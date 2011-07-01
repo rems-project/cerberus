@@ -1,0 +1,348 @@
+open ail
+
+let lift_int f_int otherwise = function
+  | BASE _ (INTEGER i) -> f_int i
+  | _ -> otherwise
+end
+
+let is_unsigned_int = function
+  | BOOL -> true
+  | UNSIGNED _ -> true
+  | SIGNED _ -> false
+end
+
+let is_signed_int = function
+  | SIGNED _ -> true
+  | UNSIGNED _ -> false
+  | BOOL -> false
+end
+
+let is_unsigned_integer = lift_int is_unsigned_int false
+let is_signed_integer   = lift_int is_signed_int   false
+
+let is_char = function
+  | BASE _ CHAR -> true
+  | _ -> false
+end
+
+let is_void = function
+  | BASE _ VOID -> true
+  | _ -> false
+end
+
+let is_character = function
+  | BASE _ (INTEGER (UNSIGNED ICHAR)) -> true
+  | BASE _ (INTEGER (SIGNED   ICHAR)) -> true
+  | BASE _ CHAR -> true
+  | _ -> false
+end
+
+(* TODO No support for floating point, enumerated, structure, union or atomic
+   types. *)
+let is_real_floating t = false
+let is_complex t = false
+let is_floating t = is_real_floating t || is_complex t
+let is_enumerated t = false
+
+let is_basic t =
+  is_char t
+  || is_unsigned_integer t
+  || is_signed_integer t
+  || is_floating t
+
+let is_integer t =
+  is_char t
+  || is_signed_integer t
+  || is_unsigned_integer t
+  || is_enumerated t
+
+let is_real t = is_integer t || is_real_floating t
+let is_arithmetic t = is_integer t || is_floating t
+
+let is_structure t = false
+let is_union t = false
+let is_enum t = false
+let is_atomic t = false
+
+let is_pointer = function
+  | POINTER _ _ -> true
+  | _ -> false
+end
+
+let is_function = function
+  | FUNCTION _ _ -> true
+  | _ -> false
+end
+
+let is_array = function
+  | ARRAY _ _ -> true
+  | _ -> false
+end
+
+let is_derived t =
+  is_array t
+  || is_structure t
+  || is_union t
+  || is_function t
+  || is_pointer t
+  || is_atomic t
+
+let is_scalar t = is_arithmetic t || is_pointer t
+
+let is_aggregate t = is_array t || is_structure t
+
+let is_unqualified = function
+  | BASE    q _ -> Set`is_empty q
+  | POINTER q _ -> Set`is_empty q
+  | _ -> true
+end
+
+let is_object = function
+  | FUNCTION _ _ -> false
+  | _ -> true
+end
+
+let is_complete_object t =
+  match t with
+    | BASE _ VOID -> false
+    | _ -> is_object t
+  end
+
+let is_pointer_to_object = function
+  | POINTER _ t -> is_object t
+  | _ -> false
+end
+
+let is_pointer_to_void = function
+  | POINTER _ t -> is_void t
+  | _ -> false
+end
+
+let is_pointer_to_function = function
+  | POINTER _ t -> is_function t
+  | _ -> false
+end
+
+let is_pointer_to_complete_object = function
+  | POINTER _ t -> is_complete_object t
+  | _ -> false 
+end
+
+let compatible_basic s1 s2 = (s1 = s2)
+
+let rec compatible type1 type2 =
+  match (type1, type2) with
+    | (BASE q1 s1, BASE q2 s2) ->
+        compatible_basic s1 s2 && Set`equal q1 q2
+    | (POINTER q1 t1, POINTER q2 t2) ->
+        compatible t1 t2 && Set`equal q1 q2
+    | (ARRAY t1 size1, ARRAY t2 size2) ->
+        size1 = size2 && compatible t1 t2
+    | (FUNCTION t1 args1, FUNCTION t2 args2) ->
+        compatible t1 t2
+        && List`length args1 = List`length args2
+        && List`for_all2 compatible args1 args2
+    | _ -> false
+  end
+
+let qualifiers = function
+  | POINTER q _ -> q
+  | BASE    q _ -> q
+  | FUNCTION _ _ -> empty
+  | ARRAY    _ _ -> empty
+end
+
+let merge_qualifiers t1 t2 = (qualifiers t1) union (qualifiers t2)
+
+let include_qualifiers t q =
+  match t with
+    | BASE q' b' -> BASE (q union q') b'
+    | POINTER q' t' -> POINTER (q union q') t'
+    | FUNCTION _ _ -> t
+    | ARRAY    _ _ -> t
+  end
+
+let rec unqualify t =
+  let f = unqualify in
+  match t with
+    | BASE _ b -> BASE empty b
+    | POINTER _ t' -> POINTER empty (f t')
+(*    | _ -> CpAilRewrite.map_type f t*)
+  end
+
+let rec eq t1 t2 =
+  match (t1, t2) with
+    | (BASE _ b1, BASE _ b2) -> b1 = b2
+    | (POINTER _ t1, POINTER _ t2) -> eq t1 t2
+    | (FUNCTION t1 ts1, FUNCTION t2 ts2) ->
+        eq t1 t2 && List`for_all2 eq ts1 ts2
+    | (ARRAY t1 size1, ARRAY t2 size2) ->
+        size1 = size2 && eq t1 t2
+    | _ -> false
+  end
+
+let eq_rank i1 i2 =
+  i1 = i2 || match (i1, i2) with
+    | (SIGNED   b1, UNSIGNED b2) -> b1 = b2
+    | (UNSIGNED b1, SIGNED   b2) -> b1 = b2
+    | _ -> false
+  end
+
+let rec
+| leq_rank i1 i2 = (eq_rank i1 i2 || lt_rank i1 i2)
+
+(* We exploit the "linear" transitivity to avoid listing all pairs/building the
+   transitive closure. *)
+| lt_rank i1 i2 =
+  let leq = leq_rank i1 in
+  match i2 with
+    | BOOL             -> false
+    | SIGNED ICHAR     -> leq BOOL
+    | SIGNED SHORT     -> leq (SIGNED ICHAR)
+    | SIGNED INT       -> leq (SIGNED SHORT)
+    | SIGNED LONG      -> leq (SIGNED INT)
+    | SIGNED LONG_LONG -> leq (SIGNED LONG)
+    (* Corresponding signed and unsigned integers have the same rank. *)
+    | UNSIGNED b         -> lt_rank i1 (SIGNED b)
+  end
+
+let leq_prec i1 i2 =
+  match (i1, i2) with
+    | (BOOL, _) -> true
+    | (_, BOOL) -> false
+    | (SIGNED   _,  SIGNED   _) -> if leq_rank i1 i2 then true else false
+    | (UNSIGNED _,  UNSIGNED _) -> if leq_rank i1 i2 then true else false
+    | (SIGNED   _,  UNSIGNED _) ->
+        if leq_rank i1 i2 then
+          true
+        else
+          (* TODO Implementation defined! *)
+          false
+  end
+
+let rec common_int i1 i2 =
+  if i1 = i2 then i1 else
+    match (i1, i2) with
+      | (BOOL, _) -> i2
+      | (_, BOOL) -> i1
+      | (SIGNED   _, SIGNED   _) ->
+          if lt_rank i1 i2 then i2 else i1
+      | (UNSIGNED _, UNSIGNED _) ->
+          if lt_rank i1 i2 then i2 else i1
+      | (SIGNED b1, UNSIGNED _) ->
+          if leq_rank i1 i2 then
+            i2
+          else if leq_prec i2 i1 then
+            i1
+          else
+            UNSIGNED b1
+      | _ -> common_int i2 i1
+    end
+
+let rec common t1 t2 =
+  match (t1, t2) with
+    | (BASE _ (INTEGER i1), BASE _ (INTEGER i2)) ->
+        BASE empty (INTEGER (common_int i1 i2))
+  end
+
+let promote_int i =
+  let s_int = SIGNED   INT in
+  let u_int = UNSIGNED INT in
+  let promoted =
+    if leq_rank i s_int then (
+      if leq_prec i s_int then s_int else u_int
+    ) else i in
+  match i with
+    | SIGNED   INT -> i
+    | UNSIGNED INT -> i
+    (* "Other than unsigned int or signed int." *)
+    | BOOL       -> promoted
+    | SIGNED   _ -> promoted
+    | UNSIGNED _ -> promoted
+  end
+
+let promote t =
+  match t with
+    | BASE q (INTEGER i) -> BASE q (INTEGER (promote_int i))
+    | _ -> t
+  end
+
+let usual_arithmetic t1 t2 = common (promote t1) (promote t2)
+
+let is_complete t =
+  match t with
+    | BASE     _ _ -> is_complete_object t
+    | POINTER  _ _ -> is_complete_object t
+    | ARRAY    _ _ -> true
+    | FUNCTION _ _ -> false
+  end
+
+let is_incomplete t = not (is_complete t)
+
+let is_const = function
+  | BASE     q _ -> cabs`CONST IN q
+  | POINTER  q _ -> cabs`CONST IN q
+  | ARRAY    _ _ -> false
+  | FUNCTION _ _ -> false
+end
+
+let is_modifiable t =
+  not (is_array t)
+  && not (is_incomplete t)
+  && not (is_const t)
+
+let is_bool = function
+  | BASE _ (INTEGER BOOL) -> true
+  | _ -> false
+end
+
+let base_of_pointer = function
+  | POINTER _ t -> t
+end
+
+let base_of_array = function
+  | ARRAY t _ -> t
+end
+
+let size_of_array = function
+  | ARRAY _ s -> s
+end
+
+let function_return = function
+  | FUNCTION t _ -> t
+end
+
+let function_parameters = function
+  | FUNCTION _ ts -> ts
+end
+
+let well_formed t = true
+
+let composite t1 t2 = if compatible t1 t2 then Some t1 else None
+
+let pointer_convert t =
+  match t with
+    | FUNCTION _  _ -> POINTER empty t
+    | ARRAY    t' _ -> POINTER empty t'
+    | _ -> t
+  end
+
+let lvalue_convert t =
+  if is_incomplete t && not (is_array t) then None else Some (unqualify t)
+
+let is_lvalue = function
+  | TLvalue _ -> true
+  | TExp    _ -> false
+end
+
+let is_unsigned_of t1 t2 =
+  match (t1, t2) with
+    | (BASE _ (INTEGER (SIGNED i1)), BASE _ (INTEGER (UNSIGNED i2))) -> i1 = i2
+    | _ -> false
+  end
+
+let is_signed_of t1 t2 =
+  match (t1, t2) with
+    | (BASE _ (INTEGER (UNSIGNED i1)), BASE _ (INTEGER (SIGNED i2))) -> i1 = i2
+    | _ -> false
+  end
