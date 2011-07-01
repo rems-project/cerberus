@@ -1,0 +1,2 @@
+type ('a, 'b) map = ('a, 'b) Pmap`map
+type 'a multiset = 'a multiset`t

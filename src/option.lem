@@ -1,0 +1,9 @@
+let is_some = function
+  | Some _ -> true
+  | None   -> false
+end
+
+let map f = function
+  | Some e -> Some (f e)
+  | None   -> None
+end
