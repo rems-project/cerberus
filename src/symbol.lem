@@ -1,0 +1,25 @@
+type t = num * string option
+type set = num
+
+let emp = 0
+let count set = set
+
+let fresh s : set * t =
+  let s' = s + 1 in
+  (s', (s, None))
+
+let fresh_name s name : set * t =
+  let s' = s + 1 in
+  (s', (s, Some name))
+
+let to_string (n, _) = "v" ^ "_" ^ string_of_num n
+let to_string_pretty ((_, name_opt) as s) =
+  match name_opt with
+    | Some name -> name
+    | None      -> to_string s
+  end
+
+let to_string_latex (n, _) =
+  "v" ^ "_" ^ "{" ^ string_of_num n ^ "}"
+
+let to_string_id (n, _) = string_of_num n
