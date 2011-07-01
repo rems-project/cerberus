@@ -1,0 +1,22 @@
+type 'msg t =
+  | Success
+  | Failure of 'msg
+
+let combine r1 r2 =
+  match r1 with
+    | Success   -> r2
+    | Failure _ -> r1
+  end
+
+let unit   = Success
+let fail m = Failure m
+
+let of_option m = function
+  | Some _ -> unit
+  | None   -> fail m
+end
+
+let of_bool m = function
+  | true  -> unit
+  | false -> fail m
+end
