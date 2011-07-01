@@ -1,0 +1,31 @@
+type ('a, 'msg) t =
+  | Result of 'a
+  | Error  of 'msg
+
+let bind r f =
+  match r with
+    | Result a -> f a
+    | Error  s -> Error s
+  end
+
+let unit a = Result a
+let fail m = Error m
+let join r = bind r (fun x -> x)
+
+let map  f rx = bind rx (fun x -> unit (f x))
+let app rf rx = bind rf (fun f -> map f rx)
+let app2 rf rx ry = app (app rf rx) ry
+
+let bind_list f rxs =
+  bind rxs (fun xs ->
+    List`fold_right (fun x -> app2 (unit list`cons) (f x)) xs (unit [])
+  )
+
+let of_option m = function
+  | Some a -> unit a
+  | None   -> fail m
+end
+
+module Operators = struct
+  let (>>=) = bind
+end

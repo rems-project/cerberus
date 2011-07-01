@@ -1,0 +1,421 @@
+open global
+
+module c = cabs
+module a = ail
+module st = symbol_table
+
+type id = symbol`t
+type id_set = symbol`set
+
+type ('a_e, 'a_s) env = <|
+  symbol_set : id_set;
+  symbol_table : (string, id) st`t;
+  id_map : (id, a`declaration) map;
+  globals : (id * (id, 'a_e) a`exp) list;
+  fn_map : (id, (id list * (id, 'a_e, 'a_s) a`stmt)) map
+|>
+
+let zero l = (c`CONSTANT (c`CONST_INT (0, None)), l)
+let one  l = (c`CONSTANT (c`CONST_INT (1, None)), l)
+let d_zero l = a`Exp l (a`CONSTANT (c`CONST_INT (0, None)))
+let d_one  l = a`Exp l (a`CONSTANT (c`CONST_INT (1, None)))
+
+let subst env l name =
+  let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
+             ``[A]n undeclared identifier is a violation of syntax`` in\n" in
+  result`of_option msg (st`find name env.symbol_table)
+
+let desugar_unop = function
+  | c`MINUS -> a`MINUS
+  | c`PLUS -> a`PLUS
+  | c`BNOT -> a`BNOT
+  | c`POSTFIX_INCR -> a`POSTFIX_INCR
+  | c`POSTFIX_DECR -> a`POSTFIX_DECR
+  | c`ADDRESS -> a`ADDRESS
+  | c`INDIRECTION -> a`INDIRECTION
+end
+
+let rec
+| desugar_exp env (e, l) =
+  let f  = desugar_exp env in
+  let ft = desugar_type in
+  let d_e =
+    match e with
+      (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
+         subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
+         ( *((E1)+(E2))) ]]". *)
+      | c`INDEX e1 e2 ->
+          a`UNARY a`INDIRECTION (a`Exp l (a`BINARY (c`ARITHMETIC c`ADD) (f e1) (f e2)))
+      (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
+         equivalent to [[ (E+=1) ]]". *)
+      | c`UNARY c`PREFIX_INCR e -> a`ASSIGN (Some c`ADD) (f e) (d_one l)
+      (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+         analogous to the prefix [[ ++ ]] operator". *)
+      | c`UNARY c`PREFIX_DECR e -> a`ASSIGN (Some c`SUB) (f e) (d_one l)
+      (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
+         equivalent to [[ (E==0) ]]". *)
+      | c`UNARY c`NOT e -> a`BINARY (c`RELATIONAL c`EQ) (d_zero l) (f e)
+      | c`UNARY unop e -> a`UNARY (desugar_unop unop) (f e)
+      | c`BINARY o e1 e2 -> a`BINARY o (f e1) (f e2)
+      | c`ASSIGN o e1 e2 -> a`ASSIGN o (f e1) (f e2)
+      | c`QUESTION e1 e2 e3 -> a`QUESTION (f e1) (f e2) (f e3)
+      | c`CAST t e -> a`CAST (ft t) (f e)
+      | c`CALL e es -> a`CALL (f e) (List`map f es)
+      | c`CONSTANT c -> a`CONSTANT c
+      | c`VARIABLE n -> a`VARIABLE (subst env l n)
+      | c`TYPE_SIZEOF t -> a`SIZEOF (ft t)
+      | c`TYPE_ALIGNOF t -> a`ALIGNOF (ft t)
+(*
+      | c`COMPOUND_LITERAL _ ->
+          raise_bug "Compound literals are not yet supported."
+*)
+    end in
+  result`map (a`Exp l) d_e
+
+| desugar_specifier specifiers =
+  let mset = multiset`from_list in
+  let map =
+    List`fold_left
+      (fun m (x, y) -> Pmap`add x y m)
+(* TODO
+      (Pmap`create multiset`compare)
+*)
+      Pmap`empty
+      ( [(mset [c`VOID], a`VOID)]
+        @ [(mset [c`SIGNED; c`CHAR], a`INTEGER (a`SIGNED a`ICHAR))]
+        @ [(mset [c`UNSIGNED; c`CHAR], a`INTEGER (a`UNSIGNED a`ICHAR))]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`SIGNED a`SHORT)))
+          [ [c`SHORT];
+            [c`SIGNED; c`SHORT];
+            [c`SHORT; c`INT];
+            [c`SIGNED; c`SHORT; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`UNSIGNED a`SHORT)))
+          [ [c`UNSIGNED; c`SHORT];
+            [c`UNSIGNED; c`SHORT; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`SIGNED a`INT)))
+          [  [c`INT];
+             [c`SIGNED];
+             [c`SIGNED; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`UNSIGNED a`INT)))
+          [ [c`UNSIGNED];
+            [c`UNSIGNED; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`SIGNED a`LONG)))
+          [ [c`LONG];
+            [c`SIGNED; c`LONG];
+            [c`LONG; c`INT];
+            [c`SIGNED; c`LONG; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`UNSIGNED a`LONG)))
+          [ [c`UNSIGNED; c`LONG];
+            [c`UNSIGNED; c`LONG; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`SIGNED a`LONG_LONG)))
+          [ [c`LONG; c`LONG];
+            [c`SIGNED; c`LONG; c`LONG];
+            [c`LONG; c`LONG; c`INT];
+            [c`SIGNED; c`LONG; c`LONG; c`INT]
+          ]
+        @ List`map (fun s -> (mset s, a`INTEGER (a`UNSIGNED a`LONG_LONG)))
+          [ [c`UNSIGNED; c`LONG; c`LONG];
+            [c`UNSIGNED; c`LONG; c`LONG; c`INT]
+          ]
+        @ [(mset [c`BOOL], a`INTEGER a`BOOL)]
+      ) in
+  match Pmap`mem specifiers map with
+    | true  -> result`unit (Pmap`find specifiers map)
+    | false -> result`fail ""
+  end
+
+| desugar_type t =
+  let ft = desugar_type in
+  match t with
+    | c`BASE qs ss -> result`map (a`BASE qs) (desugar_specifier ss)
+    | c`ARRAY _ t (Some e) ->
+        let size =
+          match e with
+            | (c`CONSTANT (c`CONST_INT (size, _)), l) -> result`unit size
+            | (_, l) ->
+                let msg = "We don't support VLAs and moreover the size of an array \
+                           must be an integer constant.\n" in
+                result`fail msg
+(*
+                CpLogger.error (CpPrint.pp_program msg) l;
+*)
+          end in
+        result`map (a`ARRAY (ft t)) size
+    | c`ARRAY s t None -> result`fail "Arrays are not yet supported.\n"
+    | c`FUNCTION t decls ->
+        let f ((_, t, sts), l) =
+          result`bind (desugar_storage l sts) (fun st -> match st with
+(* 
+            | Some a`REGISTER ->
+                raise_error "No support for storage class register."
+*)
+            | Some _ ->
+                let msg = "Violation of constraint 6.7.6.3#2 Function declarators \
+                           (including prototypes), Constraints: ``The only \
+                           storage-class that shall occur in a parameter \
+                           declaration is register.`` in\n" in
+                result`fail msg
+(*
+                CpLogger.info (CpPrint.pp_program msg) l;
+                raise E_Invalid
+*)
+            | None -> ft t
+          end) in
+        let d_decls = result`bind_list f decls in
+        result`map
+          (fun d -> result`map (fun t -> a`FUNCTION t d) (ft t)) d_decls
+    | c`POINTER qs t -> result`map (a`POINTER qs) (ft t)
+  end
+
+| desugar_stmt env (s, l) =
+  let fs = desugar_stmt env in
+  let fe = desugar_exp env in (
+  l, match s with
+    | c`BLOCK ss ->
+        (* Fairly verbose but really quite simple: We open up a new scope,
+           transform each statement/declaration in the block and tear down the
+           scope again. *)
+        let () = env.symbol_table <- st`create_scope env.symbol_table in
+        let d_ss = List`map fs ss in
+        let scope = CpSymbolTable.return_scope env.symbol_table in
+        let ids = CpSymbolTable.symbols scope in
+        let () = env.symbol_table <- st`destroy_scope env.symbol_table in
+        a`BLOCK ids d_ss
+    (* We transform all for statements into while statements. *)
+    | c`FOR_EXP e1_opt e2_opt e3_opt s ->
+        let s1 =
+          match e1_opt with
+            | Some e1 -> (c`EXPRESSION e1, l)
+            | None    -> (c`SKIP, l)
+          end in
+        let e2 =
+          match e2_opt with
+            | Some e2 -> e2
+            (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+               statement) an omitted controlling expression is replace by an
+               unspecified non-zero integer constant. We believe that the choice, as
+               long as representable, does not matter with respect to the
+               semantics. Hence, we arbitrarily choose "1" (which can always be
+               represented as an object of type int). *)
+            | None -> one l
+          end in
+      let s3 =
+        match e3_opt with
+          | Some e3 -> (c`EXPRESSION e3, l)
+          | None    -> (c`SKIP, l)
+        end in
+      let body = (c`BLOCK [s; s3], l) in
+      let loop = (c`WHILE e2 body, l) in    
+      let s = c`BLOCK [s1; loop] in
+      let (_, d_s) = fs (s, l) in
+      d_s
+    | c`FOR_DECL defns e2_opt e3_opt s ->
+        let require_auto_or_register ((((_, _, storage), l), _), _) =
+          if List`exists (fun s -> s <> c`AUTO && s <> c`REGISTER) storage then
+            let msg = "Violation of constraint 6.8.5#3 Iteration statements, \
+                       Constraints: ``The declaration part of a for statement \
+                       shall only declare identifiers for objects having storage \
+                       class auto or register`` in\n" in msg
+(*
+            CpLogger.info (CpPrint.pp_program msg) l;
+            raise E_Invalid in
+ *) else "" in
+        let () = List`iter require_auto_or_register defns in
+        let s1 = (c`DECLARATION defns, l) in
+        let e2 =
+          match e2_opt with
+            | Some e2 -> e2
+            (* See comment above. *)
+            | None -> one l
+          end in
+        let s3 =
+          match e3_opt with
+            | Some e3 -> (c`EXPRESSION e3, l)
+            | None    -> (c`SKIP, l)
+          end in
+        let body = (c`BLOCK [s; s3], l) in
+        let loop = (c`WHILE (e2, body), l) in
+        let s = c`BLOCK [s1; loop] in
+        let (_, d_s) = fs (s, l) in
+        d_s
+    | c`DECLARATION defns ->
+        let d_defns = List`map (desugar_defn env) defns in
+        (* We remove all declarations that don't contain an initialiser. *)
+        let f = function
+          | (id, Some d_e, _) -> Some (id, d_e)
+          | (_,  None,     _) -> None
+        end in
+        let d_defns = BatList`filter_map f d_defns in
+        a`DECLARATION d_defns
+    | c`EXPRESSION e -> a`EXPRESSION (fe e)
+    | c`IF e s1 s2_opt ->
+        let d_s2 = desugar_stmt_opt env l s2_opt in
+        a`IF (fe e) (fs s1) d_s2
+    | c`WHILE e s -> a`WHILE (fe e) (fs s)
+    | c`DO e s -> a`DO (fe e) (fs s)
+    | c`SWITCH e s -> a`SWITCH (fe e) (fs s)
+    | c`CASE (e, l) s ->
+        let integer_constant =
+          match e with
+            | c`CONSTANT (c`CONST_INT i) -> i
+            | _ -> raise_bug "We don't support anything but integer constants as \
+                            [[ case ]] labels."
+          end in
+        a`CASE integer_constant (fs s)
+    | c`DEFAULT s -> a`DEFAULT (fs s)
+    | c`LABEL n s -> (* a`LABEL n (fs s) *)
+        raise_error "No support for labeled statements yet.\n"
+    | c`RETURN (Some e) -> a`RETURN_EXPRESSION (fe e)
+    | c`RETURN None -> a`RETURN_VOID
+    | c`GOTO n -> (* a`GOTO n *)
+        raise_error "No support for goto yet.\n"
+    | c`SKIP -> a`SKIP
+    | c`BREAK -> a`BREAK
+    | c`CONTINUE -> a`CONTINUE
+  end)
+
+| desugar_stmt_opt env l = function
+  | Some stmt -> desugar_stmt env stmt
+  (* Adding or removing a (finite number of) null operation is semantically
+     sound since "a null statement [...] performs no operations" (6.8.3#3,
+     Expression and null statements, Semantics). *)
+  | None -> (l, a`SKIP)
+end
+
+| register_name env l name =
+  let scope = st`return_scope env.symbol_table in
+  if st`mem name scope then
+    let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ``If \
+               an identifier has no linkage, there shall be no more than one \
+               declaration of the identifier [...]`` in\n" in msg
+(*
+    CpLogger.info (CpPrint.pp_program msg) l;
+    raise E_Invalid
+*)
+  else
+    let symbol = CpSymbol.fresh_name env.symbol_set name in
+    let () =
+      env.symbol_table <- st`add name symbol env.symbol_table in
+    symbol
+
+| desugar_storage l = function
+  | []           -> result`unit None
+  | [c`AUTO]     -> result`unit (Some a`AUTO)
+  | [c`STATIC]   -> result`unit (Some a`STATIC)
+  | [c`REGISTER] -> result`fail "No support for storage class register."
+  | [c`EXTERN]   -> result`fail "No support for storage class extern."
+  | _ ->
+      let msg =
+        "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
+         ``At most, one storage-class specifier may be given [...]`` in\n" in
+      result`fail msg
+(*
+      CpLogger.info (CpPrint.pp_program msg) l;
+      raise E_Invalid
+*)
+end
+
+| desugar_decl env ((name, t, sts), l) =
+  let id = register_name env l name in
+  let d_st = desugar_storage l sts in
+  let d_t = desugar_type t in
+  let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
+  id
+
+| desugar_function_decl env ((name, t, sts), l) =
+  let desugar_function_type env t =
+    match t with
+      | c`FUNCTION (t, decls) ->
+          let f ((name, t, sts), l) (ids, ds) =
+            let id = register_name env l name in
+            let d_t = desugar_type t in
+            let d_st =
+	      match desugar_storage l sts with
+                (*
+                | Some a`REGISTER ->
+                    raise_error "No support for storage class register."
+                *)
+                | Some _ ->
+                    let msg = "Violation of constraint 6.7.6.3#2 Function \
+                               declarators (including prototypes), Constraints: \
+                               ``The only storage-class that shall occur in a \
+                               parameter declaration is register.`` in\n" in msg
+(*
+                    CpLogger.info (CpPrint.pp_program msg) l;
+                    raise E_Invalid
+*)
+                | None -> None
+              end in
+          let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
+          (id::ids, d_t::ds) in
+          let (formals, d_decls) = List`fold_right f decls ([], []) in
+          (a`FUNCTION (desugar_type t) d_decls, formals)
+      | _ -> raise_bug "Not a function type."
+    end in
+  let id = register_name env l name in
+  let d_st = desugar_storage l sts in
+  let () = env.symbol_table <- st`create_scope env.symbol_table in
+  let (d_t, formals) = desugar_function_type env t in
+  let fn_scope = st`return_scope env.symbol_table in
+  let () = env.symbol_table <- st`destroy_scope env.symbol_table in
+  let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
+  let () = env.symbol_table <- st`push_table fn_scope env.symbol_table in
+  (id, formals)
+
+| desugar_defn env ((d, e_opt), l) =
+  let fe = desugar_exp env in
+  let id = desugar_decl env d in
+  (id, option`map fe e_opt, l)
+
+let desugar_global_defn env (defn, l) =
+  match defn with
+    | c`FUNCTION_DEFINITION (decl, s) ->
+        let (id, formals) = desugar_function_decl env decl in
+        let d_s = desugar_stmt env s in
+        let () = env.symbol_table <- st`destroy_scope env.symbol_table in
+        env.fn_map <- Pmap`add id (formals, d_s) env.fn_map
+    | c`EXTERNAL_DECLARATION defns ->
+        let d_defns = List`map (desugar_defn env) defns in
+        let f = function
+          | (id, Some e, l) -> (id, e)
+          | (id, None,   l) -> (id, d_zero l)
+        end in
+        let d_defns = List`map f d_defns in
+        env.globals <- env.globals @ d_defns
+   end
+
+let desugar_program startup global_defns =
+  let env = <|
+    symbol_set = CpSymbol.make ();
+    symbol_table = CpSymbolTable.create_scope CpSymbolTable.empty;
+    id_map = Pmap`empty;
+    globals = [];
+    fn_map = Pmap`empty
+  |> in
+  let () = List`iter (desugar_global_defn env) global_defns in
+  let main =
+    CpSymbolTable.find "main" env.symbol_table
+(*
+      let msg = "Could not find startup function ``" ^ startup ^ "``.\n" in
+      CpLogger.info (fun x -> x) msg;
+      raise E_Invalid in
+*) in
+  <|
+    a`main = main;
+    a`id_map = env.id_map;
+    a`globals = env.globals;
+    a`fn_map = env.fn_map
+  |>
+
+let desugar startup (name, global_defns) =
+  a`Program (desugar_program startup global_defns)
+(*
+  | E_Undefined -> a`Undefined
+  | E_Invalid -> a`Invalid
+*)

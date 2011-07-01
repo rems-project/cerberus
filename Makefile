@@ -4,6 +4,7 @@ LEM_LIB=../lem/library
 BUILD_DIR=_build_ocaml
 
 FILES=\
+list.lem \
 success.lem \
 result.lem \
 multiset.lem \
