@@ -39,38 +39,40 @@ let rec
 | desugar_exp env (e, l) =
   let f  = desugar_exp env in
   let ft = desugar_type in
-  let d_e =
-    match e with
-      (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
-         subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
-         ( *((E1)+(E2))) ]]". *)
-      | c`INDEX e1 e2 ->
-          a`UNARY a`INDIRECTION (a`Exp l (a`BINARY (c`ARITHMETIC c`ADD) (f e1) (f e2)))
-      (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
-         equivalent to [[ (E+=1) ]]". *)
-      | c`UNARY c`PREFIX_INCR e -> a`ASSIGN (Some c`ADD) (f e) (d_one l)
-      (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
-         analogous to the prefix [[ ++ ]] operator". *)
-      | c`UNARY c`PREFIX_DECR e -> a`ASSIGN (Some c`SUB) (f e) (d_one l)
-      (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
-         equivalent to [[ (E==0) ]]". *)
-      | c`UNARY c`NOT e -> a`BINARY (c`RELATIONAL c`EQ) (d_zero l) (f e)
-      | c`UNARY unop e -> a`UNARY (desugar_unop unop) (f e)
-      | c`BINARY o e1 e2 -> a`BINARY o (f e1) (f e2)
-      | c`ASSIGN o e1 e2 -> a`ASSIGN o (f e1) (f e2)
-      | c`QUESTION e1 e2 e3 -> a`QUESTION (f e1) (f e2) (f e3)
-      | c`CAST t e -> a`CAST (ft t) (f e)
-      | c`CALL e es -> a`CALL (f e) (List`map f es)
-      | c`CONSTANT c -> a`CONSTANT c
-      | c`VARIABLE n -> a`VARIABLE (subst env l n)
-      | c`TYPE_SIZEOF t -> a`SIZEOF (ft t)
-      | c`TYPE_ALIGNOF t -> a`ALIGNOF (ft t)
+  result`map (a`Exp l) (match e with
+    (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
+       subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
+       ( *((E1)+(E2))) ]]". *)
+    | c`INDEX e1 e2 ->
+        result`map2 (fun x y ->
+          a`UNARY a`INDIRECTION (a`Exp l (a`BINARY (c`ARITHMETIC c`ADD) x y))
+        ) (f e1) (f e2)
+    (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
+       equivalent to [[ (E+=1) ]]". *)
+    | c`UNARY c`PREFIX_INCR e ->
+        result`map (fun x -> a`ASSIGN (Some c`ADD) x (d_one l)) (f e)
+    (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+       analogous to the prefix [[ ++ ]] operator". *)
+    | c`UNARY c`PREFIX_DECR e ->
+        result`map2 (a`ASSIGN (Some c`SUB)) (f e) (result`unit (d_one l))
+    (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
+       equivalent to [[ (E==0) ]]". *)
+    | c`UNARY c`NOT e -> result`map (a`BINARY (c`RELATIONAL c`EQ) (d_zero l)) (f e)
+    | c`UNARY unop e -> result`map (a`UNARY (desugar_unop unop)) (f e)
+    | c`BINARY o e1 e2 -> result`map2 (a`BINARY o) (f e1) (f e2)
+    | c`ASSIGN o e1 e2 -> result`map2 (a`ASSIGN o) (f e1) (f e2)
+    | c`QUESTION e1 e2 e3 -> result`map3 a`QUESTION (f e1) (f e2) (f e3)
+    | c`CAST t e -> result`map2 a`CAST (ft t) (f e)
+    | c`CALL e es -> result`map2 a`CALL (f e) (result`map_list f es)
+    | c`CONSTANT c -> result`unit (a`CONSTANT c)
+    | c`VARIABLE n -> result`map a`VARIABLE (subst env l n)
+    | c`TYPE_SIZEOF t -> result`map a`SIZEOF (ft t)
+    | c`TYPE_ALIGNOF t -> result`map a`ALIGNOF (ft t)
 (*
-      | c`COMPOUND_LITERAL _ ->
-          raise_bug "Compound literals are not yet supported."
+    | c`COMPOUND_LITERAL _ ->
+        raise_bug "Compound literals are not yet supported."
 *)
-    end in
-  result`map (a`Exp l) d_e
+  end)
 
 | desugar_specifier specifiers =
   let mset = multiset`from_list in
@@ -95,9 +97,9 @@ let rec
             [c`UNSIGNED; c`SHORT; c`INT]
           ]
         @ List`map (fun s -> (mset s, a`INTEGER (a`SIGNED a`INT)))
-          [  [c`INT];
-             [c`SIGNED];
-             [c`SIGNED; c`INT]
+          [ [c`INT];
+            [c`SIGNED];
+            [c`SIGNED; c`INT]
           ]
         @ List`map (fun s -> (mset s, a`INTEGER (a`UNSIGNED a`INT)))
           [ [c`UNSIGNED];
@@ -125,10 +127,7 @@ let rec
           ]
         @ [(mset [c`BOOL], a`INTEGER a`BOOL)]
       ) in
-  match Pmap`mem specifiers map with
-    | true  -> result`unit (Pmap`find specifiers map)
-    | false -> result`fail ""
-  end
+  result`of_option "" (map`find specifiers map)
 
 | desugar_type t =
   let ft = desugar_type in
@@ -146,11 +145,11 @@ let rec
                 CpLogger.error (CpPrint.pp_program msg) l;
 *)
           end in
-        result`map (a`ARRAY (ft t)) size
+        result`map2 a`ARRAY (ft t) size
     | c`ARRAY s t None -> result`fail "Arrays are not yet supported.\n"
     | c`FUNCTION t decls ->
         let f ((_, t, sts), l) =
-          result`bind (desugar_storage l sts) (fun st -> match st with
+          result`bind (desugar_storage l sts) (function
 (* 
             | Some a`REGISTER ->
                 raise_error "No support for storage class register."
@@ -167,26 +166,29 @@ let rec
 *)
             | None -> ft t
           end) in
-        let d_decls = result`bind_list f decls in
-        result`map
-          (fun d -> result`map (fun t -> a`FUNCTION t d) (ft t)) d_decls
+        let d_decls = result`map_list f decls in
+        result`map2 a`FUNCTION (ft t) d_decls
     | c`POINTER qs t -> result`map (a`POINTER qs) (ft t)
   end
 
 | desugar_stmt env (s, l) =
+  let f  = desugar_stmt in
   let fs = desugar_stmt env in
-  let fe = desugar_exp env in (
-  l, match s with
+  let fe = desugar_exp env in
+  result`map (pair`app_right (ail`Stmt l)) (match s with
     | c`BLOCK ss ->
-        (* Fairly verbose but really quite simple: We open up a new scope,
-           transform each statement/declaration in the block and tear down the
-           scope again. *)
-        let () = env.symbol_table <- st`create_scope env.symbol_table in
-        let d_ss = List`map fs ss in
-        let scope = CpSymbolTable.return_scope env.symbol_table in
-        let ids = CpSymbolTable.symbols scope in
-        let () = env.symbol_table <- st`destroy_scope env.symbol_table in
-        a`BLOCK ids d_ss
+        (* Open up a new scope, transform each statement/declaration in the
+           block and tear down the scope again. *)
+        let env = <|env with symbol_table = st`create_scope env.symbol_table|> in
+        let r_env_d_ss = result`map_snd_list desugar_stmt env ss in
+        let f (env, d_ss) =
+          let scope = st`return_scope env.symbol_table in
+          let ids = st`symbols scope in
+          let env = <|env with
+            symbol_table = st`destroy_scope env.symbol_table
+          |> in
+          (env, a`BLOCK ids d_ss) in
+        result`map f r_env_d_ss
     (* We transform all for statements into while statements. *)
     | c`FOR_EXP e1_opt e2_opt e3_opt s ->
         let s1 =
@@ -205,79 +207,82 @@ let rec
                represented as an object of type int). *)
             | None -> one l
           end in
-      let s3 =
-        match e3_opt with
-          | Some e3 -> (c`EXPRESSION e3, l)
-          | None    -> (c`SKIP, l)
-        end in
-      let body = (c`BLOCK [s; s3], l) in
-      let loop = (c`WHILE e2 body, l) in    
-      let s = c`BLOCK [s1; loop] in
-      let (_, d_s) = fs (s, l) in
-      d_s
-    | c`FOR_DECL defns e2_opt e3_opt s ->
-        let require_auto_or_register ((((_, _, storage), l), _), _) =
-          if List`exists (fun s -> s <> c`AUTO && s <> c`REGISTER) storage then
-            let msg = "Violation of constraint 6.8.5#3 Iteration statements, \
-                       Constraints: ``The declaration part of a for statement \
-                       shall only declare identifiers for objects having storage \
-                       class auto or register`` in\n" in msg
-(*
-            CpLogger.info (CpPrint.pp_program msg) l;
-            raise E_Invalid in
- *) else "" in
-        let () = List`iter require_auto_or_register defns in
-        let s1 = (c`DECLARATION defns, l) in
-        let e2 =
-          match e2_opt with
-            | Some e2 -> e2
-            (* See comment above. *)
-            | None -> one l
-          end in
         let s3 =
           match e3_opt with
             | Some e3 -> (c`EXPRESSION e3, l)
             | None    -> (c`SKIP, l)
           end in
         let body = (c`BLOCK [s; s3], l) in
-        let loop = (c`WHILE (e2, body), l) in
-        let s = c`BLOCK [s1; loop] in
-        let (_, d_s) = fs (s, l) in
-        d_s
+        let loop = (c`WHILE e2 body, l) in    
+        let s' = (c`BLOCK [s1; loop], l) in
+        fs s'
+    | c`FOR_DECL defns e2_opt e3_opt s ->
+        let is_auto_or_register ((((_, _, storage), l), _), _) =
+          if List`exists (fun s -> s <> c`AUTO && s <> c`REGISTER) storage then
+            false
+(*
+            CpLogger.info (CpPrint.pp_program msg) l;
+            raise E_Invalid in
+ *)
+          else true in
+        if List`for_all is_auto_or_register defns then
+          let d_defns = result`map_list require_auto_or_register defns in
+          let s1 = (c`DECLARATION defns, l) in
+          let e2 =
+            match e2_opt with
+              | Some e2 -> e2
+              (* See comment above. *)
+              | None -> one l
+            end in
+          let s3 =
+            match e3_opt with
+              | Some e3 -> (c`EXPRESSION e3, l)
+              | None    -> (c`SKIP, l)
+            end in
+          let body = (c`BLOCK [s; s3], l) in
+          let loop = (c`WHILE (e2, body), l) in
+          let s' = (c`BLOCK [s1; loop], l) in
+          fs s'
+        else
+          let msg = "Violation of constraint 6.8.5#3 Iteration statements, \
+                     Constraints: ``The declaration part of a for statement \
+                     shall only declare identifiers for objects having storage \
+                     class auto or register`` in\n" in
+          result`fail msg
     | c`DECLARATION defns ->
-        let d_defns = List`map (desugar_defn env) defns in
+        let d_defns = result`map_snd_list desugar_defn env defns in
         (* We remove all declarations that don't contain an initialiser. *)
         let f = function
           | (id, Some d_e, _) -> Some (id, d_e)
           | (_,  None,     _) -> None
         end in
-        let d_defns = BatList`filter_map f d_defns in
-        a`DECLARATION d_defns
-    | c`EXPRESSION e -> a`EXPRESSION (fe e)
+        let d_defns = list`filter_map f d_defns in
+        result`unit (env, a`DECLARATION d_defns)
+    | c`EXPRESSION e -> result`map (pair env -| a`EXPRESSION) (fe e)
     | c`IF e s1 s2_opt ->
         let d_s2 = desugar_stmt_opt env l s2_opt in
-        a`IF (fe e) (fs s1) d_s2
-    | c`WHILE e s -> a`WHILE (fe e) (fs s)
-    | c`DO e s -> a`DO (fe e) (fs s)
-    | c`SWITCH e s -> a`SWITCH (fe e) (fs s)
+        result`map3 a`IF (fe e) (fs s1) d_s2
+    | c`WHILE e s ->
+        result`app (result`map (pair`app_right -| result`map a`WHILE) (fe e)) (fs s)
+    | c`DO e s -> result`map2 a`DO (fe e) (fs s)
+    | c`SWITCH e s -> result`map2 a`SWITCH (fe e) (fs s)
     | c`CASE (e, l) s ->
         let integer_constant =
           match e with
-            | c`CONSTANT (c`CONST_INT i) -> i
-            | _ -> raise_bug "We don't support anything but integer constants as \
-                            [[ case ]] labels."
+            | c`CONSTANT (c`CONST_INT i) -> result`unit i
+            | _ -> result_fail "We don't support anything but integer \
+                                constants as [[ case ]] labels."
           end in
-        a`CASE integer_constant (fs s)
-    | c`DEFAULT s -> a`DEFAULT (fs s)
+        result`map2 a`CASE integer_constant (fs s)
+    | c`DEFAULT s -> result`map (pair`app_right a`DEFAULT) (fs s)
     | c`LABEL n s -> (* a`LABEL n (fs s) *)
-        raise_error "No support for labeled statements yet.\n"
-    | c`RETURN (Some e) -> a`RETURN_EXPRESSION (fe e)
-    | c`RETURN None -> a`RETURN_VOID
-    | c`GOTO n -> (* a`GOTO n *)
-        raise_error "No support for goto yet.\n"
-    | c`SKIP -> a`SKIP
-    | c`BREAK -> a`BREAK
-    | c`CONTINUE -> a`CONTINUE
+        resul`fail "No support for labeled statements yet.\n"
+    | c`RETURN (Some e) -> result`map (pair env -| a`RETURN_EXPRESSION) (fe e)
+    | c`RETURN None -> result`unit (env, a`RETURN_VOID)
+    | c`GOTO n -> result`fail "No support for goto yet.\n"
+    | c`SKIP -> result`unit (env, a`SKIP)
+    | c`BREAK -> result`unit (env, a`BREAK)
+    | c`CONTINUE -> result`unit (env, a`CONTINUE)
   end)
 
 | desugar_stmt_opt env l = function
@@ -285,7 +290,7 @@ let rec
   (* Adding or removing a (finite number of) null operation is semantically
      sound since "a null statement [...] performs no operations" (6.8.3#3,
      Expression and null statements, Semantics). *)
-  | None -> (l, a`SKIP)
+  | None -> result`unit (env, ail`Stmt l a`SKIP)
 end
 
 | register_name env l name =
@@ -293,16 +298,16 @@ end
   if st`mem name scope then
     let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ``If \
                an identifier has no linkage, there shall be no more than one \
-               declaration of the identifier [...]`` in\n" in msg
+               declaration of the identifier [...]`` in\n" in
+    result`fail msg
 (*
     CpLogger.info (CpPrint.pp_program msg) l;
     raise E_Invalid
 *)
   else
-    let symbol = CpSymbol.fresh_name env.symbol_set name in
-    let () =
-      env.symbol_table <- st`add name symbol env.symbol_table in
-    symbol
+    let symbol = symbol`fresh_name env.symbol_set name in
+    let env = <|env with symbol_table = st`add name symbol env.symbol_table|> in
+    result`unit (env, symbol)
 
 | desugar_storage l = function
   | []           -> result`unit None
@@ -325,8 +330,8 @@ end
   let id = register_name env l name in
   let d_st = desugar_storage l sts in
   let d_t = desugar_type t in
-  let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
-  id
+  let env = <|env with id_map = Pmap`add id (d_t, d_st) env.id_map|> in
+  (env, id)
 
 | desugar_function_decl env ((name, t, sts), l) =
   let desugar_function_type env t =
@@ -360,26 +365,26 @@ end
     end in
   let id = register_name env l name in
   let d_st = desugar_storage l sts in
-  let () = env.symbol_table <- st`create_scope env.symbol_table in
+  let env = <|env with symbol_table = st`create_scope env.symbol_table|> in
   let (d_t, formals) = desugar_function_type env t in
   let fn_scope = st`return_scope env.symbol_table in
-  let () = env.symbol_table <- st`destroy_scope env.symbol_table in
-  let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
-  let () = env.symbol_table <- st`push_table fn_scope env.symbol_table in
+  let env = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
+  let env = <|env with id_map = Pmap`add id (d_t, d_st) env.id_map|> in
+  let env = <|env with symbol_table = st`push_table fn_scope env.symbol_table|> in
   (id, formals)
 
 | desugar_defn env ((d, e_opt), l) =
   let fe = desugar_exp env in
-  let id = desugar_decl env d in
-  (id, option`map fe e_opt, l)
+  let (env, id) = desugar_decl env d in
+  (env, id, option`map fe e_opt, l)
 
 let desugar_global_defn env (defn, l) =
   match defn with
     | c`FUNCTION_DEFINITION (decl, s) ->
         let (id, formals) = desugar_function_decl env decl in
         let d_s = desugar_stmt env s in
-        let () = env.symbol_table <- st`destroy_scope env.symbol_table in
-        env.fn_map <- Pmap`add id (formals, d_s) env.fn_map
+        let enn = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
+        <|env with fn_map = Pmap`add id (formals, d_s) env.fn_map|>
     | c`EXTERNAL_DECLARATION defns ->
         let d_defns = List`map (desugar_defn env) defns in
         let f = function
@@ -387,7 +392,7 @@ let desugar_global_defn env (defn, l) =
           | (id, None,   l) -> (id, d_zero l)
         end in
         let d_defns = List`map f d_defns in
-        env.globals <- env.globals @ d_defns
+        <|env with globals = env.globals @ d_defns|>
    end
 
 let desugar_program startup global_defns =

@@ -1,1 +1,8 @@
 let cons x xs = x::xs
+let filter_map f xs =
+  let f' x ys =
+    match f x with
+      | Some y -> y::ys
+      | None   -> ys
+    end in
+  List`fold_right f' xs []

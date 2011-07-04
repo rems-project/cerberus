@@ -1,0 +1,3 @@
+let make x y = (x, y)
+let app_right f (x, y) = (  x, f y)
+let app_left  f (x, y) = (f x,   y)

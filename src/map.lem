@@ -1,0 +1,5 @@
+let find a m =
+  match Pmap`mem a m with
+    | true  -> Some (Pmap`find a m)
+    | false -> None
+  end
