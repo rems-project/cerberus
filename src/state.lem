@@ -1,0 +1,19 @@
+open global
+
+type ('a, 's) t = 's -> ('a * 's)
+
+let unit a = fun s -> (a, s)
+let bind r f =
+  fun s ->
+    let (a1, s1) = r s in
+    f a1 s1
+
+let join r = bind r (fun x -> x)
+let map  f rx = bind rx (unit -| f)
+
+let app rf rx = bind rf (fun f -> map f rx)
+let lift f = fun rx -> bind rx (unit -| f)
+
+module Operators = struct
+  let (>>=) = bind
+end

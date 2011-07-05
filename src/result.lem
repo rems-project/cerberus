@@ -4,17 +4,17 @@ type ('a, 'msg) t =
   | Result of 'a
   | Error  of 'msg
 
-let bind r f =
-  match r with
-    | Result a -> f a
+let bind m k =
+  match m with
+    | Result a -> k a
     | Error  s -> Error s
   end
 
 let unit a = Result a
 let fail m = Error m
-let join r = bind r (fun x -> x)
+let join m = bind m (fun x -> x)
 
-let map  f rx = bind rx (unit -| f)
+let map f m = bind m (unit -| f)
 
 let app rf rx = bind rf (fun f -> map f rx)
 

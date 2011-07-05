@@ -15,6 +15,22 @@ type ('a_e, 'a_s) env = <|
   fn_map : (id, (id list * (id, 'a_e, 'a_s) a`stmt)) map
 |>
 
+module env = struct
+  type ('a, 'a_e, 'a_s) t = ('a, ('a_e, 'a_s) env) state`t
+
+  let unit = state`unit
+  let bind = state`bind
+  let join = state`join
+  let map = state`map
+
+  let app = state`app
+  let lift = state`lift
+end
+
+module env_reader = struct
+  type ()
+end
+
 let zero l = (c`CONSTANT (c`CONST_INT (0, None)), l)
 let one  l = (c`CONSTANT (c`CONST_INT (1, None)), l)
 let d_zero l = a`Exp l (a`CONSTANT (c`CONST_INT (0, None)))
@@ -23,7 +39,7 @@ let d_one  l = a`Exp l (a`CONSTANT (c`CONST_INT (1, None)))
 let subst env l name =
   let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
              ``[A]n undeclared identifier is a violation of syntax`` in\n" in
-  result`of_option msg (st`find name env.symbol_table)
+  result`of_option msg (env`resolve name env)
 
 let desugar_unop = function
   | c`MINUS -> a`MINUS
@@ -405,7 +421,7 @@ let desugar_program startup global_defns =
   |> in
   let () = List`iter (desugar_global_defn env) global_defns in
   let main =
-    CpSymbolTable.find "main" env.symbol_table
+    st`find "main" env.symbol_table
 (*
       let msg = "Could not find startup function ``" ^ startup ^ "``.\n" in
       CpLogger.info (fun x -> x) msg;
