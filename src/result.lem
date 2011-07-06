@@ -16,15 +16,13 @@ let join m = bind m (fun x -> x)
 
 let map f m = bind m (unit -| f)
 
-let app rf rx = bind rf (fun f -> map f rx)
+let app mf m = bind mf (fun f -> map f m)
 
-let lift f = fun rx -> bind rx (unit -| f)
+let app2 mf mx my = app (app mf mx) my
+let app3 mf mx my mz = app (app (app mf mx) my) mz
 
-let app2 rf rx ry = app (app rf rx) ry
-let app3 rf rx ry rz = app (app (app rf rx) ry) rz
-
-let map2 f rx ry = app (map f rx) ry
-let map3 f rx ry rz = app2 (map f rx) ry rz
+let map2 f mx my = app (map f mx) my
+let map3 f mx my mz = app2 (map f mx) my mz
 
 let map_list f xs =
   List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
@@ -33,15 +31,15 @@ let map_snd_list f init xs =
   let f' x (i, ys) =
     let (i, y) = f i x in
     (i, y::ys) in
-  let rys_rev = List`fold_left (fun r x -> map (f' x) r) (unit (init, [])) xs in
-  map (pair`app_right List`rev) rys_rev
+  let mys_rev = List`fold_left (fun m x -> map (f' x) m) (unit (init, [])) xs in
+  map (pair`app_right List`rev) mys_rev
 
 let map_snd_list_alt f init xs =
-  let f' (i, rys) x =
-    let (i, ry) = f i x in
-    (i, map2 list`cons ry rys) in
-  let rys_rev = List`fold_left f (init, unit []) xs in
-  pair`app_right (map List`rev) rys_rev
+  let f' (i, mys) x =
+    let (i, my) = f i x in
+    (i, map2 list`cons my mys) in
+  let mys_rev = List`fold_left f (init, unit []) xs in
+  pair`app_right (map List`rev) mys_rev
 
 let of_option m = function
   | Some a -> unit a

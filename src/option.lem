@@ -1,9 +1,15 @@
+open global
+
+let unit a = Some a
+let bind m f =
+  match m with
+    | Some a -> f a
+    | None   -> None
+  end
+
+let map f m = bind m (unit -| f)
+
 let is_some = function
   | Some _ -> true
   | None   -> false
-end
-
-let map f = function
-  | Some e -> Some (f e)
-  | None   -> None
 end

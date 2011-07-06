@@ -20,15 +20,75 @@ module env = struct
 
   let unit = state`unit
   let bind = state`bind
-  let join = state`join
   let map = state`map
 
-  let app = state`app
-  let lift = state`lift
+  let destroy_scope =
+    let f env = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
+    state`update f
+
+  let create_scope =
+    let f env = <|env with symbol_table = st`create_scope env.symbol_table|> in
+    state`update f
+
+  let push_table t =
+    let f env = <|env with symbol_table = st`push_table t env.symbol_table|> in
+    state`update f
+
+  let fresh_name name =
+    fun env ->
+      let (symbol_set', symbol) = symbol`fresh_name env.symbol_set name in
+      let env' = <|env with
+        symbol_set = symbol_set';
+        symbol_table = st`add name symbol env.symbol_table
+      |> in
+      (symbol, env')
+
+  let add_id id decl=
+    let f env = <|env with id_map = Pmap`add id decl env.id_map|> in
+    state`update f
+
+  let add_fn id formals body=
+    let f env = <|env with fn_map = Pmap`add id (formals, body) env.fn_map|> in
+    state`update f
+
+  let add_globals defns =
+    let f env = <|env with globals = env.globals @ defns|> in
+  state`update f
+end
+
+module result_env = struct
+  type ('a, 'a_e, 'a_s, 'msg) t = (('a, 'a_e, 'a_s) env`t, 'msg) result`t
+
+  let unit = result`unit -| env`unit
+  let bind m f = result`bind m (fun m -> result`unit (env`bind m f))
+  let fail = result`fail
+
+  let map f m = bind m (unit -| f)
+
+  let app mf m = bind mf (fun f -> map f m)
+
+  let app2 mf mx my = app (app mf mx) my
+  let app3 mf mx my mz = app (app (app mf mx) my) mz
+
+  let map2 f mx my = app (map f mx) my
+  let map3 f mx my mz = app2 (map f mx) my mz
+
+  let map_list f xs =
+    List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
 end
 
 module env_reader = struct
-  type ()
+  type ('v, 'a, 'a_e, 'a_s) t = ('v, ('a, 'a_e, 'a_s) env`t) reader`t
+
+  let unit = reader`unit
+  let bind = reader`bind
+  let map = reader`map
+
+  let coerce = reader`coerce
+
+  let resolve name env = st`find name env.symbol_table
+  let return_scope env = st`return_scope env.symbol_table
+  let symbols env = st`symbols env.symbol_table
 end
 
 let zero l = (c`CONSTANT (c`CONST_INT (0, None)), l)
@@ -39,7 +99,7 @@ let d_one  l = a`Exp l (a`CONSTANT (c`CONST_INT (1, None)))
 let subst env l name =
   let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
              ``[A]n undeclared identifier is a violation of syntax`` in\n" in
-  result`of_option msg (env`resolve name env)
+  result`of_option msg (env_reader`resolve name env)
 
 let desugar_unop = function
   | c`MINUS -> a`MINUS
@@ -70,7 +130,7 @@ let rec
     (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
        analogous to the prefix [[ ++ ]] operator". *)
     | c`UNARY c`PREFIX_DECR e ->
-        result`map2 (a`ASSIGN (Some c`SUB)) (f e) (result`unit (d_one l))
+        result`map2 (a`ASSIGN (Some c`SUB)) (f e) (result_env`unit (d_one l))
     (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
        equivalent to [[ (E==0) ]]". *)
     | c`UNARY c`NOT e -> result`map (a`BINARY (c`RELATIONAL c`EQ) (d_zero l)) (f e)
@@ -80,7 +140,7 @@ let rec
     | c`QUESTION e1 e2 e3 -> result`map3 a`QUESTION (f e1) (f e2) (f e3)
     | c`CAST t e -> result`map2 a`CAST (ft t) (f e)
     | c`CALL e es -> result`map2 a`CALL (f e) (result`map_list f es)
-    | c`CONSTANT c -> result`unit (a`CONSTANT c)
+    | c`CONSTANT c -> result_env`unit (a`CONSTANT c)
     | c`VARIABLE n -> result`map a`VARIABLE (subst env l n)
     | c`TYPE_SIZEOF t -> result`map a`SIZEOF (ft t)
     | c`TYPE_ALIGNOF t -> result`map a`ALIGNOF (ft t)
@@ -152,17 +212,17 @@ let rec
     | c`ARRAY _ t (Some e) ->
         let size =
           match e with
-            | (c`CONSTANT (c`CONST_INT (size, _)), l) -> result`unit size
+            | (c`CONSTANT (c`CONST_INT (size, _)), l) -> result_env`unit size
             | (_, l) ->
                 let msg = "We don't support VLAs and moreover the size of an array \
                            must be an integer constant.\n" in
-                result`fail msg
+                result_env`fail msg
 (*
                 CpLogger.error (CpPrint.pp_program msg) l;
 *)
           end in
         result`map2 a`ARRAY (ft t) size
-    | c`ARRAY s t None -> result`fail "Arrays are not yet supported.\n"
+    | c`ARRAY s t None -> result_env`fail "Arrays are not yet supported.\n"
     | c`FUNCTION t decls ->
         let f ((_, t, sts), l) =
           result`bind (desugar_storage l sts) (function
@@ -175,7 +235,7 @@ let rec
                            (including prototypes), Constraints: ``The only \
                            storage-class that shall occur in a parameter \
                            declaration is register.`` in\n" in
-                result`fail msg
+                result_env`fail msg
 (*
                 CpLogger.info (CpPrint.pp_program msg) l;
                 raise E_Invalid
@@ -264,7 +324,7 @@ let rec
                      Constraints: ``The declaration part of a for statement \
                      shall only declare identifiers for objects having storage \
                      class auto or register`` in\n" in
-          result`fail msg
+          result_env`fail msg
     | c`DECLARATION defns ->
         let d_defns = result`map_snd_list desugar_defn env defns in
         (* We remove all declarations that don't contain an initialiser. *)
@@ -273,7 +333,7 @@ let rec
           | (_,  None,     _) -> None
         end in
         let d_defns = list`filter_map f d_defns in
-        result`unit (env, a`DECLARATION d_defns)
+        result_env`unit (env, a`DECLARATION d_defns)
     | c`EXPRESSION e -> result`map (pair env -| a`EXPRESSION) (fe e)
     | c`IF e s1 s2_opt ->
         let d_s2 = desugar_stmt_opt env l s2_opt in
@@ -285,7 +345,7 @@ let rec
     | c`CASE (e, l) s ->
         let integer_constant =
           match e with
-            | c`CONSTANT (c`CONST_INT i) -> result`unit i
+            | c`CONSTANT (c`CONST_INT i) -> result_env`unit i
             | _ -> result_fail "We don't support anything but integer \
                                 constants as [[ case ]] labels."
           end in
@@ -294,11 +354,11 @@ let rec
     | c`LABEL n s -> (* a`LABEL n (fs s) *)
         resul`fail "No support for labeled statements yet.\n"
     | c`RETURN (Some e) -> result`map (pair env -| a`RETURN_EXPRESSION) (fe e)
-    | c`RETURN None -> result`unit (env, a`RETURN_VOID)
-    | c`GOTO n -> result`fail "No support for goto yet.\n"
-    | c`SKIP -> result`unit (env, a`SKIP)
-    | c`BREAK -> result`unit (env, a`BREAK)
-    | c`CONTINUE -> result`unit (env, a`CONTINUE)
+    | c`RETURN None -> result_env`unit (env, a`RETURN_VOID)
+    | c`GOTO n -> result_env`fail "No support for goto yet.\n"
+    | c`SKIP -> result_env`unit (env, a`SKIP)
+    | c`BREAK -> result_env`unit (env, a`BREAK)
+    | c`CONTINUE -> result_env`unit (env, a`CONTINUE)
   end)
 
 | desugar_stmt_opt env l = function
@@ -306,7 +366,7 @@ let rec
   (* Adding or removing a (finite number of) null operation is semantically
      sound since "a null statement [...] performs no operations" (6.8.3#3,
      Expression and null statements, Semantics). *)
-  | None -> result`unit (env, ail`Stmt l a`SKIP)
+  | None -> result_env`unit (env, ail`Stmt l a`SKIP)
 end
 
 | register_name env l name =
@@ -315,7 +375,7 @@ end
     let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ``If \
                an identifier has no linkage, there shall be no more than one \
                declaration of the identifier [...]`` in\n" in
-    result`fail msg
+    result_env`fail msg
 (*
     CpLogger.info (CpPrint.pp_program msg) l;
     raise E_Invalid
@@ -323,19 +383,19 @@ end
   else
     let symbol = symbol`fresh_name env.symbol_set name in
     let env = <|env with symbol_table = st`add name symbol env.symbol_table|> in
-    result`unit (env, symbol)
+    result_env`unit (env, symbol)
 
 | desugar_storage l = function
-  | []           -> result`unit None
-  | [c`AUTO]     -> result`unit (Some a`AUTO)
-  | [c`STATIC]   -> result`unit (Some a`STATIC)
-  | [c`REGISTER] -> result`fail "No support for storage class register."
-  | [c`EXTERN]   -> result`fail "No support for storage class extern."
+  | []           -> result_env`unit None
+  | [c`AUTO]     -> result_env`unit (Some a`AUTO)
+  | [c`STATIC]   -> result_env`unit (Some a`STATIC)
+  | [c`REGISTER] -> result_env`fail "No support for storage class register."
+  | [c`EXTERN]   -> result_env`fail "No support for storage class extern."
   | _ ->
       let msg =
         "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
          ``At most, one storage-class specifier may be given [...]`` in\n" in
-      result`fail msg
+      result_env`fail msg
 (*
       CpLogger.info (CpPrint.pp_program msg) l;
       raise E_Invalid
@@ -399,7 +459,7 @@ let desugar_global_defn env (defn, l) =
     | c`FUNCTION_DEFINITION (decl, s) ->
         let (id, formals) = desugar_function_decl env decl in
         let d_s = desugar_stmt env s in
-        let enn = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
+        let env = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
         <|env with fn_map = Pmap`add id (formals, d_s) env.fn_map|>
     | c`EXTERNAL_DECLARATION defns ->
         let d_defns = List`map (desugar_defn env) defns in
