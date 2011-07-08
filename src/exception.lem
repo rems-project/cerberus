@@ -1,0 +1,27 @@
+open global
+
+type ('a, 'msg) t =
+  | Result of 'a
+  | Exception of 'msg
+
+let bind m k =
+  match m with
+    | Result a -> k a
+    | Exception  s -> Exception s
+  end
+
+let unit a = Result a
+let throw m = Exception m
+let fail = throw
+let join m = bind m (fun x -> x)
+
+let map f m = bind m (unit -| f)
+
+let of_option m = function
+  | Some a -> unit a
+  | None   -> throw m
+end
+
+module Operators = struct
+  let (>>=) = bind
+end

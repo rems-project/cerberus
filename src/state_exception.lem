@@ -1,0 +1,38 @@
+open global
+
+type ('a, 's, 'msg) t = 's -> ('a * 's, 'msg) exception`t
+
+let unit a = fun s -> exception`unit (a, s)
+
+let map f m =
+  fun s -> exception`bind (m s) (fun (a, s') -> exception`unit (f a, s'))
+
+let join mm = fun s -> exception`bind (mm s) (fun (m, s') -> m s')
+
+let bind m f = join (map f m)
+
+let app mf m = bind mf (fun f -> map f m)
+let map2 f mx my = app (map f mx) my
+
+let fail msg = fun _ -> exception`fail msg
+
+let map_list f xs =
+  List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
+
+let of_option msg = function
+  | Some a -> unit a
+  | None   -> fail msg
+end
+
+let option msg m =
+  let f o =
+    match o with
+      | Some a -> unit a
+      | None   -> fail msg
+    end in
+  bind m f
+
+let update f = fun s -> exception`unit ((), f s)
+
+let modify f = fun s -> exception`unit (f s)
+let read f = fun s -> exception`unit (f s, s)
