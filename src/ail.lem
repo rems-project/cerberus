@@ -96,7 +96,7 @@ type ('id, 'a_e, 'a_s) file = <|
   main : 'id;
   id_map : ('id, declaration) map;
   globals : ('id * ('id, 'a_e) exp) list;
-  function_map : ('id, ('id list * ('id, 'a_e, 'a_s) stmt)) map
+  fn_map : ('id, ('id list * ('id, 'a_e, 'a_s) stmt)) map
 |>
 
 type ('a_e, 'a_s) env = <|

@@ -26,15 +26,23 @@ module effect = struct
 
   let fail = state_exception`fail
 
-  let app mf m = bind mf (fun f -> map f m)
-  let app2 mf mx my = app (app mf mx) my
-  let app3 mf mx my mz = app (app2 mf mx my) mz
-  let map2 f mx my = app (map f mx) my
-  let map3 f mx my mz = app2 (map f mx) my mz
+  let app  mf m = bind mf (fun f -> map f m)
+  let papp mf x = bind mf (fun f -> unit (f x))
 
   let option = state_exception`option
   let of_option = state_exception`of_option
   let map_list = state_exception`map_list
+  let foldr_list = state_exception`foldr_list
+  let iter = state_exception`iter
+  let t_list = state_exception`t_list
+
+  let initial_state = <|
+    symbol_set = symbol`emp;
+    symbol_table = st`create_scope st`emp;
+    id_map = Pmap`empty;
+    globals = [];
+    fn_map = Pmap`empty
+  |>
 
   let update = state_exception`update
 
@@ -85,9 +93,29 @@ module effect = struct
     let f env = st`symbols env.symbol_table in
     state_exception`read f
 
+  let to_program main =
+    let f env = <|
+      a`main = main;
+      a`id_map = env.id_map;
+      a`globals = env.globals;
+      a`fn_map = env.fn_map
+    |> in
+    state_exception`read f
+
   module operators = struct
     let (>>=) = bind
+
+    let (<$>) = map
+    let (<*>) = app
+    let (<@>) = papp
   end
+
+  open operators
+
+  let app2 mf mx my = mf <*> mx <*> my
+  let app3 mf mx my mz = mf <*> mx <*> my <*> mz
+  let map2 f mx my = f <$> mx <*> my
+  let map3 f mx my mz = f <$> mx <*> my <*> mz
 end
 
 open effect`operators
@@ -116,35 +144,37 @@ let rec
 | desugar_exp (e, l) =
   let f  = desugar_exp in
   let ft = desugar_type in
-  effect`map (a`Exp l) (match e with
+  a`Exp l <$> (match e with
     (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
        subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
        ( *((E1)+(E2))) ]]". *)
     | c`INDEX e1 e2 ->
-        effect`map2 (fun x y ->
-          a`UNARY a`INDIRECTION (a`Exp l (a`BINARY (c`ARITHMETIC c`ADD) x y))
-        ) (f e1) (f e2)
+        a`UNARY a`INDIRECTION <$> (
+          a`Exp l <$> (
+            a`BINARY (c`ARITHMETIC c`ADD) <$> f e1 <*> f e2
+          )
+        )
     (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
        equivalent to [[ (E+=1) ]]". *)
     | c`UNARY c`PREFIX_INCR e ->
-        effect`map (fun x -> a`ASSIGN (Some c`ADD) x (d_one l)) (f e)
+        a`ASSIGN (Some c`ADD) <$> f e <@> d_one l
     (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
        analogous to the prefix [[ ++ ]] operator". *)
     | c`UNARY c`PREFIX_DECR e ->
-        effect`map2 (a`ASSIGN (Some c`SUB)) (f e) (effect`unit (d_one l))
+        a`ASSIGN (Some c`SUB) <$> f e <@> d_one l
     (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
        equivalent to [[ (E==0) ]]". *)
-    | c`UNARY c`NOT e -> effect`map (a`BINARY (c`RELATIONAL c`EQ) (d_zero l)) (f e)
-    | c`UNARY unop e -> effect`map (a`UNARY (desugar_unop unop)) (f e)
-    | c`BINARY o e1 e2 -> effect`map2 (a`BINARY o) (f e1) (f e2)
-    | c`ASSIGN o e1 e2 -> effect`map2 (a`ASSIGN o) (f e1) (f e2)
-    | c`QUESTION e1 e2 e3 -> effect`map3 a`QUESTION (f e1) (f e2) (f e3)
-    | c`CAST t e -> effect`map2 a`CAST (ft t) (f e)
-    | c`CALL e es -> effect`map2 a`CALL (f e) (effect`map_list f es)
+    | c`UNARY c`NOT e -> a`BINARY (c`RELATIONAL c`EQ) (d_zero l) <$> f e
+    | c`UNARY unop e -> a`UNARY (desugar_unop unop) <$> f e
+    | c`BINARY o e1 e2 -> a`BINARY o <$> f e1 <*> f e2
+    | c`ASSIGN o e1 e2 -> a`ASSIGN o <$> f e1 <*> f e2
+    | c`QUESTION e1 e2 e3 -> a`QUESTION <$> f e1 <*> f e2 <*> f e3
+    | c`CAST t e -> a`CAST <$> ft t <*> f e
+    | c`CALL e es -> a`CALL <$> f e <*> effect`map_list f es
     | c`CONSTANT c -> effect`unit (a`CONSTANT c)
-    | c`VARIABLE n -> effect`map a`VARIABLE (subst l n)
-    | c`TYPE_SIZEOF t -> effect`map a`SIZEOF (ft t)
-    | c`TYPE_ALIGNOF t -> effect`map a`ALIGNOF (ft t)
+    | c`VARIABLE n -> a`VARIABLE <$> subst l n
+    | c`TYPE_SIZEOF t -> a`SIZEOF <$> ft t
+    | c`TYPE_ALIGNOF t -> a`ALIGNOF <$> ft t
 (*
     | c`COMPOUND_LITERAL _ ->
         raise_bug "Compound literals are not yet supported."
@@ -209,7 +239,7 @@ let rec
 | desugar_type t =
   let ft = desugar_type in
   match t with
-    | c`BASE qs ss -> effect`map (a`BASE qs) (desugar_specifier ss)
+    | c`BASE qs ss -> a`BASE qs <$> desugar_specifier ss
     | c`ARRAY _ t (Some e) ->
         let size =
           match e with
@@ -222,11 +252,11 @@ let rec
                 CpLogger.error (CpPrint.pp_program msg) l;
 *)
           end in
-        effect`map2 a`ARRAY (ft t) size
+        a`ARRAY <$> ft t <*> size
     | c`ARRAY s t None -> effect`fail "Arrays are not yet supported.\n"
     | c`FUNCTION t decls ->
         let f ((_, t, sts), l) =
-          effect`bind (desugar_storage l sts) (function
+          desugar_storage l sts >>= (function
 (* 
             | Some a`REGISTER ->
                 raise_error "No support for storage class register."
@@ -244,21 +274,21 @@ let rec
             | None -> ft t
           end) in
         let d_decls = effect`map_list f decls in
-        effect`map2 a`FUNCTION (ft t) d_decls
-    | c`POINTER qs t -> effect`map (a`POINTER qs) (ft t)
+        a`FUNCTION <$> ft t <*> d_decls
+    | c`POINTER qs t -> a`POINTER qs <$> ft t
   end
 
 | desugar_stmt (s, l) =
   let fs = desugar_stmt in
   let fe = desugar_exp in
-  effect`map (ail`Stmt l) (match s with
+  ail`Stmt l <$> match s with
     | c`BLOCK ss ->
         (* Open up a new scope, transform each statement/declaration in the
            block and tear down the scope again. *)
-        effect`create_scope >>= (fun () ->
+        effect`create_scope   >>= (fun ()   ->
         effect`map_list fs ss >>= (fun d_ss ->
-        effect`symbols >>= (fun ids ->
-        effect`destroy_scope >>= (fun () ->
+        effect`symbols        >>= (fun ids  ->
+        effect`destroy_scope  >>= (fun ()   ->
         effect`unit (a`BLOCK ids d_ss)))))
     (* We transform all for statements into while statements. *)
     | c`FOR_EXP e1_opt e2_opt e3_opt s ->
@@ -286,7 +316,9 @@ let rec
         let body = (c`BLOCK [s; s3], l) in
         let loop = (c`WHILE e2 body, l) in    
         let s' = (c`BLOCK [s1; loop], l) in
-        fs s'
+        fs s' >>= (function ail`Stmt _ d_s ->
+          effect`unit d_s
+        end)
     | c`FOR_DECL defns e2_opt e3_opt s ->
         let is_auto_or_register ((((_, _, storage), l), _), _) =
           if List`exists (fun s -> s <> c`AUTO && s <> c`REGISTER) storage then
@@ -318,41 +350,42 @@ let rec
           let body = (c`BLOCK [s; s3], l) in
           let loop = (c`WHILE e2 body, l) in
           let s' = (c`BLOCK [s1; loop], l) in
-          fs s'
+          fs s' >>= (function ail`Stmt _ d_s ->
+            effect`unit d_s
+          end)
     | c`DECLARATION defns ->
-        effect`map_list desugar_defn defns >>= (fun d_defns ->
+        let d_defns = effect`map_list desugar_defn defns in
         (* We remove all declarations that don't contain an initialiser. *)
         let f = function
           | (id, Some d_e, _) -> Some (id, d_e)
           | (_,  None,     _) -> None
         end in
-        effect`unit (a`DECLARATION (list`filter_map f d_defns)))
-    | c`EXPRESSION e -> effect`map a`EXPRESSION (fe e)
+        a`DECLARATION <$> (list`filter_map f <$> d_defns)
+    | c`EXPRESSION e -> a`EXPRESSION <$> fe e
     | c`IF e s1 s2_opt ->
         let d_s2 = desugar_stmt_opt l s2_opt in
-        effect`map3 a`IF (fe e) (fs s1) d_s2
-    | c`WHILE e s ->
-        effect`map2 a`WHILE (fe e) (fs s)
-    | c`DO e s -> effect`map2 a`DO (fe e) (fs s)
-    | c`SWITCH e s -> effect`map2 a`SWITCH (fe e) (fs s)
+        a`IF <$> fe e <*> fs s1 <*> d_s2
+    | c`WHILE e s -> a`WHILE <$> fe e <*> fs s
+    | c`DO e s -> a`DO <$> fe e <*> fs s
+    | c`SWITCH e s -> a`SWITCH <$> fe e <*> fs s
     | c`CASE (e, l) s ->
         let integer_constant =
           match e with
             | c`CONSTANT (c`CONST_INT i) -> effect`unit i
-            | _ -> result_fail "We don't support anything but integer \
+            | _ -> effect`fail "We don't support anything but integer \
                                 constants as [[ case ]] labels."
           end in
-        effect`map2 a`CASE integer_constant (fs s)
-    | c`DEFAULT s -> effect`map a`DEFAULT (fs s)
+        a`CASE <$> integer_constant <*> fs s
+    | c`DEFAULT s -> a`DEFAULT <$> fs s
     | c`LABEL n s -> (* a`LABEL n (fs s) *)
         effect`fail "No support for labeled statements yet.\n"
-    | c`RETURN (Some e) -> effect`map a`RETURN_EXPRESSION (fe e)
+    | c`RETURN (Some e) -> a`RETURN_EXPRESSION <$> fe e
     | c`RETURN None -> effect`unit a`RETURN_VOID
     | c`GOTO n -> effect`fail "No support for goto yet.\n"
     | c`SKIP -> effect`unit a`SKIP
     | c`BREAK -> effect`unit a`BREAK
     | c`CONTINUE -> effect`unit a`CONTINUE
-  end)
+  end
 
 | desugar_stmt_opt l = function
   | Some stmt -> desugar_stmt stmt
@@ -363,8 +396,8 @@ let rec
 end
 
 | register_name l name =
-  effect`return_scope (fun scope ->
-  if st`mem name scope then
+  effect`return_scope >>= (fun scope ->
+  if symbol_table`mem name scope then
     let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ``If \
                an identifier has no linkage, there shall be no more than one \
                declaration of the identifier [...]`` in\n" in
@@ -374,7 +407,7 @@ end
     raise E_Invalid
 *)
   else
-    effect`fresh_name)
+    effect`fresh_name name)
 
 | desugar_storage l = function
   | []           -> effect`unit None
@@ -394,98 +427,92 @@ end
 end
 
 | desugar_decl ((name, t, sts), l) =
-  register_name l name >>= (fun id ->
-  desugar_storage l sts >>= (fun d_st ->
-  desugar_type t >= (fun d_t ->
-  effect`add_id id (d_t, d_st) >>= (fun () ->
+  register_name l name         >>= (fun id   ->
+  desugar_storage l sts        >>= (fun d_st ->
+  desugar_type t               >>= (fun d_t  ->
+  effect`add_id id (d_t, d_st) >>= (fun ()   ->
   effect`unit id))))
 
 | desugar_function_decl ((name, t, sts), l) =
   let desugar_function_type t =
     match t with
-      | c`FUNCTION (t, decls) ->
+      | c`FUNCTION t decls ->
           let f ((name, t, sts), l) (ids, ds) =
-            let id = register_name env l name in
-            let d_t = desugar_type t in
-            let d_st =
-	      match desugar_storage l sts with
-                (*
-                | Some a`REGISTER ->
-                    raise_error "No support for storage class register."
-                *)
-                | Some _ ->
-                    let msg = "Violation of constraint 6.7.6.3#2 Function \
-                               declarators (including prototypes), Constraints: \
-                               ``The only storage-class that shall occur in a \
-                               parameter declaration is register.`` in\n" in msg
+            register_name l name  >>= (fun id  ->
+            desugar_type t        >>= (fun d_t ->
+            desugar_storage l sts >>= (function
+              (*
+              | Some a`REGISTER ->
+                  effect`fail "No support for storage class register."
+              *)
+              | Some _ ->
+                  let msg = "Violation of constraint 6.7.6.3#2 Function \
+                             declarators (including prototypes), Constraints: \
+                             ``The only storage-class that shall occur in a \
+                             parameter declaration is register.`` in\n" in
+                  effect`fail msg
 (*
-                    CpLogger.info (CpPrint.pp_program msg) l;
-                    raise E_Invalid
+                  CpLogger.info (CpPrint.pp_program msg) l;
+                  raise E_Invalid
 *)
-                | None -> None
-              end in
-          let () = env.id_map <- Pmap`add id (d_t, d_st) env.id_map in
-          (id::ids, d_t::ds) in
-          let (formals, d_decls) = List`fold_right f decls ([], []) in
-          (a`FUNCTION (desugar_type t) d_decls, formals)
-      | _ -> raise_bug "Not a function type."
+              | None -> effect`unit None
+            end) >>= (fun d_st ->
+            effect`add_id id (d_t, d_st) >>= (fun () ->
+            effect`unit (id::ids, d_t::ds))))) in
+          let f _ b = effect`unit b in
+          desugar_type t >>= (fun d_t ->
+          effect`foldr_list f decls ([], []) >>= (fun (formals, d_decls) ->
+          effect`unit (a`FUNCTION d_t d_decls, formals)))
+      | _ -> effect`fail "Not a function type."
     end in
-  let id = register_name env l name in
-  let d_st = desugar_storage l sts in
-  let env = <|env with symbol_table = st`create_scope env.symbol_table|> in
-  let (d_t, formals) = desugar_function_type env t in
-  let fn_scope = st`return_scope env.symbol_table in
-  let env = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
-  let env = <|env with id_map = Pmap`add id (d_t, d_st) env.id_map|> in
-  let env = <|env with symbol_table = st`push_table fn_scope env.symbol_table|> in
-  (id, formals)
+  register_name l name >>= (fun id ->
+  desugar_storage l sts >>= (fun d_st ->
+  effect`create_scope >>= (fun () ->
+  desugar_function_type t >>= (fun (d_t, formals) ->
+  effect`return_scope >>= (fun fn_scope ->
+  effect`destroy_scope >>= (fun () ->
+  effect`add_id id (d_t, d_st) >>= (fun () ->
+  effect`push_table fn_scope >>= (fun () ->
+  effect`unit (id, formals)))))))))
 
 | desugar_defn ((d, e_opt), l) =
   desugar_decl d >>= (fun id ->
-  effect`unit (id, option`map desugar_exp e_opt, l))
+  match e_opt with
+    | None -> effect`unit (id, None, l)
+    | Some e ->
+        desugar_exp e >>= (fun d_e ->
+        effect`unit (id, Some d_e, l))
+  end)
 
-let desugar_global_defn env (defn, l) =
+let desugar_global_defn (defn, l) =
   match defn with
-    | c`FUNCTION_DEFINITION (decl, s) ->
-        let (id, formals) = desugar_function_decl env decl in
-        let d_s = desugar_stmt env s in
-        let env = <|env with symbol_table = st`destroy_scope env.symbol_table|> in
-        <|env with fn_map = Pmap`add id (formals, d_s) env.fn_map|>
+    | c`FUNCTION_DEFINITION decl s ->
+         desugar_function_decl decl >>= (fun (id, formals) ->
+        desugar_stmt s >>= (fun d_s ->
+        effect`destroy_scope >>= (fun () ->
+        effect`add_fn id formals d_s)))
     | c`EXTERNAL_DECLARATION defns ->
-        let d_defns = List`map (desugar_defn env) defns in
         let f = function
           | (id, Some e, l) -> (id, e)
           | (id, None,   l) -> (id, d_zero l)
         end in
-        let d_defns = List`map f d_defns in
-        <|env with globals = env.globals @ d_defns|>
+        List`map f <$> effect`map_list desugar_defn defns >>= (fun d_defns ->
+        effect`add_globals d_defns)
    end
 
 let desugar_program startup global_defns =
-  let env = <|
-    symbol_set = CpSymbol.make ();
-    symbol_table = CpSymbolTable.create_scope CpSymbolTable.empty;
-    id_map = Pmap`empty;
-    globals = [];
-    fn_map = Pmap`empty
-  |> in
-  let () = List`iter (desugar_global_defn env) global_defns in
-  let main =
-    st`find "main" env.symbol_table
+  let msg = "Could not find startup function ``" ^ startup ^ "``.\n" in
+  effect`iter desugar_global_defn global_defns >>= (fun () ->
+  effect`option msg (effect`resolve "main") >>= (fun main ->
 (*
-      let msg = "Could not find startup function ``" ^ startup ^ "``.\n" in
       CpLogger.info (fun x -> x) msg;
       raise E_Invalid in
-*) in
-  <|
-    a`main = main;
-    a`id_map = env.id_map;
-    a`globals = env.globals;
-    a`fn_map = env.fn_map
-  |>
+*)
+    effect`to_program main))
 
 let desugar startup (name, global_defns) =
-  a`Program (desugar_program startup global_defns)
+  let init = effect`initial_state in
+  desugar_program startup global_defns init
 (*
   | E_Undefined -> a`Undefined
   | E_Invalid -> a`Invalid

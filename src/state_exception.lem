@@ -12,12 +12,11 @@ let join mm = fun s -> exception`bind (mm s) (fun (m, s') -> m s')
 let bind m f = join (map f m)
 
 let app mf m = bind mf (fun f -> map f m)
-let map2 f mx my = app (map f mx) my
 
 let fail msg = fun _ -> exception`fail msg
-
-let map_list f xs =
-  List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
+let update f = fun s -> exception`unit ((), f s)
+let modify f = fun s -> exception`unit (f s)
+let read   f = fun s -> exception`unit (f s, s)
 
 let of_option msg = function
   | Some a -> unit a
@@ -32,7 +31,37 @@ let option msg m =
     end in
   bind m f
 
-let update f = fun s -> exception`unit ((), f s)
+module operators = struct
+  let (>>=) = bind
+  let (<$>) = map
+  let (<*>) = app
+end
 
-let modify f = fun s -> exception`unit (f s)
-let read f = fun s -> exception`unit (f s, s)
+open operators
+
+let map2 f mx my = f <$> mx <*> my
+
+let sequence ms =
+  List`fold_right
+    (fun m m' ->
+      m  >>= (fun x  ->
+      m' >>= (fun xs ->
+      unit (x::xs)))
+    ) ms (unit [])
+
+let t_list t xs = sequence (t xs)
+
+let map_list f = t_list (List`map f)
+
+let rec foldr_list f l a =
+  match l with
+    | [] -> unit a
+    | x::xs -> f x a >>= (fun a' -> foldr_list f xs a')
+  end
+
+let iter f l = foldr_list (fun a () -> f a) l ()
+
+(*
+let map_list f xs =
+  List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
+*)
