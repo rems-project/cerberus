@@ -1,0 +1,14 @@
+(* OCaml translation fails.
+
+Error message:
+Generated code: tup_ctor
+LEM internal error: type mismatch:
+num
+and
+'b
+
+*)
+
+type 'b pair = Pair of unit * 'b
+
+let p = (Pair ()) 0

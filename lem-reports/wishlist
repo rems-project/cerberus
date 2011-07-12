@@ -1,0 +1,3 @@
+module signatures
+type classes (or functors)
+sub is a keyword, a warning would be good!
