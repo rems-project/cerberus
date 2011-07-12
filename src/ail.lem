@@ -49,8 +49,8 @@ type ctype =
   | FUNCTION of ctype * ctype list
 
 type type_class =
-  | TExp of ctype
-  | TLvalue of ctype
+  | T_EXP of ctype
+  | T_LVALUE of ctype
 
 type declaration = ctype * storage_class option
 

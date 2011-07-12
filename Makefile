@@ -7,23 +7,26 @@ FILES=\
 pair.lem \
 map.lem \
 list.lem \
-success.lem \
 multiset.lem \
 lexing.lem \
 location.lem \
 symbol.lem \
 global.lem \
 option.lem \
-state.lem \
-reader.lem \
-result.lem \
+exception.lem \
+state_exception.lem \
 symbol_table.lem \
 cabs.lem \
 ail.lem \
-types.lem \
+ail_types.lem \
 ail_annotate.lem \
-cabs_to_ail.lem
+cabs_to_ail.lem \
+ail_rewrite.lem \
+ail_typing.lem
 
 all:
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types -ocaml $(foreach F, $(FILES), ../src/$(F))
+	export OCAMLRUNPARAM=b; cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types $(foreach F, $(FILES), ../src/$(F))
+
+clean:
+	rm -R $(BUILD_DIR)

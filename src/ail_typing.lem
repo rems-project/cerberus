@@ -1,0 +1,782 @@
+open global
+
+module a = ail
+module c = cabs
+
+module t = ail_types
+module aa = ail_annotate
+
+let report msg exp = ""
+
+let invalid msg exp = exception`fail (report msg exp)
+
+let lvalue_convert t e =
+  match t`lvalue_convert t with
+    | None ->
+        let msg = "Undefined behaviour according to 6.3.2.1#2 Lvalues, arrays, and \
+                   function designators: ``If the value has an incomplete \
+                   type and does not have array type, the behaviour is undefined. \
+                   [...]`` in" in
+        exception`fail (report msg e)
+    | Some t' -> exception`unit t'
+  end
+
+let int = a`BASE empty (a`INTEGER (a`SIGNED a`INT))
+let one = a`CONSTANT (c`CONST_INT (1, None))
+
+let rec is_null_pointer e =
+  match e with
+    | a`CONSTANT (c`CONST_INT (n, _)) -> n = 0
+    | a`CAST (a`POINTER _ (a`BASE _ a`VOID)) (a`Exp _ e') -> is_null_pointer e'
+    | _ -> false
+  end
+
+(* TODO Could improve specificity of error messages: Currently, we stop as soon
+   as a constraint is violated but do not check whether it is partially
+   satisfied. *)
+
+(* Implementation note: [check_exp] returns the type of a given expression but
+   we (eventually) want to annotate each expression in the abstract syntax tree
+   with a type. To avoid redundant type computation, we use open
+   recursion. [annotate_exp] complements the process. *)
+
+let rec
+| check_exp env l e_head =
+  let invalid_head msg = invalid' msg (l, e_head) in
+  let f e =
+    let t =
+      match aa`type_of e with
+        | a`T_EXP    t -> t
+        | a`T_LVALUE t -> t`lvalue_convert t
+      end in
+    t`pointer_convert t in
+  let f_lvalue msg e =
+    match aa`type_of e with
+      | a`T_EXP    _ -> invalid msg e
+      | a`T_LVALUE t -> t`pointer_convert t
+    end in
+  match e_head with
+    | a`VARIABLE id ->
+        let (t, _) = BatMap.find id env.a`id_map in
+        if BatMap.mem id env.a`function_map then
+          exception`unit (a`T_EXP t)
+        else
+          exception`unit (a`T_LVALUE t)
+    | a`CONSTANT (c`CONST_INT i None) ->
+        exception`unit (a`T_EXP (a`BASE empty (a`INTEGER (a`SIGNED a`INT))))
+    | a`CONSTANT (c`CONST_INT _ (Some _)) ->
+        exception`fail "Suffixes in integer constant expressions are not supported."
+    | a`CALL e es ->
+        let msg_r = "Violation of constraint 6.5.2.2#1 Function calls, \
+                     Constraints: ``The expression that denotes the function \
+                     shall have type pointer to function returning void or \
+                     returning a complete object type other than an array \
+                     type.`` (The return type doesn't seem to be valid.) in" in
+        let msg_arg = "Violation of constraint 6.5.2.2#1 Function calls, \
+                       Constraints: ``Each argument shall have a type such that \
+                       its value may be assigned to an object [...] of the type \
+                       corresponding to its parameter.`` in" in
+        let msg_l = "Violation of constraint 6.5.2.2#1 Function calls, \
+                     Constraints: ``[T]he number of arguments shall agree with \
+                     the number of parameters.`` in" in
+        let msg_f = "Violation of constraint 6.5.2.2#1 Function calls, \
+                     Constraints: ``The expression that denotes the function \
+                     shall have type pointer to function [...].`` in" in
+        let t = f e in
+        if t`is_pointer_to_function t then
+          let t_f = t`base_of_pointer t in
+          let t_r = t`function_return t_f in
+          let t_p = t`function_parameters t_f in
+          if t`is_void t_r
+            || (t`is_complete_object t_r && not (t`is_array t_r)) then
+            if List.length t_p = List.length es then
+              let f = fun t e ->
+                (* TODO Horrible, horrible hack! Get rid of it! (Only works
+                   because we never look at the expression.) *)
+                let dummy = a`CONSTANT (c`CONST_INT 1 None) in
+                let exp = a`ASSIGN None (aa`a_type l (a`T_LVALUE t), dummy) e in
+                let (_ : a`type_class) = check_exp env l exp in
+                true in
+              if List.for_all2 f t_p es then
+                a`T_EXP t_r
+              else invalid_head msg_arg
+            else invalid_head msg_l
+          else invalid msg_r e
+        else invalid msg_f e
+    | a`UNARY a`POSTFIX_INCR e ->
+        let msg_l = "Violation of constraint 6.5.2.4#1 Postfix increment and \
+                     decrement operators, Constraints: ``The operand of the \
+                     postfix [...] decrement operator [...] shall be a \
+                     modifiable lvalue.`` in" in
+        let msg_r = "Violation of constraint 6.5.2.4#1 Postfix increment and \
+                     decrement operators, Constraints: ``The operand of the \
+                     postfix [...] decrement operator [...] shall have [...] \
+                     real or pointer type [...].`` in" in
+        let t = f_lvalue msg_l e in
+        if t`is_modifiable t then
+          if t`is_real t || t`is_pointer t then
+            check_exp env l (a`ASSIGN (Some c`ADD, e, annotate_exp env l one))
+          else invalid msg_r e
+        else invalid msg_l e
+    | a`UNARY a`POSTFIX_DECR e ->
+        let msg_l = "Violation of constraint 6.5.2.4#1 Postfix increment and \
+                     decrement operators, Constraints: ``The operand of the \
+                     postfix increment [...] operator [...] shall be a \
+                     modifiable lvalue.`` in" in
+        let msg_r = "Violation of constraint 6.5.2.4#1 Postfix increment and \
+                     decrement operators, Constraints: ``The operand of the \
+                     postfix increment [...] operator [...] shall have [...] \
+                     real or pointer type [...].`` in" in
+        let t = f_lvalue msg_l e in
+        if t`is_modifiable t then
+          if t`is_real t || t`is_pointer t then
+            check_exp env l (a`ASSIGN (Some c`SUB, e, annotate_exp env l one))
+          else invalid msg_r e
+        else invalid msg_l e
+    | a`UNARY a`ADDRESS e ->
+        let msg_f = "Violation of constraint 6.5.3.2#1 Address and indirection \
+                     operators, Constraints: ``The operand of the & operator \
+                     shall be either a function designator [...] or an lvalue \
+                     that designates an object [...].`` in" in
+        let t =
+          match aa`type_of e with
+            | a`T_EXP ((a`FUNCTION _) as t) -> t
+            | a`T_EXP _ -> invalid msg_f e
+            | a`T_LVALUE t ->
+                if t`is_object t then
+                  t
+                else
+                  invalid msg_f e
+          end in
+        a`T_EXP (a`POINTER empty t)
+    | a`UNARY a`INDIRECTION e ->
+        let msg_p = "Violation of constraint 6.5.3.2#2 Address and indirection \
+                     operators, Constraints: ``The operand of the unary * \
+                     operator shall have pointer type.`` in" in
+        let t = f e in
+        if t`is_pointer t then
+          if t`is_pointer_to_object t then
+            a`T_LVALUE (t`base_of_pointer t)
+          else a`T_EXP (t`base_of_pointer t)
+        else invalid_head msg_p
+    | a`UNARY a`MINUS e ->
+        let msg = "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+                   Constraints: ``The operand of the unary [...] - operator \
+                   shall have arithmetic type [...].`` in" in
+        let t = f e in
+        if t`is_arithmetic t then
+          a`T_EXP (t`promote t)
+        else invalid msg e
+    | a`UNARY a`PLUS e ->
+        let msg = "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+                   Constraints: ``The operand of the unary + [...] operator \
+                   shall have arithmetic type [...].`` in" in
+        let t = f e in
+        if t`is_arithmetic t then
+          a`T_EXP (t`promote t)
+        else invalid msg e
+    | a`UNARY a`BNOT e ->
+        let msg = "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+                   Constraints: ``The operand [...] of the ~ operator [shall \
+                   have] integer type [...].`` in" in
+        let t = f e in
+        if t`is_integer t then
+          a`T_EXP (t`promote t)
+        else invalid msg e
+    | a`SIZEOF t ->
+        let msg_i = "Violation of constraint 6.5.3.4#1 The sizeof and alignof \
+                     operators, Constraints: ``The sizeof operator shall not be \
+                     applied to an [...] incomplete type[...].`` in" in
+        let msg_f = "Violation of constraint 6.5.3.4#1 The sizeof and alignof \
+                     operators, Constraints: ``The sizeof operator shall not be \
+                     applied to [a] [...] function type [...].`` in" in
+        if not (t`is_function t) then    
+          if not (t`is_incomplete t) then
+            a`T_EXP (a`BASE (empty, a`INTEGER (a`SIGNED a`INT)))
+          else invalid_head msg_i
+        else invalid_head msg_f
+    | a`ALIGNOF t ->
+        let msg_i = "Violation of constraint 6.5.3.4#1 The sizeof and alignof \
+                     operators, Constraints: ``The alignof operator shall not be \
+                     applied to [...] an incomplete type.`` in" in
+        let msg_f = "Violation of constraint 6.5.3.4#1 The sizeof and alignof \
+                     operators, Constraints: ``The alignof operator shall not be \
+                     applied to a function type [...].`` in" in
+        if not (t`is_function t) then    
+          if not (t`is_incomplete t) then
+            a`T_EXP (a`BASE (empty, a`INTEGER (a`SIGNED a`INT)))
+          else invalid_head msg_i
+        else invalid_head msg_f
+    | a`CAST (a`BASE q a`VOID) e ->
+        let (_ : a`ctype) = f e in
+        a`T_EXP (a`BASE (q, a`VOID))
+    | a`CAST t e ->
+        let msg_n = "Violation of constraint 6.5.4#1 Cast operators, \
+                     Constraints: ``[T]he type name shall specify [...] \
+                     scalar type [...].`` in" in
+        let msg_s = "Violation of constraint 6.5.4#1 Cast operators, \
+                     Constraints: ``[T]he operand shall have scalar type.`` \
+                     in" in
+        if t`is_scalar t then
+          if t`is_scalar (f e) then
+            a`T_EXP t
+          else invalid msg_s e
+        else invalid_head msg_n
+    | a`BINARY (c`ARITHMETIC c`MUL) e1 e2 ->
+        check_exp env (a`BINARY (c`ARITHMETIC c`DIV) e1 e2)
+    | a`BINARY (c`ARITHMETIC c`DIV) e1 e2 ->
+        let msg = "Violation of constraint 6.5.5#2 Multiplicative operators, \
+                   Contraints: ``Each operand shall have arithmetic type.`` \
+                   in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_arithmetic t1 then
+          if t`is_arithmetic t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg e2
+        else invalid_head msg
+    | a`BINARY (c`ARITHMETIC c`MOD) e1 e2 ->
+        let msg = "Violation of constraint 6.5.5#2 Multiplicative operators, \
+                   Contraints: ``The operands of the % operator shall have \
+                   integer type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_integer t1 then
+          if t`is_integer t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg e2
+        else invalid_head msg
+    | a`BINARY (c`ARITHMETIC c`ADD) e1 e2 ->
+        let msg_a = "Violation of constraint 6.5.6#2 Additive operators, \
+                     Constraints: ``[B]oth operands shall have arithmetic type \
+                     [...].`` in" in
+        let msg_i = "Violation of constraint 6.5.6#2 Additive operators, \
+                     Constraints: ``[O]ne operand shall be a pointer to a \
+                     complete object type and the other shall have integer \
+                     type.`` (We were expecting an integer type.) in" in
+        let msg_n = "Violation of constraint 6.5.6#2 Additive operators, \
+                     Constraints: ``[E] both operands shall have arithmetic \
+                     type, or one operand shall be a pointer to a complete \
+                     object type and the other shall have integer type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        (* Case: ptr + int. *)
+        if t`is_pointer_to_complete_object t1 then
+          if t`is_integer t2 then
+            a`T_EXP t1
+          else invalid msg_i e2
+        (* Case: int + ptr. *)
+        else if t`is_pointer_to_object t2 then
+          if t`is_integer t1 then
+            a`T_EXP t2
+          else invalid msg_i e1
+        (* Case: arith + arith. *)
+        else if t`is_arithmetic t1 then
+          if t`is_arithmetic t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg_a e2
+        else invalid_head msg_n
+    | a`BINARY (c`ARITHMETIC c`SUB) e1 e2 ->
+        let msg_c = "Violation of constraint 6.5.6#3 Additive operators, \
+                     Constraint: ``[B]oth operands [shall be] pointers to [...] \
+                     compatible complete object types [...].`` (Operands are \
+                     pointers to incompatible types.) in" in
+        let msg_i = "Violation of constraint 6.5.6#3 Additive operators, \
+                     Constraints: ``[B]oth operands [shall either be] pointers \
+                     to [...] compatible complete object types[,] or the left \
+                     operand [shall be] a pointer to a complete object type and \
+                     the right operand [shall have] integer type.`` (We expected \
+                     either a pointer or an integer type.) in" in
+        let msg_a = "Violation of contraint 6.5.6#3 Additive operators, \
+                     Constraints: ``[B]oth operands have arithmetic type [...].``
+                     in" in
+        let msg_n = "Violation of constraint 6.5.6#3 Additive operators, \
+                     Constraints: ``[B]oth operands [shall] have arithmetic \
+                     type[, or shall be] pointers to [...] compatible complete
+                     object types[,] or the left operand [shall be] a pointer to \
+                     a complete object type and the right operand [shall have]
+                     integer type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_pointer_to_complete_object t1 then
+          (* Case: ptr - ptr. *)
+          if t`is_pointer_to_complete_object t2 then
+            if t`compatible t1 t2 then
+              raise_error "Computing the difference of two pointers is not yet \
+                           supported.\n"
+            else invalid_head msg_c
+          else
+            (* Case: ptr - int. *)
+            if t`is_integer t2 then
+              a`T_EXP t1
+            else invalid msg_i e2
+        (* Case: arith - arith. *)
+        else if t`is_arithmetic t1 then
+          if t`is_arithmetic t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg_a e2
+        else invalid_head msg_n
+    | a`BINARY (c`ARITHMETIC c`SHL) e1 e2 ->
+        check_exp env l (a`BINARY (c`ARITHMETIC c`SHL) e1 e2)
+    | a`BINARY (c`ARITHMETIC c`SHR) e1 e2  ->
+        let msg = "Violation of constraint 6.5.7#2 Bitwise shift operators, \
+                   Constraints: ``Each of the operands shall have integer \
+                   type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_integer t1 then
+          if t`is_integer t2 then
+            a`T_EXP (t`promote t1)
+          else invalid msg e2
+        else invalid_head msg
+    | a`BINARY (c`RELATIONAL c`LT) e1 e2 ->
+        check_exp env l (a`BINARY (c`RELATIONAL c`GE) e1 e2)
+    | a`BINARY (c`RELATIONAL c`GT) e1 e2 ->
+        check_exp env l (a`BINARY (c`RELATIONAL c`GE) e1 e2)
+    | a`BINARY (c`RELATIONAL c`LE) e1 e2 ->
+        check_exp env l (a`BINARY (c`RELATIONAL c`GE) e1 e2)
+    | a`BINARY (c`RELATIONAL c`GE) e1 e2 ->
+        let msg_c = "Violation of constraint 6.5.8#2 Relational operators, \
+                     Constraints: ``[B]oth operands [shall be] pointers to [...] \
+                     compatible object types.`` (Operands don't seem to be
+                     compatible.) in" in
+        let msg_p = "Violation of constraint 6.5.8#2 Relational operators, \
+                     Constraints: ``[B]oth operands [shall be] pointers to [...] \
+                     compatible object types.`` (Operand doesn't seem to be a \
+                     pointer.) in" in
+        let msg_r = "Violation of constraint 6.5.8#2 Relational operators, \
+                     Constraints: ``[B]oth operands [shall] have real type \
+                     [...].`` in" in
+        let msg_n = "Violation of constraint 6.5.8#2 Relational operators, \
+                     Constraints: ``One of the following shall hold: both \
+                     operands have real type or both operands are pointers to \
+                     [...] compatible types.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in      
+        if t`is_pointer_to_object t1 then
+          if t`is_pointer_to_object t2 then
+            if t`compatible t1 t2 then
+              a`T_EXP int
+            else invalid_head msg_c
+          else invalid msg_p e2
+        else if t`is_real t1 then
+          if t`is_real t2 then
+            a`T_EXP int
+          else invalid msg_r e2
+        else invalid_head msg_n
+    | a`BINARY (c`RELATIONAL c`EQ) e1 e2 ->
+        check_exp env l (a`BINARY (c`RELATIONAL c`NE) e1 e2)
+    | a`BINARY (c`RELATIONAL c`NE) e1 e2 ->
+        let msg_v = "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne \
+                     operand is a pointer to an object type and the other is a \
+                     pointer to [...] void [...].`` (Operand doesn't seem to be \
+                     a pointer.) in" in
+        let msg_p = "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne \
+                     operand [shall be] a pointer and the other [shall be] a \
+                     null pointer constant.`` (Operand doesn't seem to be a \
+                     pointer.) in" in
+        let msg_c = "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne \
+                     operand [shall be] a pointer and the other [shall be] a \
+                     null pointer constant.`` (Operands don't seem to point to \
+                     compatible types.) in" in
+        let msg_a = "Constraint 6.5.9#2 Equality operators, Constraints: \
+                     ``[B]oth operands [shall] have arithmetic type.`` in" in
+        let msg_n = "Constraint 6.5.9#2 Equality operators, Constraints: \
+                     ``One of the following shall hold: both operands have \
+                     arithmetic type[, or] both operands are pointers to [...] \
+                     compatible types[, or] one operand is a pointer to an \
+                     object type and the other is a pointer to [...] void[, or] \
+                     one operand is a pointer and the other is a null pointer \
+                     constant.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        let req_obj_ptr = require t`is_pointer_to_object (a`T_EXP int) in
+        (* Case: void ptr == ptr. *)
+        if t`is_pointer_to_void t1 then
+          req_obj_ptr msg_v t2 e2
+        (* Case: ptr == void ptr. *)
+        else if t`is_pointer_to_void t2 then
+          req_obj_ptr msg_v t1 e1
+        (* Case: null ptr == ptr. *)
+        else if is_null_pointer e1 && t`is_pointer t2 then
+          a`T_EXP int
+        (* Case: ptr == null ptr. *)
+        else if t`is_pointer t1 && is_null_pointer e2 then
+          a`T_EXP int
+        (* Case: ptr == ptr. *)
+        else if t`is_pointer t1 then
+          if t`is_pointer t2 then
+            if t`compatible t1 t2 then
+              a`T_EXP int
+            else invalid_head msg_c
+          else invalid msg_p e2
+        (* Case: arith + arith. *)
+        else if t`is_arithmetic t1 then
+          if t`is_arithmetic t2 then
+            a`T_EXP int
+          else invalid msg_a e2
+        else invalid_head msg_n
+    |  a`BINARY (c`ARITHMETIC c`BAND) e1 e2 ->
+        let msg = "Violation of constraint 6.5.10#2 Bitwise AND operator, \
+                   Contraints: ``Each of the operands shall have integer type.`` \
+                   in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_integer t1 then
+          if t`is_integer t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg e1
+        else invalid_head msg
+    |  a`BINARY (c`ARITHMETIC c`XOR) e1 e2 ->
+        let msg = "Violation of constraint 6.5.11#2 Bitwise exclusive OR \
+                   operator, Contraints: ``Each of the operands shall have \
+                   integer type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_integer t1 then
+          if t`is_integer t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg e1
+        else invalid_head msg
+    |  a`BINARY (c`ARITHMETIC c`BOR) e1 e2 ->
+        let msg = "Violation of constraint 6.5.12#2 Bitwise inclusive OR \
+                   operator, Contraints: ``Each of the operands shall have \
+                   integer type.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_integer t1 then
+          if t`is_integer t2 then
+            a`T_EXP (t`usual_arithmetic t1 t2)
+          else invalid msg e1
+        else invalid_head msg
+    |  a`BINARY (c`SEQUENTIAL c`AND) e1 e2 ->
+        let msg = "Violation of constraint 6.5.13#2 Logical AND operator, \
+                   Constraints: ``Each of the operands shall have scalar type.`` \
+                   in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_scalar t1 then
+          if t`is_scalar t2 then
+            a`T_EXP int
+          else invalid msg e1
+        else invalid_head msg
+    |  a`BINARY (c`SEQUENTIAL c`OR) e1 e2 ->
+        let msg = "Violation of constraint 6.5.14#2 Logical OR operator, \
+                   Contraints: ``Each of the operands shall have scalar type.`` \
+                   in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        if t`is_scalar t1 then
+          if t`is_scalar t2 then
+            a`T_EXP int
+          else invalid msg e1
+        else invalid_head msg
+    |  a`QUESTION e1 e2 e3 ->
+        let msg_s = "Violation of constraint 6.5.15#2 Conditional operator, \
+                    Constraints: ``The first operand shall have scalar type.`` \
+                    in" in
+        let msg_np = "Violation of constraint 6.5.15#3 Conditional operator, \
+                      Constraints: ``[T]he following shall hold for the \
+                      second and third operands: [...] one is a pointer and the \
+                      other is a null pointer constant [...].`` (Operand doesn't \
+                      seem to be a pointer.) in" in
+        let msg_vp = "Violation of constraint 6.5.15#3 Conditional operator, \
+                      Constraints: ``[T]he following shall hold for the second \
+                      and third operands: [...] one operand is a pointer to an \
+                      object type and the other is a pointer to [...] void.`` \
+                      (Operand doesn't seem to be a pointer to an object type.)
+                      in" in
+        let msg_p = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``[T]he following shall hold for the second \
+                     and third operands: [...] both operands are pointers to \
+                     compatible types [...].`` (Operand doesn't seem to be a \
+                     pointer.) in" in
+        let msg_c = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``[T]he following shall hold for the second \
+                     and third operands: [...] both operands are pointers to \
+                     compatible types [...].`` (Operands don't seem to point to \
+                     compatible types.) in" in
+        let msg_v = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``[T]he following shall hold for the second \
+                     and third operands: [...] both operands have void type \
+                     [...].`` in" in
+        let msg_a = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``[T]he following shall hold for the second \
+                     and third operands: [...] both operands have arithmetic \
+                     type [...].`` in" in
+        let msg_u = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``[T]he following shall hold for the second \
+                     and third operands: [...] both operands have the same \
+                     structure or union type [...].`` in" in
+        let msg_n = "Violation of constraint 6.5.15#3 Conditional operator, \
+                     Constraints: ``One of the following shall hold for the \
+                     second and third operands: [Either] both operands have \
+                     arithmetic type[, or] both operands have the same structure \
+                     or union type[, or] both operands have void type[, or] both \
+                     operands are pointers to [...] compatible types[, or] one \
+                     operand is a pointer and the other is a null pointer \
+                     constant[, or] one operand is a pointer to an object type \
+                     and the other is a pointer [...] to void.`` in" in
+        let t1 = f e1 in
+        let t2 = f e2 in
+        let t3 = f e3 in
+        (* First operand must be scalar. *)
+        if t`is_scalar t1 then
+          (* Case: null ptr : ptr. *)
+          if is_null_pointer e2 && t`is_pointer t3 then
+            a`T_EXP (t`include_qualifiers t3 (t`qualifiers t2))
+          (* Case: ptr : null ptr. *)
+          else if t`is_pointer t2 && is_null_pointer e3 then
+            a`T_EXP (t`include_qualifiers t2 (t`qualifiers t3))
+          (* Case: void ptr : ptr.
+             Note that, since void is also an object, there is no need to deal
+             with the case ptr : void ptr separately. *)
+          else if t`is_pointer_to_void t2 then
+            if t`is_pointer_to_object t3 then
+              let q = t`merge_qualifiers t2 t3 in
+              a`T_EXP (a`POINTER (q, a`BASE (empty, a`VOID)))
+            else invalid msg_vp e3
+          (* Case: ptr : ptr. *)
+          else if t`is_pointer t2 then
+            if t`is_pointer t3 then
+              if t`compatible t2 t3 then
+                let q = t`merge_qualifiers t2 t3 in
+                a`T_EXP (t`include_qualifiers (t`composite t2 t3) q)
+              else invalid_head msg_c
+            else invalid msg_p e3
+          (* Case: arith : arith. *)
+          else if t`is_arithmetic t2 then
+            if t`is_arithmetic t3 then
+              a`T_EXP (t`common (t`promote t2) (t`promote t3))
+            else invalid msg_a e3
+          (* Case: void : void. *)
+          else if t`is_void t2 then
+            if t`is_void t3 then
+              a`T_EXP (a`BASE (empty, a`VOID))
+            else invalid msg_v e3
+          (* Case: struct : struct, enum : enum. *)
+          else if t`is_structure t2 || t`is_union t2 then
+            if t2 = t3 then
+              a`T_EXP t2
+            else invalid msg_u e3
+          else invalid_head msg_n
+        else invalid msg_s e1
+    | a`ASSIGN (None, e1, e2) ->
+        let msg_l = "Violation of constraint 6.5.16#1 Assignment operators, \
+                     Constraints: ``An assignment operator shall have a \
+                     modifiable lvalue as its left operand.`` in" in
+        let msg_b = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                     Constraints: ``[T]he left operand has type [...] _Bool, and \
+                     the right is a pointer.`` (Operand doesn't seem to be a \
+                     pointer.) in" in
+        let msg_sc = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                      Constraints: ``[T]he left operand has [...] structure or \
+                      union type compatible with the type of the right [...]`` ( \
+                      Operands don't seem to have compatible types.) in" in
+        let msg_a = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                     Constraints: ``[T]he left operand [shall have] arithmetic \
+                     [...] type, and the right [shall have] arithmetic type \
+                     [...]..`` in" in
+        let msg_vq = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                      Constraints: ``[T]he left operand [shall have] [...] \
+                      pointer type, and [...] one operand [shall be] a pointer \
+                      to an object type, and the other [shall be] a pointer to \
+                      [...] void, and the type pointed to by the left has all \
+                      the qualifiers of type pointed to by the right [...].`` \
+                      (Left operand doesn't seem to have all the qualifiers of \
+                      the right operand.) in" in
+        let msg_v = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                     Constraints: ``[T]he left operand [shall have] [...] \
+                     pointer type, and [...] one operand [shall be] a pointer to \
+                     an object type, and the other [shall be] a pointer to [...] \
+                     void [...].`` (Operand doesn't seem to be a pointer to an \
+                     object type.) in" in
+        let msg_cq = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                      Constraints: ``[T]he left operand [shall have] [...] \
+                      pointer type and [...] both operands [shall be] pointers \
+                      to [...] compatible types, and the type pointed to by the \
+                      left [shall have] all the qualifiers of the type pointed \
+                      to by the right [...].`` (Left operand doesn't seem to \
+                      have all the qualifiers of the right operand.) in" in
+        let msg_c = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                     Constraints: ``[T]he left operand [shall have] [...] \
+                     pointer type and [...] both operands [shall be] pointers to \
+                     [...] compatible types [...].`` (Operands don't seem to \
+                     point to compatible types.) in" in
+        let msg_n = "Violation of constraint 6.5.16.1#1 Simple assignment, \
+                     Constraints: ``One of the following shall hold: the left \
+                     operand has [...] arithmetic type, and the right has \
+                     arithmetic type[, or] the left operand has [...] structure \
+                     or union type compatible with the type of the right[, or] \
+                     the left operand has [...] pointer type, and [...] both \
+                     operands are pointer to [...] compatible types, and the \
+                     type pointed to by the left has all the qualifiers of the \
+                     type pointed to by the right[, or] the left operand has \
+                     [...] pointer type, and [...] one operand is a pointer to \
+                     an object type, and the other is a pointer to [...] void, \
+                     and the type pointed to by the left has all the qualifiers \
+                     of the type pointed to by the right[, or] the left operand \
+                     is [a] [...] pointer, and the right is a null pointer \
+                     constant[, or] the left operand has type [...] _Bool, and \
+                     the right is a pointer.`` in" in
+        let t1 = f_lvalue msg_l e1 in
+        let t2 = f e2 in   
+        let t_head = lvalue_convert t1 e1 in
+        let base_has_all_qualifiers t1 t2 =
+          let b1 = t`base_of_pointer t1 in
+          let b2 = t`base_of_pointer t2 in
+          Set`is_subset (t`qualifiers b2) (t`qualifiers b1) in
+        if t`is_modifiable t1 then
+          (* Case: bool = ptr. *)
+          if t`is_bool t1 then
+            if t`is_pointer t2 then
+              a`T_EXP t_head
+            else invalid msg_b e2
+          (* Case struct = struct or enum = enum. *)
+          else if t`is_structure t1 || t`is_enum t1 then
+            if t`compatible t1 t2 then
+              a`T_EXP t_head
+            else invalid msg_sc e2
+          (* Case: arith = arith. *)
+          else if t`is_arithmetic t1 then
+            if t`is_arithmetic t2 then
+              a`T_EXP t_head
+            else invalid msg_a e2
+          (* Cases of the form ptr = _. *)
+          else if t`is_pointer t1 then
+            (* Case ptr = null ptr. *)
+            if is_null_pointer e2 then
+              a`T_EXP t_head
+            (* Case: void ptr = ptr. *)
+            else if t`is_pointer_to_void t1 then
+              if t`is_pointer_to_object t2 then
+                if base_has_all_qualifiers t1 t2 then
+                  a`T_EXP t_head
+                else invalid_head msg_vq
+              else invalid msg_v e2
+            (* Case: ptr = void ptr. *)
+            else if t`is_pointer_to_void t2 then
+              if t`is_pointer_to_object t1 then
+                if base_has_all_qualifiers t1 t2 then
+                  a`T_EXP t_head
+                else invalid_head msg_vq
+              else invalid msg_v e1
+            (* Case: ptr = ptr. *)
+            else if t`is_pointer t2 then
+              if t`compatible t1 t2 then
+                if base_has_all_qualifiers t1 t2 then
+                  a`T_EXP t_head
+                else invalid_head msg_cq
+              else invalid_head msg_c
+            else invalid_head msg_n
+          else invalid_head msg_n
+        else invalid msg_l e1
+    | a`ASSIGN (Some c`ADD) e1 e2 ->
+        check_exp env l (a`ASSIGN (Some c`SUB) e1 e2)
+    | a`ASSIGN (Some c`SUB) e1 e2 ->
+        let msg_l = "Violation of constraint 6.5.16#2 Assignment operators, \
+                     Constraints: ``An assignment operator shall have a \
+                     modifiable lvalue as its left operand.`` in" in
+        let msg_i = "Violation of constraint 6.5.16.2#1 Compound assignment,
+                     Constraints: ``[T]he left operand shall be [a] [...] \
+                     pointer to a complete object type, and the right shall have \
+                     integer type [...].`` (Operand doesn't seem to have integer \
+                     type.) in" in
+        let msg_a = "Violation of constraint 6.5.16.2#1 Compound assignment,
+                     Constraints: ``[T]he left operand shall have [...] \
+                     arithmetic type, and the right shall have arithmetic \
+                     type.`` (Operand doesn't seem to have  arithmetic type.)`` \
+                     in" in
+        let msg_n = "Violation of constraint 6.5.16.2#1 Compound assignment,
+                     Constraints: ``For the operators += and -= only, either the \
+                     left operand shall be [a] [...] pointer to a complete \
+                     object type, and the right shall have integer type[, or] \
+                     the left operand shall have [...] arithmetic type and the \
+                     right shall have arithmetic type.`` in" in
+        let t1 = f_lvalue msg_l e1 in
+        let t2 = f e2 in
+        let t_head = lvalue_convert t1 e1 in
+        if t`is_modifiable t1 then
+          if t`is_pointer_to_complete_object t1 then
+            if t`is_integer t2 then
+              a`T_EXP t_head
+            else invalid msg_i e2
+          else if t`is_arithmetic t1 then
+            if t`is_arithmetic t2 then
+              a`T_EXP t_head
+            else invalid msg_a e2
+          else invalid_head msg_n
+        else invalid msg_l e1
+    | a`ASSIGN (Some o, e1, e2) ->
+        let msg_l = "Violation of constraint 6.5.16#2 Assignment operators, \
+                     Constraints: ``An assignment operator shall have a \
+                     modifiable lvalue as its left operand.`` in" in
+        let msg_a = "Violation of constraint 6.5.16.2#2 Compound assignment, \
+                     Constraints: ``[T]he left operand shall have [...] \
+                     arithmetic type [...].`` in" in
+        let t1 = f_lvalue msg_l e1 in
+        let t_head = lvalue_convert t1 e1 in
+        if t`is_modifiable t1 then
+          if t`is_arithmetic t1 then
+            let bexp = a`BINARY (c`ARITHMETIC o, e1, e2) in
+            let (_ : a`type_class) = check_exp env l bexp in
+            a`T_EXP t_head
+          else invalid msg_a e1
+        else invalid msg_l e1
+    | a`BINARY (c`SEQUENTIAL c`COMMA, e1, e2) ->
+        let (_ : a`ctype) = f e1 in
+        a`T_EXP (f e2)
+  end
+
+| annotate_exp env e =
+  let a`Exp l exp = e in
+  let a_type exp = a`Exp (aa`a_type l (check_exp env e)) exp in
+  match exp with
+    | a`VARIABLE v -> a_type (a`VARIABLE v)
+    | a`CONSTANT c -> a_type (a`CONSTANT c)
+    | a`SIZEOF   t -> a_type (a`SIZEOF   t)
+    | a`ALIGNOF  t -> a_type (a`ALIGNOF  t)
+    | _ -> a_type (ail_rewrite`map_exp (annotate_exp env) (fun x -> x) exp)
+  end
+
+let rec annotate_stmt env (l, stmt) =
+  let f_e = annotate_exp  env in
+  let f_s = annotate_stmt env in
+  let type_of = aa`exp_type_of in
+  (aa`a_pos l, match stmt with
+    | a`IF (e, s1, s2) ->
+        let msg_s = "Violation of constraint 6.8.4.1 The if statement, \
+                     Constraints: ``The controlling expression of an if \
+                     statement shall have scalar type.`` in" in
+        let e' = f_e e in
+        if t`is_scalar (type_of e') then
+          a`IF (e', f_s s1, f_s s2)
+        else invalid msg_s e'
+    | a`SWITCH _ -> raise_error "No support for switch statements yet."
+    | a`WHILE (e, s) ->
+        let msg_s = "Violation of constraint 6.8.4.1 Iteration statements, \
+                     Constraints: ``The controlling expression of an iteration \
+                     statement shall have scalar type.`` in" in
+        let e' = f_e e in
+        if t`is_scalar (type_of e') then
+          a`WHILE (e', f_s s)
+        else invalid msg_s e'
+    | a`DO (e, s) ->
+        let msg_s = "Violation of constraint 6.8.4.1 Iteration statements, \
+                     Constraints: ``The controlling expression of an iteration \
+                     statement shall have scalar type.`` in" in
+        let e' = f_e e in
+        if t`is_scalar (type_of e') then
+          a`DO (e', f_s s)
+        else invalid msg_s e'
+    | _ -> AR.map_stmt f_s f_e (fun x -> x) stmt
+  end)
+
+let annotate_program p =
+  let () =
+    if not (List.for_all t`well_formed (Pmap`values p.id_map)) then () else () in
+  let gs = List`map (fun (id,  e) -> (id,  annotate_exp  p e)) p.globals in
+  let fs = Pmap`map (fun (ids, s) -> (ids, annotate_stmt p s)) p.fn_map  in
+  <|p with a`globals = gs; a`fn_map = fs|>
+
+let annotate file = a`Program (annotate_program file)

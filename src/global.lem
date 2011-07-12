@@ -3,3 +3,8 @@ type 'a multiset = 'a multiset`t
 
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
+
+type 'a error =
+  | UNDEFINED of 'a
+  | INVALID of 'a
+  | BUG of 'a
