@@ -2,7 +2,7 @@
 ;; --------------------------------------------------------------------------
 ;; Desktop File for Emacs
 ;; --------------------------------------------------------------------------
-;; Created Mon Jul 11 18:31:56 2011
+;; Created Tue Jul 12 18:12:57 2011
 ;; Desktop file format version 206
 ;; Emacs version 23.2.1
 
@@ -10,66 +10,143 @@
 (setq desktop-missing-file-warning nil)
 (setq tags-file-name nil)
 (setq tags-table-list nil)
-(setq search-ring '("_map" "function_m" "fn_" "map" "to_" "read" "subst" "find" "foldr" "add_fn" "desugar_defn" "external" "desugar_defn" "map" "defn" "| (id"))
+(setq search-ring '("exp " "exp" "AR." "is_null_poin" "zero" "one" "1" "rt " " rt" " rt e" "rt " "file" "base" "f_e" "annotate_exp" "match"))
 (setq regexp-search-ring nil)
 (setq register-alist nil)
-(setq file-name-history '("/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/ail.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/monad_test.lem" "/auto/homes/jm614/rsem/csem/src/reader.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/state_exception.lem" "/auto/homes/jm614/rsem/csem/src/exception.lem" "/auto/homes/jm614/rsem/csem/src/state_t.lem" "/auto/homes/jm614/rsem/csem/src/statem.lem" "/auto/homes/jm614/rsem/csem/chickenpox/src/cpLogger.ml" "/auto/homes/jm614/rsem/csem/chickenpox/src/cpMessage.ml" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/state_reader.lem" "/auto/homes/jm614/rsem/csem/src/state.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/pair.lem" "/auto/homes/jm614/rsem/csem/src/list.lem" "/auto/homes/jm614/rsem/csem/src/map.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/Makefile" "/auto/homes/jm614/rsem/csem/src/success.lem" "/auto/homes/jm614/rsem/csem/src/cabs_check.lem" "/auto/homes/jm614/rsem/csem/Makefile" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/lem/ocaml-lib/extract.mllib" "/auto/homes/jm614/rsem/lem/ocaml-lib/nat_big_num.ml" "/auto/homes/jm614/rsem/csem/src/nat.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/chickenpox/Makefile"))
+(setq file-name-history '("/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/ail_rewrite.lem" "/auto/homes/jm614/rsem/csem/src/ail_typing.lem" "/auto/homes/jm614/rsem/csem/src/cabs_to_ail.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/ail.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/monad_test.lem" "/auto/homes/jm614/rsem/csem/src/reader.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/state_exception.lem" "/auto/homes/jm614/rsem/csem/src/exception.lem" "/auto/homes/jm614/rsem/csem/src/state_t.lem" "/auto/homes/jm614/rsem/csem/src/statem.lem" "/auto/homes/jm614/rsem/csem/chickenpox/src/cpLogger.ml" "/auto/homes/jm614/rsem/csem/chickenpox/src/cpMessage.ml" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/state_reader.lem" "/auto/homes/jm614/rsem/csem/src/state.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/pair.lem" "/auto/homes/jm614/rsem/csem/src/list.lem" "/auto/homes/jm614/rsem/csem/src/map.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/Makefile" "/auto/homes/jm614/rsem/csem/src/success.lem" "/auto/homes/jm614/rsem/csem/src/cabs_check.lem" "/auto/homes/jm614/rsem/csem/Makefile" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/lem/ocaml-lib/extract.mllib"))
 
 ;; Buffer section -- buffers listed in same order as in buffer list:
 (desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/cabs_to_ail.lem"
-  "cabs_to_ail.lem"
-  'fundamental-mode
-  '(auto-fill-mode undo-tree-mode flyspell-mode)
-  2139
-  '(17215 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix) (fill-column . 80)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/Makefile"
-  "Makefile"
-  'makefile-gmake-mode
-  '(undo-tree-mode)
-  364
-  '(341 nil)
-  nil
-  nil
-  '((indent-tabs-mode . t) (buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/global.lem"
-  "global.lem"
+  "/auto/homes/jm614/rsem/csem/src/ail_typing.lem"
+  "ail_typing.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  71
-  '(122 nil)
+  39023
+  '(1 nil)
   nil
   nil
-  '((buffer-file-coding-system . utf-8-unix)))
+  '((buffer-file-coding-system . undecided-unix) (overwrite-mode) (fill-column . 80)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/ail.lem"
   "ail.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  2119
-  '(1096 nil)
+  1439
+  '(721 nil)
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/ail_annotate.lem"
+  "ail_annotate.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  509
+  '(545 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/ail_rewrite.lem"
+  "ail_rewrite.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  49
+  '(835 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/Makefile"
+  "Makefile"
+  'makefile-gmake-mode
+  '(undo-tree-mode)
+  268
+  '(380 nil)
+  nil
+  nil
+  '((indent-tabs-mode . t) (buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/types.lem"
+  "types.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  7478
+  '(1 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix) (overwrite-mode)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/cabs_to_ail.lem"
+  "cabs_to_ail.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  1
+  '(nil nil)
+  nil
+  nil
+  '((buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/global.lem"
+  "global.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  191
+  '(122 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/state.lem"
+  "state.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  49
+  '(206 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/exception.lem"
+  "exception.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  231
+  '(299 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/state_exception.lem"
   "state_exception.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  1259
-  '(1089 nil)
+  207
+  '(304 nil)
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/cabs.lem"
+  "cabs.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  1456
+  '(1802 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . undecided-unix)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/symbol.lem"
@@ -81,17 +158,6 @@
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/cabs.lem"
-  "cabs.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  2734
-  '(1 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . undecided-unix)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/monad_test.lem"
@@ -122,28 +188,6 @@
   '(undo-tree-mode)
   337
   '(1 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/state.lem"
-  "state.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  296
-  '(251 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/exception.lem"
-  "exception.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  231
-  '(299 nil)
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
@@ -257,28 +301,6 @@
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/ail_annotate.lem"
-  "ail_annotate.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  7
-  '(360 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/types.lem"
-  "types.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  1
-  '(7490 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix) (overwrite-mode)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/location.lem"

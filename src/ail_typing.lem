@@ -1,4 +1,5 @@
 open global
+open exception`operators
 
 module a = ail
 module c = cabs
@@ -7,7 +8,6 @@ module t = ail_types
 module aa = ail_annotate
 
 let report msg exp = ""
-
 let invalid msg exp = exception`fail (report msg exp)
 
 let lvalue_convert t e =
@@ -42,29 +42,29 @@ let rec is_null_pointer e =
 
 let rec
 | check_exp env l e_head =
-  let invalid_head msg = invalid' msg (l, e_head) in
+  let invalid_head msg = invalid msg (l, e_head) in
   let f e =
     let t =
       match aa`type_of e with
-        | a`T_EXP    t -> t
-        | a`T_LVALUE t -> t`lvalue_convert t
+        | a`T_EXP    t -> exception`unit t
+        | a`T_LVALUE t -> lvalue_convert t e
       end in
-    t`pointer_convert t in
+    exception`map t`pointer_convert t in
   let f_lvalue msg e =
     match aa`type_of e with
       | a`T_EXP    _ -> invalid msg e
-      | a`T_LVALUE t -> t`pointer_convert t
+      | a`T_LVALUE t -> exception`unit (t`pointer_convert t)
     end in
   match e_head with
     | a`VARIABLE id ->
-        let (t, _) = BatMap.find id env.a`id_map in
-        if BatMap.mem id env.a`function_map then
+        let (t, _) = Pmap`find id env.a`id_map in
+        if Pmap`mem id env.a`fn_map then
           exception`unit (a`T_EXP t)
         else
           exception`unit (a`T_LVALUE t)
-    | a`CONSTANT (c`CONST_INT i None) ->
+    | a`CONSTANT (c`CONST_INT (i, None)) ->
         exception`unit (a`T_EXP (a`BASE empty (a`INTEGER (a`SIGNED a`INT))))
-    | a`CONSTANT (c`CONST_INT _ (Some _)) ->
+    | a`CONSTANT (c`CONST_INT (_, Some _)) ->
         exception`fail "Suffixes in integer constant expressions are not supported."
     | a`CALL e es ->
         let msg_r = "Violation of constraint 6.5.2.2#1 Function calls, \
@@ -82,27 +82,24 @@ let rec
         let msg_f = "Violation of constraint 6.5.2.2#1 Function calls, \
                      Constraints: ``The expression that denotes the function \
                      shall have type pointer to function [...].`` in" in
-        let t = f e in
+        f e >>= (fun t ->
         if t`is_pointer_to_function t then
           let t_f = t`base_of_pointer t in
           let t_r = t`function_return t_f in
           let t_p = t`function_parameters t_f in
           if t`is_void t_r
             || (t`is_complete_object t_r && not (t`is_array t_r)) then
-            if List.length t_p = List.length es then
-              let f = fun t e ->
-                (* TODO Horrible, horrible hack! Get rid of it! (Only works
-                   because we never look at the expression.) *)
-                let dummy = a`CONSTANT (c`CONST_INT 1 None) in
-                let exp = a`ASSIGN None (aa`a_type l (a`T_LVALUE t), dummy) e in
-                let (_ : a`type_class) = check_exp env l exp in
-                true in
-              if List.for_all2 f t_p es then
-                a`T_EXP t_r
+            if List`length t_p = List`length es then
+              let test = fun t e ->
+                (* TODO Hack! *)
+                let exp = a`ASSIGN None (a`Exp (aa`a_type l (a`T_LVALUE t)) one) e in
+                check_exp env l exp >>= (fun _ -> true) in
+              if List`for_all2 test t_p es then
+                exception`unit (a`T_EXP t_r)
               else invalid_head msg_arg
             else invalid_head msg_l
           else invalid msg_r e
-        else invalid msg_f e
+        else invalid msg_f e)
     | a`UNARY a`POSTFIX_INCR e ->
         let msg_l = "Violation of constraint 6.5.2.4#1 Postfix increment and \
                      decrement operators, Constraints: ``The operand of the \
@@ -723,14 +720,14 @@ let rec
             a`T_EXP t_head
           else invalid msg_a e1
         else invalid msg_l e1
-    | a`BINARY (c`SEQUENTIAL c`COMMA, e1, e2) ->
-        let (_ : a`ctype) = f e1 in
-        a`T_EXP (f e2)
+    | a`BINARY (c`SEQUENTIAL c`COMMA) e1 e2 ->
+        f e1 >>= (fun (_ : a`ctype) ->
+        a`T_EXP <$> f e2)
   end
 
 | annotate_exp env e =
   let a`Exp l exp = e in
-  let a_type exp = a`Exp (aa`a_type l (check_exp env e)) exp in
+  let a_type exp = a`Exp (aa`a_type l (check_exp env l e)) exp in
   match exp with
     | a`VARIABLE v -> a_type (a`VARIABLE v)
     | a`CONSTANT c -> a_type (a`CONSTANT c)
@@ -774,7 +771,7 @@ let rec annotate_stmt env (l, stmt) =
 
 let annotate_program p =
   let () =
-    if not (List.for_all t`well_formed (Pmap`values p.id_map)) then () else () in
+    if not (List`for_all t`well_formed (Pmap`values p.id_map)) then () else () in
   let gs = List`map (fun (id,  e) -> (id,  annotate_exp  p e)) p.globals in
   let fs = Pmap`map (fun (ids, s) -> (ids, annotate_stmt p s)) p.fn_map  in
   <|p with a`globals = gs; a`fn_map = fs|>

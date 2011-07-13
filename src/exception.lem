@@ -16,12 +16,16 @@ let fail = throw
 let join m = bind m (fun x -> x)
 
 let map f m = bind m (unit -| f)
+let app mf m = bind mf (fun f -> map f m)
 
 let of_option m = function
   | Some a -> unit a
   | None   -> throw m
 end
 
-module Operators = struct
+module operators = struct
   let (>>=) = bind
+
+  let (<$>) = map
+  let (<*>) = app
 end
