@@ -5,13 +5,13 @@ type t =
 let a_loc  l   = Loc l
 let a_type l t = Typ l t
 
-let loc_of  (a, _) =
+let loc_of (ail`Exp a _) =
   match a with
     | Loc l   -> l
     | Typ l _ -> l
   end
-let type_of (Typ _ t, _) = t
-let exp_of  (_, e) = e
+let type_of (ail`Exp (Typ _ t) _) = t
+let exp_of  (ail`Exp _ e) = e
 
 let exp_type_of e =
   let t =

@@ -41,7 +41,7 @@ let rec is_null_pointer e =
    recursion. [annotate_exp] complements the process. *)
 
 let rec
-| check_exp env l e_head =
+| check_exp env l (e_head : ('id, ('id, ail_annotate`t) ail`exp) ail`expression) =
   let invalid_head msg = invalid msg (l, e_head) in
   let f e =
     let t =
@@ -93,7 +93,8 @@ let rec
               let test = fun t e ->
                 (* TODO Hack! *)
                 let exp = a`ASSIGN None (a`Exp (aa`a_type l (a`T_LVALUE t)) one) e in
-                check_exp env l exp >>= (fun _ -> true) in
+                check_exp env l exp >>= (fun _ ->
+                exception`unit true) in
               if List`for_all2 test t_p es then
                 exception`unit (a`T_EXP t_r)
               else invalid_head msg_arg
@@ -725,15 +726,17 @@ let rec
         a`T_EXP <$> f e2)
   end
 
-| annotate_exp env e =
-  let a`Exp l exp = e in
-  let a_type exp = a`Exp (aa`a_type l (check_exp env l e)) exp in
+| annotate_exp env l exp =
+  let a_type e = a`Exp (aa`a_type l (check_exp env l e)) e in
   match exp with
     | a`VARIABLE v -> a_type (a`VARIABLE v)
     | a`CONSTANT c -> a_type (a`CONSTANT c)
     | a`SIZEOF   t -> a_type (a`SIZEOF   t)
     | a`ALIGNOF  t -> a_type (a`ALIGNOF  t)
-    | _ -> a_type (ail_rewrite`map_exp (annotate_exp env) (fun x -> x) exp)
+    | _ ->
+        let id x = x in
+        let f (a`Exp l e) = annotate_exp env l e in
+        a_type (ail_rewrite`map_exp f id exp)
   end
 
 let rec annotate_stmt env (l, stmt) =
