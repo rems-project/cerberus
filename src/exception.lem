@@ -23,9 +23,37 @@ let of_option m = function
   | None   -> throw m
 end
 
+let to_bool = function
+  | Result _ -> true
+  | Exception _ -> false
+end
+
 module operators = struct
   let (>>=) = bind
-
-  let (<$>) = map
-  let (<*>) = app
 end
+
+open operators
+
+let map2 f mx my    = app (map f mx) my
+let map3 f mx my mz = app (map2 f mx my) mz
+
+let sequence ms =
+  List`fold_right
+    (fun m m' ->
+      m  >>= (fun x  ->
+      m' >>= (fun xs ->
+      unit (x::xs)))
+    ) ms (unit [])
+let t_list t xs = sequence (t xs)
+let map_list f = t_list (List`map f)
+
+let sequence_map mmap =
+  Pmap`fold (fun k m mm->
+    m  >>= (fun x   ->
+    mm >>= (fun map ->
+    unit (Pmap`add k x map)))
+  ) mmap (unit Pmap`empty)
+
+let map_map f m = sequence_map (Pmap`map f m)
+
+let inj_right f (a, b) = f b >>= (fun b' -> unit (a, b'))

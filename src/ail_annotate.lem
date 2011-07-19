@@ -1,17 +1,10 @@
-type t =
-  | Loc of location`t
-  | Typ of location`t * ail`type_class
+type t = location`t * ail`type_class
 
-let a_loc  l   = Loc l
-let a_type l t = Typ l t
+let a_type l t = (l, t)
 
-let loc_of (ail`Exp a _) =
-  match a with
-    | Loc l   -> l
-    | Typ l _ -> l
-  end
-let type_of (ail`Exp (Typ _ t) _) = t
-let exp_of  (ail`Exp _ e) = e
+let loc_of  (ail`Exp (l, _) _) = l
+let type_of (ail`Exp (_, t) _) = t
+let exp_of  (ail`Exp _ e)      = e
 
 let exp_type_of e =
   let t =
