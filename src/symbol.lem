@@ -6,11 +6,11 @@ let count set = set
 
 let fresh s : set * t =
   let s' = s + 1 in
-  (s', (s, None))
+  ((s, None), s')
 
 let fresh_name s name : set * t =
   let s' = s + 1 in
-  (s', (s, Some name))
+  ((s, Some name), s')
 
 let to_string (n, _) = "v" ^ "_" ^ string_of_num n
 let to_string_pretty ((_, name_opt) as s) =

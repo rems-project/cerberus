@@ -13,6 +13,8 @@ location.lem \
 symbol.lem \
 global.lem \
 option.lem \
+state.lem \
+symbol_state.lem \
 exception.lem \
 state_exception.lem \
 symbol_table.lem \
@@ -22,11 +24,13 @@ ail_types.lem \
 ail_annotate.lem \
 cabs_to_ail.lem \
 ail_rewrite.lem \
-ail_typing.lem
+ail_typing.lem \
+range.lem \
+constraint.lem
 
 all:
 	mkdir -p $(BUILD_DIR)
-	export OCAMLRUNPARAM=b; cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types $(foreach F, $(FILES), ../src/$(F))
+	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types -ocaml $(foreach F, $(FILES), ../src/$(F))
 
 clean:
 	rm -R $(BUILD_DIR)

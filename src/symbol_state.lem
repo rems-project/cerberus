@@ -1,0 +1,12 @@
+type 'a t = ('a, symbol`set) state`t
+
+let unit = state`unit
+let bind = state`bind
+let map = state`map
+let app = state`app
+
+let fresh = state`update symbol`fresh
+
+module operators = struct
+  let (>>=) = bind
+end

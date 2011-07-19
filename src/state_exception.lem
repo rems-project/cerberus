@@ -60,8 +60,3 @@ let rec foldr_list f l a =
   end
 
 let iter f l = foldr_list (fun a () -> f a) l ()
-
-(*
-let map_list f xs =
-  List`fold_right (fun x -> map2 list`cons (f x)) xs (unit [])
-*)
