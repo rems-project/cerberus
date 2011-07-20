@@ -4,8 +4,8 @@ open exception`operators
 module a = ail
 module c = cabs
 
-module t = ail_types
-module aa = ail_annotate
+module t = types
+module annot = annotate
 
 let report msg exp = ""
 let invalid msg exp = exception`fail (report msg exp)
@@ -45,13 +45,13 @@ let rec
   let invalid_head msg = invalid msg (l, e_head) in
   let f e =
     let t =
-      match aa`type_of e with
+      match annot`type_of e with
         | a`T_EXP    t -> exception`unit t
         | a`T_LVALUE t -> lvalue_convert t e
       end in
     exception`map t`pointer_convert t in
   let f_lvalue msg e =
-    match aa`type_of e with
+    match annot`type_of e with
       | a`T_EXP    _ -> invalid msg e
       | a`T_LVALUE t -> exception`unit (t`pointer_convert t)
     end in
@@ -92,7 +92,7 @@ let rec
             if List`length t_p = List`length es then
               let test t e =
                 (* TODO Hack! *)
-                let exp = a`ASSIGN None (one (aa`a_type l (a`T_LVALUE t))) e in
+                let exp = a`ASSIGN None (one (annot`a_type l (a`T_LVALUE t))) e in
                 exception`to_bool (check_exp env l exp) in
               if List`for_all2 test t_p es then
                 exception`unit (a`T_EXP t_r)
@@ -137,7 +137,7 @@ let rec
                      operators, Constraints: ``The operand of the & operator \
                      shall be either a function designator [...] or an lvalue \
                      that designates an object [...].`` in" in
-        match aa`type_of e with
+        match annot`type_of e with
           | a`T_EXP ((a`FUNCTION _ _) as t) -> exception`unit t
           | a`T_EXP _ -> invalid msg_f e
           | a`T_LVALUE t ->
@@ -740,7 +740,7 @@ let rec
 | annotate_exp env exp =
   let (a`Exp l e) = exp in
   let a_type e =
-    exception`map (fun t -> a`Exp (aa`a_type l t) e) (check_exp env l e) in
+    exception`map (fun t -> a`Exp (annot`a_type l t) e) (check_exp env l e) in
   match e with
     | a`VARIABLE v -> a_type (a`VARIABLE v)
     | a`CONSTANT c -> a_type (a`CONSTANT c)
@@ -771,7 +771,7 @@ let rec annotate_stmt env (a`Stmt l stmt) =
   let f_s = annotate_stmt env in
   let type_of e =
     let t =
-      match aa`type_of e with
+      match annot`type_of e with
         | a`T_EXP    t -> exception`unit t
         | a`T_LVALUE t -> lvalue_convert t e
       end in

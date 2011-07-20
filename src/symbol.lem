@@ -4,11 +4,9 @@ type set = num
 let emp = 0
 let count set = set
 
-let fresh s : set * t =
-  let s' = s + 1 in
-  ((s, None), s')
+let fresh s = ((s, None), s + 1)
 
-let fresh_name s name : set * t =
+let fresh_name s name =
   let s' = s + 1 in
   ((s, Some name), s')
 

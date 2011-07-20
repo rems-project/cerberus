@@ -1,0 +1,369 @@
+module a = ail
+module c = constraint
+
+type action =
+  | Load    of a`ctype * c`constant * c`constant
+  | Store   of a`ctype * c`constant * c`constant
+  | FnStore of a`ctype * c`constant * c`constant
+  | Modify  of a`ctype * c`constant * c`constant * c`constant
+  | Create  of a`ctype * c`constant
+  | Kill    of c`constant
+  | Same    of c`constant * c`constant
+  | Id      of c`constant
+  | Call
+
+type t = Action of action * symbol`t
+
+let load     t a v   = symbol_state`fresh (Action (Load   t a v))
+let store    t a v   = symbol_state`fresh (Action (Store  t a v))
+let fn_store t a v   = symbol_state`fresh (Action (Store  t a v))
+let modify   t a l v = symbol_state`fresh (Action (Modify t a l v))
+let create   t a     = symbol_state`fresh (Action (Create t a))
+let kill a           = symbol_state`fresh (Action (Kill a))
+let same a a'        = symbol_state`fresh (Action (Same a a'))
+let id a             = symbol_state`fresh (Action (Id a))
+let call             = symbol_state`fresh (Action (Call))
+
+let uid (Action _ id) = id
+
+let is_call (Action a _) =
+  match a with
+    | Call -> true
+    | _ -> false
+  end
+
+let is_access (Action a _) =
+  match a with
+    | Store   _ _ _   -> true
+    | FnStore _ _ _   -> true
+    | Load    _ _ _   -> true
+    | Modify  _ _ _ _ -> true
+    | _               -> false
+  end
+
+let is_fn_store = function
+  | FnStore _ _ _ -> true
+  | _             -> false
+end
+
+(*
+module print = struct
+  module p = pprint
+
+  open p`operators
+
+  let pp_c = c`print.pp_constant
+  let pp_t = CpAilPrint.pp_type
+  let pp_s s = !^ (symbol`to_string s)
+
+  let pp_uid (Action _ uid) = pp_s uid
+
+  let pp (Action action uid) =
+    let eq = (^^^) (pp_s uid ^^^ p`colon) in
+    let (^%^) d1 d2 = d1 ^^ p`comma ^^^ d2 in
+    match action with
+      | Load t a v ->
+          eq !^ "load"   ^^^ p`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+      | Store t a v ->
+          eq !^ "store"  ^^^ p`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+      | FnStore t a v ->
+          eq !^ "store"  ^^^ p`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+      | Modify t a l v ->
+          eq !^ "modify" ^^^ p`parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
+      | Create t a ->
+          eq !^ "create" ^^^ p`parens (pp_t t ^%^ pp_c a)
+      | Kill a ->
+          eq !^ "kill"   ^^^ p`parens (pp_c a)
+      | Same a1 a2 ->
+          eq !^ "same"   ^^^ p`parens (pp_c a1 ^%^ pp_c a2)
+      | Id a ->
+          eq !^ "id"     ^^^ p`parens (pp_c a)
+      | Call ->
+          eq !^ "call"
+    end
+
+  let pp_latex a =
+    let pp_c = c`print.pp_constant_latex in
+    let pp_id (Action _ s) = !^ (symbol`to_string_id s) in
+    let pp_name (Action a _) =
+      match a with
+        | Load    _ _ _   -> !^ "Load"
+        | Store   _ _ _   -> !^ "Store"
+        | FnStore _ _ _   -> !^ "Store"
+        | Modify  _ _ _ _ -> !^ "Modify"
+        | Create  _ _     -> !^ "Create"
+        | Kill    _       -> !^ "Kill"
+        | Same    _ _     -> !^ "Same"
+        | Id      _       -> !^ "Id"
+        | Call            -> !^ "Call"
+      end in
+    let pp_args (Action a _) =
+      let tt d = !^ "\\\\cc" ^^ p`braces d in
+      match a with
+        | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+        | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+        | FnStore t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+        | Modify  t a l v -> [tt (pp_t t); pp_c a; pp_c l; pp_c v]
+        | Create  t a     -> [tt (pp_t t); pp_c a]
+        | Kill    a       -> [pp_c a]
+        | Same    a1 a2   -> [pp_c a1; pp_c a2]
+        | Id      a       -> [pp_c a]
+        | Call            -> []
+      end in
+    let pp_opts args =
+      match args with
+        | [] -> p`empty
+        | _ -> p`parens (p`sepmap (p`comma ^^ p`space) (fun i -> i) args)
+      end in
+    let context name id args =
+      !^ "\\\\sem" ^^ p`braces name ^^ p`underscore ^^ p`braces id
+      ^^^  pp_opts args in
+    context (pp_name a) (pp_id a) (pp_args a)
+
+  let pp_dot sb =
+    let sem_list = p`sep0map (p`semi ^^ p`break1) (fun i -> i) in
+    let pre = !^
+      "\\newcommand{\\sem}[1]{\\small{\\textsf{#1}}}\
+       \\newcommand{\\cc}[1]{\\text{\\footnotesize\\ttfamily{#1}}}" in
+    let style = !^ "node [shape=none]" in
+    let context d =
+      !^ "digraph G" ^^^ p`braces (
+        sem_list ((!^ "d2tdocpreamble" ^^ p`equals ^^ p`dquotes pre)::style::d)
+      ) in
+    let arrow a1 a2 = pp_uid a1 ^^^ p`minus ^^ p`rangle ^^^ pp_uid a2 in
+    let rd = CpTransitiveReduction.reduce sb in
+    let (s, d) =
+      Set`fold
+        (fun (a1, a2) (s, d) -> (s union {a1} union {a2}, (arrow a1 a2)::d))
+        rd (empty, []) in
+    let def a = pp_uid a ^^^ p`brackets (
+      !^ "label" ^^ p`equals ^^ p`dquotes (pp_latex a)
+    ) in
+    let d = Set`fold (fun a d -> def a::d) s d in
+    context d    
+end
+*)
+
+let address (Action action _) =
+  match action with
+    | Store   _ a _   -> a
+    | FnStore _ a _   -> a
+    | Modify  _ a _ _ -> a
+    | Load    _ a _   -> a
+    | Id      a       -> a
+(*
+    | _               ->
+*)
+  end
+
+let filter_store ((Action action _) as a) =
+  match action with
+    | FnStore _ _ _   -> Some a
+    | Store   _ _ _   -> Some a
+    | Modify  _ _ _ _ -> Some a
+    | _               -> None 
+  end
+
+let filter_other ((Action action _) as a) =
+  match action with 
+    | Load _ _ _ -> Some a
+    | Id   _     -> Some a
+    | _          -> None 
+  end
+
+let rec conflict sb other rest c =
+  if Set`is_empty rest then
+    c
+  else
+    let (a, rest) = Set`pop rest in
+    let unseq a' =
+      not ((a, a') IN sb) && not ((a', a) IN sb) in
+    let alias c a' =
+      if unseq a' then
+        c`add c (c`implies (c`eq (address a) (address a')) c`undef)
+      else
+        c in
+    let c = Set`fold (fun a' c -> alias c a') rest c in
+    conflict sb other rest (Set`fold (fun a' c -> alias c a') other c)
+
+let conflicts sb ts =
+  let stores = Set`filter_map filter_store ts in
+  let other  = Set`filter_map filter_other ts in
+  conflict sb other c`empty
+
+let unfold (Action a _) = a
+
+(*
+module Memory = struct
+  module p = c`process
+  module tc = type_constraint
+
+  type value =
+    | Indeterminate
+    | Value of c`constant
+
+  type obj =
+    | Scalar of a`ctype * value
+    | Array of a`ctype * value Array`t
+
+  type mem = (symbol`t, obj) Pmap`t
+
+  type t = <|p : p`p; mem : mem|>
+
+  let address t const =
+    let (p, addr) = p`address t.p const in
+    (<|t with p = p|>, addr)
+
+  let compare_size ct s = c`compare_const s (tc`size ct) = 0
+
+  let is_valid t addr =
+    match addr with
+      | p`Base l -> Pmap`mem l t.mem
+      | p`Displaced l i s ->
+          match map`find l t.mem with
+            | Some o ->
+                let (ct, length) =
+                  match o with
+                    | Scalar ct _  -> (ct, 1)
+                    | Array  ct vs -> (ct, Array`size vs)
+                  end in
+                i >= 0 && i <= length && compare_size ct s
+            | None -> false
+         end
+      | p`NullAddress -> false
+    end
+
+  let base_of = function
+    | p`Base      l     -> l
+    | p`Displaced l _ _ -> l
+  end
+
+  let same_base t addr1 addr2 =
+    base_of addr1 = base_of addr2 && is_valid t addr1 && is_valid t addr2
+
+  let retrieve t addr =
+    match addr with
+    | p`Base l ->
+          try
+            Pmap`find l t.mem
+          with Not_found ->
+            raise (Undefined t)
+    | p`Displaced l i s ->
+          try
+            Pmap`find l t.mem
+          with Not_found ->
+            raise (Undefined t)
+    | p`NullAddress -> raise (Undefined t)
+
+  let load_scalar t ct' v' ct v =
+    if t`compatible ct ct' then
+      <|t with p = p`conj t.p (c`eq v v')|>
+    else if t`is_unsigned_of ct' ct then
+      let a, conv = tc`conv_int ct v' in
+      <|t with p = p`conj (p`conj t.p conv) (c`eq v a)|>
+    else if t`is_signed_of ct' ct then
+      let overflow = c`implies (c`neg (tc`in_range ct v')) c`undef in
+      <|t with p = p`conj (p`conj t.p (c`eq v v')) overflow|>
+    else raise (Undefined t)
+
+  let load_event t ct a v =
+    let (t, addr) = address t a in
+    try
+      match retrieve t addr with
+        | Scalar _ Indeterminate ->
+            raise (print_endline "Indet."; Undefined t)
+        | Scalar ct' (Value v') ->
+            load_scalar t ct' v' ct v
+        | Array ct' vs' when t`compatible ct' ct ->
+            match addr with
+              | p`Base _ ->
+                  match Array`get vs' 0 with
+                    | Value v' -> load_scalar t ct' v' ct v
+                    | Indeterminate -> raise (Undefined t)
+                  end
+              | p`Displaced _ i s ->
+                  if i >= 0 && i < Array`size vs' && compare_size ct' s then
+                    match Array`get vs' i with
+                      | Value v' -> load_scalar t ct' v' ct v
+                      | Indeterminate -> raise (Undefined t)
+                    end
+                  else raise (Undefined t)
+            end
+        | _ -> raise (Undefined t)
+      end
+    with Not_found -> raise (Undefined t)
+
+  let write_scalar t ct' ct v =
+    if t`compatible ct ct' then
+      (t, Value v)
+    else if t`is_signed_of ct' ct then
+      let (a, conv) = tc`conv_int ct' v in
+      (<|t with p = p`conj t.p conv|>, Value a)
+    else if t`is_unsigned_of ct' ct then
+      let overflow = c`implies (c`neg (tc`in_range ct' v)) c`undef in
+      (<|t with p = p`conj t.p overflow|>, Value v)
+    else raise (Undefined t)
+
+  let write_event t ct a v =
+    let t, addr = address t a in
+    try
+      match (retrieve t addr) with
+        | Scalar ct' _ ->
+            let t, v = write_scalar t ct' ct v in
+            <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
+        | Array (ct', vs') when t`compatible ct' ct ->
+            match addr with
+              | p`Base _ ->
+                  let (t, v) = write_scalar t ct' ct v in
+                  let vs = Array`set vs' 0 v in
+                  <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
+              | p`Displaced _ i s ->
+                  if i >= 0 && i < Array`size vs' && compare_size ct' s then
+                    let (t, v) = write_scalar t ct' ct v in
+                    let vs = Array`set vs' i v in
+                    <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
+                  else
+                    raise (Undefined t)
+            end
+        | _ -> raise (Undefined t)
+      end
+    with Not_found -> raise (Undefined t)
+
+  let event t ((_, action) as a) =
+(*    CpDocument.print (Print.pp a); print_endline "";*)
+    match action with
+      | Id a ->
+          let (t, addr) = address t a in
+          if is_valid t addr then t else raise (Undefined t)
+      | Same a1 a2 ->
+          let (t, addr1) = address t a1 in
+          let (t, addr1) = address t a2 in
+          if same_base t addr1 addr2 then t else raise (Undefined t)
+      | Create ct a when t`is_scalar ct ->
+          let (t, addr) = address t a in
+          <|t with mem = Pmap`add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
+      | Create ct a when t`is_array ct ->
+          let (t, addr) = address t a in
+          let value = Array`create (t`size_of_array ct) Indeterminate in
+          let obj = Array (t`base_of_array ct, value) in
+          <|t with mem = Pmap`add (base_of addr) obj t.mem|>
+      | Kill a ->
+          let (t, addr) = address t a in
+          <|t with mem = Pmap`remove (base_of addr) t.mem|>
+      | Load    ct a v -> load_event  t ct a v
+      | Store   ct a v -> write_event t ct a v
+      | FnStore ct a v -> write_event t ct a v
+      | Modify  ct a v v' ->
+          let t = load_event t ct a v in
+          write_event t ct a v'
+      | Call -> t
+    end
+
+  let replay p es =
+    try
+      let t = List.fold_left event <|p = p; mem = Pmap`empty|> es in
+      p`complete t.p
+    with Undefined t ->
+      p`complete (print_endline "UNDEF"; p`conj t.p c`undef)
+end
+*)

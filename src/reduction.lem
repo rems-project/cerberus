@@ -1,7 +1,7 @@
 module a = ail
 module c = constraint
 module m = meaning
-module t = ail_types
+module t = types
 
 module tc = type_constraint
 module annot = ail_annotate
@@ -9,174 +9,175 @@ module annot = ail_annotate
 let undef = c`eq (c`fresh_named "UNDEFINED") c`one
 
 let update_env env ids =
-  List.fold_left (fun e id -> Pmap`add id (c`fresh_address ()) e) env ids
+  List`fold_left (fun e id -> Pmap`add id (c`fresh_address ()) e) env ids
 
 let conv t t' (c, m) =
   let open m`operators in
-  let a, constr = tc`conv t t' c in
-  a, m <&- constr
+  let (a, constr) = tc`conv t t' c in
+  (a, m <&- constr)
 
 let conv_int t (c, m) =
   let open m`operators in
-  let a, constr = tc`conv_int t c in
-  a, m <&- constr
+  let (a, constr) = tc`conv_int t c in
+  (a, m <&- constr)
 
-let rec reduce_lvalue n b env file exp =
+let rec
+| reduce_lvalue n b env file exp =
   let open m`operators in
   let f = reduce_exp n b env file in
   let f_lvalue = reduce_lvalue n b env file in
   match annot`exp_of exp with
-  | a`VARIABLE id -> Pmap`find id env, m`empty
-  | a`UNARY (A.INDIRECTION, e) ->
+  | a`VARIABLE id -> (Pmap`find id env, m`emp)
+  | a`UNARY a`INDIRECTION e ->
       let t = t`pointer_convert (annot`exp_type_of e) in
-      let a, m = f e in
+      let (a, m) = f e in
       let null = c`eq a c`null in
       let ill_aligned = c`neg (tc`align (t`base_of_pointer t) a) in
       let c = c`implies (c`disj null ill_aligned) c`undef in
-      a, m <&- c
+      (a, m <&- c)
 
-  and reduce_exp n b env file exp =
+| reduce_exp n b env file exp =
   let open m`operators in
       let f = reduce_exp n b env file in
   let f_lvalue e =
-    let a, m = reduce_lvalue n b env file e in
-    a, m &>> (m`empty <@- Action.id a) in
-  let lookup_type id = fst (Pmap`find id file.A.id_map) in
+    let (a, m) = reduce_lvalue n b env file e in
+    (a, m |&> (m`emp <@- action`id a)) in
+  let lookup_type id = fst (Pmap`find id file.a`id_map) in
   let conv_exp e = conv_int (annot`exp_type_of exp) (f e) in
   let usual_arithmetic e1 e2 =
     t`usual_arithmetic (annot`exp_type_of e1) (annot`exp_type_of e2) in
   let overflow t c = c`implies (c`neg (tc`in_range t c)) c`undef in
   match annot`exp_of exp with
   | a`VARIABLE id when t`is_array (lookup_type id) ->
-      Pmap`find id env, m`empty
+      (Pmap`find id env, m`emp)
   | _ when t`is_lvalue (annot`type_of exp)
       && not (t`is_array (annot`exp_type_of exp)) ->
-      let a, m = f_lvalue exp in
+      let (a, m) = f_lvalue exp in
       let v = c`fresh_name () in
-      let load = Action.load (annot`lvalue_type_of exp) a v in
-      v, m &>> (m`empty <@- load)
-  | a`CONSTANT (Cabs.CONST_INT (i, _)) -> c`const i, m`empty
-  | a`UNARY (A.POSTFIX_INCR, e) ->
-      let a, m = f_lvalue e in
+      let load = action`load (annot`lvalue_type_of exp) a v in
+      (v, m |&> (m`emp <@- load))
+  | a`CONSTANT (Cabs.CONST_INT (i, _)) -> (c`const i, m`emp)
+  | a`UNARY a`POSTFIX_INCR e ->
+      let (a, m) = f_lvalue e in
       let v = c`fresh_name () in
       let incr = c`plus v c`one in
-      let v', m' = conv_int (annot`exp_type_of e) (incr, m`empty) in
-      let modify = Action.modify (annot`lvalue_type_of e) a v v' in
-      v, (m <&> m') &>> (m`empty <@- modify)
-  | a`UNARY (A.POSTFIX_DECR, e) ->
-      let a, m = f_lvalue e in
+      let (v', m') = conv_int (annot`exp_type_of e) (incr, m`emp) in
+      let modify = action`modify (annot`lvalue_type_of e) a v v' in
+      (v, (m |&| m') |&> (m`emp <@- modify))
+  | a`UNARY a`POSTFIX_DECR e ->
+      let (a, m) = f_lvalue e in
       let v = c`fresh_name () in
       let decr = c`minus v c`one in
-      let a', m' = conv_int (annot`exp_type_of e) (decr, m`empty) in
-      let modify = Action.modify (annot`lvalue_type_of e) a v a' in
-      v, (m <&> m') &>> (m`empty <@- modify)
-  | a`UNARY (A.ADDRESS, (_, a`UNARY (A.INDIRECTION, e))) -> f e
-  | a`UNARY (A.ADDRESS, e) -> f_lvalue e
-  | a`CAST (t, e) -> conv t (annot`exp_type_of e) (f e)
-  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD, e1, e2)
+      let (a', m') = conv_int (annot`exp_type_of e) (decr, m`emp) in
+      let modify = action`modify (annot`lvalue_type_of e) a v a' in
+      (v, (m |&| m') |&> (m`emp <@- modify))
+  | a`UNARY a`ADDRESS (a`Exp _ a`UNARY a`INDIRECTION e) -> f e
+  | a`UNARY a`ADDRESS e -> f_lvalue e
+  | a`CAST t e -> conv t (annot`exp_type_of e) (f e)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2)
         && t`is_signed_integer(annot`exp_type_of exp) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let sum = c`plus a1 a2 in
       let c = overflow (annot`exp_type_of exp) sum in
-      sum, m1 <&> m2 <&- c
-  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD, e1, e2)
+      (sum, m1 |&| m2 <&- c)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
-      let a, m = conv_int (annot`exp_type_of exp) (c`plus a1 a2, m`empty) in
-      a, m1 <&> m2 <&> m
-  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD, e1, e2)
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
+      let (a, m) = conv_int (annot`exp_type_of exp) (c`plus a1 a2, m`emp) in
+      (a, m1 |&| m2 |&| m)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2
       when t`is_pointer (annot`exp_type_of e1) ->
       (* Pointer arithmetic. *)
-      let a1, m1 = f e1 in
-      let a2, m2 = f e2 in
+      let (a1, m1) = f e1 in
+      let (a2, m2) = f e2 in
       let size = tc`size (t`base_of_pointer (annot`exp_type_of e1)) in
       let a = c`offset a1 a2 size in
-      a, (m1 <&> m2) &>> (m`empty <@- Action.same a1 a)
-  | a`BINARY (Cabs.ARITHMETIC Cabs.SUB, e1, e2)
+      (a, (m1 |&| m2) |&> (m`emp <@- action`same a1 a))
+  | a`BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2
       when t`is_pointer (annot`exp_type_of e1) ->
       (* Pointer arithmetic. *)
-      let a1, m1 = f e1 in
-      let a2, m2 = f e2 in
+      let (a1, m1) = f e1 in
+      let (a2, m2) = f e2 in
       let size = tc`size (t`base_of_pointer (annot`exp_type_of e1)) in
       let a = c`offset a1 (c`minus c`zero a2) size in
-      a, (m1 <&> m2) &>> (m`empty <@- Action.same a1 a)
-  | a`BINARY(Cabs.ARITHMETIC Cabs.SUB, e1, e2)
+      (a, (m1 |&| m2) |&> (m`emp <@- action`same a1 a))
+  | a`BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2)
         && t`is_signed_integer(annot`exp_type_of exp) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let diff = c`minus a1 a2 in
       let c = overflow (annot`exp_type_of exp) diff in
-      diff, (m1 <&> m2) <&- c
-  | a`BINARY(Cabs.ARITHMETIC Cabs.SUB, e1, e2)
+      (diff, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
-      let a, m = conv_int (annot`exp_type_of exp) (c`minus a1 a2, m`empty) in
-      a, m1 <&> m2 <&> m
-  | a`BINARY(Cabs.ARITHMETIC Cabs.MOD, e1, e2)
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
+      let (a, m) = conv_int (annot`exp_type_of exp) (c`minus a1 a2, m`emp) in
+      (a, m1 |&| m2 |&| m)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2)
         && t`is_signed_integer(annot`exp_type_of exp) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let modulo = c`modulo a1 a2 in
       let div_zero = c`implies (c`eq a2 c`zero) c`undef in
       let c = overflow (annot`exp_type_of exp) (c`div a1 a2) in
-      modulo, (m1 <&> m2) <&- div_zero <&- c
-  | a`BINARY(Cabs.ARITHMETIC Cabs.MOD, e1, e2)
+      (modulo, (m1 |&| m2) <&- div_zero <&- c)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let modulo = c`modulo a1 a2 in
-      let a, m = conv_int (annot`exp_type_of exp) (modulo, m`empty) in
+      let (a, m) = conv_int (annot`exp_type_of exp) (modulo, m`emp) in
       let div_zero = c`implies (c`eq a2 c`zero) c`undef in
-      a, (m1 <&> m2 <&> m) <&- div_zero
-  | a`BINARY (Cabs.SEQUENTIAL Cabs.COMMA, e1, e2) ->
-      let _,  m1 = f e1 in
-      let a2, m2 = f e2 in
-      a2, m1 &>> m2
-  | a`BINARY (Cabs.SEQUENTIAL Cabs.OR, e1, e2) ->
-      let a1, m1 = f e1 in
-      let a2, m2 = f e2 in
+      (a, (m1 |&| m2 |&| m) <&- div_zero)
+  | a`BINARY (Cabs.SEQUENTIAL Cabs.COMMA) e1 e2 ->
+      let (_,  m1) = f e1 in
+      let (a2, m2) = f e2 in
+      (a2, m1 |&> m2)
+  | a`BINARY (Cabs.SEQUENTIAL Cabs.OR) e1 e2 ->
+      let (a1, m1) = f e1 in
+      let (a2, m2) = f e2 in
       let a = c`fresh_name () in
       let first_only = c`conj (c`neq a1 c`zero) (c`eq a c`one) in
       let both = c`conj
         (c`eq a1 c`zero)
         (c`case (c`eq a2 c`zero) (c`eq a c`zero) (c`eq a c`one)) in
-      a, (m1 <&- first_only) <|> ((m1 &>> m2) <&- both)
-  | a`BINARY (Cabs.SEQUENTIAL Cabs.AND, e1, e2) ->
-      let a1, m1 = f e1 in
-      let a2, m2 = f e2 in
+      (a, (m1 <&- first_only) ||| ((m1 |&> m2) <&- both)
+  | a`BINARY (Cabs.SEQUENTIAL Cabs.AND) e1 e2 ->
+      let (a1, m1) = f e1 in
+      let (a2, m2) = f e2 in
       let a = c`fresh_name () in
       let first_only = c`conj (c`eq a1 c`zero) (c`eq a c`zero) in
       let both = c`conj
         (c`neq a1 c`zero)
         (c`case (c`neq a2 c`zero) (c`eq a c`one) (c`eq a c`zero)) in
-      a, (m1 <&- first_only) <|> ((m1 &>> m2) <&- both)
-  | a`BINARY (Cabs.ARITHMETIC Cabs.SHL, e1, e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
+      (a, (m1 <&- first_only) ||| ((m1 |&> m2) <&- both)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2 ->
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
       let shifted = c`mult a1 (c`pow a2) in
       if t`is_signed_integer (annot`exp_type_of exp) then
         let not_repr = c`neg (tc`in_range (annot`exp_type_of exp) shifted) in
         let neg = c`lt shifted c`zero in
         let c = c`implies (c`disj neg not_repr) c`undef in
-        shifted, (m1 <&> m2) <&- c
+        shifted, (m1 |&| m2) <&- c
       else
-        let a, m = conv_int (annot`exp_type_of exp) (shifted, m`empty) in
-        a, m1 <&> m2 <&> m
-  | a`BINARY (Cabs.ARITHMETIC Cabs.SHR, e1, e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
+        let (a, m) = conv_int (annot`exp_type_of exp) (shifted, m`emp) in
+        (a, m1 |&| m2 |&| m)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2 ->
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
       let shifted = c`div a1 (c`pow a2) in
       if t`is_signed_integer (annot`exp_type_of exp) then
         let a = c`fresh_name () in
@@ -184,170 +185,170 @@ let rec reduce_lvalue n b env file exp =
         let c = c`case negative
           (c`eq a (c`fn "impl_right_shift" [shifted]))
           (c`eq a shifted) in
-        shifted, (m1 <&> m2) <&- c
+        (shifted, (m1 |&| m2) <&- c)
       else
-        shifted, m1 <&> m2
-  | a`BINARY (Cabs.RELATIONAL Cabs.EQ, e1, e2)
+        (shifted, m1 |&| m2)
+  | a`BINARY (Cabs.RELATIONAL Cabs.EQ) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`eq a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.NE, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.NE) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`neg (c`eq a1 a2))
         (c`eq a c`one)
         (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.LT, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.LT) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`lt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.LE, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.LE) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`le a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.GT, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.GT) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.GT, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.GT) e1 e2
       when t`is_pointer (annot`exp_type_of e1) ->
       (* TODO Comparing two pointers to different object is
 	 undefined. *)
-      let a1, m1 = f e1 in
-      let a2, m2 = f e2 in
+      let (a1, m1) = f e1 in
+      let (a2, m2) = f e2 in
       let a = c`fresh_name () in
       let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.RELATIONAL Cabs.GE, e1, e2)
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.RELATIONAL Cabs.GE) e1 e2
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
       let t = usual_arithmetic e1 e2 in
-      let a1, m1 = conv_int t (f e1) in
-      let a2, m2 = conv_int t (f e2) in
+      let (a1, m1) = conv_int t (f e1) in
+      let (a2, m2) = conv_int t (f e2) in
       let a = c`fresh_name () in
       let c = c`case (c`ge a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-      a, (m1 <&> m2) <&- c
-  | a`BINARY (Cabs.ARITHMETIC Cabs.BAND, e1, e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      (a, (m1 |&| m2) <&- c)
+  | a`BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let a = c`fresh_name () in
-      a, (m1 <&> m2) <&- (c`eq a (c`bit_and a1 a2))
-  | a`BINARY (Cabs.ARITHMETIC Cabs.BOR, e1, e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      (a, (m1 |&| m2) <&- (c`eq a (c`bit_and a1 a2)))
+  | a`BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2 ->
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let a = c`fresh_name () in
-      a, (m1 <&> m2) <&- (c`eq a (c`bit_or a1 a2))
-  | a`BINARY (Cabs.ARITHMETIC Cabs.XOR, e1, e2) ->
-      let a1, m1 = conv_exp e1 in
-      let a2, m2 = conv_exp e2 in
+      (a, (m1 |&| m2) <&- (c`eq a (c`bit_or a1 a2)))
+  | a`BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2 ->
+      let (a1, m1) = conv_exp e1 in
+      let (a2, m2) = conv_exp e2 in
       let a = c`fresh_name () in
-      a, (m1 <&> m2) <&- (c`eq a (c`bit_xor a1 a2))
-  | a`ASSIGN (None, e1, e2) ->
-      let a1, m1 = f_lvalue e1 in
-      let a2, m2 = f e2 in
-      let a, m =
-        conv (annot`exp_type_of e1) (annot`exp_type_of e2) (a2, m`empty) in
-      let write = Action.store (annot`lvalue_type_of e1) a1 a in
-      a,  (m1 <&> m2) &>> (m <@- write)
-  | a`QUESTION (e1, e2, e3)
+      (a, (m1 |&| m2) <&- (c`eq a (c`bit_xor a1 a2)))
+  | a`ASSIGN None e1 e2 ->
+      let (a1, m1) = f_lvalue e1 in
+      let (a2, m2) = f e2 in
+      let (a, m) =
+        conv (annot`exp_type_of e1) (annot`exp_type_of e2) (a2, m`emp) in
+      let write = action`store (annot`lvalue_type_of e1) a1 a in
+      (a,  (m1 |&| m2) |&> (m <@- write))
+  | a`QUESTION e1 e2 e3
       when t`is_arithmetic (annot`exp_type_of e1)
         && t`is_arithmetic (annot`exp_type_of e2) ->
-      let a1, m1 = f e1 in
-      let a2, m2 = conv_exp e2 in
-      let a3, m3 = conv_exp e3 in
+      let (a1, m1) = f e1 in
+      let (a2, m2) = conv_exp e2 in
+      let (a3, m3) = conv_exp e3 in
       let a = c`fresh_name () in
       let pos = m2 <&- (c`eq a a2) <&- (c`eq  a1 c`zero) in
       let neg = m3 <&- (c`eq a a3) <&- (c`neq a1 c`zero) in
-      a, m1 &>> (pos <|> neg)
-  | a`CALL ((_, a`VARIABLE fid), es) 
-      when Pmap`mem fid file.A.function_map
+      (a, m1 |&> (pos ||| neg))
+  | a`CALL (a`Exp _ (a`VARIABLE fid)) es
+      when Pmap`mem fid file.a`function_map
         && Pmap`find fid b > 0 ->
       let depth = Pmap`find fid b in
       let b' = Pmap`add fid (depth - 1) b in
-      let ids, s = Pmap`find fid file.A.function_map in
+      let (ids, s) = Pmap`find fid file.a`function_map in
       let env' = update_env env ids in
-      let ids_t = List.map (fun id -> Pmap`find id env', lookup_type id) ids in
-      let m_args = List.fold_left2
+      let ids_t = List`map (fun id -> (Pmap`find id env', lookup_type id)) ids in
+      let m_args = List`fold_left2
         (fun m' (l, t) e ->
-          let a, m = conv (t`unqualify t) (annot`exp_type_of e) (f e) in
-          let create = Action.create t l in
-          let store = Action.fn_store t l a in
-          m' <&> ((m <@- create) &>> (m`empty <@- store))
-        ) m`empty ids_t es in
-      let kill_ids m (l, _) = m <@- Action.kill l in
-      let m_kill = List.fold_left kill_ids m`empty ids_t in
+          let (a, m) = conv (t`unqualify t) (annot`exp_type_of e) (f e) in
+          let create = action`create t l in
+          let store = action`fn_store t l a in
+          m' |&| ((m <@- create) |&> (m`emp <@- store))
+        ) m`emp ids_t es in
+      let kill_ids m (l, _) = m <@- action`kill l in
+      let m_kill = List`fold_left kill_ids m`emp ids_t in
       let a = c`fresh_name () in
       let m_body = m`flatten_func (reduce_stmt n b' fid a env' file s) in
-      a, m_args &>> m_body &>> m_kill
-  | a`CALL ((_, a`VARIABLE _), _) ->
-      c`fresh_name (), m`none
+      (a, m_args |&> m_body |&> m_kill)
+  | a`CALL (a`Exp _ (a`VARIABLE _)) _ ->
+      (c`fresh_name (), m`none)
 
-and reduce_stmt n b fid return env file (d, stmt) =
+| reduce_stmt n b fid return env file (a`Stmt _ stmt) =
   let open m`StatementOperators in
   let f_s = reduce_stmt n b fid return env file in
   let f_e = reduce_exp n b env file in
-  let lift (a, m) = a, m`normal m in
-  let lookup_type id = fst (Pmap`find id file.A.id_map) in
+  let lift (a, m) = (a, m`normal m in
+  let lookup_type id = fst (Pmap`find id file.a`id_map) in
   match stmt with
-  | a`SKIP -> m`empty_func
-  | a`IF (e, s1, s2) ->
-      let a, m = lift (f_e e) in
+  | a`SKIP -> m`emp_func
+  | a`IF e s1 s2 ->
+      let (a, m) = lift (f_e e) in
       let pos = f_s s1 <&- (c`neq  a c`zero) in
       let neg = f_s s2 <&- (c`eq a c`zero) in
-      m &>> (pos <|> neg)
-  | a`BLOCK (ids, ss) ->
+      m |&> (pos ||| neg)
+  | a`BLOCK ids ss ->
       let module S = BatSet in
-      let create_ids m (l, t) = m <@- Action.create t l in
-      let kill_ids   m (l, _) = S.add (Action.kill l) m in
+      let create_ids m (l, t) = m <@- action`create t l in
+      let kill_ids   m (l, _) = S.add (action`kill l) m in
       let env' = update_env env ids in
-      let ids_t = List.map (fun i -> Pmap`find i env', lookup_type i) ids in
-      let m_create = List.fold_left create_ids m`empty_func ids_t in
-      let m_kill   = List.fold_left kill_ids S.empty ids_t in
+      let ids_t = List`map (fun i -> Pmap`find i env', lookup_type i) ids in
+      let m_create = List`fold_left create_ids m`emp_func ids_t in
+      let m_kill   = List`fold_left kill_ids empty ids_t in
       let m =
-        List.fold_left
-          (fun m s -> m &>> (reduce_stmt n b fid return env' file s))
-          m`empty_func ss in
-      m`add_actions_entire_func_sb (m_create &>> m) m_kill
+        List`fold_left
+          (fun m s -> m |&> (reduce_stmt n b fid return env' file s))
+          m`emp_func ss in
+      m`add_actions_entire_func_sb (m_create |&> m) m_kill
   | a`DECLARATION defns ->
       let define (id, e) =
         let t = lookup_type id in
-        let a, m = lift (conv t (annot`exp_type_of e) (f_e e)) in
-        m &>> (m`empty_func <@- Action.store t (Pmap`find id env) a) in
-      List.fold_left (fun m p -> m &>> define p) m`empty_func defns
+        let (a, m) = lift (conv t (annot`exp_type_of e) (f_e e)) in
+        m |&> (m`emp_func <@- action`store t (Pmap`find id env) a) in
+      List`fold_left (fun m p -> m |&> define p) m`emp_func defns
   | a`RETURN_EXPRESSION e ->
       let t_return = match lookup_type fid with
-        | a`FUNCTION (t, _) -> t
+        | a`FUNCTION t _ -> t
         | _ -> invalid_arg "Not a function type." in
-      let a, m = conv t_return (annot`exp_type_of e) (f_e e) in
+      let (a, m) = conv t_return (annot`exp_type_of e) (f_e e) in
       m`return (m`add_constraint m (c`eq a return))
-  | a`RETURN_VOID -> m`return m`empty
+  | a`RETURN_VOID -> m`return m`emp
   | a`EXPRESSION e -> snd (lift (f_e e))
-  | a`WHILE (e, s) ->
+  | a`WHILE e s ->
       let m_neg (a, m) = m`add_constraint m (c`eq  a c`zero) in
       let m_pos (a, m) = m`add_constraint m (c`neq a c`zero) in
       let rec iterate m = function
@@ -355,29 +356,28 @@ and reduce_stmt n b fid return env file (d, stmt) =
         | n ->
             let test = f_e e in
             let m' = m`enter_loop (m_pos test) (m_neg test) m in
-            iterate (m' &>> f_s s) (n-1) in
-      iterate m`empty_func n
-  | a`BREAK -> m`break m`empty
-  | a`CONTINUE -> m`continue m`empty
+            iterate (m' |&> f_s s) (n-1) in
+      iterate m`emp_func n
+  | a`BREAK -> m`break m`emp
+  | a`CONTINUE -> m`continue m`emp
 
-let reduce_file n omega ({A.function_map; a`main; _} as file) =
+let reduce_file n ({a`function_map; a`main; _} as file) =
   let b =
-    List.fold_left (fun m fid -> Pmap`add fid n m) Pmap`empty (Pmap`keys function_map) in
-  let _, s = Pmap`find main function_map in
+    List`fold_left (fun m fid -> Pmap`add fid n m) Pmap`empty (Pmap`keys function_map) in
+  let (_, s) = Pmap`find main function_map in
   let m = reduce_stmt n b main (c`fresh_named "return") Pmap`empty file s in
-  m`add_constraint_set (m`flatten_func m) omega
+  m`flatten_func m
 (*
-  List.map rd (List.map snd (Pmap`values function_map))
+  List`map rd (List`map snd (Pmap`values function_map))
 *)
 
-let reduce n (omega, result) =
+let reduce n result =
   match result with
-  | a`Program file -> a`Program (reduce_file n omega file)
+  | a`Program file -> a`Program (reduce_file n file)
   | a`Invalid -> a`Invalid
   | a`Undefined -> a`Undefined
 
 module Print = struct
 
   let pp = ()
-
 end

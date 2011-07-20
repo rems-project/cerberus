@@ -222,15 +222,15 @@ let rec compare_constr constr1 constr2 =
 *)
 type t = symbol`set * constr set
 
-let fresh f (s, t) =
-  let (s', symbol) = symbol`fresh s in
-  (f symbol, (s', t))
+let fresh f (t, s) =
+  let (symbol, s') = symbol`fresh s in
+  (f symbol, (t, s'))
 
-let fresh_pretty n f (s, t) =
-  let (s', symbol) = symbol`fresh_name n s in
-  (f symbol, (s', t))
+let fresh_pretty n f (t, s) =
+  let (symbol, s') = symbol`fresh_name n s in
+  (f symbol, (t, s'))
 
-let emp = (symbol`emp, empty)
+let emp = (empty, symbol`emp)
 let make c = {c}
 let from_list cs = List`fold_left (fun t c -> Set`add c t) empty cs
 

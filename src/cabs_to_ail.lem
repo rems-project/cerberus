@@ -72,7 +72,7 @@ module effect = struct
 
   let fresh_name name =
     let f env =
-      let (symbol_set', symbol) = symbol`fresh_name env.symbol_set name in
+      let (symbol, symbol_set') = symbol`fresh_name env.symbol_set name in
       let env' =
       <|env with
         symbol_set = symbol_set';

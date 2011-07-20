@@ -7,6 +7,7 @@ FILES=\
 pair.lem \
 map.lem \
 list.lem \
+set.lem \
 multiset.lem \
 lexing.lem \
 location.lem \
@@ -20,13 +21,14 @@ state_exception.lem \
 symbol_table.lem \
 cabs.lem \
 ail.lem \
-ail_types.lem \
-ail_annotate.lem \
+types.lem \
+annotate.lem \
 cabs_to_ail.lem \
 ail_rewrite.lem \
-ail_typing.lem \
+typing.lem \
 range.lem \
-constraint.lem
+constraint.lem \
+action.lem
 
 all:
 	mkdir -p $(BUILD_DIR)

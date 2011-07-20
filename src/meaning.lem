@@ -2,12 +2,12 @@ open global
 
 module c = constraint
 
-type denotation = {
-  actions : action`t set;
+type denotation = <|
+  actions     : action`t set;
   constraints : c`t;
-  seq_before : (action`t * action`t) set;
-  fs_actions : (action`t, action`t set) map
-}
+  seq_before  : (action`t * action`t) set;
+  fs_actions  : (action`t, action`t set) map
+|>
 
 module denotation = struct
   type t = denotation
@@ -27,191 +27,181 @@ type t = DS.t
 
 type t = denotation`t set
 
-type func = {
-  break : t;
+type func = <|
+  break    : t;
   continue : t;
-  normal : t;
-  return : t
-}
+  normal   : t;
+  return   : t
+|>
 
-let empty =
-  Set`singleton (*~cmp:cmp*) {
-    actions = Set`empty;
-    constraints = c`empty;
-    seq_before = Set`empty;
-    fs_actions = Pmap`empty
-  }
+let emp = {<|
+  actions     = empty;
+  constraints = c`empty;
+  seq_before  = empty;
+  fs_actions  = Pmap`empty
+|>}
 
-let none = Set`empty
+let none = empty
 
-let and_denotations d1 d2 = {
-  actions = Set`union d1.actions d2.actions;
+let and_denotations d1 d2 = <|
+  actions     = d1.actions     union d2.actions;
+  constraints = d1.constraints union d2.constraints;
+  seq_before  = d1.seq_before  union d2.seq_before;
+  fs_actions  = Pmap`union d1.fs_actions d2.fs_actions
+|>
+
+let and_denotations_sb d1 d2 = <|
+  actions     = d1.actions union d2.actions;
   constraints = c`union d1.constraints d2.constraints;
-  seq_before = Set`union d1.seq_before d2.seq_before;
-  fs_actions = Pmap`union d1.fs_actions d2.fs_actions
-}
+  seq_before  =
+    let sb = set`product d1.actions d2.actions in
+    sb union (d1.seq_before union d2.seq_before);
+  fs_actions  = Pmap`union d1.fs_actions d2.fs_actions
+|>
 
-let and_denotations_sb d1 d2 = {
-  actions = Set`union d1.actions d2.actions;
-  constraints = c`union d1.constraints d2.constraints;
-  seq_before =
-    begin
-      let sb = Set`product d1.actions d2.actions in
-      Set`union sb (Set`union d1.seq_before d2.seq_before)
-    end;
-  fs_actions = Pmap`union d1.fs_actions d2.fs_actions
-}
+let conj t1 t2 = set`product_map and_denotations t1 t2
+let conj_seq_before t1 t2 = set`product_map and_denotations_sb t1 t2
+let disj t1 t2 = t1 union t2
 
-let product_map pair s1 s2 =
-  let fold_inner a s_init =
-    Set`fold (fun b s -> Set`add (pair a b) s) s2 s_init in
-  Set`fold (fun a s -> fold_inner a s) s1 Set`empty
-
-let conj m1 m2 = product_map and_denotations m1 m2
-let conj_seq_before m1 m2 = product_map and_denotations_sb m1 m2
-let disj m1 m2 = Set`union m1 m2
-
-let add_constraint m constr =
+let add_constraint t constr =
   let c = c`make constr in
-  Set`map (fun d -> {d with constraints = c`union d.constraints c}) m
+  {<|d with constraints = c`union d.constraints c|> | forall (d IN t) | true}
 
-let add_constraint_set m c =
-  Set`map (fun d -> {d with constraints = c`union d.constraints c}) m
+let add_constraint_set t c =
+  {<|d with constraints = c`union d.constraints c|> | forall (d IN t) | true}
 
-let add_action m a =
-  Set`map (fun d -> {d with actions = Set`add a d.actions}) m
+let add_action t a =
+  {<|d with actions = d.actions union {a}|> | forall (d IN t) | true}
 
 module operators = struct
-  let (<&>) = conj
-  let (&>>) = conj_seq_before
-  let (<|>) = disj
+  let (|&|) = conj
+  let (|&>) = conj_seq_before
+  let (|||) = disj
   let (<&-) = add_constraint
   let (<@-) = add_action
 end
 
-let empty_func = {
-  break = Set`empty;
-  continue = Set`empty;
-  normal = empty;
-  return = Set`empty
-}
+let empty_func = <|
+  break    = empty;
+  continue = empty;
+  normal   = emp;
+  return   = empty
+|>
 
-let break m = {
-  break = m;
-  continue = Set`empty;
-  normal = Set`empty;
-  return = Set`empty
-}
+let break t = <|
+  break    = t;
+  continue = empty;
+  normal   = empty;
+  return   = empty
+|>
 
-let continue m = {
-  break = Set`empty;
-  continue = m;
-  normal = Set`empty;
-  return = Set`empty
-}
+let continue t = <|
+  break    = empty;
+  continue = t;
+  normal   = empty;
+  return   = empty
+|>
 
-let normal m = {
-  break = Set`empty;
-  continue = Set`empty;
-  normal = m;
-  return = Set`empty
-}
+let normal t = <|
+  break    = empty;
+  continue = empty;
+  normal   = t;
+  return   = empty
+|>
 
-let return m = {
-  break = Set`empty;
-  continue = Set`empty;
-  normal = Set`empty;
-  return = m
-}
+let return t = <|
+  break    = empty;
+  continue = empty;
+  normal   = empty;
+  return   = t
+|>
 
 let collect_fs_actions =
   Set`map (fun d ->
     let call = action`call () in
-    {d with
-      actions = Set`singleton call;
+    <|d with
+      actions    = {call};
       fs_actions = Pmap`add call d.actions d.fs_actions
-    }
+    |>
   )
 
-let flatten_func {break; continue; normal; return} =
+let flatten_func m =
   let open operators in
-      assert (Set`is_empty break);
-      assert (Set`is_empty continue);
-      collect_fs_actions (normal <&- c`undef <|> return)
+  collect_fs_actions (m.normal <&- c`undef ||| m.return)
 
-let enter_loop m_pos m_neg {break; continue; normal; return} =
+let enter_loop t_pos t_neg m =
   let open operators in
-      let m = continue <|> normal in {
-        break = break <|> (m &>> m_neg);
-        continue = Set`empty;
-        normal = m &>> m_pos;
-        return = return
-      }
+  let t = m.continue ||| m.normal in <|
+    break    = m.break ||| (t |&> t_neg);
+    continue = m.empty;
+    normal   = t |&> t_pos;
+    return   = m.return
+  |>
 
-let exit_loop m_neg {break; continue; normal; return} =
-  let open operators in {empty_func with
-    normal = break <|> ((continue <|> normal) &>> m_neg);
-    return = return
-  }
+let exit_loop t_neg m =
+  let open operators in <|empty_func with
+    normal = m.break ||| ((m.continue ||| m.normal) |&> t_neg);
+    return = m.return
+  |>
 
-let conj_seq_before_func ml1 ml2 =
-  let open operators in {
-    break = ml1.break <|> (ml1.normal &>> ml2.break);
-    continue = ml1.continue <|> (ml1.normal &>> ml2.continue);
-    normal = ml1.normal &>> ml2.normal;
-    return = ml1.return <|> (ml1.normal &>> ml2.return)
-  }
+let conj_seq_before_func m1 m2 =
+  let open operators in <|
+    break    = m1.break    ||| (m1.normal |&> m2.break);
+    continue = m1.continue ||| (m1.normal |&> m2.continue);
+    normal   = m1.normal   |&> m2.normal;
+    return   = m1.return   ||| (m1.normal |&> m2.return)
+  |>
 
-let disj_func ml1 ml2 =
-  let open operators in {
-    break = ml1.break <|> ml2.break;
-    continue = ml1.continue <|> ml2.continue;
-    normal = ml1.normal <|> ml2.normal;
-    return = ml1.return <|> ml2.return
-  }
+let disj_func m1 m2 =
+  let open operators in <|
+    break    = m1.break    ||| m2.break;
+    continue = m1.continue ||| m2.continue;
+    normal   = m1.normal   ||| m2.normal;
+    return   = m1.return   ||| m2.return
+  |>
 
-let add_constraint_func ml c =
+let add_constraint_func m c =
   let open operators in
-      {ml with normal = ml.normal <&- c}
+  <|m with normal = m.normal <&- c|>
 
-let add_action_func ml a =
+let add_action_func m a =
   let open operators in
-      {ml with normal = ml.normal <@- a}
+  <|m with normal = m.normal <@- a|>
 
-let add_action_entire_func {break; continue; normal; return} a =
-  let open operators in {
-    break = break <@- a;
-    continue = continue <@- a;
-    normal = normal <@- a;
-    return = return <@- a
-  }
+let add_action_entire_func m a =
+  let open operators in <|
+    break    = m.break    <@- a;
+    continue = m.continue <@- a;
+    normal   = m.normal   <@- a;
+    return   = m.return   <@- a
+  |>
 
-let add_actions_entire_func_sb {break; continue; normal; return} actions =
+let add_actions_entire_func_sb m actions =
   let open operators in
-  let m = Set`map (fun d -> {d with actions = actions} ) empty in {
-    break = break &>> m;
-    continue = continue &>> m;
-    normal = normal &>> m;
-    return = return &>> m
-  }
+  let t = {<|d with actions = actions|> | forall (d in emp) | true} in <|
+    break = m.break       |&> t;
+    continue = m.continue |&> t;
+    normal = m.normal     |&> t;
+    return = m.return     |&> t
+  |>
 
-let add_constraint_entire_func {break; continue; normal; return} c =
-  let open operators in {
-    break = break <&- c;
-    continue = continue <&- c;
-    normal = normal <&- c;
-    return = return <&- c
-  }
+let add_constraint_entire_func m c =
+  let open operators in <|
+    break    = m.break    <&- c;
+    continue = m.continue <&- c;
+    normal   = m.normal   <&- c;
+    return   = m.return   <&- c
+  |>
 
-module Statementoperators = struct
+module statement_operators = struct
   (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
-  let (&>>) = conj_seq_before_func
-  let (<|>) = disj_func
+  let (|&>) = conj_seq_before_func
+  let (|||) = disj_func
   let (<&-) = add_constraint_entire_func
   let (<@-) = add_action_func
 end
 
-module Print = struct
+module print = struct
   module p = pprint
   module u = pprint`unicode
 
@@ -240,7 +230,7 @@ module Print = struct
         (M.bindings m)
     )
 
-  let pp_denot {actions; constraints; seq_before; fs_actions} =
+  let pp_denot <|actions; constraints; seq_before; fs_actions|> =
     let line name pp p = !^ name ^^^ p`equals ^^^ p`group (pp p) ^^ p`semi in
     line "actions" pp_actions actions
     ^/^ line "constraints" pp_contraints constraints
@@ -258,10 +248,10 @@ module Solve = struct
     | [] -> [Set`fold (fun a ls -> a :: ls) s []]
     | _ ->
         let pre_f a ls = ls @ [a] in
-        Set`fold (fun a pre -> List.map (pre_f a) pre) s pre
+        Set`fold (fun a pre -> List`map (pre_f a) pre) s pre
 
   let partition_sb d u =
-    let sa a u = Set`exists (fun a' -> Set`mem (a', a) d.seq_before) u in
+    let sa a u = exists (a' IN u). (a', a) IN d.seq_before in
     Set`partition (fun a -> not (sa a u)) u
 
   let permute sb ts =
@@ -278,24 +268,24 @@ module Solve = struct
               front, tail
             else
               split p (front @ [a]) rest in
-      let split_sb = split (fun a -> Set`mem (a, t) sb) in
-      let split_sa = split (fun a -> Set`mem (t, a) sb) in
+      let split_sb = split (fun a -> (a, t) IN sb) in
+      let split_sa = split (fun a -> (t, a) IN sb) in
       let rest, sa = split_sa [] ls in
-      let nu, bs = split_sb [] (List.rev rest) in
-      let sb = List.rev bs in
-      let un = List.rev nu in
-      let sb_un = List.map ((@) sb) (p t lls [] un) in
-      List.map ((@) sa) sb_un in
-    let step t lls = List.fold_left (combine t) [] lls in
+      let nu, bs = split_sb [] (List`rev rest) in
+      let sb = List`rev bs in
+      let un = List`rev nu in
+      let sb_un = List`map ((@) sb) (p t lls [] un) in
+      List`map ((@) sa) sb_un in
+    let step t lls = List`fold_left (combine t) [] lls in
     Set`fold step ts [[]]
 
   let partition sb cs es =
     let rec f e lls cs front tail =
       match cs, tail with
-      | [], [a] -> (front @ [e :: a]) :: lls
-      | c::cs', a::rest ->
+      | ([], [a]) -> (front @ [e :: a]) :: lls
+      | (c::cs', a::rest) ->
           let lls' = (front @ ((e :: a) :: rest)) :: lls in
-          if Set`mem (e, c) sb || List.exists (fun t -> Set`mem (e, t) sb) a then
+          if (e, c) IN sb || List`exists (fun t -> (e, t) IN sb) a then
             lls'
           else
             if action`is_access e && not (action`is_fn_store e) then
@@ -303,15 +293,15 @@ module Solve = struct
             else
               f e lls  cs' (front @ [a]) rest in
     let step lls e =
-      List.fold_left (fun lls ls -> f e lls cs [] ls) [] lls in
-    List.fold_left step [BatList.make (1 + List.length cs) []] es
+      List`fold_left (fun lls ls -> f e lls cs [] ls) [] lls in
+    List`fold_left step [List`make (1 + List`length cs) []] es
 (*
   let rec merge d pre perm part =
     match perm, part with
     | [], [ts] -> schedule pre ts
     | c::cs, ts::tss ->
         let combine_pres (c1, ls1) (c2, ls2) = c`union c1 c2, ls1 @ ls2 in
-        merge d (schedule (BatList.product_map combine_pres pre c) ts) cs tss
+        merge d (schedule (List`product_map combine_pres pre c) ts) cs tss
     | _ -> assert (false)
 *)
 
@@ -323,45 +313,46 @@ module Solve = struct
       let sb_calls, sb_rest = Set`partition action`is_call sb in
       let sa_ucalls, sa_rest =
         Set`partition
-          (fun a -> action`is_call a
-            && Set`exists (fun a' -> not (Set`mem (a',a) d.seq_before)) sb)
-          sa in
-      let calls = Set`union sb_calls sa_ucalls in
+          (fun a -> 
+            action`is_call a && exists a' IN sb. not ((a',a) IN d.seq_before)
+          ) sa in
+      let calls = sb_calls union sa_ucalls in
       if Set`is_empty calls then
         seq d (schedule pre sb) sa
       else
         let sb_accesses, sb_other = Set`partition action`is_access sb_rest in
         let pre = schedule pre sb_other in
-        let sa_rest_todo, sa_rest_rest = Set`partition
-          (fun a -> Set`exists
-            (fun c -> Set`mem (a, c) d.seq_before
-              || not (Set`mem (c, a) d.seq_before)) calls)
-          sa_rest in
+        let sa_rest_todo, sa_rest_rest =
+          Set`partition
+            (fun a -> exists (c IN calls).
+              (a, c) IN d.seq_before || not ((c, a) IN d.seq_before)
+            ) sa_rest in
         let todo_list =
           let rec f ls t =
             if Set`is_empty t then
               ls
             else
-              let sb, sa = Set`partition
-                (fun a -> Set`for_all
-                  (fun a' -> not (Set`mem (a', a) d.seq_before)) t) t in
+              let sb, sa =
+                Set`partition
+                  (fun a -> forall (a' in t). not ((a', a) IN d.seq_before))
+                  t in
               f (Set`elements sb @ ls) sa in
-          f [] (Set`union sb_accesses sa_rest_todo) in
+          f [] (sb_accesses union sa_rest_todo) in
         let call_map =
           let seq_call c = seq d [] (M.find c d.fs_actions) in
-          Pmap`of_list (List.map (fun c -> c, seq_call c) (Set`elements calls)) in
+          Pmap`of_list [(c, seq_call c) | forall (c IN calls) | true] in
         let perm = permute d.seq_before calls in
         let rec interleave pre cs ts =
-          match cs, ts with
-          | [], [t] -> List.map (fun p -> p @ t) pre
-          | c::cs', t::ts ->
-              let pre = List.map (fun p -> p @ t) pre in
-              let pre = BatList.product_map (@) pre (M.find c call_map) in
+          match (cs, ts) with
+          | ([], [t]) -> [p @ t | forall (p MEM pre) | true]
+          | (c::cs', t::ts) ->
+              let pre = [p @ t | forall (p MEM pre) | true] in
+              let pre = List`product_map (@) pre (M.find c call_map) in
               interleave pre cs' ts in
         let merge lls cs =
           let part = partition d.seq_before cs todo_list in
-          List.fold_left (fun lls ts -> interleave pre cs ts @ lls) lls part in
-        seq d (List.fold_left merge [] perm) sa_rest_rest
+          List`fold_left (fun lls ts -> interleave pre cs ts @ lls) lls part in
+        seq d (List`fold_left merge [] perm) sa_rest_rest
 
   let linearise d = seq d [] d.actions
 
@@ -383,10 +374,10 @@ module Solve = struct
         with
         | p`Partial _ -> assert (false)
         | p`Invalid -> c in
-      List.fold_left f c (linearise d)
+      List`fold_left f c (linearise d)
     with p`Invalid -> c
 (*
-      List.fold_left f (Set`create c`compare) traces
+      List`fold_left f (Set`create c`compare) traces
     with p`Invalid -> Set`create c`compare
 *)
 

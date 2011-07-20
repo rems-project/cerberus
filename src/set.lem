@@ -1,0 +1,2 @@
+let product_map f s1 s2 = {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
+let product = product_map (fun x y -> (x, y))

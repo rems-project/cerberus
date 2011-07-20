@@ -10,13 +10,13 @@ let exp_type_of e =
   let t =
     match type_of e with
       | ail`T_EXP    t -> Some t
-      | ail`T_LVALUE t -> ail_types`lvalue_convert t
+      | ail`T_LVALUE t -> types`lvalue_convert t
     end in
-  option`map ail_types`pointer_convert t
+  option`map types`pointer_convert t
 
 let lvalue_type_of e =
   match type_of e with
-    | ail`T_LVALUE t -> ail_types`pointer_convert t
+    | ail`T_LVALUE t -> types`pointer_convert t
   end
 
 let ctype_of e =
