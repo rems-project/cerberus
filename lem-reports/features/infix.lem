@@ -1,0 +1,4 @@
+let (AND) = (&&)
+
+let b1 = (AND) true false
+let b2 = true AND false

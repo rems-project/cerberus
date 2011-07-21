@@ -131,10 +131,12 @@ module print = struct
         sem_list ((!^ "d2tdocpreamble" ^^ p`equals ^^ p`dquotes pre)::style::d)
       ) in
     let arrow a1 a2 = pp_uid a1 ^^^ p`minus ^^ p`rangle ^^^ pp_uid a2 in
-    let rd = CpTransitiveReduction.reduce sb in
+    let rd = transitive_reduction`reduce sb in
+    let d = [arrow a1 a2 | forall ((a1, a2) IN rd) | true] in
+    let s = {a1; a2      | forall ((a1, a2) in rd) | true} in
     let (s, d) =
       Set`fold
-        (fun (a1, a2) (s, d) -> (s union {a1} union {a2}, (arrow a1 a2)::d))
+        (fun (a1, a2) (s, d) -> (s union {a1; a2}, (arrow a1 a2)::d))
         rd (empty, []) in
     let def a = pp_uid a ^^^ p`brackets (
       !^ "label" ^^ p`equals ^^ p`dquotes (pp_latex a)
@@ -144,6 +146,7 @@ module print = struct
 end
 *)
 
+(* Lem port: Can we filter_map instead? *)
 let address (Action action _) =
   match action with
     | Store   _ a _   -> a
@@ -171,30 +174,18 @@ let filter_other ((Action action _) as a) =
     | _          -> None 
   end
 
-let rec conflict sb other rest c =
-  if Set`is_empty rest then
-    c
-  else
-    let (a, rest) = Set`pop rest in
-    let unseq a' =
-      not ((a, a') IN sb) && not ((a', a) IN sb) in
-    let alias c a' =
-      if unseq a' then
-        c`add c (c`implies (c`eq (address a) (address a')) c`undef)
-      else
-        c in
-    let c = Set`fold (fun a' c -> alias c a') rest c in
-    conflict sb other rest (Set`fold (fun a' c -> alias c a') other c)
-
 let conflicts sb ts =
   let stores = Set`filter_map filter_store ts in
   let other  = Set`filter_map filter_other ts in
-  conflict sb other c`empty
+  let alias a a' = c`implies (c`eq (address a) (address a')) c`undef in
+  let unseq a a' = not ((a, a') IN sb) && not ((a', a) IN sb) in
+  (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
+  {alias a a' | forall (a IN stores) (a' IN stores union other) | unseq a a'}
 
 let unfold (Action a _) = a
 
 (*
-module Memory = struct
+module memory = struct
   module p = c`process
   module tc = type_constraint
 

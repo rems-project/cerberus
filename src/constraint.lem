@@ -71,6 +71,7 @@ let rec fold_map_const f i const =
           (fun (i, cs) c -> let (i, c) = f i c in (i, c::cs)) (i, []) cs in
         f i (Fn s cs)
   end
+
 (*
 let rec compare_const const1 const2 =
   let (++) n p = if n = 0 then p else n in
@@ -117,6 +118,7 @@ let rec compare_const const1 const2 =
     | _ -> compare const1 const2
   end
 *)
+
 type constr =
   | True
   | False
@@ -230,14 +232,16 @@ let fresh_pretty n f (t, s) =
   let (symbol, s') = symbol`fresh_name n s in
   (f symbol, (t, s'))
 
-let emp = (empty, symbol`emp)
-let make c = {c}
-let from_list cs = List`fold_left (fun t c -> Set`add c t) empty cs
+let from_list cs = {c | forall (c MEM cs) | true}
 
 let tt = True
 
 let neq c1 c2 = Not (Eq c1 c2)
-let eq c1 c2 = Eq c1 c2
+let eq c1 c2 =
+  if compare_const c1 c2 then
+    Eq c1 c2
+  else
+    Eq c2 c1
 let le c1 c2 = Le c1 c2
 let lt c1 c2 = Lt c1 c2
 let ge c1 c2 = Le c2 c1

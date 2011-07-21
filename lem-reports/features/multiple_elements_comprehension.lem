@@ -1,0 +1,2 @@
+let p_set = {(1,2); (2,3)}
+let n_set = {a; b | forall ((a, b) IN p_set) | true}

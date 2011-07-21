@@ -1,0 +1,29 @@
+open global
+
+module R = struct
+  type 'a t = ('a, 'a set) map
+
+  let empty = Pmap`empty
+
+  let add (v1, v2) t =
+    match map`find v1 t with
+      | Some from_v1 -> Pmap`add v1 ({v2} union from_v1) t
+      | None         -> Pmap`add v1  {v2}                t
+    end
+
+  let reachable v1 v2 t =
+    match map`find v1 t with
+      | Some vs -> v2 IN vs
+      | None    -> false
+   end
+
+  let reachable_set v1 t =
+    match map`find v1 t with
+      | Some vs -> vs
+      | None    -> empty
+end
+
+let reduce edges =
+  let r = Set`fold (fun e r -> R`add e r) edges R`empty in
+  let p (v1, v2) = exists (v IN R`reachable_set v1 r). R`reachable v v2 r in
+  {e | forall (e IN edges) | p e}

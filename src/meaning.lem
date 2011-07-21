@@ -34,9 +34,9 @@ type func = <|
   return   : t
 |>
 
-let emp = {<|
+let init = {<|
   actions     = empty;
-  constraints = c`empty;
+  constraints = empty;
   seq_before  = empty;
   fs_actions  = Pmap`empty
 |>}
@@ -52,7 +52,7 @@ let and_denotations d1 d2 = <|
 
 let and_denotations_sb d1 d2 = <|
   actions     = d1.actions union d2.actions;
-  constraints = c`union d1.constraints d2.constraints;
+  constraints = d1.constraints union d2.constraints;
   seq_before  =
     let sb = set`product d1.actions d2.actions in
     sb union (d1.seq_before union d2.seq_before);
@@ -61,14 +61,12 @@ let and_denotations_sb d1 d2 = <|
 
 let conj t1 t2 = set`product_map and_denotations t1 t2
 let conj_seq_before t1 t2 = set`product_map and_denotations_sb t1 t2
-let disj t1 t2 = t1 union t2
 
-let add_constraint t constr =
-  let c = c`make constr in
-  {<|d with constraints = c`union d.constraints c|> | forall (d IN t) | true}
+let add_constraint t cstr =
+  {<|d with constraints = d.constraints union {cstr}|> | forall (d IN t) | true}
 
 let add_constraint_set t c =
-  {<|d with constraints = c`union d.constraints c|> | forall (d IN t) | true}
+  {<|d with constraints = d.constraints union c|> | forall (d IN t) | true}
 
 let add_action t a =
   {<|d with actions = d.actions union {a}|> | forall (d IN t) | true}
@@ -76,15 +74,15 @@ let add_action t a =
 module operators = struct
   let (|&|) = conj
   let (|&>) = conj_seq_before
-  let (|||) = disj
+  let (|||) = (union)
   let (<&-) = add_constraint
   let (<@-) = add_action
 end
 
-let empty_func = <|
+let init_func = <|
   break    = empty;
   continue = empty;
-  normal   = emp;
+  normal   = init;
   return   = empty
 |>
 
@@ -116,14 +114,13 @@ let return t = <|
   return   = t
 |>
 
-let collect_fs_actions =
-  Set`map (fun d ->
-    let call = action`call () in
-    <|d with
-      actions    = {call};
-      fs_actions = Pmap`add call d.actions d.fs_actions
-    |>
-  )
+let collect_fs_actions m =
+  let call = action`call in
+  let add_call d = <|d with
+    actions    = {call};
+    fs_actions = Pmap`add call d.actions d.fs_actions
+  |> in
+  {add_call d | forall (d IN m) | true}     
 
 let flatten_func m =
   let open operators in
@@ -139,7 +136,7 @@ let enter_loop t_pos t_neg m =
   |>
 
 let exit_loop t_neg m =
-  let open operators in <|empty_func with
+  let open operators in <|init_func with
     normal = m.break ||| ((m.continue ||| m.normal) |&> t_neg);
     return = m.return
   |>
@@ -178,7 +175,7 @@ let add_action_entire_func m a =
 
 let add_actions_entire_func_sb m actions =
   let open operators in
-  let t = {<|d with actions = actions|> | forall (d in emp) | true} in <|
+  let t = {<|d with actions = actions|> | forall (d in init) | true} in <|
     break = m.break       |&> t;
     continue = m.continue |&> t;
     normal = m.normal     |&> t;
@@ -217,7 +214,7 @@ module print = struct
     p`sepmap sep pp_b (Set`elements s)
 
   let pp_actions = pp_set action`print`pp
-  let pp_contraints = c`Print.pp
+  let pp_contraints = c`print.pp
   let pp_action_id = action`print`pp_uid
   let pp_seq_before =
     let pp_a = pp_action_id in
@@ -300,7 +297,7 @@ module Solve = struct
     match perm, part with
     | [], [ts] -> schedule pre ts
     | c::cs, ts::tss ->
-        let combine_pres (c1, ls1) (c2, ls2) = c`union c1 c2, ls1 @ ls2 in
+        let combine_pres (c1, ls1) (c2, ls2) = (c1 union c2, ls1 @ ls2) in
         merge d (schedule (List`product_map combine_pres pre c) ts) cs tss
     | _ -> assert (false)
 *)
@@ -357,11 +354,11 @@ module Solve = struct
   let linearise d = seq d [] d.actions
 
   let simplify d c =
-    let module P = c`Process in
+    let module p = c`process in
     let conflicts =
       Pmap`fold
-        (fun ts c -> c`union c (action`conflicts d.seq_before ts))
-        d.fs_actions c`empty in
+        (fun ts c -> c union (action`conflicts d.seq_before ts))
+        d.fs_actions empty in
     try
       let p = p`make d.constraints in
       let p = p`union p conflicts in
