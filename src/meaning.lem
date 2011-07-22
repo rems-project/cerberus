@@ -230,22 +230,22 @@ module print = struct
   let pp_denot <|actions; constraints; seq_before; fs_actions|> =
     let line name pp p = !^ name ^^^ p`equals ^^^ p`group (pp p) ^^ p`semi in
     line "actions" pp_actions actions
-    ^/^ line "constraints" pp_contraints constraints
+    ^/^ line "constraints"      pp_contraints constraints
     ^/^ line "sequenced_before" pp_seq_before seq_before
     ^/^ line "function_actions" pp_fs_actions fs_actions
 
   let pp m = nbraces (pp_dset pp_denot m) ^^ p`break0
 end
 
-module Solve = struct
+module solve = struct
   type trace = c`t * action`t list
 
   let schedule pre s =
+    let action = [a | forall (a IN s) | true] in
     match pre with
-    | [] -> [Set`fold (fun a ls -> a :: ls) s []]
-    | _ ->
-        let pre_f a ls = ls @ [a] in
-        Set`fold (fun a pre -> List`map (pre_f a) pre) s pre
+      | [] -> [actions]
+      | _  -> [ls @ actions | forall (ls MEM pre) | true]
+    end
 
   let partition_sb d u =
     let sa a u = exists (a' IN u). (a', a) IN d.seq_before in
@@ -267,8 +267,8 @@ module Solve = struct
               split p (front @ [a]) rest in
       let split_sb = split (fun a -> (a, t) IN sb) in
       let split_sa = split (fun a -> (t, a) IN sb) in
-      let rest, sa = split_sa [] ls in
-      let nu, bs = split_sb [] (List`rev rest) in
+      let (rest, sa) = split_sa [] ls in
+      let (nu, bs) = split_sb [] (List`rev rest) in
       let sb = List`rev bs in
       let un = List`rev nu in
       let sb_un = List`map ((@) sb) (p t lls [] un) in
@@ -306,9 +306,9 @@ module Solve = struct
     if Set`is_empty future then
       pre
     else
-      let sb, sa = partition_sb d future in
-      let sb_calls, sb_rest = Set`partition action`is_call sb in
-      let sa_ucalls, sa_rest =
+      let (sb, sa) = partition_sb d future in
+      let (sb_calls, sb_rest) = Set`partition action`is_call sb in
+      let (sa_ucalls, sa_rest) =
         Set`partition
           (fun a -> 
             action`is_call a && exists a' IN sb. not ((a',a) IN d.seq_before)
@@ -319,7 +319,7 @@ module Solve = struct
       else
         let sb_accesses, sb_other = Set`partition action`is_access sb_rest in
         let pre = schedule pre sb_other in
-        let sa_rest_todo, sa_rest_rest =
+        let (sa_rest_todo, sa_rest_rest) =
           Set`partition
             (fun a -> exists (c IN calls).
               (a, c) IN d.seq_before || not ((c, a) IN d.seq_before)
@@ -340,12 +340,13 @@ module Solve = struct
           Pmap`of_list [(c, seq_call c) | forall (c IN calls) | true] in
         let perm = permute d.seq_before calls in
         let rec interleave pre cs ts =
+          let add_trace t = [p @ t | forall (p MEM pre) | true] in
           match (cs, ts) with
-          | ([], [t]) -> [p @ t | forall (p MEM pre) | true]
-          | (c::cs', t::ts) ->
-              let pre = [p @ t | forall (p MEM pre) | true] in
-              let pre = List`product_map (@) pre (M.find c call_map) in
-              interleave pre cs' ts in
+            | ([], [t]) -> add_trace t
+            | (c::cs', t::ts) ->
+                let pre = list`product_map (@) (add_trace t) (M.find c call_map) in
+                interleave pre cs' ts
+          end in
         let merge lls cs =
           let part = partition d.seq_before cs todo_list in
           List`fold_left (fun lls ts -> interleave pre cs ts @ lls) lls part in

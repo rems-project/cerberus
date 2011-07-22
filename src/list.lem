@@ -6,3 +6,5 @@ let filter_map f xs =
       | None   -> ys
     end in
   List`fold_right f' xs []
+let product_map f s1 s2 = [f e1 e2 | forall (e1 MEM s1) (e2 MEM s2) | true]
+let product = product_map (fun x y -> (x, y))

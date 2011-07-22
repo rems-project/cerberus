@@ -1,0 +1,9 @@
+Pointer comparison:
+
+- §6 6.5.9: ``Two pointers compare equal if [...]  one is a pointer to one past
+  the end of one array object and the other is a pointer to the start of a
+  different array object that happens to immediately follow the first array
+  object in the address space.``
+
+  Currently, the constraint solving procedures assumes that two pointer with
+  distinct base addresses do not compare equal.

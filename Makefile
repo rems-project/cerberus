@@ -18,6 +18,8 @@ state.lem \
 symbol_state.lem \
 exception.lem \
 state_exception.lem \
+congruence_closure.lem \
+pprint.lem \
 symbol_table.lem \
 cabs.lem \
 ail.lem \

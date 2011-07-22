@@ -1,94 +1,104 @@
-module A = CpArray.Growable
-module M = BatMap
-module U = CpUnionFind.Growable
+open global
 
-type constant = int
+type constant = num
 type apply = constant * constant
 type term =
   | Constant of constant
   | Apply of apply
 
-type t = {
-  delta : U.t;
-  use : (apply * constant) list A.t;
-  congr : (constant * constant, constant) M.t;
+type t = <|
+  delta : union_find`t;
+  use : (apply * constant) list array`t;
+  congr : (constant * constant, constant) map;
   pending : (constant * constant) list;
-  size : int
-}
+  size : num
+|>
 
-let create size = {
-  delta = U.create size;
-  use = A.create size [];
-  congr = M.empty;
+let create size = <|
+  delta = union_find`create size;
+  use = array`create size [];
+  congr = Pmap`empty;
   pending = [];
   size = size
-}
+|>
 
-let find cc c = U.find cc.delta c
-let union cc c1 c2 =
-  let delta, hint = U.union_hint cc.delta c1 c2 in
-  {cc with delta = delta}, hint
-let find_congr cc r1 r2 = M.find (r1, r2) cc.congr
-let add_pending cc eq = {cc with pending = eq :: cc.pending}
+let find cc c = union_find`find cc.delta c
+
+let combine cc c1 c2 =
+  let (delta, hint) = union_find`union_hint cc.delta c1 c2 in
+  (<|cc with delta = delta|>, hint)
+
+let find_congr cc r1 r2 = map`find (r1, r2) cc.congr
+
+let add_pending cc eq = <|cc with pending = eq :: cc.pending|>
+
+let rec fold f cc =
+  match cc.pending with
+    | []         -> cc
+    | eq :: rest -> fold f (f <|cc with pending = rest|> eq)
+  end
 
 let propagate cc =
-  let rec fold f cc =
-    match cc.pending with
-    | [] -> cc
-    | eq :: rest -> fold f (f {cc with pending = rest} eq) in
   let process cc (c1, c2) =
-    let cc, hint = union cc c1 c2 in
+    let (cc, hint) = combine cc c1 c2 in
     match hint with
-    | U.Equal -> cc
-    | U.Less (r1, r2) ->
-        List.fold_left 
-          (fun cc ((c1, c2) as f, c) ->
-            let c1' = find cc c1 in
-            let c2' = find cc c2 in
-            try
-              add_pending cc (c, find_congr cc c1' c2')
-            with Not_found ->
-              {cc with
-                use = A.update cc.use r2 (BatList.cons (f, c));
-                congr = M.add (c1', c2') c cc.congr
-              }
-          )
-          {cc with use = A.set cc.use r1 []}
-          (A.get cc.use r1) in
+      | union_find`Equal      -> cc
+      | union_find`Less r1 r2 ->
+          List.fold_left 
+            (fun cc ((c1, c2) as f, c) ->
+              let c1' = find cc c1 in
+              let c2' = find cc c2 in
+              match find_congr cc c1' c2' with
+                | Some congr ->
+                    add_pending cc (c, congr)
+                | None ->
+                    <|cc with
+                      use = array`update cc.use r2 ((::) (f, c));
+                      congr = Pmap`add (c1', c2') c cc.congr
+                    |>
+              end)
+            <|cc with use = array`set cc.use r1 []|>
+            (array`get cc.use r1)
+    end in
   fold process cc
 
 let merge cc t c =
   match t with
-  | Constant c' -> propagate (add_pending cc (c', c))
-  | Apply ((c1, c2) as f) ->
-      let r1 = find cc c1 in
-      let r2 = find cc c2 in
-      try
-        propagate (add_pending cc (c, find_congr cc r1 r2))
-      with Not_found ->
-        let add r a = A.update a r (BatList.cons (f, c)) in
-        {cc with
-          use = add r2 (add r1 cc.use);
-          congr = M.add (r1, r2) c cc.congr
-        }
+    | Constant c' -> propagate (add_pending cc (c', c))
+    | Apply c1 c2 ->
+        let f = (c1, c2) in
+        let r1 = find cc c1 in
+        let r2 = find cc c2 in
+        match find_congr cc r1 r2 with
+          | Some congr ->
+              propagate (add_pending cc (c, congr))
+          | None ->
+              let add r a = array`update a r ((::) (f, c)) in
+              <|cc with
+                use = add r2 (add r1 cc.use);
+                congr = Pmap`add (r1, r2) c cc.congr
+              |>
+        end
+  end
 
 let merge_constants cc c c' = propagate (add_pending cc (c', c))
 
 let rec normalise cc t =
   match t with
-  | Constant c -> Constant (find cc c)
-  | Apply (c1, c2) ->
-      let u1 = normalise cc (Constant c1) in
-      let u2 = normalise cc (Constant c2) in
-      match u1, u2 with
-      | Constant r1, Constant r2 ->
-          begin
-            try
-              Constant (find cc (find_congr cc r1 r2))
-            with Not_found ->
-              Apply (r1, r2)
-          end
-      | _ -> assert (false)
+    | Constant c -> Constant (find cc c)
+    | Apply c1 c2 ->
+        let u1 = normalise cc (Constant c1) in
+        let u2 = normalise cc (Constant c2) in
+        match (u1, u2) with
+          | (Constant r1, Constant r2) ->
+              match find_congr cc r1 r2 with
+                | Some congr -> Constant (find cc congr)
+                | None       -> Apply r1 r2
+              end
+          (* Should be unreachable *)
+          | _ -> t
+       end
+  end
 
 let normalise_constant cc c = find cc c
 
@@ -97,9 +107,10 @@ let congruent cc t1 t2 = (normalise cc t1) = (normalise cc t2)
 let congruent_constants cc c1 c2 =
   (normalise_constant cc c1) = (normalise_constant cc c2)
 
-let grow cc n = {cc with
-  delta = U.grow cc.delta n;
-  use = A.grow cc.use n (fun _ -> []);
+let grow cc n = <|cc with
+  delta = union_find`grow cc.delta n;
+  use = array`grow cc.use n (fun _ -> []);
   size = cc.size + n
-}
-let size cc = cc.size 
+|>
+
+let size cc = cc.size

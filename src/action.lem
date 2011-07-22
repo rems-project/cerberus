@@ -175,8 +175,8 @@ let filter_other ((Action action _) as a) =
   end
 
 let conflicts sb ts =
-  let stores = Set`filter_map filter_store ts in
-  let other  = Set`filter_map filter_other ts in
+  let stores = set`filter_map filter_store ts in
+  let other  = set`filter_map filter_other ts in
   let alias a a' = c`implies (c`eq (address a) (address a')) c`undef in
   let unseq a a' = not ((a, a') IN sb) && not ((a', a) IN sb) in
   (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
