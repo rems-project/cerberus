@@ -8,6 +8,7 @@ pair.lem \
 map.lem \
 list.lem \
 set.lem \
+braun.lem \
 multiset.lem \
 lexing.lem \
 location.lem \

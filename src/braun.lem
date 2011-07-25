@@ -1,0 +1,68 @@
+type 'a t = Node of 'a t * 'a * 'a t | Nil
+
+let rec cons x t = 
+  match t with
+    | Nil        -> Node Nil x Nil
+    | Node l y r -> Node (cons y r) x l
+  end
+
+let rec diff t n =
+  match t with
+    | Nil            -> 0
+    | Node Nil _ Nil -> 1
+    | Node l   _ r   ->
+        if n % 2 = 0
+          then diff r (n/2 - 1)
+          else diff l (n/2)
+  end
+
+let rec size t =
+  match t with
+    | Nil	       -> 0
+    | Node l _ r ->
+        let m = size r in
+        1 + 2 * m + diff l m
+  end
+
+let rec copy2 x n =
+  if n = 0 then 
+    (Node Nil x Nil, Nil)
+  else if n % 2 = 0 then
+    let m = n/2 - 1 in
+    let (l, r) = copy2 x m in
+    (Node l x l, Node l x r)
+  else
+    let m = n/2 in
+    let (l, r) = copy2 x m in
+    (Node l x r, Node r x r)
+
+let copy x n = snd (copy2 x n)
+
+let rec get i (Node l x r) =
+  if i = 0 then
+    x
+  else if i % 2 = 0
+    then get (i/2 - 1) r
+    else get (i/2)     l
+
+let rec rows k ls =
+  match ls with
+    | [] -> []
+    | xs -> (k, List`take k xs)::rows (2*k) (List`drop k xs)
+  end
+
+let build (k, xs) ts =
+  let (tls, trs) = List`split_at k (ts @ list`create (2*k) Nil) in
+  list`zip_with3 (Node) tls xs trs
+
+let from_list ls = List`hd (List`fold_right build (rows 1 ls) [Nil])
+
+let rec set (Node l x r) i v =
+  if i = 0 then
+    Node l v r
+  else if i % 2 = 0
+    then Node l               x (set r (i/2 - 1) v)
+    else Node (set l (i/2) v) x  r
+
+let init   n f = from_list (list`init n f)
+let create n v = copy n v

@@ -71,6 +71,9 @@ let add_constraint_set t c =
 let add_action t a =
   {<|d with actions = d.actions union {a}|> | forall (d IN t) | true}
 
+let add_actions t acts =
+  {<|d with actions = d.actions union acts|> | forall (d IN t) | true}
+
 module operators = struct
   let (|&|) = conj
   let (|&>) = conj_seq_before

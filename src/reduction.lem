@@ -304,7 +304,7 @@ let rec
       let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
       let kills = Set`fold (fun s id -> Action.kill s id)
       let m_kill = List`fold_left kill_ids m`init ids_t in
-      let m_kill = {<|d with acts = d.acts union kills|> | forall (d IN m) | true} in
+      let m_kill = m`add_actions m acts in
       let a = c`fresh_name () in
       let m_body = m`flatten_func (reduce_stmt n b' fid a env' file s) in
       (a, m_args |&> m_body |&> m_kill)
@@ -314,7 +314,7 @@ let rec
 | reduce_stmt n b fid return env file (a`Stmt _ stmt) =
   let open m`StatementOperators in
   let f_s = reduce_stmt n b fid return env file in
-  let f_e = reduce_exp n b env file in
+  let f_e = reduce_exp  n b env file in
   let lift (a, m) = (a, m`normal m in
   let lookup_type id = fst (Pmap`find id file.a`id_map) in
   match stmt with

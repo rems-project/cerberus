@@ -8,3 +8,18 @@ let filter_map f xs =
   List`fold_right f' xs []
 let product_map f s1 s2 = [f e1 e2 | forall (e1 MEM s1) (e2 MEM s2) | true]
 let product = product_map (fun x y -> (x, y))
+
+let rec init_aux length f i =
+  if i = length then
+    []
+  else
+    f i::init_aux length f (i+1)
+
+let init   length f = init_aux length f 0
+let create length v = init length (fun _ -> v)
+
+let rec zip_with3 f l1 l2 l3 =
+  match (l1, l2, l3) with
+    | (x::xs, y::ys, z::zs) -> f x y z :: zip_with3 f xs ys zs
+    | _                     -> []
+  end
