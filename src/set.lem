@@ -7,3 +7,8 @@ let filter_map f s =
       | none   -> s
     end in
   Set`fold f' s empty
+let fold_map f s i =
+  Set`fold (fun e (a, s) ->
+    let (e', a') = f e a in
+    (a', s union {e'})
+  ) s (i, empty)
