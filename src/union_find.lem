@@ -1,25 +1,28 @@
-module a = diff_array`t
+module a = braun
 
 module uf = struct
-  type hint = Less of int * int | Equal
-  type t = <|rank : int a`t; parents : int a`t|>
+  type hint = Less of num * num | Equal
+  type t = <|rank : num a`t; parents : num a`t|>
 
   let create size = <|
-    rank = a`create size 0;
-    parents = a`init size (fun i -> i)
+    rank    = a`create size 0;
+    parents = a`init   size (fun i -> i)
   |>
 
-  let find t e =
-    let rec find_helper ps x cont =
-      let p = a`get ps x in
-      if p = x then cont (ps, x)
-      else find_helper ps p (fun (ps', r) -> cont (a`set ps' x r, r)) in
-    let (ps, r) = find_helper t.parents e (fun x -> x) in
-    (r, <|t with parents = ps; r)
+  let rec find_helper ps x cont =
+    let p = a`get ps x in
+    if p = x then
+      cont (x, ps)
+    else
+      find_helper ps p (fun (r, ps') -> cont (r, a`set ps' x r))
 
-  let union t x y =
-    let (t, dx) = find t x in
-    let (t, dy) = find t y in
+  let find t e =
+    let (r, ps) = find_helper t.parents e (fun x -> x) in
+    (r, <|t with parents = ps|>)
+
+  let combine t x y =
+    let (dx, t) = find t x in
+    let (dy, t) = find t y in
     if dx <> dy then begin
       let rx = a`get t.parents dx in
       let ry = a`get t.parents dy in
@@ -33,25 +36,25 @@ module uf = struct
       |>
     end else t
 
-  let union_hint t x y =
+  let combine_hint t x y =
     let (dx, t) = find t x in
     let (dy, t) = find t y in
     if dx <> dy then begin
       let rx = a`get t.parents dx in
       let ry = a`get t.parents dy in
       if rx < ry then
-        (<|t with parents = a`set t.parents dx dy|>, Less rx ry)
+        (Less rx ry, <|t with parents = a`set t.parents dx dy|>)
       else if rx > ry then
-        (<|t with parents = a`set t.parents dy dx|>, Less ry rx)
-      else (<|
+        (Less ry rx, <|t with parents = a`set t.parents dy dx|>)
+      else (Equal, <|
         rank    = a`set t.rank dx (rx + 1);
         parents = a`set t.parents dy dx
-      |>, Equal)
-    end else (t, Equal)
+      |>)
+    end else (Equal, t)
 end
 
-type hint = Less of int * int | Equal
-type t = uf`t * int
+type hint = Less of num * num | Equal
+type t = uf`t * num
 
 let to_hint = function
   | uf`Equal      -> Equal
@@ -61,16 +64,18 @@ end
 let create size = (uf`create size, size)
 
 let find (t, s) e =
-  let (n, t) uf`find t e in
+  let (n, t) = uf`find t e in
   (n, (t, s))
 
-let union (t, s) x y = (uf`union t x y, s)
+let combine (t, s) x y = (uf`combine t x y, s)
 
-let union_hint (t, s) x y =
-  let t', o = uf`union_hint t x y in
-  ((t', s), to_hint o)
+let combine_hint (t, s) x y =
+  let (o, t') = uf`combine_hint t x y in
+  (to_hint o, (t', s))
 
-let grow (<|uf`rank; parents|>, s) n = (<|
+(*
+let grow (<|uf`rank = rank; uf`parents = parents|>, s) n = (<|
   uf`rank = a`grow rank    n (fun _ -> 0);
-  parents = a`grow parents n (fun i -> s + i)
+  uf`parents = a`grow parents n (fun i -> s + i)
 |>, s + n)
+*)

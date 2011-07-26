@@ -8,25 +8,27 @@ type term =
 
 type t = <|
   delta : union_find`t;
-  use : (apply * constant) list array`t;
+  use : (apply * constant) list braun`t;
   congr : (constant * constant, constant) map;
   pending : (constant * constant) list;
-  size : num
+  length : num
 |>
 
-let create size = <|
-  delta = union_find`create size;
-  use = array`create size [];
+let create s = <|
+  delta = union_find`create s;
+  use = braun`create s [];
   congr = Pmap`empty;
   pending = [];
-  size = size
+  length = s
 |>
 
-let find cc c = union_find`find cc.delta c
+let find cc c =
+  let (r, d) = union_find`find cc.delta c in
+  (r, <|cc with delta = d|>)
 
 let combine cc c1 c2 =
-  let (delta, hint) = union_find`union_hint cc.delta c1 c2 in
-  (<|cc with delta = delta|>, hint)
+  let (hint, d) = union_find`combine_hint cc.delta c1 c2 in
+  (hint, <|cc with delta = d|>)
 
 let find_congr cc r1 r2 = map`find (r1, r2) cc.congr
 
@@ -40,40 +42,39 @@ let rec fold f cc =
 
 let propagate cc =
   let process cc (c1, c2) =
-    let (cc, hint) = combine cc c1 c2 in
+    let (hint, cc) = combine cc c1 c2 in
     match hint with
       | union_find`Equal      -> cc
       | union_find`Less r1 r2 ->
-          List.fold_left 
+          List`fold_left 
             (fun cc ((c1, c2) as f, c) ->
-              let c1' = find cc c1 in
-              let c2' = find cc c2 in
+              let (c1', cc) = find cc c1 in
+              let (c2', cc) = find cc c2 in
               match find_congr cc c1' c2' with
                 | Some congr ->
                     add_pending cc (c, congr)
                 | None ->
                     <|cc with
-                      use = array`update cc.use r2 ((::) (f, c));
+                      use   = braun`update cc.use r2 ((::) (f, c));
                       congr = Pmap`add (c1', c2') c cc.congr
                     |>
               end)
-            <|cc with use = array`set cc.use r1 []|>
-            (array`get cc.use r1)
+            <|cc with use = braun`set cc.use r1 []|>
+            (braun`get cc.use r1)
     end in
   fold process cc
 
 let merge cc t c =
   match t with
     | Constant c' -> propagate (add_pending cc (c', c))
-    | Apply c1 c2 ->
-        let f = (c1, c2) in
-        let r1 = find cc c1 in
-        let r2 = find cc c2 in
+    | Apply ((c1, c2) as f)->
+        let (r1, cc) = find cc c1 in
+        let (r2, cc) = find cc c2 in
         match find_congr cc r1 r2 with
           | Some congr ->
               propagate (add_pending cc (c, congr))
           | None ->
-              let add r a = array`update a r ((::) (f, c)) in
+              let add r a = braun`update a r ((::) (f, c)) in
               <|cc with
                 use = add r2 (add r1 cc.use);
                 congr = Pmap`add (r1, r2) c cc.congr
@@ -85,32 +86,44 @@ let merge_constants cc c c' = propagate (add_pending cc (c', c))
 
 let rec normalise cc t =
   match t with
-    | Constant c -> Constant (find cc c)
-    | Apply c1 c2 ->
-        let u1 = normalise cc (Constant c1) in
-        let u2 = normalise cc (Constant c2) in
+    | Constant c ->
+        let (r, cc) = find cc c in
+        (Constant r, cc)
+    | Apply (c1, c2) ->
+        let (u1, cc) = normalise cc (Constant c1) in
+        let (u2, cc) = normalise cc (Constant c2) in
         match (u1, u2) with
           | (Constant r1, Constant r2) ->
               match find_congr cc r1 r2 with
-                | Some congr -> Constant (find cc congr)
-                | None       -> Apply r1 r2
+                | Some congr ->
+                    let (r, cc) = find cc congr in
+                    (Constant r, cc)
+                | None ->
+                    (Apply (r1, r2), cc)
               end
           (* Should be unreachable *)
-          | _ -> t
+          | _ -> (t, cc)
        end
   end
 
 let normalise_constant cc c = find cc c
 
-let congruent cc t1 t2 = (normalise cc t1) = (normalise cc t2)
+let congruent cc t1 t2 =
+  let (r1, cc) = normalise cc t1 in
+  let (r2, cc) = normalise cc t2 in
+  (r1 = r2, cc)
 
 let congruent_constants cc c1 c2 =
-  (normalise_constant cc c1) = (normalise_constant cc c2)
+  let (r1, cc) = normalise_constant cc c1 in
+  let (r2, cc) = normalise_constant cc c2 in
+  (r1 = r2, cc)
 
+(*
 let grow cc n = <|cc with
   delta = union_find`grow cc.delta n;
-  use = array`grow cc.use n (fun _ -> []);
-  size = cc.size + n
+  use = braun`grow cc.use n (fun _ -> []);
+  length = cc.length + n
 |>
+*)
 
-let size cc = cc.size
+let size cc = cc.length
