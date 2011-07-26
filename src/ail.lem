@@ -104,3 +104,182 @@ type ('a_e, 'a_s) env = <|
   symbol_map : (symbol`t, string) map;
   file : (symbol`t, 'a_e, 'a_s) file
 |>
+
+module print = struct
+  module p = pprint
+
+  open p`operators
+
+  let pp_unop = function
+    | MINUS        -> p`minus
+    | PLUS         -> p`plus
+    | ADDRESS      -> p`ampersand
+    | INDIRECTION  -> p`star
+    | BNOT         -> p`tilde
+    | POSTFIX_INCR -> p`plus ^^ p`plus
+    | POSTFIX_DECR -> p`minus ^^ p`minus
+  end
+
+  let pp_arithop = function
+    | cabs`ADD  -> p`plus
+    | cabs`SUB  -> p`minus
+    | cabs`MUL  -> p`star
+    | cabs`DIV  -> p`slash
+    | cabs`MOD  -> p`percent
+    | cabs`BAND -> p`ampersand
+    | cabs`BOR  -> p`bar
+    | cabs`XOR  -> p`caret
+    | cabs`SHL  -> p`langle ^^ p`langle
+    | cabs`SHR  -> p`rangle ^^ p`rangle
+  end
+
+  let pp_seqop = function
+    | cabs`AND   -> p`ampersand ^^ p`ampersand
+    | cabs`OR    -> p`bar ^^ p`bar
+    | cabs`COMMA -> p`comma
+  end
+
+  let pp_relop = function
+    | cabs`EQ -> p`equals ^^ p`equals
+    | cabs`NE -> p`bang   ^^ p`equals
+    | cabs`LT -> p`langle
+    | cabs`GT -> p`rangle
+    | cabs`LE -> p`langle ^^ p`equals
+    | cabs`GE -> p`rangle ^^ p`equals
+  end
+
+  let pp_binop = function
+    | cabs`ARITHMETIC o -> pp_arithop o
+    | cabs`SEQUENTIAL o -> pp_seqop   o
+    | cabs`RELATIONAL o -> pp_relop   o
+  end
+
+  let showParens = p`parens
+
+  let pp_qualifier = function
+    | cabs`CONST -> !^ "const"
+  end
+
+  let pp_int_base_type = function
+    | ICHAR -> !^ "char"
+    | SHORT -> !^ "short"
+    | INT -> !^ "int"
+    | LONG -> !^ "long"
+    | LONG_LONG -> !^ "long" ^^^ !^ "long"
+  end
+
+  let pp_int_type = function
+    | BOOL        -> !^ "_Bool"
+    | UNSIGNED ib -> !^ "unsigned" ^^^ pp_int_base_type ib
+    | SIGNED   ib -> !^ "signed"   ^^^ pp_int_base_type ib
+  end
+
+  let pp_basic_type = function
+    | VOID -> !^ "void"
+    | CHAR -> !^ "char"
+    | INTEGER i -> pp_int_type i
+  end
+
+  let pp_suffix s =
+    let to_string = function
+      | cabs`SUFFIX_UNSIGNED           -> "U"
+      | cabs`SUFFIX_UNSIGNED_LONG      -> "UL"
+      | cabs`SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
+      | cabs`SUFFIX_LONG               -> "L"
+      | cabs`SUFFIX_LONG_LONG          -> "LL"
+    end in
+    p`optional (p`text -| to_string) s
+
+  let pp_int_const (i, s) = !^ (string_of_num i) ^^ pp_suffix s
+
+  let rec pp_type t =
+    let f = pp_type in
+    let pp_qs qs =
+      let ins_space ds d = ds ^^ d ^^ p`space in
+      p`fold ins_space (List`map pp_qualifier [q | forall (q IN qs) | true]) in
+    match t with
+      | BASE qs b -> pp_qs qs ^^ pp_basic_type b
+      | ARRAY t s -> p`parens (f t) ^^^ p`brackets (!^ (string_of_num s))
+      | POINTER qs t -> pp_qs qs ^^ p`parens (f t) ^^^ p`star
+      | FUNCTION t ts -> f t ^^^ p`parens (p`comma_list f ts)
+    end
+
+  let pp_type_class = function
+    | T_EXP    t -> p`brackets (pp_type t) ^^ !^ "exp"
+    | T_LVALUE t -> p`brackets (pp_type t) ^^ !^ "lvalue"
+  end
+
+  let pp_return_type = function
+    | FUNCTION t _ -> pp_type t
+    | _            -> p`empty
+  end
+
+  let pp_id id = !^ (symbol`to_string_pretty id)
+
+  let rec pp_exp (Exp d exp) =
+    let f = p`group -| p`parens -| pp_exp in
+    match exp with
+      | VARIABLE id -> pp_id id
+      | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
+      | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
+      | UNARY o                   e -> pp_unop o ^^ f e
+      | BINARY ((cabs`SEQUENTIAL cabs`COMMA) as o) e1 e2 ->
+          f e1 ^^ pp_binop o ^^ p`space ^^ f e2
+      | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
+      | CALL e es -> f e ^^ p`parens (p`comma_list f es)
+      | ASSIGN o_opt e1 e2 ->
+          f e1 ^^^ (p`optional pp_arithop o_opt ^^ p`equals) ^^^ f e2
+      | QUESTION e1 e2 e3 ->
+          p`group (f e1 ^^^ p`qmark ^/^ f e2 ^^^ p`colon ^/^ f e3)
+      | CAST t e -> p`parens (pp_type t) ^^^ f e
+      | CONSTANT (cabs`CONST_INT ic) -> pp_int_const ic
+      | SIZEOF  t -> !^ "sizeof"  ^^ p`parens (pp_type t)
+      | ALIGNOF t -> !^ "alignof" ^^ p`parens (pp_type t)
+    end
+
+  let pp_decl file id =
+    let (t, st) = Pmap`find id file.id_map in
+    pp_type t ^^^ pp_id id
+
+  let rec pp_stmt file (Stmt d stmt) =
+    let f_e = pp_exp in
+    let f_s = pp_stmt file in
+    match stmt with
+      | SKIP -> p`semi
+      | EXPRESSION e -> f_e e ^^ p`semi
+      | BLOCK _ ss ->
+          let block = p`sepmap p`break1 f_s ss in
+          p`lbrace ^^ p`nest 2 (p`break1 ^^ block) ^/^ p`rbrace
+      | IF e s1 s2 ->
+          !^ "if" ^^^ p`parens (f_e e) ^^^ f_s s1 ^^^ !^ "else" ^^^ f_s s2
+      | WHILE e s ->
+          !^ "while" ^^^ p`parens (f_e e) ^/^ f_s s
+      | DO e s ->
+          !^ "do" ^/^ f_s s ^/^ !^ "while" ^^^ p`parens (f_e e)
+      | BREAK -> !^ "break" ^^ p`semi
+      | CONTINUE -> !^ "continue" ^^ p`semi
+      | RETURN_VOID -> !^ "return" ^^ p`semi
+      | RETURN_EXPRESSION e -> !^ "return" ^^^ f_e e ^^ p`semi
+      | SWITCH e s -> !^ "switch" ^^^ p`parens (f_e e) ^/^ f_s s
+      | CASE ic s -> pp_int_const ic ^^ p`colon ^^^ f_s s
+      | DEFAULT s -> !^ "default" ^^ p`colon ^^^ f_s s
+      | GOTO id -> !^ "goto" ^^^ pp_id id ^^ p`semi
+      | LABEL id s -> pp_id id ^^ p`colon ^^^ f_s s
+      | DECLARATION ds ->
+          let f_d (id, e) =
+            let (t, st) = Pmap`find id file.id_map in
+            pp_type t ^^^ pp_id id ^^^ p`equals ^^^ f_e e in
+          p`comma_list f_d ds ^^ p`semi
+    end
+
+  let pp_function file (id, (args, s)) =
+    let (t, st) = Pmap`find id file.id_map in
+    pp_return_type t
+    ^^^ pp_id id
+    ^^^ p`parens (p`comma_list (pp_decl file) args)
+    ^^^ (pp_stmt file s)
+
+  let pp_file file =
+    let pp d f = d ^^ pp_function file f ^^ p`break1 in
+    List`fold_left pp p`empty (Pmap`bindings file.fn_map)
+end
