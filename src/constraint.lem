@@ -696,7 +696,7 @@ module process = struct
     | Base of symbol`t
     | Displaced of symbol`t * num * constant
     | NullAddress
-    | Nil of t
+    | NaA
 
   let address_aux = function
     | Address a ->
@@ -711,12 +711,12 @@ module process = struct
   let address p const =
     let (const, p) = rewrite p const in
     match address_aux const with
-      | Some addr -> addr
+      | Some addr -> (addr, p)
       | None ->
           let (const, p) = rewrite (simplify_loop p) const in
           match address_aux const with
-            | Some addr -> addr
-            | None      -> Nil (complete p)
+            | Some addr -> (addr, p)
+            | None      -> (NaA,  p)
          end
     end
 end

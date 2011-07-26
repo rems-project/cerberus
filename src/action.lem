@@ -146,7 +146,6 @@ end
 
 let unfold (Action a _) = a
 
-(*
 module memory = struct
   module p = c`process
   module tc = type_constraint
@@ -164,8 +163,8 @@ module memory = struct
   type t = <|p : p`p; mem : mem|>
 
   let address t const =
-    let (p, addr) = p`address t.p const in
-    (<|t with p = p|>, addr)
+    let (addr, p') = p`address t.p const in
+    (addr, <|t with p = p'|>)
 
   let compare_size ct s = c`compare_const s (tc`size ct) = 0
 
@@ -196,112 +195,100 @@ module memory = struct
 
   let retrieve t addr =
     match addr with
-    | p`Base l ->
-          try
-            Pmap`find l t.mem
-          with Not_found ->
-            raise (Undefined t)
-    | p`Displaced l i s ->
-          try
-            Pmap`find l t.mem
-          with Not_found ->
-            raise (Undefined t)
-    | p`NullAddress -> raise (Undefined t)
+      | p`Base      l     -> map`find l t.mem
+      | p`Displaced l i s -> map`find l t.mem
+      | p`NullAddress     -> None
+    end
 
   let load_scalar t ct' v' ct v =
     if t`compatible ct ct' then
-      <|t with p = p`conj t.p (c`eq v v')|>
+      Some <|t with p = p`conj t.p (c`eq v v')|>
     else if t`is_unsigned_of ct' ct then
-      let a, conv = tc`conv_int ct v' in
-      <|t with p = p`conj (p`conj t.p conv) (c`eq v a)|>
+      let (a, conv) = tc`conv_int ct v' in
+      Some <|t with p = p`conj (p`conj t.p conv) (c`eq v a)|>
     else if t`is_signed_of ct' ct then
       let overflow = c`implies (c`neg (tc`in_range ct v')) c`undef in
-      <|t with p = p`conj (p`conj t.p (c`eq v v')) overflow|>
-    else raise (Undefined t)
+      Some <|t with p = p`conj (p`conj t.p (c`eq v v')) overflow|>
+    else None
 
   let load_event t ct a v =
-    let (t, addr) = address t a in
-    try
-      match retrieve t addr with
-        | Scalar _ Indeterminate ->
-            raise (print_endline "Indet."; Undefined t)
-        | Scalar ct' (Value v') ->
-            load_scalar t ct' v' ct v
-        | Array ct' vs' when t`compatible ct' ct ->
-            match addr with
-              | p`Base _ ->
-                  match Array`get vs' 0 with
+    let (addr, t) = address t a in
+    match retrieve t addr with
+      | Scalar _ Indeterminate ->
+          None
+      | Scalar ct' (Value v') ->
+          load_scalar t ct' v' ct v
+      | Array ct' vs' when t`compatible ct' ct ->
+          match addr with
+            | p`Base _ ->
+                match Array`get vs' 0 with
+                  | Value v' -> load_scalar t ct' v' ct v
+                  | Indeterminate -> None
+                end
+            | p`Displaced _ i s ->
+                if i >= 0 && i < Array`size vs' && compare_size ct' s then
+                  match Array`get vs' i with
                     | Value v' -> load_scalar t ct' v' ct v
-                    | Indeterminate -> raise (Undefined t)
+                    | Indeterminate -> None
                   end
-              | p`Displaced _ i s ->
-                  if i >= 0 && i < Array`size vs' && compare_size ct' s then
-                    match Array`get vs' i with
-                      | Value v' -> load_scalar t ct' v' ct v
-                      | Indeterminate -> raise (Undefined t)
-                    end
-                  else raise (Undefined t)
-            end
-        | _ -> raise (Undefined t)
-      end
-    with Not_found -> raise (Undefined t)
+                else None
+          end
+      | _ -> None
+    end
 
   let write_scalar t ct' ct v =
     if t`compatible ct ct' then
-      (t, Value v)
+      (Value v, t)
     else if t`is_signed_of ct' ct then
       let (a, conv) = tc`conv_int ct' v in
-      (<|t with p = p`conj t.p conv|>, Value a)
+      (Value a, <|t with p = p`conj t.p conv|>)
     else if t`is_unsigned_of ct' ct then
       let overflow = c`implies (c`neg (tc`in_range ct' v)) c`undef in
-      (<|t with p = p`conj t.p overflow|>, Value v)
-    else raise (Undefined t)
+      (Value v, <|t with p = p`conj t.p overflow|>)
+    else (*raise (Undefined t)*) ()
 
   let write_event t ct a v =
-    let t, addr = address t a in
-    try
-      match (retrieve t addr) with
-        | Scalar ct' _ ->
-            let t, v = write_scalar t ct' ct v in
-            <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
-        | Array (ct', vs') when t`compatible ct' ct ->
-            match addr with
-              | p`Base _ ->
-                  let (t, v) = write_scalar t ct' ct v in
-                  let vs = Array`set vs' 0 v in
+    let (addr, t) = address t a in
+    match (retrieve t addr) with
+      | Scalar ct' _ ->
+          let (v, t) = write_scalar t ct' ct v in
+          <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
+      | Array (ct', vs') when t`compatible ct' ct ->
+          match addr with
+            | p`Base _ ->
+                let (v, t) = write_scalar t ct' ct v in
+                let vs = Array`set vs' 0 v in
+                <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
+            | p`Displaced _ i s ->
+                if i >= 0 && i < Array`size vs' && compare_size ct' s then
+                  let (v, t) = write_scalar t ct' ct v in
+                  let vs = Array`set vs' i v in
                   <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
-              | p`Displaced _ i s ->
-                  if i >= 0 && i < Array`size vs' && compare_size ct' s then
-                    let (t, v) = write_scalar t ct' ct v in
-                    let vs = Array`set vs' i v in
-                    <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
-                  else
-                    raise (Undefined t)
-            end
-        | _ -> raise (Undefined t)
-      end
-    with Not_found -> raise (Undefined t)
+                else () 
+          end
+      | _ -> ()
+    end
 
   let event t ((_, action) as a) =
-(*    CpDocument.print (Print.pp a); print_endline "";*)
+(*    document`print (print`pp a); print_endline "";*)
     match action with
       | Id a ->
-          let (t, addr) = address t a in
+          let (addr, t) = address t a in
           if is_valid t addr then t else raise (Undefined t)
       | Same a1 a2 ->
-          let (t, addr1) = address t a1 in
-          let (t, addr1) = address t a2 in
+          let (addr1, t) = address t a1 in
+          let (addr2, t) = address t a2 in
           if same_base t addr1 addr2 then t else raise (Undefined t)
       | Create ct a when t`is_scalar ct ->
-          let (t, addr) = address t a in
+          let (addr, t) = address t a in
           <|t with mem = Pmap`add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
       | Create ct a when t`is_array ct ->
-          let (t, addr) = address t a in
+          let (addr, t) = address t a in
           let value = Array`create (t`size_of_array ct) Indeterminate in
           let obj = Array (t`base_of_array ct, value) in
           <|t with mem = Pmap`add (base_of addr) obj t.mem|>
       | Kill a ->
-          let (t, addr) = address t a in
+          let (addr, t) = address t a in
           <|t with mem = Pmap`remove (base_of addr) t.mem|>
       | Load    ct a v -> load_event  t ct a v
       | Store   ct a v -> write_event t ct a v
@@ -312,11 +299,11 @@ module memory = struct
       | Call -> t
     end
 
-  let replay p es =
-    try
-      let t = List.fold_left event <|p = p; mem = Pmap`empty|> es in
-      p`complete t.p
+  let replay p' es =
+    let t = List`fold_left event <|p = p'; mem = Pmap`empty|> es in
+    p`complete t.p
+(*
     with Undefined t ->
-      p`complete (print_endline "UNDEF"; p`conj t.p c`undef)
-end
+      p`complete (*print_endline "UNDEF";*) p`conj t.p c`undef
 *)
+end
