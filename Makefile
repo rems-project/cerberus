@@ -33,6 +33,7 @@ ail_rewrite.lem \
 typing.lem \
 range.lem \
 constraint.lem \
+type_constraint.lem \
 action.lem
 
 all:
