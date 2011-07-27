@@ -13,13 +13,13 @@ module r = struct
 
   let make edges = Set`fold (fun e r -> add e r) edges emp
 
-  let reachable v1 v2 t =
+  let reachable t v1 v2 =
     match map`find v1 t with
       | Some vs -> v2 IN vs
       | None    -> false
    end
 
-  let reachable_set v1 t =
+  let reachable_set t v1 =
     match map`find v1 t with
       | Some vs -> vs
       | None    -> empty
@@ -28,5 +28,5 @@ end
 
 let reduce edges =
   let r = r`make edges in
-  let p (v1, v2) = exist (v IN r`reachable_set v1 r). r`reachable v v2 r in
-  {e | forall (e IN edges) | p e}
+  let redundant (v1, v2) = exist (v IN r`reachable_set r v1). r`reachable r v v2 in
+  {e | forall (e IN edges) | not (redundant e)}
