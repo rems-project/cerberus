@@ -10,6 +10,13 @@ let fresh_name s name =
   let s' = s + 1 in
   ((s, Some name), s')
 
+let compare (n1, _) (n2, _) =
+  if n1 = n2 then
+    0
+  else if n1 < n2 then
+    ~1
+  else 1
+
 let to_string (n, _) = "v" ^ "_" ^ string_of_num n
 let to_string_pretty ((_, name_opt) as s) =
   match name_opt with
