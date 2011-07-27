@@ -5,5 +5,5 @@ Pointer comparison:
   different array object that happens to immediately follow the first array
   object in the address space.``
 
-  Currently, the constraint solving procedures assumes that two pointer with
+  Currently, the constraint solving procedures assumes that two pointers with
   distinct base addresses do not compare equal.
