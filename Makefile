@@ -11,6 +11,7 @@ set.lem \
 braun.lem \
 multiset.lem \
 lexing.lem \
+output.lem \
 location.lem \
 symbol.lem \
 global.lem \
@@ -23,6 +24,7 @@ state_exception.lem \
 union_find.lem \
 congruence_closure.lem \
 pprint.lem \
+document.lem \
 symbol_table.lem \
 cabs.lem \
 ail.lem \

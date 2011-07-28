@@ -19,12 +19,6 @@ module denotation = struct
     ++ Pmap`compare Set`compare d1.fs_actions d2.fs_actions
 end
 
-(*
-module DS = Set`Make(Denotation)
-
-type t = DS.t
-*)
-
 type t = denotation`t set
 
 type func = <|
@@ -47,7 +41,7 @@ let and_denotations d1 d2 = <|
   actions     = d1.actions     union d2.actions;
   constraints = d1.constraints union d2.constraints;
   seq_before  = d1.seq_before  union d2.seq_before;
-  fs_actions  = Pmap`union d1.fs_actions d2.fs_actions
+  fs_actions  = Pmap`concat d1.fs_actions d2.fs_actions
 |>
 
 let and_denotations_sb d1 d2 = <|
@@ -56,7 +50,7 @@ let and_denotations_sb d1 d2 = <|
   seq_before  =
     let sb = set`product d1.actions d2.actions in
     sb union (d1.seq_before union d2.seq_before);
-  fs_actions  = Pmap`union d1.fs_actions d2.fs_actions
+  fs_actions  = Pmap`concat d1.fs_actions d2.fs_actions
 |>
 
 let conj t1 t2 = set`product_map and_denotations t1 t2
@@ -127,11 +121,9 @@ let collect_fs_actions m =
   {add_call d | forall (d IN m) | true}     
 
 let flatten_func m =
-  let open operators in
   collect_fs_actions (m.normal +& c`undef -/- m.return)
 
 let enter_loop t_pos t_neg m =
-  let open operators in
   let t = m.continue -/- m.normal in <|
     break    = m.break -/- (t -&> t_neg);
     continue = m.empty;
@@ -140,55 +132,46 @@ let enter_loop t_pos t_neg m =
   |>
 
 let exit_loop t_neg m =
-  let open operators in <|init_func with
+  <|init_func with
     normal = m.break -/- ((m.continue -/- m.normal) -&> t_neg);
     return = m.return
   |>
 
 let conj_seq_before_func m1 m2 =
-  let open operators in <|
-    break    = m1.break    -/- (m1.normal -&> m2.break);
+  <|break    = m1.break    -/- (m1.normal -&> m2.break);
     continue = m1.continue -/- (m1.normal -&> m2.continue);
     normal   = m1.normal   -&> m2.normal;
     return   = m1.return   -/- (m1.normal -&> m2.return)
   |>
 
 let disj_func m1 m2 =
-  let open operators in <|
-    break    = m1.break    -/- m2.break;
+  <|break    = m1.break    -/- m2.break;
     continue = m1.continue -/- m2.continue;
     normal   = m1.normal   -/- m2.normal;
     return   = m1.return   -/- m2.return
   |>
 
-let add_constraint_func m c =
-  let open operators in
-  <|m with normal = m.normal +& c|>
+let add_constraint_func m c = <|m with normal = m.normal +& c|>
 
-let add_action_func m a =
-  let open operators in
-  <|m with normal = m.normal +@ a|>
+let add_action_func m a = <|m with normal = m.normal +@ a|>
 
 let add_action_entire_func m a =
-  let open operators in <|
-    break    = m.break    +@ a;
+  <|break    = m.break    +@ a;
     continue = m.continue +@ a;
     normal   = m.normal   +@ a;
     return   = m.return   +@ a
   |>
 
-let add_actions_entire_func_sb m actions =
-  let open operators in
-  let t = {<|d with actions = actions|> | forall (d in init) | true} in <|
-    break = m.break       -&> t;
+let add_actions_entire_func_sb m actions' =
+  let t = {<|d with actions = actions'|> | forall (d IN init) | true} in <|
+    break    = m.break    -&> t;
     continue = m.continue -&> t;
-    normal = m.normal     -&> t;
-    return = m.return     -&> t
+    normal   = m.normal   -&> t;
+    return   = m.return   -&> t
   |>
 
 let add_constraint_entire_func m c =
-  let open operators in <|
-    break    = m.break    +& c;
+  <|break    = m.break    +& c;
     continue = m.continue +& c;
     normal   = m.normal   +& c;
     return   = m.return   +& c
@@ -198,8 +181,8 @@ module statement_operators = struct
   (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
   let (-&>) = conj_seq_before_func
   let (-/-) = disj_func
-  let (+&) = add_constraint_entire_func
-  let (+@) = add_action_func
+  let (+&)  = add_constraint_entire_func
+  let (+@)  = add_action_func
 end
 
 module print = struct
@@ -231,12 +214,12 @@ module print = struct
         (M.bindings m)
     )
 
-  let pp_denot <|actions; constraints; seq_before; fs_actions|> =
+  let pp_denot t =
     let line name pp p = !^ name ^^^ p`equals ^^^ p`group (pp p) ^^ p`semi in
-    line "actions" pp_actions actions
-    ^/^ line "constraints"      pp_contraints constraints
-    ^/^ line "sequenced_before" pp_seq_before seq_before
-    ^/^ line "function_actions" pp_fs_actions fs_actions
+    line "actions" pp_actions t.actions
+    ^/^ line "constraints"      pp_contraints t.constraints
+    ^/^ line "sequenced_before" pp_seq_before t.seq_before
+    ^/^ line "function_actions" pp_fs_actions t.fs_actions
 
   let pp m = nbraces (pp_dset pp_denot m) ^^ p`break0
 end
@@ -252,53 +235,58 @@ module solve = struct
     end
 
   let partition_sb d u =
-    let sa a u = exists (a' IN u). (a', a) IN d.seq_before in
+    let sa a u = exist (a' IN u). (a', a) IN d.seq_before in
     Set`partition (fun a -> not (sa a u)) u
 
-  let permute sb ts =
-    let rec p t lls front tail =
-      match tail with
+  let rec perm t lls front tail =
+    match tail with
       | [] -> (front @ [t]) :: lls
-      | a::rest -> p t ((front @ (t :: tail)) :: lls) (front @ [a]) rest in
+      | a::rest -> perm t ((front @ (t :: tail)) :: lls) (front @ [a]) rest
+  end
+
+  let rec split p front tail =
+    match tail with
+      | [] -> (front, [])
+      | a::rest ->
+          if p a
+            then (front, tail)
+            else split p (front @ [a]) rest 
+    end
+
+  let permute sb ts =
     let combine t lls ls =
-      let rec split p front tail =
-        match tail with
-        | [] -> front, []
-        | a::rest ->
-            if p a then
-              front, tail
-            else
-              split p (front @ [a]) rest in
       let split_sb = split (fun a -> (a, t) IN sb) in
       let split_sa = split (fun a -> (t, a) IN sb) in
       let (rest, sa) = split_sa [] ls in
       let (nu, bs) = split_sb [] (List`rev rest) in
       let sb = List`rev bs in
       let un = List`rev nu in
-      let sb_un = List`map ((@) sb) (p t lls [] un) in
+      let sb_un = List`map ((@) sb) (perm t lls [] un) in
       List`map ((@) sa) sb_un in
     let step t lls = List`fold_left (combine t) [] lls in
     Set`fold step ts [[]]
 
-  let partition sb cs es =
-    let rec f e lls cs front tail =
-      match cs, tail with
+  let rec part e lls cs front tail =
+    match (cs, tail) with
       | ([], [a]) -> (front @ [e :: a]) :: lls
       | (c::cs', a::rest) ->
           let lls' = (front @ ((e :: a) :: rest)) :: lls in
-          if (e, c) IN sb || List`exists (fun t -> (e, t) IN sb) a then
+          if (e, c) IN sb || (exist (t MEM a). (e, t) IN sb) then
             lls'
           else
             if action`is_access e && not (action`is_fn_store e) then
-              f e lls' cs' (front @ [a]) rest
+              part e lls' cs' (front @ [a]) rest
             else
-              f e lls  cs' (front @ [a]) rest in
+              part e lls  cs' (front @ [a]) rest
+    end
+
+  let partition sb cs es =
     let step lls e =
       List`fold_left (fun lls ls -> f e lls cs [] ls) [] lls in
     List`fold_left step [List`make (1 + List`length cs) []] es
 (*
   let rec merge d pre perm part =
-    match perm, part with
+    match (perm, part) with
     | [], [ts] -> schedule pre ts
     | c::cs, ts::tss ->
         let combine_pres (c1, ls1) (c2, ls2) = (c1 union c2, ls1 @ ls2) in
@@ -306,8 +294,26 @@ module solve = struct
     | _ -> assert (false)
 *)
 
+  let rec interleave pre cs ts =
+    let add_trace t = [p @ t | forall (p MEM pre) | true] in
+      match (cs, ts) with
+        | ([], [t])        -> add_trace t
+        | (c::cs', t::ts') ->
+            let pre = list`product_map (@) (add_trace t) (M`find c call_map) in
+            interleave pre cs' ts'
+      end
+
+  let rec make_todo d ls t =
+    if t = empty then
+      ls
+    else
+      let (sb, sa) =
+        Set`partition
+          (fun a -> (forall (a' IN t). not ((a', a) IN d.seq_before))) t in
+      make_todo (Set`elements sb @ ls) sa
+
   let rec seq d pre future =
-    if Set`is_empty future then
+    if future = empty then
       pre
     else
       let (sb, sa) = partition_sb d future in
@@ -315,93 +321,54 @@ module solve = struct
       let (sa_ucalls, sa_rest) =
         Set`partition
           (fun a -> 
-            action`is_call a && exists a' IN sb. not ((a',a) IN d.seq_before)
+            action`is_call a && (exist (a' IN sb). not ((a',a) IN d.seq_before))
           ) sa in
       let calls = sb_calls union sa_ucalls in
       if Set`is_empty calls then
         seq d (schedule pre sb) sa
       else
-        let sb_accesses, sb_other = Set`partition action`is_access sb_rest in
+        let (sb_accesses, sb_other) = Set`partition action`is_access sb_rest in
         let pre = schedule pre sb_other in
         let (sa_rest_todo, sa_rest_rest) =
           Set`partition
-            (fun a -> exists (c IN calls).
+            (fun a -> exist (c IN calls).
               (a, c) IN d.seq_before || not ((c, a) IN d.seq_before)
             ) sa_rest in
-        let todo_list =
-          let rec f ls t =
-            if Set`is_empty t then
-              ls
-            else
-              let sb, sa =
-                Set`partition
-                  (fun a -> forall (a' in t). not ((a', a) IN d.seq_before))
-                  t in
-              f (Set`elements sb @ ls) sa in
-          f [] (sb_accesses union sa_rest_todo) in
+        let todo_list = make_todo d [] (sb_accesses union sa_rest_todo) in
         let call_map =
-          let seq_call c = seq d [] (M.find c d.fs_actions) in
+          let seq_call c = seq d [] (M`find c d.fs_actions) in
           Pmap`of_list [(c, seq_call c) | forall (c IN calls) | true] in
-        let perm = permute d.seq_before calls in
-        let rec interleave pre cs ts =
-          let add_trace t = [p @ t | forall (p MEM pre) | true] in
-          match (cs, ts) with
-            | ([], [t]) -> add_trace t
-            | (c::cs', t::ts) ->
-                let pre = list`product_map (@) (add_trace t) (M.find c call_map) in
-                interleave pre cs' ts
-          end in
+        let perms = permute d.seq_before calls in
         let merge lls cs =
-          let part = partition d.seq_before cs todo_list in
-          List`fold_left (fun lls ts -> interleave pre cs ts @ lls) lls part in
-        seq d (List`fold_left merge [] perm) sa_rest_rest
+          let parts = partition d.seq_before cs todo_list in
+          List`fold_left (fun lls ts -> interleave pre cs ts @ lls) lls parts in
+        seq d (List`fold_left merge [] perms) sa_rest_rest
 
   let linearise d = seq d [] d.actions
 
+  module p = c`process
+
   let simplify d c =
-    let module p = c`process in
     let conflicts =
       Pmap`fold
         (fun ts c -> c union (action`conflicts d.seq_before ts))
         d.fs_actions empty in
-    try
-      let p = p`make d.constraints in
-      let p = p`union p conflicts in
-      let f c trace =
-        try
-(*
-          Set`add (action`memory`replay p trace) c
-*)
-          (action`memory`replay p trace) :: c
-        with
-        | p`Partial _ -> assert (false)
-        | p`Invalid -> c in
-      List`fold_left f c (linearise d)
-    with p`Invalid -> c
-(*
-      List`fold_left f (Set`create c`compare) traces
-    with p`Invalid -> Set`create c`compare
-*)
+    let p = p`make d.constraints in
+    let p = p`concat p conflicts in
+    let f c trace = (action`memory`replay p trace) :: c in
+    List`fold_left f c (linearise d)
 
-  let simplify_all t = Set`of_list (*~cmp:c`compare*) (Set`fold simplify t [])
-
-  let simplify_result = function
-    | Ail.Program t -> Ail.Program (simplify_all t)
-    | Ail.Invalid -> Ail.Invalid
-    | Ail.Undefined -> Ail.Undefined
+  let simplify_all t = Set`of_list (Set`fold simplify t [])
 end
 
 module Graph = struct
   let dot n t =
     Set`fold
       (fun d i ->
-        let name = n ^ "." ^ (BatInt.to_string i) ^ ".dot" in
-        let doc = action`print`pp_dot d.seq_before in
-        let str = Document.to_plain_string doc in
-        let () = Output.write str (Output.file name) in
+        let name = n ^ "." ^ (string_of_num i) ^ ".dot" in
+        let doc  = action`print`pp_dot d.seq_before in
+        let str  = document`to_plain_string doc in
+        let ()   = output`write str (output`file name) in
         i + 1
       ) t 0
-  let dot_result n = function
-    | Ail.Program t -> ignore (dot n t)
-    | _ -> ()
 end
