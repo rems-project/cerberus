@@ -1,0 +1,2 @@
+let id x = x
+let f = id fun x -> x + 1
