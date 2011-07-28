@@ -2,7 +2,7 @@
 ;; --------------------------------------------------------------------------
 ;; Desktop File for Emacs
 ;; --------------------------------------------------------------------------
-;; Created Wed Jul 27 17:46:06 2011
+;; Created Thu Jul 28 18:50:24 2011
 ;; Desktop file format version 206
 ;; Emacs version 23.2.1
 
@@ -10,10 +10,10 @@
 (setq desktop-missing-file-warning nil)
 (setq tags-file-name nil)
 (setq tags-table-list nil)
-(setq search-ring '("fre" "fresh" "conv" "conv_int" "fresh" "conv" "convs" "|||" "pp" "fres" "pointer" "fresh" "range" "match" "type_c	" "t, "))
+(setq search-ring '("null" "when" "shift" "impl_" "address" "fresh" "c`" "constr" "f" "ts" "rec " "perm" "part" "f " "p " "+@"))
 (setq regexp-search-ring nil)
 (setq register-alist nil)
-(setq file-name-history '("/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/TODO" "/auto/homes/jm614/rsem/csem/ISSUES" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/type_constraint.lem" "/auto/homes/jm614/rsem/csem/src/pprint.lem" "/auto/homes/jm614/rsem/csem/src/scratch.lem" "/auto/homes/jm614/rsem/csem/src/congruence_closure.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/braun.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/diff_array.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/union_find.lem" "/auto/homes/jm614/rsem/csem/src/congruence_closure.lem" "/auto/homes/jm614/rsem/csem/src/transitive_reduction.lem" "/auto/homes/jm614/rsem/csem/src/ord.lem" "/auto/homes/jm614/rsem/csem/src/eq.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/typing.lem" "/auto/homes/jm614/rsem/csem/src/set.lem" "/auto/homes/jm614/rsem/csem/src/action.lem" "/auto/homes/jm614/lem.tar.gz" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/symbol_state.lem" "/auto/homes/jm614/rsem/csem/src/range.lem" "/auto/homes/jm614/rsem/csem/src/constraint.lem" "/auto/homes/jm614/rsem/csem/src/meaning.lem"))
+(setq file-name-history '("/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/output.lem" "/auto/homes/jm614/rsem/csem/src/document.lem" "/auto/homes/jm614/rsem/csem/chickenpox/Makefile" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/TODO" "/auto/homes/jm614/rsem/csem/ISSUES" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/type_constraint.lem" "/auto/homes/jm614/rsem/csem/src/pprint.lem" "/auto/homes/jm614/rsem/csem/src/scratch.lem" "/auto/homes/jm614/rsem/csem/src/congruence_closure.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/braun.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/diff_array.lem" "/auto/homes/jm614/rsem/csem/src/array.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/union_find.lem" "/auto/homes/jm614/rsem/csem/src/congruence_closure.lem" "/auto/homes/jm614/rsem/csem/src/transitive_reduction.lem" "/auto/homes/jm614/rsem/csem/src/ord.lem" "/auto/homes/jm614/rsem/csem/src/eq.lem" "/auto/homes/jm614/rsem/csem/src/" "/auto/homes/jm614/rsem/csem/src/typing.lem" "/auto/homes/jm614/rsem/csem/src/set.lem" "/auto/homes/jm614/rsem/csem/src/action.lem" "/auto/homes/jm614/lem.tar.gz" "/auto/homes/jm614/rsem/csem/src/"))
 
 ;; Buffer section -- buffers listed in same order as in buffer list:
 (desktop-create-buffer 206
@@ -21,8 +21,41 @@
   "reduction.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  6017
-  '(6045 nil)
+  1904
+  '(7496 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix) (overwrite-mode)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/typing.lem"
+  "typing.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  926
+  '(1 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/meaning.lem"
+  "meaning.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  3676
+  '(513 nil)
+  nil
+  nil
+  '((buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/scratch.lem"
+  "scratch.lem"
+  'lisp-interaction-mode
+  '(abbrev-mode undo-tree-mode auto-complete-mode)
+  837
+  '(76 nil)
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
@@ -32,19 +65,52 @@
   "constraint.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  7407
+  6167
   '(1 nil)
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
 
 (desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/output.lem"
+  "output.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  39
+  '(nil nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/Makefile"
+  "Makefile"
+  'makefile-gmake-mode
+  '(undo-tree-mode)
+  166
+  '(567 nil)
+  nil
+  nil
+  '((indent-tabs-mode . t) (buffer-file-coding-system . undecided-unix)))
+
+(desktop-create-buffer 206
+  "/auto/homes/jm614/rsem/csem/src/document.lem"
+  "document.lem"
+  'fundamental-mode
+  '(undo-tree-mode)
+  41
+  '(nil nil)
+  nil
+  nil
+  '((buffer-file-coding-system . utf-8-unix)))
+
+(desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/cabs_to_ail.lem"
   "cabs_to_ail.lem"
   'fundamental-mode
   '(undo-tree-mode)
-  16587
-  '(1921 nil)
+  8876
+  '(2894 nil)
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
@@ -72,17 +138,6 @@
   '((buffer-file-coding-system . utf-8-unix)))
 
 (desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/meaning.lem"
-  "meaning.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  2799
-  '(1 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/range.lem"
   "range.lem"
   'fundamental-mode
@@ -92,17 +147,6 @@
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/Makefile"
-  "Makefile"
-  'makefile-gmake-mode
-  '(undo-tree-mode)
-  570
-  '(39 nil)
-  nil
-  nil
-  '((indent-tabs-mode . t) (buffer-file-coding-system . undecided-unix)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/set.lem"
@@ -122,17 +166,6 @@
   '(undo-tree-mode)
   189
   '(174 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/scratch.lem"
-  "scratch.lem"
-  'lisp-interaction-mode
-  '(abbrev-mode undo-tree-mode auto-complete-mode)
-  333
-  '(1 nil)
   nil
   nil
   '((buffer-file-coding-system . utf-8-unix)))
@@ -336,17 +369,6 @@
   '((buffer-file-coding-system . utf-8-unix)))
 
 (desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/typing.lem"
-  "typing.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  1
-  '(42548 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/state_exception.lem"
   "state_exception.lem"
   'fundamental-mode
@@ -389,17 +411,6 @@
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/monad_test.lem"
-  "monad_test.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  22
-  '(nil nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
 
 (desktop-create-buffer 206
   "/auto/homes/jm614/rsem/csem/src/reader.lem"
@@ -510,15 +521,4 @@
   nil
   nil
   '((buffer-file-coding-system . undecided-unix)))
-
-(desktop-create-buffer 206
-  "/auto/homes/jm614/rsem/csem/src/test.lem"
-  "test.lem"
-  'fundamental-mode
-  '(undo-tree-mode)
-  273
-  '(81 nil)
-  nil
-  nil
-  '((buffer-file-coding-system . utf-8-unix)))
 

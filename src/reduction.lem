@@ -64,9 +64,9 @@ let rec
         let (a, m) = f_lvalue e in
         let v = c`fresh_name () in
         let incr = c`plus v c`one in
-        let (v', m') = conv_int (exp_type e) (incr, m) in
+        let (v', m') = conv_int (exp_type e) (incr, m`init) in
         let modify = action`modify (lvalue_type e) a v v' in
-        (v, m' -@> modify)
+        (v, (m -&- m') -@> modify)
     | a`UNARY a`POSTFIX_DECR e ->
         let (a, m) = f_lvalue e in
         let v = c`fresh_name () in
@@ -78,72 +78,56 @@ let rec
     | a`UNARY a`ADDRESS e -> f_lvalue e
     | a`CAST t e -> conv t (exp_type e) (f e)
     | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2)
-          && t`is_signed_integer(exp_type exp) ->
-        let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_exp e2 in
-        let sum = c`plus a1 a2 in
-        let c = overflow (exp_type exp) sum in
-        (sum, m1 -&- m2 +& c)
-    | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_exp e2 in
-        let (a, m) = conv_int (exp_type exp) (c`plus a1 a2, m`init) in
-        (a, m1 -&- m2 -&- m)
-    | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_pointer (exp_type e1) ->
-        (* Pointer arithmetic. *)
-        let (a1, m1) = f e1 in
-        let (a2, m2) = f e2 in
-        let size = tc`size (t`base_of_pointer (exp_type e1)) in
-        let a = c`offset a1 a2 size in
-        (a, (m1 -&- m2) -@> action`same a1 a)
-    | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_pointer (exp_type e1) ->
-        (* Pointer arithmetic. *)
-        let (a1, m1) = f e1 in
-        let (a2, m2) = f e2 in
-        let size = tc`size (t`base_of_pointer (exp_type e1)) in
-        let a = c`offset a1 (c`minus c`zero a2) size in
-        (a, (m1 -&- m2) -@> action`same a1 a)
-    | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2)
-          && t`is_signed_integer(exp_type exp) ->
-        let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_exp e2 in
-        let diff = c`minus a1 a2 in
-        let c = overflow (exp_type exp) diff in
-        (diff, (m1 -&- m2) +& c)
-    | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_exp e2 in
-        let (a, m) = conv_int (exp_type exp) (c`minus a1 a2, m`init) in
-        (a, m1 -&- m2 -&- m)
-    | a`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2)
-          && t`is_signed_integer(exp_type exp) ->
+        if t`is_arithmetic (exp_type e1) && t`is_arithmetic (exp_type e2) then
+          let (a1, m1) = conv_exp e1 in
+          let (a2, m2) = conv_exp e2 in
+          let sum = c`plus a1 a2 in
+          if t`is_signed_integer(exp_type exp) then
+            let c = overflow (exp_type exp) sum in
+            (sum, m1 -&- m2 +& c)
+          else
+            let (a, m) = conv_int (exp_type exp) (c`plus a1 a2, m`init) in
+            (a, m1 -&- m2 -&- m)
+        else
+          (* Pointer arithmetic. *)
+          let (a1, m1) = f e1 in
+          let (a2, m2) = f e2 in
+          if t`is_pointer (exp_type e1) then
+            let size = tc`size (t`base_of_pointer (exp_type e1)) in
+            let a = c`offset a1 a2 size in
+            (a, (m1 -&- m2) -@> action`same a1 a)
+          else
+            let size = tc`size (t`base_of_pointer (exp_type e2)) in
+            let a = c`offset a2 a1 size in
+            (a, (m1 -&- m2) -@> action`same a a1)
+    | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2 ->
+        if t`is_arithmetic (exp_type e1) && t`is_arithmetic (exp_type e2) then
+          let (a1, m1) = conv_exp e1 in
+          let (a2, m2) = conv_exp e2 in
+          let diff = c`minus a1 a2 in
+          if t`is_signed_integer (exp_type exp) then
+            let c = overflow (exp_type exp) diff in
+            (diff, (m1 -&- m2) +& c)
+          else
+            let (a, m) = conv_int (exp_type exp) (c`minus a1 a2, m`init) in
+            (a, m1 -&- m2 -&- m)
+        else (*if t`is_integer (exp_type e2) then*)
+          (* Pointer arithmetic. *)
+          let (a1, m1) = f e1 in
+          let (a2, m2) = f e2 in
+          let size = tc`size (t`base_of_pointer (exp_type e1)) in
+          let a = c`offset a1 (c`minus c`zero a2) size in
+          (a, (m1 -&- m2) -@> action`same a1 a)
+    | a`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2 ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
         let modulo = c`modulo a1 a2 in
         let div_zero = c`implies (c`eq a2 c`zero) c`undef in
-        let c = overflow (exp_type exp) (c`div a1 a2) in
-        (modulo, (m1 -&- m2) +& div_zero +& c)
-    | a`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_exp e2 in
-        let modulo = c`modulo a1 a2 in
-        let (a, m) = conv_int (exp_type exp) (modulo, m`init) in
-        let div_zero = c`implies (c`eq a2 c`zero) c`undef in
-        (a, (m1 -&- m2 -&- m) +& div_zero)
+        if t`is_signed_integer(exp_type exp) then
+          let c = overflow (exp_type exp) (c`div a1 a2) in
+          (modulo, (m1 -&- m2) +& div_zero +& c)
+        else
+          (a, (m1 -&- m2 -&- m) +& div_zero)      
     | a`BINARY (cabs`SEQUENTIAL cabs`COMMA) e1 e2 ->
         let (_,  m1) = f e1 in
         let (a2, m2) = f e2 in
@@ -186,67 +170,71 @@ let rec
           let a = c`fresh_name () in
           let negative = c`lt shifted c`zero in
           let c = c`case negative
-            (c`eq a (c`fn "impl_right_shift" [shifted]))
+            (c`eq a (c`fn "shift_r" [shifted]))
             (c`eq a shifted) in
           (shifted, (m1 -&- m2) +& c)
         else
           (shifted, m1 -&- m2)
-    | a`BINARY (cabs`RELATIONAL cabs`EQ) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`eq a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
-    | a`BINARY (cabs`RELATIONAL cabs`NE) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`neg (c`eq a1 a2))
-          (c`eq a c`one)
-          (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
+    | a`BINARY (cabs`RELATIONAL cabs`EQ) e1 e2 ->
+        if t`is_arithmetic (exp_type e1) && t`is_arithmetic (exp_type e2) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`eq a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else if t`is_pointer (exp_type e1) && t`is_pointer (exp_type e2) then
+        else if typing`is_null_pointer e1 then
+        else
+    | a`BINARY (cabs`RELATIONAL cabs`NE) e1 e2 ->
+        if t`is_real (exp_type e1) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`neg (c`eq a1 a2))
+            (c`eq a c`one)
+            (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else
+          (* Pointer comparison. *)
     | a`BINARY (cabs`RELATIONAL cabs`LT) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`lt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
+        if t`is_real (exp_type e1) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`lt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else
+          (* Pointer comparison. *)
     | a`BINARY (cabs`RELATIONAL cabs`LE) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`le a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
-    | a`BINARY (cabs`RELATIONAL cabs`GT) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
-    | a`BINARY (cabs`RELATIONAL cabs`GT) e1 e2
-        when t`is_pointer (exp_type e1) ->
-        (* TODO Comparing two pointers to different object is
-           undefined. *)
-        let (a1, m1) = f e1 in
-        let (a2, m2) = f e2 in
-        let a = c`fresh_name () in
-        let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
+        if t`is_real (exp_type e1) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`le a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else
+          (* Pointer comparison. *)
+    | a`BINARY (cabs`RELATIONAL cabs`GT) e1 e2 ->
+        if t`is_real (exp_type e1) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else
+          (* Pointer comparison. *)
+          (* TODO Comparing two pointers to different object is
+             undefined. Unless ... *)
+          let (a1, m1) = f e1 in
+          let (a2, m2) = f e2 in
+          let a = c`fresh_name () in
+          let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`GE) e1 e2
         when t`is_arithmetic (exp_type e1)
           && t`is_arithmetic (exp_type e2) ->

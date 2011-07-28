@@ -627,8 +627,8 @@ let rec
                      the right is a null pointer constant[, or] the left \
                      operand has type [...] _Bool, and the right is a \
                      pointer.`` in" in
-        f_lvalue msg_l e1 >>= (fun t1 ->
-        f e2 >>= (fun t2 ->
+        f_lvalue msg_l e1    >>= (fun t1 ->
+        f e2                 >>= (fun t2 ->
         lvalue_convert t1 e1 >>= (fun t_head ->
         let base_has_all_qualifiers t1 t2 =
           let b1 = t`base_of_pointer t1 in
@@ -701,8 +701,8 @@ let rec
                      object type, and the right shall have integer type[, or] \
                      the left operand shall have [...] arithmetic type and the \
                      right shall have arithmetic type.`` in" in
-        f_lvalue msg_l e1 >>= (fun t1 ->
-        f e2 >>= (fun t2 ->
+        f_lvalue msg_l e1    >>= (fun t1 ->
+        f e2                 >>= (fun t2 ->
         lvalue_convert t1 e1 >>= (fun t_head ->
         if t`is_modifiable t1 then
           if t`is_pointer_to_complete_object t1 then
@@ -722,7 +722,7 @@ let rec
         let msg_a = "Violation of constraint 6.5.16.2#2 Compound assignment, \
                      Constraints: ``[T]he left operand shall have [...] \
                      arithmetic type [...].`` in" in
-        f_lvalue msg_l e1 >>= (fun t1 ->
+        f_lvalue msg_l e1    >>= (fun t1 ->
         lvalue_convert t1 e1 >>= (fun t_head ->
         if t`is_modifiable t1 then
           if t`is_arithmetic t1 then
