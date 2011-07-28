@@ -4,9 +4,11 @@ module m = meaning
 module t = types
 
 module tc = type_constraint
-module annot = ail_annotate
 
 let undef = c`eq (c`fresh_named "UNDEFINED") c`one
+
+let exp_type    = annotate`exp_type_of
+let lvalue_type = annotate`lvalue_type_of
 
 let update_env env ids =
   List`fold_left (fun e id -> Pmap`add id (c`fresh_address ()) e) env ids
@@ -26,10 +28,10 @@ let rec
   let open m`operators in
   let f = reduce_exp n b env file in
   let f_lvalue = reduce_lvalue n b env file in
-  match annot`exp_of exp with
+  match annotate`exp_of exp with
     | a`VARIABLE id -> (Pmap`find id env, m`init)
     | a`UNARY a`INDIRECTION e ->
-        let t = t`pointer_convert (annot`exp_type_of e) in
+        let t = t`pointer_convert (exp_type e) in
         let (a, m) = f e in
         let null = c`eq a c`null in
         let ill_aligned = c`neg (tc`align (t`base_of_pointer t) a) in
@@ -44,102 +46,102 @@ let rec
     let (a, m) = reduce_lvalue n b env file e in
     (a, m -@> action`id a) in
   let lookup_type id = fst (Pmap`find id file.a`id_map) in
-  let conv_exp e = conv_int (annot`exp_type_of exp) (f e) in
+  let conv_exp e = conv_int (exp_type exp) (f e) in
   let usual_arithmetic e1 e2 =
-    t`usual_arithmetic (annot`exp_type_of e1) (annot`exp_type_of e2) in
+    t`usual_arithmetic (exp_type e1) (exp_type e2) in
   let overflow t c = c`implies (c`neg (tc`in_range t c)) c`undef in
-  match annot`exp_of exp with
+  match annotate`exp_of exp with
     | a`VARIABLE id when t`is_array (lookup_type id) ->
         (Pmap`find id env, m`init)
-    | _ when t`is_lvalue (annot`type_of exp)
-        && not (t`is_array (annot`exp_type_of exp)) ->
+    | _ when t`is_lvalue (annotate`type_of exp)
+        && not (t`is_array (exp_type exp)) ->
         let (a, m) = f_lvalue exp in
         let v = c`fresh_name () in
-        let load = action`load (annot`lvalue_type_of exp) a v in
+        let load = action`load (lvalue_type exp) a v in
         (v, m -@> load)
     | a`CONSTANT (cabs`CONST_INT (i, _)) -> (c`const i, m`init)
     | a`UNARY a`POSTFIX_INCR e ->
         let (a, m) = f_lvalue e in
         let v = c`fresh_name () in
         let incr = c`plus v c`one in
-        let (v', m') = conv_int (annot`exp_type_of e) (incr, m) in
-        let modify = action`modify (annot`lvalue_type_of e) a v v' in
+        let (v', m') = conv_int (exp_type e) (incr, m) in
+        let modify = action`modify (lvalue_type e) a v v' in
         (v, m' -@> modify)
     | a`UNARY a`POSTFIX_DECR e ->
         let (a, m) = f_lvalue e in
         let v = c`fresh_name () in
         let decr = c`minus v c`one in
-        let (a', m') = conv_int (annot`exp_type_of e) (decr, m`init) in
-        let modify = action`modify (annot`lvalue_type_of e) a v a' in
+        let (a', m') = conv_int (exp_type e) (decr, m`init) in
+        let modify = action`modify (lvalue_type e) a v a' in
         (v, (m -&- m') -@> modify)
     | a`UNARY a`ADDRESS (a`Exp _ a`UNARY a`INDIRECTION e) -> f e
     | a`UNARY a`ADDRESS e -> f_lvalue e
-    | a`CAST t e -> conv t (annot`exp_type_of e) (f e)
+    | a`CAST t e -> conv t (exp_type e) (f e)
     | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2)
-          && t`is_signed_integer(annot`exp_type_of exp) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2)
+          && t`is_signed_integer(exp_type exp) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
         let sum = c`plus a1 a2 in
-        let c = overflow (annot`exp_type_of exp) sum in
+        let c = overflow (exp_type exp) sum in
         (sum, m1 -&- m2 +& c)
     | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
-        let (a, m) = conv_int (annot`exp_type_of exp) (c`plus a1 a2, m`init) in
+        let (a, m) = conv_int (exp_type exp) (c`plus a1 a2, m`init) in
         (a, m1 -&- m2 -&- m)
     | a`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2
-        when t`is_pointer (annot`exp_type_of e1) ->
+        when t`is_pointer (exp_type e1) ->
         (* Pointer arithmetic. *)
         let (a1, m1) = f e1 in
         let (a2, m2) = f e2 in
-        let size = tc`size (t`base_of_pointer (annot`exp_type_of e1)) in
+        let size = tc`size (t`base_of_pointer (exp_type e1)) in
         let a = c`offset a1 a2 size in
         (a, (m1 -&- m2) -@> action`same a1 a)
     | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_pointer (annot`exp_type_of e1) ->
+        when t`is_pointer (exp_type e1) ->
         (* Pointer arithmetic. *)
         let (a1, m1) = f e1 in
         let (a2, m2) = f e2 in
-        let size = tc`size (t`base_of_pointer (annot`exp_type_of e1)) in
+        let size = tc`size (t`base_of_pointer (exp_type e1)) in
         let a = c`offset a1 (c`minus c`zero a2) size in
         (a, (m1 -&- m2) -@> action`same a1 a)
     | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2)
-          && t`is_signed_integer(annot`exp_type_of exp) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2)
+          && t`is_signed_integer(exp_type exp) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
         let diff = c`minus a1 a2 in
-        let c = overflow (annot`exp_type_of exp) diff in
+        let c = overflow (exp_type exp) diff in
         (diff, (m1 -&- m2) +& c)
     | a`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
-        let (a, m) = conv_int (annot`exp_type_of exp) (c`minus a1 a2, m`init) in
+        let (a, m) = conv_int (exp_type exp) (c`minus a1 a2, m`init) in
         (a, m1 -&- m2 -&- m)
     | a`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2)
-          && t`is_signed_integer(annot`exp_type_of exp) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2)
+          && t`is_signed_integer(exp_type exp) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
         let modulo = c`modulo a1 a2 in
         let div_zero = c`implies (c`eq a2 c`zero) c`undef in
-        let c = overflow (annot`exp_type_of exp) (c`div a1 a2) in
+        let c = overflow (exp_type exp) (c`div a1 a2) in
         (modulo, (m1 -&- m2) +& div_zero +& c)
     | a`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
         let modulo = c`modulo a1 a2 in
-        let (a, m) = conv_int (annot`exp_type_of exp) (modulo, m`init) in
+        let (a, m) = conv_int (exp_type exp) (modulo, m`init) in
         let div_zero = c`implies (c`eq a2 c`zero) c`undef in
         (a, (m1 -&- m2 -&- m) +& div_zero)
     | a`BINARY (cabs`SEQUENTIAL cabs`COMMA) e1 e2 ->
@@ -163,24 +165,24 @@ let rec
         let both = c`conj
           (c`neq a1 c`zero)
           (c`case (c`neq a2 c`zero) (c`eq a c`one) (c`eq a c`zero)) in
-        (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both)
+        (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
     | a`BINARY (cabs`ARITHMETIC cabs`SHL) e1 e2 ->
         let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
+        let (a2, m2) = conv_int (t`promote (exp_type e1)) (f e2) in
         let shifted = c`mult a1 (c`pow a2) in
-        if t`is_signed_integer (annot`exp_type_of exp) then
-          let not_repr = c`neg (tc`in_range (annot`exp_type_of exp) shifted) in
+        if t`is_signed_integer (exp_type exp) then
+          let not_repr = c`neg (tc`in_range (exp_type exp) shifted) in
           let neg = c`lt shifted c`zero in
           let c = c`implies (c`disj neg not_repr) c`undef in
           shifted, (m1 -&- m2) +& c
         else
-          let (a, m) = conv_int (annot`exp_type_of exp) (shifted, m`init) in
+          let (a, m) = conv_int (exp_type exp) (shifted, m`init) in
           (a, m1 -&- m2 -&- m)
     | a`BINARY (cabs`ARITHMETIC cabs`SHR) e1 e2 ->
         let (a1, m1) = conv_exp e1 in
-        let (a2, m2) = conv_int (t`promote (annot`exp_type_of e1)) (f e2) in
+        let (a2, m2) = conv_int (t`promote (exp_type e1)) (f e2) in
         let shifted = c`div a1 (c`pow a2) in
-        if t`is_signed_integer (annot`exp_type_of exp) then
+        if t`is_signed_integer (exp_type exp) then
           let a = c`fresh_name () in
           let negative = c`lt shifted c`zero in
           let c = c`case negative
@@ -190,8 +192,8 @@ let rec
         else
           (shifted, m1 -&- m2)
     | a`BINARY (cabs`RELATIONAL cabs`EQ) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -199,8 +201,8 @@ let rec
         let c = c`case (c`eq a1 a2) (c`eq a c`one) (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`NE) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -210,8 +212,8 @@ let rec
           (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`LT) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -219,8 +221,8 @@ let rec
         let c = c`case (c`lt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`LE) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -228,8 +230,8 @@ let rec
         let c = c`case (c`le a1 a2) (c`eq a c`one) (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`GT) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -237,7 +239,7 @@ let rec
         let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`GT) e1 e2
-        when t`is_pointer (annot`exp_type_of e1) ->
+        when t`is_pointer (exp_type e1) ->
         (* TODO Comparing two pointers to different object is
            undefined. *)
         let (a1, m1) = f e1 in
@@ -246,8 +248,8 @@ let rec
         let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
         (a, (m1 -&- m2) +& c)
     | a`BINARY (cabs`RELATIONAL cabs`GE) e1 e2
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let t = usual_arithmetic e1 e2 in
         let (a1, m1) = conv_int t (f e1) in
         let (a2, m2) = conv_int t (f e2) in
@@ -273,12 +275,12 @@ let rec
         let (a1, m1) = f_lvalue e1 in
         let (a2, m2) = f e2 in
         let (a, m) =
-          conv (annot`exp_type_of e1) (annot`exp_type_of e2) (a2, m`init) in
-        let write = action`store (annot`lvalue_type_of e1) a1 a in
-        (a,  (m1 -&- m2) -&> (m +@ write))
+          conv (exp_type e1) (exp_type e2) (a2, m`init) in
+        let write = action`store (lvalue_type e1) a1 a in
+        (a,  (m1 -&- m2 -&- m) -@> write)
     | a`QUESTION e1 e2 e3
-        when t`is_arithmetic (annot`exp_type_of e1)
-          && t`is_arithmetic (annot`exp_type_of e2) ->
+        when t`is_arithmetic (exp_type e1)
+          && t`is_arithmetic (exp_type e2) ->
         let (a1, m1) = f e1 in
         let (a2, m2) = conv_exp e2 in
         let (a3, m3) = conv_exp e3 in
@@ -298,10 +300,10 @@ let rec
           let ids_t = [(Pmap`find id env', lookup_type id) | forall (id IN ids) | true] in
           let m_args = List`fold_left2
             (fun m' (l, t) e ->
-              let (a, m) = conv (t`unqualify t) (annot`exp_type_of e) (f e) in
+              let (a, m) = conv (t`unqualify t) (exp_type e) (f e) in
               let create = action`create   t l   in
               let store  = action`fn_store t l a in
-              (m' -&- m +@ create) -@> store
+              (m' -&- m) +@ create -@> store
             ) m`init ids_t es in
           let kill_ids m (l, _) = m +@ action`kill l in
           let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
@@ -342,8 +344,8 @@ let rec
     | a`DECLARATION defns ->
         let define (id, e) =
           let t = lookup_type id in
-          let (a, m) = lift (conv t (annot`exp_type_of e) (f_e e)) in
-          m -&> (m`init_func +@ action`store t (Pmap`find id env) a) in
+          let (a, m) = lift (conv t (exp_type e) (f_e e)) in
+          m -@> action`store t (Pmap`find id env) a in
         List`fold_left (fun m p -> m -&> define p) m`init_func defns
     | a`RETURN_EXPRESSION e ->
         let t_return =
@@ -351,7 +353,7 @@ let rec
             | a`FUNCTION t _ -> t
             | _ -> invalid_arg "Not a function type."
           end in
-        let (a, m) = conv t_return (annot`exp_type_of e) (f_e e) in
+        let (a, m) = conv t_return (exp_type e) (f_e e) in
         m`return (m`add_constraint m (c`eq a return))
     | a`RETURN_VOID -> m`return m`init
     | a`EXPRESSION e -> snd (lift (f_e e))
