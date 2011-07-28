@@ -1,2 +1,2 @@
 let m_map f m = {x => f y | forall (x => y IN m) | true}
-let m = {1 => 2; 2 => 3}
+let m = {1 => 2; 2 => 3} concat {3 => 1}

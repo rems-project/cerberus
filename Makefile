@@ -34,7 +34,9 @@ typing.lem \
 range.lem \
 constraint.lem \
 type_constraint.lem \
-action.lem
+action.lem \
+meaning.lem \
+reduction.lem
 
 all:
 	mkdir -p $(BUILD_DIR)

@@ -8,8 +8,8 @@ type action =
   | Modify  of a`ctype * c`constant * c`constant * c`constant
   | Create  of a`ctype * c`constant
   | Kill    of c`constant
-  | Same    of c`constant * c`constant
   | Id      of c`constant
+  | Same    of c`constant * c`constant
   | Call
 
 type t = Action of action * symbol`t
@@ -19,9 +19,9 @@ let store    t a v   = symbol_state`fresh (Action (Store  t a v))
 let fn_store t a v   = symbol_state`fresh (Action (Store  t a v))
 let modify   t a l v = symbol_state`fresh (Action (Modify t a l v))
 let create   t a     = symbol_state`fresh (Action (Create t a))
-let kill a           = symbol_state`fresh (Action (Kill a))
+let kill a           = symbol_state`fresh (Action (Kill     a))
+let id a             = symbol_state`fresh (Action (Id       a))
 let same a a'        = symbol_state`fresh (Action (Same a a'))
-let id a             = symbol_state`fresh (Action (Id a))
 let call             = symbol_state`fresh (Action (Call))
 
 let uid (Action _ id) = id

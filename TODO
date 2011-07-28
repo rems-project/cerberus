@@ -1,2 +1,5 @@
 Constraints:
 - Make the constraint language typed.
+
+Reduction:
+- Add more structure to constraints, e.g. "if . then UNDEF else .".

@@ -113,9 +113,9 @@ module effect = struct
   open operators
 
   let app2 mf mx my = mf <*> mx <*> my
-  let app3 mf mx my mz = mf <*> mx <*> my <*> mz
+  let app3 mf mx my mz = (app2 mf mx my) <*> mz
   let map2 f mx my = f <$> mx <*> my
-  let map3 f mx my mz = f <$> mx <*> my <*> mz
+  let map3 f mx my mz = (map2 f mx my) <*> mz
 end
 
 open effect`operators
@@ -280,7 +280,7 @@ let rec
 
 | desugar_stmt (s, l) =
   let fs = desugar_stmt in
-  let fe = desugar_exp in
+  let fe = desugar_exp  in
   ail`Stmt l <$> match s with
     | c`BLOCK ss ->
         (* Open up a new scope, transform each statement/declaration in the
@@ -365,8 +365,8 @@ let rec
     | c`IF e s1 s2_opt ->
         let d_s2 = desugar_stmt_opt l s2_opt in
         a`IF <$> fe e <*> fs s1 <*> d_s2
-    | c`WHILE e s -> a`WHILE <$> fe e <*> fs s
-    | c`DO e s -> a`DO <$> fe e <*> fs s
+    | c`WHILE e s  -> a`WHILE  <$> fe e <*> fs s
+    | c`DO    e s  -> a`DO     <$> fe e <*> fs s
     | c`SWITCH e s -> a`SWITCH <$> fe e <*> fs s
     | c`CASE (e, l) s ->
         let integer_constant =
@@ -465,14 +465,14 @@ end
           effect`unit (a`FUNCTION d_t d_decls, formals)))
       | _ -> effect`fail "Not a function type."
     end in
-  register_name l name >>= (fun id ->
-  desugar_storage l sts >>= (fun d_st ->
-  effect`create_scope >>= (fun () ->
-  desugar_function_type t >>= (fun (d_t, formals) ->
-  effect`return_scope >>= (fun fn_scope ->
-  effect`destroy_scope >>= (fun () ->
+  register_name l name         >>= (fun id ->
+  desugar_storage l sts        >>= (fun d_st ->
+  effect`create_scope          >>= (fun () ->
+  desugar_function_type t      >>= (fun (d_t, formals) ->
+  effect`return_scope          >>= (fun fn_scope ->
+  effect`destroy_scope         >>= (fun () ->
   effect`add_id id (d_t, d_st) >>= (fun () ->
-  effect`push_table fn_scope >>= (fun () ->
+  effect`push_table fn_scope   >>= (fun () ->
   effect`unit (id, formals)))))))))
 
 | desugar_defn ((d, e_opt), l) =
