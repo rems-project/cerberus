@@ -1,3 +1,6 @@
+open meaning`operators
+open meaning`statement_operators
+
 module a = ail
 module c = constraint
 module m = meaning
@@ -23,18 +26,15 @@ let update_env env ids =
   List`fold_left (fun e id -> Pmap`add id (c`fresh_address ()) e) env ids
 
 let conv t t' (c, m) =
-  let open m`operators in
   let (a, constr) = tc`conv t t' c in
   (a, m +& constr)
 
 let conv_int t (c, m) =
-  let open m`operators in
   let (a, constr) = tc`conv_int t c in
   (a, m +& constr)
 
 let rec
 | reduce_lvalue n b env file exp =
-  let open m`operators in
   let f = reduce_exp n b env file in
   let f_lvalue = reduce_lvalue n b env file in
   match annotate`exp_of exp with
@@ -49,8 +49,7 @@ let rec
   end
 
 | reduce_exp n b env file exp =
-  let open m`operators in
-      let f = reduce_exp n b env file in
+  let f = reduce_exp n b env file in
   let f_lvalue e =
     let (a, m) = reduce_lvalue n b env file e in
     (a, m -@> action`id a) in
@@ -315,7 +314,6 @@ let rec
   end
 
 | reduce_stmt n b fid return env file (a`Stmt _ stmt) =
-  let open m`StatementOperators in
   let f_s = reduce_stmt n b fid return env file in
   let f_e = reduce_exp  n b            env file in
   let lift (a, m) = (a, m`normal m) in
@@ -324,12 +322,12 @@ let rec
     | a`SKIP -> m`init_func
     | a`IF e s1 s2 ->
         let (a, m) = lift (f_e e) in
-        let pos = f_s s1 +& (c`neq a c`zero) in
-        let neg = f_s s2 +& (c`eq  a c`zero) in
-        m -&> (pos -/- neg)
+        let pos = f_s s1 ++& (c`neq a c`zero) in
+        let neg = f_s s2 ++& (c`eq  a c`zero) in
+        m --&> (pos -//- neg)
     | a`BLOCK ids ss ->
         let module S = BatSet in
-        let create_ids m (l, t) = m +@ action`create t l in
+        let create_ids m (l, t) = m ++@ action`create t l in
         let kill_ids   m (l, _) = m union {action`kill l} in
         let env' = update_env env ids in
         let ids_t = List`map (fun i -> Pmap`find i env', lookup_type i) ids in
@@ -337,15 +335,15 @@ let rec
         let m_kill   = List`fold_left kill_ids empty ids_t in
         let m =
           List`fold_left
-            (fun m s -> m -&> (reduce_stmt n b fid return env' file s))
+            (fun m s -> m --&> (reduce_stmt n b fid return env' file s))
             m`init_func ss in
-        m`add_actions_entire_func_sb (m_create -&> m) m_kill
+        m`add_actions_entire_func_sb (m_create --&> m) m_kill
     | a`DECLARATION defns ->
         let define (id, e) =
           let t = lookup_type id in
           let (a, m) = lift (conv t (exp_type e) (f_e e)) in
-          m -@> action`store t (Pmap`find id env) a in
-        List`fold_left (fun m p -> m -&> define p) m`init_func defns
+          m --@> action`store t (Pmap`find id env) a in
+        List`fold_left (fun m p -> m --&> define p) m`init_func defns
     | a`RETURN_EXPRESSION e ->
         let t_return =
           match lookup_type fid with
@@ -357,14 +355,14 @@ let rec
     | a`RETURN_VOID -> m`return m`init
     | a`EXPRESSION e -> snd (lift (f_e e))
     | a`WHILE e s ->
-        let m_neg (a, m) = m`add_constraint m (c`eq  a c`zero) in
-        let m_pos (a, m) = m`add_constraint m (c`neq a c`zero) in
+        let m_neg (a, m) = m +& (c`eq  a c`zero) in
+        let m_pos (a, m) = m +& (c`neq a c`zero) in
         let rec iterate m = function
           | 0 -> m`exit_loop (m_neg (f_e e)) m
           | n ->
               let test = f_e e in
               let m' = m`enter_loop (m_pos test) (m_neg test) m in
-              iterate (m' -&> f_s s) (n-1)
+              iterate (m' --&> f_s s) (n-1)
         end in
         iterate m`init_func n
     | a`BREAK    -> m`break    m`init

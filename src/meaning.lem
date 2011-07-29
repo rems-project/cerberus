@@ -179,10 +179,10 @@ let add_constraint_entire_func m c =
 
 module statement_operators = struct
   (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
-  let (-&>) = conj_seq_before_func
-  let (-/-) = disj_func
-  let (+&)  = add_constraint_entire_func
-  let (+@)  = add_action_func
+  let (--&>) = conj_seq_before_func
+  let (-//-) = disj_func
+  let (++&)  = add_constraint_entire_func
+  let (++@)  = add_action_func
 end
 
 module print = struct
