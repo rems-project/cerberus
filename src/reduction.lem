@@ -10,6 +10,15 @@ let undef = c`eq (c`fresh_named "UNDEFINED") c`one
 let exp_type    = annotate`exp_type_of
 let lvalue_type = annotate`lvalue_type_of
 
+let is_function_id file e =
+  match e with
+    | a`Exp _ (a`VARIABLE fid)) ->
+        if Pmap`mem fid file.a`function_map
+          then Some fid
+          else None
+    | _ -> None
+  end
+
 let update_env env ids =
   List`fold_left (fun e id -> Pmap`add id (c`fresh_address ()) e) env ids
 
@@ -51,14 +60,14 @@ let rec
     t`usual_arithmetic (exp_type e1) (exp_type e2) in
   let overflow t c = c`implies (c`neg (tc`in_range t c)) c`undef in
   match annotate`exp_of exp with
-    | a`VARIABLE id when t`is_array (lookup_type id) ->
-        (Pmap`find id env, m`init)
-    | _ when t`is_lvalue (annotate`type_of exp)
-        && not (t`is_array (exp_type exp)) ->
-        let (a, m) = f_lvalue exp in
-        let v = c`fresh_name () in
-        let load = action`load (lvalue_type exp) a v in
-        (v, m -@> load)
+    | a`VARIABLE id ->
+        if t`is_array (lookup_type id) then
+          (Pmap`find id env, m`init)
+        else
+          let (a, m) = f_lvalue exp in
+          let v = c`fresh_name () in
+          let load = action`load (lvalue_type exp) a v in
+          (v, m -@> load)
     | a`CONSTANT (cabs`CONST_INT (i, _)) -> (c`const i, m`init)
     | a`UNARY a`POSTFIX_INCR e ->
         let (a, m) = f_lvalue e in
@@ -235,15 +244,16 @@ let rec
           let a = c`fresh_name () in
           let c = c`case (c`gt a1 a2) (c`eq a c`one) (c`eq a c`zero) in
           (a, (m1 -&- m2) +& c)
-    | a`BINARY (cabs`RELATIONAL cabs`GE) e1 e2
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let t = usual_arithmetic e1 e2 in
-        let (a1, m1) = conv_int t (f e1) in
-        let (a2, m2) = conv_int t (f e2) in
-        let a = c`fresh_name () in
-        let c = c`case (c`ge a1 a2) (c`eq a c`one) (c`eq a c`zero) in
-        (a, (m1 -&- m2) +& c)
+    | a`BINARY (cabs`RELATIONAL cabs`GE) e1 e2 ->
+        if t`is_arithmetic (exp_type e1) then
+          let t = usual_arithmetic e1 e2 in
+          let (a1, m1) = conv_int t (f e1) in
+          let (a2, m2) = conv_int t (f e2) in
+          let a = c`fresh_name () in
+          let c = c`case (c`ge a1 a2) (c`eq a c`one) (c`eq a c`zero) in
+          (a, (m1 -&- m2) +& c)
+        else
+          (* Pointer comparison. *)
     | a`BINARY (cabs`ARITHMETIC cabs`BAND) e1 e2 ->
         let (a1, m1) = conv_exp e1 in
         let (a2, m2) = conv_exp e2 in
@@ -267,40 +277,41 @@ let rec
         let write = action`store (lvalue_type e1) a1 a in
         (a,  (m1 -&- m2 -&- m) -@> write)
     | a`QUESTION e1 e2 e3
-        when t`is_arithmetic (exp_type e1)
-          && t`is_arithmetic (exp_type e2) ->
-        let (a1, m1) = f e1 in
-        let (a2, m2) = conv_exp e2 in
-        let (a3, m3) = conv_exp e3 in
-        let a = c`fresh_name () in
-        let pos = m2 +& (c`eq a a2) +& (c`eq  a1 c`zero) in
-        let neg = m3 +& (c`eq a a3) +& (c`neq a1 c`zero) in
-        (a, m1 -&> (pos -/- neg))
-    | a`CALL (a`Exp _ (a`VARIABLE fid)) es
-        when Pmap`mem fid file.a`function_map ->
-        let depth = Pmap`find fid b in
-        if depth = 0 then
-          (c`fresh_name (), m`none)
-        else
-          let b' = Pmap`add fid (depth - 1) b in
-          let (ids, s) = Pmap`find fid file.a`function_map in
-          let env' = update_env env ids in
-          let ids_t = [(Pmap`find id env', lookup_type id) | forall (id IN ids) | true] in
-          let m_args = List`fold_left2
-            (fun m' (l, t) e ->
-              let (a, m) = conv (t`unqualify t) (exp_type e) (f e) in
-              let create = action`create   t l   in
-              let store  = action`fn_store t l a in
-              (m' -&- m) +@ create -@> store
-            ) m`init ids_t es in
-          let kill_ids m (l, _) = m +@ action`kill l in
-          let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
-          let kills = Set`fold (fun s id -> action`kill s id)
-          let m_kill = List`fold_left kill_ids m`init ids_t in
-          let m_kill = m`add_actions m acts in
+        if t`is_arithmetic (exp_type e1) && t`is_arithmetic (exp_type e2) then
+          let (a1, m1) = f e1 in
+          let (a2, m2) = conv_exp e2 in
+          let (a3, m3) = conv_exp e3 in
           let a = c`fresh_name () in
-          let m_body = m`flatten_func (reduce_stmt n b' fid a env' file s) in
-          (a, m_args -&> m_body -&> m_kill)      
+          let pos = m2 +& (c`eq a a2) +& (c`eq  a1 c`zero) in
+          let neg = m3 +& (c`eq a a3) +& (c`neq a1 c`zero) in
+          (a, m1 -&> (pos -/- neg))
+    | a`CALL e es ->
+        match is_function_id file e with
+          | Some fid ->
+              let depth = Pmap`find fid b in
+              if depth = 0 then
+                (c`fresh_name (), m`none)
+              else
+                let b' = Pmap`add fid (depth - 1) b in
+                let (ids, s) = Pmap`find fid file.a`function_map in
+                let env' = update_env env ids in
+                let ids_t = [(Pmap`find id env', lookup_type id) | forall (id IN ids) | true] in
+                let m_args = List`fold_left2
+                  (fun m' (l, t) e ->
+                    let (a, m) = conv (t`unqualify t) (exp_type e) (f e) in
+                    let create = action`create   t l   in
+                    let store  = action`fn_store t l a in
+                    (m' -&- m) +@ create -@> store
+                  ) m`init ids_t es in
+                let kill_ids m (l, _) = m +@ action`kill l in
+                let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
+                let kills = Set`fold (fun s id -> action`kill s id)
+                let m_kill = List`fold_left kill_ids m`init ids_t in
+                let m_kill = m`add_actions m acts in
+                let a = c`fresh_name () in
+                let m_body = m`flatten_func (reduce_stmt n b' fid a env' file s) in
+                (a, m_args -&> m_body -&> m_kill)      
+        end
   end
 
 | reduce_stmt n b fid return env file (a`Stmt _ stmt) =
