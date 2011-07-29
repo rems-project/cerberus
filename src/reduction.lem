@@ -16,9 +16,7 @@ let lvalue_type = annotate`lvalue_type_of
 let is_function_id file e =
   match e with
     | a`Exp _ (a`VARIABLE fid)) ->
-        if Pmap`mem fid file.a`function_map
-          then Some fid
-          else None
+        map`find fid file.a`fn_map
     | _ -> None
   end
 
@@ -286,13 +284,12 @@ let rec
           (a, m1 -&> (pos -/- neg))
     | a`CALL e es ->
         match is_function_id file e with
-          | Some fid ->
+          | Some (ids, s) ->
               let depth = Pmap`find fid b in
               if depth = 0 then
                 (c`fresh_name (), m`none)
               else
                 let b' = Pmap`add fid (depth - 1) b in
-                let (ids, s) = Pmap`find fid file.a`function_map in
                 let env' = update_env env ids in
                 let ids_t = [(Pmap`find id env', lookup_type id) | forall (id IN ids) | true] in
                 let m_args = List`fold_left2
@@ -308,14 +305,14 @@ let rec
                 let m_kill = List`fold_left kill_ids m`init ids_t in
                 let m_kill = m`add_actions m acts in
                 let a = c`fresh_name () in
-                let m_body = m`flatten_func (reduce_stmt n b' fid a env' file s) in
+                let m_body = m`flatten_func (reduce_stmt n b' env' file s fid a) in
                 (a, m_args -&> m_body -&> m_kill)      
         end
   end
 
-| reduce_stmt n b fid return env file (a`Stmt _ stmt) =
-  let f_s = reduce_stmt n b fid return env file in
-  let f_e = reduce_exp  n b            env file in
+| reduce_stmt n b env file (a`Stmt _ stmt) fid return =
+  let f_s = reduce_stmt n b env file fid return in
+  let f_e = reduce_exp  n b env file in
   let lift (a, m) = (a, m`normal m) in
   let lookup_type id = fst (Pmap`find id file.a`id_map) in
   match stmt with
@@ -335,7 +332,7 @@ let rec
         let m_kill   = List`fold_left kill_ids empty ids_t in
         let m =
           List`fold_left
-            (fun m s -> m --&> (reduce_stmt n b fid return env' file s))
+            (fun m s -> m --&> (reduce_stmt n b env' file s fid return))
             m`init_func ss in
         m`add_actions_entire_func_sb (m_create --&> m) m_kill
     | a`DECLARATION defns ->
@@ -373,7 +370,7 @@ let reduce_file n file =
   let b =
     List`fold_left (fun m fid -> Pmap`add fid n m) Pmap`empty (Pmap`keys file.a`fn_map) in
   let (_, s) = Pmap`find file.a`main file.a`fn_map in
-  let m = reduce_stmt n b main (c`fresh_named "return") Pmap`empty file s in
+  let m = reduce_stmt n b Pmap`empty file s main (c`fresh_named "return") in
   m`flatten_func m
 (*
   List`map rd (List`map snd (Pmap`values file.a`fn_map))
