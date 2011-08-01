@@ -254,14 +254,6 @@ let rec compare_constr constr1 constr2 =
 
 type t = constr set
 
-let fresh f (t, s) =
-  let (symbol, s') = symbol`fresh s in
-  (f symbol, (t, s'))
-
-let fresh_pretty n f (t, s) =
-  let (symbol, s') = symbol`fresh_name n s in
-  (f symbol, (t, s'))
-
 let from_list cs = {c | forall (c MEM cs) | true}
 
 let tt = True
@@ -279,9 +271,9 @@ let gt c1 c2 = Lt c2 c1
 
 let add t c = Set`add c t
 
-let fresh_name = fresh Name
-let fresh_named n = fresh_pretty n Name
-let fresh_address = fresh Address
+let fresh         = symbol_state`fresh Name
+let fresh_named n = symbol_state`fresh_pretty n Name
+let fresh_address = symbol_state`fresh Address
 
 let const i = Integer i
 let fn name args = Fn name args

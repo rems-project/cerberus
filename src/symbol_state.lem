@@ -11,6 +11,8 @@ module operators = struct
   let (>>=) = bind
 end
 
-open operators
+
+let init f = f symbol`emp
 
 let fresh f = map f (modify symbol`fresh)
+let fresh_pretty n f = map f (modify (symbol`fresh_pretty n))
