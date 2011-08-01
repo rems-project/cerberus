@@ -2,3 +2,8 @@ let (AND) = (&&)
 
 let b1 = (AND) true false
 let b2 = true AND false
+
+(* Alternatively, have Haskell- or HOL-style infix operators. *)
+let OR = (||)
+let b1 = true $OR  false
+let b2 = true `OR` false
