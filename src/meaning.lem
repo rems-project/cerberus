@@ -21,7 +21,7 @@ end
 
 type t = denotation`t set
 
-type func = <|
+type t_lifted = <|
   break    : t;
   continue : t;
   normal   : t;
@@ -53,20 +53,20 @@ let and_denotations_sb d1 d2 = <|
   fs_actions  = Pmap`concat d1.fs_actions d2.fs_actions
 |>
 
-let conj t1 t2 = set`product_map and_denotations t1 t2
-let conj_seq_before t1 t2 = set`product_map and_denotations_sb t1 t2
+let conj m1 m2 = set`product_map and_denotations m1 m2
+let conj_seq_before m1 m2 = set`product_map and_denotations_sb m1 m2
 
-let add_constraint t cstr =
-  {<|d with constraints = d.constraints union {cstr}|> | forall (d IN t) | true}
+let add_constraint m cstr =
+  {<|d with constraints = d.constraints union {cstr}|> | forall (d IN m) | true}
 
-let add_constraint_set t c =
-  {<|d with constraints = d.constraints union c|> | forall (d IN t) | true}
+let add_constraint_set m c =
+  {<|d with constraints = d.constraints union c|> | forall (d IN m) | true}
 
-let add_action t a =
-  {<|d with actions = d.actions union {a}|> | forall (d IN t) | true}
+let add_action m a =
+  {<|d with actions = d.actions union {a}|> | forall (d IN m) | true}
 
-let add_actions t acts =
-  {<|d with actions = d.actions union acts|> | forall (d IN t) | true}
+let add_actions m acts =
+  {<|d with actions = d.actions union acts|> | forall (d IN m) | true}
 
 module operators = struct
   let (-&-) = conj
@@ -74,42 +74,42 @@ module operators = struct
   let (</>) = (union)
   let (+&) = add_constraint
   let (+@) = add_action
-  let (-@>) t a = t -&> (init +@ a)
+  let (-@>) m a = m -&> (init +@ a)
 end
 
-let init_func = <|
+let init_lifted = <|
   break    = empty;
   continue = empty;
   normal   = init;
   return   = empty
 |>
 
-let break t = <|
-  break    = t;
+let break m = <|
+  break    = m;
   continue = empty;
   normal   = empty;
   return   = empty
 |>
 
-let continue t = <|
+let continue m = <|
   break    = empty;
-  continue = t;
+  continue = m;
   normal   = empty;
   return   = empty
 |>
 
-let normal t = <|
+let normal m = <|
   break    = empty;
   continue = empty;
-  normal   = t;
+  normal   = m;
   return   = empty
 |>
 
-let return t = <|
+let return m = <|
   break    = empty;
   continue = empty;
   normal   = empty;
-  return   = t
+  return   = m
 |>
 
 let collect_fs_actions m =
@@ -120,69 +120,69 @@ let collect_fs_actions m =
   |> in
   {add_call d | forall (d IN m) | true}     
 
-let flatten_func m =
-  collect_fs_actions (m.normal +& c`undef -/- m.return)
+let flatten ml =
+  collect_fs_actions (ml.normal +& c`undef -/- ml.return)
 
-let enter_loop t_pos t_neg m =
-  let t = m.continue -/- m.normal in <|
-    break    = m.break -/- (t -&> t_neg);
-    continue = m.empty;
-    normal   = t -&> t_pos;
-    return   = m.return
+let enter_loop m_pos m_neg ml =
+  let m = ml.continue -/- ml.normal in <|
+    break    = ml.break -/- (m -&> m_neg);
+    continue = empty;
+    normal   = m -&> m_pos;
+    return   = ml.return
   |>
 
-let exit_loop t_neg m =
-  <|init_func with
-    normal = m.break -/- ((m.continue -/- m.normal) -&> t_neg);
-    return = m.return
+let exit_loop m_neg l =
+  <|init_lifted with
+    normal = ml.break -/- ((ml.continue -/- ml.normal) -&> m_neg);
+    return = ml.return
   |>
 
-let conj_seq_before_func m1 m2 =
-  <|break    = m1.break    -/- (m1.normal -&> m2.break);
-    continue = m1.continue -/- (m1.normal -&> m2.continue);
-    normal   = m1.normal   -&> m2.normal;
-    return   = m1.return   -/- (m1.normal -&> m2.return)
+let conj_seq_before_lifted ml1 ml2 =
+  <|break    = ml1.break    -/- (ml1.normal -&> ml2.break);
+    continue = ml1.continue -/- (ml1.normal -&> ml2.continue);
+    normal   = ml1.normal   -&> ml2.normal;
+    return   = ml1.return   -/- (ml1.normal -&> ml2.return)
   |>
 
-let disj_func m1 m2 =
-  <|break    = m1.break    -/- m2.break;
-    continue = m1.continue -/- m2.continue;
-    normal   = m1.normal   -/- m2.normal;
-    return   = m1.return   -/- m2.return
+let disj_lifted ml1 ml2 =
+  <|break    = ml1.break    -/- ml2.break;
+    continue = ml1.continue -/- ml2.continue;
+    normal   = ml1.normal   -/- ml2.normal;
+    return   = ml1.return   -/- ml2.return
   |>
 
-let add_constraint_func m c = <|m with normal = m.normal +& c|>
+let add_constraint_lifted ml c = <|ml with normal = ml.normal +& c|>
 
-let add_action_func m a = <|m with normal = m.normal +@ a|>
+let add_action_lifted     ml a = <|ml with normal = ml.normal +@ a|>
 
-let add_action_entire_func m a =
-  <|break    = m.break    +@ a;
-    continue = m.continue +@ a;
-    normal   = m.normal   +@ a;
-    return   = m.return   +@ a
+let add_action_entire_lifted ml a =
+  <|break    = ml.break    +@ a;
+    continue = ml.continue +@ a;
+    normal   = ml.normal   +@ a;
+    return   = ml.return   +@ a
   |>
 
-let add_actions_entire_func_sb m actions' =
-  let t = {<|d with actions = actions'|> | forall (d IN init) | true} in <|
-    break    = m.break    -&> t;
-    continue = m.continue -&> t;
-    normal   = m.normal   -&> t;
-    return   = m.return   -&> t
+let add_actions_entire_lifted_sb ml actions' =
+  let m = {<|d with actions = actions'|> | forall (d IN init) | true} in <|
+    break    = ml.break    -&> m;
+    continue = ml.continue -&> m;
+    normal   = ml.normal   -&> m;
+    return   = ml.return   -&> m
   |>
 
-let add_constraint_entire_func m c =
-  <|break    = m.break    +& c;
-    continue = m.continue +& c;
-    normal   = m.normal   +& c;
-    return   = m.return   +& c
+let add_constraint_entire_lifted ml c =
+  <|break    = ml.break    +& c;
+    continue = ml.continue +& c;
+    normal   = ml.normal   +& c;
+    return   = ml.return   +& c
   |>
 
 module statement_operators = struct
   (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
-  let (--&>) = conj_seq_before_func
-  let (-//-) = disj_func
-  let (++&)  = add_constraint_entire_func
-  let (++@)  = add_action_func
+  let (--&>) = conj_seq_before_lifted
+  let (-//-) = disj_lifted
+  let (++&)  = add_constraint_entire_lifted
+  let (++@)  = add_action_lifted
 end
 
 module print = struct
