@@ -28,17 +28,17 @@ let uid (Action _ id) = id
 
 let is_call (Action a _) =
   match a with
-    | Call -> true
-    | _ -> false
+  | Call -> true
+  | _ -> false
   end
 
 let is_access (Action a _) =
   match a with
-    | Store   _ _ _   -> true
-    | FnStore _ _ _   -> true
-    | Load    _ _ _   -> true
-    | Modify  _ _ _ _ -> true
-    | _               -> false
+  | Store   _ _ _   -> true
+  | FnStore _ _ _   -> true
+  | Load    _ _ _   -> true
+  | Modify  _ _ _ _ -> true
+  | _               -> false
   end
 
 let is_fn_store = function
@@ -61,24 +61,24 @@ module Print = struct
     let eq = (^^^) (pp_s uid ^^^ P`colon) in
     let (^%^) d1 d2 = d1 ^^ P`comma ^^^ d2 in
     match action with
-      | Load t a v ->
-          eq (!^ "load")   ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
-      | Store t a v ->
-          eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
-      | FnStore t a v ->
-          eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
-      | Modify t a l v ->
-          eq (!^ "modify") ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
-      | Create t a ->
-          eq (!^ "create") ^^^ P`parens (pp_t t ^%^ pp_c a)
-      | Kill a ->
-          eq (!^ "kill")   ^^^ P`parens (pp_c a)
-      | Same a1 a2 ->
-          eq (!^ "same")   ^^^ P`parens (pp_c a1 ^%^ pp_c a2)
-      | Id a ->
-          eq (!^ "id")     ^^^ P`parens (pp_c a)
-      | Call ->
-          eq (!^ "call")
+    | Load t a v ->
+        eq (!^ "load")   ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | Store t a v ->
+        eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | FnStore t a v ->
+        eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | Modify t a l v ->
+        eq (!^ "modify") ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
+    | Create t a ->
+        eq (!^ "create") ^^^ P`parens (pp_t t ^%^ pp_c a)
+    | Kill a ->
+        eq (!^ "kill")   ^^^ P`parens (pp_c a)
+    | Same a1 a2 ->
+        eq (!^ "same")   ^^^ P`parens (pp_c a1 ^%^ pp_c a2)
+    | Id a ->
+        eq (!^ "id")     ^^^ P`parens (pp_c a)
+    | Call ->
+        eq (!^ "call")
     end
 
   let pp_latex a =
@@ -86,33 +86,33 @@ module Print = struct
     let pp_id (Action _ s) = !^ (Symbol`to_string_id s) in
     let pp_name (Action a _) =
       match a with
-        | Load    _ _ _   -> !^ "Load"
-        | Store   _ _ _   -> !^ "Store"
-        | FnStore _ _ _   -> !^ "Store"
-        | Modify  _ _ _ _ -> !^ "Modify"
-        | Create  _ _     -> !^ "Create"
-        | Kill    _       -> !^ "Kill"
-        | Same    _ _     -> !^ "Same"
-        | Id      _       -> !^ "Id"
-        | Call            -> !^ "Call"
+      | Load    _ _ _   -> !^ "Load"
+      | Store   _ _ _   -> !^ "Store"
+      | FnStore _ _ _   -> !^ "Store"
+      | Modify  _ _ _ _ -> !^ "Modify"
+      | Create  _ _     -> !^ "Create"
+      | Kill    _       -> !^ "Kill"
+      | Same    _ _     -> !^ "Same"
+      | Id      _       -> !^ "Id"
+      | Call            -> !^ "Call"
       end in
     let pp_args (Action a _) =
       let tt d = !^ "\\\\cc" ^^ P`braces d in
       match a with
-        | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
-        | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
-        | FnStore t a v   -> [tt (pp_t t); pp_c a; pp_c v]
-        | Modify  t a l v -> [tt (pp_t t); pp_c a; pp_c l; pp_c v]
-        | Create  t a     -> [tt (pp_t t); pp_c a]
-        | Kill    a       -> [pp_c a]
-        | Same    a1 a2   -> [pp_c a1; pp_c a2]
-        | Id      a       -> [pp_c a]
-        | Call            -> []
+      | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | FnStore t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | Modify  t a l v -> [tt (pp_t t); pp_c a; pp_c l; pp_c v]
+      | Create  t a     -> [tt (pp_t t); pp_c a]
+      | Kill    a       -> [pp_c a]
+      | Same    a1 a2   -> [pp_c a1; pp_c a2]
+      | Id      a       -> [pp_c a]
+      | Call            -> []
       end in
     let pp_opts args =
       match args with
-        | [] -> P`empty
-        | _ -> P`parens (P`sepmap (P`comma ^^ P`space) (fun i -> i) args)
+      | [] -> P`empty
+      | _ -> P`parens (P`sepmap (P`comma ^^ P`space) (fun i -> i) args)
       end in
     let context name id args =
       !^ "\\\\sem" ^^ P`braces name ^^ P`underscore ^^ P`braces id
@@ -156,7 +156,7 @@ module Memory = struct
 
   type obj =
     | Scalar of A`ctype * value
-    | Array of A`ctype * value Braun`t
+    | Array  of A`ctype * value Braun`t
 
   type mem = (Symbol`t, obj) Pmap`t
 
@@ -170,19 +170,19 @@ module Memory = struct
 
   let is_valid t addr =
     match addr with
-      | P`Base l -> Pmap`mem l t.mem
-      | P`Displaced l i s ->
-          match Map`find l t.mem with
-            | Some o ->
-                let (ct, length) =
-                  match o with
-                    | Scalar ct _  -> (ct, 1)
-                    | Array  ct vs -> (ct, Braun`size vs)
-                  end in
-                i >= 0 && i <= length && compare_size ct s
-            | None -> false
-         end
-      | P`NullAddress -> false
+    | P`Base      l     -> Pmap`mem l t.mem
+    | P`Displaced l i s ->
+        match Map`find l t.mem with
+        | Some o ->
+            let (ct, length) =
+              match o with
+              | Scalar ct _  -> (ct, 1)
+              | Array  ct vs -> (ct, Braun`size vs)
+              end in
+            i >= 0 && i <= length && compare_size ct s
+        | None -> false
+        end
+    | P`NullAddress -> false
     end
 
   let base_of = function
@@ -195,9 +195,9 @@ module Memory = struct
 
   let retrieve t addr =
     match addr with
-      | P`Base      l     -> Map`find l t.mem
-      | P`Displaced l i s -> Map`find l t.mem
-      | P`NullAddress     -> None
+    | P`Base      l     -> Map`find l t.mem
+    | P`Displaced l i s -> Map`find l t.mem
+    | P`NullAddress     -> None
     end
 
   let load_scalar t ct' v' ct v =
@@ -312,4 +312,4 @@ module Memory = struct
     with Undefined t ->
       P`complete (*print_endline "UNDEF";*) P`conj t.p C`undef
 *)
-end
+end	

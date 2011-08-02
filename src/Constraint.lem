@@ -19,123 +19,123 @@ type constant =
 let rec fold_map_const f const i =
   let fm = fold_map_const f in
   match const with
-    | Name    _ -> f const i
-    | Integer _ -> f const i
-    | Address _ -> f const i
-    | Null      -> f const i
-    | Offset c1 c2 c3 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        let (c3, i) = fm c3 i in
-        f (Offset c1 c2 c3) i
-    | Plus c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Plus c1 c2) i
-    | Minus c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Minus c1 c2) i
-    | Mod c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Mod c1 c2) i
-    | Mult c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Mult c1 c2) i
-    | Div c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Div c1 c2) i
-    | Pow c ->
-        let (c, i) = fm c i in
-        f (Pow c) i
-    | BitAnd c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (BitAnd c1 c2) i
-    | BitOr c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (BitOr c1 c2) i
-    | BitXor c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (BitXor c1 c2) i
-    | BitComplement c ->
-        let (c, i) = fm c i in
-        f (BitComplement c) i
-    | Fn s cs ->
-        let (cs, i) = List`fold_left
-          (fun (cs, i) c -> let (c, i) = f c i in (c::cs, i)) ([], i) cs in
-        f (Fn s cs) i
+  | Name    _ -> f const i
+  | Integer _ -> f const i
+  | Address _ -> f const i
+  | Null      -> f const i
+  | Offset c1 c2 c3 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      let (c3, i) = fm c3 i in
+      f (Offset c1 c2 c3) i
+  | Plus c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Plus c1 c2) i
+  | Minus c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Minus c1 c2) i
+  | Mod c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Mod c1 c2) i
+  | Mult c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Mult c1 c2) i
+  | Div c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Div c1 c2) i
+  | Pow c ->
+      let (c, i) = fm c i in
+      f (Pow c) i
+  | BitAnd c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (BitAnd c1 c2) i
+  | BitOr c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (BitOr c1 c2) i
+  | BitXor c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (BitXor c1 c2) i
+  | BitComplement c ->
+      let (c, i) = fm c i in
+      f (BitComplement c) i
+  | Fn s cs ->
+      let (cs, i) = List`fold_left
+        (fun (cs, i) c -> let (c, i) = f c i in (c::cs, i)) ([], i) cs in
+      f (Fn s cs) i
   end
 
 let rec compare_const const1 const2 =
   let (++) n p = if n = 0 then p else n in
   match (const1, const2) with
-    | (Name n1, Name n2) ->
-        Symbol`compare n1 n2
-    | (Address a1, Address a2) ->
-        Symbol`compare a1 a2
-    | (Null, Null) -> 0
-    | (Integer i1, Integer i2) ->
-        if i1 = i2 then 0
-        else if i1 < i2 then (0-1)
-        else 1
-    | (Offset c1 c2 c3, Offset c1' c2' c3') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-        ++ compare_const c3 c3'
-    | (Plus c1 c2, Plus c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Minus c1 c2, Minus c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Mod c1 c2, Mod c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Mult c1 c2, Mult c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Div c1 c2, Div c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Pow c1, Pow c2) ->
-        compare_const c1 c2
-    | (BitAnd c1 c2, BitAnd c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (BitOr c1 c2, BitOr c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (BitXor c1 c2, BitXor c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (BitComplement c1, BitComplement c2) ->
-        compare_const c1 c2
-    | (Fn n1 cs1, Fn n2 cs2) ->
-        List`fold_left2
-          (fun r c1 c2 -> r ++ compare_const c1 c2) (compare_num n1 n2) cs1 cs2
-    | (Name _         , _) -> ~1
-    | (Integer _      , _) -> ~1
-    | (Address _      , _) -> ~1
-    | (Null           , _) -> ~1
-    | (Offset _ _ _   , _) -> ~1
-    | (Plus _ _       , _) -> ~1
-    | (Minus _ _      , _) -> ~1
-    | (Mod _ _        , _) -> ~1
-    | (Mult _ _       , _) -> ~1
-    | (Div _ _        , _) -> ~1
-    | (Pow _          , _) -> ~1
-    | (BitAnd _ _     , _) -> ~1
-    | (BitOr _ _      , _) -> ~1
-    | (BitXor _ _     , _) -> ~1
-    | (BitComplement _, _) -> ~1
-    | (Fn _ _         , _) -> ~1
-    | _ -> 1
+  | (Name n1, Name n2) ->
+      Symbol`compare n1 n2
+  | (Address a1, Address a2) ->
+      Symbol`compare a1 a2
+  | (Null, Null) -> 0
+  | (Integer i1, Integer i2) ->
+      if i1 = i2 then 0
+      else if i1 < i2 then (0-1)
+      else 1
+  | (Offset c1 c2 c3, Offset c1' c2' c3') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+      ++ compare_const c3 c3'
+  | (Plus c1 c2, Plus c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Minus c1 c2, Minus c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Mod c1 c2, Mod c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Mult c1 c2, Mult c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Div c1 c2, Div c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Pow c1, Pow c2) ->
+      compare_const c1 c2
+  | (BitAnd c1 c2, BitAnd c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (BitOr c1 c2, BitOr c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (BitXor c1 c2, BitXor c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (BitComplement c1, BitComplement c2) ->
+      compare_const c1 c2
+  | (Fn n1 cs1, Fn n2 cs2) ->
+      List`fold_left2
+        (fun r c1 c2 -> r ++ compare_const c1 c2) (compare_num n1 n2) cs1 cs2
+  | (Name _         , _) -> ~1
+  | (Integer _      , _) -> ~1
+  | (Address _      , _) -> ~1
+  | (Null           , _) -> ~1
+  | (Offset _ _ _   , _) -> ~1
+  | (Plus _ _       , _) -> ~1
+  | (Minus _ _      , _) -> ~1
+  | (Mod _ _        , _) -> ~1
+  | (Mult _ _       , _) -> ~1
+  | (Div _ _        , _) -> ~1
+  | (Pow _          , _) -> ~1
+  | (BitAnd _ _     , _) -> ~1
+  | (BitOr _ _      , _) -> ~1
+  | (BitXor _ _     , _) -> ~1
+  | (BitComplement _, _) -> ~1
+  | (Fn _ _         , _) -> ~1
+  | _ -> 1
   end
 
 type constr =
@@ -154,102 +154,102 @@ type constr =
 let rec fold_constr f_c constr i =
   let f = fold_constr f_c in
   match constr with
-    | True  -> i
-    | False -> i
-    | Eq c1 c2 -> f_c c2 (f_c c1 i)
-    | Le c1 c2 -> f_c c2 (f_c c1 i)
-    | Lt c1 c2 -> f_c c2 (f_c c1 i)
-    | Not c -> f c i
-    | Or      c1 c2 -> f c2 (f c1 i)
-    | And     c1 c2 -> f c2 (f c1 i)
-    | Implies c1 c2 -> f c2 (f c1 i)
-    | If     c1 c2 c3 -> f c3 (f c2 (f c1 i))
-    | ConvInt _ c1 c2 -> f c1 (f_c c2 i)
+  | True  -> i
+  | False -> i
+  | Eq c1 c2 -> f_c c2 (f_c c1 i)
+  | Le c1 c2 -> f_c c2 (f_c c1 i)
+  | Lt c1 c2 -> f_c c2 (f_c c1 i)
+  | Not c -> f c i
+  | Or      c1 c2 -> f c2 (f c1 i)
+  | And     c1 c2 -> f c2 (f c1 i)
+  | Implies c1 c2 -> f c2 (f c1 i)
+  | If     c1 c2 c3 -> f c3 (f c2 (f c1 i))
+  | ConvInt _ c1 c2 -> f c1 (f_c c2 i)
   end
 
 let rec fold_map_constr f f_c constr i =
   let fm = fold_map_constr f f_c in
   match constr with
-    | Eq c1 c2 ->
-        let (c1, i) = f_c c1 i in
-        let (c2, i) = f_c c2 i in
-        f (Eq c1 c2) i
-    | Le c1 c2 ->
-        let (c1, i) = f_c c1 i in
-        let (c2, i) = f_c c2 i in
-        f (Le c1 c2) i
-    | Lt c1 c2 ->
-        let (c1, i) = f_c c1 i in
-        let (c2, i) = f_c c2 i in
-        f (Lt c1 c2) i
-    | Not c ->
-        let (c, i) = fm c i in
-        f (Not c) i
-    | Or c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Or c1 c2) i
-    | And c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (And c1 c2) i
-    | Implies c1 c2 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        f (Implies c1 c2) i
-    | If c1 c2 c3 ->
-        let (c1, i) = fm c1 i in
-        let (c2, i) = fm c2 i in
-        let (c3, i) = fm c3 i in
-        f (If c1 c2 c3) i
-    | ConvInt r c1 c2 ->
-        let (c1, i) = fm  c1 i in
-        let (c2, i) = f_c c2 i in
-        f (ConvInt r c1 c2) i
-    | _ -> f constr i
+  | Eq c1 c2 ->
+      let (c1, i) = f_c c1 i in
+      let (c2, i) = f_c c2 i in
+      f (Eq c1 c2) i
+  | Le c1 c2 ->
+      let (c1, i) = f_c c1 i in
+      let (c2, i) = f_c c2 i in
+      f (Le c1 c2) i
+  | Lt c1 c2 ->
+      let (c1, i) = f_c c1 i in
+      let (c2, i) = f_c c2 i in
+      f (Lt c1 c2) i
+  | Not c ->
+      let (c, i) = fm c i in
+      f (Not c) i
+  | Or c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Or c1 c2) i
+  | And c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (And c1 c2) i
+  | Implies c1 c2 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      f (Implies c1 c2) i
+  | If c1 c2 c3 ->
+      let (c1, i) = fm c1 i in
+      let (c2, i) = fm c2 i in
+      let (c3, i) = fm c3 i in
+      f (If c1 c2 c3) i
+  | ConvInt r c1 c2 ->
+      let (c1, i) = fm  c1 i in
+      let (c2, i) = f_c c2 i in
+      f (ConvInt r c1 c2) i
+  | _ -> f constr i
   end
 
 let rec compare_constr constr1 constr2 =
   let (++) n p = if n = 0 then p else n in
   match (constr1, constr2) with
-    | (Eq c1 c2, Eq c1' c2') ->
-        (compare_const c1 c1' ++ compare_const c2 c2')
-        ++ (compare_const c1 c2' ++ compare_const c2 c1')
-    | (Le c1 c2, Le c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Lt c1 c2, Lt c1' c2') ->
-        compare_const c1 c1'
-        ++ compare_const c2 c2'
-    | (Not c1, Not c2) ->
-        compare_constr c1 c2
-    | (Or c1 c2, Or c1' c2') ->
-        compare_constr c1 c1'
-        ++ compare_constr c2 c2'
-    | (And c1 c2, And c1' c2') ->
-        compare_constr c1 c1'
-        ++ compare_constr c2 c2'
-    | (Implies c1 c2, Implies c1' c2') ->
-        compare_constr c1 c1'
-        ++ compare_constr c2 c2'
-    | (If c1 c2 c3, If c1' c2' c3') ->
-        compare_constr c1 c1'
-        ++ compare_constr c2 c2'
-        ++ compare_constr c3 c3'
-    | (ConvInt _ c1 _, ConvInt _ c1' _) ->
-        compare_constr c1 c1'
-    | (True         , _) -> ~1
-    | (False        , _) -> ~1
-    | (Eq _ _       , _) -> ~1
-    | (Le _ _       , _) -> ~1
-    | (Lt _ _       , _) -> ~1
-    | (Not _        , _) -> ~1
-    | (Or _ _       , _) -> ~1
-    | (And _ _      , _) -> ~1
-    | (Implies _ _  , _) -> ~1
-    | (If _ _ _     , _) -> ~1
-    | (ConvInt _ _ _, _) -> ~1
-    | _ -> 1
+  | (Eq c1 c2, Eq c1' c2') ->
+      (compare_const c1 c1' ++ compare_const c2 c2')
+      ++ (compare_const c1 c2' ++ compare_const c2 c1')
+  | (Le c1 c2, Le c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Lt c1 c2, Lt c1' c2') ->
+      compare_const c1 c1'
+      ++ compare_const c2 c2'
+  | (Not c1, Not c2) ->
+      compare_constr c1 c2
+  | (Or c1 c2, Or c1' c2') ->
+      compare_constr c1 c1'
+      ++ compare_constr c2 c2'
+  | (And c1 c2, And c1' c2') ->
+      compare_constr c1 c1'
+      ++ compare_constr c2 c2'
+  | (Implies c1 c2, Implies c1' c2') ->
+      compare_constr c1 c1'
+      ++ compare_constr c2 c2'
+  | (If c1 c2 c3, If c1' c2' c3') ->
+      compare_constr c1 c1'
+      ++ compare_constr c2 c2'
+      ++ compare_constr c3 c3'
+  | (ConvInt _ c1 _, ConvInt _ c1' _) ->
+      compare_constr c1 c1'
+  | (True         , _) -> ~1
+  | (False        , _) -> ~1
+  | (Eq _ _       , _) -> ~1
+  | (Le _ _       , _) -> ~1
+  | (Lt _ _       , _) -> ~1
+  | (Not _        , _) -> ~1
+  | (Or _ _       , _) -> ~1
+  | (And _ _      , _) -> ~1
+  | (Implies _ _  , _) -> ~1
+  | (If _ _ _     , _) -> ~1
+  | (ConvInt _ _ _, _) -> ~1
+  | _ -> 1
   end
 
 type t = constr set
@@ -320,43 +320,43 @@ module Print = struct
     let f = P`parens -| pp_constant_inner f_s in
     let fp = pp_constant_inner f_s in
     match const with
-      | Null -> U`null
-      | Name    s -> !^ (f_s s)
-      | Integer i -> !^ (string_of_num i)
-      |  Address s ->
-          !^ "addr" ^^^ P`parens (!^ (f_s s))
-      | Offset base offset size ->
-          !^ "offset" ^^^ P`parens (fp base ^^ P`comma ^^^ fp offset ^^^ P`star ^^^ fp size)
-      | Plus  c1 c2 -> f c1 ^^^ P`plus    ^^^ f c2
-      | Minus c1 c2 -> f c1 ^^^ P`minus   ^^^ f c2
-      | Mult  c1 c2 -> f c1 ^^^ P`star    ^^^ f c2
-      | Mod   c1 c2 -> f c1 ^^^ P`percent ^^^ f c2
-      | Div   c1 c2 -> f c1 ^^^ P`slash   ^^^ f c2
-      | Pow c -> !^ "2" ^^ P`caret ^^ f c
-      | BitAnd c1 c2 -> !^ "bitand" ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
-      | BitOr  c1 c2 -> !^ "bitor"  ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
-      | BitXor c1 c2 -> !^ "xor"    ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
-      | BitComplement c -> !^ "compl" ^^^ P`parens (f c)
-      | Fn name args    -> !^ name    ^^^ P`parens (P`comma_list f args)
+    | Null -> U`null
+    | Name    s -> !^ (f_s s)
+    | Integer i -> !^ (string_of_num i)
+    |  Address s ->
+        !^ "addr" ^^^ P`parens (!^ (f_s s))
+    | Offset base offset size ->
+        !^ "offset" ^^^ P`parens (fp base ^^ P`comma ^^^ fp offset ^^^ P`star ^^^ fp size)
+    | Plus  c1 c2 -> f c1 ^^^ P`plus    ^^^ f c2
+    | Minus c1 c2 -> f c1 ^^^ P`minus   ^^^ f c2
+    | Mult  c1 c2 -> f c1 ^^^ P`star    ^^^ f c2
+    | Mod   c1 c2 -> f c1 ^^^ P`percent ^^^ f c2
+    | Div   c1 c2 -> f c1 ^^^ P`slash   ^^^ f c2
+    | Pow c -> !^ "2" ^^ P`caret ^^ f c
+    | BitAnd c1 c2 -> !^ "bitand" ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+    | BitOr  c1 c2 -> !^ "bitor"  ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+    | BitXor c1 c2 -> !^ "xor"    ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+    | BitComplement c -> !^ "compl" ^^^ P`parens (f c)
+    | Fn name args    -> !^ name    ^^^ P`parens (P`comma_list f args)
     end
 
   let rec pp_constr_inner f_s constr =
     let f = P`parens -| pp_constr_inner f_s in
     let f_c = pp_constant_inner f_s in
     match constr with
-      | True  -> !^ "true"
-      | False -> !^ "false"
-      | Eq      c1 c2 -> f_c c1 ^^^ P`equals  ^^^ f_c c2
-      | Le      c1 c2 -> f_c c1 ^^^ U`le      ^^^ f_c c2
-      | Lt      c1 c2 -> f_c c1 ^^^ P`langle  ^^^ f_c c2
-      | Or      c1 c2 -> f   c1 ^^^ U`disj    ^^^ f   c2
-      | And     c1 c2 -> f   c1 ^^^ U`conj    ^^^ f   c2
-      | Implies c1 c2 -> f   c1 ^^^ U`implies ^^^ f   c2
-      | Not c -> U`compl ^^^ f c
-      | If c1 c2 c3 ->
-          !^ "if" ^^^ f c1 ^^^ !^ "then" ^^^ f c2 ^^^ !^ "else" ^^^ f c3
-      | ConvInt _ c1 _ -> pp_constr_inner f_s c1
-   end
+    | True  -> !^ "true"
+    | False -> !^ "false"
+    | Eq      c1 c2 -> f_c c1 ^^^ P`equals  ^^^ f_c c2
+    | Le      c1 c2 -> f_c c1 ^^^ U`le      ^^^ f_c c2
+    | Lt      c1 c2 -> f_c c1 ^^^ P`langle  ^^^ f_c c2
+    | Or      c1 c2 -> f   c1 ^^^ U`disj    ^^^ f   c2
+    | And     c1 c2 -> f   c1 ^^^ U`conj    ^^^ f   c2
+    | Implies c1 c2 -> f   c1 ^^^ U`implies ^^^ f   c2
+    | Not c -> U`compl ^^^ f c
+    | If c1 c2 c3 ->
+        !^ "if" ^^^ f c1 ^^^ !^ "then" ^^^ f c2 ^^^ !^ "else" ^^^ f c3
+    | ConvInt _ c1 _ -> pp_constr_inner f_s c1
+    end
 
   let pp_constant_latex = pp_constant_inner Symbol`to_string_latex
   let pp_constant = pp_constant_inner Symbol`to_string_pretty
@@ -407,54 +407,54 @@ module Process = struct
 
   let convert_name p s =
     match Map`find s p.name_map with
-      | Some n -> (n, p)
-      | None   ->
-          let (n, p) = n_fresh p in
-          (n, <|p with name_map = Pmap`add s n p.name_map|>)
+    | Some n -> (n, p)
+    | None   ->
+        let (n, p) = n_fresh p in
+        (n, <|p with name_map = Pmap`add s n p.name_map|>)
     end
 
   let convert_addr p a =
     match Map`find a p.name_map with
-      | Some n -> (n, p)
-      | None   ->
-          let (n, p) = n_fresh p in
-          let p = <|p with
-            name_map = Pmap`add a n p.name_map;
-            const_map = Pmap`add n (Address a) p.const_map
-          |> in
-          (n, p)
+    | Some n -> (n, p)
+    | None   ->
+        let (n, p) = n_fresh p in
+        let p = <|p with
+          name_map = Pmap`add a n p.name_map;
+          const_map = Pmap`add n (Address a) p.const_map
+        |> in
+        (n, p)
      end
 
   let convert_int p i =
     match Map`find i p.int_map with
-      | Some n -> (n, p)
-      | None   ->
-          let (n, p) = n_fresh p in
-          let p = <|p with
-            int_map = Pmap`add i n p.int_map;
-            const_map = Pmap`add n (Integer i) p.const_map
-          |> in
-          (n, p)
+    | Some n -> (n, p)
+    | None   ->
+        let (n, p) = n_fresh p in
+        let p = <|p with
+          int_map = Pmap`add i n p.int_map;
+          const_map = Pmap`add n (Integer i) p.const_map
+        |> in
+        (n, p)
     end
 
   let convert_fn p s =
     match Map`find s p.fn_map with
-      | Some n -> (n, p)
-      | None   ->
-          let (n, p) = n_fresh p in
-          (n, <|p with fn_map = Pmap`add s n p.fn_map|>)
+    | Some n -> (n, p)
+    | None   ->
+        let (n, p) = n_fresh p in
+        (n, <|p with fn_map = Pmap`add s n p.fn_map|>)
     end
 
   let apply p n1 n2 =
     match Map`find (n1, n2) p.apply_map with
-      | Some n -> (n, p)
-      | None   ->
-          let (n, p) = n_fresh p in
-          let p = <|p with
-            apply_map = Pmap`add (n1, n2) n p.apply_map;
-            cc = Cc`merge p.cc (Cc`Apply (n1, n2)) n
-          |> in
-          (n, p)
+    | Some n -> (n, p)
+    | None   ->
+        let (n, p) = n_fresh p in
+        let p = <|p with
+          apply_map = Pmap`add (n1, n2) n p.apply_map;
+          cc = Cc`merge p.cc (Cc`Apply (n1, n2)) n
+        |> in
+        (n, p)
     end
 
   let rec convert_const c p =
@@ -469,27 +469,27 @@ module Process = struct
     let f2 n c1 c2    = chain (n, p) [c1; c2] in
     let f3 n c1 c2 c3 = chain (n, p) [c1; c2; c3] in
     match c with
-      | Null -> (n_null, p)
-      | Name    n -> convert_name p n
-      | Integer i -> convert_int p i
-      | Address a -> convert_addr p a
-      | Pow c -> f1 n_pow c
-      | Plus   c1 c2 -> f2 n_plus   c1 c2
-      | Minus  c1 c2 -> f2 n_minus  c1 c2
-      | Mod    c1 c2 -> f2 n_modulo c1 c2
-      | Mult   c1 c2 -> f2 n_mult   c1 c2
-      | Div    c1 c2 -> f2 n_div    c1 c2
-      | BitAnd c1 c2 -> f2 n_bitand c1 c2
-      | BitOr  c1 c2 -> f2 n_bitor  c1 c2
-      | BitXor c1 c2 -> f2 n_bitxor c1 c2
-      | BitComplement c -> f1 n_bitcomplement c
-      | Offset c1 c2 c3 ->
-          let (n, p) = f3 n_offset c1 c2 c3 in
-          if Pmap`mem n p.const_map then
-            (n, p)
-          else
-            (n, <|p with const_map = Pmap`add n (Offset c1 c2 c3) p.const_map|>)
-      | Fn s cs -> chain (convert_fn p s) cs
+    | Null -> (n_null, p)
+    | Name    n -> convert_name p n
+    | Integer i -> convert_int p i
+    | Address a -> convert_addr p a
+    | Pow c -> f1 n_pow c
+    | Plus   c1 c2 -> f2 n_plus   c1 c2
+    | Minus  c1 c2 -> f2 n_minus  c1 c2
+    | Mod    c1 c2 -> f2 n_modulo c1 c2
+    | Mult   c1 c2 -> f2 n_mult   c1 c2
+    | Div    c1 c2 -> f2 n_div    c1 c2
+    | BitAnd c1 c2 -> f2 n_bitand c1 c2
+    | BitOr  c1 c2 -> f2 n_bitor  c1 c2
+    | BitXor c1 c2 -> f2 n_bitxor c1 c2
+    | BitComplement c -> f1 n_bitcomplement c
+    | Offset c1 c2 c3 ->
+        let (n, p) = f3 n_offset c1 c2 c3 in
+        if Pmap`mem n p.const_map then
+          (n, p)
+        else
+          (n, <|p with const_map = Pmap`add n (Offset c1 c2 c3) p.const_map|>)
+    | Fn s cs -> chain (convert_fn p s) cs
     end
 
   let lift p f = Set`fold f p.t p
@@ -499,14 +499,14 @@ module Process = struct
 
   let collect p b constr =
     match constr with
-      | Eq c1 c2 ->
-          let (n1, p1) = convert_const c1 p  in
-          let (n2, p2) = convert_const c2 p1 in
-          (true, <|p2 with
-            cc = Cc`merge_constants p2.cc n1 n2;
-            eqs = Set`add constr p.eqs
-          |>)
-      | _ -> (b, p)
+    | Eq c1 c2 ->
+        let (n1, p1) = convert_const c1 p  in
+        let (n2, p2) = convert_const c2 p1 in
+        (true, <|p2 with
+          cc = Cc`merge_constants p2.cc n1 n2;
+          eqs = Set`add constr p.eqs
+        |>)
+    | _ -> (b, p)
     end
 
   let collect_eqs p = Set`fold (fun c (b, p) -> collect p b c) p.t (false, p)
@@ -525,37 +525,37 @@ module Process = struct
         let (n2, p2) = normalise_const p1 c in
         (c, <|p2 with cc = Cc`merge_constants p.cc n1 n2|>) in
       match const with
-        | Offset a (Integer i) _ ->
-            if i = 0 then replace a else (const, p)
-        | Offset (Offset a o1 s1) o2 s2 ->
-            if compare_const s1 s2 = 0 then
-              replace (Offset a (Plus o1 o2) s1)
-            else (const, p)
-        | Plus (Integer i1) (Integer i2) ->
-            replace (Integer (i1 + i2))
-        | Minus (Integer i1) (Integer i2) ->
-            replace (Integer (i1 - i2))
-        | Mult (Integer i1) (Integer i2) ->
-            replace (Integer (i1 * i2))
-        | Mod (Integer i1) (Integer i2) ->
-            if i2 <> 0 then
-              replace (Integer (i1 % i2))
-            else (const, p)
-        | Div (Integer i1) (Integer i2) ->
-            if i2 <> 0 then
-              replace (Integer (i1 / i2))
-            else (const, p)
-        | Pow (Integer i) ->
-            replace (Integer (2 ** i))
-        | Name _ ->
-            let (n, p) = normalise_const p const in
-            let n =
-              match Map`find n p.const_map with
-                | Some n' -> n'
-                | None -> const
-              end in
-            (n, p)
-        | _ -> (const, p)
+      | Offset a (Integer i) _ ->
+          if i = 0 then replace a else (const, p)
+      | Offset (Offset a o1 s1) o2 s2 ->
+          if compare_const s1 s2 = 0 then
+            replace (Offset a (Plus o1 o2) s1)
+          else (const, p)
+      | Plus (Integer i1) (Integer i2) ->
+          replace (Integer (i1 + i2))
+      | Minus (Integer i1) (Integer i2) ->
+          replace (Integer (i1 - i2))
+      | Mult (Integer i1) (Integer i2) ->
+          replace (Integer (i1 * i2))
+      | Mod (Integer i1) (Integer i2) ->
+          if i2 <> 0 then
+            replace (Integer (i1 % i2))
+          else (const, p)
+      | Div (Integer i1) (Integer i2) ->
+          if i2 <> 0 then
+            replace (Integer (i1 / i2))
+          else (const, p)
+      | Pow (Integer i) ->
+          replace (Integer (2 ** i))
+      | Name _ ->
+          let (n, p) = normalise_const p const in
+          let n =
+            match Map`find n p.const_map with
+            | Some n' -> n'
+            | None -> const
+            end in
+          (n, p)
+      | _ -> (const, p)
       end in
     fold_map_const simplify const p
 
@@ -566,75 +566,75 @@ module Process = struct
         let (n2, p2) = normalise_const p1 c2 in
         <|p2 with cc = Cc`merge_constants p.cc n1 n2|> in
       match constr with
-        | Not False -> (True, p)
-        | Not True  -> (False, p)
-        | Or True _ -> (True, p)
-        | Or _ True -> (True, p)
-        | Or False False -> (False, p)
-        | Or c1 False -> (c1, p)
-        | Or False c2 -> (c2, p)
-        | And False _ -> (False, p)
-        | And _ False -> (False, p)
-        | And True True -> (True, p)
-        | And c1 True -> (c1, p)
-        | And True c2 -> (c2, p)
-        | Implies False _ -> (True, p)
-        | Implies True c2 -> (c2, p)
-        | Implies c1 True -> (True, p)
-        | Implies c1 False -> (Not c1, p)
-        | If True c2 _ -> (c2, p)
-        | If False _ c3 -> (c3, p)
-        | Le (Integer i1) (Integer i2) ->
-            (if i1 <= i2 then True else False, p)
-        | Lt (Integer i1) (Integer i2) ->
-            (if i1 <  i2 then True else False, p)
-        | Lt a1 (Offset a2' (Integer i2) s2) ->
-            if compare_const a1 a2' = 0 then
-              if 0 < i2
-                then (True, p)
-                else (False, p)
-            else
-              match a1 with
-                | Offset a1' (Integer i1) s1 ->
-                    if compare_const a1' a2' = 0 && compare_const s1 s2 = 0 then
-                      if i1 < i2
-                        then (True, p)
-                        else (False, p)
-                    else (constr, p)
-                | _ -> (constr, p)
-              end
-        | Eq (Integer i1) (Integer i2) ->
-            if i1 = i2
-              then (True,  p)
+      | Not False -> (True,  p)
+      | Not True  -> (False, p)
+      | Or True  _     -> (True,  p)
+      | Or _     True  -> (True,  p)
+      | Or False False -> (False, p)
+      | Or c1    False -> (c1, p)
+      | Or False c2    -> (c2, p)
+      | And False _     -> (False, p)
+      | And _     False -> (False, p)
+      | And True  True  -> (True,  p)
+      | And c1    True  -> (c1,    p)
+      | And True  c2    -> (c2,    p)
+      | Implies False _     -> (True,   p)
+      | Implies True  c2    -> (c2,     p)
+      | Implies c1    True  -> (True,   p)
+      | Implies c1    False -> (Not c1, p)
+      | If True  c2 _  -> (c2, p)
+      | If False _  c3 -> (c3, p)
+      | Le (Integer i1) (Integer i2) ->
+          (if i1 <= i2 then True else False, p)
+      | Lt (Integer i1) (Integer i2) ->
+          (if i1 <  i2 then True else False, p)
+      | Lt a1 (Offset a2' (Integer i2) s2) ->
+          if compare_const a1 a2' = 0 then
+            if 0 < i2
+              then (True, p)
               else (False, p)
-        | Eq (Address a1) (Address a2) ->
-            if a1 = a2
-              then (True,  p)
-              else (False, p)
-        | Eq c1 c2 ->
-            let (n1, p1) = normalise_const p  c1 in
-            let (n2, p2) = normalise_const p1 c2 in
-            if compare_const c1 c2 = 0 then
-              (True, merge p2 c1 c2)
-            else
-              let (b, cc') = Cc`congruent_constants p.cc n1 n2 in
-              let p3 = <|p2 with cc = cc'|> in
-              if b
-                then (True,   p3)
-                else (constr, p3)
-        | Le c1 c2 ->
-            let (n1, p1) = normalise_const p  c1 in
-            let (n2, p2) = normalise_const p1 c2 in
+          else
+            match a1 with
+            | Offset a1' (Integer i1) s1 ->
+                if compare_const a1' a2' = 0 && compare_const s1 s2 = 0 then
+                  if i1 < i2
+                    then (True, p)
+                    else (False, p)
+                else (constr, p)
+            | _ -> (constr, p)
+            end
+      | Eq (Integer i1) (Integer i2) ->
+          if i1 = i2
+            then (True,  p)
+            else (False, p)
+      | Eq (Address a1) (Address a2) ->
+          if a1 = a2
+            then (True,  p)
+            else (False, p)
+      | Eq c1 c2 ->
+          let (n1, p1) = normalise_const p  c1 in
+          let (n2, p2) = normalise_const p1 c2 in
+          if compare_const c1 c2 = 0 then
+            (True, merge p2 c1 c2)
+          else
             let (b, cc') = Cc`congruent_constants p.cc n1 n2 in
             let p3 = <|p2 with cc = cc'|> in
             if b
               then (True,   p3)
               else (constr, p3)
-        | ConvInt r (If _ c2 _) (Integer i) ->
-            if Range`in_range r i
-              then (c2, p)
-              else (constr, p)
-        | _ -> (constr, p)
+      | Le c1 c2 ->
+          let (n1, p1) = normalise_const p  c1 in
+          let (n2, p2) = normalise_const p1 c2 in
+          let (b, cc') = Cc`congruent_constants p.cc n1 n2 in
+          let p3 = <|p2 with cc = cc'|> in
+          if b
+            then (True,   p3)
+            else (constr, p3)
+      | ConvInt r (If _ c2 _) (Integer i) ->
+          if Range`in_range r i
+            then (c2, p)
+            else (constr, p)
+      | _ -> (constr, p)
       end in
     let simplify_all = fold_map_constr simplify_constr simplify_const in
     let (p, t') = Set`fold_map simplify_all p.t p in
@@ -644,8 +644,8 @@ module Process = struct
     let norm p m n c =
       let (c, p) =
         match c with
-          | Offset _ _ _ -> simplify_const c p
-          | _            -> (c, p) 
+        | Offset _ _ _ -> simplify_const c p
+        | _            -> (c, p) 
         end in
       let (n, cc') = Cc`normalise_constant p.cc n in
       (Pmap`add n c m, <|p with cc = cc'|>) in
@@ -663,8 +663,8 @@ module Process = struct
       >> simplify
       >> check_unsat in
     match collect_eqs (rewrite p) with
-      | (true,  p) -> simplify_loop p
-      | (false, p) -> p
+    | (true,  p) -> simplify_loop p
+    | (false, p) -> p
     end
 
   let add_constr p constr =
@@ -712,12 +712,12 @@ module Process = struct
   let address p const =
     let (const, p) = rewrite p const in
     match address_aux const with
-      | Some addr -> (addr, p)
-      | None ->
-          let (const, p) = rewrite (simplify_loop p) const in
-          match address_aux const with
-            | Some addr -> (addr, p)
-            | None      -> (NaA,  p)
-         end
+    | Some addr -> (addr, p)
+    | None ->
+        let (const, p) = rewrite (simplify_loop p) const in
+        match address_aux const with
+        | Some addr -> (addr, p)
+        | None      -> (NaA,  p)
+        end
     end
 end

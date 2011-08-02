@@ -73,7 +73,7 @@ let rec
         (Pmap`find id env, M`init)
       else
         f_lvalue exp >>= fun (a, m) ->
-        C`fresh >>= fun v      ->
+        C`fresh      >>= fun v      ->
         let load = action`load (lvalue_type exp) a v in
         unit (v, m -@> load)
   | A`CONSTANT (cabs`CONST_INT (i, _)) -> (C`const i, M`init)
