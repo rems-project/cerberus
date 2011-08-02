@@ -588,17 +588,21 @@ module Process = struct
             (if i1 <= i2 then True else False, p)
         | Lt (Integer i1) (Integer i2) ->
             (if i1 <  i2 then True else False, p)
-(*
-        | Lt a1 (Offset a2 (Integer i2) _) when compare_const a1 a2 = 0 ->
-            if 0 < i2
-              then (True, p)
-              else (False, p)
-        | Lt (Offset a1 (Integer i1) s1) (Offset a2 (Integer i2 s2))
-            when compare_const a1 a2 = 0 && compare_const s1 s2 = 0 ->
-            if i1 < i2
-              then (True, p)
-              else (False, p)
-*)
+        | Lt a1 (Offset a2' (Integer i2) s2) ->
+            if compare_const a1 a2' = 0 then
+              if 0 < i2
+                then (True, p)
+                else (False, p)
+            else
+              match a1 with
+                | Offset a1' (Integer i1) s1 ->
+                    if compare_const a1' a2' = 0 && compare_const s1 s2 = 0 then
+                      if i1 < i2
+                        then (True, p)
+                        else (False, p)
+                    else (constr, p)
+                | _ -> (constr, p)
+              end
         | Eq (Integer i1) (Integer i2) ->
             if i1 = i2
               then (True,  p)
