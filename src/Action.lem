@@ -14,15 +14,15 @@ type action =
 
 type t = Action of action * Symbol`t
 
-let load     t a v   = symbol_state`fresh (Action (Load   t a v))
-let store    t a v   = symbol_state`fresh (Action (Store  t a v))
-let fn_store t a v   = symbol_state`fresh (Action (Store  t a v))
-let modify   t a l v = symbol_state`fresh (Action (Modify t a l v))
-let create   t a     = symbol_state`fresh (Action (Create t a))
-let kill a           = symbol_state`fresh (Action (Kill     a))
-let id a             = symbol_state`fresh (Action (Id       a))
-let same a a'        = symbol_state`fresh (Action (Same a a'))
-let call             = symbol_state`fresh (Action (Call))
+let load     t a v   = Symbol_state`fresh (Action (Load   t a v))
+let store    t a v   = Symbol_state`fresh (Action (Store  t a v))
+let fn_store t a v   = Symbol_state`fresh (Action (Store  t a v))
+let modify   t a l v = Symbol_state`fresh (Action (Modify t a l v))
+let create   t a     = Symbol_state`fresh (Action (Create t a))
+let kill a           = Symbol_state`fresh (Action (Kill     a))
+let id a             = Symbol_state`fresh (Action (Id       a))
+let same a a'        = Symbol_state`fresh (Action (Same a a'))
+let call             = Symbol_state`fresh (Action (Call))
 
 let uid (Action _ id) = id
 
@@ -156,7 +156,7 @@ module Memory = struct
 
   type obj =
     | Scalar of A`ctype * value
-    | Array of A`ctype * value Array`t
+    | Array of A`ctype * value Braun`t
 
   type mem = (Symbol`t, obj) Pmap`t
 
@@ -172,12 +172,12 @@ module Memory = struct
     match addr with
       | P`Base l -> Pmap`mem l t.mem
       | P`Displaced l i s ->
-          match maP`find l t.mem with
+          match Map`find l t.mem with
             | Some o ->
                 let (ct, length) =
                   match o with
                     | Scalar ct _  -> (ct, 1)
-                    | Array  ct vs -> (ct, Array`size vs)
+                    | Array  ct vs -> (ct, Braun`size vs)
                   end in
                 i >= 0 && i <= length && compare_size ct s
             | None -> false
@@ -195,8 +195,8 @@ module Memory = struct
 
   let retrieve t addr =
     match addr with
-      | P`Base      l     -> maP`find l t.mem
-      | P`Displaced l i s -> maP`find l t.mem
+      | P`Base      l     -> Map`find l t.mem
+      | P`Displaced l i s -> Map`find l t.mem
       | P`NullAddress     -> None
     end
 
@@ -214,26 +214,28 @@ module Memory = struct
   let load_event t ct a v =
     let (addr, t) = address t a in
     match retrieve t addr with
-      | Scalar _ Indeterminate ->
-          None
-      | Scalar ct' (Value v') ->
-          load_scalar t ct' v' ct v
-      | Array ct' vs' when t`compatible ct' ct ->
+    | Scalar _ Indeterminate ->
+        None
+    | Scalar ct' (Value v') ->
+        load_scalar t ct' v' ct v
+    | Array ct' vs' ->
+        if t`compatible ct' ct then
           match addr with
-            | P`Base _ ->
-                match Array`get vs' 0 with
-                  | Value v' -> load_scalar t ct' v' ct v
-                  | Indeterminate -> None
+          | P`Base _ ->
+              match Braun`get vs' 0 with
+              | Value v' -> load_scalar t ct' v' ct v
+              | Indeterminate -> None
+              end
+          | P`Displaced _ i s ->
+              if i >= 0 && i < Braun`size vs' && compare_size ct' s then
+                match Braun`get vs' i with
+                | Value v' -> load_scalar t ct' v' ct v
+                | Indeterminate -> None
                 end
-            | P`Displaced _ i s ->
-                if i >= 0 && i < Array`size vs' && compare_size ct' s then
-                  match Array`get vs' i with
-                    | Value v' -> load_scalar t ct' v' ct v
-                    | Indeterminate -> None
-                  end
-                else None
+              else None
           end
-      | _ -> None
+        else None
+    | _ -> None
     end
 
   let write_scalar t ct' ct v =
@@ -250,53 +252,57 @@ module Memory = struct
   let write_event t ct a v =
     let (addr, t) = address t a in
     match (retrieve t addr) with
-      | Scalar ct' _ ->
-          let (v, t) = write_scalar t ct' ct v in
-          <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
-      | Array (ct', vs') when t`compatible ct' ct ->
+    | Scalar ct' _ ->
+        let (v, t) = write_scalar t ct' ct v in
+        <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
+    | Array (ct', vs') ->
+        if t`compatible ct' ct
           match addr with
-            | P`Base _ ->
+          | P`Base _ ->
+              let (v, t) = write_scalar t ct' ct v in
+              let vs = Braun`set vs' 0 v in
+              <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
+          | P`Displaced _ i s ->
+              if i >= 0 && i < Braun`size vs' && compare_size ct' s then
                 let (v, t) = write_scalar t ct' ct v in
-                let vs = Array`set vs' 0 v in
+                let vs = Braun`set vs' i v in
                 <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
-            | P`Displaced _ i s ->
-                if i >= 0 && i < Array`size vs' && compare_size ct' s then
-                  let (v, t) = write_scalar t ct' ct v in
-                  let vs = Array`set vs' i v in
-                  <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
-                else () 
+              else () 
           end
-      | _ -> ()
+        else ()
+    | _ -> ()
     end
 
   let event t ((_, action) as a) =
-(*    document`print (print`pp a); print_endline "";*)
+(*    Document`Print (Print`pp a); print_endline "";*)
     match action with
-      | Id a ->
-          let (addr, t) = address t a in
-          if is_valid t addr then t else raise (Undefined t)
-      | Same a1 a2 ->
-          let (addr1, t) = address t a1 in
-          let (addr2, t) = address t a2 in
-          if same_base t addr1 addr2 then t else raise (Undefined t)
-      | Create ct a when t`is_scalar ct ->
+    | Id a ->
+        let (addr, t) = address t a in
+        if is_valid t addr then t else raise (Undefined t)
+    | Same a1 a2 ->
+        let (addr1, t) = address t a1 in
+        let (addr2, t) = address t a2 in
+        if same_base t addr1 addr2 then t else raise (Undefined t)
+    | Create ct a -> 
+        if t`is_scalar ct then
           let (addr, t) = address t a in
           <|t with mem = Pmap`add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
-      | Create ct a when t`is_array ct ->
+        else if t`is_array ct then
           let (addr, t) = address t a in
-          let value = Array`create (t`size_of_array ct) Indeterminate in
+          let value = Braun`create (t`size_of_array ct) Indeterminate in
           let obj = Array (t`base_of_array ct, value) in
           <|t with mem = Pmap`add (base_of addr) obj t.mem|>
-      | Kill a ->
-          let (addr, t) = address t a in
-          <|t with mem = Pmap`remove (base_of addr) t.mem|>
-      | Load    ct a v -> load_event  t ct a v
-      | Store   ct a v -> write_event t ct a v
-      | FnStore ct a v -> write_event t ct a v
-      | Modify  ct a v v' ->
-          let t = load_event t ct a v in
-          write_event t ct a v'
-      | Call -> t
+        else ()
+    | Kill a ->
+        let (addr, t) = address t a in
+        <|t with mem = Pmap`remove (base_of addr) t.mem|>
+    | Load    ct a v -> load_event  t ct a v
+    | Store   ct a v -> write_event t ct a v
+    | FnStore ct a v -> write_event t ct a v
+    | Modify  ct a v v' ->
+        let t = load_event t ct a v in
+        write_event t ct a v'
+    | Call -> t
     end
 
   let replay p' es =
