@@ -1,0 +1,383 @@
+open Meaning`Operators
+open Meaning`Statement_operators
+
+module A = Ail
+module C = Constraint
+module M = Meaning
+module T = Types
+
+module Tc = Type_constraint
+
+let undef = C`eq (C`fresh_named "UNDEFINED") C`one
+
+let exp_type    = annotate`exp_type_of
+let lvalue_type = annotate`lvalue_type_of
+
+let is_function_id file e =
+  match e with
+    | A`Exp _ (A`VARIABLE fid)) ->
+        map`find fid file.A`fn_map
+    | _ -> None
+  end
+
+let update_env env ids =
+  List`fold_left (fun e id -> Pmap`add id (C`fresh_address ()) e) env ids
+
+let conv t t' (c, m) =
+  let (a, constr) = Tc`conv t t' c in
+  (a, m +& constr)
+
+let conv_int t (c, m) =
+  let (a, constr) = Tc`conv_int t c in
+  (a, m +& constr)
+
+let rec iterate f_s f _e n ml e s =
+  let m_neg (a, m) = m +& (C`eq  a C`zero) in
+  let m_pos (a, m) = m +& (C`neq a C`zero) in
+  f_e e >>= fun m   ->
+  f_s s >>= fun ml' ->
+  match n with
+  | 0 -> unit (M`exit_loop (m_neg m) ml)
+  | _ -> iterate (M`enter_loop (m_pos m) (m_neg m) ml --&> ml') (n-1)
+end
+
+let rec
+| reduce_lvalue n b env file exp =
+  let f = reduce_exp n b env file in
+  let f_lvalue = reduce_lvalue n b env file in
+  match annotate`exp_of exp with
+  | A`VARIABLE id ->
+      unit (Pmap`find id env, M`init)
+  | A`UNARY A`INDIRECTION e ->
+      f e >>= fun (a, m) ->
+      let t = T`base_of_pointer (T`pointer_convert (exp_type e)) in
+      let ill_aligned = C`neg (Tc`align t a) in
+      let null = C`eq a C`null in
+      let c = C`implies (C`disj null ill_aligned) C`undef in
+      unit (a, m +& c)
+  end
+
+| reduce_exp n b env file exp =
+  let f = reduce_exp n b env file in
+  let f_lvalue e =
+    let (a, m) = reduce_lvalue n b env file e in
+    (a, m -@> action`id a) in
+  let lookup_type id = fst (Pmap`find id file.A`id_map) in
+  let conv_exp e = f e >>= conv_int (exp_type exp) in
+  let usual_arithmetic e1 e2 =
+    T`usual_arithmetic (exp_type e1) (exp_type e2) in
+  let overflow t c = C`implies (C`neg (Tc`in_range t c)) C`undef in
+  match annotate`exp_of exp with
+  | A`VARIABLE id ->
+      if T`is_array (lookup_type id) then
+        (Pmap`find id env, M`init)
+      else
+        f_lvalue exp >>= fun (a, m) ->
+        C`fresh >>= fun v      ->
+        let load = action`load (lvalue_type exp) a v in
+        unit (v, m -@> load)
+  | A`CONSTANT (cabs`CONST_INT (i, _)) -> (C`const i, M`init)
+  | A`UNARY A`POSTFIX_INCR e ->
+      f_lvalue e >>= fun (a, m) ->
+      C`fresh    >>= fun v      ->
+      let incr = C`plus v C`one in
+      conv_int (exp_type e) (incr, M`init) >>= fun (v', m') ->
+      let modify = action`modify (lvalue_type e) a v v' in
+      unit (v, (m -&- m') -@> modify)
+  | A`UNARY A`POSTFIX_DECR e ->
+      f_lvalue e >>= fun (a, m) ->
+      C`fresh    >>= fun v      ->
+      let decr = C`minus v C`one in
+      conv_int (exp_type e) (decr, M`init) >>= fun (a', m') ->
+      let modify = action`modify (lvalue_type e) a v a' in
+      unit (v, (m -&- m') -@> modify)
+  | A`UNARY A`ADDRESS (A`Exp _ A`UNARY A`INDIRECTION e) -> f e
+  | A`UNARY A`ADDRESS e -> f_lvalue e
+  | A`CAST t e -> conv t (exp_type e) (f e)
+  | A`BINARY (cabs`ARITHMETIC cabs`ADD) e1 e2 ->
+      if T`is_arithmetic (exp_type e1) && T`is_arithmetic (exp_type e2) then
+        conv_exp e1 >>= fun (a1, m1) ->
+        conv_exp e2 >>= fun (a2, m2) ->
+        let sum = C`plus a1 a2 in
+        if T`is_signed_integer(exp_type exp) then
+          let c = overflow (exp_type exp) sum in
+          unit (sum, m1 -&- m2 +& c)
+        else
+          let (a, m) = conv_int (exp_type exp) (C`plus a1 a2, M`init) in
+          unit (a, m1 -&- m2 -&- m)
+      else
+        (* Pointer arithmetic. *)
+        f e1 >>= fun (a1, m1) ->
+        f e2 >>= fun (a2, m2) ->
+        if T`is_pointer (exp_type e1) then
+          let size = Tc`size (T`base_of_pointer (exp_type e1)) in
+          let a = C`offset a1 a2 size in
+          unit (a, (m1 -&- m2) -@> action`same a1 a)
+        else
+          let size = Tc`size (T`base_of_pointer (exp_type e2)) in
+          let a = C`offset a2 a1 size in
+          unit (a, (m1 -&- m2) -@> action`same a a1)
+  | A`BINARY (cabs`ARITHMETIC cabs`SUB) e1 e2 ->
+      if T`is_arithmetic (exp_type e1) && T`is_arithmetic (exp_type e2) then
+        conv_exp e1 >>= fun (a1, m1) ->
+        conv_exp e2 >>= fun (a2, m2) ->
+        let diff = C`minus a1 a2 in
+        if T`is_signed_integer (exp_type exp) then
+          let c = overflow (exp_type exp) diff in
+          unit (diff, (m1 -&- m2) +& c)
+        else
+          let (a, m) = conv_int (exp_type exp) (C`minus a1 a2, M`init) in
+          unit (a, m1 -&- m2 -&- m)
+      else (*if T`is_integer (exp_type e2) then*)
+        (* Pointer arithmetic. *)
+        f e1 >>= fun (a1, m1) ->
+        f e2 >>= fun (a2, m2) ->
+        let size = Tc`size (T`base_of_pointer (exp_type e1)) in
+        let a = C`offset a1 (C`minus C`zero a2) size in
+        unit (a, (m1 -&- m2) -@> action`same a1 a)
+  | A`BINARY (cabs`ARITHMETIC cabs`MOD) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_exp e2 >>= fun (a2, m2) ->
+      let modulo = C`modulo a1 a2 in
+      let div_zero = C`implies (C`eq a2 C`zero) C`undef in
+      if T`is_signed_integer(exp_type exp) then
+        let c = overflow (exp_type exp) (C`div a1 a2) in
+        unit (modulo, (m1 -&- m2) +& div_zero +& c)
+      else
+        unit (a, (m1 -&- m2 -&- m) +& div_zero)
+  | A`BINARY (cabs`SEQUENTIAL cabs`COMMA) e1 e2 ->
+      f e1 >>= fun (_,  m1) ->
+      f e2 >>= fun (a2, m2) ->
+      unit (a2, m1 -&> m2)
+  | A`BINARY (cabs`SEQUENTIAL cabs`OR) e1 e2 ->
+      f e1    >>= fun (a1, m1) ->
+      f e2    >>= fun (a2, m2) ->
+      C`fresh >>= fun a        ->
+      let first_only = C`conj (C`neq a1 C`zero) (C`eq a C`one) in
+      let both = C`conj
+        (C`eq a1 C`zero)
+        (C`case (C`eq a2 C`zero) (C`eq a C`zero) (C`eq a C`one)) in
+      unit (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both)
+  | A`BINARY (cabs`SEQUENTIAL cabs`AND) e1 e2 ->
+      f e1    >>= fun (a1, m1) ->
+      f e2    >>= fun (a2, m2) ->
+      C`fresh >>= fun a        ->
+      let first_only = C`conj (C`eq a1 C`zero) (C`eq a C`zero) in
+      let both = C`conj
+        (C`neq a1 C`zero)
+        (C`case (C`neq a2 C`zero) (C`eq a C`one) (C`eq a C`zero)) in
+      unit (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
+  | A`BINARY (cabs`ARITHMETIC cabs`SHL) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_int (T`promote (exp_type e1)) (f e2) >>= fun (a2, m2) ->
+      let shifted = C`mult a1 (C`pow a2) in
+      if T`is_signed_integer (exp_type exp) then
+        let not_repr = C`neg (Tc`in_range (exp_type exp) shifted) in
+        let neg = C`lt shifted C`zero in
+        let c = C`implies (C`disj neg not_repr) C`undef in
+        unit (shifted, (m1 -&- m2) +& c)
+      else
+        conv_int (exp_type exp) (shifted, M`init) >>= fun (a, m) ->
+        unit (a, m1 -&- m2 -&- m)
+  | A`BINARY (cabs`ARITHMETIC cabs`SHR) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_int (T`promote (exp_type e1)) (f e2) >>= fun (a2, m2) ->
+      let shifted = C`div a1 (C`pow a2) in
+      if T`is_signed_integer (exp_type exp) then
+        C`fresh >>= fun a ->
+        let negative = C`lt shifted C`zero in
+        let c = C`case negative
+          (C`eq a (C`fn "shift_r" [shifted]))
+          (C`eq a shifted) in
+        unit (shifted, (m1 -&- m2) +& c)
+      else
+        unit (shifted, m1 -&- m2)
+  | A`BINARY (cabs`RELATIONAL cabs`EQ) e1 e2 ->
+      if T`is_arithmetic (exp_type e1) && T`is_arithmetic (exp_type e2) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh           >>= fun a        ->
+        let c = C`case (C`eq a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else if T`is_pointer (exp_type e1) && T`is_pointer (exp_type e2) then
+      else if typing`is_null_pointer e1 then
+      else
+  | A`BINARY (cabs`RELATIONAL cabs`NE) e1 e2 ->
+      if T`is_real (exp_type e1) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh           >>= fun a        ->
+        let c = C`case (C`neg (C`eq a1 a2)) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else
+        (* Pointer comparison. *)
+  | A`BINARY (cabs`RELATIONAL cabs`LT) e1 e2
+      if T`is_real (exp_type e1) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh >>= fun a ->
+        let c = C`case (C`lt a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else
+        (* Pointer comparison. *)
+  | A`BINARY (cabs`RELATIONAL cabs`LE) e1 e2
+      if T`is_real (exp_type e1) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh       	  >>= fun a        ->
+        let c = C`case (C`le a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else
+        (* Pointer comparison. *)
+  | A`BINARY (cabs`RELATIONAL cabs`GT) e1 e2 ->
+      if T`is_real (exp_type e1) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh           >>= fun a        ->
+        let c = C`case (C`gt a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else
+        (* Pointer comparison. *)
+        (* TODO Comparing two pointers to different object is
+           undefined. Unless ... *)
+        f e1	>>= fun (a1, m1) ->
+        f e2	>>= fun (a2, m2) ->
+        C`fresh >>= fun a        ->
+        let c = C`case (C`gt a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+  | A`BINARY (cabs`RELATIONAL cabs`GE) e1 e2 ->
+      if T`is_arithmetic (exp_type e1) then
+        let t = usual_arithmetic e1 e2 in
+        conv_int t (f e1) >>= fun (a1, m1) ->
+        conv_int t (f e2) >>= fun (a2, m2) ->
+        C`fresh           >>= fun a        ->
+        let c = C`case (C`ge a1 a2) (C`eq a C`one) (C`eq a C`zero) in
+        unit (a, (m1 -&- m2) +& c)
+      else
+        (* Pointer comparison. *)
+  | A`BINARY (cabs`ARITHMETIC cabs`BAND) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_exp e2 >>= fun (a2, m2) ->
+      C`fresh     >>= fun a        ->
+      unit (a, (m1 -&- m2) +& (C`eq a (C`bit_and a1 a2)))
+  | A`BINARY (cabs`ARITHMETIC cabs`BOR) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_exp e2 >>= fun (a2, m2) ->
+      C`fresh     >>= fun a        ->
+      unit (a, (m1 -&- m2) +& (C`eq a (C`bit_or a1 a2)))
+  | A`BINARY (cabs`ARITHMETIC cabs`XOR) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_exp e2 >>= fun (a2, m2) ->
+      C`fresh     >>= fun a        ->
+      unit (a, (m1 -&- m2) +& (C`eq a (C`bit_xor a1 a2)))
+  | A`ASSIGN None e1 e2 ->
+      f_lvalue e1 >>= fun (a1, m1) ->
+      f e2        >>= fun (a2, m2) ->
+      conv (exp_type e1) (exp_type e2) (a2, M`init) >>= fun (a, m) ->
+      let write = action`store (lvalue_type e1) a1 a in
+      unit (a, (m1 -&- m2 -&- m) -@> write)
+  | A`QUESTION e1 e2 e3
+      if T`is_arithmetic (exp_type e1) && T`is_arithmetic (exp_type e2) then
+        f e1        >>= fun (a1, m1) ->
+        conv_exp e2 >>= fun (a2, m2) ->
+        conv_exp e3 >>= fun (a3, m3) ->
+        C`fresh     >>= fun a        ->
+        let pos = m2 +& (C`eq a a2) +& (C`eq  a1 C`zero) in
+        let neg = m3 +& (C`eq a a3) +& (C`neq a1 C`zero) in
+        unit (a, m1 -&> (pos -/- neg))
+  | A`CALL e es ->
+      match is_function_id file e with
+      | Some (ids, s) ->
+          let depth = Pmap`find fid b in
+          if depth = 0 then
+            C`fresh >>= fun a ->
+            unit (a, M`none)
+          else
+            let b' =  Pmap`add fid (depth - 1) b in
+            let env' = update_env env ids in
+            let ids_t = [(Pmap`find id env', lookup_type id) | forall (id IN ids) | true] in
+            let m_args = List`fold_left2
+              (fun m' (l, t) e ->
+                let (a, m) = conv (T`unqualify t) (exp_type e) (f e) in
+                let create = action`create   t l   in
+                let store  = action`fn_store t l a in
+                (m' -&- m) +@ create -@> store
+              ) M`init ids_t es in
+            let kill_ids m (l, _) = m +@ action`kill l in
+            let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
+            let kills = Set`fold (fun s id -> action`kill s id)
+            let m_kill = List`fold_left kill_ids M`init ids_t in
+            let m_kill = M`add_actions m acts in
+            C`fresh >>= fun a ->
+	    reduce_stmt n b' env' file s fid a >>= fun ml_body ->
+            unit (a, m_args -&> M`flatten ml_body -&> m_kill)
+      end
+  end
+
+| reduce_stmt n b env file (A`Stmt _ stmt) fid return =
+  let f_s = reduce_stmt n b env file fid return in
+  let f_e = reduce_exp  n b env file in
+  let lift x = x >>= fun (a, m) -> (a, M`normal m) in
+  let lookup_type id = fst (Pmap`find id file.A`id_map) in
+  match stmt with
+  | A`SKIP ->
+      unit M`init_lifted
+  | A`IF e s1 s2 ->
+      lift (f_e e) >>= fun (a, ml) ->
+      f_s s1       >>= fun ml1     ->
+      f_s s2       >>= fun ml2     ->
+      let pos = ml1 ++& (C`neq a C`zero) in
+      let neg = ml2 ++& (C`eq  a C`zero) in
+      unit (ml --&> (pos -//- neg))
+  | A`BLOCK ids ss ->
+      let create_ids ml (l, t) = ml ++@ action`create t l in
+      let kill_ids   ml (l, _) = ml union {action`kill l} in
+      let env' = update_env env ids in
+      let ids_t = List`map (fun i -> Pmap`find i env', lookup_type i) ids in
+      let ml_create = List`fold_left create_ids M`init_lifted ids_t in
+      let ml_kill   = List`fold_left kill_ids empty ids_t in
+      let ml =
+        fold_list
+          (fun ml s -> ml --&> (reduce_stmt n b env' file s fid return))
+          M`init_lifted ss in
+      (ml_create --&> ml) --@> ml_kill
+  | A`DECLARATION defns ->
+      let define (id, e) =
+        let t = lookup_type id in
+        lift (conv t (exp_type e) (f_e e)) >>= fun (a, ml) ->
+        unit (ml --@> action`store t (Pmap`find id env) a) in
+      fold_list (fun ml p -> ml --&> define p) M`init_lifted defns
+  | A`RETURN_EXPRESSION e ->
+      let t_return =
+        match lookup_type fid with
+        | A`FUNCTION t _ -> t
+        end in
+      conv t_return (exp_type e) (f_e e) >>= fun (a, m) ->
+      unit (M`return (m +& C`eq a return))
+  | A`RETURN_VOID -> unit (M`return M`init)
+  | A`EXPRESSION e ->
+      lift (f_e e) >>= fun (_, ml) ->
+      unit ml
+  | A`WHILE e s -> iterate f_s f_e n M`init_lifted e s
+  | A`BREAK    -> unit (M`break    M`init)
+  | A`CONTINUE -> unit (M`continue M`init)
+  end
+
+let reduce_file n file =
+  let b =
+    List`fold_left (fun m fid -> Pmap`add fid n m) Pmap`empty (Pmap`keys file.A`fn_map) in
+  let (_, s) = Pmap`find file.A`main file.A`fn_map in
+  let m = reduce_stmt n b Pmap`empty file s main (C`fresh_named "return") in
+  M`flatten_lifted m
+(*
+  List`map rd (List`map snd (Pmap`values file.A`fn_map))
+*)
+
+module print = struct
+  let pp = ()
+end

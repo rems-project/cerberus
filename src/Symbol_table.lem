@@ -1,4 +1,4 @@
-open global
+open Global
 
 type ('a, 'b) t = ('a, 'b) map list
 
@@ -19,7 +19,7 @@ let rec find a t =
     | [] -> None
   end
 
-let mem a t = option`is_some (find a t)
+let mem a t = Option`is_some (find a t)
 
 let symbols t =
   match t with

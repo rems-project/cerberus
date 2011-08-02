@@ -1,0 +1,521 @@
+open Global
+
+module C = Cabs
+module A = Ail
+
+module Effect = struct
+  module St = Symbol_table
+
+  type id = Symbol`t
+  type id_set = Symbol`set
+
+  type ('a_e, 'a_s) env = <|
+    symbol_set : id_set;
+    symbol_table : (string, id) St`t;
+    id_map : (id, A`declaration) map;
+    globals : (id * (id, 'a_e) A`exp) list;
+    fn_map : (id, (id list * (id, 'a_e, 'a_s) A`stmt)) map
+  |>
+
+  type ('a, 'a_e, 'a_s, 'msg) t = ('a, ('a_e, 'a_s) env, 'msg) State_exception`t
+
+  let unit = State_exception`unit
+  let map  = State_exception`map
+  let join = State_exception`join
+  let bind = State_exception`bind
+
+  let fail = State_exception`fail
+
+  let app  mf m = bind mf (fun f -> map f m)
+  let papp mf x = bind mf (fun f -> unit (f x))
+
+  let option = State_exception`option
+  let of_option = State_exception`of_option
+  let map_list = State_exception`map_list
+  let foldr_list = State_exception`foldr_list
+  let iter = State_exception`iter
+  let t_list = State_exception`t_list
+
+  let initial_state = <|
+    symbol_set = Symbol`emp;
+    symbol_table = St`create_scope St`emp;
+    id_map = Pmap`empty;
+    globals = [];
+    fn_map = Pmap`empty
+  |>
+
+  let update = State_exception`update
+  let modify = State_exception`modify
+  let read   = State_exception`read
+
+  let destroy_scope =
+    let f env = <|env with symbol_table = St`destroy_scope env.symbol_table|> in
+    update f
+
+  let create_scope =
+    let f env = <|env with symbol_table = St`create_scope env.symbol_table|> in
+    update f
+
+  let push_table t =
+    let f env = <|env with symbol_table = St`push_table t env.symbol_table|> in
+    update f
+
+  let add_id id decl=
+    let f env = <|env with id_map = Pmap`add id decl env.id_map|> in
+    update f
+
+  let add_fn id formals body=
+    let f env = <|env with fn_map = Pmap`add id (formals, body) env.fn_map|> in
+    update f
+
+  let add_globals defns =
+    let f env = <|env with globals = env.globals @ defns|> in
+    update f
+
+  let fresh_name name =
+    let f env =
+      let (symbol, symbol_set') = Symbol`fresh_pretty name env.symbol_set in
+      let env' =
+      <|env with
+        symbol_set = symbol_set';
+        symbol_table = St`add name symbol env.symbol_table
+      |> in
+      (symbol, env') in
+    modify f
+
+  let resolve name =
+    let f env = St`find name env.symbol_table in
+    read f
+
+  let return_scope =
+    let f env = St`return_scope env.symbol_table in
+    read f
+
+  let symbols =
+    let f env = St`symbols env.symbol_table in
+    read f
+
+  let to_program main =
+    let f env = <|
+      A`main = main;
+      A`id_map = env.id_map;
+      A`globals = env.globals;
+      A`fn_map = env.fn_map
+    |> in
+    read f
+
+  module Operators = struct
+    let (>>=) = bind
+
+    let (<$>) = map
+    let (<*>) = app
+    let (<@>) = papp
+  end
+
+  open Operators
+
+  let app2 mf mx my = mf <*> mx <*> my
+  let app3 mf mx my mz = (app2 mf mx my) <*> mz
+  let map2 f mx my = f <$> mx <*> my
+  let map3 f mx my mz = (map2 f mx my) <*> mz
+end
+
+open Effect`Operators
+
+let zero l = (C`CONSTANT (C`CONST_INT (0, None)), l)
+let one  l = (C`CONSTANT (C`CONST_INT (1, None)), l)
+let d_zero l = A`Exp l (A`CONSTANT (C`CONST_INT (0, None)))
+let d_one  l = A`Exp l (A`CONSTANT (C`CONST_INT (1, None)))
+
+let subst l name =
+  let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
+             ``[A]n undeclared identifier is a violation of syntax`` in\n" in
+  Effect`option msg (Effect`resolve name)
+
+let desugar_unop = function
+  | C`MINUS -> A`MINUS
+  | C`PLUS -> A`PLUS
+  | C`BNOT -> A`BNOT
+  | C`POSTFIX_INCR -> A`POSTFIX_INCR
+  | C`POSTFIX_DECR -> A`POSTFIX_DECR
+  | C`ADDRESS -> A`ADDRESS
+  | C`INDIRECTION -> A`INDIRECTION
+end
+
+let rec
+| desugar_exp (e, l) =
+  let f  = desugar_exp in
+  let ft = desugar_type in
+  A`Exp l <$> (match e with
+    (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
+       subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
+       ( *((E1)+(E2))) ]]". *)
+    | C`INDEX e1 e2 ->
+        A`UNARY A`INDIRECTION <$> (
+          A`Exp l <$> (
+            A`BINARY (C`ARITHMETIC C`ADD) <$> f e1 <*> f e2
+          )
+        )
+    (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
+       equivalent to [[ (E+=1) ]]". *)
+    | C`UNARY C`PREFIX_INCR e ->
+        A`ASSIGN (Some C`ADD) <$> f e <@> d_one l
+    (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+       analogous to the prefix [[ ++ ]] operator". *)
+    | C`UNARY C`PREFIX_DECR e ->
+        A`ASSIGN (Some C`SUB) <$> f e <@> d_one l
+    (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
+       equivalent to [[ (E==0) ]]". *)
+    | C`UNARY C`NOT e -> A`BINARY (C`RELATIONAL C`EQ) (d_zero l) <$> f e
+    | C`UNARY unop e -> A`UNARY (desugar_unop unop) <$> f e
+    | C`BINARY o e1 e2 -> A`BINARY o <$> f e1 <*> f e2
+    | C`ASSIGN o e1 e2 -> A`ASSIGN o <$> f e1 <*> f e2
+    | C`QUESTION e1 e2 e3 -> A`QUESTION <$> f e1 <*> f e2 <*> f e3
+    | C`CAST t e -> A`CAST <$> ft t <*> f e
+    | C`CALL e es -> A`CALL <$> f e <*> Effect`map_list f es
+    | C`CONSTANT c -> Effect`unit (A`CONSTANT c)
+    | C`VARIABLE n -> A`VARIABLE <$> subst l n
+    | C`TYPE_SIZEOF t -> A`SIZEOF <$> ft t
+    | C`TYPE_ALIGNOF t -> A`ALIGNOF <$> ft t
+(*
+    | C`COMPOUND_LITERAL _ ->
+        raise_bug "Compound literals are not yet supported."
+*)
+  end)
+
+| desugar_specifier specifiers =
+  let mset = Multiset`from_list in
+  let smap =
+    List`fold_left
+      (fun m (x, y) -> Pmap`add x y m)
+(* TODO
+      (Pmap`create Multiset`compare)
+*)
+      Pmap`empty
+      ( [(mset [C`VOID], A`VOID)]
+        @ [(mset [C`SIGNED; C`CHAR], A`INTEGER (A`SIGNED A`ICHAR))]
+        @ [(mset [C`UNSIGNED; C`CHAR], A`INTEGER (A`UNSIGNED A`ICHAR))]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`SIGNED A`SHORT)))
+          [ [C`SHORT];
+            [C`SIGNED; C`SHORT];
+            [C`SHORT; C`INT];
+            [C`SIGNED; C`SHORT; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`UNSIGNED A`SHORT)))
+          [ [C`UNSIGNED; C`SHORT];
+            [C`UNSIGNED; C`SHORT; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`SIGNED A`INT)))
+          [ [C`INT];
+            [C`SIGNED];
+            [C`SIGNED; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`UNSIGNED A`INT)))
+          [ [C`UNSIGNED];
+            [C`UNSIGNED; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`SIGNED A`LONG)))
+          [ [C`LONG];
+            [C`SIGNED; C`LONG];
+            [C`LONG; C`INT];
+            [C`SIGNED; C`LONG; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`UNSIGNED A`LONG)))
+          [ [C`UNSIGNED; C`LONG];
+            [C`UNSIGNED; C`LONG; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`SIGNED A`LONG_LONG)))
+          [ [C`LONG; C`LONG];
+            [C`SIGNED; C`LONG; C`LONG];
+            [C`LONG; C`LONG; C`INT];
+            [C`SIGNED; C`LONG; C`LONG; C`INT]
+          ]
+        @ List`map (fun s -> (mset s, A`INTEGER (A`UNSIGNED A`LONG_LONG)))
+          [ [C`UNSIGNED; C`LONG; C`LONG];
+            [C`UNSIGNED; C`LONG; C`LONG; C`INT]
+          ]
+        @ [(mset [C`BOOL], A`INTEGER A`BOOL)]
+      ) in
+  Effect`of_option "" (Map`find specifiers smap)
+
+| desugar_type t =
+  let ft = desugar_type in
+  match t with
+    | C`BASE qs ss -> A`BASE qs <$> desugar_specifier ss
+    | C`ARRAY _ t (Some e) ->
+        let size =
+          match e with
+            | (C`CONSTANT (C`CONST_INT (size, _)), _) -> Effect`unit size
+            | (_, l) ->
+                let msg = "We don't support VLAs and moreover the size of an array \
+                           must be an integer constant.\n" in
+                Effect`fail msg
+(*
+                CpLogger.error (CpPrint.pp_program msg) l;
+*)
+          end in
+        A`ARRAY <$> ft t <*> size
+    | C`ARRAY s t None -> Effect`fail "Arrays are not yet supported.\n"
+    | C`FUNCTION t decls ->
+        let f ((_, t, sts), l) =
+          desugar_storage l sts >>= (function
+(* 
+            | Some A`REGISTER ->
+                raise_error "No support for storage class register."
+*)
+            | Some _ ->
+                let msg = "Violation of constraint 6.7.6.3#2 Function declarators \
+                           (including prototypes), Constraints: ``The only \
+                           storage-class that shall occur in a parameter \
+                           declaration is register.`` in\n" in
+                Effect`fail msg
+(*
+                CpLogger.info (CpPrint.pp_program msg) l;
+                raise E_Invalid
+*)
+            | None -> ft t
+          end) in
+        let d_decls = Effect`map_list f decls in
+        A`FUNCTION <$> ft t <*> d_decls
+    | C`POINTER qs t -> A`POINTER qs <$> ft t
+  end
+
+| desugar_stmt (s, l) =
+  let fs = desugar_stmt in
+  let fe = desugar_exp  in
+  A`Stmt l <$> match s with
+    | C`BLOCK ss ->
+        (* Open up a new scope, transform each statement/declaration in the
+           block and tear down the scope again. *)
+        Effect`create_scope   >>= (fun ()   ->
+        Effect`map_list fs ss >>= (fun d_ss ->
+        Effect`symbols        >>= (fun ids  ->
+        Effect`destroy_scope  >>= (fun ()   ->
+        Effect`unit (A`BLOCK ids d_ss)))))
+    (* We transform all for statements into while statements. *)
+    | C`FOR_EXP e1_opt e2_opt e3_opt s ->
+        let s1 =
+          match e1_opt with
+            | Some e1 -> (C`EXPRESSION e1, l)
+            | None    -> (C`SKIP, l)
+          end in
+        let e2 =
+          match e2_opt with
+            | Some e2 -> e2
+            (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+               statement) an omitted controlling expression is replace by an
+               unspecified non-zero integer constant. We believe that the choice, as
+               long as representable, does not matter with respect to the
+               semantics. Hence, we arbitrarily choose "1" (which can always be
+               represented as an object of type int). *)
+            | None -> one l
+          end in
+        let s3 =
+          match e3_opt with
+            | Some e3 -> (C`EXPRESSION e3, l)
+            | None    -> (C`SKIP, l)
+          end in
+        let body = (C`BLOCK [s; s3], l) in
+        let loop = (C`WHILE e2 body, l) in    
+        let s' = (C`BLOCK [s1; loop], l) in
+        fs s' >>= (function A`Stmt _ d_s ->
+          Effect`unit d_s
+        end)
+    | C`FOR_DECL defns e2_opt e3_opt s ->
+        let is_auto_or_register ((((_, _, storage), l), _), _) =
+          if List`exists (fun s -> s <> C`AUTO && s <> C`REGISTER) storage then
+            false
+(*
+            CpLogger.info (CpPrint.pp_program msg) l;
+            raise E_Invalid in
+ *)
+          else true in
+        if not (List`for_all is_auto_or_register defns) then
+          let msg = "Violation of constraint 6.8.5#3 Iteration statements, \
+                     Constraints: ``The declaration part of a for statement \
+                     shall only declare identifiers for objects having storage \
+                     class auto or register`` in\n" in
+          Effect`fail msg
+        else
+          let s1 = (C`DECLARATION defns, l) in
+          let e2 =
+            match e2_opt with
+              | Some e2 -> e2
+              (* See comment above. *)
+              | None -> one l
+            end in
+          let s3 =
+            match e3_opt with
+              | Some e3 -> (C`EXPRESSION e3, l)
+              | None    -> (C`SKIP, l)
+            end in
+          let body = (C`BLOCK [s; s3], l) in
+          let loop = (C`WHILE e2 body, l) in
+          let s' = (C`BLOCK [s1; loop], l) in
+          fs s' >>= (function A`Stmt _ d_s ->
+            Effect`unit d_s
+          end)
+    | C`DECLARATION defns ->
+        let d_defns = Effect`map_list desugar_defn defns in
+        (* We remove all declarations that don't contain an initialiser. *)
+        let f = function
+          | (id, Some d_e, _) -> Some (id, d_e)
+          | (_,  None,     _) -> None
+        end in
+        A`DECLARATION <$> (List`filter_map f <$> d_defns)
+    | C`EXPRESSION e -> A`EXPRESSION <$> fe e
+    | C`IF e s1 s2_opt ->
+        let d_s2 = desugar_stmt_opt l s2_opt in
+        A`IF <$> fe e <*> fs s1 <*> d_s2
+    | C`WHILE e s  -> A`WHILE  <$> fe e <*> fs s
+    | C`DO    e s  -> A`DO     <$> fe e <*> fs s
+    | C`SWITCH e s -> A`SWITCH <$> fe e <*> fs s
+    | C`CASE (e, l) s ->
+        let integer_constant =
+          match e with
+            | C`CONSTANT (C`CONST_INT i) -> Effect`unit i
+            | _ -> Effect`fail "We don't support anything but integer \
+                                constants as [[ case ]] labels."
+          end in
+        A`CASE <$> integer_constant <*> fs s
+    | C`DEFAULT s -> A`DEFAULT <$> fs s
+    | C`LABEL n s -> (* A`LABEL n (fs s) *)
+        Effect`fail "No support for labeled statements yet.\n"
+    | C`RETURN (Some e) -> A`RETURN_EXPRESSION <$> fe e
+    | C`RETURN None -> Effect`unit A`RETURN_VOID
+    | C`GOTO n -> Effect`fail "No support for goto yet.\n"
+    | C`SKIP -> Effect`unit A`SKIP
+    | C`BREAK -> Effect`unit A`BREAK
+    | C`CONTINUE -> Effect`unit A`CONTINUE
+  end
+
+| desugar_stmt_opt l = function
+  | Some stmt -> desugar_stmt stmt
+  (* Adding or removing a (finite number of) null operation is semantically
+     sound since "a null statement [...] performs no operations" (6.8.3#3,
+     Expression and null statements, Semantics). *)
+  | None -> Effect`unit (A`Stmt l A`SKIP)
+end
+
+| register_name l name =
+  Effect`return_scope >>= (fun scope ->
+  if Symbol_table`mem name scope then
+    let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ``If \
+               an identifier has no linkage, there shall be no more than one \
+               declaration of the identifier [...]`` in\n" in
+    Effect`fail msg
+(*
+    CpLogger.info (CpPrint.pp_program msg) l;
+    raise E_Invalid
+*)
+  else
+    Effect`fresh_name name)
+
+| desugar_storage l = function
+  | []           -> Effect`unit None
+  | [C`AUTO]     -> Effect`unit (Some A`AUTO)
+  | [C`STATIC]   -> Effect`unit (Some A`STATIC)
+  | [C`REGISTER] -> Effect`fail "No support for storage class register."
+  | [C`EXTERN]   -> Effect`fail "No support for storage class extern."
+  | _ ->
+      let msg =
+        "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
+         ``At most, one storage-class specifier may be given [...]`` in\n" in
+      Effect`fail msg
+(*
+      CpLogger.info (CpPrint.pp_program msg) l;
+      raise E_Invalid
+*)
+end
+
+| desugar_decl ((name, t, sts), l) =
+  register_name l name         >>= (fun id   ->
+  desugar_storage l sts        >>= (fun d_st ->
+  desugar_type t               >>= (fun d_t  ->
+  Effect`add_id id (d_t, d_st) >>= (fun ()   ->
+  Effect`unit id))))
+
+| desugar_function_decl ((name, t, sts), l) =
+  let desugar_function_type t =
+    match t with
+      | C`FUNCTION t decls ->
+          let f ((name, t, sts), l) (ids, ds) =
+            register_name l name  >>= (fun id  ->
+            desugar_type t        >>= (fun d_t ->
+            desugar_storage l sts >>= (function
+              (*
+              | Some A`REGISTER ->
+                  Effect`fail "No support for storage class register."
+              *)
+              | Some _ ->
+                  let msg = "Violation of constraint 6.7.6.3#2 Function \
+                             declarators (including prototypes), Constraints: \
+                             ``The only storage-class that shall occur in a \
+                             parameter declaration is register.`` in\n" in
+                  Effect`fail msg
+(*
+                  CpLogger.info (CpPrint.pp_program msg) l;
+                  raise E_Invalid
+*)
+              | None -> Effect`unit None
+            end) >>= (fun d_st ->
+            Effect`add_id id (d_t, d_st) >>= (fun () ->
+            Effect`unit (id::ids, d_t::ds))))) in
+          let f _ b = Effect`unit b in
+          desugar_type t >>= (fun d_t ->
+          Effect`foldr_list f decls ([], []) >>= (fun (formals, d_decls) ->
+          Effect`unit (A`FUNCTION d_t d_decls, formals)))
+      | _ -> Effect`fail "Not a function type."
+    end in
+  register_name l name         >>= (fun id ->
+  desugar_storage l sts        >>= (fun d_st ->
+  Effect`create_scope          >>= (fun () ->
+  desugar_function_type t      >>= (fun (d_t, formals) ->
+  Effect`return_scope          >>= (fun fn_scope ->
+  Effect`destroy_scope         >>= (fun () ->
+  Effect`add_id id (d_t, d_st) >>= (fun () ->
+  Effect`push_table fn_scope   >>= (fun () ->
+  Effect`unit (id, formals)))))))))
+
+| desugar_defn ((d, e_opt), l) =
+  desugar_decl d >>= (fun id ->
+  match e_opt with
+    | None -> Effect`unit (id, None, l)
+    | Some e ->
+        desugar_exp e >>= (fun d_e ->
+        Effect`unit (id, Some d_e, l))
+  end)
+
+let desugar_global_defn (defn, l) =
+  match defn with
+    | C`FUNCTION_DEFINITION decl s ->
+         desugar_function_decl decl >>= (fun (id, formals) ->
+        desugar_stmt s >>= (fun d_s ->
+        Effect`destroy_scope >>= (fun () ->
+        Effect`add_fn id formals d_s)))
+    | C`EXTERNAL_DECLARATION defns ->
+        let f = function
+          | (id, Some e, l) -> (id, e)
+          | (id, None,   l) -> (id, d_zero l)
+        end in
+        List`map f <$> Effect`map_list desugar_defn defns >>= (fun d_defns ->
+        Effect`add_globals d_defns)
+   end
+
+let desugar_program startup global_defns =
+  let msg = "Could not find startup function ``" ^ startup ^ "``.\n" in
+  Effect`iter desugar_global_defn global_defns >>= (fun () ->
+  Effect`option msg (Effect`resolve "main") >>= (fun main ->
+(*
+      CpLogger.info (fun x -> x) msg;
+      raise E_Invalid in
+*)
+    Effect`to_program main))
+
+let desugar startup (name, global_defns) =
+  let init = Effect`initial_state in
+  desugar_program startup global_defns init
+(*
+  | E_Undefined -> A`Undefined
+  | E_Invalid -> A`Invalid
+*)

@@ -1,7 +1,7 @@
 type constant =
-  | Name of symbol`t
+  | Name of Symbol`t
   | Integer of num
-  | Address of symbol`t
+  | Address of Symbol`t
   | Null
   | Offset of constant * constant * constant
   | Plus of constant * constant
@@ -76,9 +76,9 @@ let rec compare_const const1 const2 =
   let (++) n p = if n = 0 then p else n in
   match (const1, const2) with
     | (Name n1, Name n2) ->
-        symbol`compare n1 n2
+        Symbol`compare n1 n2
     | (Address a1, Address a2) ->
-        symbol`compare a1 a2
+        Symbol`compare a1 a2
     | (Null, Null) -> 0
     | (Integer i1, Integer i2) ->
         if i1 = i2 then 0
@@ -149,7 +149,7 @@ type constr =
   | And of constr * constr
   | Implies of constr * constr
   | If of constr * constr * constr
-  | ConvInt of range`t * constr * constant
+  | ConvInt of Range`t * constr * constant
 
 let rec fold_constr f_c constr i =
   let f = fold_constr f_c in
@@ -271,9 +271,9 @@ let gt c1 c2 = Lt c2 c1
 
 let add t c = Set`add c t
 
-let fresh         = symbol_state`fresh Name
-let fresh_named n = symbol_state`fresh_pretty n Name
-let fresh_address = symbol_state`fresh Address
+let fresh         = Symbol_state`fresh Name
+let fresh_named n = Symbol_state`fresh_pretty n Name
+let fresh_address = Symbol_state`fresh Address
 
 let const i = Integer i
 let fn name args = Fn name args
@@ -307,70 +307,70 @@ let conv_int r c1 c2 = ConvInt r c1 c2
 
 let mem c t = c IN t
 
-module print = struct
-  module p = pprint
-  module u = p`unicode
+module Print = struct
+  module P = Pprint
+  module U = P`Unicode
 
-  open global
-  open pprint`operators
+  open Global
+  open Pprint`Operators
 
-  let nbraces d = p`lbrace ^^ p`group2 (p`break0 ^^ d) ^/^ p`rbrace
+  let nbraces d = P`lbrace ^^ P`group2 (P`break0 ^^ d) ^/^ P`rbrace
 
   let rec pp_constant_inner f_s const =
-    let f = p`parens -| pp_constant_inner f_s in
+    let f = P`parens -| pp_constant_inner f_s in
     let fp = pp_constant_inner f_s in
     match const with
-      | Null -> u`null
+      | Null -> U`null
       | Name    s -> !^ (f_s s)
       | Integer i -> !^ (string_of_num i)
       |  Address s ->
-          !^ "addr" ^^^ p`parens (!^ (f_s s))
+          !^ "addr" ^^^ P`parens (!^ (f_s s))
       | Offset base offset size ->
-          !^ "offset" ^^^ p`parens (fp base ^^ p`comma ^^^ fp offset ^^^ p`star ^^^ fp size)
-      | Plus  c1 c2 -> f c1 ^^^ p`plus    ^^^ f c2
-      | Minus c1 c2 -> f c1 ^^^ p`minus   ^^^ f c2
-      | Mult  c1 c2 -> f c1 ^^^ p`star    ^^^ f c2
-      | Mod   c1 c2 -> f c1 ^^^ p`percent ^^^ f c2
-      | Div   c1 c2 -> f c1 ^^^ p`slash   ^^^ f c2
-      | Pow c -> !^ "2" ^^ p`caret ^^ f c
-      | BitAnd c1 c2 -> !^ "bitand" ^^^ p`parens (f c1 ^^ p`comma ^^^ f c2)
-      | BitOr  c1 c2 -> !^ "bitor"  ^^^ p`parens (f c1 ^^ p`comma ^^^ f c2)
-      | BitXor c1 c2 -> !^ "xor"    ^^^ p`parens (f c1 ^^ p`comma ^^^ f c2)
-      | BitComplement c -> !^ "compl" ^^^ p`parens (f c)
-      | Fn name args    -> !^ name    ^^^ p`parens (p`comma_list f args)
+          !^ "offset" ^^^ P`parens (fp base ^^ P`comma ^^^ fp offset ^^^ P`star ^^^ fp size)
+      | Plus  c1 c2 -> f c1 ^^^ P`plus    ^^^ f c2
+      | Minus c1 c2 -> f c1 ^^^ P`minus   ^^^ f c2
+      | Mult  c1 c2 -> f c1 ^^^ P`star    ^^^ f c2
+      | Mod   c1 c2 -> f c1 ^^^ P`percent ^^^ f c2
+      | Div   c1 c2 -> f c1 ^^^ P`slash   ^^^ f c2
+      | Pow c -> !^ "2" ^^ P`caret ^^ f c
+      | BitAnd c1 c2 -> !^ "bitand" ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+      | BitOr  c1 c2 -> !^ "bitor"  ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+      | BitXor c1 c2 -> !^ "xor"    ^^^ P`parens (f c1 ^^ P`comma ^^^ f c2)
+      | BitComplement c -> !^ "compl" ^^^ P`parens (f c)
+      | Fn name args    -> !^ name    ^^^ P`parens (P`comma_list f args)
     end
 
   let rec pp_constr_inner f_s constr =
-    let f = p`parens -| pp_constr_inner f_s in
+    let f = P`parens -| pp_constr_inner f_s in
     let f_c = pp_constant_inner f_s in
     match constr with
       | True  -> !^ "true"
       | False -> !^ "false"
-      | Eq      c1 c2 -> f_c c1 ^^^ p`equals  ^^^ f_c c2
-      | Le      c1 c2 -> f_c c1 ^^^ u`le      ^^^ f_c c2
-      | Lt      c1 c2 -> f_c c1 ^^^ p`langle  ^^^ f_c c2
-      | Or      c1 c2 -> f   c1 ^^^ u`disj    ^^^ f   c2
-      | And     c1 c2 -> f   c1 ^^^ u`conj    ^^^ f   c2
-      | Implies c1 c2 -> f   c1 ^^^ u`implies ^^^ f   c2
-      | Not c -> u`compl ^^^ f c
+      | Eq      c1 c2 -> f_c c1 ^^^ P`equals  ^^^ f_c c2
+      | Le      c1 c2 -> f_c c1 ^^^ U`le      ^^^ f_c c2
+      | Lt      c1 c2 -> f_c c1 ^^^ P`langle  ^^^ f_c c2
+      | Or      c1 c2 -> f   c1 ^^^ U`disj    ^^^ f   c2
+      | And     c1 c2 -> f   c1 ^^^ U`conj    ^^^ f   c2
+      | Implies c1 c2 -> f   c1 ^^^ U`implies ^^^ f   c2
+      | Not c -> U`compl ^^^ f c
       | If c1 c2 c3 ->
           !^ "if" ^^^ f c1 ^^^ !^ "then" ^^^ f c2 ^^^ !^ "else" ^^^ f c3
       | ConvInt _ c1 _ -> pp_constr_inner f_s c1
    end
 
-  let pp_constant_latex = pp_constant_inner symbol`to_string_latex
-  let pp_constant = pp_constant_inner symbol`to_string_pretty
-  let pp_constr = pp_constr_inner symbol`to_string_pretty
+  let pp_constant_latex = pp_constant_inner Symbol`to_string_latex
+  let pp_constant = pp_constant_inner Symbol`to_string_pretty
+  let pp_constr = pp_constr_inner Symbol`to_string_pretty
 
-  let rec pp t = u`conj ^^ nbraces (p`comma_list pp_constr  [e | forall (e IN t) | true])
+  let rec pp t = U`conj ^^ nbraces (P`comma_list pp_constr  [e | forall (e IN t) | true])
 
-  let pp_set ts = p`sepmap p`break1 pp [t | forall (t IN ts) | true]
+  let pp_set ts = P`sepmap P`break1 pp [t | forall (t IN ts) | true]
 end
 
-module process = struct
-  open global
+module Process = struct
+  open Global
 
-  module cc = congruence_closure
+  module Cc = Congruence_closure
 
   let n_null = 0
   let n_offset = 1
@@ -389,10 +389,10 @@ module process = struct
   type p = <|
     t : t;
     eqs : t;
-    cc : cc`t;
+    cc : Cc`t;
     counter : num;
     int_map : (num, num) map;
-    name_map : (symbol`t, num) map;
+    name_map : (Symbol`t, num) map;
     const_map : (num, constant) map;
     apply_map : (num * num, num) map;
     fn_map : (string, num) map
@@ -400,13 +400,13 @@ module process = struct
 
   let n_fresh p =
     let n = p.counter + 1 in
-    if n + 1 < cc`size p.cc then
+    if n + 1 < Cc`size p.cc then
       (n, <|p with counter = n|>)
     else 
-      (n, <|p with counter = n(*; cc = cc`grow p.cc (cc`size p.cc)*)|>)
+      (n, <|p with counter = n(*; cc = Cc`grow p.cc (Cc`size p.cc)*)|>)
 
   let convert_name p s =
-    match map`find s p.name_map with
+    match Map`find s p.name_map with
       | Some n -> (n, p)
       | None   ->
           let (n, p) = n_fresh p in
@@ -414,7 +414,7 @@ module process = struct
     end
 
   let convert_addr p a =
-    match map`find a p.name_map with
+    match Map`find a p.name_map with
       | Some n -> (n, p)
       | None   ->
           let (n, p) = n_fresh p in
@@ -426,7 +426,7 @@ module process = struct
      end
 
   let convert_int p i =
-    match map`find i p.int_map with
+    match Map`find i p.int_map with
       | Some n -> (n, p)
       | None   ->
           let (n, p) = n_fresh p in
@@ -438,7 +438,7 @@ module process = struct
     end
 
   let convert_fn p s =
-    match map`find s p.fn_map with
+    match Map`find s p.fn_map with
       | Some n -> (n, p)
       | None   ->
           let (n, p) = n_fresh p in
@@ -446,13 +446,13 @@ module process = struct
     end
 
   let apply p n1 n2 =
-    match map`find (n1, n2) p.apply_map with
+    match Map`find (n1, n2) p.apply_map with
       | Some n -> (n, p)
       | None   ->
           let (n, p) = n_fresh p in
           let p = <|p with
             apply_map = Pmap`add (n1, n2) n p.apply_map;
-            cc = cc`merge p.cc (cc`Apply (n1, n2)) n
+            cc = Cc`merge p.cc (Cc`Apply (n1, n2)) n
           |> in
           (n, p)
     end
@@ -503,7 +503,7 @@ module process = struct
           let (n1, p1) = convert_const c1 p  in
           let (n2, p2) = convert_const c2 p1 in
           (true, <|p2 with
-            cc = cc`merge_constants p2.cc n1 n2;
+            cc = Cc`merge_constants p2.cc n1 n2;
             eqs = Set`add constr p.eqs
           |>)
       | _ -> (b, p)
@@ -515,7 +515,7 @@ module process = struct
 
   let normalise_const p c =
     let (n, p) = convert_const c p in
-    let (n, cc') = cc`normalise_constant p.cc n in
+    let (n, cc') = Cc`normalise_constant p.cc n in
     (n, <|p with cc = cc'|>)
 
   let simplify_const const p =
@@ -523,7 +523,7 @@ module process = struct
       let replace c =
         let (n1, p1) = normalise_const p const in
         let (n2, p2) = normalise_const p1 c in
-        (c, <|p2 with cc = cc`merge_constants p.cc n1 n2|>) in
+        (c, <|p2 with cc = Cc`merge_constants p.cc n1 n2|>) in
       match const with
         | Offset a (Integer i) _ ->
             if i = 0 then replace a else (const, p)
@@ -550,7 +550,7 @@ module process = struct
         | Name _ ->
             let (n, p) = normalise_const p const in
             let n =
-              match map`find n p.const_map with
+              match Map`find n p.const_map with
                 | Some n' -> n'
                 | None -> const
               end in
@@ -564,7 +564,7 @@ module process = struct
       let merge p c1 c2 =
         let (n1, p1) = normalise_const p c1 in
         let (n2, p2) = normalise_const p1 c2 in
-        <|p2 with cc = cc`merge_constants p.cc n1 n2|> in
+        <|p2 with cc = Cc`merge_constants p.cc n1 n2|> in
       match constr with
         | Not False -> (True, p)
         | Not True  -> (False, p)
@@ -613,7 +613,7 @@ module process = struct
             if compare_const c1 c2 = 0 then
               (True, merge p2 c1 c2)
             else
-              let (b, cc') = cc`congruent_constants p.cc n1 n2 in
+              let (b, cc') = Cc`congruent_constants p.cc n1 n2 in
               let p3 = <|p2 with cc = cc'|> in
               if b
                 then (True,   p3)
@@ -621,19 +621,19 @@ module process = struct
         | Le c1 c2 ->
             let (n1, p1) = normalise_const p  c1 in
             let (n2, p2) = normalise_const p1 c2 in
-            let (b, cc') = cc`congruent_constants p.cc n1 n2 in
+            let (b, cc') = Cc`congruent_constants p.cc n1 n2 in
             let p3 = <|p2 with cc = cc'|> in
             if b
               then (True,   p3)
               else (constr, p3)
         | ConvInt r (If _ c2 _) (Integer i) ->
-            if range`in_range r i
+            if Range`in_range r i
               then (c2, p)
               else (constr, p)
         | _ -> (constr, p)
       end in
     let simplify_all = fold_map_constr simplify_constr simplify_const in
-    let (p, t') = set`fold_map simplify_all p.t p in
+    let (p, t') = Set`fold_map simplify_all p.t p in
     <|p with t = t'|>
 
   let normalise_const_map p =
@@ -643,7 +643,7 @@ module process = struct
           | Offset _ _ _ -> simplify_const c p
           | _            -> (c, p) 
         end in
-      let (n, cc') = cc`normalise_constant p.cc n in
+      let (n, cc') = Cc`normalise_constant p.cc n in
       (Pmap`add n c m, <|p with cc = cc'|>) in
     let (m, p) = List`fold_left
       (fun (m, p) (n, c) -> norm p m n c)
@@ -671,7 +671,7 @@ module process = struct
     let p = <|
       t = t';
       eqs = empty;
-      cc = cc`create 2048;
+      cc = Cc`create 2048;
       counter = n_fn;
       int_map = Pmap`empty;
       name_map = Pmap`empty;
@@ -690,8 +690,8 @@ module process = struct
   let rewrite p const = simplify_const const (snd (convert_const const p))
 
   type address =
-    | Base of symbol`t
-    | Displaced of symbol`t * num * constant
+    | Base of Symbol`t
+    | Displaced of Symbol`t * num * constant
     | NullAddress
     | NaA
 

@@ -1,6 +1,6 @@
 type t
 
-module unicode = struct
+module Unicode = struct
   val null : t
   val le : t
   val ge : t
@@ -10,7 +10,7 @@ module unicode = struct
   val implies : t
 end
 
-module operators = struct
+module Operators = struct
   val (^^) : t -> t -> t
   val (^^^) : t -> t -> t
   val (^/^) : t -> t -> t

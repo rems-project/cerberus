@@ -1,4 +1,4 @@
-open global
+open Global
 
 type cabsloc = <|
   lineno : num;
@@ -7,7 +7,7 @@ type cabsloc = <|
   ident : num
 |>
 
-type location = location`t
+type location = Location`t
 
 type storage_class =
   | AUTO

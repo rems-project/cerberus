@@ -1,4 +1,4 @@
-open ail
+open Ail
 
 let lift_int f_int otherwise = function
   | BASE _ (INTEGER i) -> f_int i
@@ -280,8 +280,8 @@ let is_complete t =
 let is_incomplete t = not (is_complete t)
 
 let is_const = function
-  | BASE     q _ -> cabs`CONST IN q
-  | POINTER  q _ -> cabs`CONST IN q
+  | BASE     q _ -> Cabs`CONST IN q
+  | POINTER  q _ -> Cabs`CONST IN q
   | ARRAY    _ _ -> false
   | FUNCTION _ _ -> false
 end

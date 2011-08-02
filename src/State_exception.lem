@@ -1,22 +1,22 @@
-open global
+open Global
 
-type ('a, 's, 'msg) t = 's -> ('a * 's, 'msg) exception`t
+type ('a, 's, 'msg) t = 's -> ('a * 's, 'msg) Exception`t
 
-let unit a = fun s -> exception`unit (a, s)
+let unit a = fun s -> Exception`unit (a, s)
 
 let map f m =
-  fun s -> exception`bind (m s) (fun (a, s') -> exception`unit (f a, s'))
+  fun s -> Exception`bind (m s) (fun (a, s') -> Exception`unit (f a, s'))
 
-let join mm = fun s -> exception`bind (mm s) (fun (m, s') -> m s')
+let join mm = fun s -> Exception`bind (mm s) (fun (m, s') -> m s')
 
 let bind m f = join (map f m)
 
 let app mf m = bind mf (fun f -> map f m)
 
-let fail msg = fun _ -> exception`fail msg
-let update f = fun s -> exception`unit ((), f s)
-let modify f = fun s -> exception`unit (f s)
-let read   f = fun s -> exception`unit (f s, s)
+let fail msg = fun _ -> Exception`fail msg
+let update f = fun s -> Exception`unit ((), f s)
+let modify f = fun s -> Exception`unit (f s)
+let read   f = fun s -> Exception`unit (f s, s)
 
 let of_option msg = function
   | Some a -> unit a
@@ -31,13 +31,13 @@ let option msg m =
     end in
   bind m f
 
-module operators = struct
+module Operators = struct
   let (>>=) = bind
   let (<$>) = map
   let (<*>) = app
 end
 
-open operators
+open Operators
 
 let map2 f mx my = f <$> mx <*> my
 

@@ -4,41 +4,39 @@ LEM_LIB=../lem/library
 BUILD_DIR=_build_ocaml
 
 FILES=\
-pair.lem \
-map.lem \
-list.lem \
-set.lem \
-braun.lem \
-multiset.lem \
-lexing.lem \
-output.lem \
-location.lem \
-symbol.lem \
-global.lem \
-option.lem \
-transitive_reduction.lem \
-state.lem \
-symbol_state.lem \
-exception.lem \
-state_exception.lem \
-union_find.lem \
-congruence_closure.lem \
-pprint.lem \
-document.lem \
-symbol_table.lem \
-cabs.lem \
-ail.lem \
-types.lem \
-annotate.lem \
-cabs_to_ail.lem \
-ail_rewrite.lem \
-typing.lem \
-range.lem \
-constraint.lem \
-type_constraint.lem \
-action.lem \
-meaning.lem \
-reduction.lem
+Pair.lem \
+Map.lem \
+Braun.lem \
+Multiset.lem \
+Lexing.lem \
+Output.lem \
+Location.lem \
+Symbol.lem \
+Global.lem \
+Option.lem \
+Transitive_reduction.lem \
+State.lem \
+Symbol_state.lem \
+Exception.lem \
+State_exception.lem \
+Union_find.lem \
+Congruence_closure.lem \
+Pprint.lem \
+Document.lem \
+Symbol_table.lem \
+Cabs.lem \
+Ail.lem \
+Types.lem \
+Annotate.lem \
+Cabs_to_ail.lem \
+Ail_rewrite.lem \
+Typing.lem \
+Range.lem \
+Constraint.lem \
+Type_constraint.lem \
+Action.lem \
+Meaning.lem \
+Reduction.lem
 
 all:
 	mkdir -p $(BUILD_DIR)

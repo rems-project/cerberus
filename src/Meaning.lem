@@ -1,12 +1,12 @@
-open global
+open Global
 
-module c = constraint
+module C = Constraint
 
 type denotation = <|
-  actions     : action`t set;
-  constraints : c`t;
-  seq_before  : (action`t * action`t) set;
-  fs_actions  : (action`t, action`t set) map
+  actions     : Action`t set;
+  constraints : C`t;
+  seq_before  : (Action`t * Action`t) set;
+  fs_actions  : (Action`t, Action`t set) map
 |>
 
 module denotation = struct
@@ -14,7 +14,7 @@ module denotation = struct
   let compare d1 d2 =
     let (++) n p = if n = 0 then p else n in
     Set`compare d1.actions d2.actions
-    ++ c`compare d1.constraints d2.constraints
+    ++ C`compare d1.constraints d2.constraints
     ++ Set`compare d1.seq_before d2.seq_before
     ++ Pmap`compare Set`compare d1.fs_actions d2.fs_actions
 end
@@ -113,7 +113,7 @@ let return m = <|
 |>
 
 let collect_fs_actions m =
-  let call = action`call in
+  let call = Action`call in
   let add_call d = <|d with
     actions    = {call};
     fs_actions = Pmap`add call d.actions d.fs_actions
@@ -121,7 +121,7 @@ let collect_fs_actions m =
   {add_call d | forall (d IN m) | true}     
 
 let flatten ml =
-  collect_fs_actions (ml.normal +& c`undef -/- ml.return)
+  collect_fs_actions (ml.normal +& C`undef -/- ml.return)
 
 let enter_loop m_pos m_neg ml =
   let m = ml.continue -/- ml.normal in <|
@@ -186,46 +186,45 @@ module statement_operators = struct
 end
 
 module print = struct
-  module p = pprint
-  module u = pprint`unicode
+  module P = Pprint
 
-  open p`operators
+  open P`Operators
 
-  let nbraces d = p`lbrace ^^ p`group2 (p`break0 ^^ d) ^/^ p`rbrace
+  let nbraces d = P`lbrace ^^ P`group2 (P`break0 ^^ d) ^/^ P`rbrace
 
   let pp_set pp s  =
-    nbraces (p`comma_list pp (Set`elements  s))
+    nbraces (P`comma_list pp (Set`elements  s))
   let pp_dset pp s =
-    let sep = p`comma ^^ p`break1 in
+    let sep = P`comma ^^ P`break1 in
     let pp_b e = nbraces (pp e) in
-    p`sepmap sep pp_b (Set`elements s)
+    P`sepmap sep pp_b (Set`elements s)
 
-  let pp_actions = pp_set action`print`pp
-  let pp_contraints = c`print.pp
-  let pp_action_id = action`print`pp_uid
+  let pp_actions = pp_set Action`print`pp
+  let pp_contraints = C`print.pp
+  let pp_action_id = Action`print`pp_uid
   let pp_seq_before =
     let pp_a = pp_action_id in
     pp_set (fun (a1, a2) -> pp_a a1 ^^^ U.implies ^^^ pp_a a2)
   let pp_fs_actions m =
     let pp_a = pp_action_id in
     nbraces (
-      p`comma_list
+      P`comma_list
         (fun (a, b) -> pp_a a ^^^ U.mapsto ^^^ pp_actions b)
         (M.bindings m)
     )
 
   let pp_denot t =
-    let line name pp p = !^ name ^^^ p`equals ^^^ p`group (pp p) ^^ p`semi in
+    let line name pp p = !^ name ^^^ P`equals ^^^ P`group (pp p) ^^ P`semi in
     line "actions" pp_actions t.actions
     ^/^ line "constraints"      pp_contraints t.constraints
     ^/^ line "sequenced_before" pp_seq_before t.seq_before
     ^/^ line "function_actions" pp_fs_actions t.fs_actions
 
-  let pp m = nbraces (pp_dset pp_denot m) ^^ p`break0
+  let pp m = nbraces (pp_dset pp_denot m) ^^ P`break0
 end
 
 module solve = struct
-  type trace = c`t * action`t list
+  type trace = C`t * Action`t list
 
   let schedule pre s =
     let action = [a | forall (a IN s) | true] in
@@ -274,7 +273,7 @@ module solve = struct
           if (e, c) IN sb || (exist (t MEM a). (e, t) IN sb) then
             lls'
           else
-            if action`is_access e && not (action`is_fn_store e) then
+            if Action`is_access e && not (Action`is_fn_store e) then
               part e lls' cs' (front @ [a]) rest
             else
               part e lls  cs' (front @ [a]) rest
@@ -317,17 +316,17 @@ module solve = struct
       pre
     else
       let (sb, sa) = partition_sb d future in
-      let (sb_calls, sb_rest) = Set`partition action`is_call sb in
+      let (sb_calls, sb_rest) = Set`partition Action`is_call sb in
       let (sa_ucalls, sa_rest) =
         Set`partition
           (fun a -> 
-            action`is_call a && (exist (a' IN sb). not ((a',a) IN d.seq_before))
+            Action`is_call a && (exist (a' IN sb). not ((a',a) IN d.seq_before))
           ) sa in
       let calls = sb_calls union sa_ucalls in
       if Set`is_empty calls then
         seq d (schedule pre sb) sa
       else
-        let (sb_accesses, sb_other) = Set`partition action`is_access sb_rest in
+        let (sb_accesses, sb_other) = Set`partition Action`is_access sb_rest in
         let pre = schedule pre sb_other in
         let (sa_rest_todo, sa_rest_rest) =
           Set`partition
@@ -346,16 +345,16 @@ module solve = struct
 
   let linearise d = seq d [] d.actions
 
-  module p = c`process
+  module P = C`Process
 
   let simplify d c =
     let conflicts =
       Pmap`fold
-        (fun ts c -> c union (action`conflicts d.seq_before ts))
+        (fun ts c -> c union (Action`conflicts d.seq_before ts))
         d.fs_actions empty in
-    let p = p`make d.constraints in
-    let p = p`concat p conflicts in
-    let f c trace = (action`memory`replay p trace) :: c in
+    let p = P`make d.constraints in
+    let p = P`concat p conflicts in
+    let f c trace = (Action`memory`replay p trace) :: c in
     List`fold_left f c (linearise d)
 
   let simplify_all t = Set`of_list (Set`fold simplify t [])
@@ -366,9 +365,9 @@ module Graph = struct
     Set`fold
       (fun d i ->
         let name = n ^ "." ^ (string_of_num i) ^ ".dot" in
-        let doc  = action`print`pp_dot d.seq_before in
-        let str  = document`to_plain_string doc in
-        let ()   = output`write str (output`file name) in
+        let doc  = Action`print`pp_dot d.seq_before in
+        let str  = Document`to_plain_string doc in
+        let ()   = Output`write str (output`file name) in
         i + 1
       ) t 0
 end

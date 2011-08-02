@@ -1,4 +1,4 @@
-open global
+open Global
 
 type ('a, 'msg) t =
   | Result of 'a
@@ -28,11 +28,11 @@ let to_bool = function
   | Exception _ -> false
 end
 
-module operators = struct
+module Operators = struct
   let (>>=) = bind
 end
 
-open operators
+open Operators
 
 let map2 f mx my    = app (map f mx) my
 let map3 f mx my mz = app (map2 f mx my) mz

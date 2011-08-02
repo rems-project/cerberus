@@ -1,0 +1,18 @@
+type 'a t = ('a, Symbol`set) State`t
+
+let unit = State`unit
+let bind = State`bind
+let map = State`map
+let app = State`app
+
+let modify = State`modify
+
+module Operators = struct
+  let (>>=) = bind
+end
+
+
+let init f = f Symbol`emp
+
+let fresh f = map f (modify Symbol`fresh)
+let fresh_pretty n f = map f (modify (Symbol`fresh_pretty n))

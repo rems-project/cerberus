@@ -1,0 +1,206 @@
+module A = Ail
+module C = Constraint
+module R = Range
+
+let char_bit   = C`fresh_named "char_bit"
+
+(* Minimum and maximum  values. *)
+let char_min   = C`fresh_named "char_min"
+let char_max   = C`fresh_named "char_max"
+let schar_min  = C`fresh_named "schar_min"
+let schar_max  = C`fresh_named "schar_max"
+let uchar_max  = C`fresh_named "uchar_max"
+let shrt_min   = C`fresh_named "shrt_min"
+let shrt_max   = C`fresh_named "shrt_max"
+let ushrt_max  = C`fresh_named "ushrt_max"
+let int_min    = C`fresh_named "int_min"
+let int_max    = C`fresh_named "int_max"
+let uint_max   = C`fresh_named "uint_max"
+let long_min   = C`fresh_named "long_min"
+let long_max   = C`fresh_named "long_max"
+let ulong_max  = C`fresh_named "ulong_max"
+let llong_min  = C`fresh_named "llong_min"
+let llong_max  = C`fresh_named "llong_max"
+let ullong_max = C`fresh_named "ullong_max"
+
+(* Byte sizes. *)
+let bool_size   = C`fresh_named "bool_size"
+let char_size   = C`fresh_named "char_size"
+let schar_size  = C`fresh_named "schar_size"
+let uchar_size  = C`fresh_named "uchar_size"
+let shrt_size   = C`fresh_named "shrt_size"
+let ushrt_size  = C`fresh_named "ushrt_size"
+let int_size    = C`fresh_named "int_size"
+let uint_size   = C`fresh_named "uint_size"
+let long_size   = C`fresh_named "long_size"
+let ulong_size  = C`fresh_named "ulong_size"
+let llong_size  = C`fresh_named "llong_size"
+let ullong_size = C`fresh_named "ullong_size"
+
+(* Alignment requirements. *)
+let bool_align   = C`fresh_named "bool_align"
+let char_align   = C`fresh_named "char_align"
+let schar_align  = C`fresh_named "schar_align"
+let uchar_align  = C`fresh_named "uchar_align"
+let shrt_align   = C`fresh_named "shrt_align"
+let ushrt_align  = C`fresh_named "ushrt_align"
+let int_align    = C`fresh_named "int_align"
+let uint_align   = C`fresh_named "uint_align"
+let long_align   = C`fresh_named "long_align"
+let ulong_align  = C`fresh_named "ulong_align"
+let llong_align  = C`fresh_named "llong_align"
+let ullong_align = C`fresh_named "ullong_align"
+
+let inital = C`from_list [
+  C`eq char_bit   (C`const (R`char_bit));
+
+  C`le schar_min  (C`const (R`min R`schar));
+  C`ge schar_max  (C`const (R`max R`schar));
+  C`ge uchar_max  (C`const (R`max R`uchar));
+  C`le shrt_min   (C`const (R`min R`shrt));
+  C`ge shrt_max   (C`const (R`max R`shrt));
+  C`ge ushrt_max  (C`const (R`max R`ushrt));
+  C`le int_min    (C`const (R`min R`int));
+  C`ge int_max    (C`const (R`max R`int));
+  C`ge uint_max   (C`const (R`max R`uint));
+  C`le long_min   (C`const (R`min R`long));
+  C`ge long_max   (C`const (R`max R`long));
+  C`ge ulong_max  (C`const (R`max R`ulong));
+  C`le llong_min  (C`const (R`min R`llong));
+  C`ge llong_max  (C`const (R`max R`llong));
+  C`ge ullong_max (C`const (R`max R`ullong))
+]
+
+let conv_impl t const =
+  let name =
+    match t with
+      | A`SIGNED A`ICHAR     -> "signed_char"
+      | A`SIGNED A`SHORT     -> "signed_short"
+      | A`SIGNED A`INT       -> "signed_int"
+      | A`SIGNED A`LONG      -> "signed_long"
+      | A`SIGNED A`LONG_LONG -> "signed_long_long"
+(*
+      | A`BOOL | A`UNSIGNED _ -> invalid_arg "Signed integer type was expected."
+*)
+    end in
+  C`fn ("to_" ^ name) [const]
+
+let min = function
+  | A`BOOL                 -> C`zero
+  | A`SIGNED   A`ICHAR     -> schar_min
+  | A`SIGNED   A`SHORT     -> shrt_min
+  | A`SIGNED   A`INT       -> int_min
+  | A`SIGNED   A`LONG      -> long_min
+  | A`SIGNED   A`LONG_LONG -> llong_min
+  | A`UNSIGNED A`ICHAR     -> C`zero
+  | A`UNSIGNED A`SHORT     -> C`zero
+  | A`UNSIGNED A`INT       -> C`zero
+  | A`UNSIGNED A`LONG      -> C`zero
+  | A`UNSIGNED A`LONG_LONG -> C`zero
+end
+
+let max = function
+  | A`BOOL                 -> C`one
+  | A`SIGNED   A`ICHAR     -> schar_max
+  | A`SIGNED   A`SHORT     -> shrt_max
+  | A`SIGNED   A`INT       -> int_max
+  | A`SIGNED   A`LONG      -> long_max
+  | A`SIGNED   A`LONG_LONG -> llong_max
+  | A`UNSIGNED A`ICHAR     -> uchar_max
+  | A`UNSIGNED A`SHORT     -> ushrt_max
+  | A`UNSIGNED A`INT       -> uint_max
+  | A`UNSIGNED A`LONG      -> ulong_max
+  | A`UNSIGNED A`LONG_LONG -> ullong_max
+end
+
+let min_range_of it =
+  match it with
+    | A`BOOL                 -> R`bool
+    | A`SIGNED   A`ICHAR     -> R`schar
+    | A`SIGNED   A`SHORT     -> R`shrt
+    | A`SIGNED   A`INT       -> R`int
+    | A`SIGNED   A`LONG      -> R`long
+    | A`SIGNED   A`LONG_LONG -> R`llong
+    | A`UNSIGNED A`ICHAR     -> R`uchar
+    | A`UNSIGNED A`SHORT     -> R`ushrt
+    | A`UNSIGNED A`INT       -> R`uint
+    | A`UNSIGNED A`LONG      -> R`ulong
+    | A`UNSIGNED A`LONG_LONG -> R`ullong
+  end
+
+let size_int = function
+  | A`BOOL                 -> bool_size
+  | A`SIGNED   A`ICHAR     -> schar_size
+  | A`SIGNED   A`SHORT     -> shrt_size
+  | A`SIGNED   A`INT       -> int_size
+  | A`SIGNED   A`LONG      -> long_size
+  | A`SIGNED   A`LONG_LONG -> llong_size
+  | A`UNSIGNED A`ICHAR     -> uchar_size
+  | A`UNSIGNED A`SHORT     -> ushrt_size
+  | A`UNSIGNED A`INT       -> uint_size
+  | A`UNSIGNED A`LONG      -> ulong_size
+  | A`UNSIGNED A`LONG_LONG -> ullong_size
+end    
+
+let size = function
+  | A`BASE (_, A`INTEGER i) -> size_int i
+end    
+
+let align_int = function
+  | A`BOOL                 -> bool_align
+  | A`SIGNED   A`ICHAR     -> schar_align
+  | A`SIGNED   A`SHORT     -> shrt_align
+  | A`SIGNED   A`INT       -> int_align
+  | A`SIGNED   A`LONG      -> long_align
+  | A`SIGNED   A`LONG_LONG -> llong_align
+  | A`UNSIGNED A`ICHAR     -> uchar_align
+  | A`UNSIGNED A`SHORT     -> ushrt_align
+  | A`UNSIGNED A`INT       -> uint_align
+  | A`UNSIGNED A`LONG      -> ulong_align
+  | A`UNSIGNED A`LONG_LONG -> ullong_align
+end
+
+let in_range_int t const = C`conj (C`le (min t) const) (C`le const (max t))
+
+let in_range t const =
+  match t with
+    | A`BASE (_, A`INTEGER i) -> in_range_int i const
+  end
+
+let conv_int_type i const =
+  let a = C`fresh_name () in
+  let constr =
+    match i with
+      | A`BOOL ->
+          C`case (C`eq C`zero const) (C`eq a C`zero) (C`eq a C`one)
+      | A`UNSIGNED _ as i ->
+          C`eq a (C`modulo const (max i))
+      | A`SIGNED   _ as i ->
+          C`case (in_range_int i const)
+            (C`eq a const)
+            (C`eq a (conv_impl i const))
+    end in
+  let conv = C`conv_int (min_range_of i) constr const in
+  (a, conv)
+
+let conv_int t const =
+  match t with
+    | A`BASE (_, A`INTEGER i) -> conv_int_type i const
+  end
+
+let conv t t' const =
+  match (t, t') with
+    | (_, A`BASE _ (A`INTEGER i)) ->
+        if types`is_integer t then
+          conv_int_type i const
+        else (const, C`tt)
+    | _ -> (const, C`tt)
+  end  
+
+let align t addr =
+  let alignment =
+    match t with
+      | A`BASE (_, A`INTEGER i) -> (align_int i)
+      | _ -> C`one
+    end in
+  C`eq (C`modulo addr alignment) C`zero

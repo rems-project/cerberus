@@ -1,4 +1,4 @@
-open global
+open Global
 
 let unit a = Some a
 let bind m f =

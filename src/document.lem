@@ -1,1 +1,0 @@
-val to_plain_string : pprint`t -> string
