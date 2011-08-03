@@ -1,18 +1,22 @@
 module A = Ail
 module C = Constraint
 
+type address  = C`constant
+type value    = C`constant
+
 type action =
-  | Load    of A`ctype * C`constant * C`constant
-  | Store   of A`ctype * C`constant * C`constant
-  | FnStore of A`ctype * C`constant * C`constant
-  | Modify  of A`ctype * C`constant * C`constant * C`constant
-  | Create  of A`ctype * C`constant
-  | Kill    of C`constant
-  | Id      of C`constant
-  | Same    of C`constant * C`constant
+  | Load    of A`ctype * address * value
+  | Store   of A`ctype * address * value
+  | FnStore of A`ctype * address * value
+  | Modify  of A`ctype * address * value * value
+  | Create  of A`ctype * address
+  | Kill    of address
+  | Id      of address
+  | Same    of address * address
   | Call
 
-type t = Action of action * Symbol`t
+type uid = Symbol`t
+type t = Action of action * uid
 
 let load     t a v   = Symbol_state`fresh (Action (Load   t a v))
 let store    t a v   = Symbol_state`fresh (Action (Store  t a v))

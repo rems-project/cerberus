@@ -1,7 +1,10 @@
+type name    = Symbol`t
+type address = Symbol`t
+
 type constant =
-  | Name of Symbol`t
+  | Name of name
   | Integer of num
-  | Address of Symbol`t
+  | Address of address
   | Null
   | Offset of constant * constant * constant
   | Plus of constant * constant

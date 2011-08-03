@@ -3,3 +3,9 @@ Constraints:
 
 Reduction:
 - Add more structure to constraints, e.g. "if . then UNDEF else .".
+
+Work plan:
+1. structs
+2. union
+3. malloc
+4. cppmem
