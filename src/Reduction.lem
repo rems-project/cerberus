@@ -218,7 +218,7 @@ let rec
         let t = usual_arithmetic e1 e2 in
         conv_int t (f e1) >>= fun (a1, m1) ->
         conv_int t (f e2) >>= fun (a2, m2) ->
-        C`fresh >>= fun a ->
+        C`fresh           >>= fun a        ->
         let c = C`case (C`lt a1 a2) (C`eq a C`one) (C`eq a C`zero) in
         unit (a, (m1 -&- m2) +& c)
       else
@@ -290,6 +290,7 @@ let rec
         let pos = m2 +& (C`eq a a2) +& (C`eq  a1 C`zero) in
         let neg = m3 +& (C`eq a a3) +& (C`neq a1 C`zero) in
         unit (a, m1 -&> (pos -/- neg))
+      else
   | A`CALL e es ->
       match is_function_id file e with
       | Some (ids, s) ->

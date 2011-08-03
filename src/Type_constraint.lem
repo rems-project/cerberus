@@ -115,17 +115,17 @@ end
 
 let min_range_of it =
   match it with
-    | A`BOOL                 -> R`bool
-    | A`SIGNED   A`ICHAR     -> R`schar
-    | A`SIGNED   A`SHORT     -> R`shrt
-    | A`SIGNED   A`INT       -> R`int
-    | A`SIGNED   A`LONG      -> R`long
-    | A`SIGNED   A`LONG_LONG -> R`llong
-    | A`UNSIGNED A`ICHAR     -> R`uchar
-    | A`UNSIGNED A`SHORT     -> R`ushrt
-    | A`UNSIGNED A`INT       -> R`uint
-    | A`UNSIGNED A`LONG      -> R`ulong
-    | A`UNSIGNED A`LONG_LONG -> R`ullong
+  | A`BOOL                 -> R`bool
+  | A`SIGNED   A`ICHAR     -> R`schar
+  | A`SIGNED   A`SHORT     -> R`shrt
+  | A`SIGNED   A`INT       -> R`int
+  | A`SIGNED   A`LONG      -> R`long
+  | A`SIGNED   A`LONG_LONG -> R`llong
+  | A`UNSIGNED A`ICHAR     -> R`uchar
+  | A`UNSIGNED A`SHORT     -> R`ushrt
+  | A`UNSIGNED A`INT       -> R`uint
+  | A`UNSIGNED A`LONG      -> R`ulong
+  | A`UNSIGNED A`LONG_LONG -> R`ullong
   end
 
 let size_int = function
@@ -164,43 +164,44 @@ let in_range_int t const = C`conj (C`le (min t) const) (C`le const (max t))
 
 let in_range t const =
   match t with
-    | A`BASE (_, A`INTEGER i) -> in_range_int i const
+  | A`BASE (_, A`INTEGER i) -> in_range_int i const
   end
 
-let conv_int_type i const =
-  let a = C`fresh_name () in
+let conv_int_type i const s =
+  Symbol_state`fresh >>= fun a ->
   let constr =
     match i with
-      | A`BOOL ->
-          C`case (C`eq C`zero const) (C`eq a C`zero) (C`eq a C`one)
-      | A`UNSIGNED _ as i ->
-          C`eq a (C`modulo const (max i))
-      | A`SIGNED   _ as i ->
-          C`case (in_range_int i const)
-            (C`eq a const)
-            (C`eq a (conv_impl i const))
+    | A`BOOL ->
+        C`case (C`eq C`zero const) (C`eq a C`zero) (C`eq a C`one)
+    | A`UNSIGNED _ as i ->
+        C`eq a (C`modulo const (max i))
+    | A`SIGNED   _ as i ->
+        C`case (in_range_int i const)
+          (C`eq a const)
+          (C`eq a (conv_impl i const))
     end in
   let conv = C`conv_int (min_range_of i) constr const in
   (a, conv)
 
 let conv_int t const =
   match t with
-    | A`BASE (_, A`INTEGER i) -> conv_int_type i const
+  | A`BASE (_, A`INTEGER i) -> conv_int_type i const
+  | _ -> Symbol_state`unit (const, C`tt)
   end
 
 let conv t t' const =
   match (t, t') with
-    | (_, A`BASE _ (A`INTEGER i)) ->
-        if types`is_integer t then
-          conv_int_type i const
-        else (const, C`tt)
-    | _ -> (const, C`tt)
+  | (_, A`BASE _ (A`INTEGER i)) ->
+      if Types`is_integer t then
+        conv_int_type i const
+      else Symbol_state`unit (const, C`tt)
+  | _ -> Symbol_state`unit (const, C`tt)
   end  
 
 let align t addr =
   let alignment =
     match t with
-      | A`BASE (_, A`INTEGER i) -> (align_int i)
-      | _ -> C`one
+    | A`BASE (_, A`INTEGER i) -> (align_int i)
+    | _ -> C`one
     end in
   C`eq (C`modulo addr alignment) C`zero
