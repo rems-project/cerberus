@@ -1,3 +1,5 @@
+open Global
+
 type 'a t = ('a, Symbol`set) State`t
 
 let unit = State`unit
@@ -5,14 +7,17 @@ let bind = State`bind
 let map = State`map
 let app = State`app
 
-let modify = State`modify
+let modify = State`read
+let read = State`read
 
 module Operators = struct
   let (>>=) = bind
+  let (<$>) = map
 end
 
+open Operators
 
-let init f = f Symbol`emp
+let init f = f Symbol`init
 
-let fresh f = map f (modify Symbol`fresh)
-let fresh_pretty n f = map f (modify (Symbol`fresh_pretty n))
+let fresh = Symbol`fresh
+let fresh_pretty n = Symbol`fresh_pretty n

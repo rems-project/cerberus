@@ -34,10 +34,9 @@ module Effect = struct
   let map_list = State_exception`map_list
   let foldr_list = State_exception`foldr_list
   let iter = State_exception`iter
-  let t_list = State_exception`t_list
 
   let initial_state = <|
-    symbol_set = Symbol`emp;
+    symbol_set = Symbol`init;
     symbol_table = St`create_scope St`emp;
     id_map = Pmap`empty;
     globals = [];

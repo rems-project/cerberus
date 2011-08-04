@@ -9,3 +9,11 @@ type 'a error =
   | UNDEFINED of 'a
   | INVALID of 'a
   | BUG of 'a
+
+let compare_num i1 i2 =
+  if i1 = i2 then
+    Ord`EQ
+  else if i1 < i2 then
+    Ord`LT
+  else
+    Ord`GT

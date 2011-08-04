@@ -4,6 +4,7 @@ LEM_LIB=../lem/library
 BUILD_DIR=_build_ocaml
 
 FILES=\
+Ord.lem \
 Pair.lem \
 Map.lem \
 Braun.lem \

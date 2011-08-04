@@ -1,7 +1,6 @@
 type t = num * string option
 type set = num
 
-let emp = 0
 let count set = set
 
 let fresh s = ((s, None), s + 1)
@@ -12,10 +11,10 @@ let fresh_pretty name s =
 
 let compare (n1, _) (n2, _) =
   if n1 = n2 then
-    0
+    Ord`EQ
   else if n1 < n2 then
-    ~1
-  else 1
+    Ord`LT
+  else Ord`GT
 
 let to_string (n, _) = "v" ^ "_" ^ string_of_num n
 let to_string_pretty ((_, name_opt) as s) =
@@ -28,3 +27,62 @@ let to_string_latex (n, _) =
   "v" ^ "_" ^ "{" ^ string_of_num n ^ "}"
 
 let to_string_id (n, _) = string_of_num n
+
+let undef      = ( 0, Some "UNDEFINED")
+
+let char_bit   = ( 1, Some "char_bit")
+
+(* Minimum and maximum  values. *)
+let char_min     = ( 2, Some "char_min")
+let char_max     = ( 3, Some "char_max")
+let schar_min    = ( 4, Some "schar_min")
+let schar_max    = ( 5, Some "schar_max")
+let uchar_max    = ( 6, Some "uchar_max")
+let shrt_min     = ( 7, Some "shrt_min")
+let shrt_max     = ( 8, Some "shrt_max")
+let ushrt_max    = ( 9, Some "ushrt_max")
+let int_min      = (10, Some "int_min")
+let int_max      = (11, Some "int_max")
+let uint_max     = (12, Some "uint_max")
+let long_min     = (13, Some "long_min")
+let long_max     = (14, Some "long_max")
+let ulong_max    = (15, Some "ulong_max")
+let llong_min    = (16, Some "llong_min")
+let llong_max    = (17, Some "llong_max")
+let ullong_max   = (18, Some "ullong_max")
+
+(* Byte sizes. *)
+let bool_size    = (19, Some "bool_size")
+let char_size    = (20, Some "char_size")
+let schar_size   = (21, Some "schar_size")
+let uchar_size   = (22, Some "uchar_size")
+let shrt_size    = (23, Some "shrt_size")
+let ushrt_size   = (24, Some "ushrt_size")
+let int_size     = (25, Some "int_size")
+let uint_size    = (26, Some "uint_size")
+let long_size    = (27, Some "long_size")
+let ulong_size   = (28, Some "ulong_size")
+let llong_size   = (29, Some "llong_size")
+let ullong_size  = (30, Some "ullong_size")
+
+(* Alignment requirements. *)
+let bool_align   = (31, Some "bool_align")
+let char_align   = (32, Some "char_align")
+let schar_align  = (33, Some "schar_align")
+let uchar_align  = (34, Some "uchar_align")
+let shrt_align   = (35, Some "shrt_align")
+let ushrt_align  = (36, Some "ushrt_align")
+let int_align    = (37, Some "int_align")
+let uint_align   = (38, Some "uint_align")
+let long_align   = (39, Some "long_align")
+let ulong_align  = (40, Some "ulong_align")
+let llong_align  = (41, Some "llong_align")
+let ullong_align = (42, Some "ullong_align")
+
+let to_char      = (43, Some "to_char")
+let to_shrt      = (44, Some "to_shrt")
+let to_int       = (45, Some "to_int")
+let to_long      = (46, Some "to_long")
+let to_llong     = (47, Some "to_llong")
+
+let init = 48

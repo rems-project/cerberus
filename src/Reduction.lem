@@ -8,8 +8,6 @@ module T = Types
 
 module Tc = Type_constraint
 
-let undef = C`eq (C`fresh_named "UNDEFINED") C`one
-
 let exp_type    = annotate`exp_type_of
 let lvalue_type = annotate`lvalue_type_of
 
