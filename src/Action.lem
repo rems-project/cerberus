@@ -212,8 +212,8 @@ module Memory = struct
     if T.compatible ct ct' then
       (Some <|t with p = P.add_constr t.p (C.eq v v')|>)
     else if T.is_unsigned_of ct' ct then
-      Tc.conv_int ct v' >>= (fun (a, conv) ->
-      Some <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>)
+      Tc.conv_int ct v' >>= fun (a, conv) ->
+      Some <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>
     else if T.is_signed_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
       Some <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>

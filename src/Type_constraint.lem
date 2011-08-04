@@ -122,7 +122,7 @@ let in_range t const =
   end
 
 let conv_int_type i const =
-  C.fresh >>= (fun a ->
+  C.fresh >>= fun a ->
   let constr =
     match i with
     | A.BOOL ->
@@ -135,7 +135,7 @@ let conv_int_type i const =
           (C.eq a (conv_impl i const))
     end in
   let conv = C.conv_int (min_range_of i) constr const in
-  Symbol_state.unit (a, conv))
+  Symbol_state.unit (a, conv)
 
 let conv_int t const =
   match t with
