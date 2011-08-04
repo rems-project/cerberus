@@ -1,0 +1,5 @@
+let rec f ls =
+  match ls with
+    | [] -> []
+    | x::xs -> x::f xs
+  end
