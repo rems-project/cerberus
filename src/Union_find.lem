@@ -2,19 +2,19 @@ module A = Braun
 
 module Uf = struct
   type hint = Less of num * num | Equal
-  type t = <|rank : num A`t; parents : num A`t|>
+  type t = <|rank : num A.t; parents : num A.t|>
 
   let create size = <|
-    rank    = A`create size 0;
-    parents = A`init   size (fun i -> i)
+    rank    = A.create size 0;
+    parents = A.init   size (fun i -> i)
   |>
 
   let rec find_helper ps x cont =
-    let p = A`get ps x in
+    let p = A.get ps x in
     if p = x then
       cont (x, ps)
     else
-      find_helper ps p (fun (r, ps') -> cont (r, A`set ps' x r))
+      find_helper ps p (fun (r, ps') -> cont (r, A.set ps' x r))
 
   let find t e =
     let (r, ps) = find_helper t.parents e (fun x -> x) in
@@ -24,15 +24,15 @@ module Uf = struct
     let (dx, t) = find t x in
     let (dy, t) = find t y in
     if dx <> dy then begin
-      let rx = A`get t.parents dx in
-      let ry = A`get t.parents dy in
+      let rx = A.get t.parents dx in
+      let ry = A.get t.parents dy in
       if rx < ry then
-        <|t with parents = A`set t.parents dx dy|>
+        <|t with parents = A.set t.parents dx dy|>
       else if rx > ry then
-        <|t with parents = A`set t.parents dy dx|>
+        <|t with parents = A.set t.parents dy dx|>
       else <|
-        rank    = A`set t.rank    dx (rx + 1);
-        parents = A`set t.parents dy dx
+        rank    = A.set t.rank    dx (rx + 1);
+        parents = A.set t.parents dy dx
       |>
     end else t
 
@@ -40,42 +40,42 @@ module Uf = struct
     let (dx, t) = find t x in
     let (dy, t) = find t y in
     if dx <> dy then begin
-      let rx = A`get t.parents dx in
-      let ry = A`get t.parents dy in
+      let rx = A.get t.parents dx in
+      let ry = A.get t.parents dy in
       if rx < ry then
-        (Less rx ry, <|t with parents = A`set t.parents dx dy|>)
+        (Less rx ry, <|t with parents = A.set t.parents dx dy|>)
       else if rx > ry then
-        (Less ry rx, <|t with parents = A`set t.parents dy dx|>)
+        (Less ry rx, <|t with parents = A.set t.parents dy dx|>)
       else (Equal, <|
-        rank    = A`set t.rank dx (rx + 1);
-        parents = A`set t.parents dy dx
+        rank    = A.set t.rank dx (rx + 1);
+        parents = A.set t.parents dy dx
       |>)
     end else (Equal, t)
 end
 
 type hint = Less of num * num | Equal
-type t = Uf`t * num
+type t = Uf.t * num
 
 let to_hint = function
-  | Uf`Equal      -> Equal
-  | Uf`Less r1 r2 -> Less r1 r2
+  | Uf.Equal      -> Equal
+  | Uf.Less r1 r2 -> Less r1 r2
 end
 
-let create size = (Uf`create size, size)
+let create size = (Uf.create size, size)
 
 let find (t, s) e =
-  let (n, t) = Uf`find t e in
+  let (n, t) = Uf.find t e in
   (n, (t, s))
 
-let combine (t, s) x y = (Uf`combine t x y, s)
+let combine (t, s) x y = (Uf.combine t x y, s)
 
 let combine_hint (t, s) x y =
-  let (o, t') = Uf`combine_hint t x y in
+  let (o, t') = Uf.combine_hint t x y in
   (to_hint o, (t', s))
 
 (*
-let grow (<|Uf`rank = rank; Uf`parents = parents|>, s) n = (<|
-  Uf`rank = A`grow rank    n (fun _ -> 0);
-  Uf`parents = A`grow parents n (fun i -> s + i)
+let grow (<|Uf.rank = rank; Uf.parents = parents|>, s) n = (<|
+  Uf.rank = A.grow rank    n (fun _ -> 0);
+  Uf.parents = A.grow parents n (fun i -> s + i)
 |>, s + n)
 *)

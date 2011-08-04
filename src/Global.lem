@@ -1,5 +1,5 @@
-type ('a, 'b) map = ('a, 'b) Pmap`map
-type 'a multiset = 'a Multiset`t
+type ('a, 'b) map = ('a, 'b) Pmap.map
+type 'a multiset = 'a Multiset.t
 
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
@@ -12,8 +12,8 @@ type 'a error =
 
 let compare_num i1 i2 =
   if i1 = i2 then
-    Ord`EQ
+    Ord.EQ
   else if i1 < i2 then
-    Ord`LT
+    Ord.LT
   else
-    Ord`GT
+    Ord.GT

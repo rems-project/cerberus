@@ -6,27 +6,27 @@ let emp = []
 
 let add a b t =
   match t with
-    | t::ts -> Pmap`add a b t :: ts
+    | t::ts -> Pmap.add a b t :: ts
   end
 
 let rec find a t =
   match t with
     | m::ms ->
-       match Pmap`mem a m with
-         | true  -> Some (Pmap`find a m)
+       match Pmap.mem a m with
+         | true  -> Some (Pmap.find a m)
          | false -> find a ms
       end
     | [] -> None
   end
 
-let mem a t = Option`is_some (find a t)
+let mem a t = Option.is_some (find a t)
 
 let symbols t =
   match t with
-    | m::_ -> Pmap`fold (fun _ b l -> b::l) m []
+    | m::_ -> Pmap.fold (fun _ b l -> b::l) m []
   end
 
-let create_scope t = Pmap`empty::t
+let create_scope t = Pmap.empty::t
 
 let destroy_scope t =
   match t with

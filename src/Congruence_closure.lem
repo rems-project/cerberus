@@ -7,30 +7,30 @@ type term =
   | Apply of apply
 
 type t = <|
-  delta : Union_find`t;
-  use : (apply * constant) list Braun`t;
+  delta : Union_find.t;
+  use : (apply * constant) list Braun.t;
   congr : (constant * constant, constant) map;
   pending : (constant * constant) list;
   length : num
 |>
 
 let create s = <|
-  delta = Union_find`create s;
-  use = Braun`create s [];
-  congr = Pmap`empty;
+  delta = Union_find.create s;
+  use = Braun.create s [];
+  congr = Pmap.empty;
   pending = [];
   length = s
 |>
 
 let find cc c =
-  let (r, d) = Union_find`find cc.delta c in
+  let (r, d) = Union_find.find cc.delta c in
   (r, <|cc with delta = d|>)
 
 let combine cc c1 c2 =
-  let (hint, d) = Union_find`combine_hint cc.delta c1 c2 in
+  let (hint, d) = Union_find.combine_hint cc.delta c1 c2 in
   (hint, <|cc with delta = d|>)
 
-let find_congr cc r1 r2 = Map`find (r1, r2) cc.congr
+let find_congr cc r1 r2 = Map.find (r1, r2) cc.congr
 
 let add_pending cc eq = <|cc with pending = eq :: cc.pending|>
 
@@ -44,9 +44,9 @@ let propagate cc =
   let process cc (c1, c2) =
     let (hint, cc) = combine cc c1 c2 in
     match hint with
-      | Union_find`Equal      -> cc
-      | Union_find`Less r1 r2 ->
-          List`fold_left 
+      | Union_find.Equal      -> cc
+      | Union_find.Less r1 r2 ->
+          List.fold_left 
             (fun cc ((c1, c2) as f, c) ->
               let (c1', cc) = find cc c1 in
               let (c2', cc) = find cc c2 in
@@ -55,12 +55,12 @@ let propagate cc =
                     add_pending cc (c, congr)
                 | None ->
                     <|cc with
-                      use   = Braun`update cc.use r2 ((::) (f, c));
-                      congr = Pmap`add (c1', c2') c cc.congr
+                      use   = Braun.update cc.use r2 ((::) (f, c));
+                      congr = Pmap.add (c1', c2') c cc.congr
                     |>
               end)
-            <|cc with use = Braun`set cc.use r1 []|>
-            (Braun`get cc.use r1)
+            <|cc with use = Braun.set cc.use r1 []|>
+            (Braun.get cc.use r1)
     end in
   fold process cc
 
@@ -74,10 +74,10 @@ let merge cc t c =
           | Some congr ->
               propagate (add_pending cc (c, congr))
           | None ->
-              let add r a = Braun`update a r ((::) (f, c)) in
+              let add r a = Braun.update a r ((::) (f, c)) in
               <|cc with
                 use = add r2 (add r1 cc.use);
-                congr = Pmap`add (r1, r2) c cc.congr
+                congr = Pmap.add (r1, r2) c cc.congr
               |>
         end
   end
@@ -120,8 +120,8 @@ let congruent_constants cc c1 c2 =
 
 (*
 let grow cc n = <|cc with
-  delta = Union_find`grow cc.delta n;
-  use = Braun`grow cc.use n (fun _ -> []);
+  delta = Union_find.grow cc.delta n;
+  use = Braun.grow cc.use n (fun _ -> []);
   length = cc.length + n
 |>
 *)

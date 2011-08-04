@@ -92,8 +92,8 @@ let is_scalar t = is_arithmetic t || is_pointer t
 let is_aggregate t = is_array t || is_structure t
 
 let is_unqualified = function
-  | BASE    q _ -> Set`is_empty q
-  | POINTER q _ -> Set`is_empty q
+  | BASE    q _ -> Set.is_empty q
+  | POINTER q _ -> Set.is_empty q
   | _ -> true
 end
 
@@ -133,15 +133,15 @@ let compatible_basic s1 s2 = (s1 = s2)
 let rec compatible type1 type2 =
   match (type1, type2) with
     | (BASE q1 s1, BASE q2 s2) ->
-        compatible_basic s1 s2 && Set`equal q1 q2
+        compatible_basic s1 s2 && Set.equal q1 q2
     | (POINTER q1 t1, POINTER q2 t2) ->
-        compatible t1 t2 && Set`equal q1 q2
+        compatible t1 t2 && Set.equal q1 q2
     | (ARRAY t1 size1, ARRAY t2 size2) ->
         size1 = size2 && compatible t1 t2
     | (FUNCTION t1 args1, FUNCTION t2 args2) ->
         compatible t1 t2
-        && List`length args1 = List`length args2
-        && List`for_all2 compatible args1 args2
+        && List.length args1 = List.length args2
+        && List.for_all2 compatible args1 args2
     | _ -> false
   end
 
@@ -175,7 +175,7 @@ let rec eq t1 t2 =
     | (BASE _ b1, BASE _ b2) -> b1 = b2
     | (POINTER _ t1, POINTER _ t2) -> eq t1 t2
     | (FUNCTION t1 ts1, FUNCTION t2 ts2) ->
-        eq t1 t2 && List`for_all2 eq ts1 ts2
+        eq t1 t2 && List.for_all2 eq ts1 ts2
     | (ARRAY t1 size1, ARRAY t2 size2) ->
         size1 = size2 && eq t1 t2
     | _ -> false
@@ -280,8 +280,8 @@ let is_complete t =
 let is_incomplete t = not (is_complete t)
 
 let is_const = function
-  | BASE     q _ -> Cabs`CONST IN q
-  | POINTER  q _ -> Cabs`CONST IN q
+  | BASE     q _ -> Cabs.CONST IN q
+  | POINTER  q _ -> Cabs.CONST IN q
   | ARRAY    _ _ -> false
   | FUNCTION _ _ -> false
 end

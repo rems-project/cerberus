@@ -1,35 +1,35 @@
 open Global
-open Symbol_state`Operators
+open Symbol_state.Operators
 
 module A = Ail
 module C = Constraint
 
-type address  = C`constant
-type value    = C`constant
+type address  = C.constant
+type value    = C.constant
 
 type action =
-  | Load    of A`ctype * address * value
-  | Store   of A`ctype * address * value
-  | FnStore of A`ctype * address * value
-  | Modify  of A`ctype * address * value * value
-  | Create  of A`ctype * address
+  | Load    of A.ctype * address * value
+  | Store   of A.ctype * address * value
+  | FnStore of A.ctype * address * value
+  | Modify  of A.ctype * address * value * value
+  | Create  of A.ctype * address
   | Kill    of address
   | Id      of address
   | Same    of address * address
   | Call
 
-type uid = Symbol`t
+type uid = Symbol.t
 type t = Action of action * uid
 
-let load     t a v   = Action (Load   t a v)   <$> Symbol_state`fresh
-let store    t a v   = Action (Store  t a v)   <$> Symbol_state`fresh
-let fn_store t a v   = Action (Store  t a v)   <$> Symbol_state`fresh
-let modify   t a l v = Action (Modify t a l v) <$> Symbol_state`fresh
-let create   t a     = Action (Create t a)     <$> Symbol_state`fresh
-let kill a           = Action (Kill     a)     <$> Symbol_state`fresh
-let id a             = Action (Id       a)     <$> Symbol_state`fresh
-let same a a'        = Action (Same a a')      <$> Symbol_state`fresh
-let call             = Action (Call)           <$> Symbol_state`fresh
+let load     t a v   = Action (Load   t a v)   <$> Symbol_state.fresh
+let store    t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
+let fn_store t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
+let modify   t a l v = Action (Modify t a l v) <$> Symbol_state.fresh
+let create   t a     = Action (Create t a)     <$> Symbol_state.fresh
+let kill a           = Action (Kill     a)     <$> Symbol_state.fresh
+let id a             = Action (Id       a)     <$> Symbol_state.fresh
+let same a a'        = Action (Same a a')      <$> Symbol_state.fresh
+let call             = Action (Call)           <$> Symbol_state.fresh
 
 let uid (Action _ id) = id
 
@@ -56,41 +56,41 @@ end
 module Print = struct
   module P = Pprint
 
-  open P`Operators
+  open P.Operators
 
-  let pp_c = C`Print`pp_constant
-  let pp_t = A`Print`pp_type
-  let pp_s s = !^ (Symbol`to_string s)
+  let pp_c = C.Print.pp_constant
+  let pp_t = A.Print.pp_type
+  let pp_s s = !^ (Symbol.to_string s)
 
   let pp_uid (Action _ uid) = pp_s uid
 
   let pp (Action action uid) =
-    let eq = (^^^) (pp_s uid ^^^ P`colon) in
-    let (^%^) d1 d2 = d1 ^^ P`comma ^^^ d2 in
+    let eq = (^^^) (pp_s uid ^^^ P.colon) in
+    let (^%^) d1 d2 = d1 ^^ P.comma ^^^ d2 in
     match action with
     | Load t a v ->
-        eq (!^ "load")   ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+        eq (!^ "load")   ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
     | Store t a v ->
-        eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+        eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
     | FnStore t a v ->
-        eq (!^ "store")  ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+        eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
     | Modify t a l v ->
-        eq (!^ "modify") ^^^ P`parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
+        eq (!^ "modify") ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
     | Create t a ->
-        eq (!^ "create") ^^^ P`parens (pp_t t ^%^ pp_c a)
+        eq (!^ "create") ^^^ P.parens (pp_t t ^%^ pp_c a)
     | Kill a ->
-        eq (!^ "kill")   ^^^ P`parens (pp_c a)
+        eq (!^ "kill")   ^^^ P.parens (pp_c a)
     | Same a1 a2 ->
-        eq (!^ "same")   ^^^ P`parens (pp_c a1 ^%^ pp_c a2)
+        eq (!^ "same")   ^^^ P.parens (pp_c a1 ^%^ pp_c a2)
     | Id a ->
-        eq (!^ "id")     ^^^ P`parens (pp_c a)
+        eq (!^ "id")     ^^^ P.parens (pp_c a)
     | Call ->
         eq (!^ "call")
     end
 
   let pp_latex a =
-    let pp_c = C`Print`pp_constant_latex in
-    let pp_id (Action _ s) = !^ (Symbol`to_string_id s) in
+    let pp_c = C.Print.pp_constant_latex in
+    let pp_id (Action _ s) = !^ (Symbol.to_string_id s) in
     let pp_name (Action a _) =
       match a with
       | Load    _ _ _   -> !^ "Load"
@@ -104,7 +104,7 @@ module Print = struct
       | Call            -> !^ "Call"
       end in
     let pp_args (Action a _) =
-      let tt d = !^ "\\\\cc" ^^ P`braces d in
+      let tt d = !^ "\\\\cc" ^^ P.braces d in
       match a with
       | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
       | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
@@ -118,84 +118,84 @@ module Print = struct
       end in
     let pp_opts args =
       match args with
-      | [] -> P`empty
-      | _ -> P`parens (P`sepmap (P`comma ^^ P`space) (fun i -> i) args)
+      | [] -> P.empty
+      | _ -> P.parens (P.sepmap (P.comma ^^ P.space) (fun i -> i) args)
       end in
     let context name id args =
-      !^ "\\\\sem" ^^ P`braces name ^^ P`underscore ^^ P`braces id
+      !^ "\\\\sem" ^^ P.braces name ^^ P.underscore ^^ P.braces id
       ^^^  pp_opts args in
     context (pp_name a) (pp_id a) (pp_args a)
 
   let pp_dot sb =
-    let sem_list = P`sep0map (P`semi ^^ P`break1) (fun i -> i) in
+    let sem_list = P.sep0map (P.semi ^^ P.break1) (fun i -> i) in
     let pre = !^
       "\\newcommand{\\sem}[1]{\\small{\\textsf{#1}}}\
        \\newcommand{\\cc}[1]{\\text{\\footnotesize\\ttfamily{#1}}}" in
     let style = !^ "node [shape=none]" in
     let context d =
-      !^ "digraph G" ^^^ P`braces (
-        sem_list ((!^ "d2tdocpreamble" ^^ P`equals ^^ P`dquotes pre)::style::d)
+      !^ "digraph G" ^^^ P.braces (
+        sem_list ((!^ "d2tdocpreamble" ^^ P.equals ^^ P.dquotes pre)::style::d)
       ) in
-    let arrow a1 a2 = pp_uid a1 ^^^ P`minus ^^ P`rangle ^^^ pp_uid a2 in
-    let rd = Transitive_reduction`reduce sb in
+    let arrow a1 a2 = pp_uid a1 ^^^ P.minus ^^ P.rangle ^^^ pp_uid a2 in
+    let rd = Transitive_reduction.reduce sb in
     let d = [arrow a1 a2 | forall ((a1, a2) IN rd) | true] in
     let s = {a1 | forall ((a1, _) IN rd) | true} union {a2 | forall ((_, a2) IN rd) | true} in
     let (s, d) =
-      Set`fold
+      Set.fold
         (fun (a1, a2) (s, d) -> (s union {a1; a2}, (arrow a1 a2)::d))
         rd (empty, []) in
-    let def a = pp_uid a ^^^ P`brackets (
-      !^ "label" ^^ P`equals ^^ P`dquotes (pp_latex a)
+    let def a = pp_uid a ^^^ P.brackets (
+      !^ "label" ^^ P.equals ^^ P.dquotes (pp_latex a)
     ) in
-    let d = Set`fold (fun a d -> def a::d) s d in
+    let d = Set.fold (fun a d -> def a::d) s d in
     context d    
 end
 
 let unfold (Action a _) = a
 
 module Memory = struct
-  module P = C`Process
+  module P = C.Process
   module T = Types
   module Tc = Type_constraint
 
   type value =
     | Indeterminate
-    | Value of C`constant
+    | Value of C.constant
 
   type obj =
-    | Scalar of A`ctype * value
-    | Array  of A`ctype * value Braun`t
+    | Scalar of A.ctype * value
+    | Array  of A.ctype * value Braun.t
 
-  type mem = (Symbol`t, obj) map
+  type mem = (Symbol.t, obj) map
 
-  type t = <|p : P`p; mem : mem|>
+  type t = <|p : P.p; mem : mem|>
 
   let address t const =
-    let (addr, p') = P`address t.p const in
+    let (addr, p') = P.address t.p const in
     (addr, <|t with p = p'|>)
 
-  let same_size ct s = C`compare_const s (Tc`size ct) = Ord`EQ
+  let same_size ct s = C.compare_const s (Tc.size ct) = Ord.EQ
 
   let is_valid t addr =
     match addr with
-    | P`Base      l     -> Pmap`mem l t.mem
-    | P`Displaced l i s ->
-        match Map`find l t.mem with
+    | P.Base      l     -> Pmap.mem l t.mem
+    | P.Displaced l i s ->
+        match Map.find l t.mem with
         | Some o ->
             let (ct, length) =
               match o with
               | Scalar ct _  -> (ct, 1)
-              | Array  ct vs -> (ct, Braun`size vs)
+              | Array  ct vs -> (ct, Braun.size vs)
               end in
             i >= 0 && i <= length && same_size ct s
         | None -> false
         end
-    | P`NullAddress -> false
+    | P.NullAddress -> false
     end
 
   let base_of = function
-    | P`Base      l     -> l
-    | P`Displaced l _ _ -> l
+    | P.Base      l     -> l
+    | P.Displaced l _ _ -> l
   end
 
   let same_base t addr1 addr2 =
@@ -203,20 +203,20 @@ module Memory = struct
 
   let retrieve t addr =
     match addr with
-    | P`Base      l     -> Map`find l t.mem
-    | P`Displaced l i s -> Map`find l t.mem
-    | P`NullAddress     -> None
+    | P.Base      l     -> Map.find l t.mem
+    | P.Displaced l i s -> Map.find l t.mem
+    | P.NullAddress     -> None
     end
 
   let load_scalar t ct' v' ct v =
-    if T`compatible ct ct' then
-      (Some <|t with p = P`add_constr t.p (C`eq v v')|>)
-    else if T`is_unsigned_of ct' ct then
-      Tc`conv_int ct v' >>= (fun (a, conv) ->
-      Some <|t with p = P`add_constr (P`add_constr t.p conv) (C`eq v a)|>)
-    else if T`is_signed_of ct' ct then
-      let overflow = C`implies (C`neg (Tc`in_range ct v')) C`undef in
-      Some <|t with p = P`add_constr (P`add_constr t.p (C`eq v v')) overflow|>
+    if T.compatible ct ct' then
+      (Some <|t with p = P.add_constr t.p (C.eq v v')|>)
+    else if T.is_unsigned_of ct' ct then
+      Tc.conv_int ct v' >>= (fun (a, conv) ->
+      Some <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>)
+    else if T.is_signed_of ct' ct then
+      let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
+      Some <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
     else None
 
   let load_event t ct a v =
@@ -227,16 +227,16 @@ module Memory = struct
     | Scalar ct' (Value v') ->
         load_scalar t ct' v' ct v
     | Array ct' vs' ->
-        if T`compatible ct' ct then
+        if T.compatible ct' ct then
           match addr with
-          | P`Base _ ->
-              match Braun`get vs' 0 with
+          | P.Base _ ->
+              match Braun.get vs' 0 with
               | Value v' -> load_scalar t ct' v' ct v
               | Indeterminate -> None
               end
-          | P`Displaced _ i s ->
-              if i >= 0 && i < Braun`size vs' && same_size ct' s then
-                match Braun`get vs' i with
+          | P.Displaced _ i s ->
+              if i >= 0 && i < Braun.size vs' && same_size ct' s then
+                match Braun.get vs' i with
                 | Value v' -> load_scalar t ct' v' ct v
                 | Indeterminate -> None
                 end
@@ -247,14 +247,14 @@ module Memory = struct
     end
 
   let write_scalar t ct' ct v =
-    if T`compatible ct ct' then
+    if T.compatible ct ct' then
       (Value v, t)
-    else if T`is_signed_of ct' ct then
-      let (a, conv) = Tc`conv_int ct' v in
-      (Value a, <|t with p = P`add_constr t.p conv|>)
-    else if T`is_unsigned_of ct' ct then
-      let overflow = C`implies (C`neg (Tc`in_range ct' v)) C`undef in
-      (Value v, <|t with p = P`add_constr t.p overflow|>)
+    else if T.is_signed_of ct' ct then
+      let (a, conv) = Tc.conv_int ct' v in
+      (Value a, <|t with p = P.add_constr t.p conv|>)
+    else if T.is_unsigned_of ct' ct then
+      let overflow = C.implies (C.neg (Tc.in_range ct' v)) C.undef in
+      (Value v, <|t with p = P.add_constr t.p overflow|>)
     else (*raise (Undefined t)*) ()
 
   let write_event t ct a v =
@@ -262,19 +262,19 @@ module Memory = struct
     match (retrieve t addr) with
     | Scalar ct' _ ->
         let (v, t) = write_scalar t ct' ct v in
-        <|t with mem = Pmap`add (base_of addr) (Scalar (ct', v)) t.mem|>
+        <|t with mem = Pmap.add (base_of addr) (Scalar (ct', v)) t.mem|>
     | Array (ct', vs') ->
-        if T`compatible ct' ct then
+        if T.compatible ct' ct then
           match addr with
-          | P`Base _ ->
+          | P.Base _ ->
               let (v, t) = write_scalar t ct' ct v in
-              let vs = Braun`set vs' 0 v in
-              <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
-          | P`Displaced _ i s ->
-              if i >= 0 && i < Braun`size vs' && same_size ct' s then
+              let vs = Braun.set vs' 0 v in
+              <|t with mem = Pmap.add (base_of addr) (Array (ct', vs)) t.mem|>
+          | P.Displaced _ i s ->
+              if i >= 0 && i < Braun.size vs' && same_size ct' s then
                 let (v, t) = write_scalar t ct' ct v in
-                let vs = Braun`set vs' i v in
-                <|t with mem = Pmap`add (base_of addr) (Array (ct', vs)) t.mem|>
+                let vs = Braun.set vs' i v in
+                <|t with mem = Pmap.add (base_of addr) (Array (ct', vs)) t.mem|>
               else () 
           end
         else ()
@@ -282,7 +282,7 @@ module Memory = struct
     end
 
   let event t ((_, action) as a) =
-(*    Document`Print (Print`pp a); print_endline "";*)
+(*    Document.Print (Print.pp a); print_endline "";*)
     match action with
     | Id a ->
         let (addr, t) = address t a in
@@ -292,18 +292,18 @@ module Memory = struct
         let (addr2, t) = address t a2 in
         if same_base t addr1 addr2 then t else raise (Undefined t)
     | Create ct a -> 
-        if T`is_scalar ct then
+        if T.is_scalar ct then
           let (addr, t) = address t a in
-          <|t with mem = Pmap`add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
-        else if T`is_array ct then
+          <|t with mem = Pmap.add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
+        else if T.is_array ct then
           let (addr, t) = address t a in
-          let value = Braun`create (T`size_of_array ct) Indeterminate in
-          let obj = Array (T`base_of_array ct, value) in
-          <|t with mem = Pmap`add (base_of addr) obj t.mem|>
+          let value = Braun.create (T.size_of_array ct) Indeterminate in
+          let obj = Array (T.base_of_array ct, value) in
+          <|t with mem = Pmap.add (base_of addr) obj t.mem|>
         else ()
     | Kill a ->
         let (addr, t) = address t a in
-        <|t with mem = Pmap`remove (base_of addr) t.mem|>
+        <|t with mem = Pmap.remove (base_of addr) t.mem|>
     | Load    ct a v -> load_event  t ct a v
     | Store   ct a v -> write_event t ct a v
     | FnStore ct a v -> write_event t ct a v
@@ -314,10 +314,10 @@ module Memory = struct
     end
 
   let replay p' es =
-    let t = List`fold_left event <|p = p'; mem = Pmap`empty|> es in
-    P`complete t.p
+    let t = List.fold_left event <|p = p'; mem = Pmap.empty|> es in
+    P.complete t.p
 (*
     with Undefined t ->
-      P`complete (*print_endline "UNDEF";*) P`add_constr t.p C`undef
+      P.complete (*print_endline "UNDEF";*) P.add_constr t.p C.undef
 *)
 end	

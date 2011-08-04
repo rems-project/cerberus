@@ -7,7 +7,7 @@ type cabsloc = <|
   ident : num
 |>
 
-type location = Location`t
+type location = Location.t
 
 type storage_class =
   | AUTO
