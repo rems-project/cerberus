@@ -40,8 +40,7 @@ let rec is_null_pointer (A.Exp _ e) =
    with a type. To avoid redundant type computation, we use open
    recursion. [annotate_exp] complements the process. *)
 
-let rec
-| check_exp env l e_head =
+let rec check_exp env l e_head =
   let invalid_head msg = invalid msg (l, e_head) in
   let f e =
     let t =
@@ -737,7 +736,7 @@ let rec
         Exception.unit (A.T_EXP t)
   end
 
-| annotate_exp env exp =
+and annotate_exp env exp =
   let (A.Exp l e) = exp in
   let a_type e =
     Exception.map (fun t -> A.Exp (Annot.a_type l t) e) (check_exp env l e) in

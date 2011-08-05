@@ -2,7 +2,7 @@ module L = Lexing
 
 type t = <|
   start : L.position;
-  stop : L.position
+  stop  : L.position
 |>
 
 let make s e = <|start = s; stop = e|>

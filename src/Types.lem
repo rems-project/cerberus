@@ -188,12 +188,11 @@ let eq_rank i1 i2 =
     | _ -> false
   end
 
-let rec
-| leq_rank i1 i2 = (eq_rank i1 i2 || lt_rank i1 i2)
+let rec leq_rank i1 i2 = (eq_rank i1 i2 || lt_rank i1 i2)
 
 (* We exploit the "linear" transitivity to avoid listing all pairs/building the
    transitive closure. *)
-| lt_rank i1 i2 =
+and lt_rank i1 i2 =
   let leq = leq_rank i1 in
   match i2 with
     | BOOL             -> false

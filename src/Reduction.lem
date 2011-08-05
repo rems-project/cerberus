@@ -39,8 +39,7 @@ let rec iterate f_s f _e n ml e s =
   | _ -> iterate (M.enter_loop (m_pos m) (m_neg m) ml --&> ml') (n-1)
 end
 
-let rec
-| reduce_lvalue n b env file exp =
+let rec reduce_lvalue n b env file exp =
   let f = reduce_exp n b env file in
   let f_lvalue = reduce_lvalue n b env file in
   match annotate.exp_of exp with
@@ -55,7 +54,7 @@ let rec
       unit (a, m +& c)
   end
 
-| reduce_exp n b env file exp =
+and reduce_exp n b env file exp =
   let f = reduce_exp n b env file in
   let f_lvalue e =
     let (a, m) = reduce_lvalue n b env file e in
@@ -318,7 +317,7 @@ let rec
       end
   end
 
-| reduce_stmt n b env file (A.Stmt _ stmt) fid return =
+and reduce_stmt n b env file (A.Stmt _ stmt) fid return =
   let f_s = reduce_stmt n b env file fid return in
   let f_e = reduce_exp  n b env file in
   let lift x = x >>= fun (a, m) -> (a, M.normal m) in

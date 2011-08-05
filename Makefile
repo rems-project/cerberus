@@ -41,7 +41,7 @@ Reduction.lem
 
 all:
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types -ocaml $(foreach F, $(FILES), ../src/$(F))
+	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types $(foreach F, $(FILES), ../src/$(F))
 
 clean:
 	rm -R $(BUILD_DIR)

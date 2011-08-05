@@ -141,8 +141,7 @@ let desugar_unop = function
   | C.INDIRECTION -> A.INDIRECTION
 end
 
-let rec
-| desugar_exp (e, l) =
+let rec desugar_exp (e, l) =
   let f  = desugar_exp in
   let ft = desugar_type in
   A.Exp l <$> (match e with
@@ -182,7 +181,7 @@ let rec
 *)
   end)
 
-| desugar_specifier specifiers =
+and desugar_specifier specifiers =
   let mset = Multiset.from_list in
   let smap =
     List.fold_left
@@ -237,7 +236,7 @@ let rec
       ) in
   Effect.of_option "" (Map.find specifiers smap)
 
-| desugar_type t =
+and desugar_type t =
   let ft = desugar_type in
   match t with
     | C.BASE qs ss -> A.BASE qs <$> desugar_specifier ss
@@ -279,7 +278,7 @@ let rec
     | C.POINTER qs t -> A.POINTER qs <$> ft t
   end
 
-| desugar_stmt (s, l) =
+and desugar_stmt (s, l) =
   let fs = desugar_stmt in
   let fe = desugar_exp  in
   A.Stmt l <$> match s with
@@ -388,7 +387,7 @@ let rec
     | C.CONTINUE -> Effect.unit A.CONTINUE
   end
 
-| desugar_stmt_opt l = function
+and desugar_stmt_opt l = function
   | Some stmt -> desugar_stmt stmt
   (* Adding or removing a (finite number of) null operation is semantically
      sound since "a null statement [...] performs no operations" (6.8.3#3,
@@ -396,7 +395,7 @@ let rec
   | None -> Effect.unit (A.Stmt l A.SKIP)
 end
 
-| register_name l name =
+and register_name l name =
   Effect.return_scope >>= fun scope ->
   if Symbol_table.mem name scope then
     let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ..If \
@@ -410,7 +409,7 @@ end
   else
     Effect.fresh_name name
 
-| desugar_storage l = function
+and desugar_storage l = function
   | []           -> Effect.unit None
   | [C.AUTO]     -> Effect.unit (Some A.AUTO)
   | [C.STATIC]   -> Effect.unit (Some A.STATIC)
@@ -427,14 +426,14 @@ end
 *)
 end
 
-| desugar_decl ((name, t, sts), l) =
+and desugar_decl ((name, t, sts), l) =
   register_name l name         >>= fun id   ->
   desugar_storage l sts        >>= fun d_st ->
   desugar_type t               >>= fun d_t  ->
   Effect.add_id id (d_t, d_st) >>= fun ()   ->
   Effect.unit id
 
-| desugar_function_decl ((name, t, sts), l) =
+and desugar_function_decl ((name, t, sts), l) =
   let desugar_function_type t =
     match t with
       | C.FUNCTION t decls ->
@@ -476,7 +475,7 @@ end
   Effect.push_table fn_scope   >>= fun () ->
   Effect.unit (id, formals)
 
-| desugar_defn ((d, e_opt), l) =
+and desugar_defn ((d, e_opt), l) =
   desugar_decl d >>= fun id ->
   match e_opt with
     | None   -> Effect.unit (id, None, l)
