@@ -28,7 +28,7 @@ let to_string_latex (n, _) =
 
 let to_string_id (n, _) = string_of_num n
 
-let undef      = ( 0, Some "UNDEFINED")
+let undefined  = ( 0, Some "UNDEFINED")
 
 let char_bit   = ( 1, Some "char_bit")
 

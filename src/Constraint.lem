@@ -314,8 +314,7 @@ let conv_int r c1 c2 = ConvInt r c1 c2
 let mem c t = c IN t
 
 module Constants = struct
-  let undef      = Name Symbol.undef
-
+  let undefined  = Name Symbol.undefined
   let char_bit   = Name Symbol.char_bit
 
   (* Minimum and maximum  values. *)
@@ -371,6 +370,8 @@ module Constants = struct
   let to_long  = Symbol.to_long
   let to_llong = Symbol.to_llong
 end
+
+let undef = eq one Constants.undefined
 
 module Print = struct
   module P = Pprint
@@ -731,7 +732,7 @@ module Process = struct
     let p = <|
       t = t';
       eqs = empty;
-      cc = Cc.create 2048;
+      cc = Cc.make 2048;
       counter = n_fn;
       int_map = Pmap.empty;
       name_map = Pmap.empty;
@@ -744,7 +745,7 @@ module Process = struct
     let p = simplify_loop p in
     p.t union p.eqs
 
-  let add_constraints p c = Set.fold (fun constr p -> conj p constr) c p
+  let add_constraints p c = Set.fold (fun constr p -> add_constr p constr) c p
 
   let rewrite p const = simplify_const const (snd (convert_const const p))
 
