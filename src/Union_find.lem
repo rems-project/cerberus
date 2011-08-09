@@ -4,9 +4,9 @@ module Uf = struct
   type hint = Less of num * num | Equal
   type t = <|rank : num A.t; parents : num A.t|>
 
-  let create size = <|
-    rank    = A.create size 0;
-    parents = A.init   size (fun i -> i)
+  let make size = <|
+    rank    = A.make size 0;
+    parents = A.init size (fun i -> i)
   |>
 
   let rec find_helper ps x cont =
@@ -61,7 +61,7 @@ let to_hint = function
   | Uf.Less r1 r2 -> Less r1 r2
 end
 
-let create size = (Uf.create size, size)
+let make size = (Uf.make size, size)
 
 let find (t, s) e =
   let (n, t) = Uf.find t e in
