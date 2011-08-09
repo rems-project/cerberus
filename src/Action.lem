@@ -1,5 +1,4 @@
 open Global
-open Symbol_state.Operators
 
 module A = Ail
 module C = Constraint
@@ -20,6 +19,8 @@ type action =
 
 type uid = Symbol.t
 type t = Action of action * uid
+
+let (<$>) = Symbol_state.Operators.(<$>)
 
 let load     t a v   = Action (Load   t a v)   <$> Symbol_state.fresh
 let store    t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
@@ -158,6 +159,24 @@ module Memory = struct
   module T = Types
   module Tc = Type_constraint
 
+  module Effect = struct
+    module M = Symbol_state_program
+
+    let unit = M.unit
+
+    module Operators = struct
+      let (>>=) = M.bind
+    end
+
+    let undef = M.undefined
+    let bug   = M.bug
+
+    let conv_int t v = M.of_symbol_state (Tc.conv_int t v)
+  end
+
+  module E = Effect
+  open E.Operators
+
   type value =
     | Indeterminate
     | Value of C.constant
@@ -210,14 +229,14 @@ module Memory = struct
 
   let load_scalar t ct' v' ct v =
     if T.compatible ct ct' then
-      (Some <|t with p = P.add_constr t.p (C.eq v v')|>)
+      E.unit <|t with p = P.add_constr t.p (C.eq v v')|>
     else if T.is_unsigned_of ct' ct then
-      Tc.conv_int ct v' >>= fun (a, conv) ->
-      Some <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>
+      E.conv_int ct v' >>= fun (a, conv) ->
+      E.unit <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>
     else if T.is_signed_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
-      Some <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
-    else None
+      E.unit <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
+    else E.undef "Incompatible types."
 
   let load_event t ct a v =
     let (addr, t) = address t a in
@@ -248,14 +267,14 @@ module Memory = struct
 
   let write_scalar t ct' ct v =
     if T.compatible ct ct' then
-      (Value v, t)
+      Symbol_state.unit (Value v, t)
     else if T.is_signed_of ct' ct then
-      let (a, conv) = Tc.conv_int ct' v in
+      E.conv_int ct' v >>= fun (a, conv) ->
       (Value a, <|t with p = P.add_constr t.p conv|>)
     else if T.is_unsigned_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct' v)) C.undef in
-      (Value v, <|t with p = P.add_constr t.p overflow|>)
-    else (*raise (Undefined t)*) ()
+      Symbol_state.unit (Value v, <|t with p = P.add_constr t.p overflow|>)
+    else (*raise (Undefined t)*) Symbol_state.unit ()
 
   let write_event t ct a v =
     let (addr, t) = address t a in

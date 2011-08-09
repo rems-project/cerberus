@@ -16,9 +16,11 @@ Symbol.lem \
 Global.lem \
 Option.lem \
 Transitive_reduction.lem \
+Exception.lem \
+Program.lem \
 State.lem \
 Symbol_state.lem \
-Exception.lem \
+Symbol_state_program.lem \
 State_exception.lem \
 Union_find.lem \
 Congruence_closure.lem \
