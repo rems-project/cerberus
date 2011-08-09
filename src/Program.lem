@@ -1,0 +1,17 @@
+type 'msg error =
+  | Undefined of 'msg
+  | Invalid of 'msg
+  | Bug of 'msg
+
+type ('a, 'msg) t = ('a, 'msg error) Exception.t
+
+let unit = Exception.unit
+let bind = Exception.bind
+let map = Exception.map
+let app = Exception.app
+
+let undefined = Undefined
+let invalid = Invalid
+let bug = Bug
+
+let fail = Bug

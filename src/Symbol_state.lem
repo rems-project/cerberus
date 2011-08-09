@@ -1,23 +1,16 @@
-open Global
-
 type 'a t = ('a, Symbol.set) State.t
 
 let unit = State.unit
 let bind = State.bind
 let map = State.map
-let app = State.app
-
-let modify = State.read
-let read = State.read
 
 module Operators = struct
   let (>>=) = bind
   let (<$>) = map
 end
 
-open Operators
-
-let init f = f Symbol.init
+let init m = State.run m Symbol.init
+let run = State.run
 
 let fresh = Symbol.fresh
 let fresh_pretty n = Symbol.fresh_pretty n

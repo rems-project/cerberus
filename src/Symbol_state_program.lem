@@ -1,0 +1,27 @@
+open Global
+
+type ('a, 'msg) t = Symbol.set -> ('a * Symbol.set, 'msg) Program.t
+
+let unit a = fun s -> Program.unit (a, s)
+let map f m =
+  fun s -> Program.bind (m s) (fun (a, s') -> Program.unit (f a, s'))
+let join mm = fun s -> Program.bind (mm s) (fun (m, s') -> m s')
+let bind m f = join (map f m)
+let app mf m = bind mf (fun f -> map f m)
+
+let fail      msg = fun _ -> Program.fail      msg
+let undefined msg = fun _ -> Program.undefined msg
+let invalid   msg = fun _ -> Program.invalid   msg
+let bug       msg = fun _ -> Program.bug       msg
+
+let fresh          = fun s -> Program.unit (Symbol.fresh          s)
+let fresh_pretty n = fun s -> Program.unit (Symbol.fresh_pretty n s)
+
+let init m = m Symbol.init
+
+module Operators = struct
+  let (>>=) = bind
+  let (<$>) = map
+end
+
+let of_symbol_state m = fun s -> unit (Symbol_state.run m s)
