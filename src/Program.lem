@@ -1,17 +1,15 @@
-type 'msg error =
-  | Undefined of 'msg
-  | Invalid of 'msg
-  | Bug of 'msg
+type 'partial error =
+  | Undefined of 'partial
+  | Bug of string
 
-type ('a, 'msg) t = ('a, 'msg error) Exception.t
+type ('a, 'partial) t = ('a, 'partial error) Exception.t
 
 let unit = Exception.unit
 let bind = Exception.bind
 let map = Exception.map
 let app = Exception.app
 
-let undefined = Undefined
-let invalid = Invalid
-let bug = Bug
+let undefined m = Exception.fail (Undefined m)
+let bug       m = Exception.fail (Bug       m)
 
-let fail = Bug
+let fail = bug

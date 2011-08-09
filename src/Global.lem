@@ -5,11 +5,6 @@ let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
 let (>>) x f = f x
 
-type 'a error =
-  | UNDEFINED of 'a
-  | INVALID of 'a
-  | BUG of 'a
-
 let compare_num i1 i2 =
   if i1 = i2 then
     Ord.EQ

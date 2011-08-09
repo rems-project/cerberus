@@ -11,7 +11,6 @@ let app mf m = bind mf (fun f -> map f m)
 
 let fail      msg = fun _ -> Program.fail      msg
 let undefined msg = fun _ -> Program.undefined msg
-let invalid   msg = fun _ -> Program.invalid   msg
 let bug       msg = fun _ -> Program.bug       msg
 
 let fresh          = fun s -> Program.unit (Symbol.fresh          s)
@@ -19,9 +18,18 @@ let fresh_pretty n = fun s -> Program.unit (Symbol.fresh_pretty n s)
 
 let init m = m Symbol.init
 
-module Operators = struct
-  let (>>=) = bind
-  let (<$>) = map
-end
+let of_symbol_state m =
+  fun s ->
+    let (a, s') = Symbol_state.run m s in
+    (unit a) s'
 
-let of_symbol_state m = fun s -> unit (Symbol_state.run m s)
+let of_option m = function
+  | Some v -> unit v
+  | None   -> m
+  end
+
+let rec foldr_list f l a =
+  match l with
+    | [] -> unit a
+    | x::xs -> bind (f x a) (fun a' -> foldr_list f xs a')
+  end

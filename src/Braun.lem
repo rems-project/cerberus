@@ -52,7 +52,7 @@ let rec rows k ls =
   end
 
 let build (k, xs) ts =
-  let (tls, trs) = List.split_at k (ts @ List.create (2*k) Nil) in
+  let (tls, trs) = List.split_at k (ts @ List.make (2*k) Nil) in
   List.zip_with3 (Node) xs tls trs
 
 let from_list ls = List.hd (List.fold_right build (rows 1 ls) [Nil])
@@ -67,4 +67,4 @@ let rec update (Node x l r) i f =
 let set t i v = update t i (fun _ -> v)
 
 let init   n f = from_list (List.init n f)
-let create n v = copy v n
+let make n v = copy v n

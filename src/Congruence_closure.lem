@@ -14,9 +14,9 @@ type t = <|
   length : num
 |>
 
-let create s = <|
-  delta = Union_find.create s;
-  use = Braun.create s [];
+let make s = <|
+  delta = Union_find.make s;
+  use = Braun.make s [];
   congr = Pmap.empty;
   pending = [];
   length = s

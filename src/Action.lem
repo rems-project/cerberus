@@ -49,10 +49,46 @@ let is_access (Action a _) =
   | _               -> false
   end
 
-let is_fn_store = function
+let is_fn_store (Action a _) =
+  match a with
   | FnStore _ _ _ -> true
   | _             -> false
-end
+  end
+
+let address_of (Action action _) =
+  match action with
+    | Store   _ a _   -> a
+    | FnStore _ a _   -> a
+    | Modify  _ a _ _ -> a
+    | Load    _ a _   -> a
+    | Id      a       -> a
+(*
+    | _               ->
+*)
+  end
+
+let filter_store ((Action action _) as a) =
+  match action with
+    | FnStore _ _ _   -> Some a
+    | Store   _ _ _   -> Some a
+    | Modify  _ _ _ _ -> Some a
+    | _               -> None 
+  end
+
+let filter_other ((Action action _) as a) =
+  match action with 
+    | Load _ _ _ -> Some a
+    | Id   _     -> Some a
+    | _          -> None 
+  end
+
+let conflicts sb ts =
+  let stores = Set.filter_map filter_store ts in
+  let other  = Set.filter_map filter_other ts in
+  let alias a a' = C.implies (C.eq (address_of a) (address_of a')) C.undef in
+  let unseq a a' = a <> a' && not ((a, a') IN sb) && not ((a', a) IN sb) in
+  (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
+  {alias a a' | forall (a IN stores) (a' IN stores union other) | unseq a a'}
 
 module Print = struct
   module P = Pprint
@@ -168,10 +204,14 @@ module Memory = struct
       let (>>=) = M.bind
     end
 
-    let undef = M.undefined
+    let undef t msg = M.undefined (t, msg)
     let bug   = M.bug
 
-    let conv_int t v = M.of_symbol_state (Tc.conv_int t v)
+    let foldr_list = M.foldr_list
+
+    let of_option = M.of_option
+
+    let conv_int t const = M.of_symbol_state (Tc.conv_int t const)
   end
 
   module E = Effect
@@ -222,9 +262,10 @@ module Memory = struct
 
   let retrieve t addr =
     match addr with
-    | P.Base      l     -> Map.find l t.mem
-    | P.Displaced l i s -> Map.find l t.mem
-    | P.NullAddress     -> None
+    | P.Base      l     -> E.of_option (E.undef t "Invalid address.") (Map.find l t.mem)
+    | P.Displaced l i s -> E.of_option (E.undef t "Invalid address.") (Map.find l t.mem)
+    | P.NullAddress     -> E.undef t "Null pointer access."
+    | P.NaA             -> E.bug "Could not retrieve address."
     end
 
   let load_scalar t ct' v' ct v =
@@ -236,13 +277,14 @@ module Memory = struct
     else if T.is_signed_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
       E.unit <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
-    else E.undef "Incompatible types."
+    else E.undef t "Access and effective type are not compatible."
 
   let load_event t ct a v =
+    let msg = "Tried to read an Indeterminate value." in
     let (addr, t) = address t a in
-    match retrieve t addr with
+    retrieve t addr >>= function
     | Scalar _ Indeterminate ->
-        None
+        E.undef t msg
     | Scalar ct' (Value v') ->
         load_scalar t ct' v' ct v
     | Array ct' vs' ->
@@ -251,90 +293,93 @@ module Memory = struct
           | P.Base _ ->
               match Braun.get vs' 0 with
               | Value v' -> load_scalar t ct' v' ct v
-              | Indeterminate -> None
+              | Indeterminate -> E.undef t msg
               end
           | P.Displaced _ i s ->
               if i >= 0 && i < Braun.size vs' && same_size ct' s then
                 match Braun.get vs' i with
                 | Value v' -> load_scalar t ct' v' ct v
-                | Indeterminate -> None
+                | Indeterminate -> E.undef t msg
                 end
-              else None
+              else E.undef t "Out-of-bounds access."
+          | P.NullAddress -> E.undef t "Null pointer access."
           end
-        else None
-    | _ -> None
+        else E.undef t "Access and effective type are not compatible."
     end
 
   let write_scalar t ct' ct v =
     if T.compatible ct ct' then
-      Symbol_state.unit (Value v, t)
+      E.unit (Value v, t)
     else if T.is_signed_of ct' ct then
       E.conv_int ct' v >>= fun (a, conv) ->
-      (Value a, <|t with p = P.add_constr t.p conv|>)
+      E.unit (Value a, <|t with p = P.add_constr t.p conv|>)
     else if T.is_unsigned_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct' v)) C.undef in
-      Symbol_state.unit (Value v, <|t with p = P.add_constr t.p overflow|>)
-    else (*raise (Undefined t)*) Symbol_state.unit ()
+      E.unit (Value v, <|t with p = P.add_constr t.p overflow|>)
+    else E.undef t "Access and effective type are not compatible."
 
   let write_event t ct a v =
     let (addr, t) = address t a in
-    match (retrieve t addr) with
+    retrieve t addr >>= function
     | Scalar ct' _ ->
-        let (v, t) = write_scalar t ct' ct v in
-        <|t with mem = Pmap.add (base_of addr) (Scalar (ct', v)) t.mem|>
-    | Array (ct', vs') ->
+        write_scalar t ct' ct v >>= fun (v, t) ->
+        E.unit <|t with mem = Pmap.add (base_of addr) (Scalar ct' v) t.mem|>
+    | Array ct' vs' ->
         if T.compatible ct' ct then
           match addr with
           | P.Base _ ->
-              let (v, t) = write_scalar t ct' ct v in
+              write_scalar t ct' ct v >>= fun (v, t) ->
               let vs = Braun.set vs' 0 v in
-              <|t with mem = Pmap.add (base_of addr) (Array (ct', vs)) t.mem|>
+              E.unit <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
           | P.Displaced _ i s ->
               if i >= 0 && i < Braun.size vs' && same_size ct' s then
-                let (v, t) = write_scalar t ct' ct v in
+                write_scalar t ct' ct v >>= fun (v, t) ->
                 let vs = Braun.set vs' i v in
-                <|t with mem = Pmap.add (base_of addr) (Array (ct', vs)) t.mem|>
-              else () 
+                E.unit <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
+              else E.undef t "Out-of-bounds access."
           end
-        else ()
-    | _ -> ()
+        else E.undef t "Access and effective type are not compatible."
     end
 
-  let event t ((_, action) as a) =
+  let event ((_, action) as a) t =
 (*    Document.Print (Print.pp a); print_endline "";*)
     match action with
     | Id a ->
         let (addr, t) = address t a in
-        if is_valid t addr then t else raise (Undefined t)
+        if is_valid t addr
+          then E.unit  t
+          else E.undef t "Invalid address."
     | Same a1 a2 ->
         let (addr1, t) = address t a1 in
         let (addr2, t) = address t a2 in
-        if same_base t addr1 addr2 then t else raise (Undefined t)
+        if same_base t addr1 addr2
+          then E.unit  t
+          else E.undef t "Comparing addresses of distinct object."
     | Create ct a -> 
         if T.is_scalar ct then
           let (addr, t) = address t a in
-          <|t with mem = Pmap.add (base_of addr) (Scalar (ct, Indeterminate)) t.mem|>
+          E.unit <|t with mem = Pmap.add (base_of addr) (Scalar ct Indeterminate) t.mem|>
         else if T.is_array ct then
           let (addr, t) = address t a in
-          let value = Braun.create (T.size_of_array ct) Indeterminate in
-          let obj = Array (T.base_of_array ct, value) in
-          <|t with mem = Pmap.add (base_of addr) obj t.mem|>
-        else ()
+          let value = Braun.make (T.size_of_array ct) Indeterminate in
+          let obj = Array (T.base_of_array ct) value in
+          E.unit <|t with mem = Pmap.add (base_of addr) obj t.mem|>
+        else E.bug "event"
     | Kill a ->
         let (addr, t) = address t a in
-        <|t with mem = Pmap.remove (base_of addr) t.mem|>
+        E.unit <|t with mem = Pmap.remove (base_of addr) t.mem|>
     | Load    ct a v -> load_event  t ct a v
     | Store   ct a v -> write_event t ct a v
     | FnStore ct a v -> write_event t ct a v
     | Modify  ct a v v' ->
-        let t = load_event t ct a v in
+        load_event  t ct a v >>= fun t ->
         write_event t ct a v'
-    | Call -> t
+    | Call -> E.unit t
     end
 
   let replay p' es =
-    let t = List.fold_left event <|p = p'; mem = Pmap.empty|> es in
-    P.complete t.p
+    E.foldr_list event es <|p = p'; mem = Pmap.empty|> >>= fun t ->
+    E.unit (P.complete t.p)
 (*
     with Undefined t ->
       P.complete (*print_endline "UNDEF";*) P.add_constr t.p C.undef
