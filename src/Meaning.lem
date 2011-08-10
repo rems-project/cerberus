@@ -200,6 +200,7 @@ module Statement_operators = struct
   let (-//-) = disj_lifted
   let (++&)  = add_constraint_entire_lifted
   let (++@)  = add_action_lifted
+  let (--@>) ml a = ml --&> (init_lifted ++@ a)
 end
 
 module Print = struct
@@ -385,7 +386,7 @@ module Graph = struct
         let name = n ^ "." ^ (string_of_num i) ^ ".dot" in
         let doc  = Action.Print.pp_dot d.seq_before in
         let str  = Document.to_plain_string doc in
-        let ()   = Output.write str (output.file name) in
+        let ()   = Output.write str (Output.file name) in
         i + 1
       ) t 0
 end
