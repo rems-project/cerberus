@@ -341,11 +341,11 @@ module Memory = struct
         else E.undef t "Access and effective type are not compatible."
     end
 
-  let event ((_, action) as a) t =
+  let event (Action a _) t =
 (*    Document.Print (Print.pp a); print_endline "";*)
-    match action with
-    | Id a ->
-        let (addr, t) = address t a in
+    match a with
+    | Id v ->
+        let (addr, t) = address t v in
         if is_valid t addr
           then E.unit  t
           else E.undef t "Invalid address."

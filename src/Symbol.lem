@@ -85,4 +85,8 @@ let to_int       = (45, Some "to_int")
 let to_long      = (46, Some "to_long")
 let to_llong     = (47, Some "to_llong")
 
-let init = 48
+let shift_r      = (48, Some "impl_shift_r")
+
+let return       = (49, Some "return")
+
+let init = 50

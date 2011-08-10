@@ -21,46 +21,57 @@ module Effect = struct
   let init m = M.init
   let fresh = M.fresh
   let fresh_pretty = M.fresh_pretty
+
+  let foldr_list = M.foldr_list
 end
 
 module E = Effect
 open E.Operators
 
-let exp_type    = annotate.exp_type_of
-let lvalue_type = annotate.lvalue_type_of
+let exp_type    = Annotate.exp_type_of
+let lvalue_type = Annotate.lvalue_type_of
 
 let is_function_id file e =
   match e with
-    | A.Exp _ (A.VARIABLE fid)) ->
-        map.find fid file.A.fn_map
-    | _ -> None
+  | A.Exp _ (A.VARIABLE fid) ->
+      let (ids, body) = Pmap.find fid file.A.fn_map in
+      Some (fid, ids , body)
+  | _ -> None
   end
 
 let update_env env ids =
-  List.fold_left (fun e id -> Pmap.add id (C.fresh_address ()) e) env ids
+  let f id e =
+    C.fresh_address >>= fun a ->
+    E.unit (Pmap.add id a e) in
+  E.foldr_list f ids env
 
-let conv t t' (c, m) =
-  let (a, constr) = Tc.conv t t' c in
-  (a, m +& constr)
+let conv t t' x =
+  x               >>= fun (a, m) ->
+  Tc.conv t t' a  >>= fun (v, c) ->
+  E.unit (v, m +& c)
 
-let conv_int t (c, m) =
-  let (a, constr) = Tc.conv_int t c in
-  (a, m +& constr)
+let conv_int_lifted t (a, m) =
+  Tc.conv_int t a >>= fun (v, c) ->
+  E.unit (v, m +& c)
 
-let rec iterate f_s f _e n ml e s =
+let rec iterate e s f_e f_s n ml_prev =
   let m_neg (a, m) = m +& (C.eq  a C.zero) in
   let m_pos (a, m) = m +& (C.neq a C.zero) in
-  f_e e >>= fun m   ->
-  f_s s >>= fun ml' ->
   match n with
-  | 0 -> E.unit (M.exit_loop (m_neg m) ml)
-  | _ -> iterate (M.enter_loop (m_pos m) (m_neg m) ml --&> ml') (n-1)
-end
+  | 0 ->
+      f_e e >>= fun m  ->
+      E.unit (M.exit_loop (m_neg m) ml_prev)
+  | _ ->
+      f_e e >>= fun m  ->
+      f_s s >>= fun ml ->
+      let ml' = M.enter_loop (m_pos m) (m_neg m) ml_prev in
+      iterate e s f_e f_s (n-1) (ml' --&> ml)
+  end
 
 let rec reduce_lvalue n b env file exp =
   let f = reduce_exp n b env file in
   let f_lvalue = reduce_lvalue n b env file in
-  match annotate.exp_of exp with
+  match Annotate.exp_of exp with
   | A.VARIABLE id ->
       E.unit (Pmap.find id env, M.init)
   | A.UNARY A.INDIRECTION e ->
@@ -75,41 +86,43 @@ let rec reduce_lvalue n b env file exp =
 and reduce_exp n b env file exp =
   let f = reduce_exp n b env file in
   let f_lvalue e =
-    let (a, m) = reduce_lvalue n b env file e in
-    (a, m -@> action.id a) in
+    reduce_lvalue n b env file e >>= fun (a, m) ->
+    Action.id a                  >>= fun id     ->
+    E.unit (a, m -@> id) in
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
-  let conv_exp e = f e >>= conv_int (exp_type exp) in
+  let conv_exp   e = f e >>= conv_int_lifted (exp_type exp) in
+  let conv_int t e = f e >>= conv_int_lifted t in
   let usual_arithmetic e1 e2 =
     T.usual_arithmetic (exp_type e1) (exp_type e2) in
   let overflow t c = C.implies (C.neg (Tc.in_range t c)) C.undef in
-  match annotate.exp_of exp with
+  match Annotate.exp_of exp with
   | A.VARIABLE id ->
       if T.is_array (lookup_type id) then
-        (Pmap.find id env, M.init)
+        E.unit (Pmap.find id env, M.init)
       else
         f_lvalue exp >>= fun (a, m) ->
         C.fresh      >>= fun v      ->
-        let load = action.load (lvalue_type exp) a v in
+        Action.load (lvalue_type exp) a v >>= fun load ->
         E.unit (v, m -@> load)
-  | A.CONSTANT (cabs.CONST_INT (i, _)) -> (C.const i, M.init)
+  | A.CONSTANT (Cabs.CONST_INT (i, _)) -> E.unit (C.const i, M.init)
   | A.UNARY A.POSTFIX_INCR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
       let incr = C.plus v C.one in
-      conv_int (exp_type e) (incr, M.init) >>= fun (v', m') ->
-      let modify = action.modify (lvalue_type e) a v v' in
-      E.unit (v, (m -&- m') -@> modify)
+      Tc.conv_int (exp_type e) incr >>= fun (v', c) ->
+      Action.modify (lvalue_type e) a v v' >>= fun modify   ->
+      E.unit (v, (m +& c) -@> modify)
   | A.UNARY A.POSTFIX_DECR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
       let decr = C.minus v C.one in
-      conv_int (exp_type e) (decr, M.init) >>= fun (a', m') ->
-      let modify = action.modify (lvalue_type e) a v a' in
-      E.unit (v, (m -&- m') -@> modify)
-  | A.UNARY A.ADDRESS (A.Exp _ A.UNARY A.INDIRECTION e) -> f e
+      Tc.conv_int (exp_type e) decr >>= fun (a', c) ->
+      Action.modify (lvalue_type e) a v a' >>= fun modify   ->
+      E.unit (v, (m +& c) -@> modify)
+  | A.UNARY A.ADDRESS (A.Exp _ (A.UNARY A.INDIRECTION e)) -> f e
   | A.UNARY A.ADDRESS e -> f_lvalue e
   | A.CAST t e -> conv t (exp_type e) (f e)
-  | A.BINARY (cabs.ARITHMETIC cabs.ADD) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         conv_exp e1 >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -118,8 +131,8 @@ and reduce_exp n b env file exp =
           let c = overflow (exp_type exp) sum in
           E.unit (sum, m1 -&- m2 +& c)
         else
-          let (a, m) = conv_int (exp_type exp) (C.plus a1 a2, M.init) in
-          E.unit (a, m1 -&- m2 -&- m)
+          Tc.conv_int (exp_type exp) (C.plus a1 a2) >>= fun (a, c) ->
+          E.unit (a, m1 -&- m2 +& c)
       else
         (* Pointer arithmetic. *)
         f e1 >>= fun (a1, m1) ->
@@ -127,12 +140,14 @@ and reduce_exp n b env file exp =
         if T.is_pointer (exp_type e1) then
           let size = Tc.size (T.base_of_pointer (exp_type e1)) in
           let a = C.offset a1 a2 size in
-          E.unit (a, (m1 -&- m2) -@> action.same a1 a)
+          Action.same a1 a >>= fun same ->
+          E.unit (a, (m1 -&- m2) -@> same)
         else
           let size = Tc.size (T.base_of_pointer (exp_type e2)) in
           let a = C.offset a2 a1 size in
-          E.unit (a, (m1 -&- m2) -@> action.same a a1)
-  | A.BINARY (cabs.ARITHMETIC cabs.SUB) e1 e2 ->
+          Action.same a a1 >>= fun same ->
+          E.unit (a, (m1 -&- m2) -@> same)
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         conv_exp e1 >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -141,16 +156,17 @@ and reduce_exp n b env file exp =
           let c = overflow (exp_type exp) diff in
           E.unit (diff, (m1 -&- m2) +& c)
         else
-          let (a, m) = conv_int (exp_type exp) (C.minus a1 a2, M.init) in
-          E.unit (a, m1 -&- m2 -&- m)
+          Tc.conv_int (exp_type exp) (C.minus a1 a2) >>= fun (a, c) ->
+          E.unit (a, m1 -&- m2 +& c)
       else (*if T.is_integer (exp_type e2) then*)
         (* Pointer arithmetic. *)
         f e1 >>= fun (a1, m1) ->
         f e2 >>= fun (a2, m2) ->
         let size = Tc.size (T.base_of_pointer (exp_type e1)) in
         let a = C.offset a1 (C.minus C.zero a2) size in
-        E.unit (a, (m1 -&- m2) -@> action.same a1 a)
-  | A.BINARY (cabs.ARITHMETIC cabs.MOD) e1 e2 ->
+        Action.same a1 a >>= fun same ->
+        E.unit (a, (m1 -&- m2) -@> same)
+  | A.BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       let modulo = C.modulo a1 a2 in
@@ -159,12 +175,13 @@ and reduce_exp n b env file exp =
         let c = overflow (exp_type exp) (C.div a1 a2) in
         E.unit (modulo, (m1 -&- m2) +& div_zero +& c)
       else
-        E.unit (a, (m1 -&- m2 -&- m) +& div_zero)
-  | A.BINARY (cabs.SEQUENTIAL cabs.COMMA) e1 e2 ->
+        Tc.conv_int (exp_type exp) modulo >>= fun (a, c) ->
+        E.unit (a, (m1 -&- m2 +& c) +& div_zero)
+  | A.BINARY (Cabs.SEQUENTIAL Cabs.COMMA) e1 e2 ->
       f e1 >>= fun (_,  m1) ->
       f e2 >>= fun (a2, m2) ->
       E.unit (a2, m1 -&> m2)
-  | A.BINARY (cabs.SEQUENTIAL cabs.OR) e1 e2 ->
+  | A.BINARY (Cabs.SEQUENTIAL Cabs.OR) e1 e2 ->
       f e1    >>= fun (a1, m1) ->
       f e2    >>= fun (a2, m2) ->
       C.fresh >>= fun a        ->
@@ -172,8 +189,8 @@ and reduce_exp n b env file exp =
       let both = C.conj
         (C.eq a1 C.zero)
         (C.case (C.eq a2 C.zero) (C.eq a C.zero) (C.eq a C.one)) in
-      E.unit (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both)
-  | A.BINARY (cabs.SEQUENTIAL cabs.AND) e1 e2 ->
+      E.unit (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
+  | A.BINARY (Cabs.SEQUENTIAL Cabs.AND) e1 e2 ->
       f e1    >>= fun (a1, m1) ->
       f e2    >>= fun (a2, m2) ->
       C.fresh >>= fun a        ->
@@ -182,9 +199,9 @@ and reduce_exp n b env file exp =
         (C.neq a1 C.zero)
         (C.case (C.neq a2 C.zero) (C.eq a C.one) (C.eq a C.zero)) in
       E.unit (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
-  | A.BINARY (cabs.ARITHMETIC cabs.SHL) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
-      conv_int (T.promote (exp_type e1)) (f e2) >>= fun (a2, m2) ->
+      conv_int (T.promote (exp_type e1)) e2 >>= fun (a2, m2) ->
       let shifted = C.mult a1 (C.pow a2) in
       if T.is_signed_integer (exp_type exp) then
         let not_repr = C.neg (Tc.in_range (exp_type exp) shifted) in
@@ -192,68 +209,70 @@ and reduce_exp n b env file exp =
         let c = C.implies (C.disj neg not_repr) C.undef in
         E.unit (shifted, (m1 -&- m2) +& c)
       else
-        conv_int (exp_type exp) (shifted, M.init) >>= fun (a, m) ->
-        E.unit (a, m1 -&- m2 -&- m)
-  | A.BINARY (cabs.ARITHMETIC cabs.SHR) e1 e2 ->
+        Tc.conv_int (exp_type exp) shifted >>= fun (a, c) ->
+        E.unit (a, m1 -&- m2 +& c)
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
-      conv_int (T.promote (exp_type e1)) (f e2) >>= fun (a2, m2) ->
+      conv_int (T.promote (exp_type e1)) e2 >>= fun (a2, m2) ->
       let shifted = C.div a1 (C.pow a2) in
       if T.is_signed_integer (exp_type exp) then
         C.fresh >>= fun a ->
         let negative = C.lt shifted C.zero in
         let c = C.case negative
-          (C.eq a (C.fn "shift_r" [shifted]))
+          (C.eq a (C.fn Symbol.shift_r [shifted]))
           (C.eq a shifted) in
         E.unit (shifted, (m1 -&- m2) +& c)
       else
         E.unit (shifted, m1 -&- m2)
-  | A.BINARY (cabs.RELATIONAL cabs.EQ) e1 e2 ->
+  | A.BINARY (Cabs.RELATIONAL Cabs.EQ) e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
-        C.fresh           >>= fun a        ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
+        C.fresh       >>= fun a        ->
         let c = C.case (C.eq a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
       else if T.is_pointer (exp_type e1) && T.is_pointer (exp_type e2) then
-      else if typing.is_null_pointer e1 then
-      else
-  | A.BINARY (cabs.RELATIONAL cabs.NE) e1 e2 ->
+        (*TODO*) E.unit (C.one, M.none)
+      else if Typing.is_null_pointer e1 then
+        (*TODO*) E.unit (C.one, M.none)
+      else (*TODO*) E.unit (C.one, M.none)
+  | A.BINARY (Cabs.RELATIONAL Cabs.NE) e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
-        C.fresh           >>= fun a        ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
+        C.fresh       >>= fun a        ->
         let c = C.case (C.neg (C.eq a1 a2)) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
-      else
+      else (*TODO*) E.unit (C.one, M.none)
         (* Pointer comparison. *)
-  | A.BINARY (cabs.RELATIONAL cabs.LT) e1 e2
+  | A.BINARY (Cabs.RELATIONAL Cabs.LT) e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
         C.fresh           >>= fun a        ->
         let c = C.case (C.lt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
-      else
+      else (*TODO*) E.unit (C.one, M.none)
         (* Pointer comparison. *)
-  | A.BINARY (cabs.RELATIONAL cabs.LE) e1 e2
+  | A.BINARY (Cabs.RELATIONAL Cabs.LE) e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
-        C.fresh       	  >>= fun a        ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
+        C.fresh       >>= fun a        ->
         let c = C.case (C.le a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
-      else
+      else (*TODO*) E.unit (C.one, M.none)
         (* Pointer comparison. *)
-  | A.BINARY (cabs.RELATIONAL cabs.GT) e1 e2 ->
+  | A.BINARY (Cabs.RELATIONAL Cabs.GT) e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
-        C.fresh           >>= fun a        ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
+        C.fresh       >>= fun a        ->
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
       else
@@ -265,27 +284,27 @@ and reduce_exp n b env file exp =
         C.fresh >>= fun a        ->
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
-  | A.BINARY (cabs.RELATIONAL cabs.GE) e1 e2 ->
+  | A.BINARY (Cabs.RELATIONAL Cabs.GE) e1 e2 ->
       if T.is_arithmetic (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
-        conv_int t (f e1) >>= fun (a1, m1) ->
-        conv_int t (f e2) >>= fun (a2, m2) ->
-        C.fresh           >>= fun a        ->
+        conv_int t e1 >>= fun (a1, m1) ->
+        conv_int t e2 >>= fun (a2, m2) ->
+        C.fresh       >>= fun a        ->
         let c = C.case (C.ge a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.unit (a, (m1 -&- m2) +& c)
-      else
+      else (*TODO*) E.unit (C.one, M.none)
         (* Pointer comparison. *)
-  | A.BINARY (cabs.ARITHMETIC cabs.BAND) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
       E.unit (a, (m1 -&- m2) +& (C.eq a (C.bit_and a1 a2)))
-  | A.BINARY (cabs.ARITHMETIC cabs.BOR) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
       E.unit (a, (m1 -&- m2) +& (C.eq a (C.bit_or a1 a2)))
-  | A.BINARY (cabs.ARITHMETIC cabs.XOR) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
@@ -293,10 +312,10 @@ and reduce_exp n b env file exp =
   | A.ASSIGN None e1 e2 ->
       f_lvalue e1 >>= fun (a1, m1) ->
       f e2        >>= fun (a2, m2) ->
-      conv (exp_type e1) (exp_type e2) (a2, M.init) >>= fun (a, m) ->
-      let write = action.store (lvalue_type e1) a1 a in
-      E.unit (a, (m1 -&- m2 -&- m) -@> write)
-  | A.QUESTION e1 e2 e3
+      Tc.conv (exp_type e1) (exp_type e2) a2 >>= fun (a, c) ->
+      Action.store (lvalue_type e1) a1 a >>= fun write->
+      E.unit (a, (m1 -&- m2 +& c) -@> write)
+  | A.QUESTION e1 e2 e3 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         f e1        >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -305,40 +324,40 @@ and reduce_exp n b env file exp =
         let pos = m2 +& (C.eq a a2) +& (C.eq  a1 C.zero) in
         let neg = m3 +& (C.eq a a3) +& (C.neq a1 C.zero) in
         E.unit (a, m1 -&> (pos -/- neg))
-      else
+      else (*TODO*) E.unit (C.one, M.none)
   | A.CALL e es ->
       match is_function_id file e with
-      | Some (ids, s) ->
+      | Some (fid, ids, s) ->
           let depth = Pmap.find fid b in
           if depth = 0 then
             C.fresh >>= fun a ->
             E.unit (a, M.none)
           else
-            let b' =  Pmap.add fid (depth - 1) b in
-            let env' = update_env env ids in
-            let ids_t = [(Pmap.find id env', lookup_type id) | forall (id IN ids) | true] in
-            let m_args = List.fold_left2
-              (fun m' (l, t) e ->
-                let (a, m) = conv (T.unqualify t) (exp_type e) (f e) in
-                let create = action.create   t l   in
-                let store  = action.fn_store t l a in
-                (m' -&- m) +@ create -@> store
-              ) M.init ids_t es in
-            let kill_ids m (l, _) = m +@ action.kill l in
-            let kill_ids = {l | forall ((l, _) MEM ids_t) | true} in
-            let kills = Set.fold (fun s id -> action.kill s id)
-            let m_kill = List.fold_left kill_ids M.init ids_t in
-            let m_kill = M.add_actions m acts in
+            update_env env ids >>= fun env' ->
+            let b' = Pmap.add fid (depth - 1) b in
+            let args =
+              let f id e = (Pmap.find id env', lookup_type id, e) in
+              List.map2 f ids es in
+            let f_create (l, t, e) m' =
+              conv (T.unqualify t) (exp_type e) (f e) >>= fun (a, m) ->
+              Action.create   t l   >>= fun create ->
+              Action.fn_store t l a >>= fun store  ->
+              E.unit ((m' -&- m) +@ create -@> store) in
+            let f_kill (l, _, _) m =
+              Action.kill l >>= fun kill ->
+              E.unit (m +@ kill) in
+            E.foldr_list f_create args M.init >>= fun m_create ->
+            E.foldr_list f_kill   args M.init >>= fun m_kill   ->
             C.fresh >>= fun a ->
-	    reduce_stmt n b' env' file s fid a >>= fun ml_body ->
-            E.unit (a, m_args -&> M.flatten ml_body -&> m_kill)
+	    reduce_stmt n b' env' file fid a s >>= M.flatten >>= fun m_body ->
+            E.unit (a, m_create -&> m_body -&> m_kill)
       end
   end
 
-and reduce_stmt n b env file (A.Stmt _ stmt) fid return =
+and reduce_stmt n b env file fid return (A.Stmt _ stmt) =
   let f_s = reduce_stmt n b env file fid return in
   let f_e = reduce_exp  n b env file in
-  let lift x = x >>= fun (a, m) -> (a, M.normal m) in
+  let lift x = x >>= fun (a, m) -> E.unit (a, M.normal m) in
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   match stmt with
   | A.SKIP ->
@@ -351,49 +370,52 @@ and reduce_stmt n b env file (A.Stmt _ stmt) fid return =
       let neg = ml2 ++& (C.eq  a C.zero) in
       E.unit (ml --&> (pos -//- neg))
   | A.BLOCK ids ss ->
-      let create_ids ml (l, t) = ml ++@ action.create t l in
-      let kill_ids   ml (l, _) = ml union {action.kill l} in
-      let env' = update_env env ids in
-      let ids_t = List.map (fun i -> Pmap.find i env', lookup_type i) ids in
-      let ml_create = List.fold_left create_ids M.init_lifted ids_t in
-      let ml_kill   = List.fold_left kill_ids empty ids_t in
-      let ml =
-        fold_list
-          (fun ml s -> ml --&> (reduce_stmt n b env' file s fid return))
-          M.init_lifted ss in
-      (ml_create --&> ml) --@> ml_kill
+      update_env env ids >>= fun env' ->
+      let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
+      let f_create (l, t) ml =
+        Action.create t l >>= fun create ->
+        E.unit (ml ++@ create) in
+      let f_kill (l, _) ml =
+        Action.kill l >>= fun kill ->
+        E.unit (ml ++@ kill) in
+      let f s ml' =
+        reduce_stmt n b env' file fid return s >>= fun ml ->
+        E.unit (ml' --&> ml) in
+      E.foldr_list f_create decls M.init_lifted >>= fun ml_create ->
+      E.foldr_list f_kill   decls M.init_lifted >>= fun ml_kill   ->
+      E.foldr_list f        ss    M.init_lifted >>= fun ml        ->
+      E.unit ((ml_create --&> ml) --&> ml_kill)
   | A.DECLARATION defns ->
-      let define (id, e) =
+      let f (id, e) ml' =
         let t = lookup_type id in
+        let l = Pmap.find id env in
         lift (conv t (exp_type e) (f_e e)) >>= fun (a, ml) ->
-        E.unit (ml --@> action.store t (Pmap.find id env) a) in
-      fold_list (fun ml p -> ml --&> define p) M.init_lifted defns
+        Action.store t l a >>= fun write ->
+        E.unit ((ml --@> write) --&> ml') in
+      E.foldr_list f defns M.init_lifted
   | A.RETURN_EXPRESSION e ->
-      let t_return =
-        match lookup_type fid with
-        | A.FUNCTION t _ -> t
-        end in
-      conv t_return (exp_type e) (f_e e) >>= fun (a, m) ->
+      let t = T.function_return (lookup_type fid) in
+      conv t (exp_type e) (f_e e) >>= fun (a, m) ->
       E.unit (M.return (m +& C.eq a return))
   | A.RETURN_VOID -> E.unit (M.return M.init)
   | A.EXPRESSION e ->
       lift (f_e e) >>= fun (_, ml) ->
       E.unit ml
-  | A.WHILE e s -> iterate f_s f_e n M.init_lifted e s
+  | A.WHILE e s -> iterate e s f_e f_s n M.init_lifted
   | A.BREAK    -> E.unit (M.break    M.init)
   | A.CONTINUE -> E.unit (M.continue M.init)
   end
 
 let reduce_file n file =
   let b =
-    List.fold_left (fun m fid -> Pmap.add fid n m) Pmap.empty (Pmap.keys file.A.fn_map) in
+    let f m (fid, _) = Pmap.add fid n m in
+    List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
   let (_, s) = Pmap.find file.A.main file.A.fn_map in
-  let m = reduce_stmt n b Pmap.empty file s main (C.fresh_named "return") in
-  M.flatten_lifted m
+  reduce_stmt n b Pmap.empty file file.A.main C.Constants.return s >>=
+  M.flatten
 (*
   List.map rd (List.map snd (Pmap.values file.A.fn_map))
 *)
 
-module print = struct
-  let pp = ()
-end
+
+

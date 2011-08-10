@@ -14,3 +14,9 @@ let run = State.run
 
 let fresh = Symbol.fresh
 let fresh_pretty n = Symbol.fresh_pretty n
+
+let rec foldr_list f l a =
+  match l with
+    | []    -> unit a
+    | x::xs -> bind (f x a) (fun a' -> foldr_list f xs a')
+  end

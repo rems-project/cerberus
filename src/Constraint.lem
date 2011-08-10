@@ -277,8 +277,8 @@ let gt c1 c2 = Lt c2 c1
 
 let add t c = Set.add c t
 
-let fresh         = Name <$> Symbol_state.fresh
-let fresh_named n = Name <$> Symbol_state.fresh_pretty n
+let fresh         = Name    <$> Symbol_state.fresh
+let fresh_named n = Name    <$> Symbol_state.fresh_pretty n
 let fresh_address = Address <$> Symbol_state.fresh
 
 let const i = Integer i
@@ -363,6 +363,8 @@ module Constants = struct
   let ulong_align  = Name Symbol.ulong_align
   let llong_align  = Name Symbol.llong_align
   let ullong_align = Name Symbol.ullong_align
+
+  let return = Name Symbol.return
 
   let to_char  = Symbol.to_char
   let to_shrt  = Symbol.to_shrt
