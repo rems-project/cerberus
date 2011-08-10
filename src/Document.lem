@@ -1,1 +1,2 @@
 val to_plain_string : Pprint.t -> string
+sub [ocaml] to_plain_string = Document.to_plain_string

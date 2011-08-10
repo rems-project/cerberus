@@ -1,6 +1,6 @@
 LEM=../lem/lem
 LEM_LIB=../lem/library
-
+OCAML_LIB=lib/ocaml
 BUILD_DIR=_build_ocaml
 
 FILES=\
@@ -41,9 +41,14 @@ Action.lem \
 Meaning.lem \
 Reduction.lem
 
+OCAML_FILES=\
+pprint.lem \
+output.lem \
+document.lem
+
 all:
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB) -print_types $(foreach F, $(FILES), ../src/$(F))
+	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F))
 
 clean:
 	rm -R $(BUILD_DIR)

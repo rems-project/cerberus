@@ -110,6 +110,11 @@ module Print = struct
 
   open P.Operators
 
+  let optional pp = function
+    | Some x -> pp x
+    | None   -> P.empty
+    end
+
   let pp_unop = function
     | MINUS        -> P.minus
     | PLUS         -> P.plus
@@ -188,7 +193,7 @@ module Print = struct
       | Cabs.SUFFIX_LONG               -> "L"
       | Cabs.SUFFIX_LONG_LONG          -> "LL"
     end in
-    P.optional (P.text -| to_string) s
+    optional (P.text -| to_string) s
 
   let pp_int_const (i, s) = !^ (string_of_num i) ^^ pp_suffix s
 
@@ -228,7 +233,7 @@ module Print = struct
       | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
       | CALL e es -> f e ^^ P.parens (P.comma_list f es)
       | ASSIGN o_opt e1 e2 ->
-          f e1 ^^^ (P.optional pp_arithop o_opt ^^ P.equals) ^^^ f e2
+          f e1 ^^^ (optional pp_arithop o_opt ^^ P.equals) ^^^ f e2
       | QUESTION e1 e2 e3 ->
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
       | CAST t e -> P.parens (pp_type t) ^^^ f e
