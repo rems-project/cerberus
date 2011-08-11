@@ -61,7 +61,7 @@ all: build_ocaml
 build_ocaml: lem_ocaml
 	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
 # Copy in Lem's OCaml library.
-	cp lib/ocaml/*.ml lib/ocaml/*.mli $(OCAML_BUILD_DIR)
+	cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
 # Copy in our own OCaml libraries.
 	cp $(LEM_DIR)/ocaml-lib/*.ml $(LEM_DIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
 # Working around the value restriction.
@@ -78,7 +78,7 @@ build_ocaml: lem_ocaml
 	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/let none/let none ()/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/M.none/M.none ()/' $(OCAML_BUILD_DIR)/Reduction.ml
-	cd $(OCAML_BUILD_DIR); ocamlbuild -package batteries Reduction.cmo
+	cd $(OCAML_BUILD_DIR); ocamlbuild -package batteries main.byte
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)
