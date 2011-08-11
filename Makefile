@@ -1,7 +1,10 @@
-LEM=../lem/lem
-LEM_LIB=../lem/library
+LEM_DIR=../lem
+LEM=$(LEM_DIR)/lem
+LEM_LIB=$(LEM_DIR)/library
+
 OCAML_LIB=lib/ocaml
-BUILD_DIR=_build_ocaml
+
+OCAML_BUILD_DIR=_build_ocaml
 
 FILES=\
 Ord.lem \
@@ -43,14 +46,34 @@ Action.lem \
 Meaning.lem \
 Reduction.lem
 
-OCAML_FILES=\
+OCAML_LIB_FILES=\
 pprint.lem \
 output.lem \
 document.lem
 
-all:
-	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR); ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F))
+SPURIOUS_FILES=\
+Pprint.ml \
+Lexing.ml \
+Document.ml
+
+all: build_ocaml
+
+build_ocaml: lem_ocaml
+	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
+	cp lib/ocaml/*.ml lib/ocaml/*.mli $(OCAML_BUILD_DIR)
+	cp $(LEM_DIR)/ocaml-lib/*.ml $(LEM_DIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
+	sed -i '1i open Batteries' $(OCAML_BUILD_DIR)/Braun.ml
+	sed -i 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
+	sed -i 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
+	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/let none/let none ()/' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/M.none/M.none ()/' $(OCAML_BUILD_DIR)/Reduction.ml
+	cd $(OCAML_BUILD_DIR); ocamlbuild -package batteries Reduction.cmo
+
+lem_ocaml:
+	mkdir -p $(OCAML_BUILD_DIR)
+	cd $(OCAML_BUILD_DIR) && ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
 clean:
-	rm -R $(BUILD_DIR)
+	rm -R $(OCAML_BUILD_DIR)
