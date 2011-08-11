@@ -1,0 +1,2 @@
+(* Type name is already used. Should get a warning message. *)
+type set = num
