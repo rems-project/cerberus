@@ -60,9 +60,18 @@ all: build_ocaml
 
 build_ocaml: lem_ocaml
 	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
+# Copy in Lem's OCaml library.
 	cp lib/ocaml/*.ml lib/ocaml/*.mli $(OCAML_BUILD_DIR)
+# Copy in our own OCaml libraries.
 	cp $(LEM_DIR)/ocaml-lib/*.ml $(LEM_DIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
+# Working around the value restriction.
+	sed -i 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/Multiset.ml
+	sed -i 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/Transitive_reduction.ml
+	sed -i 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/Multiset.ml
+	sed -i "s/emp$$/(emp ())/" $(OCAML_BUILD_DIR)/Transitive_reduction.ml
+# Open batteries to for List.take and List.drop.
 	sed -i '1i open Batteries' $(OCAML_BUILD_DIR)/Braun.ml
+# Fixing up OCaml syntax.
 	sed -i 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
 	sed -i 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
 	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/Meaning.ml

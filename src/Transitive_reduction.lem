@@ -1,9 +1,7 @@
 module R = struct
   type 'a t = ('a, 'a set) Pmap.map
 
-(* TODO value restriction
   let emp = Pmap.empty
-*)
 
   let add (v1, v2) t =
     match Map_.find v1 t with
@@ -11,10 +9,7 @@ module R = struct
       | None         -> Pmap.add v1  {v2}                t
     end
 
-(* TODO value restriction
   let make edges = Set.fold (fun e r -> add e r) edges emp
-*)
-  let make edges = Set.fold (fun e r -> add e r) edges Pmap.empty
 
   let reachable t v1 v2 =
     match Map_.find v1 t with
