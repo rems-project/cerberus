@@ -1,0 +1,2 @@
+(* Warn about duplicate file/module name. *)
+let x = 0

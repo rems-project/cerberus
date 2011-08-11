@@ -1,0 +1,5 @@
+module M = struct
+  let m = 0
+end
+
+let n = M.m
