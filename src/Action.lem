@@ -83,8 +83,8 @@ let filter_other ((Action action _) as a) =
   end
 
 let conflicts sb ts =
-  let stores = Set.filter_map filter_store ts in
-  let other  = Set.filter_map filter_other ts in
+  let stores = Set_.filter_map filter_store ts in
+  let other  = Set_.filter_map filter_other ts in
   let alias a a' = C.implies (C.eq (address_of a) (address_of a')) C.undef in
   let unseq a a' = a <> a' && not ((a, a') IN sb) && not ((a', a) IN sb) in
   (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
@@ -233,13 +233,13 @@ module Memory = struct
     let (addr, p') = P.address t.p const in
     (addr, <|t with p = p'|>)
 
-  let same_size ct s = C.compare_const s (Tc.size ct) = Ord.EQ
+  let same_size ct s = C.compare_const s (Tc.size ct) = Ord.Eq
 
   let is_valid t addr =
     match addr with
     | P.Base      l     -> Pmap.mem l t.mem
     | P.Displaced l i s ->
-        match Map.find l t.mem with
+        match Map_.find l t.mem with
         | Some o ->
             let (ct, length) =
               match o with
@@ -262,8 +262,8 @@ module Memory = struct
 
   let retrieve t addr =
     match addr with
-    | P.Base      l     -> E.of_option (E.undef t "Invalid address.") (Map.find l t.mem)
-    | P.Displaced l i s -> E.of_option (E.undef t "Invalid address.") (Map.find l t.mem)
+    | P.Base      l     -> E.of_option (E.undef t "Invalid address.") (Map_.find l t.mem)
+    | P.Displaced l i s -> E.of_option (E.undef t "Invalid address.") (Map_.find l t.mem)
     | P.NullAddress     -> E.undef t "Null pointer access."
     | P.NaA             -> E.bug "Could not retrieve address."
     end

@@ -1,6 +1,6 @@
 open Global
 
-type ('a, 'msg) t = Symbol.set -> ('a * Symbol.set, 'msg) Program.t
+type ('a, 'msg) t = Symbol.sset -> ('a * Symbol.sset, 'msg) Program.t
 
 let unit a = fun s -> Program.unit (a, s)
 let map f m =

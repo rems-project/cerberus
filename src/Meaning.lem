@@ -22,19 +22,7 @@ type denotation = <|
   fs_actions  : (Action.t, Action.t set) map
 |>
 
-module Denotation = struct
-  type t = denotation
-(*
-  let compare d1 d2 =
-    let (++) n p = if n = 0 then p else n in
-    Set.compare d1.actions d2.actions
-    ++ C.compare d1.constraints d2.constraints
-    ++ Set.compare d1.seq_before d2.seq_before
-    ++ Pmap.compare Set.compare d1.fs_actions d2.fs_actions
-*)
-end
-
-type t = Denotation.t set
+type t = denotation set
 
 type t_lifted = <|
   break    : t;
@@ -63,13 +51,13 @@ let and_denotations_sb d1 d2 = <|
   actions     = d1.actions union d2.actions;
   constraints = d1.constraints union d2.constraints;
   seq_before  =
-    let sb = Set.product d1.actions d2.actions in
+    let sb = Set_.product d1.actions d2.actions in
     sb union (d1.seq_before union d2.seq_before);
   fs_actions  = Pmap.concat d1.fs_actions d2.fs_actions
 |>
 
-let conj m1 m2 = Set.product_map and_denotations m1 m2
-let conj_seq_before m1 m2 = Set.product_map and_denotations_sb m1 m2
+let conj m1 m2 = Set_.product_map and_denotations m1 m2
+let conj_seq_before m1 m2 = Set_.product_map and_denotations_sb m1 m2
 
 let add_constraint m cstr =
   {<|d with constraints = d.constraints union {cstr}|> | forall (d IN m) | true}
@@ -301,14 +289,14 @@ module Solve = struct
   let partition sb cs es =
     let step lls e =
       List.fold_left (fun lls ls -> part sb e lls cs [] ls) [] lls in
-    List.fold_left step [List.make (1 + List.length cs) []] es
+    List.fold_left step [List_.make (1 + List.length cs) []] es
 (*
   let rec merge d pre perm part =
     match (perm, part) with
     | [], [ts] -> schedule pre ts
     | c::cs, ts::tss ->
         let combine_pres (c1, ls1) (c2, ls2) = (c1 union c2, ls1 @ ls2) in
-        merge d (schedule (List.product_map combine_pres pre c) ts) cs tss
+        merge d (schedule (List_.product_map combine_pres pre c) ts) cs tss
     | _ -> assert (false)
 *)
 
@@ -317,7 +305,7 @@ module Solve = struct
       match (cs, ts) with
         | ([], [t])        -> add_trace t
         | (c::cs', t::ts') ->
-            let pre = List.product_map (@) (add_trace t) (Pmap.find c call_map) in
+            let pre = List_.product_map (@) (add_trace t) (Pmap.find c call_map) in
             interleave call_map pre cs' ts'
       end
 
@@ -355,7 +343,7 @@ module Solve = struct
         let todo_list = make_todo d [] (sb_accesses union sa_rest_todo) in
         let call_map =
           let seq_call c = seq d [] (Pmap.find c d.fs_actions) in
-          Pmap.of_list [(c, seq_call c) | forall (c IN calls) | true] in
+          Map_.of_list [(c, seq_call c) | forall (c IN calls) | true] in
         let perms = permute d.seq_before calls in
         let merge lls cs =
           let parts = partition d.seq_before cs todo_list in
@@ -376,7 +364,7 @@ module Solve = struct
     let f c trace = (Action.Memory.replay p trace) :: c in
     List.fold_left f c (linearise d)
 
-  let simplify_all t = Set.of_list (Set.fold simplify t [])
+  let simplify_all t = Set_.of_list (Set.fold simplify t [])
 end
 
 module Graph = struct

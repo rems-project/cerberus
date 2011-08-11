@@ -1,5 +1,5 @@
 let product_map f s1 s2 = {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
-let product = product_map (fun x y -> (x, y))
+let product s1 s2 = product_map Pair.make s1 s2
 
 let filter_map f s =
   let f' a s =
@@ -14,3 +14,5 @@ let fold_map f s i =
     let (e', a') = f e a in
     (a', s union {e'})
   ) s (i, empty)
+
+let of_list xs =  {x | forall (x MEM xs) | true}

@@ -6,7 +6,9 @@ BUILD_DIR=_build_ocaml
 FILES=\
 Ord.lem \
 Pair.lem \
-Map.lem \
+Map_.lem \
+List_.lem \
+Set_.lem \
 Braun.lem \
 Multiset.lem \
 Lexing.lem \

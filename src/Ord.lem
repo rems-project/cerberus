@@ -1,5 +1,6 @@
-type ordering = LT | EQ | GT
+type ordering = Lt | Eq | Gt
 
+(*
 class (ORD 'a)
   val compare : 'a -> 'a -> ordering
 end
@@ -15,7 +16,7 @@ class (ord 'a)
   val min : 'a -> 'a -> 'a
   val max : 'a -> 'a -> 'a
 end
-(*
+
 instance forall 'a. (ORD 'a) => (ord 'a)
   let lt a b =
     match compare a b with
@@ -44,7 +45,7 @@ end
 *)
 
 let compose o1 o2 =
-  if o1 = EQ then
+  if o1 = Eq then
     o2
   else
     o1

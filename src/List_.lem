@@ -6,10 +6,10 @@ let filter_map f xs =
       | Some y -> y::ys
       | None   -> ys
     end in
-  List`fold_right f' xs []
+  List.fold_right f' xs []
 
 let product_map f s1 s2 = [f e1 e2 | forall (e1 MEM s1) (e2 MEM s2) | true]
-let product = product_map (fun x y -> (x, y))
+let product s1 s2 = product_map (fun x y -> (x, y)) s1 s2
 
 let rec init_aux length f i =
   if i = length then
@@ -17,8 +17,8 @@ let rec init_aux length f i =
   else
     f i::init_aux length f (i+1)
 
-let init   length f = init_aux length f 0
-let create length v = init length (fun _ -> v)
+let init length f = init_aux length f 0
+let make length v = init length (fun _ -> v)
 
 let rec zip_with3 f l1 l2 l3 =
   match (l1, l2, l3) with
