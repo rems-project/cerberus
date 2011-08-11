@@ -1,8 +1,6 @@
 type 'a t = ('a, num) Pmap.map
 
-(* TODO value restriction
 let emp = Pmap.empty
-*)
 
 let count e m =
   match Pmap.mem e m with
@@ -13,7 +11,4 @@ let count e m =
 let mem e m = (count e m > 0)
 let add e m = Pmap.add e (1 + count e m) m
 
-(* TODO value restriction
 let from_list ls = List.fold_left (fun m e -> add e m) emp ls
-*)
-let from_list ls = List.fold_left (fun m e -> add e m) Pmap.empty ls
