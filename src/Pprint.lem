@@ -27,7 +27,7 @@ module Operators = struct
   val (^/^) : t -> t -> t
   sub [ocaml] (^/^) = Pprint.Operators.(^/^)
   val !^ : string -> t
-  sub [ocaml] !^ = Pprint.Operators.!^
+  sub [ocaml] !^ = Pprint.text
 end
 
 val lbrace : t

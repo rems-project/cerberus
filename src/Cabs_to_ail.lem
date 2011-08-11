@@ -9,7 +9,7 @@ module Effect = struct
   module St = Symbol_table
 
   type id = Symbol.t
-  type id_set = Symbol.set
+  type id_set = Symbol.sset
 
   type ('a_e, 'a_s) env = <|
     symbol_set : id_set;
@@ -218,7 +218,7 @@ and desugar_specifier specifiers =
           ]
         @ [(mset [C.BOOL], A.INTEGER A.BOOL)]
       ) in
-  E.of_option "" (Map.find specifiers smap)
+  E.of_option "" (Map_.find specifiers smap)
 
 and desugar_type t =
   let ft = desugar_type in
@@ -344,7 +344,7 @@ and desugar_stmt (s, l) =
           | (id, Some d_e, _) -> Some (id, d_e)
           | (_,  None,     _) -> None
         end in
-        A.DECLARATION <$> (List.filter_map f <$> d_defns)
+        A.DECLARATION <$> (List_.filter_map f <$> d_defns)
     | C.EXPRESSION e -> A.EXPRESSION <$> fe e
     | C.IF e s1 s2_opt ->
         let d_s2 = desugar_stmt_opt l s2_opt in

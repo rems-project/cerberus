@@ -85,11 +85,11 @@ let rec compare_const const1 const2 =
       Symbol.compare n1 n2
   | (Address a1, Address a2) ->
       Symbol.compare a1 a2
-  | (Null, Null) -> Ord.EQ
+  | (Null, Null) -> Ord.Eq
   | (Integer i1, Integer i2) ->
-      if i1 = i2 then Ord.EQ
-      else if i1 < i2 then Ord.LT
-      else Ord.GT
+      if i1 = i2 then Ord.Eq
+      else if i1 < i2 then Ord.Lt
+      else Ord.Gt
   | (Offset c1 c2 c3, Offset c1' c2' c3') ->
       compare_const c1 c1'
       ++ compare_const c2 c2'
@@ -125,23 +125,23 @@ let rec compare_const const1 const2 =
   | (Fn n1 cs1, Fn n2 cs2) ->
       List.fold_left2
         (fun r c1 c2 -> r ++ compare_const c1 c2) (Symbol.compare n1 n2) cs1 cs2
-  | (Name _         , _) -> Ord.LT
-  | (Integer _      , _) -> Ord.LT
-  | (Address _      , _) -> Ord.LT
-  | (Null           , _) -> Ord.LT
-  | (Offset _ _ _   , _) -> Ord.LT
-  | (Plus _ _       , _) -> Ord.LT
-  | (Minus _ _      , _) -> Ord.LT
-  | (Mod _ _        , _) -> Ord.LT
-  | (Mult _ _       , _) -> Ord.LT
-  | (Div _ _        , _) -> Ord.LT
-  | (Pow _          , _) -> Ord.LT
-  | (BitAnd _ _     , _) -> Ord.LT
-  | (BitOr _ _      , _) -> Ord.LT
-  | (BitXor _ _     , _) -> Ord.LT
-  | (BitComplement _, _) -> Ord.LT
-  | (Fn _ _         , _) -> Ord.LT
-  | _ -> Ord.GT
+  | (Name _         , _) -> Ord.Lt
+  | (Integer _      , _) -> Ord.Lt
+  | (Address _      , _) -> Ord.Lt
+  | (Null           , _) -> Ord.Lt
+  | (Offset _ _ _   , _) -> Ord.Lt
+  | (Plus _ _       , _) -> Ord.Lt
+  | (Minus _ _      , _) -> Ord.Lt
+  | (Mod _ _        , _) -> Ord.Lt
+  | (Mult _ _       , _) -> Ord.Lt
+  | (Div _ _        , _) -> Ord.Lt
+  | (Pow _          , _) -> Ord.Lt
+  | (BitAnd _ _     , _) -> Ord.Lt
+  | (BitOr _ _      , _) -> Ord.Lt
+  | (BitXor _ _     , _) -> Ord.Lt
+  | (BitComplement _, _) -> Ord.Lt
+  | (Fn _ _         , _) -> Ord.Lt
+  | _ -> Ord.Gt
   end
 
 type constr =
@@ -244,18 +244,18 @@ let rec compare_constr constr1 constr2 =
       ++ compare_constr c3 c3'
   | (ConvInt _ c1 _, ConvInt _ c1' _) ->
       compare_constr c1 c1'
-  | (True         , _) -> Ord.LT
-  | (False        , _) -> Ord.LT
-  | (Eq _ _       , _) -> Ord.LT
-  | (Le _ _       , _) -> Ord.LT
-  | (Lt _ _       , _) -> Ord.LT
-  | (Not _        , _) -> Ord.LT
-  | (Or _ _       , _) -> Ord.LT
-  | (And _ _      , _) -> Ord.LT
-  | (Implies _ _  , _) -> Ord.LT
-  | (If _ _ _     , _) -> Ord.LT
-  | (ConvInt _ _ _, _) -> Ord.LT
-  | _ -> Ord.GT
+  | (True         , _) -> Ord.Lt
+  | (False        , _) -> Ord.Lt
+  | (Eq _ _       , _) -> Ord.Lt
+  | (Le _ _       , _) -> Ord.Lt
+  | (Lt _ _       , _) -> Ord.Lt
+  | (Not _        , _) -> Ord.Lt
+  | (Or _ _       , _) -> Ord.Lt
+  | (And _ _      , _) -> Ord.Lt
+  | (Implies _ _  , _) -> Ord.Lt
+  | (If _ _ _     , _) -> Ord.Lt
+  | (ConvInt _ _ _, _) -> Ord.Lt
+  | _ -> Ord.Gt
   end
 
 type t = constr set
@@ -266,7 +266,7 @@ let tt = True
 
 let neq c1 c2 = Not (Eq c1 c2)
 let eq c1 c2 =
-  if compare_const c1 c2 = Ord.EQ then
+  if compare_const c1 c2 = Ord.Eq then
     Eq c1 c2
   else
     Eq c2 c1
@@ -473,7 +473,7 @@ module Process = struct
       (n, <|p with counter = n(*; cc = Cc.grow p.cc (Cc.size p.cc)*)|>)
 
   let convert_name p s =
-    match Map.find s p.name_map with
+    match Map_.find s p.name_map with
     | Some n -> (n, p)
     | None   ->
         let (n, p) = n_fresh p in
@@ -481,7 +481,7 @@ module Process = struct
     end
 
   let convert_addr p a =
-    match Map.find a p.name_map with
+    match Map_.find a p.name_map with
     | Some n -> (n, p)
     | None   ->
         let (n, p) = n_fresh p in
@@ -493,7 +493,7 @@ module Process = struct
      end
 
   let convert_int p i =
-    match Map.find i p.int_map with
+    match Map_.find i p.int_map with
     | Some n -> (n, p)
     | None   ->
         let (n, p) = n_fresh p in
@@ -505,7 +505,7 @@ module Process = struct
     end
 
   let apply p n1 n2 =
-    match Map.find (n1, n2) p.apply_map with
+    match Map_.find (n1, n2) p.apply_map with
     | Some n -> (n, p)
     | None   ->
         let (n, p) = n_fresh p in
@@ -587,7 +587,7 @@ module Process = struct
       | Offset a (Integer i) _ ->
           if i = 0 then replace a else (const, p)
       | Offset (Offset a o1 s1) o2 s2 ->
-          if compare_const s1 s2 = Ord.EQ then
+          if compare_const s1 s2 = Ord.Eq then
             replace (Offset a (Plus o1 o2) s1)
           else (const, p)
       | Plus (Integer i1) (Integer i2) ->
@@ -609,7 +609,7 @@ module Process = struct
       | Name _ ->
           let (n, p) = normalise_const p const in
           let n =
-            match Map.find n p.const_map with
+            match Map_.find n p.const_map with
             | Some n' -> n'
             | None -> const
             end in
@@ -648,14 +648,14 @@ module Process = struct
       | Lt (Integer i1) (Integer i2) ->
           (if i1 <  i2 then True else False, p)
       | Lt a1 (Offset a2' (Integer i2) s2) ->
-          if compare_const a1 a2' = Ord.EQ then
+          if compare_const a1 a2' = Ord.Eq then
             if 0 < i2
               then (True, p)
               else (False, p)
           else
             match a1 with
             | Offset a1' (Integer i1) s1 ->
-                if compare_const a1' a2' = Ord.EQ && compare_const s1 s2 = Ord.EQ then
+                if compare_const a1' a2' = Ord.Eq && compare_const s1 s2 = Ord.Eq then
                   if i1 < i2
                     then (True, p)
                     else (False, p)
@@ -673,7 +673,7 @@ module Process = struct
       | Eq c1 c2 ->
           let (n1, p1) = normalise_const p  c1 in
           let (n2, p2) = normalise_const p1 c2 in
-          if compare_const c1 c2 = Ord.EQ then
+          if compare_const c1 c2 = Ord.Eq then
             (True, merge p2 c1 c2)
           else
             let (b, cc') = Cc.congruent_constants p.cc n1 n2 in
@@ -696,7 +696,7 @@ module Process = struct
       | _ -> (constr, p)
       end in
     let simplify_all = fold_map_constr simplify_constr simplify_const in
-    let (p, t') = Set.fold_map simplify_all p.t p in
+    let (p, t') = Set_.fold_map simplify_all p.t p in
     <|p with t = t'|>
 
   let normalise_const_map p =

@@ -7,8 +7,8 @@ let (>>) x f = f x
 
 let compare_num i1 i2 =
   if i1 = i2 then
-    Ord.EQ
+    Ord.Eq
   else if i1 < i2 then
-    Ord.LT
+    Ord.Lt
   else
-    Ord.GT
+    Ord.Gt

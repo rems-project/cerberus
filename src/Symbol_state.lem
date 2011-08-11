@@ -1,4 +1,4 @@
-type 'a t = ('a, Symbol.set) State.t
+type 'a t = ('a, Symbol.sset) State.t
 
 let unit = State.unit
 let bind = State.bind

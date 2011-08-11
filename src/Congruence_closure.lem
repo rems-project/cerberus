@@ -30,7 +30,7 @@ let combine cc c1 c2 =
   let (hint, d) = Union_find.combine_hint cc.delta c1 c2 in
   (hint, <|cc with delta = d|>)
 
-let find_congr cc r1 r2 = Map.find (r1, r2) cc.congr
+let find_congr cc r1 r2 = Map_.find (r1, r2) cc.congr
 
 let add_pending cc eq = <|cc with pending = eq :: cc.pending|>
 
@@ -55,7 +55,7 @@ let propagate cc =
                     add_pending cc (c, congr)
                 | None ->
                     <|cc with
-                      use   = Braun.update cc.use r2 ((::) (f, c));
+                      use   = Braun.update cc.use r2 (List_.cons (f, c));
                       congr = Pmap.add (c1', c2') c cc.congr
                     |>
               end)
@@ -74,7 +74,7 @@ let merge cc t c =
           | Some congr ->
               propagate (add_pending cc (c, congr))
           | None ->
-              let add r a = Braun.update a r ((::) (f, c)) in
+              let add r a = Braun.update a r (List_.cons (f, c)) in
               <|cc with
                 use = add r2 (add r1 cc.use);
                 congr = Pmap.add (r1, r2) c cc.congr
