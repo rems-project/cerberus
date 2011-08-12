@@ -31,10 +31,14 @@ let () =
     >> Lexer.make
     >> Parser.parse
     >> Cabs_to_ail.desugar "main"
-    >> Typing.annotate
+    >> Exception.rbind Typing.annotate
+    >> Exception.map (Reduction.reduce !bound) in
+(*
     >> pass_through
         (List.iter (Document.print -| Ail.Print.pp -| snd))
-    >> List.map (Reduction.reduce !bound)
+*)
+    
+(*
     >> pass_through_test !dot
         (List.iter (Meaning.Graph.dot_result file_name))
     >> pass_through_test !output
@@ -44,4 +48,5 @@ let () =
     >> List.iter
         (Document.print -|
             Ail.Print.pp_result Constraint.Print.pp_set) in
+*)
   List.iter (ignore -| pipeline) !files

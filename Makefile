@@ -69,8 +69,11 @@ build_ocaml: lem_ocaml
 	sed -i 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/Transitive_reduction.ml
 	sed -i 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/Multiset.ml
 	sed -i "s/emp$$/(emp ())/" $(OCAML_BUILD_DIR)/Transitive_reduction.ml
-# Open batteries to for List.take and List.drop.
-	sed -i '1i open Batteries' $(OCAML_BUILD_DIR)/Braun.ml
+	sed -i 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cparser.mly
+# Open batteries to for List.take, List.drop, list.split_at.
+	sed -i 's/List\.take/BatList.take/' $(OCAML_BUILD_DIR)/Braun.ml
+	sed -i 's/List\.drop/BatList.drop/' $(OCAML_BUILD_DIR)/Braun.ml
+	sed -i 's/List\.split_at/BatList.split_at/' $(OCAML_BUILD_DIR)/Braun.ml
 # Fixing up OCaml syntax.
 	sed -i 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
 	sed -i 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
@@ -78,7 +81,7 @@ build_ocaml: lem_ocaml
 	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/let none/let none ()/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/M.none/M.none ()/' $(OCAML_BUILD_DIR)/Reduction.ml
-	cd $(OCAML_BUILD_DIR); ocamlbuild -package batteries main.byte
+	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)

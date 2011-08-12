@@ -43,7 +43,7 @@
 %{
 module E = Errormsg
 module C = Cabs
-module P = Position
+module L = Location
 
 let parse_error msg : 'a =
   E.parse_error msg
@@ -104,7 +104,7 @@ let currentFunctionName = ref "<outside any function>"
 %token TYPEOF FUNCTION__ PRETTY_FUNCTION__
 %token LABEL__
 
-%token<BatBig_int.t * Cabs.suffix option> CONST_INT
+%token<Nat_num.num * Cabs.suffix option> CONST_INT
 
 /* operator precedence */
 %right ELSE
@@ -138,7 +138,7 @@ external_declaration:
 | function_definition
     {$1}
 | declaration
-    {C.EXTERNAL_DECLARATION $1, P.make $startpos $endpos}
+    {C.EXTERNAL_DECLARATION $1, L.make $startpos $endpos}
 ;
 
 /* 6.9.1#1 Function definitions, Syntax */
@@ -148,7 +148,7 @@ function_definition:
     { let store, specs, quals = $1 in
       let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
       let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in
-      C.FUNCTION_DEFINITION (defn_l, $3), P.make $startpos $endpos
+      C.FUNCTION_DEFINITION (defn_l, $3), L.make $startpos $endpos
     }
 ;
 
@@ -170,9 +170,9 @@ declaration_list:
 /* 6.5.1#1 Primary expressions, Syntax */
 primary_expression:
 | identifier
-    {C.VARIABLE $1, P.make $startpos $endpos}
+    {C.VARIABLE $1, L.make $startpos $endpos}
 | constant
-    {C.CONSTANT $1, P.make $startpos $endpos}
+    {C.CONSTANT $1, L.make $startpos $endpos}
 | LPAREN expression RPAREN
     {$2}
 ;
@@ -182,9 +182,9 @@ postfix_expression:
 | primary_expression     
     {$1}
 | postfix_expression LBRACKET expression RBRACKET
-    {C.INDEX ($1, $3), P.make $startpos $endpos}
+    {C.INDEX ($1, $3), L.make $startpos $endpos}
 | postfix_expression LPAREN argument_expression_list_opt RPAREN
-    {C.CALL ($1, $3), P.make $startpos $endpos}
+    {C.CALL ($1, $3), L.make $startpos $endpos}
 /* Currently, we have no support for structs.
 | postfix_expression DOT identifier
     {C.MEMBEROF (fst $1, fst $3), snd $1}
@@ -192,9 +192,9 @@ postfix_expression:
     {C.MEMBEROFPTR (fst $1, fst $3), snd $1}
 */
 | postfix_expression PLUS_PLUS
-    {C.UNARY (C.POSTFIX_INCR, $1), P.make $startpos $endpos}
+    {C.UNARY (C.POSTFIX_INCR, $1), L.make $startpos $endpos}
 | postfix_expression MINUS_MINUS
-    {C.UNARY (C.POSTFIX_DECR, $1), P.make $startpos $endpos}
+    {C.UNARY (C.POSTFIX_DECR, $1), L.make $startpos $endpos}
 
 /* TODO I am omitting compound literals for the moment. Adding them at a later stage shouldn't pose much of a challenge.
 | LPAREN type_name RPAREN LBRACE initialiser_list RBRACE
@@ -209,19 +209,19 @@ unary_expression:
 | postfix_expression
     {$1}
 | PLUS_PLUS unary_expression
-    {C.UNARY (C.PREFIX_INCR, $2), P.make $startpos $endpos}
+    {C.UNARY (C.PREFIX_INCR, $2), L.make $startpos $endpos}
 | MINUS_MINUS unary_expression
-    {C.UNARY (C.PREFIX_DECR, $2), P.make $startpos $endpos}
+    {C.UNARY (C.PREFIX_DECR, $2), L.make $startpos $endpos}
 | unary_operator cast_expression
-        {C.UNARY ($1, $2), P.make $startpos $endpos}
+        {C.UNARY ($1, $2), L.make $startpos $endpos}
 /* TODO Not yet supported.
 | SIZEOF unary_expression
     {C.EXPR_SIZEOF (fst $2), $1}
 */
 | SIZEOF LPAREN type_name RPAREN
-    {C.TYPE_SIZEOF $3, P.make $startpos $endpos}
+    {C.TYPE_SIZEOF $3, L.make $startpos $endpos}
 | ALIGNOF LPAREN type_name RPAREN
-    {C.TYPE_ALIGNOF $3, P.make $startpos $endpos}
+    {C.TYPE_ALIGNOF $3, L.make $startpos $endpos}
 ;
 
 unary_operator:
@@ -244,7 +244,7 @@ cast_expression:
 | unary_expression
     {$1}
 | LPAREN type_name RPAREN cast_expression
-    {C.CAST ($2, $4), P.make $startpos $endpos}
+    {C.CAST ($2, $4), L.make $startpos $endpos}
 ;
 
 /* 6.5.5#1 Multiplicative operators, Syntax */
@@ -252,11 +252,11 @@ multiplicative_expression:
 | cast_expression
     {$1}
 | multiplicative_expression STAR cast_expression
-    {C.BINARY (C.ARITHMETIC C.MUL, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.MUL, $1, $3), L.make $startpos $endpos}
 | multiplicative_expression SLASH cast_expression
-    {C.BINARY (C.ARITHMETIC C.DIV, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.DIV, $1, $3), L.make $startpos $endpos}
 | multiplicative_expression PERCENT cast_expression
-    {C.BINARY (C.ARITHMETIC C.MOD, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.MOD, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.6#1 Additive operators, Syntax */
@@ -264,9 +264,9 @@ additive_expression:
 | multiplicative_expression
     {$1}
 | additive_expression PLUS multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.ADD, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.ADD, $1, $3), L.make $startpos $endpos}
 | additive_expression MINUS multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.SUB, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.SUB, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.7 Bitwise shift operators, Syntax */
@@ -274,9 +274,9 @@ shift_expression:
 | additive_expression
     {$1}
 | shift_expression  INF_INF additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHL, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.SHL, $1, $3), L.make $startpos $endpos}
 | shift_expression  SUP_SUP additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHR, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.SHR, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.8#1 Relational operators, Syntax */
@@ -284,13 +284,13 @@ relational_expression:
 | shift_expression
     {$1}
 | relational_expression INF shift_expression
-    {C.BINARY (C.RELATIONAL C.LT, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.LT, $1, $3), L.make $startpos $endpos}
 | relational_expression SUP shift_expression
-    {C.BINARY (C.RELATIONAL C.GT, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.GT, $1, $3), L.make $startpos $endpos}
 | relational_expression INF_EQ shift_expression
-    {C.BINARY (C.RELATIONAL C.LE, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.LE, $1, $3), L.make $startpos $endpos}
 | relational_expression SUP_EQ shift_expression
-    {C.BINARY (C.RELATIONAL C.GE, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.GE, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.9#1 Equality operators, Syntax */
@@ -298,9 +298,9 @@ equality_expression:
 | relational_expression
     {$1}
 | equality_expression EQ_EQ relational_expression
-    {C.BINARY (C.RELATIONAL C.EQ, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.EQ, $1, $3), L.make $startpos $endpos}
 | equality_expression EXCLAM_EQ relational_expression
-    {C.BINARY (C.RELATIONAL C.NE, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.RELATIONAL C.NE, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.10#1 Bitwise AND operator, Syntax */
@@ -308,7 +308,7 @@ and_expression:
 | equality_expression
     {$1}
 | and_expression AND equality_expression
-    {C.BINARY (C.ARITHMETIC C.BAND, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.BAND, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.11#1 Bitwise exclusive OR operator */
@@ -316,7 +316,7 @@ exclusive_or_expression:
 | and_expression
     {$1}
 | exclusive_or_expression CIRC and_expression
-    {C.BINARY (C.ARITHMETIC C.XOR, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.XOR, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.12#1 Bitwise inclusive OR operator */
@@ -324,7 +324,7 @@ inclusive_or_expression:
 | exclusive_or_expression
     {$1} 
 | inclusive_or_expression PIPE exclusive_or_expression
-    {C.BINARY (C.ARITHMETIC C.BOR, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.ARITHMETIC C.BOR, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.13#1 Logical AND operator, Syntax */
@@ -332,7 +332,7 @@ logical_and_expression:
 | inclusive_or_expression
     {$1}
 | logical_and_expression AND_AND inclusive_or_expression
-    {C.BINARY (C.SEQUENTIAL C.AND, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.SEQUENTIAL C.AND, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.14#1 Logical OR operator, Syntax */
@@ -340,7 +340,7 @@ logical_or_expression:
 | logical_and_expression
     {$1}
 | logical_or_expression PIPE_PIPE logical_and_expression
-    {C.BINARY (C.SEQUENTIAL C.OR, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.SEQUENTIAL C.OR, $1, $3), L.make $startpos $endpos}
 ;
 
 /* 6.5.15#1 Conditional operator, Syntax*/
@@ -348,7 +348,7 @@ conditional_expression:
 | logical_or_expression
     { $1 }
 | logical_or_expression QUEST expression COLON conditional_expression
-    {C.QUESTION ($1, $3, $5), P.make $startpos $endpos}
+    {C.QUESTION ($1, $3, $5), L.make $startpos $endpos}
 ;
 
 /* 6.5.16#1 Assignment operators, Syntax */
@@ -362,7 +362,7 @@ assignment_expression:
 | conditional_expression
     {$1}
 | unary_expression assignment_operator assignment_expression
-    {C.ASSIGN ($2, $1, $3), P.make $startpos $endpos}
+    {C.ASSIGN ($2, $1, $3), L.make $startpos $endpos}
 
 assignment_operator:
 | EQ
@@ -400,7 +400,7 @@ expression:
 | assignment_expression
     {$1}
 | expression COMMA assignment_expression
-    {C.BINARY (C.SEQUENTIAL C.COMMA, $1, $3), P.make $startpos $endpos}
+    {C.BINARY (C.SEQUENTIAL C.COMMA, $1, $3), L.make $startpos $endpos}
 ;
 
 constant_expression:
@@ -508,17 +508,17 @@ statement:
 /* 6.8.1#1 Labeled statements, Syntax */
 labeled_statement:
 | identifier COLON statement
-    {C.LABEL ($1, $3), P.make $startpos $endpos}
+    {C.LABEL ($1, $3), L.make $startpos $endpos}
 | CASE constant_expression COLON statement
-    {C.CASE ($2, $4), P.make $startpos $endpos}
+    {C.CASE ($2, $4), L.make $startpos $endpos}
 | DEFAULT COLON statement
-    {C.DEFAULT ($3), P.make $startpos $endpos}
+    {C.DEFAULT ($3), L.make $startpos $endpos}
 ;
 
 /* 6.8.2#1 Compound statement, Syntax */
 compound_statement:
 | LBRACE block_item_list_opt RBRACE
-    {C.BLOCK ($2), P.make $startpos $endpos}
+    {C.BLOCK ($2), L.make $startpos $endpos}
 ;
 
 block_item_list_opt:
@@ -538,7 +538,7 @@ block_item_list:
 
 block_item:
 | declaration
-    {C.DECLARATION ($1), Position.make $startpos $endpos}
+    {C.DECLARATION ($1), L.make $startpos $endpos}
 | statement
     {$1}
 ;
@@ -546,7 +546,7 @@ block_item:
 /* 6.8.3#1 Expression and null statement, Syntax */
 expression_statement:
 | expression_opt SEMICOLON
-    { let l = P.make $startpos $endpos in
+    { let l = L.make $startpos $endpos in
       match $1 with
       | Some e -> C.EXPRESSION e, l
       | None -> C.SKIP, l
@@ -556,26 +556,26 @@ expression_statement:
 /* 6.8.4#1 Selection statements, Syntax */
 selection_statement:
 | IF LPAREN expression RPAREN statement
-    {C.IF ($3, $5, None), P.make $startpos $endpos} %prec ELSE
+    {C.IF ($3, $5, None), L.make $startpos $endpos} %prec ELSE
 | IF LPAREN expression RPAREN statement ELSE statement
-    {C.IF ($3, $5, Some $7), P.make $startpos $endpos}
+    {C.IF ($3, $5, Some $7), L.make $startpos $endpos}
 | SWITCH LPAREN expression RPAREN statement
-    {C.SWITCH ($3, $5), P.make $startpos $endpos}
+    {C.SWITCH ($3, $5), L.make $startpos $endpos}
 ;
 
 /* 6.8.5#1 Iteration statements, Syntax */
 iteration_statement:
 | WHILE LPAREN expression RPAREN statement
-    {C.WHILE ($3, $5), P.make $startpos $endpos}
+    {C.WHILE ($3, $5), L.make $startpos $endpos}
 | DO statement WHILE LPAREN expression RPAREN
-    {C.DO ($5, $2), P.make $startpos $endpos}
+    {C.DO ($5, $2), L.make $startpos $endpos}
 | FOR LPAREN expression_opt SEMICOLON expression_opt SEMICOLON expression_opt RPAREN statement
-    { let l = P.make $startpos $endpos in
+    { let l = L.make $startpos $endpos in
       C.FOR_EXP ($3, $5, $7, $9), l
     }
 | FOR LPAREN declaration expression_opt SEMICOLON expression_opt RPAREN
         statement
-    { let l = P.make $startpos $endpos in
+    { let l = L.make $startpos $endpos in
       C.FOR_DECL ($3, $4, $6, $8), l
     }
 ;
@@ -583,13 +583,13 @@ iteration_statement:
 /* 6.8.6#1 Jump statements, Syntax */
 jump_statement:
 | GOTO identifier
-    {C.GOTO $2, P.make $startpos $endpos}
+    {C.GOTO $2, L.make $startpos $endpos}
 | CONTINUE SEMICOLON
-    {C.CONTINUE, P.make $startpos $endpos}
+    {C.CONTINUE, L.make $startpos $endpos}
 | BREAK SEMICOLON
-    {C.BREAK, P.make $startpos $endpos}
+    {C.BREAK, L.make $startpos $endpos}
 | RETURN expression_opt SEMICOLON
-    {C.RETURN $2, P.make $startpos $endpos}
+    {C.RETURN $2, L.make $startpos $endpos}
 ;
 
 /* 6.7#1 Declarations, Syntax */
@@ -607,7 +607,7 @@ declaration:
 
 declaration_specifiers_opt:
 | /* empty */
-    {([], CpMultiSet.empty, BatSet.empty)}
+    {([], Multiset.emp, Pset.empty compare)}
 | declaration_specifiers
     {$1}
 ;
@@ -619,11 +619,11 @@ declaration_specifiers:
     }
 | type_specifier declaration_specifiers_opt
     { let store, specs, quals = $2 in
-      (store, CpMultiSet.add $1 specs, quals)
+      (store, Multiset.add $1 specs, quals)
     }
 | type_qualifier declaration_specifiers_opt
     { let store, specs, quals = $2 in
-      (store, specs, BatSet.add $1 quals)
+      (store, specs, Pset.add $1 quals)
     }
 /* TODO Keyword inline should only be used for function declarations. */
 | function_specifier declaration_specifiers_opt
@@ -652,11 +652,11 @@ init_declarator_list:
 init_declarator:
 | declarator
     { let name, mk_type = $1 in
-      (name, mk_type, None), P.make $startpos $endpos
+      (name, mk_type, None), L.make $startpos $endpos
     }
 | declarator EQ initialiser
     { let name, mk_type = $1 in
-      (name, mk_type, Some $3), P.make $startpos $endpos
+      (name, mk_type, Some $3), L.make $startpos $endpos
     }
 
 /* 6.7.6#1 Declarators, Syntax */
@@ -678,16 +678,16 @@ pointer_opt:
 
 type_qualifier_list_opt:
 | /* empty */
-    {BatSet.empty}
+    {Pset.empty compare}
 | type_qualifier_list
     {$1}
 ;
 
 type_qualifier_list:
 | type_qualifier
-    {BatSet.add $1 BatSet.empty}
+    {Pset.add $1 (Pset.empty compare)}
 | type_qualifier_list type_qualifier
-    {BatSet.add $2 $1}
+    {Pset.add $2 $1}
 ;
 
 /* 6.7.1#1 Storage-class specifier, Syntax */
@@ -744,7 +744,7 @@ type_specifier:
 /* 6.7.2.1#1 Structure and union specifiers, Syntax */
 specifier_qualifier_list_opt:
 | /* empty */
-    {(CpMultiSet.empty, BatSet.empty)}
+    {(Multiset.emp, Pset.empty compare)}
 | specifier_qualifier_list
     {$1}    
 ;
@@ -752,11 +752,11 @@ specifier_qualifier_list_opt:
 specifier_qualifier_list:
 | type_specifier specifier_qualifier_list_opt
     { let specs, quals = $2 in
-      (CpMultiSet.add $1 specs, quals)
+      (Multiset.add $1 specs, quals)
     }
 | type_qualifier specifier_qualifier_list_opt
     { let specs, quals = $2 in
-      (specs, BatSet.add $1 quals)
+      (specs, Pset.add $1 quals)
     }
 ;
 
@@ -778,7 +778,7 @@ declarator:
 | pointer_opt direct_declarator
     { let mk_type1 : C.c_type -> C.c_type = $1 in
       let mk_type2 : C.c_type -> C.c_type = snd $2 in
-      (fst $2, fun t -> mk_type2 (mk_type1 t)), P.make $startpos $endpos
+      (fst $2, fun t -> mk_type2 (mk_type1 t)), L.make $startpos $endpos
     }
 ;
 
