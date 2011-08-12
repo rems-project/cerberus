@@ -177,15 +177,10 @@ module Print = struct
     let rd = Transitive_reduction.reduce sb in
     let d = [arrow a1 a2 | forall ((a1, a2) IN rd) | true] in
     let s = {a1 | forall ((a1, _) IN rd) | true} union {a2 | forall ((_, a2) IN rd) | true} in
-    let (s, d) =
-      Set.fold
-        (fun (a1, a2) (s, d) -> (s union {a1; a2}, (arrow a1 a2)::d))
-        rd (empty, []) in
     let def a = pp_uid a ^^^ P.brackets (
       !^ "label" ^^ P.equals ^^ P.dquotes (pp_latex a)
     ) in
-    let d = Set.fold (fun a d -> def a::d) s d in
-    context d    
+    context (Set.fold (fun a d -> def a::d) s d)
 end
 
 let unfold (Action a _) = a
