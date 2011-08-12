@@ -152,10 +152,10 @@ let conv t t' const =
   | _ -> Symbol_state.unit (const, C.tt)
   end  
 
-let align t addr =
-  let alignment =
-    match t with
-    | A.BASE _ (A.INTEGER i) -> align_int i
-    | _ -> C.one
-    end in
-  C.eq (C.modulo addr alignment) C.zero
+
+let align = function
+  | A.BASE _ (A.INTEGER i) -> align_int i
+  | _ -> C.one
+  end
+
+let is_aligned t addr = C.eq (C.modulo addr (align t)) C.zero

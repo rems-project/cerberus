@@ -87,9 +87,7 @@ let rec compare_const const1 const2 =
       Symbol.compare a1 a2
   | (Null, Null) -> Ord.Eq
   | (Integer i1, Integer i2) ->
-      if i1 = i2 then Ord.Eq
-      else if i1 < i2 then Ord.Lt
-      else Ord.Gt
+      Num.compare i1 i2
   | (Offset c1 c2 c3, Offset c1' c2' c3') ->
       compare_const c1 c1'
       ++ compare_const c2 c2'
@@ -279,6 +277,7 @@ let rec compare_constr constr1 constr2 =
   | (_, If _ _ _     ) -> Ord.Gt
   end
 
+(* TODO compare *)
 type t = constr set
 
 let from_list cs = {c | forall (c MEM cs) | true}
@@ -490,7 +489,8 @@ module Process = struct
     let n = p.counter + 1 in
     if n + 1 < Cc.size p.cc then
       (n, <|p with counter = n|>)
-    else 
+    else
+      (* TODO grow *)
       (n, <|p with counter = n(*; cc = Cc.grow p.cc (Cc.size p.cc)*)|>)
 
   let convert_name p s =

@@ -7,3 +7,9 @@ Pointer comparison:
 
   Currently, the constraint solving procedures assumes that two pointers with
   distinct base addresses do not compare equal.
+
+Pointer arithmetic:
+
+- Pointer overflow.
+- Pointer substraction, ptrdiff_t type
+

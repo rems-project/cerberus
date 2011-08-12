@@ -70,17 +70,19 @@ let rec iterate e s f_e f_s n ml_prev =
 
 let rec reduce_lvalue n b env file exp =
   let f = reduce_exp n b env file in
-  let f_lvalue = reduce_lvalue n b env file in
   match Annotate.exp_of exp with
   | A.VARIABLE id ->
       E.unit (Pmap.find id env, M.init)
   | A.UNARY A.INDIRECTION e ->
       f e >>= fun (a, m) ->
       let t = T.base_of_pointer (T.pointer_convert (exp_type e)) in
-      let ill_aligned = C.neg (Tc.align t a) in
+      let ill_aligned = C.neg (Tc.is_aligned t a) in
       let null = C.eq a C.null in
       let c = C.implies (C.disj null ill_aligned) C.undef in
       E.unit (a, m +& c)
+  | _ ->
+      C.fresh >>= fun a ->
+      E.unit (a, M.none)
   end
 
 and reduce_exp n b env file exp =
@@ -104,7 +106,8 @@ and reduce_exp n b env file exp =
         C.fresh      >>= fun v      ->
         Action.load (lvalue_type exp) a v >>= fun load ->
         E.unit (v, m -@> load)
-  | A.CONSTANT (Cabs.CONST_INT (i, _)) -> E.unit (C.const i, M.init)
+  | A.CONSTANT (Cabs.CONST_INT (i, _)) ->
+      E.unit (C.const i, M.init)
   | A.UNARY A.POSTFIX_INCR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
@@ -118,7 +121,11 @@ and reduce_exp n b env file exp =
       let decr = C.minus v C.one in
       Tc.conv_int (exp_type e) decr >>= fun (a', c) ->
       Action.modify (lvalue_type e) a v a' >>= fun modify   ->
-      E.unit (v, (m +& c) -@> modify)
+      if T.is_signed_integer(exp_type exp) then
+        let c' = overflow (exp_type exp) decr in
+        E.unit (decr, m +& c +& c' -@> modify)
+      else
+        E.unit (v, m +& c -@> modify)
   | A.UNARY A.ADDRESS (A.Exp _ (A.UNARY A.INDIRECTION e)) -> f e
   | A.UNARY A.ADDRESS e -> f_lvalue e
   | A.CAST t e -> conv t (exp_type e) (f e)
@@ -278,12 +285,13 @@ and reduce_exp n b env file exp =
       else
         (* Pointer comparison. *)
         (* TODO Comparing two pointers to different object is
-           undefined. Unless ... *)
+           undefined unless ... *)
         f e1	>>= fun (a1, m1) ->
         f e2	>>= fun (a2, m2) ->
         C.fresh >>= fun a        ->
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
-        E.unit (a, (m1 -&- m2) +& c)
+        Action.same a1 a2 >>= fun same ->
+        E.unit (a, (m1 -&- m2) +& c +@ same)
   | A.BINARY (Cabs.RELATIONAL Cabs.GE) e1 e2 ->
       if T.is_arithmetic (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
@@ -351,7 +359,15 @@ and reduce_exp n b env file exp =
             C.fresh >>= fun a ->
 	    reduce_stmt n b' env' file fid a s >>= M.flatten >>= fun m_body ->
             E.unit (a, m_create -&> m_body -&> m_kill)
+      | None ->
+          (* Function pointer. *)
+          C.fresh >>= fun a ->
+          E.unit (a, M.none)
       end
+  | A.ALIGNOF t ->
+      E.unit (Tc.align t, M.init)
+  | A.SIZEOF  t ->
+      E.unit (Tc.size  t, M.init)
   end
 
 and reduce_stmt n b env file fid return (A.Stmt _ stmt) =

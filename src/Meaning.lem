@@ -22,6 +22,7 @@ type denotation = <|
   fs_actions  : (Action.t, Action.t set) map
 |>
 
+(* TODO compare *)
 type t = denotation set
 
 type t_lifted = <|

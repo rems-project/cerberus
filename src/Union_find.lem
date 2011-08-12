@@ -73,7 +73,7 @@ let combine_hint (t, s) x y =
   let (o, t') = Uf.combine_hint t x y in
   (to_hint o, (t', s))
 
-(*
+(* TODO grow
 let grow (<|Uf.rank = rank; Uf.parents = parents|>, s) n = (<|
   Uf.rank = A.grow rank    n (fun _ -> 0);
   Uf.parents = A.grow parents n (fun i -> s + i)
