@@ -478,11 +478,13 @@ let rec check_exp env l e_head =
         let msg_s = "Violation of constraint 6.5.15#2 Conditional operator, \
                     Constraints: ..The first operand shall have scalar type... \
                     in" in
+(* TODO Seems to be no longer needed.
         let msg_np = "Violation of constraint 6.5.15#3 Conditional operator, \
                       Constraints: ..[T]he following shall hold for the \
                       second and third operands: [...] one is a pointer and \
                       the other is a null pointer constant [...]... (Operand \
                       doesn't seem to be a pointer.) in" in
+*)
         let msg_vp = "Violation of constraint 6.5.15#3 Conditional operator, \
                       Constraints: ..[T]he following shall hold for the second \
                       and third operands: [...] one operand is a pointer to an \
