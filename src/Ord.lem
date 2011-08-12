@@ -49,3 +49,9 @@ let compose o1 o2 =
     o2
   else
     o1
+
+let to_int = function
+ | Lt -> ~1
+ | Eq -> 0
+ | Ge -> 1
+ end

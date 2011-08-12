@@ -118,7 +118,7 @@ let congruent_constants cc c1 c2 =
   let (r2, cc) = normalise_constant cc c2 in
   (r1 = r2, cc)
 
-(*
+(* TODO grow
 let grow cc n = <|cc with
   delta = Union_find.grow cc.delta n;
   use = Braun.grow cc.use n (fun _ -> []);

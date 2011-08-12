@@ -12,3 +12,7 @@ let mem e m = (count e m > 0)
 let add e m = Pmap.add e (1 + count e m) m
 
 let from_list ls = List.fold_left (fun m e -> add e m) emp ls
+
+(*
+sub [ocaml] compare_int t1 t2 = Pmap.compare Pervasives.compare t1 t2
+*)

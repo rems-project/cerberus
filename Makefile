@@ -8,6 +8,7 @@ OCAML_BUILD_DIR=_build_ocaml
 
 FILES=\
 Ord.lem \
+Num.lem \
 Pair.lem \
 Map_.lem \
 List_.lem \

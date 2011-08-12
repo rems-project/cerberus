@@ -148,7 +148,7 @@ let rec desugar_exp (e, l) =
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
   | C.UNARY C.NOT e -> A.BINARY (C.RELATIONAL C.EQ) (d_zero l) <$> f e
-  | C.UNARY unop e -> A.UNARY (desugar_unop unop) <$> f e
+  | C.UNARY unop  e -> A.UNARY (desugar_unop unop) <$> f e
   | C.BINARY o e1 e2 -> A.BINARY o <$> f e1 <*> f e2
   | C.ASSIGN o e1 e2 -> A.ASSIGN o <$> f e1 <*> f e2
   | C.QUESTION e1 e2 e3 -> A.QUESTION <$> f e1 <*> f e2 <*> f e3
@@ -156,7 +156,7 @@ let rec desugar_exp (e, l) =
   | C.CALL e es -> A.CALL <$> f e <*> E.map_list f es
   | C.CONSTANT c -> E.unit (A.CONSTANT c)
   | C.VARIABLE n -> A.VARIABLE <$> subst l n
-  | C.TYPE_SIZEOF t -> A.SIZEOF <$> ft t
+  | C.TYPE_SIZEOF  t -> A.SIZEOF  <$> ft t
   | C.TYPE_ALIGNOF t -> A.ALIGNOF <$> ft t
 (*
   | C.COMPOUND_LITERAL _ ->
@@ -169,7 +169,7 @@ and desugar_specifier specifiers =
   let smap =
     List.fold_left
       (fun m (x, y) -> Pmap.add x y m)
-(* TODO
+(* TODO compare
       (Pmap.create Multiset.compare)
 *)
       Pmap.empty
