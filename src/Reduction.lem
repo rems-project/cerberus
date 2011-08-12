@@ -406,7 +406,7 @@ and reduce_stmt n b env file fid return (A.Stmt _ stmt) =
   | A.CONTINUE -> E.unit (M.continue M.init)
   end
 
-let reduce_file n file =
+let reduce n file =
   let b =
     let f m (fid, _) = Pmap.add fid n m in
     List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
@@ -416,6 +416,3 @@ let reduce_file n file =
 (*
   List.map rd (List.map snd (Pmap.values file.A.fn_map))
 *)
-
-
-

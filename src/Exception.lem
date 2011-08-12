@@ -10,6 +10,8 @@ let bind m k =
     | Exception  s -> Exception s
   end
 
+let rbind k m = bind m k
+
 let unit a = Result a
 let throw m = Exception m
 let fail = throw
