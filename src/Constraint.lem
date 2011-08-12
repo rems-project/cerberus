@@ -126,22 +126,35 @@ let rec compare_const const1 const2 =
       List.fold_left2
         (fun r c1 c2 -> r ++ compare_const c1 c2) (Symbol.compare n1 n2) cs1 cs2
   | (Name _         , _) -> Ord.Lt
+  | (_, Name _         ) -> Ord.Gt
   | (Integer _      , _) -> Ord.Lt
+  | (_, Integer _      ) -> Ord.Gt
   | (Address _      , _) -> Ord.Lt
+  | (_, Address _      ) -> Ord.Gt
   | (Null           , _) -> Ord.Lt
+  | (_, Null           ) -> Ord.Gt
   | (Offset _ _ _   , _) -> Ord.Lt
+  | (_, Offset _ _ _   ) -> Ord.Gt
   | (Plus _ _       , _) -> Ord.Lt
+  | (_, Plus _ _       ) -> Ord.Gt
   | (Minus _ _      , _) -> Ord.Lt
+  | (_, Minus _ _      ) -> Ord.Gt
   | (Mod _ _        , _) -> Ord.Lt
+  | (_, Mod _ _        ) -> Ord.Gt
   | (Mult _ _       , _) -> Ord.Lt
+  | (_, Mult _ _       ) -> Ord.Gt
   | (Div _ _        , _) -> Ord.Lt
+  | (_, Div _ _        ) -> Ord.Gt
   | (Pow _          , _) -> Ord.Lt
+  | (_, Pow _          ) -> Ord.Gt
   | (BitAnd _ _     , _) -> Ord.Lt
+  | (_, BitAnd _ _     ) -> Ord.Gt
   | (BitOr _ _      , _) -> Ord.Lt
+  | (_, BitOr _ _      ) -> Ord.Gt
   | (BitXor _ _     , _) -> Ord.Lt
+  | (_, BitXor _ _     ) -> Ord.Gt
   | (BitComplement _, _) -> Ord.Lt
-  | (Fn _ _         , _) -> Ord.Lt
-  | _ -> Ord.Gt
+  | (_, BitComplement _) -> Ord.Gt
   end
 
 type constr =
@@ -245,17 +258,25 @@ let rec compare_constr constr1 constr2 =
   | (ConvInt _ c1 _, ConvInt _ c1' _) ->
       compare_constr c1 c1'
   | (True         , _) -> Ord.Lt
+  | (_, True         ) -> Ord.Gt
   | (False        , _) -> Ord.Lt
+  | (_, False        ) -> Ord.Gt
   | (Eq _ _       , _) -> Ord.Lt
+  | (_, Eq _ _       ) -> Ord.Gt
   | (Le _ _       , _) -> Ord.Lt
+  | (_, Le _ _       ) -> Ord.Gt
   | (Lt _ _       , _) -> Ord.Lt
+  | (_, Lt _ _       ) -> Ord.Gt
   | (Not _        , _) -> Ord.Lt
+  | (_, Not _        ) -> Ord.Gt
   | (Or _ _       , _) -> Ord.Lt
+  | (_, Or _ _       ) -> Ord.Gt
   | (And _ _      , _) -> Ord.Lt
+  | (_, And _ _      ) -> Ord.Gt
   | (Implies _ _  , _) -> Ord.Lt
+  | (_, Implies _ _  ) -> Ord.Gt
   | (If _ _ _     , _) -> Ord.Lt
-  | (ConvInt _ _ _, _) -> Ord.Lt
-  | _ -> Ord.Gt
+  | (_, If _ _ _     ) -> Ord.Gt
   end
 
 type t = constr set
