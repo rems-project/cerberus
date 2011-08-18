@@ -9,8 +9,8 @@ module Operators = struct
   let (<$>) = map
 end
 
+let run_impl = State.run_impl
 let init m = State.run m Symbol.init
-let run = State.run
 
 let fresh = Symbol.fresh
 let fresh_pretty n = Symbol.fresh_pretty n
