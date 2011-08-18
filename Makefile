@@ -80,13 +80,15 @@ build_ocaml: lem_ocaml
 	sed -i 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
 	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/Meaning.ml
-	sed -i 's/let none/let none ()/' $(OCAML_BUILD_DIR)/Meaning.ml
-	sed -i 's/M.none/M.none ()/' $(OCAML_BUILD_DIR)/Reduction.ml
+	sed -i 's/let null/let null ()/' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/M.null/M.null ()/' $(OCAML_BUILD_DIR)/Reduction.ml
+# Write _tags
+	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
 	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)
-	cd $(OCAML_BUILD_DIR) && ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
+	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
 clean:
 	rm -R $(OCAML_BUILD_DIR)

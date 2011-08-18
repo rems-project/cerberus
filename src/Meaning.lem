@@ -32,14 +32,14 @@ type t_lifted = <|
   return   : t
 |>
 
-let init = {<|
-  actions     = empty;
-  constraints = empty;
-  seq_before  = empty;
+let unit = {<|
+  actions     = {};
+  constraints = {};
+  seq_before  = {};
   fs_actions  = Pmap.empty
 |>}
 
-let none = empty
+let null = {}
 
 let and_denotations d1 d2 = <|
   actions     = d1.actions     union d2.actions;
@@ -78,43 +78,43 @@ module Operators = struct
   let (-/-) = (union)
   let (+&) = add_constraint
   let (+@) = add_action
-  let (-@>) m a = m -&> (init +@ a)
+  let (-@>) m a = m -&> (unit +@ a)
 end
 
 open Operators
 
-let init_lifted = <|
-  break    = empty;
-  continue = empty;
-  normal   = init;
-  return   = empty
+let unit_lifted = <|
+  break    = {};
+  continue = {};
+  normal   = unit;
+  return   = {}
 |>
 
 let break m = <|
   break    = m;
-  continue = empty;
-  normal   = empty;
-  return   = empty
+  continue = {};
+  normal   = {};
+  return   = {}
 |>
 
 let continue m = <|
-  break    = empty;
+  break    = {};
   continue = m;
-  normal   = empty;
-  return   = empty
+  normal   = {};
+  return   = {}
 |>
 
 let normal m = <|
-  break    = empty;
-  continue = empty;
+  break    = {};
+  continue = {};
   normal   = m;
-  return   = empty
+  return   = {}
 |>
 
 let return m = <|
-  break    = empty;
-  continue = empty;
-  normal   = empty;
+  break    = {};
+  continue = {};
+  normal   = {};
   return   = m
 |>
 
@@ -132,13 +132,13 @@ let flatten ml =
 let enter_loop m_pos m_neg ml =
   let m = ml.continue -/- ml.normal in <|
     break    = ml.break -/- (m -&> m_neg);
-    continue = empty;
+    continue = {};
     normal   = m -&> m_pos;
     return   = ml.return
   |>
 
 let exit_loop m_neg ml =
-  <|init_lifted with
+  <|unit_lifted with
     normal = ml.break -/- ((ml.continue -/- ml.normal) -&> m_neg);
     return = ml.return
   |>
@@ -169,7 +169,7 @@ let add_action_entire_lifted ml a =
   |>
 
 let add_actions_entire_lifted_sb ml actions' =
-  let m = {<|d with actions = actions'|> | forall (d IN init) | true} in <|
+  let m = {<|d with actions = actions'|> | forall (d IN unit) | true} in <|
     break    = ml.break    -&> m;
     continue = ml.continue -&> m;
     normal   = ml.normal   -&> m;
@@ -189,7 +189,7 @@ module Statement_operators = struct
   let (-//-) = disj_lifted
   let (++&)  = add_constraint_entire_lifted
   let (++@)  = add_action_lifted
-  let (--@>) ml a = ml --&> (init_lifted ++@ a)
+  let (--@>) ml a = ml --&> (unit_lifted ++@ a)
 end
 
 module Print = struct
@@ -311,7 +311,7 @@ module Solve = struct
       end
 
   let rec make_todo d ls t =
-    if t = empty then
+    if t = {} then
       ls
     else
       let (sb, sa) =
@@ -320,7 +320,7 @@ module Solve = struct
       make_todo d (Set.to_list sb @ ls) sa
 
   let rec seq d pre future =
-    if future = empty then
+    if future = {} then
       pre
     else
       let (sb, sa) = partition_sb d future in
@@ -331,7 +331,7 @@ module Solve = struct
             Action.is_call a && exist (a' IN sb). not ((a',a) IN d.seq_before)
           ) sa in
       let calls = sb_calls union sa_ucalls in
-      if Set.is_empty calls then
+      if calls = {} then
         seq d (schedule pre sb) sa
       else
         let (sb_accesses, sb_other) = Set.partition Action.is_access sb_rest in
@@ -359,7 +359,7 @@ module Solve = struct
     let conflicts =
       Pmap.fold
         (fun _ ts c -> c union (Action.conflicts d.seq_before ts))
-        d.fs_actions empty in
+        d.fs_actions {} in
     let p = P.make d.constraints in
     let p = P.add_constraints p conflicts in
     let f c trace = (Action.Memory.replay p trace) :: c in
@@ -378,4 +378,8 @@ module Graph = struct
         let ()   = Output.write str (Output.file name) in
         i + 1
       ) t 0
+
+  let to_file n t =
+    let (_ : num) = dot n t in
+    ()
 end

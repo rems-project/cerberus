@@ -21,7 +21,7 @@ let lvalue_convert t e =
     | Some t' -> Exception.unit t'
   end
 
-let int = A.BASE empty (A.INTEGER (A.SIGNED A.INT))
+let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
 let one l = A.Exp l (A.CONSTANT (C.CONST_INT (1, None)))
 
 let rec is_null_pointer (A.Exp _ e) =
@@ -62,7 +62,7 @@ let rec check_exp env l e_head =
         else
           Exception.unit (A.T_LVALUE t)
     | A.CONSTANT (C.CONST_INT (i, None)) ->
-        Exception.unit (A.T_EXP (A.BASE empty (A.INTEGER (A.SIGNED A.INT))))
+        Exception.unit (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
     | A.CONSTANT (C.CONST_INT (_, Some _)) ->
         Exception.fail "Suffixes in integer constant expressions are not supported."
     | A.CALL e es ->
@@ -145,7 +145,7 @@ let rec check_exp env l e_head =
               else
                 invalid msg_f e
         end >>= fun t ->
-        Exception.unit (A.T_EXP (A.POINTER empty t))
+        Exception.unit (A.T_EXP (A.POINTER {} t))
     | A.UNARY A.INDIRECTION e ->
         let msg_p = "Violation of constraint 6.5.3.2#2 Address and indirection \
                      operators, Constraints: ..The operand of the unary * \
@@ -189,7 +189,7 @@ let rec check_exp env l e_head =
                      be applied to [a] [...] function type [...]... in" in
         if not (T.is_function t) then
           if not (T.is_incomplete t) then
-            Exception.unit (A.T_EXP (A.BASE empty (A.INTEGER (A.SIGNED A.INT))))
+            Exception.unit (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
           else invalid_head msg_i
         else invalid_head msg_f
     | A.ALIGNOF t ->
@@ -201,7 +201,7 @@ let rec check_exp env l e_head =
                      be applied to a function type [...]... in" in
         if not (T.is_function t) then
           if not (T.is_incomplete t) then
-            Exception.unit (A.T_EXP (A.BASE empty (A.INTEGER (A.SIGNED A.INT))))
+            Exception.unit (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
           else invalid_head msg_i
         else invalid_head msg_f
     | A.CAST (A.BASE q A.VOID) e ->
@@ -540,7 +540,7 @@ let rec check_exp env l e_head =
           else if T.is_pointer_to_void t2 then
             if T.is_pointer_to_object t3 then
               let q = T.merge_qualifiers t2 t3 in
-              Exception.unit (A.T_EXP (A.POINTER q (A.BASE empty A.VOID)))
+              Exception.unit (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
             else invalid msg_vp e3
           (* Case: ptr : ptr. *)
           else if T.is_pointer t2 then
@@ -559,7 +559,7 @@ let rec check_exp env l e_head =
           (* Case: void : void. *)
           else if T.is_void t2 then
             if T.is_void t3 then
-              Exception.unit (A.T_EXP (A.BASE empty A.VOID))
+              Exception.unit (A.T_EXP (A.BASE {} A.VOID))
             else invalid msg_v e3
           (* Case: struct : struct, enum : enum. *)
           else if T.is_structure t2 || T.is_union t2 then

@@ -92,8 +92,8 @@ let is_scalar t = is_arithmetic t || is_pointer t
 let is_aggregate t = is_array t || is_structure t
 
 let is_unqualified = function
-  | BASE    q _ -> Set.is_empty q
-  | POINTER q _ -> Set.is_empty q
+  | BASE    q _ -> q = {}
+  | POINTER q _ -> q = {}
   | _ -> true
   end
 
@@ -148,8 +148,8 @@ let rec compatible type1 type2 =
 let qualifiers = function
   | POINTER q _ -> q
   | BASE    q _ -> q
-  | FUNCTION _ _ -> empty
-  | ARRAY    _ _ -> empty
+  | FUNCTION _ _ -> {}
+  | ARRAY    _ _ -> {}
   end
 
 let merge_qualifiers t1 t2 = (qualifiers t1) union (qualifiers t2)
@@ -165,8 +165,8 @@ let include_qualifiers t q =
 let rec unqualify t =
   let f = unqualify in
   match t with
-  | BASE _ b -> BASE empty b
-  | POINTER _ t' -> POINTER empty (f t')
+  | BASE _ b -> BASE {} b
+  | POINTER _ t' -> POINTER {} (f t')
 (*  | _ -> CpAilRewrite.map_type f t*)
   end
 
@@ -241,7 +241,7 @@ let rec common_int i1 i2 =
 let rec common t1 t2 =
   match (t1, t2) with
   | (BASE _ (INTEGER i1), BASE _ (INTEGER i2)) ->
-      BASE empty (INTEGER (common_int i1 i2))
+      BASE {} (INTEGER (common_int i1 i2))
   end
 
 let promote_int i =
@@ -321,8 +321,8 @@ let composite t1 t2 = if compatible t1 t2 then Some t1 else None
 
 let pointer_convert t =
   match t with
-  | FUNCTION _  _ -> POINTER empty t
-  | ARRAY    t' _ -> POINTER empty t'
+  | FUNCTION _  _ -> POINTER {} t
+  | ARRAY    t' _ -> POINTER {} t'
   | _ -> t
   end
 
