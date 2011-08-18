@@ -20,7 +20,7 @@ module R = struct
   let reachable_set t v1 =
     match Map_.find v1 t with
       | Some vs -> vs
-      | None    -> empty
+      | None    -> {}
     end
 end
 

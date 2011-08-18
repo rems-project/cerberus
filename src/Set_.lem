@@ -7,12 +7,12 @@ let filter_map f s =
       | Some b -> s union {b}
       | None   -> s
     end in
-  Set.fold f' s empty
+  Set.fold f' s {}
 
 let fold_map f s i =
   Set.fold (fun e (a, s) ->
     let (e', a') = f e a in
     (a', s union {e'})
-  ) s (i, empty)
+  ) s (i, {})
 
 let of_list xs =  {x | forall (x MEM xs) | true}
