@@ -11,5 +11,9 @@ Pointer comparison:
 Pointer arithmetic:
 
 - Pointer overflow.
-- Pointer substraction, ptrdiff_t type
+- Pointer substraction, ptrdiff_t type.
 
+Symbolic execution:
+
+- No longer conviced that type conversions between signed and unsigned types
+  are necessary.
