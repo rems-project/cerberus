@@ -31,13 +31,13 @@ module Effect = struct
   let iter = M.iter
 
   let init m =
-    Exception.map fst (M.run m <|
+    M.run m <|
       symbol_set = Symbol.init;
       symbol_table = St.create_scope St.emp;
       id_map = Pmap.empty;
       globals = [];
       fn_map = Pmap.empty
-    |>)
+    |>
 
   let destroy_scope =
     let f env = <|env with symbol_table = St.destroy_scope env.symbol_table|> in

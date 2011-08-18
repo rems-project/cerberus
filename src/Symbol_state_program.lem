@@ -16,11 +16,11 @@ let bug       msg = fun _ -> Program.bug       msg
 let fresh          = fun s -> Program.unit (Symbol.fresh          s)
 let fresh_pretty n = fun s -> Program.unit (Symbol.fresh_pretty n s)
 
-let init m = m Symbol.init
+let init m = Program.map fst (m Symbol.init)
 
 let of_symbol_state m =
   fun s ->
-    let (a, s') = Symbol_state.run m s in
+    let (a, s') = Symbol_state.run_impl m s in
     (unit a) s'
 
 let of_option m = function

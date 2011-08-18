@@ -17,7 +17,9 @@ let update f = fun s -> ((), f s)
 let modify f = fun s -> f s
 let read   f = fun s -> (f s, s)
 
-let run t s = t s
+let run t s = fst (t s)
+
+let run_impl t s = t s
 
 module Operators = struct
   let (>>=) = bind

@@ -1,6 +1,5 @@
 type ordering = Lt | Eq | Gt
 
-(*
 class (ORD 'a)
   val compare : 'a -> 'a -> ordering
 end
@@ -17,6 +16,7 @@ class (ord 'a)
   val max : 'a -> 'a -> 'a
 end
 
+(*
 instance forall 'a. (ORD 'a) => (ord 'a)
   let lt a b =
     match compare a b with

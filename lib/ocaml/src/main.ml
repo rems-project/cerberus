@@ -21,32 +21,26 @@ let options = Arg.align [
 
 let usage = "Usage: chickenpox [OPTIONS]... [FILE]...\n"
 
+let pass_through f v = f v; v
+let pass_through_test b f v = if b then f v else (); v
+
 let () =
   let () = Arg.parse options add_file usage in
-  let pass_through f v = f v; v in
-  let pass_through_test b f v = if b then f v else (); v in
   let pipeline file_name =
+    let pp_file = Document.print -| Ail.Print.pp_file in
+    let pp_dot  = Meaning.Graph.to_file file_name in
+    let pp_out  = Document.print -| Meaning.Print.pp in
+    let pp_res  = List.iter (Document.print -| Constraint.Print.pp_set) in
     file_name
     >> Input.file
     >> Lexer.make
     >> Parser.parse
     >> Cabs_to_ail.desugar "main"
+    >> Exception.map (pass_through pp_file)
     >> Exception.rbind Typing.annotate
-    >> Exception.map (Reduction.reduce !bound) in
-(*
-    >> pass_through
-        (List.iter (Document.print -| Ail.Print.pp -| snd))
-*)
-    
-(*
-    >> pass_through_test !dot
-        (List.iter (Meaning.Graph.dot_result file_name))
-    >> pass_through_test !output
-        (List.iter
-           (Document.print -| Ail.Print.pp_result Meaning.Print.pp))
-    >> List.map (Meaning.Solve.simplify_result)
-    >> List.iter
-        (Document.print -|
-            Ail.Print.pp_result Constraint.Print.pp_set) in
-*)
+    >> Exception.map (Reduction.reduce !bound)
+    >> Exception.map (pass_through_test !dot    pp_dot)
+    >> Exception.map (pass_through_test !output pp_out)
+    >> Exception.map Meaning.Solve.simplify_all
+    >> Exception.map pp_res in
   List.iter (ignore -| pipeline) !files

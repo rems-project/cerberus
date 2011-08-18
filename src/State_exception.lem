@@ -15,7 +15,7 @@ let update f = fun s -> Exception.unit ((), f s)
 let modify f = fun s -> Exception.unit (f s)
 let read   f = fun s -> Exception.unit (f s, s)
 
-let run m s = m s
+let run m s = Exception.map fst (m s)
 
 module Operators = struct
   let (>>=) = bind
