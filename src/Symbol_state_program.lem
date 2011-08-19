@@ -23,6 +23,10 @@ let of_symbol_state m =
     let (a, s') = Symbol_state.run_impl m s in
     (unit a) s'
 
+(*
+let of_exception m = fun s -> (Program.of_exception m, s)
+*)
+
 let of_option m = function
   | Some v -> unit v
   | None   -> m

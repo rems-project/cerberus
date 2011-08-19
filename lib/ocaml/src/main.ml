@@ -19,10 +19,15 @@ let options = Arg.align [
   ("-o", Arg.Unit   set_output, "       Print m-sets")
 ]
 
-let usage = "Usage: chickenpox [OPTIONS]... [FILE]...\n"
+let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
-let pass_through f v = f v; v
+let pass_through        f v =           f v        ; v
 let pass_through_test b f v = if b then f v else (); v
+
+let catch m =
+  match Exception.catch m with
+  | Some m -> print_endline m
+  | None   -> ()
 
 let () =
   let () = Arg.parse options add_file usage in
@@ -30,7 +35,7 @@ let () =
     let pp_file = Document.print -| Ail.Print.pp_file in
     let pp_dot  = Meaning.Graph.to_file file_name in
     let pp_out  = Document.print -| Meaning.Print.pp in
-    let pp_res  = List.iter (Document.print -| Constraint.Print.pp_set) in
+    let pp_res  = Document.print -| Constraint.Print.pp in
     file_name
     >> Input.file
     >> Lexer.make
@@ -42,5 +47,5 @@ let () =
     >> Exception.map (pass_through_test !dot    pp_dot)
     >> Exception.map (pass_through_test !output pp_out)
     >> Exception.map Meaning.Solve.simplify_all
-    >> Exception.map pp_res in
-  List.iter (ignore -| pipeline) !files
+    >> Exception.map (Program.iter_list pp_res) in
+  List.iter (catch -| pipeline) !files

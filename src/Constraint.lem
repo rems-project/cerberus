@@ -277,6 +277,11 @@ let rec compare_constr constr1 constr2 =
   | (_, If _ _ _     ) -> Ord.Gt
   end
 
+let compare_constr_int c1 c2 = Ord.to_int (compare_constr c1 c2)
+
+sub [ocaml] set_compare_int = Pset.compare
+let compare_int = set_compare_int
+
 (* TODO compare *)
 type t = constr set
 
