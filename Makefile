@@ -7,6 +7,8 @@ OCAML_LIB=lib/ocaml
 OCAML_BUILD_DIR=_build_ocaml
 
 FILES=\
+Multiset.lem \
+Global.lem \
 Ord.lem \
 Num.lem \
 Pair.lem \
@@ -14,12 +16,10 @@ Map_.lem \
 List_.lem \
 Set_.lem \
 Braun.lem \
-Multiset.lem \
 Lexing.lem \
 Output.lem \
 Location.lem \
 Symbol.lem \
-Global.lem \
 Option.lem \
 Transitive_reduction.lem \
 Exception.lem \
@@ -78,10 +78,16 @@ build_ocaml: lem_ocaml
 # Fixing up OCaml syntax.
 	sed -i 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
 	sed -i 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/Constraint.ml
-	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/Meaning.ml
+#	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/let sb = action_set_/(let sb = action_set_/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/let null/let null ()/' $(OCAML_BUILD_DIR)/Meaning.ml
 	sed -i 's/M.null/M.null ()/' $(OCAML_BUILD_DIR)/Reduction.ml
+# Removing module references introduced by Lem hack
+	sed -i 's/Action\.compare_int/compare_int/g' $(OCAML_BUILD_DIR)/Action.ml
+	sed -i 's/Action\.ne/ne/g' $(OCAML_BUILD_DIR)/Action.ml
+	sed -i 's/Meaning\.compare_int/compare_int/g' $(OCAML_BUILD_DIR)/Meaning.ml
+	sed -i 's/Constraint\.compare_constr_int/compare_constr_int/g' $(OCAML_BUILD_DIR)/Constraint.ml
 # Write _tags
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
 	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte

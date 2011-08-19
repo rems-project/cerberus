@@ -6,6 +6,7 @@ type ('a, 'partial) t = ('a, 'partial error) Exception.t
 
 let unit = Exception.unit
 let bind = Exception.bind
+let rbind f m = bind m f
 let map = Exception.map
 let app = Exception.app
 
@@ -13,3 +14,20 @@ let undefined m = Exception.fail (Undefined m)
 let bug       m = Exception.fail (Bug       m)
 
 let fail = bug
+
+let of_exception = function
+  | Exception.Result    a -> unit a
+  | Exception.Exception m -> bug  m
+  end
+
+let iter_set f s =
+  let f' v () =
+    let (_ : (unit, _) t) = map f v in
+    () in
+  Set.fold f' s ()
+
+let iter_list f ls =
+  let f' v () =
+    let (_ : (unit, _) t) = map f v in
+    () in
+  List.fold_right f' ls ()

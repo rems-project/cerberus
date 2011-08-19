@@ -25,6 +25,17 @@ type denotation = <|
 (* TODO compare *)
 type t = denotation set
 
+sub [ocaml] set_compare_int = Pset.compare
+sub [ocaml] map_compare_int = Pmap.compare
+sub [ocaml] unv_compare_int = Pervasives.compare
+let compare_int d1 d2 =
+  let (++) p n = if n = 0 then p else n in
+  int_of_num (
+       num_of_int (set_compare_int                 d1.actions     d2.actions    )
+    ++ num_of_int (C.compare_int                   d1.constraints d2.constraints)
+    ++ num_of_int (set_compare_int                 d1.seq_before  d2.seq_before )
+    ++ num_of_int (map_compare_int set_compare_int d1.fs_actions  d2.fs_actions ))
+
 type t_lifted = <|
   break    : t;
   continue : t;
@@ -39,7 +50,7 @@ let unit = {<|
   fs_actions  = Pmap.empty
 |>}
 
-let null = {}
+let null : t = {}
 
 let and_denotations d1 d2 = <|
   actions     = d1.actions     union d2.actions;
@@ -48,17 +59,24 @@ let and_denotations d1 d2 = <|
   fs_actions  = Pmap.concat d1.fs_actions d2.fs_actions
 |>
 
+(* Hack: Original functions in module Set_. *)
+let action_set_product (s1 : Action.t set) (s2 : Action.t set) =
+  {(e1, e2) | forall (e1 IN s1) (e2 IN s2) | true}
+
+let denotation_set_product_map (f : denotation -> denotation -> denotation) s1 s2 =
+  {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
+
 let and_denotations_sb d1 d2 = <|
   actions     = d1.actions union d2.actions;
   constraints = d1.constraints union d2.constraints;
   seq_before  =
-    let sb = Set_.product d1.actions d2.actions in
+    let sb = action_set_product d1.actions d2.actions in
     sb union (d1.seq_before union d2.seq_before);
   fs_actions  = Pmap.concat d1.fs_actions d2.fs_actions
 |>
 
-let conj m1 m2 = Set_.product_map and_denotations m1 m2
-let conj_seq_before m1 m2 = Set_.product_map and_denotations_sb m1 m2
+let conj m1 m2 = denotation_set_product_map and_denotations m1 m2
+let conj_seq_before m1 m2 = denotation_set_product_map and_denotations_sb m1 m2
 
 let add_constraint m cstr =
   {<|d with constraints = d.constraints union {cstr}|> | forall (d IN m) | true}
@@ -311,7 +329,8 @@ module Solve = struct
       end
 
   let rec make_todo d ls t =
-    if t = {} then
+    (* Hack: should be t = {}. *)
+    if Set.is_empty t then
       ls
     else
       let (sb, sa) =
@@ -320,7 +339,8 @@ module Solve = struct
       make_todo d (Set.to_list sb @ ls) sa
 
   let rec seq d pre future =
-    if future = {} then
+    (* Hack: should be future = {}. *)
+    if Set.is_empty future then
       pre
     else
       let (sb, sa) = partition_sb d future in
@@ -331,7 +351,8 @@ module Solve = struct
             Action.is_call a && exist (a' IN sb). not ((a',a) IN d.seq_before)
           ) sa in
       let calls = sb_calls union sa_ucalls in
-      if calls = {} then
+      (* Hack: calls = {}. *)
+      if Set.is_empty calls then
         seq d (schedule pre sb) sa
       else
         let (sb_accesses, sb_other) = Set.partition Action.is_access sb_rest in
@@ -365,7 +386,7 @@ module Solve = struct
     let f c trace = (Action.Memory.replay p trace) :: c in
     List.fold_left f c (linearise d)
 
-  let simplify_all t = Set_.of_list (Set.fold simplify t [])
+  let simplify_all t = Set.fold simplify t []
 end
 
 module Graph = struct

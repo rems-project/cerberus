@@ -1,3 +1,5 @@
+open Global
+
 type ordering = Lt | Eq | Gt
 
 class (ORD 'a)
@@ -7,6 +9,7 @@ end
 class (ord 'a)
   val lt : 'a -> 'a -> bool
   val eq : 'a -> 'a -> bool
+  val ne : 'a -> 'a -> bool
   val gt : 'a -> 'a -> bool
 
   val le : 'a -> 'a -> bool
@@ -50,8 +53,18 @@ let compose o1 o2 =
   else
     o1
 
-let to_int = function
+let to_num = function
  | Lt -> ~1
  | Eq -> 0
- | Ge -> 1
+ | Gt -> 1
  end
+
+let of_num n =
+  if n = 0 then
+    Eq
+  else if n >= 1
+    then Gt
+    else Lt
+
+let to_int o = int_of_num (to_num o)
+let of_int n = of_num (num_of_int n)
