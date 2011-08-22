@@ -1,6 +1,6 @@
 type 'a t = ('a, Symbol.sset) State.t
 
-let unit = State.unit
+let return = State.return
 let bind = State.bind
 let map = State.map
 
@@ -17,6 +17,6 @@ let fresh_pretty n = Symbol.fresh_pretty n
 
 let rec foldr_list f l a =
   match l with
-    | []    -> unit a
+    | []    -> return a
     | x::xs -> bind (f x a) (fun a' -> foldr_list f xs a')
   end

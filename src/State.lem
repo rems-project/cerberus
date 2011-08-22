@@ -2,14 +2,14 @@ open Global
 
 type ('a, 's) t = 's -> ('a * 's)
 
-let unit a = fun s -> (a, s)
+let return a = fun s -> (a, s)
 let bind m f =
   fun s ->
     let (a, s') = m s in
     f a s'
 
 let join m = bind m (fun x -> x)
-let map f m = bind m (unit -| f)
+let map f m = bind m (return -| f)
 
 let app mf m = bind mf (fun f -> map f m)
 

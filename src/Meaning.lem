@@ -5,7 +5,7 @@ module C = Constraint
 module Effect = struct
   module M = Symbol_state
 
-  let unit = M.unit
+  let return = M.return
 
   module Operators = struct
     let (>>=) = M.bind
@@ -142,7 +142,7 @@ let collect_fs_actions m =
     actions    = {call};
     fs_actions = Pmap.add call d.actions d.fs_actions
   |> in
-  E.unit {add_call d | forall (d IN m) | true}     
+  E.return {add_call d | forall (d IN m) | true}     
 
 let flatten ml =
   collect_fs_actions (ml.normal +& C.undef -/- ml.return)

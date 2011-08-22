@@ -21,7 +21,7 @@ module Effect = struct
 
   type ('a, 'a_e, 'a_s, 'msg) t = ('a, ('a_e, 'a_s) env, 'msg) M.t
 
-  let unit = M.unit
+  let return = M.return
   let fail = M.fail
 
   let option = M.option
@@ -154,7 +154,7 @@ let rec desugar_exp (e, l) =
   | C.QUESTION e1 e2 e3 -> A.QUESTION <$> f e1 <*> f e2 <*> f e3
   | C.CAST t e -> A.CAST <$> ft t <*> f e
   | C.CALL e es -> A.CALL <$> f e <*> E.map_list f es
-  | C.CONSTANT c -> E.unit (A.CONSTANT c)
+  | C.CONSTANT c -> E.return (A.CONSTANT c)
   | C.VARIABLE n -> A.VARIABLE <$> subst l n
   | C.TYPE_SIZEOF  t -> A.SIZEOF  <$> ft t
   | C.TYPE_ALIGNOF t -> A.ALIGNOF <$> ft t
@@ -226,7 +226,7 @@ and desugar_type t =
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
-        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.unit size
+        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return size
         | (_, l) ->
             let msg = "We don't support VLAs and moreover the size of an array \
                        must be an integer constant.\n" in
@@ -272,7 +272,7 @@ and desugar_stmt (s, l) =
       E.map_list fs ss >>= fun d_ss ->
       E.symbols        >>= fun ids  ->
       E.destroy_scope  >>= fun ()   ->
-      E.unit (A.BLOCK ids d_ss)
+      E.return (A.BLOCK ids d_ss)
   (* We transform all for statements into while statements. *)
   | C.FOR_EXP e1_opt e2_opt e3_opt s ->
       let s1 =
@@ -300,7 +300,7 @@ and desugar_stmt (s, l) =
       let loop = (C.WHILE e2 body, l) in    
       let s' = (C.BLOCK [s1; loop], l) in
       fs s' >>= function A.Stmt _ d_s ->
-      E.unit d_s end
+      E.return d_s end
   | C.FOR_DECL defns e2_opt e3_opt s ->
       let is_auto_or_register ((((_, _, storage), l), _), _) =
         if List.exists (fun s -> s <> C.AUTO && s <> C.REGISTER) storage then
@@ -333,7 +333,7 @@ and desugar_stmt (s, l) =
         let loop = (C.WHILE e2 body, l) in
         let s' = (C.BLOCK [s1; loop], l) in
         fs s' >>= function A.Stmt _ d_s ->
-        E.unit d_s end
+        E.return d_s end
   | C.DECLARATION defns ->
       let d_defns = E.map_list desugar_defn defns in
       (* We remove all declarations that don't contain an initialiser. *)
@@ -352,7 +352,7 @@ and desugar_stmt (s, l) =
   | C.CASE (e, l) s ->
       let integer_constant =
         match e with
-        | C.CONSTANT (C.CONST_INT i) -> E.unit i
+        | C.CONSTANT (C.CONST_INT i) -> E.return i
         | _ -> E.fail "We don't support anything but integer \
                        constants as [[ case ]] labels."
         end in
@@ -361,11 +361,11 @@ and desugar_stmt (s, l) =
   | C.LABEL n s -> (* A.LABEL n (fs s) *)
       E.fail "No support for labeled statements yet.\n"
   | C.RETURN (Some e) -> A.RETURN_EXPRESSION <$> fe e
-  | C.RETURN None -> E.unit A.RETURN_VOID
+  | C.RETURN None -> E.return A.RETURN_VOID
   | C.GOTO n -> E.fail "No support for goto yet.\n"
-  | C.SKIP -> E.unit A.SKIP
-  | C.BREAK -> E.unit A.BREAK
-  | C.CONTINUE -> E.unit A.CONTINUE
+  | C.SKIP -> E.return A.SKIP
+  | C.BREAK -> E.return A.BREAK
+  | C.CONTINUE -> E.return A.CONTINUE
   end
 
 and desugar_stmt_opt l = function
@@ -373,7 +373,7 @@ and desugar_stmt_opt l = function
   (* Adding or removing a (finite number of) null operation is semantically
      sound since "a null statement [...] performs no operations" (6.8.3#3,
      Expression and null statements, Semantics). *)
-  | None -> E.unit (A.Stmt l A.SKIP)
+  | None -> E.return (A.Stmt l A.SKIP)
   end
 
 and register_name l name =
@@ -391,9 +391,9 @@ and register_name l name =
     E.fresh_name name
 
 and desugar_storage l = function
-  | []           -> E.unit None
-  | [C.AUTO]     -> E.unit (Some A.AUTO)
-  | [C.STATIC]   -> E.unit (Some A.STATIC)
+  | []           -> E.return None
+  | [C.AUTO]     -> E.return (Some A.AUTO)
+  | [C.STATIC]   -> E.return (Some A.STATIC)
   | [C.REGISTER] -> E.fail "No support for storage class register."
   | [C.EXTERN]   -> E.fail "No support for storage class extern."
   | _ ->
@@ -412,7 +412,7 @@ and desugar_decl ((name, t, sts), l) =
   desugar_storage l sts        >>= fun d_st ->
   desugar_type t               >>= fun d_t  ->
   E.add_id id (d_t, d_st) >>= fun ()   ->
-  E.unit id
+  E.return id
 
 and desugar_function_decl ((name, t, sts), l) =
   let desugar_function_type t =
@@ -436,13 +436,13 @@ and desugar_function_decl ((name, t, sts), l) =
                 CpLogger.info (CpPrint.pp_program msg) l;
                 raise E_Invalid
 *)
-            | None -> E.unit None
+            | None -> E.return None
           end >>= fun d_st ->
           E.add_id id (d_t, d_st) >>= fun () ->
-          E.unit (id::ids, d_t::ds) in
+          E.return (id::ids, d_t::ds) in
         desugar_type t >>= fun d_t ->
         E.foldr_list f decls ([], []) >>= fun (formals, d_decls) ->
-        E.unit (A.FUNCTION d_t d_decls, formals)
+        E.return (A.FUNCTION d_t d_decls, formals)
     | _ -> E.fail "Not a function type."
     end in
   register_name l name         >>= fun id ->
@@ -453,15 +453,15 @@ and desugar_function_decl ((name, t, sts), l) =
   E.destroy_scope         >>= fun () ->
   E.add_id id (d_t, d_st) >>= fun () ->
   E.push_table fn_scope   >>= fun () ->
-  E.unit (id, formals)
+  E.return (id, formals)
 
 and desugar_defn ((d, e_opt), l) =
   desugar_decl d >>= fun id ->
   match e_opt with
-  | None   -> E.unit (id, None, l)
+  | None   -> E.return (id, None, l)
   | Some e ->
       desugar_exp e >>= fun d_e ->
-      E.unit (id, Some d_e, l)
+      E.return (id, Some d_e, l)
   end
 
 let desugar_global_defn (defn, l) =
