@@ -391,16 +391,16 @@ and reduce_stmt n b env file fid return (A.Stmt _ stmt) =
       let f_create (l, t) ml =
         Action.create t l >>= fun create ->
         E.unit (ml ++@ create) in
-      let f_kill (l, _) ml =
+      let f_kill (l, _) ks =
         Action.kill l >>= fun kill ->
-        E.unit (ml ++@ kill) in
+        E.unit (ks union {kill}) in
       let f s ml' =
         reduce_stmt n b env' file fid return s >>= fun ml ->
         E.unit (ml' --&> ml) in
       E.foldr_list f_create decls M.unit_lifted >>= fun ml_create ->
-      E.foldr_list f_kill   decls M.unit_lifted >>= fun ml_kill   ->
       E.foldr_list f        ss    M.unit_lifted >>= fun ml        ->
-      E.unit ((ml_create --&> ml) --&> ml_kill)
+      E.foldr_list f_kill   decls {}            >>= fun kills     ->
+      E.unit (M.add_actions_entire_lifted_sb (ml_create --&> ml) kills)
   | A.DECLARATION defns ->
       let f (id, e) ml' =
         let t = lookup_type id in
