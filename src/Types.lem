@@ -167,7 +167,7 @@ let rec unqualify t =
   match t with
   | BASE _ b -> BASE {} b
   | POINTER _ t' -> POINTER {} (f t')
-(*  | _ -> CpAilRewrite.map_type f t*)
+  | _ -> Ail_rewrite.map_type f t
   end
 
 let rec eq t1 t2 =
