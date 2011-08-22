@@ -230,8 +230,10 @@ let rec compare_constr constr1 constr2 =
   let (++) = Ord.compose in
   match (constr1, constr2) with
   | (Eq c1 c2, Eq c1' c2') ->
-      (compare_const c1 c1' ++ compare_const c2 c2')
-      ++ (compare_const c1 c2' ++ compare_const c2 c1')
+      let o1 = (compare_const c1 c1' ++ compare_const c2 c2') in
+      if o1 = Ord.Eq
+        then o1
+        else compare_const c1 c2' ++ compare_const c2 c1'
   | (Le c1 c2, Le c1' c2') ->
       compare_const c1 c1'
       ++ compare_const c2 c2'
