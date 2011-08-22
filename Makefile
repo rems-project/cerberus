@@ -35,10 +35,10 @@ Document.lem \
 Symbol_table.lem \
 Cabs.lem \
 Ail.lem \
+Ail_rewrite.lem \
 Types.lem \
 Annotate.lem \
 Cabs_to_ail.lem \
-Ail_rewrite.lem \
 Typing.lem \
 Range.lem \
 Constraint.lem \
