@@ -135,12 +135,12 @@ let conv_int_type i const =
           (C.eq a (conv_impl i const))
     end in
   let conv = C.conv_int (min_range_of i) constr const in
-  Symbol_state.unit (a, conv)
+  Symbol_state.return (a, conv)
 
 let conv_int t const =
   match t with
   | A.BASE _ (A.INTEGER i) -> conv_int_type i const
-  | _ -> Symbol_state.unit (const, C.tt)
+  | _ -> Symbol_state.return (const, C.tt)
   end
 
 let conv t t' const =
@@ -148,8 +148,8 @@ let conv t t' const =
   | (_, A.BASE _ (A.INTEGER i)) ->
       if Types.is_integer t then
         conv_int_type i const
-      else Symbol_state.unit (const, C.tt)
-  | _ -> Symbol_state.unit (const, C.tt)
+      else Symbol_state.return (const, C.tt)
+  | _ -> Symbol_state.return (const, C.tt)
   end  
 
 

@@ -4,7 +4,7 @@ type 'partial error =
 
 type ('a, 'partial) t = ('a, 'partial error) Exception.t
 
-let unit = Exception.unit
+let return = Exception.return
 let bind = Exception.bind
 let rbind f m = bind m f
 let map = Exception.map
@@ -16,7 +16,7 @@ let bug       m = Exception.fail (Bug       m)
 let fail = bug
 
 let of_exception = function
-  | Exception.Result    a -> unit a
+  | Exception.Result    a -> return a
   | Exception.Exception m -> bug  m
   end
 

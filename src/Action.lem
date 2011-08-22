@@ -210,7 +210,7 @@ module Memory = struct
   module Effect = struct
     module M = Symbol_state_program
 
-    let unit = M.unit
+    let return = M.return
 
     let init = M.init
 
@@ -283,13 +283,13 @@ module Memory = struct
 
   let load_scalar t ct' v' ct v =
     if T.compatible ct ct' then
-      E.unit <|t with p = P.add_constr t.p (C.eq v v')|>
+      E.return <|t with p = P.add_constr t.p (C.eq v v')|>
     else if T.is_unsigned_of ct' ct then
       E.conv_int ct v' >>= fun (a, conv) ->
-      E.unit <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>
+      E.return <|t with p = P.add_constr (P.add_constr t.p conv) (C.eq v a)|>
     else if T.is_signed_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
-      E.unit <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
+      E.return <|t with p = P.add_constr (P.add_constr t.p (C.eq v v')) overflow|>
     else E.undef t "Access and effective type are incompatible."
 
   let load_event t ct a v =
@@ -322,13 +322,13 @@ module Memory = struct
 
   let write_scalar t ct' ct v =
     if T.compatible ct ct' then
-      E.unit (Value v, t)
+      E.return (Value v, t)
     else if T.is_signed_of ct' ct then
       E.conv_int ct' v >>= fun (a, conv) ->
-      E.unit (Value a, <|t with p = P.add_constr t.p conv|>)
+      E.return (Value a, <|t with p = P.add_constr t.p conv|>)
     else if T.is_unsigned_of ct' ct then
       let overflow = C.implies (C.neg (Tc.in_range ct' v)) C.undef in
-      E.unit (Value v, <|t with p = P.add_constr t.p overflow|>)
+      E.return (Value v, <|t with p = P.add_constr t.p overflow|>)
     else E.undef t "Access and effective type are incompatible."
 
   let write_event t ct a v =
@@ -336,19 +336,19 @@ module Memory = struct
     retrieve t addr >>= function
     | Scalar ct' _ ->
         write_scalar t ct' ct v >>= fun (v, t) ->
-        E.unit <|t with mem = Pmap.add (base_of addr) (Scalar ct' v) t.mem|>
+        E.return <|t with mem = Pmap.add (base_of addr) (Scalar ct' v) t.mem|>
     | Array ct' vs' ->
         if T.compatible ct' ct then
           match addr with
           | P.Base _ ->
               write_scalar t ct' ct v >>= fun (v, t) ->
               let vs = Braun.set vs' 0 v in
-              E.unit <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
+              E.return <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
           | P.Displaced _ i s ->
               if i >= 0 && i < Braun.size vs' && same_size ct' s then
                 write_scalar t ct' ct v >>= fun (v, t) ->
                 let vs = Braun.set vs' i v in
-                E.unit <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
+                E.return <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
               else E.undef t "Out-of-bounds access."
           end
         else E.undef t "Access and effective type are incompatible."
@@ -360,39 +360,39 @@ module Memory = struct
     | Id v ->
         let (addr, t) = address t v in
         if is_valid t addr
-          then E.unit  t
+          then E.return  t
           else E.undef t "Invalid address."
     | Same a1 a2 ->
         let (addr1, t) = address t a1 in
         let (addr2, t) = address t a2 in
         if same_base t addr1 addr2
-          then E.unit  t
+          then E.return  t
           else E.undef t "Comparing addresses of distinct object."
     | Create ct a -> 
         if T.is_scalar ct then
           let (addr, t) = address t a in
-          E.unit <|t with mem = Pmap.add (base_of addr) (Scalar ct Indeterminate) t.mem|>
+          E.return <|t with mem = Pmap.add (base_of addr) (Scalar ct Indeterminate) t.mem|>
         else if T.is_array ct then
           let (addr, t) = address t a in
           let value = Braun.make (T.size_of_array ct) Indeterminate in
           let obj = Array (T.base_of_array ct) value in
-          E.unit <|t with mem = Pmap.add (base_of addr) obj t.mem|>
+          E.return <|t with mem = Pmap.add (base_of addr) obj t.mem|>
         else E.bug "event"
     | Kill a ->
         let (addr, t) = address t a in
-        E.unit <|t with mem = Pmap.remove (base_of addr) t.mem|>
+        E.return <|t with mem = Pmap.remove (base_of addr) t.mem|>
     | Load    ct a v -> load_event  t ct a v
     | Store   ct a v -> write_event t ct a v
     | FnStore ct a v -> write_event t ct a v
     | Modify  ct a v v' ->
         load_event  t ct a v >>= fun t ->
         write_event t ct a v'
-    | Call -> E.unit t
+    | Call -> E.return t
     end
 
   let replay_init p' es =
     E.foldr_list event es <|p = p'; mem = Pmap.empty|> >>= fun t ->
-    E.unit (P.complete t.p)
+    E.return (P.complete t.p)
 (*
     with Undefined t ->
       P.complete (*print_endline "UNDEF";*) P.add_constr t.p C.undef

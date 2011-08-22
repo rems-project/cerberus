@@ -12,12 +12,12 @@ let bind m k =
 
 let rbind k m = bind m k
 
-let unit a = Result a
+let return a = Result a
 let throw m = Exception m
 let fail = throw
 let join m = bind m (fun x -> x)
 
-let map f m = bind m (unit -| f)
+let map f m = bind m (return -| f)
 let app mf m = bind mf (fun f -> map f m)
 
 let catch = function
@@ -26,14 +26,14 @@ let catch = function
   end
 
 let of_option m = function
-  | Some a -> unit a
-  | None   -> throw m
-end
+  | Some a -> return a
+  | None   -> throw  m
+  end
 
 let to_bool = function
   | Result    _ -> true
   | Exception _ -> false
-end
+  end
 
 module Operators = struct
   let (>>=) = bind
@@ -49,8 +49,8 @@ let sequence ms =
     (fun m m' ->
       m  >>= fun x  ->
       m' >>= fun xs ->
-      unit (x::xs)
-    ) ms (unit [])
+      return (x::xs)
+    ) ms (return [])
 let t_list t xs = sequence (t xs)
 let map_list f = t_list (List.map f)
 
@@ -58,9 +58,9 @@ let sequence_map mmap =
   Pmap.fold (fun k m mm->
     m  >>= fun x   ->
     mm >>= fun map ->
-    unit (Pmap.add k x map)
-  ) mmap (unit Pmap.empty)
+    return (Pmap.add k x map)
+  ) mmap (return Pmap.empty)
 
 let map_map f m = sequence_map (Pmap.map f m)
 
-let inj_right f (a, b) = f b >>= fun b' -> unit (a, b')
+let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
