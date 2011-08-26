@@ -5,6 +5,7 @@ LEM_LIB=$(LEM_DIR)/library
 OCAML_LIB=lib/ocaml
 
 OCAML_BUILD_DIR=_build_ocaml
+TEX_BUILD_DIR=_build_tex
 
 FILES=\
 Multiset.lem \
@@ -57,9 +58,11 @@ Pprint.ml \
 Lexing.ml \
 Document.ml
 
-all: build_ocaml
+default: ocaml
 
-build_ocaml: lem_ocaml
+all: ocaml tex
+
+ocaml: lem_ocaml
 	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
 # Copy in Lem's OCaml library.
 	cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
@@ -102,7 +105,15 @@ build_ocaml: lem_ocaml
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)
-	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB)  $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
+	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
+
+tex: lem_tex
+	cp $(LEM_DIR)/tex-lib/lem.sty $(TEX_BUILD_DIR)
+
+lem_tex:
+	mkdir -p $(TEX_BUILD_DIR)
+	cd $(TEX_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -tex $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
 clean:
 	rm -R $(OCAML_BUILD_DIR)
+	rm -R $(TEX_BUILD_DIR)
