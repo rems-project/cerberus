@@ -426,7 +426,7 @@ rule initial = parse
     }
 | hexadecimal_constant
     { let num = Lexing.lexeme lexbuf in
-      integer_suffix lexbuf (BatBig_int.of_hex_string num)
+      integer_suffix lexbuf (BatBig_int.of_string num)
     }
 (* TODO Hack alert! We do not lex octal numbers but "0" is an octal number. :( *)
 | "0"

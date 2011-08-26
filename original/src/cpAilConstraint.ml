@@ -573,7 +573,12 @@ module Process = struct
           p, c2
       | _ -> p, constr in
     let simplify_all = fold_map_constr simplify_constr simplify_const in
-    let p, t = S.fold_map simplify_all p.t p in
+    let set_fold_map f s i = 
+      S.fold (fun e (a, s) ->
+        let (a', e') = f a e in
+        (a', S.union  s  (S.singleton e'))
+      ) s (i, S.empty) in
+    let p, t = set_fold_map simplify_all p.t p in
     {p with t = t}
 
   let normalise_const_map p =

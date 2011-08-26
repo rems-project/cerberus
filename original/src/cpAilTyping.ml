@@ -821,7 +821,7 @@ let rec annotate_stmt omega env (l, stmt) =
 
 let annotate_program omega ({A.id_map = ids; globals; function_map; _} as p) =
   let () =
-    if not (List.for_all AT.well_formed (BatMap.values ids)) then
+    if not (List.for_all AT.well_formed (List.map snd (BatMap.bindings ids))) then
       raise_error "Found an ill-formed type!" in
   let gs = List.map 
     (fun (id,  e) -> id,  annotate_exp  omega p e) globals in

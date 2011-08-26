@@ -27,6 +27,17 @@ end
 
 module DS = S.Make(Denotation)
 
+let set_product_map f s1 s2 =
+  S.fold (fun e1 x2 -> S.fold (fun e2 x2 -> S.add(f e1 e2) x2) s2 x2) s1 S.empty
+let set_product s1 s2 = set_product_map (fun x y -> (x, y)) s1 s2
+
+let list_product_map f s1 s2 =
+  List.fold_left (fun x2 e1 -> List.fold_left (fun x2 e2 -> (f e1 e2) :: x2) s2 x2) s1 []
+let list_product s1 s2 = list_product_map (fun x y -> (x, y)) s1 s2
+
+let map_of_list ls =
+  List.fold_left (fun m (k, d) -> M.add k d m) M.empty ls
+
 type t = DS.t
 (*type t = denotation S.t*)
 
@@ -67,7 +78,7 @@ let and_denotations_sb d1 d2 = {
   constraints = AC.union d1.constraints d2.constraints;
   seq_before =
     begin
-      let sb = S.product d1.actions d2.actions in
+      let sb = set_product d1.actions d2.actions in
       S.union sb (S.union d1.seq_before d2.seq_before)
     end;
   fs_actions = M.union d1.fs_actions d2.fs_actions
@@ -331,10 +342,12 @@ module Solve = struct
 *)
 
   let rec seq d pre future =
+    let () = print_endline ("future: " ^ string_of_int (S.cardinal future)) in
     if S.is_empty future then
       pre
     else
       let sb, sa = partition_sb d future in
+      let () = print_endline ("sb: " ^ string_of_int (S.cardinal sb)) in
       let sb_calls, sb_rest = S.partition Action.is_call sb in
       let sa_ucalls, sa_rest =
         S.partition
@@ -363,15 +376,17 @@ module Solve = struct
               f (S.elements sb @ ls) sa in
           f [] (S.union sb_accesses sa_rest_todo) in
         let call_map =
-          let seq_call c = seq d [] (M.find c d.fs_actions) in
-          M.of_list (List.map (fun c -> c, seq_call c) (S.elements calls)) in
+          let seq_call c =
+            let () = print_endline ("c: " ^ string_of_int (S.cardinal (M.find c d.fs_actions))) in
+            seq d [] (M.find c d.fs_actions) in
+          map_of_list (List.map (fun c -> c, seq_call c) (S.elements calls)) in
         let perm = permute d.seq_before calls in
         let rec interleave pre cs ts =
           match cs, ts with
           | [], [t] -> List.map (fun p -> p @ t) pre
           | c::cs', t::ts ->
               let pre = List.map (fun p -> p @ t) pre in
-              let pre = BatList.product_map (@) pre (M.find c call_map) in
+              let pre = list_product_map (@) pre (M.find c call_map) in
               interleave pre cs' ts in
         let merge lls cs =
           let part = partition d.seq_before cs todo_list in
@@ -404,8 +419,9 @@ module Solve = struct
       List.fold_left f (S.create AC.compare) traces
     with P.Invalid -> S.create AC.compare
 *)
+  let set_of_list cmp ls = List.fold_left (fun a x -> S.add x a) (S.create cmp) ls
 
-  let simplify_all t = S.of_list ~cmp:AC.compare (DS.fold simplify t [])
+  let simplify_all t = set_of_list AC.compare (DS.fold simplify t [])
 
   let simplify_result = function
     | CpAil.Program t -> CpAil.Program (simplify_all t)
