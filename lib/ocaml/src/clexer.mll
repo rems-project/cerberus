@@ -422,16 +422,16 @@ rule initial = parse
 *)
 | decimal_constant
     { let num = Lexing.lexeme lexbuf in
-      integer_suffix lexbuf (Nat_num.of_string num)
+      integer_suffix lexbuf (Nat_num.num_of_string num)
     }
 | hexadecimal_constant
     { let num = Lexing.lexeme lexbuf in
-      integer_suffix lexbuf (Nat_num.of_string num)
+      integer_suffix lexbuf (Nat_num.num_of_string num)
     }
 (* TODO Hack alert! We do not lex octal numbers but "0" is an octal number. :( *)
 | "0"
     { let num = Lexing.lexeme lexbuf in
-      integer_suffix lexbuf (Nat_num.of_string num)
+      integer_suffix lexbuf (Nat_num.num_of_string num)
     }
 | "!quit!"		{P.EOF}
 | "+="			{P.PLUS_EQ}
