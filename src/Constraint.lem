@@ -155,6 +155,27 @@ let rec compare_const const1 const2 =
   | (_, BitComplement _) -> Ord.Gt
   end
 
+let rec is_ground const =
+  let f = is_ground in
+  match const with
+  | Name    _ -> false
+  | Integer _ -> true
+  | Address _ -> true
+  | Null      -> true
+  | Offset c1 c2 c3 -> f c1 && f c2 && f c3
+  | Plus   c1 c2    -> f c1 && f c2
+  | Minus  c1 c2    -> f c1 && f c2
+  | Mod    c1 c2    -> f c1 && f c2
+  | Mult   c1 c2    -> f c1 && f c2
+  | Div    c1 c2    -> f c1 && f c2
+  | Pow    c        -> f c
+  | BitAnd c1 c2    -> f c1 && f c2
+  | BitOr  c1 c2    -> f c1 && f c2
+  | BitXor c1 c2    -> f c1 && f c2
+  | BitComplement c -> f c
+  | Fn s cs -> List.for_all f cs
+  end
+
 type constr =
   | True
   | False
@@ -612,8 +633,8 @@ module Process = struct
         let (n2, p2) = normalise_const p1 c in
         (c, <|p2 with cc = Cc.merge_constants p.cc n1 n2|>) in
       match const with
-      | Offset a (Integer i) _ ->
-          if i = 0 then replace a else (const, p)
+      | Offset a (Integer 0) _ ->
+          replace a
       | Offset (Offset a o1 s1) o2 s2 ->
           if compare_const s1 s2 = Ord.Eq then
             replace (Offset a (Plus o1 o2) s1)
@@ -675,6 +696,10 @@ module Process = struct
           (if i1 <= i2 then True else False, p)
       | Lt (Integer i1) (Integer i2) ->
           (if i1 <  i2 then True else False, p)
+      | Lt (Address a1) (Address a2) ->
+          if a1 = a2
+            then (False,  p)
+            else (constr, p)
       | Lt a1 (Offset a2' (Integer i2) s2) ->
           if compare_const a1 a2' = Ord.Eq then
             if 0 < i2
@@ -690,6 +715,10 @@ module Process = struct
                 else (constr, p)
             | _ -> (constr, p)
             end
+      | Eq Null (Address _) -> (False, p)
+      | Eq (Address _) Null -> (False, p)
+      | Eq Null (Offset _ _ _) -> (False, p)
+      | Eq (Offset _ _ _) Null -> (False, p)
       | Eq (Integer i1) (Integer i2) ->
           if i1 = i2
             then (True,  p)
@@ -803,7 +832,15 @@ module Process = struct
         let (const, p) = rewrite (simplify_loop p) const in
         match address_aux const with
         | Some addr -> (addr, p)
-        | None      -> (NaA,  p)
+        | None      ->
+(*
+            let () = print_endline "p.t:" in
+            let () = Document.print (Print.pp p.t) in
+            let () = print_endline "\np.eqs:" in
+            let () = Document.print (Print.pp p.eqs) in
+            let () = print_endline "" in
+*)
+            (NaA,  p)
         end
     end
 end
