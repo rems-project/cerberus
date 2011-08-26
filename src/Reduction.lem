@@ -291,7 +291,7 @@ and reduce_exp n b env file exp =
         C.fresh >>= fun a        ->
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         Action.same a1 a2 >>= fun same ->
-        E.return (a, (m1 -&- m2) +& c +@ same)
+        E.return (a, (m1 -&- m2) +& c -@> same)
   | A.BINARY (Cabs.RELATIONAL Cabs.GE) e1 e2 ->
       if T.is_arithmetic (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
@@ -319,9 +319,9 @@ and reduce_exp n b env file exp =
       E.return (a, (m1 -&- m2) +& (C.eq a (C.bit_xor a1 a2)))
   | A.ASSIGN None e1 e2 ->
       f_lvalue e1 >>= fun (a1, m1) ->
-      f e2        >>= fun (a2, m2) ->
+      f        e2 >>= fun (a2, m2) ->
       Tc.conv (exp_type e1) (exp_type e2) a2 >>= fun (a, c) ->
-      Action.store (lvalue_type e1) a1 a >>= fun write->
+      Action.store (lvalue_type e1) a1 a >>= fun write ->
       E.return (a, (m1 -&- m2 +& c) -@> write)
   | A.QUESTION e1 e2 e3 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
@@ -368,6 +368,15 @@ and reduce_exp n b env file exp =
       E.return (Tc.align t, M.unit)
   | A.SIZEOF  t ->
       E.return (Tc.size  t, M.unit)
+  | _ ->
+      if T.is_lvalue (Annotate.type_of exp) then
+        f_lvalue exp >>= fun (a, m) ->
+        C.fresh      >>= fun v      ->
+        Action.load (lvalue_type exp) a v >>= fun load ->
+        E.return (v, m -@> load)
+      else
+        C.fresh >>= fun a ->
+        E.return (a, M.null)
   end
 
 and reduce_stmt n b env file fid return (A.Stmt _ stmt) =
