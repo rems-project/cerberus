@@ -368,7 +368,7 @@ and reduce_stmt n b fid return env file (d, stmt) =
 
 let reduce_file n omega ({A.function_map; A.main; _} as file) =
   let b =
-    List.fold_left (fun m fid -> M.add fid n m) M.empty (M.keys function_map) in
+    List.fold_left (fun m fid -> M.add fid n m) M.empty (List.map fst (M.bindings function_map)) in
   let _, s = M.find main function_map in
   let m = reduce_stmt n b main (AC.fresh_named "return") M.empty file s in
   AM.add_constraint_set (AM.flatten_func m) omega
