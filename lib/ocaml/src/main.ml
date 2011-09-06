@@ -48,4 +48,7 @@ let () =
     >> Exception.map (pass_through_test !output pp_out)
     >> Exception.map Meaning.Solve.simplify_all
     >> Exception.map (Program.iter_list pp_res) in
+(*
+    >> Exception.map (fun s -> Program.iter_list pp_res (Pset.elements s)) in
+*)
   List.iter (catch -| pipeline) !files

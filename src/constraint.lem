@@ -483,7 +483,7 @@ module Print = struct
   let pp_set ts = P.sepmap P.break1 pp [t | forall (t IN ts) | true]
 end
 
-module Process = struct
+module Solver = struct
   open Global
 
   module Cc = Congruence_closure

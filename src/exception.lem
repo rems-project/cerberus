@@ -64,3 +64,17 @@ let sequence_map mmap =
 let map_map f m = sequence_map (Pmap.map f m)
 
 let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
+
+let compare cmp cmp_msg a1 a2 =
+  match (a1, a2) with
+  | (Result r1, Result r2) -> cmp r1 r2
+  | (Exception e1, Exception e2) -> cmp_msg e1 e2
+  | (Result _, _) -> Ord.Lt
+  | (_, Result _) -> Ord.Gt
+  end
+
+let bind_exception m k =
+  match m with
+    | Result a -> Result a
+    | Exception s -> k s
+  end
