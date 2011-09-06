@@ -18,6 +18,7 @@ Symbolic execution:
 Numbers:
 - Nat_num uses machine integers. We need proper integers.
 - Nat_num implements natural numbers. We need integers.
+- Write ZArith lem library.
 
 Solver:
 - "Fast congruence closure" algorithm uses ackermanization. We might be better

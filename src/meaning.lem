@@ -22,7 +22,6 @@ type denotation = <|
   fs_actions  : (Action.t, Action.t set) map
 |>
 
-(* TODO compare *)
 type t = denotation set
 
 sub [ocaml] set_compare_int = Pset.compare
@@ -374,16 +373,14 @@ module Solve = struct
 
   let linearise d = seq d [] d.actions
 
-  module P = C.Process
-
   let simplify d c =
     let conflicts =
       Pmap.fold
         (fun _ ts c -> c union (Action.conflicts d.seq_before ts))
         d.fs_actions {} in
-    let p = P.make d.constraints in
-    let p = P.add_constraints p conflicts in
-    let f c trace = (Action.Memory.replay p trace) :: c in
+    let p = Constraint.Solver.make d.constraints in
+    let p = Constraint.Solver.add_constraints p conflicts in
+    let f c trace = Action.Memory.replay p trace :: c in
     List.fold_left f c (linearise d)
 
   let simplify_all t = Set.fold simplify t []

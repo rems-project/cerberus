@@ -1,11 +1,6 @@
 Constraints:
+- Uniform address handling: "addr v" to "offset (v, 0)".
 - Make the constraint language typed.
 
 Reduction:
 - Add more structure to constraints, e.g. "if . then UNDEF else .".
-
-Work plan:
-1. structs
-2. union
-3. malloc
-4. cppmem

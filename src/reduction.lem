@@ -113,14 +113,14 @@ and reduce_exp n b env file exp =
       C.fresh    >>= fun v      ->
       let incr = C.plus v C.one in
       Tc.conv_int (exp_type e) incr >>= fun (v', c) ->
-      Action.modify (lvalue_type e) a v v' >>= fun modify   ->
+      Action.modify (lvalue_type e) a v v' >>= fun modify ->
       E.return (v, (m +& c) -@> modify)
   | A.UNARY A.POSTFIX_DECR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
       let decr = C.minus v C.one in
       Tc.conv_int (exp_type e) decr >>= fun (a', c) ->
-      Action.modify (lvalue_type e) a v a' >>= fun modify   ->
+      Action.modify (lvalue_type e) a v a' >>= fun modify ->
       if T.is_signed_integer(exp_type exp) then
         let c' = overflow (exp_type exp) decr in
         E.return (decr, m +& c +& c' -@> modify)
@@ -300,8 +300,16 @@ and reduce_exp n b env file exp =
         C.fresh       >>= fun a        ->
         let c = C.case (C.ge a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         E.return (a, (m1 -&- m2) +& c)
-      else (*TODO*) E.return (C.one, M.null)
+      else
         (* Pointer comparison. *)
+        (* TODO Comparing two pointers to different object is
+           undefined unless ... *)
+        f e1	>>= fun (a1, m1) ->
+        f e2	>>= fun (a2, m2) ->
+        C.fresh >>= fun a        ->
+        let c = C.case (C.ge a1 a2) (C.eq a C.one) (C.eq a C.zero) in
+        Action.same a1 a2 >>= fun same ->
+        E.return (a, (m1 -&- m2) +& c -@> same)
   | A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
