@@ -13,7 +13,7 @@ multiset.lem \
 global.lem \
 ord.lem \
 string_.lem \
-num.lem \
+num_.lem \
 pair.lem \
 map_.lem \
 list_.lem \
