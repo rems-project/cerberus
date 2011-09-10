@@ -7,10 +7,10 @@ let rec cons x t =
   end
 
 let rec diff t n =
-  match t with
-    | Nil            -> 0
-    | Node _ Nil Nil -> 1
-    | Node _ l   r   ->
+  match (t, n) with
+    | (Nil           , 0) -> 0
+    | (Node _ Nil Nil, 0) -> 1
+    | (Node _ l   r  , _) ->
         if n % 2 = 0
           then diff r (n/2 - 1)
           else diff l (n/2)
