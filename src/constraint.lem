@@ -87,7 +87,7 @@ let rec compare_const const1 const2 =
       Symbol.compare a1 a2
   | (Null, Null) -> Ord.Eq
   | (Integer i1, Integer i2) ->
-      Num.compare i1 i2
+      Num_.compare i1 i2
   | (Offset c1 c2 c3, Offset c1' c2' c3') ->
       compare_const c1 c1'
       ++ compare_const c2 c2'
