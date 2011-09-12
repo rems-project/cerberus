@@ -1,0 +1,237 @@
+Index: src/trans.ml
+===================================================================
+--- src/trans.ml	(revision 8278)
++++ src/trans.ml	(working copy)
+@@ -391,16 +391,173 @@
+ let special_type = 
+   { Types.t = Types.Tapp([], Path.mk_path [Name.from_rope r"MachineDefTypes"] (Name.from_rope r"instruction_instance")) }
+ 
++(* Csem hack: Types and comparision functions.. *)
++
++(* Multiset.t *)
++let special_type_spec = {
++  Types.t = Types.Tapp (
++    [],
++    Path.mk_path [Name.from_rope r"Cabs"] (Name.from_rope r"specifier")
++  )
++}
++
++let special_type_mset = {
++  Types.t = Types.Tapp (
++    [special_type_spec; {Types.t = Types.Tapp ([], Path.numpath)}],
++    Path.mk_path
++      [Name.from_rope r"Hol"; Name.from_rope r"Finite_map"]
++      (Name.from_rope r"fmap")
++  )
++}
++
++let compare_mset =
++  let l = Ast.Trans("compare_mset") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Multiset"] r"compare_int";
++      id_locn = l;
++      descr = (get_const env [r"Multiset"; r"compare_int"]);
++      instantiation =
++	[{Types.t = Types.Tapp ([], Path.numpath)}; special_type_spec]
++    }
++    None
++
++(* Meaning.denotation *)
++let special_type_denot = {
++  Types.t  = Types.Tapp (
++    [],
++    Path.mk_path [Name.from_rope r"Meaning"] (Name.from_rope r"denotation")
++  )
++}
++
++let compare_denot =
++  let l = Ast.Trans("compare_denot") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Meaning"] r"compare_int";
++      id_locn = l;
++      descr = (get_const env [r"Meaning"; r"compare_int"]);
++      instantiation = []
++    }
++    None
++
++(* Action.t *)
++let special_type_action = {
++  Types.t  = Types.Tapp (
++    [],
++    Path.mk_path [Name.from_rope r"Action"] (Name.from_rope r"t")
++  )
++}
++
++let compare_action =
++  let l = Ast.Trans("compare_action") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Action"] r"compare_int";
++      id_locn = l;
++      descr = (get_const env [r"Action"; r"compare_int"]);
++      instantiation = []
++    }
++    None
++
++let neq_action =
++  let l = Ast.Trans("ne_action") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Action"] r"ne";
++      id_locn = l;
++      descr = (get_const env [r"Action"; r"ne"]);
++      instantiation = []
++    }
++    None
++
++(* Action.t set *)
++let special_type_action_set = {
++  Types.t  = Types.Tapp ([special_type_action], Path.setpath)
++}
++
++(*
++let compare_action_set =
++  let l = Ast.Trans("compare_action") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Pset"] r"compare";
++      id_locn = l;
++      descr = (get_const env [r"Ocaml"; r"Pset"; r"compare"]);
++      instantiation = [special_type_action_set; special_type_action_set]
++    }
++    None
++*)
++
++let eq_action_set =
++  let l = Ast.Trans("eq_action_set") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Set"] r"equal";
++      id_locn = l;
++      descr = (get_const env [r"Set"; r"equal"]);
++      instantiation = [special_type_action]
++    }
++    None
++
++(* (Action.t * Action.t) *)
++let special_type_action_pair = {
++  Types.t  = Types.Ttup [special_type_action; special_type_action]
++}
++
++let compare_action_pair =
++  let l = Ast.Trans("compare_action_pair") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Action"] r"compare_pair_int";
++      id_locn = l;
++      descr = (get_const env [r"Action"; r"compare_pair_int"]);
++      instantiation = []
++    }
++    None
++
++(* Constraint.constr *)
++let special_type_constr = {
++  Types.t  = Types.Tapp (
++    [],
++    Path.mk_path [Name.from_rope r"Constraint"] (Name.from_rope r"constr")
++  )
++}
++
++let compare_constr =
++  let l = Ast.Trans("compare_constr") in
++  C.mk_const
++    l
++    { id_path = mk_ident [r"Constraint"] r"compare_constr_int";
++      id_locn = l;
++      descr = (get_const env [r"Constraint"; r"compare_constr_int"]);
++      instantiation = []
++    }
++    None
++
++(* End of csem hack. *)
++
+ let get_compare t = 
+   let l_unk = Ast.Trans("get_compare") in
++  let type_eq t' = Types.compare (Types.head_norm d t) t' = 0 in
+   (* TODO: Remove this hack *)
+-  if Types.compare (Types.head_norm d t) special_type = 0 then
++  if type_eq  special_type then
+     C.mk_const l_unk
+       { id_path = mk_ident [r"MachineDefTypes"] r"compare_instruction_instance";
+         id_locn = l_unk;
+         descr = (get_const env [r"MachineDefTypes"; r"compare_instruction_instance"]);
+         instantiation = [] }
+       None
++  else if type_eq special_type_mset then
++    compare_mset
++  else if type_eq special_type_denot then
++    compare_denot
++  else if type_eq special_type_action then
++    compare_action
++  else if type_eq special_type_action_pair then
++    compare_action_pair
++  else if type_eq special_type_constr then
++    compare_constr
+   else
+   C.mk_const l_unk
+     { id_path = mk_ident [r"Pervasives"] r"compare";
+@@ -822,15 +979,17 @@
+         None
+ 
+ let eq_path = Path.mk_path [Name.from_rope r"Ocaml"; Name.from_rope r"Pervasives"] (Name.from_rope r"=")
++let neq_path = Path.mk_path [Name.from_rope r"Ocaml"; Name.from_rope r"Pervasives"] (Name.from_rope r"<>")
++let cmp_path = Path.mk_path [Name.from_rope r"Ocaml"; Name.from_rope r"Pervasives"] (Name.from_rope r"compare")
+ 
+ let hack e = 
+-  let l_unk = Ast.Trans("hack") in
+   match C.exp_to_term e with
+   | Constant(c) ->
+       if Path.compare c.descr.const_binding eq_path = 0 then
++	let l_unk = Ast.Trans("hack") in
+         begin
+           match c.instantiation with
+-            | [t] when Types.compare (Types.head_norm d t) special_type = 0 ->
++            | [t] when Types.compare (Types.head_norm d t) special_type_action = 0 ->
+                 Some
+                   (C.mk_const l_unk
+                      { id_path = Ident.mk_ident [] (Name.from_x (Ast.X_l((None, r"eq_instruction_instance"), l_unk)));
+@@ -845,8 +1004,37 @@
+                                  substitutions = Targetmap.empty };
+                        instantiation = [] }
+                      None)
++            | [t] ->
++		let type_eq t' = Types.compare (Types.head_norm d t) t' = 0 in
++		if type_eq special_type_action_set then
++                  Some eq_action_set
++		else None
+             | _ -> None
++	end
++      else if Path.compare c.descr.const_binding cmp_path = 0 then
++	begin
++          match c.instantiation with
++            | [t] ->
++		let type_eq t' = Types.compare (Types.head_norm d t) t' = 0 in
++		if type_eq special_type_mset then
++                  Some compare_mset
++		else if type_eq special_type_denot then
++		  Some compare_denot
++		else if type_eq special_type_action then
++		  Some compare_action
++		else None
++            | _ -> None
+         end
++      else if Path.compare c.descr.const_binding neq_path = 0 then
++	begin
++          match c.instantiation with
++            | [t] ->
++		let type_eq t' = Types.compare (Types.head_norm d t) t' = 0 in
++		if type_eq special_type_action then
++                  Some neq_action
++		else None
++            | _ -> None
++        end
+       else
+         None
+   | _ -> None

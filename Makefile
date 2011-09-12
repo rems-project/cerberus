@@ -105,7 +105,7 @@ ocaml: lem_ocaml
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
 	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte
 
-lem_ocaml:
+lem_ocaml: patch_lem
 	mkdir -p $(OCAML_BUILD_DIR)
 	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
@@ -116,14 +116,19 @@ lem_tex:
 	mkdir -p $(TEX_BUILD_DIR)
 	cd $(TEX_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -tex $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
-
 hol: lem_hol
 
 lem_hol:
 	mkdir -p $(HOL_BUILD_DIR)
 	cd $(HOL_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -hol $(foreach F, $(FILES), ../src/$(F)) && cd ..
 
-clean:
+patch_lem:
+	make -C patches
+
+unpatch_lem:
+	make -C patches unpatch_lem
+
+clean: unpatch_lem
 	rm -R $(OCAML_BUILD_DIR)
 	rm -R $(TEX_BUILD_DIR)
 	rm -R $(HOL_BUILD_DIR)
