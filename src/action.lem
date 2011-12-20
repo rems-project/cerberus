@@ -10,7 +10,6 @@ type action =
   | Load    of A.ctype * address * value
   | Store   of A.ctype * address * value
   | FnStore of A.ctype * address * value
-  | Modify  of A.ctype * address * value * value
   | Create  of A.ctype * address
   | Kill    of address
   | Id      of address
@@ -33,7 +32,6 @@ let (<$>) = Symbol_state.Operators.(<$>)
 let load     t a v   = Action (Load   t a v)   <$> Symbol_state.fresh
 let store    t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
 let fn_store t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
-let modify   t a l v = Action (Modify t a l v) <$> Symbol_state.fresh
 let create   t a     = Action (Create t a)     <$> Symbol_state.fresh
 let kill a           = Action (Kill     a)     <$> Symbol_state.fresh
 let id a             = Action (Id       a)     <$> Symbol_state.fresh
@@ -53,7 +51,6 @@ let is_access (Action a _) =
   | Store   _ _ _   -> true
   | FnStore _ _ _   -> true
   | Load    _ _ _   -> true
-  | Modify  _ _ _ _ -> true
   | _               -> false
   end
 
@@ -67,7 +64,6 @@ let address_of (Action action _) =
   match action with
     | Store   _ a _   -> a
     | FnStore _ a _   -> a
-    | Modify  _ a _ _ -> a
     | Load    _ a _   -> a
     | Id      a       -> a
 (*
@@ -79,7 +75,6 @@ let filter_store ((Action action _) as a) =
   match action with
     | FnStore _ _ _   -> Some a
     | Store   _ _ _   -> Some a
-    | Modify  _ _ _ _ -> Some a
     | _               -> None 
   end
 
@@ -127,8 +122,6 @@ module Print = struct
         eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
     | FnStore t a v ->
         eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
-    | Modify t a l v ->
-        eq (!^ "modify") ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c l ^%^ pp_c v)
     | Create t a ->
         eq (!^ "create") ^^^ P.parens (pp_t t ^%^ pp_c a)
     | Kill a ->
@@ -149,7 +142,6 @@ module Print = struct
       | Load    _ _ _   -> !^ "Load"
       | Store   _ _ _   -> !^ "Store"
       | FnStore _ _ _   -> !^ "Store"
-      | Modify  _ _ _ _ -> !^ "Modify"
       | Create  _ _     -> !^ "Create"
       | Kill    _       -> !^ "Kill"
       | Same    _ _     -> !^ "Same"
@@ -162,7 +154,6 @@ module Print = struct
       | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
       | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
       | FnStore t a v   -> [tt (pp_t t); pp_c a; pp_c v]
-      | Modify  t a l v -> [tt (pp_t t); pp_c a; pp_c l; pp_c v]
       | Create  t a     -> [tt (pp_t t); pp_c a]
       | Kill    a       -> [pp_c a]
       | Same    a1 a2   -> [pp_c a1; pp_c a2]
@@ -385,9 +376,6 @@ module Memory = struct
     | Load    ct a v -> load_event  t ct a v
     | Store   ct a v -> write_event t ct a v
     | FnStore ct a v -> write_event t ct a v
-    | Modify  ct a v v' ->
-        load_event  t ct a v >>= fun t ->
-        write_event t ct a v'
     | Call -> E.return t
     end
 
