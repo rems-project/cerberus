@@ -113,19 +113,22 @@ and reduce_exp n b env file exp =
       C.fresh    >>= fun v      ->
       let incr = C.plus v C.one in
       Tc.conv_int (exp_type e) incr >>= fun (v', c) ->
-      Action.modify (lvalue_type e) a v v' >>= fun modify ->
-      E.return (v, M.conj_seq_before (m +& c) (M.add_side_effect M.unit modify))
+      Action.load  (lvalue_type e) a v  >>= fun load  ->
+      Action.store (lvalue_type e) a v' >>= fun store ->
+      E.return (v, M.conj_seq_before (m +& c) (M.add_ls_pair M.unit load store))
   | A.UNARY A.POSTFIX_DECR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
       let decr = C.minus v C.one in
-      Tc.conv_int (exp_type e) decr >>= fun (a', c) ->
-      Action.modify (lvalue_type e) a v a' >>= fun modify ->
+      Tc.conv_int (exp_type e) decr >>= fun (v', c) ->
+      Action.load  (lvalue_type e) a v  >>= fun load  ->
+      Action.store (lvalue_type e) a v' >>= fun store ->
+      let modify = M.add_ls_pair M.unit load store in
       if T.is_signed_integer(exp_type exp) then
         let c' = overflow (exp_type exp) decr in
-        E.return (decr, m +& c +& c' -@> modify)
+        E.return (decr, M.conj_seq_before (m +& c +& c') modify)
       else
-        E.return (v, m +& c -@> modify)
+        E.return (v, M.conj_seq_before (m +& c) modify)
   | A.UNARY A.ADDRESS (A.Exp _ (A.UNARY A.INDIRECTION e)) -> f e
   | A.UNARY A.ADDRESS e -> f_lvalue e
   | A.CAST t e -> conv t (exp_type e) (f e)
@@ -356,16 +359,18 @@ and reduce_exp n b env file exp =
               List.map2 f ids es in
             let f_create (l, t, e) m' =
               conv (T.unqualify t) (exp_type e) (f e) >>= fun (a, m) ->
-              Action.create   t l   >>= fun create ->
-              Action.fn_store t l a >>= fun store  ->
+              Action.create   t l                     >>= fun create ->
+              Action.fn_store t l a                   >>= fun store  ->
               E.return ((m' -&- m) +@ create -@> store) in
             let f_kill (l, _, _) m =
               Action.kill l >>= fun kill ->
               E.return (m +@ kill) in
-            E.foldr_list f_create args M.unit >>= fun m_create ->
-            E.foldr_list f_kill   args M.unit >>= fun m_kill   ->
-            C.fresh >>= fun a ->
-	    reduce_stmt n b' env' file fid a s >>= M.flatten >>= fun m_body ->
+            E.foldr_list f_create args M.unit  >>= fun m_create ->
+            E.foldr_list f_kill   args M.unit  >>= fun m_kill   ->
+            C.fresh                            >>= fun a        ->
+	    reduce_stmt n b' env' file fid a s >>= fun ml       ->
+            Action.call                        >>= fun call     ->
+            let m_body = M.flatten ml call in
             E.return (a, m_create -&> m_body -&> m_kill)
       | None ->
           (* Function pointer. *)
@@ -378,9 +383,9 @@ and reduce_exp n b env file exp =
       E.return (Tc.size  t, M.unit)
   | _ ->
       if T.is_lvalue (Annotate.type_of exp) then
-        f_lvalue exp >>= fun (a, m) ->
-        C.fresh      >>= fun v      ->
-        Action.load (lvalue_type exp) a v >>= fun load ->
+        f_lvalue exp                      >>= fun (a, m) ->
+        C.fresh                           >>= fun v      ->
+        Action.load (lvalue_type exp) a v >>= fun load   ->
         E.return (v, m -@> load)
       else
         C.fresh >>= fun a ->
@@ -444,8 +449,9 @@ let reduce_file n file =
     let f m (fid, _) = Pmap.add fid n m in
     List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
   let (_, s) = Pmap.find file.A.main file.A.fn_map in
-  reduce_stmt n b Pmap.empty file file.A.main C.Constants.return s >>=
-  M.flatten
+  reduce_stmt n b Pmap.empty file file.A.main C.Constants.return s >>= fun ml ->
+  Action.call >>= fun call ->
+  E.return (M.flatten ml call)
 (*
   List.map rd (List.map snd (Pmap.values file.A.fn_map))
 *)

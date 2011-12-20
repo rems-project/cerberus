@@ -2,25 +2,13 @@ open Global
 
 module C = Constraint
 
-module Effect = struct
-  module M = Symbol_state
-
-  let return = M.return
-
-  module Operators = struct
-    let (>>=) = M.bind
-  end
-end
-
-module E = Effect
-open E.Operators
-
 type denotation = <|
   actions      : Action.t set;
-  side_effects : Action.t set;
-  constraints  : C.t;
+  side_effects : Action.t set; (* subset of actions*)
   seq_before   : (Action.t * Action.t) set;
-  call_map     : (Action.t,  Action.t set) map
+  ls_map       : (Action.t, Action.t) map; (* encodes postfix increment/decrement dependencies *)
+  call_map     : (Action.t,  Action.t set) map;
+  constraints  : C.t
 |>
 
 type t = denotation set
@@ -33,9 +21,10 @@ let compare_int d1 d2 =
   int_of_num (
        num_of_int (set_compare_int                 d1.actions      d2.actions     )
     ++ num_of_int (set_compare_int                 d1.side_effects d2.side_effects)
-    ++ num_of_int (C.compare_int                   d1.constraints  d2.constraints )
     ++ num_of_int (set_compare_int                 d1.seq_before   d2.seq_before  )
-    ++ num_of_int (map_compare_int set_compare_int d1.call_map     d2.call_map    ))
+    ++ num_of_int (map_compare_int unv_compare_int d1.ls_map       d2.ls_map      )
+    ++ num_of_int (map_compare_int set_compare_int d1.call_map     d2.call_map    )
+    ++ num_of_int (C.compare_int                   d1.constraints  d2.constraints ))
 
 type t_lifted = <|
   break    : t;
@@ -47,9 +36,10 @@ type t_lifted = <|
 let unit = {<|
   actions      = {};
   side_effects = {};
-  constraints  = {};
   seq_before   = {};
-  call_map     = Pmap.empty
+  ls_map      = Pmap.empty;
+  call_map     = Pmap.empty;
+  constraints  = {}
 |>}
 
 let null : t = {}
@@ -57,8 +47,9 @@ let null : t = {}
 let and_denotations d1 d2 = <|
   actions      = d1.actions      union d2.actions;
   side_effects = d1.side_effects union d2.side_effects;
-  constraints  = d1.constraints  union d2.constraints;
   seq_before   = d1.seq_before   union d2.seq_before;
+  constraints  = d1.constraints  union d2.constraints;
+  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
   call_map     = Pmap.concat d1.call_map d2.call_map
 |>
 
@@ -73,20 +64,22 @@ let and_denotations_sb d1 d2 = <|
   actions      = d1.actions      union d2.actions;
   side_effects = d1.side_effects union d2.side_effects;
   constraints  = d1.constraints  union d2.constraints;
+  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
+  call_map     = Pmap.concat d1.call_map d2.call_map;
   seq_before   =
     let sb = action_set_product (Set.diff d1.actions d1.side_effects) d2.actions in
-    sb union (d1.seq_before union d2.seq_before);
-  call_map     = Pmap.concat d1.call_map d2.call_map
+    sb union (d1.seq_before union d2.seq_before)
 |>
 
 let and_denotations_sp d1 d2 = <|
   actions      = d1.actions union d2.actions;
-  side_effects = d2.side_effects;
   constraints  = d1.constraints union d2.constraints;
+  side_effects = d2.side_effects;
+  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
+  call_map     = Pmap.concat d1.call_map d2.call_map;
   seq_before   =
     let sb = action_set_product d1.actions d2.actions in
-    sb union (d1.seq_before union d2.seq_before);
-  call_map     = Pmap.concat d1.call_map d2.call_map
+    sb union (d1.seq_before union d2.seq_before)
 |>
 
 let conj            m1 m2 = denotation_set_product_map and_denotations    m1 m2
@@ -107,6 +100,15 @@ let add_actions m acts =
 
 let add_side_effect m a =
   {<|d with side_effects = d.side_effects union {a}|> | forall (d IN (add_action m a)) | true}
+
+let add_ls_pair m l s =
+  { <|d with
+      actions      = d.actions      union {l; s};
+      side_effects = d.side_effects union {s};
+      seq_before   = d.seq_before   union {(l, s)};
+      ls_map       = Pmap.add l s d.ls_map
+    |>
+  | forall (d IN m) | true}
 
 module Operators = struct
   let (-&-) = conj
@@ -154,17 +156,16 @@ let return m = <|
   return   = m
 |>
 
-let collect m =
-  Action.call >>= fun call ->
+let collect m call =
   let add_call d = <|d with
     actions = {call};
     side_effects = {};
     call_map = Pmap.add call d.actions d.call_map
   |> in
-  E.return {add_call d | forall (d IN m) | true}
+  {add_call d | forall (d IN m) | true}
 
-let flatten ml =
-  collect (ml.normal +& C.undef -/- ml.return)
+let flatten ml call =
+  collect (ml.normal +& C.undef -/- ml.return) call
 
 let enter_loop m_pos m_neg ml =
   let m = ml.continue -/- ml.normal in <|
