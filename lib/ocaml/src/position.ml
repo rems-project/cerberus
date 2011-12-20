@@ -15,18 +15,18 @@ let make s e =
 
 let from_lexbuf {L.lex_start_p = s; L.lex_curr_p = e; _} = {s; e}
 
-let name {s; _} = s.L.pos_fname
-let first_line {s; _} = s.L.pos_lnum
-let last_line {e; _} = e.L.pos_lnum
+let name              {s; _} = s.L.pos_fname
+let first_line        {s; _} = s.L.pos_lnum
+let last_line         {e; _} = e.L.pos_lnum
 let first_line_offset {s; _} = s.L.pos_lnum
-let last_line_offset {e; _} = e.L.pos_lnum
-let first_char {s; _} = s.L.pos_cnum
-let last_char {e; _} = e.L.pos_cnum
+let last_line_offset  {e; _} = e.L.pos_lnum
+let first_char        {s; _} = s.L.pos_cnum
+let last_char         {e; _} = e.L.pos_cnum
 
 let lines_to_string p =
   let f = first_line p in
   let l = last_line p in
   if f = l then
-    "line " ^ BatInt.to_string f
+    "line "  ^ string_of_int f
   else
-    "lines " ^ BatInt.to_string f ^ "-" ^ BatInt.to_string l
+    "lines " ^ string_of_int f ^ "-" ^ string_of_int l

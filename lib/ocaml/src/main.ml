@@ -40,7 +40,7 @@ let () =
     >> Input.file
     >> Lexer.make
     >> Parser.parse
-    >> Cabs_to_ail.desugar "main"
+    >> Exception.rbind (Cabs_to_ail.desugar "main")
     >> Exception.map (pass_through pp_file)
     >> Exception.rbind Typing.annotate
     >> Exception.map (Reduction.reduce !bound)

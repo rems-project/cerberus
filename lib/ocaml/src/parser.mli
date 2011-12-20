@@ -1,6 +1,3 @@
 open Pervasives
 
-val parse : Lexer.t -> Cabs.file
-
-
-
+val parse : Lexer.t -> (Cabs.file, string) Exception.t

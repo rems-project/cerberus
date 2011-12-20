@@ -99,12 +99,12 @@ let conflicts sb ts =
       end in
     Set.fold f' s {} in
   let stores = action_set_filter_map filter_store ts in
-  let other  = action_set_filter_map filter_load  ts in
+  let loads  = action_set_filter_map filter_load  ts in
   let alias a a' = C.implies (C.eq (address_of a) (address_of a')) C.undef in
   (* HACK: should be <> instead of ne. *)
   let unseq a a' = ne a a' && not ((a, a') IN sb) && not ((a', a) IN sb) in
   (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
-  {alias a a' | forall (a IN stores) (a' IN stores union other) | unseq a a'}
+  {alias a a' | forall (a IN stores) (a' IN stores union loads) | unseq a a'}
 
 module Print = struct
   module P = Pprint
