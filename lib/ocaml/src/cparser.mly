@@ -41,12 +41,9 @@
 *)
 */
 %{
-module E = Errormsg
+
 module C = Cabs
 module L = Location
-
-let parse_error msg : 'a =
-  E.parse_error msg
 
 let print = print_string
 
