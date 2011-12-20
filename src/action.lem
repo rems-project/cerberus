@@ -83,10 +83,9 @@ let filter_store ((Action action _) as a) =
     | _               -> None 
   end
 
-let filter_other ((Action action _) as a) =
+let filter_load ((Action action _) as a) =
   match action with 
     | Load _ _ _ -> Some a
-    | Id   _     -> Some a
     | _          -> None 
   end
 
@@ -100,7 +99,7 @@ let conflicts sb ts =
       end in
     Set.fold f' s {} in
   let stores = action_set_filter_map filter_store ts in
-  let other  = action_set_filter_map filter_other ts in
+  let other  = action_set_filter_map filter_load  ts in
   let alias a a' = C.implies (C.eq (address_of a) (address_of a')) C.undef in
   (* HACK: should be <> instead of ne. *)
   let unseq a a' = ne a a' && not ((a, a') IN sb) && not ((a', a) IN sb) in
