@@ -16,10 +16,11 @@ module E = Effect
 open E.Operators
 
 type denotation = <|
-  actions     : Action.t set;
-  constraints : C.t;
-  seq_before  : (Action.t * Action.t) set;
-  fs_actions  : (Action.t, Action.t set) map
+  actions      : Action.t set;
+  side_effects : Action.t set;
+  constraints  : C.t;
+  seq_before   : (Action.t * Action.t) set;
+  call_map     : (Action.t,  Action.t set) map
 |>
 
 type t = denotation set
@@ -30,10 +31,11 @@ sub [ocaml] unv_compare_int = Pervasives.compare
 let compare_int d1 d2 =
   let (++) p n = if n = 0 then p else n in
   int_of_num (
-       num_of_int (set_compare_int                 d1.actions     d2.actions    )
-    ++ num_of_int (C.compare_int                   d1.constraints d2.constraints)
-    ++ num_of_int (set_compare_int                 d1.seq_before  d2.seq_before )
-    ++ num_of_int (map_compare_int set_compare_int d1.fs_actions  d2.fs_actions ))
+       num_of_int (set_compare_int                 d1.actions      d2.actions     )
+    ++ num_of_int (set_compare_int                 d1.side_effects d2.side_effects)
+    ++ num_of_int (C.compare_int                   d1.constraints  d2.constraints )
+    ++ num_of_int (set_compare_int                 d1.seq_before   d2.seq_before  )
+    ++ num_of_int (map_compare_int set_compare_int d1.call_map     d2.call_map    ))
 
 type t_lifted = <|
   break    : t;
@@ -43,19 +45,21 @@ type t_lifted = <|
 |>
 
 let unit = {<|
-  actions     = {};
-  constraints = {};
-  seq_before  = {};
-  fs_actions  = Pmap.empty
+  actions      = {};
+  side_effects = {};
+  constraints  = {};
+  seq_before   = {};
+  call_map     = Pmap.empty
 |>}
 
 let null : t = {}
 
 let and_denotations d1 d2 = <|
-  actions     = d1.actions     union d2.actions;
-  constraints = d1.constraints union d2.constraints;
-  seq_before  = d1.seq_before  union d2.seq_before;
-  fs_actions  = Pmap.concat d1.fs_actions d2.fs_actions
+  actions      = d1.actions      union d2.actions;
+  side_effects = d1.side_effects union d2.side_effects;
+  constraints  = d1.constraints  union d2.constraints;
+  seq_before   = d1.seq_before   union d2.seq_before;
+  call_map     = Pmap.concat d1.call_map d2.call_map
 |>
 
 (* Hack: Original functions in module Set_. *)
@@ -66,15 +70,27 @@ let denotation_set_product_map (f : denotation -> denotation -> denotation) s1 s
   {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
 
 let and_denotations_sb d1 d2 = <|
-  actions     = d1.actions union d2.actions;
-  constraints = d1.constraints union d2.constraints;
-  seq_before  =
-    let sb = action_set_product d1.actions d2.actions in
+  actions      = d1.actions      union d2.actions;
+  side_effects = d1.side_effects union d2.side_effects;
+  constraints  = d1.constraints  union d2.constraints;
+  seq_before   =
+    let sb = action_set_product (Set.diff d1.actions d1.side_effects) d2.actions in
     sb union (d1.seq_before union d2.seq_before);
-  fs_actions  = Pmap.concat d1.fs_actions d2.fs_actions
+  call_map     = Pmap.concat d1.call_map d2.call_map
 |>
 
-let conj m1 m2 = denotation_set_product_map and_denotations m1 m2
+let and_denotations_sp d1 d2 = <|
+  actions      = d1.actions union d2.actions;
+  side_effects = d2.side_effects;
+  constraints  = d1.constraints union d2.constraints;
+  seq_before   =
+    let sb = action_set_product d1.actions d2.actions in
+    sb union (d1.seq_before union d2.seq_before);
+  call_map     = Pmap.concat d1.call_map d2.call_map
+|>
+
+let conj            m1 m2 = denotation_set_product_map and_denotations    m1 m2
+let conj_seq_point  m1 m2 = denotation_set_product_map and_denotations_sp m1 m2
 let conj_seq_before m1 m2 = denotation_set_product_map and_denotations_sb m1 m2
 
 let add_constraint m cstr =
@@ -89,9 +105,12 @@ let add_action m a =
 let add_actions m acts =
   {<|d with actions = d.actions union acts|> | forall (d IN m) | true}
 
+let add_side_effect m a =
+  {<|d with side_effects = d.side_effects union {a}|> | forall (d IN (add_action m a)) | true}
+
 module Operators = struct
   let (-&-) = conj
-  let (-&>) = conj_seq_before
+  let (-&>) = conj_seq_point
   let (-/-) = (union)
   let (+&) = add_constraint
   let (+@) = add_action
@@ -135,16 +154,17 @@ let return m = <|
   return   = m
 |>
 
-let collect_fs_actions m =
+let collect m =
   Action.call >>= fun call ->
   let add_call d = <|d with
-    actions    = {call};
-    fs_actions = Pmap.add call d.actions d.fs_actions
+    actions = {call};
+    side_effects = {};
+    call_map = Pmap.add call d.actions d.call_map
   |> in
-  E.return {add_call d | forall (d IN m) | true}     
+  E.return {add_call d | forall (d IN m) | true}
 
 let flatten ml =
-  collect_fs_actions (ml.normal +& C.undef -/- ml.return)
+  collect (ml.normal +& C.undef -/- ml.return)
 
 let enter_loop m_pos m_neg ml =
   let m = ml.continue -/- ml.normal in <|
@@ -160,7 +180,7 @@ let exit_loop m_neg ml =
     return = ml.return
   |>
 
-let conj_seq_before_lifted ml1 ml2 =
+let conj_seq_point_lifted ml1 ml2 =
   <|break    = ml1.break    -/- (ml1.normal -&> ml2.break);
     continue = ml1.continue -/- (ml1.normal -&> ml2.continue);
     normal   = ml1.normal   -&> ml2.normal;
@@ -176,7 +196,7 @@ let disj_lifted ml1 ml2 =
 
 let add_constraint_lifted ml c = <|ml with normal = ml.normal +& c|>
 
-let add_action_lifted     ml a = <|ml with normal = ml.normal +@ a|>
+let add_action_lifted ml a = <|ml with normal = ml.normal +@ a|>
 
 let add_action_entire_lifted ml a =
   <|break    = ml.break    +@ a;
@@ -185,7 +205,7 @@ let add_action_entire_lifted ml a =
     return   = ml.return   +@ a
   |>
 
-let add_actions_entire_lifted_sb ml actions' =
+let add_actions_entire_lifted_sp ml actions' =
   let m = {<|d with actions = actions'|> | forall (d IN unit) | true} in <|
     break    = ml.break    -&> m;
     continue = ml.continue -&> m;
@@ -202,7 +222,7 @@ let add_constraint_entire_lifted ml c =
 
 module Statement_operators = struct
   (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
-  let (--&>) = conj_seq_before_lifted
+  let (--&>) = conj_seq_point_lifted
   let (-//-) = disj_lifted
   let (++&)  = add_constraint_entire_lifted
   let (++@)  = add_action_lifted
@@ -230,7 +250,7 @@ module Print = struct
   let pp_seq_before =
     let pp_a = pp_action_id in
     pp_set (fun (a1, a2) -> pp_a a1 ^^^ U.implies ^^^ pp_a a2)
-  let pp_fs_actions m =
+  let pp_call_map m =
     let pp_a = pp_action_id in
     nbraces (
       P.comma_list
@@ -240,10 +260,13 @@ module Print = struct
 
   let pp_denot t =
     let line name d = !^ name ^^^ P.equals ^^^ P.group d ^^ P.semi in
-    line "actions" (pp_actions t.actions)
-    ^/^ line "constraints"      (pp_contraints t.constraints)
-    ^/^ line "sequenced_before" (pp_seq_before t.seq_before )
-    ^/^ line "function_actions" (pp_fs_actions t.fs_actions )
+        line "actions"          (pp_actions    t.actions)
+(*
+    ^/^ line "side_effects"     (pp_actions    t.side_effects )
+*)
+    ^/^ line "constraints"      (pp_contraints t.constraints  )
+    ^/^ line "sequenced_before" (pp_seq_before t.seq_before   )
+    ^/^ line "call_map"         (pp_call_map   t.call_map     )
 
   let pp m = nbraces (pp_dset pp_denot m) ^^ P.break0
 end
@@ -363,7 +386,7 @@ module Solve = struct
             ) sa_rest in
         let todo_list = make_todo d [] (sb_accesses union sa_rest_todo) in
         let call_map =
-          let seq_call c = seq d [] (Pmap.find c d.fs_actions) in
+          let seq_call c = seq d [] (Pmap.find c d.call_map) in
           Map_.of_list [(c, seq_call c) | forall (c IN calls) | true] in
         let perms = permute d.seq_before calls in
         let merge lls cs =
@@ -377,7 +400,7 @@ module Solve = struct
     let conflicts =
       Pmap.fold
         (fun _ ts c -> c union (Action.conflicts d.seq_before ts))
-        d.fs_actions {} in
+        d.call_map {} in
     let p = Constraint.Solver.make d.constraints in
     let p = Constraint.Solver.add_constraints p conflicts in
     let f c trace = Action.Memory.replay p trace :: c in

@@ -114,7 +114,7 @@ and reduce_exp n b env file exp =
       let incr = C.plus v C.one in
       Tc.conv_int (exp_type e) incr >>= fun (v', c) ->
       Action.modify (lvalue_type e) a v v' >>= fun modify ->
-      E.return (v, (m +& c) -@> modify)
+      E.return (v, M.conj_seq_before (m +& c) (M.add_side_effect M.unit modify))
   | A.UNARY A.POSTFIX_DECR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
@@ -330,7 +330,7 @@ and reduce_exp n b env file exp =
       f        e2 >>= fun (a2, m2) ->
       Tc.conv (exp_type e1) (exp_type e2) a2 >>= fun (a, c) ->
       Action.store (lvalue_type e1) a1 a >>= fun write ->
-      E.return (a, (m1 -&- m2 +& c) -@> write)
+      E.return (a, M.conj_seq_before (m1 -&- m2 +& c) (M.add_side_effect M.unit write))
   | A.QUESTION e1 e2 e3 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         f e1        >>= fun (a1, m1) ->
@@ -417,7 +417,7 @@ and reduce_stmt n b env file fid return (A.Stmt _ stmt) =
       E.foldr_list f_create decls M.unit_lifted >>= fun ml_create ->
       E.foldr_list f        ss    M.unit_lifted >>= fun ml        ->
       E.foldr_list f_kill   decls {}            >>= fun kills     ->
-      E.return (M.add_actions_entire_lifted_sb (ml_create --&> ml) kills)
+      E.return (M.add_actions_entire_lifted_sp (ml_create --&> ml) kills)
   | A.DECLARATION defns ->
       let f (id, e) ml' =
         let t = lookup_type id in
