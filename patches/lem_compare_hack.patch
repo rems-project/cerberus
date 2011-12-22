@@ -37,11 +37,11 @@ Index: src/trans.ml
 +    }
 +    None
 +
-+(* Meaning.denotation *)
++(* Meaning.Denotation.t *)
 +let special_type_denot = {
 +  Types.t  = Types.Tapp (
 +    [],
-+    Path.mk_path [Name.from_rope r"Meaning"] (Name.from_rope r"denotation")
++    Path.mk_path [Name.from_rope r"Meaning"; Name.from_rope r"Denotation"] (Name.from_rope r"t")
 +  )
 +}
 +
@@ -49,9 +49,9 @@ Index: src/trans.ml
 +  let l = Ast.Trans("compare_denot") in
 +  C.mk_const
 +    l
-+    { id_path = mk_ident [r"Meaning"] r"compare_int";
++    { id_path = mk_ident [r"Meaning"; r"Denotation"] r"compare_int";
 +      id_locn = l;
-+      descr = (get_const env [r"Meaning"; r"compare_int"]);
++      descr = (get_const env [r"Meaning"; r"Denotation"; r"compare_int"]);
 +      instantiation = []
 +    }
 +    None
