@@ -2,232 +2,236 @@ open Global
 
 module C = Constraint
 
-type denotation = <|
-  actions      : Action.t set;
-  side_effects : Action.t set; (* subset of actions*)
-  seq_before   : (Action.t * Action.t) set;
-  ls_map       : (Action.t, Action.t) map; (* encodes postfix increment/decrement dependencies *)
-  call_map     : (Action.t,  Action.t set) map;
-  constraints  : C.t
-|>
+module Denotation = struct
+  type t = <|
+    actions      : Action.t set;
+    side_effects : Action.t set; (* subset of actions*)
+    seq_before   : (Action.t * Action.t) set;
+    ls_map       : (Action.t, Action.t) map; (* encodes postfix increment/decrement dependencies *)
+    call_map     : (Action.t,  Action.t set) map;
+    constraints  : C.t
+  |>
 
-type t = denotation set
+  let unit = <|
+    actions      = {};
+    side_effects = {};
+    seq_before   = {};
+    ls_map      = Pmap.empty;
+    call_map     = Pmap.empty;
+    constraints  = {}
+  |>
 
-sub [ocaml] set_compare_int = Pset.compare
-sub [ocaml] map_compare_int = Pmap.compare
-sub [ocaml] unv_compare_int = Pervasives.compare
-let compare_int d1 d2 =
-  let (++) p n = if n = 0 then p else n in
-  int_of_num (
-       num_of_int (set_compare_int                 d1.actions      d2.actions     )
-    ++ num_of_int (set_compare_int                 d1.side_effects d2.side_effects)
-    ++ num_of_int (set_compare_int                 d1.seq_before   d2.seq_before  )
-    ++ num_of_int (map_compare_int unv_compare_int d1.ls_map       d2.ls_map      )
-    ++ num_of_int (map_compare_int set_compare_int d1.call_map     d2.call_map    )
-    ++ num_of_int (C.compare_int                   d1.constraints  d2.constraints ))
+  let conj t1 t2 = <|
+    actions      = t1.actions      union t2.actions;
+    side_effects = t1.side_effects union t2.side_effects;
+    seq_before   = t1.seq_before   union t2.seq_before;
+    constraints  = t1.constraints  union t2.constraints;
+    ls_map       = Pmap.concat t1.ls_map   t2.ls_map;
+    call_map     = Pmap.concat t1.call_map t2.call_map
+  |>
 
-type t_lifted = <|
-  break    : t;
-  continue : t;
-  normal   : t;
-  return   : t
-|>
+  (* Hack: Original function in module Set_. *)
+  let product (s1 : Action.t set) (s2 : Action.t set) =
+    {(e1, e2) | forall (e1 IN s1) (e2 IN s2) | true}
 
-let unit = {<|
-  actions      = {};
-  side_effects = {};
-  seq_before   = {};
-  ls_map      = Pmap.empty;
-  call_map     = Pmap.empty;
-  constraints  = {}
-|>}
+  let conj_sb t1 t2 = <|
+    actions      = t1.actions      union t2.actions;
+    side_effects = t1.side_effects union t2.side_effects;
+    constraints  = t1.constraints  union t2.constraints;
+    ls_map       = Pmap.concat t1.ls_map   t2.ls_map;
+    call_map     = Pmap.concat t1.call_map t2.call_map;
+    seq_before   =
+      let sb = product (Set.diff t1.actions t1.side_effects) t2.actions in
+      sb union (t1.seq_before union t2.seq_before)
+  |>
 
-let null : t = {}
+  let conj_sp t1 t2 = <|
+    actions      = t1.actions     union t2.actions;
+    constraints  = t1.constraints union t2.constraints;
+    side_effects = t2.side_effects;
+    ls_map       = Pmap.concat t1.ls_map   t2.ls_map;
+    call_map     = Pmap.concat t1.call_map t2.call_map;
+    seq_before   =
+      let sb = product t1.actions t2.actions in
+      sb union (t1.seq_before union t2.seq_before)
+  |>
 
-let and_denotations d1 d2 = <|
-  actions      = d1.actions      union d2.actions;
-  side_effects = d1.side_effects union d2.side_effects;
-  seq_before   = d1.seq_before   union d2.seq_before;
-  constraints  = d1.constraints  union d2.constraints;
-  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
-  call_map     = Pmap.concat d1.call_map d2.call_map
-|>
+  let add_constraint     cstr  t = <|t with constraints  = t.constraints  union {cstr}|>
+  let add_constraint_set cstrs t = <|t with constraints  = t.constraints  union cstrs|>
+  let add_action         a     t = <|t with actions      = t.actions      union {a}|>
+  let add_actions        acts  t = <|t with actions      = t.actions      union acts|>
+  let add_side_effect    a     t = <|t with side_effects = t.side_effects union {a}|>
 
-(* Hack: Original functions in module Set_. *)
-let action_set_product (s1 : Action.t set) (s2 : Action.t set) =
-  {(e1, e2) | forall (e1 IN s1) (e2 IN s2) | true}
-
-let denotation_set_product_map (f : denotation -> denotation -> denotation) s1 s2 =
-  {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
-
-let and_denotations_sb d1 d2 = <|
-  actions      = d1.actions      union d2.actions;
-  side_effects = d1.side_effects union d2.side_effects;
-  constraints  = d1.constraints  union d2.constraints;
-  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
-  call_map     = Pmap.concat d1.call_map d2.call_map;
-  seq_before   =
-    let sb = action_set_product (Set.diff d1.actions d1.side_effects) d2.actions in
-    sb union (d1.seq_before union d2.seq_before)
-|>
-
-let and_denotations_sp d1 d2 = <|
-  actions      = d1.actions union d2.actions;
-  constraints  = d1.constraints union d2.constraints;
-  side_effects = d2.side_effects;
-  ls_map       = Pmap.concat d1.ls_map   d2.ls_map;
-  call_map     = Pmap.concat d1.call_map d2.call_map;
-  seq_before   =
-    let sb = action_set_product d1.actions d2.actions in
-    sb union (d1.seq_before union d2.seq_before)
-|>
-
-let conj            m1 m2 = denotation_set_product_map and_denotations    m1 m2
-let conj_seq_point  m1 m2 = denotation_set_product_map and_denotations_sp m1 m2
-let conj_seq_before m1 m2 = denotation_set_product_map and_denotations_sb m1 m2
-
-let add_constraint m cstr =
-  {<|d with constraints = d.constraints union {cstr}|> | forall (d IN m) | true}
-
-let add_constraint_set m c =
-  {<|d with constraints = d.constraints union c|> | forall (d IN m) | true}
-
-let add_action m a =
-  {<|d with actions = d.actions union {a}|> | forall (d IN m) | true}
-
-let add_actions m acts =
-  {<|d with actions = d.actions union acts|> | forall (d IN m) | true}
-
-let add_side_effect m a =
-  {<|d with side_effects = d.side_effects union {a}|> | forall (d IN (add_action m a)) | true}
-
-let add_ls_pair m l s =
-  { <|d with
-      actions      = d.actions      union {l; s};
-      side_effects = d.side_effects union {s};
-      seq_before   = d.seq_before   union {(l, s)};
-      ls_map       = Pmap.add l s d.ls_map
+  let add_call call t =
+    <|t with
+      actions = {call};
+      side_effects = {};
+      call_map = Pmap.add call t.actions t.call_map
     |>
-  | forall (d IN m) | true}
 
-module Operators = struct
-  let (-&-) = conj
-  let (-&>) = conj_seq_point
-  let (-/-) = (union)
-  let (+&) = add_constraint
-  let (+@) = add_action
-  let (-@>) m a = m -&> (unit +@ a)
+  let add_ls_pair l s t =
+    <|t with
+      actions      = t.actions      union {l; s};
+      side_effects = t.side_effects union {s};
+      seq_before   = t.seq_before   union {(l, s)};
+      ls_map       = Pmap.add l s t.ls_map
+    |>
+
+  sub [ocaml] set_compare_int = Pset.compare
+  sub [ocaml] map_compare_int = Pmap.compare
+  sub [ocaml] unv_compare_int = Pervasives.compare
+
+  let compare_int t1 t2 =
+    let (++) p n = if n = 0 then p else n in
+    int_of_num (
+         num_of_int (set_compare_int                 t1.actions      t2.actions     )
+      ++ num_of_int (set_compare_int                 t1.side_effects t2.side_effects)
+      ++ num_of_int (set_compare_int                 t1.seq_before   t2.seq_before  )
+      ++ num_of_int (map_compare_int unv_compare_int t1.ls_map       t2.ls_map      )
+      ++ num_of_int (map_compare_int set_compare_int t1.call_map     t2.call_map    )
+      ++ num_of_int (C.compare_int                   t1.constraints  t2.constraints ))
 end
 
-open Operators
+module Expression = struct
+  type t = Denotation.t set
 
-let unit_lifted = <|
-  break    = {};
-  continue = {};
-  normal   = unit;
-  return   = {}
-|>
+  let unit : t = {Denotation.unit}
+  let null : t = {}
 
-let break m = <|
-  break    = m;
-  continue = {};
-  normal   = {};
-  return   = {}
-|>
+  (* Hack: Original function in module Set_. *)
+  let product_map (f : Denotation.t -> Denotation.t -> Denotation.t) s1 s2 =
+    {f e1 e2 | forall (e1 IN s1) (e2 IN s2) | true}
 
-let continue m = <|
-  break    = {};
-  continue = m;
-  normal   = {};
-  return   = {}
-|>
+  let conj    = product_map Denotation.conj
+  let conj_sp = product_map Denotation.conj_sp
+  let conj_sb = product_map Denotation.conj_sb
 
-let normal m = <|
-  break    = {};
-  continue = {};
-  normal   = m;
-  return   = {}
-|>
+  let add_constraint     cstr  = Set.map (Denotation.add_constraint  cstr)
+  let add_constraint_set cstrs = Set.map (Denotation.add_constraint  cstrs)
+  let add_action         a     = Set.map (Denotation.add_action      a)
+  let add_actions        acts  = Set.map (Denotation.add_actions     acts)
+  let add_side_effect    a     = Set.map (Denotation.add_side_effect a)
+  let add_ls_pair        l s   = Set.map (Denotation.add_ls_pair     l s)
+  let add_call           call  = Set.map (Denotation.add_call        call)
 
-let return m = <|
-  break    = {};
-  continue = {};
-  normal   = {};
-  return   = m
-|>
+  module Operators = struct
+    let (-&-) = conj
+    let (-&>) = conj_sp
+    let (-/-) = (union)
+    let (+&)  t c = add_constraint c t
+    let (+@)  t a = add_action a t
+    let (-@>) t a = t -&> (unit +@ a)
+  end
+end
 
-let collect m call =
-  let add_call d = <|d with
-    actions = {call};
-    side_effects = {};
-    call_map = Pmap.add call d.actions d.call_map
-  |> in
-  {add_call d | forall (d IN m) | true}
+module Statement = struct
+  module E = Expression
 
-let flatten ml call =
-  collect (ml.normal +& C.undef -/- ml.return) call
+  open E.Operators
 
-let enter_loop m_pos m_neg ml =
-  let m = ml.continue -/- ml.normal in <|
-    break    = ml.break -/- (m -&> m_neg);
+  type t = <|
+    break    : E.t;
+    continue : E.t;
+    normal   : E.t;
+    return   : E.t
+  |>
+
+  let unit = <|
+    break    = {};
     continue = {};
-    normal   = m -&> m_pos;
-    return   = ml.return
+    normal   = E.unit;
+    return   = {}
   |>
 
-let exit_loop m_neg ml =
-  <|unit_lifted with
-    normal = ml.break -/- ((ml.continue -/- ml.normal) -&> m_neg);
-    return = ml.return
+  let break te = <|
+    break    = te;
+    continue = {};
+    normal   = {};
+    return   = {}
   |>
 
-let conj_seq_point_lifted ml1 ml2 =
-  <|break    = ml1.break    -/- (ml1.normal -&> ml2.break);
-    continue = ml1.continue -/- (ml1.normal -&> ml2.continue);
-    normal   = ml1.normal   -&> ml2.normal;
-    return   = ml1.return   -/- (ml1.normal -&> ml2.return)
+  let continue te = <|
+    break    = {};
+    continue = te;
+    normal   = {};
+    return   = {}
   |>
 
-let disj_lifted ml1 ml2 =
-  <|break    = ml1.break    -/- ml2.break;
-    continue = ml1.continue -/- ml2.continue;
-    normal   = ml1.normal   -/- ml2.normal;
-    return   = ml1.return   -/- ml2.return
+  let normal te = <|
+    break    = {};
+    continue = {};
+    normal   = te;
+    return   = {}
   |>
 
-let add_constraint_lifted ml c = <|ml with normal = ml.normal +& c|>
-
-let add_action_lifted ml a = <|ml with normal = ml.normal +@ a|>
-
-let add_action_entire_lifted ml a =
-  <|break    = ml.break    +@ a;
-    continue = ml.continue +@ a;
-    normal   = ml.normal   +@ a;
-    return   = ml.return   +@ a
+  let return te = <|
+    break    = {};
+    continue = {};
+    normal   = {};
+    return   = te
   |>
 
-let add_actions_entire_lifted_sp ml actions' =
-  let m = {<|d with actions = actions'|> | forall (d IN unit) | true} in <|
-    break    = ml.break    -&> m;
-    continue = ml.continue -&> m;
-    normal   = ml.normal   -&> m;
-    return   = ml.return   -&> m
-  |>
+  let exit_function call t =
+    E.add_call call (t.normal +& C.undef -/- t.return)
 
-let add_constraint_entire_lifted ml c =
-  <|break    = ml.break    +& c;
-    continue = ml.continue +& c;
-    normal   = ml.normal   +& c;
-    return   = ml.return   +& c
-  |>
+  let enter_loop te_pos te_neg t =
+    let te = t.continue -/- t.normal in
+    <|break    = t.break -/- (te -&> te_neg);
+      continue = {};
+      normal   = te -&> te_pos;
+      return   = t.return
+    |>
 
-module Statement_operators = struct
-  (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
-  let (--&>) = conj_seq_point_lifted
-  let (-//-) = disj_lifted
-  let (++&)  = add_constraint_entire_lifted
-  let (++@)  = add_action_lifted
-  let (--@>) ml a = ml --&> (unit_lifted ++@ a)
+  let exit_loop te_neg t =
+    <|unit with
+      normal = t.break -/- ((t.continue -/- t.normal) -&> te_neg);
+      return = t.return
+    |>
+
+  let conj_sp t1 t2 =
+    <|break    = (t1.normal -&> t2.break)    -/- t1.break;
+      continue = (t1.normal -&> t2.continue) -/- t1.continue;
+      normal   =  t1.normal -&> t2.normal;
+      return   = (t1.normal -&> t2.return)   -/- t1.return
+    |>
+
+  let disj t1 t2 =
+    <|break    = t1.break    -/- t2.break;
+      continue = t1.continue -/- t2.continue;
+      normal   = t1.normal   -/- t2.normal;
+      return   = t1.return   -/- t2.return
+    |>
+
+  let add_action a t =
+    <|break    = t.break    +@ a;
+      continue = t.continue +@ a;
+      normal   = t.normal   +@ a;
+      return   = t.return   +@ a
+    |>
+
+  let add_actions_sp acts t =
+    let te = E.add_actions acts E.unit in <|
+      break    = t.break    -&> te;
+      continue = t.continue -&> te;
+      normal   = t.normal   -&> te;
+      return   = t.return   -&> te
+    |>
+
+  let add_constraint c t =
+    <|break    = t.break    +& c;
+      continue = t.continue +& c;
+      normal   = t.normal   +& c;
+      return   = t.return   +& c
+    |>
+
+  module Operators = struct
+    (* OCaml won't allow us to define (\/) and (/\). *sniff* *)
+    let (--&>) = conj_sp
+    let (-//-) = disj
+    let (++&)  t c = add_constraint c t
+    let (++@)  t a = add_action a t
+    let (--@>) t a = t --&> (unit ++@ a)
+  end
 end
 
 module Print = struct
@@ -235,6 +239,7 @@ module Print = struct
   module U = P.Unicode
 
   open P.Operators
+  open Denotation
 
   let nbraces d = P.lbrace ^^ P.group2 (P.break0 ^^ d) ^/^ P.rbrace
 
@@ -273,6 +278,8 @@ module Print = struct
 end
 
 module Solve = struct
+  open Denotation
+
   type trace = C.t * Action.t list
 
   let schedule pre s =
@@ -298,7 +305,7 @@ module Solve = struct
       | a::rest ->
           if p a
             then (front, tail)
-            else split p (front @ [a]) rest 
+            else split p (front @ [a]) rest
     end
 
   let permute sb ts =
@@ -347,8 +354,8 @@ module Solve = struct
       match (cs, ts) with
         | ([], [t])        -> add_trace t
         | (c::cs', t::ts') ->
-            let pre = List_.product_map (@) (add_trace t) (Pmap.find c call_map) in
-            interleave call_map pre cs' ts'
+            let pre' = List_.product_map (@) (add_trace t) (Pmap.find c call_map) in
+            interleave call_map pre' cs' ts'
       end
 
   let rec make_todo d ls t =
@@ -370,7 +377,7 @@ module Solve = struct
       let (sb_calls, sb_rest) = Set.partition Action.is_call sb in
       let (sa_ucalls, sa_rest) =
         Set.partition
-          (fun a -> 
+          (fun a ->
             Action.is_call a && exist (a' IN sb). not ((a',a) IN d.seq_before)
           ) sa in
       let calls = sb_calls union sa_ucalls in
@@ -415,7 +422,7 @@ module Graph = struct
     Set.fold
       (fun d i ->
         let name = n ^ "." ^ (string_of_num i) ^ ".dot" in
-        let doc  = Action.Print.pp_dot d.seq_before in
+        let doc  = Action.Print.pp_dot d.Denotation.seq_before in
         let str  = Document.to_plain_string doc in
         let ()   = Output.write str (Output.file name) in
         i + 1

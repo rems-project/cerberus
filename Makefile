@@ -144,12 +144,12 @@ ocaml: lem_ocaml
 #	sed -i 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/meaning.ml
 #	sed -i 's/let sb = action_set_/(let sb = action_set_/' $(OCAML_BUILD_DIR)/meaning.ml
 #	sed -i 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/meaning.ml
-	sed -i 's/let null/let null ()/' $(OCAML_BUILD_DIR)/meaning.ml
-	sed -i 's/M.null/M.null ()/' $(OCAML_BUILD_DIR)/reduction.ml
+#	sed -i 's/let null/let null ()/' $(OCAML_BUILD_DIR)/meaning.ml
+#	sed -i 's/M.null/M.null ()/' $(OCAML_BUILD_DIR)/reduction.ml
 # Removing module references introduced by Lem hack
 	sed -i 's/Action\.compare_int/compare_int/g' $(OCAML_BUILD_DIR)/action.ml
 	sed -i 's/Action\.ne/ne/g' $(OCAML_BUILD_DIR)/action.ml
-	sed -i 's/Meaning\.compare_int/compare_int/g' $(OCAML_BUILD_DIR)/meaning.ml
+	sed -i 's/Meaning\.//g' $(OCAML_BUILD_DIR)/meaning.ml
 	sed -i 's/Constraint\.compare_constr_int/compare_constr_int/g' $(OCAML_BUILD_DIR)/constraint.ml
 # Write _tags
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
