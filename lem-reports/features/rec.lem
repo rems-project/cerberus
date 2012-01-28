@@ -1,7 +1,0 @@
-type t = <|
-  n : num;
-|>
-
-let make n = <|
-  n = 0;
-|>

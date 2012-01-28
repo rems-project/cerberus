@@ -1,5 +1,0 @@
-let test1 f s e = e IN (f s)
-
-module M = struct
-  let test2 f s e = e IN (f s)
-end

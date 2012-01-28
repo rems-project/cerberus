@@ -1,6 +1,0 @@
-type t = <| u1 : unit; u2 : unit |>
-
-let r = <|
-  u1 = let m = () in m;
-  u2 = ()
-|>
