@@ -1,0 +1,20 @@
+include ../Makefile.config
+
+OUTPUT_TYPE=native
+OCAMLBUILD_OPT=-no-links -j 0 -build-dir _build \
+  -cflags -g,-I,$(LLVM_OCAML_LIB) \
+  -lflags -g,-I,$(LLVM_OCAML_LIB),-cclib,-lffi,-cclib,-L$(LLVM_LIB)
+
+CMAS:= coqllvm.cma \
+  eq_tv.cma \
+  sub_tv.cma
+
+CMXAS:=$(CMAS:.cma=.cmxa)
+
+all: 
+	ocamlbuild $(OCAMLBUILD_OPT) $(CMAS) $(CMXAS)
+
+clean:
+	ocamlbuild -clean
+
+.PHONY: all clean

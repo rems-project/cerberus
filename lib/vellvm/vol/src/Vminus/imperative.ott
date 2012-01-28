@@ -1,0 +1,149 @@
+embed
+{{coq
+
+Require Import Metatheory.
+Require Import syntax.
+Require Import infrastructure.
+Require Import ListSet.
+
+Module VMitypings.
+Import VMsyntax.
+Import VMinfra.
+
+}}
+
+% grammar
+
+% formula :: 'formula_' ::=
+%   | judgement			::   :: judgement
+%   | formula1 ... formulan     	::   :: dots
+%   | not formula                 :: M :: not
+%       				{{ tex \neg [[formula]] }}
+% 				{{ coq (not ([[formula]])) }}
+%   | ( formula )                 :: M :: brackets
+%       	      			{{ tex ([[formula]]\!) }} 
+%       				{{ coq ([[ formula ]]) }}
+%   | l1 = l2 			::   :: eqLabel
+% 				{{ tex [[l1]] = [[l2]] }}
+% 				{{ coq [[l1]] = [[l2]] }}
+%   | getEntryBlock fdef = opt_block	        :: :: getEntryBlock
+%     	      	     		{{ coq getEntryBlock [[fdef]] = [[opt_block]] }}
+%   | lookupBlockViaLabelFromFdef fdef l = opt_block :: :: lookupBlockViaLabelFromFdef
+%                                 {{ coq lookupBlockViaLabelFromFdef [[fdef]] [[l]] = [[opt_block]] }}
+
+% parsing
+% formula_true left formula_not
+% formula_false left formula_not
+% formula_and left formula_and
+% formula_or left formula_or
+% formula_not left formula_or
+% formula_not left formula_and
+% formula_or left formula_seq
+% formula_seq left formula_seq
+% formula_or left formula_ifthenelse
+% formula_ifthenelse left formula_seq
+% formula_and left formula_and
+% formula_multiline <= formula_and
+% formula_multiline <= formula_or
+
+defns
+Jwfi_insn :: '' ::=
+      defn
+      fdef |= insn :: :: wfi_insn :: 'wfi_insn_' 
+      {{ com [[insn]] is well-formed w.r.t in [[fdef]] }} by  
+
+      ---------------------------------------------- :: return
+      fdef |= id = ret value
+
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l1 = block1
+      lookupBlockViaLabelFromFdef fdef l2 = block2
+      not (l1 = l2)
+      ----------------------------------------------- :: br
+      fdef |= id = br value l1 l2	
+
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l = block
+      ----------------------------------------------- :: uncond
+      fdef |= id = br l		
+  
+      ---------------------------------------------- :: bop
+      fdef |= id = bop value1 value2
+
+      --------------------------------------------- :: icmp
+      fdef |= id = icmp cond value1 value2
+
+defns
+Jwfi_cmds :: '' ::=
+      defn
+      fdef |=c cmds :: :: wfi_cmds :: 'wfi_cmds_'
+      {{ com [[cmds]] is well-formed w.r.t. [[fdef]] }} by
+
+      --------------------------------------- :: nil
+      fdef |=c []
+
+      fdef |= cmd
+      fdef |=c cmds
+      ---------------------------------------- :: cons
+      fdef |=c cmd , cmds
+ 
+defns
+Jwfi_block :: '' ::=
+      defn
+      fdef |=b block :: :: wfi_block :: '' 
+      {{ com [[block]] is well-formed w.r.t. [[fdef]] }} by
+
+      (l [] cmds terminator) in fdef
+      fdef |=c cmds
+      fdef |= terminator
+      --------------------------------------------------- :: wfi_block_intro
+      fdef |=b l [] cmds terminator
+
+defns
+Jwfi_blocks :: '' ::=
+      defn
+      fdef |= blocks :: :: wfi_blocks :: 'wfi_blocks_'
+      {{ com [[blocks]] is well-formed w.r.t. [[fdef]] }} by
+
+      ------------- :: nil
+      fdef |= []
+
+      fdef |=b block
+      fdef |= blocks
+      ---------------------- :: cons
+      fdef |= block , blocks
+ 
+
+defns
+Jwfi_fdef :: '' ::=
+      defn
+      |=f fdef :: :: wfi_fdef :: ''
+      {{ com [[fdef]] is well-formed }} by
+
+      % Check the entry node 
+      % Entry block to function must not have predecessors! 
+      getEntryBlock (fun { blocks }) = block
+      {{ genBlockUseDef_fdef [[:user_syntax__fdef:fun { blocks }]] = [[usedef_block]] }}
+      {{ hasNonePredecessor [[:user_syntax__block:block]] [[usedef_block]] = true }}
+      % Checking function body
+      fun { blocks } |= blocks
+      ------------------------------ :: wfi_fdef_intro
+      |=f  fun { blocks }
+
+embed
+{{coq
+
+End VMitypings.
+
+}}
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/vol/src/Vellvm/monads" "-I" "~/SVN/sol/vol/src/Vellvm/ott" "-I" "~/SVN/sol/vol/src/Vellvm/compcert" "-I" "~/SVN/sol/theory/metatheory_8.3") ***
+*** End: ***
+*)
+}}
+

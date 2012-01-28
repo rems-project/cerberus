@@ -1,0 +1,901 @@
+./testcases/t10.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     void @foo () nounwind{
+entry:
+  ret void
+}
+define     i32 @main () nounwind{
+entry:
+  call   void ()* @foo () 
+  br label %bb 
+bb:
+  %_tmp_5 = phi i32 [0, %entry]
+  br label %end 
+end:
+  ret i32 %_tmp_5
+}
+
+real	0m0.043s
+user	0m0.025s
+sys	0m0.017s
+./testcases/t11.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     void @foo () nounwind{
+entry:
+  ret void
+}
+define     i32 @main () nounwind{
+entry:
+  call   void ()* @foo () 
+  br label %bb 
+bb:
+  %_tmp_5 = phi i32 [undef, %entry]
+  br label %end 
+end:
+  ret i32 %_tmp_5
+}
+
+real	0m0.038s
+user	0m0.017s
+sys	0m0.021s
+./testcases/t12.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_5 = phi i32 [1, %bb],[0, %entry]
+  br i1 -1, label %end, label %bb
+end:
+  %_tmp_2 = phi i32 [1, %bb]
+  ret i32 %_tmp_5
+}
+
+real	0m0.039s
+user	0m0.021s
+sys	0m0.011s
+./testcases/t13.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb1 
+bb:
+  br label %bb1 
+bb1:
+  %_tmp_5 = phi i32 [1, %bb],[0, %entry]
+  br i1 -1, label %end, label %bb
+end:
+  ret i32 %_tmp_5
+}
+
+real	0m0.040s
+user	0m0.010s
+sys	0m0.007s
+./testcases/t14.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %c = trunc i32 undef to i1
+  %a1 = add i32 undef, undef
+  %a2 = add i32 undef, undef
+  %a3 = add i32 undef, undef
+  %a4 = add i32 undef, undef
+  br label %loop 
+loop:
+  %_tmp_26 = phi i32 [%_tmp_26, %bb2],[undef, %entry]
+  %_tmp_11 = phi i32 [%_tmp_11, %bb2],[undef, %entry]
+  br i1 %c, label %bb1, label %bb2
+bb1:
+  %0 = add i32 %a1, %a3
+  %1 = add i32 %a2, %a4
+  br label %end 
+bb2:
+  %2 = add i32 %a1, %a3
+  %3 = add i32 %a2, %a4
+  br i1 -1, label %end, label %loop
+end:
+  %4 = phi i32 [%0, %bb1],[%2, %bb2]
+  %5 = phi i32 [%1, %bb1],[%3, %bb2]
+  %6 = add i32 %4, %5
+  ret i32 %6
+}
+
+real	0m0.039s
+user	0m0.018s
+sys	0m0.014s
+./testcases/t15.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_14 = phi i32 [undef, %entry]
+  %_tmp_5 = phi i32 [undef, %entry]
+  %0 = add i32 undef, %_tmp_5
+  br label %end 
+end:
+  ret i32 %0
+}
+
+real	0m0.038s
+user	0m0.008s
+sys	0m0.009s
+./testcases/t16.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     void @foo () nounwind{
+entry:
+  ret void
+}
+define     i32 @main () nounwind{
+entry:
+  br i1 -1, label %bb1, label %bb2
+bb1:
+  %_tmp_8 = phi i32 [0, %entry]
+  call   void ()* @foo () 
+  br label %end 
+bb2:
+  %_tmp_5 = phi i32 [0, %entry]
+  br label %end 
+end:
+  %_tmp_2 = phi i32 [%_tmp_5, %bb2],[%_tmp_8, %bb1]
+  ret i32 %_tmp_2
+}
+
+real	0m0.039s
+user	0m0.023s
+sys	0m0.015s
+./testcases/t17.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %0 = add i32 undef, undef
+  br i1 -1, label %bb1, label %bb2
+bb1:
+  %_tmp_56 = phi i32 [undef, %entry]
+  %_tmp_26 = phi i32 [undef, %entry]
+  %1 = add i32 undef, undef
+  br label %merge1 
+bb2:
+  %_tmp_53 = phi i32 [undef, %entry]
+  %_tmp_23 = phi i32 [undef, %entry]
+  %2 = add i32 undef, undef
+  br label %merge1 
+merge1:
+  %_tmp_50 = phi i32 [%_tmp_53, %bb2],[%_tmp_56, %bb1]
+  %_tmp_20 = phi i32 [%_tmp_23, %bb2],[%_tmp_26, %bb1]
+  %3 = phi i32 [%1, %bb1],[%2, %bb2]
+  br i1 -1, label %bb3, label %bb4
+bb3:
+  %4 = add i32 undef, undef
+  br label %merge2 
+bb4:
+  %5 = add i32 undef, undef
+  br label %merge2 
+merge2:
+  %6 = phi i32 [%4, %bb3],[%5, %bb4]
+  br i1 -1, label %bb5, label %bb6
+bb5:
+  %7 = add i32 undef, undef
+  br label %end 
+bb6:
+  %8 = add i32 undef, undef
+  br label %end 
+end:
+  %9 = phi i32 [%7, %bb5],[%8, %bb6]
+  ret i32 %9
+}
+
+real	0m0.040s
+user	0m0.010s
+sys	0m0.008s
+./testcases/t18.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %0 = load i32* @g
+  br i1 -1, label %bb1, label %bb2
+bb1:
+  store i32 0, i32* @g
+  br label %bb2 
+bb2:
+  br i1 -1, label %bb3, label %end
+bb3:
+  %1 = load i32* @g
+  br label %end 
+end:
+  %2 = phi i32 [%1, %bb3],[undef, %bb2]
+  ret i32 %2
+}
+@g =  global i32 16
+
+real	0m0.043s
+user	0m0.024s
+sys	0m0.011s
+./testcases/t19.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+%struct.tree = type { i32,double,double,%struct.tree*,%struct.tree*,%struct.tree*,%struct.tree* }
+define     i32 @tsp (%struct.tree*  %t,i32  %sz,i32  %nproc) nounwind{
+entry:
+  %t2 = sdiv i32 %nproc, 2
+  br label %end 
+end:
+  ret i32 0
+}
+define     i32 @main () nounwind{
+entry:
+  ret i32 0
+}
+
+real	0m0.042s
+user	0m0.008s
+sys	0m0.010s
+./testcases/t1.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %0 = add i32 4, 5
+  br label %bb 
+bb:
+  br label %end 
+end:
+  ret i32 %0
+}
+
+real	0m0.042s
+user	0m0.026s
+sys	0m0.013s
+./testcases/t20.ll: target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32"
+%struct.tree = type { i32,double,double,%struct.tree*,%struct.tree*,%struct.tree*,%struct.tree* }
+define internal    %struct.tree* @makelist (%struct.tree*  %t) nounwind{
+entry:
+  br i1 -1, label %bb4, label %end
+bb4:
+  %_tmp_14 = phi %struct.tree* [undef, %entry]
+  %_tmp_5 = phi %struct.tree* [undef, %entry]
+  br label %end 
+end:
+  %_tmp_11 = phi %struct.tree* [%_tmp_14, %bb4],[undef, %entry]
+  %_tmp_2 = phi %struct.tree* [%_tmp_14, %bb4],[undef, %entry]
+  ret %struct.tree* null
+}
+define     i32 @main () nounwind{
+entry:
+  ret i32 0
+}
+
+real	0m0.041s
+user	0m0.009s
+sys	0m0.010s
+./testcases/t21.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @onintr () nounwind{
+entry:
+  %retval = alloca i32, i32 1
+  unreachable
+return:
+  %retval1 = load i32* %retval
+  ret i32 %retval1
+}
+define     i32 @main () nounwind{
+entry:
+  ret i32 0
+}
+
+real	0m0.041s
+user	0m0.021s
+sys	0m0.014s
+./testcases/t2.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %0 = add i32 undef, undef
+  br label %bb 
+bb:
+  %_tmp_14 = phi i32 [undef, %entry]
+  %_tmp_5 = phi i32 [undef, %entry]
+  %1 = add i32 undef, undef
+  %2 = add i32 %0, %1
+  br label %end 
+end:
+  ret i32 %2
+}
+
+real	0m0.041s
+user	0m0.018s
+sys	0m0.016s
+./testcases/t3.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_5 = phi i32 [undef, %entry]
+  %0 = add i32 undef, %_tmp_5
+  br label %end 
+end:
+  ret i32 %0
+}
+
+real	0m0.043s
+user	0m0.006s
+sys	0m0.007s
+./testcases/t4.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  %c = trunc i32 undef to i1
+  %a1 = add i32 undef, undef
+  %a2 = add i32 undef, undef
+  %a3 = add i32 undef, undef
+  %a4 = add i32 undef, undef
+  br i1 %c, label %bb1, label %bb2
+bb1:
+  %_tmp_20 = phi i32 [undef, %entry]
+  %_tmp_8 = phi i32 [undef, %entry]
+  %0 = add i32 %a1, %a3
+  %1 = add i32 %a2, %a4
+  br label %end 
+bb2:
+  %_tmp_17 = phi i32 [undef, %entry]
+  %_tmp_5 = phi i32 [undef, %entry]
+  %2 = add i32 %a1, %a3
+  %3 = add i32 %a2, %a4
+  br label %end 
+end:
+  %_tmp_14 = phi i32 [%_tmp_17, %bb2],[%_tmp_20, %bb1]
+  %_tmp_2 = phi i32 [%_tmp_5, %bb2],[%_tmp_8, %bb1]
+  %4 = phi i32 [%0, %bb1],[%2, %bb2]
+  %5 = phi i32 [%1, %bb1],[%3, %bb2]
+  %6 = add i32 %4, %5
+  ret i32 %6
+}
+
+real	0m0.040s
+user	0m0.018s
+sys	0m0.021s
+./testcases/t5.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_14 = phi i32 [0, %entry]
+  %_tmp_5 = phi i32 [undef, %entry]
+  %0 = add i32 undef, %_tmp_5
+  br label %end 
+end:
+  ret i32 %0
+}
+
+real	0m0.043s
+user	0m0.011s
+sys	0m0.021s
+./testcases/t6.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br i1 -1, label %bb1, label %bb2
+bb1:
+  %_tmp_8 = phi i32 [undef, %entry]
+  %0 = add i32 undef, undef
+  br label %end 
+bb2:
+  %_tmp_5 = phi i32 [undef, %entry]
+  %1 = add i32 undef, undef
+  br label %end 
+end:
+  %_tmp_2 = phi i32 [%_tmp_5, %bb2],[%_tmp_8, %bb1]
+  %2 = phi i32 [%0, %bb1],[%1, %bb2]
+  ret i32 %2
+}
+
+real	0m0.039s
+user	0m0.015s
+sys	0m0.017s
+./testcases/t7.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br i1 -1, label %bb1, label %bb2
+bb1:
+  %_tmp_8 = phi i32 [undef, %entry]
+  br label %end 
+bb2:
+  %_tmp_5 = phi i32 [undef, %entry]
+  br label %end 
+end:
+  %_tmp_2 = phi i32 [%_tmp_5, %bb2],[%_tmp_8, %bb1]
+  %0 = phi i32 [%_tmp_8, %bb1],[1, %bb2]
+  %1 = add i32 %_tmp_2, %0
+  ret i32 %1
+}
+
+real	0m0.040s
+user	0m0.019s
+sys	0m0.017s
+./testcases/t8.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_5 = phi i32 [0, %entry]
+  br label %end 
+end:
+  ret i32 %_tmp_5
+}
+
+real	0m0.039s
+user	0m0.020s
+sys	0m0.014s
+./testcases/t9.ll: target datalayout = "E-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64"
+define     i32 @main () nounwind{
+entry:
+  br label %bb 
+bb:
+  %_tmp_14 = phi i32 [0, %entry]
+  %_tmp_5 = phi i32 [0, %entry]
+  br label %end 
+end:
+  ret i32 %_tmp_5
+}
+
+real	0m0.039s
+user	0m0.021s
+sys	0m0.012s
+bh: Coq M2R
+
+real	0m25.150s
+user	0m24.172s
+sys	0m0.053s
+LLVM ld1
+/tmp/ccHBylv0.o: In function `getparam':
+bha.exe.bc:(.text+0x28e7): warning: the `gets' function is dangerous and should not be used.
+
+real	0m2.634s
+user	0m2.009s
+sys	0m0.060s
+Coq M2R no phielim
+
+real	0m18.590s
+user	0m6.144s
+sys	0m0.043s
+LLVM ld2
+/tmp/ccNlFIze.o: In function `getparam':
+bhc.exe.bc:(.text+0x2d09): warning: the `gets' function is dangerous and should not be used.
+
+real	0m3.904s
+user	0m3.530s
+sys	0m0.120s
+LLVM ld3
+/tmp/cccf8TWI.o: In function `getparam':
+bhb.exe.bc:(.text+0x3aaf): warning: the `gets' function is dangerous and should not be used.
+
+real	0m2.500s
+user	0m2.240s
+sys	0m0.064s
+bisort: Coq M2R
+
+real	0m0.143s
+user	0m0.100s
+sys	0m0.009s
+LLVM ld1
+
+real	0m0.493s
+user	0m0.244s
+sys	0m0.055s
+Coq M2R no phielim
+
+real	0m0.140s
+user	0m0.116s
+sys	0m0.017s
+LLVM ld2
+
+real	0m0.548s
+user	0m0.442s
+sys	0m0.057s
+LLVM ld3
+
+real	0m0.543s
+user	0m0.477s
+sys	0m0.060s
+em3d: Coq M2R
+
+real	0m0.105s
+user	0m0.094s
+sys	0m0.011s
+LLVM ld1
+
+real	0m0.509s
+user	0m0.408s
+sys	0m0.057s
+Coq M2R no phielim
+
+real	0m0.108s
+user	0m0.090s
+sys	0m0.016s
+LLVM ld2
+
+real	0m0.556s
+user	0m0.449s
+sys	0m0.062s
+LLVM ld3
+
+real	0m0.534s
+user	0m0.430s
+sys	0m0.046s
+health: Coq M2R
+
+real	0m0.186s
+user	0m0.168s
+sys	0m0.018s
+LLVM ld1
+
+real	0m0.622s
+user	0m0.219s
+sys	0m0.037s
+Coq M2R no phielim
+
+real	0m0.186s
+user	0m0.166s
+sys	0m0.019s
+LLVM ld2
+
+real	0m0.757s
+user	0m0.600s
+sys	0m0.058s
+LLVM ld3
+
+real	0m0.674s
+user	0m0.598s
+sys	0m0.061s
+mst: Coq M2R
+
+real	0m0.211s
+user	0m0.179s
+sys	0m0.012s
+LLVM ld1
+
+real	0m0.587s
+user	0m0.409s
+sys	0m0.052s
+Coq M2R no phielim
+
+real	0m0.202s
+user	0m0.171s
+sys	0m0.018s
+LLVM ld2
+
+real	0m0.624s
+user	0m0.459s
+sys	0m0.061s
+LLVM ld3
+
+real	0m0.563s
+user	0m0.450s
+sys	0m0.046s
+perimeter: Coq M2R
+
+real	0m0.479s
+user	0m0.410s
+sys	0m0.016s
+LLVM ld1
+
+real	0m0.666s
+user	0m0.574s
+sys	0m0.077s
+Coq M2R no phielim
+
+real	0m0.373s
+user	0m0.342s
+sys	0m0.023s
+LLVM ld2
+
+real	0m0.698s
+user	0m0.579s
+sys	0m0.047s
+LLVM ld3
+
+real	0m0.633s
+user	0m0.496s
+sys	0m0.043s
+power: Coq M2R
+
+real	0m0.408s
+user	0m0.304s
+sys	0m0.025s
+LLVM ld1
+
+real	0m1.368s
+user	0m1.088s
+sys	0m0.041s
+Coq M2R no phielim
+
+real	0m0.379s
+user	0m0.352s
+sys	0m0.023s
+LLVM ld2
+
+real	0m1.212s
+user	0m0.797s
+sys	0m0.051s
+LLVM ld3
+
+real	0m0.978s
+user	0m0.910s
+sys	0m0.045s
+treeadd: Coq M2R
+
+real	0m0.032s
+user	0m0.026s
+sys	0m0.006s
+LLVM ld1
+
+real	0m0.192s
+user	0m0.115s
+sys	0m0.031s
+Coq M2R no phielim
+
+real	0m0.031s
+user	0m0.027s
+sys	0m0.003s
+LLVM ld2
+
+real	0m0.196s
+user	0m0.089s
+sys	0m0.033s
+LLVM ld3
+
+real	0m0.208s
+user	0m0.139s
+sys	0m0.044s
+tsp: Coq M2R
+
+real	0m1.718s
+user	0m0.567s
+sys	0m0.006s
+LLVM ld1
+
+real	0m0.727s
+user	0m0.612s
+sys	0m0.052s
+Coq M2R no phielim
+
+real	0m2.078s
+user	0m2.006s
+sys	0m0.047s
+LLVM ld2
+
+real	0m1.023s
+user	0m0.905s
+sys	0m0.044s
+LLVM ld3
+
+real	0m0.811s
+user	0m0.332s
+sys	0m0.049s
+bh b: 
+real	0m19.079s
+user	0m6.330s
+sys	0m0.002s
+bh a: 
+real	0m12.289s
+user	0m11.928s
+sys	0m0.005s
+bh c: 
+real	0m12.333s
+user	0m4.108s
+sys	0m0.001s
+bisort b: 
+real	0m31.776s
+user	0m30.952s
+sys	0m0.145s
+bisort a: 
+real	0m21.748s
+user	0m7.203s
+sys	0m0.040s
+bisort c: 
+real	0m22.187s
+user	0m7.356s
+sys	0m0.040s
+em3d b: 
+real	1m4.423s
+user	0m21.254s
+sys	0m0.209s
+em3d a: 
+real	0m26.708s
+user	0m8.726s
+sys	0m0.175s
+em3d c: 
+real	0m27.245s
+user	0m26.089s
+sys	0m0.567s
+health b: 
+real	0m24.781s
+user	0m8.291s
+sys	0m0.115s
+health a: 
+real	0m17.342s
+user	0m5.709s
+sys	0m0.069s
+health c: 
+real	0m17.585s
+user	0m16.867s
+sys	0m0.290s
+mst b: 
+real	0m7.455s
+user	0m6.782s
+sys	0m0.530s
+mst a: 
+real	0m5.145s
+user	0m4.518s
+sys	0m0.521s
+mst c: 
+real	0m5.749s
+user	0m4.981s
+sys	0m0.572s
+perimeter b: 
+real	1m26.182s
+user	1m24.575s
+sys	0m0.020s
+perimeter a: 
+real	0m58.054s
+user	0m56.832s
+sys	0m0.019s
+perimeter c: 
+real	0m56.933s
+user	0m55.375s
+sys	0m0.026s
+power b: 
+real	0m1.853s
+user	0m0.616s
+sys	0m0.001s
+power a: 
+real	0m1.885s
+user	0m1.871s
+sys	0m0.005s
+power c: 
+real	0m1.903s
+user	0m1.877s
+sys	0m0.002s
+treeadd b: 
+real	0m8.935s
+user	0m8.143s
+sys	0m0.520s
+treeadd a: 
+real	0m6.249s
+user	0m5.567s
+sys	0m0.488s
+treeadd c: 
+real	0m6.164s
+user	0m5.589s
+sys	0m0.464s
+tsp b: 
+real	0m11.618s
+user	0m11.217s
+sys	0m0.152s
+tsp a: 
+real	0m9.648s
+user	0m9.229s
+sys	0m0.179s
+tsp c: 
+real	0m9.708s
+user	0m9.007s
+sys	0m0.112s
+129.compress: Coq M2R
+
+real	0m0.781s
+user	0m0.746s
+sys	0m0.024s
+LLVM ld1
+
+real	0m1.215s
+user	0m0.530s
+sys	0m0.071s
+Coq M2R no phielim
+
+real	0m0.734s
+user	0m0.230s
+sys	0m0.015s
+LLVM ld2
+
+real	0m1.453s
+user	0m1.203s
+sys	0m0.056s
+LLVM ld3
+
+real	0m1.194s
+user	0m1.095s
+sys	0m0.081s
+099.go: Coq M2R
+
+real	9m26.319s
+user	9m12.820s
+sys	0m0.438s
+LLVM ld1
+
+real	0m34.139s
+user	0m33.192s
+sys	0m0.170s
+Coq M2R no phielim
+
+real	7m23.018s
+user	2m26.849s
+sys	0m0.663s
+LLVM ld2
+
+real	0m57.223s
+user	0m52.556s
+sys	0m0.333s
+LLVM ld3
+
+real	0m32.173s
+user	0m12.599s
+sys	0m0.110s
+130.li: Coq M2R
+
+real	0m10.748s
+user	0m3.535s
+sys	0m0.039s
+LLVM ld1
+
+real	0m9.614s
+user	0m8.929s
+sys	0m0.069s
+Coq M2R no phielim
+
+real	0m9.437s
+user	0m8.977s
+sys	0m0.243s
+LLVM ld2
+
+real	0m12.035s
+user	0m11.458s
+sys	0m0.119s
+LLVM ld3
+
+real	0m10.027s
+user	0m9.623s
+sys	0m0.095s
+132.ijpeg: Coq M2R
+
+real	1m15.686s
+user	1m13.821s
+sys	0m0.191s
+LLVM ld1
+
+real	0m20.362s
+user	0m19.680s
+sys	0m0.116s
+Coq M2R no phielim
+
+real	1m6.570s
+user	1m4.428s
+sys	0m0.696s
+LLVM ld2
+
+real	0m27.059s
+user	0m26.353s
+sys	0m0.176s
+LLVM ld3
+
+real	0m20.151s
+user	0m8.106s
+sys	0m0.096s
+099.go b: 
+real	0m17.658s
+user	0m17.248s
+sys	0m0.006s
+099.go a: 
+real	0m12.023s
+user	0m11.740s
+sys	0m0.005s
+099.go c: 
+real	0m12.363s
+user	0m12.078s
+sys	0m0.003s
+129.compress b: 
+real	1m19.559s
+user	1m17.427s
+sys	0m0.113s
+129.compress a: 
+real	0m51.246s
+user	0m49.680s
+sys	0m0.093s
+129.compress c: 
+real	0m53.651s
+user	0m51.931s
+sys	0m0.101s
+132.ijpeg b: 
+real	0m44.477s
+user	0m42.664s
+sys	0m0.564s
+132.ijpeg a: 
+real	0m23.898s
+user	0m22.920s
+sys	0m0.308s
+132.ijpeg c: 
+real	0m25.328s
+user	0m24.259s
+sys	0m0.322s

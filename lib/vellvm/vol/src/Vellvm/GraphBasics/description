@@ -1,0 +1,15 @@
+Name : GraphBasics
+Title : a Coq toolkit for graph theory
+Author : Jean Duprat
+Institution : LIP, Ecole Normale Supérieure de Lyon
+Date : April 2001
+Description :  This library offers inductive definitions of basics
+in graph theory. The goal is to offer the possibility to write proofs
+and programs on graphs in the same formalism : the Coq language.
+It now contains : vertices, arcs, edges, degrees, graphs, directed
+graphs,
+paths, acyclic graphs, connected graphs and tree.
+Keywords : graph theory, Curry-Howard's isomorphism, inductive
+definitions
+Require :
+Category: Mathematics/Combinatorics and Graph Theory

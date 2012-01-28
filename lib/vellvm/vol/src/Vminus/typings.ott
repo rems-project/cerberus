@@ -1,0 +1,451 @@
+
+% Static Semantics of Static Single Assignment(SSA)
+
+embed
+{{coq
+
+Require Import Metatheory.
+Require Import syntax.
+Require Import infrastructure.
+Require Import ListSet.
+Require Import analysis.
+
+Module VMtypings.
+Import VMsyntax.
+Import VMinfra.
+
+}}
+
+grammar
+
+formula :: 'formula_' ::=
+  | judgement			::   :: judgement
+  | formula1 ... formulan     	::   :: dots
+  | True     	 		:: M :: true
+    				{{ tex True }}
+				{{ coq [[True]] }}
+  | False     	 		:: M :: false
+    				{{ tex False }}
+				{{ coq [[False]] }}
+  | not formula                 :: M :: not
+      				{{ tex \neg [[formula]] }}
+				{{ coq (not ([[formula]])) }}
+  | notT formula                :: M :: notT
+      				{{ tex \neg [[formula]] }}
+				{{ coq (notT ([[formula]])) }}
+  | ( formula )                 :: M :: brackets
+      	      			{{ tex ([[formula]]\!) }} 
+      				{{ coq ([[ formula ]]) }}
+  | exists u . formula          ::   :: exists 
+      	       			{{ tex \exists [[u]]. [[formula]] }}
+      				{{ coq ( exists [[ u ]] , [[ formula ]] ) }}
+  | formula /\ formula'         :: M :: and
+               			{{ tex [[formula]] \wedge [[formula']] }}
+	  			{{ coq [[formula]] /\ [[ formula' ]] }}
+  | foreach C . formula         :: M :: forall 
+              			{{ tex \forall [[C]]. [[ formula ]] }}
+	  			{{ coq ( forall [[C]], [[ formula ]] ) }}
+  | formula implies formula'    :: M :: implies
+            	    		{{ tex [[formula]] \mathit{implies} [[formula']] }}
+	  			{{ coq ([[formula]] -> [[ formula' ]]) }}
+  | formula iff formula'        :: M :: iff
+            	    		{{ tex [[formula]] \mathit{iff} [[formula']] }}
+	  			{{ coq ([[formula]] <-> [[ formula' ]]) }}
+  | formula \/ formula'         :: M :: or
+               			{{ tex [[formula]] \vee [[formula']] }}
+	  			{{ coq [[formula]] \/ [[ formula' ]] }} 
+  |  [multiline] formula        :: M :: multiline
+                                {{ com allow \LaTeX{} output in multiple lines }}
+                                {{ coq [[formula]] }}
+                                {{ tex \begin{array}{l}[[formula]]\end{array} }}
+  |  [newline] formula          :: M :: formula_n
+                                {{ com add a newline to the \LaTeX{} output }}
+                                {{ coq [[formula]] }} {{ tex \\[[formula]] }}
+  |  [tab] formula              :: M :: formula_t
+                                {{ com add a tab to the \LaTeX{} output }}
+                                {{ coq [[formula]] }} {{ tex \qquad[[formula]] }}
+  | if formula0 then formula1 else formula2 endif
+       	       	    	    	:: M :: ifthenelse
+				{{ tex if [[formula0]] then [[formula1]] else [[formula2]] }}
+				{{ coq ([[formula0]] -> [[formula1]]) /\ ((~[[formula0]]) -> [[formula2]]) }}
+  | formula ; formula'		:: M :: seq
+    	      			{{ tex [[formula]] ; [[formula']] }}
+				{{ coq [[formula]] -> [[formula']] }}
+  | block1 = block2 		::   :: eqBlock
+				{{ tex [[block1]] = [[block2]] }}
+				{{ coq [[block1]] = [[block2]] }}
+  | int1			::   :: intone
+       	 			{{ coq [[typ_int Size.One]] }} 
+  | INT1 = INT2 		::   :: eqINT
+				{{ tex [[INT1]] = [[INT2]] }}
+				{{ coq [[INT1]] = [[INT2]] }}
+  | l1 = l2 			::   :: eqLabel
+				{{ tex [[l1]] = [[l2]] }}
+				{{ coq [[l1]] = [[l2]] }}
+  | id1 == id2			::   :: eqID
+				{{ tex [[id1]] = [[id2]] }}
+				{{ coq [[id1]] = [[id2]] }}
+  | ls1 == ls2                  ::   :: eqLabels
+				{{ tex [[ls1]] = [[ls2]] }}       
+                                {{ coq lset_eq [[ls1]] [[ls2]] }}
+  | l notin ls			::   :: l_notin_ls
+      	    			{{ tex [[l]] \not\in [[ls]] }}
+				{{ coq ( ~ set_In [[l]] [[ls]]) }}
+  | l in ls			::   :: l_in_ls
+      	    			{{ tex [[l]] \in [[ls]] }}
+				{{ coq ( set_In [[l]] [[ls]]) }}
+  | id in ids			::   :: id_in_ids
+      	    			{{ tex [[id]] \in [[ids]] }}
+				{{ coq ( set_In [[id]] [[ids]]) }}
+  | block in blocks		::   :: block_in_blocks
+    	       			{{ tex [[block]] \in [[blocks]] }}
+				{{ coq In [[block]] [[blocks]] }}
+  | block in fdef               ::   :: blockInFdef
+                                {{ coq blockInFdefB [[block]] [[fdef]] = true }}
+  | insn in insns		::   :: insn_in_insns
+    	       			{{ tex [[insn]] \in [[insns]] }}
+				{{ coq In [[insn]] [[insns]] }}
+  | arg in args			::   :: arg_in_args
+    	       			{{ tex [[arg]] \in [[args]] }}
+				{{ coq In [[arg]] [[args]] }}
+  | insn = insn'  		:: M :: insn_alias
+    	     			{{ com insn alias }} 
+				{{ coq [[insn]] = [[insn']] }}
+  | opt_id <-> opt_id' 		:: M :: opt_id_alias
+    	     			{{ com opt_id alias }} 
+				{{ coq [[opt_id]] = [[opt_id']] }}
+  | length </ constj // j /> = sz :: M :: length_of_consts_is_sz
+                                {{ coq length (unmake_list_const [[ </ constj // j /> ]]) = Size.to_nat[[sz]] }}
+  | ids <-> </ idj // j /> 	:: M :: ids_alias
+    	      	   	        {{ com ids alias }}
+				{{ coq [[ids]] = unmake_list_id [[ </ idj // j /> ]] }}
+  | ls <-> </ lj // j /> 	:: M :: ls_alias
+    	      	   	        {{ com ls alias }}
+				{{ coq [[ls]] = (unmake_list_l [[ </ lj // j /> ]] }}
+  | args <-> </ argj // j /> :: M :: args_alias
+    	      	   	        {{ com args alias }}
+				{{ coq [[args]] = [[ </ argj // j /> ]] }}
+  | insns <-> </ insnj // j /> :: M :: insns_alias
+    	      	   	        {{ com insns alias }}
+				{{ coq [[insns]] = [[ </ insnj // j /> ]] }}
+  | phinodes <-> </ phinodej // j /> :: M :: phis_alias
+    	      	   	        {{ com phinodes alias }}
+				{{ coq [[phinodes]] = [[ </ phinodej // j /> ]] }}
+  | blocks <-> </ blockj // j /> :: M :: blocks_alias
+    	      	   	        {{ com blocks alias }}
+				{{ coq [[blocks]] = [[ </ blockj // j /> ]] }}
+  | insn =id= insn'        :: M :: getInsnID_eq
+    	      	      	      	{{ tex [[insn]] =id= [[insn']] }}
+				{{ coq getInsnID [[insn]] = getInsnID [[insn']] }}
+  | insnsRemovesLast insns = insns'
+    		     	        ::   :: insnsRemovesLast
+    		     		{{ coq 
+                                    removelast [[insns]] = [[insns']]
+                                }}
+  | blockDominates fdef block1 block2 
+    		       	        ::   :: blockDominates
+				{{ coq blockDominates [[fdef]] [[block1]] [[block2]] }} 			
+  | blockStrictDominates fdef block1 block2 
+    		       	        ::   :: blockStrictDominates
+				{{ coq blockStrictDominates [[fdef]] [[block1]] [[block2]] }} 			
+  | insnDominates id1 insn2 block
+    		       	        ::   :: insnDominates
+				{{ coq insnDominates [[id1]] [[insn2]] [[block]] }} 			
+  | genBlockUseDef_fdef fdef = usedef_block	::   :: genBlockUseDefFdef
+    		  		{{ coq genBlockUseDef_fdef [[fdef]] = [[usedef_block]] }}
+  | genBlockUseDef module = usedef_block	::   :: genBlockUseDef
+    		  		{{ coq genBlockUseDef [[module]] = [[usedef_block]] }}
+  | getIdUseDef usedef_id id = ids		::   :: getInsnUseDef
+    		  		{{ coq getIdUseDef [[usedef_id]] [[id]] = [[ids]] }}
+  | getBlockUseDef usedef_block	block = blocks      ::   :: getBlockUseDef
+    		  		{{ coq getBlockUseDef [[usedef_block]] [[block]] = [[blocks]] }}
+  | isReachableFromEntry fdef block  ::   :: isReachableFromEntry
+                                {{ coq isReachableFromEntry [[fdef]] [[block]] }}
+  | getInsnID insn = id		       ::   :: getInsnID
+    	      	     		{{ coq getInsnID [[insn]] = [[id]] }}
+  | getValueID value = opt_id	::   :: getValueID
+    	      	     		{{ coq getValueID [[value]] = [[opt_id]] }}
+  | getEntryBlock fdef = opt_block	        :: :: getEntryBlock
+    	      	     		{{ coq getEntryBlock [[fdef]] = [[opt_block]] }}
+  | predOfBlock block usedef_block = ls :: :: prefOfBlock
+                                {{ coq predOfBlock [[block]] [[usedef_block]] = [[ls]] }}
+  | getLabelsFromBlocks blocks = ls         :: :: getLabelsFromBlocks
+                                {{ coq getLabelsFromBlocks [[blocks]] = [[ls]] }}
+  | checkIdenticalIncomingValues phinode           :: :: checkIdenticalIncomingValues
+                                {{ coq checkIdenticalIncomingValues [[phinode]] }}
+  | CallSite.getCalledFunction insn system = opt_fdef :: :: CallSiteGetCalledFunction
+                                {{ coq CallSite.getCalledFunction [[insn]] [[system]] = [[opt_fdef]] }}
+  | CallSite.arg_size fdef = INT :: :: CallSiteArgSize
+                                {{ coq CallSite.arg_size [[fdef]] = [[INT]] }}
+  | getInsnOperands insn = ids :: :: getInsnOperands
+                                {{ coq getInsnOperands [[insn]] = [[ids]] }}
+  | getInsnLabels insn = ls :: :: getInsnLabels
+                                {{ coq getInsnLabels [[insn]] = [[ls]] }}
+  | lookupBlockViaLabelFromFdef fdef l = opt_block :: :: lookupBlockViaLabelFromFdef
+                                {{ coq lookupBlockViaLabelFromFdef [[fdef]] [[l]] = [[opt_block]] }}
+  | isPhiNode insn :: :: isPhiNode
+                                {{ coq isPhiNode [[insn]] }}
+  | insn in fdef , block :: :: insnInFdef
+    	    	     		{{ coq insnInFdefBlockB [[insn]] [[fdef]] [[block]] = true }}
+  | insn in system , module , fdef , block :: :: insnInSystem
+    	    	     		{{ coq insnInSystemModuleFdefBlockB [[insn]] [[system]] [[module]] [[fdef]] [[block]] = true }}
+  | lookupBlockViaIDFromFdef fdef id = opt_block :: :: lookupBlockViaIDFromFdef
+                                {{ coq lookupBlockViaIDFromFdef [[fdef]] [[id]] = [[opt_block]] }}
+  | getLabelViaIDFromPhiNode phinode id = opt_l :: :: getLabelViaIDFromPhiNode
+                                {{ coq getLabelViaIDFromPhiNode [[phinode]] [[id]] = [[opt_l]] }}
+%  | lookupBindingViaIDFromFdef fdef id = id_binding :: :: lookupBindingViaIDFromFdef
+%                                {{ coq lookupBindingViaIDFromFdef [[fdef]] [[id]] = [[id_binding]] }}  
+%  | lookupBindingViaIDFromSystem system id = id_binding :: :: lookupBindingViaIDFromSystem
+%                                {{ coq lookupBindingViaIDFromSystem [[system]] [[id]] = [[id_binding]] }}
+  | getFdecID fdec = id             :: :: getFdecID
+    	      	     		{{ coq getFdecID [[fdec]] = [[id]] }}
+  | argInFdef arg fdef           :: :: argInFdef
+                                {{ coq argInFdefB [[arg]] [[fdef]] = true }}
+  | floating_point1 < floating_point2  :: :: floating_point_order
+    			        {{ coq floating_point_order [[floating_point1]] [[floating_point2]] = true }}
+  | getLabelViaIDPhiNode insn id = opt_l :: :: getLabelViaIDPhiNode
+                                {{ coq getLabelViaIDPhiNode [[insn]] [[id]] = [[opt_l]] }}
+  | getCalledValue insn = opt_value    :: :: getCalledValue
+                                {{ coq getCalledValue [[insn]] = [[opt_value]] }}
+  | getCalledValueID insn = opt_id    :: :: getCalledValueID
+                                {{ coq getCalledValueID [[insn]] = [[opt_id]] }}
+  | getPhiNodeOperands phinode = ids :: :: getPhiNodeOperands
+                                {{ coq getPhiNodeOperands [[phinode]] = [[ids]] }}
+  | getLabelsFromPhiNode phinode = ls :: :: getLabelsFromPhiNode
+                                {{ coq getLabelsFromPhiNode [[phinode]] = [[ls]] }}
+  | isBindingFdec id_binding = fdec  :: :: isBindingFdec
+    		     	        {{ coq isBindingFdec [[id_binding]] = Some [[fdec]] }}
+  | isBindingInsn id_binding = insn   :: :: isBindingInsn
+    		     	        {{ coq isBindingInsn [[id_binding]] = Some [[insn]] }}
+  | v in sv                           ::   :: vinsv
+  | ( gl , lc ) ( value ) = opt_sv    ::   :: value2sv
+  | ( module , ft ) ( v ) = opt_fdef  ::   :: lookupfdef
+  | ( gl , lc ) ( params ) = opt_svs  ::   :: params2svs
+  | init_locals gl lc fdef = lc'      ::   :: initlocals
+  | lookupIDFromFdef fdef id          ::   :: lookupIDFromFdef
+                                {{ coq lookupIDFromFdef [[fdef]] [[id]] = Some tt }}
+  | uniqFdef fdef                     ::   :: uniqFdef
+                                {{ coq uniqFdef [[fdef]] }}
+
+parsing
+formula_true left formula_not
+formula_false left formula_not
+formula_and left formula_and
+formula_or left formula_or
+formula_not left formula_or
+formula_not left formula_and
+formula_or left formula_seq
+formula_seq left formula_seq
+formula_or left formula_ifthenelse
+formula_ifthenelse left formula_seq
+formula_and left formula_and
+formula_multiline <= formula_and
+formula_multiline <= formula_or
+
+defns
+Jwf_value :: '' ::=
+      defn
+      fdef |- value :: :: wf_value :: ''
+      {{ com [[value]] wrt [fdef] }} by
+
+      ----------------------------------------- :: wf_value_const
+      fdef |- const
+
+      lookupIDFromFdef fdef id
+      ----------------------------------------- :: wf_value_id
+      fdef |- id
+
+defns
+Jwf_operand :: '' ::=
+      defn
+      fdef , block , insn |- id' :: :: wf_operand :: ''
+      {{ com [[id']] is well-formed w.r.t [[insn]] [[block]] in [[fdef]] }} by
+
+      insn in fdef , block
+      getInsnOperands insn = ids
+      id' in ids
+      lookupBlockViaIDFromFdef fdef id' = block'
+      notT isPhiNode insn
+<<
+        (
+         insnDominates id' insn block \/ 
+         blockStrictDominates fdef block' block \/ 
+         (not (isReachableFromEntry fdef block))
+        )
+>>
+      ----------------------------------------- :: wf_operand_intro
+      fdef , block , insn |- id'
+
+defns
+Jwf_insn_base :: '' ::=
+      defn
+      fdef , block |-i insn :: :: wf_insn_base :: '' 
+      {{ com [[insn]] is well-formed w.r.t [[block]] in [[fdef]] }} by  
+      % Verifier::visitInstruction
+
+      % Instruction must be embedded in basic block!
+      insn in fdef , block
+      % Check that non-phi nodes are not self referential in wf_insn_base::PhiNode
+      %
+      % Verify that if this is a terminator that it is at the end of the block in wf_block
+      %
+      % Check that all uses of the instruction, if they are instructions
+      % themselves, actually have parent basic blocks.  If the use is not an
+      % instruction, it is an error!
+      % We should prove a lemma for this later.
+      %
+      % Check operands
+      getInsnOperands insn = ids
+      ids <-> </ idj // j />
+      </ fdef , block , insn |- idj // j />
+      --------------------------------------------- :: wf_insn_base_intro
+      fdef , block |-i insn
+
+defns
+Jwf_insn :: '' ::=
+      defn
+      fdef , block |- insn :: :: wf_insn :: '' 
+      {{ com [[insn]] is well-formed w.r.t [[block]] in [[fdef]] }} by  
+
+      fdef |- value 
+      % Check invariance for instructions
+      fdef , block |-i id = ret value
+      ---------------------------------------------- :: wf_insn_return
+      fdef , block |- id = ret value
+
+      % Check typs
+      fdef |- value 
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l1 = block1
+      lookupBlockViaLabelFromFdef fdef l2 = block2
+      not (l1 = l2)
+      % Check invariance for instructions
+      fdef , block |-i id = br value l1 l2
+      ----------------------------------------------- :: wf_insn_br
+      fdef , block |- id = br value l1 l2	
+
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l = block
+      % Check invariance for instructions
+      fdef , block |-i id = br l
+      ----------------------------------------------- :: wf_insn_br_uncond
+      fdef , block |- id = br l		
+
+      % Check typs
+      fdef |- value1
+      fdef |- value2
+      % Check that integer arithmetic operators are only used with integral operands.
+      % Integer arithmetic operators only work with integral types 
+      % Typ.isIntOrIntVector typ
+      % Check invariance for instructions
+      fdef , block |-i id = bop value1 value2
+      ---------------------------------------------- :: wf_insn_bop
+      fdef , block |- id = bop value1 value2
+
+      % Check typs
+      fdef |- value1 
+      fdef |- value2 
+      % Check invariance for instructions
+      fdef , block |-i id = icmp cond value1 value2
+      --------------------------------------------- :: wf_insn_icmp
+      fdef , block |- id = icmp cond value1 value2
+
+
+      </ fdef |- valuej // j />
+      % Check invariance for instructions
+      {{ insnInFdefBlockB [[:user_syntax__insn:id = phi </ [ valuej , lj ] // j />]] [[:user_syntax__fdef:fdef]] [[:user_syntax__block:block]] = true }}
+      %
+      {{ wf_phinode [[:user_syntax__fdef:fdef]] [[:user_syntax__block:block]] [[:user_syntax__phinode:id = phi </ [ valuej , lj ] // j />]] }}
+      -------------------------------------------------------------------------------------- :: wf_insn_phi
+      fdef , block |- id = phi </ [ valuej , lj ] // j />
+			        
+defns
+Jwf_cmds :: '' ::=
+      defn
+      fdef , block |-c cmds :: :: wf_cmds :: ''
+      {{ com [[cmds]] is well-formed w.r.t. [[block]] [[fdef]] }} by
+
+      --------------------------------------- :: wf_cmds_nil
+      fdef , block |-c []
+
+      fdef , block |- cmd
+      fdef , block |-c cmds
+      ---------------------------------------- :: wf_cmds_cons
+      fdef , block |-c cmd , cmds
+ 
+defns
+Jwf_phinodes :: '' ::=
+      defn
+      fdef , block |-p phinodes :: :: wf_phinodes :: ''
+      {{ com [[phinodes]] is well-formed w.r.t. [[block]] [[fdef]] }} by
+
+      --------------------------------------- :: wf_phinodes_nil
+      fdef , block |-p []
+
+      fdef , block |- phinode
+      fdef , block |-p phinodes
+      ---------------------------------------- :: wf_phinodes_cons
+      fdef , block |-p phinode , phinodes
+
+defns
+Jwf_block :: '' ::=
+      defn
+      fdef |-b block :: :: wf_block :: '' 
+      {{ com [[block]] is well-formed w.r.t. [[fdef]] }} by
+
+      (l phinodes cmds terminator) in fdef
+      fdef , (l phinodes cmds terminator) |-p phinodes
+      fdef , (l phinodes cmds terminator) |-c cmds
+      fdef , (l phinodes cmds terminator) |- terminator
+      --------------------------------------------------- :: wf_block_intro
+      fdef |-b l phinodes cmds terminator
+
+defns
+Jwf_blocks :: '' ::=
+      defn
+      fdef |- blocks :: :: wf_blocks :: ''
+      {{ com [[blocks]] is well-formed w.r.t. [[fdef]] }} by
+
+      ------------- :: wf_blocks_nil
+      fdef |- []
+
+      fdef |-b block
+      fdef |- blocks
+      ---------------------- :: wf_blocks_cons
+      fdef |- block , blocks
+ 
+
+defns
+Jwf_fdef :: '' ::=
+      defn
+      |-f fdef :: :: wf_fdef :: ''
+      {{ com [[fdef]] is well-formed }} by
+
+      % Check the entry node 
+      % Entry block to function must not have predecessors! 
+      getEntryBlock (fun { blocks }) = block
+      {{ genBlockUseDef_fdef [[:user_syntax__fdef:fun { blocks }]] = [[usedef_block]] }}
+      {{ hasNonePredecessor [[:user_syntax__block:block]] [[usedef_block]] = true }}
+      % Checking function body
+      fun { blocks } |- blocks
+      uniqFdef (fun { blocks })
+      ------------------------------ :: wf_fdef_intro
+      |-f  fun { blocks }
+
+embed
+{{coq
+
+End VMtypings.
+
+}}
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/vol/src/Vellvm/monads" "-I" "~/SVN/sol/vol/src/Vellvm/ott" "-I" "~/SVN/sol/vol/src/Vellvm/compcert" "-I" "~/SVN/sol/theory/metatheory_8.3") ***
+*** End: ***
+*)
+}}
+

@@ -1,0 +1,111 @@
+% -*- mode: LaTeX -*-
+
+\documentclass{article}
+
+\usepackage{times}
+\usepackage{amsmath}
+\usepackage{fullpage}
+%\usepackage{macros}
+
+\usepackage{moreverb}
+\usepackage{color}
+\usepackage{ifthen}
+
+%% for ott
+\usepackage{supertabular}
+
+%% comments
+\newif \ifcomments \commentstrue
+\ifcomments
+\newcommand{\zjz}[1]{\textbf{\color{blue}{[ZJZ: {#1}]}}}
+\newcommand{\todo}[1]{\textbf{TODO: {#1}}}
+\else
+\newcommand{\zjz}[1]{}
+\fi
+
+\newcommand{\myinfer}[3]{\infer[\scriptstyle #1]{\scriptstyle #2}{\scriptstyle #3}}
+
+\newcommand{\mc}[1]{\mbox{\textit{#1}}}
+\newcommand{\ifclause}[3]{\ensuremath{\IF\ #1 \; \THEN\ #2 \; \ELSE\ #3}}
+\newcommand{\tabs}[2]{\ensuremath{\forall #1 . #2}}
+\newcommand{\niceFrame}[1]{\framebox[1.2\width]{#1}}
+\newcommand{\mcase}[3]{\ensuremath{\CASE\; #1 \; #2 \; #3}}
+\newcommand{\fix}[2]{\ensuremath{\FIX\;#1 .\: #2}}
+\newcommand{\tprod}[2]{\ensuremath{{#1} \to {#2}}}
+\newcommand{\tsig}[2]{\ensuremath{\exists {#1}. {#2}}}
+\newcommand{\kprod}[2]{\ensuremath{{#1} \Rightarrow {#2}}}
+\newcommand{\vect}[1]{\overrightarrow{#1}}
+\newcommand{\vtprod}[2]{\ensuremath{{\vect{#1}} \to {#2}}}
+\newcommand{\vkprod}[2]{\ensuremath{{\vect{#1}} \Rightarrow {#2}}}
+\newcommand{\TRY}{\keyfont{try}}
+\newcommand{\WITH}{\keyfont{with}}
+\newcommand{\RAISE}{\keyfont{raise}}
+\newcommand{\eprod}[2]{\ensuremath{\langle {#1}, {#2} \rangle}}
+\newcommand{\ctr}[2]{\ensuremath{{#1}\;{#2}}}
+\newcommand{\branch}[3]{\ensuremath{{\ctr {#1} {#2}} \Rightarrow {#3}}}
+\newcommand{\pattern}[5]{\ensuremath{\CASE\;{#1}\;\WITH\;{#2}\;\OF\{\vect{\branch {#3} {#4} {#5}}\}}}
+\newcommand{\trywith}[2]{\ensuremath{\TRY\;{#1}\;\WITH\;{#2}\;}}
+
+\newcommand{\iseq}[3]{\ensuremath{\mathsf{isEq}(#1, #2, #3)}}
+\newcommand{\isneq}[3]{\ensuremath{\mathsf{isNotEq}(#1, #2, #3)}}
+%%-------------------------------------
+%% new macros
+%%---------------------------------
+\newcommand{\tapp}[2]{\ensuremath{{#1} \;{#2}}}
+\newcommand{\tparr}[3]{\ensuremath{{#1}:{#2}\to {#3}}}
+\newcommand{\erase}[1]{{(#1)}^{o}}
+
+\newcommand{\emptycontext}{\cdot}
+\newcommand{\wfsig}[1]{\vdash #1}
+\newcommand{\wfenv}[2]{#1\vdash #2}
+\newcommand{\wftm}[3]{#1\vdash #2\,:\,#3}
+\newcommand{\wftp}[3]{#1\vdash #2\,::\,#3}
+\newcommand{\Subst}[3]{#3\{#1/#2\}}
+\newcommand{\eequiv}[3]{#1\approxeq #2:#3}
+\newcommand{\tequiv}[2]{#1\equiv_T #2}
+\newcommand{\kequiv}[2]{#1\equiv_K #2}
+\newcommand{\ctxequiv}[2]{#1\equiv_{\Gamma} #2}
+\newcommand{\ectxequiv}[2]{#1\equiv^o_{\Gamma} #2}
+
+\newcommand{\CtrOf}[1]{\ensuremath{\mathsf{CtrOf}(#1)}}
+
+\newcommand{\fixme}[1]{\color{red}\text{#1}}
+\newcommand{\Assumption}[1]{\color{blue}\text{#1}}
+
+\def\avdash{\mathrel|\joinrel\arrow}
+
+%%------------------------------------------
+% environment for lemma case statements
+\newcounter{casec}
+\newcounter{casef}
+\newcounter{casel}
+\newenvironment{cas}{%
+  \providecommand{\nl}{\ifthenelse{\value{casec}=0}{}{\\}\stepcounter{casec}}%
+  \setcounter{casec}{0} \setcounter{casef}{0} \stepcounter{casel}%
+  \begin{tabbing}XX\=XXXX\=\kill }{\end{tabbing}}
+\newcommand{\by}[1]{\nl \>By #1,}
+\newcommand{\byn}[1]{\nl \>#1,}
+\newcommand{\noby}{\nl \>}
+\newcommand{\cfmla}[2]{\nl \>\> $ #2 $ \refstepcounter{casef}
+  \ifthenelse{\equal{#1}{}}{}{\label{casel\thecasel#1}}
+  \`(\arabic{casef})}
+\newcommand{\cfmlan}[1]{\nl \>\> $ #1 $}
+\newcommand{\cref}[1]{(\ref{casel\thecasel#1})}
+\newcommand{\ee}{\mathcal{E}}
+
+%\usepackage{proofs}
+
+\input{def}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% start the show...
+
+\begin{document}
+
+\section{Syntex}
+
+\ottall
+
+\end{document}
+

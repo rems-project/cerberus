@@ -1,0 +1,22 @@
+AssocList.vo AssocList.glob: AssocList.v CoqFSetDecide.vo CoqListFacts.vo LibTactics.vo
+CoqEqDec.vo CoqEqDec.glob: CoqEqDec.v
+CoqFSetDecide.vo CoqFSetDecide.glob: CoqFSetDecide.v
+CoqFSetInterface.vo CoqFSetInterface.glob: CoqFSetInterface.v
+CoqListFacts.vo CoqListFacts.glob: CoqListFacts.v CoqUniquenessTac.vo
+CoqUniquenessTac.vo CoqUniquenessTac.glob: CoqUniquenessTac.v
+CoqUniquenessTacEx.vo CoqUniquenessTacEx.glob: CoqUniquenessTacEx.v CoqUniquenessTac.vo
+FSetExtra.vo FSetExtra.glob: FSetExtra.v CoqFSetInterface.vo
+FSetWeakNotin.vo FSetWeakNotin.glob: FSetWeakNotin.v CoqFSetDecide.vo
+LibDefaultSimp.vo LibDefaultSimp.glob: LibDefaultSimp.v
+LibLNgen.vo LibLNgen.glob: LibLNgen.v LibDefaultSimp.vo Metatheory.vo
+LibTactics.vo LibTactics.glob: LibTactics.v
+MetatheoryAtom.vo MetatheoryAtom.glob: MetatheoryAtom.v CoqFSetDecide.vo CoqListFacts.vo FSetExtra.vo FSetWeakNotin.vo LibTactics.vo
+Metatheory.vo Metatheory.glob: Metatheory.v AssocList.vo CoqEqDec.vo CoqListFacts.vo LibTactics.vo MetatheoryAtom.vo
+AssumeList.vo AssumeList.glob: AssumeList.v CoqFSetDecide.vo CoqListFacts.vo LibTactics.vo MetatheoryAtom.vo
+MetatheoryAlt.vo MetatheoryAlt.glob: MetatheoryAlt.v CoqEqDec.vo CoqListFacts.vo LibTactics.vo MetatheoryAtom.vo AssumeList.vo
+Fsub_LetSum_Definitions.vo Fsub_LetSum_Definitions.glob: Fsub_LetSum_Definitions.v Metatheory.vo
+Fsub_LetSum_Infrastructure.vo Fsub_LetSum_Infrastructure.glob: Fsub_LetSum_Infrastructure.v Fsub_LetSum_Definitions.vo
+Fsub_LetSum_Lemmas.vo Fsub_LetSum_Lemmas.glob: Fsub_LetSum_Lemmas.v Fsub_LetSum_Infrastructure.vo
+Fsub_LetSum_Soundness.vo Fsub_LetSum_Soundness.glob: Fsub_LetSum_Soundness.v Fsub_LetSum_Lemmas.vo
+CoqIntro.vo CoqIntro.glob: CoqIntro.v
+STLCsol.vo STLCsol.glob: STLCsol.v Metatheory.vo

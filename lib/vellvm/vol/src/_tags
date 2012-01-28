@@ -1,0 +1,3 @@
+<*.{d.byte,byte,native}>: g++, use_llvm, use_llvm_analysis
+<*.{d.byte,byte,native}>: use_llvm_executionengine, use_llvm_target, use_llvm_bitreader, use_llvm_bitwriter
+<*.{d.byte,byte,native}>: use_llvm_scalar_opts, use_bindings

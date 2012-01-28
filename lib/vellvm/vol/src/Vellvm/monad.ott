@@ -1,0 +1,142 @@
+
+% Syntax of Monads
+
+embed 
+{{ coq
+Require Import monad.
+}}
+
+metavar N ::= {{ coq nat }}
+metavar B ::= {{ coq bool }}
+indexvar index, i, j, n ::= {{ com index }}
+  {{ coq nat }}
+ 
+grammar
+e , x :: 'e_'						::=			{{ com expr }}
+  | N							::   :: nat		{{ com nat }}
+    							{{ coq [[N]] }}
+  | B							::   :: bool		{{ com bool }} 
+    							{{ coq [[B]] }}                        
+
+statement :: 'statement_'				::=			{{ com statement }}
+  | e 	 						::   ::	expr		{{ com expr }}
+    							{{ coq ret [[e]] }}
+  | x <- e						::   ::	assignment	{{ com assignment }}
+      	 						{{ coq [[x]] <- ret [[e]] }}
+  | ( statement )					::   :: paren		{{ coq [[statement]] }}			
+                                                     
+statements :: 'statements_'				::=  			{{ com statements }}
+  | statement 						::   :: statement       {{ coq do [[statement]] }}
+  | if e then statements1 else statements2 endif        ::   :: if 
+  							{{ coq do If [[e]] 
+                                                                  then 
+                                                                    [[statements1]] 
+                                                                    enddo
+                                                                  else 
+                                                                    [[statements2]] 
+                                                                    enddo 
+                                                                  endif }}
+%  | switch </ case Bj => statementsj // j /> default => statements endswitch 
+%    	      	      	 	     	     	     	::   :: switch
+%							{{ coq do switch
+%							       [[ </ Bj statementsj // j /> ]] 
+%							       default ([[ statements ]] enddo)
+%                                                               endswitch }}  	            
+  | statement ; statements				::   :: cons 		{{ com cons }}
+      							{{ coq do [[statement]] ; 
+                                                                  [[statements]] }}
+  | if e then statements1 else statements2 endif ; statements 
+       	      		       		   	   	::   :: ifs             
+							{{ coq do If [[e]] 
+                                                                  then 
+                                                                    [[statements1]] ; 
+                                                                    [[statements]] 
+                                                                    enddo 
+                                                                  else 
+                                                                    [[statements2]] ; 
+                                                                    [[statements]] 
+                                                                    enddo 
+                                                                  endif }}
+
+%list_B_statements :: 'list_B_statements_'	        ::=			{{ com list of B and statements }}
+%		     								{{ coq list (B*monad B) }}
+%  | []		     					::   :: nil		{{ coq nil }}
+%  | list_B_statements , case B => statements		::   :: cons		{{ coq ([[B]],([[statements]] enddo))::[[list_B_statements]]}}
+%  | ( list_B_statements )				::   :: paren		{{ coq [[list_B_statements]] }}			
+
+monads :: 'monads_'					::=  			{{ com monads }}
+  | do statements					::   ::	def		{{ com def }}
+       							{{ coq monad2prop(
+                                                                 [[statements]] 
+                                                                 enddo) }}
+terminals :: 'terminals_' ::=
+  | <-       		        ::   :: monadassignment      {{ tex <- }}
+  | ;				::   :: monadseq	     {{ tex ; }}
+  | =>				::   :: switchcase	     {{ tex => }}
+
+formula :: 'formula_' ::=
+  | judgement			::   :: judgement
+  | formula1 ... formulan     	::   :: dots
+  | not formula                 :: M :: not
+      				{{ tex \neg [[formula]] }}
+				{{ coq (not ([[formula]])) }}
+  | ( formula )                 :: M :: brackets
+      	      			{{ tex ([[formula]]\!) }} 
+      				{{ coq ([[ formula ]]) }}
+  | exists u . formula          ::   :: exists 
+      	       			{{ tex \exists [[u]]. [[formula]] }}
+      				{{ coq ( exists [[ u ]] , [[ formula ]] ) }}
+  | formula /\ formula'         :: M :: and
+               			{{ tex [[formula]] \wedge [[formula']] }}
+	  			{{ coq [[formula]] /\ [[ formula' ]] }}
+  | foreach C . formula         :: M :: forall 
+              			{{ tex \forall [[C]]. [[ formula ]] }}
+	  			{{ coq ( forall [[C]], [[ formula ]] ) }}
+  | formula implies formula'    :: M :: implies
+            	    		{{ tex [[formula]] \mathit{implies} [[formula']] }}
+	  			{{ coq [[formula]] -> [[ formula' ]] }}
+  | formula \/ formula'         :: M :: or
+               			{{ tex [[formula]] \vee [[formula']] }}
+	  			{{ coq [[formula]] \/ [[ formula' ]] }} 
+  | monads		        :: M :: monads
+    				{{ coq [[monads]] }}
+
+%defns
+%test_def :: '' ::=
+%     defn
+%     test :: :: test :: ''
+%     {{ com aaa }} by
+%
+%     ([] , case B => B) <-> </ case Bj => statementsj // j />
+%     do switch </ case Bj => statementsj // j /> default => B endswitch
+%     do if B then B else B endif
+%<<
+%     do x1 <- B ; 
+%        x2 <- B ; 
+%        if B 
+%        then 
+%          x1 <- B 
+%        else 
+%          x1 <- B 
+%        endif ; 
+%        x2 <- x1 ; 
+%        if B 
+%        then 
+%          x2 <- B 
+%        else 
+%          x2 <- B 
+%        endif ; 
+%        x2
+%>>
+%     -------------------------------- :: test_intro 
+%     test
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "./monads") ***
+*** End: ***
+*)
+}}

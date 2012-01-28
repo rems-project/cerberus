@@ -1,0 +1,684 @@
+
+% Syntax of Static Single Assignment(SSA)
+
+embed 
+{{ coq
+Require Import ListSet.
+Require Import Logic_Type.
+Require Import monad.
+Require Import Metatheory.
+Require Import ZArith.
+Require Import Coqlib.
+Require Import Floats.
+Require Import alist.
+
+Module LLVMsyntax.
+
+Section Lists.
+
+  Variable A : Type.
+
+  Fixpoint last_opt (l:list A) {struct l} : option A := 
+  match l with 
+    | nil => None 
+    | a :: nil => Some a 
+    | a :: l' => last_opt l'
+  end.
+
+End Lists.
+
+Require Import ZArith.
+
+Module Size.
+
+Definition t := nat.
+Definition dec : forall x y : t, {x=y} + {x<>y} := eq_nat_dec.
+Definition Zero : t := 0%nat.
+Definition One : t := 1%nat.
+Definition Two : t := 2%nat.
+Definition Four : t := 4%nat.
+Definition Eight : t := 8%nat.
+Definition Sixteen : t := 16%nat.
+Definition ThirtyTwo : t := 32%nat.
+Definition SixtyFour : t := 64%nat.
+Definition from_nat (i:nat) : t := i.
+Definition to_nat (i:t) : nat := i.
+Definition to_Z (i:t) : Z := Z_of_nat i.
+Definition from_Z (i:Z) : t := nat_of_Z i.
+Definition add (a b:t) : t := (a + b)%nat.
+Definition sub (a b:t) : t := (a - b)%nat.
+Definition mul (a b:t) : t := (a * b)%nat.
+Definition div (a b:t) : t := nat_of_Z ((Z_of_nat a) / (Z_of_nat b)).
+Definition gt (a b:t) : Prop := (a > b)%nat.
+Definition lt (a b:t) : Prop := (a < b)%nat.
+
+End Size.
+
+Module Align.
+
+Definition t := nat.
+Definition dec : forall x y : t, {x=y} + {x<>y} := eq_nat_dec.
+Definition Zero : t := 0%nat.
+Definition One : t := 1%nat.
+Definition Two : t := 2%nat.
+Definition Four : t := 4%nat.
+Definition Eight : t := 8%nat.
+Definition Sixteen : t := 16%nat.
+Definition ThirtyTwo : t := 32%nat.
+Definition SixtyFour : t := 64%nat.
+Definition from_nat (i:nat) : t := i.
+Definition to_nat (i:t) : nat := i.
+Definition to_Z (i:t) : Z := Z_of_nat i.
+Definition from_Z (i:Z) : t := nat_of_Z i.
+Definition add (a b:t) : t := (a + b)%nat.
+Definition sub (a b:t) : t := (a - b)%nat.
+Definition mul (a b:t) : t := (a * b)%nat.
+Definition div (a b:t) : t := nat_of_Z ((Z_of_nat a) / (Z_of_nat b)).
+Definition gt (a b:t) : Prop := (a > b)%nat.
+Definition lt (a b:t) : Prop := (a < b)%nat.
+
+End Align.
+
+Module INTEGER.
+
+Definition t := Z.
+Definition dec : forall x y : t, {x=y} + {x<>y} := zeq.
+Definition to_nat (i:t) : nat := nat_of_Z i.
+Definition to_Z (i:t) : Z := i.
+Definition of_Z (bitwidth:Z) (v:Z) (is_signed:bool) : t := v.
+
+End INTEGER.
+
+Module FLOAT.
+
+Definition t := float.
+Definition dec : forall x y : t, {x=y} + {x<>y} := Float.eq_dec.
+(* Definition Zero : t := Float.zero. *)
+
+End FLOAT.
+
+}}
+
+metavar Int ::= {{ com Int }}
+  {{ coq INTEGER.t }} {{ lex numeral }}
+metavar Float ::= {{ com FLOAT }}
+  {{ coq FLOAT.t }} {{ lex numeral }}
+metavar sz ::= {{ com sz }}
+  {{ coq Size.t }} {{ lex numeral }}
+metavar id, fid ::= {{ com identities }}
+  {{ coq atom }} {{ lex numeral  }}
+metavar l ::= {{ com labels }}
+  {{ coq atom }} {{ lex numeral  }}
+metavar align ::= {{ com align }}
+  {{ coq Align.t }} {{ lex numeral }}
+indexvar i, j, n ::= {{ com index }}
+  {{ coq nat }}
+ 
+grammar
+
+opt_Int {{ tex \mathit{opt_{Int} } }} :: 'opt_Int_'	::=			{{ com option Int }} {{ coq option Int }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  Int						:: M :: some  		{{ com some }} {{ coq (Some [[Int]]) }}
+
+opt_l {{ tex \mathit{opt_{l} } }} :: 'opt_l_'		::=			{{ com option l }} {{ coq option l }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  l							:: M :: some  		{{ com some }} {{ coq (Some [[l]]) }}
+
+opt_id {{ tex \mathit{opt_{id} } }} :: 'opt_id_'	::=			{{ com option id }} {{ coq option id }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  id							:: M :: some  		{{ com some }} {{ coq (Some [[id]]) }}
+
+ids {{ tex \mathit{\{id\} } }} :: 'ids_'		::=			{{ com id set }}
+       	   			      	 					{{ coq (list id) }}
+  | empty						::   :: empty		{{ coq (empty_set id) }}
+  | id1 .. idn						::   :: set		{{ coq [[id1 .. idn]] }}
+  | ids , id						::   :: cons		{{ coq (set_add eq_dec [[id]] [[ids]]) }}
+  | ids ; ids'						::   :: append		{{ coq (set_union eq_dec [[ids]] [[ids']]) }}
+  | ( ids )						:: S :: paren		{{ coq [[ ids ]] }}
+
+layout :: 'layout_'					::=  			{{ com data layout }}
+  | bigendian						::   :: be 		{{ com bigendian }}
+  | littleendian					::   :: le	 	{{ com littleendian }}
+  | ptr sz align0 align1				::   :: ptr		{{ com ptr }}
+  | int sz align0 align1				::   :: int		{{ com int }}
+  | float sz align0 align1				::   :: float		{{ com float }}
+  | aggr sz align0 align1			     	::   :: aggr		{{ com aggregate }}
+  | stack sz align0 align1				::   :: stack		{{ com stack }}
+  | vector sz align0 align1				::   :: vector		{{ com vector }}
+
+layouts {{ tex \mathit{\overline{layout} } }} :: 'layouts_'	::=  		{{ com layouts }}
+     	    			     	   					{{ coq (list layout) }}
+  | []   		 				::   :: nil		{{ coq nil }}
+  | layout , layouts					::   :: cons		{{ coq ([[layout]]::[[layouts]]) }}
+  | layouts ; layouts'					::   :: append		{{ coq ([[layouts]]++[[layouts']]) }}
+  | ( layouts )						:: S :: paren           {{ coq [[ layouts ]] }}
+
+floating_point {{ tex \mathit{fp} }} :: 'fp_'			::=  			{{ com floating point types }}
+  | float						::   :: float		{{ com float }}
+  | double						::   :: double          {{ com double }}
+  | fp128						::   :: fp128           {{ com fp128 }} 
+  | x86_fp80						::   :: x86_fp80	{{ com x86fp80 }}
+  | ppc_fp128						::   :: ppc_fp128     	{{ com ppcfp128 }}
+  | ( floating_point )					:: S :: paren           {{ coq [[ floating_point ]] }}
+
+varg :: 'varg_'						::=  			{{ com var arg }} {{ coq bool }}
+  | varg_yes						::   :: yes		{{ com yes }} {{ coq true }}
+  | varg_no						::   :: no              {{ com no }} {{ coq false }}
+
+typ :: 'typ_'						::=			{{ com type }}
+  | int sz                    				::   :: int         	{{ com integer }} {{ tex \ottkw{i}[[sz]] }}
+  | floating_point					::   :: floatpoint	{{ com floating point types }}
+  | void                      				::   :: void        	{{ com void }}
+  | label                                               ::   :: label           {{ com label }}
+  | metadata                                            ::   :: metadata        {{ com metadata }}
+  | [ sz * typ ]              				::   :: array       	{{ com array }}
+      {{ tex \ottsym{[}\, [[sz]]\, \times \, [[typ]] \, \ottsym{]}  }}
+  | typ ( </ typj // j /> varg ) 			::   :: function    	{{ com function }}
+      {{ tex [[typ]]\, \overline{typ_j}^{j}  }}
+  | { </ typj // j /> }       				::   :: struct      	{{ com structure }}
+  | typ *                     				::   :: pointer     	{{ com pointer }}
+  %| < sz * typ >             				::   :: vector       	{{ com vector }}
+  | opaque  						::   :: opaque          {{ com opaque }}
+  | id							::   :: namedt		{{ com namedt }}
+  % union
+  | ( typ )						:: S :: paren           {{ coq [[ typ ]] }}
+
+opt_typ {{ tex \mathit{opt_{typ} } }} :: 'opt_typ_'	::=			{{ com option typ }} {{ coq option typ }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  typ						:: M :: some  		{{ com some }} {{ coq (Some [[typ]]) }}
+
+cond :: 'cond_'						::=			{{ com condition code }}
+  | eq							::   :: eq		{{ com eq }}
+  | ne							::   :: ne		{{ com ne }}
+  | ugt							::   :: ugt		{{ com ugt }}
+  | uge							::   :: uge		{{ com uge }}
+  | ult							::   :: ult		{{ com ult }}
+  | ule							::   :: ule		{{ com ule }}
+  | sgt							::   :: sgt		{{ com sgt }}
+  | sge							::   :: sge		{{ com sge }}
+  | slt							::   :: slt		{{ com slt }}
+  | sle							::   :: sle		{{ com sle }}
+
+fcond {{ tex \mathit{fcond} }} :: 'fcond_'					::=  			{{ com float condition code }}
+  | false						::   :: false 		{{ com false }}
+  | oeq							::   :: oeq		{{ com oeq }}
+  | ogt							::   :: ogt		{{ com ogt }}
+  | oge							::   :: oge		{{ com oge }}
+  | olt							::   :: olt		{{ com olt }}
+  | ole							::   :: ole		{{ com ole }}
+  | one							::   :: one		{{ com one }}
+  | ord							::   :: ord		{{ com ord }}
+  | fueq						::   :: ueq		{{ com ueq }}
+  | fugt						::   :: ugt		{{ com ugt }}
+  | fuge						::   :: uge		{{ com uge }}
+  | fult						::   :: ult		{{ com ult }}
+  | fule						::   :: ule		{{ com ule }}
+  | fune						::   :: une		{{ com une }}
+  | funo						::   :: uno		{{ com uno }}
+  | true						::   :: true		{{ com true }}
+
+bop :: 'bop_'						::=  			{{ com binary operators }}
+  | add							::   :: add             {{ com add }}
+  | sub							::   :: sub		{{ com sub }}
+  | mul							::   :: mul		{{ com mul }}
+  | udiv						::   :: udiv		{{ com udiv }}
+  | sdiv						::   :: sdiv 		{{ com sdiv }}
+  | urem						::   :: urem		{{ com urem }}
+  | srem						::   :: srem		{{ com srem }}
+  | shl							::   :: shl		{{ com shl  }}
+  | lshr						::   :: lshr            {{ com lshr }}
+  | ashr						::   :: ashr		{{ com ashr }}
+  | and							::   :: and             {{ com and }}
+  | or							::   :: or              {{ com or }}
+  | xor							::   :: xor		{{ com xor }}
+
+fbop :: 'fbop_'						::=  			{{ com floating point binops }}
+  | fadd						::   :: fadd		{{ com fadd }}
+  | fsub						::   :: fsub		{{ com fsub }}
+  | fmul						::   :: fmul		{{ com fmul }}
+  | fdiv						::   :: fdiv 		{{ com fdiv }}
+  | frem						::   :: frem		{{ com frem }}
+
+extop {{ tex eop }} :: 'extop_'				::=  			{{ com ext operators }}
+  | zext						::   :: z               {{ com zext }}
+  | sext						::   :: s               {{ com sext }}
+  | fpext						::   :: fp		{{ com fpext }}
+
+castop {{ tex cop }} :: 'castop_'			::=  			{{ com cast operators }}
+  | fptoui 						::   :: fptoui		{{ com fptoui }}
+  | fptosi 						::   :: fptosi		{{ com fptosi }}
+  | uitofp 						::   :: uitofp		{{ com uitofp }}
+  | sitofp 						::   :: sitofp		{{ com sitofp }}
+  | ptrtoint						::   :: ptrtoint	{{ com ptrtoint }}
+  | inttoptr						::   :: inttoptr	{{ com inttoptr }}
+  | bitcast 						::   :: bitcast		{{ com bitcast }}
+
+inbounds :: 'inbounds_'					::=  			{{ com inbounds }} {{ coq bool }}
+  | inbounds_yes					::   :: yes		{{ com yes }} {{ coq true }}
+  | inbounds_no						::   :: no              {{ com no }} {{ coq false }}
+
+tailc :: 'tailc_'					::=  			{{ com tailcall }} {{ coq bool }}
+  | tailc_yes						::   :: yes		{{ com yes }} {{ coq true }}
+  | tailc_no						::   :: no              {{ com no }} {{ coq false }}
+
+noret :: 'noret_'					::=  			{{ com noret }} {{ coq bool }}
+  | noret_yes						::   :: yes		{{ com yes }} {{ coq true }}
+  | noret_no						::   :: no              {{ com no }} {{ coq false }}
+
+truncop {{ tex trop }} :: 'truncop_'			::=  			{{ com trunc operators }}
+  | trunc_int						::   :: int		{{ com trunc }}  {{ tex \ottkw{trunc}_{\mathit{int} } }}
+  | trunc_fp						::   :: fp		{{ com fptrunc }} {{ tex \ottkw{trunc}_{\mathit{fp} } }}
+
+const {{ tex \mathit{cnst} }} :: 'const_'				::=  			{{ com constant }}
+  | typ zeroinitializer					::   :: zeroinitializer {{ com zeroinitializer }}
+  | ( int sz ) Int					::   :: int		{{ com int }}	{{ tex \ottkw{i}[[sz]]\,[[Int]] }}
+  | floating_point Float				::   :: floatpoint	{{ com floatpoint }}
+  | typ undef						::   :: undef		{{ com undef }}
+  | ( typ * ) null					::   :: null		{{ com null }}
+  | typ [ </ constj // j /> ]				::   :: arr             {{ com array }}
+  | { </ constj // j /> }				::   :: struct          {{ com struct }}
+  | typ * id						::   :: gid		{{ com gid }}
+  | truncop const to typ				::   :: truncop		{{ com truncop }}
+  | extop const to typ 					::   :: extop		{{ com extop }}
+  | castop const to typ					::   :: castop		{{ com castop }}
+  | getelementptr inbounds const </ constj // j />	::   :: gep		{{ com gep }}
+      {{ tex \ottkw{getelementptr}\, [[const]]\, \overline{cst_j}^{j} }}
+  | select const0 const1 const2	    	      		::   :: select		{{ com select }}
+  | icmp cond const1 const2				::   :: icmp		{{ com icmp }}     
+  | fcmp fcond const1 const2				::   :: fcmp		{{ com fcmp }}
+  | extractvalue const </ constj // j />		::   :: extractvalue	{{ com extractvalue }}
+  | insertvalue const const' </ constj // j />		::   :: insertvalue	{{ com extractvalue }}
+  | bop const1 const2 	     	       	    		::   :: bop		{{ com bop }}
+  | fbop const1 const2 	     	       	    		::   :: fbop		{{ com fbop }}
+  | ( const )						:: S :: paren           {{ coq [[ const ]] }}
+
+value {{ tex val }} :: 'value_'				::=  			{{ com values }}
+      	 									{{ coq-universe Type }} 
+  | id	 						::   :: id		{{ com id }}
+  | const						::   :: const   	{{ com constant }}
+  | ( value )						:: S :: paren           {{ coq [[ value ]] }}
+
+opt_value {{ tex \mathit{opt_{value} } }} :: 'opt_value_'	::= 		{{ com option value }} {{ coq option value }}
+  | none 						::   :: none		{{ coq None }}
+  | value						::   :: value		{{ coq (Some [[value]]) }}
+  | ( opt_value )					:: S :: paren		{{ coq [[ opt_value ]] }}
+
+attribute :: 'attribute_'				::=  			{{ com attribute }}
+  | zext     						::   :: zext
+  | sext						::   :: sext
+  | noreturn						::   :: noreturn
+  | inreg						::   :: inreg
+  | structret						::   :: structret
+  | nounwind						::   :: nounwind
+  | noalias						::   :: noalias
+  | byval						::   :: byval
+  | nest						::   :: nest
+  | readnone						::   :: readnone
+  | readonly						::   :: readonly
+  | noinline						::   :: noinline
+  | alwaysinline					::   :: alwaysinline
+  | optforsize						::   :: optforsize
+  | stackprotect					::   :: stackprotect
+  | stackprotectreq					::   :: stackprotectreq
+  | nocapture						::   :: nocapture
+  | noredzone						::   :: noredzone
+  | implicitfloat					::   :: implicitfloat
+  | naked                                               ::   :: naked
+
+attributes {{ tex \mathit{\overline{attribute} } }} :: 'attributes_'	::=     {{ com attributes }}
+     	    			     	   					{{ coq (list attribute) }}
+  | []   		 				::   :: nil		{{ coq nil }}
+  | attributes , attribute				::   :: cons		{{ coq ([[attribute]]::[[attributes]]) }}
+  | attributes ; attributes'				::   :: append		{{ coq ([[attributes]]++[[attributes']]) }}
+  | ( attributes )					:: S :: paren           {{ coq [[ attributes ]] }}
+
+arg :: 'arg_'  						::=  			{{ com argument }}
+       										{{ coq (typ * attributes * id)%type }}
+  | typ attributes id					::   :: def		{{ coq (([[typ]], [[attributes]]), [[id]]) }}
+  | ( arg )						:: S :: paren		{{ coq [[ arg ]] }} 			
+
+args {{ tex \mathit{\overline{arg} } }} :: 'args_'	::=  			{{ com arguments }}
+     	    			     	   					{{ coq (list (typ*attributes*id)) }}
+  | []   		 				::   :: nil		{{ coq nil }}
+  | arg , args						::   :: cons		{{ coq ([[arg]]::[[args]]) }}
+  | args ; args'					::   :: append		{{ coq ([[args]]++[[args']]) }}
+  | ( args )						:: S :: paren           {{ coq [[ args ]] }}
+
+param :: 'param_'  					::=  			{{ com argument }}
+       										{{ coq (typ * attributes * value)%type }}
+  | typ attributes value                         	::   :: def		{{ coq (([[typ]], [[attributes]]), [[value]]) }}
+  | ( param )						:: S :: paren		{{ coq [[ param ]] }} 			
+
+params {{ tex \mathit{\overline{param} } }} :: 'params_'::=			{{ com parameters }}
+       	      			       	       					{{ coq (list (typ * attributes * value)) }}
+  | []  						::   :: nil		{{ coq nil }}
+  | param , params           				::   :: cons		{{ coq (([[param]])::[[params]]) }}
+  | params ; params'				     	::   :: append		{{ coq ([[params]]++[[params']]) }}
+  | ( params )						:: S :: paren           {{ coq [[ params ]] }}
+
+ls {{ tex \mathit{\{l\} } }} :: 'ls_'			::=			{{ com label set }}
+       	   			      	 					{{ coq (list l) }}
+  | empty						::   :: empty		{{ coq (empty_set l) }}
+  | l1 .. ln						::   :: set		{{ coq [[l1 .. ln]] }}
+  | ls , l						::   :: cons		{{ coq (set_add eq_dec [[l]] [[ls]]) }}
+  | ls ; ls'						::   :: append		{{ coq (set_union eq_dec [[ls]] [[ls']]) }}
+  | ( ls )						:: S :: paren		{{ coq [[ ls ]] }}
+
+callconv :: 'callconv_'					::=			{{ com calling convention }}
+  | ccc   						::   :: ccc
+  | fast						::   :: fast
+  | cold						::   :: cold
+  | x86_stdcall	 					::   :: x86_stdcall
+  | x86_fastcall					::   :: x86_fastcall
+
+clattrs :: 'clattrs_'                                   ::=                     {{ com call attributtes }}
+  | tailc callconv attributes1 attributes2              ::   :: intro
+
+cmd {{ tex c }} :: 'insn_'					    	::=			{{ com commands }}
+%% Binary Operations and Bitwise Binary Operations
+  | id = bop ( int sz ) value1 value2			::   :: bop		{{ com bop }}
+  | id = fbop floating_point value1 value2		::   :: fbop		{{ com fbop }}
+%% Vector Operations
+  %| id = extractelement typ0 value0 , const1		::   :: extractelement  {{ com extractelement }}
+  %| id = insertelement typ0 value0 , typ1 value1 , const2	::   :: insertelement   {{ com insertelement }}
+%% Aggregate Operations
+  | id = extractvalue typ value </ constj // j />            ::   :: extractvalue       {{ com extractvalue }}
+  | id = insertvalue typ value typ' value' </ constj // j /> ::   :: insertvalue	{{ com insertvalue }}
+%% Memory Access and Addressing Operations
+  | id = malloc typ value align	         	     	::   :: malloc		{{ com malloc }}
+  | id = free ( typ * ) value     	       	     	::   :: free		{{ com free }}
+      {{ tex \ottkw{free}\, \ottsym{(}\, [[typ]]\, \ottsym{*}\, \ottsym{)}\, [[value]] }}
+  | id = alloca typ value align     	       	     	::   :: alloca		{{ com alloca }}
+  | id = load ( typ * ) value1 align			::   :: load		{{ com load }}
+  | id = store typ value1 value2 align			::   :: store		{{ com store }}
+      {{ tex \ottkw{store}\, [[typ]]\, [[value1]]\, [[value2]]\, [[align]] }}
+  | id = getelementptr inbounds ( typ * ) value </ szj , valuej // j />    	      ::  :: gep        {{ com getelementptr }}
+      {{ tex [[id]]\, [[=]]\, \ottkw{getelementptr}\, \ottsym{(}\, [[typ]]\, \ottsym{*}\, \ottsym{)}\, [[value]]\, \overline{val_j}^{j} }}
+%% Conversion Operations
+  | id = truncop typ1 value1 to typ2			::   :: trunc		{{ com trunc }}
+  | id = extop typ1 value to typ2                   	::   :: ext             {{ com ext }}
+  | id = castop typ1 value1 to typ2		    	::   :: cast		{{ com cast }}
+%% Other Operations
+  | id = icmp cond typ value1 value2			::   :: icmp		{{ com icmp }}
+  | id = fcmp fcond floating_point value1 value2	::   :: fcmp		{{ com fcmp }}
+  | id = select value0 typ value1 value2                ::   :: select          {{ com select }}
+  | id = noret clattrs call typ0 value0 params    	::   :: call		{{ com call }} 
+      {{ tex \ottnt{option}\,[[id]]\, [[=]]\, \ottkw{call}\, [[typ0]]\, [[value0]]\, [[params]] }}
+  %| va_arg
+  | ( insn )						:: S :: paren           {{ coq [[ insn ]] }}
+
+terminator {{ tex tmn }} :: 'insn_'			::=  			{{ com termniators }}
+  | id = ret typ value        			    	::   :: return      	{{ com return }}
+      {{ tex \ottkw{ret}\, [[typ]]\, [[value]] }}
+  | id = ret void   					::   :: return_void  	{{ com return void }}
+      {{ tex \ottkw{ret}\, \ottkw{void} }}
+  | id = br value l1 l2		 			::   :: br              {{ com br }}        
+      {{ tex \ottkw{br}\, [[value]]\, [[l1]]\, [[l2]] }}
+  | id = br l        	    	  			::   :: br_uncond       {{ com unconditional br }}        
+      {{ tex \ottkw{br}\, [[l]] }}
+  %| id = switch typ value , l </ [ constj , lj ] // j />	::   :: switch		{{ com switch }}
+  %| indirectbr
+  %| id = invoke typ0 id0 list_param to l1 unwind l2 	::   :: invoke		{{ com invoke }} 
+  %| unwind
+  | id = unreachable   	   	     	 		::   :: unreachable	{{ com unreachable }}
+      {{ tex \ottkw{unreachable} }}
+  | ( terminator )					:: S :: paren1          {{ coq [[ terminator ]] }}
+
+phinode {{ tex \phi }} :: 'insn_'			::=  			{{ com phinodes }}
+  | id = phi typ </ [ valuej , lj ] // j />	        ::   :: phi  	    	{{ com def }}
+  | ( phinode )						:: S :: paren2          {{ coq [[ phinode ]] }}
+
+insn :: 'insn_'						::=  			{{ com instructions }}
+  | phinode						::   :: phinode         {{ com phinodes }}
+  | cmd							::   :: cmd		{{ com commands }}
+  | terminator						::   :: terminator	{{ com terminator }}
+
+insns {{ tex \mathit{\overline{insn} } }} :: 'insns_'	::=			{{ com insns }}
+      	     			       	     					{{ coq (list insn) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | insns , insn           				::   :: cons		{{ coq ([[insn]]::[[insns]]) }}
+  | insns ; insns'					::   :: append		{{ coq ([[insns]]++[[insns']]) }}
+  | ( insns )						:: S :: paren           {{ coq [[ insns]] }}
+
+cmds {{ tex \mathit{\overline{c} } }} :: 'cmds_'	::=			{{ com cmds }}
+      	     			       	     					{{ coq (list cmd) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | cmd , cmds           				::   :: cons		{{ coq ([[cmd]]::[[cmds]]) }}
+  | cmds ; cmds'					::   :: append		{{ coq ([[cmds]]++[[cmds']]) }}
+  | ( cmds )						:: S :: paren           {{ coq [[ cmds ]] }}
+
+phinodes {{ tex \mathit{\overline{\phi} } }} :: 'phinodes_'	::=		{{ com phinodes }}
+      	     			       	     					{{ coq (list phinode) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | phinode , phinodes     				::   :: cons		{{ coq ([[phinode]]::[[phinodes]]) }}
+  | phinodes ; phinodes'				::   :: append		{{ coq ([[phindes]]++[[phinodes']]) }}
+  | ( phinodes )					:: S :: paren           {{ coq [[ phinodes ]] }}
+
+block {{ tex b }} :: 'block_' 	::=	     			{{ com block }}
+  | l phinodes cmds terminator				::   :: intro           {{ tex [[l]] [[phinodes]] [[cmds]] [[terminator]] }}
+  | ( block )						:: S :: paren           {{ coq [[ block ]] }}
+
+opt_block {{ tex \mathit{opt_{b} } }} :: 'opt_block_' ::=			{{ com option block }} {{ coq option block }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  block						:: M :: some  		{{ com some }} {{ coq (Some [[block]]) }}
+		   
+blocks {{ tex \mathit{\overline{b} } }} :: 'blocks_'::=				{{ com blocks }}
+      	     			       	     					{{ coq (list block) }}
+  | []  						::   :: nil		{{ coq nil }}
+  | block , blocks					::   :: cons		{{ coq ([[block]]::[[blocks]]) }}
+  | blocks ; blocks'					::   :: append		{{ coq ([[blocks]]++[[blocks']]) }}
+  | ( blocks )						:: S :: paren           {{ coq [[ blocks ]] }}
+
+visibility :: 'visibility_'				::=  			{{ com visibility }}
+  | default   						::   :: default		
+  | hidden						::   :: hidden
+  | protected						::   :: protected
+
+linkage :: 'linkage_'					::=  			{{ com linkage }}
+  | External                                            ::   :: external
+  | Available_externally                                ::   :: available_externally
+  | Link_once                                           ::   :: link_once
+  | Link_once_odr                                       ::   :: link_once_odr
+  | Weak                                                ::   :: weak
+  | Weak_odr                                            ::   :: weak_odr
+  | Appending						::   :: appending
+  | Internal						::   :: internal
+  | Private						::   :: private
+  | Linker_private					::   :: linker_private
+  | Dllimport						::   :: dllimport
+  | Dllexport						::   :: dllexport
+  | External_weak					::   :: external_weak
+  | Ghost						::   :: ghost
+  | Common						::   :: common
+
+fnattrs ::  'fnattrs_'                                  ::=                     {{ com function attributtes }}
+  | linkage visibility callconv attributes1 attributes2 ::   :: intro
+
+fheader :: 'fheader_'    				::=			{{ com function header }}
+  | fnattrs typ id ( args varg )      	      	  	::   :: intro           {{ tex [[typ]]\, [[id]]\, ( [[args]] ) }}
+  | ( fheader )						:: S :: paren           {{ coq [[ fheader ]] }}
+
+fdec :: 'fdec_'       					::=			{{ com function declaration }}
+  | declare fheader     				::   :: intro
+  | ( fdec )						:: S :: paren           {{ coq [[ fdec ]] }}
+
+fdef :: 'fdef_'          				::=			{{ com function definition }}
+  | define fheader { blocks } 				::   :: intro
+  | ( fdef )						:: S :: paren           {{ coq [[ fdef ]] }}
+
+opt_fdec {{ tex \mathit{opt_{fdec} } }} :: 'opt_fdec_'	::=  			{{ com option fdec }} {{ coq option fdec }}
+  | none 						::   :: none		{{ coq None }}
+  | fdec						::   :: fdec		{{ coq (Some [[fdec]]) }} {{ tex \lfloor [[fdec]] \rfloor }}
+  | ( opt_fdec )					:: S :: paren		{{ coq [[ opt_fdec ]] }}
+
+opt_fdef {{ tex \mathit{opt_{fdef} } }} :: 'opt_fdef_'	::=  			{{ com option fdef }} {{ coq option fdef }}
+  | none 						::   :: none		{{ coq None }}
+  | fdef						::   :: fdec		{{ coq (Some [[fdef]]) }} {{ tex \lfloor [[fdef]] \rfloor }}
+  | ( opt_fdef )					:: S :: paren		{{ coq [[ opt_fdef ]] }}
+
+namedt :: 'namedt_'         				::=			{{ com named type }}
+  | id = typ  						::   :: intro 
+  | ( namedt )						:: S :: paren		{{ coq [[ namedt ]] }}
+
+namedts {{ tex \mathit{\overline{namedt} } }} :: 'namedts_'	::=		{{ com namedts }}
+      	     			       	     					{{ coq (list namedt) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | namedt , namedts           				::   :: cons		{{ coq ([[namedt]]::[[namedts]]) }}
+  | namedts ; namedts'					::   :: append		{{ coq ([[namedts]]++[[namedts']]) }}
+  | ( namedts )						:: S :: paren           {{ coq [[ namedts ]] }}
+
+gvar_spec :: 'gvar_spec_'				::=	     		{{ com gvar spec }}
+  | global  						::   :: global		{{ com global }}
+  | constant						::   :: constant	{{ com constant }}
+
+% global id is also taken as constant addresses
+gvar :: 'gvar_'   	 				::=			{{ com global variables }}
+  | id = linkage gvar_spec typ const align		::   :: intro		{{ com intro }}
+  | id = gvar_spec typ	      				::   :: external	{{ com external }}
+  | ( gvar )	    					:: S :: paren		{{ coq [[ gvar ]] }}
+
+id_binding :: 'id_binding_'  				::=			{{ com id binding }} 
+  |  none 						::  :: none		{{ com none }} 
+  |  cmd						::  :: cmd  		{{ com cmd }} 
+  |  phinode						::  :: phinode		{{ com phinode }}
+  |  terminator						::  :: terminator	{{ com terminator }}
+  |  gvar						::  :: gvar             {{ com gvar }} 
+  |  fdec						::  :: fdec		{{ com fdec }}
+  |  arg 						::  :: arg		{{ com arg }}
+
+% FIXME: Should we split products to be separate lists for vars, funs and named types?		   
+product  {{ tex prod }} :: 'product_'			::=			{{ com prodoct }}
+  | gvar						::   :: gvar     	{{ com global variable }}
+  | fdec             					::   :: fdec   		{{ com function declaration }}
+  | fdef             					::   :: fdef		{{ com function definition }}
+
+products {{ tex \mathit{\overline{prod} } }}            :: 'products_'::=	{{ com products }}
+	    				     	   				{{ coq (list product) }}	   
+  | []   						::   :: nil        	{{ com nil }}
+    							     			{{ coq nil }}
+  | product , products					::   :: cons            {{ com cons }}
+    	       						     			{{ coq ([[product]]::[[products]]) }}
+  | ( products )					:: S :: paren		{{ coq [[ products ]] }}			
+
+targetdata :: 'targetdata_'  				::=  			{{ com targetdata }}
+       										{{ coq (prod (list layout) (list namedt)) }}
+  | layouts namedts					::   :: def		{{ coq ([[layouts]],[[namedts]]) }}
+  | ( targetdata )					:: S :: paren		{{ coq [[ targetdata ]] }}
+
+module {{ tex mod }} :: 'module_'					::=  			{{ com module }}
+  | layouts namedts products 				::   :: intro		{{ com prods }}
+  | ( module )					        :: S :: paren           {{ coq [[ module ]] }}
+
+modules {{ tex \mathit{\overline{mod} } }} :: 'modules_'::=  		{{ com modules }}
+      	     			       	     					{{ coq (list module) }}
+  | []  						::   :: nil		{{ coq nil }}
+  | module , modules					::   :: cons		{{ coq ([[module]]::[[modules]]) }}
+  | modules ; modules'					::   :: append		{{ coq ([[modules]]++[[modules']]) }}
+  | ( modules )						:: S :: paren           {{ coq [[ modules ]] }}
+
+system :: 'system_'					::=  			{{ com system }}
+       	  									{{ coq modules }}
+  | modules						::   :: def		{{ com list of modules }}
+    							     			{{ coq [[modules]] }}
+
+usedef_block :: 'usedef_block_'				::=			{{ com label usedef }}
+                                                                                {{ coq-universe Type }} 
+       	  									{{ coq AssocList (list l) }} 
+
+intrinsic_funs :: 'intrinsic_funs_'			::=  			{{ com intrinsic functions }}
+	      	 								{{ coq ids }}
+
+terminals :: 'terminals_' ::=
+  | <-                  ::   :: larrow         {{ tex \leftarrow }}
+  | ->			::   :: rarrow		{{ tex \rightarrow }}
+  | |->			::   :: mapsto		{{ tex \mapsto }}
+  | [                   ::   :: lsbracket       {{ tex [ }}
+  | ]                   ::   :: rsbracket       {{ tex ] }}
+  | -                   ::   :: minus           {{ tex - }}
+  | |                   ::   :: vbar            {{ tex \mid }}
+  | --\                 ::   :: rharp           {{ tex \rightharpoonup }}
+  | -->>                ::   :: lrdarrow        {{ tex \twoheadrightarrow }}
+  | -->                 ::   :: lrarrow		{{ tex \longrightarrow }}
+  | -->*                ::   :: lrarrows	{{ tex \longrightarrow^* }}
+  | ==>                 ::   :: Lrarrow		{{ tex \Longrightarrow }}
+  | ==>*                ::   :: Lrarrows	{{ tex \Longrightarrow^* }}
+  | =                   ::   :: assignment      {{ tex = }}
+  | <->                 ::   :: alias		{{ tex <-> }}
+  | == 			::   :: eq		{{ tex == }}
+  | <			::   :: lt		{{ tex \le }}
+  | |-			::   :: shows           {{ tex \vdash }}
+  | |-i			::   :: ishows          {{ tex \vdash_{i} }}
+  | |-t			::   :: tshows          {{ tex \vdash_{t} }}
+  | |-f			::   :: fshows          {{ tex \vdash_{f} }}
+  | in			::   :: in		{{ tex \in }}
+  | ;			::   :: colon		{{ tex ; }}
+  | \/                  ::   :: union           {{ tex \cup }}
+  | >>=                 ::   :: ggeq            {{ tex \gg= }}
+  | >>                  ::   :: gg              {{ tex \gg }}
+
+embed 
+{{ coq
+
+Tactic Notation "cmd_cases" tactic(first) tactic(c) :=
+  first;
+  [ c "insn_bop" | c "insn_fbop" |
+    c "insn_extractvalue" | c "insn_insertvalue" |
+    c "insn_malloc" | c "insn_free" |
+    c "insn_alloca" | c "insn_load" | c "insn_store" | c "insn_gep" |
+    c "insn_trunc" | c "insn_ext" | c "insn_cast" | 
+    c "insn_icmp" | c "insn_fcmp" | c "insn_select" |
+    c "insn_call" ].
+
+Tactic Notation "product_cases" tactic(first) tactic(c) :=
+  first;
+  [ c "product_gvar" | c "product_fdec" | c "product_fdef" ].
+
+Tactic Notation "typ_cases" tactic(first) tactic(c) :=
+  first;
+  [ c "typ_int" | c "typ_floatingpoint" |
+    c "typ_void" | c "typ_label" |
+    c "typ_metadata" | c "typ_array" |
+    c "typ_function" | c "typ_struct" | c "typ_pointer" | c "typ_opaque" |
+    c "typ_namedt" | c "typ_nil" | c "typ_cons" ].
+
+Scheme const_rec2 := Induction for const Sort Set
+  with list_const_rec2 := Induction for list_const Sort Set.
+
+Definition const_mutrec P P' :=
+  fun h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19 h20 h21=>
+      (pair (@const_rec2 P P' h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19 h20 h21)
+            (@list_const_rec2 P P' h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19 h20 h21)).
+
+Scheme typ_rec2 := Induction for typ Sort Set
+  with list_typ_rec2 := Induction for list_typ Sort Set.
+
+Definition typ_mutrec P P' :=
+  fun h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 =>
+      (pair (@typ_rec2 P P' h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13)
+            (@list_typ_rec2 P P' h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13)).
+
+Scheme const_ind2 := Induction for const Sort Prop
+  with list_const_ind2 := Induction for list_const Sort Prop.
+
+Combined Scheme const_mutind from const_ind2, list_const_ind2.
+
+Scheme typ_ind2 := Induction for typ Sort Prop
+  with list_typ_ind2 := Induction for list_typ Sort Prop.
+
+Combined Scheme typ_mutind from typ_ind2, list_typ_ind2.
+
+
+End LLVMsyntax.
+
+}}
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/vol/src/Vellvm/monads" "-I" "~/SVN/sol/vol/src/Vellvm/ott" "-I" "~/SVN/sol/vol/src/Vellvm/compcert" "-I" "~/SVN/sol/theory/metatheory_8.3" "-I" "~/SVN/sol/vol/src/TV") ***
+*** End: ***
+ *)
+}}
+

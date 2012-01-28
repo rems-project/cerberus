@@ -1,0 +1,285 @@
+
+% Syntax of Static Single Assignment(SSA)
+
+embed 
+{{ coq
+Add LoadPath "../Vellvm/".
+Add LoadPath "../Vellvm/ott".
+Add LoadPath "../Vellvm/monads".
+Add LoadPath "../Vellvm/compcert".
+Add LoadPath "../../../theory/metatheory_8.3".
+Require Import ListSet.
+Require Import Logic_Type.
+Require Import monad.
+Require Import Metatheory.
+Require Import ZArith.
+Require Import Coqlib.
+Require Import Floats.
+Require Import alist.
+
+Module VMsyntax.
+
+Module INTEGER.
+
+Definition t := Z.
+Definition dec : forall x y : t, {x=y} + {x<>y} := zeq.
+Definition to_nat (i:t) : nat := nat_of_Z i.
+Definition to_Z (i:t) : Z := i.
+Definition of_Z (bitwidth:Z) (v:Z) (is_signed:bool) : t := v.
+
+End INTEGER.
+
+}}
+
+metavar Int ::= {{ com Int }} {{ coq INTEGER.t }} {{ lex numeral }}
+metavar id {{ tex r }} ::= {{ com identities }}
+  {{ coq atom }} {{ lex numeral  }}
+metavar l ::= {{ com labels }}
+  {{ coq atom }} {{ lex numeral  }}
+indexvar i, j, n ::= {{ com index }}
+  {{ coq nat }}
+ 
+grammar
+
+opt_Int {{ tex \mathit{opt_{Int} } }} :: 'opt_Int_'	::=			{{ com option Int }} {{ coq option Int }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  Int						:: M :: some  		{{ com some }} {{ coq (Some [[Int]]) }}
+                                    						{{ tex \lfloor [[Int]] \rfloor }}
+
+opt_l {{ tex \mathit{opt_{l} } }} :: 'opt_l_'		::=			{{ com option l }} {{ coq option l }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  l							:: M :: some  		{{ com some }} {{ coq (Some [[l]]) }}
+                                    						{{ tex \lfloor [[l]] \rfloor }}
+
+opt_id {{ tex \mathit{opt_{id} } }} :: 'opt_id_'	::=			{{ com option id }} {{ coq option id }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  id							:: M :: some  		{{ com some }} {{ coq (Some [[id]]) }}
+                                    						{{ tex \lfloor [[id]] \rfloor }}
+
+ids {{ tex \mathit{set_{id} } }} :: 'ids_'		::=			{{ com id set }}
+       	   			      	 					{{ coq (list id) }}
+  | empty						::   :: empty		{{ coq (empty_set id) }}
+  | id1 .. idn						::   :: set		{{ coq [[id1 .. idn]] }}
+  | ids , id						::   :: cons		{{ coq (set_add eq_dec [[id]] [[ids]]) }}
+  | ids ; ids'						::   :: append		{{ coq (set_union eq_dec [[ids]] [[ids']]) }}
+  | ( ids )						:: S :: paren		{{ coq [[ ids ]] }}
+
+cond {{ tex cnd }} :: 'cond_'				::=			{{ com condition code }}
+  | eq							::   :: eq		{{ com eq }} {{ tex = }}
+  | ne							::   :: ne		{{ com ne }} {{ tex \neq }}
+  | ugt							::   :: ugt		{{ com ugt }} {{ tex > }}
+  | uge							::   :: uge		{{ com uge }} {{ tex \geq }}
+  | ult							::   :: ult		{{ com ult }} {{ tex < }}
+  | ule							::   :: ule		{{ com ule }} {{ tex \leq }}
+  | sgt							::   :: sgt		{{ com sgt }} {{ tex > }}
+  | sge							::   :: sge		{{ com sge }} {{ tex \geq }}
+  | slt							::   :: slt		{{ com slt }} {{ tex < }}
+  | sle							::   :: sle		{{ com sle }} {{ tex \leq }}
+
+bop :: 'bop_'						::=  			{{ com binary operators }}
+  | add							::   :: add             {{ com add }} {{ tex + }}
+  | sub							::   :: sub		{{ com sub }} {{ tex - }}
+  | mul							::   :: mul		{{ com mul }} {{ tex * }}
+  | udiv						::   :: udiv		{{ com udiv }} {{ tex / }}
+  | sdiv						::   :: sdiv 		{{ com sdiv }} {{ tex / }}
+  | urem						::   :: urem		{{ com urem }} {{ tex \% }}
+  | srem						::   :: srem		{{ com srem }} {{ tex \% }}
+  | shl							::   :: shl		{{ com shl  }} {{ tex \ll }}
+  | lshr						::   :: lshr            {{ com lshr }} {{ tex \gg }}
+  | ashr						::   :: ashr		{{ com ashr }} {{ tex \gg }}
+  | and							::   :: and             {{ com and }} {{ tex \&\& }}
+  | or							::   :: or              {{ com or }} {{ tex \| }}
+  | xor							::   :: xor		{{ com xor }}
+
+const {{ tex \mathit{cnst} }} :: 'const_'		::=  			{{ com constant }}
+  | Int							::   :: int		{{ com int }}
+  | zero                                                :: M :: zero            {{ tex 0 }} {{ coq (INTEGER.of_Z 32 0 false) }}
+  | one                                                 :: M :: one             {{ tex 1 }} {{ coq (INTEGER.of_Z 32 1 false) }}
+  | ninetynine                                          :: M :: ninetynine      {{ tex 99 }} {{ coq (INTEGER.of_Z 32 99 false) }}
+  | hundred                                             :: M :: hundred         {{ tex 100 }} {{ coq (INTEGER.of_Z 32 100 false) }}
+  | ( const )						:: S :: paren           {{ coq [[ const ]] }}
+
+value {{ tex val }} :: 'value_'				::=  			{{ com values }}
+      	 									{{ coq-universe Type }} 
+  | id	 						::   :: id		{{ com id }}
+  | const						::   :: const   	{{ com constant }}
+  | value1 { value2 / id }                              :: M :: subst           {{ com subst }} {{ coq [[ value1 ]] }}
+  | ( value )						:: S :: paren           {{ coq [[ value ]] }}
+
+opt_value {{ tex \mathit{opt_{value} } }} :: 'opt_value_'	::= 		{{ com option value }} {{ coq option value }}
+  | none 						::   :: none		{{ coq None }}
+  | value						::   :: value		{{ coq (Some [[value]]) }}
+                                    						{{ tex \lfloor [[value]] \rfloor }}
+  | ( opt_value )					:: S :: paren		{{ coq [[ opt_value ]] }}
+
+ls {{ tex \mathit{\{l\} } }} :: 'ls_'			::=			{{ com label set }}
+       	   			      	 					{{ coq (list l) }}
+  | empty						::   :: empty		{{ coq (empty_set l) }}
+  | l1 .. ln						::   :: set		{{ coq [[l1 .. ln]] }}
+  | ls , l						::   :: cons		{{ coq (set_add eq_dec [[l]] [[ls]]) }}
+  | ls ; ls'						::   :: append		{{ coq (set_union eq_dec [[ls]] [[ls']]) }}
+  | ( ls )						:: S :: paren		{{ coq [[ ls ]] }}
+
+cmd {{ tex c }} :: 'insn_'			    	::=			{{ com commands }}
+  | id = bop value1 value2	        		::   :: bop		{{ com bop }} {{ tex [[id]] [[:=]] [[value1]]\, [[bop]]\, [[value2]] }}
+  | id = icmp cond value1 value2			::   :: icmp		{{ com icmp }} {{ tex [[id]] [[:=]] [[value1]]\, [[cond]]\, [[value2]] }}
+  | id = value                                          :: M :: init            {{ com init }} {{ coq [[id = add value zero]] }}
+                                                                                               {{ tex [[id]] [[:=]] [[value]] }}
+  | cmd { value / id }                                  :: M :: csubst          {{ com subst }} {{ coq [[cmd]] }}
+  | cmd { id1 |> id2 }                                  :: M :: crename         {{ com rename }} {{ coq [[cmd]] }}
+  | ( cmd )						:: S :: paren           {{ coq [[ cmd ]] }}
+
+terminator {{ tex t }} :: 'insn_'			::=  			{{ com termniators }}
+  | id = ret value        			    	::   :: return      	{{ com return }}
+      {{ tex \ottkw{ret}\, [[value]] }}
+  | id = br value l1 l2		 			::   :: br              {{ com br }}        
+      {{ tex \ottkw{br}\, [[value]]\, [[l1]]\, [[l2]] }}
+  | id = br l        	    	  			::   :: br_uncond       {{ com unconditional br }}        
+      {{ tex \ottkw{br}\, [[l]] }}
+  | terminator { value / id }                           :: M :: tsubst          {{ com subst }} {{ coq [[terminator]] }}
+  | terminator { id1 |> id2 }                           :: M :: trename         {{ com rename }} {{ coq [[terminator]] }}
+  | ( terminator )					:: S :: paren1          {{ coq [[ terminator ]] }}
+
+phinode {{ tex \phi }} :: 'insn_'			::=  			{{ com phinodes }}
+  | id = phi </ [ valuej , lj ] // j />			::   :: phi  	    	{{ com def }}
+  | phinode { value / id }                              :: M :: psubst          {{ com subst }} {{ coq [[phinode]] }}
+                                                                                {{ tex [[phinode]]\{[[value]]/[[id]]\} }}
+  | phinode { id1 |> id2 }                              :: M :: prename         {{ com rename }} {{ coq [[phinode]] }}
+  | ( phinode )						:: S :: paren2          {{ coq [[ phinode ]] }}
+
+insn :: 'insn_'						::=  			{{ com instructions }}
+  | phinode						::   :: phinode         {{ com phinodes }}
+  | cmd							::   :: cmd		{{ com commands }}
+  | terminator						::   :: terminator	{{ com terminator }}
+  | insn { value / id }                                 :: M :: isubst          {{ com subst }} {{ coq [[insn]] }}
+  | insn { id1 |> id2 }                                 :: M :: irename         {{ com rename }} {{ coq [[insn]] }}
+
+insns {{ tex \mathit{\overline{insn} } }} :: 'insns_'	::=			{{ com insns }}
+      	     			       	     					{{ coq (list insn) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | insns , insn           				::   :: cons		{{ coq ([[insn]]::[[insns]]) }}
+  | insns ; insns'					::   :: append		{{ coq ([[insns]]++[[insns']]) }}
+  | insn1 .. insnn 					::   :: dots		{{ coq [[ insn1 .. insnn ]] }}
+  | ( insns )						:: S :: paren           {{ coq [[ insns]] }}
+
+cmds {{ tex \mathit{\overline{c} } }} :: 'cmds_'	::=			{{ com cmds }}
+      	     			       	     					{{ coq (list cmd) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | cmd , cmds           				::   :: cons		{{ coq ([[cmd]]::[[cmds]]) }}
+  | cmds ; cmds'					::   :: append		{{ coq ([[cmds]]++[[cmds']]) }}
+  | cmd1 .. cmdn   					::   :: dots		{{ coq [[ cmd1 .. cmdn ]] }}
+  | cmds - id0                                          :: M :: remove          {{ coq [[ cmds ]] }}
+  | ( cmds )						:: S :: paren           {{ coq [[ cmds ]] }}
+
+phinodes {{ tex \mathit{\overline{\phi} } }} :: 'phinodes_'	::=		{{ com phinodes }}
+      	     			       	     					{{ coq (list phinode) }}
+  | []	                  				::   :: nil		{{ coq nil }}
+  | phinode , phinodes     				::   :: cons		{{ coq ([[phinode]]::[[phinodes]]) }}
+  | phinodes ; phinodes'				::   :: append		{{ coq ([[phindes]]++[[phinodes']]) }}
+  | phinode1 .. phinoden 				::   :: dots		{{ coq [[ phinode1 .. phinoden ]] }}
+  | phinodes - id0                                      :: M :: remove          {{ coq [[ phinodes ]] }}
+  | ( phinodes )					:: S :: paren           {{ coq [[ phinodes ]] }}
+
+block {{ tex b }} :: 'block_' 	::=	     			{{ com block }}
+  | l phinodes cmds terminator				::   :: intro           {{ tex [[l]]\, [[phinodes]]\, [[cmds]]\, [[terminator]] }}
+  | block { value / id }                                :: M :: subst           {{ com subst }} {{ coq [[block]] }}
+                                                                                {{ tex [[block]]\{[[value]]/[[id]]\} }}
+  | block - id0                                         :: M :: remove          {{ coq [[ block ]] }}
+  | block + cmd @ pc                                    :: M :: insert          {{ coq [[ block ]] }}
+  | block { id1 |> id2 }                                :: M :: rename          {{ com rename }} {{ coq [[block]] }}
+  | ( block )						:: S :: paren           {{ coq [[ block ]] }}
+
+opt_block {{ tex \mathit{opt_{b} } }} :: 'opt_block_' ::=			{{ com option block }} {{ coq option block }}
+  |  none 						:: M :: none		{{ com none }} {{ coq None }}
+  |  block						:: M :: some  		{{ com some }} {{ coq (Some [[block]]) }}
+                                    						{{ tex \lfloor [[block]] \rfloor }}
+		   
+blocks {{ tex \mathit{\overline{b} } }} :: 'blocks_'::=				{{ com blocks }}
+      	     			       	     					{{ coq (list block) }}
+  | []  						::   :: nil		{{ coq nil }}
+  | block , blocks					::   :: cons		{{ coq ([[block]]::[[blocks]]) }}
+  | blocks ; blocks'					::   :: append		{{ coq ([[blocks]]++[[blocks']]) }}
+  | block1 .. blockn   					::   :: dots		{{ coq [[ block1 .. blockn ]] }}
+  | ( blocks )						:: S :: paren           {{ coq [[ blocks ]] }}
+
+fdef {{ tex f }} :: 'fdef_'    				::=			{{ com function definition }}
+  | fun { blocks } 				        ::   :: intro
+  | fdef { value / id }                                 :: M :: subst           {{ com subst }} {{ coq [[fdef]] }}
+                                                                                {{ tex [[fdef]]\{[[value]]/[[id]]\} }}
+  | fdef - id0                                          :: M :: remove          {{ coq [[ fdef ]] }}
+  | fdef + cmd @ pc                                     :: M :: insert          {{ coq [[ fdef ]] }}
+  | fdef { id1 |> id2 }                                 :: M :: rename          {{ com rename }} {{ coq [[fdef]] }}
+  | fdef { cmd -> pc }                                  :: M :: move            {{ coq [[ fdef ]] }}
+  | ( fdef )						:: S :: paren           {{ coq [[ fdef ]] }}
+
+id_binding :: 'id_binding_'  				::=			{{ com id binding }} 
+  |  none 						::  :: none		{{ com none }} 
+  |  cmd						::  :: cmd  		{{ com cmd }} 
+  |  phinode						::  :: phinode		{{ com phinode }}
+  |  terminator						::  :: terminator	{{ com terminator }}
+
+usedef_block :: 'usedef_block_'				::=			{{ com label usedef }}
+                                                                                {{ coq-universe Type }} 
+       	  									{{ coq AssocList (list l) }} 
+
+terminals :: 'terminals_' ::=
+  | ~>			::   :: leadsto		{{ tex \leadsto }}
+  | <-                  ::   :: larrow          {{ tex \leftarrow }}
+  | ->			::   :: rarrow		{{ tex \rightarrow }}
+  | |->			::   :: mapsto		{{ tex \mapsto }}
+  | [                   ::   :: lsbracket       {{ tex [ }}
+  | ]                   ::   :: rsbracket       {{ tex ] }}
+  | -                   ::   :: minus           {{ tex - }}
+  | |                   ::   :: vbar            {{ tex \mid }}
+  | --\                 ::   :: rharp           {{ tex \rightharpoonup }}
+  | -->>                ::   :: lrdarrow        {{ tex \twoheadrightarrow }}
+  | -->                 ::   :: lrarrow		{{ tex \longrightarrow }}
+  | -->*                ::   :: lrarrows	{{ tex \longrightarrow^* }}
+  | ==>                 ::   :: Lrarrow		{{ tex \Longrightarrow }}
+  | ==>*                ::   :: Lrarrows	{{ tex \Longrightarrow^* }}
+  | =                   ::   :: eq              {{ tex = }}
+  | :=                  ::   :: assignment      {{ tex := }}
+  | <->                 ::   :: alias		{{ tex <-> }}
+  | == 			::   :: equiv		{{ tex == }}
+  | <			::   :: lt		{{ tex \le }}
+  | |-			::   :: shows           {{ tex \vdash }}
+  | |-i			::   :: ishows          {{ tex \vdash }}
+  | |-t			::   :: tshows          {{ tex \vdash }}
+  | |-f			::   :: fshows          {{ tex \vdash }}
+  | in			::   :: in		{{ tex \in }}
+  | ;			::   :: colon		{{ tex ; }}
+  | \/                  ::   :: union           {{ tex \cup }}
+  | >>=                 ::   :: ggeq            {{ tex \gg= }}
+  | >>                  ::   :: gg              {{ tex \gg }}
+  | |=                  ::   :: models          {{ tex \models }}
+  | |-b			::   :: bshows          {{ tex \vdash }}
+  | |-c			::   :: cshows          {{ tex \vdash }}
+  | |-p			::   :: pshows          {{ tex \vdash }}
+  | |>> 		::   :: dshows          {{ tex \vdash_{\gg} }}
+  | >=  		::   :: bsim            {{ tex \supseteq }}
+  | <=  		::   :: fsim            {{ tex \subseteq }}
+  | ~~  		::   :: sim             {{ tex \approx }}
+  | |>                  ::   :: rtriangle       {{ tex \vartriangleright }}
+  | -|                  ::   :: dashv           {{ tex \dashv }}
+
+embed 
+{{ coq
+
+Tactic Notation "cmd_cases" tactic(first) tactic(c) :=
+  first;
+  [ c "insn_bop" | c "insn_icmp" ].
+
+End VMsyntax.
+
+}}
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/vol/src/Vellvm/monads" "-I" "~/SVN/sol/vol/src/Vellvm/ott" "-I" "~/SVN/sol/vol/src/Vellvm/compcert" "-I" "~/SVN/sol/theory/metatheory_8.3") ***
+*** End: ***
+ *)
+}}
+

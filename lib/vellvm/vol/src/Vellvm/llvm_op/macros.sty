@@ -1,0 +1,271 @@
+\usepackage{latexsym}
+\usepackage{proof}
+\usepackage{code}
+\usepackage{amssymb}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for programming language syntax:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% KEYWORDS and associated constructs
+%% All expression keywords are written in bold face
+
+%\newcommand{\keyfont}[1]{\mbox{\bf{#1}}}
+\newcommand{\keyfont}[1]{\ensuremath{\mathtt{#1}}}
+
+%% Miscellaneous syntax
+\newcommand{\parens}[1]{\ensuremath{\!\mathcd{(}#1\mathcd{)}\!}}
+
+%% Conditionals
+\newcommand{\IF}{\keyfont{if}}
+\newcommand{\IFZ}{\keyfont{if0}}
+\newcommand{\THEN}{\keyfont{then}}
+\newcommand{\ELSE}{\keyfont{else}}
+\newcommand{\cond}[3]{\ensuremath{\IF\ {#1} \ \THEN\ {#2} \ \ELSE\ {#3}}}
+\newcommand{\condz}[3]{\ensuremath{\IFZ\ {#1} \ \THEN\ {#2}\ \ELSE\ {#3}}}
+
+\newcommand{\CASE}{\keyfont{case}}
+\newcommand{\OF}{\keyfont{of}}
+\newcommand{\INJ}{\keyfont{inj}}
+\newcommand{\case}[4]{\ensuremath{\CASE\ {#1} \ \OF\ \inj{1}(#2).\;{#3} \sep 
+    \inj{2}(#2).\;{#4}}}
+
+%% Pairs and tuples
+\newcommand{\PRJ}{\keyfont{prj}}
+
+%% Looping Constructs
+\newcommand{\WHILE}{\keyfont{while}}
+\newcommand{\DO}{\keyfont{do}}
+\newcommand{\UNTIL}{\keyfont{until}}
+\newcommand{\while}[2]{\WHILE\ {#1}\ \DO\ {#2}}
+
+%% Let Constructs
+\newcommand{\LET}{\keyfont{let}}
+\newcommand{\IN}{\keyfont{in}}
+\newcommand{\letin}[3]{\LET\ #1 = #2\ \IN\  #3}
+
+%% Monad Constructs
+\newcommand{\BIND}{\keyfont{bind}}
+\newcommand{\bind}[3]{\BIND\ #1 = #2 \ \IN\ #3}
+
+%% Abstraction Constructs
+\newcommand{\lam}[2]{\ensuremath{\lambda #1 .\: #2}}
+\newcommand{\Lam}[2]{\ensuremath{\Lambda #1 .\: #2}}
+\newcommand{\FIX}{\keyfont{fix}}
+
+%% Continuation Constructs
+\newcommand{\LETCC}{\keyfont{letcc}}
+\newcommand{\THROW}{\keyfont{throw}}
+\newcommand{\CONT}{\keyfont{cont}}
+\newcommand{\cont}[1]{\ensuremath{\CONT(#1)}}
+\newcommand{\letcc}[2]{\ensuremath{\LETCC\ #1\ \IN\ #2}}
+\newcommand{\throw}[2]{\ensuremath{\THROW\ #1\ #2}}
+
+%% References and State
+\newcommand{\REF}{\keyfont{ref}}
+\newcommand{\assign}[2]{\ensuremath{#1:= #2}}
+\newcommand{\deref}[1]{\ensuremath{!\;#1}}
+\newcommand{\loc}[1]{\ensuremath{\ell_{#1}}}
+\newcommand{\assn}{\ensuremath{:=}}
+
+%% Boolean Operators
+\newcommand{\opand}{\ensuremath{\wedge}}
+\newcommand{\opor}{\ensuremath{\vee}}
+\newcommand{\opneg}{\ensuremath{\neg}}
+
+%% Natural numbers
+\newcommand{\SUCC}{\keyfont{succ}}
+\newcommand{\ZERO}{\const{0}}
+
+%% Miscellaneous Keywords
+\newcommand{\HALT}{\keyfont{halt}}
+\newcommand{\halt}[2]{\ensuremath{\HALT_{#1}\; #2}}  %% #1 is a type parameter
+\newcommand{\SKIP}{\keyfont{skip}}
+\newcommand{\OP}{\keyfont{op}}
+
+%% Generic operators
+\newcommand{\binop}{\ensuremath{\oplus}}
+\newcommand{\unop}{\ensuremath{\ominus\;}}
+
+\newcommand{\constfont}[1]{\mbox{\ensuremath{\mathtt{#1}}}}
+%% Constants
+\newcommand{\TRUE}{\constfont{true}}
+\newcommand{\FALSE}{\constfont{false}}
+\newcommand{\MAYBE}{\constfont{maybe}}
+\newcommand{\UNIT}{\ensuremath{()}}
+\newcommand{\const}[1]{\constfont{#1}}
+
+%% Syntactic Variables (as opposed to Meta-variables)
+\newcommand{\var}[1]{\keyfont{#1}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for Grammar Constructs
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\bnf}{\ensuremath{::=}}
+\newcommand{\sep}{\ensuremath{\ \ |\ \ }}
+
+%%%%%%%%%%%%%%%%%%%
+%% Macros for Types
+%%%%%%%%%%%%%%%%%%%
+
+%% All type-constants are written in \mathsf
+%\newcommand{\typefont}[1]{\mbox{\ensuremath{\mathsf{#1}}}}
+\newcommand{\typefont}[1]{\ensuremath{\mathcd{#1}}}
+
+%% Type abbreviations
+\newcommand{\tlist}[1]{\mbox{\ensuremath{#1 \ \typefont{list}}}}
+\newcommand{\tint}{\typefont{int}}
+\newcommand{\tbool}{\typefont{b}}
+\newcommand{\tbase}{\typefont{b}}
+\newcommand{\tnat}{\typefont{nat}}
+\newcommand{\tfloat}{\typefont{float}}
+\newcommand{\tunit}{\typefont{1}}
+\newcommand{\tvoid}{\typefont{0}}
+\newcommand{\tcont}{\typefont{cont}}
+
+%% Macros that are ``Polymorphic'' over any thing.
+\newcommand{\pair}[2]{\ensuremath{\langle#1,#2\rangle}}
+\newcommand{\gprod}[2]{\ensuremath{#1 \times #2}}
+\newcommand{\gsum}[2]{\ensuremath{#1+#2}}
+\newcommand{\ccase}[2]{\ensuremath{[#1,#2]}}
+\newcommand{\tuple}[1]{\ensuremath{\langle #1 \rangle}}
+
+%%%%%%%%%%%%%%%%%%%
+%% Macros for kinds
+%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\kindfont}[1]{\mbox{\ensuremath{\mathsf{#1}}}}
+\newcommand{\ktype}{\kindfont{Type}}
+\newcommand{\kcap}{\kindfont{Cap}}
+\newcommand{\klev}{\kindfont{Lev}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for creating typing judgements and inference rules:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Rule Names
+\newcommand{\rname}[1]{\ensuremath{[\mathit{#1}]}}
+%\newcommand{\rname}[1]{\mbox{$\mathrm{[{\it #1}]}$}}
+
+\newcommand{\proves}{\ensuremath{\vdash}}
+\newcommand{\satisfies}{\ensuremath{\vDash}}
+\newcommand{\ty}{\ensuremath{\!:\!}}  %% For binding types in contexts
+\newcommand{\Rule}[2]{\infer{#2}{#1}}
+\newcommand{\RuleSide}[3]{\infer[#3]{#2}{#1}}
+\newcommand{\Axiom}[1]{\Rule{}{#1}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for Category Theory
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Macros for constructing categories and things related to categories
+\newcommand{\cat}[1]{\ensuremath{\mathbf{#1}}}
+\newcommand{\cobj}[1]{\ensuremath{\cat{#1}^o}}
+\newcommand{\carr}[1]{\ensuremath{\cat{#1}^a}}
+\newcommand{\chom}[3]{\mbox{\ensuremath{Hom_{\cat{#1}}(#2, #3)}}}
+\newcommand{\cprod}[2]{\mbox{\ensuremath{\cat{#1} \times \cat{#2}}}}
+\newcommand{\cdual}[1]{\ensuremath{\widehat{\cat{#1}}}}
+
+%% Macros for constructing objects in a given category
+\newcommand{\oterm}{\ensuremath{1}}
+\newcommand{\oinit}{\ensuremath{0}}
+
+%% Macros for relating objects in a given category
+\newcommand{\iso}[2]{\mbox{\ensuremath{#1 \cong #2}}}
+
+%% Macros for exponential objects
+\newcommand{\oexp}[2]{\ensuremath{{#2}^{#1}}}
+\newcommand{\curry}[1]{\ensuremath{\Lambda #1}}
+
+%% Macros for dealing with arrows
+\newcommand{\arrow}{\ensuremath{\rightarrow}}
+\newcommand{\longarrow}{\ensuremath{\longrightarrow}}
+\newcommand{\labarrow}[1]{\ensuremath{\stackrel{\scriptscriptstyle #1}{\longrightarrow}}}
+\newcommand{\arr}[3]{\mbox{\ensuremath{#1 : #2 \arrow #3}}}
+\newcommand{\vararr}[3]{\mbox{\ensuremath{#2 \labarrow{#1} #3}}}
+\newcommand{\comp}[2]{\mbox{\ensuremath{#1 \circ #2}}}
+\newcommand{\eqmon}[1]{\ensuremath{\sim_{#1}}}
+\newcommand{\linarr}{\ensuremath{\multimap}}
+
+%% Macros for constructing arrows related to objects
+\newcommand{\iarr}[2]{\ensuremath{\iota_{#1 #2}}}
+\newcommand{\tarr}[2]{\ensuremath{\tau_{#1 #2}}}
+\newcommand{\id}[1]{\ensuremath{id_{#1}}}
+\newcommand{\inj}[1]{\ensuremath{\INJ_{#1}}}
+\newcommand{\prj}[1]{\ensuremath{\PRJ_{#1}}}
+
+%% Macros for functors
+\newcommand{\fun}[1]{\ensuremath{\mathsf{#1}}}
+\newcommand{\idfun}[1]{\ensuremath{\fun{id}_{\cat{#1}}}}
+
+%% Macros for adjoints
+%% Extension of arrow f
+\newcommand{\ext}[1]{\ensuremath{{#1}^*}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for Lattices, CPO's, etc.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\meet}{\ensuremath{\sqcap}}
+\newcommand{\join}{\ensuremath{\sqcup}}
+\newcommand{\sle}{\ensuremath{\sqsubseteq}}
+\newcommand{\latfont}[1]{\ensuremath{\mathcal{#1}}}
+\newcommand{\Lat}{\ensuremath{\latfont{L}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for Operational Semantics
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\stepsto}{\ensuremath{\longmapsto}}
+\newcommand{\stepstostar}{\,\longmapsto^{\ast}\,}
+\newcommand{\evalsto}{\ensuremath{\Downarrow}}
+\newcommand{\diverges}{\ensuremath{\Uparrow}}
+
+\newcommand{\subst}[2]{\ensuremath{\{{#1}/{#2}\}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for Denotational Semantics
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\meanl}{\ensuremath{[ \! [}}
+\newcommand{\meanr}{\ensuremath{] \! ]}}
+\newcommand{\means}[1]{\ensuremath{\meanl #1 \meanr}}
+
+%%%%%%%%%%%%%%%%%%%%%%
+%% Logical connectives
+%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\IMPLIES}{\ensuremath{\Rightarrow}}
+\newcommand{\IFF}{\ensuremath{\Leftrightarrow}}
+\newcommand{\AND}{\ensuremath{\wedge}}
+\newcommand{\OR}{\ensuremath{\vee}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for editing and writing styles
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\note}[1]{\begin{quote}{\bf NOTE:\ }\it #1 \end{quote}}
+\newcommand{\defn}[1]{\textup{\textbf{#1}}}
+\newcommand{\ie}{{\it i.e.}}
+\newcommand{\etal}{\mbox{\it et~al\/}}
+\newcommand{\etc}{{\it etc.}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Macros for miscellaneous math-mode functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\ul}[1]{\underline{#1}}
+\newcommand{\dom}{\ensuremath{\mathrm{dom}}}
+\newcommand{\codom}{\ensuremath{\mathrm{codom}}}
+
+%% Set comprehension
+%\newcommand{\set}[2]{\ensuremath{\{#1 \sep #2\}}}
+
+\newcommand{\NAT}{\ensuremath{\mathbb{N}}}
+\newcommand{\REAL}{\ensuremath{\mathbb{R}}}
+\newcommand{\BOOL}{\keyfont{bool}}
+
+\newcommand{\defeq}{\ensuremath{\stackrel{\tiny{\mathrm{def}}}{=}}}
+
+%% equivalence classes of #1 modulo an eq. relation #2
+%\newcommand{\mod}[2]{\mbox{\ensuremath{#1/\!#2}}}
+
+%% Powerset 
+\newcommand{\pow}[1]{\ensuremath{\mathcal{P}(#1)}}
+
+\newcommand{\bnfdef}{\mathrel{\!\colon\!\!\colon\!\mathord{=}}}
+\newcommand{\bnfalt}{\;\mathrel{\mid}\;}

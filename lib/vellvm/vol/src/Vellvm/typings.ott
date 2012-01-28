@@ -1,0 +1,1380 @@
+
+% Static Semantics of Static Single Assignment(SSA)
+
+embed
+{{coq
+
+Require Import Metatheory.
+Require Import syntax.
+Require Import infrastructure.
+Require Import ListSet.
+Require Import analysis.
+Require Import targetdata.
+
+Module LLVMtypings.
+Import LLVMsyntax.
+Import LLVMinfra.
+
+}}
+
+grammar
+
+formula :: 'formula_' ::=
+  | judgement			::   :: judgement
+  | formula1 ... formulan     	::   :: dots
+  | True     	 		:: M :: true
+    				{{ tex True }}
+				{{ coq [[True]] }}
+  | False     	 		:: M :: false
+    				{{ tex False }}
+				{{ coq [[False]] }}
+  | not formula                 :: M :: not
+      				{{ tex \neg [[formula]] }}
+				{{ coq (not ([[formula]])) }}
+  | notT formula                :: M :: notT
+      				{{ tex \neg [[formula]] }}
+				{{ coq (notT ([[formula]])) }}
+  | ( formula )                 :: M :: brackets
+      	      			{{ tex ([[formula]]\!) }} 
+      				{{ coq ([[ formula ]]) }}
+  | exists u . formula          ::   :: exists 
+      	       			{{ tex \exists [[u]]. [[formula]] }}
+      				{{ coq ( exists [[ u ]] , [[ formula ]] ) }}
+  | formula /\ formula'         :: M :: and
+               			{{ tex [[formula]] \wedge [[formula']] }}
+	  			{{ coq [[formula]] /\ [[ formula' ]] }}
+  | foreach C . formula         :: M :: forall 
+              			{{ tex \forall [[C]]. [[ formula ]] }}
+	  			{{ coq ( forall [[C]], [[ formula ]] ) }}
+  | formula implies formula'    :: M :: implies
+            	    		{{ tex [[formula]] \mathit{implies} [[formula']] }}
+	  			{{ coq ([[formula]] -> [[ formula' ]]) }}
+  | formula iff formula'        :: M :: iff
+            	    		{{ tex [[formula]] \mathit{iff} [[formula']] }}
+	  			{{ coq ([[formula]] <-> [[ formula' ]]) }}
+  | formula \/ formula'         :: M :: or
+               			{{ tex [[formula]] \vee [[formula']] }}
+	  			{{ coq [[formula]] \/ [[ formula' ]] }} 
+  |  [multiline] formula        :: M :: multiline
+                                {{ com allow \LaTeX{} output in multiple lines }}
+                                {{ coq [[formula]] }}
+                                {{ tex \begin{array}{l}[[formula]]\end{array} }}
+  |  [newline] formula          :: M :: formula_n
+                                {{ com add a newline to the \LaTeX{} output }}
+                                {{ coq [[formula]] }} {{ tex \\[[formula]] }}
+  |  [tab] formula              :: M :: formula_t
+                                {{ com add a tab to the \LaTeX{} output }}
+                                {{ coq [[formula]] }} {{ tex \qquad[[formula]] }}
+  | if formula0 then formula1 else formula2 endif
+       	       	    	    	:: M :: ifthenelse
+				{{ tex if [[formula0]] then [[formula1]] else [[formula2]] }}
+				{{ coq ([[formula0]] -> [[formula1]]) /\ ((~[[formula0]]) -> [[formula2]]) }}
+  | formula ; formula'		:: M :: seq
+    	      			{{ tex [[formula]] ; [[formula']] }}
+				{{ coq [[formula]] -> [[formula']] }}
+  | block1 = block2 		::   :: eqBlock
+				{{ tex [[block1]] = [[block2]] }}
+				{{ coq [[block1]] = [[block2]] }}
+  | int1			::   :: intone
+       	 			{{ coq [[typ_int Size.One]] }} 
+  | sz = 1			::   :: isOne
+       	 			{{ coq [[sz]] = Size.One }} 
+  | typ = i32	        	::   :: thirtyTwoInt
+       	 			{{ coq [[typ]] = typ_int Size.ThirtyTwo }}
+  | sz = 32			::   :: isThirtyTwo
+       	 			{{ coq [[sz]] = Size.ThirtyTwo }}
+  | sz > 0			::   :: gtZero
+       	 			{{ coq (Size.gt [[sz]] Size.Zero) }}
+  | sz1 = sz2 			::   :: eqSize
+				{{ tex [[sz1]] = [[sz2]] }}
+				{{ coq [[sz1]] = [[sz2]] }}
+  | sz1 < sz2 			::   :: ltSize
+				{{ tex ([[sz1]] < [[sz2]]) }}
+				{{ coq (Size.lt [[sz1]] [[sz2]]) }}
+  | INT1 = INT2 		::   :: eqINT
+				{{ tex [[INT1]] = [[INT2]] }}
+				{{ coq [[INT1]] = [[INT2]] }}
+  | l1 = l2 			::   :: eqLabel
+				{{ tex [[l1]] = [[l2]] }}
+				{{ coq [[l1]] = [[l2]] }}
+  | id1 == id2			::   :: eqID
+				{{ tex [[id1]] = [[id2]] }}
+				{{ coq [[id1]] = [[id2]] }}
+  | ls1 == ls2                  ::   :: eqLabels
+				{{ tex [[ls1]] = [[ls2]] }}       
+                                {{ coq lset_eq [[ls1]] [[ls2]] }}
+  | l notin ls			::   :: l_notin_ls
+      	    			{{ tex [[l]] \not\in [[ls]] }}
+				{{ coq ( ~ set_In [[l]] [[ls]]) }}
+  | l in ls			::   :: l_in_ls
+      	    			{{ tex [[l]] \in [[ls]] }}
+				{{ coq ( set_In [[l]] [[ls]]) }}
+  | id in ids			::   :: id_in_ids
+      	    			{{ tex [[id]] \in [[ids]] }}
+				{{ coq ( set_In [[id]] [[ids]]) }}
+  | id in intrinsic_funs	::   :: id_in_intrinsic_funs
+      	    			{{ tex [[id]] \in [[intrinsic_funs]] }}
+				{{ coq ( set_In [[id]] [[intrinsic_funs]]) }}
+  | id notin intrinsic_funs	::   :: id_notin_intrinsic_funs
+      	    			{{ tex [[id]] \notin [[intrinsic_funs]] }}
+				{{ coq ( ~ set_In [[id]] [[intrinsic_funs]]) }}
+  | module in system		::   :: module_in_system
+    	       			{{ tex [[module]] \in [[system]] }}
+				{{ coq In [[module]] [[system]] }}
+  | product in products		::   :: product_in_products
+    	       			{{ tex [[product]] \in [[products]] }}
+				{{ coq In [[product]] [[products]] }}
+  | block in blocks		::   :: block_in_blocks
+    	       			{{ tex [[block]] \in [[blocks]] }}
+				{{ coq In [[block]] [[blocks]] }}
+  | insn in insns		::   :: insn_in_insns
+    	       			{{ tex [[insn]] \in [[insns]] }}
+				{{ coq In [[insn]] [[insns]] }}
+  | arg in args			::   :: arg_in_args
+    	       			{{ tex [[arg]] \in [[args]] }}
+				{{ coq In [[arg]] [[args]] }}
+  | noret = yes  		:: M :: noret_alias
+    	     			{{ com noret alias }} 
+				{{ coq [[noret]] = true }}
+  | typ = typ'  		:: M :: typ_alias
+    	     			{{ com typ alias }} 
+				{{ coq [[typ]] = [[typ']] }}
+  | insn = insn'  		:: M :: insn_alias
+    	     			{{ com insn alias }} 
+				{{ coq [[insn]] = [[insn']] }}
+  | module = module'          :: M :: module_alias
+    	     			{{ com module alias }} 
+				{{ coq [[module]] = [[module']] }}
+  | system = system'          :: M :: system_alias
+    	     			{{ com system alias }} 
+				{{ coq [[system]] = [[system']] }}
+  | opt_id <-> opt_id' 		:: M :: opt_id_alias
+    	     			{{ com opt_id alias }} 
+				{{ coq [[opt_id]] = [[opt_id']] }}
+  | length </ constj // j /> = sz :: M :: length_of_consts_is_sz
+                                {{ coq length (unmake_list_const [[ </ constj // j /> ]]) = Size.to_nat[[sz]] }}
+  | ids <-> </ idj // j /> 	:: M :: ids_alias
+    	      	   	        {{ com ids alias }}
+				{{ coq [[ids]] = unmake_list_id [[ </ idj // j /> ]] }}
+  | ls <-> </ lj // j /> 	:: M :: ls_alias
+    	      	   	        {{ com ls alias }}
+				{{ coq [[ls]] = (unmake_list_l [[ </ lj // j /> ]] }}
+  | args <-> </ argj // j /> :: M :: args_alias
+    	      	   	        {{ com args alias }}
+				{{ coq [[args]] = [[ </ argj // j /> ]] }}
+  | insns <-> </ insnj // j /> :: M :: insns_alias
+    	      	   	        {{ com insns alias }}
+				{{ coq [[insns]] = [[ </ insnj // j /> ]] }}
+  | phinodes <-> </ phinodej // j /> :: M :: phis_alias
+    	      	   	        {{ com phinodes alias }}
+				{{ coq [[phinodes]] = [[ </ phinodej // j /> ]] }}
+  | blocks <-> </ blockj // j /> :: M :: blocks_alias
+    	      	   	        {{ com blocks alias }}
+				{{ coq [[blocks]] = [[ </ blockj // j /> ]] }}
+  | products = </ productj // j /> :: M :: products_alias
+    	      	   	        {{ com products alias }}
+				{{ coq [[products]] = [[ </ productj // j /> ]] }}
+  | modules <-> </ modulej // j /> :: M :: modules_alias
+    	      	   	        {{ com modules alias }}
+				{{ coq [[modules]] = [[ </ modulej // j /> ]] }}
+  | params <-> </ paramj // j /> :: M :: params_alias
+                                {{ com params_alias }}
+                                {{ coq [[params]] = [[ </ paramj // j /> ]] }}
+  | getNthTyp </ typj // j /> INT = opt_typ ::   :: getNthTyp
+    	      	       	   	{{ com getNthTyp }}
+				{{ coq nth_error [[ </ typj // j /> ]] [[INT]] = [[opt_typ]] }}  
+  | insn =id= insn'        :: M :: getInsnID_eq
+    	      	      	      	{{ tex [[insn]] =id= [[insn']] }}
+				{{ coq getInsnID [[insn]] = getInsnID [[insn']] }}
+  | insnsRemovesLast insns = insns'
+    		     	        ::   :: insnsRemovesLast
+    		     		{{ coq 
+                                    removelast [[insns]] = [[insns']]
+                                }}
+  | blockDominates fdef block1 block2 
+    		       	        ::   :: blockDominates
+				{{ coq blockDominates [[fdef]] [[block1]] [[block2]] }} 			
+  | blockStrictDominates fdef block1 block2 
+    		       	        ::   :: blockStrictDominates
+				{{ coq blockStrictDominates [[fdef]] [[block1]] [[block2]] }} 			
+  | insnDominates id1 insn2 block
+    		       	        ::   :: insnDominates
+				{{ coq insnDominates [[id1]] [[insn2]] [[block]] }} 			
+  | genInsnUseDef module = usedef_insn		::   :: genInsnUseDef
+    		  		{{ coq genInsnUseDef [[module]] = [[usedef_insn]] }}
+  | genBlockUseDef_fdef fdef = usedef_block	::   :: genBlockUseDefFdef
+    		  		{{ coq genBlockUseDef_fdef [[fdef]] = [[usedef_block]] }}
+  | genBlockUseDef module = usedef_block	::   :: genBlockUseDef
+    		  		{{ coq genBlockUseDef [[module]] = [[usedef_block]] }}
+  | getIdUseDef usedef_id id = ids		::   :: getInsnUseDef
+    		  		{{ coq getIdUseDef [[usedef_id]] [[id]] = [[ids]] }}
+  | getBlockUseDef usedef_block	block = blocks      ::   :: getBlockUseDef
+    		  		{{ coq getBlockUseDef [[usedef_block]] [[block]] = [[blocks]] }}
+  | succOfBlock block module = blocks	::   :: succOfBlock
+    		      		{{ coq succOfBlock [[block]] [[module]] = [[blocks]] }}
+  | isReachableFromEntry fdef block  ::   :: isReachableFromEntry
+                                {{ coq isReachableFromEntry [[fdef]] [[block]] }}
+  | getInsnID insn = id		       ::   :: getInsnID
+    	      	     		{{ coq getInsnID [[insn]] = [[id]] }}
+  | getValueID value = opt_id	::   :: getValueID
+    	      	     		{{ coq getValueID [[value]] = [[opt_id]] }}
+  | getEntryBlock fdef = opt_block	        :: :: getEntryBlock
+    	      	     		{{ coq getEntryBlock [[fdef]] = [[opt_block]] }}
+  | predOfBlock block usedef_block = ls :: :: prefOfBlock
+                                {{ coq predOfBlock [[block]] [[usedef_block]] = [[ls]] }}
+  | getLabelsFromBlocks blocks = ls         :: :: getLabelsFromBlocks
+                                {{ coq getLabelsFromBlocks [[blocks]] = [[ls]] }}
+  | checkIdenticalIncomingValues phinode           :: :: checkIdenticalIncomingValues
+                                {{ coq checkIdenticalIncomingValues [[phinode]] }}
+  | lookupTypViaIDFromFdef fdef id = opt_typ :: :: lookupTypViaIDFromFdef
+                                {{ coq lookupTypViaIDFromFdef [[fdef]] [[id]] = [[opt_typ]] }}
+  | lookupTypViaTIDFromSystem system id = opt_typ :: :: lookupTypViaTIDFromSystem
+                                {{ coq lookupTypViaTIDFromSystem [[system]] [[id]] = [[opt_typ]] }}
+  | lookupTypViaGIDFromSystem system id = opt_typ :: :: lookupTypViaGIDFromSystem
+                                {{ coq lookupTypViaGIDFromSystem [[system]] [[id]] = [[opt_typ]] }}
+  | BinaryOperator.getFirstOperandType fdef insn = opt_typ  :: :: BinaryOperatorGetFirstOperandType
+                                {{ coq BinaryOperator.getFirstOperandType [[fdef]] [[insn]] = [[opt_typ]] }}
+  | BinaryOperator.getSecondOperandType fdef insn = opt_typ  :: :: BinaryOperatorGetSecondOperandType
+                                {{ coq BinaryOperator.getSecondOperandType [[fdef]] [[insn]] = [[opt_typ]] }}
+  | Typ.isIntOrIntVector typ :: :: TypIsIntOrIntVector
+                                {{ coq Typ.isIntOrIntVector [[typ]] }}
+  | CallSite.getCalledFunction insn system = opt_fdef :: :: CallSiteGetCalledFunction
+                                {{ coq CallSite.getCalledFunction [[insn]] [[system]] = [[opt_fdef]] }}
+  | CallSite.getFdefTyp fdef = typ      :: ::  CallSiteGetFdefTy
+                                {{ coq CallSite.getFdefTyp [[fdef]] = [[typ]] }}
+  | FunctionType.getNumParams typ = opt_INT :: :: FunctionTypeGetNumParams
+                                {{ coq FunctionType.getNumParams [[typ]] = [[opt_INT]] }}
+  | CallSite.arg_size fdef = INT :: :: CallSiteArgSize
+                                {{ coq CallSite.arg_size [[fdef]] = [[INT]] }}
+  | Function.getDefReturnType fdef = typ :: :: FunctionGetDefReturnType
+                                {{ coq Function.getDefReturnType [[fdef]] = [[typ]] }}
+  | getInsnTyp insn = opt_typ :: :: getInsnTyp
+                                {{ coq getInsnTyp [[insn]] = [[opt_typ]] }}
+  | getInsnOperands insn = ids :: :: getInsnOperands
+                                {{ coq getInsnOperands [[insn]] = [[ids]] }}
+  | getInsnLabels insn = ls :: :: getInsnLabels
+                                {{ coq getInsnLabels [[insn]] = [[ls]] }}
+  | checkIndexes targetdata typ </ constj // j /> = typ' :: :: checkIndexes
+      {{ coq (exists idxs, exists o, intConsts2Nats [[targetdata]] [[ </ constj // j /> ]] = Some idxs /\ mgetoffset [[targetdata]] [[typ]] idxs = Some (o, [[typ']])) }}
+  | getSubTypFromConstIdxs </ constj // j /> typ = opt_typ :: :: getSubTypFromConstIdxs
+                                {{ coq getSubTypFromConstIdxs [[ </ constj // j /> ]] [[typ]] = [[opt_typ]] }}
+  | getConstGEPTyp </ constj // j /> typ = opt_typ :: :: getConstGEPTyp
+                                {{ coq getConstGEPTyp [[ </ constj // j /> ]] [[typ]] = [[opt_typ]] }}
+  | getGEPTyp </ szj , valuej // j /> typ = opt_typ :: :: getGEPTyp
+                                {{ coq getGEPTyp [[ </ szj , valuej // j /> ]] [[typ]] = [[opt_typ]] }}
+  | Typ.isSized typ :: :: TypIsSized
+                                {{ coq Typ.isSized [[typ]] = true }}
+  | lookupBlockViaLabelFromFdef fdef l = opt_block :: :: lookupBlockViaLabelFromFdef
+                                {{ coq lookupBlockViaLabelFromFdef [[fdef]] [[l]] = [[opt_block]] }}
+  | Typ.getPrimitiveSizeInBits typ = sz :: :: TypgetPrimitiveSizeInBits
+                                {{ coq Typ.getPrimitiveSizeInBits [[typ]] = [[sz]] }}
+  | isPhiNode insn :: :: isPhiNode
+                                {{ coq isPhiNode [[insn]] }}
+  | insn in fdef , block :: :: insnInFdef
+    	    	     		{{ coq insnInFdefBlockB [[insn]] [[fdef]] [[block]] = true }}
+  | insn in system , module , fdef , block :: :: insnInSystem
+    	    	     		{{ coq insnInSystemModuleFdefBlockB [[insn]] [[system]] [[module]] [[fdef]] [[block]] = true }}
+  | lookupBlockViaIDFromFdef fdef id = opt_block :: :: lookupBlockViaIDFromFdef
+                                {{ coq lookupBlockViaIDFromFdef [[fdef]] [[id]] = [[opt_block]] }}
+  | getLabelViaIDFromPhiNode phinode id = opt_l :: :: getLabelViaIDFromPhiNode
+                                {{ coq getLabelViaIDFromPhiNode [[phinode]] [[id]] = [[opt_l]] }}
+%  | lookupBindingViaIDFromFdef fdef id = id_binding :: :: lookupBindingViaIDFromFdef
+%                                {{ coq lookupBindingViaIDFromFdef [[fdef]] [[id]] = [[id_binding]] }}  
+%  | lookupBindingViaIDFromSystem system id = id_binding :: :: lookupBindingViaIDFromSystem
+%                                {{ coq lookupBindingViaIDFromSystem [[system]] [[id]] = [[id_binding]] }}
+  | getBindingTyp id_binding = opt_typ :: :: getBindingTyp
+                                {{ coq getBindingTyp [[id_binding]] = [[opt_typ]] }}
+  | getPointerEltTyp typ1 = opt_typ2 :: :: getPointerEltTyp
+                                {{ coq getPointerEltTyp [[typ1]] = [[opt_typ2]] }}
+  | getFdecID fdec = id             :: :: getFdecID
+    	      	     		{{ coq getFdecID [[fdec]] = [[id]] }}
+  | argInFdef arg fdef           :: :: argInFdef
+                                {{ coq argInFdefB [[arg]] [[fdef]] = true }}
+  | floating_point1 < floating_point2  :: :: floating_point_order
+    			        {{ coq floating_point_order [[floating_point1]] [[floating_point2]] = true }}
+  | getLabelViaIDPhiNode insn id = opt_l :: :: getLabelViaIDPhiNode
+                                {{ coq getLabelViaIDPhiNode [[insn]] [[id]] = [[opt_l]] }}
+  | getCalledValue insn = opt_value    :: :: getCalledValue
+                                {{ coq getCalledValue [[insn]] = [[opt_value]] }}
+  | getCalledValueID insn = opt_id    :: :: getCalledValueID
+                                {{ coq getCalledValueID [[insn]] = [[opt_id]] }}
+  | blockInFdef block fdef       :: :: blockInFdef
+                                {{ coq blockInFdefB [[block]] [[fdef]] = true }}
+  | block in system , module , fdef :: :: blockInSystem
+                                {{ coq blockInSystemModuleFdefB [[block]] [[system]] [[module]] [[fdef]] = true }}
+  | product in system , module :: :: productInSystem
+                                {{ coq productInSystemModuleB [[product]] [[system]] [[module]] = true }}
+  | uniqSystem system               :: :: uniqSystem
+                                {{ coq uniqSystem [[system]] }}
+  | typ =t= typ'                     :: :: typEq 
+                                {{ coq typEqB [[typ]] [[typ']] = true }}
+  | isCallInsn insn                 :: :: isCallInsn
+                                {{ coq isCallInsnB [[insn]] = true }}
+  | getPhiNodeOperands phinode = ids :: :: getPhiNodeOperands
+                                {{ coq getPhiNodeOperands [[phinode]] = [[ids]] }}
+  | getLabelsFromPhiNode phinode = ls :: :: getLabelsFromPhiNode
+                                {{ coq getLabelsFromPhiNode [[phinode]] = [[ls]] }}
+  | lookupFdefViaIDFromSystem system id = opt_fdef :: :: lookupFdefViaIDFromSystem
+                                {{ coq lookupFdefViaIDFromSystem [[system]] [[id]] = [[opt_fdef]] }}
+  | isPointerTyp typ    :: :: isPointerTyp
+    		     	        {{ coq isPointerTyp [[typ]] }}
+  | isFunctionPointerTyp typ    :: :: isFunctionPointerTyp
+    		     	        {{ coq isFunctionPointerTyp [[typ]] }}
+  | isAggregateTyp typ    :: :: isAggregateTyp
+    		     	        {{ coq isAggregateTyp [[typ]] }}
+  | isValidReturnTyp typ    :: :: isValidReturnTyp
+    		     	        {{ coq isValidReturnTyp [[typ]] }}
+  | isValidArgumentTyp typ    :: :: isValidArgumentTyp
+    		     	        {{ coq isValidArgumentTyp [[typ]] }}
+  | isValidElementTyp typ    :: :: isValidElementTyp
+    		     	        {{ coq isValidElementTyp [[typ]] }}
+  | isFirstClassTyp typ    :: :: isFirstClassTyp
+    		     	        {{ coq isFirstClassTyp [[typ]] }}
+  | isBindingFdec id_binding = fdec  :: :: isBindingFdec
+    		     	        {{ coq isBindingFdec [[id_binding]] = Some [[fdec]] }}
+  | isBindingArg id_binding = arg   :: :: isBindingArg
+    		     	        {{ coq isBindingArg [[id_binding]] = Some [[arg]] }}
+  | isBindingGvar id_binding = gvar   :: :: isBindingGvar
+    		     	        {{ coq isBindingGvar [[id_binding]] = Some [[gvar]] }}
+  | isBindingInsn id_binding = insn   :: :: isBindingInsn
+    		     	        {{ coq isBindingInsn [[id_binding]] = Some [[insn]] }}
+  | v in sv                           ::   :: vinsv
+  | ( gl , lc ) ( value ) = opt_sv    ::   :: value2sv
+  | ( module , ft ) ( v ) = opt_fdef  ::   :: lookupfdef
+  | ( gl , lc ) ( params ) = opt_svs  ::   :: params2svs
+  | init_locals gl lc fdef = lc'      ::   :: initlocals
+
+parsing
+formula_true left formula_not
+formula_false left formula_not
+formula_and left formula_and
+formula_or left formula_or
+formula_not left formula_or
+formula_not left formula_and
+formula_or left formula_seq
+formula_seq left formula_seq
+formula_or left formula_ifthenelse
+formula_ifthenelse left formula_seq
+formula_and left formula_and
+formula_multiline <= formula_and
+formula_multiline <= formula_or
+
+defns
+Jwf_typ :: '' ::=
+      defn
+      system |- typ :: :: wf_typ :: '' {{ com [[typ]] is well-formed }} by  
+
+      sz > 0
+      -------------------- :: wf_typ_int
+      system |- int sz
+
+      -------------------- :: wf_typ_float
+      system |- float
+
+      -------------------- :: wf_typ_double
+      system |- double
+
+      -------------------- :: wf_typ_void
+      system |- void
+
+      -------------------- :: wf_typ_label
+      system |- label
+
+      -------------------- :: wf_typ_metadate
+      system |- metadata
+
+      -------------------- :: wf_typ_opaque
+      system |- opaque
+
+      isValidReturnTyp typ     
+      system |- typ
+      </ isValidArgumentTyp typj // j />
+      </ system |- typj // j /> 
+      -------------------------------------------------- :: wf_typ_function
+      system |- typ ( </ typj // j /> varg ) 
+     
+      </ isValidElementTyp typj // j />
+      </ system |- typj // j /> 
+      -------------------------------------------------- :: wf_typ_structure
+      system |- { </ typj // j /> }
+
+      system |- typ
+      isValidElementTyp typ
+      ------------------- :: wf_typ_array
+      system |- [ sz * typ ]
+
+      system |- typ
+      isValidElementTyp typ
+      ------------------- :: wf_typ_pointer
+      system |- typ * 
+
+      % |- typ
+      % isValidElementTyp typ
+      % ------------------- :: wf_typ_vector
+      % |- < Int * typ >
+
+      lookupTypViaTIDFromSystem system id = opt_typ
+      ---------------------------------------------- :: wf_typ_namedt
+      system |- id
+
+defns
+Jfeasible_typ :: '' ::=
+      defn
+      targetdata |- typ :: :: feasible_typ :: '' {{ com [[typ]] is well-formed }} by  
+
+      {{ LLVMtd.feasible_typ [[targetdata]] [[:user_syntax__typ:typ]] }}
+      -------------------------------------------------------------------------------- :: feasible_typ_intro
+      targetdata |- typ
+
+defns
+Jwf_const :: '' ::=
+      defn 
+      system , targetdata |-c const : typ :: :: wf_const :: ''
+      {{ com [[const]] has [[typ]] }} by
+
+      system |- typ
+      {{ Constant.wf_zeroconst_typ [[:user_syntax__typ:typ]] }}
+      ---------------------------------------------------------- :: wf_const_zeroinitializer
+      system , targetdata |-c typ zeroinitializer : typ
+
+
+      system |- int sz
+      sz > 0
+      targetdata |- int sz
+      ------------------------------------------ :: wf_const_int
+      system , targetdata |-c (int sz) Int : int sz
+
+      system |- floating_point
+      targetdata |- typ
+      --------------------------------------------------------- :: wf_const_floatpoint
+      system , targetdata |-c floating_point Float : floating_point
+
+      system |- typ
+      --------------------------- :: wf_const_undef
+      system , targetdata |-c typ undef : typ
+
+      system |- typ*
+      --------------------------------------- :: wf_const_null
+      system , targetdata |-c (typ*) null : typ*
+
+
+      </ system , targetdata |-c constj : typ // j />
+      length </ constj // j /> = sz
+      ----------------------------------------------------------- :: wf_const_arr
+      system , targetdata |-c typ [ </ constj // j /> ] : [sz * typ]
+
+      </ system , targetdata |-c constj : typj // j />
+      </ targetdata |- typj // j />
+      ------------------------------------------------------------------- :: wf_const_struct
+      system , targetdata |-c { </ constj // j /> } : { </ typj // j /> }
+
+
+      system |- typ*
+      lookupTypViaGIDFromSystem system id = typ*
+      {{ Constant.unifiable_typ [[targetdata]] [[:user_syntax__typ:typ]] }}
+      -------------------------------------------------------------------- :: wf_const_gid
+      system , targetdata |-c typ * id : typ*
+
+      system , targetdata |-c const : int sz1
+      system |- int sz2
+      sz2 < sz1
+      targetdata |- int sz1
+      ----------------------------------------------------------- :: wf_const_trunc_int
+      system , targetdata |-c trunc_int const to (int sz2) : int sz2
+
+      system , targetdata |-c const : floating_point1
+      floating_point2 < floating_point1
+      targetdata |- floating_point1
+      system |- floating_point2
+      ------------------------------------------------------------------------ :: wf_const_trunc_fp
+      system , targetdata |-c trunc_int const to floating_point2 : floating_point2
+
+      system , targetdata |-c const : int sz1
+      targetdata |- int sz1
+      system |- int sz2
+      sz1 < sz2
+      --------------------------------------------------------- :: wf_const_zext
+      system , targetdata |-c zext const to (int sz2) : int sz2
+
+      system , targetdata |-c const : int sz1
+      targetdata |- int sz1
+      system |- int sz2
+      sz1 < sz2
+      --------------------------------------------------------- :: wf_const_sext
+      system , targetdata |-c sext const to (int sz2) : int sz2
+
+      system , targetdata |-c const : floating_point1
+      floating_point1 < floating_point2
+      targetdata |- floating_point1
+      system |- floating_point2
+      -------------------------------------------------------------------------- :: wf_const_fpext
+      system , targetdata |-c fpext const to floating_point2 : floating_point2
+
+      % system , targetdata |-c const : floating_point
+      % targetdata |- floating_point
+      % system |- int sz
+      % ---------------------------------------------------------- :: wf_const_fptoui
+      % system , targetdata |-c fptoui const to (int sz) : int sz
+
+      % system , targetdata |-c const : floating_point
+      % targetdata |- floating_point
+      % system |- int sz
+      % --------------------------------------------------------- :: wf_const_fptosi
+      % system , targetdata |-c fptosi const to (int sz) : int sz
+
+      % system , targetdata |-c const : int sz
+      % targetdata |- int sz
+      % system |- floating_point
+      % ------------------------------------------------------------------------ :: wf_const_uitofp
+      % system , targetdata |-c uitofp const to floating_point : floating_point
+
+      % system , targetdata |-c const : int sz
+      % targetdata |- int sz
+      % system |- floating_point
+      % ------------------------------------------------------------------------ :: wf_const_sitofp
+      % system , targetdata |-c sitofp const to floating_point : floating_point
+
+      system , targetdata |-c const : typ*
+      targetdata |- typ*
+      system |- int sz
+      ------------------------------------------------------------- :: wf_const_ptrtoint
+      system , targetdata |-c ptrtoint const to (int sz) : int sz
+
+      system , targetdata |-c const : int sz
+      targetdata |- int sz
+      system |- typ*
+      --------------------------------------------------------- :: wf_const_inttoptr
+      system , targetdata |-c inttoptr const to (typ*) : typ*
+
+      % Check typs
+      system , targetdata |-c const : typ1*
+      targetdata |- typ1*
+      system |- typ2*
+      % BitCast implies a no-op cast of type only. No bits change.
+      % However, you can't cast pointers to anything but pointers.
+      %typ1 = int sz1 /\ typ2 = int sz2 /\ sz1 = sz2
+      % Bitcast requires types of same width.
+      %isPointerTyp typ1 iff isPointerTyp typ2 
+      % Disallow aggregates.
+      %(not isAggregateTyp typ1) /\ (not isAggregateTyp typ2)
+      ------------------------------------------------------- :: wf_const_bitcast
+      system , targetdata |-c bitcast const to typ2* : typ2*
+
+      % Check typs
+      system , targetdata |-c const : typ*
+      targetdata |- typ*
+      </ system , targetdata |-c constj : typ'' // j /> 
+      typ'' = i32
+      % Check indexs
+      getConstGEPTyp </ constj // j /> (typ*) = typ'
+      system |- typ'
+      ------------------------------------------------------------------------- :: wf_const_gep
+      system , targetdata |-c getelementptr inbounds const </ constj // j /> : typ'
+
+      % Check typs
+      system , targetdata |-c const0 : int sz 
+      sz = 1
+      system , targetdata |-c const1 : typ
+      system , targetdata |-c const2 : typ
+      targetdata |- int sz
+      ----------------------------------------------------- :: wf_const_select
+      system , targetdata |-c select const0 const1 const2 : typ
+
+      % Check typs
+      system , targetdata |-c const1 : typ
+      system , targetdata |-c const2 : typ
+      targetdata |- typ
+      % types can only be int, vector or ptr
+      Typ.isIntOrIntVector typ \/ isPointerTyp typ
+      targetdata |- int sz 
+      sz = 1     
+      --------------------------------------------------------- :: wf_const_icmp
+      system , targetdata |-c icmp cond const1 const2 : int sz
+
+      {{ wf_fcond [[fcond]] = true }}
+      % Check typs
+      system , targetdata |-c const1 : floating_point
+      system , targetdata |-c const2 : floating_point 
+      targetdata |- floating_point
+      targetdata |- int sz 
+      sz = 1     
+      system |- floating_point
+      ------------------------------------------------------------- :: wf_const_fcmp
+      system , targetdata |-c fcmp fcond const1 const2 : int sz
+
+
+      % Check typs
+      system , targetdata |-c const : typ
+      targetdata |- typ
+      </ system , targetdata |-c constj : typ'' // j />
+      typ'' = i32
+      targetdata |- typ''
+      % Check indexs
+      checkIndexes targetdata typ </ constj // j /> = typ'
+      system |- typ'
+      --------------------------------------------------------------------- :: wf_const_extractvalue
+      system , targetdata |-c extractvalue const </ constj // j /> : typ'
+
+
+      % Check typs
+      system , targetdata |-c const : typ
+      system , targetdata |-c const' : typ'
+      targetdata |- typ'
+      </ system , targetdata |-c constj : typ'' // j />
+      typ'' = i32
+      targetdata |- typ''
+      % Check indexs
+      checkIndexes targetdata typ </ constj // j /> = typ'
+      system |- typ
+      ------------------------------------------------------------------------- :: wf_const_insertvalue
+      system , targetdata |-c insertvalue const const' </ constj // j /> : typ
+
+      % Check typs
+      system , targetdata |-c const1 : int sz
+      system , targetdata |-c const2 : int sz
+      system |- int sz
+      ----------------------------------------------- :: wf_const_bop
+      system , targetdata |-c bop const1 const2 : int sz
+
+      % Check typs
+      system , targetdata |-c const1 : floating_point
+      system , targetdata |-c const2 : floating_point
+      system |- floating_point
+      -------------------------------------------------------- :: wf_const_fbop
+      system , targetdata |-c fbop const1 const2 : floating_point
+
+defns
+Jwf_value :: '' ::=
+      defn
+      system , module , fdef |- value : typ :: :: wf_value :: ''
+      {{ com [[value]] has [[typ]] wrt [[system]] and [fdef] }} by
+
+      system , (layouts namedts) |-c const : typ
+      (layouts namedts) |- typ
+      system |- typ
+      --------------------------------------------------------- :: wf_value_const
+      system , (layouts namedts products) , fdef |- const : typ
+
+      system |- typ
+      (layouts namedts) |- typ
+      lookupTypViaIDFromFdef fdef id = typ
+      ------------------------------------------ :: wf_value_id
+      system , (layouts namedts products) , fdef |- id : typ
+
+defns
+Jwf_operand :: '' ::=
+      defn
+      fdef , block , insn |- id' :: :: wf_operand :: ''
+      {{ com [[id']] is well-formed w.r.t [[insn]] [[block]] in [[fdef]] }} by
+
+      insn in fdef , block
+      getInsnOperands insn = ids
+      id' in ids
+      lookupBlockViaIDFromFdef fdef id' = block'
+      notT isPhiNode insn
+<<
+        (
+         insnDominates id' insn block \/ 
+         blockStrictDominates fdef block' block \/ 
+         (not (isReachableFromEntry fdef block))
+        )
+>>
+      -------------------------------------------------------- :: wf_operand_intro
+      fdef , block , insn |- id'
+
+defns
+Jwf_insn_base :: '' ::=
+      defn
+      fdef , block |-i insn :: :: wf_insn_base :: '' 
+      {{ com [[insn]] is well-formed w.r.t [[block]] in [[fdef]] }} by  
+      % Verifier::visitInstruction
+
+      % Instruction must be embedded in basic block!
+      insn in fdef , block
+      % Check that non-phi nodes are not self referential in wf_insn_base::PhiNode
+      %
+      % Verify that if this is a terminator that it is at the end of the block in wf_block
+      %
+      % Check that void typed values don't have names
+      % We dont need to check this in Ott
+      %
+      % Check that the return value of the instruction is either void or a legal value type.
+      getInsnTyp insn = typ
+      typ =t= void \/ isFirstClassTyp typ
+      % Check that the instruction doesn't produce metadata or metadata*. Calls
+      % all already checked against the callee type.
+      (not typ =t= metadata) \/ isCallInsn insn 
+      % Instructions may not produce pointer to metadata.
+      (isPointerTyp typ) implies (getPointerEltTyp typ = typ' /\ (not typ' =t= metadata)) 
+      % Check that all uses of the instruction, if they are instructions
+      % themselves, actually have parent basic blocks.  If the use is not an
+      % instruction, it is an error!
+      % We should prove a lemma for this later.
+      %
+      % Check operands
+      getInsnOperands insn = ids
+      ids <-> </ idj // j />
+      </ fdef , block , insn |- idj // j />
+      -------------------------------------------------------------------------------------- :: wf_insn_base_intro
+      fdef , block |-i insn
+
+defns
+Jwf_cast :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |-cast insn :: :: wf_cast :: '' 
+      {{ com cast [[insn]] is well-formed w.r.t [[block]] in [[fdef]] in [[module]] [[system]] }} by  
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : typ *
+      system |- int sz
+      (layouts namedts) |- int sz
+      % Check invariance for instructions 
+      fdef , block |-i id = ptrtoint ( typ * ) value1 to ( int sz )
+      ------------------------------------------------------------------------------------------------------- :: wf_cast_ptrtoint
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-cast id = ptrtoint ( typ * ) value1 to ( int sz )	
+
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : int sz
+      system |- typ *
+      (layouts namedts) |- typ *
+      % Check invariance for instructions 
+      fdef , block |-i id = inttoptr ( int sz ) value1 to ( typ * )	
+      ------------------------------------------------------------------------------------------------------------ :: wf_cast_inttoptr
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-cast id = inttoptr ( int sz ) value1 to ( typ * )
+
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : typ1*
+      system |- typ2 *
+      (layouts namedts) |- typ2 *
+      % BitCast implies a no-op cast of type only. No bits change.
+      % However, you can't cast pointers to anything but pointers.
+      %Typ.getPrimitiveSizeInBits typ1 = sz1 /\ Typ.getPrimitiveSizeInBits typ2 = sz2 /\ sz1 = sz2
+      % Bitcast requires types of same width.
+      %isPointerTyp typ1 iff isPointerTyp typ2 
+      % Disallow aggregates.
+      %(not isAggregateTyp typ1) /\ (not isAggregateTyp typ2)
+      % Check invariance for instructions 
+      fdef , block |-i id = bitcast typ1* value1 to typ2*
+      system |- typ2*		
+      --------------------------------------------------------------------------------------------- :: wf_cast_bitcast
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-cast id = bitcast typ1* value1 to typ2*		
+
+defns
+Jwf_trunc :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |-trunc insn :: :: wf_trunc :: '' 
+      {{ com trunc [[insn]] is well-formed w.r.t [[block]] in [[fdef]] in [[module]] [[system]] }} by  
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : int sz1 
+      system |- int sz2
+      (layouts namedts) |- int sz2
+      % bitwidth of dest typ is less then src typ
+      sz2 < sz1
+      % Check invariance for instructions 
+      fdef , block |-i id = trunc_int ( int sz1 ) value1 to ( int sz2 )
+      ----------------------------------------------------------------------------------------------- :: wf_trunc_int
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-trunc id = trunc_int ( int sz1 ) value1 to ( int sz2 )	
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : floating_point1
+      system |- floating_point2
+      (layouts namedts) |- floating_point2
+      % bitwidth of dest typ is less then src typ
+      floating_point2 < floating_point1
+      % Check invariance for instructions 
+      fdef , block |-i id = trunc_fp floating_point1 value1 to floating_point2
+      system |- floating_point2
+      ----------------------------------------------------------------------------------------------- :: wf_trunc_fp
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-trunc id = trunc_fp floating_point1 value1 to floating_point2	
+
+defns
+Jwf_ext :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |-ext insn :: :: wf_ext :: '' 
+      {{ com ext [[insn]] is well-formed w.r.t [[block]] in [[fdef]] in [[module]] [[system]] }} by  
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : int sz1 
+      system |- int sz2
+      (layouts namedts) |- int sz2
+      % bitwidth of src typ is less then dest typ
+      sz1 < sz2
+      % Check invariance for instructions 
+      fdef , block |-i id = zext ( int sz1 ) value1 to ( int sz2 )
+      ------------------------------------------------------------------------------------------------------- :: wf_ext_z
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-ext id = zext ( int sz1 ) value1 to ( int sz2 )	
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : int sz1 
+      system |- int sz2
+      (layouts namedts) |- int sz2
+      % bitwidth of src typ is less then dest typ
+      sz1 < sz2
+      % Check invariance for instructions 
+      fdef , block |-i id = sext ( int sz1 ) value1 to ( int sz2 )
+      ------------------------------------------------------------------------------------------------------- :: wf_ext_s
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-ext id = sext ( int sz1 ) value1 to ( int sz2 )	
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : floating_point1 
+      system |- floating_point2
+      (layouts namedts) |- floating_point2
+      % bitwidth of src typ is less then dest typ
+      floating_point1 < floating_point2
+      % Check invariance for instructions 
+      fdef , block |-i id = fpext floating_point1 value1 to floating_point2
+      ------------------------------------------------------------------------------------------------------- :: wf_ext_fp
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |-ext id = fpext floating_point1 value1 to floating_point2	
+
+defns
+Jwf_insn :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |- insn :: :: wf_insn :: '' 
+      {{ com [[insn]] is well-formed w.r.t [[block]] in [[fdef]] in [[module]] [[system]] }} by  
+
+      % Check typs
+      system , module , fdef |- value : typ
+      % Exactly one return value and it matches the return type. Good. 
+      Function.getDefReturnType fdef = typ
+      % Check invariance for instructions
+      fdef , block |-i id = ret typ value
+      ------------------------------------------------------ :: wf_insn_return
+      intrinsic_funs , system , module , fdef , block |- id = ret typ value
+
+      % return instr that returns void in Function can be of void return type! 
+      Function.getDefReturnType fdef = void
+      % Check invariance for instructions
+      fdef , block |-i id = ret void
+      ------------------------------------------------------- :: wf_insn_return_void
+      intrinsic_funs , system , module , fdef , block |- id = ret void
+
+      % Check typs
+      system , module , fdef |- value : int sz 
+      sz = 1
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l1 = block1
+      lookupBlockViaLabelFromFdef fdef l2 = block2
+      not (l1 = l2)
+      % Check invariance for instructions
+      fdef , block |-i id = br value l1 l2
+      -------------------------------------------------------------------------------------- :: wf_insn_br
+      intrinsic_funs , system , module , fdef , block |- id = br value l1 l2	
+
+      % Check labels
+      lookupBlockViaLabelFromFdef fdef l = block
+      % Check invariance for instructions
+      fdef , block |-i id = br l
+      -------------------------------------------------------------------------------------- :: wf_insn_br_uncond
+      intrinsic_funs , system , module, fdef , block |- id = br l		
+
+      % fdef , block |-i id = invoke typ0 id0 params to l1 unwind l2
+      % -------------------------------------------------------------------------------------- :: wf_insn_invoke
+      % intrinsic_funs , system , module, fdef , block |- id = invoke typ0 id0 params to l1 unwind l2
+
+      % Check invariance for instructions
+      fdef , block |-i id = unreachable
+      -------------------------------------------------------------------------------------- :: wf_insn_unreachable
+      intrinsic_funs , system , module, fdef , block |- id = unreachable
+
+      % Check typs
+      system , module , fdef |- value1 : int sz
+      system , module , fdef |- value2 : int sz
+      % Check that integer arithmetic operators are only used with integral operands.
+      % Integer arithmetic operators only work with integral types 
+      % Typ.isIntOrIntVector typ
+      % Check invariance for instructions
+      fdef , block |-i id = bop (int sz) value1 value2
+      -------------------------------------------------------------------------------------- :: wf_insn_bop
+      intrinsic_funs , system , module, fdef , block |- id = bop (int sz) value1 value2
+
+      % Check typs
+      system , module , fdef |- value1 : floating_point
+      system , module , fdef |- value2 : floating_point
+      % Check that integer arithmetic operators are only used with integral operands.
+      % Integer arithmetic operators only work with integral types 
+      % Typ.isIntOrIntVector typ
+      % Check invariance for instructions
+      fdef , block |-i id = fbop floating_point value1 value2
+      ----------------------------------------------------------------------------------------------------- :: wf_insn_fbop
+      intrinsic_funs , system , module, fdef , block |- id = fbop floating_point value1 value2
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value : typ
+      </ system , (layouts namedts) |-c constj : typ'' // j />
+      typ'' = i32
+      % Check indexs
+      checkIndexes (layouts namedts) typ </ constj // j /> = typ'
+      system |- typ'
+      (layouts namedts) |- typ'
+      % Check invariance for instructions
+      fdef , block |-i id = extractvalue typ value </ constj // j />
+      -------------------------------------------------------------------------------------- :: wf_insn_extractvalue
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = extractvalue typ value </ constj // j />
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value : typ
+      system , (layouts namedts products) , fdef |- value' : typ'
+      </ system , (layouts namedts) |-c constj : typ'' // j />
+      typ'' = i32
+      % Check indexs
+      checkIndexes (layouts namedts) typ </ constj // j /> = typ'
+      % Check invariance for instructions
+      fdef , block |-i id = insertvalue typ value typ' value' </ constj // j />
+      -------------------------------------------------------------------------------------- :: wf_insn_insertvalue
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = insertvalue typ value typ' value' </ constj // j />
+
+      % Allocation instruction pointer not in the generic address space!
+      %
+      % Alloca array size must be i32
+      system , (layouts namedts products) , fdef |- value : int sz 
+      sz = 32
+      %
+      % Cannot allocate unsized type"
+      (layouts namedts) |- typ
+      system |- typ
+      {{ Constant.unifiable_typ [[(layouts namedts)]] [[:user_syntax__typ:typ]] }}
+      % Check invariance for instructions
+      fdef , block |-i id = malloc typ value align 
+      --------------------------------------------------------------------------------------------------- :: wf_insn_malloc
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = malloc typ value align 
+
+      % Check typs
+      system , module , fdef |- value : typ*
+      % Check invariance for instructions
+      fdef , block |-i id = free (typ*) value
+      -------------------------------------------------------------------------------------- :: wf_insn_free
+      intrinsic_funs , system , module , fdef , block |- id = free (typ*) value
+
+      % Allocation instruction pointer not in the generic address space!
+      %
+      % Alloca array size must be i32
+      system , (layouts namedts products) , fdef |- value : int sz 
+      sz = 32
+      %
+      % Cannot allocate unsized type"
+      (layouts namedts) |- typ
+      system |- typ
+      {{ Constant.unifiable_typ [[(layouts namedts)]] [[:user_syntax__typ:typ]] }}
+      {{ Constant.wf_zeroconst_typ [[:user_syntax__typ:typ]] }}
+      % Check invariance for instructions
+      fdef , block |-i id = alloca typ value align 
+      -------------------------------------------------------------------------------------------------- :: wf_insn_alloca
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = alloca typ value align 
+
+      % Load operand must be a pointer.
+      system , (layouts namedts products) , fdef |- value1 : typ1*
+      (layouts namedts) |- typ1
+      {{ Constant.wf_zeroconst_typ [[:user_syntax__typ:typ1]] }}
+      % Check invariance for instructions
+      fdef , block |-i id = load (typ1*) value1 align
+      ------------------------------------------------------------------------------------------------------- :: wf_insn_load
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = load (typ1*) value1 align		
+
+      % Store operand must be a pointer.
+      system , (layouts namedts products) , fdef |- value1 : typ
+      system , (layouts namedts products) , fdef |- value2 : typ*
+      (layouts namedts) |- typ
+      % Check invariance for instructions
+      fdef , block |-i id = store typ value1 value2 align
+      --------------------------------------------------------------------------------------------------------- :: wf_insn_store
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = store typ value1 value2 align
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value : typ*
+      module = (layouts namedts products)
+      </ system , module , fdef |- valuej : typ'' // j />
+      typ'' = i32
+      % Check indexs
+      getGEPTyp </ szj , valuej // j /> typ = typ'
+      system |- typ'
+      (layouts namedts) |- typ'
+      % Check invariance for instructions
+      fdef , block |-i id = getelementptr inbounds (typ*) value </ szj , valuej // j />
+      ---------------------------------------------------------------------------------------- :: wf_insn_gep
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = getelementptr inbounds (typ*) value </ szj , valuej // j />
+
+
+      intrinsic_funs , system , module , fdef , block |-trunc id = truncop typ1 value1 to typ2
+      ---------------------------------------------------------------------------------------------------- :: wf_insn_trunc
+      intrinsic_funs , system , module , fdef , block |- id = truncop typ1 value1 to typ2
+
+      intrinsic_funs , system , module , fdef , block |-ext id = extop typ1 value1 to typ2
+      ---------------------------------------------------------------------------------------------------- :: wf_insn_ext
+      intrinsic_funs , system , module , fdef , block |- id = extop typ1 value1 to typ2
+
+
+      intrinsic_funs , system , module , fdef , block |-cast id = castop typ1 value1 to typ2
+      ---------------------------------------------------------------------------------------------------- :: wf_insn_cast
+      intrinsic_funs , system , module , fdef , block |- id = castop typ1 value1 to typ2
+
+
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : typ
+      system , (layouts namedts products) , fdef |- value2 : typ
+      % types can only be int, vector or ptr
+      Typ.isIntOrIntVector typ \/ isPointerTyp typ
+      % Check invariance for instructions
+      fdef , block |-i id = icmp cond typ value1 value2
+      --------------------------------------------------------------------------------------------------- :: wf_insn_icmp
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = icmp cond typ value1 value2
+
+
+      {{ wf_fcond [[fcond]] = true }}
+      % Check typs
+      system , (layouts namedts products) , fdef |- value1 : floating_point
+      system , (layouts namedts products) , fdef |- value2 : floating_point
+      % Check invariance for instructions
+      fdef , block |-i id = fcmp fcond floating_point value1 value2
+      ------------------------------------------------------------------------------------------------------- :: wf_insn_fcmp
+      intrinsic_funs , system , (layouts namedts products) , fdef , block |- id = fcmp fcond floating_point value1 value2
+
+      % Check typs
+      </ system , module , fdef |- valuej : typ // j />
+      typ =t= void \/ isFirstClassTyp typ
+      % Check that the instruction doesn't produce metadata or metadata*. Calls
+      % all already checked against the callee type.
+      not typ =t= metadata
+      % Instructions may not produce pointer to metadata.
+      (isPointerTyp typ) implies (getPointerEltTyp typ = typ' /\ (not typ' =t= metadata)) 
+      % Check invariance for instructions
+      {{ insnInFdefBlockB [[:user_syntax__insn:id = phi typ </ [ valuej , lj ] // j />]] [[:user_syntax__fdef:fdef]] [[:user_syntax__block:block]] = true }}
+      %
+      {{ wf_phinode [[:user_syntax__fdef:fdef]] [[:user_syntax__block:block]] [[:user_syntax__phinode:id = phi typ </ [ valuej , lj ] // j />]] }}
+      --------------------------------------------------------------------------------------------------------------------------------------------- :: wf_insn_phi
+      intrinsic_funs , system , module , fdef , block |- id = phi typ </ [ valuej , lj ] // j />
+			        
+      % Check typs
+      system , module , fdef |- value0 : int sz 
+      sz = 1
+      system , module , fdef |- value1 : typ
+      system , module , fdef |- value2 : typ
+      % Check invariance for instructions
+      fdef , block |-i id = select value0 typ value1 value2
+      ------------------------------------------------------------------------------------------------------- :: wf_insn_select
+      intrinsic_funs , system , module , fdef , block |- id = select value0 typ value1 value2
+
+      % LLVM checks that 
+      %   "Called function must be a pointer!"
+      %   "Called function has to be a pointer to function type!"
+      module = (layouts namedts products)
+      system , module , fdef |- value0 : typ0*
+      % Verify that the correct number of arguments are being passed 
+      % Correct number of arguments passed to called function! 
+      {{ FunctionType.getNumParams [[:user_syntax__typ:typ1]] = Some (length [[params]]) }}
+      % Verify that all arguments to the call match the function type... 
+      params <-> </ (typj' attributesj' valuej'') // j />
+      typ0 = typ1 ( </ typj' // j /> varg )
+      system |- typ1 
+      (layouts namedts) |- typ1
+      </ system , module , fdef |- valuej'' : typj' // j />
+      % instructions returning void cannot have a name
+      typ1 =t= void implies noret = yes
+      % Will Verify call attributes later... 
+      %
+      % Verify that there's no metadata unless it's a direct call to an intrinsic. 
+      %   Open soooon...
+      %  
+      % Check invariance for instructions
+      fdef , block |-i id = noret clattrs call typ0 value0 params
+      ------------------------------------------------------------------------------------------------------------------- :: wf_insn_call
+      intrinsic_funs , system , module , fdef , block |- id = noret clattrs call typ0 value0 params
+
+defns
+Jwf_cmds :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |- cmds :: :: wf_cmds :: ''
+      {{ com [[cmds]] is well-formed w.r.t. [[block]] [[fdef]] in [[module]] [[system]] }} by
+
+      --------------------------------------- :: wf_cmds_nil
+      intrinsic_funs , system , module , fdef , block |- []
+
+      intrinsic_funs , system , module , fdef , block |- cmd
+      intrinsic_funs , system , module , fdef , block |- cmds
+      ------------------------------------------------------------------------------ :: wf_cmds_cons
+      intrinsic_funs , system , module , fdef , block |- cmd , cmds
+ 
+defns
+Jwf_phinodes :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef , block |- phinodes :: :: wf_phinodes :: ''
+      {{ com [[phinodes]] is well-formed w.r.t. [[block]] [[fdef]] in [[module]] [[system]] }} by
+
+      --------------------------------------- :: wf_phinodes_nil
+      intrinsic_funs , system , module , fdef , block |- []
+
+      intrinsic_funs , system , module , fdef , block |- phinode
+      intrinsic_funs , system , module , fdef , block |- phinodes
+      ------------------------------------------------------------------------------ :: wf_phinodes_cons
+      intrinsic_funs , system , module , fdef , block |- phinode , phinodes
+
+defns
+Jwf_block :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef |- block :: :: wf_block :: '' 
+      {{ com [[block]] is well-formed w.r.t. [[fdef]] in [[module]] [[system]] }} by
+
+      % Inclusion
+      (l phinodes cmds terminator) in system , module , fdef
+      % Ensure that the PHI nodes are all grouped together at the top of the block.
+      % This can be tested by checking whether the instruction before this is
+      % either nonexistent (because this is begin()) or is a PHI node.  If not,
+      % then there is some other instruction before a PHI.
+      % LLVM checks this only in visitPHINode, we pull it up to block checking. 
+      % It is easier than the one in LLVM::visitPHINode.
+      %
+      % Ensure that basic blocks have terminators! 
+      %
+      % We moved some assertions to visitPhiNode 
+      %
+      % Check instruction
+      intrinsic_funs , system , module , fdef , (l phinodes cmds terminator) |- phinodes
+      intrinsic_funs , system , module , fdef , (l phinodes cmds terminator) |- cmds
+      intrinsic_funs , system , module , fdef , (l phinodes cmds terminator) |- terminator
+      ------------------------------------------------------------------------------------- :: wf_block_intro
+      intrinsic_funs , system , module , fdef |- l phinodes cmds terminator
+
+defns
+Jwf_blocks :: '' ::=
+      defn
+      intrinsic_funs , system , module , fdef |- blocks :: :: wf_blocks :: ''
+      {{ com [[blocks]] is well-formed w.r.t. [[fdef]] in [[module]] [[system]] }} by
+
+      --------------------------------------- :: wf_blocks_nil
+      intrinsic_funs , system , module , fdef |- []
+
+      intrinsic_funs , system , module , fdef |- block
+      intrinsic_funs , system , module , fdef |- blocks
+      ------------------------------------------------------------------------ :: wf_blocks_cons
+      intrinsic_funs , system , module , fdef |- block , blocks
+ 
+
+defns
+Jwf_fdec :: '' ::=
+      defn
+      intrinsic_funs , system , module |-f fdec :: :: wf_fdec :: ''
+      {{ com [[fdec]] is well-formed w.r.t. [[module]] [[system]] }} by
+
+      % Inclusion
+      (declare ( fnattrs typ id ( args varg ) )) in system , (layouts namedts products)
+      % Check function arguments.
+      args <-> </ (typj attributesj idj) // j />
+      </ system |- typj // j />      
+      </ (layouts namedts) |- typj // j />      
+      % Functions may not have common linkage 
+      %
+      % Formal arguments must match # of arguments for function type! 
+      %
+      % Functions cannot return aggregate values
+      isFirstClassTyp typ \/ typ =t= void
+      % "Invalid struct return type!" 
+      %
+      % Attributes after last parameter! 
+      %
+      % Check function attributes. 
+      %
+      % Check that this function meets the restrictions on this calling convention. 
+      %
+      % Function may not return metadata unless it's an intrinsic.
+      %
+      % Check that the argument values match the function type for this function... 
+        % Argument value does not match function argument type! 
+        % Function arguments must have first-class types! 
+        % Function takes metadata but isn't an intrinsic 
+      %
+      % Verify that this function (which has a body) is not named "llvm.*".  It
+      % is not legal to define intrinsics. 
+      %
+      % Check invalid linkage type for function declaration 
+      -------------------------------------------------------------------------------------------------- :: wf_fdec_intro
+      intrinsic_funs , system , (layouts namedts products) |-f declare ( fnattrs typ id ( args varg ) )
+
+defns
+Jwf_fdef :: '' ::=
+      defn
+      intrinsic_funs , system , module |-f fdef :: :: wf_fdef :: ''
+      {{ com [[fdef]] is well-formed w.r.t. [[module]] [[system]] }} by
+
+      % Inclusion
+      (define ( fnattrs typ id ( args varg ) ) { blocks } ) in system , (layouts namedts products)
+      % Check function arguments.
+      args <-> </ (typj attributesj idj) // j />
+      </ system |- typj // j />      
+      </ (layouts namedts) |- typj // j />      
+      % Functions may not have common linkage 
+      %
+      % Formal arguments must match # of arguments for function type! 
+      % 
+      % Functions cannot return aggregate values
+      isFirstClassTyp typ \/ typ =t= void
+      %
+      % "Invalid struct return type!" 
+      %
+      % Attributes after last parameter! 
+      %
+      % Check function attributes. 
+      %
+      % Check that this function meets the restrictions on this calling convention. 
+      %
+      % Function may not return metadata unless it's an intrinsic 
+      %
+      % Check that the argument values match the function type for this function... 
+        % Argument value does not match function argument type! 
+        % Function arguments must have first-class types! 
+        % Function takes metadata but isn't an intrinsic 
+      %
+      % Verify that this function (which has a body) is not named "llvm.*".  It
+      % is not legal to define intrinsics. 
+      % 
+      % Check the entry node 
+      % Entry block to function must not have predecessors! 
+      getEntryBlock (define ( fnattrs typ id ( args varg ) ) { blocks }) = block
+      {{ genBlockUseDef_fdef [[:user_syntax__fdef:define fheader { blocks }]] = [[usedef_block]] }}
+      {{ hasNonePredecessor [[:user_syntax__block:block]] [[usedef_block]] = true }}
+      % Checking function body
+      intrinsic_funs , system , (layouts namedts products) , define ( fnattrs typ id ( args varg ) ) { blocks } |- blocks
+      ------------------------------------------------------------------------------------------------------------------- :: wf_fdef_intro
+      intrinsic_funs , system , (layouts namedts products) |-f define ( fnattrs typ id ( args varg ) ) { blocks }
+
+defns
+Jwf_g :: '' ::=     % visitGlobalValue
+      defn
+      intrinsic_funs , system , module |-g product :: :: wf_g :: ''
+      {{ com common cases that [[product]] is well-formed w.r.t. [[module]] [[system]]}} by 
+
+      -------------------------------------------------- :: wf_g_intro
+      intrinsic_funs , system , module |-g product
+      
+defns
+Jwf_gvar :: '' ::=  % visitGlobalVariable
+      defn
+      intrinsic_funs , system , module |-v gvar :: :: wf_gvar :: ''
+      {{ com [[gvar]] is well-formed w.r.t. [[module]] [[system]]}} by 
+
+      system , targetdata |-c const : typ
+      ----------------------------------------------------------------------------- :: wf_gv_intro
+      intrinsic_funs , system , module |-v id = linkage gvar_spec typ const align
+
+defns
+Jwf_prod :: '' ::=
+      defn
+      intrinsic_funs , system , module |- product :: :: wf_prod :: ''
+      {{ com [[product]] is well-formed w.r.t. [[module]] [[system]]}} by 
+
+      intrinsic_funs , system , module |-g gvar
+      intrinsic_funs , system , module |-v gvar      
+      ------------------------------------------------ :: wf_prod_global_var
+      intrinsic_funs , system , module |- gvar
+
+      intrinsic_funs , system , module |-g fdec
+      intrinsic_funs , system , module |-f fdec
+      ---------------------------------------------- :: wf_prod_function_dec
+      intrinsic_funs , system , module |- fdec
+
+      intrinsic_funs , system , module |-g fdef
+      intrinsic_funs , system , module |-f fdef
+      ---------------------------------------------- :: wf_prod_function_def
+      intrinsic_funs , system , module |- fdef   
+
+      % -------------------------------------- :: wf_prod_namedtype
+      % intrinsic_funs , system , module |- namedt     
+
+defns
+Jwf_prods :: '' ::=
+      defn
+      intrinsic_funs , system , module |- products :: :: wf_prods :: ''
+      {{ com [[products]] is well-formed w.r.t. [[module]] [[system]]}} by 
+
+      ------------------------------------------- :: wf_prods_nil
+      intrinsic_funs , system , module |- []
+
+      intrinsic_funs , system , module |- products
+      intrinsic_funs , system , module |- product
+      ---------------------------------------------------------------- :: wf_prods_cons
+      intrinsic_funs , system , module |- product , products
+
+defns
+Jwf_namedts :: '' ::=
+      defn
+      |- namedts :: :: wf_namedts :: ''
+      {{ com [[namedts]] is well-formed }} by
+
+      %% FIXME: Check circularity
+      -------------------------------- :: wf_namedts_intro
+      |- namedts 
+
+defns
+Jwf_module :: '' ::=
+      defn
+      intrinsic_funs , system |- module :: :: wf_module :: ''
+      {{ com [[module]] is well-formed w.r.t. [[system]] }} by
+
+      %%
+      |- namedts
+      %%
+      (layouts namedts products) in system
+      intrinsic_funs , system , (layouts namedts products) |- products
+      ------------------------------------------------------------------------------------ :: wf_module_intro
+      intrinsic_funs , system |- (layouts namedts products)
+
+defns
+Jwf_modules :: '' ::=
+      defn
+      intrinsic_funs , system |- modules :: :: wf_modules :: ''
+      {{ com [[modules]] is well-formed w.r.t. [[system]] }} by  
+
+      ----------------------------- :: wf_modules_nil
+      intrinsic_funs , system |- []
+
+      intrinsic_funs , system |- module 
+      intrinsic_funs , system |- modules
+      ----------------------------------------------- :: wf_modules_cons
+      intrinsic_funs, system |- module , modules
+ 
+defns
+Jwf_system :: '' ::=
+      defn
+      intrinsic_funs |- system :: :: wf_system :: ''
+      {{ com [[system]] is well-formed }} by
+
+      intrinsic_funs , modules |- modules
+      uniqSystem modules
+      ------------------------------ :: wf_system_intro
+      intrinsic_funs |- modules
+     
+embed
+{{coq
+
+Tactic Notation "wfconst_cases" tactic(first) tactic(c) :=
+  first;
+  [ c "wfconst_zero" | c "wfconst_int" | c "wfconst_floatingpoint" |
+    c "wfconst_undef" | c "wfconst_null" | c "wfconst_array" |
+    c "wfconst_struct" | c "wfconst_gid" | c "wfconst_trunc_int" |
+    c "wfconst_trunc_fp" | c "wfconst_zext" | c "wfconst_sext" |
+    c "wfconst_fpext" | c "wfconst_ptrtoint" | c "wfconst_inttoptr" |
+    c "wfconst_bitcast" | c "wfconst_gep" | c "wfconst_select" |
+    c "wfconst_icmp" | c "wfconst_fcmp" | c "wfconst_extractvalue" | 
+    c "wfconst_insertvalue" | c "wfconst_bop" | c "wfconst_fbop" | 
+    c "wfconst_nil" | c "wfconst_cons" ].
+
+Scheme wf_const_ind2 := Induction for wf_const Sort Prop
+  with wf_const_list_ind2 := Induction for wf_const_list Sort Prop.
+
+Combined Scheme wf_const_mutind from wf_const_ind2, wf_const_list_ind2.
+
+End LLVMtypings.
+
+}}
+
+embed 
+{{ coq
+(*
+*** Local Variables: ***
+*** coq-prog-name: "coqtop" ***
+*** coq-prog-args: ("-emacs-U" "-I" "./monads" "-I" "./ott" "-I" "./compcert" "-I" "/home/jianzhou/SVN/provers/metalib/branches/metatheory_8.3/") ***
+*** End: ***
+*)
+}}
+
