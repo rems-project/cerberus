@@ -1,4 +1,4 @@
-LEM_DIR=../lem
+LEM_DIR=lem
 LEM=$(LEM_DIR)/lem
 LEM_LIB=$(LEM_DIR)/library
 
