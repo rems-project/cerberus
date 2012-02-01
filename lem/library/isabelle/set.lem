@@ -1,0 +1,20 @@
+val Collect : forall 'a. ('a -> bool) -> 'a set
+val member : forall 'a. 'a -> 'a set -> bool
+val not_member : forall 'a. 'a -> 'a set -> bool
+val insert : forall 'a. 'a -> 'a set -> 'a set
+val (subset) : forall 'a. 'a set -> 'a set -> bool
+val subset_eq : forall 'a. 'a set -> 'a set -> bool
+val supset : forall 'a. 'a set -> 'a set -> bool
+val supset_eq : forall 'a. 'a set -> 'a set -> bool
+val Ball : forall 'a. 'a set -> ('a -> bool) -> bool
+val Bex : forall 'a. 'a set -> ('a -> bool) -> bool
+val UNIV : forall 'a. 'a set
+val empty : forall 'a. 'a set
+val Pow : forall 'a. 'a set -> 'a set set 
+val (union) : forall 'a. 'a set -> 'a set -> 'a set 
+val (inter) : forall 'a. 'a set -> 'a set -> 'a set
+val subtraction : forall 'a. 'a set -> 'a set -> 'a set
+val image : forall 'a 'b. ('a -> 'b) -> 'a set -> 'b set 
+val range : forall 'a 'b. ('a -> 'b) -> 'b set
+val vimage : forall 'a 'b. ('a -> 'b) -> 'b set -> 'a set
+val contents : forall 'a. 'a set -> 'a

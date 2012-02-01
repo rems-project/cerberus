@@ -1,0 +1,1 @@
+val fold: forall 'a 'b. ('a -> 'b -> 'b) -> 'a set -> 'b -> 'b
