@@ -17,7 +17,6 @@ type int_type =
   | UNSIGNED of int_base_type
 
 type basic_type =
-  | VOID
   | CHAR
   | INTEGER of int_type
 
@@ -41,7 +40,8 @@ type integer_constant = Cabs.integer_constant
 type constant = Cabs.constant
 
 type ctype =
-  | BASE of qualifiers * basic_type
+  | VOID of qualifiers
+  | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
   | ARRAY of ctype * num
@@ -180,7 +180,6 @@ module Print = struct
   end
 
   let pp_basic_type = function
-    | VOID -> !^ "void"
     | CHAR -> !^ "char"
     | INTEGER i -> pp_int_type i
   end
@@ -203,7 +202,8 @@ module Print = struct
       let ins_space ds d = ds ^^ d ^^ P.space in
       P.fold ins_space (List.map pp_qualifier [q | forall (q IN qs) | true]) in
     match t with
-      | BASE qs b -> pp_qs qs ^^ pp_basic_type b
+      | VOID qs   -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
       | ARRAY t s -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
       | POINTER qs t -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
       | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
