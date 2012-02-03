@@ -1,0 +1,22 @@
+type t = <|min : num; max : num|>
+
+let in_range r v = r.min <= v && v <= r.max
+let max_of r = r.max
+let min_of r = r.min
+
+let char_bit = 8
+
+let zero = <|min = 0; max = 0|>
+
+let bool = <|min = 0; max = 1|>
+
+let schar  = <|min =                 ~127; max =                  127|>
+let uchar  = <|min =                    0; max =                  255|>
+let shrt   = <|min =               ~32767; max =                32767|>
+let ushrt  = <|min =                    0; max =                65535|>
+let int    = <|min =               ~32767; max =                32767|>
+let uint   = <|min =                    0; max =                65535|>
+let long   = <|min =           ~214748364; max =            214748364|>
+let ulong  = <|min =                    0; max =          4294967295 |>
+let llong  = zero (*<|min = ~9223372036854775807; max =  9223372036854775807|>*)
+let ullong = zero (*<|min =                    0; max = 18446744073709551615|>*)

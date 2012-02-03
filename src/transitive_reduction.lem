@@ -1,0 +1,30 @@
+module R = struct
+  type 'a t = ('a, 'a set) Pmap.map
+
+  let emp = Pmap.empty
+
+  let add (v1, v2) t =
+    match Map_.find v1 t with
+      | Some from_v1 -> Pmap.add v1 ({v2} union from_v1) t
+      | None         -> Pmap.add v1  {v2}                t
+    end
+
+  let make edges = Set.fold (fun e r -> add e r) edges emp
+
+  let reachable t v1 v2 =
+    match Map_.find v1 t with
+      | Some vs -> v2 IN vs
+      | None    -> false
+   end
+
+  let reachable_set t v1 =
+    match Map_.find v1 t with
+      | Some vs -> vs
+      | None    -> {}
+    end
+end
+
+let reduce edges =
+  let r = R.make edges in
+  let redundant (v1, v2) = exist (v IN R.reachable_set r v1). R.reachable r v v2 in
+  {e | forall (e IN edges) | not (redundant e)}

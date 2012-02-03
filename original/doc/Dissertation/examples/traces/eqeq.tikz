@@ -1,0 +1,20 @@
+%%
+\node (a_7) at (121bp,9bp) [draw,draw=none] {$\textsf{Kill}_7 (s_3)$};
+  \node (a_6) at (91bp,63bp) [draw,draw=none] {$\textsf{Store}_6 (\texttt{INT}, s_3, v_{10})$};
+  \node (a_5) at (41bp,117bp) [draw,draw=none] {$\textsf{Load}_5 (\texttt{INT}, s_4, v_3)$};
+  \node (a_4) at (141bp,117bp) [draw,draw=none] {$\textsf{Load}_4 (\texttt{INT}, s_4, v_5)$};
+  \node (a_3) at (91bp,171bp) [draw,draw=none] {$\textsf{Store}_3 (\texttt{INT}, s_3, \texttt{0})$};
+  \node (a_2) at (91bp,225bp) [draw,draw=none] {$\textsf{Store}_2 (\texttt{INT}, s_4, \texttt{2})$};
+  \node (a_1) at (45bp,279bp) [draw,draw=none] {$\textsf{Create}_1 (\texttt{INT}, s_4)$};
+  \node (a_0) at (137bp,279bp) [draw,draw=none] {$\textsf{Create}_0 (\texttt{INT}, s_3)$};
+  \node (a_8) at (61bp,9bp) [draw,draw=none] {$\textsf{Kill}_8 (s_4)$};
+  \draw [->] (a_2) ..controls (91bp,209.01bp) and (91bp,198.86bp)  .. (a_3);
+  \draw [->] (a_4) ..controls (125.54bp,100.3bp) and (114.89bp,88.801bp)  .. (a_6);
+  \draw [->] (a_5) ..controls (56.465bp,100.3bp) and (67.11bp,88.801bp)  .. (a_6);
+  \draw [->] (a_6) ..controls (81.896bp,46.613bp) and (75.847bp,35.724bp)  .. (a_8);
+  \draw [->] (a_0) ..controls (122.77bp,262.3bp) and (112.98bp,250.8bp)  .. (a_2);
+  \draw [->] (a_3) ..controls (106.46bp,154.3bp) and (117.11bp,142.8bp)  .. (a_4);
+  \draw [->] (a_3) ..controls (75.535bp,154.3bp) and (64.89bp,142.8bp)  .. (a_5);
+  \draw [->] (a_6) ..controls (100.1bp,46.613bp) and (106.15bp,35.724bp)  .. (a_7);
+  \draw [->] (a_1) ..controls (59.227bp,262.3bp) and (69.021bp,250.8bp)  .. (a_2);
+%
