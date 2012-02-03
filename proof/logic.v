@@ -48,7 +48,7 @@ Inductive sem : formula -> value -> Prop :=
   | sem_guard_false : forall f1 f2 v2, sem f1 VFalse -> sem f2 v2 -> sem (KGuard f1 f2) v2.
 
 Inductive feq : formula -> formula -> Prop :=
-  | feq_ext : forall f1 f2 v, sem f1 v -> sem f2 v -> feq f1 f2.
+  | feq_ext : forall f1 f2 v1 v2, sem f1 v1 -> sem f2 v2 -> (forall v, sem f1 v <-> sem f2 v) -> feq f1 f2.
 
 Lemma sem_and_comm : forall f1 f2 v, sem (KAnd f2 f1) v -> sem (KAnd f1 f2) v.
 Proof.
@@ -158,12 +158,31 @@ Proof.
     ).
 Qed.
 
+Lemma feq_ext_simpl : forall f1 f2 v, sem f1 v -> sem f2 v -> feq f1 f2.
+Proof.
+  intros f1 f2 v Sem1 Sem2.
+  apply (feq_ext _ _ _ _ Sem1 Sem2).
+  intros v'.
+  split;
+    intros Sem;
+    try set (sem_inj _ _ _ Sem1 Sem);
+    try set (sem_inj _ _ _ Sem2 Sem);
+    congruence.
+Qed.
+
+Lemma feq_wff_simpl : forall f1 f2, wff f1 -> wff f2 -> (forall v, sem f1 v <-> sem f2 v) -> feq f1 f2.
+Proof.
+  intros f1 f2 wff_f1 wff_f2 fequiv.
+  destruct (wff_sem f1 wff_f1) as [v1 Sem1].
+  destruct (wff_sem f2 wff_f2) as [v2 Sem2].
+  apply (feq_ext _ _ _ _ Sem1 Sem2 fequiv).
+Qed.
 
 Lemma feq_wff_refl : forall f, wff f -> feq f f.
 Proof.
   intros f wff_f.
   destruct (wff_sem f wff_f) as [v Sem].
-  now apply (feq_ext _ _ v).
+  apply (feq_ext_simpl _ _ _ Sem Sem).
 Qed.
 
 Lemma feq_wff_and_comm : forall f1 f2, wff f1 -> wff f2 -> feq (KAnd f1 f2) (KAnd f2 f1).
@@ -174,6 +193,6 @@ Proof.
   destruct (wff_sem (KAnd f1 f2) wff_f12) as [v12 Sem12].
   destruct (wff_sem (KAnd f2 f1) wff_f21) as [v21 Sem21].
   set (sem_and_comm _ _ _ Sem21) as Sem12'.
-  set (sem_inj _ _ _ Sem12 Sem12').
-  apply (feq_ext _ _ v12); congruence.
+  rewrite (sem_inj _ _ _ Sem12 Sem12') in Sem12.
+  apply (feq_ext_simpl _ _ _ Sem12 Sem21).
 Qed.
