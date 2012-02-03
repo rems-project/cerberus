@@ -17,6 +17,9 @@ type storage_class =
 
 type qualifier =
   | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC
 
 type specifier =
   | VOID
