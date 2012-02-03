@@ -106,13 +106,13 @@ module Expression = struct
   let conj_sp = product_map Denotation.conj_sp
   let conj_sb = product_map Denotation.conj_sb
 
-  let add_constraint     cstr  = Set.map (Denotation.add_constraint  cstr)
-  let add_constraint_set cstrs = Set.map (Denotation.add_constraint  cstrs)
-  let add_action         a     = Set.map (Denotation.add_action      a)
-  let add_actions        acts  = Set.map (Denotation.add_actions     acts)
-  let add_side_effect    a     = Set.map (Denotation.add_side_effect a)
-  let add_ls_pair        l s   = Set.map (Denotation.add_ls_pair     l s)
-  let add_call           call  = Set.map (Denotation.add_call        call)
+  let add_constraint     cstr  = Set.map (Denotation.add_constraint     cstr)
+  let add_constraint_set cstrs = Set.map (Denotation.add_constraint_set cstrs)
+  let add_action         a     = Set.map (Denotation.add_action         a)
+  let add_actions        acts  = Set.map (Denotation.add_actions        acts)
+  let add_side_effect    a     = Set.map (Denotation.add_side_effect    a)
+  let add_ls_pair        l s   = Set.map (Denotation.add_ls_pair        l s)
+  let add_call           call  = Set.map (Denotation.add_call           call)
 
   module Operators = struct
     let (-&-) = conj
