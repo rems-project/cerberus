@@ -22,13 +22,13 @@ let lvalue_convert t e =
   | Some t' -> E.return t'
   end
 
-let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
+let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
 let one l = A.Exp l (A.CONSTANT (C.CONST_INT (1, None)))
 
 let rec is_null_pointer (A.Exp _ e) =
   match e with
   | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
-  | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer exp
+  | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer exp
   | _ -> false
   end
 
@@ -67,7 +67,7 @@ let rec check_exp env l e_head =
       else
         E.return (A.T_LVALUE t)
   | A.CONSTANT (C.CONST_INT (i, None)) ->
-      E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+      E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
   | A.CONSTANT (C.CONST_INT (_, Some _)) ->
       E.fail "Suffixes in integer constant expressions are not supported."
   | A.CALL e es ->
@@ -194,7 +194,7 @@ let rec check_exp env l e_head =
                    be applied to [a] [...] function type [...].`` in" in
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
         else invalid_head msg_i
       else invalid_head msg_f
   | A.ALIGNOF t ->
@@ -206,12 +206,12 @@ let rec check_exp env l e_head =
                    be applied to a function type [...].`` in" in
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
         else invalid_head msg_i
       else invalid_head msg_f
-  | A.CAST (A.VOID q) e ->
+  | A.CAST (A.BASE q A.VOID) e ->
       f e >>= fun _ ->
-      E.return (A.T_EXP (A.VOID q))
+      E.return (A.T_EXP (A.BASE q A.VOID))
   | A.CAST t' e ->
       let msg_n = "Violation of constraint 6.5.4#1 Cast operators, \
                    Constraints: ``[T]he type name shall specify [...] \
@@ -545,7 +545,7 @@ let rec check_exp env l e_head =
         else if T.is_pointer_to_void t2 then
           if T.is_pointer_to_object t3 then
             let q = T.merge_qualifiers t2 t3 in
-            E.return (A.T_EXP (A.POINTER q (A.VOID {})))
+            E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
           else invalid msg_vp e3
         (* Case: ptr : ptr. *)
         else if T.is_pointer t2 then
@@ -564,7 +564,7 @@ let rec check_exp env l e_head =
         (* Case: void : void. *)
         else if T.is_void t2 then
           if T.is_void t3 then
-            E.return (A.T_EXP (A.VOID {}))
+            E.return (A.T_EXP (A.BASE {} A.VOID))
           else invalid msg_v e3
         (* Case: struct : struct, enum : enum. *)
         else if T.is_structure t2 || T.is_union t2 then

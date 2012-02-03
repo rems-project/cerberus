@@ -173,8 +173,8 @@ and desugar_specifier specifiers =
       (Pmap.create Multiset.compare)
 *)
       Pmap.empty
-      ( (* [(mset [C.VOID], A.VOID)] TODO: (K) Does this break anything ?
-        @ *) [(mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
+      ( [(mset [C.VOID], A.VOID)]
+        @ [(mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
         @ [(mset [C.UNSIGNED; C.CHAR], A.INTEGER (A.UNSIGNED A.ICHAR))]
         @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.SHORT)))
           [ [C.SHORT];
@@ -222,7 +222,7 @@ and desugar_specifier specifiers =
 and desugar_type t =
   let ft = desugar_type in
   match t with
-  | C.BASE qs ss -> A.BASIC qs <$> desugar_specifier ss
+  | C.BASE qs ss -> A.BASE qs <$> desugar_specifier ss
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
