@@ -1,4 +1,4 @@
-type t = Location.t * Ail.type_class
+type ('id, 'e) t = Location.t * Ail.type_class
 
 let a_type l t = (l, t)
 

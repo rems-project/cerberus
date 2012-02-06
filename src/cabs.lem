@@ -9,30 +9,6 @@ type cabsloc = <|
 
 type location = Location.t
 
-type storage_class =
-  | AUTO
-  | STATIC
-  | EXTERN
-  | REGISTER
-
-type qualifier =
-  | CONST
-  | RESTRICT
-  | VOLATILE
-  | ATOMIC
-
-type specifier =
-  | VOID
-  | CHAR
-  | SHORT
-  | INT
-  | LONG
-  | SIGNED
-  | UNSIGNED
-  | BOOL
-
-type specifiers = specifier multiset
-type qualifiers = qualifier set
 
 type sequential_operator =
   | COMMA
@@ -94,7 +70,47 @@ type constant =
   | CONST_STRING of string
 *)
 
-type c_type =
+
+
+
+
+
+
+(* [Storage-class specifiers] (6.7.1#1) *)
+type storage_class =
+  | AUTO
+  | STATIC
+  | EXTERN
+  | REGISTER
+
+(* [Type qualifiers] (6.7.3#1) *)
+type qualifier =
+  | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC
+
+type specifier =
+  | VOID
+  | CHAR
+  | SHORT
+  | INT
+  | LONG
+(*  | FLOAT *)
+(*  | DOUBLE *)
+  | SIGNED
+  | UNSIGNED
+  | BOOL
+(*  | COMPLEX *)
+  | STRUCT of string option * struct_declaration list (* TODO: STRUCT_HACK *)
+(* TODO: union-specifier *)
+(* TODO: enum-specifier *)
+(* TODO: typedef-name *)
+
+and specifiers = specifier multiset
+and qualifiers = qualifier set
+
+and c_type =
   | BASE of qualifiers * specifiers
   | ARRAY of qualifiers * c_type * exp_l option
   | POINTER of qualifiers * c_type
@@ -116,6 +132,13 @@ and expression =
   | TYPE_ALIGNOF of c_type
   | INDEX of exp_l * exp_l
 and exp_l = expression * location
+
+(* TODO: STRUCT_HACK *)
+and struct_declarator =
+  | STRUCT_DECL of string * c_type
+  | BITFIELD of (string * c_type) option * exp_l
+and struct_declaration = specifiers * qualifiers * struct_declarator list option
+
 
 and declaration = string * c_type * storage_class list
 and decl_l = declaration * location
@@ -146,6 +169,7 @@ and stmt_l = statement * location
 type global_definition =
   | FUNCTION_DEFINITION of decl_l * stmt_l
   | EXTERNAL_DECLARATION of defn_l list
+  | STRUCT_ (* TODO: struct *)
 
 type g_defn_l = global_definition * location
 

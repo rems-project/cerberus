@@ -39,6 +39,7 @@ document.lem \
 symbol_table.lem \
 cabs.lem \
 ail.lem \
+ail_aux.lem \
 ail_rewrite.lem \
 types.lem \
 annotate.lem \

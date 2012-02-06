@@ -138,10 +138,10 @@ external_declaration:
     {C.EXTERNAL_DECLARATION $1, L.make $startpos $endpos}
 ;
 
-/* 6.9.1#1 Function definitions, Syntax */
+(* 6.9.1#1 Function definitions, Syntax *)
 function_definition:
-/* TODO No support for old-style function definitions. */
-| declaration_specifiers declarator /*declaration_list_opt*/ compound_statement
+(* TODO No support for old-style function definitions. *)
+| declaration_specifiers declarator (*declaration_list_opt*) compound_statement
     { let store, specs, quals = $1 in
       let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
       let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in

@@ -1,64 +1,133 @@
 open Ail
+open Ail_aux (* lift_int *)
 
-let lift_int f_int otherwise = function
-  | BASIC _ (INTEGER i) -> f_int i
-  | _                   -> otherwise
-  end
+(* *************************************************************************
+   * Predicates over types, corresponding to the name conventions and type *
+   * correspondences defined in 6.2.5.                                     *
+   *************************************************************************
 
-let is_unsigned_int = function
-  | BOOL       -> true
-  | UNSIGNED _ -> true
-  | SIGNED   _ -> false
-  end
-
+   [signed integer types] 6.2.5#4
+   
+   "(...) The standard (...) integer types are collectively called signed
+    integer types."
+*)
 let is_signed_int = function
   | SIGNED   _ -> true
   | UNSIGNED _ -> false
   | BOOL       -> false
   end
 
-let is_unsigned_integer = lift_int is_unsigned_int false
-let is_signed_integer   = lift_int is_signed_int   false
-
-let is_char = function
-  | BASIC _ CHAR -> true
-  | _            -> false
+(* [unsigned integer types] 6.2.5#6
+   
+   "The type *_Bool* and the unsigned integer types that correspond to the
+    standard signed integer types are the `standard unsigned integer types`.
+    (...) The standard (...) integer types are collectively called
+    `unsigned integer types`"
+   
+   NOT_SUPPORTED: extended unsigned integer types
+*)
+let is_unsigned_int = function
+  | BOOL       -> true
+  | UNSIGNED _ -> true
+  | SIGNED   _ -> false
   end
 
+let is_signed_integer   = lift_int is_signed_int   false
+let is_unsigned_integer = lift_int is_unsigned_int false
+
+
+(* [real floating types] (6.2.5#10)
+   
+   "(...)"
+   
+   NOT_SUPPORTED
+*)
+let is_real_floating t = false
+
+
+(* [complex types, floating types] (6.2.5#11)
+   
+   "(...) The real floating and complex types are collectively called the
+    `floating types`."
+   
+   NOT_SUPPORTED
+*)
+let is_complex t = false
+let is_floating t = is_real_floating t || is_complex t
+
+
+(* (basic types) (6.2.5#14)
+   
+   "The type *char*, the signed and unsigned integer types, and the floating
+    types are collectively called the `basic types`."
+*)
+let is_basic = function
+  | BASIC _ CHAR -> true
+  | t            -> is_unsigned_integer t || is_signed_integer t ||
+                    is_floating t
+  end
+
+
+(* [character types] (6.2.5#15)
+   
+   "The three types *char*, *signed char*, and *unsigned char* are collectively
+    called the `character types`. (...)"
+*)
+let is_character = function
+  | BASIC _ CHAR                       -> true
+  | BASIC _ (INTEGER (SIGNED   ICHAR)) -> true
+  | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true
+  | _                                  -> false
+  end
+
+
+(* [enumerated types] (6.2.5#16)
+   
+   "(...)"
+   
+   TODO
+*)
+let is_enumerated t = false
+
+
+(* [integer types, real types] (6.2.5#17)
+   
+   "The type *char*, the signed and unsigned integer types, and the enumerated
+    types are collectively called `integer types`. The integer and real floating
+    types are collectively called `real types`."
+*)
+let is_integer = function
+  | BASIC _ CHAR -> true
+  | t            -> is_signed_integer t || is_unsigned_integer t ||
+                    is_enumerated t
+  end
+let is_real t = is_integer t || is_real_floating t
+
+
+(* [arithmetic types] (6.2.5#18)
+   
+   "Integer and floating types are collectively called `arithmetic types`.
+    (...)"
+*)
+let is_arithmetic t = is_integer t || is_floating t
+
+
+(* TODO: would be nice to get rid of this *)
 let is_void = function
   | VOID _ -> true
   | _      -> false
   end
 
-let is_character = function
-  | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true
-  | BASIC _ (INTEGER (SIGNED   ICHAR)) -> true
-  | BASIC _ CHAR                       -> true
-  | _                                  -> false
-  end
 
-(* TODO No support for floating point, enumerated, structure, union or atomic
-   types. *)
-let is_real_floating t = false
-let is_complex t = false
-let is_floating t = is_real_floating t || is_complex t
-let is_enumerated t = false
 
-let is_basic t =
-  is_char t
-  || is_unsigned_integer t
-  || is_signed_integer t
-  || is_floating t
 
-let is_integer t =
-  is_char t
-  || is_signed_integer t
-  || is_unsigned_integer t
-  || is_enumerated t
 
-let is_real t = is_integer t || is_real_floating t
-let is_arithmetic t = is_integer t || is_floating t
 
+
+
+
+
+(* TODO *)
 let is_structure t = false
 let is_union t = false
 let is_enum t = false
