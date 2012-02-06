@@ -64,6 +64,7 @@ type cause =
   | IF_SCALAR
   | WHILE_SCALAR
   | DO_SCALAR
+  | LVALUE_UNDEFINED
   | UNSUPPORTED of string
 
 let to_string e =
@@ -394,6 +395,11 @@ let to_string e =
       "Violation of constraint 6.8.4.1 Iteration statements, Constraints: \
        ``The controlling expression of an iteration statement shall have \
        scalar type.``"
+
+  | LVALUE_UNDEFINED ->
+      "Undefined behaviour according to 6.3.2.1#2 Lvalues, arrays, and \
+       function designators: ``If the value has an incomplete type and does \
+       not have array type, the behaviour is undefined. [...]``"
 
   | UNSUPPORTED msg -> msg
   end
