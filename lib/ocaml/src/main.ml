@@ -42,7 +42,10 @@ let () =
     >> Parser.parse
     >> Exception.rbind (Cabs_to_ail.desugar "main")
     >> Exception.map (pass_through pp_file)
-    >> Exception.rbind Typing.annotate
+    >> Exception.rbind (
+         Exception.rbind_exception (Exception.fail -| Type_error.to_string)
+         -| Typing.annotate
+       )
     >> Exception.map (Reduction.reduce !bound)
     >> Exception.map (pass_through_test !dot    pp_dot)
     >> Exception.map (pass_through_test !output pp_out)
