@@ -1,5 +1,20 @@
 open Global
 
+
+(* [storage duration] (6.2.4#1)
+   
+   "An object has a storage duration that determines its lifetime. There are
+    four storage durations: static, thread, automatic, and allocated. Allocated
+    storage is described in 7.22.3."
+*)
+(* (* TODO *)
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+*)
+
 type storage_class =
   | AUTO
   | STATIC
@@ -47,6 +62,7 @@ type ctype =
   | ARRAY of ctype * num
   | POINTER of qualifiers * ctype
   | FUNCTION of ctype * ctype list
+(*   | STRUCT of 'id *)
 
 type type_class =
   | T_EXP of ctype
