@@ -11,15 +11,15 @@ module Effect = struct
   type id = Symbol.t
   type id_set = Symbol.sset
 
-  type ('a_e, 'a_s) env = <|
+  type 'a env = <|
     symbol_set : id_set;
     symbol_table : (string, id) St.t;
     id_map : (id, A.declaration) map;
-    globals : (id * (id, 'a_e) A.exp) list;
-    fn_map : (id, (id list * (id, 'a_e, 'a_s) A.stmt)) map
+    globals : (id * 'a A.expression_l) list;
+    fn_map : (id, (id list * 'a A.statement_l)) map
   |>
 
-  type ('a, 'a_e, 'a_s, 'msg) t = ('a, ('a_e, 'a_s) env, 'msg) M.t
+  type ('b, 'a, 'msg) t = ('b, 'a env, 'msg) M.t
 
   let return = M.return
   let fail = M.fail
@@ -108,8 +108,8 @@ open E.Operators
 
 let zero l = (C.CONSTANT (C.CONST_INT (0, None)), l)
 let one  l = (C.CONSTANT (C.CONST_INT (1, None)), l)
-let d_zero l = A.Exp l (A.CONSTANT (C.CONST_INT (0, None)))
-let d_one  l = A.Exp l (A.CONSTANT (C.CONST_INT (1, None)))
+let d_zero l = Pair.make l (A.CONSTANT (C.CONST_INT (0, None)))
+let d_one  l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 
 let subst l name =
   let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
@@ -129,13 +129,13 @@ end
 let rec desugar_exp (e, l) =
   let f  = desugar_exp in
   let ft = desugar_type in
-  A.Exp l <$> (match e with
+  Pair.make l <$> (match e with
   (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
      subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
      ( *((E1)+(E2))) ]]". *)
   | C.INDEX e1 e2 ->
       A.UNARY A.INDIRECTION <$> (
-        A.Exp l <$> (A.BINARY (C.ARITHMETIC C.ADD) <$> f e1 <*> f e2)
+        Pair.make l <$> (A.BINARY (C.ARITHMETIC C.ADD) <$> f e1 <*> f e2)
       )
   (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
      equivalent to [[ (E+=1) ]]". *)
@@ -264,7 +264,7 @@ and desugar_type t =
 and desugar_stmt (s, l) =
   let fs = desugar_stmt in
   let fe = desugar_exp  in
-  A.Stmt l <$> match s with
+  Pair.make l <$> match s with
   | C.BLOCK ss ->
       (* Open up a new scope, transform each statement/declaration in the
          block and tear down the scope again. *)
@@ -299,7 +299,7 @@ and desugar_stmt (s, l) =
       let body = (C.BLOCK [s; s3], l) in
       let loop = (C.WHILE e2 body, l) in    
       let s' = (C.BLOCK [s1; loop], l) in
-      fs s' >>= function A.Stmt _ d_s ->
+      fs s' >>= function (_, d_s) ->
       E.return d_s end
   | C.FOR_DECL defns e2_opt e3_opt s ->
       let is_auto_or_register ((((_, _, storage), l), _), _) =
@@ -332,7 +332,7 @@ and desugar_stmt (s, l) =
         let body = (C.BLOCK [s; s3], l) in
         let loop = (C.WHILE e2 body, l) in
         let s' = (C.BLOCK [s1; loop], l) in
-        fs s' >>= function A.Stmt _ d_s ->
+        fs s' >>= function (_, d_s) ->
         E.return d_s end
   | C.DECLARATION defns ->
       let d_defns = E.map_list desugar_defn defns in
@@ -373,7 +373,7 @@ and desugar_stmt_opt l = function
   (* Adding or removing a (finite number of) null operation is semantically
      sound since "a null statement [...] performs no operations" (6.8.3#3,
      Expression and null statements, Semantics). *)
-  | None -> E.return (A.Stmt l A.SKIP)
+  | None -> E.return (Pair.make l A.SKIP)
   end
 
 and register_name l name =

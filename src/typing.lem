@@ -13,20 +13,15 @@ let invalid msg exp = E.fail (report msg exp)
 
 let lvalue_convert t e =
   match T.lvalue_convert t with
-  | None ->
-      let msg = "Undefined behaviour according to 6.3.2.1#2 Lvalues, arrays, \
-                 and function designators: ``If the value has an incomplete \
-                 type and does not have array type, the behaviour is \
-                 undefined. [...]``" in
-      E.fail (Type_error.UNSUPPORTED msg)
+  | None -> E.fail Type_error.LVALUE_UNDEFINED
   | Some t' -> E.return t'
   end
 
 let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
-let one l = A.Exp l (A.CONSTANT (C.CONST_INT (1, None)))
+let one l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 
-let rec is_null_pointer (A.Exp _ e) =
-  match e with
+let rec is_null_pointer e =
+  match Annot.exp_of e with
   | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
   | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer exp
   | _ -> false
@@ -480,9 +475,9 @@ let rec check_exp env l e_head =
   end
 
 and annotate_exp env exp =
-  let (A.Exp l e) = exp in
+  let (l, e) = exp in
   let a_type e =
-    E.map (fun t -> A.Exp (Annot.a_type l t) e) (check_exp env l e) in
+    E.map (fun t -> Pair.make (Annot.a_type l t) e) (check_exp env l e) in
   match e with
   | A.VARIABLE v -> a_type (A.VARIABLE v)
   | A.CONSTANT c -> a_type (A.CONSTANT c)
@@ -508,10 +503,10 @@ and annotate_exp env exp =
       map_exp f e >>= a_type
   end
 
-let rec annotate_stmt env (A.Stmt l stmt) =
+let rec annotate_stmt env (l, stmt) =
   let f_e = annotate_exp  env in
   let f_s = annotate_stmt env in
-  E.map (A.Stmt l) (match stmt with
+  E.map (Pair.make (l, A.T_EXP (A.BASE {} A.VOID))) (match stmt with
   | A.IF e s1 s2 ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->

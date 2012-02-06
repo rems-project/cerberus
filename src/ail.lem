@@ -1,5 +1,7 @@
 open Global
 
+type id = Symbol.t
+
 type storage_class =
   | AUTO
   | STATIC
@@ -54,55 +56,54 @@ type type_class =
 
 type declaration = ctype * storage_class option
 
-type ('id, 'e) definition = 'id * 'e
-
-type ('id, 'e) expression =
-  | UNARY of unary_operator * 'e
-  | BINARY of binary_operator * 'e * 'e 
-  | ASSIGN of arithmetic_operator option * 'e * 'e
-  | QUESTION of 'e * 'e * 'e
-  | CAST of ctype * 'e
-  | CALL of 'e * 'e list
+type 'a expression =
+  | UNARY of unary_operator * 'a expression_l
+  | BINARY of binary_operator * 'a expression_l * 'a expression_l 
+  | ASSIGN of arithmetic_operator option * 'a expression_l * 'a expression_l
+  | QUESTION of 'a expression_l * 'a expression_l * 'a expression_l
+  | CAST of ctype * 'a expression_l
+  | CALL of 'a expression_l * 'a expression_l list
   | CONSTANT of Cabs.constant
-  | VARIABLE of 'id
+  | VARIABLE of id
   | SIZEOF of ctype
   | ALIGNOF of ctype
 
-type ('id, 'a) exp = Exp of 'a * ('id, ('id, 'a) exp) expression
+and 'a expression_l = 'a * 'a expression
+
+type 'a definition = id * 'a expression_l
 
 (* Statements *)
-type ('id, 'e, 's) statement =
+type 'a statement =
   | SKIP
-  | EXPRESSION of 'e
-  | BLOCK of 'id list * 's list
-  | IF of 'e * 's * 's
-  | WHILE of 'e * 's
-  | DO of 'e * 's
+  | EXPRESSION of 'a expression_l
+  | BLOCK of id list * 'a statement_l list
+  | IF of 'a expression_l * 'a statement_l * 'a statement_l
+  | WHILE of 'a expression_l * 'a statement_l
+  | DO of 'a expression_l * 'a statement_l
   | BREAK
   | CONTINUE
   | RETURN_VOID
-  | RETURN_EXPRESSION of 'e
-  | SWITCH of 'e * 's
-  | CASE of Cabs.integer_constant * 's
-  | DEFAULT of 's
-  | LABEL of 'id * 's
-  | GOTO of 'id
-  | DECLARATION of ('id, 'e) definition list
+  | RETURN_EXPRESSION of 'a expression_l
+  | SWITCH of 'a expression_l * 'a statement_l
+  | CASE of Cabs.integer_constant * 'a statement_l
+  | DEFAULT of 'a statement_l
+  | LABEL of id * 'a statement_l
+  | GOTO of id
+  | DECLARATION of 'a definition list
 
-type ('id, 'a_e, 'a_s) stmt =
-  Stmt of 'a_s * ('id, ('id, 'a_e) exp, ('id, 'a_e, 'a_s) stmt) statement
+and 'a statement_l = 'a * 'a statement
 
-type ('id, 'a_e, 'a_s) file = <|
-  main : 'id;
-  id_map : ('id, declaration) map;
-  globals : ('id * ('id, 'a_e) exp) list;
-  fn_map : ('id, ('id list * ('id, 'a_e, 'a_s) stmt)) map
+type 'a file = <|
+  main : id;
+  id_map : (id, declaration) map;
+  globals : (id * 'a expression_l) list;
+  fn_map : (id, (id list * 'a statement_l)) map
 |>
 
-type ('a_e, 'a_s) env = <|
-  symbol : Symbol.t;
-  symbol_map : (Symbol.t, string) map;
-  file : (Symbol.t, 'a_e, 'a_s) file
+type 'a env = <|
+  symbol : id;
+  symbol_map : (id, string) map;
+  file : 'a file
 |>
 
 module Print = struct
@@ -221,7 +222,7 @@ module Print = struct
 
   let pp_id id = !^ (Symbol.to_string_pretty id)
 
-  let rec pp_exp (Exp d exp) =
+  let rec pp_exp (d, exp) =
     let f = P.group -| P.parens -| pp_exp in
     match exp with
       | VARIABLE id -> pp_id id
@@ -246,7 +247,7 @@ module Print = struct
     let (t, st) = Pmap.find id file.id_map in
     pp_type t ^^^ pp_id id
 
-  let rec pp_stmt file (Stmt d stmt) =
+  let rec pp_stmt file (d, stmt) =
     let f_e = pp_exp in
     let f_s = pp_stmt file in
     match stmt with
