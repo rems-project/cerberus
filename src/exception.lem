@@ -7,7 +7,7 @@ type ('a, 'msg) t =
 let bind m k =
   match m with
     | Result a -> k a
-    | Exception  s -> Exception s
+    | Exception s -> Exception s
   end
 
 let rbind k m = bind m k
@@ -78,3 +78,5 @@ let bind_exception m k =
     | Result a -> Result a
     | Exception s -> k s
   end
+
+let rbind_exception k m = bind_exception m k

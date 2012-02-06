@@ -10,6 +10,7 @@ HOL_BUILD_DIR=_build_hol
 COQ_BUILD_DIR=_build_coq
 
 FILES=\
+type_error.lem \
 multiset.lem \
 global.lem \
 ord.lem \
@@ -52,7 +53,7 @@ meaning.lem \
 reduction.lem
 
 COQ_FILES=\
-multiset.lem #\
+multiset.lem \
 global.lem \
 ord.lem \
 string_.lem \
@@ -63,7 +64,7 @@ list_.lem \
 set_.lem \
 braun.lem \
 lexing.lem \
-output.lem \
+output.lem #\
 location.lem \
 symbol.lem \
 option.lem \
