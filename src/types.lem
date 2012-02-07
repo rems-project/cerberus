@@ -163,11 +163,10 @@ let include_qualifiers t q =
   end
 
 let rec unqualify t =
-  let f = unqualify in
   match t with
   | BASE _ b -> BASE {} b
-  | POINTER _ t' -> POINTER {} (f t')
-  | _ -> Ail_rewrite.map_type f t
+  | POINTER _ t' -> POINTER {} (unqualify t')
+  | _ -> Ail_rewrite.map_type unqualify t
   end
 
 let rec eq t1 t2 =
