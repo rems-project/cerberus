@@ -195,7 +195,7 @@ let rec check_exp env l e_head =
 
         (* Case: ptr - ptr. *)
         if T.is_pointer_to_complete_object t2 then
-          if T.compatible t1 t2 then
+          if T.compatible_unqualified t1 t2 then
             E.fail (Type_error.UNSUPPORTED
 	      "Computing the difference of two pointers is not yet supported.")
 	  else E.fail Type_error.SUB_COMPATIBLE_POINTERS
@@ -232,7 +232,7 @@ let rec check_exp env l e_head =
 
       if T.is_pointer_to_object t1 then
         if T.is_pointer_to_object t2 then
-          if T.compatible t1 t2 then
+          if T.compatible_unqualified t1 t2 then
             E.return (A.T_EXP int)
           else E.fail Type_error.GE_COMPATIBLE
         else E.fail Type_error.GE_POINTER
@@ -272,7 +272,7 @@ let rec check_exp env l e_head =
       (* Case: ptr == ptr. *)
       else if T.is_pointer t1 then
         if T.is_pointer t2 then
-          if T.compatible t1 t2 then
+          if T.compatible_unqualified t1 t2 then
             E.return (A.T_EXP int)
           else E.fail Type_error.NE_COMPATIBLE_POINTERS
         else E.fail Type_error.NE_POINTERS
@@ -346,7 +346,7 @@ let rec check_exp env l e_head =
         (* Case: ptr : ptr. *)
         else if T.is_pointer t2 then
           if T.is_pointer t3 then
-            if T.compatible t2 t3 then
+            if T.compatible_unqualified t2 t3 then
               let q = T.merge_qualifiers t2 t3 in
               E.of_option
 	        Type_error.QUESTION_COMPATIBLE_POINTERS
