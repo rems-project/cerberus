@@ -162,11 +162,11 @@ let include_qualifiers t q =
   | ARRAY    _ _ -> t
   end
 
-let rec unqualify t =
+let unqualify t =
   match t with
   | BASE _ b -> BASE {} b
-  | POINTER _ t' -> POINTER {} (unqualify t')
-  | _ -> Ail_rewrite.map_type unqualify t
+  | POINTER _ t' -> POINTER {} t'
+  | _ -> t
   end
 
 let rec eq t1 t2 =
