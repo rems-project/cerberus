@@ -101,7 +101,14 @@ let currentFunctionName = ref "<outside any function>"
 %token TYPEOF FUNCTION__ PRETTY_FUNCTION__
 %token LABEL__
 
-%token<Nat_num.num * Cabs.suffix option> CONST_INT
+(* TODO: organize *)
+%token FLOAT DOUBLE
+%token EXTERN REGISTER RESTRICT
+%token TYPEDEF ALIGNAS ATOMIC
+%token COMPLEX GENERIC IMAGINARY NORETURN
+%token STATIC_ASSERT THREAD_LOCAL
+
+%token<Nat_num.num * Cabs.integer_suffix option> CONST_INT
 
 /* operator precedence */
 %right ELSE
@@ -122,6 +129,33 @@ start:
     {List.rev $1}
 ;
 
+(* KKK *)
+
+(* 6.4.2.1#1 Identifiers - General, Syntax [see lexer] *)
+identifier:
+| id= IDENT {id}
+;
+
+
+(* 6.4.4.3#1 Enumeration constants, Syntax *)
+enumeration_constant:
+| identifier
+    {failwith "TODO" (* TODO *)}
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* ************************************************************************** *)
+
 /* 6.9#1 External definitions, Syntax */
 translation_unit:
 | external_declaration
@@ -138,10 +172,10 @@ external_declaration:
     {C.EXTERNAL_DECLARATION $1, L.make $startpos $endpos}
 ;
 
-/* 6.9.1#1 Function definitions, Syntax */
+(* 6.9.1#1 Function definitions, Syntax *)
 function_definition:
-/* TODO No support for old-style function definitions. */
-| declaration_specifiers declarator /*declaration_list_opt*/ compound_statement
+(* TODO No support for old-style function definitions. *)
+| declaration_specifiers declarator (*declaration_list_opt*) compound_statement
     { let store, specs, quals = $1 in
       let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
       let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in
@@ -463,10 +497,7 @@ designator:
 | DOT identifier {}
 ;
 
-/* 6.4.2.1#1 Identifiers - General, Syntax */
-identifier:
-| IDENT {$1}
-;
+
 
 argument_expression_list_opt:
 | /* empty */

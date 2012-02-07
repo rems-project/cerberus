@@ -117,13 +117,13 @@ let subst l name =
   E.option msg (E.resolve name)
 
 let desugar_unop = function
-  | C.MINUS -> A.MINUS
-  | C.PLUS -> A.PLUS
-  | C.BNOT -> A.BNOT
+  | C.MINUS        -> A.MINUS
+  | C.PLUS         -> A.PLUS
+  | C.BNOT         -> A.BNOT
   | C.POSTFIX_INCR -> A.POSTFIX_INCR
   | C.POSTFIX_DECR -> A.POSTFIX_DECR
-  | C.ADDRESS -> A.ADDRESS
-  | C.INDIRECTION -> A.INDIRECTION
+  | C.ADDRESS      -> A.ADDRESS
+  | C.INDIRECTION  -> A.INDIRECTION
 end
 
 let rec desugar_exp (e, l) =
@@ -147,20 +147,20 @@ let rec desugar_exp (e, l) =
       A.ASSIGN (Some C.SUB) <$> f e <@> d_one l
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
-  | C.UNARY C.NOT e -> A.BINARY (C.RELATIONAL C.EQ) (d_zero l) <$> f e
-  | C.UNARY unop  e -> A.UNARY (desugar_unop unop) <$> f e
-  | C.BINARY o e1 e2 -> A.BINARY o <$> f e1 <*> f e2
-  | C.ASSIGN o e1 e2 -> A.ASSIGN o <$> f e1 <*> f e2
+  | C.UNARY C.NOT e     -> A.BINARY (C.RELATIONAL C.EQ) (d_zero l) <$> f e
+  | C.UNARY unop  e     -> A.UNARY (desugar_unop unop) <$> f e
+  | C.BINARY o e1 e2    -> A.BINARY o <$> f e1 <*> f e2
+  | C.ASSIGN o e1 e2    -> A.ASSIGN o <$> f e1 <*> f e2
   | C.QUESTION e1 e2 e3 -> A.QUESTION <$> f e1 <*> f e2 <*> f e3
-  | C.CAST t e -> A.CAST <$> ft t <*> f e
-  | C.CALL e es -> A.CALL <$> f e <*> E.map_list f es
-  | C.CONSTANT c -> E.return (A.CONSTANT c)
-  | C.VARIABLE n -> A.VARIABLE <$> subst l n
-  | C.TYPE_SIZEOF  t -> A.SIZEOF  <$> ft t
-  | C.TYPE_ALIGNOF t -> A.ALIGNOF <$> ft t
+  | C.CAST t e          -> A.CAST     <$> ft t <*> f e
+  | C.CALL e es         -> A.CALL     <$> f e  <*> E.map_list f es
+  | C.CONSTANT c        -> E.return (A.CONSTANT c)
+  | C.VARIABLE n        -> A.VARIABLE <$> subst l n
+  | C.TYPE_SIZEOF  t    -> A.SIZEOF   <$> ft t
+  | C.TYPE_ALIGNOF t    -> A.ALIGNOF  <$> ft t
 (*
   | C.COMPOUND_LITERAL _ ->
-        raise_bug "Compound literals are not yet supported."
+        raise_bug "Compound literals are not yet supported." (* TODO *)
 *)
   end)
 
@@ -173,8 +173,8 @@ and desugar_specifier specifiers =
       (Pmap.create Multiset.compare)
 *)
       Pmap.empty
-      ( [(mset [C.VOID], A.VOID)]
-        @ [(mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
+      ( (* [(mset [C.VOID], A.VOID)] TODO: (K) Does this break anything ?
+        @ *) [(mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
         @ [(mset [C.UNSIGNED; C.CHAR], A.INTEGER (A.UNSIGNED A.ICHAR))]
         @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.SHORT)))
           [ [C.SHORT];
@@ -222,7 +222,7 @@ and desugar_specifier specifiers =
 and desugar_type t =
   let ft = desugar_type in
   match t with
-  | C.BASE qs ss -> A.BASE qs <$> desugar_specifier ss
+  | C.BASE qs ss -> A.BASIC qs <$> desugar_specifier ss
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with

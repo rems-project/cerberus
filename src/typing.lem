@@ -17,13 +17,13 @@ let lvalue_convert t e =
   | Some t' -> E.return t'
   end
 
-let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
+let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
 let one l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 
 let rec is_null_pointer e =
   match Annot.exp_of e with
   | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
-  | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer exp
+  | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer exp
   | _ -> false
   end
 
@@ -59,7 +59,7 @@ let rec check_exp env l e_head =
       else
         E.return (A.T_LVALUE t)
   | A.CONSTANT (C.CONST_INT (i, None)) ->
-      E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+      E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
   | A.CONSTANT (C.CONST_INT (_, Some _)) ->
       E.fail (Type_error.UNSUPPORTED
         "Suffixes in integer constant expressions are not supported.")
@@ -133,18 +133,18 @@ let rec check_exp env l e_head =
   | A.SIZEOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.SIZEOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
   | A.ALIGNOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.ALIGNOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
-  | A.CAST (A.BASE q A.VOID) e ->
+  | A.CAST (A.VOID q) e ->
       type_of e >>= fun _ ->
-      E.return (A.T_EXP (A.BASE q A.VOID))
+      E.return (A.T_EXP (A.VOID q))
   | A.CAST t' e ->
       type_of e >>= fun t ->
       if T.is_scalar t' then
@@ -333,14 +333,14 @@ let rec check_exp env l e_head =
         else if T.is_pointer_to_void t2 then
           if T.is_pointer_to_object t3 then
             let q = T.merge_qualifiers t2 t3 in
-            E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
+            E.return (A.T_EXP (A.POINTER q (A.VOID {})))
           else E.fail Type_error.QUESTION_VOID_POINTER_SECOND
 
         (* Case: ptr : void ptr. *)
         else if T.is_pointer_to_void t3 then
           if T.is_pointer_to_object t2 then
             let q = T.merge_qualifiers t2 t3 in
-            E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
+            E.return (A.T_EXP (A.POINTER q (A.VOID {})))
           else E.fail Type_error.QUESTION_VOID_POINTER_THIRD
 
         (* Case: ptr : ptr. *)
@@ -364,7 +364,7 @@ let rec check_exp env l e_head =
         (* Case: void : void. *)
         else if T.is_void t2 then
           if T.is_void t3 then
-            E.return (A.T_EXP (A.BASE {} A.VOID))
+            E.return (A.T_EXP (A.VOID {}))
           else E.fail Type_error.QUESTION_VOID
 
         (* Case: struct : struct, enum : enum. *)
@@ -506,7 +506,7 @@ and annotate_exp env exp =
 let rec annotate_stmt env (l, stmt) =
   let f_e = annotate_exp  env in
   let f_s = annotate_stmt env in
-  E.map (Pair.make (l, A.T_EXP (A.BASE {} A.VOID))) (match stmt with
+  E.map (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
   | A.IF e s1 s2 ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->

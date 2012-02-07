@@ -71,7 +71,7 @@ let fold_stmt_left fs fe a stmt =
 
 let rec map_type f t =
   match t with
-    | BASE _ _ -> t
+    | BASIC _ _ -> t
     | POINTER q t -> POINTER q (f t)
     | ARRAY t size -> ARRAY (f t) size
     | FUNCTION t ts -> FUNCTION (f t) (List.map f ts)
@@ -79,7 +79,7 @@ let rec map_type f t =
 
 let rec for_all_type p t =
   match t with
-    | BASE _ _ -> true
+    | BASIC _ _ -> true
     | POINTER _ t -> p t
     | ARRAY t _ -> p t
     | FUNCTION t ts -> p t && List.for_all p ts
