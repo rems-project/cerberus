@@ -2,9 +2,23 @@ open Global
 
 type id = Symbol.t
 
+(* [storage duration] (6.2.4#1)
+   
+   "An object has a storage duration that determines its lifetime. There are
+    four storage durations: static, thread, automatic, and allocated. Allocated
+    storage is described in 7.22.3."
+*)
+(* (* TODO *)
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+*)
 type storage_class =
   | AUTO
   | STATIC
+
 
 type int_base_type =
   | ICHAR
@@ -19,7 +33,6 @@ type int_type =
   | UNSIGNED of int_base_type
 
 type basic_type =
-  | VOID
   | CHAR
   | INTEGER of int_type
 
@@ -43,14 +56,21 @@ type integer_constant = Cabs.integer_constant
 type constant = Cabs.constant
 
 type ctype =
-  | BASE of qualifiers * basic_type
+  | VOID of qualifiers
+  | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
   | ARRAY of ctype * num
   | POINTER of qualifiers * ctype
   | FUNCTION of ctype * ctype list
+(*  | STRUCT of id * (storage_class * ctype * 'e member_declarator) list
 
-type type_class =
+and 'e member_declarator =
+  | MEMBER_DECL of id
+  | BITFIELD of id option * 'e
+*)
+
+and type_class =
   | T_EXP of ctype
   | T_LVALUE of ctype
 
@@ -181,7 +201,6 @@ module Print = struct
   end
 
   let pp_basic_type = function
-    | VOID -> !^ "void"
     | CHAR -> !^ "char"
     | INTEGER i -> pp_int_type i
   end
@@ -204,7 +223,8 @@ module Print = struct
       let ins_space ds d = ds ^^ d ^^ P.space in
       P.fold ins_space (List.map pp_qualifier [q | forall (q IN qs) | true]) in
     match t with
-      | BASE qs b -> pp_qs qs ^^ pp_basic_type b
+      | VOID qs   -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
       | ARRAY t s -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
       | POINTER qs t -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
       | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
