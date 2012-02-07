@@ -1,0 +1,2 @@
+<**/*.ml> : annot
+<*>: package(batteries), package(batteries.pa_string.syntax), syntax(camlp4o)

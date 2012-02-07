@@ -1,0 +1,6 @@
+Constraints:
+- Uniform address handling: "addr v" to "offset (v, 0)".
+- Make the constraint language typed.
+
+Reduction:
+- Add more structure to constraints, e.g. "if . then UNDEF else .".

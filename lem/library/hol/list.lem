@@ -1,0 +1,30 @@
+val (::) : forall 'a. 'a -> 'a list -> 'a list
+val ALL_DISTINCT : forall 'a. 'a list -> bool
+val APPEND : forall 'a. 'a list -> 'a list -> 'a list
+val DROP : forall 'a. num -> 'a list -> 'a list
+val EL : forall 'a. num -> 'a list -> 'a
+val EVERY : forall 'a. ('a -> bool) -> 'a list -> bool
+val EXISTS : forall 'a. ('a -> bool) -> 'a list -> bool
+val FILTER : forall 'a. ('a -> bool) -> 'a list -> 'a list
+val FLAT : forall 'a. 'a list list -> 'a list
+val FOLDL : forall 'a 'b. ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+val FOLDR : forall 'a 'b. ('a -> 'b -> 'b) -> 'b -> 'a list -> 'b
+val FRONT : forall 'a. 'a list -> 'a list
+val GENLIST : forall 'a. (num -> 'a) -> num -> 'a list
+val HD : forall 'a. 'a list -> 'a
+val LAST : forall 'a. 'a list -> 'a
+val LENGTH : forall 'a. 'a list -> num
+val LEN : forall 'a. 'a list -> num -> num
+val MAP : forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list
+val MAP2 : forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+val (MEM) : forall 'a. 'a -> 'a list -> bool
+val NULL : forall 'a. 'a list
+val REVERSE : forall 'a. 'a list -> 'a list
+val REV : forall 'a. 'a list -> 'a list -> 'a list
+val SNOC : forall 'a. 'a -> 'a list -> 'a list
+val SUM : forall 'a. num list -> num
+val TAKE : forall 'a. num -> 'a list -> 'a list
+val TL : forall 'a. 'a list -> 'a list
+val UNZIP : forall 'a 'b. ('a * 'b) list -> 'a list * 'b list
+val ZIP : forall 'a 'b. 'a list * 'b list -> ('a * 'b) list
+val (++) : forall 'a. 'a list -> 'a list -> 'a list

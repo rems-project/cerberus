@@ -1,0 +1,6 @@
+type t = Ocaml.Output.t
+
+val write : string -> t -> unit
+sub [ocaml] write = Output.write
+val file  : string -> t
+sub [ocaml] file = Output.file
