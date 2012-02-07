@@ -86,8 +86,7 @@ and reduce_exp n b env file exp =
   let f = reduce_exp n b env file in
   let f_lvalue e =
     reduce_lvalue n b env file e >>= fun (a, m) ->
-    Action.id a                  >>= fun id     ->
-    E.return (a, m -@> id) in
+    E.return (a, m) in
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   let conv_exp   e = f e >>= conv_int_lifted (exp_type exp) in
   let conv_int t e = f e >>= conv_int_lifted t in

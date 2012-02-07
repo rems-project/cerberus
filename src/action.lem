@@ -12,7 +12,6 @@ type action =
   | FnStore of A.ctype * address * value
   | Create  of A.ctype * address
   | Kill    of address
-  | Id      of address
   | Same    of address * address
   | Call
 
@@ -34,7 +33,6 @@ let store    t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
 let fn_store t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
 let create   t a     = Action (Create t a)     <$> Symbol_state.fresh
 let kill a           = Action (Kill     a)     <$> Symbol_state.fresh
-let id a             = Action (Id       a)     <$> Symbol_state.fresh
 let same a a'        = Action (Same a a')      <$> Symbol_state.fresh
 let call             = Action (Call)           <$> Symbol_state.fresh
 
@@ -65,7 +63,6 @@ let address_of (Action action _) =
     | Store   _ a _   -> a
     | FnStore _ a _   -> a
     | Load    _ a _   -> a
-    | Id      a       -> a
 (*
     | _               ->
 *)
@@ -128,8 +125,6 @@ module Print = struct
         eq (!^ "kill")   ^^^ P.parens (pp_c a)
     | Same a1 a2 ->
         eq (!^ "same")   ^^^ P.parens (pp_c a1 ^%^ pp_c a2)
-    | Id a ->
-        eq (!^ "id")     ^^^ P.parens (pp_c a)
     | Call ->
         eq (!^ "call")
     end
@@ -145,7 +140,6 @@ module Print = struct
       | Create  _ _     -> !^ "Create"
       | Kill    _       -> !^ "Kill"
       | Same    _ _     -> !^ "Same"
-      | Id      _       -> !^ "Id"
       | Call            -> !^ "Call"
       end in
     let pp_args (Action a _) =
@@ -157,7 +151,6 @@ module Print = struct
       | Create  t a     -> [tt (pp_t t); pp_c a]
       | Kill    a       -> [pp_c a]
       | Same    a1 a2   -> [pp_c a1; pp_c a2]
-      | Id      a       -> [pp_c a]
       | Call            -> []
       end in
     let pp_opts args =
@@ -349,11 +342,6 @@ module Memory = struct
     let () = Document.print (Print.pp (Action (a, uid))); print_endline "" in
 *)
     match a with
-    | Id v ->
-        let (addr, t) = address t v in
-        if is_valid t addr
-          then E.return  t
-          else E.undef t "Invalid address."
     | Same a1 a2 ->
         let (addr1, t) = address t a1 in
         let (addr2, t) = address t a2 in
