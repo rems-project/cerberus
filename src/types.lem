@@ -145,6 +145,16 @@ let rec compatible type1 type2 =
   | _ -> false
   end
 
+let unqualify t =
+  match t with
+  | BASE _ b -> BASE {} b
+  | POINTER _ t' -> POINTER {} t'
+  | _ -> t
+  end
+
+let compatible_unqualified type1 type2 =
+  compatible (unqualify type1) (unqualify type2)
+
 let qualifiers = function
   | POINTER q _ -> q
   | BASE    q _ -> q
@@ -160,13 +170,6 @@ let include_qualifiers t q =
   | POINTER q' t' -> POINTER (q union q') t'
   | FUNCTION _ _ -> t
   | ARRAY    _ _ -> t
-  end
-
-let unqualify t =
-  match t with
-  | BASE _ b -> BASE {} b
-  | POINTER _ t' -> POINTER {} t'
-  | _ -> t
   end
 
 let rec eq t1 t2 =
