@@ -14,10 +14,10 @@ type storage_duration =
   | AUTOMATIC
   | ALLOCATED (*TODO: see 7.22.3 *)
 *)
-
 type storage_class =
   | AUTO
   | STATIC
+
 
 type int_base_type =
   | ICHAR
@@ -62,9 +62,14 @@ type ctype =
   | ARRAY of ctype * num
   | POINTER of qualifiers * ctype
   | FUNCTION of ctype * ctype list
-(*   | STRUCT of 'id *)
+(*  | STRUCT of id * (storage_class * ctype * 'e member_declarator) list
 
-type type_class =
+and 'e member_declarator =
+  | MEMBER_DECL of id
+  | BITFIELD of id option * 'e
+*)
+
+and type_class =
   | T_EXP of ctype
   | T_LVALUE of ctype
 
