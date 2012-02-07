@@ -10,6 +10,44 @@ type cabsloc = <|
 type location = Location.t
 
 
+(* 6.4.4.1 Integer constants *)
+type integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+type integer_constant = num * integer_suffix option
+
+
+(* 6.4.4 Constants *)
+type constant =
+  | CONST_INT of integer_constant
+(*
+  | CONST_FLOAT of string (* the textual representaton *)
+  | CONST_CHAR of int64 list
+  | CONST_WCHAR of int64 list
+  | CONST_STRING of string
+*)
+
+
+(* 6.4.5 String literals *)
+type encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+
+type string_literal = encoding_prefix * string
+
+
+
+
+
+
+
+
+
 type sequential_operator =
   | COMMA
   | AND
@@ -52,23 +90,6 @@ type unary_operator =
   | POSTFIX_INCR
   | POSTFIX_DECR
 
-type suffix =
-  | SUFFIX_UNSIGNED
-  | SUFFIX_UNSIGNED_LONG
-  | SUFFIX_UNSIGNED_LONG_LONG
-  | SUFFIX_LONG
-  | SUFFIX_LONG_LONG
-
-type integer_constant = num * suffix option
-
-type constant =
-  | CONST_INT of integer_constant
-(*
-  | CONST_FLOAT of string (* the textual representaton *)
-  | CONST_CHAR of int64 list
-  | CONST_WCHAR of int64 list
-  | CONST_STRING of string
-*)
 
 
 
