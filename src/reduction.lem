@@ -240,7 +240,7 @@ and reduce_exp n b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else if T.is_pointer (exp_type e1) && T.is_pointer (exp_type e2) then
         (*TODO*) E.return (C.one, Me.null)
-      else if Typing.is_null_pointer e1 then
+      else if Typing.is_null_pointer_constant e1 then
         (*TODO*) E.return (C.one, Me.null)
       else (*TODO*) E.return (C.one, Me.null)
   | A.BINARY (Cabs.RELATIONAL Cabs.NE) e1 e2 ->

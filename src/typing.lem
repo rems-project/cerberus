@@ -20,10 +20,10 @@ let lvalue_convert t e =
 let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
 let one l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 
-let rec is_null_pointer e =
+let rec is_null_pointer_constant e =
   match Annot.exp_of e with
   | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
-  | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer exp
+  | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer_constant exp
   | _ -> false
   end
 
@@ -190,26 +190,27 @@ let rec check_exp env l e_head =
   | A.BINARY (C.ARITHMETIC C.SUB) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-
-      if T.is_pointer_to_complete_object t1 then
-
-        (* Case: ptr - ptr. *)
-        if T.is_pointer_to_complete_object t2 then
-          if T.compatible_unqualified t1 t2 then
-            E.fail (Type_error.UNSUPPORTED
-	      "Computing the difference of two pointers is not yet supported.")
-	  else E.fail Type_error.SUB_COMPATIBLE_POINTERS
-
-        (* Case: ptr - int. *)
-        else if T.is_integer t2 then
-          E.return (A.T_EXP t1)
-        else E.fail Type_error.SUB_INTEGER_OR_POINTER
-
-      (* Case: arith - arith. *)
-      else if T.is_arithmetic t1 && T.is_arithmetic t2 then
-        E.return (A.T_EXP (T.usual_arithmetic t1 t2))
-
-      else E.fail Type_error.SUB_ALL
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.is_complete_object b1 then
+            if T.is_complete_object b2 then
+              if T.compatible_unqualified b1 b2 then
+                E.fail (Type_error.UNSUPPORTED
+	          "Computing the difference of two pointers is not yet supported.")
+              else E.fail Type_error.SUB_COMPATIBLE_POINTERS
+            else E.fail Type_error.SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
+          else E.fail Type_error.SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
+      | (A.POINTER _ b1, _) ->
+          if T.is_complete_object b1 then
+            if T.is_integer t2 then
+              E.return (A.T_EXP t1)
+            else E.fail Type_error.SUB_INTEGER_OR_POINTER
+          else E.fail Type_error.SUB_POINTER_TO_COMPLETE_OBJECT
+      | _ ->
+          if T.is_arithmetic t1 && T.is_arithmetic t2 then
+            E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+          else E.fail Type_error.SUB_ALL
+      end
   | A.BINARY (C.ARITHMETIC C.SHL) e1 e2 ->
       check_exp env l (A.BINARY (C.ARITHMETIC C.SHL) e1 e2)
   | A.BINARY (C.ARITHMETIC C.SHR) e1 e2  ->
@@ -230,60 +231,64 @@ let rec check_exp env l e_head =
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
-      if T.is_pointer_to_object t1 then
-        if T.is_pointer_to_object t2 then
-          if T.compatible_unqualified t1 t2 then
-            E.return (A.T_EXP int)
-          else E.fail Type_error.GE_COMPATIBLE
-        else E.fail Type_error.GE_POINTER
-
-      else if T.is_real t1 then
-        if T.is_real t2 then
-          E.return (A.T_EXP int)
-        else E.fail Type_error.GE_REAL
-
-      else E.fail Type_error.GE_ALL
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.is_object b1 then
+            if T.is_object b2 then
+              if T.compatible_unqualified b1 b2 then
+                E.return (A.T_EXP int)
+              else E.fail Type_error.GE_COMPATIBLE
+            else E.fail Type_error.GE_POINTER_TO_OBJECT_SECOND
+          else E.fail Type_error.GE_POINTER_TO_OBJECT_FIRST
+      | _ ->
+          if T.is_real t1 then
+            if T.is_real t2 then
+              E.return (A.T_EXP int)
+            else E.fail Type_error.GE_REAL
+          else E.fail Type_error.GE_ALL
+      end
   | A.BINARY (C.RELATIONAL C.EQ) e1 e2 ->
       check_exp env l (A.BINARY (C.RELATIONAL C.NE) e1 e2)
   | A.BINARY (C.RELATIONAL C.NE) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
-      (* Case: void ptr == ptr. *)
-      if T.is_pointer_to_void t1 then
-        if T.is_pointer_to_object t2 then
-          E.return (A.T_EXP int)
-        else E.fail Type_error.NE_VOID_POINTER_FIRST
-
-      (* Case: ptr == void ptr. *)
-      else if T.is_pointer_to_void t2 then
-        if T.is_pointer_to_object t1 then
-          E.return (A.T_EXP int)
-        else E.fail Type_error.NE_VOID_POINTER_SECOND
-
-      (* Case: null ptr == ptr. *)
-      else if is_null_pointer e1 && T.is_pointer t2 then
-        E.return (A.T_EXP int)
-
-      (* Case: ptr == null ptr. *)
-      else if T.is_pointer t1 && is_null_pointer e2 then
-        E.return (A.T_EXP int)
-
-      (* Case: ptr == ptr. *)
-      else if T.is_pointer t1 then
-        if T.is_pointer t2 then
-          if T.compatible_unqualified t1 t2 then
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.compatible_unqualified b1 b2 then
             E.return (A.T_EXP int)
-          else E.fail Type_error.NE_COMPATIBLE_POINTERS
-        else E.fail Type_error.NE_POINTERS
 
-      (* Case: arith + arith. *)
-      else if T.is_arithmetic t1 then
-        if T.is_arithmetic t2 then
-          E.return (A.T_EXP int)
-        else E.fail Type_error.NE_ARITHMETIC
+          (* void pointer *)
+          else if T.is_void b1 && T.is_object b2 then
+            E.return (A.T_EXP int)
+          else if T.is_object b1 && T.is_void b2 then
+            E.return (A.T_EXP int)
 
-      else E.fail Type_error.NE_ALL
+          (* null pointer constant of pointer type*)
+          else if is_null_pointer_constant e1 then
+            E.return (A.T_EXP int)
+          else if is_null_pointer_constant e2 then
+            E.return (A.T_EXP int)
+
+          else E.fail Type_error.NE_POINTERS
+
+      (* null pointer constant of integer type *)
+      | (A.POINTER _ _, _) ->
+          if is_null_pointer_constant e2 then
+            E.return (A.T_EXP int)
+          else E.fail Type_error.NE_NULL_POINTER_CONSTANT_SECOND
+      | (_, A.POINTER _ _) ->
+          if is_null_pointer_constant e1 then
+            E.return (A.T_EXP int)
+          else E.fail Type_error.NE_NULL_POINTER_CONSTANT_FIRST
+
+      | _ ->
+          if T.is_arithmetic t1 then
+            if T.is_arithmetic t2 then
+              E.return (A.T_EXP int)
+            else E.fail Type_error.NE_ARITHMETIC
+          else E.fail Type_error.NE_ALL
+      end
   | A.BINARY (C.ARITHMETIC C.BAND) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
@@ -321,119 +326,104 @@ let rec check_exp env l e_head =
       (* First operand must be scalar. *)
       if T.is_scalar t1 then
 
-        (* Case: null ptr : ptr. *)
-        if is_null_pointer e2 && T.is_pointer t3 then
-          E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
+        match (t2, t3) with
+        | (A.POINTER _ b2, A.POINTER _ b3) ->
+            if T.is_void b2 && T.is_object b3 then
+              let q = T.merge_qualifiers t2 t3 in
+              E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
+            else if T.is_object b2 && T.is_void b3 then
+              let q = T.merge_qualifiers t2 t3 in
+              E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
 
-        (* Case: ptr : null ptr. *)
-        else if T.is_pointer t2 && is_null_pointer e3 then
-          E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
-
-        (* Case: void ptr : ptr. *)
-        else if T.is_pointer_to_void t2 then
-          if T.is_pointer_to_object t3 then
-            let q = T.merge_qualifiers t2 t3 in
-            E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
-          else E.fail Type_error.QUESTION_VOID_POINTER_SECOND
-
-        (* Case: ptr : void ptr. *)
-        else if T.is_pointer_to_void t3 then
-          if T.is_pointer_to_object t2 then
-            let q = T.merge_qualifiers t2 t3 in
-            E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
-          else E.fail Type_error.QUESTION_VOID_POINTER_THIRD
-
-        (* Case: ptr : ptr. *)
-        else if T.is_pointer t2 then
-          if T.is_pointer t3 then
-            if T.compatible_unqualified t2 t3 then
+            (* null pointer constant of pointer type *)
+            else if is_null_pointer_constant e2 then
+              E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
+            else if is_null_pointer_constant e3 then
+              E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
+            else if T.compatible_unqualified b2 b3 then
               let q = T.merge_qualifiers t2 t3 in
               E.of_option
-	        Type_error.QUESTION_COMPATIBLE_POINTERS
-		(T.composite t2 t3) >>= fun t ->
+                Type_error.QUESTION_COMPATIBLE_POINTERS
+                (T.composite t2 t3) >>= fun t ->
               E.return (A.T_EXP (T.include_qualifiers t q))
-            else E.fail Type_error.QUESTION_COMPATIBLE_POINTERS
-          else E.fail Type_error.QUESTION_POINTER
+            else E.fail Type_error.QUESTION_POINTERS
 
-        (* Case: arith : arith. *)
-        else if T.is_arithmetic t2 then
-          if T.is_arithmetic t3 then
-            E.return (A.T_EXP (T.common (T.promote t2) (T.promote t3)))
-          else E.fail Type_error.QUESTION_ARITHMETIC
+        (* null pointer constant of integer type *)
+        | (A.POINTER _ b2, _) ->
+            if is_null_pointer_constant e3 then
+              E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
+            else E.fail Type_error.QUESTION_NULL_POINTER_CONSTANT_THIRD
+        | (_, A.POINTER _ b3) ->
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
+            else E.fail Type_error.QUESTION_NULL_POINTER_CONSTANT_THIRD
 
-        (* Case: void : void. *)
-        else if T.is_void t2 then
-          if T.is_void t3 then
+        | (A.BASE _ A.VOID, A.BASE _ A.VOID) ->
             E.return (A.T_EXP (A.BASE {} A.VOID))
-          else E.fail Type_error.QUESTION_VOID
 
-        (* Case: struct : struct, enum : enum. *)
-        else if T.is_structure t2 || T.is_union t2 then
-          if t2 = t3 then
-            E.return (A.T_EXP t2)
-          else E.fail Type_error.QUESTION_STRUCTURE_OR_UNION
+        | _ ->
+            if T.is_arithmetic t2 then
+              if T.is_arithmetic t3 then
+                E.return (A.T_EXP (T.common (T.promote t2) (T.promote t3)))
+              else E.fail Type_error.QUESTION_ARITHMETIC_SECOND
 
-        else E.fail Type_error.QUESTION_ALL
+            else if T.is_structure t2 || T.is_union t2 then
+              if t2 = t3 then
+                E.return (A.T_EXP t2)
+              else E.fail Type_error.QUESTION_STRUCTURE_OR_UNION
+
+            else E.fail Type_error.QUESTION_ALL
+        end
 
       else E.fail Type_error.QUESTION_SCALAR_FIRST
   | A.ASSIGN None e1 e2 ->
       lvalue_type_of Type_error.ASSIGN_LVALUE e1 >>= fun t1 ->
       type_of e2                                 >>= fun t2 ->
       lvalue_convert t1 e1                       >>= fun t  ->
-      let base_has_all_qualifiers t1 t2 =
-        let b1 = T.base_of_pointer t1 in
-        let b2 = T.base_of_pointer t2 in
-        (T.qualifiers b2) subset (T.qualifiers b1) in
+      let has_all_qualifiers t1 t2 =
+        (T.qualifiers t2) subset (T.qualifiers t1) in
       if T.is_modifiable t1 then
 
-        (* Case: bool = ptr. *)
-        if T.is_bool t1 && T.is_pointer t2 then
-          E.return (A.T_EXP t)
-
-        (* Case struct = struct or enum = enum. *)
-        else if T.is_structure t1 || T.is_enum t1 then
-          if T.compatible t1 t2 then
+        match (t1, t2) with
+        | (A.BASE _ (A.INTEGER A.BOOL), A.POINTER _ _) ->
             E.return (A.T_EXP t)
-          else E.fail Type_error.ASSIGN_STRUCTURE_OR_UNION
+        | (A.POINTER _ b1, A.POINTER _ b2) ->
+            (* null pointer constant of pointer type *)
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP t)
 
-        (* Case: arith = arith. *)
-        else if T.is_arithmetic t1 && T.is_arithmetic t2 then
-          E.return (A.T_EXP t)
-
-        (* Cases of the form ptr = _. *)
-        else if T.is_pointer t1 then
-
-          (* Case ptr = null ptr. *)
-          if is_null_pointer e2 then
-            E.return (A.T_EXP t)
-
-          (* Case: void ptr = ptr. *)
-          else if T.is_pointer_to_void t1 then
-            if T.is_pointer_to_object t2 then
-              if base_has_all_qualifiers t1 t2 then
+            (* void pointer *)
+            else if T.is_void b1 && T.is_object b2 then
+              if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Type_error.ASSIGN_VOID_POINTER_QUALIFIERS
-            else E.fail Type_error.ASSIGN_VOID_POINTER_FIRST
-
-          (* Case: ptr = void ptr. *)
-          else if T.is_pointer_to_void t2 then
-            if T.is_pointer_to_object t1 then
-              if base_has_all_qualifiers t1 t2 then
+            else if T.is_object b2 && T.is_void b1 then
+              if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Type_error.ASSIGN_VOID_POINTER_QUALIFIERS
-            else E.fail Type_error.ASSIGN_VOID_POINTER_SECOND
 
-          (* Case: ptr = ptr. *)
-          else if T.is_pointer t2 then
-            if T.compatible t1 t2 then
-              if base_has_all_qualifiers t1 t2 then
+            else if T.compatible_unqualified b1 b2 then
+              if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Type_error.ASSIGN_POINTER_QUALIFIERS
-            else E.fail Type_error.ASSIGN_COMPATIBLE_POINTERS
-          else E.fail Type_error.ASSIGN_LVALUE
+            else E.fail Type_error.ASSIGN_POINTERS
 
-        else E.fail Type_error.ASSIGN_LVALUE
+        (* null pointer constant of integer type *)
+        | (A.POINTER _ _, _) ->
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP t)
+            else E.fail Type_error.ASSIGN_NULL_POINTER_CONSTANT
 
+        | _ ->
+            if T.is_arithmetic t1 && T.is_arithmetic t2 then
+              E.return (A.T_EXP t)
+    
+            else if T.is_structure t1 || T.is_enum t1 then
+              if T.compatible t1 t2 then
+                E.return (A.T_EXP t)
+              else E.fail Type_error.ASSIGN_STRUCTURE_OR_UNION
+            else E.fail Type_error.ASSIGN_ALL
+        end
       else E.fail Type_error.ASSIGN_LVALUE
   | A.ASSIGN (Some C.ADD) e1 e2 ->
       check_exp env l (A.ASSIGN (Some C.SUB) e1 e2)

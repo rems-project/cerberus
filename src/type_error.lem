@@ -20,19 +20,22 @@ type cause =
   | ADD_POINTER_INTEGER
   | ADD_INTEGER_POINTER
   | ADD_ALL
+  | SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
+  | SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
   | SUB_COMPATIBLE_POINTERS
+  | SUB_POINTER_TO_COMPLETE_OBJECT
   | SUB_INTEGER_OR_POINTER
   | SUB_ALL
   | SHR_INTEGER_FIRST
   | SHR_INTEGER_SECOND
   | GE_COMPATIBLE
-  | GE_POINTER
+  | GE_POINTER_TO_OBJECT_FIRST
+  | GE_POINTER_TO_OBJECT_SECOND
   | GE_REAL
   | GE_ALL
-  | NE_VOID_POINTER_FIRST
-  | NE_VOID_POINTER_SECOND
   | NE_POINTERS
-  | NE_COMPATIBLE_POINTERS
+  | NE_NULL_POINTER_CONSTANT_FIRST
+  | NE_NULL_POINTER_CONSTANT_SECOND
   | NE_ARITHMETIC
   | NE_ALL
   | BAND_INTEGER
@@ -41,21 +44,22 @@ type cause =
   | AND_SCALAR
   | OR_SCALAR
   | QUESTION_SCALAR_FIRST
-  | QUESTION_VOID_POINTER_SECOND
-  | QUESTION_VOID_POINTER_THIRD
-  | QUESTION_POINTER
-  | QUESTION_COMPATIBLE_POINTERS
-  | QUESTION_VOID
-  | QUESTION_ARITHMETIC
+  | QUESTION_NULL_POINTER_CONSTANT_SECOND
+  | QUESTION_NULL_POINTER_CONSTANT_THIRD
+  | QUESTION_POINTERS
+  | QUESTION_ARITHMETIC_SECOND
   | QUESTION_STRUCTURE_OR_UNION
+  | QUESTION_COMPATIBLE_POINTERS
   | QUESTION_ALL
   | ASSIGN_LVALUE
   | ASSIGN_STRUCTURE_OR_UNION
   | ASSIGN_VOID_POINTER_QUALIFIERS
   | ASSIGN_VOID_POINTER_FIRST
   | ASSIGN_VOID_POINTER_SECOND
+  | ASSIGN_NULL_POINTER_CONSTANT
   | ASSIGN_POINTER_QUALIFIERS
   | ASSIGN_COMPATIBLE_POINTERS
+  | ASSIGN_POINTERS
   | ASSIGN_ALL
   | ASSIGN_SUB_POINTER
   | ASSIGN_SUB_ARITHMETIC
@@ -164,10 +168,26 @@ let to_string e =
        shall be a pointer to a complete object type and the other shall have \
        integer type.``"
 
+  | SUB_POINTER_TO_COMPLETE_OBJECT_FIRST ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
+       ``[B]oth operands [shall be] pointers to [...] compatible complete \
+       object types [...].`` (Operands are pointers but the left operand \
+       doesn't point to a complete object.)"
+  | SUB_POINTER_TO_COMPLETE_OBJECT_SECOND ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
+       ``[B]oth operands [shall be] pointers to [...] compatible complete \
+       object types [...].`` (Operands are pointers but the right operand \
+       doesn't point to a complete object.)"
   | SUB_COMPATIBLE_POINTERS ->
       "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
        ``[B]oth operands [shall be] pointers to [...] compatible complete \
        object types [...].`` (Operands are pointers to incompatible types.)"
+  | SUB_POINTER_TO_COMPLETE_OBJECT ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraints: \
+       ``[T]he left operand [shall be] a pointer to a complete object type and \
+       the right operand [shall have] integer type.`` (Left operand is a \
+       pointer, right operand is not a pointer but the left operand doesn't \
+       pointer to a complete object.)"
   | SUB_INTEGER_OR_POINTER ->
       "Violation of constraint 6.5.6#3 Additive operators, Constraints: \
        ``[B]oth operands [shall either be] pointers to [...] compatible \
@@ -194,11 +214,16 @@ let to_string e =
       "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
        ``[B]oth operands [shall be] pointers to [...] compatible object \
        types.`` (Operands are pointers to incompatible object types.)"
-  | GE_POINTER ->
+  | GE_POINTER_TO_OBJECT_FIRST ->
       "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
        ``[B]oth operands [shall be] pointers to [...] compatible object \
-       types.`` (Right operand is a pointer to an object but left operand \
-       isn't.)"
+       types.`` (Both operands are pointers but the left operand doesn't point \
+       point to an object.)"
+  | GE_POINTER_TO_OBJECT_SECOND ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``[B]oth operands [shall be] pointers to [...] compatible object \
+       types.`` (Both operands are pointers but the right operand doesn't point \
+       point to an object.)"
   | GE_REAL ->
       "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
        ``[B]oth operands [shall] have real type [...].`` (First operand has \
@@ -208,24 +233,21 @@ let to_string e =
        ``One of the following shall hold: both operands have real type or both \
        operands are pointers to [...] compatible types.``"
 
-  | NE_VOID_POINTER_FIRST ->
-      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
-       a pointer to an object type and the other is a pointer to [...] void \
-       [...].`` (Left operand is a pointer to void but the right operand isn't \
-       a pointer to an object type.)"
-  | NE_VOID_POINTER_SECOND ->
-      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
-       a pointer to an object type and the other is a pointer to [...] void \
-       [...].`` (Right operand is a pointer to void but the left operand isn't \
-       a pointer to an object type.)"
   | NE_POINTERS ->
-      "Constraint 6.5.9#2 Equality operators, Constraints: ``[B]oth operands \
-       [shall be] pointers [...].`` (Left operand is a pointer but the right \
-       operand isn't.)"
-  | NE_COMPATIBLE_POINTERS ->
-      "Constraint 6.5.9#2 Equality operators, Constraints: ``[B]oth operands \
-       [shall be] pointers to [...] compatible types`` (Operands are pointers \
-       to incompatible types.)"
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``One of the \
+       following shall hold: [...] both operands are pointers to [...] \
+       compatible types[, or] one operand is a pointer to an object type and \
+       the other is a pointer to [...] void[, or] one operand is a pointer and \
+       the other is a null pointer constant.`` (Both operand are pointers but \
+       none of the other constraints are satisfied.)"
+  | NE_NULL_POINTER_CONSTANT_FIRST ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
+       a pointer and the other is a null pointer constant.`` (Right operand is \
+       a pointer but the left operand isn't a null pointer constant.)"
+  | NE_NULL_POINTER_CONSTANT_SECOND ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
+       a pointer and the other is a null pointer constant.`` (Left operand is \
+       a pointer but the right operand isn't a null pointer constant.)"
   | NE_ARITHMETIC ->
       "Constraint 6.5.9#2 Equality operators, Constraints: ``[B]oth operands \
        [shall] have arithmetic type.`` (Left operand has arithmetic type but
@@ -260,34 +282,30 @@ let to_string e =
   | QUESTION_SCALAR_FIRST ->
       "Violation of constraint 6.5.15#2 Conditional operator, Constraints: \
        ``The first operand shall have scalar type.``"
-  | QUESTION_VOID_POINTER_SECOND ->
+  | QUESTION_NULL_POINTER_CONSTANT_SECOND ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+        (Third operand is a pointer but the second operand is not a null pointer constant.)"
+  | QUESTION_NULL_POINTER_CONSTANT_THIRD ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        one operand is a pointer to an object type and the other is a pointer \
-       to [...] void.`` (Second operand is a pointer to void but the third \
-       operand is not a pointer to an object type.)"
-  | QUESTION_VOID_POINTER_THIRD ->
+       to [...] void.`` (Third operand is a pointer but the second operand is \
+       not a null pointer constant.)"
+  | QUESTION_POINTERS ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
-       ``[T]he following shall hold for the second and third operands: [...] \
-       one operand is a pointer to an object type and the other is a pointer \
-       to [...] void.`` (Third operand is a pointer to void but the second \
-       operand is not a pointer to an object type.)"
-  | QUESTION_POINTER ->
-      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
-       ``[T]he following shall hold for the second and third operands: [...] \
-       both operands are pointers [...].`` (Second operand is a pointer but the
-       third isn't.)"
+       ``One of the following shall hold for the second and third operands: \
+       [Either] both operands have the same structure or union type[, or] both \
+       operands have void type[, or] both operands are pointers to [...] \
+       compatible types[, or] one operand is a pointer and the other is a null \
+       pointer constant[, or] one operand is a pointer to an object type and \
+       the other is a pointer [...] to void.`` (Second and third operands are \
+       pointers but none of the other constraints are satisfied.)"
   | QUESTION_COMPATIBLE_POINTERS ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
-       both operands are pointers to compatible types [...].`` (Second and third
-       operand are pointers to incompatible types.)"
-  | QUESTION_VOID ->
-      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
-       ``[T]he following shall hold for the second and third operands: [...] \
-       both operands have void type [...].`` (Second operand has void type but
-       the third operand doesn't.)"
-  | QUESTION_ARITHMETIC ->
+       both operands are pointers to compatible types [...].`` (Second and \
+       third operand are pointers to incompatible types.)"
+  | QUESTION_ARITHMETIC_SECOND ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        both operands have arithmetic type [...].`` (Second operand has
@@ -345,6 +363,22 @@ let to_string e =
        ``[T]he left operand [shall have] [...] pointer type and [...] both \
        operands [shall be] pointers to [...] compatible types [...].`` \
        (Operands are pointers to incompatible types.)"
+  | ASSIGN_POINTERS ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``One of the following shall hold: [...] both operands are pointer to \
+       [...] compatible types, and the type pointed to by the left has all the \
+       qualifiers of the type pointed to by the right[, or] the left operand \
+       has [...] pointer type, and [...] one operand is a pointer to an object \
+       type, and the other is a pointer to [...] void, and the type pointed to \
+       by the left has all the qualifiers of the type pointed to by the \
+       right[, or] the left operand is [a] [...] pointer, and the right is a \
+       null pointer constant.`` (Both operands are pointer but none of the \
+      others constraints is satisfied.)"
+  | ASSIGN_NULL_POINTER_CONSTANT ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand is [a] [...] pointer, and the right is a null \
+       pointer constant.`` (Left operand is a point but right operand is not \
+       a pointer nor a null pointer constant.)"
   | ASSIGN_ALL ->
       "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
        ``One of the following shall hold: the left operand has [...] \
@@ -353,7 +387,7 @@ let to_string e =
        the right[, or] the left operand has [...] pointer type, and [...] both \
        operands are pointer to [...] compatible types, and the type pointed to \
        by the left has all the qualifiers of the type pointed to by the \
-       right[, or] the left operand has [...] pointer type, and [...] one z
+       right[, or] the left operand has [...] pointer type, and [...] one \
        operand is a pointer to an object type, and the other is a pointer to \
        [...] void, and the type pointed to by the left has all the qualifiers \
        of the type pointed to by the right[, or] the left operand is [a] [...] \
