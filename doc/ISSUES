@@ -1,0 +1,46 @@
+Can we create pointers out of thin air?
+---------------------------------------
+
+struct point2 {
+  int x, y;
+} p;
+
+
+Case 1:
+int *p = 3456789098765432;
+*p = 1;
+
+Is usage of p always undefined? Or, more generally, if one execution of a
+program has undefined behaviour, do all executions have undefined behaviour?
+
+
+Case 2:
+int *px = (int *) ( ((void *) &p) + offsetof(struct point2, x));
+*px = 1;
+
+Is px a valid pointer? It should be but where does it say so in the standard?
+
+
+Does indeterminacy propagate?
+-----------------------------
+
+unsigned char x, y;
+y = x;
+if (y == y)
+  return 0;
+else
+  return -1;
+
+
+unsigned char x;
+x = x;
+if (x == x)
+  return 0;
+else
+  return -1;
+
+Can the programs output -1?
+
+
+What's a volatile union? Is it allowed?
+---------------------------------------
