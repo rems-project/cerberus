@@ -44,3 +44,10 @@ Can the programs output -1?
 
 What's a volatile union? Is it allowed?
 ---------------------------------------
+
+
+Modifying the object representation of an object
+------------------------------------------------
+
+If one extracts a byte (using an unsigned char pointer) from a valid object and
+writes it back again, is the object still valid.
