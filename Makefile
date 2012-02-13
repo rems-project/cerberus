@@ -155,7 +155,7 @@ ocaml: lem_ocaml
 # Write _tags
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
 	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.native
-	ln -s _build_ocaml/main.native csem
+	-@[ -e "csem" ] || ln -s _build_ocaml/main.native csem
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)
