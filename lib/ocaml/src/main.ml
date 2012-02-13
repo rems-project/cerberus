@@ -32,6 +32,7 @@ let catch m =
 let () =
   let () = Arg.parse options add_file usage in
   let pipeline file_name =
+    let pp_hack = Document.print -| Hack.Print.pp_file in
     let pp_file = Document.print -| Ail.Print.pp_file in
     let pp_dot  = Meaning.Graph.to_file file_name in
     let pp_out  = Document.print -| Meaning.Print.pp in
@@ -40,6 +41,9 @@ let () =
     >> Input.file
     >> Lexer.make
     >> Parser.parse
+    >> Exception.map (pass_through pp_hack)
+    >> Exception.rbind (fun f -> print_endline "-------------------------------\
+       -------------------------------------------------"; Exception.Result f)
     >> Exception.rbind (Cabs_to_ail.desugar "main")
     >> Exception.map (pass_through pp_file)
     >> Exception.rbind (

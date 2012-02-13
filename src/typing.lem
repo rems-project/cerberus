@@ -220,13 +220,13 @@ let rec check_exp env l e_head =
           E.return (A.T_EXP (T.promote t1))
         else E.fail Type_error.SHR_INTEGER_FIRST
       else E.fail Type_error.SHR_INTEGER_SECOND
-  | A.BINARY (C.RELATIONAL C.LT) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.GT) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.LE) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.GE) e1 e2 ->
+  | A.BINARY C.LT e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.GT e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.LE e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.GE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -243,9 +243,9 @@ let rec check_exp env l e_head =
         else E.fail Type_error.GE_REAL
 
       else E.fail Type_error.GE_ALL
-  | A.BINARY (C.RELATIONAL C.EQ) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.NE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.NE) e1 e2 ->
+  | A.BINARY C.EQ e1 e2 ->
+      check_exp env l (A.BINARY C.NE e1 e2)
+  | A.BINARY C.NE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -302,13 +302,13 @@ let rec check_exp env l e_head =
       if T.is_integer t1 && T.is_integer t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Type_error.BOR_INTEGER
-  | A.BINARY (C.SEQUENTIAL C.AND) e1 e2 ->
+  | A.BINARY C.AND e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
         E.return (A.T_EXP int)
       else E.fail Type_error.AND_SCALAR
-  | A.BINARY (C.SEQUENTIAL C.OR) e1 e2 ->
+  | A.BINARY C.OR e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
@@ -468,7 +468,7 @@ let rec check_exp env l e_head =
         else E.fail Type_error.ASSIGN_OTHER_ARITHMETIC
 
       else E.fail Type_error.ASSIGN_LVALUE
-  | A.BINARY (C.SEQUENTIAL C.COMMA) e1 e2 ->
+  | A.BINARY C.COMMA e1 e2 ->
       type_of e1 >>= fun _ ->
       type_of e2 >>= fun t ->
       E.return (A.T_EXP t)

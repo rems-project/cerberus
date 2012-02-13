@@ -133,7 +133,7 @@ let rec desugar_exp (e, l) =
   (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
      subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
      ( *((E1)+(E2))) ]]". *)
-  | C.INDEX e1 e2 ->
+  | C.SUBSCRIPT e1 e2 ->
       A.UNARY A.INDIRECTION <$> (
         Pair.make l <$> (A.BINARY (C.ARITHMETIC C.ADD) <$> f e1 <*> f e2)
       )
@@ -147,17 +147,17 @@ let rec desugar_exp (e, l) =
       A.ASSIGN (Some C.SUB) <$> f e <@> d_one l
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
-  | C.UNARY C.NOT e     -> A.BINARY (C.RELATIONAL C.EQ) (d_zero l) <$> f e
-  | C.UNARY unop  e     -> A.UNARY (desugar_unop unop) <$> f e
-  | C.BINARY o e1 e2    -> A.BINARY o <$> f e1 <*> f e2
-  | C.ASSIGN o e1 e2    -> A.ASSIGN o <$> f e1 <*> f e2
-  | C.QUESTION e1 e2 e3 -> A.QUESTION <$> f e1 <*> f e2 <*> f e3
-  | C.CAST t e          -> A.CAST     <$> ft t <*> f e
-  | C.CALL e es         -> A.CALL     <$> f e  <*> E.map_list f es
-  | C.CONSTANT c        -> E.return (A.CONSTANT c)
-  | C.VARIABLE n        -> A.VARIABLE <$> subst l n
-  | C.TYPE_SIZEOF  t    -> A.SIZEOF   <$> ft t
-  | C.TYPE_ALIGNOF t    -> A.ALIGNOF  <$> ft t
+  | C.UNARY C.NOT e        -> A.BINARY C.EQ (d_zero l) <$> f e
+  | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
+  | C.BINARY o e1 e2       -> A.BINARY o <$> f e1 <*> f e2
+  | C.ASSIGN o e1 e2       -> A.ASSIGN o <$> f e1 <*> f e2
+  | C.CONDITIONAL e1 e2 e3 -> A.QUESTION <$> f e1 <*> f e2 <*> f e3
+  | C.CAST t e             -> A.CAST     <$> ft t <*> f e
+  | C.CALL e es            -> A.CALL     <$> f e  <*> E.map_list f es
+  | C.CONSTANT c           -> E.return (A.CONSTANT c)
+  | C.IDENTIFIER n         -> A.VARIABLE <$> subst l n
+  | C.TYPE_SIZEOF  t       -> A.SIZEOF   <$> ft t
+  | C.TYPE_ALIGNOF t       -> A.ALIGNOF  <$> ft t
 (*
   | C.COMPOUND_LITERAL _ ->
         raise_bug "Compound literals are not yet supported." (* TODO *)

@@ -1,4 +1,98 @@
 (*
+(* 6.4 [Lexical elements]
+   
+    token:
+        keyword
+        identifier
+        constant
+        string-literal
+        punctuator
+
+preprocessing-token:
+        header-name
+        identifier
+        pp-number
+        character-constant
+        string-literal
+        punctuator
+        "each non-white-space character that cannot be one of the above"
+*)
+
+(* 6.4.1 [Keywords] *)
+let lexicon =
+  List.fold_left
+    (fun m (k, e) -> Map.add k e m)
+    Map.empty
+    [
+      ("alignof",        P.ALIGNOF);
+      ("auto",           P.AUTO);
+      ("break",          P.BREAK);
+      ("case",           P.CASE);
+      ("char",           P.CHAR);
+      ("const",          P.CONST);
+      ("continue",       P.CONTINUE);
+      ("default",        P.DEFAULT);
+      ("do",             P.DO);
+      ("double",         P.DOUBLE); (* LATER *)
+      ("else",           P.ELSE);
+      ("enum",           P.ENUM);
+      ("extern",         P.EXTERN);
+      ("float",          P.FLOAT); (* LATER *)
+      ("for",            P.FOR);
+      ("goto",           P.GOTO);
+      ("if",             P.IF);
+      ("inline",         P.INLINE);
+      ("int",            P.INT);
+      ("long",           P.LONG);
+      ("register",       P.REGISTER);
+      ("restrict",       P.RESTRICT);
+      ("return",         P.RETURN);
+      ("short",          P.SHORT);
+      ("signed",         P.SIGNED);
+      ("sizeof",         P.SIZEOF);
+      ("static",         P.STATIC);
+      ("struct",         P.STRUCT);
+      ("switch",         P.SWITCH);
+      ("typedef",        P.TYPEDEF);
+      ("union",          P.UNION);
+      ("unsigned",       P.UNSIGNED);
+      ("void",           P.VOID);
+      ("volatile",       P.VOLATILE);
+      ("while",          P.WHILE);
+      ("_Alignas",       P.ALIGNAS);
+      ("_Atomic",        P.ATOMIC);
+      ("_Bool",          P.BOOL);
+      ("_Complex",       P.COMPLEX); (* LATER *)
+      ("_Generic",       P.GENERIC);
+      ("_Imaginary",     P.IMAGINARY); (* LATER *)
+      ("_Noreturn",      P.NORETURN);
+      ("_Static_assert", P.STATIC_ASSERT);
+      ("_Thread_local",  P.THREAD_LOCAL);
+    ]
+
+(* 6.4.2 [Identifiers] *)
+(* 6.4.2.1 [General Syntax]
+   
+    identifier:
+            identifier-nondigit
+            identifier identifier-nondigit
+            identifier digit
+    
+    identifier-nondigit:
+            nondigit
+            universal-character-name
+            "other implementation-defined characters"
+    
+    nondigit: (...)
+    
+    digit: (...)
+*)
+
+
+*)
+
+
+(*
  *
  * Copyright (c) 2001-2003,
  *  George C. Necula    <necula@cs.berkeley.edu>
@@ -312,13 +406,6 @@ let c_char_sequence = c_char+
 
 
 
-
-
-
-
-
-
-
 let ident = (letter|'_'|'$')(letter|digit|'_'|'$')* 
 let blank = [' ' '\t' '\012' '\r']+
 let escape = '\\' _
@@ -416,7 +503,8 @@ rule initial = parse
 | ';'	{P.SEMICOLON}
 | ','	{P.COMMA}
 | '.'	{P.DOT}
-| "sizeof" {P.SIZEOF}
+(* | "sizeof" {P.SIZEOF} (* TODO: why was this here ? *) *)
+| "\"" {P.DQUOTE}
 (* __extension__ is a black. The parser runs into some conflicts if we let it
  * pass *)
 | "__extension__"         {initial lexbuf}
@@ -531,3 +619,4 @@ and integer_suffix = parse
 
 {
 }
+
