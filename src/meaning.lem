@@ -60,7 +60,8 @@ module Denotation = struct
   let add_constraint_set cstrs t = <|t with constraints  = t.constraints  union cstrs|>
   let add_action         a     t = <|t with actions      = t.actions      union {a}|>
   let add_actions        acts  t = <|t with actions      = t.actions      union acts|>
-  let add_side_effect    a     t = <|t with side_effects = t.side_effects union {a}|>
+  let add_side_effect    a     t = <|t with actions      = t.actions      union {a};
+                                            side_effects = t.side_effects union {a}|>
 
   let add_call call t =
     <|t with
