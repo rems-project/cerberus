@@ -1,64 +1,133 @@
 open Ail
+open Ail_aux (* lift_int *)
 
-let lift_int f_int otherwise = function
-  | BASE _ (INTEGER i) -> f_int i
-  | _ -> otherwise
-  end
+(* *************************************************************************
+   * Predicates over types, corresponding to the name conventions and type *
+   * correspondences defined in 6.2.5.                                     *
+   *************************************************************************
 
-let is_unsigned_int = function
-  | BOOL       -> true
-  | UNSIGNED _ -> true
-  | SIGNED   _ -> false
-  end
-
+   [signed integer types] 6.2.5#4
+   
+   "(...) The standard (...) integer types are collectively called signed
+    integer types."
+*)
 let is_signed_int = function
   | SIGNED   _ -> true
   | UNSIGNED _ -> false
   | BOOL       -> false
   end
 
-let is_unsigned_integer = lift_int is_unsigned_int false
+(* [unsigned integer types] 6.2.5#6
+   
+   "The type *_Bool* and the unsigned integer types that correspond to the
+    standard signed integer types are the `standard unsigned integer types`.
+    (...) The standard (...) integer types are collectively called
+    `unsigned integer types`"
+   
+   NOT_SUPPORTED: extended unsigned integer types
+*)
+let is_unsigned_int = function
+  | BOOL       -> true
+  | UNSIGNED _ -> true
+  | SIGNED   _ -> false
+  end
+
 let is_signed_integer   = lift_int is_signed_int   false
+let is_unsigned_integer = lift_int is_unsigned_int false
 
-let is_char = function
-  | BASE _ CHAR -> true
-  | _           -> false
-  end
 
-let is_void = function
-  | BASE _ VOID -> true
-  | _           -> false
-  end
-
-let is_character = function
-  | BASE _ (INTEGER (UNSIGNED ICHAR)) -> true
-  | BASE _ (INTEGER (SIGNED   ICHAR)) -> true
-  | BASE _ CHAR -> true
-  | _ -> false
-  end
-
-(* TODO No support for floating point, enumerated, structure, union or atomic
-   types. *)
+(* [real floating types] (6.2.5#10)
+   
+   "(...)"
+   
+   NOT_SUPPORTED
+*)
 let is_real_floating t = false
+
+
+(* [complex types, floating types] (6.2.5#11)
+   
+   "(...) The real floating and complex types are collectively called the
+    `floating types`."
+   
+   NOT_SUPPORTED
+*)
 let is_complex t = false
 let is_floating t = is_real_floating t || is_complex t
+
+
+(* (basic types) (6.2.5#14)
+   
+   "The type *char*, the signed and unsigned integer types, and the floating
+    types are collectively called the `basic types`."
+*)
+let is_basic = function
+  | BASIC _ CHAR -> true
+  | t            -> is_unsigned_integer t || is_signed_integer t ||
+                    is_floating t
+  end
+
+
+(* [character types] (6.2.5#15)
+   
+   "The three types *char*, *signed char*, and *unsigned char* are collectively
+    called the `character types`. (...)"
+*)
+let is_character = function
+  | BASIC _ CHAR                       -> true
+  | BASIC _ (INTEGER (SIGNED   ICHAR)) -> true
+  | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true
+  | _                                  -> false
+  end
+
+
+(* [enumerated types] (6.2.5#16)
+   
+   "(...)"
+   
+   TODO
+*)
 let is_enumerated t = false
 
-let is_basic t =
-  is_char t
-  || is_unsigned_integer t
-  || is_signed_integer t
-  || is_floating t
 
-let is_integer t =
-  is_char t
-  || is_signed_integer t
-  || is_unsigned_integer t
-  || is_enumerated t
-
+(* [integer types, real types] (6.2.5#17)
+   
+   "The type *char*, the signed and unsigned integer types, and the enumerated
+    types are collectively called `integer types`. The integer and real floating
+    types are collectively called `real types`."
+*)
+let is_integer = function
+  | BASIC _ CHAR -> true
+  | t            -> is_signed_integer t || is_unsigned_integer t ||
+                    is_enumerated t
+  end
 let is_real t = is_integer t || is_real_floating t
+
+
+(* [arithmetic types] (6.2.5#18)
+   
+   "Integer and floating types are collectively called `arithmetic types`.
+    (...)"
+*)
 let is_arithmetic t = is_integer t || is_floating t
 
+
+(* TODO: would be nice to get rid of this *)
+let is_void = function
+  | VOID _ -> true
+  | _      -> false
+  end
+
+
+
+
+
+
+
+
+
+
+(* TODO *)
 let is_structure t = false
 let is_union t = false
 let is_enum t = false
@@ -66,17 +135,17 @@ let is_atomic t = false
 
 let is_pointer = function
   | POINTER _ _ -> true
-  | _ -> false
+  | _           -> false
   end
 
 let is_function = function
   | FUNCTION _ _ -> true
-  | _ -> false
+  | _            -> false
   end
 
 let is_array = function
   | ARRAY _ _ -> true
-  | _ -> false
+  | _         -> false
   end
 
 let is_derived t =
@@ -92,47 +161,47 @@ let is_scalar t = is_arithmetic t || is_pointer t
 let is_aggregate t = is_array t || is_structure t
 
 let is_unqualified = function
-  | BASE    q _ -> q = {}
-  | POINTER q _ -> q = {}
-  | _ -> true
+  | BASIC    q _ -> q = {}
+  | POINTER  q _ -> q = {}
+  | _            -> true
   end
 
 let is_object = function
   | FUNCTION _ _ -> false
-  | _ -> true
+  | _            -> true
   end
 
 let is_complete_object t =
   match t with
-  | BASE _ VOID -> false
-  | _           -> is_object t
+  | VOID _ -> false
+  | _      -> is_object t
   end
 
 let is_pointer_to_object = function
   | POINTER _ t -> is_object t
-  | _ -> false
+  | _           -> false
   end
 
 let is_pointer_to_void = function
   | POINTER _ t -> is_void t
-  | _ -> false
+  | _           -> false
   end
 
 let is_pointer_to_function = function
   | POINTER _ t -> is_function t
-  | _ -> false
+  | _           -> false
   end
 
 let is_pointer_to_complete_object = function
   | POINTER _ t -> is_complete_object t
-  | _ -> false 
+  | _           -> false 
   end
 
 let compatible_basic s1 s2 = (s1 = s2)
 
 let rec compatible type1 type2 =
   match (type1, type2) with
-  | (BASE q1 s1, BASE q2 s2) ->
+  | (BASIC q1 s1, BASIC q2 s2) ->
       compatible_basic s1 s2 && Set.equal q1 q2
   | (POINTER q1 t1, POINTER q2 t2) ->
       compatible t1 t2 && Set.equal q1 q2
@@ -147,17 +216,17 @@ let rec compatible type1 type2 =
 
 let unqualify t =
   match t with
-  | BASE _ b -> BASE {} b
+  | BASIC _ b    -> BASIC {} b
   | POINTER _ t' -> POINTER {} t'
-  | _ -> t
+  | _            -> t
   end
 
 let compatible_unqualified type1 type2 =
   compatible (unqualify type1) (unqualify type2)
 
 let qualifiers = function
-  | POINTER q _ -> q
-  | BASE    q _ -> q
+  | POINTER  q _ -> q
+  | BASIC    q _ -> q
   | FUNCTION _ _ -> {}
   | ARRAY    _ _ -> {}
   end
@@ -166,15 +235,15 @@ let merge_qualifiers t1 t2 = (qualifiers t1) union (qualifiers t2)
 
 let include_qualifiers t q =
   match t with
-  | BASE q' b' -> BASE (q union q') b'
-  | POINTER q' t' -> POINTER (q union q') t'
-  | FUNCTION _ _ -> t
-  | ARRAY    _ _ -> t
+  | BASIC    q' b' -> BASIC (q union q') b'
+  | POINTER  q' t' -> POINTER (q union q') t'
+  | FUNCTION _  _  -> t
+  | ARRAY    _  _  -> t
   end
 
 let rec eq t1 t2 =
   match (t1, t2) with
-  | (BASE _ b1, BASE _ b2) -> b1 = b2
+  | (BASIC _ b1, BASIC _ b2) -> b1 = b2
   | (POINTER _ t1, POINTER _ t2) -> eq t1 t2
   | (FUNCTION t1 ts1, FUNCTION t2 ts2) ->
       eq t1 t2 && List.for_all2 eq ts1 ts2
@@ -204,13 +273,13 @@ and lt_rank i1 i2 =
   | SIGNED LONG      -> leq (SIGNED INT)
   | SIGNED LONG_LONG -> leq (SIGNED LONG)
   (* Corresponding signed and unsigned integers have the same rank. *)
-  | UNSIGNED b         -> lt_rank i1 (SIGNED b)
+  | UNSIGNED b       -> lt_rank i1 (SIGNED b)
   end
 
 let leq_prec i1 i2 =
   match (i1, i2) with
-  | (BOOL, _) -> true
-  | (_, BOOL) -> false
+  | (BOOL      ,  _         ) -> true
+  | (_         ,  BOOL      ) -> false
   | (SIGNED   _,  SIGNED   _) -> leq_rank i1 i2
   | (UNSIGNED _,  UNSIGNED _) -> leq_rank i1 i2
   | (SIGNED   _,  UNSIGNED _) ->
@@ -242,8 +311,8 @@ let rec common_int i1 i2 =
 
 let rec common t1 t2 =
   match (t1, t2) with
-  | (BASE _ (INTEGER i1), BASE _ (INTEGER i2)) ->
-      BASE {} (INTEGER (common_int i1 i2))
+  | (BASIC _ (INTEGER i1), BASIC _ (INTEGER i2)) ->
+      BASIC {} (INTEGER (common_int i1 i2))
   end
 
 let promote_int i =
@@ -264,7 +333,7 @@ let promote_int i =
 
 let promote t =
   match t with
-  | BASE q (INTEGER i) -> BASE q (INTEGER (promote_int i))
+  | BASIC q (INTEGER i) -> BASIC q (INTEGER (promote_int i))
   | _ -> t
   end
 
@@ -272,7 +341,7 @@ let usual_arithmetic t1 t2 = common (promote t1) (promote t2)
 
 let is_complete t =
   match t with
-  | BASE     _ _ -> is_complete_object t
+  | BASIC    _ _ -> is_complete_object t
   | POINTER  _ _ -> is_complete_object t
   | ARRAY    _ _ -> true
   | FUNCTION _ _ -> false
@@ -281,7 +350,7 @@ let is_complete t =
 let is_incomplete t = not (is_complete t)
 
 let is_const = function
-  | BASE     q _ -> Cabs.CONST IN q
+  | BASIC    q _ -> Cabs.CONST IN q
   | POINTER  q _ -> Cabs.CONST IN q
   | ARRAY    _ _ -> false
   | FUNCTION _ _ -> false
@@ -293,8 +362,8 @@ let is_modifiable t =
   && not (is_const t)
 
 let is_bool = function
-  | BASE _ (INTEGER BOOL) -> true
-  | _ -> false
+  | BASIC _ (INTEGER BOOL) -> true
+  | _                      -> false
   end
 
 let base_of_pointer = function
@@ -340,12 +409,12 @@ let is_lvalue = function
 
 let is_unsigned_of t1 t2 =
   match (t1, t2) with
-  | (BASE _ (INTEGER (SIGNED i1)), BASE _ (INTEGER (UNSIGNED i2))) -> i1 = i2
-  | _ -> false
+  | (BASIC _ (INTEGER (SIGNED i1)), BASIC _ (INTEGER (UNSIGNED i2))) -> i1 = i2
+  | _                                                                -> false
   end
 
 let is_signed_of t1 t2 =
   match (t1, t2) with
-  | (BASE _ (INTEGER (UNSIGNED i1)), BASE _ (INTEGER (SIGNED i2))) -> i1 = i2
-  | _ -> false
+  | (BASIC _ (INTEGER (UNSIGNED i1)), BASIC _ (INTEGER (SIGNED i2))) -> i1 = i2
+  | _                                                                -> false
   end

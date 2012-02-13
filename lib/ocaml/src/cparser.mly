@@ -36,7 +36,7 @@
  *
  **)
 (**
-** 1.0	3.22.99	Hugues Cass�	First version.
+** 1.0	3.22.99	Hugues Cassé	First version.
 ** 2.0  George Necula 12/12/00: Practically complete rewrite.
 *)
 */
@@ -48,7 +48,14 @@ module L = Location
 let print = print_string
 
 let currentFunctionName = ref "<outside any function>"
-    
+
+(* TODO: an external module + nice displaying *)
+let error msg = print_endline ("\x1b[31m" ^ msg ^ "\x1b[0m"); exit 1
+
+type struct_union =
+  | STRUCT_
+  | UNION_
+
 %}
 
 %token <string> IDENT
@@ -56,9 +63,9 @@ let currentFunctionName = ref "<outside any function>"
 %token <int64 list> CONST_CHAR
 %token <int64 list> CONST_WCHAR
 
-/* Each character is its own list element, and the terminating nul is not
-   included in this list. */
-%token <int64 list> CONST_STRING   
+(* Each character is its own list element, and the terminating nul is not
+   included in this list. *)
+%token <int64 list> CONST_STRING
 %token <int64 list> CONST_WSTRING
 
 %token EOF
@@ -90,6 +97,7 @@ let currentFunctionName = ref "<outside any function>"
 %token COLON
 %token SEMICOLON
 %token COMMA QUEST
+%token DQUOTE
 
 %token BREAK CONTINUE GOTO RETURN
 %token SWITCH CASE DEFAULT
@@ -101,13 +109,21 @@ let currentFunctionName = ref "<outside any function>"
 %token TYPEOF FUNCTION__ PRETTY_FUNCTION__
 %token LABEL__
 
-%token<Nat_num.num * Cabs.suffix option> CONST_INT
 
-/* operator precedence */
+(* TODO: organize *)
+%token FLOAT DOUBLE
+%token EXTERN REGISTER RESTRICT
+%token TYPEDEF ALIGNAS ATOMIC
+%token COMPLEX GENERIC IMAGINARY NORETURN
+%token STATIC_ASSERT THREAD_LOCAL
+
+%token<Nat_num.num * Cabs.integer_suffix option> CONST_INT
+
+(* operator precedence *)
 %right ELSE
 %left	DOT ARROW
 
-/* Non-terminals informations */
+(* Non-terminals informations *)
 %start start
 %type <Cabs.g_defn_l list> start
 
@@ -115,6 +131,14 @@ let currentFunctionName = ref "<outside any function>"
 %type <Cabs.exp_l> expression
 %type <Cabs.exp_l list> argument_expression_list_opt
 %type <Cabs.defn_l list> declaration
+
+
+
+(* KKK *)
+%type <((string * (Cabs.c_type -> Cabs.c_type)) * Cabs.location) option * Cabs.exp_l option> struct_declarator
+
+
+
 %%
 
 start:
@@ -122,327 +146,793 @@ start:
     {List.rev $1}
 ;
 
-/* 6.9#1 External definitions, Syntax */
-translation_unit:
-| external_declaration
-    {[$1]}
-/* ATTENTION We store the list in reverse. */
-| translation_unit external_declaration
-    {$2 :: $1}
+
+
+(* 6.4.2.1#1 Identifiers - General, Syntax [see lexer] *)
+identifier:
+| id= IDENT {id}
 ;
 
-external_declaration:
-| function_definition
-    {$1}
-| declaration
-    {C.EXTERNAL_DECLARATION $1, L.make $startpos $endpos}
-;
 
-/* 6.9.1#1 Function definitions, Syntax */
-function_definition:
-/* TODO No support for old-style function definitions. */
-| declaration_specifiers declarator /*declaration_list_opt*/ compound_statement
-    { let store, specs, quals = $1 in
-      let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
-      let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in
-      C.FUNCTION_DEFINITION (defn_l, $3), L.make $startpos $endpos
-    }
-;
+(* 6.4.4.3#1 Enumeration constants, Syntax *)
+enumeration_constant:
+| identifier
+    {error "PARSING: 'enumeration-constant' not yet supported." (* TODO *)}
 
 declaration_list_opt:
-| /* empty */
+| (* empty *)
     {[]}
-| declaration_list
-    {$1}
+| l= declaration_list
+    {l}
 ;
 
 declaration_list:
-| declaration
+| d= declaration
+    {[d]}
+(* ATTENTION We store the list in reverse.*)
+| ds= declaration_list d= declaration
+    {d :: ds}
+;
+
+(* (* TODO *)
+(* 6.4.5 String literals *)
+string_literal:
+| encoding_prefix? DQUOTE s_char_sequence? DQUOTE
+
+encoding_prefix (* TODO *)
+
+s_char_sequence:
+| s_char:
     {[$1]}
-/* ATTENTION We store the list in reverse.*/
-| declaration_list declaration
+(* ATTENTION We store the list in reverse.*)
+| s_char_sequence s_char
     {$2 :: $1}
-;
 
-/* 6.5.1#1 Primary expressions, Syntax */
+s_char:
+| 
+*)
+
+
+
+(* 6.5.1#1 Primary expressions, Syntax *)
 primary_expression:
-| identifier
-    {C.VARIABLE $1, L.make $startpos $endpos}
-| constant
-    {C.CONSTANT $1, L.make $startpos $endpos}
-| LPAREN expression RPAREN
-    {$2}
+| id = identifier              {C.IDENTIFIER id, L.make $startpos $endpos}
+| c = constant                 {C.CONSTANT c, L.make $startpos $endpos}
+(* (* TODO *)
+| l = string_literal           {C.STRIN_LITERAL l, L.make $starpos $endpos}
+*)
+| LPAREN e = expression RPAREN {e}
+(* TODO: generic-selection *)
 ;
 
-/* 6.5.2#1 Postfix operators, Syntax */
+(* 6.5.2#1 Postfix operators, Syntax *)
 postfix_expression:
-| primary_expression     
-    {$1}
-| postfix_expression LBRACKET expression RBRACKET
-    {C.INDEX ($1, $3), L.make $startpos $endpos}
-| postfix_expression LPAREN argument_expression_list_opt RPAREN
-    {C.CALL ($1, $3), L.make $startpos $endpos}
-/* Currently, we have no support for structs.
-| postfix_expression DOT identifier
-    {C.MEMBEROF (fst $1, fst $3), snd $1}
-| postfix_expression ARROW identifier
-    {C.MEMBEROFPTR (fst $1, fst $3), snd $1}
-*/
-| postfix_expression PLUS_PLUS
-    {C.UNARY (C.POSTFIX_INCR, $1), L.make $startpos $endpos}
-| postfix_expression MINUS_MINUS
-    {C.UNARY (C.POSTFIX_DECR, $1), L.make $startpos $endpos}
+(* see 'primary expressions' *)
+| e = primary_expression     
+    {e}
+(* e1[e2] *)
+| e1 = postfix_expression LBRACKET e2 = expression RBRACKET
+    {C.SUBSCRIPT (e1, e2), L.make $startpos $endpos}
+(* f(arg1, ..., argn) *)
+| f = postfix_expression LPAREN args = argument_expression_list_opt RPAREN
+    {C.CALL (f, args), L.make $startpos $endpos}
+(* e.id *)
+| e = postfix_expression DOT id = identifier
+    {C.MEMBEROF (e, id), L.make $startpos $endpos}
+(* e->id *)
+| e = postfix_expression ARROW id = identifier
+    {C.MEMBEROFPTR (e, id), L.make $startpos $endpos}
+(* e ++ *)
+| e = postfix_expression PLUS_PLUS
+    {C.UNARY (C.POSTFIX_INCR, e), L.make $startpos $endpos}
+(* e -- *)
+| e = postfix_expression MINUS_MINUS
+    {C.UNARY (C.POSTFIX_DECR, e), L.make $startpos $endpos}
 
-/* TODO I am omitting compound literals for the moment. Adding them at a later stage shouldn't pose much of a challenge.
+(* TODO I am omitting compound literals for the moment. Adding them at a later stage shouldn't pose much of a challenge.
 | LPAREN type_name RPAREN LBRACE initialiser_list RBRACE
     {C.COMPOUND_LITERAL ($2, C.COMPOUND_INIT $5), $1}
 | LPAREN type_name RPAREN LBRACE initialiser_list COMMA RBRACE
     {C.COMPOUND_LITERAL ($2, C.COMPOUND_INIT $5), $1}
-*/
+*)
 ;
 
-/* 6.5.3#1 Unary operators, Syntax */
+argument_expression_list_opt:
+| (* empty *)
+    {[]}
+| es = argument_expression_list
+    {List.rev es}
+;
+
+argument_expression_list:
+| e = assignment_expression
+    {[e]}
+(* ATTENTION Storing list in reverse. Don't forget to reverse the list. *)
+| es = argument_expression_list COMMA e = assignment_expression
+    {e :: es}
+(* We don't need fancy error handling ;)
+| error COMMA argument_expression_list {$3}
+*)
+;
+
+
+(* 6.5.3#1 Unary operators, Syntax *)
 unary_expression:
-| postfix_expression
-    {$1}
-| PLUS_PLUS unary_expression
-    {C.UNARY (C.PREFIX_INCR, $2), L.make $startpos $endpos}
-| MINUS_MINUS unary_expression
-    {C.UNARY (C.PREFIX_DECR, $2), L.make $startpos $endpos}
-| unary_operator cast_expression
-        {C.UNARY ($1, $2), L.make $startpos $endpos}
-/* TODO Not yet supported.
+(* see 'postfix expressions' *)
+| e = postfix_expression
+    {e}
+(* ++ e *)
+| PLUS_PLUS e = unary_expression
+    {C.UNARY (C.PREFIX_INCR, e), L.make $startpos $endpos}
+(* -- e *)
+| MINUS_MINUS e = unary_expression
+    {C.UNARY (C.PREFIX_DECR, e), L.make $startpos $endpos}
+(* see 'unary operators' *)
+| op = unary_operator e = cast_expression
+        {C.UNARY (op, e), L.make $startpos $endpos}
+(* TODO Not yet supported.
 | SIZEOF unary_expression
     {C.EXPR_SIZEOF (fst $2), $1}
-*/
-| SIZEOF LPAREN type_name RPAREN
-    {C.TYPE_SIZEOF $3, L.make $startpos $endpos}
-| ALIGNOF LPAREN type_name RPAREN
-    {C.TYPE_ALIGNOF $3, L.make $startpos $endpos}
+*)
+(* sizeof(ty) *)
+| SIZEOF LPAREN ty = type_name RPAREN
+    {C.TYPE_SIZEOF ty, L.make $startpos $endpos}
+(* alignof(ty) *)
+| ALIGNOF LPAREN ty = type_name RPAREN
+    {C.TYPE_ALIGNOF ty, L.make $startpos $endpos}
 ;
 
 unary_operator:
-| AND
-    {C.ADDRESS}
-| STAR
-    {C.INDIRECTION}
-| PLUS
-    {C.PLUS}
-| MINUS
-    {C.MINUS}
-| TILDE
-    {C.BNOT}
-| EXCLAM
-    {C.NOT}
+| AND    {C.ADDRESS}
+| STAR   {C.INDIRECTION}
+| PLUS   {C.PLUS}
+| MINUS  {C.MINUS}
+| TILDE  {C.BNOT}
+| EXCLAM {C.NOT}
 ;
 
-/* 6.5.4#1 Cast operators, Syntax */
+
+(* 6.5.4#1 Cast operators, Syntax *)
 cast_expression:
-| unary_expression
-    {$1}
-| LPAREN type_name RPAREN cast_expression
-    {C.CAST ($2, $4), L.make $startpos $endpos}
+(* see 'unary expressions' *)
+| e = unary_expression
+    {e}
+(* (ty) e *)
+| LPAREN ty = type_name RPAREN e = cast_expression
+    {C.CAST (ty, e), L.make $startpos $endpos}
 ;
 
-/* 6.5.5#1 Multiplicative operators, Syntax */
+
+(* 6.5.5#1 Multiplicative operators, Syntax *)
 multiplicative_expression:
-| cast_expression
-    {$1}
-| multiplicative_expression STAR cast_expression
-    {C.BINARY (C.ARITHMETIC C.MUL, $1, $3), L.make $startpos $endpos}
-| multiplicative_expression SLASH cast_expression
-    {C.BINARY (C.ARITHMETIC C.DIV, $1, $3), L.make $startpos $endpos}
-| multiplicative_expression PERCENT cast_expression
-    {C.BINARY (C.ARITHMETIC C.MOD, $1, $3), L.make $startpos $endpos}
+(* see 'cast expressions' *)
+| e = cast_expression
+    {e}
+(* e1 * e2 *)
+| e1 = multiplicative_expression STAR e2 = cast_expression
+    {C.BINARY (C.ARITHMETIC C.MUL, e1, e2), L.make $startpos $endpos}
+(* e1 / e2 *)
+| e1 = multiplicative_expression SLASH e2 = cast_expression
+    {C.BINARY (C.ARITHMETIC C.DIV, e1, e2), L.make $startpos $endpos}
+(* e1 % e2 *)
+| e1 = multiplicative_expression PERCENT e2 = cast_expression
+    {C.BINARY (C.ARITHMETIC C.MOD, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.6#1 Additive operators, Syntax */
+
+(* 6.5.6#1 Additive operators, Syntax *)
 additive_expression:
-| multiplicative_expression
-    {$1}
-| additive_expression PLUS multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.ADD, $1, $3), L.make $startpos $endpos}
-| additive_expression MINUS multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.SUB, $1, $3), L.make $startpos $endpos}
+(* see 'multiplicative expressions' *)
+| e = multiplicative_expression
+    {e}
+(* e1 + e2 *)
+| e1 = additive_expression PLUS e2 = multiplicative_expression
+    {C.BINARY (C.ARITHMETIC C.ADD, e1, e2), L.make $startpos $endpos}
+(* e1 - e2 *)
+| e1 = additive_expression MINUS e2 = multiplicative_expression
+    {C.BINARY (C.ARITHMETIC C.SUB, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.7 Bitwise shift operators, Syntax */
+
+(* 6.5.7 Bitwise shift operators, Syntax *)
 shift_expression:
-| additive_expression
-    {$1}
-| shift_expression  INF_INF additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHL, $1, $3), L.make $startpos $endpos}
-| shift_expression  SUP_SUP additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHR, $1, $3), L.make $startpos $endpos}
+(* see 'additive expressions' *)
+| e = additive_expression
+    {e}
+(* e1 << e2 *)
+| e1 = shift_expression  INF_INF e2 = additive_expression
+    {C.BINARY (C.ARITHMETIC C.SHL, e1, e2), L.make $startpos $endpos}
+(* e1 >> e2 *)
+| e1 = shift_expression  SUP_SUP e2 = additive_expression
+    {C.BINARY (C.ARITHMETIC C.SHR, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.8#1 Relational operators, Syntax */
+
+(* 6.5.8#1 Relational operators, Syntax *)
 relational_expression:
-| shift_expression
-    {$1}
-| relational_expression INF shift_expression
-    {C.BINARY (C.RELATIONAL C.LT, $1, $3), L.make $startpos $endpos}
-| relational_expression SUP shift_expression
-    {C.BINARY (C.RELATIONAL C.GT, $1, $3), L.make $startpos $endpos}
-| relational_expression INF_EQ shift_expression
-    {C.BINARY (C.RELATIONAL C.LE, $1, $3), L.make $startpos $endpos}
-| relational_expression SUP_EQ shift_expression
-    {C.BINARY (C.RELATIONAL C.GE, $1, $3), L.make $startpos $endpos}
+(* see 'shift expressions' *)
+| e = shift_expression
+    {e}
+(* e1 < e2 *)
+| e1 = relational_expression INF e2 = shift_expression
+    {C.BINARY (C.LT, e1, e2), L.make $startpos $endpos}
+(* e1 > e2 *)
+| e1 = relational_expression SUP e2 = shift_expression
+    {C.BINARY (C.GT, e1, e2), L.make $startpos $endpos}
+(* e1 <= e2 *)
+| e1 = relational_expression INF_EQ e2 = shift_expression
+    {C.BINARY (C.LE, e1, e2), L.make $startpos $endpos}
+(* e1 >= e2 *)
+| e1 = relational_expression SUP_EQ e2 = shift_expression
+    {C.BINARY (C.GE, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.9#1 Equality operators, Syntax */
+
+(* 6.5.9#1 Equality operators, Syntax *)
 equality_expression:
-| relational_expression
-    {$1}
-| equality_expression EQ_EQ relational_expression
-    {C.BINARY (C.RELATIONAL C.EQ, $1, $3), L.make $startpos $endpos}
-| equality_expression EXCLAM_EQ relational_expression
-    {C.BINARY (C.RELATIONAL C.NE, $1, $3), L.make $startpos $endpos}
+(* see 'relational expressions' *)
+| e = relational_expression
+    {e}
+(* e1 == e2 *)
+| e1 = equality_expression EQ_EQ e2 = relational_expression
+    {C.BINARY (C.EQ, e1, e2), L.make $startpos $endpos}
+(* e1 != e2 *)
+| e1 = equality_expression EXCLAM_EQ e2 = relational_expression
+    {C.BINARY (C.NE, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.10#1 Bitwise AND operator, Syntax */
+
+(* 6.5.10#1 Bitwise AND operator, Syntax *)
 and_expression:
-| equality_expression
-    {$1}
-| and_expression AND equality_expression
-    {C.BINARY (C.ARITHMETIC C.BAND, $1, $3), L.make $startpos $endpos}
+(* see 'equality expressions' *)
+| e = equality_expression
+    {e}
+(* e1 & e2 *)
+| e1 = and_expression AND e2 = equality_expression
+    {C.BINARY (C.ARITHMETIC C.BAND, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.11#1 Bitwise exclusive OR operator */
+
+(* 6.5.11#1 Bitwise exclusive OR operator *)
 exclusive_or_expression:
-| and_expression
-    {$1}
-| exclusive_or_expression CIRC and_expression
-    {C.BINARY (C.ARITHMETIC C.XOR, $1, $3), L.make $startpos $endpos}
+(* see 'AND expressions' *)
+| e = and_expression
+    {e}
+(* e1 ^ e2 *)
+| e1 = exclusive_or_expression CIRC e2 = and_expression
+    {C.BINARY (C.ARITHMETIC C.XOR, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.12#1 Bitwise inclusive OR operator */
+
+(* 6.5.12#1 Bitwise inclusive OR operator *)
 inclusive_or_expression:
-| exclusive_or_expression
-    {$1} 
-| inclusive_or_expression PIPE exclusive_or_expression
-    {C.BINARY (C.ARITHMETIC C.BOR, $1, $3), L.make $startpos $endpos}
+(* see 'exclusive OR expressions' *)
+| e = exclusive_or_expression
+    {e}
+(* e1 | e2 *)
+| e1 = inclusive_or_expression PIPE e2 = exclusive_or_expression
+    {C.BINARY (C.ARITHMETIC C.BOR, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.13#1 Logical AND operator, Syntax */
+
+(* 6.5.13#1 Logical AND operator, Syntax *)
 logical_and_expression:
-| inclusive_or_expression
-    {$1}
-| logical_and_expression AND_AND inclusive_or_expression
-    {C.BINARY (C.SEQUENTIAL C.AND, $1, $3), L.make $startpos $endpos}
+(* see 'inclusive OR expressions' *)
+| e = inclusive_or_expression
+    {e}
+(* e1 && e2 *)
+| e1 = logical_and_expression AND_AND e2 = inclusive_or_expression
+    {C.BINARY (C.AND, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.14#1 Logical OR operator, Syntax */
+
+(* 6.5.14#1 Logical OR operator, Syntax *)
 logical_or_expression:
-| logical_and_expression
-    {$1}
-| logical_or_expression PIPE_PIPE logical_and_expression
-    {C.BINARY (C.SEQUENTIAL C.OR, $1, $3), L.make $startpos $endpos}
+(* see 'logical AND expressions' *)
+| e = logical_and_expression
+    {e}
+(* e1 || e2 *)
+| e1 = logical_or_expression PIPE_PIPE e2 = logical_and_expression
+    {C.BINARY (C.OR, e1, e2), L.make $startpos $endpos}
 ;
 
-/* 6.5.15#1 Conditional operator, Syntax*/
+
+(* 6.5.15#1 Conditional operator, Syntax *)
 conditional_expression:
-| logical_or_expression
-    { $1 }
-| logical_or_expression QUEST expression COLON conditional_expression
-    {C.QUESTION ($1, $3, $5), L.make $startpos $endpos}
+(* see 'logical OR expressions' *)
+| e = logical_or_expression
+    {e}
+(* e1 ? e2 : e3 *)
+| e1 = logical_or_expression QUEST e2 = expression COLON e3 = conditional_expression
+    {C.CONDITIONAL (e1, e2, e3), L.make $startpos $endpos}
 ;
 
-/* 6.5.16#1 Assignment operators, Syntax */
-assignment_expression_opt:
-| /* empty */
-    {None}
-| assignment_expression
-    {Some $1}
-;
+
+(* 6.5.16#1 Assignment operators, Syntax *)
 assignment_expression:
-| conditional_expression
-    {$1}
-| unary_expression assignment_operator assignment_expression
-    {C.ASSIGN ($2, $1, $3), L.make $startpos $endpos}
+(* see 'conditional expressions' *)
+| e = conditional_expression
+    {e}
+| e1 = unary_expression op = assignment_operator e2 = assignment_expression
+(* see 'assignment operators' *)
+    {C.ASSIGN (op, e1, e2), L.make $startpos $endpos}
 
 assignment_operator:
-| EQ
-    {None}
-| STAR_EQ
-    {Some C.MUL}
-| SLASH_EQ
-    {Some C.DIV}
-| PERCENT_EQ
-    {Some C.MOD}
-| PLUS_EQ
-    {Some C.ADD}
-| MINUS_EQ
-    {Some C.SUB}
-| INF_INF_EQ
-    {Some C.SHL}
-| SUP_SUP_EQ
-    {Some C.SHR}
-| AND_EQ
-    {Some C.BAND}
-| CIRC_EQ
-    {Some C.XOR}
-| PIPE_EQ
-    {Some C.BOR}
+| EQ         {None}
+| STAR_EQ    {Some C.MUL}
+| SLASH_EQ   {Some C.DIV}
+| PERCENT_EQ {Some C.MOD}
+| PLUS_EQ    {Some C.ADD}
+| MINUS_EQ   {Some C.SUB}
+| INF_INF_EQ {Some C.SHL}
+| SUP_SUP_EQ {Some C.SHR}
+| AND_EQ     {Some C.BAND}
+| CIRC_EQ    {Some C.XOR}
+| PIPE_EQ    {Some C.BOR}
 ;
 
-/* 6.5.17#1 Comma operator, Syntax */
-expression_opt:
-| /* empty */
-    {None}
-| expression
-    {Some $1}
 
+(* 6.5.17#1 Comma operator, Syntax *)
 expression:
-| assignment_expression
-    {$1}
-| expression COMMA assignment_expression
-    {C.BINARY (C.SEQUENTIAL C.COMMA, $1, $3), L.make $startpos $endpos}
+(* see 'assignment expressions' *)
+| e = assignment_expression
+    {e}
+(* e1, e2 *)
+| e1 = expression COMMA e2 = assignment_expression
+    {C.BINARY (C.COMMA, e1, e2), L.make $startpos $endpos}
 ;
 
-constant_expression:
-| conditional_expression {$1}
 
-  /* 6.4.4#1 Constants, Syntax */
+(* 6.6 Constant expressions *)
+constant_expression:
+| e = conditional_expression {e}
+;
+
+
+(* 6.4.4#1 Constants, Syntax *)
 constant:
-| integer_constant
-    {$1}
-/* TODO Add in later.
+| c = integer_constant {c}
+(* TODO Add in later.
 | CONST_CHAR				{C.CONST_CHAR (fst $1), snd $1}
 | CONST_WCHAR				{C.CONST_WCHAR (fst $1), snd $1}
-*/
+*)
 ;
 
 integer_constant:
-| CONST_INT
-    { let value, suffix = $1 in
+| c = CONST_INT {C.CONST_INT c}
+(* QUESTION[K]: is this η-expansion needed ?
+    { let value, suffix = c in
       C.CONST_INT (value, suffix)
+    }
+*)
+;
+
+
+(* 6.7 Declarations ********************************************************* *)
+
+(* 6.7#1 Declarations, Syntax *)
+declaration:
+(* | declaration_specifiers init_declarator_list_opt SEMICOLON *)
+| s = declaration_specifiers l = loption(init_declarator_list) SEMICOLON (* TODO: check *)
+    { let store, specs, quals = s in
+      let make_def (((name, mk_type), li, exp), lo) =
+        (((name, mk_type (C.BASE (quals, specs)), store), li), exp), lo in
+      
+      match l with
+        | [] -> [] (* failwith "TODO: need to extract struct tag" *)
+                
+        | l  -> print_endline "BBB"; List.map make_def (List.rev l)}
+(* TODO We don't support static assertions.
+| static_assert_declaration
+*)
+;
+
+declaration_specifiers_opt:
+| (* empty *)
+    {([], Multiset.emp, Pset.empty compare)}
+| declaration_specifiers
+    {$1}
+;
+
+declaration_specifiers:
+| s= storage_class_specifier decls_opt= declaration_specifiers_opt
+    { let store, specs, quals = decls_opt in (s :: store, specs, quals) }
+| s= type_specifier decls_opt= declaration_specifiers_opt
+    { let store, specs, quals = decls_opt in (store, Multiset.add s specs, quals) }
+| q= type_qualifier decls_opt= declaration_specifiers_opt
+    { let store, specs, quals = decls_opt in (store, specs, Pset.add q quals) }
+(* TODO Keyword inline should only be used for function declarations. *)
+| function_specifier declaration_specifiers_opt
+    {$2}
+(* TODO _Noreturn is not supported. *)
+(* TODO We are don't support alignment yet.
+| alignment_specifier declaration_specifiers_opt
+*)
+;
+
+init_declarator_list_opt:
+| (* empty *)
+    {[]}
+| init_declarator_list
+    {List.rev $1}
+;
+
+init_declarator_list:
+| init_declarator
+    {[$1]}
+(* ATTENTION We are storing the list in reverse. *)
+| init_declarator_list COMMA init_declarator
+    {$3 :: $1}
+;
+
+init_declarator:
+| decl = declarator
+    { let name, mk_type = decl in
+      (name, mk_type, None), L.make $startpos $endpos
+    }
+| declarator EQ initialiser
+    { let name, mk_type = $1 in
+      (name, mk_type, Some $3), L.make $startpos $endpos
+    }
+
+
+(* 6.7.1#1 Storage-class specifier, Syntax *)
+storage_class_specifier:
+| TYPEDEF      {C.TYPEDEF}
+| EXTERN       {C.EXTERN}
+| STATIC       {C.STATIC}
+| THREAD_LOCAL {C.THREAD_LOCAL}
+| AUTO         {C.AUTO}
+| REGISTER     {C.REGISTER}
+;
+
+(* 6.7.2#1 Type specifiers, Syntax *)
+type_specifier:
+| VOID     {C.VOID}
+| CHAR     {C.CHAR}    
+| SHORT    {C.SHORT}
+| INT      {C.INT}
+| LONG     {C.LONG}
+| FLOAT    {error "PARSING: 'float' type-specifier not yet supported." (* (* LATER *) C.FLOAT *)}
+| DOUBLE   {error "PARSING: 'double' type-specifier not yet supported." (* (* LATER *) C.DOUBLE *)}
+| SIGNED   {C.SIGNED}
+| UNSIGNED {C.UNSIGNED}
+| BOOL     {C.BOOL}
+| COMPLEX  {error "PARSING: '_Complex' type-specifier not yet supported." (* (* LATER *) C.COMPLEX *)}
+(* TODO
+| atomic_type_specifier     {failwith "type_specifier [atomic]: TODO" (* TODO *)} *)
+| spec = struct_or_union_specifier {spec}
+(*
+| enum_specifier            {failwith "type_specifier [enum]: TODO" (* TODO *)}
+| typedef_name              {failwith "type_specifier [typedef]: TODO" (* TODO *)}
+*)
+;
+
+(* 6.7.2.1#1 Structure and union specifiers, Syntax *)
+struct_or_union_specifier:
+| x = struct_or_union id_opt = identifier? LBRACE decls = struct_declaration_list RBRACE
+    {match x with
+      | STRUCT_ -> Cabs.STRUCT (id_opt, List.rev decls)
+      | UNION_  -> Cabs.UNION (id_opt, List.rev decls)}
+| x = struct_or_union id = identifier
+    {match x with
+      | STRUCT_ -> Cabs.STRUCT (Some id, [])
+      | UNION_  -> Cabs.UNION (Some id, [])}
+
+struct_or_union:
+| STRUCT {STRUCT_}
+| UNION {UNION_}
+
+struct_declaration_list:
+| decl = struct_declaration
+    {[decl]}
+(* ATTENTION We are storing the list in reverse. *)
+| decls = struct_declaration_list decl = struct_declaration
+    {decl :: decls}
+
+struct_declarator_list_opt:
+| (* empty *)
+    {[]}
+| l = struct_declarator_list
+    {List.rev l}
+
+(* KKK *)
+struct_declaration:
+| ss_qs = specifier_qualifier_list decls = struct_declarator_list_opt SEMICOLON
+     {let (ss, qs) = ss_qs in
+      (ss, qs,
+       List.map (fun (decl_opt, exp_opt) ->
+         match decl_opt, exp_opt with
+           | Some ((name, mk_type), _), Some e -> Cabs.BITFIELD (Some (name, mk_type), e)
+           | None                     , Some e -> Cabs.BITFIELD (None, e)
+           | Some ((name, mk_type), _), None   -> Cabs.STRUCT_DECL (name, mk_type)
+           | None                     , None   -> failwith "[CParser.struct_declaration] OutOfHomeomorphism exception.") decls
+(*
+           | Some ((name, mk_type), _), Some e -> Cabs.BITFIELD (Some (name, mk_type (C.BASE (qs, ss))), e)
+           | None                     , Some e -> Cabs.BITFIELD (None, e)
+           | Some ((name, mk_type), _), None   -> Cabs.STRUCT_DECL (name, mk_type (C.BASE (qs, ss)))
+           | None                     , None   -> failwith "[CParser.struct_declaration] OutOfHomeomorphism exception.") decls
+*)
+)}
+
+(*
+| static_assert_declaration
+    {error "PARSING: struct-declaration of the shape 'static_assert_declaration' not yet supported."}
+*)
+
+specifier_qualifier_list_opt:
+| (* empty *)
+    {(Multiset.emp, Pset.empty compare)}
+| l = specifier_qualifier_list
+    {l}
+;
+
+specifier_qualifier_list:
+| s = type_specifier x = specifier_qualifier_list_opt
+    { let specs, quals = x in
+      (Multiset.add s specs, quals)
+    }
+| q = type_qualifier l = specifier_qualifier_list_opt
+    { let specs, quals = l in
+      (specs, Pset.add q quals)
     }
 ;
 
-/* 6.7.9#1 Initalization, Syntax */
-initialiser:
-| assignment_expression {$1}
-/*
-| LBRACE initialiser_list RBRACE {}
-| LBRACE initialiser_list COMMA RBRACE {}
-*/
+struct_declarator_list:
+| decl = struct_declarator
+    {[decl]}
+(* ATTENTION We are storing the list in reverse. *)
+| decls = struct_declarator_list COMMA decl = struct_declarator
+    {decl :: decls}
+
+(* KKK: output of type: ((string, ctype -> ctype), expression opt) *)
+struct_declarator:
+| decl = declarator
+    {(Some decl, None)}
+| decl_opt = declarator? COLON exp = constant_expression
+    {(decl_opt, Some exp)}
+
+
+(* 6.7.2.2#1 Enumeration specifiers, Syntax *)
+enum_specifier:
+| ENUM identifier? LBRACE enumerator_list RBRACE
+    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
+| ENUM identifier? LBRACE enumerator_list COMMA RBRACE
+    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
+| ENUM identifier
+    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
 ;
 
-/*
+enumerator_list:
+| enumerator
+    {error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
+| enumerator_list COMMA enumerator
+    {error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
+
+enumerator:
+| enumeration_constant
+    {error "PARSING: 'enumerator' not yet supported." (* TODO *)}
+| enumeration_constant EQ constant_expression
+    {error "PARSING: 'enumerator' not yet supported." (* TODO *)}
+
+
+(* 6.7.2.4#1 Atomic type specifiers, Syntax *)
+atomic_type_specifier: 
+| ATOMIC LPAREN type_name RPAREN
+    {error "PARSING: atomic-type-specifier' not yet supported." (* TODO *)}
+
+
+(* 6.7.3#1 Type qualifiers, Syntax *)
+type_qualifier:
+| CONST
+    {C.CONST}
+| RESTRICT
+    {C.RESTRICT}
+| VOLATILE
+    {C.VOLATILE}
+| ATOMIC
+    {C.ATOMIC}
+
+
+(* 6.7.4#1 Function specifiers, Syntax *)
+function_specifier:
+| INLINE
+    {()}
+| NORETURN
+    {error "PARSING: 'function-specifier' _NoReturn not yet supported." (* TODO *)}
+
+
+(* 6.7.5#1 Alignment specifier, Syntax *)
+alignment_specifier:
+| ALIGNAS LPAREN type_name RPAREN
+    {error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
+| ALIGNAS LPAREN constant_expression RPAREN
+    {error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
+;
+
+(* 6.7.6#1 Declarators, Syntax *)
+declarator:
+| ptr_opt = pointer_opt decl = direct_declarator
+    { let mk_type1 : C.c_type -> C.c_type = ptr_opt in
+      let mk_type2 : C.c_type -> C.c_type = snd decl in
+      (fst decl, fun t -> mk_type2 (mk_type1 t)), L.make $startpos $endpos
+    }
+;
+
+direct_declarator:
+| id = identifier
+    {id, fun t -> t}
+| LPAREN declarator RPAREN
+        { let (name, (mk_type : C.c_type -> C.c_type)), _ = $2 in
+      name, fun t -> mk_type t
+    }
+| direct_declarator LBRACKET type_qualifier_list_opt assignment_expression? RBRACKET
+    { let mk_type : C.c_type -> C.c_type = snd $1 in
+      fst $1, fun t -> mk_type (C.ARRAY ($3, t, $4))
+    }
+| direct_declarator LBRACKET STATIC type_qualifier_list_opt assignment_expression RBRACKET
+    {error "PARSING: direct-declarator of the shape 'direct-declarator [static type-qualifier-list_opt assignment-expression]' not yet supported." (* LATER *)}
+| direct_declarator LBRACKET type_qualifier_list STATIC assignment_expression RBRACKET
+    {error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-list static assignment-expression]' not yet supported." (* LATER *)}
+| direct_declarator LBRACKET type_qualifier_list_opt STAR RBRACKET
+    {error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-listopt *]' not yet supported." (* LATER *)}
+| direct_declarator LPAREN parameter_type_list RPAREN
+    { let mk_type : C.c_type -> C.c_type = snd $1 in
+      fst $1, fun t -> C.FUNCTION (mk_type t, $3)
+    }
+(* TODO Omitted case handles empty parameter lists. We need a special case. *)
+| direct_declarator LPAREN RPAREN
+    { let mk_type : C.c_type -> C.c_type = snd $1 in
+      fst $1, fun t -> C.FUNCTION (mk_type t, [])
+    }
+| direct_declarator LPAREN VOID RPAREN
+    { let mk_type : C.c_type -> C.c_type = snd $1 in
+      fst $1, fun t -> C.FUNCTION (mk_type t, [])
+    }
+(* TODO We do not support function declarations of the following style.
+| direct_declarator LPAREN identifier_list_opt RPAREN
+*)
+;
+
+pointer:
+| STAR type_qualifier_list_opt
+    {fun t -> C.POINTER ($2, t)}
+| STAR type_qualifier_list_opt pointer
+    { let mk_type : C.c_type -> C.c_type = $3 in
+      fun t -> mk_type (C.POINTER ($2, t))
+    }
+;
+
+pointer_opt:
+| (* empty *)
+    {fun t -> t}
+| pointer
+    {$1}
+;
+
+type_qualifier_list_opt:
+| (* empty *)
+    {Pset.empty compare}
+| type_qualifier_list
+    {$1}
+;
+
+type_qualifier_list:
+| type_qualifier
+    {Pset.add $1 (Pset.empty compare)}
+| type_qualifier_list type_qualifier
+    {Pset.add $2 $1}
+;
+
+
+
+(* 6.7.6#1 Declarators, Syntax *)
+
+parameter_type_list:
+| parameter_list
+    {List.rev $1}
+(* TODO No support for functions with a variable number of actuals
+| parameter_list COMMA ELLIPSES
+*)
+;
+
+parameter_list:
+| parameter_declaration
+    {[$1]}
+(* ATTENTION We are storing the list in reverse. *)
+| parameter_list COMMA parameter_declaration
+    {$3 :: $1}
+;
+
+parameter_declaration:
+| declaration_specifiers declarator
+    { let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
+      let store, specs, quals = $1 in
+      (name, mk_type (C.BASE (quals, specs)), store), l
+    }
+(* TODO No support for type-only parameters yet. Important since we need main (void).
+| declaration_specifiers abstract_declarator_opt
+    { let mk_type : C.c_type -> C.c_type = $2 in
+      let store, quals, specs = $1 in
+      (name, mk_type (C.BASE (quals, specs)), store, None)
+    }
+*)
+;
+
+(* 6.7.7#1 Type names, Syntax *)
+type_name:
+| specifier_qualifier_list abstract_declarator_opt
+    { let specs, quals = $1 in
+      $2 (C.BASE (quals, specs))
+    }
+;
+
+abstract_declarator_opt:
+| (* empy *)
+    {fun t -> t}
+| abstract_declarator
+    {$1}
+;
+
+abstract_declarator:
+| pointer
+    {$1}
+| pointer_opt direct_abstract_declarator
+    { let mk_type1 : C.c_type -> C.c_type = $1 in
+      let mk_type2 : C.c_type -> C.c_type = $2 in
+      fun t -> mk_type2 (mk_type1 t)
+    }
+;
+
+direct_abstract_declarator_opt:
+| (* empty *)
+    {fun t -> t}
+| direct_abstract_declarator
+    {$1}
+;
+
+direct_abstract_declarator:
+| LPAREN abstract_declarator RPAREN
+    {  let mk_type : C.c_type -> C.c_type = $2 in
+       fun t -> mk_type t
+    }
+| direct_abstract_declarator_opt LBRACKET type_qualifier_list_opt assignment_expression? RBRACKET
+    { let mk_type : C.c_type -> C.c_type = $1 in
+      fun t -> mk_type (C.ARRAY ($3, t, $4))
+    }
+(* TODO Add the other constructs including function pointers. *)
+;
+
+
+(* 6.7.8#1 Type definitions, Syntax *)
+typedef_name:
+| identifier
+    {$1}
+
+
+(* 6.7.9#1 Initalization, Syntax *)
+initialiser:
+| assignment_expression {$1}
+(*
+| LBRACE initialiser_list RBRACE {}
+| LBRACE initialiser_list COMMA RBRACE {}
+*)
+;
+
+(*
 initialiser_list:
 | designation_opt initialiser
     {$2}
-*/
-/* ATTENTION We store the list in reverse. */
-/*
+*)
+(* ATTENTION We store the list in reverse. *)
+(*
 | initialiser_list COMMA designation_opt initialiser
     {$3 :: $1}
 ;
-*/
+*)
 
 designation_opt:
-| /* empty */
+| (* empty *)
     {}
 | designation
     {}
@@ -463,425 +953,126 @@ designator:
 | DOT identifier {}
 ;
 
-/* 6.4.2.1#1 Identifiers - General, Syntax */
-identifier:
-| IDENT {$1}
-;
+(* 6.7.10 Static assertions *)
+(*
+static_assert_declaration:
+| STATIC_ASSERT LPAREN constant_expression COMMA string_literal RPAREN SEMICOLON
+    {error "PARSING: 'static_assert-declaration' not yet supported."
+*)
 
-argument_expression_list_opt:
-| /* empty */
-    {[]}
-| argument_expression_list
-    {List.rev $1}
-;
+(* 6.8 Statements *********************************************************** *)
 
-argument_expression_list:
-| assignment_expression
-    {[$1]}
-/* ATTENTION Storing list in reverse. Don't forget to reverse the list. */
-| argument_expression_list COMMA assignment_expression
-    {$3 :: $1}
-/* We don't need fancy error handling ;)
-| error COMMA argument_expression_list {$3}
-*/
-;
-
-/* 6.8#1 Statements and blocks, Syntax */
+(* 6.8#1 Statements and blocks, Syntax *)
 statement:
-| labeled_statement
-    {$1}
-| compound_statement
-    {$1}
-| expression_statement
-    {$1}
-| selection_statement
-    {$1}
-| iteration_statement
-    {$1}
-| jump_statement
-    {$1}
+| s = labeled_statement
+| s = compound_statement
+| s = expression_statement
+| s = selection_statement
+| s = iteration_statement
+| s = jump_statement
+    {s}
 ;
 
-/* 6.8.1#1 Labeled statements, Syntax */
+(* 6.8.1#1 Labeled statements, Syntax *)
 labeled_statement:
-| identifier COLON statement
-    {C.LABEL ($1, $3), L.make $startpos $endpos}
-| CASE constant_expression COLON statement
-    {C.CASE ($2, $4), L.make $startpos $endpos}
-| DEFAULT COLON statement
-    {C.DEFAULT ($3), L.make $startpos $endpos}
+| id = identifier COLON s = statement
+    {C.LABEL (id, s), L.make $startpos $endpos}
+| CASE e = constant_expression COLON s = statement
+    {C.CASE (e, s), L.make $startpos $endpos}
+| DEFAULT COLON s = statement
+    {C.DEFAULT s, L.make $startpos $endpos}
 ;
 
-/* 6.8.2#1 Compound statement, Syntax */
+(* 6.8.2#1 Compound statement, Syntax *)
 compound_statement:
-| LBRACE block_item_list_opt RBRACE
-    {C.BLOCK ($2), L.make $startpos $endpos}
-;
-
-block_item_list_opt:
-| /* empty */
-    {[]}
-| block_item_list
-    {List.rev $1}
+| LBRACE l = loption(block_item_list) RBRACE
+    {C.BLOCK (List.rev l), L.make $startpos $endpos}
 ;
 
 block_item_list:
-| block_item
-    {[$1]}
-/* ATTENTION We are storing the list in reverse. */
-| block_item_list block_item
-    {$2 :: $1}
+| x = block_item                      {[x]}
+(* ATTENTION We are storing the list in reverse. *)
+| xs = block_item_list x = block_item {x :: xs}
 ;
 
 block_item:
-| declaration
-    {C.DECLARATION ($1), L.make $startpos $endpos}
-| statement
-    {$1}
+| d = declaration {C.DECLARATION d, L.make $startpos $endpos}
+| s = statement   {s}
 ;
 
-/* 6.8.3#1 Expression and null statement, Syntax */
+(* 6.8.3#1 Expression and null statement, Syntax *)
 expression_statement:
-| expression_opt SEMICOLON
+| e = expression? SEMICOLON
     { let l = L.make $startpos $endpos in
-      match $1 with
+      match e with
       | Some e -> C.EXPRESSION e, l
-      | None -> C.SKIP, l
+      | None   -> C.SKIP, l
     }
 ;
 
-/* 6.8.4#1 Selection statements, Syntax */
+(* 6.8.4#1 Selection statements, Syntax *)
 selection_statement:
-| IF LPAREN expression RPAREN statement
-    {C.IF ($3, $5, None), L.make $startpos $endpos} %prec ELSE
-| IF LPAREN expression RPAREN statement ELSE statement
-    {C.IF ($3, $5, Some $7), L.make $startpos $endpos}
-| SWITCH LPAREN expression RPAREN statement
-    {C.SWITCH ($3, $5), L.make $startpos $endpos}
+| IF LPAREN e = expression RPAREN s = statement
+    {C.IF (e, s, None), L.make $startpos $endpos} %prec ELSE
+| IF LPAREN e = expression RPAREN s1 = statement ELSE s2 = statement
+    {C.IF (e, s1, Some s2), L.make $startpos $endpos}
+| SWITCH LPAREN e = expression RPAREN s = statement
+    {C.SWITCH (e, s), L.make $startpos $endpos}
 ;
 
-/* 6.8.5#1 Iteration statements, Syntax */
+(* 6.8.5#1 Iteration statements, Syntax *)
 iteration_statement:
-| WHILE LPAREN expression RPAREN statement
-    {C.WHILE ($3, $5), L.make $startpos $endpos}
-| DO statement WHILE LPAREN expression RPAREN
-    {C.DO ($5, $2), L.make $startpos $endpos}
-| FOR LPAREN expression_opt SEMICOLON expression_opt SEMICOLON expression_opt RPAREN statement
-    { let l = L.make $startpos $endpos in
-      C.FOR_EXP ($3, $5, $7, $9), l
-    }
-| FOR LPAREN declaration expression_opt SEMICOLON expression_opt RPAREN
-        statement
-    { let l = L.make $startpos $endpos in
-      C.FOR_DECL ($3, $4, $6, $8), l
-    }
+(* while (e) s *)
+| WHILE LPAREN e = expression RPAREN s = statement
+    {C.WHILE (e, s), L.make $startpos $endpos}
+(* do s while (e) *)
+| DO s = statement WHILE LPAREN e = expression RPAREN
+    {C.DO (e, s), L.make $startpos $endpos}
+(* for (e1; e2; e3) s *)
+| FOR LPAREN e1 = expression? SEMICOLON e2 = expression? SEMICOLON e3 = expression? RPAREN s = statement
+    {C.FOR_EXP (e1, e2, e3, s), L.make $startpos $endpos}
+(* for (d e1; e2) s *)
+| FOR LPAREN d = declaration e1 = expression? SEMICOLON e2 = expression? RPAREN s = statement
+    {C.FOR_DECL (d, e1, e2, s), L.make $startpos $endpos}
 ;
 
-/* 6.8.6#1 Jump statements, Syntax */
+(* 6.8.6#1 Jump statements, Syntax *)
 jump_statement:
-| GOTO identifier
-    {C.GOTO $2, L.make $startpos $endpos}
-| CONTINUE SEMICOLON
-    {C.CONTINUE, L.make $startpos $endpos}
-| BREAK SEMICOLON
-    {C.BREAK, L.make $startpos $endpos}
-| RETURN expression_opt SEMICOLON
-    {C.RETURN $2, L.make $startpos $endpos}
+| GOTO id = identifier             {C.GOTO id, L.make $startpos $endpos}
+| CONTINUE SEMICOLON               {C.CONTINUE, L.make $startpos $endpos}
+| BREAK SEMICOLON                  {C.BREAK, L.make $startpos $endpos}
+| RETURN e = expression? SEMICOLON {C.RETURN e, L.make $startpos $endpos}
 ;
 
-/* 6.7#1 Declarations, Syntax */
-declaration:
-| declaration_specifiers init_declarator_list_opt SEMICOLON
+
+(* 6.9 External definitions ************************************************* *)
+(* 6.9#1 External definitions, Syntax *)
+translation_unit:
+| external_declaration
+    {[$1]}
+| translation_unit external_declaration (* ATTENTION We store the list in reverse. *)
+    {$2 :: $1}
+;
+
+external_declaration:
+| d = function_definition {d}
+| d = declaration         {Printf.printf "CCC> lines %d - %d\n" $startpos.Lexing.pos_lnum $endpos.Lexing.pos_lnum;
+C.EXTERNAL_DECLARATION d, L.make $startpos $endpos}
+;
+
+
+(* 6.9.1#1 Function definitions, Syntax *)
+function_definition:
+(* TODO No support for old-style function definitions. *)
+| declaration_specifiers declarator (*declaration_list_opt*) compound_statement
     { let store, specs, quals = $1 in
-      let make_def (((name, mk_type), li, exp), lo) =
-        (((name, mk_type (C.BASE (quals, specs)), store), li), exp), lo in
-      List.map make_def $2
-    }
-/* TODO We don't support static assertions.
-| static_assert_declaration
-*/
-;
-
-declaration_specifiers_opt:
-| /* empty */
-    {([], Multiset.emp, Pset.empty compare)}
-| declaration_specifiers
-    {$1}
-;
-
-declaration_specifiers:
-| storage_class_specifier declaration_specifiers_opt
-    { let store, specs, quals = $2 in
-      ($1 :: store, specs, quals)
-    }
-| type_specifier declaration_specifiers_opt
-    { let store, specs, quals = $2 in
-      (store, Multiset.add $1 specs, quals)
-    }
-| type_qualifier declaration_specifiers_opt
-    { let store, specs, quals = $2 in
-      (store, specs, Pset.add $1 quals)
-    }
-/* TODO Keyword inline should only be used for function declarations. */
-| function_specifier declaration_specifiers_opt
-    {$2}
-/* TODO _Noreturn is not supported. */
-/* TODO We are don't support alignment yet.
-| alignment_specifier declaration_specifiers_opt
-*/
-;
-
-init_declarator_list_opt:
-| /* empty */
-    {[]}
-| init_declarator_list
-    {List.rev $1}
-;
-
-init_declarator_list:
-| init_declarator
-    {[$1]}
-/* ATTENTION We are storing the list in reverse. */
-| init_declarator_list COMMA init_declarator
-    {$3 :: $1}
-;
-
-init_declarator:
-| declarator
-    { let name, mk_type = $1 in
-      (name, mk_type, None), L.make $startpos $endpos
-    }
-| declarator EQ initialiser
-    { let name, mk_type = $1 in
-      (name, mk_type, Some $3), L.make $startpos $endpos
-    }
-
-/* 6.7.6#1 Declarators, Syntax */
-pointer:
-| STAR type_qualifier_list_opt
-    {fun t -> C.POINTER ($2, t)}
-| STAR type_qualifier_list_opt pointer
-    { let mk_type : C.c_type -> C.c_type = $3 in
-      fun t -> mk_type (C.POINTER ($2, t))
+      let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
+      let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in
+      C.FUNCTION_DEFINITION (defn_l, $3), L.make $startpos $endpos
     }
 ;
 
-pointer_opt:
-| /* empty */
-    {fun t -> t}
-| pointer
-    {$1}
-;
 
-type_qualifier_list_opt:
-| /* empty */
-    {Pset.empty compare}
-| type_qualifier_list
-    {$1}
-;
 
-type_qualifier_list:
-| type_qualifier
-    {Pset.add $1 (Pset.empty compare)}
-| type_qualifier_list type_qualifier
-    {Pset.add $2 $1}
-;
-
-/* 6.7.1#1 Storage-class specifier, Syntax */
-storage_class_specifier:
-/* TODO No support for typedef.
-| TYPEDEF
-*/
-/* TODO No support for extern
-| EXTERN
-*/
-| STATIC
-    {C.STATIC}
-| AUTO
-    {C.AUTO}
-/* TODO No support for register
-| REGISTER
-*/
-;
-
-/* 6.7.2#1 Type specifiers, Syntax */
-/* TODO Complete the list.*/
-type_specifier:
-| VOID
-    {C.VOID}
-| CHAR
-    {C.CHAR}    
-| SHORT
-    {C.SHORT}
-| INT
-    {C.INT}
-| LONG
-    {C.LONG}
-/*
-| FLOAT
-| DOUBLE
-*/
-| SIGNED
-    {C.SIGNED}
-| UNSIGNED
-    {C.UNSIGNED}
-| BOOL
-    {C.BOOL}
-/*
-| COMPLEX
-*/
-/*
-| atomic_type_specifier
-| struct_or_union_specifier
-| enum_specifier
-| typedef_specifier
-*/
-;
-
-/* 6.7.2.1#1 Structure and union specifiers, Syntax */
-specifier_qualifier_list_opt:
-| /* empty */
-    {(Multiset.emp, Pset.empty compare)}
-| specifier_qualifier_list
-    {$1}    
-;
-
-specifier_qualifier_list:
-| type_specifier specifier_qualifier_list_opt
-    { let specs, quals = $2 in
-      (Multiset.add $1 specs, quals)
-    }
-| type_qualifier specifier_qualifier_list_opt
-    { let specs, quals = $2 in
-      (specs, Pset.add $1 quals)
-    }
-;
-
-/* 6.7.3#1 Type qualifiers, Syntax */
-type_qualifier:
-| CONST {C.CONST}
-/*
-| RESTRICT
-| VOLATILE
-| ATOMIC
-*/
-
-/* 6.7.4#1 Function specifiers, Syntax */
-function_specifier:
-| INLINE {()}
-
-/* 6.7.6#1 Declarators, Syntax */
-declarator:
-| pointer_opt direct_declarator
-    { let mk_type1 : C.c_type -> C.c_type = $1 in
-      let mk_type2 : C.c_type -> C.c_type = snd $2 in
-      (fst $2, fun t -> mk_type2 (mk_type1 t)), L.make $startpos $endpos
-    }
-;
-
-direct_declarator:
-| identifier
-    {$1, fun t -> t}
-| LPAREN declarator RPAREN
-        { let (name, (mk_type : C.c_type -> C.c_type)), _ = $2 in
-      name, fun t -> mk_type t
-    }
-| direct_declarator LBRACKET type_qualifier_list_opt assignment_expression_opt RBRACKET
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> mk_type (C.ARRAY ($3, t, $4))
-    }
-/* TODO No support for static keyword inside [], nor do we support variable-length arrays. */
-| direct_declarator LPAREN parameter_type_list RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, $3)
-    }
-/* TODO Omitted case handles empty parameter lists. We need a special case. */
-| direct_declarator LPAREN RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, [])
-    }
-| direct_declarator LPAREN VOID RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, [])
-    }
-/* TODO We do not support function declarations of the following style.
-| direct_declarator LPAREN identifier_list_opt RPAREN
-*/
-;
-
-parameter_type_list:
-| parameter_list
-    {List.rev $1}
-/* TODO No support for functions with a variable number of actuals
-| parameter_list COMMA ELLIPSES
-*/
-;
-
-parameter_list:
-| parameter_declaration
-    {[$1]}
-/* ATTENTION We are storing the list in reverse. */
-| parameter_list COMMA parameter_declaration
-    {$3 :: $1}
-;
-
-parameter_declaration:
-| declaration_specifiers declarator
-    { let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
-      let store, specs, quals = $1 in
-      (name, mk_type (C.BASE (quals, specs)), store), l
-    }
-/* TODO No support for type-only parameters yet. Important since we need main (void).
-| declaration_specifiers abstract_declarator_opt
-    { let mk_type : C.c_type -> C.c_type = $2 in
-      let store, quals, specs = $1 in
-      (name, mk_type (C.BASE (quals, specs)), store, None)
-    }
-*/
-;
-
-/* 6.7.7#1 Type names, Syntax */
-type_name:
-| specifier_qualifier_list abstract_declarator_opt
-    { let specs, quals = $1 in
-      $2 (C.BASE (quals, specs))
-    }
-;
-
-abstract_declarator_opt:
-| /* empy */
-    {fun t -> t}
-| abstract_declarator
-    {$1}
-;
-
-abstract_declarator:
-| pointer
-    {$1}
-| pointer_opt direct_abstract_declarator
-    { let mk_type1 : C.c_type -> C.c_type = $1 in
-      let mk_type2 : C.c_type -> C.c_type = $2 in
-      fun t -> mk_type2 (mk_type1 t)
-    }
-;
-
-direct_abstract_declarator_opt:
-| /* empty */
-    {fun t -> t}
-| direct_abstract_declarator
-    {$1}
-;
-
-direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
-    {  let mk_type : C.c_type -> C.c_type = $2 in
-       fun t -> mk_type t
-    }
-| direct_abstract_declarator_opt LBRACKET type_qualifier_list_opt assignment_expression_opt RBRACKET
-    { let mk_type : C.c_type -> C.c_type = $1 in
-      fun t -> mk_type (C.ARRAY ($3, t, $4))
-    }
-/* TODO Add the other constructs including function pointers. */
-;
 
 %%
