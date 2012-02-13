@@ -38,9 +38,7 @@ type basic_type =
 
 type qualifiers = Cabs.qualifiers
 
-type sequential_operator = Cabs.sequential_operator
 type arithmetic_operator = Cabs.arithmetic_operator
-type relational_operator = Cabs.relational_operator
 type binary_operator = Cabs.binary_operator
 
 type unary_operator =
@@ -159,25 +157,17 @@ module Print = struct
     | Cabs.SHR  -> P.rangle ^^ P.rangle
   end
 
-  let pp_seqop = function
-    | Cabs.AND   -> P.ampersand ^^ P.ampersand
-    | Cabs.OR    -> P.bar ^^ P.bar
-    | Cabs.COMMA -> P.comma
-  end
-
-  let pp_relop = function
+  let pp_binop = function
+    | Cabs.ARITHMETIC o -> pp_arithop o
     | Cabs.EQ -> P.equals ^^ P.equals
     | Cabs.NE -> P.bang   ^^ P.equals
     | Cabs.LT -> P.langle
     | Cabs.GT -> P.rangle
     | Cabs.LE -> P.langle ^^ P.equals
     | Cabs.GE -> P.rangle ^^ P.equals
-  end
-
-  let pp_binop = function
-    | Cabs.ARITHMETIC o -> pp_arithop o
-    | Cabs.SEQUENTIAL o -> pp_seqop   o
-    | Cabs.RELATIONAL o -> pp_relop   o
+    | Cabs.AND   -> P.ampersand ^^ P.ampersand
+    | Cabs.OR    -> P.bar ^^ P.bar
+    | Cabs.COMMA -> P.comma
   end
 
   let showParens = P.parens
@@ -249,7 +239,7 @@ module Print = struct
       | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
       | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
       | UNARY o                   e -> pp_unop o ^^ f e
-      | BINARY ((Cabs.SEQUENTIAL Cabs.COMMA) as o) e1 e2 ->
+      | BINARY (Cabs.COMMA as o) e1 e2 ->
           f e1 ^^ pp_binop o ^^ P.space ^^ f e2
       | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
       | CALL e es -> f e ^^ P.parens (P.comma_list f es)

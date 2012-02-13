@@ -184,11 +184,11 @@ and reduce_exp n b env file exp =
       else
         Tc.conv_int (exp_type exp) modulo >>= fun (a, c) ->
         E.return (a, (m1 -&- m2 +& c) +& div_zero)
-  | A.BINARY (Cabs.SEQUENTIAL Cabs.COMMA) e1 e2 ->
+  | A.BINARY Cabs.COMMA e1 e2 ->
       f e1 >>= fun (_,  m1) ->
       f e2 >>= fun (a2, m2) ->
       E.return (a2, m1 -&> m2)
-  | A.BINARY (Cabs.SEQUENTIAL Cabs.OR) e1 e2 ->
+  | A.BINARY Cabs.OR e1 e2 ->
       f e1 >>= fun (a1, m1) ->
       f e2 >>= fun (a2, m2) ->
       C.fresh >>= fun a ->
@@ -197,7 +197,7 @@ and reduce_exp n b env file exp =
         (C.eq a1 C.zero)
         (C.case (C.eq a2 C.zero) (C.eq a C.zero) (C.eq a C.one)) in
       E.return (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
-  | A.BINARY (Cabs.SEQUENTIAL Cabs.AND) e1 e2 ->
+  | A.BINARY Cabs.AND e1 e2 ->
       f e1 >>= fun (a1, m1) ->
       f e2 >>= fun (a2, m2) ->
       C.fresh >>= fun a ->
@@ -231,7 +231,7 @@ and reduce_exp n b env file exp =
         E.return (shifted, (m1 -&- m2) +& c)
       else
         E.return (shifted, m1 -&- m2)
-  | A.BINARY (Cabs.RELATIONAL Cabs.EQ) e1 e2 ->
+  | A.BINARY Cabs.EQ e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -244,7 +244,7 @@ and reduce_exp n b env file exp =
       else if Typing.is_null_pointer e1 then
         (*TODO*) E.return (C.one, Me.null)
       else (*TODO*) E.return (C.one, Me.null)
-  | A.BINARY (Cabs.RELATIONAL Cabs.NE) e1 e2 ->
+  | A.BINARY Cabs.NE e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -254,7 +254,7 @@ and reduce_exp n b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY (Cabs.RELATIONAL Cabs.LT) e1 e2 ->
+  | A.BINARY Cabs.LT e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -264,7 +264,7 @@ and reduce_exp n b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY (Cabs.RELATIONAL Cabs.LE) e1 e2 ->
+  | A.BINARY Cabs.LE e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -274,7 +274,7 @@ and reduce_exp n b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY (Cabs.RELATIONAL Cabs.GT) e1 e2 ->
+  | A.BINARY Cabs.GT e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -292,7 +292,7 @@ and reduce_exp n b env file exp =
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         Action.same a1 a2 >>= fun same ->
         E.return (a, (m1 -&- m2) +& c -@> same)
-  | A.BINARY (Cabs.RELATIONAL Cabs.GE) e1 e2 ->
+  | A.BINARY Cabs.GE e1 e2 ->
       if T.is_arithmetic (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
