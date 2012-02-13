@@ -1,0 +1,20 @@
+val BIGINTER : forall 'a.  'a set set -> 'a set
+val BIGUNION : forall 'a.  'a set set -> 'a set
+val CARD : forall 'a.  'a set -> num
+val CHOICE : forall 'a.  'a set -> 'a
+val CROSS : forall 'a 'b.  'a set -> 'b set -> ('a * 'b) set
+val DELETE : forall 'a.  'a set -> 'a -> 'a set
+val DIFF : forall 'a.  'a set -> 'a set -> 'a set
+val DISJOINT : forall 'a.  'a set -> 'a set -> bool
+val IMAGE : forall 'a 'b.  ('a -> 'b) -> 'a set -> 'b -> bool
+val (IN) : forall 'a.  'a -> 'a set -> bool
+val INSERT : forall 'a.  'a -> 'a set -> 'a set
+val INTER : forall 'a.  'a set -> 'a set -> 'a set
+val POW : forall 'a.  'a set -> 'a set set
+val SING : forall 'a.  'a -> 'a set
+val SUBSET : forall 'a.  'a set -> 'a set -> bool
+val UNION : forall 'a.  'a set -> 'a set -> 'a set
+val EMPTY : forall 'a.  'a set
+val LIST_TO_SET : forall 'a.  'a list -> 'a set
+val SET_TO_LIST : forall 'a.  'a set -> 'a list
+val ITSET : forall 'a 'b.  ('a -> 'b -> 'b) -> 'a set -> 'b -> 'b

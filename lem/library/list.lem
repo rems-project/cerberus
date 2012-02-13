@@ -1,0 +1,146 @@
+val length : forall 'a. 'a list -> num
+sub [hol] length = LENGTH
+sub [ocaml] length = List.length
+sub [isabelle] length = List.length
+
+val hd : forall 'a. 'a list -> 'a
+sub [hol] hd = HD
+sub [ocaml] hd = List.hd
+sub [isabelle] hd = List.hd
+
+val tl : forall 'a. 'a list -> 'a list
+sub [hol] tl = TL
+sub [ocaml] tl = List.tl
+sub [isabelle] tl = List.tl
+
+val nth : forall 'a. 'a list -> num -> 'a
+sub [hol] nth l n = EL n l
+sub [ocaml] nth = List.nth
+sub [isabelle] nth = List.nth
+
+val take : forall 'a. num -> 'a list -> 'a list
+sub [ocaml] take = List.take
+
+val drop : forall 'a. num -> 'a list -> 'a list
+sub [ocaml] drop = List.drop
+
+val split_at : forall 'a. num -> 'a list -> ('a list * 'a list)
+sub [ocaml] split_at = List.split_at
+
+val rev : forall 'a. 'a list -> 'a list
+sub [hol] rev = REVERSE
+sub [ocaml] rev = List.rev
+sub [isabelle] rev = List.rev
+
+val append : forall 'a. 'a list -> 'a list -> 'a list
+sub [hol] append = APPEND
+sub [ocaml] append = List.append
+sub [isabelle] append = List.append
+
+val rev_append : forall 'a. 'a list -> 'a list -> 'a list
+sub [hol] rev_append l1 l2 = APPEND (REVERSE l1) l2
+sub [ocaml] rev_append = List.rev_append
+sub [isabelle] rev_append l1 l2 = List.append (List.rev l1) l2
+
+val concat : forall 'a. 'a list list -> 'a list
+sub [hol] concat = FLAT
+sub [ocaml] concat = List.concat
+sub [isabelle] concat = List.concat
+
+val flatten : forall 'a. 'a list list -> 'a list
+sub [hol] flatten = FLAT
+sub [ocaml] flatten = List.flatten
+sub [isabelle] flatten = List.concat
+
+val map : forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list
+sub [hol] map = MAP
+sub [ocaml] map = List.map
+sub [isabelle] map = List.map
+
+val rev_map : forall 'a 'b. ('a -> 'b) -> 'a list -> 'b list
+sub [hol] rev_map f l = REVERSE (MAP f l)
+sub [ocaml] rev_map = List.rev_map
+sub [isabelle] rev_map f l = List.rev (List.map f l)
+
+val fold_left : forall 'a 'b. ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+sub [hol] fold_left = FOLDL
+sub [ocaml] fold_left = List.fold_left
+sub [isabelle] fold_left = List.foldl
+
+val fold_right : forall 'a 'b. ('a -> 'b -> 'b) -> 'a list -> 'b -> 'b
+sub [hol] fold_right f l b = FOLDR f b l
+sub [ocaml] fold_right = List.fold_right
+sub [isabelle] fold_right = List.foldr
+
+val map2 : forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+sub [hol] map2 = MAP2
+sub [ocaml] map2 = List.map2
+
+val rev_map2 : forall 'a 'b 'c. ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+sub [hol] rev_map2 f l1 l2 = REVERSE (MAP2 f l1 l2)
+sub [ocaml] rev_map2 = List.rev_map2
+
+val fold_left2 : forall 'a 'b 'c. ('a -> 'b -> 'c -> 'a) -> 'a -> 'b list -> 'c list -> 'a
+sub [ocaml] fold_left2 = List.fold_left2
+
+val fold_right2 : forall 'a 'b 'c. ('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> 'c -> 'c
+
+val for_all : forall 'a. ('a -> bool) -> 'a list -> bool
+sub [hol] for_all = EVERY
+sub [ocaml] for_all = List.for_all
+(*sub [isabelle] for_all P l = ALL x:(set l). P x*)
+
+val exists : forall 'a. ('a -> bool) -> 'a list -> bool
+sub [hol] exists = EXISTS
+sub [ocaml] exists = List.exists
+(*sub [isabelle] exists P l = EX x:(set l). P x*)
+
+val for_all2 : forall 'a 'b. ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
+sub [ocaml] for_all2 = List.for_all2
+sub [isabelle] for_all2 = List.list_all2
+
+val exists2 : forall 'a 'b. ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
+
+val mem : forall 'a. 'a -> 'a list -> bool
+sub [hol] mem = (MEM)
+sub [ocaml] mem = List.mem
+sub [isabelle] mem = List.ListMem
+
+val find : forall 'a. ('a -> bool) -> 'a list -> 'a
+
+val filter : forall 'a. ('a -> bool) -> 'a list -> 'a list
+sub [hol] filter = FILTER
+sub [ocaml] filter = List.filter
+sub [isabelle] filter = List.filter
+
+val find_all : forall 'a. ('a -> bool) -> 'a list -> 'a list
+sub [hol] find_all = FILTER
+sub [ocaml] find_all = List.find_all
+sub [isabelle] find_all = List.filter
+
+val partition : forall 'a. ('a -> bool) -> 'a list -> 'a list * 'a list
+sub [hol] partition = Sorting.PARTITION
+sub [ocaml] partition = List.partition
+
+val assoc : forall 'a 'b. 'a -> ('a * 'b) list -> 'b
+
+val mem_assoc : forall 'a 'b. 'a -> ('a * 'b) list -> bool
+
+val remove_assoc : forall 'a 'b. 'a -> ('a * 'b) list -> ('a * 'b) list
+
+val split : forall 'a 'b. ('a * 'b) list -> 'a list * 'b list
+sub [hol] split = UNZIP
+sub [ocaml] split = List.split
+
+val combine : forall 'a 'b. 'a list -> 'b list -> ('a * 'b) list
+sub [hol] combine l1 l2 = ZIP (l1,l2)
+sub [ocaml] combine = List.combine
+sub [isabelle] combine = List.zip
+
+val sort : forall 'a. ('a -> 'a -> num) -> 'a list -> 'a list
+
+val stable_sort : forall 'a. ('a -> 'a -> num) -> 'a list -> 'a list
+
+val fast_sort : forall 'a. ('a -> 'a -> num) -> 'a list -> 'a list
+
+val merge : forall 'a. ('a -> 'a -> num) -> 'a list -> 'a list -> 'a list

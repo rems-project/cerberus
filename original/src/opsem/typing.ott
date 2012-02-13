@@ -1,0 +1,405 @@
+% Typing
+
+grammar
+G {{ tex \Gamma }} :: type_env_ ::=
+
+
+defns
+typing :: typing_ ::=
+
+% Might be a good idea to group some of the rules below.
+
+%defn
+%P ( binop , t1 , t2 ) :: :: binop_pred :: binop_pred_ {{ tex [[P]]_{[[binop]]} ([[t1]]) = [[t2]]}} by
+
+%t1 = t2
+%----------------- :: all
+%P(binop, t1, t2)
+
+defn
+G ( id ) = t :: :: env_var :: env_var by
+
+defn
+G |- e : t :: :: exp :: exp_ by
+
+% General Rules
+
+% lvalue types can be turned into object types
+% TODO Deal with arrays.
+G |- e : t lvalue
+----------------- :: lvalue
+G |- e : t
+
+% Primary Expressions
+
+% Variable Identifier
+G(id) = t
+---------------------- :: var
+G |- Var id : t lvalue
+
+% TODO Function Designator
+
+% Prefix Increment and Decrement Operators
+% Syntactic Sugar: e++ = (e += 1)
+
+% Address and Indirection Operators
+% TODO function designators (also bit-fields and register specifier)
+
+% Address Operator
+G |- e : t lvalue
+----------------- :: addr_lvalue
+G |- addr e : t *
+
+% Indirection Operator
+G |- e : t *
+% lvalues cannot have type void (6.3.2.1#1)
+t neq void
+------------------- :: indr_pt
+G |- * e : t lvalue
+
+% Unary Operators
+
+% Unary + Operator
+G |- e1 : t_arith1
+promote(t_arith1) = t_arith2
+--------------------------- :: unop_plus
+G |- +e1 : t_arith2
+
+% Unary - Operator (Negation)
+G |- e1 : t_arith1
+promote(t_arith2) = t_arith2
+---------------------------- :: unop_neg
+G |- -e1 : t_arith2
+
+% Unary ~ Operator (Bitwise Complement)
+G |- e : t_int
+promote(t_int) = t_arith
+------------------------ :: unop_compl
+G |- ~e : t_arith
+
+% Unary ! Operator
+% Syntaxtic Sugar: !e = (0 == e)
+
+
+% Type Cast
+% Note: The standard doesn't actually specify the result type.
+G |- e : t
+-------------------- :: cast_void
+G |- (void) e : void
+
+G |- e1 : t_scalar1
+--------------------------------- :: cast_scalar
+G |- (t_C_scalar) e1 : t_C_scalar
+
+% TODO I don't understand what is meant by 6.5.4#2!
+% Cases specified by 6.5.16.1
+
+% TODO type qualifiers
+%G |- e1 : t1 *
+%t1 =compat t2
+%--------------------- :: cast_pt_compat
+%G |- (t2 *) e1 : t2 *
+
+%G |- e1 : t1 *
+%------------------------- :: cast_pt_void_left
+%G |- (void *) e1 : void *
+
+%G |- e1 : void *
+%------------------------- :: cast_pt_void_right
+%G |- (t2 *) e1 : t2 *
+
+
+% Binary Operators
+
+% Multiplication
+G |- e1 : t_arith1
+G |- e2 : t_arith2
+promote(t_arith1) = t_arith3
+promote(t_arith2) = t_arith4
+common_type(t_arith3, t_arith4) = t_arith
+----------------------------------------- :: binop_mult
+G |- e1 * e2 : t_arith
+
+% Division
+G |- e1 : t_arith1
+G |- e2 : t_arith2
+promote(t_arith1) = t_arith3
+promote(t_arith2) = t_arith4
+common_type(t_arith3, t_arith4) = t_arith
+----------------------------------------- :: binop_div
+G |- e1 / e2 : t_arith
+
+% Modulo (operands must be of integer type)
+G |- e1 : t_int1
+G |- e2 : t_int2
+promote(t_int1) = t_arith1
+promote(t_int2) = t_arith2
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_mod
+G |- e1 mod e2 : t_arith
+
+% Addition
+G |- e1 : t_arith1
+G |- e2 : t_arith2
+promote(t_arith1) = t_arith3
+promote(t_arith2) = t_arith4
+common_type(t_arith3, t_arith4) = t_arith
+----------------------------------------- :: binop_add_arith
+G |- e1 + e2 : t_arith
+
+G |- e1 : t_int
+G |- e2 : t *
+------------------ :: binop_add_pt_right
+G |- e1 * e2 : t *
+
+G |- e1 : t *
+G |- e2 : t_int
+------------------ :: binop_add_pt_left
+G |- e1 * e2 : t *
+
+%Subtraction
+G |- e1 : t_arith1
+G |- e2 : t_arith2
+promote(t_arith1) = t_arith3
+promote(t_arith2) = t_arith4
+common_type(t_arith3, t_arith4) = t_arith
+----------------------------------------- :: binop_sub_arith
+G |- e1 - e2 : t_arith
+
+G |- e1 : t *
+G |- e2 : t_int
+------------------ :: binop_sub_pt_left
+G |- e1 - e2 : t *
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+composite(t1, t2) = t
+--------------------- :: binop_sub_pt_both
+G |- e1 - e2 : t *
+
+% Left shift
+G |- e1 : t_int1
+G |- e2 : t_int2
+promote(t_int1) = t_arith1
+promote(t_int2) = t_arith2
+----------------------------------------- :: binop_lshift
+G |- e1 << e2 : t_arith1
+
+% Right shift
+G |- e1 : t_int1
+G |- e2 : t_int2
+promote(t_int1) = t_arith1
+promote(t_int2) = t_arith2
+----------------------------------------- :: binop_rshift
+G |- e1 >> e2 : t_arith1
+
+% Relational operators
+
+% Less-than
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_lt_real
+G |- e1 < e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+----------------------------------------- :: binop_lt_pt
+G |- e1 < e2 : signed int
+
+% Greater-than
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_gt_real
+G |- e1 > e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+----------------------------------------- :: binop_gt_pt
+G |- e1 > e2 : signed int
+
+% Less-than-or-equal
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_leq_real
+G |- e1 <= e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+----------------------------------------- :: binop_leq_pt
+G |- e1 <= e2 : signed int
+
+% Greater-than-or-equal
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_geq_real
+G |- e1 >= e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+----------------------------------------- :: binop_geq_pt
+G |- e1 >= e2 : signed int
+
+% Equality Operators
+
+% Equal-to
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_eq_arith
+G |- e1 == e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+--------------------------- :: binop_eq_pt_compat
+G |- e1 == e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : void *
+-------------------------- :: binop_eq_pt_void_right
+G |- e1 == e2 : signed int
+
+G |- e1 : void *
+G |- e2 : t1 *
+-------------------------- :: binop_eq_pt_void_left
+G |- e1 == e2 : signed int
+
+G |- e1 : t1 *
+---------------------------- :: binop_eq_pt_null_right
+G |- e1 == NULL : signed int
+
+% Not-equal-to
+G |- e1 : t_real1
+G |- e2 : t_real2
+promote(t_real1) = t_arith1
+promote(t_real2) = t_arith2
+% TODO This premise might not be necessary.
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_neq_arith
+G |- e1 != e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : t2 *
+t1 =compat t2
+--------------------------- :: binop_neq_pt_compat
+G |- e1 != e2 : signed int
+
+G |- e1 : t1 *
+G |- e2 : void *
+-------------------------- :: binop_neq_pt_void_right
+G |- e1 != e2 : signed int
+
+G |- e1 : void *
+G |- e2 : t1 *
+-------------------------- :: binop_neq_pt_void_left
+G |- e1 != e2 : signed int
+
+G |- e1 : t1 *
+---------------------------- :: binop_neq_pt_null_right
+G |- e1 != NULL : signed int
+
+G |- e2 : t2 *
+---------------------------- :: binop_neq_pt_null_left
+G |- NULL != e2 : signed int
+
+
+% Bitwise Operation
+
+% Bitwise and
+G |- e1 : t_int1
+G |- e2 : t_int2
+promote(t_int1) = t_arith1
+promote(t_int2) = t_arith2
+common_type(t_arith1, t_arith2) = t_arith
+------------------------------------------ :: binop_band
+G |- e1 & e2 : t_arith
+
+% Bitwise xor
+G |- e1 : t_int1
+G |- e2 : t_int2
+promote(t_int1) = t_arith1
+promote(t_int2) = t_arith2
+common_type(t_arith1, t_arith2) = t_arith
+----------------------------------------- :: binop_bxor
+G |- e1 ^ e2 : t_arith
+
+% Logical binary operators
+
+% Logical And
+G |- e1 : t_scalar1
+G |- e2 : t_scalar2
+-------------------------- :: binop_land
+G |- e1 && e2 : signed int
+
+% Logical Or
+G |- e1 : t_scalar1
+G |- e2 : t_scalar2
+-------------------------- :: binop_lor
+G |- e1 || e2 : signed int
+
+% Assignment Operators
+
+% Simple Assignment
+
+G |- e1 : t_arith1 lvalue
+G |- e2 : t_arith2
+------------------------- ::assign_arith
+G |- e1 = e2 : t_arith1
+
+G |- e1 : t1 * lvalue
+G |- e2 : t2 *
+t1 =compat t2
+--------------------- ::assign_pt
+G |- e1 = e2 : t1 *
+
+G |- e1 : void * lvalue
+G |- e2 : t2 *
+----------------------- ::assign_void_left
+G |- e1 = e2 : void *
+
+G |- e1 : t1 * lvalue
+G |- e2 : void *
+----------------------- ::assign_void_right
+G |- e1 = e2 : t1 *
+
+G |- e1 : t1 * lvalue
+----------------------- ::assign_null
+G |- e1 = NULL : t1 *
+
+G |- e1 : bool lvalue
+G |- e2 : t2 *
+--------------------- ::assign_bool
+G |- e1 = e2 : bool
+
+% TODO Compound Assignment
+
+% Comma Operator
+G |- e1 : t1
+G |- e2 : t2
+----------------- :: binop_comma
+G |- e1 , e2 : t2
+

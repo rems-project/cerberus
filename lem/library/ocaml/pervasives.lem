@@ -1,0 +1,30 @@
+val (::) : forall 'a. 'a -> 'a list -> 'a list
+val (=) : forall 'a. 'a -> 'a -> bool
+val (<>) : forall 'a. 'a -> 'a -> bool
+val (<) : num -> num -> bool
+val (<=) : num -> num -> bool
+val (>) : num -> num -> bool
+val (>=) : num -> num -> bool
+val land : num -> num -> num
+val lor  : num -> num -> num
+val lxor : num -> num -> num
+val not : bool -> bool
+val (&&) : bool -> bool -> bool
+val (||) : bool -> bool -> bool
+val (+) : num -> num -> num
+val (-) : num -> num -> num
+val ( *) : num -> num -> num
+val (/) : num -> num -> num
+val fst : forall 'a 'b. 'a * 'b -> 'a
+val snd : forall 'a 'b. 'a * 'b -> 'b
+val (@) : forall 'a. 'a list -> 'a list -> 'a list
+val (^) : string -> string -> string
+val (%) : num -> num -> num
+val ( ** ) : num -> num -> num
+
+type int
+val compare : forall 'a. 'a -> 'a -> int
+
+val string_of_num : num -> string
+val int_of_num : num -> int
+val num_of_int : int -> num

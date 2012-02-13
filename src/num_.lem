@@ -1,0 +1,7 @@
+let compare i1 i2 =
+  if i1 = i2 then
+    Ord.Eq
+  else if i1 < i2 then
+    Ord.Lt
+  else
+    Ord.Gt

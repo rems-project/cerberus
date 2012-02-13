@@ -1,0 +1,30 @@
+(* TODO : This is not the right type *)
+type ('key,'a) map = ('key,'a) Hol.Finite_map.fmap
+val empty: forall 'key 'a.  ('key -> 'key -> int) -> ('key,'a) map
+val is_empty: forall 'key 'a.  ('key,'a) map -> bool
+val mem: forall 'key 'a.  'key -> ('key,'a) map -> bool
+val add: forall 'key 'a.  'key -> 'a -> ('key,'a) map -> ('key,'a) map
+val singleton: forall 'key 'a.  ('key -> 'key -> int) -> 'key -> 'a -> ('key,'a) map
+val remove: forall 'key 'a.  'key -> ('key,'a) map -> ('key,'a) map
+(*
+val merge: forall 'key 'a 'b. 
+    ('key -> 'a option -> 'b option -> 'c option) -> ('key,'a) map -> ('key,'b) map -> ('key,'c) map
+*)
+val compare: forall 'key 'a.  ('a -> 'a -> int) -> ('key,'a) map -> ('key,'a) map -> int
+val equal: forall 'key 'a.  ('a -> 'a -> bool) -> ('key,'a) map -> ('key,'a) map -> bool
+(*val iter: forall 'key 'a.  ('key -> 'a -> unit) -> ('key,'a) map -> unit*)
+val fold: forall 'key 'a 'b.  ('key -> 'a -> 'b -> 'b) -> ('key,'a) map -> 'b -> 'b
+val for_all: forall 'key 'a.  ('key -> 'a -> bool) -> ('key,'a) map -> bool
+val exists: forall 'key 'a.  ('key -> 'a -> bool) -> ('key,'a) map -> bool
+val filter: forall 'key 'a.  ('key -> 'a -> bool) -> ('key,'a) map -> ('key,'a) map
+val partition: forall 'key 'a.  ('key -> 'a -> bool) -> ('key,'a) map -> ('key,'a) map * ('key,'a) map
+val cardinal: forall 'key 'a.  ('key,'a) map -> int
+val bindings: forall 'key 'a.  ('key,'a) map -> ('key * 'a) list
+val min_binding: forall 'key 'a.  ('key,'a) map -> ('key * 'a)
+val max_binding: forall 'key 'a.  ('key,'a) map -> ('key * 'a)
+val choose: forall 'key 'a.  ('key,'a) map -> ('key * 'a)
+(*val split: forall 'key 'a.  'key -> ('key,'a) map -> ('key,'a) map * 'a option * ('key,'a) map*)
+val find: forall 'key 'a.  'key -> ('key,'a) map -> 'a
+val map: forall 'key 'a 'b.  ('a -> 'b) -> ('key,'a) map -> ('key,'b) map
+val mapi: forall 'key 'a 'b.  ('key -> 'a -> 'b) -> ('key,'a) map -> ('key,'b) map
+val concat: forall 'key 'a. ('key, 'a) map -> ('key, 'a) map -> ('key, 'a) map

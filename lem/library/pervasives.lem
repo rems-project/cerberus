@@ -1,0 +1,160 @@
+val (=) : forall 'a. 'a -> 'a -> bool
+sub [hol] (=) = (=)
+sub [ocaml] (=) = (=)
+sub [isabelle] (=) = (=)
+
+val (<>) : forall 'a. 'a -> 'a -> bool
+sub [hol] (<>) = (<>)
+sub [ocaml] (<>) = (<>)
+sub [isabelle] (<>) = (~=)
+
+val (<) : num -> num -> bool
+sub [hol] (<) = (<)
+sub [ocaml] (<) = (<)
+sub [isabelle] (<) = (<)
+
+val (>) : num -> num -> bool
+sub [hol] (>) = (>)
+sub [ocaml] (>) = (>)
+sub [isabelle] (>) = (>)
+
+val (<=) : num -> num -> bool
+sub [hol] (<=) = (<=)
+sub [ocaml] (<=) = (<=)
+sub [isabelle] (<=) = (<=)
+
+val (>=) : num -> num -> bool
+sub [hol] (>=) = (>=)
+sub [ocaml] (>=) = (>=)
+sub [isabelle] (>=) = (>=)
+
+val land : num -> num -> num
+sub [hol] land = bitwise_and
+sub [ocaml] land = (land)
+
+val lor : num -> num -> num
+sub [hol] lor =  bitwise_or
+sub [ocaml] lor = (lor)
+
+val lxor : num -> num -> num
+sub [hol] lxor = bitwise_xor
+sub [ocaml] lxor = (lxor)
+
+val not : bool -> bool
+sub [hol] not x = ~x
+sub [ocaml] not = not
+sub [isabelle] not x = (~x) 
+
+val (&&) : bool -> bool -> bool
+sub [hol] (&&) = \\/\
+sub [ocaml] (&&) = (&&)
+sub [isabelle] (&&) = (&)
+
+val (||) : bool -> bool -> bool
+sub [hol] (||) = \\\/
+sub [ocaml] (||) = (||)
+sub [isabelle] (||) = \\| 
+
+val (-->) : bool -> bool -> bool
+sub [hol] (-->) = \\==>
+sub [ocaml] (-->) x y = (not x || y)
+sub [isabelle] (-->) = (-->)
+
+val (+) : num -> num -> num
+sub [hol] (+) = (+)
+sub [ocaml] (+) = (+)
+sub [isabelle] (+) = (+)
+
+val (-) : num -> num -> num
+sub [hol] (-) = (-)
+sub [ocaml] (-) = (-)
+sub [isabelle] (-) = (-)
+
+val ( * ) : num -> num -> num
+sub [hol] ( * ) = ( * )
+sub [ocaml] ( * ) = ( * )
+
+val (/) : num -> num -> num
+sub [hol] (/) = DIV
+sub [ocaml] (/) = (/)
+
+val ~ : num -> num
+sub [hol] ~ = ~
+sub [ocaml] ~ = (-) 0
+
+val (%) : num -> num -> num
+sub [ocaml] (%) = (%)
+
+val ( ** ) : num -> num -> num
+sub [ocaml] ( ** ) = ( ** )
+
+val fst : forall 'a 'b. 'a * 'b -> 'a
+sub [hol] fst = FST
+sub [ocaml] fst = fst
+sub [isabelle] fst = fst
+
+val snd : forall 'a 'b. 'a * 'b -> 'b
+sub [hol] snd = SND
+sub [ocaml] snd = snd
+sub [isabelle] snd = snd
+
+val (@) : forall 'a. 'a list -> 'a list -> 'a list
+sub [hol] (@) = (++)
+sub [ocaml] (@) = (@)
+sub [isabelle] (@) = (@)
+
+val (IN) : forall 'a. 'a -> 'a set -> bool
+sub [hol] (IN) = (IN)
+sub [ocaml] (IN) e s = Pset.mem e s
+sub [isabelle] (IN) e s = Set.member e s
+
+val (subset) : forall 'a. 'a set -> 'a set -> bool
+sub [hol] (subset) = SUBSET
+sub [ocaml] (subset) s1 s2 = Pset.(subset) s1 s2
+(* is Lem.subset equal to < or <=?? *)
+sub [isabelle] (subset) s1 s2 = Set.(subset) s1 s2
+
+val (union) : forall 'a. 'a set -> 'a set -> 'a set
+sub [hol] (union) = UNION
+sub [ocaml] (union) s1 s2 = Pset.(union) s1 s2
+sub [isabelle] (union) s1 s2 = Set.(union) s1 s2
+
+val (inter) : forall 'a. 'a set -> 'a set -> 'a set
+sub [hol] (inter) = INTER
+sub [ocaml] (inter) s1 s2 = Pset.(inter) s1 s2
+sub [isabelle] (inter) s1 s2 = Set.(inter) s1 s2
+
+val (\) : forall 'a. 'a set -> 'a set -> 'a set
+sub [hol] (\) = DIFF
+sub [ocaml] (\) s1 s2 = Pset.diff s1 s2
+sub [isabelle] (\) = Set.subtraction
+
+val bigunion : forall 'a. 'a set set -> 'a set
+sub [hol] bigunion = BIGUNION
+sub [ocaml] bigunion = Pset.bigunion compare
+
+val biginter : forall 'a. 'a set set -> 'a set
+sub [hol] biginter = BIGINTER
+sub [ocaml] biginter = Pset.biginter
+
+val empty : forall 'a. 'a set
+sub [hol] empty = EMPTY
+sub [ocaml] empty = (Pset.empty Pervasives.compare)
+sub [isabelle] empty = Set.empty
+
+val (^) : string -> string -> string
+sub [hol] (^) x y = STRCAT x y
+sub [ocaml] (^) = (^)
+
+val (::) : forall 'a. 'a -> 'a list -> 'a list
+sub [hol] (::) = (::)
+sub [ocaml] (::) = (::)
+sub [isabelle] (::) = \\#
+
+type 'a option = 
+  | None
+  | Some of 'a
+
+val string_of_num : num -> string
+sub [ocaml] string_of_num = string_of_num
+(* sub [hol] string_of_num = n2s *)

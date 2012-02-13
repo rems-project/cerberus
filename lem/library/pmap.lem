@@ -1,0 +1,36 @@
+(* TODO: This is not the right type *)
+type ('a,'b) map = ('a,'b) Hol.Finite_map.fmap
+
+val empty : forall 'a 'b. ('a,'b) map
+sub [hol] empty = FEMPTY
+sub [ocaml] empty = (Pmap.empty Pervasives.compare)
+
+val add : forall 'key 'a. 'key -> 'a -> ('key,'a) map -> ('key,'a) map
+sub [hol] add k a m = FUPDATE m (k,a)
+sub [ocaml] add = Pmap.add
+
+val mem : forall 'key 'a. 'key -> ('key,'a) map -> bool
+sub [hol] mem k m = k IN FDOM m
+sub [ocaml] mem = Pmap.mem
+
+val find : forall 'key 'a. 'key -> ('key,'a) map -> 'a
+sub [hol] find k m = FAPPLY m k
+sub [ocaml] find = Pmap.find
+
+val fold : forall 'key 'a 'b. ('key -> 'a -> 'b -> 'b) -> ('key, 'a) map -> 'b -> 'b
+sub[ocaml] fold = Pmap.fold
+
+val for_all : forall 'key 'a. ('key -> 'a -> bool) -> ('key, 'a) map -> bool
+sub [ocaml] for_all = Pmap.for_all
+
+val map : forall 'key 'a 'b. ('a -> 'b) -> ('key, 'a) map -> ('key, 'b) map
+sub [ocaml] map = Pmap.map
+
+val bindings: forall 'key 'a.  ('key,'a) map -> ('key * 'a) list
+sub [ocaml] bindings = Pmap.bindings
+
+val concat: forall 'key 'a. ('key, 'a) map -> ('key, 'a) map -> ('key, 'a) map
+sub [ocaml] concat = Pmap.concat
+
+val remove: forall 'key 'a. 'key -> ('key, 'a) map -> ('key, 'a) map
+sub [ocaml] remove = Pmap.remove
