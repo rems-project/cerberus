@@ -2,9 +2,23 @@ open Global
 
 type id = Symbol.t
 
+(* [storage duration] (6.2.4#1)
+   
+   "An object has a storage duration that determines its lifetime. There are
+    four storage durations: static, thread, automatic, and allocated. Allocated
+    storage is described in 7.22.3."
+*)
+(* (* TODO *)
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+*)
 type storage_class =
   | AUTO
   | STATIC
+
 
 type int_base_type =
   | ICHAR
@@ -19,15 +33,12 @@ type int_type =
   | UNSIGNED of int_base_type
 
 type basic_type =
-  | VOID
   | CHAR
   | INTEGER of int_type
 
 type qualifiers = Cabs.qualifiers
 
-type sequential_operator = Cabs.sequential_operator
 type arithmetic_operator = Cabs.arithmetic_operator
-type relational_operator = Cabs.relational_operator
 type binary_operator = Cabs.binary_operator
 
 type unary_operator =
@@ -43,14 +54,21 @@ type integer_constant = Cabs.integer_constant
 type constant = Cabs.constant
 
 type ctype =
-  | BASE of qualifiers * basic_type
+  | VOID of qualifiers
+  | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
   | ARRAY of ctype * num
   | POINTER of qualifiers * ctype
   | FUNCTION of ctype * ctype list
+(*  | STRUCT of id * (storage_class * ctype * 'e member_declarator) list
 
-type type_class =
+and 'e member_declarator =
+  | MEMBER_DECL of id
+  | BITFIELD of id option * 'e
+*)
+
+and type_class =
   | T_EXP of ctype
   | T_LVALUE of ctype
 
@@ -139,25 +157,17 @@ module Print = struct
     | Cabs.SHR  -> P.rangle ^^ P.rangle
   end
 
-  let pp_seqop = function
-    | Cabs.AND   -> P.ampersand ^^ P.ampersand
-    | Cabs.OR    -> P.bar ^^ P.bar
-    | Cabs.COMMA -> P.comma
-  end
-
-  let pp_relop = function
+  let pp_binop = function
+    | Cabs.ARITHMETIC o -> pp_arithop o
     | Cabs.EQ -> P.equals ^^ P.equals
     | Cabs.NE -> P.bang   ^^ P.equals
     | Cabs.LT -> P.langle
     | Cabs.GT -> P.rangle
     | Cabs.LE -> P.langle ^^ P.equals
     | Cabs.GE -> P.rangle ^^ P.equals
-  end
-
-  let pp_binop = function
-    | Cabs.ARITHMETIC o -> pp_arithop o
-    | Cabs.SEQUENTIAL o -> pp_seqop   o
-    | Cabs.RELATIONAL o -> pp_relop   o
+    | Cabs.AND   -> P.ampersand ^^ P.ampersand
+    | Cabs.OR    -> P.bar ^^ P.bar
+    | Cabs.COMMA -> P.comma
   end
 
   let showParens = P.parens
@@ -181,7 +191,6 @@ module Print = struct
   end
 
   let pp_basic_type = function
-    | VOID -> !^ "void"
     | CHAR -> !^ "char"
     | INTEGER i -> pp_int_type i
   end
@@ -204,7 +213,8 @@ module Print = struct
       let ins_space ds d = ds ^^ d ^^ P.space in
       P.fold ins_space (List.map pp_qualifier [q | forall (q IN qs) | true]) in
     match t with
-      | BASE qs b -> pp_qs qs ^^ pp_basic_type b
+      | VOID qs   -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
       | ARRAY t s -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
       | POINTER qs t -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
       | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
@@ -229,7 +239,7 @@ module Print = struct
       | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
       | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
       | UNARY o                   e -> pp_unop o ^^ f e
-      | BINARY ((Cabs.SEQUENTIAL Cabs.COMMA) as o) e1 e2 ->
+      | BINARY (Cabs.COMMA as o) e1 e2 ->
           f e1 ^^ pp_binop o ^^ P.space ^^ f e2
       | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
       | CALL e es -> f e ^^ P.parens (P.comma_list f es)
