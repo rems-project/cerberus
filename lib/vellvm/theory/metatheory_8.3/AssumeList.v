@@ -650,12 +650,12 @@ Require Import LibTactics.
     Lemma binds_one_1 :
       binds x a (one (VarAsn B y b)) ->
       x = y.
-    Proof. clear. intros H1. inversion H1; intuition congruence. Qed.
+    Proof. clear. intros H1. inversion H1; now try congruence. Qed.
 
     Lemma binds_one_2 :
       binds x a (one (VarAsn B y b)) ->
       a = b.
-    Proof. clear. intros H1. inversion H1; intuition congruence. Qed.
+    Proof. clear. intros H1. inversion H1; now try congruence. Qed.
 
     Lemma binds_one_iff :
       binds x a (one (VarAsn B y b)) <-> x = y /\ a = b.

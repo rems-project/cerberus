@@ -206,7 +206,10 @@ Section ListProperties.
 
   Lemma in_one_iff :
     List.In x (one y) <-> x = y.
-  Proof. clear. split. inversion 1; intuition. constructor; intuition. Qed.
+  Proof. clear. split.
+    now destruct 1.
+    now constructor.
+Qed.
 
   Lemma in_app_iff :
     List.In x (l1 ++ l2) <-> List.In x l1 \/ List.In x l2.
@@ -629,12 +632,12 @@ Section BindsProperties.
   Lemma binds_one_1 :
     binds x a (y ~ b) ->
     x = y.
-  Proof. clear. intros H. inversion H; intuition congruence. Qed.
+  Proof. clear. intros H. inversion H; now try intuition congruence. Qed.
 
   Lemma binds_one_2 :
     binds x a (y ~ b) ->
     a = b.
-  Proof. clear. intros H. inversion H; intuition congruence. Qed.
+  Proof. clear. intros H. inversion H; now try intuition congruence. Qed.
 
   Lemma binds_one_3 :
     x = y ->
