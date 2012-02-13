@@ -17,13 +17,13 @@ let lvalue_convert t e =
   | Some t' -> E.return t'
   end
 
-let int = A.BASE {} (A.INTEGER (A.SIGNED A.INT))
+let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
 let one l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 
 let rec is_null_pointer_constant e =
   match Annot.exp_of e with
   | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
-  | A.CAST (A.POINTER _ (A.BASE _ A.VOID)) exp -> is_null_pointer_constant exp
+  | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer_constant exp
   | _ -> false
   end
 
@@ -59,7 +59,7 @@ let rec check_exp env l e_head =
       else
         E.return (A.T_LVALUE t)
   | A.CONSTANT (C.CONST_INT (i, None)) ->
-      E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+      E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
   | A.CONSTANT (C.CONST_INT (_, Some _)) ->
       E.fail (Type_error.UNSUPPORTED
         "Suffixes in integer constant expressions are not supported.")
@@ -133,18 +133,18 @@ let rec check_exp env l e_head =
   | A.SIZEOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.SIZEOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
   | A.ALIGNOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASE {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.ALIGNOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
-  | A.CAST (A.BASE q A.VOID) e ->
+  | A.CAST (A.VOID q) e ->
       type_of e >>= fun _ ->
-      E.return (A.T_EXP (A.BASE q A.VOID))
+      E.return (A.T_EXP (A.VOID q))
   | A.CAST t' e ->
       type_of e >>= fun t ->
       if T.is_scalar t' then
@@ -221,13 +221,13 @@ let rec check_exp env l e_head =
           E.return (A.T_EXP (T.promote t1))
         else E.fail Type_error.SHR_INTEGER_FIRST
       else E.fail Type_error.SHR_INTEGER_SECOND
-  | A.BINARY (C.RELATIONAL C.LT) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.GT) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.LE) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.GE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.GE) e1 e2 ->
+  | A.BINARY C.LT e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.GT e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.LE e1 e2 ->
+      check_exp env l (A.BINARY C.GE e1 e2)
+  | A.BINARY C.GE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -247,9 +247,9 @@ let rec check_exp env l e_head =
             else E.fail Type_error.GE_REAL
           else E.fail Type_error.GE_ALL
       end
-  | A.BINARY (C.RELATIONAL C.EQ) e1 e2 ->
-      check_exp env l (A.BINARY (C.RELATIONAL C.NE) e1 e2)
-  | A.BINARY (C.RELATIONAL C.NE) e1 e2 ->
+  | A.BINARY C.EQ e1 e2 ->
+      check_exp env l (A.BINARY C.NE e1 e2)
+  | A.BINARY C.NE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -307,13 +307,13 @@ let rec check_exp env l e_head =
       if T.is_integer t1 && T.is_integer t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Type_error.BOR_INTEGER
-  | A.BINARY (C.SEQUENTIAL C.AND) e1 e2 ->
+  | A.BINARY C.AND e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
         E.return (A.T_EXP int)
       else E.fail Type_error.AND_SCALAR
-  | A.BINARY (C.SEQUENTIAL C.OR) e1 e2 ->
+  | A.BINARY C.OR e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
@@ -330,10 +330,10 @@ let rec check_exp env l e_head =
         | (A.POINTER _ b2, A.POINTER _ b3) ->
             if T.is_void b2 && T.is_object b3 then
               let q = T.merge_qualifiers t2 t3 in
-              E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
+              E.return (A.T_EXP (A.POINTER q (A.VOID {})))
             else if T.is_object b2 && T.is_void b3 then
               let q = T.merge_qualifiers t2 t3 in
-              E.return (A.T_EXP (A.POINTER q (A.BASE {} A.VOID)))
+              E.return (A.T_EXP (A.POINTER q (A.VOID {})))
 
             (* null pointer constant of pointer type *)
             else if is_null_pointer_constant e2 then
@@ -358,8 +358,8 @@ let rec check_exp env l e_head =
               E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
             else E.fail Type_error.QUESTION_NULL_POINTER_CONSTANT_THIRD
 
-        | (A.BASE _ A.VOID, A.BASE _ A.VOID) ->
-            E.return (A.T_EXP (A.BASE {} A.VOID))
+        | (A.VOID _, A.VOID _) ->
+            E.return (A.T_EXP (A.VOID {}))
 
         | _ ->
             if T.is_arithmetic t2 then
@@ -385,7 +385,7 @@ let rec check_exp env l e_head =
       if T.is_modifiable t1 then
 
         match (t1, t2) with
-        | (A.BASE _ (A.INTEGER A.BOOL), A.POINTER _ _) ->
+        | (A.BASIC _ (A.INTEGER A.BOOL), A.POINTER _ _) ->
             E.return (A.T_EXP t)
         | (A.POINTER _ b1, A.POINTER _ b2) ->
             (* null pointer constant of pointer type *)
@@ -458,7 +458,7 @@ let rec check_exp env l e_head =
         else E.fail Type_error.ASSIGN_OTHER_ARITHMETIC
 
       else E.fail Type_error.ASSIGN_LVALUE
-  | A.BINARY (C.SEQUENTIAL C.COMMA) e1 e2 ->
+  | A.BINARY C.COMMA e1 e2 ->
       type_of e1 >>= fun _ ->
       type_of e2 >>= fun t ->
       E.return (A.T_EXP t)
@@ -496,7 +496,7 @@ and annotate_exp env exp =
 let rec annotate_stmt env (l, stmt) =
   let f_e = annotate_exp  env in
   let f_s = annotate_stmt env in
-  E.map (Pair.make (l, A.T_EXP (A.BASE {} A.VOID))) (match stmt with
+  E.map (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
   | A.IF e s1 s2 ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->

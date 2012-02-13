@@ -9,14 +9,97 @@ type cabsloc = <|
 
 type location = Location.t
 
+
+(* 6.4.4.1 Integer constants *)
+type integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+type integer_constant = num * integer_suffix option
+
+
+(* 6.4.4 Constants *)
+type constant =
+  | CONST_INT of integer_constant
+(*  | CONST_FLOAT of string (* the textual representaton *) (* LATER *) *)
+  | CONST_ENUM of string (* 6.4.4.3 Enumeration constants *)
+(*
+(* TODO *)
+  | CONST_CHAR of int64 list
+  | CONST_WCHAR of int64 list
+*)
+
+
+(* 6.4.5 String literals *)
+type encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+type string_literal = encoding_prefix * string
+
+
+(* -- EXPRESSIONS -- *)
+(* Part of the binary operators (also used as the assignment operators) *)
+type arithmetic_operator =
+  (* 6.5.5 Multiplicative operators *)
+  | MUL | DIV | MOD
+  (* 6.5.6 Additive operators *)
+  | ADD | SUB
+  (* 6.5.7 Bitwise shift operators *)
+  | SHL | SHR
+  (* 6.5.10 Bitwise AND operator *)
+  | BAND
+  (* 6.5.11 Bitwise exclusive OR operator *)
+  | BOR
+  (* 6.5.12 Bitwise inclusive OR operator *)
+  | XOR
+
+(* Binary operators from 6.5.5-14, 6.5.17 *)
+type binary_operator =
+  (* Group of operators also used for assigments *)
+  | ARITHMETIC of arithmetic_operator
+  (* 6.5.17 Comma operator *)
+  | COMMA
+  (* 6.5.13 Logical AND operator *)
+  | AND
+  (* 6.5.14 Logical OR operator *)
+  | OR
+  (* 6.5.8 Relational operators *)
+  | LT | GT | LE | GE
+  (* 6.5.9 Equality operators *)
+  | EQ | NE
+
+type unary_operator =
+  (* from 6.5.2 Postfix operators *)
+  | POSTFIX_INCR | POSTFIX_DECR
+  (* 6.5.3 Unary operators *)
+  | PREFIX_INCR | PREFIX_DECR
+  | ADDRESS | INDIRECTION | PLUS | MINUS | BNOT | NOT
+
+
+
+
+
+
+
+(* 6.7.1 Storage-class specifiers *)
 type storage_class =
-  | AUTO
-  | STATIC
+  | TYPEDEF
   | EXTERN
+  | STATIC
+  | THREAD_LOCAL
+  | AUTO
   | REGISTER
 
+(* 6.7.2 Type specifiers *)
 type qualifier =
   | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC
 
 type specifier =
   | VOID
@@ -24,95 +107,65 @@ type specifier =
   | SHORT
   | INT
   | LONG
+(*  | FLOAT *)
+(*  | DOUBLE *)
   | SIGNED
   | UNSIGNED
   | BOOL
+(*  | COMPLEX *)
+  | STRUCT of string option * struct_union_declaration list (* TODO: STRUCT_HACK *)
+  | UNION of string option * struct_union_declaration list (* TODO: STRUCT_HACK *)
+(* TODO: enum-specifier *)
+(* TODO: typedef-name *)
 
-type specifiers = specifier multiset
-type qualifiers = qualifier set
+and specifiers = specifier multiset
+and qualifiers = qualifier set
 
-type sequential_operator =
-  | COMMA
-  | AND
-  | OR
-
-type arithmetic_operator =
-  | ADD
-  | SUB
-  | MUL
-  | DIV
-  | MOD
-  | BAND
-  | BOR
-  | XOR
-  | SHL
-  | SHR
-
-type relational_operator =
-  | EQ
-  | NE
-  | LT
-  | GT
-  | LE
-  | GE
-
-type binary_operator =
-  | ARITHMETIC of arithmetic_operator
-  | SEQUENTIAL of sequential_operator
-  | RELATIONAL of relational_operator
-
-type unary_operator =
-  | MINUS
-  | PLUS
-  | NOT
-  | BNOT
-  | ADDRESS
-  | INDIRECTION
-  | PREFIX_INCR
-  | PREFIX_DECR
-  | POSTFIX_INCR
-  | POSTFIX_DECR
-
-type suffix =
-  | SUFFIX_UNSIGNED
-  | SUFFIX_UNSIGNED_LONG
-  | SUFFIX_UNSIGNED_LONG_LONG
-  | SUFFIX_LONG
-  | SUFFIX_LONG_LONG
-
-type integer_constant = num * suffix option
-
-type constant =
-  | CONST_INT of integer_constant
-(*
-  | CONST_FLOAT of string (* the textual representaton *)
-  | CONST_CHAR of int64 list
-  | CONST_WCHAR of int64 list
-  | CONST_STRING of string
-*)
-
-type c_type =
+and c_type =
   | BASE of qualifiers * specifiers
   | ARRAY of qualifiers * c_type * exp_l option
   | POINTER of qualifiers * c_type
   | FUNCTION of c_type * decl_l list
 
 and expression =
-  | UNARY of unary_operator * exp_l
-  | BINARY of binary_operator * exp_l * exp_l 
-  | ASSIGN of arithmetic_operator option * exp_l * exp_l
-  | QUESTION of exp_l * exp_l * exp_l
-(*
+  (* 6.5.1 Primary expressions *)
+  | IDENTIFIER of string
+  | CONSTANT of constant
+  | STRING_LITERAL of string_literal
+(* TODO: generic_selection *)
+  (* 6.5.2.1 Array subscripting *)
+  | SUBSCRIPT of exp_l * exp_l
+  (* 6.5.2.2 Function call *)
+  | CALL of exp_l * exp_l list
+  (* 6.5.2.3 Structure and union members *)
+  | MEMBEROF of exp_l * string
+  | MEMBEROFPTR of exp_l * string
+  (* 6.5.2.5 Compound literals *)
+(* (* TODO *)
   | COMPOUND_LITERAL of (specifier * c_type) * init_expression
 *)
-  | CAST of c_type * exp_l
-  | CALL of exp_l * exp_l list
-  | CONSTANT of constant
-  | VARIABLE of string
-  | TYPE_SIZEOF of c_type
+  (* Unary operators from 6.5.2 and 6.5.3 *)
+  | UNARY of unary_operator * exp_l
+  (* 6.5.3.4 The sizeof and alignof operators *)
+  | TYPE_SIZEOF of c_type (* TODO: sizeof can have an 'unary-expression' as argument *)
   | TYPE_ALIGNOF of c_type
-  | INDEX of exp_l * exp_l
+  (* 6.5.4 Cast operators *)
+  | CAST of c_type * exp_l
+  (* Binary operators from 6.5.5-14 and 6.5.17 *)
+  | BINARY of binary_operator * exp_l * exp_l 
+  (* 6.5.15 Conditional operator *)
+  | CONDITIONAL of exp_l * exp_l * exp_l
+  (* 6.5.16 Assignment operators *)
+  | ASSIGN of arithmetic_operator option * exp_l * exp_l
+
 and exp_l = expression * location
+
+(* TODO: STRUCT_HACK *)
+and struct_union_declarator =
+  | STRUCT_DECL of string * (c_type -> c_type)
+  | BITFIELD of (string * (c_type -> c_type)) option * exp_l
+and struct_union_declaration = specifiers * qualifiers * struct_union_declarator list
+
 
 and declaration = string * c_type * storage_class list
 and decl_l = declaration * location
@@ -143,6 +196,7 @@ and stmt_l = statement * location
 type global_definition =
   | FUNCTION_DEFINITION of decl_l * stmt_l
   | EXTERNAL_DECLARATION of defn_l list
+  | STRUCT_ (* TODO: struct *)
 
 type g_defn_l = global_definition * location
 
