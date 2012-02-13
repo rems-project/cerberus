@@ -23,7 +23,7 @@ syntax.vo : ./monads/monad.vo ./compcert/Floats.vo ./compcert/alist.vo \
 	$(COQC) $(COQARG) syntax.v
 
 syntax.v : syntax.ott 
-	$(OTT) -coq_expand_list_types true -i syntax.ott -o syntax.v
+	$(OTT) -coq_names_in_rules false -coq_expand_list_types true -i syntax.ott -o syntax.v
 	./fixott.py syntax.v
 
 infrastructure.ott : infrastructure_aux.vo syntax.ott coq2ott.py 
