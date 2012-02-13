@@ -1,98 +1,4 @@
 (*
-(* 6.4 [Lexical elements]
-   
-    token:
-        keyword
-        identifier
-        constant
-        string-literal
-        punctuator
-
-preprocessing-token:
-        header-name
-        identifier
-        pp-number
-        character-constant
-        string-literal
-        punctuator
-        "each non-white-space character that cannot be one of the above"
-*)
-
-(* 6.4.1 [Keywords] *)
-let lexicon =
-  List.fold_left
-    (fun m (k, e) -> Map.add k e m)
-    Map.empty
-    [
-      ("alignof",        P.ALIGNOF);
-      ("auto",           P.AUTO);
-      ("break",          P.BREAK);
-      ("case",           P.CASE);
-      ("char",           P.CHAR);
-      ("const",          P.CONST);
-      ("continue",       P.CONTINUE);
-      ("default",        P.DEFAULT);
-      ("do",             P.DO);
-      ("double",         P.DOUBLE); (* LATER *)
-      ("else",           P.ELSE);
-      ("enum",           P.ENUM);
-      ("extern",         P.EXTERN);
-      ("float",          P.FLOAT); (* LATER *)
-      ("for",            P.FOR);
-      ("goto",           P.GOTO);
-      ("if",             P.IF);
-      ("inline",         P.INLINE);
-      ("int",            P.INT);
-      ("long",           P.LONG);
-      ("register",       P.REGISTER);
-      ("restrict",       P.RESTRICT);
-      ("return",         P.RETURN);
-      ("short",          P.SHORT);
-      ("signed",         P.SIGNED);
-      ("sizeof",         P.SIZEOF);
-      ("static",         P.STATIC);
-      ("struct",         P.STRUCT);
-      ("switch",         P.SWITCH);
-      ("typedef",        P.TYPEDEF);
-      ("union",          P.UNION);
-      ("unsigned",       P.UNSIGNED);
-      ("void",           P.VOID);
-      ("volatile",       P.VOLATILE);
-      ("while",          P.WHILE);
-      ("_Alignas",       P.ALIGNAS);
-      ("_Atomic",        P.ATOMIC);
-      ("_Bool",          P.BOOL);
-      ("_Complex",       P.COMPLEX); (* LATER *)
-      ("_Generic",       P.GENERIC);
-      ("_Imaginary",     P.IMAGINARY); (* LATER *)
-      ("_Noreturn",      P.NORETURN);
-      ("_Static_assert", P.STATIC_ASSERT);
-      ("_Thread_local",  P.THREAD_LOCAL);
-    ]
-
-(* 6.4.2 [Identifiers] *)
-(* 6.4.2.1 [General Syntax]
-   
-    identifier:
-            identifier-nondigit
-            identifier identifier-nondigit
-            identifier digit
-    
-    identifier-nondigit:
-            nondigit
-            universal-character-name
-            "other implementation-defined characters"
-    
-    nondigit: (...)
-    
-    digit: (...)
-*)
-
-
-*)
-
-
-(*
  *
  * Copyright (c) 2001-2003,
  *  George C. Necula    <necula@cs.berkeley.edu>
@@ -154,51 +60,34 @@ let lexicon =
   List.fold_left
     (fun m (k, e) -> BatMap.add k e m)
     BatMap.empty
-    [
-      ("alignof",        P.ALIGNOF);
-      ("auto",           P.AUTO);
-      ("break",          P.BREAK);
-      ("case",           P.CASE);
-      ("char",           P.CHAR);
-      ("const",          P.CONST);
-      ("continue",       P.CONTINUE);
-      ("default",        P.DEFAULT);
-      ("do",             P.DO);
-      ("double",         P.DOUBLE); (* LATER *)
-      ("else",           P.ELSE);
-      ("enum",           P.ENUM);
-      ("extern",         P.EXTERN);
-      ("float",          P.FLOAT); (* LATER *)
-      ("for",            P.FOR);
-      ("goto",           P.GOTO);
-      ("if",             P.IF);
-      ("inline",         P.INLINE);
-      ("int",            P.INT);
-      ("long",           P.LONG);
-      ("register",       P.REGISTER);
-      ("restrict",       P.RESTRICT);
-      ("return",         P.RETURN);
-      ("short",          P.SHORT);
-      ("signed",         P.SIGNED);
-      ("sizeof",         P.SIZEOF);
-      ("static",         P.STATIC);
-      ("struct",         P.STRUCT);
-      ("switch",         P.SWITCH);
-      ("typedef",        P.TYPEDEF);
-      ("union",          P.UNION);
-      ("unsigned",       P.UNSIGNED);
-      ("void",           P.VOID);
-      ("volatile",       P.VOLATILE);
-      ("while",          P.WHILE);
-      ("_Alignas",       P.ALIGNAS);
-      ("_Atomic",        P.ATOMIC);
-      ("_Bool",          P.BOOL);
-      ("_Complex",       P.COMPLEX); (* LATER *)
-      ("_Generic",       P.GENERIC);
-      ("_Imaginary",     P.IMAGINARY); (* LATER *)
-      ("_Noreturn",      P.NORETURN);
-      ("_Static_assert", P.STATIC_ASSERT);
-      ("_Thread_local",  P.THREAD_LOCAL);
+    [ ("auto",     P.AUTO);
+      ("const",    P.CONST);
+      ("static",   P.STATIC);
+      ("long",     P.LONG);
+      ("short",    P.SHORT);
+      ("signed",   P.SIGNED);
+      ("unsigned", P.UNSIGNED);
+      ("volatile", P.VOLATILE);
+      ("_Bool",    P.BOOL);
+      ("char",     P.CHAR);
+      ("int",      P.INT);
+      ("void",     P.VOID);
+      ("enum",     P.ENUM);
+      ("struct",   P.STRUCT);
+      ("union",    P.UNION);
+      ("break",    P.BREAK);
+      ("continue", P.CONTINUE);
+      ("goto",     P.GOTO); 
+      ("return",   P.RETURN);
+      ("switch",   P.SWITCH);
+      ("case",     P.CASE); 
+      ("default",  P.DEFAULT);
+      ("while",    P.WHILE);  
+      ("do",       P.DO);  
+      ("for",      P.FOR);
+      ("if",       P.IF);
+      ("else",     P.ELSE);
+      ("inline",   P.INLINE);
     ]
 
 (*
@@ -210,7 +99,6 @@ let scan_ident lexbuf =
     BatMap.find id lexicon
   (* default to variable name, as opposed to type *)
   with Not_found ->
-(* (* TODO: clean *)
     if List.mem id ["extern"; "typedef"] then
       let msg =
         "The keyword \"" ^ id ^ "\" in "
@@ -218,7 +106,6 @@ let scan_ident lexbuf =
         ^ " is unsupported.\n" in
       raise_error msg
     else
-*)
       P.IDENT id
 
 
@@ -302,109 +189,49 @@ let lex_comment remainder lexbuf =
 
 let letter = ['a'- 'z' 'A'-'Z']
 
-
-
-
-
-
-
-
-(* 6.4.2.1#1 Identifiers, General*)
-let nondigit = ['_' 'a' - 'z' 'A' - 'Z']
-let digit = ['0'-'9']
-
-(* BEGIN K *)
-
-(* 6.4.4.1#1 Integer constants *)
-let hexadecimal_prefix = "0x" | "0X"
-let nonzero_digit = ['1'-'9']
-let octal_digit = ['0'-'7']
-let hexadecimal_digit = ['0'-'9' 'a'-'f' 'A'-'F']
 let unsigned_suffix = 'u' | 'U'
 let long_suffix = 'l' | 'L'
 let long_long_suffix = "ll" | "LL"
-let integer_suffix =
-    unsigned_suffix long_suffix?
-  | unsigned_suffix long_long_suffix
-  | long_suffix unsigned_suffix?
-  | long_long_suffix unsigned_suffix?
+let digit = ['0'-'9']
+let nonzero_digit = ['1'-'9']
+
 let decimal_constant = nonzero_digit digit*
-let octal_constant = '0' octal_digit*
+
+let hexadecimal_prefix = "0x" | "0X"
+let hexadecimal_digit = ['0'-'9' 'a'-'f' 'A'-'F']
 let hexadecimal_constant = hexadecimal_prefix hexadecimal_digit+
-let integer_constant =
-    decimal_constant integer_suffix?
-  | octal_constant integer_suffix?
-  | hexadecimal_constant integer_suffix?
 
-(* 6.4.4.2#1 Float constants *)
+let lsuffix = long_suffix | long_long_suffix
+let usuffix = unsigned_suffix
+let intsuffix = lsuffix | usuffix | usuffix lsuffix | lsuffix usuffix | usuffix
+let intnum = digit+ intsuffix?
 (*
-let floating_constant =
-    decimal_floating_constant
-  | hexadecimal_floating_constant
+let octdigit = ['0'-'7']
+let hexdigit = ['0'-'9' 'a'-'f' 'A'-'F']
 
-let decimal_floating_constant =
-    fractional_constant exponent_part? floating_suffix?
-  | digit_sequence exponent_part floating_suffix?
+let hexprefix = '0' ['x' 'X']
 
-let hexadecimal_floating_constant =
-    hexadecimal_prefix hexadecimal_fractional_constant binary_exponent_part floating_suffix?
-  | hexadecimal_prefix hexadecimal_digit_sequence binary_exponent_part floating_suffix?
-
-let fractional_constant =
-    digit_sequence? '.' digit_sequence
-  | digit_sequence '.'
-
-let exponent_part =
-    'e' sign? digit_sequence
-  | 'E' sign? digit_sequence
-
-let sign = ['+' '-']
-
-let digit_sequence = digit+
-(*
-    digit
-  | digit_sequence digit
+let octnum = '0' octdigit+ intsuffix?
+let hexnum = hexprefix hexdigit+ intsuffix?
 *)
 
-let hexadecimal_fractional_constant =
-    hexadecimal_digit_sequence? '.' hexadecimal_digit_sequence
-  | hexadecimal_digit_sequence '.'
+let exponent = ['e' 'E']['+' '-']? digit+
+let fraction  = '.' digit+
+let decfloat = (intnum? fraction)
+	      |(intnum exponent)
+	      |(intnum? fraction exponent)
+	      | (intnum '.') 
+              | (intnum '.' exponent) 
 
-let binary_exponent_part = ['p' 'P'] sign? digit-sequence
 (*
-    'p' sign? digit-sequence
-  | 'P' sign? digit-sequence
+let hexfraction = hexdigit* '.' hexdigit+ | hexdigit+
+let binexponent = ['p' 'P'] ['+' '-']? digit+
+let hexfloat = hexprefix hexfraction binexponent
+             | hexprefix hexdigit+   binexponent
+
+let floatsuffix = ['f' 'F' 'l' 'L']
+let floatnum = (decfloat | hexfloat) floatsuffix?
 *)
-
-let hexadecimal_digit_sequence = hexadecimal_digit+
-(*
-    hexadecimal_digit
-  | hexadecimal_digit_sequence hexadecimal_digit
-*)
-
-let floating_suffix = ['f' 'l' 'F' 'L']
-
-
-
-(* 6.4.4.3 Enumeration constants *)
-let enumeration_constant = identifier
-
-(* 6.4.4.4 Character constants *)
-let character_constant =
-    '\'' c_char_sequence '\''
-  | 'L' '\'' c_char_sequence '\''
-  | 'u' '\'' c_char_sequence '\''
-  | 'U' '\'' c_char_sequence '\''
-
-let c_char_sequence = c_char+
-*)
-
-
-(* END K *)
-
-
-
-
 
 let ident = (letter|'_'|'$')(letter|digit|'_'|'$')* 
 let blank = [' ' '\t' '\012' '\r']+
@@ -503,8 +330,7 @@ rule initial = parse
 | ';'	{P.SEMICOLON}
 | ','	{P.COMMA}
 | '.'	{P.DOT}
-(* | "sizeof" {P.SIZEOF} (* TODO: why was this here ? *) *)
-| "\"" {P.DQUOTE}
+| "sizeof" {P.SIZEOF}
 (* __extension__ is a black. The parser runs into some conflicts if we let it
  * pass *)
 | "__extension__"         {initial lexbuf}
@@ -619,4 +445,3 @@ and integer_suffix = parse
 
 {
 }
-

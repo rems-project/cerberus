@@ -97,7 +97,7 @@ let size_int = function
 end    
 
 let size = function
-  | A.BASIC _ (A.INTEGER i) -> size_int i
+  | A.BASE _ (A.INTEGER i) -> size_int i
 end    
 
 let align_int = function
@@ -118,7 +118,7 @@ let in_range_int t const = C.conj (C.le (min t) const) (C.le const (max t))
 
 let in_range t const =
   match t with
-  | A.BASIC _ (A.INTEGER i) -> in_range_int i const
+  | A.BASE _ (A.INTEGER i) -> in_range_int i const
   end
 
 let conv_int_type i const =
@@ -139,13 +139,13 @@ let conv_int_type i const =
 
 let conv_int t const =
   match t with
-  | A.BASIC _ (A.INTEGER i) -> conv_int_type i const
+  | A.BASE _ (A.INTEGER i) -> conv_int_type i const
   | _ -> Symbol_state.return (const, C.tt)
   end
 
 let conv t t' const =
   match (t, t') with
-  | (_, A.BASIC _ (A.INTEGER i)) ->
+  | (_, A.BASE _ (A.INTEGER i)) ->
       if Types.is_integer t then
         conv_int_type i const
       else Symbol_state.return (const, C.tt)
@@ -154,7 +154,7 @@ let conv t t' const =
 
 
 let align = function
-  | A.BASIC _ (A.INTEGER i) -> align_int i
+  | A.BASE _ (A.INTEGER i) -> align_int i
   | _ -> C.one
   end
 
