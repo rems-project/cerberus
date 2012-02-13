@@ -412,7 +412,7 @@ Qed.
 Lemma Zmin_spec:
   forall x y, Zmin x y = if zlt x y then x else y.
 Proof.
-  intros. case (zlt x y); unfold Zlt, Zge; intros.
+  intros. case (zlt x y) as [z|]; unfold Zlt, Zge; intros.
   unfold Zmin. rewrite z. auto.
   unfold Zmin. caseEq (x ?= y); intro. 
   apply Zcompare_Eq_eq. auto.
@@ -423,7 +423,7 @@ Qed.
 Lemma Zmax_spec:
   forall x y, Zmax x y = if zlt y x then x else y.
 Proof.
-  intros. case (zlt y x); unfold Zlt, Zge; intros.
+  intros. case (zlt y x) as [z|]; unfold Zlt, Zge; intros.
   unfold Zmax. rewrite <- (Zcompare_antisym y x).
   rewrite z. simpl. auto.
   unfold Zmax. rewrite <- (Zcompare_antisym y x).
@@ -584,7 +584,12 @@ Qed.
 Lemma Zdivides_trans:
   forall x y z, (x | y) -> (y | z) -> (x | z).
 Proof.
-  intros. inv H. inv H0. exists (q0 * q). ring.
+  intros x y z H1 H2.
+  inversion H1 as [q1 Heq1].
+  inversion H2 as [q2 Heq2].
+  exists (q2 * q1).
+  rewrite <- Zmult_assoc.
+  congruence.
 Qed.
 
 Definition Zdivide_dec:
@@ -639,17 +644,22 @@ Qed.
 Lemma nat_of_Z_inj_ge : forall a b, (a >= b)%Z -> 
   (nat_of_Z a >= nat_of_Z b)%nat.
 Proof.
-  induction a; destruct b; intros; simpl; 
+  induction a as [|p1|p1]; destruct b as [|p2|p2]; intros; simpl; 
     try solve [auto | contradict H; auto | omega].
   apply nat_compare_le.
   rewrite <- nat_of_P_compare_morphism.
 
-  assert (p >= p0)%positive as J. auto with zarith.
+  assert (p1 >= p2)%positive as J. auto with zarith.
   unfold Pge in J.
-  remember ((p ?= p0)%positive Eq) as R.
+  remember ((p1 ?= p2)%positive Eq) as R.
   destruct R; try solve [congruence].
-    symmetry in HeqR. apply ZC3 in HeqR. rewrite HeqR. congruence.
-    symmetry in HeqR. apply ZC1 in HeqR. rewrite HeqR. congruence.
+    symmetry in HeqR. set (ZC3 _ _ HeqR). congruence.
+    symmetry in HeqR. set (ZC1 _ _ HeqR). congruence.
+(* version 8.4
+  remember ((p0 ?= p)%positive) as R.
+  destruct R; try solve [congruence].
+    symmetry in HeqR. rewrite Pos.compare_gt_iff in HeqR. congruence.
+*)
 Qed.    
 
 Lemma nat_of_Z_inj_gt : forall a b, (a > b)%Z -> (b >= 0)%Z ->
@@ -1600,11 +1610,3 @@ Qed.
 
 End DECIDABLE_PREDICATE.
 
-
-(*****************************)
-(*
-*** Local Variables: ***
-*** coq-prog-name: "coqtop" ***
-*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/theory/metatheory_8.3") ***
-*** End: ***
- *)

@@ -16,11 +16,11 @@
 (** This module defines the type of values that is used in the dynamic
   semantics of all our intermediate languages. *)
 
+Require Import Equations.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
-Require Import Equations.
 Require Import Axioms.
 
 Definition block : Type := Z.
@@ -53,7 +53,7 @@ Definition Vmone (wz:nat): val := Vint wz (mone wz).
 Definition Vtrue := Vone 0.
 Definition Vfalse := Vzero 0.
 
-Definition eq_Vbool (wz:nat) (v v':val) := 
+Definition eq_Vbool (wz:nat) (v v':val) :=
   (v = Vone wz <-> v'= Vtrue) /\
   (v = Vzero wz <-> v'= Vfalse).
 
@@ -65,25 +65,25 @@ Definition eq_Vbool (wz:nat) (v v':val) :=
 
 Module Val.
 
-(* FIXME: Comparision between float and int may not be correct. 
-   But we only need the eq to define LLVMgv.eq, which is only used for 
+(* FIXME: Comparision between float and int may not be correct.
+   But we only need the eq to define LLVMgv.eq, which is only used for
    pointer comparision. *)
 Definition eq (v1 v2:val) : bool :=
 match v1, v2 with
 | Vundef, _ => false
 | _, Vundef => false
 | Vint wz1 i1, Vint wz2 i2 => zeq (Int.unsigned wz1 i1) (Int.unsigned wz2 i2)
-| Vint wz1 i1, Vfloat f2 => 
+| Vint wz1 i1, Vfloat f2 =>
     zeq (Int.unsigned wz1 i1) (Int.unsigned 31 (Float.intuoffloat f2))
-| Vfloat f1, Vint wz2 i2 => 
+| Vfloat f1, Vint wz2 i2 =>
     zeq (Int.unsigned 31 (Float.intuoffloat f1)) (Int.unsigned wz2 i2)
 | Vfloat f1, Vfloat f2 => match (Float.eq_dec f1 f2) with
                           | left _ => true
                           | right _ => false
                           end
-| Vptr b1 o1, Vptr b2 o2 => eq_block b1 b2 && 
+| Vptr b1 o1, Vptr b2 o2 => eq_block b1 b2 &&
                             zeq (Int.unsigned 31 o1) (Int.unsigned 31 o2)
-| Vinttoptr i1, Vinttoptr i2 => 
+| Vinttoptr i1, Vinttoptr i2 =>
     (* FIXME: Should we compare Vinttoptr and Vptr? *)
     zeq (Int.unsigned 31 i1) (Int.unsigned 31 i2)
 | _, _ => false
@@ -92,13 +92,13 @@ end.
 Definition get_wordsize (v : val) : option nat :=
   match v with
   | Vint wz _ => Some wz
-  | Vptr _ _ | Vinttoptr _ => 
+  | Vptr _ _ | Vinttoptr _ =>
       (* This is incorrect, size of ptr is configured differently. *)
       Some 31%nat
   | _ => None
   end.
 
-Definition of_bool (b: bool) : val := 
+Definition of_bool (b: bool) : val :=
 if b then Vtrue else Vfalse.
 
 Definition has_type (v: val) (t: typ) : Prop :=
@@ -242,7 +242,7 @@ Equations add (v1 v2: val): val :=
 add (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   add (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
      Vint wz1 (Int.add wz1 n1 n2);
-  add (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  add (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 add (Vptr b1 ofs1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   add (Vptr b1 ofs1) (Vint ?(wz2) n2) (left eq_refl) :=
@@ -257,12 +257,12 @@ add (Vint wz1 n1) (Vptr b2 ofs2) with (eq_nat_dec wz1 31) := {
 add (Vinttoptr n1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   add (Vinttoptr n1) (Vint ?(wz1) n2) (left eq_refl) :=
      Vinttoptr (Int.add 31 n1 n2);
-  add (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef  
+  add (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef
   };
 add (Vint wz1 n1) (Vinttoptr n2) with (eq_nat_dec wz1 31) := {
   add (Vint wz1 n1) (Vinttoptr n2) (left eq_refl) :=
      Vinttoptr (Int.add wz1 n1 n2);
-  add (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef  
+  add (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef
   };
 add _ _ := Vundef.
 
@@ -270,14 +270,14 @@ Equations sub (v1 v2: val): val :=
 sub (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   sub (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
      Vint wz1 (Int.sub wz1 n1 n2);
-  sub (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  sub (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 sub (Vptr b1 ofs1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   sub (Vptr b1 ofs1) (Vint ?(wz2) n2) (left eq_refl) :=
      Vptr b1 (Int.sub 31 ofs1 n2);
   sub (Vptr b1 ofs1) (Vint ?(wz2) n2) (right p) := Vundef
   };
-sub (Vptr b1 ofs1) (Vptr b2 ofs2) := 
+sub (Vptr b1 ofs1) (Vptr b2 ofs2) :=
   if zeq b1 b2 then Vint 31 (Int.sub 31 ofs1 ofs2) else Vundef;
 sub (Vinttoptr n1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   sub (Vinttoptr n1) (Vint ?(wz2) n2) (left eq_refl) :=
@@ -291,47 +291,47 @@ Equations mul (v1 v2: val): val :=
 mul (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   mul (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
      Vint wz1 (Int.mul wz1 n1 n2);
-  mul (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  mul (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 mul _ _ := Vundef.
 
 Equations divs (v1 v2: val): val :=
 divs (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   divs (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
-    if Int.eq wz1 n2 (Int.zero wz1) 
-    then Vundef 
+    if Int.eq wz1 n2 (Int.zero wz1)
+    then Vundef
     else Vint wz1 (Int.divs wz1 n1 n2);
-  divs (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  divs (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 divs _ _ := Vundef.
 
 Equations mods (v1 v2: val): val :=
 mods (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   mods (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
-    if Int.eq wz1 n2 (Int.zero wz1) 
-    then Vundef 
+    if Int.eq wz1 n2 (Int.zero wz1)
+    then Vundef
     else Vint wz1 (Int.mods wz1 n1 n2);
-  mods (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  mods (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 mods _ _ := Vundef.
 
 Equations divu (v1 v2: val): val :=
 divu (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   divu (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
-    if Int.eq wz1 n2 (Int.zero wz1) 
-    then Vundef 
+    if Int.eq wz1 n2 (Int.zero wz1)
+    then Vundef
     else Vint wz1 (Int.divu wz1 n1 n2);
-  divu (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  divu (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 divu _ _ := Vundef.
 
 Equations modu (v1 v2: val): val :=
 modu (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   modu (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
-    if Int.eq wz1 n2 (Int.zero wz1) 
-    then Vundef 
+    if Int.eq wz1 n2 (Int.zero wz1)
+    then Vundef
     else Vint wz1 (Int.modu wz1 n1 n2);
-  modu (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  modu (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 modu _ _ := Vundef.
 
@@ -339,7 +339,7 @@ Equations and (v1 v2: val): val :=
 and (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   and (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
     Vint wz1 (Int.and wz1 n1 n2);
-  and (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  and (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 and _ _ := Vundef.
 
@@ -347,7 +347,7 @@ Equations or (v1 v2: val): val :=
 or (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   or (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
     Vint wz1 (Int.or wz1 n1 n2);
-  or (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  or (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 or _ _ := Vundef.
 
@@ -355,7 +355,7 @@ Equations xor (v1 v2: val): val :=
 xor (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   xor (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
     Vint wz1 (Int.xor wz1 n1 n2);
-  xor (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  xor (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 xor _ _ := Vundef.
 
@@ -365,7 +365,7 @@ shl (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.shl wz1 n1 n2)
     else Vundef;
-  shl (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  shl (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 shl _ _ := Vundef.
 
@@ -375,7 +375,7 @@ shr (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.shr wz1 n1 n2)
     else Vundef;
-  shr (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  shr (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 shr _ _ := Vundef.
 
@@ -385,7 +385,7 @@ shr_carry (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.shr_carry wz1 n1 n2)
     else Vundef;
-  shr_carry (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  shr_carry (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 shr_carry _ _ := Vundef.
 
@@ -395,7 +395,7 @@ shrx (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.shrx wz1 n1 n2)
     else Vundef;
-  shrx (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  shrx (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 shrx _ _ := Vundef.
 
@@ -405,7 +405,7 @@ shru (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.shru wz1 n1 n2)
     else Vundef;
-  shru (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  shru (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 shru _ _ := Vundef.
 
@@ -416,12 +416,12 @@ Inductive D : Prop :=
   | C : forall (wz:nat), wz <> 0%nat -> R wz -> D
   .
 
-Definition f (wz:nat) (H:wz <> 0%nat) (r1 r2 r3: R wz) : D := 
+Definition f (wz:nat) (H:wz <> 0%nat) (r1 r2 r3: R wz) : D :=
 match wz with
 | O => C wz H r1
 | S O => C wz H r2
 | _ => C wz H r3
-end. 
+end.
 
 Equations test (d d': D) : D :=
 test (C wz wz_isnt_zero r) (C wz' wz_isnt_zero' r') with (eq_nat_dec wz wz') := {
@@ -455,7 +455,7 @@ Equations rolm (v: val) (wz:nat) (wz_not_zero:wz <> 0%nat) (amount mask: Int.int
 rolm (Vint wz1 wz_not_zero1 n1) wz0 wz_not_zero0 amount mask with (eq_nat_dec wz1 wz0) := {
   rolm (Vint wz1 wz_not_zero1 n1) ?(wz1) wz_not_zero0 amount0 mask (left eq_refl) :=
     Vint wz1 wz_not_zero1 (Int.rolm wz1 wz_not_zero1 n1 amount0 mask);
-  rolm (Vint wz1 wz_not_zero1 n1) wz0 wz_not_zero0 amount mask (right p) := Vundef  
+  rolm (Vint wz1 wz_not_zero1 n1) wz0 wz_not_zero0 amount mask (right p) := Vundef
   };
 rolm _ _ _ _ _ := Vundef.
 *)
@@ -472,7 +472,7 @@ ror (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
     if Int.ltu wz1 n2 (Int.iwordsize wz1)
     then Vint wz1 (Int.ror wz1 n1 n2)
     else Vundef;
-  ror (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  ror (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 ror _ _ := Vundef.
 
@@ -517,7 +517,7 @@ Equations cmp (c: comparison) (v1 v2: val): val :=
 cmp c (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   cmp c (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
     of_bool (Int.cmp wz1 c n1 n2);
-  cmp c (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  cmp c (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 cmp c (Vint wz1 n1) (Vptr b2 ofs2) with (eq_nat_dec wz1 31) := {
   cmp c (Vint ?(wz1) n1) (Vptr b2 ofs2) (left eq_refl) :=
@@ -535,12 +535,12 @@ cmp c (Vptr b1 ofs1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   };
 cmp c (Vint wz1 n1) (Vinttoptr n2) with (eq_nat_dec wz1 31) := {
   cmp c (Vint wz1 n1) (Vinttoptr n2) (left eq_refl) := Vundef;
-  cmp c (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef  
+  cmp c (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef
   };
 cmp c (Vinttoptr n1) (Vinttoptr n2) := of_bool (Int.cmp 31 c n1 n2);
 cmp c (Vinttoptr n1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   cmp c (Vinttoptr n1) (Vint ?(wz2) n2) (left eq_refl) := Vundef;
-  cmp c (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef  
+  cmp c (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef
   };
 (* FIXME: Vptr and Vinttoptr are not compariable. *)
 cmp _ _ _ := Vundef.
@@ -549,7 +549,7 @@ Equations cmpu (c: comparison) (v1 v2: val): val :=
 cmpu c (Vint wz1 n1) (Vint wz2 n2) with (eq_nat_dec wz1 wz2) := {
   cmpu c (Vint wz1 n1) (Vint ?(wz1) n2) (left eq_refl) :=
     of_bool (Int.cmpu wz1 c n1 n2);
-  cmpu c (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef  
+  cmpu c (Vint wz1 n1) (Vint wz2 n2) (right p) := Vundef
   };
 cmpu c (Vint wz1 n1) (Vptr b2 ofs2) with (eq_nat_dec wz1 31) := {
   cmpu c (Vint ?(wz1) n1) (Vptr b2 ofs2) (left eq_refl) :=
@@ -567,12 +567,12 @@ cmpu c (Vptr b1 ofs1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   };
 cmpu c (Vint wz1 n1) (Vinttoptr n2) with (eq_nat_dec wz1 31) := {
   cmpu c (Vint wz1 n1) (Vinttoptr n2) (left eq_refl) := Vundef;
-  cmpu c (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef  
+  cmpu c (Vint wz1 n1) (Vinttoptr n2) (right p) := Vundef
   };
 cmpu c (Vinttoptr n1) (Vinttoptr n2) := of_bool (Int.cmpu 31 c n1 n2);
 cmpu c (Vinttoptr n1) (Vint wz2 n2) with (eq_nat_dec wz2 31) := {
   cmpu c (Vinttoptr n1) (Vint ?(wz2) n2) (left eq_refl) := Vundef;
-  cmpu c (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef  
+  cmpu c (Vinttoptr n1) (Vint wz2 n2) (right p) := Vundef
   };
 (* FIXME: Vptr and Vinttoptr are not compariable. *)
 cmpu _ _ _ := Vundef.
@@ -611,9 +611,9 @@ Ltac simpl_misc :=
 
 Ltac simpl_add :=
   (match goal with
-  | [ |- context [add Vundef _] ] => 
+  | [ |- context [add Vundef _] ] =>
       rewrite add_equation_1
-  | [ |- context [add (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [add (Vint ?wz ?i) Vundef] ] =>
       rewrite add_equation_2
 
   | [ |- context [add (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -677,7 +677,7 @@ Ltac simpl_add :=
 
   | [ |- context [add (Vptr ?b ?i) (Vinttoptr ?i0)] ] =>
       rewrite add_equation_12
-  | [ |- context [add (Vinttoptr ?i) Vundef] ] => 
+  | [ |- context [add (Vinttoptr ?i) Vundef] ] =>
       rewrite add_equation_13
 
   | [ |- context [add (Vinttoptr ?i0) (Vint ?wz ?i)] ] =>
@@ -690,13 +690,13 @@ Ltac simpl_add :=
   unfold eq_rect;
   destruct (eq_nat_dec wz 31); subst
 
-  | [ |- context [add (Vinttoptr ?i) (Vfloat ?f)] ] => 
+  | [ |- context [add (Vinttoptr ?i) (Vfloat ?f)] ] =>
       rewrite add_equation_15
 
-  | [ |- context [add (Vinttoptr ?i) (Vptr ?b ?i0)] ] => 
+  | [ |- context [add (Vinttoptr ?i) (Vptr ?b ?i0)] ] =>
       rewrite add_equation_16
 
-  | [ |- context [add (Vinttoptr ?i) (Vinttoptr ?i0)] ] => 
+  | [ |- context [add (Vinttoptr ?i) (Vinttoptr ?i0)] ] =>
       rewrite add_equation_17
 
   | [ |- context [add_obligation_11] ] =>
@@ -711,16 +711,16 @@ Ltac ctx_contradiction :=
     let n := fresh "n" in
     destruct (eq_nat_dec wz wz) as [e | n]; try solve
       [inversion H | contradiction n; auto]
-  | [ H : eq_nat_dec ?wz0 ?wz = in_right, 
-      H' : Some ?wz = Some ?wz0 
+  | [ H : eq_nat_dec ?wz0 ?wz = in_right,
+      H' : Some ?wz = Some ?wz0
       |- _ ] =>
     let e := fresh "e" in
     let n := fresh "n" in
     inversion H'; subst;
     destruct (eq_nat_dec wz0 wz0) as [e | n]; try solve
       [inversion H | contradiction n; auto]
-  | [ H : eq_nat_dec ?wz0 ?wz = in_right, 
-      H' : Some ?wz0 = Some ?wz 
+  | [ H : eq_nat_dec ?wz0 ?wz = in_right,
+      H' : Some ?wz0 = Some ?wz
       |- _ ] =>
     let e := fresh "e" in
     let n := fresh "n" in
@@ -730,29 +730,29 @@ Ltac ctx_contradiction :=
   | [ H : None = Some _ |- _] => inversion H
   | [ H : Some _ = None |- _] => inversion H
   | [ H : ?wz ≠ ?wz |- _] => contradiction H; auto
-  | [ H : ?wz ≠ ?wz0, 
+  | [ H : ?wz ≠ ?wz0,
       H' : Some ?wz = Some ?wz0
-      |- _] => 
+      |- _] =>
     inversion H'; subst;
     contradiction H; auto
-  | [ H : ?wz ≠ ?wz0, 
+  | [ H : ?wz ≠ ?wz0,
       H' : Some ?wz0 = Some ?wz
-      |- _] => 
+      |- _] =>
     inversion H'; subst;
     contradiction H; auto
-  | [ H : ?wz ≠ ?wz0, 
+  | [ H : ?wz ≠ ?wz0,
       H' : get_wordsize (Vint ?wz _) = Some ?wz0
-      |- _] => 
+      |- _] =>
     simpl in H'; inversion H'; subst;
     contradiction H; auto
-  | [ H : ?wz ≠ ?wz0, 
+  | [ H : ?wz ≠ ?wz0,
       H' : get_wordsize (Vint ?wz0 _) = Some ?wz
-      |- _] => 
+      |- _] =>
     simpl in H'; inversion H'; subst;
     contradiction H; auto
-  | [ H : ?wz ≠ 31%nat, 
+  | [ H : ?wz ≠ 31%nat,
       H' : get_wordsize (Vptr _ _) = Some ?wz
-      |- _] => 
+      |- _] =>
     simpl in H'; inversion H'; subst;
     contradiction H; auto
   | [ H : ?wz ≠ ?wz |- _] => contradict H; auto
@@ -760,9 +760,9 @@ Ltac ctx_contradiction :=
 
 Ltac simpl_sub :=
   try (match goal with
-  | [ |- context [sub Vundef _] ] => 
+  | [ |- context [sub Vundef _] ] =>
       rewrite sub_equation_1
-  | [ |- context [sub (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [sub (Vint ?wz ?i) Vundef] ] =>
       rewrite sub_equation_2
 
   | [ |- context [sub (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -834,9 +834,9 @@ Ltac simpl_sub :=
 
 Ltac simpl_mul :=
   (match goal with
-  | [ |- context [mul Vundef _] ] => 
+  | [ |- context [mul Vundef _] ] =>
       rewrite mul_equation_1
-  | [ |- context [mul (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [mul (Vint ?wz ?i) Vundef] ] =>
       rewrite mul_equation_2
 
   | [ |- context [mul (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -863,9 +863,9 @@ Ltac simpl_mul :=
 
 Ltac simpl_divs :=
   (match goal with
-  | [ |- context [divs Vundef _] ] => 
+  | [ |- context [divs Vundef _] ] =>
       rewrite divs_equation_1
-  | [ |- context [divs (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [divs (Vint ?wz ?i) Vundef] ] =>
       rewrite divs_equation_2
 
   | [ |- context [divs (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -892,9 +892,9 @@ Ltac simpl_divs :=
 
 Ltac simpl_divu :=
   (match goal with
-  | [ |- context [divu Vundef _] ] => 
+  | [ |- context [divu Vundef _] ] =>
       rewrite divu_equation_1
-  | [ |- context [divu (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [divu (Vint ?wz ?i) Vundef] ] =>
       rewrite divu_equation_2
 
   | [ |- context [divu (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -921,9 +921,9 @@ Ltac simpl_divu :=
 
 Ltac simpl_mods :=
   (match goal with
-  | [ |- context [mods Vundef _] ] => 
+  | [ |- context [mods Vundef _] ] =>
       rewrite mods_equation_1
-  | [ |- context [mods (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [mods (Vint ?wz ?i) Vundef] ] =>
       rewrite mods_equation_2
 
   | [ |- context [mods (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -950,9 +950,9 @@ Ltac simpl_mods :=
 
 Ltac simpl_modu :=
   (match goal with
-  | [ |- context [modu Vundef _] ] => 
+  | [ |- context [modu Vundef _] ] =>
       rewrite modu_equation_1
-  | [ |- context [modu (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [modu (Vint ?wz ?i) Vundef] ] =>
       rewrite modu_equation_2
 
   | [ |- context [modu (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -979,9 +979,9 @@ Ltac simpl_modu :=
 
 Ltac simpl_shl :=
   (match goal with
-  | [ |- context [shl Vundef _] ] => 
+  | [ |- context [shl Vundef _] ] =>
       rewrite shl_equation_1
-  | [ |- context [shl (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [shl (Vint ?wz ?i) Vundef] ] =>
       rewrite shl_equation_2
 
   | [ |- context [shl (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1008,9 +1008,9 @@ Ltac simpl_shl :=
 
 Ltac simpl_shr :=
   (match goal with
-  | [ |- context [shr Vundef _] ] => 
+  | [ |- context [shr Vundef _] ] =>
       rewrite shr_equation_1
-  | [ |- context [shr (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [shr (Vint ?wz ?i) Vundef] ] =>
       rewrite shr_equation_2
 
   | [ |- context [shr (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1038,9 +1038,9 @@ Ltac simpl_shr :=
 
 Ltac simpl_shr_carry :=
   (match goal with
-  | [ |- context [shr_carry Vundef _] ] => 
+  | [ |- context [shr_carry Vundef _] ] =>
       rewrite shr_carry_equation_1
-  | [ |- context [shr_carry (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [shr_carry (Vint ?wz ?i) Vundef] ] =>
       rewrite shr_carry_equation_2
 
   | [ |- context [shr_carry (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1067,9 +1067,9 @@ Ltac simpl_shr_carry :=
 
 Ltac simpl_shrx :=
   (match goal with
-  | [ |- context [shrx Vundef _] ] => 
+  | [ |- context [shrx Vundef _] ] =>
       rewrite shrx_equation_1
-  | [ |- context [shrx (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [shrx (Vint ?wz ?i) Vundef] ] =>
       rewrite shrx_equation_2
 
   | [ |- context [shrx (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1096,9 +1096,9 @@ Ltac simpl_shrx :=
 
 Ltac simpl_shru :=
   (match goal with
-  | [ |- context [shru Vundef _] ] => 
+  | [ |- context [shru Vundef _] ] =>
       rewrite shru_equation_1
-  | [ |- context [shru (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [shru (Vint ?wz ?i) Vundef] ] =>
       rewrite shru_equation_2
 
   | [ |- context [shru (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1125,9 +1125,9 @@ Ltac simpl_shru :=
 
 Ltac simpl_ror :=
   (match goal with
-  | [ |- context [ror Vundef _] ] => 
+  | [ |- context [ror Vundef _] ] =>
       rewrite ror_equation_1
-  | [ |- context [ror (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [ror (Vint ?wz ?i) Vundef] ] =>
       rewrite ror_equation_2
 
   | [ |- context [ror (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1154,9 +1154,9 @@ Ltac simpl_ror :=
 
 Ltac simpl_and :=
   (match goal with
-  | [ |- context [and Vundef _] ] => 
+  | [ |- context [and Vundef _] ] =>
       rewrite and_equation_1
-  | [ |- context [and (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [and (Vint ?wz ?i) Vundef] ] =>
       rewrite and_equation_2
 
   | [ |- context [and (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1183,9 +1183,9 @@ Ltac simpl_and :=
 
 Ltac simpl_or :=
   (match goal with
-  | [ |- context [or Vundef _] ] => 
+  | [ |- context [or Vundef _] ] =>
       rewrite or_equation_1
-  | [ |- context [or (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [or (Vint ?wz ?i) Vundef] ] =>
       rewrite or_equation_2
 
   | [ |- context [or (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1212,9 +1212,9 @@ Ltac simpl_or :=
 
 Ltac simpl_xor :=
   (match goal with
-  | [ |- context [xor Vundef _] ] => 
+  | [ |- context [xor Vundef _] ] =>
       rewrite xor_equation_1
-  | [ |- context [xor (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [xor (Vint ?wz ?i) Vundef] ] =>
       rewrite xor_equation_2
 
   | [ |- context [xor (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1241,9 +1241,9 @@ Ltac simpl_xor :=
 
 Ltac simpl_cmp :=
   (match goal with
-  | [ |- context [cmp _ Vundef _] ] => 
+  | [ |- context [cmp _ Vundef _] ] =>
       rewrite cmp_equation_1
-  | [ |- context [cmp _ (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [cmp _ (Vint ?wz ?i) Vundef] ] =>
       rewrite cmp_equation_2
 
   | [ |- context [cmp _ (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1335,9 +1335,9 @@ Ltac simpl_cmp :=
 
 Ltac simpl_cmpu :=
   (match goal with
-  | [ |- context [cmpu _ Vundef _] ] => 
+  | [ |- context [cmpu _ Vundef _] ] =>
       rewrite cmpu_equation_1
-  | [ |- context [cmpu _ (Vint ?wz ?i) Vundef] ] => 
+  | [ |- context [cmpu _ (Vint ?wz ?i) Vundef] ] =>
       rewrite cmpu_equation_2
 
   | [ |- context [cmpu _ (Vint ?wz ?i) (Vint ?wz0 ?i0)] ] =>
@@ -1427,15 +1427,15 @@ Ltac simpl_cmpu :=
 
   end).
 
-Ltac simpl_equations := repeat 
-  (simpl || simpl_misc || 
-   simpl_add || simpl_sub || 
+Ltac simpl_equations := repeat
+  (simpl || simpl_misc ||
+   simpl_add || simpl_sub ||
    simpl_mul || simpl_divs || simpl_mods || simpl_divu || simpl_modu ||
-   simpl_shl || simpl_shr || simpl_shr_carry || simpl_shrx || simpl_shru || 
+   simpl_shl || simpl_shr || simpl_shr_carry || simpl_shrx || simpl_shru ||
    simpl_ror || simpl_and || simpl_or || simpl_xor ||
    simpl_cmp || simpl_cmpu ).
 
-Ltac simpl_auto_equations := 
+Ltac simpl_auto_equations :=
   simpl_equations; try solve [auto | ctx_contradiction].
 
 
@@ -1478,7 +1478,7 @@ Qed.
 Theorem cast16unsigned_and:
   zero_ext 16 x = and x (Vint 31 (Int.repr 31 65535)).
 Proof.
-  destruct x; simpl; auto. 
+  destruct x; simpl; auto.
   funelim (and (Vint wz i) (Vint 31 (Int.repr 31 65535))).
     decEq. change 65535 with (two_p 16 - 1). apply Int.zero_ext_and. vm_compute; auto.
     inversion x_is_int; subst. contradiction f; auto.
@@ -1499,7 +1499,7 @@ Proof.
   destruct v; simpl; try contradiction; auto.
   intros. generalize (Int.eq_spec wz i (zero wz)).
   case (Int.eq wz i (zero wz)); intro; simpl; auto.
-    contradiction. 
+    contradiction.
 Qed.
 
 Theorem bool_of_true_val:
@@ -1518,7 +1518,7 @@ Qed.
 Theorem bool_of_true_val_inv:
   forall v b, is_true v -> bool_of_val v b -> b = true.
 Proof.
-  intros. inversion H0; subst v b; simpl in H; auto. 
+  intros. inversion H0; subst v b; simpl in H; auto.
 Qed.
 
 Theorem bool_of_false_val:
@@ -1562,7 +1562,7 @@ Qed.
 Theorem notbool_idem3:
   forall x, notbool(notbool(notbool x)) = notbool x.
 Proof.
-  destruct x; simpl; auto. 
+  destruct x; simpl; auto.
   case (Int.eq wz i (zero wz)); reflexivity.
 Qed.
 
@@ -1578,7 +1578,7 @@ Proof.
     try solve [
       decEq; rewrite Int.add_assoc; auto |
       decEq; rewrite Int.add_assoc; rewrite (Int.add_commut 31 i i0); auto |
-      decEq; rewrite Int.add_assoc; rewrite (Int.add_commut 31 i i1); 
+      decEq; rewrite Int.add_assoc; rewrite (Int.add_commut 31 i i1);
         rewrite <- Int.add_assoc; auto
     ].
 Qed.
@@ -1592,8 +1592,8 @@ Qed.
 Theorem add_permut_4:
   forall x y z t, add (add x y) (add z t) = add (add x z) (add y t).
 Proof.
-  intros. rewrite add_permut. rewrite add_assoc. 
-  rewrite add_permut. symmetry. apply (add_assoc x z (add y t)). 
+  intros. rewrite add_permut. rewrite add_assoc.
+  rewrite add_permut. symmetry. apply (add_assoc x z (add y t)).
 Qed.
 
 Theorem neg_zero: forall wz, neg (Vzero wz) = (Vzero wz).
@@ -1607,22 +1607,22 @@ Proof.
   decEq. apply Int.neg_add_distr.
 Qed.
 
-Theorem sub_zero_r: forall x wz, 
+Theorem sub_zero_r: forall x wz,
   get_wordsize x = Some wz -> sub (Vzero wz) x = neg x.
 Proof.
   destruct x; intros wz0 H; simpl_auto_equations.
 Qed.
 
-Theorem sub_add_opp: forall x wz y, 
-  get_wordsize x = Some wz -> 
+Theorem sub_add_opp: forall x wz y,
+  get_wordsize x = Some wz ->
   sub x (Vint wz y) = add x (Vint wz (Int.neg wz y)).
 Proof.
   destruct x; intros wz0 y H; simpl_auto_equations;
     rewrite Int.sub_add_opp; auto.
 Qed.
 
-Theorem sub_opp_add: forall x wz y, 
-  get_wordsize x = Some wz -> 
+Theorem sub_opp_add: forall x wz y,
+  get_wordsize x = Some wz ->
   sub x (Vint wz (Int.neg wz y)) = add x (Vint wz y).
 Proof.
   intros x wz y H.
@@ -1631,8 +1631,8 @@ Proof.
 Qed.
 
 Theorem sub_add_l:
-  forall v1 v2 wz i, 
-  get_wordsize v1 = Some wz -> 
+  forall v1 v2 wz i,
+  get_wordsize v1 = Some wz ->
   sub (add v1 (Vint wz i)) v2 = add (sub v1 v2) (Vint wz i).
 Proof.
   destruct v1; destruct v2; intros wz5 i5 H; simpl_auto_equations;
@@ -1644,29 +1644,29 @@ Qed.
 
 Theorem sub_add_r:
   forall v1 v2 wz i,
-  get_wordsize v1 = Some wz -> 
+  get_wordsize v1 = Some wz ->
   sub v1 (add v2 (Vint wz i)) = add (sub v1 v2) (Vint wz (Int.neg wz i)).
 Proof.
   destruct v1; destruct v2; intros wz5 i5 H; simpl_auto_equations.
   rewrite Int.sub_add_r. auto.
-  repeat rewrite Int.sub_add_opp. decEq. 
+  repeat rewrite Int.sub_add_opp. decEq.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
 
-  decEq. repeat rewrite Int.sub_add_opp. 
+  decEq. repeat rewrite Int.sub_add_opp.
   rewrite Int.add_assoc. decEq. apply Int.neg_add_distr.
 
   case (zeq b b0); intro; simpl_auto_equations.
-  decEq. 
+  decEq.
   repeat rewrite Int.sub_add_opp.
   rewrite Int.add_assoc. decEq. decEq. decEq.
   apply Int.neg_add_distr.
 
   rewrite Int.sub_add_r. auto.
-  repeat rewrite Int.sub_add_opp. decEq. 
+  repeat rewrite Int.sub_add_opp. decEq.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
 
   rewrite Int.sub_add_r. auto.
-  repeat rewrite Int.sub_add_opp. decEq. 
+  repeat rewrite Int.sub_add_opp. decEq.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
 Qed.
 
@@ -1704,7 +1704,7 @@ Theorem mul_pow2:
 Proof.
   intros x wz n logn H0 H; destruct x; simpl_auto_equations.
   rewrite (Int.is_power2_range wz _ _ H). decEq. apply Int.mul_pow2. auto.
-Qed.  
+Qed.
 
 Theorem mods_divs:
   forall x y, mods x y = sub x (mul (divs x y) y).
@@ -1730,7 +1730,7 @@ Theorem divs_pow2:
   divs x (Vint wz n) = shrx x (Vint wz logn).
 Proof.
   intros x wz n logn H0 H; destruct x; simpl_auto_equations.
-  rewrite (Int.is_power2_range wz _ _ H). 
+  rewrite (Int.is_power2_range wz _ _ H).
   generalize (Int.eq_spec wz n (Int.zero wz));
   case (Int.eq wz n (Int.zero wz)); intro.
   subst n. rewrite Int.is_power2_zero in H. discriminate.
@@ -1744,7 +1744,7 @@ Theorem divu_pow2:
   divu x (Vint wz n) = shru x (Vint wz logn).
 Proof.
   intros x wz n logn H0 H; destruct x; simpl_auto_equations.
-  rewrite (Int.is_power2_range wz _ _ H). 
+  rewrite (Int.is_power2_range wz _ _ H).
   generalize (Int.eq_spec wz n (Int.zero wz));
   case (Int.eq wz n (Int.zero wz)); intro.
   subst n. rewrite Int.is_power2_zero in H. discriminate.
@@ -1797,7 +1797,7 @@ Proof.
   decEq. apply Int.xor_assoc.
 Qed.
 
-Theorem shl_mul: forall wz x y, 
+Theorem shl_mul: forall wz x y,
   get_wordsize x = Some wz ->
   Val.mul x (Val.shl (Vone wz) y) = Val.shl x y.
 Proof.
@@ -1914,7 +1914,7 @@ Lemma swap_cmp_mismatch:
 Proof.
   destruct c; reflexivity.
 Qed.
-  
+
 Theorem swap_cmp:
   forall c x y,
   cmp (swap_comparison c) x y = cmp c y x.
@@ -1947,7 +1947,7 @@ Theorem negate_cmpf_eq:
   forall v1 v2, notbool (cmpf Cne v1 v2) = cmpf Ceq v1 v2.
 Proof.
   destruct v1; destruct v2; simpl_auto_equations.
-  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. 
+  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1.
   apply notbool_idem2.
 Qed.
 
@@ -1955,7 +1955,7 @@ Theorem negate_cmpf_ne:
   forall v1 v2, notbool (cmpf Ceq v1 v2) = cmpf Cne v1 v2.
 Proof.
   destruct v1; destruct v2; simpl_auto_equations.
-  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. auto. 
+  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. auto.
 Qed.
 
 Lemma or_of_bool:
@@ -2003,14 +2003,14 @@ Lemma cmp_is_bool:
 Proof.
   destruct v1; destruct v2; simpl_auto_equations; try apply undef_is_bool;
     try solve [apply of_bool_is_bool].
-  case (Int.eq 31 i (Int.zero 31)). 
-    apply cmp_mismatch_is_bool. 
+  case (Int.eq 31 i (Int.zero 31)).
+    apply cmp_mismatch_is_bool.
     apply undef_is_bool.
-  case (Int.eq 31 i0 (Int.zero 31)). 
-    apply cmp_mismatch_is_bool. 
+  case (Int.eq 31 i0 (Int.zero 31)).
+    apply cmp_mismatch_is_bool.
     apply undef_is_bool.
-  case (zeq b b0); intro. 
-    apply of_bool_is_bool. 
+  case (zeq b b0); intro.
+    apply of_bool_is_bool.
     apply cmp_mismatch_is_bool.
 Qed.
 
@@ -2019,14 +2019,14 @@ Lemma cmpu_is_bool:
 Proof.
   destruct v1; destruct v2; simpl_auto_equations; try apply undef_is_bool;
     try solve [apply of_bool_is_bool].
-  case (Int.eq 31 i (Int.zero 31)). 
-    apply cmp_mismatch_is_bool. 
+  case (Int.eq 31 i (Int.zero 31)).
+    apply cmp_mismatch_is_bool.
     apply undef_is_bool.
-  case (Int.eq 31 i0 (Int.zero 31)). 
-    apply cmp_mismatch_is_bool. 
+  case (Int.eq 31 i0 (Int.zero 31)).
+    apply cmp_mismatch_is_bool.
     apply undef_is_bool.
-  case (zeq b b0); intro. 
-    apply of_bool_is_bool. 
+  case (zeq b b0); intro.
+    apply of_bool_is_bool.
     apply cmp_mismatch_is_bool.
 Qed.
 
@@ -2041,13 +2041,13 @@ Lemma notbool_is_bool:
   forall v, is_bool (notbool v).
 Proof.
   destruct v; simpl_auto_equations.
-  apply undef_is_bool. apply of_bool_is_bool. 
+  apply undef_is_bool. apply of_bool_is_bool.
   apply undef_is_bool. unfold is_bool; tauto.
   unfold is_bool. auto.
 Qed.
 
 Lemma notbool_xor:
-  forall v wz, 
+  forall v wz,
   get_wordsize v = Some wz ->
   is_bool v -> v = xor (notbool v) (Vone wz).
 Proof.
@@ -2088,12 +2088,12 @@ Proof.
 Qed.
 
 Lemma rolm_lt_zero:
-  forall v, 
+  forall v,
   get_wordsize v = Some 31%nat ->
-  eq_Vbool 31 (rolm v (Int.one 31) (Int.one 31)) 
+  eq_Vbool 31 (rolm v (Int.one 31) (Int.one 31))
               (cmp Clt v (Vint 31 (Int.zero 31))).
 Proof.
-  intros. destruct v; simpl_auto_equations; 
+  intros. destruct v; simpl_auto_equations;
     try solve [apply Vundef__eq_Vbool__Vundef].
 
   assert (Vint 31 (Int.shru 31 i (Int.repr 31 (Z_of_nat 32 - 1))) =
@@ -2101,13 +2101,13 @@ Proof.
     decEq. symmetry. rewrite Int.shru_rolm. auto. auto.
   rewrite <- EQ.
   rewrite Int.shru_lt_zero. destruct (Int.lt 31 i (Int.zero 31)).
-    apply Vone__eq_Vbool__Vtrue. apply Vzero__eq_Vbool__Vfalse. 
+    apply Vone__eq_Vbool__Vtrue. apply Vzero__eq_Vbool__Vfalse.
 Qed.
 
 Lemma rolm_ge_zero:
   forall v,
   get_wordsize v = Some 31%nat ->
-  eq_Vbool 31 (xor (rolm v (Int.one 31) (Int.one 31)) (Vint 31 (Int.one 31))) 
+  eq_Vbool 31 (xor (rolm v (Int.one 31) (Int.one 31)) (Vint 31 (Int.one 31)))
               (cmp Cge v (Vint 31 (Int.zero 31))).
 Proof.
   intros. destruct v; simpl_auto_equations; try solve [apply Vundef__eq_Vbool__Vundef].
@@ -2117,11 +2117,11 @@ Proof.
     symmetry. rewrite Int.shru_rolm. auto. auto.
   rewrite <- EQ.
   rewrite Int.shru_lt_zero. destruct (Int.lt 31 i (Int.zero 31)); simpl.
-    rewrite Int.xor_one_one. apply Vzero__eq_Vbool__Vfalse. 
-    rewrite Int.xor_zero_one. apply Vone__eq_Vbool__Vtrue. 
+    rewrite Int.xor_one_one. apply Vzero__eq_Vbool__Vfalse.
+    rewrite Int.xor_zero_one. apply Vone__eq_Vbool__Vtrue.
 Qed.
 
-(** The ``is less defined'' relation between values. 
+(** The ``is less defined'' relation between values.
     A value is less defined than itself, and [Vundef] is
     less defined than any value. *)
 
@@ -2144,7 +2144,7 @@ Lemma lessdef_list_inv:
 Proof.
   induction 1; simpl.
   tauto.
-  inv H. destruct IHlessdef_list. 
+  inv H. destruct IHlessdef_list.
   left; congruence. tauto. tauto.
 Qed.
 
@@ -2207,15 +2207,15 @@ Inductive val_inject (mi: meminj): val -> val -> Prop :=
   | val_inject_undef: forall v,
       val_inject mi Vundef v.
 
-Hint Resolve val_inject_int val_inject_float val_inject_ptr val_inject_inttoptr 
+Hint Resolve val_inject_int val_inject_float val_inject_ptr val_inject_inttoptr
              val_inject_undef.
 
-Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:= 
+Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:=
   | val_nil_inject :
       val_list_inject mi nil nil
-  | val_cons_inject : forall v v' vl vl' , 
+  | val_cons_inject : forall v v' vl vl' ,
       val_inject mi v v' -> val_list_inject mi vl vl'->
-      val_list_inject mi (v :: vl) (v' :: vl').  
+      val_list_inject mi (v :: vl) (v' :: vl').
 
 Hint Resolve val_nil_inject val_cons_inject.
 
@@ -2239,10 +2239,10 @@ Lemma inject_incr_refl :
 Proof. unfold inject_incr. auto. Qed.
 
 Lemma inject_incr_trans :
-  forall f1 f2 f3, 
+  forall f1 f2 f3,
   inject_incr f1 f2 -> inject_incr f2 f3 -> inject_incr f1 f3 .
 Proof .
-  unfold inject_incr; intros. eauto. 
+  unfold inject_incr; intros. eauto.
 Qed.
 
 Lemma val_inject_incr:
@@ -2272,7 +2272,7 @@ Lemma add_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_add; try congruence.
-    unfold Val.add_obligation_1. 
+    unfold Val.add_obligation_1.
     unfold DepElim.solution_left.
     unfold eq_rect_r. simpl. congruence.
 Qed.
@@ -2282,7 +2282,7 @@ Lemma sub_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_sub; try congruence.
-    unfold Val.sub_obligation_1. 
+    unfold Val.sub_obligation_1.
     unfold DepElim.solution_left.
     unfold eq_rect_r. simpl. congruence.
 Qed.
@@ -2292,7 +2292,7 @@ Lemma mul_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_mul; try congruence.
-    unfold Val.mul_obligation_1. 
+    unfold Val.mul_obligation_1.
     unfold DepElim.solution_left.
     unfold eq_rect_r. simpl. congruence.
 Qed.
@@ -2302,9 +2302,9 @@ Lemma divu_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_divu; try congruence.
-    unfold Val.divu_obligation_1. 
+    unfold Val.divu_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.eq wz0 i1 (Int.zero wz0)); congruence.
 Qed.
 
@@ -2313,9 +2313,9 @@ Lemma divs_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_divs; try congruence.
-    unfold Val.divs_obligation_1. 
+    unfold Val.divs_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.eq wz0 i1 (Int.zero wz0)); congruence.
 Qed.
 
@@ -2324,9 +2324,9 @@ Lemma modu_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_modu; try congruence.
-    unfold Val.modu_obligation_1. 
+    unfold Val.modu_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.eq wz0 i1 (Int.zero wz0)); congruence.
 Qed.
 
@@ -2335,9 +2335,9 @@ Lemma mods_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_mods; try congruence.
-    unfold Val.mods_obligation_1. 
+    unfold Val.mods_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.eq wz0 i1 (Int.zero wz0)); congruence.
 Qed.
 
@@ -2346,9 +2346,9 @@ Lemma shl_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_shl; try congruence.
-    unfold Val.shl_obligation_1. 
+    unfold Val.shl_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.ltu wz0 i1 (Int.iwordsize wz0)); congruence.
 Qed.
 
@@ -2357,9 +2357,9 @@ Lemma shrx_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_shrx; try congruence.
-    unfold Val.shrx_obligation_1. 
+    unfold Val.shrx_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.ltu wz0 i1 (Int.iwordsize wz0)); congruence.
 Qed.
 
@@ -2368,9 +2368,9 @@ Lemma shr_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_shr; try congruence.
-    unfold Val.shr_obligation_1. 
+    unfold Val.shr_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     destruct (Int.ltu wz0 i1 (Int.iwordsize wz0)); congruence.
 Qed.
 
@@ -2379,9 +2379,9 @@ Lemma and_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_and; try congruence.
-    unfold Val.and_obligation_1. 
+    unfold Val.and_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     congruence.
 Qed.
 
@@ -2390,9 +2390,9 @@ Lemma or_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_or; try congruence.
-    unfold Val.or_obligation_1. 
+    unfold Val.or_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     congruence.
 Qed.
 
@@ -2401,9 +2401,9 @@ Lemma xor_isnt_ptr : forall wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_xor; try congruence.
-    unfold Val.xor_obligation_1. 
+    unfold Val.xor_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     congruence.
 Qed.
 
@@ -2412,9 +2412,9 @@ Lemma cmp_isnt_ptr : forall c wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_cmp; try congruence.
-    unfold Val.cmp_obligation_1. 
+    unfold Val.cmp_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     unfold Val.of_bool.
     destruct (Int.cmp wz0 c i0 i1).
       unfold Vtrue. unfold Vone. congruence.
@@ -2426,9 +2426,9 @@ Lemma cmpu_isnt_ptr : forall c wz i0 wz0 i1 b ofs,
 Proof.
   intros.
   Val.simpl_cmpu; try congruence.
-    unfold Val.cmpu_obligation_1. 
+    unfold Val.cmpu_obligation_1.
     unfold DepElim.solution_left.
-    unfold eq_rect_r. simpl. 
+    unfold eq_rect_r. simpl.
     unfold Val.of_bool.
     destruct (Int.cmpu wz0 c i0 i1).
       unfold Vtrue. unfold Vone. congruence.
@@ -2438,7 +2438,7 @@ Qed.
 Lemma val_of_bool_isnt_ptr : forall v b ofs,
   Val.of_bool v <> Vptr b ofs.
 Proof.
-  intros. unfold Val.of_bool. destruct v. 
+  intros. unfold Val.of_bool. destruct v.
     unfold Vtrue. unfold Vone. congruence.
     unfold Vfalse. unfold Vzero. congruence.
 Qed.
@@ -2462,13 +2462,5 @@ Lemma val_list_inject_app : forall mi vs1 vs1' vs2 vs2',
 Proof.
   induction vs1; destruct vs2; simpl; intros; inv H; auto.
 Qed.
-
-(*****************************)
-(*
-*** Local Variables: ***
-*** coq-prog-name: "coqtop" ***
-*** coq-prog-args: ("-emacs-U" "-I" "~/SVN/sol/vol/src/ssa/monads" "-I" "~/SVN/sol/vol/src/ssa/ott" "-I" "~/SVN/sol/vol/src/ssa/compcert" "-I" "~/SVN/sol/theory/metatheory_8.3") ***
-*** End: ***
- *)
 
 
