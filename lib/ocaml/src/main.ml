@@ -25,8 +25,9 @@ let options = Arg.align [
 
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
-let pass_through        f v =           f v        ; v
-let pass_through_test b f v = if b then f v else (); v
+let pass_through        f = Exception.map (fun v ->           f v        ; v)
+let pass_through_test b f = Exception.map (fun v -> if b then f v else (); v)
+let pass_message      m   = Exception.map (fun v -> print_endline m      ; v)
 
 let catch m =
   match Exception.catch m with
@@ -45,18 +46,20 @@ let () =
     >> Input.file
     >> Lexer.make
     >> Parser.parse
-    >> Exception.map (pass_through_test !hack pp_hack)
-    >> Exception.rbind (fun f -> print_endline "-------------------------------\
-       -------------------------------------------------"; Exception.Result f)
+    >> pass_through_test !hack pp_hack
+    >> pass_message "Parsing completed!"
     >> Exception.rbind (Cabs_to_ail.desugar "main")
-    >> Exception.map (pass_through pp_file)
+    >> pass_message "Cabs -> Ail completed!"
+    >> pass_through pp_file
     >> Exception.rbind (
          Exception.rbind_exception (Exception.fail -| Type_error.to_string)
          -| Typing.annotate
        )
+    >> pass_message "Type checking completed!"
     >> Exception.map (Reduction.reduce !bound)
-    >> Exception.map (pass_through_test !dot    pp_dot)
-    >> Exception.map (pass_through_test !output pp_out)
+    >> pass_message "Opsem completed!"
+    >> pass_through_test !dot    pp_dot
+    >> pass_through_test !output pp_out
     >> Exception.map Meaning.Solve.simplify_all
     >> Exception.map (Program.iter_list pp_res) in
 (*
