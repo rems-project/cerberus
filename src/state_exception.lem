@@ -51,14 +51,20 @@ let sequence ms =
       return (x::xs)
     ) ms (return [])
 
-let t_list t xs = sequence (t xs)
+let listM t xs = sequence (t xs)
 
-let map_list f = t_list (List.map f)
+let mapM f = listM (List.map f)
 
-let rec foldr_list f l a =
+let rec foldlM f l a =
   match l with
     | [] -> return a
-    | x::xs -> f x a >>= fun a' -> foldr_list f xs a'
+    | x::xs -> f x a >>= foldlM f xs
   end
 
-let iter f l = foldr_list (fun a () -> f a) l ()
+let rec foldrM f l a =
+  match l with
+    | [] -> return a
+    | x::xs -> foldrM f xs a >>= f x
+  end
+
+let iter f l = foldlM (fun a () -> f a) l ()
