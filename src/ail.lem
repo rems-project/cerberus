@@ -1,0 +1,301 @@
+open Global
+
+type id = Symbol.t
+
+(* [storage duration] (6.2.4#1)
+   
+   "An object has a storage duration that determines its lifetime. There are
+    four storage durations: static, thread, automatic, and allocated. Allocated
+    storage is described in 7.22.3."
+*)
+(* (* TODO *)
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+*)
+type storage_class =
+  | AUTO
+  | STATIC
+
+
+type int_base_type =
+  | ICHAR
+  | SHORT
+  | INT
+  | LONG
+  | LONG_LONG
+
+type int_type =
+  | BOOL
+  | SIGNED of int_base_type
+  | UNSIGNED of int_base_type
+
+type basic_type =
+  | CHAR
+  | INTEGER of int_type
+
+type qualifiers = Cabs.qualifiers
+
+type arithmetic_operator = Cabs.arithmetic_operator
+type binary_operator = Cabs.binary_operator
+
+type unary_operator =
+  | MINUS
+  | PLUS
+  | BNOT
+  | ADDRESS
+  | INDIRECTION
+  | POSTFIX_INCR
+  | POSTFIX_DECR
+
+type integer_constant = Cabs.integer_constant
+type constant = Cabs.constant
+
+type ctype =
+  | VOID of qualifiers
+  | BASIC of qualifiers * basic_type
+  (* TODO Need to convert integer constant to an actual value! Otherwise, we
+     cannot compare types! *)
+  | ARRAY of ctype * num
+  | POINTER of qualifiers * ctype
+  | FUNCTION of ctype * ctype list
+(*  | STRUCT of id * (storage_class * ctype * 'e member_declarator) list
+
+and 'e member_declarator =
+  | MEMBER_DECL of id
+  | BITFIELD of id option * 'e
+*)
+
+and type_class =
+  | T_EXP of ctype
+  | T_LVALUE of ctype
+
+type declaration = ctype * storage_class option
+
+type 'a expression =
+  | UNARY of unary_operator * 'a expression_l
+  | BINARY of binary_operator * 'a expression_l * 'a expression_l 
+  | ASSIGN of arithmetic_operator option * 'a expression_l * 'a expression_l
+  | QUESTION of 'a expression_l * 'a expression_l * 'a expression_l
+  | CAST of ctype * 'a expression_l
+  | CALL of 'a expression_l * 'a expression_l list
+  | CONSTANT of Cabs.constant
+  | VARIABLE of id
+  | SIZEOF of ctype
+  | ALIGNOF of ctype
+
+and 'a expression_l = 'a * 'a expression
+
+type 'a definition = id * 'a expression_l
+
+(* Statements *)
+type 'a statement =
+  | SKIP
+  | EXPRESSION of 'a expression_l
+  | BLOCK of id list * 'a statement_l list
+  | IF of 'a expression_l * 'a statement_l * 'a statement_l
+  | WHILE of 'a expression_l * 'a statement_l
+  | DO of 'a expression_l * 'a statement_l
+  | BREAK
+  | CONTINUE
+  | RETURN_VOID
+  | RETURN_EXPRESSION of 'a expression_l
+  | SWITCH of 'a expression_l * 'a statement_l
+  | CASE of Cabs.integer_constant * 'a statement_l
+  | DEFAULT of 'a statement_l
+  | LABEL of id * 'a statement_l
+  | GOTO of id
+  | DECLARATION of 'a definition list
+
+and 'a statement_l = 'a * 'a statement
+
+type 'a file = <|
+  main : id;
+  id_map : (id, declaration) map;
+  globals : (id * 'a expression_l) list;
+  fn_map : (id, (id list * 'a statement_l)) map
+|>
+
+type 'a env = <|
+  symbol : id;
+  symbol_map : (id, string) map;
+  file : 'a file
+|>
+
+module Print = struct
+  module P = Pprint
+
+  open P.Operators
+
+  let optional pp = function
+    | Some x -> pp x
+    | None   -> P.empty
+    end
+
+  let pp_unop = function
+    | MINUS        -> P.minus
+    | PLUS         -> P.plus
+    | ADDRESS      -> P.ampersand
+    | INDIRECTION  -> P.star
+    | BNOT         -> P.tilde
+    | POSTFIX_INCR -> P.plus ^^ P.plus
+    | POSTFIX_DECR -> P.minus ^^ P.minus
+  end
+
+  let pp_arithop = function
+    | Cabs.ADD  -> P.plus
+    | Cabs.SUB  -> P.minus
+    | Cabs.MUL  -> P.star
+    | Cabs.DIV  -> P.slash
+    | Cabs.MOD  -> P.percent
+    | Cabs.BAND -> P.ampersand
+    | Cabs.BOR  -> P.bar
+    | Cabs.XOR  -> P.caret
+    | Cabs.SHL  -> P.langle ^^ P.langle
+    | Cabs.SHR  -> P.rangle ^^ P.rangle
+  end
+
+  let pp_binop = function
+    | Cabs.ARITHMETIC o -> pp_arithop o
+    | Cabs.EQ -> P.equals ^^ P.equals
+    | Cabs.NE -> P.bang   ^^ P.equals
+    | Cabs.LT -> P.langle
+    | Cabs.GT -> P.rangle
+    | Cabs.LE -> P.langle ^^ P.equals
+    | Cabs.GE -> P.rangle ^^ P.equals
+    | Cabs.AND   -> P.ampersand ^^ P.ampersand
+    | Cabs.OR    -> P.bar ^^ P.bar
+    | Cabs.COMMA -> P.comma
+  end
+
+  let showParens = P.parens
+
+  let pp_qualifier = function
+    | Cabs.CONST -> !^ "const"
+  end
+
+  let pp_int_base_type = function
+    | ICHAR -> !^ "char"
+    | SHORT -> !^ "short"
+    | INT -> !^ "int"
+    | LONG -> !^ "long"
+    | LONG_LONG -> !^ "long" ^^^ !^ "long"
+  end
+
+  let pp_int_type = function
+    | BOOL        -> !^ "_Bool"
+    | UNSIGNED ib -> !^ "unsigned" ^^^ pp_int_base_type ib
+    | SIGNED   ib -> !^ "signed"   ^^^ pp_int_base_type ib
+  end
+
+  let pp_basic_type = function
+    | CHAR -> !^ "char"
+    | INTEGER i -> pp_int_type i
+  end
+
+  let pp_suffix s =
+    let to_string = function
+      | Cabs.SUFFIX_UNSIGNED           -> "U"
+      | Cabs.SUFFIX_UNSIGNED_LONG      -> "UL"
+      | Cabs.SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
+      | Cabs.SUFFIX_LONG               -> "L"
+      | Cabs.SUFFIX_LONG_LONG          -> "LL"
+    end in
+    optional (P.text -| to_string) s
+
+  let pp_int_const (i, s) = !^ (string_of_num i) ^^ pp_suffix s
+
+  let rec pp_type t =
+    let f = pp_type in
+    let pp_qs qs =
+      let ins_space ds d = ds ^^ d ^^ P.space in
+      P.fold ins_space (List.map pp_qualifier [q | forall (q IN qs) | true]) in
+    match t with
+      | VOID qs   -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
+      | ARRAY t s -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
+      | POINTER qs t -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
+      | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
+    end
+
+  let pp_type_class = function
+    | T_EXP    t -> P.brackets (pp_type t) ^^ !^ "exp"
+    | T_LVALUE t -> P.brackets (pp_type t) ^^ !^ "lvalue"
+  end
+
+  let pp_return_type = function
+    | FUNCTION t _ -> pp_type t
+    | _            -> P.empty
+  end
+
+  let pp_id id = !^ (Symbol.to_string_pretty id)
+
+  let rec pp_exp (d, exp) =
+    let f = P.group -| P.parens -| pp_exp in
+    match exp with
+      | VARIABLE id -> pp_id id
+      | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
+      | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
+      | UNARY o                   e -> pp_unop o ^^ f e
+      | BINARY (Cabs.COMMA as o) e1 e2 ->
+          f e1 ^^ pp_binop o ^^ P.space ^^ f e2
+      | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
+      | CALL e es -> f e ^^ P.parens (P.comma_list f es)
+      | ASSIGN o_opt e1 e2 ->
+          f e1 ^^^ (optional pp_arithop o_opt ^^ P.equals) ^^^ f e2
+      | QUESTION e1 e2 e3 ->
+          P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
+      | CAST t e -> P.parens (pp_type t) ^^^ f e
+      | CONSTANT (Cabs.CONST_INT ic) -> pp_int_const ic
+      | SIZEOF  t -> !^ "sizeof"  ^^ P.parens (pp_type t)
+      | ALIGNOF t -> !^ "alignof" ^^ P.parens (pp_type t)
+    end
+
+  let pp_decl file id =
+    let (t, st) = Pmap.find id file.id_map in
+    pp_type t ^^^ pp_id id
+
+  let rec pp_stmt file (d, stmt) =
+    let f_e = pp_exp in
+    let f_s = pp_stmt file in
+    match stmt with
+      | SKIP -> P.semi
+      | EXPRESSION e -> f_e e ^^ P.semi
+      | BLOCK _ ss ->
+          let block = P.sepmap P.break1 f_s ss in
+          P.lbrace ^^ P.nest 2 (P.break1 ^^ block) ^/^ P.rbrace
+      | IF e s1 s2 ->
+          !^ "if" ^^^ P.parens (f_e e) ^^^ f_s s1 ^^^ !^ "else" ^^^ f_s s2
+      | WHILE e s ->
+          !^ "while" ^^^ P.parens (f_e e) ^/^ f_s s
+      | DO e s ->
+          !^ "do" ^/^ f_s s ^/^ !^ "while" ^^^ P.parens (f_e e)
+      | BREAK -> !^ "break" ^^ P.semi
+      | CONTINUE -> !^ "continue" ^^ P.semi
+      | RETURN_VOID -> !^ "return" ^^ P.semi
+      | RETURN_EXPRESSION e -> !^ "return" ^^^ f_e e ^^ P.semi
+      | SWITCH e s -> !^ "switch" ^^^ P.parens (f_e e) ^/^ f_s s
+      | CASE ic s -> pp_int_const ic ^^ P.colon ^^^ f_s s
+      | DEFAULT s -> !^ "default" ^^ P.colon ^^^ f_s s
+      | GOTO id -> !^ "goto" ^^^ pp_id id ^^ P.semi
+      | LABEL id s -> pp_id id ^^ P.colon ^^^ f_s s
+      | DECLARATION ds ->
+          let f_d (id, e) =
+            let (t, st) = Pmap.find id file.id_map in
+            pp_type t ^^^ pp_id id ^^^ P.equals ^^^ f_e e in
+          P.comma_list f_d ds ^^ P.semi
+    end
+
+  let pp_function file (id, (args, s)) =
+    let (t, st) = Pmap.find id file.id_map in
+    pp_return_type t
+    ^^^ pp_id id
+    ^^^ P.parens (P.comma_list (pp_decl file) args)
+    ^^^ (pp_stmt file s)
+
+  let pp_file file =
+    let pp d f = d ^^ pp_function file f ^^ P.break1 in
+    List.fold_left pp P.empty (Pmap.bindings file.fn_map)
+end

@@ -1,0 +1,26 @@
+open Global
+
+type ('a, 's) t = 's -> ('a * 's)
+
+let return a = fun s -> (a, s)
+let bind m f =
+  fun s ->
+    let (a, s') = m s in
+    f a s'
+
+let join m = bind m (fun x -> x)
+let map f m = bind m (return -| f)
+
+let app mf m = bind mf (fun f -> map f m)
+
+let update f = fun s -> ((), f s)
+let modify f = fun s -> f s
+let read   f = fun s -> (f s, s)
+
+let run t s = fst (t s)
+
+let run_impl t s = t s
+
+module Operators = struct
+  let (>>=) = bind
+end

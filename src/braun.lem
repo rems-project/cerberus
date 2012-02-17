@@ -1,0 +1,74 @@
+type 'a t = Node of 'a * 'a t * 'a t | Nil
+
+let rec cons x t = 
+  match t with
+    | Nil        -> Node x Nil Nil
+    | Node y l r -> Node x (cons y r) l
+  end
+
+let rec diff t n =
+  match (t, n) with
+    | (Nil           , 0) -> 0
+    | (Node _ Nil Nil, 0) -> 1
+    | (Node _ l   r  , _) ->
+        if n % 2 = 0
+          then diff r (n/2 - 1)
+          else diff l (n/2)
+  end
+
+let rec size t =
+  match t with
+    | Nil        -> 0
+    | Node _ l r ->
+        let m = size r in
+        1 + 2 * m + diff l m
+  end
+
+let rec copy2 x n =
+  if n = 0 then 
+    (Node x Nil Nil, Nil)
+  else if n % 2 = 0 then
+    let m = n/2 - 1 in
+    let (l, r) = copy2 x m in
+    (Node x l l, Node x l r)
+  else
+    let m = n/2 in
+    let (l, r) = copy2 x m in
+    (Node x l r, Node x r r)
+
+let copy x n = snd (copy2 x n)
+
+let rec get (Node x l r) i =
+  if i = 0 then
+    x
+  else if i % 2 = 0
+    then get r (i/2 - 1)
+    else get l (i/2)
+
+let rec rows k ls =
+  match ls with
+    | [] -> []
+    | _ -> (k, List.take k ls)::rows (2*k) (List.drop k ls)
+  end
+
+let build (k, xs) ts =
+  let (tls, trs) = List.split_at k (ts @ List_.make (2*k) Nil) in
+  List_.zip_with3 (Node) xs tls trs
+
+let from_list ls = List.hd (List.fold_right build (rows 1 ls) [Nil])
+
+let rec update (Node x l r) i f =
+  if i = 0 then
+    Node (f x) l r
+  else if i % 2 = 0
+    then Node x l                (update r (i/2 - 1) f)
+    else Node x (update l (i/2) f) r
+
+let set t i v = update t i (fun _ -> v)
+
+let init n f = from_list (List_.init n f)
+let make n v = copy v n
+
+(* TODO grow 
+let grow t n f =
+*)

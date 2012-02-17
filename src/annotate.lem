@@ -1,0 +1,26 @@
+type ('id, 'e) t = Location.t * Ail.type_class
+
+let a_type l t = (l, t)
+
+let loc_of  ((l, _), _) = l
+let type_of ((_, t), _) = t
+let exp_of  (_,      e) = e
+
+let exp_type_of e =
+  let t =
+    match type_of e with
+      | Ail.T_EXP    t -> t
+      | Ail.T_LVALUE t -> Types.lvalue_convert' t
+    end in
+  Types.pointer_convert t
+
+let lvalue_type_of e =
+  match type_of e with
+    | Ail.T_LVALUE t -> Types.pointer_convert t
+  end
+
+let ctype_of e =
+  match type_of e with
+    | Ail.T_EXP    t -> t
+    | Ail.T_LVALUE t -> t
+  end

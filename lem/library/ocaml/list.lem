@@ -1,0 +1,38 @@
+val length : forall 'a.  'a list -> num
+val hd : forall 'a.  'a list -> 'a
+val tl : forall 'a.  'a list -> 'a list
+val nth : forall 'a.  'a list -> num -> 'a
+val rev : forall 'a.  'a list -> 'a list
+val append : forall 'a.  'a list -> 'a list -> 'a list
+val rev_append : forall 'a.  'a list -> 'a list -> 'a list
+val concat : forall 'a.  'a list list -> 'a list
+val flatten : forall 'a.  'a list list -> 'a list
+val map : forall 'a 'b.  ('a -> 'b) -> 'a list -> 'b list
+val rev_map : forall 'a 'b.  ('a -> 'b) -> 'a list -> 'b list
+val fold_left : forall 'a 'b.  ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
+val fold_right : forall 'a 'b.  ('a -> 'b -> 'b) -> 'a list -> 'b -> 'b
+val map2 : forall 'a 'b 'c.  ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+val rev_map2 : forall 'a 'b 'c.  ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+val fold_left2 : forall 'a 'b 'c.  ('a -> 'b -> 'c -> 'a) -> 'a -> 'b list -> 'c list -> 'a
+val fold_right2 : forall 'a 'b 'c.  ('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> 'c -> 'c
+val for_all : forall 'a.  ('a -> bool) -> 'a list -> bool
+val exists : forall 'a.  ('a -> bool) -> 'a list -> bool
+val for_all2 : forall 'a 'b.  ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
+val exists2 : forall 'a 'b.  ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
+val mem : forall 'a.  'a -> 'a list -> bool
+val find : forall 'a.  ('a -> bool) -> 'a list -> 'a
+val filter : forall 'a.  ('a -> bool) -> 'a list -> 'a list
+val find_all : forall 'a.  ('a -> bool) -> 'a list -> 'a list
+val partition : forall 'a.  ('a -> bool) -> 'a list -> 'a list * 'a list
+val assoc : forall 'a 'b.  'a -> ('a * 'b) list -> 'b
+val mem_assoc : forall 'a 'b.  'a -> ('a * 'b) list -> bool
+val remove_assoc : forall 'a 'b.  'a -> ('a * 'b) list -> ('a * 'b) list
+val split : forall 'a 'b.  ('a * 'b) list -> 'a list * 'b list
+val combine : forall 'a 'b.  'a list -> 'b list -> ('a * 'b) list
+val sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
+val stable_sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
+val fast_sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
+val merge : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list -> 'a list
+val take : forall 'a. num -> 'a list -> 'a list
+val drop : forall 'a. num -> 'a list -> 'a list
+val split_at : forall 'a. num -> 'a list -> ('a list * 'a list)
