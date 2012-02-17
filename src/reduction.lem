@@ -19,7 +19,7 @@ module Effect = struct
   end
 
   let init = M.init
-  let foldr_list = M.foldr_list
+  let foldlM = M.foldlM
 end
 
 module E = Effect
@@ -40,7 +40,7 @@ let update_env env ids =
   let f id e =
     C.fresh_address >>= fun a ->
     E.return (Pmap.add id a e) in
-  E.foldr_list f ids env
+  E.foldlM f ids env
 
 let conv t t' x =
   x               >>= fun (a, m) ->
@@ -183,6 +183,16 @@ and reduce_exp n b env file exp =
       else
         Tc.conv_int (exp_type exp) modulo >>= fun (a, c) ->
         E.return (a, (m1 -&- m2 +& c) +& div_zero)
+  | A.BINARY (Cabs.ARITHMETIC Cabs.MUL) e1 e2 ->
+      conv_exp e1 >>= fun (a1, m1) ->
+      conv_exp e2 >>= fun (a2, m2) ->
+      let mult = C.mult a1 a2 in
+      if T.is_signed_integer(exp_type exp) then
+        let c = overflow (exp_type exp) mult in
+        E.return (mult, (m1 -&- m2) +& c)
+      else
+        Tc.conv_int (exp_type exp) mult >>= fun (a, c) ->
+        E.return (a, (m1 -&- m2 +& c))
   | A.BINARY Cabs.COMMA e1 e2 ->
       f e1 >>= fun (_,  m1) ->
       f e2 >>= fun (a2, m2) ->
@@ -361,8 +371,8 @@ and reduce_exp n b env file exp =
             let f_kill (l, _, _) m =
               Action.kill l >>= fun kill ->
               E.return (m +@ kill) in
-            E.foldr_list f_create args Me.unit >>= fun m_create ->
-            E.foldr_list f_kill   args Me.unit >>= fun m_kill   ->
+            E.foldlM f_create args Me.unit     >>= fun m_create ->
+            E.foldlM f_kill   args Me.unit     >>= fun m_kill   ->
             C.fresh                            >>= fun a        ->
 	    reduce_stmt n b' env' file fid a s >>= fun ml       ->
             Action.call                        >>= fun call     ->
@@ -415,9 +425,9 @@ and reduce_stmt n b env file fid return (_, stmt) =
       let f s ml' =
         reduce_stmt n b env' file fid return s >>= fun ml ->
         E.return (ml' --&> ml) in
-      E.foldr_list f_create decls Ms.unit >>= fun ml_create ->
-      E.foldr_list f        ss    Ms.unit >>= fun ml        ->
-      E.foldr_list f_kill   decls {}      >>= fun kills     ->
+      E.foldlM f_create decls Ms.unit >>= fun ml_create ->
+      E.foldlM f        ss    Ms.unit >>= fun ml        ->
+      E.foldlM f_kill   decls {}      >>= fun kills     ->
       E.return (Ms.add_actions_sp kills (ml_create --&> ml))
   | A.DECLARATION defns ->
       let f (id, e) ml' =
@@ -426,7 +436,7 @@ and reduce_stmt n b env file fid return (_, stmt) =
         lift (conv t (exp_type e) (f_e e)) >>= fun (a, ml) ->
         Action.store t l a                 >>= fun write   ->
         E.return ((ml --@> write) --&> ml') in
-      E.foldr_list f defns Ms.unit
+      E.foldlM f defns Ms.unit
   | A.RETURN_EXPRESSION e ->
       let t = T.function_return (lookup_type fid) in
       conv t (exp_type e) (f_e e) >>= fun (a, m) ->

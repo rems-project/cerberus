@@ -155,7 +155,7 @@ ocaml: lem_ocaml
 	sed -i"" -e 's/Constraint\.compare_constr_int/compare_constr_int/g' $(OCAML_BUILD_DIR)/constraint.ml
 # Write _tags
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
-	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte
+	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.native
 	-@[ -e "csem" ] || ln -s _build_ocaml/main.native csem
 
 lem_ocaml:

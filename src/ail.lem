@@ -81,8 +81,6 @@ type 'a expression =
   | QUESTION of 'a expression_l * 'a expression_l * 'a expression_l
   | CAST of ctype * 'a expression_l
   | CALL of 'a expression_l * 'a expression_l list
-  | MEMBEROF of 'a expression * id
-  | MEMBEROFPTR of 'a expression * id
   | CONSTANT of Cabs.constant
   | VARIABLE of id
   | SIZEOF of ctype

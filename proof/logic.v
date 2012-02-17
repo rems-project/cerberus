@@ -29,13 +29,6 @@ Inductive wff : formula -> Prop :=
   | wff_imp   : forall f1 f2, no_guard f1 -> wff f2 -> wff (KImp   f1 f2)
   | wff_guard : forall f1 f2, no_guard f1 -> wff f2 -> wff (KGuard f1 f2).
 
-Lemma no_guard_wff : forall f, no_guard f -> wff f.
-Proof.
-  intros f no_guard_f.
-  dependent induction no_guard_f;
-    now constructor.
-Qed.
-
 Inductive value : Set :=
   | VTrue
   | VFalse
@@ -116,7 +109,7 @@ Proof.
     dependent destruction p; simpl;
       try (now constructor);
 
-      try (
+      try now (
         set (IHf1 p1) as Sem1;
         set (IHf2 p2) as Sem2;
         case_eq (no_guard_b f1 p1);
@@ -136,7 +129,7 @@ Proof.
   intros f wff_f.
   dependent induction wff_f;
     try (exists VFalse; now constructor);
-    try (
+    try now (
       (* Destruct KAnd. *)
       try destruct IHwff_f1 as [[] Sem1];
       try destruct IHwff_f2 as [[] Sem2];
@@ -160,7 +153,7 @@ Proof.
       try (exists VFalse; now apply sem_and_false2);
 
       try (exists VTrue; now apply sem_imp_false);
-
+      
       try (exists VUndef; now apply sem_guard_false)
     ).
 Qed.
@@ -175,6 +168,14 @@ Proof.
     try set (sem_inj _ _ _ Sem1 Sem);
     try set (sem_inj _ _ _ Sem2 Sem);
     congruence.
+Qed.
+
+Lemma feq_wff_simpl : forall f1 f2, wff f1 -> wff f2 -> (forall v, sem f1 v <-> sem f2 v) -> feq f1 f2.
+Proof.
+  intros f1 f2 wff_f1 wff_f2 fequiv.
+  destruct (wff_sem f1 wff_f1) as [v1 Sem1].
+  destruct (wff_sem f2 wff_f2) as [v2 Sem2].
+  apply (feq_ext _ _ _ _ Sem1 Sem2 fequiv).
 Qed.
 
 Lemma feq_wff_refl : forall f, wff f -> feq f f.
@@ -195,4 +196,3 @@ Proof.
   rewrite (sem_inj _ _ _ Sem12 Sem12') in Sem12.
   apply (feq_ext_simpl _ _ _ Sem12 Sem21).
 Qed.
-
