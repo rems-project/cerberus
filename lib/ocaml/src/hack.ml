@@ -184,13 +184,13 @@ module Print = struct
       P.fold ins_space (List.map (fun (x,n) -> replicate x n) (Pmap.bindings ss))
   
   
-  and pp_struct_union_declarator = function
-    | STRUCT_DECL (id, ty) -> !^ (ansi_format [Yellow] id) (* ^^ P.parens (pp_type ty) *)
-    | BITFIELD (x_opt, e)  -> P.optional (fun (s,ty) -> !^ (ansi_format [Yellow] s) (* ^^ P.parens (pp_type ty) *)) x_opt ^^^
+  and pp_struct_union_declarator ss qs = function
+    | STRUCT_DECL (id, mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] id)
+    | BITFIELD (x_opt, e)  -> P.optional (fun (s,mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] s)) x_opt ^^^
                               P.colon ^^ pp_exp e
   
   and pp_struct_union_declaration (ss, qs, decls) =
-    pp_qs qs ^^ pp_ss ss ^^ P.sepmap (P.comma ^^ P.space) pp_struct_union_declarator decls ^^ P.semi
+    pp_qs qs ^^ pp_ss ss ^^ P.sepmap (P.comma ^^ P.space) (pp_struct_union_declarator ss qs) decls ^^ P.semi
 
 
 
