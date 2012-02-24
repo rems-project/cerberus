@@ -1,0 +1,9 @@
+type ('a, 'b) map = ('a, 'b) Pmap.map
+type 'a multiset = 'a Multiset.t
+
+let (-|) f g x = f (g x)
+let (|-) g f x = f (g x)
+let (>>) x f = f x
+
+sub [ocaml] int_of_num = int_of_num
+sub [ocaml] num_of_int = num_of_int

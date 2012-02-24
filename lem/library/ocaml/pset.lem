@@ -1,0 +1,38 @@
+val empty: forall 'a. ('a -> 'a -> int) -> 'a set
+val from_list: forall 'a. ('a -> 'a -> int) -> 'a list -> 'a set
+val bigunion : forall 'a. ('a -> 'a -> int) -> 'a set set -> 'a set
+val biginter : forall 'a. 'a set set -> 'a set
+val is_empty: forall 'a. 'a set -> bool
+val mem: forall 'a. 'a -> 'a set -> bool
+val add: forall 'a. 'a -> 'a set -> 'a set
+val singleton: forall 'a. ('a -> 'a -> int) -> 'a -> 'a set
+val remove: forall 'a. 'a -> 'a set -> 'a set
+val (union): forall 'a. 'a set -> 'a set -> 'a set
+val (inter): forall 'a. 'a set -> 'a set -> 'a set
+val diff: forall 'a. 'a set -> 'a set -> 'a set
+val compare: forall 'a. 'a set -> 'a set -> int
+val equal: forall 'a. 'a set -> 'a set -> bool
+val (subset): forall 'a. 'a set -> 'a set -> bool
+(* val iter: forall 'a. ('a -> unit) -> 'a set -> unit *)
+val fold: forall 'a 'b. ('a -> 'b -> 'b) -> 'a set -> 'b -> 'b
+val for_all: forall 'a. ('a -> bool) -> 'a set -> bool
+val exists: forall 'a. ('a -> bool) -> 'a set -> bool
+val filter: forall 'a. ('a -> bool) -> 'a set -> 'a set
+val partition: forall 'a. ('a -> bool) -> 'a set -> 'a set * 'a set
+val cardinal: forall 'a. 'a set -> num
+val elements: forall 'a. 'a set -> 'a list
+val min_elt: forall 'a. 'a set -> 'a
+val max_elt: forall 'a. 'a set -> 'a
+val choose: forall 'a. 'a set -> 'a
+val split: forall 'a. 'a -> 'a set -> 'a set * bool * 'a set
+
+val comprehension1 : forall 'a 'b. ('b -> 'b -> int) -> ('a -> 'b) -> ('a -> bool) -> 'a set -> 'b set
+val comprehension2 : forall 'a 'b 'c. ('c -> 'c -> int) -> ('a -> 'b -> 'c) -> ('a -> 'b -> bool) -> 'a set -> 'b set -> 'c set
+val comprehension3 : forall 'a 'b 'c 'd. ('d -> 'd -> int) -> ('a -> 'b -> 'c -> 'd) -> ('a -> 'b -> 'c -> bool) -> 'a set -> 'b set -> 'c set -> 'd set
+val comprehension4 : forall 'a 'b 'c 'd 'e. ('e -> 'e -> int) -> ('a -> 'b -> 'c -> 'd -> 'e) -> ('a -> 'b -> 'c -> 'd -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set
+val comprehension5 : forall 'a 'b 'c 'd 'e 'f. ('f -> 'f -> int) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f) -> ('a -> 'b -> 'c -> 'd -> 'e -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set -> 'f set
+val comprehension6 : forall 'a 'b 'c 'd 'e 'f 'g. ('g -> 'g -> int) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set -> 'f set -> 'g set
+val comprehension7 : forall 'a 'b 'c 'd 'e 'f 'g 'h. ('h -> 'h -> int) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> 'h) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set -> 'f set -> 'g set -> 'h set
+
+val map : forall 'a 'b. ('b -> 'b -> int) -> ('a -> 'b) -> 'a set -> 'b set
+

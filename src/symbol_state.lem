@@ -1,0 +1,28 @@
+type 'a t = ('a, Symbol.sset) State.t
+
+let return = State.return
+let bind = State.bind
+let map = State.map
+
+module Operators = struct
+  let (>>=) = bind
+  let (<$>) = map
+end
+
+let run_impl = State.run_impl
+let init m = State.run m Symbol.init
+
+let fresh = Symbol.fresh
+let fresh_pretty n = Symbol.fresh_pretty n
+
+let rec foldlM f l a =
+  match l with
+    | []    -> return a
+    | x::xs -> bind (f x a) (foldlM f xs)
+  end
+
+let rec foldrM f l a =
+  match l with
+    | []    -> return a
+    | x::xs -> bind (foldrM f xs a) (f x )
+  end
