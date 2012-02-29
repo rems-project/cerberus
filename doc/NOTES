@@ -1,0 +1,188 @@
+2012-02-28 16:23 - K
+2012-02-29 17:02 - K, J
+
+[Auxiliary stuff in the syntax]
+function name:              φ
+symbols (address or value): α
+type:                       τ
+
+[Core program]
+P = [(φ, S)]
+
+[Core statements]
+S ::= skip
+   |  fail
+   |  E
+   |  let α = S in S
+   |  if F then S else S
+   |  S + S
+   |  S || S
+   |  create_τ
+   |  kill α
+   |  store_τ α α
+   |  load_τ α
+   |  same α α
+   |  call φ(α1, ..., αN)
+
+[Core expressions]
+E::= n
+  |  α
+  |  E * E,  * ∈ {+,−,×,/,mod}
+  |  -E
+  |  max_τ
+  |  min_τ
+  |  sizeof_τ
+  |  alignof_τ
+  |  offsetof α
+
+
+
+== [fail] ======================================================================
+The purpose of this construct is to implement the occurence of an undefined
+behaviour.
+
+== [if F then S else S] ========================================================
+In addition to allowing the implementation of C's if-then-else statement, this
+construct is used to make explicit checks for undefined behaviours (such as:
+arithmetic overflows, conversion errors, ...).
+
+
+== [create_τ] ==================================================================
+This statement creates in the memory an "object" (§3.15) with
+"effective type" (§6.5#6) τ. It returns one or more symbols of type Addr. Later,
+to refer to the object or its subobjects (fields of structs/unions) one has to
+use the corresponding symbol introduced by the create statement. Formally create
+has type:
+
+  create {τ: Ty} : match τ with
+                     | TyStruct τ'
+                     | TyUnion  τ' => {l: [Addr] | length l = length (fields τ')}
+                     | _           => Addr
+                   end
+
+This construct typically corresponds to the translation of a C declaration,
+where it is used as the left operand of a let construct:
+
+  (in C)        (in Core)
+  
+  struct T {      let α1 = create_{signed int} in
+    int x, y;     let α2 = create_{signed_int} in
+  };              ...
+  ...             let [α3, α4, α5] = create_{struct T} in
+  int u, v;       
+  ...             
+  struct T w;     
+
+
+== [offsetof α] ================================================================
+If α designate a struct/union field, then the value of the expression "offsetof
+α" is the offset of that field in the memory representation of the containing
+object. Otherwise the value is 0.
+
+[K: the only alternative to the "otherwise" I see is to put a "binary" type for
+    Addr symbols, but this seems uselessly heavy. Morally the expression has no
+    real meaning for an α not corresponding to a struct/union field, but for
+    these the 0 should be correct (?)]
+
+The value of this construct is clearly implementation-defined; it is needed to
+implement the offsetof macro (§7.19).
+
+
+== Proposed implementation of gotos ============================================
+We try to avoid having plain continuations in Core's syntax or semantics. For
+gotos, a possible hack is to make for each label a partial duplicate of the
+containing function. This would be done during the translation from Ail to Core.
+Goto statement would then simply translated as Core function calls. Here is an
+example:
+
+  (in C)                   (in Core)
+  int f(int x) {           fun φ1 x =
+    int i = 0;               let α1 = create_{signed int} in
+                             let α2 = 0 in
+                             if min_{signed int} ≤ α2 ≤ max_{signed int} then
+                               store_{signed int} α1 α2
+                             else
+                               fail
+    loop: if i<5 {           let (α3, α4) = load_{signed int} α1 || 5 in
+            i++;             if min_{signed int} ≤ α4 ≤ max_{signed int} then
+            goto loop;         if α3 < α4 then
+          }                      let α5 = load_{signed_int} α1 in
+   return i;                     let α6 = α5 + 1 in
+  }                              if min_{signed int} ≤ α6 ≤ max_{signed int} then
+                                   store_{signed int} α1 α6
+                                 else
+                                   fail
+                                 call φ2(x, α1)
+                               else
+                                 skip
+                             else
+                               fail
+                             let α7 = load_{signed int} α1 in
+                             α7
+                           
+                           fun φ2 x i =
+                             let (α1, α2) = load_{signed int} i || 5 in
+                             if min_{signed int} ≤ α2 ≤ max_{signed int} then
+                               if α1 < α2 then
+                                 let α3 = load_{signed_int} i in
+                                 let α4 = α3 + 1 in
+                                 if min_{signed int} ≤ α4 ≤ max_{signed int} then
+                                   store_{signed int} i α4
+                                 else
+                                   fail
+                                 call φ2 x i
+                               else
+                                 skip
+                             else
+                               fail
+                             let α5 = load_{signed int} i in
+                             α5
+
+However there are several problems:
+  * loss of original program structure
+  * when calling a function corresponding to a label, have to pass in addresses
+    of locals
+  * when jumping into new block, have to allocate new locals
+  * when jumping into a loop body, have to unfold loop once
+  * when jumping out of a block, have to kill locals
+
+
+Crazy remark by J: maybe goto in Core is a better option
+
+################################################################################
+2012-02-29 15:36 - K, J
+
+[Bringing & back to Core]
+Consider the following C pseudo-program: A + B + f()
+
+The operands of the additions are "unsequenced", except for function calls which
+are indeterminately sequenced. Here the sb-relation look like:
+  
+       .- f() -.            A             B        A
+   sb /         \ sb        |             |         \ sb
+     |           |     OR   | sb       sb |   OR     '-> f()        OR
+     v           v           \           /                 \ sb
+     A           B            '-> f() <-'                   '-> B
+   
+                            B
+                             \ sb
+                              '-> f()
+                                    \ sb
+                                     '-> A
+   --------------------------------------------------------------------------
+
+== Previous attempt 1) at the definition of &:
+  f & A = f(); A or A; f
+  
+But if we have A = e_1 || e_2, we are missing the last two cases.
+
+
+== Previous attempt 2):
+  f (A || B) = f; (A || B) or (A||B); f + A; f; B + B; f; A
+
+But this is still not enough because of the following program:
+  f() + ((x, x=0) + y)
+
+
+== Third attempt:
+  
