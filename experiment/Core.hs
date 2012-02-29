@@ -87,18 +87,18 @@ int main(void) {
 
 ----------------------------------------
 
-(a1, a2) <- create {signed int} || create {signed int};
-            if (min{signed int} <= 0 <= max{signed int}) {
-                         store {signed int} a2 0;
-              (n1,n2) <- load {signed int} a2 || 1;
-                         if (min{signed int} <= n1 + n2 <= max{signed int}) {
-                           store {signed int} (n1 + n2);
-                         } else {
-                           fail
-                         }
-            } else {
+(a1, a2) <- create {signed int} || create {signed int}
+s1       <- 0
+            if s1 IN range{signed int} then
+              store {signed int} a2 0
+             else
               fail
-            };
+(s2,s3)  <- load {signed int} a2 || 1;
+            let s4 = s2 + s3 in
+            if s4 IN range{signed int} then
+              store {signed int} (n1 + n2);
+             else
+              fail
             0
 
 ========================================
@@ -188,11 +188,14 @@ ex2 = Eseq (Eassign "x" (Econst 0))
                               (Econst 0))))
 
 
+-- TODO
+type Error = String
+
 {- Memory representation #################################################### -}
 class Memory mem where
-  initial :: mem                           -- Initial memory state
-  load    :: Object -> mem -> Value        -- Load the value of an object
-  store   :: Object -> Value -> mem -> mem -- Store a value in an object
+  initial :: mem                                        -- Initial memory state
+  load    :: Object -> mem -> Either Value Error        -- Load the value of an object
+  store   :: Object -> Value -> mem -> Either mem Error -- Store a value in an object
 
 
 {- Actions sequencing #######################################################
@@ -217,12 +220,11 @@ class (Memory mem, MonadState mem seq) => Sequencing seq mem where
 newtype AbstractMem = AMem (M.Map Object Value) deriving Show
 
 instance Memory AbstractMem where
-  initial = AMem M.empty
-  load x (AMem s) = case M.lookup x s of
-                      Just n -> n
-                      Nothing -> error ("Assignable " ++ x ++
-                                        " has not been initialized.")
-  store x n (AMem s) = AMem $ M.insert x n s
+  initial            = AMem M.empty
+  load x (AMem s)    = maybe (Right $ "Assignable " ++ x ++ " has not been initialized.")
+                             (Left . id)
+                             (M.lookup x s)
+  store x n (AMem s) = Left $ AMem (M.insert x n s)
 
 
 
@@ -236,15 +238,27 @@ instance Memory mem => Sequencing (M1 mem) mem where
   (StateT a) +|+ (StateT b) = StateT (\s -> a s ++ b s)
   a          ||  b          = (a >>= \va -> b >>= \vb -> return (va, vb)) +|+
                               (b >>= \vb -> a >>= \va -> return (va, vb))
-  seqPt   = return ()
+  seqPt                     = return ()
 
 
 -- Compute all the execution traces
--- type M2 mem = TODO
+data M2 mem a 
+instance Monad (M2 mem) where
+  return = undefined
+  (>>=)  = undefined
+
+instance MonadState mem (M2 mem) where
+  get = undefined
+  put = undefined
+
+instance Memory mem => Sequencing (M2 mem) mem where
+  (+|+) = undefined
+  (||)  = undefined
+  seqPt = undefined
 
 
 {- ########################################################################## -}
--- sem :: (Memory mem, Sequencing (seq mem') mem, mem ~ mem') => CoreSyn Object Value -> (seq mem') Value
+-- sem :: Sequencing (seq mem) mem => Expr Object Value -> (seq mem) Value
 {-
   TODO: the type of [sem] should be parametric on the Sequencing monad, but
         currently GHC don't like it.
