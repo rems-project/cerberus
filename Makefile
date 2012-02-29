@@ -9,6 +9,8 @@ TEX_BUILD_DIR=_build_tex
 HOL_BUILD_DIR=_build_hol
 COQ_BUILD_DIR=_build_coq
 
+OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries
+
 FILES=\
 type_error.lem \
 multiset.lem \
@@ -105,7 +107,7 @@ pprint.ml \
 lexing.ml \
 document.ml
 
-default: ocaml
+default: ocaml_byte
 
 all: ocaml tex
 
@@ -155,8 +157,14 @@ ocaml: lem_ocaml
 	sed -i"" -e 's/Constraint\.compare_constr_int/compare_constr_int/g' $(OCAML_BUILD_DIR)/constraint.ml
 # Write _tags
 	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
-	cd $(OCAML_BUILD_DIR); ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries main.byte
-	-@[ -e "csem" ] || ln -s _build_ocaml/main.native csem
+
+ocaml_native: ocaml
+	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.native
+	-@[ ! -e "csem" ] || ln -s _build_ocaml/main.native csem
+
+ocaml_byte: ocaml
+	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
+	-@[ ! -e "csem" ] || ln -s _build_ocaml/main.byte csem
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)

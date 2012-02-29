@@ -1,7 +1,5 @@
 open Global
 
-module C = Constraint
-
 module Denotation = struct
   type t = <|
     actions      : Action.t set;
@@ -9,14 +7,14 @@ module Denotation = struct
     seq_before   : (Action.t * Action.t) set;
     ls_map       : (Action.t, Action.t) map; (* encodes postfix increment/decrement dependencies *)
     call_map     : (Action.t,  Action.t set) map;
-    constraints  : C.t
+    constraints  : Constraint.t
   |>
 
   let unit = <|
     actions      = {};
     side_effects = {};
     seq_before   = {};
-    ls_map      = Pmap.empty;
+    ls_map       = Pmap.empty;
     call_map     = Pmap.empty;
     constraints  = {}
   |>
@@ -90,7 +88,7 @@ module Denotation = struct
       ++ num_of_int (set_compare_int                 t1.seq_before   t2.seq_before  )
       ++ num_of_int (map_compare_int unv_compare_int t1.ls_map       t2.ls_map      )
       ++ num_of_int (map_compare_int set_compare_int t1.call_map     t2.call_map    )
-      ++ num_of_int (C.compare_int                   t1.constraints  t2.constraints ))
+      ++ num_of_int (Constraint.compare_int          t1.constraints  t2.constraints ))
 end
 
 module Expression = struct
@@ -126,21 +124,19 @@ module Expression = struct
 end
 
 module Statement = struct
-  module E = Expression
-
-  open E.Operators
+  open Expression.Operators
 
   type t = <|
-    break    : E.t;
-    continue : E.t;
-    normal   : E.t;
-    return   : E.t
+    break    : Expression.t;
+    continue : Expression.t;
+    normal   : Expression.t;
+    return   : Expression.t
   |>
 
   let unit = <|
     break    = {};
     continue = {};
-    normal   = E.unit;
+    normal   = Expression.unit;
     return   = {}
   |>
 
@@ -173,7 +169,7 @@ module Statement = struct
   |>
 
   let exit_function call t =
-    E.add_call call (t.normal +& C.undef -/- t.return)
+    Expression.add_call call (t.normal +& Constraint.undef -/- t.return)
 
   let enter_loop te_pos te_neg t =
     let te = t.continue -/- t.normal in
@@ -211,7 +207,7 @@ module Statement = struct
     |>
 
   let add_actions_sp acts t =
-    let te = E.add_actions acts E.unit in <|
+    let te = Expression.add_actions acts Expression.unit in <|
       break    = t.break    -&> te;
       continue = t.continue -&> te;
       normal   = t.normal   -&> te;
@@ -252,7 +248,7 @@ module Print = struct
     P.sepmap sep pp_b (Set.to_list s)
 
   let pp_actions = pp_set Action.Print.pp
-  let pp_contraints = C.Print.pp
+  let pp_contraints = Constraint.Print.pp
   let pp_action_id = Action.Print.pp_uid
   let pp_seq_before =
     let pp_a = pp_action_id in
@@ -281,7 +277,7 @@ end
 module Solve = struct
   open Denotation
 
-  type trace = C.t * Action.t list
+  type trace = Constraint.t * Action.t list
 
   let schedule pre s =
     let actions = [a | forall (a IN s) | true] in
