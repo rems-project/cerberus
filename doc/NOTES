@@ -1,57 +1,139 @@
 2012-02-28 16:23 - K
 2012-02-29 17:02 - K, J
 
-[Auxiliary stuff in the syntax]
-function name:              φ
-symbols (address or value): α
-type:                       τ
+[Introduction]
+Core aims at replacing csem's current pipeline starting from reduction.lem. It
+is a "simple" language with pure expressions, pure boolean tests and effectful
+statements whose syntax makes explicit all non memory-related unbehaviours and
+how the sequence-before relation will be computed. It will be the last
+intermediate language in the pipeline from which different things can be done
+according to the mode on which csem is run:
+
+  * Simulator mode:    csem is given some setting for the implementation-defined
+                       behaviours and the Core program is (one possible)
+                       execution is evaluated. It will signal undefined
+                       behaviours it finds along the way.
+
+  * Mark's mode:    The set of actions and all the possible sequenced-before
+                    relations are computed for the Core program.
+
+  * Prover's mode:    Outputs a proof assistant readable encoding of the Core
+                      program for verification purpose.
+
+Here is a remainder of the new csem's intermediate language and pipeline:
+--------------------------------------------------------------------------------
+Cabs    tries to follow as closely as possible the grammar given in the standard
+        (see Annex A), modulo: collapsing of the "parsing motivated" structure
+        of grammar describing expressions; addition of some stuff defined as
+        part of the standard library, but which should really be part of the
+        language (e.g. setjmp).
+
+Ail    Cabs but with more structure: the type declarators are encoded in a form
+       where meaningless declarator are not possible (e.g. int char x;);
+       struct/union members are flattened (int x, y ==> int x; int y) and more
+       sensible blocks. Some construct of Cabs which are simply syntactic sugar
+       are also omitted (e.g. increment/decrement, BUT NOT array subscripts
+       because we need to keep them for typechecking).
+
+Ail_tau    Ail with type annotation everywhere
+
+Ail'_tau    Ail_tay after the final pass of sugaring: translating array
+            subscripts into arithmetic and deref (TODO: something else ?)
+
+Core    described here, and translated from Ail'_tau
+
+
+PIPELINE:
+  1) C        ----parsing-----> Cabs
+  2) Cabs     ---desugaring---> Ail
+  3) Ail      --typechecking--> Ail_tau
+  4) Ail_tau  --desugaring2---> Ail'_tau
+  5) Ail'_tau ----------------> Core
+--------------------------------------------------------------------------------
+
+
+[Syntax]
+  [Auxiliary stuff in the syntax] (TODO)
+    function name:              φ
+    symbols (address or value): α
+    C-type:                     τ
 
 [Core program]
-P = [(φ, S)]
+P = [(φ, S)] (TODO: this has changed)
 
-[Core statements]
-S ::= skip
-   |  fail
-   |  E
-   |  let α = S in S
-   |  if F then S else S
-   |  S + S
-   |  S || S
-   |  create_τ
-   |  kill α
-   |  store_τ α α
-   |  load_τ α
-   |  same α α
-   |  call φ(α1, ..., αN)
+== [statements] ================================================================
+  S ::= skip
+     |  fail
+     |  E
+     |  let α = S in S
+     |  if F then S else S
+     |  S + S
+     |  S || S
+     |  create_τ
+     |  kill α
+     |  store_τ α α
+     |  load_τ α
+     |  same α α
+     |  fun φ(α1, ..., αN) S
+     |  call φ(α1, ..., αN)
 
-[Core expressions]
-E::= n
-  |  α
-  |  E * E,  * ∈ {+,−,×,/,mod}
-  |  -E
-  |  max_τ
-  |  min_τ
-  |  sizeof_τ
-  |  alignof_τ
-  |  offsetof α
-
-
-
-== [fail] ======================================================================
-The purpose of this construct is to implement the occurence of an undefined
-behaviour.
-
-== [if F then S else S] ========================================================
-In addition to allowing the implementation of C's if-then-else statement, this
-construct is used to make explicit checks for undefined behaviours (such as:
-arithmetic overflows, conversion errors, ...).
+== [expressions] ===============================================================
+  E::= n
+    |  α
+    |  E * E,  * ∈ {+,−,×,/,mod}
+    |  -E
+    |  max_τ
+    |  min_τ
+    |  sizeof_τ
+    |  alignof_τ
+    |  offsetof α
+--------------------------------------------------------------------------------
 
 
-== [create_τ] ==================================================================
-This statement creates in the memory an "object" (§3.15) with
-"effective type" (§6.5#6) τ. It returns one or more symbols of type Addr. Later,
-to refer to the object or its subobjects (fields of structs/unions) one has to
-use the corresponding symbol introduced by the create statement. Formally create
+[Statics]
+  We give a nearly trivial type system to Core to avoid having meaningless
+  programs (may be useless for the "Prover mode").
+  
+  We have the following base types:
+    * unit    the classic unit type
+    * value   morally is the mathematical integers modulo Trap values,
+              indeterminate values, ... (Or I (K) am wrong ?)
+    * addr    the addr of a memory object
+  
+  We also have lists (written [ty]) and pairs (written (ty1, ty2)).
+  
+  EXPRESSIONS
+    [α]           lookup in the typing environment
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
+    [-E]          E must be of type value anfd the result is of type value.
+    [max_τ]       is of type value
+    [min_τ]       is of type value
+    [sizeof_τ]    is of type value
+    [alignof_τ]   is of type value
+    [offsetof α]  α is of type addr (TODO: there is some metaphysical thoughts
+                  whether we have to enforce that α is not only of type addr but
+                  also corresponds to a struct/union members (which is the only
+                  case where offsetof makes any sense) or if we ignore this a
+                  the typing level and then makes the value of "offsetof α" 
+                  equals 0 for any improper α (this should "just work" but this
+                  is nasty)
+  
+  STATEMENTS
+    [skip]                  is of type unit.
+    [fail]                  (TODO) J seems to want to have a base type
+                            "undefined" for this construct, whereas K don't see
+                            the point (or forgot it) and thinks the type unit is
+                            sufficient here.
+    [E]                     see the typing of expressions
+    [let α = S1 in S2]      is of the same type as S2, which is typed in the
+                            current type environmnent extended with "α is of the
+                            same type as S1".
+    [if F then S1 else S2]  
+    [S1 + S2]               
+    [S1 || S2]              
+    [create_τ]              
+
+Formally create
 has type:
 
   create {τ: Ty} : match τ with
@@ -59,6 +141,40 @@ has type:
                      | TyUnion  τ' => {l: [Addr] | length l = length (fields τ')}
                      | _           => Addr
                    end
+
+
+    [kill α]                α must be of type addr, and the return type is unit.
+    [store_τ α1 α2]         α1 must be of type addr, α2 must be of type value
+                            and the return type is unit.
+    [load_τ α]              α must be of type addr and the return type is value.
+    [same α1 α2]            α1 and α2 must be of type addr and the return type
+                            is unit.
+    [fun φ(α1, ..., αN) S]  
+    [call φ(α1, ..., αN)]   
+--------------------------------------------------------------------------------
+
+
+[Dynamics]
+
+== [skip] ======================================================================
+Is just a "nop". Used for example to implement C's if-then statements and loop
+with empty bodies.
+
+== [fail] ======================================================================
+This construct represents an undefined behaviour. In the simulator mode this is
+implemented as an exception being thrown.
+
+== [if F then S else S] ========================================================
+Classic if-then-else construct: the test is evaluated (remember that it is pure)
+and the corresponding branch is executed. This is used to implement C's
+if-then-else statement, but also to make explicit checks for non memory-related
+undefined behaviours (such as: arithmetic overflows, conversion errors, ...).
+
+== [create_τ] ==================================================================
+This statement creates in the memory an "object" (§3.15) with
+"effective type" (§6.5#6) τ. It returns one or more symbols of type Addr. Later,
+to refer to the object or its subobjects (fields of structs/unions) one has to
+use the corresponding symbol introduced by the create statement. 
 
 This construct typically corresponds to the translation of a C declaration,
 where it is used as the left operand of a let construct:
