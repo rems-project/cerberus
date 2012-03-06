@@ -2,12 +2,15 @@
 2012-02-29 17:02 - K, J
 
 [Introduction]
-Core aims at replacing csem's current pipeline starting from reduction.lem. It
-is a "simple" language with pure expressions, pure boolean tests and effectful
-statements whose syntax makes explicit all non memory-related unbehaviours and
-how the sequence-before relation will be computed. It will be the last
-intermediate language in the pipeline from which different things can be done
-according to the mode on which csem is run:
+Core aims at replacing csem's current pipeline starting from "reduction.lem". It
+is intended to correspond to the essence of the C. It has pure expressions with
+a clear evaluation order; boolean tests over expressions; explicit memory
+actions (creation/kill of an object, load, store, ...); effectful statements
+allowing the implementation of C's statements but with a syntax making explicit
+the sequenced-before over the memory actions; explicit checks for non
+memory-related undefined behaviours. Core will be the last intermediate language
+in the pipeline from which different things can be done according to the mode on
+which csem is run:
 
   * Simulator mode:    csem is given some setting for the implementation-defined
                        behaviours and the Core program is (one possible)
@@ -18,37 +21,37 @@ according to the mode on which csem is run:
                     relations are computed for the Core program.
 
   * Prover's mode:    Outputs a proof assistant readable encoding of the Core
-                      program for verification purpose.
+                      program (not just an execution) for verification purpose.
 
-Here is a remainder of the new csem's intermediate language and pipeline:
+Here we recall the "next" csem's intermediate languages and pipeline:
 --------------------------------------------------------------------------------
 Cabs    tries to follow as closely as possible the grammar given in the standard
-        (see Annex A), modulo: collapsing of the "parsing motivated" structure
-        of grammar describing expressions; addition of some stuff defined as
-        part of the standard library, but which should really be part of the
+        (see Annex A), modulo: collapsing of "parsing motivated" structures of
+        the grammar (e.g. expressions); addition of some stuff defined as part
+        of the standard library, but which should really be part of the
         language (e.g. setjmp).
 
 Ail    Cabs but with more structure: the type declarators are encoded in a form
-       where meaningless declarator are not possible (e.g. int char x;);
+       where meaningless declarator are not representable (e.g. int char x;);
        struct/union members are flattened (int x, y ==> int x; int y) and more
        sensible blocks. Some construct of Cabs which are simply syntactic sugar
-       are also omitted (e.g. increment/decrement, BUT NOT array subscripts
-       because we need to keep them for typechecking).
+       are also translated away (e.g. increment/decrement, BUT NOT array
+       subscripts because we need to keep them for typechecking).
 
-Ail_tau    Ail with type annotation everywhere
+Ail_τ    Ail with type annotation everywhere
 
-Ail'_tau    Ail_tay after the final pass of sugaring: translating array
-            subscripts into arithmetic and deref (TODO: something else ?)
+Ail'_τ    Ail_τ after the final pass of sugaring: translating array subscripts
+          into arithmetic and deref (TODO: something else ?)
 
-Core    described here, and translated from Ail'_tau
+Core    described here, and translated from Ail'_τ
 
 
 PIPELINE:
-  1) C        ----parsing-----> Cabs
-  2) Cabs     ---desugaring---> Ail
-  3) Ail      --typechecking--> Ail_tau
-  4) Ail_tau  --desugaring2---> Ail'_tau
-  5) Ail'_tau ----------------> Core
+  1) C      ----parsing-----> Cabs
+  2) Cabs   ---desugaring---> Ail
+  3) Ail    --typechecking--> Ail_τ
+  4) Ail_τ  --desugaring2---> Ail'_τ
+  5) Ail'_τ ----------------> Core
 --------------------------------------------------------------------------------
 
 
@@ -59,7 +62,7 @@ PIPELINE:
     C-type:                     τ
 
 [Core program]
-P = [(φ, S)] (TODO: this has changed)
+P = [(φ, S)] (TODO: this has/will change(d))
 
 == [statements] ================================================================
   S ::= skip
@@ -74,7 +77,7 @@ P = [(φ, S)] (TODO: this has changed)
      |  store_τ α α
      |  load_τ α
      |  same α α
-     |  fun φ(α1, ..., αN) S
+     |  fun φ(α1, ..., αN) S (TODO: or outside of statements (?))
      |  call φ(α1, ..., αN)
 
 == [expressions] ===============================================================
@@ -87,6 +90,13 @@ P = [(φ, S)] (TODO: this has changed)
     |  sizeof_τ
     |  alignof_τ
     |  offsetof α
+
+== [boolean tests] =============================================================
+  F::= true
+    |  false
+    |  ¬F
+    |  F * F,  * ∈ {v,∨}
+    |  E * E,  * ∈ {<,=}
 --------------------------------------------------------------------------------
 
 
@@ -105,7 +115,7 @@ P = [(φ, S)] (TODO: this has changed)
   EXPRESSIONS
     [α]           lookup in the typing environment
     [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
-    [-E]          E must be of type value anfd the result is of type value.
+    [-E]          E must be of type value and the result is of type value.
     [max_τ]       is of type value
     [min_τ]       is of type value
     [sizeof_τ]    is of type value
@@ -118,6 +128,13 @@ P = [(φ, S)] (TODO: this has changed)
                   equals 0 for any improper α (this should "just work" but this
                   is nasty)
   
+  BOOLEAN TESTS
+    [true]        is of type value
+    [false]       is of type value
+    [¬F]          F must be of type value and the result is of type value.
+    [F1 * F2]     F1 and F2 must be of type value and the result is of type value.
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
+  
   STATEMENTS
     [skip]                  is of type unit.
     [fail]                  (TODO) J seems to want to have a base type
@@ -128,21 +145,15 @@ P = [(φ, S)] (TODO: this has changed)
     [let α = S1 in S2]      is of the same type as S2, which is typed in the
                             current type environmnent extended with "α is of the
                             same type as S1".
-    [if F then S1 else S2]  
-    [S1 + S2]               
-    [S1 || S2]              
-    [create_τ]              
-
-Formally create
-has type:
-
-  create {τ: Ty} : match τ with
-                     | TyStruct τ'
-                     | TyUnion  τ' => {l: [Addr] | length l = length (fields τ')}
-                     | _           => Addr
-                   end
-
-
+    [if F then S1 else S2]  F must be of type value, S1 and S2 must be of the
+                            same type (say ty) and result is of type ty.
+    [S1 + S2]               S1 and S2 must be of the same type (say ty) and
+                            result is of type ty.
+    [S1 || S2]              if S1 is of type ty1 and S2 of type ty2, then the
+                            result is of type (ty1, ty2)
+    [create_τ]              if τ is not a struct/union type, then the result is
+                            of type addr, otherwise it is of type [addr] with
+                            length equal to the number of fields of τ.
     [kill α]                α must be of type addr, and the return type is unit.
     [store_τ α1 α2]         α1 must be of type addr, α2 must be of type value
                             and the return type is unit.
