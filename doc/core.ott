@@ -54,7 +54,8 @@ p :: '' ::= {{ com patterns }}
 
 S :: '' ::= {{ com statements }}
   | skip                 :: :: SKIP                      
-  | fail                 :: :: FAIL                      {{ com signal an undefined behaviour }}
+  | undef                :: :: UNDEF                     {{ com signal an undefined behaviour }}
+  | static_error         :: :: STATIC_ERROR
   | E                    :: :: EXPR                      
   | let p = S1 in S2     :: :: LET (+ bind b(p) in S2 +) {{ com the actions of [[S1]] are sequenced-before those of [[S2]] }}
   | if B then S1 else S2 :: :: IF                        
