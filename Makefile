@@ -12,6 +12,7 @@ COQ_BUILD_DIR=_build_coq
 OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries
 
 FILES=\
+errors.lem \
 type_error.lem \
 multiset.lem \
 global.lem \
@@ -44,6 +45,8 @@ cabs.lem \
 ail.lem \
 ail_aux.lem \
 ail_rewrite.lem \
+implementation.lem \
+core.lem \
 types.lem \
 annotate.lem \
 cabs_to_ail.lem \
@@ -53,7 +56,8 @@ constraint.lem \
 type_constraint.lem \
 action.lem \
 meaning.lem \
-reduction.lem
+reduction.lem \
+reduction2.lem
 
 COQ_FILES=\
 multiset.lem \

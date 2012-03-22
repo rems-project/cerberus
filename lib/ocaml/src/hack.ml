@@ -65,7 +65,7 @@ module Print = struct
     | ENCODING_U  -> !^ "U"
     | ENCODING_L  -> !^ "L"
   let pp_string_literal (enc, s) =
-    pp_encoding_prefix enc ^^ (!^ s)
+    (P.optional pp_encoding_prefix enc) ^^ (!^ s)
   
   
   let pp_arithop = function

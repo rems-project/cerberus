@@ -104,6 +104,8 @@ and reduce_exp n b env file exp =
         E.return (v, m -@> load)
   | A.CONSTANT (Cabs.CONST_INT (i, _)) ->
       E.return (C.const i, Me.unit)
+  
+  (* (6.5.2.4) Postfix increment and decrement operators *)
   | A.UNARY A.POSTFIX_INCR e ->
       f_lvalue e >>= fun (a, m) ->
       C.fresh    >>= fun v      ->
@@ -340,7 +342,7 @@ and reduce_exp n b env file exp =
       Tc.conv (exp_type e1) (exp_type e2) a2 >>= fun (a, c) ->
       Action.store (lvalue_type e1) a1 a >>= fun write ->
       E.return (a, Me.conj_sb (m1 -&- m2 +& c) (Me.add_side_effect write Me.unit))
-  | A.QUESTION e1 e2 e3 ->
+  | A.CONDITIONAL e1 e2 e3 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         f e1        >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -398,7 +400,9 @@ and reduce_exp n b env file exp =
         E.return (a, Me.null)
   end
 
-and reduce_stmt n b env file fid return (_, stmt) =
+
+(* reduce_stmt n b Pmap.empty file file.A.main C.Constants.return s *)
+and reduce_stmt (n: num) b env (file: _ Ail.file) fid return (_, stmt) =
   let f_s = reduce_stmt n b env file fid return in
   let f_e = reduce_exp  n b env file in
   let lift x = x >>= fun (a, m) -> E.return (a, Ms.normal m) in
@@ -450,7 +454,9 @@ and reduce_stmt n b env file fid return (_, stmt) =
   | A.CONTINUE -> E.return (Ms.continue Me.unit)
   end
 
-let reduce_file n file =
+
+(*  *)
+let reduce_file (n: num) (file: _ A.file) =
   let b =
     let f m (fid, _) = Pmap.add fid n m in
     List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
@@ -462,4 +468,6 @@ let reduce_file n file =
   List.map rd (List.map snd (Pmap.values file.A.fn_map))
 *)
 
-let reduce n file = E.init (reduce_file n file)
+
+(* This is the entry function (called from main) *)
+let reduce (n: num) (file: _ A.file) = E.init (reduce_file n file)

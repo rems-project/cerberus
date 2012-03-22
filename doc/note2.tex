@@ -1,0 +1,940 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+\documentclass[12pt, a4paper]{article}
+
+\setlength{\topmargin}{0mm}      % no margin above heading
+\setlength{\parindent}{0mm}      % no paragraph identation
+\setlength{\parskip}{4mm}        % skip a line between paragraphs
+\setlength{\unitlength}{1mm}
+\pagestyle{headings}
+
+% Paper-saving settings
+\setlength{\textwidth}{16cm}     % larger page
+\setlength{\oddsidemargin}{0mm}  % no left margin
+\setlength{\evensidemargin}{0mm} % the same, on even pages
+\setlength{\textheight}{22.5cm}  % longer page
+
+%\usepackage[british]{polyglossia}
+\usepackage[british]{babel}
+
+
+\usepackage{supertabular}
+
+\usepackage{fontspec}
+%\usepackage{xunicode}
+%\usepackage{xltxtra}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{semantic}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\input{core}
+
+
+% Fonts selection
+% \defaultfontfeatures{Mapping=tex-text}
+% \setromanfont[Mapping=tex-text,Ligatures={Common}]{Adobe Garamond Pro}
+% \setsansfont[Scale=MatchLowercase,Mapping=tex-text]{Gill Sans}
+% \setmonofont[Scale=MatchLowercase]{Courier}
+
+% Configuration for [listings]
+\lstset{language=C, basicstyle=\footnotesize\fontspec{Courier}}
+
+% Colourful hyperlinks
+\hypersetup{colorlinks=true}
+
+% Some colours
+\definecolor{red}{rgb}{1,0,0}
+\definecolor{green}{rgb}{0,0.7,0}
+\definecolor{blue}{rgb}{0,0,1}
+\definecolor{magenta}{rgb}{1,0,1}
+\definecolor{orange}{rgb}{1,0.5,0}
+
+\newcommand{\TODO}[1]{{\color{red} #1}}
+
+
+
+
+\title{Core}
+\author{}
+\date{}
+
+
+
+
+
+
+
+
+
+
+\newcommand{\N}{\ensuremath{\mathbb{N}}}
+\newcommand{\Z}{\ensuremath{\mathbb{Z}}}
+\newcommand{\D}{\ensuremath{\mathbb{D}}}
+\newcommand{\Q}{\ensuremath{\mathbb{Q}}}
+\newcommand{\R}{\ensuremath{\mathbb{R}}}
+%\newcommand{\C}{\ensuremath{\mathbb{C}}}
+
+\newcommand{\syn}[1]{\textsf{#1}} % for Core's syntax
+
+\newcommand{\ail}[1]{\textsf{#1}} % for Ail/Ail_tau's syntax
+
+
+\newcommand{\csyn}[1]{{\fontspec{Courier} #1}} % for C's syntax
+\newcommand{\meta}[1]{\textbf{#1}}
+
+\begin{document}
+\bibliographystyle{plain}
+\nocite{*} 
+
+\maketitle
+
+\section{Introduction}
+Core aims at replacing csem's current pipeline starting from "reduction.lem".
+It is intended to correspond to the essence of the C.
+It has pure expressions; boolean tests over expressions;
+explicit memory actions (creation/kill of an object, load, store, ...);
+effectful statements allowing the implementation of C's statements but with a syntax making explicit the sequenced-before relation over the memory actions;
+explicit checks for non memory-related undefined behaviours.  Core will be the last intermediate language in the pipeline which will form the basis of:
+
+\begin{description}
+\item[Simulator mode]
+  csem is given some setting for the implementation-defined behaviours and the Core program is (one possible) execution is evaluated.
+  It will signal undefined behaviours it finds along the way.
+  
+  \item[Annotating mode]
+  csem is given a C progam and returns a C program free of undefined behaviours but "semantically equivalent" (whatever that means) to the original program.
+  
+  \item[Mark's mode]
+  The set of actions and all the possible sequenced-before relations are computed for the Core program.
+  
+  \item[Prover's mode]
+  Outputs a proof assistant readable encoding of the Core program (not just an execution) for verification purpose.
+  
+  \item[TODO mode]
+  specialisation of the Simulator mode, where csem shows the part of the standard being used while executing a program.
+\end{description}
+
+\newpage
+
+Here we recall the "next" csem's intermediate languages and pipeline:
+--------------------------------------------------------------------------------
+Cabs    tries to follow as closely as possible the grammar given in the standard
+        (see Annex A), modulo: collapsing of "parsing motivated" structures of
+        the grammar (e.g. expressions); addition of some stuff defined as part
+        of the standard library, but which should really be part of the
+        language (e.g. setjmp).
+
+Ail    Cabs but with more structure: the type declarators are encoded in a form
+       where meaningless declarator are not representable (e.g. int char x;);
+       struct/union members are flattened (int x, y ==> int x; int y) and more
+       sensible blocks. Some construct of Cabs which are simply syntactic sugar
+       are also translated away (e.g. increment/decrement, BUT NOT array
+       subscripts because we need to keep them for typechecking).
+
+Ail\_τ    Ail with type annotation everywhere
+
+Ail'\_τ    Ail\_τ after the final pass of sugaring: translating array subscripts
+          into arithmetic and deref (TODO: something else ?)
+
+Core    described here, and translated from Ail'\_τ
+
+
+PIPELINE:
+  1) C      ----parsing-----> Cabs
+  2) Cabs   ---desugaring---> Ail
+  3) Ail    --typechecking--> Ail\_τ
+  4) Ail\_τ  --desugaring2---> Ail'\_τ
+  5) Ail'\_τ ----------------> Core
+--------------------------------------------------------------------------------
+
+
+\section{Syntax}
+
+\subsection{TODO: auxiliary stuff}
+\ottmetavars
+
+
+\subsection{Expressions}
+Core has {\bf pure} expressions over {\bf true integers} ($\Z$). They
+do not produce any sort of error and always return a value. Note that
+the purity makes the ordering of Core's expressions irrelevant. An
+$\texttt{Ail}_\tau$ expression is not translated to a \texttt{Core}
+expression, but to a \texttt{Core} statement explicitely showing how
+the evaluation of the the
+decomposition of 
+represents the complex ordering
+
+\ottgrammartabular{
+  \otteop\ottinterrule
+  \ottE\ottafterlastrule
+}
+
+
+\subsection{Boolean tests}
+\ottgrammartabular{
+  \ottbop\ottinterrule
+  \ottconnective\ottinterrule
+  \ottB\ottafterlastrule
+}
+
+
+\subsection{Statements}
+\ottgrammartabular{
+  \ottp\ottinterrule
+  \ottS\ottafterlastrule
+}
+
+
+
+
+
+
+
+\subsection{Programs}
+{\color{orange} P = [(φ, S)] (TODO: this has/will change(d))}
+
+\section{Statics}
+  We give a nearly trivial type system to Core to avoid having meaningless
+  programs (may be useless for the "Prover mode").
+  
+  We have the following base types:
+    * unit    the classic unit type
+    * value   morally is the mathematical integers modulo Trap values,
+              indeterminate values, ... (Or I (K) am wrong ?)
+    * addr    the addr of a memory object
+  
+  We also have lists (written [ty]) and pairs (written (ty1, ty2)).
+  
+  EXPRESSIONS
+    [α]           lookup in the typing environment
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type
+                  value.
+    [-E]          E must be of type value and the result is of type value.
+    [max\_τ]       is of type value
+    [min\_τ]       is of type value
+    [sizeof\_τ]    is of type value
+    [alignof\_τ]   is of type value
+    [offsetof α]  α is of type addr (TODO: there is some metaphysical thoughts
+                  whether we have to enforce that α is not only of type addr but
+                  also corresponds to a struct/union members (which is the only
+                  case where offsetof makes any sense) or if we ignore this a
+                  the typing level and then makes the value of "offsetof α"
+                  equals 0 for any improper α (this should "just work" but this
+                  is nasty)
+  
+  BOOLEAN TESTS
+    [true]        is of type value
+    [false]       is of type value
+    [¬F]          F must be of type value and the result is of type value.
+    [F1 * F2]     F1 and F2 must be of type value and the result is of type value.
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
+  
+  STATEMENTS
+    [skip]                  is of type unit.
+    [fail]                  (TODO) J seems to want to have a base type
+                            "undefined" for this construct, whereas K don't see
+                            the point (or forgot it) and thinks the type unit is
+                            sufficient here.
+    [E]                     see the typing of expressions
+    [let α = S1 in S2]      is of the same type as S2, which is typed in the
+                            current type environmnent extended with "α is of the
+                            same type as S1".
+    [if F then S1 else S2]  F must be of type value, S1 and S2 must be of the
+                            same type (say ty) and result is of type ty.
+    [S1 + S2]               S1 and S2 must be of the same type (say ty) and
+                            result is of type ty.
+    [S1 || S2]              if S1 is of type ty1 and S2 of type ty2, then the
+                            result is of type (ty1, ty2)
+    [create\_τ]              if τ is not a struct/union type, then the result is
+                            of type addr, otherwise it is of type [addr] with
+                            length equal to the number of fields of τ.
+    [kill α]                α must be of type addr, and the return type is unit.
+    [store\_τ α1 α2]         α1 must be of type addr, α2 must be of type value
+                            and the return type is unit.
+    [load\_τ α]              α must be of type addr and the return type is value.
+    [same α1 α2]            α1 and α2 must be of type addr and the return type
+                            is unit.
+    [fun φ(α1, ..., αN) S]  TODO
+    [call φ(α1, ..., αN)]   TODO
+--------------------------------------------------------------------------------
+
+
+\section{Dynamics}
+
+\subsection{Abstract Memory model}
+The basic blocks of C's memory model are {\it objects} (§3.15), defined
+as regions in the memory of the execution environnment capable of
+containing the representation of a value. In turn, {\it values}
+(§3.19) are defined as the ``precise meaning of the contents of an
+object when interpreted as having a specific type''. When an object is
+declared, it is given an {\it effective type} (with the exception of
+allocated objects).
+
+
+We encode the memory state as a list of trees of objects. The root of
+each tree correspond to an object which is not a subobject (hence not
+a field of struct/union), while childs of the trees are sub-objects.
+
+
+
+data Object= (Repr, EffectiveTy)
+
+data EffectiveTy = EType Ty | Allocated
+
+data Repr = Value Z | TrapRepr | IndeterminateRepr
+
+
+
+
+
+\newpage
+
+
+
+
+
+
+
+
+
+
+
+
+(We omit obvious stuff like booleans tests and arithmetic operations over
+ expressions)
+
+== [α] =========================================================================
+Is a symbol that occording to its type may correspond to a memory object (addr),
+a value computed using an expression/boolean test (val).
+TODO: also functions?
+
+== [max\_τ / min\_τ] =============================================================
+Is the maximum/minimum value (of Z) representable by the type τ.
+
+== [sizeof\_τ / alignof\_τ] ======================================================
+Is respectively the number of bytes needed to store in the memory an object of
+type τ and the memory alignment (given as a positive). These are needed to
+implement C's sizeof() and alignof() but may also appear on some explicit checks
+that we add to detect undefined behaviours.
+
+== [offsetof α] ================================================================
+If α designate a struct/union field, then the value of the expression "offsetof
+α" is the offset of that field in the memory representation of the containing
+object. Otherwise the value is 0.
+
+[K: the only alternative to the "otherwise" I see is to put a "binary" type for
+    Addr symbols, but this seems uselessly heavy. Morally the expression has no
+    real meaning for an α not corresponding to a struct/union field, but for
+    these the 0 should be correct (?)]
+
+The value of this construct is clearly implementation-defined; it is needed to
+implement the offsetof macro (§7.19).
+
+
+
+
+
+
+
+== [skip] ======================================================================
+Is just a "nop". Used for example to implement C's if-then statements and loop
+with empty bodies.
+
+== [fail] ======================================================================
+This construct represents an undefined behaviour. In the simulator mode this is
+implemented as an exception being thrown.
+
+== [let α = S1 in S2] ==========================================================
+In addition to meaning the usual stuff, this construct means that any action
+performed by S1 is sequenced-before any action performed by S2. If α is not used
+in S2 this just correspond the ';' of C.
+
+== [if F then S else S] ========================================================
+Classic if-then-else construct: the test is evaluated (remember that it is pure)
+and the corresponding branch is executed. This is used to implement C's
+if-then-else statement, but also to make explicit checks for non memory-related
+undefined behaviours (such as: arithmetic overflows, conversion errors, ...).
+
+== [S1 + S2] ===================================================================
+Non deterministic choice (TODO: why do we want this again?)
+
+
+== [S1 || S2] ==================================================================
+This is the unsequenced composition. If we consider the sb relation as a graph,
+this construct is simply placing the actions of S1 and S2 side-by-side without
+adding any new edges. The value returned by this statement is the pair made of
+the value of S1 and the value of S2. The state of the memory after this
+statement can be explained by applying an interleaving of the actions of S1 and
+S2 to the original state.
+
+== [create\_τ] ==================================================================
+This statement creates in the memory an "object" (§3.15) with
+"effective type" (§6.5\#6) τ. It returns one or more symbols of type Addr. Later,
+to refer to the object or its subobjects (fields of structs/unions) one has to
+use the corresponding symbol introduced by the create statement. 
+
+This construct typically corresponds to the translation of a C declaration,
+where it is used as the left operand of a let construct:
+
+  (in C)        (in Core)
+  
+  struct T {      let α1 = create\_\{signed int\} in
+    int x, y;     let α2 = create\_\{signed int\} in
+  };              ...
+  ...             let [α3, α4, α5] = create\_\{struct T\} in
+  int u, v;       
+  ...             
+  struct T w;     
+
+
+
+
+== [kill α] ====================================================================
+
+== [store\_τ α1 α2] =============================================================
+
+== [load\_τ α] ==================================================================
+
+== [fun φ(α1, ..., αN) S] ======================================================
+
+== [call φ(α1, ..., αN)] =======================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Problems}
+
+\subsection{Implementation of \csyn{goto} and \csyn{setjmp}/\csyn{longjmp}}
+
+We try to avoid having plain continuations in Core's syntax or semantics, but need to implement \csyn{goto} and \csyn{setjmp}/\csyn{longjmp}.
+The first are somehow ``well-behaved'' since they can't jump out of the function containing them.
+This allows a rather simple hack to implement them:
+consider a C function \csyn{func}, we translate it a first time to Core (producing a Core function $\varphi$) while ignoring the labels it contains.
+In this translation, a statement \csyn{goto label;} is translated to a Core function calls $\varphi_{\syn{label}}(\dots)$ with as arguments: all the local variables
+of $\varphi$ visible at this point (this includes that function parameters).
+Now for each label in the body of \csyn{func}, we create a truncated copy of the Core function $\varphi$ containing only the ``continuation'' of the
+function after that label. For example, consider the following C program (left) and its first Core translation (right):
+% \begin{lstlisting}
+% 1: int func(int x)
+%    {
+% 2:      int i = 0;
+% 3: loop:
+% 4:      if i<5 {
+% 5:        i++;
+% 6:        goto loop;
+%         }
+% 7:      return i;
+%    }
+% \end{lstlisting}
+
+{\footnotesize
+{\fontspec{Courier}
+\begin{tabular}{ll}
+& int func(int x)\\
+& \{\\
+& {\color{red}\quad int i = 0;}\\
+loop: & \\
+& {\color{green}\quad if i<5} \{\\
+& {\color{blue}\quad \quad i++;}\\
+& {\color{magenta}\quad \quad goto loop;}\\
+& \quad \}\\
+& {\color{orange}\quad return i;}\\
+& \}
+\end{tabular}
+}
+\vline
+\begin{tabular}{l}
+\syn{fun} $\varphi$ $x$ =\\
+{\color{red} \quad \syn{let} $\alpha_1$ = $\syn{create}_\textsf{signed int}$ \syn{in}}\\
+{\color{red} \quad \syn{let} $\alpha_2$ = 0 \syn{in}}\\
+{\color{red} \quad \syn{if} $\syn{min}_\textsf{signed int} \le \alpha_2 \le \syn{max}_\textsf{signed int}$ \syn{then}}\\
+{\color{red} \quad \quad $\syn{store}_\textsf{signed int}$ $\alpha_1$ $\alpha_2$}\\
+{\color{red} \quad \syn{else}}\\
+{\color{red} \quad \quad \syn{fail}}\\
+{\color{green} \quad \syn{let} $(\alpha_3, \alpha_4)$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ || 5 \syn{in}}\\
+{\color{green} \quad \syn{if} $\syn{min}_\textsf{signed int} \le \alpha_4 \le \syn{max}_\textsf{signed int}$ \syn{then}}\\
+{\color{green} \quad \quad \syn{if} $\alpha_3 < \alpha_4$ \syn{then}}\\
+{\color{blue} \quad \quad \quad \syn{let} $\alpha_5$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ \syn{in}}\\
+{\color{blue} \quad \quad \quad \syn{let} $\alpha_6$ = $\alpha_5$ + 1 \syn{in}}\\
+{\color{blue} \quad \quad \quad \syn{if} $\syn{min}_\textsf{signed int} \le \alpha_6 \le \syn{max}_\textsf{signed int}$ \syn{then}}\\
+{\color{blue} \quad \quad \quad \quad $\syn{store}_\textsf{signed int}$ $\alpha_1$ $\alpha_6$}\\
+{\color{blue} \quad \quad \quad  \syn{else}}\\
+{\color{blue} \quad \quad \quad \quad \syn{fail}}\\
+{\color{magenta} \quad \quad \quad \syn{call} $\varphi_\syn{loop}$ $x$ $\alpha_1$}\\
+{\color{green} \quad \quad \syn{else}}\\
+{\color{green} \quad \quad \quad \syn{skip}}\\
+{\color{green} \quad \syn{else}}\\
+{\color{green} \quad \quad \syn{fail}}\\
+{\color{orange} \quad \syn{let} $\alpha_7$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ \syn{in}}\\
+{\color{orange} \quad  $\alpha_7$}
+\end{tabular}
+
+\begin{tabular}{l}
+\syn{fun} $\varphi_\syn{loop}$ $x$ $\alpha_1$ =\\
+{\color{green} \quad \syn{let} $(\alpha_2, \alpha_3)$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ || 5 \syn{in}}\\
+{\color{green} \quad \syn{if} $\syn{min}_\textsf{signed int} \le \alpha_3 \le \syn{max}_\textsf{signed int}$ \syn{then}}\\
+{\color{green} \quad \quad \syn{if} $\alpha_2 < \alpha_3$ \syn{then}}\\
+{\color{blue} \quad \quad \quad \syn{let} $\alpha_4$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ \syn{in}}\\
+{\color{blue} \quad \quad \quad \syn{let} $\alpha_5$ = $\alpha_4$ + 1 \syn{in}}\\
+{\color{blue} \quad \quad \quad \syn{if} $\syn{min}_\textsf{signed int} \le \alpha_5 \le \syn{max}_\textsf{signed int}$ \syn{then}}\\
+{\color{blue} \quad \quad \quad \quad $\syn{store}_\textsf{signed int}$ $\alpha_1$ $\alpha_5$}\\
+{\color{blue} \quad \quad \quad  \syn{else}}\\
+{\color{blue} \quad \quad \quad \quad \syn{fail}}\\
+{\color{magenta} \quad \quad \quad \syn{call} $\varphi_\syn{loop}$ $x$ $\alpha_1$}\\
+{\color{green} \quad \quad \syn{else}}\\
+{\color{green} \quad \quad \quad \syn{skip}}\\
+{\color{green} \quad \syn{else}}\\
+{\color{green} \quad \quad \syn{fail}}\\
+{\color{orange} \quad \syn{let} $\alpha_6$ = $\syn{load}_\textsf{signed int}$ $\alpha_1$ \syn{in}}\\
+{\color{orange} \quad  $\alpha_6$}
+\end{tabular}
+}
+
+This scheme should also be sufficient to implement all C's iteration and jump statements.
+Some additional care not visible in the example need to be taken.
+For jumps entering a different block, we need to allocate the local variables of that block and make the symbols used in the body of block match the allocations. Accordingly for jumps leaving a block, we need to kill the local variables.
+For labels inside a loop body, we have to unfold the loop once in order to be able to do the function duplication.
+These should not be difficult to add to the translation but will affect the readability of the Core code.
+Regarding the whole scheme, a main concern it that is makes the structure of the Core code very different from the one of the
+original C program. \TODO{Crazy remark by J: maybe goto in Core is a better option.}
+
+
+
+
+\subsection{Indeterminately sequenced}
+A main goal of Core is to cleanly represents the order of evaluation between memory actions. The standard defines {\it sequenced-before} (sb) as a thread-local binary relation over ``evaluations'' \footnote{``Evaluation of an expression in general includes both value computations and initiation of side effects'' (§5.1.2.3\#2)} leading to a partial order over them. We think we handle properly explicitely sequenced and unsequenced actions (with \syn{let} . \syn {in} . and $||$), but we get into trouble with the ``indeterminately sequenced'' actions:
+
+\begin{quote}
+  {\bf (§5.1.2.3\#3)}
+  "\dots Evaluations A and B are indeterminately sequenced when A is sequenced either before or after B, but it is unspecified which. ${}^{13)}$ ..."
+\end{quote}
+  
+\begin{quote}
+  {\bf(footnote 13)}
+  "The executions of unsequenced evaluations can interleave. Indeterminately sequenced evaluations cannot interleave, but can be executed in any order."
+\end{quote}
+
+\begin{quote}
+  {\bf(footnote 86)}
+  "In an expression that is evaluated more than once during the execution of a program, unsequenced and indeterminately sequenced evaluations of its subexpressions need not be performed consistently in different evaluations."
+\end{quote}
+
+Only two things are stated as being indeterminately sequenced with their context:
+\begin{description}
+\item[(§6.5.2.2\#10) function calls]
+  "... Every evaluation in the calling function (including other function
+  calls) that is not otherwise specifically sequenced before or after the
+  execution of the body of the called function is indeterminately sequenced
+  with respect to the execution of the called function."\\
+  {\bf (footnote 94)}:
+  "In other words, function executions do not ‘‘interleave’’ with each
+  other."
+  
+\item[(§6.7.9\#23) initialization list expressions]
+  "The evaluations of the initialization list expressions are
+  indeterminately sequenced with respect to one another and thus the order
+  in which any side effects occur is unspecified. ${}^{152}$"\\
+  {\bf (footnote 152)}:
+  "In particular, the evaluation order need not be the same as the order of
+  subobject initialization."
+\end{description}
+
+We also need to handle postfix increments/decrements and compound assigments specially:
+\begin{quote}
+  {\bf (§6.5.2.4\#2)}
+  "With respect to an indeterminately-sequenced function call, the operation
+  of postfix ++ is a single evaluation."
+\end{quote}
+
+\begin{quote}
+  {\bf (§6.5.16.2\#3)}
+  "A compound assignment of the form \csyn{E1 op = E2} is equivalent to the simple
+  assignment expression \csyn{E1 = E1 op (E2)}, except that the lvalue \csyn{E1} is
+  evaluated only once, and with respect to an indeterminately-sequenced
+  function call, the operation of a compound assignment is a single
+  evaluation. ${}^{113}$"
+\end{quote}
+
+
+If no other construct of C has the same kind of constraint, then it should be sufficient to add an RMW action of Core's statements.
+This will be a bit annoying because checks for undefined behaviour coming from arithmetic exceptions will be hidden inside the semantics
+of that action.
+If there are other ``non interleaving'' constructions, then we will probably need something like atomic blocks.
+With these we won't have the hiding of the undefined behaviours checks, but this not a minor addition to the language.
+
+
+
+
+\newpage
+
+
+[All the things stated as unsequenced by the standard]
+  
+  * (6.5\#3 Expressions)
+      "Except as specified later, side effects and value computations of
+       subexpressions are unsequenced. [86]"
+  
+  * (6.5.16\#3 Assignment operators)
+      "The evaluations of the operands are unsequenced."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Consider the following C pseudo-program: A + B + f()
+
+The operands of the additions are "unsequenced", except for function calls which
+are indeterminately sequenced. Here the sb-relation look like:
+  
+       .- f() -.            A             B        A
+   sb /         \ sb        |             |         \ sb
+     |           |     OR   | sb       sb |   OR     '-> f()        OR
+     v           v           \           /                 \ sb
+     A           B            '-> f() <-'                   '-> B
+   
+                            B
+                             \ sb
+                              '-> f()
+                                    \ sb
+                                     '-> A
+   --------------------------------------------------------------------------
+
+== Previous attempt 1) at the definition of \&:
+  f \& A = f(); A or A; f
+  
+But if we have A = e\_1 || e\_2, we are missing the last two cases.
+
+
+== Previous attempt 2):
+  f (A || B) = f; (A || B) or (A||B); f + A; f; B + B; f; A
+
+But this is still not enough because of the following program:
+  f() + ((x, x=0) + y)
+
+
+== Third attempt:
+  
+
+
+
+
+--------------------------------------------------------------------------------
+
+[Abstract memory]
+  We represents the memory as a list of trees of memory objects. A memory object
+  is given by a symbolic name, an effective type and a content. The trees
+  corresponds to subobjects of struct/union types. As an example, consider the
+  following C declarations:
+    
+    int x = 0;
+    struct T {
+      int y = 1,z = 2;
+    } v;
+  
+  The memory after initialisation is encoded as:
+  
+%  ---(S\_x, signed int, Val 0)---------(S_v, T, _)------------------>
+ %                                       /    \
+%                                     .-'      '-.
+ %                                   /            \
+   %              (S_y, signed int, Val 1)    (S_z, signed int, Val 2)
+
+
+
+2012-03-06 - J, K
+
+There are now some worries about Core being too far removed from the real C.
+There are two major problems:
+  - the "nasty conference question" where some random programmer complains that
+    our semantics doesn't talk about C but talks about some other (related)
+    language.
+
+  - we want to be able to formulate a logical statement about a C program (e.g.
+    "function f of file.c doesn't have any undefined behaviour") and show its
+    correctness. To do so, we intend to translate the C program into Core where
+    all the semantics goodness happens. Hence we have to problems: we need a
+    semantics to directly talk about properties of the original program and a
+    bijective truth-preserving translation to properties of the corresponding
+    Core program.
+
+
+
+
+
+TODO: I/O
+
+TODO: define what a "Value" is (talk somewhere about trap values, multiple representations)
+
+
+
+CHOICE:
+  In Core, do we write "by hand" check for type compatibility when doing a load/store or
+  do we hide these in the semantics of load/store ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[Compatible types (§6.2.7)]
+  
+  compatible τ1 τ2 <->
+    
+    * "their types are the same"
+    * Additional rules for determining whether two types are compatible are described in:
+        * 6.7.2 for type specifiers,
+        * 6.7.3 for type qualifiers,
+        * 6.7.6 for declarators.
+
+    
+    * If τ1 and τ2 are structure types declared in separate translation units:
+        * tag τ1 = tag τ2
+        ------------------------------------------------------------------------
+        * N = length (members τ1) = length (members τ2)
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, compatible (typeof (members τ1)[i])
+                                            (typeof (members τ2)[i])
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N,
+            forall a1 a2,
+              alignment\_specifier (members τ1)[i] a1 ->
+              alignment\_specifier (members τ2)[i] a2 ->
+              compatible\_alignment a1 a2
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, name (members τ1)[i] = name (members τ2)[i]
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, bitfield\_width (members τ1)[i] =
+                                 bitfield\_width (members τ2)[i]
+        
+
+
+
+    * two structure, union or enumerated types declared in separate translation
+      units are compatible if their tags and members satisfy the following
+      requirements:
+        * tag τ1 = tag τ2
+        ------------------------------------------------------------------------
+        * If both are completed anywhere within their respective translation
+          units, then the following additional requirements apply:
+            * there shall be a one-to-one correspondence between their members
+              such that each pair of corresponding members are declared with
+              compatible types;
+            --------------------------------------------------------------------
+            * if one member of the pair is declared with an alignment specifier,
+              the other is declared with an equivalent alignment specifier;
+            --------------------------------------------------------------------
+            * if one member of the pair is declared with a name, the other is
+              declared with the same name. For two structures, corresponding
+              members shall be declared in the same order. For two structures or unions, corresponding bit-fields shall have the same widths. For two enumerations, corresponding members shall have the same values.
+
+
+\subsection{Type conversions}
+
+\subsection{Input/Output}
+
+
+
+\newpage
+
+
+\section{Typing of $\syn{Ail}_\tau$}
+
+% unary predicate over types checking that its argument is "arithmetic
+% type" (see. §6.2.5#18)
+\newcommand{\isArithmetic}[1]{\textsf{is\_arithmetic(#1)}}
+
+
+\newcommand{\isObject}[1]{\textsf{is\_object(#1)}}
+\newcommand{\isFunction}[1]{\textsf{is\_function(#1)}}
+
+% annotate the type given as argument as being the type of an lvalue.
+\newcommand{\lvalue}[1]{\textsf{lvalue(#1)}} 
+
+% integer promotion
+\newcommand{\promote}[1]{\textsf{promote(#1)}} 
+
+
+\newcommand{\pointerTy}[1]{$*#1$} 
+
+\subsection{Expressions}
+
+{\bf (\ail{+E})} % Ail.UNARY Ail.PLUS e
+    \inference{
+      \Gamma |- E : \tau \\ \isArithmetic{$\tau$}
+    }{
+      \Gamma |- +E : \promote{$\tau$}
+    }[unary\_plus]
+    
+{\bf (\ail{-E})} % Ail.UNARY Ail.MINUS e
+    \inference{
+      \Gamma |- E : \tau \\ \isArithmetic{$\tau$}
+    }{
+      \Gamma |- -E : \promote{$\tau$}
+    }[unary\_minus]
+    
+{\bf (\ail{!E})} % Ail.UNARY Ail.BNOT e
+    \inference{
+      \Gamma |- E : \tau \\ \isArithmetic{$\tau$}
+    }{
+      \Gamma |- !E : \promote{$\tau$}
+    }[unary\_bnot]
+    
+{\bf (\syn{\&E})} % Ail.UNARY Ail.ADDRESS e
+
+% IF E is of type ``function of type ty''
+% OR E is an lvalue of object type ty
+% THEN \&E is of type ``pointer to ty''
+
+    \inference{
+      \Gamma |- E : \tau \\ \isFunction{$\tau$}
+    }{
+      \Gamma |- \&E : \pointerTy{$\tau$}
+    }[unary\_address\_lvalue]
+
+    \inference{
+      \Gamma |- E : \tau \\ \isArithmetic{$\tau$}
+    }{
+      \Gamma |- \&E : \promote{$\tau$}
+    }[unary\_address\_function]
+    
+{\bf (\syn{*E})} % Ail.UNARY Ail.INDIRECTION e
+    
+{\bf (\syn{++E})} % Ail.UNARY Ail.POSTFIX_INCR e
+    
+    
+{\bf (\syn{--E})} % Ail.UNARY Ail.POSTFIX_DECR e
+    
+    
+  % \item[($\ail{E}_1 * \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.MUL) e1 e2
+    
+    
+  % \item[($\ail{E}_1 / \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.DIV) e1 e2
+    
+    
+  % \item[($\ail{E}_1 \% \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2
+    
+    
+  % \item[($\ail{E}_1 + \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2
+    
+    
+  % \item[($\ail{E}_1 - \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2
+    
+    
+  % \item[($\ail{E}_1 >> \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2
+    
+    
+  % \item[($\ail{E}_1 << \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2
+    
+    
+  % \item[($\ail{E}_1 \& \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2
+    
+    
+  % \item[($\ail{E}_1 | \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2
+    
+    
+  % \item[($\ail{E}_1 xor \ail{E}_2$)] % Ail.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2
+    
+    
+
+
+
+
+
+
+
+  % \item[Ail.ASSIGN $op_{\text{opt}}$ $e_1$ $e_2$]
+  % \item[Ail.QUESTION  $e_1$ $e_2$ $e_3$]
+  % \item[Ail.CAST $\tau$ $e$]
+  % \item[Ail.CALL $e_1$ $e_2$]
+  % \item[Ail.MEMBEROF $e$ $x$]
+  % \item[Ail.MEMBEROFPTR $e$ $x$]
+  % \item[Ail.CONSTANT $n$]
+  % \item[Ail.VARIABLE $x$]
+  % \item[Ail.SIZEOF $\tau $]
+  % \item[Ail.ALIGNOF $\tau$]
+
+
+
+\section{Compiling $\syn{Ail}_\tau$ to \syn{Core}}
+
+\subsection{Compiling $\syn{Ail}_\tau$ expressions}
+
+\begin{description}
+
+\item[Ail.UNARY op e]
+\item[Ail.BINARY op $e_1$ $e_2$]
+\item[Ail.ASSIGN $op_{\text{opt}}$ $e_1$ $e_2$]
+\item[Ail.QUESTION  $e_1$ $e_2$ $e_3$]
+\item[Ail.CAST $\tau$ $e$]
+\item[Ail.CALL $e_1$ $e_2$]
+\item[Ail.MEMBEROF $e$ $x$]
+\item[Ail.MEMBEROFPTR $e$ $x$]
+\item[Ail.CONSTANT $n$]
+\item[Ail.VARIABLE $x$]
+\item[Ail.SIZEOF $\tau $]
+\item[Ail.ALIGNOF $\tau$]
+
+
+
+\item[(§6.5.2.4) Postfix increment and decrement operators]
+\[
+  \inference{(E:\tau) \leadsto \syn{C}}
+	        {\textsf{++}(E:\tau) \leadsto
+	         \left[
+             \begin{tabular}{lll}
+	           $\alpha$ & $\leftarrow$ & \syn{C}\\
+	           $v$      & $\leftarrow$ & $\syn{load}_\tau$ $\alpha$\\
+	           $v'$     & $\leftarrow$ & $\syn{conv}_\tau$ $(v+1)$\\
+	                    &              & $\syn{store}_\tau$ $a$ $v'$\\
+				        &              & $v$
+	         \end{tabular}
+		     \right]}[(post\_incr)]
+\]
+
+\end{description}
+
+
+
+\end{document}

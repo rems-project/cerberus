@@ -60,9 +60,22 @@ let rec check_exp env l e_head =
         E.return (A.T_LVALUE t)
   | A.CONSTANT (C.CONST_INT (i, None)) ->
       E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
-  | A.CONSTANT (C.CONST_INT (_, Some _)) ->
+  | A.CONSTANT (C.CONST_INT (_, Some suffix)) ->
+      (* (§6.4.4.1) Integer constants, with suffix *)
+      match suffix with
+      | SUFFIX_UNSIGNED           -> E.fail (Type_error.UNSUPPORTED "UNSIGNED")
+      | SUFFIX_UNSIGNED_LONG      -> E.fail (Type_error.UNSUPPORTED "UNSIGNED LONG")
+      | SUFFIX_UNSIGNED_LONG_LONG -> E.fail (Type_error.UNSUPPORTED "UNSIGNED LONG LONG")
+      | SUFFIX_LONG               -> E.fail (Type_error.UNSUPPORTED "LONG")
+      | SUFFIX_LONG_LONG          -> E.fail (Type_error.UNSUPPORTED "LONG LONG")
+      end
+
+
+
+(*
       E.fail (Type_error.UNSUPPORTED
         "Suffixes in integer constant expressions are not supported.")
+*)
   | A.CALL e es ->
       type_of e >>= fun t ->
       if T.is_pointer_to_function t then
@@ -82,6 +95,47 @@ let rec check_exp env l e_head =
           else E.fail Type_error.CALL_NUMBER_OF_ARGUMENTS
         else E.fail Type_error.CALL_RETURN
       else E.fail Type_error.CALL_FUNCTION_POINTER
+
+  | A.UNARY A.PLUS e ->
+      type_of e >>= fun t ->
+      if T.is_arithmetic t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Type_error.PLUS_ARITHMETIC
+
+  | A.UNARY A.MINUS e ->
+      type_of e >>= fun t ->
+      if T.is_arithmetic t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Type_error.MINUS_ARITHMETIC
+
+  | A.UNARY A.BNOT e ->
+      type_of e >>= fun t ->
+      if T.is_integer t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Type_error.BNOT_INTEGER
+
+  | A.UNARY A.ADDRESS e ->
+      match Annot.type_of e with
+      | A.T_EXP ((A.FUNCTION _ _) as t) -> E.return t
+      | A.T_EXP _                       -> E.fail Type_error.ADDRESS_FUNCTION_OR_LVALUE
+      | A.T_LVALUE t                    ->
+          if T.is_object t then
+            E.return t
+          else E.fail Type_error.ADDRESS_FUNCTION_OR_LVALUE
+      end >>= fun t ->
+      E.return (A.T_EXP (A.POINTER {} t))
+
+
+  | A.UNARY A.INDIRECTION e ->
+      type_of e >>= fun t ->
+      if T.is_pointer t then
+        if T.is_pointer_to_object t then
+          E.return (A.T_LVALUE (T.base_of_pointer t))
+        else E.return (A.T_EXP (T.base_of_pointer t))
+      else E.fail Type_error.INDIRECTION_POINTER
+
+
+
   | A.UNARY A.POSTFIX_INCR e ->
       lvalue_type_of Type_error.INCR_LVALUE e >>= fun t ->
       if T.is_modifiable t then
@@ -90,6 +144,7 @@ let rec check_exp env l e_head =
           check_exp env l (A.ASSIGN (Some C.ADD) e a_one)
         else E.fail Type_error.INCR_REAL_OR_POINTER
       else E.fail Type_error.INCR_LVALUE
+
   | A.UNARY A.POSTFIX_DECR e ->
       lvalue_type_of Type_error.INCR_LVALUE e >>= fun t ->
       if T.is_modifiable t then
@@ -98,53 +153,25 @@ let rec check_exp env l e_head =
           check_exp env l (A.ASSIGN (Some C.SUB) e a_one)
         else E.fail Type_error.INCR_REAL_OR_POINTER
       else E.fail Type_error.INCR_LVALUE
-  | A.UNARY A.ADDRESS e ->
-      match Annot.type_of e with
-      | A.T_EXP ((A.FUNCTION _ _) as t) -> E.return t
-      | A.T_EXP _ -> E.fail Type_error.ADDRESS_FUNCTION_OR_LVALUE
-      | A.T_LVALUE t ->
-          if T.is_object t then
-            E.return t
-          else E.fail Type_error.ADDRESS_FUNCTION_OR_LVALUE
-      end >>= fun t ->
-      E.return (A.T_EXP (A.POINTER {} t))
-  | A.UNARY A.INDIRECTION e ->
-      type_of e >>= fun t ->
-      if T.is_pointer t then
-        if T.is_pointer_to_object t then
-          E.return (A.T_LVALUE (T.base_of_pointer t))
-        else E.return (A.T_EXP (T.base_of_pointer t))
-      else E.fail Type_error.INDIRECTION_POINTER
-  | A.UNARY A.MINUS e ->
-      type_of e >>= fun t ->
-      if T.is_arithmetic t then
-        E.return (A.T_EXP (T.promote t))
-      else E.fail Type_error.MINUS_ARITHMETIC
-  | A.UNARY A.PLUS e ->
-      type_of e >>= fun t ->
-      if T.is_arithmetic t then
-        E.return (A.T_EXP (T.promote t))
-      else E.fail Type_error.PLUS_ARITHMETIC
-  | A.UNARY A.BNOT e ->
-      type_of e >>= fun t ->
-      if T.is_integer t then
-        E.return (A.T_EXP (T.promote t))
-      else E.fail Type_error.BNOT_INTEGER
+
   | A.SIZEOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
           E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.SIZEOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
+
   | A.ALIGNOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
           E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Type_error.ALIGNOF_INCOMPLETE
       else E.fail Type_error.SIZEOF_FUNCTION
+
   | A.CAST (A.VOID q) e ->
       type_of e >>= fun _ ->
       E.return (A.T_EXP (A.VOID q))
+
   | A.CAST t' e ->
       type_of e >>= fun t ->
       if T.is_scalar t' then
@@ -152,20 +179,25 @@ let rec check_exp env l e_head =
           E.return (A.T_EXP t')
         else E.fail Type_error.CAST_OPERAND_SCALAR
       else E.fail Type_error.CAST_NAME_SCALAR
+
+  (* K: seriously? This hack is at the edge of decency  *)
   | A.BINARY (C.ARITHMETIC C.MUL) e1 e2 ->
       check_exp env l (A.BINARY (C.ARITHMETIC C.DIV) e1 e2)
+
   | A.BINARY (C.ARITHMETIC C.DIV) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_arithmetic t1 && T.is_arithmetic t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Type_error.MUL_ARITHMETIC
+
   | A.BINARY (C.ARITHMETIC C.MOD) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 && T.is_integer t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Type_error.MOD_INTEGER
+
   | A.BINARY (C.ARITHMETIC C.ADD) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
@@ -211,8 +243,10 @@ let rec check_exp env l e_head =
             E.return (A.T_EXP (T.usual_arithmetic t1 t2))
           else E.fail Type_error.SUB_ALL
       end
+  (* TODO: this is looping, I guess C.SHL is meant to be C.SHR (ugly btw) *)
   | A.BINARY (C.ARITHMETIC C.SHL) e1 e2 ->
       check_exp env l (A.BINARY (C.ARITHMETIC C.SHL) e1 e2)
+
   | A.BINARY (C.ARITHMETIC C.SHR) e1 e2  ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
@@ -221,6 +255,8 @@ let rec check_exp env l e_head =
           E.return (A.T_EXP (T.promote t1))
         else E.fail Type_error.SHR_INTEGER_FIRST
       else E.fail Type_error.SHR_INTEGER_SECOND
+
+  (* TODO: beurk *)
   | A.BINARY C.LT e1 e2 ->
       check_exp env l (A.BINARY C.GE e1 e2)
   | A.BINARY C.GT e1 e2 ->
@@ -295,6 +331,7 @@ let rec check_exp env l e_head =
       if T.is_integer t1 && T.is_integer t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Type_error.BAND_INTEGER
+
   | A.BINARY (C.ARITHMETIC C.XOR) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
@@ -319,7 +356,8 @@ let rec check_exp env l e_head =
       if T.is_scalar t1 && T.is_scalar t2 then
         E.return (A.T_EXP int)
       else E.fail Type_error.OR_SCALAR
-  | A.QUESTION e1 e2 e3 ->
+
+  | A.CONDITIONAL e1 e2 e3 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       type_of e3 >>= fun t3 ->
@@ -343,20 +381,20 @@ let rec check_exp env l e_head =
             else if T.compatible_unqualified b2 b3 then
               let q = T.merge_qualifiers t2 t3 in
               E.of_option
-                Type_error.QUESTION_COMPATIBLE_POINTERS
+                Type_error.CONDITIONAL_COMPATIBLE_POINTERS
                 (T.composite t2 t3) >>= fun t ->
               E.return (A.T_EXP (T.include_qualifiers t q))
-            else E.fail Type_error.QUESTION_POINTERS
+            else E.fail Type_error.CONDITIONAL_POINTERS
 
         (* null pointer constant of integer type *)
         | (A.POINTER _ b2, _) ->
             if is_null_pointer_constant e3 then
               E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
-            else E.fail Type_error.QUESTION_NULL_POINTER_CONSTANT_THIRD
+            else E.fail Type_error.CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
         | (_, A.POINTER _ b3) ->
             if is_null_pointer_constant e2 then
               E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
-            else E.fail Type_error.QUESTION_NULL_POINTER_CONSTANT_THIRD
+            else E.fail Type_error.CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
 
         | (A.VOID _, A.VOID _) ->
             E.return (A.T_EXP (A.VOID {}))
@@ -365,17 +403,17 @@ let rec check_exp env l e_head =
             if T.is_arithmetic t2 then
               if T.is_arithmetic t3 then
                 E.return (A.T_EXP (T.common (T.promote t2) (T.promote t3)))
-              else E.fail Type_error.QUESTION_ARITHMETIC_SECOND
+              else E.fail Type_error.CONDITIONAL_ARITHMETIC_SECOND
 
             else if T.is_structure t2 || T.is_union t2 then
               if t2 = t3 then
                 E.return (A.T_EXP t2)
-              else E.fail Type_error.QUESTION_STRUCTURE_OR_UNION
+              else E.fail Type_error.CONDITIONAL_STRUCTURE_OR_UNION
 
-            else E.fail Type_error.QUESTION_ALL
+            else E.fail Type_error.CONDITIONAL_ALL
         end
 
-      else E.fail Type_error.QUESTION_SCALAR_FIRST
+      else E.fail Type_error.CONDITIONAL_SCALAR_FIRST
   | A.ASSIGN None e1 e2 ->
       lvalue_type_of Type_error.ASSIGN_LVALUE e1 >>= fun t1 ->
       type_of e2                                 >>= fun t2 ->
@@ -479,8 +517,8 @@ and annotate_exp env exp =
         | A.UNARY o e -> E.map (A.UNARY o) (f e)
         | A.BINARY o e1 e2 -> E.map2 (A.BINARY o) (f e1) (f e2)
         | A.ASSIGN o e1 e2 -> E.map2 (A.ASSIGN o) (f e1) (f e2)
-        | A.QUESTION e1 e2 e3 ->
-            E.map3 A.QUESTION (f e1) (f e2) (f e3)
+        | A.CONDITIONAL e1 e2 e3 ->
+            E.map3 A.CONDITIONAL (f e1) (f e2) (f e3)
         | A.CAST t e -> E.map (A.CAST t) (f e)
         | A.CALL e es ->
             E.map2 (A.CALL) (f e) (E.map_list f es)
@@ -497,14 +535,21 @@ let rec annotate_stmt env (l, stmt) =
   let f_e = annotate_exp  env in
   let f_s = annotate_stmt env in
   E.map (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
+  
+  (* (§6.8.4) Selection statements ****************************************** *)
   | A.IF e s1 s2 ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
-      if T.is_scalar t then
+      (* (§6.8.4.1#1) The controlling expression of an if statement shall have
+                      scalar type. *)
+      if not (T.is_scalar t) then
+        E.fail Type_error.IF_SCALAR
+      else
         E.map2 (A.IF e') (f_s s1) (f_s s2)
-      else E.fail Type_error.IF_SCALAR
+
   | A.SWITCH _ _ ->
       E.fail (Type_error.UNSUPPORTED "No support for switch statements yet.")
+
   | A.WHILE e s ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->

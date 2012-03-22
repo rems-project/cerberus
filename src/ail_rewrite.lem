@@ -5,7 +5,7 @@ let map_exp f s exp =
     | UNARY o e -> UNARY o (f e)
     | BINARY o e1 e2 -> BINARY o (f e1) (f e2)
     | ASSIGN o e1 e2 -> ASSIGN o (f e1) (f e2)
-    | QUESTION e1 e2 e3 -> QUESTION (f e1) (f e2) (f e3)
+    | CONDITIONAL e1 e2 e3 -> CONDITIONAL (f e1) (f e2) (f e3)
     | CAST t e -> CAST t (f e)
     | CALL e es -> CALL (f e) (List.map f es)
     | CONSTANT c -> CONSTANT c
@@ -19,7 +19,7 @@ let fold_exp_left f a exp =
     | UNARY o e -> f a e
     | BINARY o e1 e2 -> f (f a e1) e2
     | ASSIGN o e1 e2 -> f (f a e1) e2
-    | QUESTION e1 e2 e3 -> f (f (f a e1) e2) e3
+    | CONDITIONAL e1 e2 e3 -> f (f (f a e1) e2) e3
     | CAST t e -> f a e
     | CALL e es -> List.fold_left f a es
     | CONSTANT c -> a
