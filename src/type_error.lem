@@ -43,14 +43,14 @@ type cause =
   | BOR_INTEGER
   | AND_SCALAR
   | OR_SCALAR
-  | QUESTION_SCALAR_FIRST
-  | QUESTION_NULL_POINTER_CONSTANT_SECOND
-  | QUESTION_NULL_POINTER_CONSTANT_THIRD
-  | QUESTION_POINTERS
-  | QUESTION_ARITHMETIC_SECOND
-  | QUESTION_STRUCTURE_OR_UNION
-  | QUESTION_COMPATIBLE_POINTERS
-  | QUESTION_ALL
+  | CONDITIONAL_SCALAR_FIRST
+  | CONDITIONAL_NULL_POINTER_CONSTANT_SECOND
+  | CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
+  | CONDITIONAL_POINTERS
+  | CONDITIONAL_ARITHMETIC_SECOND
+  | CONDITIONAL_STRUCTURE_OR_UNION
+  | CONDITIONAL_COMPATIBLE_POINTERS
+  | CONDITIONAL_ALL
   | ASSIGN_LVALUE
   | ASSIGN_STRUCTURE_OR_UNION
   | ASSIGN_VOID_POINTER_QUALIFIERS
@@ -279,19 +279,19 @@ let to_string e =
       "Violation of constraint 6.5.14#2 Logical OR operator, Contraints: \
        ``Each of the operands shall have scalar type.``"
 
-  | QUESTION_SCALAR_FIRST ->
+  | CONDITIONAL_SCALAR_FIRST ->
       "Violation of constraint 6.5.15#2 Conditional operator, Constraints: \
        ``The first operand shall have scalar type.``"
-  | QUESTION_NULL_POINTER_CONSTANT_SECOND ->
+  | CONDITIONAL_NULL_POINTER_CONSTANT_SECOND ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
         (Third operand is a pointer but the second operand is not a null pointer constant.)"
-  | QUESTION_NULL_POINTER_CONSTANT_THIRD ->
+  | CONDITIONAL_NULL_POINTER_CONSTANT_THIRD ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        one operand is a pointer to an object type and the other is a pointer \
        to [...] void.`` (Third operand is a pointer but the second operand is \
        not a null pointer constant.)"
-  | QUESTION_POINTERS ->
+  | CONDITIONAL_POINTERS ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``One of the following shall hold for the second and third operands: \
        [Either] both operands have the same structure or union type[, or] both \
@@ -300,21 +300,21 @@ let to_string e =
        pointer constant[, or] one operand is a pointer to an object type and \
        the other is a pointer [...] to void.`` (Second and third operands are \
        pointers but none of the other constraints are satisfied.)"
-  | QUESTION_COMPATIBLE_POINTERS ->
+  | CONDITIONAL_COMPATIBLE_POINTERS ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        both operands are pointers to compatible types [...].`` (Second and \
        third operand are pointers to incompatible types.)"
-  | QUESTION_ARITHMETIC_SECOND ->
+  | CONDITIONAL_ARITHMETIC_SECOND ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        both operands have arithmetic type [...].`` (Second operand has
        arithmetic type but the third doesn't.)"
-  | QUESTION_STRUCTURE_OR_UNION ->
+  | CONDITIONAL_STRUCTURE_OR_UNION ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``[T]he following shall hold for the second and third operands: [...] \
        both operands have the same structure or union type [...].``"
-  | QUESTION_ALL ->
+  | CONDITIONAL_ALL ->
       "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
        ``One of the following shall hold for the second and third operands: \
        [Either] both operands have arithmetic type[, or] both operands have \

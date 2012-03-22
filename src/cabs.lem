@@ -38,7 +38,7 @@ type encoding_prefix =
   | ENCODING_u
   | ENCODING_U
   | ENCODING_L
-type string_literal = encoding_prefix * string
+type string_literal = encoding_prefix option * string
 
 
 (* -- EXPRESSIONS -- *)

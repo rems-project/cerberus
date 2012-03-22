@@ -1,64 +1,16 @@
-/*(*
- *
- * Copyright (c) 2001-2003,
- *  George C. Necula    <necula@cs.berkeley.edu>
- *  Scott McPeak        <smcpeak@cs.berkeley.edu>
- *  Wes Weimer          <weimer@cs.berkeley.edu>
- *  Ben Liblit          <liblit@cs.berkeley.edu>
- * All rights reserved.
- * 
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- * 1. Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- *
- * 3. The names of the contributors may not be used to endorse or promote
- * products derived from this software without specific prior written
- * permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
- * IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- **)
-(**
-** 1.0	3.22.99	Hugues Cassé	First version.
-** 2.0  George Necula 12/12/00: Practically complete rewrite.
-*)
-*/
 %{
-
 module C = Cabs
 module L = Location
 
-let print = print_string
-
-let currentFunctionName = ref "<outside any function>"
-
-(* TODO: an external module + nice displaying *)
-let error msg = print_endline ("\x1b[31m" ^ msg ^ "\x1b[0m"); exit 1
+let print = print_string (* TODO: not used? *)
+let currentFunctionName = ref "<outside any function>" (* TODO: not used? *)
 
 type struct_union =
   | STRUCT_
   | UNION_
-
 %}
 
-%token <string> IDENT
+%token <string> IDENTIFIER
 %token <string> QUALIFIER
 %token <int64 list> CONST_CHAR
 %token <int64 list> CONST_WCHAR
@@ -96,6 +48,7 @@ type struct_union =
 %token LBRACKET RBRACKET
 %token COLON
 %token SEMICOLON
+%token ELLIPSIS
 %token COMMA QUEST
 %token DQUOTE
 
@@ -119,9 +72,12 @@ type struct_union =
 
 %token<Nat_num.num * Cabs.integer_suffix option> CONST_INT
 
+
+%token<Cabs.encoding_prefix option * string> STRING_LITERAL
+
 (* operator precedence *)
 %right ELSE
-%left	DOT ARROW
+%left  DOT ARROW
 
 (* Non-terminals informations *)
 %start start
@@ -141,23 +97,17 @@ type struct_union =
 
 %%
 
+
 start:
 | translation_unit EOF
     {List.rev $1}
 ;
 
 
-
-(* 6.4.2.1#1 Identifiers - General, Syntax [see lexer] *)
-identifier:
-| id= IDENT {id}
-;
-
-
 (* 6.4.4.3#1 Enumeration constants, Syntax *)
 enumeration_constant:
-| identifier
-    {error "PARSING: 'enumeration-constant' not yet supported." (* TODO *)}
+| IDENTIFIER
+    {Debug.error "PARSING: 'enumeration-constant' not yet supported." (* TODO *)}
 
 declaration_list_opt:
 | (* empty *)
@@ -174,33 +124,20 @@ declaration_list:
     {d :: ds}
 ;
 
-(* (* TODO *)
+(* TODO *)
 (* 6.4.5 String literals *)
+(*
 string_literal:
-| encoding_prefix? DQUOTE s_char_sequence? DQUOTE
-
-encoding_prefix (* TODO *)
-
-s_char_sequence:
-| s_char:
-    {[$1]}
-(* ATTENTION We store the list in reverse.*)
-| s_char_sequence s_char
-    {$2 :: $1}
-
-s_char:
-| 
+| encoding_prefix? DQUOTE s_char_sequence? DQUOTE {(C.ENCODING_u8, ""), L.make $startpos $endpos}
 *)
 
 
 
 (* 6.5.1#1 Primary expressions, Syntax *)
 primary_expression:
-| id = identifier              {C.IDENTIFIER id, L.make $startpos $endpos}
+| id = IDENTIFIER              {C.IDENTIFIER id, L.make $startpos $endpos}
 | c = constant                 {C.CONSTANT c, L.make $startpos $endpos}
-(* (* TODO *)
-| l = string_literal           {C.STRIN_LITERAL l, L.make $starpos $endpos}
-*)
+| l = STRING_LITERAL           {C.STRING_LITERAL l, L.make $startpos $endpos}
 | LPAREN e = expression RPAREN {e}
 (* TODO: generic-selection *)
 ;
@@ -217,10 +154,10 @@ postfix_expression:
 | f = postfix_expression LPAREN args = argument_expression_list_opt RPAREN
     {C.CALL (f, args), L.make $startpos $endpos}
 (* e.id *)
-| e = postfix_expression DOT id = identifier
+| e = postfix_expression DOT id = IDENTIFIER
     {C.MEMBEROF (e, id), L.make $startpos $endpos}
 (* e->id *)
-| e = postfix_expression ARROW id = identifier
+| e = postfix_expression ARROW id = IDENTIFIER
     {C.MEMBEROFPTR (e, id), L.make $startpos $endpos}
 (* e ++ *)
 | e = postfix_expression PLUS_PLUS
@@ -593,12 +530,12 @@ type_specifier:
 | SHORT    {C.SHORT}
 | INT      {C.INT}
 | LONG     {C.LONG}
-| FLOAT    {error "PARSING: 'float' type-specifier not yet supported." (* (* LATER *) C.FLOAT *)}
-| DOUBLE   {error "PARSING: 'double' type-specifier not yet supported." (* (* LATER *) C.DOUBLE *)}
+| FLOAT    {Debug.error "PARSING: 'float' type-specifier not yet supported." (* (* LATER *) C.FLOAT *)}
+| DOUBLE   {Debug.error "PARSING: 'double' type-specifier not yet supported." (* (* LATER *) C.DOUBLE *)}
 | SIGNED   {C.SIGNED}
 | UNSIGNED {C.UNSIGNED}
 | BOOL     {C.BOOL}
-| COMPLEX  {error "PARSING: '_Complex' type-specifier not yet supported." (* (* LATER *) C.COMPLEX *)}
+| COMPLEX  {Debug.error "PARSING: '_Complex' type-specifier not yet supported." (* (* LATER *) C.COMPLEX *)}
 (* TODO
 | atomic_type_specifier     {failwith "type_specifier [atomic]: TODO" (* TODO *)} *)
 | spec = struct_or_union_specifier {spec}
@@ -610,11 +547,11 @@ type_specifier:
 
 (* 6.7.2.1#1 Structure and union specifiers, Syntax *)
 struct_or_union_specifier:
-| x = struct_or_union id_opt = identifier? LBRACE decls = struct_declaration_list RBRACE
+| x = struct_or_union id_opt = IDENTIFIER? LBRACE decls = struct_declaration_list RBRACE
     {match x with
       | STRUCT_ -> Cabs.STRUCT (id_opt, List.rev decls)
       | UNION_  -> Cabs.UNION (id_opt, List.rev decls)}
-| x = struct_or_union id = identifier
+| x = struct_or_union id = IDENTIFIER
     {match x with
       | STRUCT_ -> Cabs.STRUCT (Some id, [])
       | UNION_  -> Cabs.UNION (Some id, [])}
@@ -657,7 +594,7 @@ struct_declaration:
 
 (*
 | static_assert_declaration
-    {error "PARSING: struct-declaration of the shape 'static_assert_declaration' not yet supported."}
+    {Debug.error "PARSING: struct-declaration of the shape 'static_assert_declaration' not yet supported."}
 *)
 
 specifier_qualifier_list_opt:
@@ -695,31 +632,31 @@ struct_declarator:
 
 (* 6.7.2.2#1 Enumeration specifiers, Syntax *)
 enum_specifier:
-| ENUM identifier? LBRACE enumerator_list RBRACE
-    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
-| ENUM identifier? LBRACE enumerator_list COMMA RBRACE
-    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
-| ENUM identifier
-    {error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
+| ENUM IDENTIFIER? LBRACE enumerator_list RBRACE
+    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
+| ENUM IDENTIFIER? LBRACE enumerator_list COMMA RBRACE
+    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
+| ENUM IDENTIFIER
+    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
 ;
 
 enumerator_list:
 | enumerator
-    {error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
 | enumerator_list COMMA enumerator
-    {error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
 
 enumerator:
 | enumeration_constant
-    {error "PARSING: 'enumerator' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'enumerator' not yet supported." (* TODO *)}
 | enumeration_constant EQ constant_expression
-    {error "PARSING: 'enumerator' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'enumerator' not yet supported." (* TODO *)}
 
 
 (* 6.7.2.4#1 Atomic type specifiers, Syntax *)
 atomic_type_specifier: 
 | ATOMIC LPAREN type_name RPAREN
-    {error "PARSING: atomic-type-specifier' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: atomic-type-specifier' not yet supported." (* TODO *)}
 
 
 (* 6.7.3#1 Type qualifiers, Syntax *)
@@ -739,15 +676,15 @@ function_specifier:
 | INLINE
     {()}
 | NORETURN
-    {error "PARSING: 'function-specifier' _NoReturn not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'function-specifier' _NoReturn not yet supported." (* TODO *)}
 
 
 (* 6.7.5#1 Alignment specifier, Syntax *)
 alignment_specifier:
 | ALIGNAS LPAREN type_name RPAREN
-    {error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
 | ALIGNAS LPAREN constant_expression RPAREN
-    {error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
+    {Debug.error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
 ;
 
 (* 6.7.6#1 Declarators, Syntax *)
@@ -760,7 +697,7 @@ declarator:
 ;
 
 direct_declarator:
-| id = identifier
+| id = IDENTIFIER
     {id, fun t -> t}
 | LPAREN declarator RPAREN
         { let (name, (mk_type : C.c_type -> C.c_type)), _ = $2 in
@@ -771,11 +708,11 @@ direct_declarator:
       fst $1, fun t -> mk_type (C.ARRAY ($3, t, $4))
     }
 | direct_declarator LBRACKET STATIC type_qualifier_list_opt assignment_expression RBRACKET
-    {error "PARSING: direct-declarator of the shape 'direct-declarator [static type-qualifier-list_opt assignment-expression]' not yet supported." (* LATER *)}
+    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [static type-qualifier-list_opt assignment-expression]' not yet supported." (* LATER *)}
 | direct_declarator LBRACKET type_qualifier_list STATIC assignment_expression RBRACKET
-    {error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-list static assignment-expression]' not yet supported." (* LATER *)}
+    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-list static assignment-expression]' not yet supported." (* LATER *)}
 | direct_declarator LBRACKET type_qualifier_list_opt STAR RBRACKET
-    {error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-listopt *]' not yet supported." (* LATER *)}
+    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-listopt *]' not yet supported." (* LATER *)}
 | direct_declarator LPAREN parameter_type_list RPAREN
     { let mk_type : C.c_type -> C.c_type = snd $1 in
       fst $1, fun t -> C.FUNCTION (mk_type t, $3)
@@ -790,7 +727,7 @@ direct_declarator:
       fst $1, fun t -> C.FUNCTION (mk_type t, [])
     }
 (* TODO We do not support function declarations of the following style.
-| direct_declarator LPAREN identifier_list_opt RPAREN
+| direct_declarator LPAREN IDENTIFIER_list_opt RPAREN
 *)
 ;
 
@@ -906,7 +843,7 @@ direct_abstract_declarator:
 
 (* 6.7.8#1 Type definitions, Syntax *)
 typedef_name:
-| identifier
+| IDENTIFIER
     {$1}
 
 
@@ -950,14 +887,14 @@ designator_list:
 
 designator:
 | LBRACKET constant_expression RBRACKET {}
-| DOT identifier {}
+| DOT IDENTIFIER {}
 ;
 
 (* 6.7.10 Static assertions *)
 (*
 static_assert_declaration:
 | STATIC_ASSERT LPAREN constant_expression COMMA string_literal RPAREN SEMICOLON
-    {error "PARSING: 'static_assert-declaration' not yet supported."
+    {Debug.error "PARSING: 'static_assert-declaration' not yet supported."
 *)
 
 (* 6.8 Statements *********************************************************** *)
@@ -975,7 +912,7 @@ statement:
 
 (* 6.8.1#1 Labeled statements, Syntax *)
 labeled_statement:
-| id = identifier COLON s = statement
+| id = IDENTIFIER COLON s = statement
     {C.LABEL (id, s), L.make $startpos $endpos}
 | CASE e = constant_expression COLON s = statement
     {C.CASE (e, s), L.make $startpos $endpos}
@@ -1038,7 +975,7 @@ iteration_statement:
 
 (* 6.8.6#1 Jump statements, Syntax *)
 jump_statement:
-| GOTO id = identifier             {C.GOTO id, L.make $startpos $endpos}
+| GOTO id = IDENTIFIER             {C.GOTO id, L.make $startpos $endpos}
 | CONTINUE SEMICOLON               {C.CONTINUE, L.make $startpos $endpos}
 | BREAK SEMICOLON                  {C.BREAK, L.make $startpos $endpos}
 | RETURN e = expression? SEMICOLON {C.RETURN e, L.make $startpos $endpos}

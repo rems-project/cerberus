@@ -8,33 +8,27 @@ type id = Symbol.t
     four storage durations: static, thread, automatic, and allocated. Allocated
     storage is described in 7.22.3."
 *)
-(* (* TODO *)
 type storage_duration =
   | STATIC
   | THREAD
   | AUTOMATIC
   | ALLOCATED (*TODO: see 7.22.3 *)
-*)
-type storage_class =
-  | AUTO
-  | STATIC
 
-
-type int_base_type =
+type integer_base_type =
   | ICHAR
   | SHORT
   | INT
   | LONG
   | LONG_LONG
 
-type int_type =
+type integer_type =
   | BOOL
-  | SIGNED of int_base_type
-  | UNSIGNED of int_base_type
+  | SIGNED of integer_base_type
+  | UNSIGNED of integer_base_type
 
 type basic_type =
   | CHAR
-  | INTEGER of int_type
+  | INTEGER of integer_type
 
 type qualifiers = Cabs.qualifiers
 
@@ -42,8 +36,8 @@ type arithmetic_operator = Cabs.arithmetic_operator
 type binary_operator = Cabs.binary_operator
 
 type unary_operator =
-  | MINUS
   | PLUS
+  | MINUS
   | BNOT
   | ADDRESS
   | INDIRECTION
@@ -61,24 +55,25 @@ type ctype =
   | ARRAY of ctype * num
   | POINTER of qualifiers * ctype
   | FUNCTION of ctype * ctype list
-(*  | STRUCT of id * (storage_class * ctype * 'e member_declarator) list
+  | STRUCT of id option * (storage_duration * ctype * member_declarator) list
 
-and 'e member_declarator =
+and member_declarator =
   | MEMBER_DECL of id
-  | BITFIELD of id option * 'e
-*)
+(*  | BITFIELD of id option * 'e (* TODO: need to decide what to do about the 'e *) *)
 
 and type_class =
   | T_EXP of ctype
   | T_LVALUE of ctype
+  (* TODO: we need to add a T_BITFIELD *)
 
-type declaration = ctype * storage_class option
+
+type declaration = ctype * storage_duration option
 
 type 'a expression =
   | UNARY of unary_operator * 'a expression_l
   | BINARY of binary_operator * 'a expression_l * 'a expression_l 
   | ASSIGN of arithmetic_operator option * 'a expression_l * 'a expression_l
-  | QUESTION of 'a expression_l * 'a expression_l * 'a expression_l
+  | CONDITIONAL of 'a expression_l * 'a expression_l * 'a expression_l
   | CAST of ctype * 'a expression_l
   | CALL of 'a expression_l * 'a expression_l list
   | MEMBEROF of 'a expression * id
@@ -178,7 +173,7 @@ module Print = struct
     | Cabs.CONST -> !^ "const"
   end
 
-  let pp_int_base_type = function
+  let pp_integer_base_type = function
     | ICHAR -> !^ "char"
     | SHORT -> !^ "short"
     | INT -> !^ "int"
@@ -186,15 +181,15 @@ module Print = struct
     | LONG_LONG -> !^ "long" ^^^ !^ "long"
   end
 
-  let pp_int_type = function
+  let pp_integer_type = function
     | BOOL        -> !^ "_Bool"
-    | UNSIGNED ib -> !^ "unsigned" ^^^ pp_int_base_type ib
-    | SIGNED   ib -> !^ "signed"   ^^^ pp_int_base_type ib
+    | UNSIGNED ib -> !^ "unsigned" ^^^ pp_integer_base_type ib
+    | SIGNED   ib -> !^ "signed"   ^^^ pp_integer_base_type ib
   end
 
   let pp_basic_type = function
     | CHAR -> !^ "char"
-    | INTEGER i -> pp_int_type i
+    | INTEGER i -> pp_integer_type i
   end
 
   let pp_suffix s =
@@ -247,7 +242,7 @@ module Print = struct
       | CALL e es -> f e ^^ P.parens (P.comma_list f es)
       | ASSIGN o_opt e1 e2 ->
           f e1 ^^^ (optional pp_arithop o_opt ^^ P.equals) ^^^ f e2
-      | QUESTION e1 e2 e3 ->
+      | CONDITIONAL e1 e2 e3 ->
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
       | CAST t e -> P.parens (pp_type t) ^^^ f e
       | CONSTANT (Cabs.CONST_INT ic) -> pp_int_const ic
