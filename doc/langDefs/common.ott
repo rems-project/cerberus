@@ -1,0 +1,29 @@
+indexvar k, j ::=  {{ com index variables }}
+
+metavar n                  ::=  {{ com integer constants }}
+metavar id                 ::=  {{ com identifiers (\ailtau{} variables, functions and types names, struct/union members) }}
+metavar a {{ tex \alpha }} ::=  {{ com symbolic name }}
+
+
+grammar
+atom {{ tex A }} :: 'atom_' ::= {{ com atomic formulæ }}
+  | k         :: :: index
+  | id        :: :: ident
+  | ty        :: :: ailType
+  | a         :: :: sym
+
+formula {{ tex \psi }} :: 'formula_' ::=
+  | judgement            :: :: judgement
+  | atom1 = atom2        :: :: eq
+  | atom1 != atom2       :: :: neq {{ tex [[atom1]] \neq [[atom2]]         }}
+  | formula1 /\ formula2 :: :: and {{ tex [[formula1]] \wedge [[formula2]] }}
+  | formula1 \/ formula2 :: :: or  {{ tex [[formula1]] \vee [[formula2]]   }}
+  
+  | isLabel( id , Sig )  :: :: isLabel {{ tex [[id]] \in [[Sig]]_\text{labels} }}
+  | core_formula         :: :: core_formula
+
+parsing
+
+formula_and <= formula_eq
+formula_and <= formula_neq
+formula_or <= formula_and

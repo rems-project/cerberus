@@ -43,7 +43,7 @@
 % \setmonofont[Scale=MatchLowercase]{Courier}
 
 % Configuration for [listings]
-\lstset{language=C, basicstyle=\footnotesize\fontspec{Courier}}
+% \lstset{language=C, basicstyle=\footnotesize\fontspec{Courier}}
 
 % Colourful hyperlinks
 \hypersetup{colorlinks=true}
@@ -57,10 +57,30 @@
 
 \newcommand{\TODO}[1]{{\color{red} #1}}
 
+\newcommand{\N}{\ensuremath{\mathbb{N}}}
+\newcommand{\Z}{\ensuremath{\mathbb{Z}}}
+\newcommand{\D}{\ensuremath{\mathbb{D}}}
+\newcommand{\Q}{\ensuremath{\mathbb{Q}}}
+\newcommand{\R}{\ensuremath{\mathbb{R}}}
+%\newcommand{\C}{\ensuremath{\mathbb{C}}}
 
 
 
-\title{Core}
+\newcommand{\core}{\texttt{Core}}
+\newcommand{\ailtau}{$\texttt{Ail}_\tau$}
+
+
+\newcommand{\syn}[1]{\textsf{#1}} % for Core's syntax
+
+\newcommand{\ail}[1]{\textsf{#1}} % for Ail/Ail_tau's syntax
+
+
+\newcommand{\csyn}[1]{#1} % for C's syntax
+\newcommand{\meta}[1]{\textbf{#1}}
+
+
+
+\title{\core{}}
 \author{}
 \date{}
 
@@ -73,20 +93,6 @@
 
 
 
-\newcommand{\N}{\ensuremath{\mathbb{N}}}
-\newcommand{\Z}{\ensuremath{\mathbb{Z}}}
-\newcommand{\D}{\ensuremath{\mathbb{D}}}
-\newcommand{\Q}{\ensuremath{\mathbb{Q}}}
-\newcommand{\R}{\ensuremath{\mathbb{R}}}
-%\newcommand{\C}{\ensuremath{\mathbb{C}}}
-
-\newcommand{\syn}[1]{\textsf{#1}} % for Core's syntax
-
-\newcommand{\ail}[1]{\textsf{#1}} % for Ail/Ail_tau's syntax
-
-
-\newcommand{\csyn}[1]{{\fontspec{Courier} #1}} % for C's syntax
-\newcommand{\meta}[1]{\textbf{#1}}
 
 \begin{document}
 \bibliographystyle{plain}
@@ -95,26 +101,26 @@
 \maketitle
 
 \section{Introduction}
-Core aims at replacing csem's current pipeline starting from "reduction.lem".
+\core{} aims at replacing csem's current pipeline starting from "reduction.lem".
 It is intended to correspond to the essence of the C.
 It has pure expressions; boolean tests over expressions;
 explicit memory actions (creation/kill of an object, load, store, ...);
 effectful statements allowing the implementation of C's statements but with a syntax making explicit the sequenced-before relation over the memory actions;
-explicit checks for non memory-related undefined behaviours.  Core will be the last intermediate language in the pipeline which will form the basis of:
+explicit checks for non memory-related undefined behaviours.  \core{} will be the last intermediate language in the pipeline which will form the basis of:
 
 \begin{description}
 \item[Simulator mode]
-  csem is given some setting for the implementation-defined behaviours and the Core program is (one possible) execution is evaluated.
+  csem is given some setting for the implementation-defined behaviours and the \core{} program is (one possible) execution is evaluated.
   It will signal undefined behaviours it finds along the way.
   
   \item[Annotating mode]
   csem is given a C progam and returns a C program free of undefined behaviours but "semantically equivalent" (whatever that means) to the original program.
   
   \item[Mark's mode]
-  The set of actions and all the possible sequenced-before relations are computed for the Core program.
+  The set of actions and all the possible sequenced-before relations are computed for the \core{} program.
   
   \item[Prover's mode]
-  Outputs a proof assistant readable encoding of the Core program (not just an execution) for verification purpose.
+  Outputs a proof assistant readable encoding of the \core{} program (not just an execution) for verification purpose.
   
   \item[TODO mode]
   specialisation of the Simulator mode, where csem shows the part of the standard being used while executing a program.
@@ -142,7 +148,7 @@ Ail\_τ    Ail with type annotation everywhere
 Ail'\_τ    Ail\_τ after the final pass of sugaring: translating array subscripts
           into arithmetic and deref (TODO: something else ?)
 
-Core    described here, and translated from Ail'\_τ
+\core{}    described here, and translated from Ail'\_τ
 
 
 PIPELINE:
@@ -154,42 +160,46 @@ PIPELINE:
 --------------------------------------------------------------------------------
 
 
+\newpage
 \section{Syntax}
 
-\subsection{TODO: auxiliary stuff}
+In this section we present the syntax of \core{} which is divided in three components: pure expressions, boolean tests over the expressions and effectfull statements.
+We use the traditional BNF notation with the following meta-variables:
+
+\[
 \ottmetavars
+\]
+
+Symbolic names are 
 
 
 \subsection{Expressions}
-Core has {\bf pure} expressions over {\bf true integers} ($\Z$). They
-do not produce any sort of error and always return a value. Note that
-the purity makes the ordering of Core's expressions irrelevant. An
-$\texttt{Ail}_\tau$ expression is not translated to a \texttt{Core}
-expression, but to a \texttt{Core} statement explicitely showing how
-the evaluation of the the
-decomposition of 
-represents the complex ordering
+\core{}'s expressions are {\bf pure} with value ranging over the {\bf true integers} ($\Z$).
+Their evaluation doesn't produce any sort of error (e.g. 1/0 returns a value as specified in \S\ref{dynamics}).
 
-\ottgrammartabular{
-  \otteop\ottinterrule
-  \ottE\ottafterlastrule
-}
+Note that the purity makes the ordering of evaluation of expressions irrelevant.
+They therefore do not correspond to \ailtau{}'s expressions, but are instead only used to express the arithmetic calculations they perform while a whole \ailtau{} expression is explicitely decomposed into \core{} statements.
+
+
+% \ottgrammartabular{
+%   \ottcoreXXeop\ottinterrule
+%   \ottcoreXXe\ottafterlastrule
+% }
+
 
 
 \subsection{Boolean tests}
-\ottgrammartabular{
-  \ottbop\ottinterrule
-  \ottconnective\ottinterrule
-  \ottB\ottafterlastrule
-}
-
+% \ottgrammartabular{
+%   \ottcoreXXbop\ottinterrule
+%   \ottcoreXXconnective\ottinterrule
+%   \ottcoreXXb\ottafterlastrule
+% }
 
 \subsection{Statements}
-\ottgrammartabular{
-  \ottp\ottinterrule
-  \ottS\ottafterlastrule
-}
-
+% \ottgrammartabular{
+%   \ottp\ottinterrule
+%   \ottcoreXXs\ottafterlastrule
+% }
 
 
 
@@ -200,7 +210,7 @@ represents the complex ordering
 {\color{orange} P = [(φ, S)] (TODO: this has/will change(d))}
 
 \section{Statics}
-  We give a nearly trivial type system to Core to avoid having meaningless
+  We give a nearly trivial type system to \core{} to avoid having meaningless
   programs (may be useless for the "Prover mode").
   
   We have the following base types:
@@ -265,7 +275,7 @@ represents the complex ordering
 --------------------------------------------------------------------------------
 
 
-\section{Dynamics}
+\section{Dynamics}\label{dynamics}
 
 \subsection{Abstract Memory model}
 The basic blocks of C's memory model are {\it objects} (§3.15), defined

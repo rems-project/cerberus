@@ -1,0 +1,89 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+\documentclass[12pt, a4paper]{article}
+
+\setlength{\topmargin}{0mm}      % no margin above heading
+\setlength{\parindent}{0mm}      % no paragraph identation
+\setlength{\parskip}{4mm}        % skip a line between paragraphs
+\setlength{\unitlength}{1mm}
+\pagestyle{headings}
+
+% Paper-saving settings
+\setlength{\textwidth}{16cm}     % larger page
+\setlength{\oddsidemargin}{0mm}  % no left margin
+\setlength{\evensidemargin}{0mm} % the same, on even pages
+\setlength{\textheight}{22.5cm}  % longer page
+
+%\usepackage[british]{polyglossia}
+\usepackage[british]{babel}
+
+
+\usepackage{supertabular}
+
+\usepackage{fontspec}
+%\usepackage{xunicode}
+%\usepackage{xltxtra}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\input{ail}
+
+
+% Fonts selection
+\defaultfontfeatures{Mapping=tex-text}
+\setromanfont[Mapping=tex-text,Ligatures={Common}]{Adobe Garamond Pro}
+\setsansfont[Scale=MatchLowercase,Mapping=tex-text]{DejaVu Sans Mono} % TODO this a hack
+\setmonofont[Scale=MatchLowercase]{DejaVu Sans Mono}
+
+% Colourful hyperlinks
+\hypersetup{colorlinks=true}
+
+% Some colours
+\definecolor{red}{rgb}{1,0,0}
+\definecolor{green}{rgb}{0,0.7,0}
+\definecolor{blue}{rgb}{0,0,1}
+\definecolor{magenta}{rgb}{1,0,1}
+\definecolor{orange}{rgb}{1,0.5,0}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Some commands                                                                %
+
+% Bold monospaced text
+\newcommand{\textbm}[1]{\textbf{\textsf{#1}}} % TODO this a hack
+
+\newcommand{\TODO}[1]{{\color{red} #1}}
+
+\newcommand{\N}{\ensuremath{\mathbb{N}}}
+\newcommand{\Z}{\ensuremath{\mathbb{Z}}}
+\newcommand{\D}{\ensuremath{\mathbb{D}}}
+\newcommand{\Q}{\ensuremath{\mathbb{Q}}}
+\newcommand{\R}{\ensuremath{\mathbb{R}}}
+%\newcommand{\C}{\ensuremath{\mathbb{C}}}
+
+\newcommand{\core}{\texttt{Core}}
+\newcommand{\ailtau}{$\texttt{Ail}_\tau$}
+
+\newcommand{\syn}[1]{\textsf{#1}} % for Core's syntax
+\newcommand{\ail}[1]{\textsf{#1}} % for Ail/Ail_tau's syntax
+
+
+\title{The \core{} language}
+\author{}
+\date{}
+
+\begin{document}
+\bibliographystyle{plain}
+\nocite{*} 
+
+\maketitle
+
+\ottall
+
+
+\end{document}
