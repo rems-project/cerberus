@@ -4,3 +4,8 @@ _build*
 *.svn*
 *\#*
 *.lock
+*.out
+*.log
+*.aux
+doc/langDefs/ail.tex
+doc/langDefs/top_ail.pdf
