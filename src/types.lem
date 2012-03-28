@@ -519,15 +519,18 @@ let well_formed t = true
 
 let composite t1 t2 = if compatible t1 t2 then Some t1 else None
 
-let pointer_convert t =
+let pointer_convert (t: Ail.ctype) : Ail.ctype =
   match t with
   | FUNCTION _  _ -> POINTER {} t
   | ARRAY    t' _ -> POINTER {} t'
-  | _ -> t
+  | _             -> t
   end
 
-let lvalue_convert t =
-  if is_incomplete t && not (is_array t) then None else Some (unqualify t)
+let lvalue_convert (t: Ail.ctype) : Ail.ctype option =
+  if is_incomplete t && not (is_array t) then
+    None
+  else
+    Some (unqualify t)
 
 let lvalue_convert' = unqualify
 
