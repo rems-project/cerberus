@@ -55,6 +55,12 @@
 \definecolor{magenta}{rgb}{1,0,1}
 \definecolor{orange}{rgb}{1,0.5,0}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Some commands                                                                %
+
+% Bold monospaced text
+\newcommand{\textbm}[1]{\textbf{\textsf{#1}}} % TODO this a hack
+
 \newcommand{\TODO}[1]{{\color{red} #1}}
 
 \newcommand{\N}{\ensuremath{\mathbb{N}}}
@@ -64,14 +70,10 @@
 \newcommand{\R}{\ensuremath{\mathbb{R}}}
 %\newcommand{\C}{\ensuremath{\mathbb{C}}}
 
-
-
 \newcommand{\core}{\texttt{Core}}
 \newcommand{\ailtau}{$\texttt{Ail}_\tau$}
 
-
 \newcommand{\syn}[1]{\textsf{#1}} % for Core's syntax
-
 \newcommand{\ail}[1]{\textsf{#1}} % for Ail/Ail_tau's syntax
 
 
@@ -161,161 +163,73 @@ PIPELINE:
 
 
 \newpage
-\section{Syntax}
+\section{The language}
+In this section we present the syntax and semantics of \core{} which is divided in three components:
+pure expressions, boolean tests over the expressions and effectful statements.
+For the syntax, we use the traditional BNF notation with the following meta-variables:
 
-In this section we present the syntax of \core{} which is divided in three components: pure expressions, boolean tests over the expressions and effectfull statements.
-We use the traditional BNF notation with the following meta-variables:
-
-\[
 \ottmetavars
-\]
 
-Symbolic names are 
+When translating a \ailtau{} program into \core{}, \ailtau{} expressions which may produce side-effects are
+explicitely decomposed into: its memory accesses, its pure arithmetic computations, pure tests that allow use
+to decide at runtine if a undefined behaviour, and test catching static errors depending on implementation defined
+behaviours.
+The memory accesses are translated into explicit memory operations part of \core{} statements. This constructs are
+the only ones interacting with the memory, and hence capable of producing effects.
+The pure arithmetic computation and the tests are translated into \core{} expressions and boolean tests.
+Finally, all these pieces are combined using \core{} statement's construct explicitely shaping the \emph{sequenced-before}
+relation corresponding to the original \ailtau{} expression.
 
+\core{} doesn't provide any sort of mutables (only the memory evolves at runtine), instead let-binders and symbolic names are
+used to save values read from the memory or values of expressions. Once set, ``value'' refered to be a symbol cannot be changed,
+new symbols need to be created to save new values. Symbols are also used to save more exotic contents like C-types and
+memory objects. For this reason, they are given a simple type-system.
 
-\subsection{Expressions}
-\core{}'s expressions are {\bf pure} with value ranging over the {\bf true integers} ($\Z$).
-Their evaluation doesn't produce any sort of error (e.g. 1/0 returns a value as specified in \S\ref{dynamics}).
-
-Note that the purity makes the ordering of evaluation of expressions irrelevant.
-They therefore do not correspond to \ailtau{}'s expressions, but are instead only used to express the arithmetic calculations they perform while a whole \ailtau{} expression is explicitely decomposed into \core{} statements.
-
-
-% \ottgrammartabular{
-%   \ottcoreXXeop\ottinterrule
-%   \ottcoreXXe\ottafterlastrule
-% }
-
-
-
-\subsection{Boolean tests}
-% \ottgrammartabular{
-%   \ottcoreXXbop\ottinterrule
-%   \ottcoreXXconnective\ottinterrule
-%   \ottcoreXXb\ottafterlastrule
-% }
-
-\subsection{Statements}
-% \ottgrammartabular{
-%   \ottp\ottinterrule
-%   \ottcoreXXs\ottafterlastrule
-% }
-
-
-
-
-
-
-\subsection{Programs}
-{\color{orange} P = [(φ, S)] (TODO: this has/will change(d))}
-
-\section{Statics}
-  We give a nearly trivial type system to \core{} to avoid having meaningless
-  programs (may be useless for the "Prover mode").
-  
+\TODO{give the list of ``types'' of symbols\\
   We have the following base types:
     * unit    the classic unit type
     * value   morally is the mathematical integers modulo Trap values,
               indeterminate values, ... (Or I (K) am wrong ?)
     * addr    the addr of a memory object
   
-  We also have lists (written [ty]) and pairs (written (ty1, ty2)).
-  
-  EXPRESSIONS
-    [α]           lookup in the typing environment
-    [E1 * E2]     E1 and E2 must be of type value and the result is of type
-                  value.
-    [-E]          E must be of type value and the result is of type value.
-    [max\_τ]       is of type value
-    [min\_τ]       is of type value
-    [sizeof\_τ]    is of type value
-    [alignof\_τ]   is of type value
+  We also have lists (written [ty]) and pairs (written (ty1, ty2)).\\
+
     [offsetof α]  α is of type addr (TODO: there is some metaphysical thoughts
                   whether we have to enforce that α is not only of type addr but
                   also corresponds to a struct/union members (which is the only
                   case where offsetof makes any sense) or if we ignore this a
                   the typing level and then makes the value of "offsetof α"
                   equals 0 for any improper α (this should "just work" but this
-                  is nasty)
-  
-  BOOLEAN TESTS
-    [true]        is of type value
-    [false]       is of type value
-    [¬F]          F must be of type value and the result is of type value.
-    [F1 * F2]     F1 and F2 must be of type value and the result is of type value.
-    [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
-  
-  STATEMENTS
-    [skip]                  is of type unit.
+                  is nasty)\\
+
     [fail]                  (TODO) J seems to want to have a base type
                             "undefined" for this construct, whereas K don't see
                             the point (or forgot it) and thinks the type unit is
                             sufficient here.
-    [E]                     see the typing of expressions
-    [let α = S1 in S2]      is of the same type as S2, which is typed in the
-                            current type environmnent extended with "α is of the
-                            same type as S1".
-    [if F then S1 else S2]  F must be of type value, S1 and S2 must be of the
-                            same type (say ty) and result is of type ty.
-    [S1 + S2]               S1 and S2 must be of the same type (say ty) and
-                            result is of type ty.
-    [S1 || S2]              if S1 is of type ty1 and S2 of type ty2, then the
-                            result is of type (ty1, ty2)
-    [create\_τ]              if τ is not a struct/union type, then the result is
-                            of type addr, otherwise it is of type [addr] with
-                            length equal to the number of fields of τ.
-    [kill α]                α must be of type addr, and the return type is unit.
-    [store\_τ α1 α2]         α1 must be of type addr, α2 must be of type value
-                            and the return type is unit.
-    [load\_τ α]              α must be of type addr and the return type is value.
-    [same α1 α2]            α1 and α2 must be of type addr and the return type
-                            is unit.
-    [fun φ(α1, ..., αN) S]  TODO
-    [call φ(α1, ..., αN)]   TODO
---------------------------------------------------------------------------------
 
-
-\section{Dynamics}\label{dynamics}
-
-\subsection{Abstract Memory model}
-The basic blocks of C's memory model are {\it objects} (§3.15), defined
-as regions in the memory of the execution environnment capable of
-containing the representation of a value. In turn, {\it values}
-(§3.19) are defined as the ``precise meaning of the contents of an
-object when interpreted as having a specific type''. When an object is
-declared, it is given an {\it effective type} (with the exception of
-allocated objects).
-
-
-We encode the memory state as a list of trees of objects. The root of
-each tree correspond to an object which is not a subobject (hence not
-a field of struct/union), while childs of the trees are sub-objects.
+}
 
 
 
-data Object= (Repr, EffectiveTy)
+\subsection{\core{} expressions}
+\core{}'s expressions are {\bf pure} with value ranging over the {\bf true integers} ($\Z$).
+Their evaluation doesn't produce any sort of error (e.g. we specify a return value of the expression 1/0).
+In addition to being pure, expression cannot directly read from the memory, symbolic names are the
+only way to refer to a read value from a \core{} expression.
+This restriction allows \core{} expressions to play no part in the shaping of the sequenced-before relation.
+The question of order of evaluation for \core{} expressions is also irrelevant.
 
-data EffectiveTy = EType Ty | Allocated
+\ottgrammartabular{
+  \ottcoreXXeop\ottinterrule
+  \ottcoreXXe\ottafterlastrule
+}
 
-data Repr = Value Z | TrapRepr | IndeterminateRepr
+The two base constucts of \core{} expression are integer constants $n$ and symbolic name $\alpha$. 
 
-
-
-
-
-\newpage
-
-
-
-
-
-
-
+The $\textbm{max}_{\tau}$
 
 
-
-
-
+\TODO{
 (We omit obvious stuff like booleans tests and arithmetic operations over
  expressions)
 
@@ -345,13 +259,33 @@ object. Otherwise the value is 0.
 
 The value of this construct is clearly implementation-defined; it is needed to
 implement the offsetof macro (§7.19).
+}
 
 
+\newpage
 
 
+They therefore do not correspond to \ailtau{}'s expressions, but are instead only used to express the arithmetic calculations they perform while a whole \ailtau{} expression is explicitely decomposed into \core{} statements.
 
 
+\subsection{Boolean tests}
+\ottgrammartabular{
+  \ottcoreXXbop\ottinterrule
+  \ottcoreXXconnective\ottinterrule
+  \ottcoreXXb\ottafterlastrule
+}
 
+\subsection{Statements}
+\ottgrammartabular{
+  \ottp\ottinterrule
+  \ottcoreXXs\ottinterrule
+  \ottfunXXdef\ottinterrule
+  \ottprocXXdef\ottinterrule
+  \ottprogram\ottafterlastrule
+}
+
+
+\TODO{
 == [skip] ======================================================================
 Is just a "nop". Used for example to implement C's if-then statements and loop
 with empty bodies.
@@ -414,6 +348,50 @@ where it is used as the left operand of a let construct:
 == [fun φ(α1, ..., αN) S] ======================================================
 
 == [call φ(α1, ..., αN)] =======================================================
+
+}
+
+
+
+
+
+\subsection{Programs}
+{\color{orange} P = [(φ, S)] (TODO: this has/will change(d))}
+
+
+\section{Dynamics}\label{dynamics}
+
+\subsection{Abstract Memory model}
+The basic blocks of C's memory model are {\it objects} (§3.15), defined
+as regions in the memory of the execution environnment capable of
+containing the representation of a value. In turn, {\it values}
+(§3.19) are defined as the ``precise meaning of the contents of an
+object when interpreted as having a specific type''. When an object is
+declared, it is given an {\it effective type} (with the exception of
+allocated objects).
+
+
+We encode the memory state as a list of trees of objects. The root of
+each tree correspond to an object which is not a subobject (hence not
+a field of struct/union), while childs of the trees are sub-objects.
+
+
+
+data Object= (Repr, EffectiveTy)
+
+data EffectiveTy = EType Ty | Allocated
+
+data Repr = Value Z | TrapRepr | IndeterminateRepr
+
+
+
+
+
+\newpage
+
+
+
+
 
 
 
@@ -945,6 +923,7 @@ CHOICE:
 
 \end{description}
 
+\ottall
 
 
 \end{document}

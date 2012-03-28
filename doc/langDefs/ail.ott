@@ -193,7 +193,7 @@ statement, ail_s {{ tex S }} :: '' ::=
 
 
 
-terminals :: 'terminals_' ::=
+ail_terminals :: 'ail_terminals_' ::=
   | |-                  ::   :: turnstile  {{ tex \vdash }}
   | !=                  ::   :: neq
 

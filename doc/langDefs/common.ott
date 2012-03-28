@@ -1,11 +1,20 @@
-indexvar k, j ::=  {{ com index variables }}
+indexvar j, k ::=  {{ com index variables }}
 
-metavar n                  ::=  {{ com integer constants }}
-metavar id                 ::=  {{ com identifiers (\ailtau{} variables, functions and types names, struct/union members) }}
-metavar a {{ tex \alpha }} ::=  {{ com symbolic name }}
+metavar n                   ::=  {{ com integer constants }}
+metavar id                  ::=  {{ com identifiers (\ailtau{} variables, functions and types names, struct/union members) }}
+metavar f {{ tex \varphi }} ::=  {{ com \core{} function }}
+metavar a {{ tex \alpha  }} ::=  {{ com symbolic name }}
 
 
 grammar
+
+terminals :: 'terminals_' ::=
+  | ail_terminals  :: :: ail_terminals
+  | |e-  :: :: eturnstile  {{ tex \vdash_e }}
+  | |b-  :: :: bturnstile  {{ tex \vdash_b }}
+  | |s-  :: :: sturnstile  {{ tex \vdash_S }}
+  | _in  :: :: _in          {{ tex \in }}
+
 atom {{ tex A }} :: 'atom_' ::= {{ com atomic formulæ }}
   | k         :: :: index
   | id        :: :: ident
