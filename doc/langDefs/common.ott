@@ -1,8 +1,10 @@
 indexvar j, k ::=  {{ com index variables }}
 
 metavar n                   ::=  {{ com integer constants }}
+                                 {{ lem num }}
 metavar id                  ::=  {{ com identifiers (\ailtau{} variables, functions and types names, struct/union members) }}
-metavar f {{ tex \varphi }} ::=  {{ com \core{} function }}
+                                 {{ lem Symbol.t }}
+metavar fname {{ tex \varphi }} ::=  {{ com \core{} function }}
 metavar a {{ tex \alpha  }} ::=  {{ com symbolic name }}
 
 
@@ -13,12 +15,13 @@ terminals :: 'terminals_' ::=
   | |e-  :: :: eturnstile  {{ tex \vdash_e }}
   | |b-  :: :: bturnstile  {{ tex \vdash_b }}
   | |s-  :: :: sturnstile  {{ tex \vdash_S }}
-  | _in  :: :: _in          {{ tex \in }}
+  | _in  :: :: _in         {{ tex \in }}
+  | ~>   :: :: leadsto     {{ tex \leadsto }}
 
 atom {{ tex A }} :: 'atom_' ::= {{ com atomic formulæ }}
   | k         :: :: index
   | id        :: :: ident
-  | ty        :: :: ailType
+  | ctype     :: :: ailType
   | a         :: :: sym
 
 formula {{ tex \psi }} :: 'formula_' ::=
@@ -30,6 +33,8 @@ formula {{ tex \psi }} :: 'formula_' ::=
   
   | isLabel( id , Sig )  :: :: isLabel {{ tex [[id]] \in [[Sig]]_\text{labels} }}
   | core_formula         :: :: core_formula
+  
+
 
 parsing
 

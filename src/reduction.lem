@@ -82,17 +82,17 @@ let rec reduce_lvalue n b env file exp =
       E.return (a, Me.null)
   end
 
-and reduce_exp n b env file exp =
-  let f = reduce_exp n b env file in
-  let f_lvalue e =
-    reduce_lvalue n b env file e >>= fun (a, m) ->
-    E.return (a, m) in
-  let lookup_type id = fst (Pmap.find id file.A.id_map) in
-  let conv_exp   e = f e >>= conv_int_lifted (exp_type exp) in
-  let conv_int t e = f e >>= conv_int_lifted t in
+(* [b] is a bindings(?) map *)
+and reduce_exp (n: num) b env file exp =
+  let f                      = reduce_exp n b env file in
+  let f_lvalue e             = reduce_lvalue n b env file e in
+  let lookup_type id         = fst (Pmap.find id file.A.id_map) in
+  let conv_exp   e           = f e >>= conv_int_lifted (exp_type exp) in
+  let conv_int t e           = f e >>= conv_int_lifted t in
   let usual_arithmetic e1 e2 =
     T.usual_arithmetic (exp_type e1) (exp_type e2) in
-  let overflow t c = C.implies (C.neg (Tc.in_range t c)) C.undef in
+  let overflow t c           = C.implies (C.neg (Tc.in_range t c)) C.undef in
+  
   match Annotate.exp_of exp with
   | A.VARIABLE id ->
       if T.is_array (lookup_type id) then

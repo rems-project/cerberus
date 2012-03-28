@@ -7,7 +7,7 @@ ail:
 
 top:
 	ott -tex_wrap false ail.ott core.ott common.ott -o core.tex
-	xelatex top.tex
+	xelatex -interaction=nonstopmode top.tex
 
 clean:
 	rm -f ail.tex core.tex

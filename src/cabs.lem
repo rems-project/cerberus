@@ -53,9 +53,9 @@ type arithmetic_operator =
   (* 6.5.10 Bitwise AND operator *)
   | BAND
   (* 6.5.11 Bitwise exclusive OR operator *)
-  | BOR
-  (* 6.5.12 Bitwise inclusive OR operator *)
   | XOR
+  (* 6.5.12 Bitwise inclusive OR operator *)
+  | BOR
 
 (* Binary operators from 6.5.5-14, 6.5.17 *)
 type binary_operator =

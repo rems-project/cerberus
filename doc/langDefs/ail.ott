@@ -46,26 +46,38 @@ qualifiers :: '' ::=
   | qualifier1 .. qualifierk :: :: Qualifiers
 
 
-ty {{ tex \tau }} :: '' ::=
-  {{ com $\texttt{Ail}_\tau$ types }}
-  | qualifiers void                 ::   :: VOID             {{ com \texttt{void} type (\S6.2.5\#19) }}
-  | qualifiers basic_type           ::   :: BASIC            {{ com  basic types       (\S6.2.5\#14) }}
-  | enum id                         ::   :: ENUM             {{ com enumerate types    (\S6.2.5\#16) }} % TODO: add names to an env + MOVE TO INTEGER_TYPE
-  | ty [ n ]                        ::   :: ARRAY            {{ com  array types       (\S6.2.5\#20) }}
-%  | struct 
-%  | union
-  | ty ( ty1 , .. , tyk )           ::   :: FUNCTION         {{ com  function types                  }}
-  | qualifiers ty *                 ::   :: POINTER          {{ com  pointer types                   }}
+ctype {{ tex \tau }} :: '' ::=
+  {{ com \ailtau types }}
+  | qualifiers void                       ::   :: VOID             {{ com \texttt{void} type (\S6.2.5\#19)                  }}
+  | qualifiers basic_type                 ::   :: BASIC            {{ com  basic types       (\S6.2.5\#14)                  }}
+  | enum id                               ::   :: ENUM             {{ com enumerate types    (\S6.2.5\#16)                  }} % TODO: add names to an env + MOVE TO INTEGER_TYPE
+  | ctype [ n ]                           ::   :: ARRAY            {{ com  array types       (\S6.2.5\#20)                  }}
+  | struct id {
+      storage_duration1 ctype1 mem_decl1 ;
+      .. ;
+      storage_durationk ctypek mem_declk
+    }                                     ::   :: STRUCT           {{ com \TODO{we "unfold" anonymous struct/union and give a tag for struct/union
+                                                                                declarated without any} }}
+  | union id {
+      storage_duration1 ctype1 mem_decl1 ;
+      .. ;
+      storage_durationk ctypek mem_declk
+    }                                     ::   :: UNION
+  | ctype ( ctype1 , .. , ctypek )        ::   :: FUNCTION         {{ com  function types                                   }}
+  | qualifiers ctype *                    ::   :: POINTER          {{ com  pointer types                                    }}
 % atomic types 
-  | lvalue ty                       ::   :: LVALUE           {{ com  }} % TODO something I don't remember
-  | bitfield ty                     ::   :: BITFIELD         {{ com  }} % TODO put in a env
-  | promote ( ty )                  :: M :: PROMOTE          {{ com integer promotion }}
-                                                             {{ tex \texttt{promote}([[ty]]) }}
-  | usual_arithmetic ( ty1 ,  ty2 ) :: M :: USUAL_ARITHMETIC {{ tex \texttt{usual\_arithmetic}([[ty1]],[[ty2]]) }}
+  | lvalue ctype                          ::   :: LVALUE           {{ com                                                   }} % TODO something I don't remember
+  | bitfield ctype                        ::   :: BITFIELDTY       {{ com                                                   }} % TODO put in a env
+  | promote ( ctype                       :: M :: PROMOTE          {{ com integer promotion                                 }}
+                                                                   {{ tex \texttt{promote}([[ctype]])                       }}
+                                                                   {{ lem [[ctype]]                                         }} % TODO
+  | usual_arithmetic ( ctype1 ,  ctype2 ) :: M :: USUAL_ARITHMETIC {{ tex \texttt{usual\_arithmetic}([[ctype1]],[[ctype2]]) }}
+                                                                   {{ lem [[ctype1]]                                        }} % TODO
 
+mem_decl :: '' ::=
+  | id         :: :: MEMBER_DECL
+  | id : ail_e :: :: BITFIELD % TODO the id is an option
 
-
-% TODO: member declarator
 
 
 % TODO: type_class
@@ -75,7 +87,9 @@ ty {{ tex \tau }} :: '' ::=
 
 
 % Expressions %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-aop {{ tex \bullet }} :: '' ::= {{ com arithmetic operators }}
+aop {{ lem arithmetic_operator }} {{ tex \bullet }} :: '' ::=
+  {{ com arithmetic operators }}
+  {{ lem Cabs.arithmetic_operator }}
   | *  :: :: MULT {{ tex \texttt{*}                }} {{ com multiplication       (\S6.5.5)  }}
   | /  :: :: DIV  {{ tex \texttt{/}                }} {{ com division                        }}
   | %  :: :: MOD  {{ tex \texttt{\%}               }} {{ com modulo operator                 }}
@@ -87,21 +101,22 @@ aop {{ tex \bullet }} :: '' ::= {{ com arithmetic operators }}
   | ^  :: :: XOR  {{ tex \texttt{\textasciicircum} }} {{ com bitwise exclusive OR (\S6.5.11) }}
   | |  :: :: BOR  {{ tex \texttt{|}                }} {{ com bitwise inclusive OR (\S6.5.12) }}
 
-bop {{ tex \circ }} :: '' ::= {{ com binary operators }}
+bop {{ lem binary_operator }} {{ tex \circ }} :: '' ::=
+  {{ com binary operators }}
+  {{ lem Cabs.binary_operator }}
   | aop :: :: ARITHMETIC 
   | ,   :: :: COMMA      {{ tex \texttt{,}    }} {{ com comma operator (\S6.5.17) }}
   | &&  :: :: AND        {{ tex \texttt{\&\&} }} {{ com logical AND    (\S6.5.13) }}
   | ||  :: :: OR         {{ tex \texttt{||}   }} {{ com logical OR     (\S6.5.14) }}
   | <   :: :: LT         {{ tex \texttt{<}    }} {{ com less than      (\S6.5.8)  }}
-  | >   :: :: GT         {{ tex \texttt{<}    }} {{ com greater than              }}
+  | >   :: :: GT         {{ tex \texttt{>}    }} {{ com greater than              }}
   | <=  :: :: LE         {{ tex \texttt{<=}   }} {{ com less than or equal to     }}
   | >=  :: :: GE         {{ tex \texttt{>=}   }} {{ com greater than or equal to  }}
   | ==  :: :: EQ         {{ tex \texttt{==}   }} {{ com equal to       (\S6.5.9)  }}
   | !=  :: :: NE         {{ tex \texttt{!=}   }} {{ com not equal to              }}
 
-uop :: '' ::=
+uop {{lem unary_operator}} {{ tex \diamond }} :: '' ::=
   {{ com unary operators (6.5.3) }}
-  {{ tex \diamond }}
   | &  :: :: ADDRESS     {{ tex \texttt{\&}   }} {{ com address operator }}
   | *  :: :: INDIRECTION {{ tex \texttt{*}    }} {{ com indirection operator }}
   | +  :: :: PLUS        {{ tex \texttt{+}    }}
@@ -117,39 +132,47 @@ uop :: '' ::=
 
 constant :: '' ::=
   {{ com TODO: the other constants }}
+  {{ lem Cabs.constant }}
   | n  :: :: CONST_INT  {{ com integer constant }}
 %  | CONST_FLOAT of string
   | id :: :: CONST_ENUM {{ com enumeration constant }}
 %  | CONST_CHAR of int64 list
 %  | CONST_WCHAR of int64 list
 
-expression, ail_e {{ tex e }} :: '' ::=
-  | uop ail_e                              :: :: UNARY       
+aop_opt {{ tex \bullet^{?} }} :: '' ::=
+  |     :: :: NIL
+  | aop :: :: BASE
+
+expression {{ lem 'a expression_l }} , ail_e {{ tex e^\text{ail} }} :: '' ::=
+  | uop ail_e                                     :: :: UNARY       
 % TODO: K don't know how to put them in uop while telling
 %       the parser expect ++ and -- after the expr.
-  | ail_e ++                               :: :: INCR        {{ com postfix increment operator (\S6.5.2.4)                         }}
-                                                             {{ tex [[ail_e]] \ \texttt{++}                                        }}
-  | ail_e --                               :: :: DECR        {{ com postfix decrement operator (\S6.5.2.4)                         }}
-                                                             {{ tex [[ail_e]] \ \texttt{-{}-}                                      }}
-  | ail_e1 bop ail_e2                      :: :: BINARY      
-  | ail_e1 aop = ail_e2                    :: :: ASSIGN      {{ com assignment operators (\S6.5.16)                                }}
-  | ail_e1 ? ail_e2 : ail_e3               :: :: CONDITIONAL {{ com  conditional operator (\S6.5.15)                               }}
-                                                             {{ tex [[ail_e1]] \ \texttt{?} \ [[ail_e2]] \ \texttt{:} \ [[ail_e3]] }}
-  | ( ty ) ail_e                           :: :: CAST        {{ com  cast operator (\S6.5.4)                                       }}
-%  | ail_e ( ty1 ail_e1 , .. , tyk ail_ek ) :: :: CALL        {{ com function call (\S6.5.2.2)                                      }}
-  | ail_e ( ail_e1 , .. , ail_ek )          :: :: CALL        {{ com function call (\S6.5.2.2)                                      }}
-  | ail_e . id                             :: :: MEMBEROF    {{ com structure/union member (\S6.5.2.3)                             }}
-  | ail_e -> id                            :: :: MEMBEROFPTR {{ tex [[ail_e]] \texttt{->} [[id]]                                   }}
-  | constant                               :: :: CONSTANT    
-  | id                                     :: :: VARIABLE    
-  | sizeof ( ty )                          :: :: SIZEOF      {{ com  \texttt{sizeof} operator (\S6.5.3.4)                          }}
-                                                             {{ tex  \texttt{sizeof}([[ty]])                                       }}
-  | alignof ( ty )                         :: :: ALIGNOF     {{ com  \texttt{\_Alignof} operator (\S6.5.3.4)                       }}
-                                                             {{ tex  \texttt{alignof}([[ty]])                                      }}
+  | ail_e ++                                      ::   :: INCR        {{ com postfix increment operator (\S6.5.2.4)                         }}
+                                                                      {{ tex [[ail_e]] \ \texttt{++}                                        }}
+  | ail_e --                                      ::   :: DECR        {{ com postfix decrement operator (\S6.5.2.4)                         }}
+                                                                      {{ tex [[ail_e]] \ \texttt{-{}-}                                      }}
+  | ail_e1 bop ail_e2                             ::   :: BINARY      {{ lem [[bop]] [[ail_e1]] [[ail_e2]] }}
+  | ail_e1 aop_opt = ail_e2                       ::   :: ASSIGN      {{ com assignment operators (\S6.5.16)                                }}
+  | ail_e1 ? ail_e2 : ail_e3                      ::   :: CONDITIONAL {{ com  conditional operator (\S6.5.15)                               }}
+                                                                      {{ tex [[ail_e1]] \ \texttt{?} \ [[ail_e2]] \ \texttt{:} \ [[ail_e3]] }}
+  | ( ctype ) ail_e                               ::   :: CAST        {{ com  cast operator (\S6.5.4)                                       }}
+%  | ail_e ( ctype1 ail_e1 , .. , ctypek ail_ek ) ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
+  | ail_e ( ail_e1 , .. , ail_ek )                ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
+  | ail_e . id                                    ::   :: MEMBEROF    {{ com structure/union member (\S6.5.2.3)                             }}
+  | ail_e -> id                                   ::   :: MEMBEROFPTR {{ tex [[ail_e]] \texttt{->} [[id]]                                   }}
+  | constant                                      ::   :: CONSTANT    
+  | id                                            ::   :: IDENTIFIER  
+  | sizeof ( ail_e )                              ::   :: SIZEOF_EXPR {{ com  \texttt{sizeof} operator (\S6.5.3.4)                          }}
+                                                                      {{ tex  \texttt{sizeof}([[ail_e]])                                    }}
+  | sizeof ( ctype )                              ::   :: SIZEOF_TY   {{ tex  \texttt{sizeof}([[ctype]])                                    }}
+  | alignof ( ctype )                             ::   :: ALIGNOF     {{ com  \texttt{\_Alignof} operator (\S6.5.3.4)                       }}
+                                                                      {{ tex  \texttt{alignof}([[ctype]])                                   }}
+  | ( ail_e )                                     :: M :: PARENS
 
-% E_tau :: 'E_tau_' ::=
-%   {{ tex E_\tau }}
-%   | E : ty :: :: Expr
+% embed
+%   {{ lem
+% and 'a expression_l = 'a * 'a expression
+%   }}
 
 
 % TODO: definitions
@@ -157,7 +180,7 @@ expression, ail_e {{ tex e }} :: '' ::=
 
 
 
-statement, ail_s {{ tex S }} :: '' ::=
+statement {{ lem 'a statement_l }} , ail_s {{ tex S^\text{ail} }} :: '' ::=
   | skip                                                 :: :: SKIP              {{ tex \textbm{skip}                                          }}
   | ail_e                                                :: :: EXPRESSION        
   | begin vars id1 , .. , idk ; ail_s1 ; .. ; ail_sj end :: :: BLOCK             {{ com TODO: check + typesetting                              }}
@@ -201,7 +224,7 @@ ail_terminals :: 'ail_terminals_' ::=
 
   G {{ tex \Gamma }} :: 'G_' ::=
     | empty     :: :: base {{ tex \emptyset }}
-    | G , id : ty :: :: ctor
+    | G , id : ctype :: :: ctor
   
   Sig {{ tex \Sigma }} :: 'Sig_' ::=
     | empty :: :: base % TODO
@@ -215,62 +238,62 @@ defns
   % "The type *char*, the signed and unsigned integer types, and the enumerated
   %  types are collectively called `integer types`. The integer and real floating
   %  types are collectively called `real types`."
-  defn is_integer ( ty ) :: :: is_integer :: 'is_integer_'
-       {{ com (6.2.5\#17) }} {{ tex \texttt{is\_integer}([[ty]]) }} by
+  defn is_integer ( ctype ) :: :: is_integer :: 'is_integer_'
+       {{ com (6.2.5\#17) }} {{ tex \texttt{is\_integer}([[ctype]]) }} by
   
   % [arithmetic types] (6.2.5#18)
   % 
   % "Integer and floating types are collectively called `arithmetic types`.
   %  (...)"
-  defn is_arithmetic ( ty ) :: :: is_arithmetic :: 'is_arithmetic_' {{ tex \texttt{is\_arithmetic}([[ty]]) }} by
+  defn is_arithmetic ( ctype ) :: :: is_arithmetic :: 'is_arithmetic_' {{ tex \texttt{is\_arithmetic}([[ctype]]) }} by
   
   
 % defn
-% isObject ( ty ) :: :: isObject :: isObject_ by
+% isObject ( ctype ) :: :: isObject :: isObject_ by
 
 % defn
-% isModifiable ( ty ) :: :: isModifiable :: isModifiable_ by
+% isModifiable ( ctype ) :: :: isModifiable :: isModifiable_ by
 
 
 
 
 
 
-  defn is_scalar ( ty ) :: :: is_scalar :: 'is_scalar_'
+  defn is_scalar ( ctype ) :: :: is_scalar :: 'is_scalar_'
        {{ com Arithmetic types and pointer types are collectively called \emph{scalar types}. (6.2.5\#21) }}
-       {{ tex \texttt{is\_scalar}([[ty]]) }} by
-    is_arithmetic(ty)
+       {{ tex \texttt{is\_scalar}([[ctype]]) }} by
+    is_arithmetic(ctype)
     ----------------- :: arith
-    is_scalar(ty)
+    is_scalar(ctype)
     
     ----------------- :: pointer
-    is_scalar(ty*)
+    is_scalar(ctype*)
     
     
-  defn is_aggregate ( ty ) :: :: is_aggregate :: 'is_aggregate_'
+  defn is_aggregate ( ctype ) :: :: is_aggregate :: 'is_aggregate_'
        {{ com Array and structure types are collectively called \emph{aggregate types}. (6.2.5\#21) }}
-       {{ tex \texttt{is\_aggregate}([[ty]]) }} by
+       {{ tex \texttt{is\_aggregate}([[ctype]]) }} by
     ---------------- :: array
-    is_scalar(ty[n])
+    is_scalar(ctype[n])
     
     -------------------- :: struct
     is_scalar(struct id)
     
     
   % TODO better ?
-  defn is_object ( ty ) :: :: is_object :: 'is_object_'
-       {{ tex \texttt{is\_object}([[ty]]) }} by
-    ty != ty'(ty'1, .., ty'k)
+  defn is_object ( ctype ) :: :: is_object :: 'is_object_'
+       {{ tex \texttt{is\_object}([[ctype]]) }} by
+    ctype != ctype'(ctype'1, .., ctype'k)
     ---------------------- :: def
-    is_object(ty)
+    is_object(ctype)
     
     
-  defn is_complete_object ( ty ) :: :: is_complete_object :: 'is_complete_object_'
-       {{ tex \texttt{is\_complete\_object}([[ty]]) }} by
-    is_object(ty)
-    ty != void
+  defn is_complete_object ( ctype ) :: :: is_complete_object :: 'is_complete_object_'
+       {{ tex \texttt{is\_complete\_object}([[ctype]]) }} by
+    is_object(ctype)
+    ctype != void
     ---------------------- :: def
-    is_complete_object(ty)
+    is_complete_object(ctype)
 
 
 
@@ -278,14 +301,14 @@ defns
 
 
 % defn
-% isCompatibleUnqualified ( ty1 , ty2 ) :: :: isCompatibleUnqualified :: isCompatibleUnqualified_ by
+% isCompatibleUnqualified ( ctype1 , ctype2 ) :: :: isCompatibleUnqualified :: isCompatibleUnqualified_ by
 
 % defn
 % isNullPtrConstant ( E ) :: :: isNullPtrConstant :: isNullPtrConstant_ by
 
 
 
-  defn G , Sig |- ail_e : ty :: :: Ty :: Ty_ by 
+  defn G , Sig |- ail_e : ctype :: :: Ctype :: Ctype_ by 
 
 
 
@@ -424,12 +447,12 @@ defns
 %    parameters. Each argument shall have a type such that its value may be
 %    assigned to an object with the unqualified version of the type of its
 %    corresponding parameter.
-    G,Sig |- ail_e : qualifiers ty(ty1, .., tyj)*
-    ty = void \/ is_complete_object(ty) /\ ty != ty'[n]
+    G,Sig |- ail_e : qualifiers ctype(ctype1, .., ctypej)*
+    ctype = void \/ is_complete_object(ctype) /\ ctype != ctype'[n]
     j = k
     --------------------------------------------------- :: call
-    G,Sig |- ail_e(ail_e1, .., ail_ek) : ty
-% is_pointer_to_function(ty)
+    G,Sig |- ail_e(ail_e1, .., ail_ek) : ctype
+% is_pointer_to_function(ctype)
 
 % t_base = T.base_of_pointer t in
 % t_return = T.function_return t_base in
@@ -489,13 +512,13 @@ defns
     % (§6.5.3.2#3) "[...] If the operand has type ‘‘type’’, the result has     %
     %               type ‘‘pointer to type’’. [...]"                           %
     % ------------------------------------------------------------------------ %
-    G,Sig |- e : ty
+    G,Sig |- e : ctype
     is_function_designator(e) \/
     e = e1[e2] \/
     e = *e1 \/
     is_lvalue_of_"an object that is not a bit-field and is not declared with % the register storage-class specifier"(e)
     ------------------------------------------ :: address
-    G,Sig |- &e : ty*
+    G,Sig |- &e : ctype*
     
     
     % A.UNARY A.INDIRECTION
@@ -506,11 +529,11 @@ defns
     % (§6.5.3.2#4) "[...] If the operand has type ‘‘pointer to type’’, the     %
     %               result has type ‘‘type’’. [...]                            %
     % ------------------------------------------------------------------------ %
-    G,Sig |- ail_e : qualifiers ty*
-    isObject(ty)
-    ty' = promote(ty)
+    G,Sig |- ail_e : qualifiers ctype*
+    isObject(ctype)
+    ctype' = promote(ctype)
     ----------------------- :: UnaryIndirection
-         G,Sig |- *ail_e : ty'
+         G,Sig |- *ail_e : ctype'
     
     
     
@@ -521,33 +544,33 @@ defns
     % (§6.5.3.3#1) "The operand of the unary + [...] operator shall have       %
     %               arithmetic type;"                                          %
     % (§6.5.3.3#2) "[...] and the result has the promoted type."               %
-    G,Sig |- ail_e : ty
-    is_arithmetic(ty)
-    ty' = promote(ty)
+    G,Sig |- ail_e : ctype
+    is_arithmetic(ctype)
+    ctype' = promote(ctype)
     ----------------- :: UnaryPlus
-    G,Sig |- +ail_e : ty'
+    G,Sig |- +ail_e : ctype'
     
     % ------------------------------------------------------------------------ %
     % [unary -]                                                                %
     % (§6.5.3.3#1) "The operand of the unary [...] - operator shall have       %
     %               arithmetic type;"                                          %
     % (§6.5.3.3#3) "[...] and the result has the promoted type."               %
-    G,Sig  |- ail_e : ty
-    is_arithmetic(ty)
-    ty' = promote ty
+    G,Sig  |- ail_e : ctype
+    is_arithmetic(ctype)
+    ctype' = promote ctype
     ----------------- :: UnaryMinus
-    G,Sig  |- -ail_e : ty'
+    G,Sig  |- -ail_e : ctype'
     
     
     % ------------------------------------------------------------------------ %
     % [unary ~]                                                                %
     % (§6.5.3.3#1) "The operand [...] of the unary ~ operator, integer type;"  %
     % (§6.5.3.3#4) "[...] and the result has the promoted type."               %
-    G,Sig |- ail_e : ty
-    is_integer(ty)
-    ty' = promote ty 
+    G,Sig |- ail_e : ctype
+    is_integer(ctype)
+    ctype' = promote ctype 
     ---------------- :: UnaryBnot
-      G,Sig  |- ~ail_e : ty'
+      G,Sig  |- ~ail_e : ctype'
     
     % REMARK ----------------------------------------------------------------- %
     %   In addition to the unary operator present in Ail, Cabs has the         %
@@ -594,154 +617,154 @@ G,Sig |- (void)ail_e : void
 
 
 % TODO: in the tex the ty1 and ty2 both appear as \tay
-G,Sig |- ail_e : ty2
-isScalar(ty1)
-isScalar(ty2)
+G,Sig |- ail_e : ctype2
+isScalar(ctype1)
+isScalar(ctype2)
 --------------------- :: Cast
-G,Sig |- (ty1)ail_e : ty1
+G,Sig |- (ctype1)ail_e : ctype1
 
 
-|- E1 : ty1
-|- E2 : ty2
-is_arithmetic(ty1)
-is_arithmetic(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+is_arithmetic(ctype1)
+is_arithmetic(ctype2)
 -------------------------------------------- :: Mul
-|- E1 * E2 : usualArithmetic(ty1, ty2)
+|- E1 * E2 : usualArithmetic(ctype1, ctype2)
 
 
-|- E1 : ty1
-|- E2 : ty2
-is_arithmetic(ty1)
-is_arithmetic(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+is_arithmetic(ctype1)
+is_arithmetic(ctype2)
 -------------------------------------------- :: Div
-|- E1 / E2 : usualArithmetic(ty1, ty2)
+|- E1 / E2 : usualArithmetic(ctype1, ctype2)
 
 
-|- E1 : ty1
-|- E2 : ty2
-is_integer(ty1)
-is_integer(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
 -------------------------------------------- :: Mod
-|- E1 % E2 : usualArithmetic(ty1, ty2)
+|- E1 % E2 : usualArithmetic(ctype1, ctype2)
 
 
-|- E1 : qualifiers *ty1
-|- E2 : ty2
-ty1 != void
-isObject(ty1)
-is_integer(ty2)
+|- E1 : qualifiers *ctype1
+|- E2 : ctype2
+ctype1 != void
+isObject(ctype1)
+is_integer(ctype2)
 -------------------------------------------- :: Add_PtrInt
-|- E1 + E2 : qualifiers *ty1
+|- E1 + E2 : qualifiers *ctype1
 
 
-|- E1 : ty1
-|- E2 : qualifiers *ty2
-ty2 != void
-is_integer(ty1)
-isObject(ty2)
+|- E1 : ctype1
+|- E2 : qualifiers *ctype2
+ctype2 != void
+is_integer(ctype1)
+isObject(ctype2)
 -------------------------------------------- :: Add_IntPtr
-|- E1 + E2 : qualifiers *ty2
+|- E1 + E2 : qualifiers *ctype2
 
-|- E1 : ty1
-|- E2 : ty2
-is_arithmetic(ty1)
-is_arithmetic(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+is_arithmetic(ctype1)
+is_arithmetic(ctype2)
 -------------------------------------------- :: Add_ArithArith
-|- E1 + E2 : usualArithmetic(ty1, ty2)
+|- E1 + E2 : usualArithmetic(ctype1, ctype2)
 
 
 % A.BINARY (C.ARITHMETIC C.SUB) e1 e2
 
-|- E1 : ty1
-|- E2 : ty2
-is_integer(ty1)
-is_integer(ty2)
-ty' = promote ty1
+|- E1 : ctype1
+|- E2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
+ctype' = promote ctype1
 -------------------------- :: SHL
-|- E1 << E2 : ty'
+|- E1 << E2 : ctype'
 
 
-|- E1 : ty1
-|- E2 : ty2
-is_integer(ty1)
-is_integer(ty2)
-ty' = promote ty1
+|- E1 : ctype1
+|- E2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
+ctype' = promote ctype1
 -------------------------- :: SHR
-|- E1 >> E2 : ty'
+|- E1 >> E2 : ctype'
 
 
 % TODO: parsing problem
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-isObject(ty1)
-isObject(ty2)
-isCompatibleUnqualified ( ty1 , ty2 )
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+isObject(ctype1)
+isObject(ctype2)
+isCompatibleUnqualified ( ctype1 , ctype2 )
 -------------------------------- :: Lt_PtrPtr
 |- E1 < E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : ty1
-|- E2 : ty2
-isReal(ty1)
-isReal(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+isReal(ctype1)
+isReal(ctype2)
 -------------------------------- :: Lt_RealReal
 |- E1 < E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-isObject(ty1)
-isObject(ty2)
-isCompatibleUnqualified ( ty1 , ty2 )
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+isObject(ctype1)
+isObject(ctype2)
+isCompatibleUnqualified ( ctype1 , ctype2 )
 -------------------------------- :: Gt_PtrPtr
 |- E1 > E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : ty1
-|- E2 : ty2
-isReal(ty1)
-isReal(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+isReal(ctype1)
+isReal(ctype2)
 -------------------------------- :: Gt_RealReal
 |- E1 > E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-isObject(ty1)
-isObject(ty2)
-isCompatibleUnqualified ( ty1 , ty2 )
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+isObject(ctype1)
+isObject(ctype2)
+isCompatibleUnqualified ( ctype1 , ctype2 )
 -------------------------------- :: Le_PtrPtr
 |- E1 <= E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : ty1
-|- E2 : ty2
-isReal(ty1)
-isReal(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+isReal(ctype1)
+isReal(ctype2)
 -------------------------------- :: Le_RealReal
 |- E1 <= E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-isObject(ty1)
-isObject(ty2)
-isCompatibleUnqualified ( ty1 , ty2 )
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+isObject(ctype1)
+isObject(ctype2)
+isCompatibleUnqualified ( ctype1 , ctype2 )
 -------------------------------- :: Ge_PtrPtr
 |- E1 >= E2 : signed int
 
 
 % TODO: parsing problem
-|- E1 : ty1
-|- E2 : ty2
-isReal(ty1)
-isReal(ty2)
+|- E1 : ctype1
+|- E2 : ctype2
+isReal(ctype1)
+isReal(ctype2)
 -------------------------------- :: Ge_RealReal
 |- E1 >= E2 : signed int
 
@@ -749,16 +772,16 @@ isReal(ty2)
 % A.BINARY C.EQ e1 e2
 
 
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-isCompatibleUnqualified ( ty1 , ty2 )
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+isCompatibleUnqualified ( ctype1 , ctype2 )
 ------------------------------------- :: Ne_PtrPtr1
 |- E1 != E2 : signed int
 
 
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-ty1 = void /\ isObject(ty2) \/ isObject(ty1) /\ ty2 = void
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+ctype1 = void /\ isObject(ctype2) \/ isObject(ctype1) /\ ctype2 = void
 ------------------------------------- :: Ne_PtrPtr2
 |- E1 != E2 : signed int
 
@@ -783,9 +806,9 @@ ty1 = void /\ isObject(ty2) \/ isObject(ty1) /\ ty2 = void
 
 
 % TODO: check
-|- E1 : qualifiers1 *ty1
-|- E2 : qualifiers2 *ty2
-ty1 != void /\ ty2 != void
+|- E1 : qualifiers1 *ctype1
+|- E2 : qualifiers2 *ctype2
+ctype1 != void /\ ctype2 != void
 isNullPtrConstant(E1) \/ isNullPtrConstant(E2)
 ------------------------------------- :: Ne_PtrPtr3
 |- E1 != E2 : signed int
@@ -818,39 +841,39 @@ isNullPtrConstant(E1) \/ isNullPtrConstant(E2)
 
 
 % ==================================
-G,Sig |- ail_e1 : ty1
-G,Sig |- ail_e2 : ty2
-is_integer(ty1)
-is_integer(ty2)
+G,Sig |- ail_e1 : ctype1
+G,Sig |- ail_e2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
 ---------------------------------------------------- :: BAND
-G,Sig |- ail_e1 & ail_e2 : usual_arithmetic(ty1,ty2)
+G,Sig |- ail_e1 & ail_e2 : usual_arithmetic(ctype1,ctype2)
 
 
-G,Sig |- ail_e1 : ty1
-G,Sig |- ail_e2 : ty2
-is_integer(ty1)
-is_integer(ty2)
+G,Sig |- ail_e1 : ctype1
+G,Sig |- ail_e2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
 ---------------------------------------------------- :: XOR
-G,Sig |- ail_e1 ^ ail_e2 : usual_arithmetic(ty1,ty2)
+G,Sig |- ail_e1 ^ ail_e2 : usual_arithmetic(ctype1,ctype2)
 
-G,Sig |- ail_e1 : ty1
-G,Sig |- ail_e2 : ty2
-is_integer(ty1)
-is_integer(ty2)
+G,Sig |- ail_e1 : ctype1
+G,Sig |- ail_e2 : ctype2
+is_integer(ctype1)
+is_integer(ctype2)
 --------------------------------------------------- :: BOR
-G,Sig|- ail_e1 | ail_e2 : usual_arithmetic(ty1,ty2)
+G,Sig|- ail_e1 | ail_e2 : usual_arithmetic(ctype1,ctype2)
 
-G,Sig |- ail_e1 : ty1
-G,Sig |- ail_e2 : ty2
-is_scalar(ty1)
-is_scalar(ty2)
+G,Sig |- ail_e1 : ctype1
+G,Sig |- ail_e2 : ctype2
+is_scalar(ctype1)
+is_scalar(ctype2)
 -------------------------------------- :: AND
 G,Sig |- ail_e1 && ail_e2 : signed int
 
-G,Sig |- ail_e1 : ty1
-G,Sig |- ail_e2 : ty2
-is_scalar(ty1)
-is_scalar(ty2)
+G,Sig |- ail_e1 : ctype1
+G,Sig |- ail_e2 : ctype2
+is_scalar(ctype1)
+is_scalar(ctype2)
 -------------------------------- :: OR
 G,Sig |- ail_e1 || ail_e2 : signed int
 
@@ -873,30 +896,30 @@ G , Sig |- [ ail_s ] ok :: :: StmtOk :: 'StmtOk_'
   {{ com statement well-formedness and expressions typechecking entry point }}
   {{ tex [[G]], [[Sig]] [[|-]] [ [[ail_s]] ] \ \textbm{ok} }} by 
   
-  G,Sig |- ail_e : ty
-  is_scalar(ty)
+  G,Sig |- ail_e : ctype
+  is_scalar(ctype)
   G,Sig |- [ail_s1] ok
   G,Sig |- [ail_s2] ok
   ---------------------------------------------- :: if
   G,Sig |- [if ail_e then ail_s1 else ail_s2] ok
   
   
-  G,Sig |- ail_e : ty
-  is_integer(ty)
+  G,Sig |- ail_e : ctype
+  is_integer(ctype)
   G,Sig |- [ail_s] ok
   ---------------------------------- :: switch
   G,Sig |- [switch (ail_e) ail_s] ok
   
   
-  G,Sig |- ail_e : ty
-  is_scalar(ty)
+  G,Sig |- ail_e : ctype
+  is_scalar(ctype)
   G,Sig |- [ail_s] ok
   --------------------------------------- :: while
   G,Sig |- [while ail_e do ail_s done] ok
   
   
-  G,Sig |- ail_e : ty
-  is_scalar(ty)
+  G,Sig |- ail_e : ctype
+  is_scalar(ctype)
   G,Sig |- [ail_s] ok
   ----------------------------------- :: do
   G,Sig |- [do ail_s while(ail_e)] ok
