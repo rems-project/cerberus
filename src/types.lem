@@ -28,6 +28,7 @@ let is_signed_integer = lift_int
    
    NOT_SUPPORTED: extended unsigned integer types
 *)
+(* TODO: don't seems to be used outside from Types.lem *)
 let is_unsigned_integer = lift_int
   function
     | BOOL       -> true
@@ -42,6 +43,7 @@ let is_unsigned_integer = lift_int
    
    NOT_SUPPORTED
 *)
+(* TODO: don't seems to be used outside from Types.lem *)
 let is_real_floating t = false
 
 
@@ -52,6 +54,7 @@ let is_real_floating t = false
    
    NOT_SUPPORTED
 *)
+(* TODO: not used outside from Types.lem *)
 let is_complex t = false
 let is_floating t = is_real_floating t || is_complex t
 
@@ -394,7 +397,7 @@ We define a unary operation over types called "integer promotion" as follow:
   
   for a given type τ:
     
-    IF τ = int /\ τ = (unsigned int) THEN
+    IF τ = int \/ τ = (unsigned int) THEN
       the operation simply gives back τ
     
     IF is_integer_type τ /\ τ ≤_rank int /\ τ ≤_rank (unsigned int) THEN

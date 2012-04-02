@@ -1,0 +1,173 @@
+type value = num (* TODO *)
+
+type sym = Symbol.t
+
+
+
+
+
+
+type eop =
+  | ADD
+  | SUB
+  | MULT
+  | DIV
+  | MODULO
+
+type bop =
+  | EQ
+  | LT
+
+type connective =
+  | AND
+  | OR
+
+type expression =
+  | DEBUG_EXPR of string
+  | CONST of value
+  | SYMBOL of sym
+  | EOP of eop * expression * expression
+  | MINUS of expression
+  | MAX of Ail.ctype
+  | MIN of Ail.ctype
+  | SIZEOF of Ail.ctype
+  | ALIGNOF of Ail.ctype
+  | OFFSETOF of Ail.ctype
+  | CONV of Ail.ctype * Ail.ctype * sym
+
+type boolean_test =
+  | TRUE
+  | FALSE
+  | BEXPR of bop * expression * expression
+  | BOP of connective * boolean_test * boolean_test
+  | NEG of boolean_test
+
+type statement =
+  | DEBUG_STMT of string
+  | SKIP
+  | UNDEF
+  | ERROR
+  | EXPR of expression
+  | LET of sym list * expression * statement
+  | SEQ of sym list * statement * statement
+  | UNSEQ of statement list
+  | IF of boolean_test * statement * statement
+  | PLUS of statement * statement
+  | CREATE of Ail.ctype
+
+(* Since allocated (malloc) object don't have an effective type set at their
+   creation, we need to either add an "alloc" construct or make CREATE take
+   an Ail.ctype option as argument *)
+
+
+  | KILL of sym
+  | STORE of Ail.ctype * sym * sym
+  | LOAD of Ail.ctype * sym
+  | SAME of sym * sym
+(*  | FUN of sym * sym list * statement *)
+  | CALL of sym * sym list
+
+
+(* Emulating partial application of type constructors *)
+(* TODO: don't need this in lem *)
+
+let skip_ctx _ = SKIP
+let let_ctx a s1 s2 = LET a s1 s2
+
+
+(* Pretty printing *)
+module Print = struct
+  module P = Pprint
+
+  open P.Operators
+  
+  let pp_keyword w = !^ ("\x1b[1m" ^ w ^ "\x1b[0m")
+  let pp_control w = !^ ("\x1b[1;36m" ^ w ^ "\x1b[0m")
+  let pp_constant c = !^ ("\x1b[35m" ^ c ^ "\x1b[0m")
+  let pp_symbol a = !^ ("\x1b[31m" ^ (Symbol.to_string_pretty a) ^ "\x1b[0m")
+  let pp_number n = !^ ("\x1b[33m" ^ n ^ "\x1b[0m")
+  
+  
+  let optional pp = function
+    | Some x -> pp x
+    | None   -> P.empty
+  end
+
+(*  
+  let pp_ty = function
+    | TY -> !^ "\x1b[32mty\x1b[0m"
+  end
+*)
+  
+  let pp_eop = function
+    | ADD    -> P.plus
+    | SUB    -> P.minus
+    | MULT   -> P.star
+    | DIV    -> P.slash
+    | MODULO -> P.percent
+  end
+  
+  let pp_bop = function
+    | EQ -> P.equals
+    | LT -> P.langle
+  end
+  
+  let pp_connective = function
+    | AND -> P.ampersand ^^ P.ampersand
+    | OR  -> P.bar ^^ P.bar
+  end
+  
+  let rec pp_expression e =
+    match e with
+      | DEBUG_EXPR str -> !^ ("[DEBUG_EXPR]{" ^ str ^ "}")
+      | CONST n      -> pp_number (string_of_num n)
+      | SYMBOL a     -> pp_symbol a
+      | EOP op e1 e2 -> P.parens (pp_expression e1) ^^^ pp_eop op ^^^ P.parens (pp_expression e2)
+      | MINUS e      -> P.minus ^^ P.parens (pp_expression e)
+      | MAX ty       -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
+      | MIN ty       -> pp_keyword "min" ^^ P.braces (Ail.Print.pp_type ty)
+      | SIZEOF ty    -> pp_keyword "sizeof" ^^ P.braces (Ail.Print.pp_type ty)
+      | ALIGNOF ty   -> pp_keyword "alignof" ^^ P.braces (Ail.Print.pp_type ty)
+      | OFFSETOF ty  -> pp_keyword "offset" ^^ P.braces (Ail.Print.pp_type ty)
+  end
+  
+  let rec pp_boolean_test b =
+    match b with
+      | TRUE           -> pp_constant "true"
+      | FALSE          -> pp_constant "false"
+      | BEXPR op e1 e2 -> P.parens (pp_expression e1) ^^^ pp_bop op ^^^ P.parens (pp_expression e2)
+      | BOP c b1 b2    -> P.parens (pp_boolean_test b1) ^^^ pp_connective c ^^^ P.parens (pp_boolean_test b2)
+      | NEG b          -> P.tilde ^^ P.parens (pp_boolean_test b)
+    end
+  
+  let rec pp_statement s =
+    match s with
+    | DEBUG_STMT str     -> !^ ("[DEBUG_STMT]{" ^ str ^ "}")
+    | SKIP               -> pp_keyword "skip"
+    | UNDEF              -> pp_keyword "undef"
+    | ERROR              -> pp_keyword "error"
+    | EXPR e             -> pp_expression e
+    | LET [] e s         -> !^ "BUG: for now LET must have at least one symbol."
+    | LET [a] e s        -> pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^ pp_expression e ^^^
+                            pp_control "in" ^^ P.break1 ^^ pp_statement s
+    | LET _as e s        -> pp_control "let" ^^^ (P.parens (P.comma_list pp_symbol _as)) ^^^ P.equals ^^^ pp_expression e ^^^
+                            pp_control "in" ^^ P.break1 ^^ pp_statement s
+    | SEQ [] s1 s2       -> pp_statement s1 ^^ P.semi ^^ P.break1 ^^ pp_statement s2
+    | SEQ [a] s1 s2      -> pp_symbol a ^^^ !^ "<-" ^^^ pp_statement s1 ^^ P.semi ^^ P.break1 ^^ pp_statement s2
+    | SEQ _as s1 s2      -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^^ pp_statement s1 ^^ P.semi ^^ P.break1 ^^
+                            pp_statement s2
+    | UNSEQ []           -> !^ "BUG: UNSEQ must have at least one statement, probably even two"
+    | UNSEQ ss           ->  P.sepmap (pp_control "||") (fun x -> P.parens (pp_statement x)) ss
+    | IF b s1 s2         -> pp_control "if" ^^^ pp_boolean_test b ^^^ pp_control "then" ^^
+                            P.nest 2 (P.break1 ^^ pp_statement s1) ^^ P.break1 ^^
+                            pp_control "else" ^^
+                            P.nest 2 (P.break1 ^^ pp_statement s2) ^^ P.break1
+    | PLUS s1 s2         -> P.parens (pp_statement s1) ^^^ pp_control "++" ^^^ P.parens (pp_statement s2)
+    | CREATE ty          -> pp_keyword "create" ^^ P.braces (Ail.Print.pp_type ty)
+    | KILL a             -> pp_keyword "kill" ^^^ pp_symbol a
+    | STORE ty a1 a2     -> pp_keyword "store" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a1 ^^^ pp_symbol a2
+    | LOAD ty a          -> pp_keyword "load" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a
+    | SAME a1 a2         -> pp_keyword "same" ^^^ pp_symbol a1 ^^^ pp_symbol a2
+    | CALL a args        -> !^ "TODO(call)"
+  end
+end

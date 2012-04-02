@@ -45,7 +45,6 @@ cabs.lem \
 ail.lem \
 ail_aux.lem \
 ail_rewrite.lem \
-implementation.lem \
 core.lem \
 types.lem \
 annotate.lem \
@@ -57,7 +56,7 @@ type_constraint.lem \
 action.lem \
 meaning.lem \
 reduction.lem \
-reduction2.lem
+translation.lem
 
 COQ_FILES=\
 multiset.lem \

@@ -16,7 +16,7 @@ let compare (n1, _) (n2, _) =
     Ord.Lt
   else Ord.Gt
 
-let to_string (n, _) = "v" ^ "_" ^ string_of_num n
+let to_string (n, _) = "a" ^ "_" ^ string_of_num n
 let to_string_pretty ((_, name_opt) as s) =
   match name_opt with
     | Some name -> name

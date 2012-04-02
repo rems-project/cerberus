@@ -456,7 +456,7 @@ and reduce_stmt (n: num) b env (file: _ Ail.file) fid return (_, stmt) =
 
 
 (*  *)
-let reduce_file (n: num) (file: _ A.file) =
+let reduce_file (n: num) (file: _ A.file) : Meaning.Denotation.t set E.M.t =
   let b =
     let f m (fid, _) = Pmap.add fid n m in
     List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
@@ -470,4 +470,4 @@ let reduce_file (n: num) (file: _ A.file) =
 
 
 (* This is the entry function (called from main) *)
-let reduce (n: num) (file: _ A.file) = E.init (reduce_file n file)
+let reduce (n: num) (file: _ A.file) : Meaning.Denotation.t set = E.init (reduce_file n file)
