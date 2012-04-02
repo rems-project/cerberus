@@ -1,0 +1,301 @@
+module A = Ail
+module C = Core
+module T = Types
+
+
+(* TODO: put somewhere *)
+let ($) f x = f x
+
+let rec mapWithLast f g = function
+  | []      -> []
+  | [x]     -> [g x]
+  | (x::xs) -> f x :: mapWithLast f g xs
+end
+
+
+(* -------------------------------------------------------------------------- *)
+module Effect = struct
+  module M = Symbol_state
+
+  let return = M.return
+
+  module Operators = struct
+    let (>>=) = M.bind
+  end
+
+  let init = M.init
+  let foldlM = M.foldlM
+  
+  open Operators
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  let mapWithLastM f g xs = sequence (mapWithLast f g xs)
+
+end
+
+(* -------------------------------------------------------------------------- *)
+module E = Effect
+open E.Operators
+
+let exp_type    = Annotate.exp_type_of
+let lvalue_type = Annotate.lvalue_type_of
+
+
+let fresh_symbol = Symbol_state.map (fun x -> x) Symbol_state.fresh
+
+
+
+
+(* TODO: clean up *)
+(* TODO: local recursive function are not allowed in Lem ?? *)
+let rec bar f (xs, ys) = function
+  | []      -> (xs, ys)
+  | (l::ls) -> let (x,y) = f l in bar f (x::xs, y::ys) ls
+end
+let foo f l = bar f ([],[]) l
+
+
+
+let update_env env ids =
+  let f id env =
+    fresh_symbol >>= fun a ->
+    E.return (Pmap.add id a env) in
+  E.foldlM f ids env
+
+
+(*
+let is_function_id file e =
+  match Annotate.exp_of e with
+  | A.VARIABLE fid ->
+      let (ids, body) = Pmap.find fid file.A.fn_map in
+      Some (fid, ids , body)
+  | _ -> None
+  end
+
+
+let conv t t' x =
+  x               >>= fun (a, m) ->
+  Tc.conv t t' a  >>= fun (v, c) ->
+  E.return (v, m +& c)
+
+let conv_int_lifted t (a, m) =
+  Tc.conv_int t a >>= fun (v, c) ->
+  E.return (v, m +& c)
+
+
+let rec iterate e s f_e f_s n ml_prev =
+  let m_neg (a, m) = m +& (C.eq  a C.zero) in
+  let m_pos (a, m) = m +& (C.neq a C.zero) in
+  match n with
+  | 0 ->
+      f_e e >>= fun m  ->
+      E.return (Ms.exit_loop (m_neg m) ml_prev)
+  | _ ->
+      f_e e >>= fun m  ->
+      f_s s >>= fun ml ->
+      let ml' = Ms.enter_loop (m_pos m) (m_neg m) ml_prev in
+      iterate e s f_e f_s (n-1) (ml' --&> ml)
+  end
+*)
+
+(* -------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+(*
+let rec translate_lvalue n b env file exp =
+  let f = translate_exp n b env file in
+  match Annotate.exp_of exp with
+  | A.VARIABLE id ->
+      E.return (Pmap.find id env, Me.unit)
+  | A.UNARY A.INDIRECTION e ->
+      f e >>= fun (a, m) ->
+      let t = T.base_of_pointer (T.pointer_convert (exp_type e)) in
+      let ill_aligned = C.neg (Tc.is_aligned t a) in
+      let null = C.eq a C.null in
+      let c = C.implies (C.disj null ill_aligned) C.undef in
+      E.return (a, m +& c)
+  | _ ->
+      C.fresh >>= fun a ->
+      E.return (a, Me.null)
+  end
+*)
+
+(* -------------------------------------------------------------------------- *)
+
+let rec translate_exp env file exp =
+  match Annotate.exp_of exp with
+    (* WARNING: this is not enought (DEBUG FOR NOW) *)
+    | A.VARIABLE id ->
+        let a = Pmap.find id env in
+        E.return $ C.LOAD (lvalue_type exp) a
+
+
+    | A.CONSTANT (Cabs.CONST_INT (i, _)) -> E.return (C.EXPR (C.CONST i))
+
+
+
+(*
+      f_lvalue e >>= fun (a, m) ->
+      C.fresh    >>= fun v      ->
+      let incr = C.plus v C.one in
+      Tc.conv_int (exp_type e) incr >>= fun (v', c) ->
+      Action.load  (lvalue_type e) a v  >>= fun load  ->
+      Action.store (lvalue_type e) a v' >>= fun store ->
+      E.return (v, Me.conj_sb (m +& c) (Me.add_ls_pair load store Me.unit))
+*)
+(*
+  | A.UNARY A.POSTFIX_INCR e ->
+      (* TODO: must be done un "lvalue mode" *)
+      translate_exp e >>= fun core_s ->
+      fresh_symbol >>= fun a ->
+*)
+
+
+
+  
+  | A.ALIGNOF ty -> E.return $ C.EXPR (C.ALIGNOF ty)
+  
+  | A.SIZEOF  ty -> E.return $ C.EXPR (C.SIZEOF ty)
+
+
+
+
+
+    | _ -> E.return (C.DEBUG_STMT "expression")
+  end
+(*
+  | A.UNARY A.POSTFIX_DECR e ->
+  | A.UNARY A.ADDRESS (_, (A.UNARY A.INDIRECTION e)) ->
+  | A.UNARY A.ADDRESS e ->
+  | A.CAST t e ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.MUL) e1 e2 ->
+  | A.BINARY Cabs.COMMA e1 e2 ->
+  | A.BINARY Cabs.OR e1 e2 ->
+  | A.BINARY Cabs.AND e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2 ->
+  | A.BINARY Cabs.EQ e1 e2 ->
+  | A.BINARY Cabs.NE e1 e2 ->
+  | A.BINARY Cabs.LT e1 e2 ->
+  | A.BINARY Cabs.LE e1 e2 ->
+  | A.BINARY Cabs.GT e1 e2 ->
+  | A.BINARY Cabs.GE e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2 ->
+  | A.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2 ->
+  | A.ASSIGN None e1 e2 ->
+  | A.CONDITIONAL e1 e2 e3 ->
+  | A.CALL e es ->
+  | _ ->
+  end
+*)
+
+(* -------------------------------------------------------------------------- *)
+
+(* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
+and translate_stmt env file current_function (_, stmt) : C.statement Symbol_state.t =
+  (* return the type of a given identifier. (TODO: why is this a local function?) *)
+  let lookup_type id = fst (Pmap.find id file.A.id_map) in
+  
+  match stmt with
+  | A.SKIP -> E.return C.SKIP
+  | A.IF e s1 s2 -> E.return (C.DEBUG_STMT "IF")
+
+
+(*
+      update_env env ids >>= fun env' ->
+      let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
+      let f_create (l, t) ml =
+        Action.create t l >>= fun create ->
+        E.return (ml ++@ create) in
+      let f_kill (l, _) ks =
+        Action.kill l >>= fun kill ->
+        E.return (ks union {kill}) in
+      let f s ml' =
+        translate_stmt n b env' file fid return s >>= fun ml ->
+        E.return (ml' --&> ml) in
+      E.foldlM f_create decls Ms.unit >>= fun ml_create ->
+      E.foldlM f        ss    Ms.unit >>= fun ml        ->
+      E.foldlM f_kill   decls {}      >>= fun kills     ->
+      E.return (Ms.add_actions_sp kills (ml_create --&> ml))
+*)
+  | A.BLOCK ids ss ->
+      (* add the block local variables to the environment (by assigning fresh
+         symbolic names) *)
+      update_env env ids >>= fun env' ->
+      (* retrieve the declarations of the block local variables *)
+      let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
+      
+      (* prepare the code creating the objects for the block local variables. *)
+      let creates_ctx = let (syms, xs) = foo (fun (a, ty) -> (a, C.CREATE ty)) (List.rev decls) in
+                        C.SEQ syms (C.UNSEQ xs) in
+      
+      (* prepare the code killing the objects. *)
+      (* TODO: check that the unseq is right *)
+      let kills = C.UNSEQ $ List.map (fun (a, _) -> C.KILL a) decls in
+      
+      (* translate the statements with a symbolic name bound to the result of
+         the last statement *)
+      fresh_symbol >>= fun a ->
+      E.mapWithLastM (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
+                               E.return ([], core_s))
+                     (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
+                               E.return ([a], core_s))
+                     ss >>= fun core_ss ->
+      
+      (* connecting everything an returning that symbolic name bounded to the
+         result of last statement *)
+      E.return $ creates_ctx
+                 (List.fold_left (fun acc (_as, stmt) -> C.SEQ _as stmt acc)
+                    (C.SEQ [] kills (C.EXPR (C.SYMBOL a)))
+                    (List.rev core_ss))
+
+  | A.DECLARATION defns -> E.return (C.DEBUG_STMT "DECLARATION")
+
+
+(*
+      let t = T.function_return (lookup_type fid) in
+      conv t (exp_type e) (f_e e) >>= fun (a, m) ->
+      E.return (Ms.return (m +& C.eq a return))
+*)
+  | A.RETURN_EXPRESSION e ->
+      translate_exp env file e >>= fun core_s ->
+      fresh_symbol >>= fun a  ->
+      fresh_symbol >>= fun a' ->
+      E.return $ C.SEQ [a] core_s (C.LET [a'] (C.DEBUG_EXPR "conv") (C.EXPR $ C.SYMBOL a')) (* TODO: conversion *)
+
+
+  | A.RETURN_VOID -> E.return C.SKIP
+
+  | A.EXPRESSION e -> translate_exp env file e
+
+  | A.WHILE e s -> E.return (C.DEBUG_STMT "while")
+
+  | A.BREAK    -> E.return (C.DEBUG_STMT "break")
+
+  | A.CONTINUE -> E.return (C.DEBUG_STMT "continue")
+  end
+
+
+(* TODO: for now only translating the body of the main function *)
+let translate_file (file: _ A.file) : C.statement Symbol_state.t =
+   (translate_stmt
+              (* initial state of an environment associating Ail identifiers to
+                 symbolic names *)
+              Pmap.empty
+              file
+              (* set [main] as the current function. *)
+              file.A.main
+              (* the body of main. *)
+              (let (_,s) = Pmap.find file.A.main file.A.fn_map in s)
+  )
+
+
+(* This is the entry function (called from main.ml) *)
+let translate (file: _ A.file) : C.statement = E.init (translate_file file)

@@ -1,0 +1,17 @@
+type cause =
+  | CASE_OUTSIDE_SWITCH
+  | DEFAULT_OUTSIDE_SWITCH
+  | UNSUPPORTED of string
+
+let to_string e =
+  match e with
+  | CASE_OUTSIDE_SWITCH ->
+      "[Violation of 6.8.1#1] Labeled statements, Constraints: ``A \
+       case [...] label shall appear only in a switch statement.``"
+  
+  | DEFAULT_OUTSIDE_SWITCH ->
+      "[Violation of 6.8.1#1] Labeled statements, Constraints: ``A \
+       [...] default label shall appear only in a switch statement.``"
+  
+  | UNSUPPORTED msg -> msg
+  end

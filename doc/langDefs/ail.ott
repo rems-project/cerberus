@@ -143,36 +143,35 @@ aop_opt {{ tex \bullet^{?} }} :: '' ::=
   |     :: :: NIL
   | aop :: :: BASE
 
-expression {{ lem 'a expression_l }} , ail_e {{ tex e^\text{ail} }} :: '' ::=
-  | uop ail_e                                     :: :: UNARY       
+expression , ail_e {{ tex e^{\texttt{Ail} } }} :: '' ::=
+  | uop ailtau_e                                     :: :: UNARY       
 % TODO: K don't know how to put them in uop while telling
 %       the parser expect ++ and -- after the expr.
-  | ail_e ++                                      ::   :: INCR        {{ com postfix increment operator (\S6.5.2.4)                         }}
-                                                                      {{ tex [[ail_e]] \ \texttt{++}                                        }}
-  | ail_e --                                      ::   :: DECR        {{ com postfix decrement operator (\S6.5.2.4)                         }}
-                                                                      {{ tex [[ail_e]] \ \texttt{-{}-}                                      }}
-  | ail_e1 bop ail_e2                             ::   :: BINARY      {{ lem [[bop]] [[ail_e1]] [[ail_e2]] }}
-  | ail_e1 aop_opt = ail_e2                       ::   :: ASSIGN      {{ com assignment operators (\S6.5.16)                                }}
-  | ail_e1 ? ail_e2 : ail_e3                      ::   :: CONDITIONAL {{ com  conditional operator (\S6.5.15)                               }}
-                                                                      {{ tex [[ail_e1]] \ \texttt{?} \ [[ail_e2]] \ \texttt{:} \ [[ail_e3]] }}
-  | ( ctype ) ail_e                               ::   :: CAST        {{ com  cast operator (\S6.5.4)                                       }}
-%  | ail_e ( ctype1 ail_e1 , .. , ctypek ail_ek ) ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
-  | ail_e ( ail_e1 , .. , ail_ek )                ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
-  | ail_e . id                                    ::   :: MEMBEROF    {{ com structure/union member (\S6.5.2.3)                             }}
-  | ail_e -> id                                   ::   :: MEMBEROFPTR {{ tex [[ail_e]] \texttt{->} [[id]]                                   }}
+  | ailtau_e ++                                      ::   :: INCR        {{ com postfix increment operator (\S6.5.2.4)                         }}
+                                                                      {{ tex [[ailtau_e]] \ \texttt{++}                                        }}
+  | ailtau_e --                                      ::   :: DECR        {{ com postfix decrement operator (\S6.5.2.4)                         }}
+                                                                      {{ tex [[ailtau_e]] \ \texttt{-{}-}                                      }}
+  | ailtau_e1 bop ailtau_e2                             ::   :: BINARY      {{ lem [[bop]] [[ailtau_e1]] [[ailtau_e2]] }}
+  | ailtau_e1 aop_opt = ailtau_e2                       ::   :: ASSIGN      {{ com assignment operators (\S6.5.16)                                }}
+  | ailtau_e1 ? ailtau_e2 : ailtau_e3                      ::   :: CONDITIONAL {{ com  conditional operator (\S6.5.15)                               }}
+                                                                      {{ tex [[ailtau_e1]] \ \texttt{?} \ [[ailtau_e2]] \ \texttt{:} \ [[ailtau_e3]] }}
+  | ( ctype ) ailtau_e                               ::   :: CAST        {{ com  cast operator (\S6.5.4)                                       }}
+%  | ailtau_e ( ctype1 ailtau_e1 , .. , ctypek ailtau_ek ) ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
+  | ailtau_e ( ailtau_e1 , .. , ailtau_ek )                ::   :: CALL        {{ com function call (\S6.5.2.2)                                      }}
+  | ailtau_e . id                                    ::   :: MEMBEROF    {{ com structure/union member (\S6.5.2.3)                             }}
+  | ailtau_e -> id                                   ::   :: MEMBEROFPTR {{ tex [[ailtau_e]] \texttt{->} [[id]]                                   }}
   | constant                                      ::   :: CONSTANT    
   | id                                            ::   :: IDENTIFIER  
-  | sizeof ( ail_e )                              ::   :: SIZEOF_EXPR {{ com  \texttt{sizeof} operator (\S6.5.3.4)                          }}
-                                                                      {{ tex  \texttt{sizeof}([[ail_e]])                                    }}
+  | sizeof ( ailtau_e )                              ::   :: SIZEOF_EXPR {{ com  \texttt{sizeof} operator (\S6.5.3.4)                          }}
+                                                                      {{ tex  \texttt{sizeof}([[ailtau_e]])                                    }}
   | sizeof ( ctype )                              ::   :: SIZEOF_TY   {{ tex  \texttt{sizeof}([[ctype]])                                    }}
   | alignof ( ctype )                             ::   :: ALIGNOF     {{ com  \texttt{\_Alignof} operator (\S6.5.3.4)                       }}
                                                                       {{ tex  \texttt{alignof}([[ctype]])                                   }}
-  | ( ail_e )                                     :: M :: PARENS
+  | ( ailtau_e )                                     :: M :: PARENS
 
-% embed
-%   {{ lem
-% and 'a expression_l = 'a * 'a expression
-%   }}
+annotated_expression, ailtau_e {{ tex e^{\texttt{Ail}_\tau} }} :: '' ::=
+  | ail_e             :: :: UNTYPED_EXPR
+  | ( ail_e : ctype ) :: :: TYPED_EXPR
 
 
 % TODO: definitions
@@ -182,7 +181,7 @@ expression {{ lem 'a expression_l }} , ail_e {{ tex e^\text{ail} }} :: '' ::=
 
 statement {{ lem 'a statement_l }} , ail_s {{ tex S^\text{ail} }} :: '' ::=
   | skip                                                 :: :: SKIP              {{ tex \textbm{skip}                                          }}
-  | ail_e                                                :: :: EXPRESSION        
+  | ailtau_e                                                :: :: EXPRESSION        
   | begin vars id1 , .. , idk ; ail_s1 ; .. ; ail_sj end :: :: BLOCK             {{ com TODO: check + typesetting                              }}
                                                                                  
   | if ail_e then ail_s1 else ail_s2                     :: :: IF                {{ tex \textbm{if} \ [[ail_e]] \ \textbm{then} \ [[ail_s1]] \

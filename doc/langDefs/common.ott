@@ -13,16 +13,18 @@ grammar
 terminals :: 'terminals_' ::=
   | ail_terminals  :: :: ail_terminals
   | |e-  :: :: eturnstile  {{ tex \vdash_e }}
-  | |b-  :: :: bturnstile  {{ tex \vdash_b }}
+  | |l-  :: :: lturnstile  {{ tex \vdash_\text{lvalue} }}
   | |s-  :: :: sturnstile  {{ tex \vdash_S }}
+  | |-   :: :: turnstile  {{ tex \vdash }}
   | _in  :: :: _in         {{ tex \in }}
   | ~>   :: :: leadsto     {{ tex \leadsto }}
+  | <-   :: :: leftarrow   {{ tex \leftarrow }}
 
 atom {{ tex A }} :: 'atom_' ::= {{ com atomic formulæ }}
-  | k         :: :: index
-  | id        :: :: ident
-  | ctype     :: :: ailType
-  | a         :: :: sym
+  | k          :: :: index
+  | id         :: :: ident
+  | ctype      :: :: ailType
+  | a          :: :: sym
 
 formula {{ tex \psi }} :: 'formula_' ::=
   | judgement            :: :: judgement
@@ -32,6 +34,7 @@ formula {{ tex \psi }} :: 'formula_' ::=
   | formula1 \/ formula2 :: :: or  {{ tex [[formula1]] \vee [[formula2]]   }}
   
   | isLabel( id , Sig )  :: :: isLabel {{ tex [[id]] \in [[Sig]]_\text{labels} }}
+  | getObject( id , a , Sig ) :: :: getObject {{ tex ([[id]],[[a]]) \in [[Sig]]_\text{objects} }}
   | core_formula         :: :: core_formula
   
 
