@@ -1,78 +1,68 @@
 type value = num (* TODO *)
 
+(* Symbolic names *)
 type sym = Symbol.t
 
 
+(* Binary operators *)
+type binop =
+  (* arithmetic operators *)
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpMod
+  (* relational operators *)
+  | OpEq
+  | OpLt
+  (* logical connectives *)
+  | OpAnd
+  | OpOr
 
 
-
-
-type eop =
-  | ADD
-  | SUB
-  | MULT
-  | DIV
-  | MODULO
-
-type bop =
-  | EQ
-  | LT
-
-type connective =
-  | AND
-  | OR
-
-type expression =
-  | DEBUG_EXPR of string
-  | CONST of value
-  | SYMBOL of sym
-  | EOP of eop * expression * expression
-  | MINUS of expression
-  | MAX of Ail.ctype
-  | MIN of Ail.ctype
-  | SIZEOF of Ail.ctype
-  | ALIGNOF of Ail.ctype
-  | OFFSETOF of Ail.ctype
-  | CONV of Ail.ctype * Ail.ctype * sym
-
-type boolean_test =
-  | TRUE
-  | FALSE
-  | BEXPR of bop * expression * expression
-  | BOP of connective * boolean_test * boolean_test
-  | NEG of boolean_test
-
-type statement =
-  | DEBUG_STMT of string
-  | SKIP
-  | UNDEF
-  | ERROR
-  | EXPR of expression
-  | LET of sym list * expression * statement
-  | SEQ of sym list * statement * statement
-  | UNSEQ of statement list
-  | IF of boolean_test * statement * statement
-  | PLUS of statement * statement
-  | CREATE of Ail.ctype
-
-(* Since allocated (malloc) object don't have an effective type set at their
-   creation, we need to either add an "alloc" construct or make CREATE take
-   an Ail.ctype option as argument *)
-
-
-  | KILL of sym
-  | STORE of Ail.ctype * sym * sym
-  | LOAD of Ail.ctype * sym
-  | SAME of sym * sym
-(*  | FUN of sym * sym list * statement *)
-  | CALL of sym * sym list
-
-
-(* Emulating partial application of type constructors *)
-(* TODO: don't need this in lem *)
-
-let skip_ctx _ = SKIP
-let let_ctx a s1 s2 = LET a s1 s2
+(* Core syntax *)
+type expr =
+  | DEBUG of string
+  
+  (* pure expressions *)
+  | Kconst of num
+  | Ksym of sym
+  | Kop of binop * expr * expr
+  | Ktrue
+  | Kfalse
+  | Kctype of Ail.ctype
+  | Klet of sym list * expr * expr
+  | Kif of expr * expr * expr
+  | Kcall of sym * expr list (* TODO: do we want the same symbols for Core functions? probably not. *)
+  
+  (* undefined behaviour and late static error *)
+  | Kundef
+  | Kerror
+  
+  (* sequence-before constructors *)
+  | Kskip
+  | Kseq of sym list * expr * expr
+  | Kunseq of expr list
+  | Kindet of expr
+  | Katom of expr
+  
+  (* memory actions *)
+  | Kcreate of Ail.ctype
+  | Kalloc of sym
+  | Kkill of sym
+  | Kstore of Ail.ctype * sym * sym
+  | Kload of Ail.ctype * sym
+  | Ksame of sym * sym
+  
+  (* TODO: would it be better to make these become function
+           part of a standard library ? *)
+  | Kmax of Ail.ctype
+  | Kmin of Ail.ctype
+  | Ksizeof of Ail.ctype
+  | Kalignof of Ail.ctype
+  | Koffsetof of Ail.ctype
+  | Kshift of sym * expr
+  | Kconv of Ail.ctype * Ail.ctype * sym
 
 
 (* Pretty printing *)
@@ -81,93 +71,74 @@ module Print = struct
 
   open P.Operators
   
-  let pp_keyword w = !^ ("\x1b[1m" ^ w ^ "\x1b[0m")
-  let pp_control w = !^ ("\x1b[1;36m" ^ w ^ "\x1b[0m")
+  let pp_keyword w = !^ ("\x1b[1;35m" ^ w ^ "\x1b[0m")
   let pp_constant c = !^ ("\x1b[35m" ^ c ^ "\x1b[0m")
-  let pp_symbol a = !^ ("\x1b[31m" ^ (Symbol.to_string_pretty a) ^ "\x1b[0m")
+  let pp_control w = !^ ("\x1b[1;36m" ^ w ^ "\x1b[0m")
+  let pp_symbol a = !^ ("\x1b[34m" ^ (Symbol.to_string_pretty a) ^ "\x1b[0m")
   let pp_number n = !^ ("\x1b[33m" ^ n ^ "\x1b[0m")
-  
   
   let optional pp = function
     | Some x -> pp x
     | None   -> P.empty
   end
-
-(*  
-  let pp_ty = function
-    | TY -> !^ "\x1b[32mty\x1b[0m"
-  end
-*)
   
-  let pp_eop = function
-    | ADD    -> P.plus
-    | SUB    -> P.minus
-    | MULT   -> P.star
-    | DIV    -> P.slash
-    | MODULO -> P.percent
+  let pp_binop = function
+    | OpAdd -> P.plus
+    | OpSub -> P.minus
+    | OpMul -> P.star
+    | OpDiv -> P.slash
+    | OpMod -> P.percent
+    | OpEq  -> P.equals
+    | OpLt  -> P.langle
+    | OpAnd -> !^ "/\\"
+    | OpOr  -> !^ "\/"
   end
   
-  let pp_bop = function
-    | EQ -> P.equals
-    | LT -> P.langle
-  end
-  
-  let pp_connective = function
-    | AND -> P.ampersand ^^ P.ampersand
-    | OR  -> P.bar ^^ P.bar
-  end
-  
-  let rec pp_expression e =
+  let rec pp_expr e =
     match e with
-      | DEBUG_EXPR str -> !^ ("[DEBUG_EXPR]{" ^ str ^ "}")
-      | CONST n      -> pp_number (string_of_num n)
-      | SYMBOL a     -> pp_symbol a
-      | EOP op e1 e2 -> P.parens (pp_expression e1) ^^^ pp_eop op ^^^ P.parens (pp_expression e2)
-      | MINUS e      -> P.minus ^^ P.parens (pp_expression e)
-      | MAX ty       -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
-      | MIN ty       -> pp_keyword "min" ^^ P.braces (Ail.Print.pp_type ty)
-      | SIZEOF ty    -> pp_keyword "sizeof" ^^ P.braces (Ail.Print.pp_type ty)
-      | ALIGNOF ty   -> pp_keyword "alignof" ^^ P.braces (Ail.Print.pp_type ty)
-      | OFFSETOF ty  -> pp_keyword "offset" ^^ P.braces (Ail.Print.pp_type ty)
+      | DEBUG str       -> !^ ("\x1b[1;7;31m[DEBUG]{" ^ str ^ "}\x1b[0m")
+      | Kconst n        -> pp_number (string_of_num n)
+      | Ksym a          -> pp_symbol a
+      | Kop op e1 e2    -> P.parens (pp_expr e1) ^^^ pp_binop op ^^^ P.parens (pp_expr e2)
+      | Ktrue           -> pp_constant "true"
+      | Kfalse          -> pp_constant "false"
+      | Kctype ty       -> Ail.Print.pp_type ty
+      | Klet [] e1 e2   -> !^ "BUG: for now LET must have at least one symbol."
+      | Klet [a] e1 e2  -> pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^ pp_expr e1 ^^^
+                           pp_control "in" ^^ P.break1 ^^ pp_expr e2
+      | Klet _as e1 e2  -> pp_control "let" ^^^ (P.parens (P.comma_list pp_symbol _as)) ^^^ P.equals ^^^ pp_expr e1 ^^^
+                           pp_control "in" ^^ P.break1 ^^ pp_expr e2
+      | Kif b e1 e2     -> pp_control "if" ^^^ pp_expr b ^^^ pp_control "then" ^^
+                           P.nest 2 (P.break1 ^^ pp_expr e1) ^^ P.break1 ^^
+                           pp_control "else" ^^ P.nest 2 (P.break1 ^^ pp_expr e2) ^^ P.break1
+      | Kcall a es      -> !^ "TODO(call)"
+      | Kundef          -> pp_keyword "undef"
+      | Kerror          -> pp_keyword "error"
+      | Kskip           -> pp_keyword "skip"
+      | Kseq [] e1 e2   -> pp_expr e1 ^^ P.semi ^^ P.break1 ^^ pp_expr e2
+      | Kseq [a] e1 e2  -> pp_symbol a ^^^ !^ "<-" ^^^ pp_expr e1 ^^ P.semi ^^ P.break1 ^^ pp_expr e2
+      | Kseq _as e1 e2  -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^^ pp_expr e1 ^^ P.semi ^^ P.break1 ^^
+                           pp_expr e2
+      | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
+      | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
+      | Kunseq es       ->  P.sepmap (pp_control "||") (fun x -> P.parens (pp_expr x)) es
+      | Kindet e        -> P.brackets (pp_expr e)
+      | Katom e         -> P.braces (pp_expr e)
+      | Kcreate ty      -> pp_keyword "create" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kalloc a        -> pp_keyword "alloc" ^^^ pp_symbol a
+      | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
+      | Kstore ty a1 a2 -> pp_keyword "store" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a1 ^^^ pp_symbol a2
+      | Kload ty a      -> pp_keyword "load" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a
+      | Ksame a1 a2     -> pp_keyword "same" ^^^ pp_symbol a1 ^^^ pp_symbol a2
+      | Kmax ty         -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kmin ty         -> pp_keyword "min" ^^ P.braces (Ail.Print.pp_type ty)
+      | Ksizeof ty      -> pp_keyword "sizeof" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kalignof ty     -> pp_keyword "alignof" ^^ P.braces (Ail.Print.pp_type ty)
+      | Koffsetof ty    -> pp_keyword "offset" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kshift a e      -> pp_keyword "alloc" ^^^ pp_symbol a ^^^ pp_expr e
+      | Kconv ty1 ty2 a -> pp_keyword "alloc" ^^ P.braces (Ail.Print.pp_type ty1 ^^ !^"\\" ^^ Ail.Print.pp_type ty2) ^^^ pp_symbol a
   end
   
-  let rec pp_boolean_test b =
-    match b with
-      | TRUE           -> pp_constant "true"
-      | FALSE          -> pp_constant "false"
-      | BEXPR op e1 e2 -> P.parens (pp_expression e1) ^^^ pp_bop op ^^^ P.parens (pp_expression e2)
-      | BOP c b1 b2    -> P.parens (pp_boolean_test b1) ^^^ pp_connective c ^^^ P.parens (pp_boolean_test b2)
-      | NEG b          -> P.tilde ^^ P.parens (pp_boolean_test b)
-    end
+  let pp_file x = pp_expr x ^^ !^ "\n"
   
-  let rec pp_statement s =
-    match s with
-    | DEBUG_STMT str     -> !^ ("[DEBUG_STMT]{" ^ str ^ "}")
-    | SKIP               -> pp_keyword "skip"
-    | UNDEF              -> pp_keyword "undef"
-    | ERROR              -> pp_keyword "error"
-    | EXPR e             -> pp_expression e
-    | LET [] e s         -> !^ "BUG: for now LET must have at least one symbol."
-    | LET [a] e s        -> pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^ pp_expression e ^^^
-                            pp_control "in" ^^ P.break1 ^^ pp_statement s
-    | LET _as e s        -> pp_control "let" ^^^ (P.parens (P.comma_list pp_symbol _as)) ^^^ P.equals ^^^ pp_expression e ^^^
-                            pp_control "in" ^^ P.break1 ^^ pp_statement s
-    | SEQ [] s1 s2       -> pp_statement s1 ^^ P.semi ^^ P.break1 ^^ pp_statement s2
-    | SEQ [a] s1 s2      -> pp_symbol a ^^^ !^ "<-" ^^^ pp_statement s1 ^^ P.semi ^^ P.break1 ^^ pp_statement s2
-    | SEQ _as s1 s2      -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^^ pp_statement s1 ^^ P.semi ^^ P.break1 ^^
-                            pp_statement s2
-    | UNSEQ []           -> !^ "BUG: UNSEQ must have at least one statement, probably even two"
-    | UNSEQ ss           ->  P.sepmap (pp_control "||") (fun x -> P.parens (pp_statement x)) ss
-    | IF b s1 s2         -> pp_control "if" ^^^ pp_boolean_test b ^^^ pp_control "then" ^^
-                            P.nest 2 (P.break1 ^^ pp_statement s1) ^^ P.break1 ^^
-                            pp_control "else" ^^
-                            P.nest 2 (P.break1 ^^ pp_statement s2) ^^ P.break1
-    | PLUS s1 s2         -> P.parens (pp_statement s1) ^^^ pp_control "++" ^^^ P.parens (pp_statement s2)
-    | CREATE ty          -> pp_keyword "create" ^^ P.braces (Ail.Print.pp_type ty)
-    | KILL a             -> pp_keyword "kill" ^^^ pp_symbol a
-    | STORE ty a1 a2     -> pp_keyword "store" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a1 ^^^ pp_symbol a2
-    | LOAD ty a          -> pp_keyword "load" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_symbol a
-    | SAME a1 a2         -> pp_keyword "same" ^^^ pp_symbol a1 ^^^ pp_symbol a2
-    | CALL a args        -> !^ "TODO(call)"
   end
-end

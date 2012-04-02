@@ -6,6 +6,8 @@ module T = Types
 (* TODO: put somewhere *)
 let ($) f x = f x
 
+let extractList [x] = x
+
 let rec mapWithLast f g = function
   | []      -> []
   | [x]     -> [g x]
@@ -66,6 +68,17 @@ let update_env env ids =
   E.foldlM f ids env
 
 
+let conv ty1 ty2 exp =
+  fresh_symbol      >>= fun a_exp  ->
+  fresh_symbol      >>= fun a_conv ->
+  exp               >>= fun core_e ->
+  E.return $ C.Kseq [a_exp] core_e (C.Klet [a_conv] (C.Kconv ty1 ty2 a_exp) (* C.DEBUG "conv" *) (C.Ksym a_conv))
+(*  
+  Tc.conv ty ty2 a  >>= fun (v, c) ->
+  E.return (v, m +& c)
+*)
+
+
 (*
 let is_function_id file e =
   match Annotate.exp_of e with
@@ -76,10 +89,6 @@ let is_function_id file e =
   end
 
 
-let conv t t' x =
-  x               >>= fun (a, m) ->
-  Tc.conv t t' a  >>= fun (v, c) ->
-  E.return (v, m +& c)
 
 let conv_int_lifted t (a, m) =
   Tc.conv_int t a >>= fun (v, c) ->
@@ -129,11 +138,11 @@ let rec translate_exp env file exp =
   match Annotate.exp_of exp with
     (* WARNING: this is not enought (DEBUG FOR NOW) *)
     | A.VARIABLE id ->
-        let a = Pmap.find id env in
-        E.return $ C.LOAD (lvalue_type exp) a
+        let a_id = Pmap.find id env in
+        E.return $ C.Kload (lvalue_type exp) a_id
 
 
-    | A.CONSTANT (Cabs.CONST_INT (i, _)) -> E.return (C.EXPR (C.CONST i))
+    | A.CONSTANT (Cabs.CONST_INT (i, _)) -> E.return (C.Kconst i)
 
 
 
@@ -146,28 +155,31 @@ let rec translate_exp env file exp =
       Action.store (lvalue_type e) a v' >>= fun store ->
       E.return (v, Me.conj_sb (m +& c) (Me.add_ls_pair load store Me.unit))
 *)
-(*
   | A.UNARY A.POSTFIX_INCR e ->
+      E.return (C.DEBUG "postfix increment")
       (* TODO: must be done un "lvalue mode" *)
-      translate_exp e >>= fun core_s ->
+(*
+      translate_exp e >>= fun core_e ->
       fresh_symbol >>= fun a ->
+      C.Kop C.OpPlus (C.Ksym a) (C.Kconst 1)
 *)
 
-
-
   
-  | A.ALIGNOF ty -> E.return $ C.EXPR (C.ALIGNOF ty)
+  | A.ALIGNOF ty -> E.return $ C.Kalignof ty
   
-  | A.SIZEOF  ty -> E.return $ C.EXPR (C.SIZEOF ty)
+  | A.SIZEOF  ty -> E.return $ C.Ksizeof ty
+
+
+  | A.UNARY A.POSTFIX_DECR e ->
+      E.return (C.DEBUG "postfix decrement")
 
 
 
 
 
-    | _ -> E.return (C.DEBUG_STMT "expression")
+    | _ -> E.return (C.DEBUG "expression")
   end
 (*
-  | A.UNARY A.POSTFIX_DECR e ->
   | A.UNARY A.ADDRESS (_, (A.UNARY A.INDIRECTION e)) ->
   | A.UNARY A.ADDRESS e ->
   | A.CAST t e ->
@@ -199,92 +211,108 @@ let rec translate_exp env file exp =
 (* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
-and translate_stmt env file current_function (_, stmt) : C.statement Symbol_state.t =
+and translate_stmt env file current_function (_, stmt) : C.expr Symbol_state.t =
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   
   match stmt with
-  | A.SKIP -> E.return C.SKIP
-  | A.IF e s1 s2 -> E.return (C.DEBUG_STMT "IF")
-
-
-(*
-      update_env env ids >>= fun env' ->
-      let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
-      let f_create (l, t) ml =
-        Action.create t l >>= fun create ->
-        E.return (ml ++@ create) in
-      let f_kill (l, _) ks =
-        Action.kill l >>= fun kill ->
-        E.return (ks union {kill}) in
-      let f s ml' =
-        translate_stmt n b env' file fid return s >>= fun ml ->
-        E.return (ml' --&> ml) in
-      E.foldlM f_create decls Ms.unit >>= fun ml_create ->
-      E.foldlM f        ss    Ms.unit >>= fun ml        ->
-      E.foldlM f_kill   decls {}      >>= fun kills     ->
-      E.return (Ms.add_actions_sp kills (ml_create --&> ml))
-*)
+  | A.SKIP -> E.return C.Kskip
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.IF e s1 s2 ->
+      fresh_symbol                                >>= fun a_test  ->
+      translate_exp env file e                    >>= fun core_e  ->
+      translate_stmt env file current_function s1 >>= fun core_s1 ->
+      translate_stmt env file current_function s2 >>= fun core_s2 ->
+      E.return $ C.Kseq [a_test] core_e (C.Kif (C.Ksym a_test) core_s1 core_s2)
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
   | A.BLOCK ids ss ->
-      (* add the block local variables to the environment (by assigning fresh
-         symbolic names) *)
+      (* add the block local variables to the environment (fresh symbolic names are assigned) *)
       update_env env ids >>= fun env' ->
-      (* retrieve the declarations of the block local variables *)
+      (* retrieve the declarations of these variables *)
       let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
+      let n     = List.length decls                                                 in
       
       (* prepare the code creating the objects for the block local variables. *)
-      let creates_ctx = let (syms, xs) = foo (fun (a, ty) -> (a, C.CREATE ty)) (List.rev decls) in
-                        C.SEQ syms (C.UNSEQ xs) in
+      let creates_ctx = let (syms, xs) = foo (fun (a, ty) -> (a, C.Kcreate ty)) (List.rev decls) in
+                        match n with
+                          | 0 -> fun x -> x
+                          | 1 -> C.Kseq syms (extractList xs)
+                          | _ -> C.Kseq syms (C.Kunseq xs)
+                        end in
       
       (* prepare the code killing the objects. *)
-      (* TODO: check that the unseq is right *)
-      let kills = C.UNSEQ $ List.map (fun (a, _) -> C.KILL a) decls in
+      let kills = let xs = List.map (fun (a, _) -> C.Kkill a) decls in
+                        match n with
+                          | 0 -> C.Kskip
+                          | 1 -> extractList xs
+                          | _ -> C.Kunseq xs
+                        end in
       
-      (* translate the statements with a symbolic name bound to the result of
-         the last statement *)
-      fresh_symbol >>= fun a ->
+      (* translate the statements with a symbolic name bound to the result of the last statement *)
+      fresh_symbol >>= fun a_last ->
       E.mapWithLastM (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
                                E.return ([], core_s))
                      (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
-                               E.return ([a], core_s))
+                               E.return ([a_last], core_s))
                      ss >>= fun core_ss ->
       
-      (* connecting everything an returning that symbolic name bounded to the
-         result of last statement *)
+      (* connecting everything an returning that symbolic name bounded to the result of last statement *)
       E.return $ creates_ctx
-                 (List.fold_left (fun acc (_as, stmt) -> C.SEQ _as stmt acc)
-                    (C.SEQ [] kills (C.EXPR (C.SYMBOL a)))
+                 (List.fold_left (fun acc (_as, stmt) -> C.Kseq _as stmt acc)
+                    (C.Kseq [] kills (C.Ksym a_last))
                     (List.rev core_ss))
-
-  | A.DECLARATION defns -> E.return (C.DEBUG_STMT "DECLARATION")
-
-
-(*
-      let t = T.function_return (lookup_type fid) in
-      conv t (exp_type e) (f_e e) >>= fun (a, m) ->
-      E.return (Ms.return (m +& C.eq a return))
-*)
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.DECLARATION defns ->
+      let f (id, e) acc =
+        let a_id = Pmap.find id env in
+        conv (exp_type e) (lookup_type id)
+             (translate_exp env file e) >>= fun core_e ->
+        E.return $ C.Kseq [] core_e acc in
+      E.foldlM f defns C.Kskip
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
   | A.RETURN_EXPRESSION e ->
-      translate_exp env file e >>= fun core_s ->
-      fresh_symbol >>= fun a  ->
-      fresh_symbol >>= fun a' ->
-      E.return $ C.SEQ [a] core_s (C.LET [a'] (C.DEBUG_EXPR "conv") (C.EXPR $ C.SYMBOL a')) (* TODO: conversion *)
-
-
-  | A.RETURN_VOID -> E.return C.SKIP
-
+      conv (exp_type e) (T.function_return $ lookup_type current_function)
+           (translate_exp env file e)
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.RETURN_VOID -> E.return C.Kskip
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
   | A.EXPRESSION e -> translate_exp env file e
-
-  | A.WHILE e s -> E.return (C.DEBUG_STMT "while")
-
-  | A.BREAK    -> E.return (C.DEBUG_STMT "break")
-
-  | A.CONTINUE -> E.return (C.DEBUG_STMT "continue")
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+(*
+  iterate e s f_e f_s n Ms.unit
+*)
+  | A.WHILE e s -> E.return (C.DEBUG "while")
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+(*
+  E.return (Ms.break    Me.unit)
+*)
+  | A.BREAK    -> E.return (C.DEBUG "break")
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+(*
+  E.return (Ms.continue Me.unit)
+*)
+  | A.CONTINUE -> E.return (C.DEBUG "continue")
   end
 
 
 (* TODO: for now only translating the body of the main function *)
-let translate_file (file: _ A.file) : C.statement Symbol_state.t =
+let translate_file (file: _ A.file) : C.expr Symbol_state.t =
    (translate_stmt
               (* initial state of an environment associating Ail identifiers to
                  symbolic names *)
@@ -298,4 +326,4 @@ let translate_file (file: _ A.file) : C.statement Symbol_state.t =
 
 
 (* This is the entry function (called from main.ml) *)
-let translate (file: _ A.file) : C.statement = E.init (translate_file file)
+let translate (file: _ A.file) : C.expr = E.init (translate_file file)
