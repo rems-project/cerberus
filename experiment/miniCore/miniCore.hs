@@ -8,6 +8,7 @@ import System.Console.Haskeline
 import System.Console.Haskeline.IO -- TODO: find how to get rid of that
 import Control.Exception
 
+import System.Environment
 import System.Process
 
 import Text.Parsec
@@ -112,9 +113,9 @@ simpl es = filter f es
 -- REMARK: doesn't take a graph of type G as input.
 toDot n es =
   "subgraph cluster_" ++ (show n) ++ "{style=filled;color=" ++ boxColour ++
-  ";label=\"order n°" ++ (show n) ++ "\";" ++ printV vs ++ printE es ++ "}"
+  ";label=\"order n°" ++ (show n) ++ "\";" ++ printV vs ++ printE (simpl es) ++ "}"
   where
-    vs = collectVertices es
+    vs = collectVertices (simpl es)
     -- print a vertex (salmond if it is a function call, white otherwise)
     printV vs = foldl (\s v -> s ++ show (v ++ (show n)) ++ "[label=" ++ (show v) ++
                 (if all (not.isUpper) v then "color=salmon" else "") ++ "];") "" vs
@@ -220,20 +221,28 @@ test2 = Atom "A" |> (Atom "B" || Atom "C") |> Atom "D"
 main :: IO ()
 main = bracketOnError (initializeInput defaultSettings)
             cancelInput
-            (\hd -> loop hd >> closeInput hd)
+            (\hd -> start hd >> closeInput hd)
   where
     filename = "sb.dot"
-    loop :: InputState -> IO ()
+    start, loop :: InputState -> IO ()
+    start hd = do
+               args <- getArgs
+               case args of
+                 []         -> loop hd
+                 [filename] -> do
+                               input <- readFile filename
+                               process hd $ Just input
+                 _          -> putStrLn "USAGE: miniCore <filename> \n       miniCore"
+
     loop hd = do
              input <- queryInput hd $ getInputLine "[^C to quit]> "
-             case input of
-               Nothing -> return ()
-               Just input -> do
-                 case parse miniCoreParser "" input of
-                   Left err -> queryInput hd $ outputStrLn $ "\x1b[31m" ++ show err ++ "\x1b[0m"
-                   Right e  -> do writeFile filename "digraph G{node[style=filled,color=white];"
-                                  mapM_ (\(n,g) -> appendFile filename $ toDot n g) $ zip [1..] (sem e)
-                                  appendFile filename "}"
-                                  readProcess "./run" [] []
-                                  queryInput hd $ outputStrLn "\x1b[32mdone.\x1b[0m\n"
-                 loop hd
+             process hd input
+             loop hd
+    process hd Nothing      = return ()
+    process hd (Just input) = case parse miniCoreParser "" input of
+                                Left err -> queryInput hd $ outputStrLn $ "\x1b[31m" ++ show err ++ "\x1b[0m"
+                                Right e  -> do writeFile filename "digraph G{node[style=filled,color=white];"
+                                               mapM_ (\(n,g) -> appendFile filename $ toDot n g) $ zip [1..] (sem e)
+                                               appendFile filename "}"
+                                               readProcess "./run" [] []
+                                               queryInput hd $ outputStrLn "\x1b[32mdone.\x1b[0m\n"
