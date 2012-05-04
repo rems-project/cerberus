@@ -125,7 +125,7 @@ let d_one  l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
 let subst l name =
   let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
              ..[A]n undeclared identifier is a violation of syntax.. in\n" in
-  E.option msg (E.resolve name)
+  E.option (Errors.OTHER msg) (E.resolve name)
 
 let desugar_unop = function
   | C.MINUS        -> A.MINUS
@@ -154,8 +154,8 @@ let rec desugar_exp (e, l) =
       )
   
   | C.CALL e es            -> A.CALL <$> f e <*> E.mapM f es
-  | C.MEMBEROF e x         -> E.fail "TODO"
-  | C.MEMBEROFPTR e x      -> E.fail "TODO"
+  | C.MEMBEROF e x         -> E.fail (Errors.OTHER "TODO")
+  | C.MEMBEROFPTR e x      -> E.fail (Errors.OTHER "TODO")
 
   (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
      equivalent to [[ (E+=1) ]]". *)
@@ -236,7 +236,7 @@ and desugar_specifier specifiers =
           ]
         @ [(mset [C.BOOL], A.INTEGER A.BOOL)]
       ) in
-  E.of_option "" (Map_.find specifiers smap)
+  E.of_option (Errors.OTHER "") (Map_.find specifiers smap)
 
 and desugar_type t =
   let ft = desugar_type in
@@ -249,13 +249,13 @@ and desugar_type t =
         | (_, l) ->
             let msg = "We don't support VLAs and moreover the size of an array \
                        must be an integer constant.\n" in
-            E.fail msg
+            E.fail (Errors.OTHER msg)
 (*
             CpLogger.error (CpPrint.pp_program msg) l;
 *)
         end in
       A.ARRAY <$> ft t <*> size
-  | C.ARRAY s t None -> E.fail "Arrays are not yet supported.\n"
+  | C.ARRAY s t None -> E.fail (Errors.OTHER "Arrays are not yet supported.\n")
   | C.FUNCTION t decls ->
       let f ((_, t, sts), l) =
         desugar_storage l sts >>= function
@@ -268,7 +268,7 @@ and desugar_type t =
                          (including prototypes), Constraints: ..The only \
                          storage-class that shall occur in a parameter \
                          declaration is register... in\n" in
-              E.fail msg
+              E.fail (Errors.OTHER msg)
 (*
               CpLogger.info (CpPrint.pp_program msg) l;
               raise E_Invalid
@@ -288,25 +288,25 @@ and desugar_stmt st (s, l) =
   (* (§6.8.1) Labeled statements ******************************************** *)
   | C.LABEL n s -> (* A.LABEL n (fs s) *)
       (* TODO: (§6.8.1#3) "Label names shall be unique within a function." *)
-      E.fail "No support for labeled statements yet.\n" (* TODO *)
+      E.fail (Errors.OTHER "No support for labeled statements yet.\n") (* TODO *)
   
   | C.CASE (e, l) s ->
       (* (§6.8.1#2) "A case label shall appear only in a switch statement." *)
       if not st.inside_switch then
-        E.fail (Errors.to_string Errors.CASE_OUTSIDE_SWITCH)
+        E.fail Errors.CASE_OUTSIDE_SWITCH
       else
         let integer_constant =
           match e with
             | C.CONSTANT (C.CONST_INT i) -> E.return i
-            | _ -> E.fail "We don't support anything but integer \
-                       constants as [[ case ]] labels."
+            | _ -> E.fail (Errors.OTHER "We don't support anything but integer \
+                       constants as [[ case ]] labels.")
         end in
         A.CASE <$> integer_constant <*> fs s
   
   | C.DEFAULT s ->
       (* (§6.8.1#2) "A default label shall appear only in a switch statement." *)
       if not st.inside_switch then
-        E.fail (Errors.to_string Errors.DEFAULT_OUTSIDE_SWITCH)
+        E.fail Errors.DEFAULT_OUTSIDE_SWITCH
       else
         A.DEFAULT <$> fs s
   
@@ -381,7 +381,7 @@ and desugar_stmt st (s, l) =
                    Constraints: ..The declaration part of a for statement \
                    shall only declare identifiers for objects having storage \
                    class auto or register.. in\n" in
-        E.fail msg
+        E.fail (Errors.OTHER msg)
       else
         let s1 = (C.DECLARATION defns, l) in
         let e2 =
@@ -402,7 +402,7 @@ and desugar_stmt st (s, l) =
         E.return d_s end
   
   (* (§6.8.6) Jump statements *********************************************** *)
-  | C.GOTO n -> E.fail "No support for goto yet.\n"
+  | C.GOTO n -> E.fail (Errors.OTHER "No support for goto yet.\n")
   | C.CONTINUE -> E.return A.CONTINUE
   | C.BREAK -> E.return A.BREAK
   | C.RETURN (Some e) -> A.RETURN_EXPRESSION <$> fe e
@@ -454,7 +454,7 @@ and register_name l name =
     let msg = "Violation of constraint 6.7#3 Declarations, Constraints: ..If \
                an identifier has no linkage, there shall be no more than one \
                declaration of the identifier [...].. in\n" in
-    E.fail msg
+    E.fail (Errors.OTHER msg)
 (*
     CpLogger.info (CpPrint.pp_program msg) l;
     raise E_Invalid
@@ -474,13 +474,13 @@ and desugar_storage l = function
   | []           -> E.return None
   | [C.AUTO]     -> E.return (Some A.AUTOMATIC)
   | [C.STATIC]   -> E.return (Some A.STATIC)
-  | [C.REGISTER] -> E.fail "No support for storage class register."
-  | [C.EXTERN]   -> E.fail "No support for storage class extern."
+  | [C.REGISTER] -> E.fail (Errors.OTHER "No support for storage class register.")
+  | [C.EXTERN]   -> E.fail (Errors.OTHER "No support for storage class extern.")
   | _ ->
       let msg =
         "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
          ..At most, one storage-class specifier may be given [...].. in\n" in
-      E.fail msg
+      E.fail (Errors.OTHER msg)
 (*
       CpLogger.info (CpPrint.pp_program msg) l;
       raise E_Invalid
@@ -504,14 +504,14 @@ and desugar_function_decl ((name, t, sts), l) =
           desugar_storage l sts >>= function
             (*
             | Some A.REGISTER ->
-                E.fail "No support for storage class register."
+                E.fail (Errors.OTHER "No support for storage class register.")
             *)
             | Some _ ->
                 let msg = "Violation of constraint 6.7.6.3#2 Function \
                            declarators (including prototypes), Constraints: \
                            ..The only storage-class that shall occur in a \
                            parameter declaration is register... in\n" in
-                E.fail msg
+                E.fail (Errors.OTHER msg)
 (*
                 CpLogger.info (CpPrint.pp_program msg) l;
                 raise E_Invalid
@@ -523,7 +523,7 @@ and desugar_function_decl ((name, t, sts), l) =
         desugar_type t >>= fun d_t ->
         E.foldrM f decls ([], []) >>= fun (formals, d_decls) ->
         E.return (A.FUNCTION d_t d_decls, formals)
-    | _ -> E.fail "Not a function type."
+    | _ -> E.fail (Errors.OTHER "Not a function type.")
     end in
   register_name l name         >>= fun id ->
   desugar_storage l sts        >>= fun d_st ->
@@ -563,7 +563,7 @@ let desugar_global_defn st (defn, l) =
 let desugar_program startup global_defns =
   let msg = "Could not find startup function .." ^ startup ^ "...\n" in
   E.iter (desugar_global_defn initial_desugar_state) global_defns >>= fun () ->
-  E.option msg (E.resolve "main") >>= fun main ->
+  E.option (Errors.OTHER msg) (E.resolve "main") >>= fun main ->
   E.to_program main
 
 let desugar startup (name, global_defns) =

@@ -80,7 +80,7 @@ isAccessible r x y = or $ f x y r []
                       return False      -- then abort the currrent branch.
                     else if z == y then -- Otherwise, if z = y,
                       return True       -- then we are done.
-                    else do             -- Otherwise, remember z and look for
+                    else                -- Otherwise, remember z and look for
                       f z y r (z:acc)   -- a path from z to y.
 
 -- note that this one is reflexive

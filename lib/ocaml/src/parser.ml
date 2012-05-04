@@ -7,7 +7,7 @@ let parse_exn name lexbuf =
     Exception.return (name, file)
   with Cparser.Error ->
     let token = Lexing.lexeme lexbuf in
-    Exception.throw ("Unexpected token: " ^ token ^ ".")
+    Exception.throw (Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
 let parse lexer =
   let name = Lexer.name lexer in
