@@ -1,0 +1,339 @@
+open Global
+open Core
+
+(* (UI hack) uses to remember from where an edge come from *)
+type edge_kind =
+  | Syntax       (* from the sequenced composition                              *)
+  | Syntax_trans (* by transitivity as a result of sequenced composition alone  *)
+  | Indet        (* from an indeterminate choice                                *)
+  | Indet_trans  (* by transitivity after addition of the indeterminate choices *)
+
+type 'a edge = 'a * 'a * edge_kind
+
+val edge_eq: forall 'a. 'a edge -> 'a edge -> bool
+let edge_eq (x,y,_) (x',y',_) = x=x' && y=y'
+
+
+(* this need to be at the beginning because of some ocaml nastiness *)
+type action =
+  | Aundef
+  | Aerror
+  | Acreate of Ail.ctype
+  | Aalloc of expr
+  | Akill of sym
+  | Astore of Ail.ctype * expr * expr
+  | Aload of Ail.ctype * expr
+  | Asame of sym * sym
+  | Acall of sym * expr list
+  
+  | Atest of expr
+
+
+(* list monad *)
+module L = struct
+  type 'a t = 'a list
+  
+  val return: forall 'a. 'a -> 'a t
+  let return x = [x]
+  
+  val bind: forall 'a 'b. 'a t -> ('a -> 'b t) -> 'b t
+  let bind m f = List.fold_right (fun x y -> (f x) @ y) m []
+end
+
+
+(* Representation of the sequenced-before relation as directed graphs *)
+type 'a g = <|
+  nodes: (num, 'a) map;
+  edges: (num edge) list;
+  calls: num list         (* subset of the domain of nodes corresponding
+                             to function calls *)
+|>
+
+(* [lookups x r] = { y | (x,y,_) IN r } *)
+(* val     img: forall 'a. ('a -> 'a -> bool) -> 'a -> ('a edge) list -> 'a list *)
+let rec img (x: num) = function
+  | []            -> []
+  | (a,b,_) :: rs -> if x = a then b :: img x rs
+                              else img x rs
+end
+
+
+(* [isAccessible r x y] = True iff there is a path from x to y in r (irreflexive). *)
+val isAccessible: (num edge) list -> num -> num -> bool
+let rec isAccessible_ x y r acc =
+  L.bind (img x r) (fun z ->     (* for any z such that (x,z) IN r :   *)
+  if List.mem z acc then         (* if z has already been visited,     *)
+    L.return false               (* then abort the currrent branch.    *)
+  else if z = y then             (* Otherwise, if z = y,               *)
+    L.return true                (* then we are done.                  *)
+  else                           (* Otherwise, remember z and look for *)
+    isAccessible_ z y r (z::acc)) (* a path from z to y.               *)
+let isAccessible r x y = or_list $ isAccessible_ x y r []
+
+(* note that this one is reflexive *)
+(* val connected: forall 'a. ('a edge) list -> 'a -> 'a -> bool *)
+let connected r x y = (x = y) || isAccessible r x y || isAccessible r y x
+
+(* val unreachablesFrom: forall 'a. 'a -> 'a list -> ('a edge) list -> 'a list *)
+let unreachablesFrom x vs es = List.filter (comp not (connected es x)) vs
+
+
+(* -------------------------------------------------------------------------- *)
+
+
+module Effect = struct
+  (* state of the name generator for association with actions, and state
+     of the sequenced-before relation *)
+  type state = (num * action g)
+  
+  (* non-deterministic state monad *)
+  type 'a t = state -> ('a * state) list
+  
+  val return: forall 'a. 'a -> 'a t
+  let return x = fun s -> [(x, s)]
+  
+  module Operators = struct
+    val (>>=): forall 'a 'b. 'a t -> ('a -> 'b t) -> 'b t
+    let (>>=) m f =
+      fun s -> (fun m f -> List.fold_right (fun x y -> (f x) @ y) m [])
+                 (m s)
+                 (fun (v,s') -> (f v) s')
+    
+    let (>>)  m f = m >>= fun _ -> f
+  end
+  
+  open Operators
+  
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  
+  let sequence_ ms = List.fold_right (>>) ms (return ())
+  val mapM_: forall 'a 'b. ('a -> 'b t) -> 'a list -> unit t
+  let mapM_ f _as = sequence_ (List.map f _as)
+
+
+  val     folM: forall 'a 'b. ('a -> 'b -> 'a t) -> 'a -> 'b list -> 'a t
+  let rec foldM f a = function
+    | []    -> return a
+    | x::xs -> f a x >>= fun fax -> foldM f fax xs
+  end
+  
+
+  (* MonadPlus *)
+  val mzero: forall 'a. 'a t
+  let mzero = fun s -> []
+  val mplus: forall 'a. 'a t -> 'a t -> 'a t
+  let mplus a b = fun s -> a s @ b s
+  
+  
+  (* operations on sequenced-before *)
+  val add_action: action -> num t
+  let add_action a =
+    fun (n,env) -> [(n, (n+1, <| env with nodes= Pmap.add n a env.nodes |>))]
+  
+  val add_call: action -> num t
+  let add_call a =
+    match a with
+      | Acall f args -> add_action a >>= fun sym (n,env) -> [(sym, (n, <| env with calls= sym :: env.calls |>))]
+    end
+  
+  val add_actions: action list -> (num list) t
+  let add_actions _as = mapM add_action _as
+  
+  val add_edge: num edge -> unit t
+  let add_edge edge =
+    fun (n,env) -> [((), (n, <| env with edges= edge :: env.edges |>))]
+  
+  val get_nodes: (num list) t
+  let get_nodes =
+    fun (n,env) -> [(List.map fst (Pmap.bindings env.nodes), (n,env))]
+  
+  let get_edges =
+    fun (n,env) -> [(env.edges, (n,env))]
+  
+  let get_calls =
+    fun (n,env) -> [(env.calls, (n,env))]
+  
+  
+  val close: unit t
+  let close =
+    get_nodes >>= fun nodes ->
+    let f k g =
+      let edges' = g.edges @ [ (x,y,k) | forall (x MEM nodes) (y MEM nodes) |
+                                         x<>y && isAccessible g.edges x y &&
+                                         (* TODO: the kind is wrong, the kind should be
+                                                  "undefined" but I don't know how to write that
+                                                  in a strict language *)
+                                         not(List.mem (x,y,Syntax) g.edges)
+                             ] in
+      <| nodes= g.nodes; edges= edges'; calls= g.calls |> in
+    fun (n,env) -> [((), (n, f Indet_trans env))]
+end
+
+module E = Effect
+open E.Operators
+
+
+
+(* [collectNodes es] retrieve the list of nodes associated to
+                        the edge-map [es]                           *)
+val collectNodes: forall 'a. ('a edge) list -> 'a list
+let rec collectNodes_ acc = function
+  | []            -> acc
+  | (a,b,_) :: es -> collectNodes_ (a::b::acc) es
+end
+let collectNodes es = collectNodes_ [] es
+
+
+
+
+
+
+(* remove syntax edges implied by transitivity
+   HIGHLY non-efficient algorithm              *)
+(* val simpl: forall 'a. ('a edge) list -> ('a edge) list *)
+let simpl es =
+  let f e =
+    match e with
+      | (x,y,Syntax) -> not $ isAccessible (delete edge_eq e es) x y
+      | _            -> true
+    end
+  in List.filter f es
+
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+(* TODO: I don't like it *)
+val sem_core: expr -> (num list) E.t
+let rec sem_core e =
+  match e with
+    | COMMENT _ e -> sem_core e
+(*    | DEBUG msg   -> E.throw ("found DEBUG in the Core program: " ^ msg) *)
+    
+    (* in the following, the discarded sub-expressions are pure *)
+    | Kconst _    -> E.return []
+    | Ksym _      -> E.return []
+    | Kop _ _ _   -> E.return []
+    | Ktrue       -> E.return []
+    | Kfalse      -> E.return []
+    | Knot _      -> E.return []
+    | Kctype _    -> E.return []
+    | Klet _ _ e  -> sem_core e
+    (* TODO: probably not what we want *)
+    | Kif _ e1 e2 -> sem_core e1 >>= fun as1 -> sem_core e2 >>= fun as2 -> E.return (as1 @ as2)
+    
+    (* TODO: do we want the same symbols for Core functions? probably not. *)
+    (* | Kcall f args -> *)
+    
+    | Kundef -> E.add_actions [Aundef]
+    | Kerror -> E.add_actions [Aerror]
+    
+    | Kskip  -> E.return []
+    | Kseq _ e1 e2 ->
+        sem_core e1 >>= fun as1 ->
+        sem_core e2 >>= fun as2 ->
+        E.mapM (fun edge -> E.add_edge edge)
+               [ (x,y,Syntax) | forall (x MEM as1) (y MEM as2) | true ] >>
+        E.return (as1 @ as2)
+    | Kunseq es ->
+        E.foldM (fun acc e -> sem_core e >>= fun _as ->
+                              E.return (_as @ acc)) [] es
+
+    | Kcreate ty      -> E.add_actions [Acreate ty]
+    | Kalloc e        -> E.add_actions [Aalloc e]
+    | Kkill a         -> E.add_actions [Akill a]
+    | Kstore ty e1 e2 -> E.add_actions [Astore ty e1 e2]
+    | Kload ty e      -> E.add_actions [Aload ty e]
+    | Ksame a1 a2     -> E.add_actions [Asame a1 a2]
+    
+    
+    (* TODO: do we want the same symbols for Core functions? probably not. *)
+    | Kindet (Kcall f args) -> E.add_call (Acall f args) >>= fun x -> E.return [x]
+(*
+    | Katom of expr
+*)
+    | _ -> E.return []
+  end 
+
+(* TODO: rewrite it better *)
+(* val final_core: expr -> unit E.t *)
+let final_core e =
+  sem_core e >>
+  E.get_calls >>= fun calls ->
+  E.mapM_ (fun c ->
+    E.get_nodes >>= fun vs ->
+    E.get_edges >>= fun es ->
+    E.mapM_ (fun v ->
+      E.get_edges >>= fun es ->
+      E.mplus (if isAccessible es v c then E.mzero
+                                      else E.add_edge (c,v,Indet))
+              (if isAccessible es c v then E.mzero
+                                      else E.add_edge (v,c,Indet))
+    ) (List.filter (fun x -> not (connected es c x)) vs) >>
+    E.close
+  ) calls
+
+
+
+
+
+(* ---------------------------------------------------------------------------------------------- *)
+let rec exec e =
+  match e with
+  | COMMENT _ e -> exec e
+  | DEBUG msg -> E.return ()
+  
+  | Kconst n -> E.return ()
+  | Ksym a -> E.return ()
+  | Kop op e1 e2 -> E.return ()
+  | Ktrue -> E.return ()
+  | Kfalse -> E.return ()
+  | Knot e -> E.return ()
+  | Kctype ty -> E.return ()
+  | Klet _as e1 e2 -> E.return ()
+  | Kif b e1 e2 -> E.return ()
+  | Kcall f args -> E.return ()
+  | Kundef -> E.return ()
+  | Kerror -> E.return ()
+  | Kskip -> E.return ()
+  | Kseq _as e1 e2 -> E.return ()
+  | Kunseq es -> E.return ()
+  | Kindet e -> E.return ()
+  | Katom e -> E.return ()
+  | Kcreate ty -> E.return ()
+  | Kalloc e -> E.return ()
+  | Kkill a -> E.return ()
+  | Kstore ty e1 e2 -> E.return ()
+  | Kload ty e -> E.return ()
+  | Ksame a1 a2 -> E.return ()
+  | Kmax ty -> E.return ()
+  | Kmin ty -> E.return ()
+  | Ksizeof ty -> E.return ()
+  | Kalignof ty -> E.return ()
+  | Koffsetof ty -> E.return ()
+  | Kshift a e -> E.return ()
+  | Kconv ty1 ty2 a -> E.return ()
+  end
+
+(* move to Exception *)
+(* (a -> b -> m a) -> a -> [b] -> m a *)
+let rec foldM_exception f a = function
+  | []    -> Exception.return a
+  | x::xs -> Exception.bind (f a x) (fun fax -> foldM_exception f fax xs)
+end
+
+val run: Core.file -> ((action g) list, string) Exception.t
+let run file =
+  let process_file (ty, args, body) =
+    List.map (fun (_,(_,g)) -> g) $
+      (final_core body) (0, <| nodes= Pmap.empty; edges= []; calls= [] |>)
+(*    (* TODO: pointer should be of type 'address' (?) *)
+    State.run (E.mapM_ (fun a -> E.put a value) args >> sem_core body)
+              Pmap.empty *) in
+  foldM_exception
+    (fun acc (_, def) -> Exception.return $ (process_file def) @ acc)
+    []
+    (Pmap.bindings file.fun_map)

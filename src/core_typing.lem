@@ -1,0 +1,575 @@
+open Core
+open Errors
+
+(* -------------------------------------------------------------------------- *)
+module Effect = struct
+  type 'a error =
+    | Success of 'a
+    | Error of cause
+  
+  type sym_env = (sym, core_base_type) Pmap.map
+  type fun_env = (sym, (core_base_type list * core_type)) Pmap.map
+  
+  type 'a t = ('a error, sym_env * fun_env) State.t
+  
+  let return x = State.return (Success x)
+  let bind m f = State.bind m function
+                                | Success x -> f x
+                                | Error msg -> State.return (Error msg)
+                              end
+  let fmap   = State.map
+  
+  
+  module Operators = struct
+    let (>>=)    = bind
+    val (>>): forall 'a 'b. 'a t -> 'b t -> 'b t
+    let (>>) m f = m >>= fun _ -> f
+    let (<$>)    = fmap
+  end
+  
+  let string_of_senv senv =
+    List.fold_right (fun (x,_) acc -> Symbol.to_string_pretty x ^ "; " ^ acc) (Pmap.bindings senv) ""
+  
+  let get a = fun (senv, fenv) ->
+      let ret = if Pmap.mem a senv then Success (Pmap.find a senv)
+                                   else Error (* CORE_TYPECHECK_GET_FAILURE *)
+                                              (CORE_TYPECHECK ("[get]> " ^ string_of_senv senv ^ " | " ^ Symbol.to_string_pretty a))
+      in (ret, (senv,fenv))
+  
+  let get_fun f = fun (senv, fenv) ->
+      let ret = if Pmap.mem f fenv then Some (Pmap.find f fenv)
+                                   else None
+      in (Success ret, (senv,fenv))
+  
+  let put a baseTy = fun (senv,fenv) -> (Success (), (Pmap.add a baseTy senv, fenv))
+  
+  let put_fun f coreTy = fun (senv,fenv) -> (Success (), (senv, Pmap.add f coreTy fenv))
+
+  
+  val fail: forall 'a. Errors.cause -> 'a t
+  let fail cause       = fun env -> (Error cause, env)
+  val guard: bool -> Errors.cause -> unit t
+  let guard cond cause = if cond then return () else fail cause
+  
+  let run = State.run
+  
+  open Operators
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  
+  let sequence_ ms = List.fold_right (>>) ms (return ())
+  val mapM_: forall 'a 'b. ('a -> 'b t) -> 'a list -> unit t
+  let mapM_ f _as = sequence_ (List.map f _as)
+end
+
+let ($) f x = f x
+
+
+
+(* -------------------------------------------------------------------------- *)
+module E = Effect
+open E.Operators
+
+let is_arithOp = function
+  | OpAdd -> true
+  | OpSub -> true
+  | OpMul -> true
+  | OpDiv -> true
+  | OpMod -> true
+  | _     -> false
+end
+
+let is_relOp = function
+  | OpEq -> true
+  | OpLt -> true
+  | _    -> false
+end
+
+let is_connective = function
+  | OpAnd -> true
+  | OpOr  -> true
+  | _     -> false
+end
+
+let base_type = function
+  | TyBase baseTy   -> baseTy
+  | TyEffect baseTy -> baseTy
+  end
+
+let base_type_to_list = function
+  | tuple coreTys -> coreTys
+  | coreTy        -> [coreTy]
+  end
+
+let core_type_eq coreTy1 coreTy2 =
+  match (coreTy1, coreTy2) with
+    | (TyBase wildcard, TyBase _) -> true
+    | (TyBase _, TyBase wildcard) -> true
+    | (TyEffect wildcard, TyEffect _) -> true
+    | (TyEffect _, TyEffect wildcard) -> true
+    | (TyBase baseTy1,   TyBase baseTy2) -> baseTy1 = baseTy2
+    | (TyEffect baseTy1, TyEffect baseTy2) -> baseTy1 = baseTy2
+  end
+
+
+let rec infer e =
+  match e with
+    | COMMENT _ e -> infer e
+    | DEBUG msg   -> E.fail (Errors.CORE_TYPECHECK ("(infer) found a DEBUG: `" ^ msg ^ "'."))
+    
+   (*
+    +  ------------- (const)
+    +  Γ ⊢ n : value
+    ----------------------------------------------------------------------------------------------*)
+    | Kconst n ->
+        E.return (TyBase value)
+    
+    
+   (*
+    +  (α,T) ∈ Γ
+    +  ------------- (sym)
+    +  Γ ⊢ α : T
+    ----------------------------------------------------------------------------------------------*)
+    | Ksym a   ->
+        E.get a             >>= fun baseTy_a ->
+        E.return (TyBase baseTy_a)
+    
+    
+   (*
+    +  Γ ⊢ e1 : value                                    Γ ⊢ e1 : boolean
+    +  Γ ⊢ e2 : value   • ∈ {+,-,*,/,%,=,<}              Γ ⊢ e2 : boolean    • ∈ {∧,∨}
+    +  ------------------------------------ (op_arith)   ----------------------------- (op_bool)
+    +          Γ ⊢ e1 • e2 : value                           Γ ⊢ e1 • e2 : boolean
+    ----------------------------------------------------------------------------------------------*)
+    | Kop op e1 e2 ->
+        let op_type = if is_arithOp op || is_relOp op then TyBase value
+                                                      else TyBase boolean in
+        check op_type e1 >>
+        check op_type e2 >>
+        E.return op_type
+    
+    
+   (*
+    +  ------------------ (true)    ------------------- (false)
+    +  Γ ⊢ true : boolean           Γ ⊢ false : boolean
+    ----------------------------------------------------------------------------------------------*)
+    | Ktrue  -> E.return (TyBase boolean)
+    | Kfalse -> E.return (TyBase boolean)
+    
+    
+   (*
+    +    Γ ⊢ e : boolean
+    +  ------------------- (not)
+    +  Γ ⊢ not e : boolean
+    ----------------------------------------------------------------------------------------------*)
+    | Knot e ->
+        check (TyBase boolean) e  >>
+        E.return (TyBase boolean)
+    
+    
+   (*
+    +  ------------- (ty)
+    +  Γ ⊢ τ : ctype
+    ----------------------------------------------------------------------------------------------*)
+    | Kctype ty -> E.return (TyBase ctype)
+    
+    
+   (*
+    +  Γ ⊢ e1 : T1    (T1 not an effect)
+    +  Γ, (_αs : T1) ⊢ e2 : T2
+    +  --------------------------------- (let)
+    +    Γ ⊢ let _αs = e1 in e2 : T2
+    ----------------------------------------------------------------------------------------------*)
+    | Klet _as e1 e2 ->
+        infer e1 >>= fun coreTy_e1 ->
+        match coreTy_e1 with
+          | TyEffect _    -> E.fail (Errors.CORE_TYPECHECK "the first argument of a let must be a \
+                                                            pure expression")
+          | TyBase baseTy ->
+              let baseTys = base_type_to_list baseTy in
+              let n = List.length _as in
+              if n <> List.length baseTys && n>0 then
+                E.fail (Errors.CORE_TYPECHECK "the pattern of the let is not compatible with the \
+                                               type of the first argument")
+              else
+                (if n = 0 then
+                   E.return ()
+                 else
+                   E.mapM_ (fun (a,coreTy) -> E.put a coreTy) (List.combine _as baseTys)) >>
+                infer e2
+        end
+    
+    
+   (* ---------------------------------------------------------------------------------------------
+    +        Γ ⊢ b : boolean                                        Γ ⊢ b : boolean               +
+    +    Γ ⊢ e1 : T    Γ ⊢ e2 : T                              Γ ⊢ e1 : T*    Γ ⊢ e2 : T          +
+    +  ---------------------------- (if1)                    ----------------------------- (if2)  +
+    +  Γ ⊢ if b then e1 else e2 : T                          Γ ⊢ if b then e1 else e2 : T*        +
+    +                                                                                             +
+    +                                                                                             +
+    +        Γ ⊢ b : boolean                                        Γ ⊢ b : boolean               +
+    +    Γ ⊢ e1 : T    Γ ⊢ e2 : T*                             Γ ⊢ e1 : T*    Γ ⊢ e2 : T*         +
+    +  ----------------------------- (if3)                   ----------------------------- (if4)  +
+    +  Γ ⊢ if b then e1 else e2 : T*                         Γ ⊢ if b then e1 else e2 : T*        +
+    --------------------------------------------------------------------------------------------- *)
+    | Kif b e1 e2 ->
+        check (TyBase boolean) b        >>
+        infer e1                        >>= fun coreTy_e1 ->
+        infer e2                        >>= fun coreTy_e2 ->
+        let (baseTy_e1, baseTy_e2, retTy) =
+          match (coreTy_e1, coreTy_e2) with
+            | (TyBase baseTy1,   TyBase baseTy2)   -> (baseTy1, baseTy2, TyBase)
+            | (TyBase baseTy1,   TyEffect baseTy2) -> (baseTy1, baseTy2, TyEffect)
+            | (TyEffect baseTy1, TyBase baseTy2)   -> (baseTy1, baseTy2, TyEffect)
+            | (TyEffect baseTy1, TyEffect baseTy2) -> (baseTy1, baseTy2, TyEffect)
+          end
+        in
+        E.guard (baseTy_e1 = baseTy_e2)
+                Errors.CORE_TYPECHECK_IF_BRANCHES >>
+        E.return (retTy baseTy_e1)
+    
+    
+    | Kcall f args ->
+        E.get_fun f >>= fun funTy_opt ->
+        match funTy_opt with
+          | None   -> E.fail (Errors.CORE_TYPECHECK "TODO: non-std functions")
+          | Some x -> E.return x
+        end >>= fun (baseTys, coreTy_ret) ->
+        E.mapM infer args >>= fun coreTys_args ->
+        if List.length baseTys <> List.length coreTys_args
+          then E.fail (Errors.CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS)
+          else E.mapM_
+                 (fun (baseTy_expected, coreTy_found) ->
+                    match coreTy_found with
+                      | TyBase baseTy_found ->
+                          if baseTy_expected = baseTy_found
+                            then E.return ()
+                            else E.fail (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED
+                                         coreTy_found (TyBase baseTy_expected))
+                      | _ -> E.fail Errors.CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
+                  end)
+                 (List.combine baseTys coreTys_args) >>
+               E.return coreTy_ret
+(*               E.return (TyBase wildcard) (* E.fail "TODO(infer call)" *) *)
+    
+(*
+    | Kunseq es ->
+      E.mapM infer es >>= fun coreTys ->
+      E.return $
+        List.fold_left
+          (fun acc coreTy ->
+             let base   x        = TyBase x   in
+             let effect x        = TyEffect x in
+             let (kind, baseTys) = match acc with
+                                     | TyBase (tuple baseTys)   -> (base,   baseTys)
+                                     | TyEffect (tuple baseTys) -> (effect, baseTys)
+                                   end in
+             match coreTy with
+               | TyBase   baseTy -> kind (tuple (baseTy :: baseTys))
+               | TyEffect baseTy -> TyEffect (tuple (baseTy :: baseTys))
+             end)
+          (TyBase (tuple [])) coreTys
+    
+*)
+
+
+
+
+
+
+
+
+    
+   (*
+    +  ------------- (undef)    ------------- (error)
+    +  Γ ⊢ undef : _            Γ ⊢ error : _
+    ----------------------------------------------------------------------------------------------*)
+    | Kundef -> E.return (TyBase wildcard)
+    | Kerror -> E.return (TyBase wildcard)
+    
+    
+   (*
+    +  --------------- (skip)
+    +  Γ ⊢ skip : unit
+    ----------------------------------------------------------------------------------------------*)
+    | Kskip -> E.return (TyBase unit)
+    
+    
+   (*
+    +  Γ ⊢ e1 : T1
+    +  Γ, (_αs : T1) ⊢ e2 : T2
+    +  ------------------------------------------------------- (let)
+    +    Γ ⊢ let _αs = e1 in e2 : [the effectful version of T2 if not already effectful]
+    ----------------------------------------------------------------------------------------------*)
+    | Kseq _as e1 e2 ->
+        infer e1 >>= fun coreTy_e1 ->
+        let baseTys = base_type_to_list (base_type coreTy_e1) in
+        let n = List.length _as in
+        let m = List.length baseTys in
+        if n <> m && n>0 then
+          E.fail (Errors.CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY n m)
+        else
+          (if n = 0 then
+             E.return ()
+           else
+             E.mapM_ (fun (a,coreTy) -> E.put a coreTy) (List.combine _as baseTys)) >>
+          infer e2 >>= fun coreTy_e2 ->
+          E.return $
+            match coreTy_e2 with
+              | TyEffect _    -> coreTy_e2
+              | TyBase baseTy -> match coreTy_e1 with
+                                   | TyEffect _ -> TyEffect baseTy
+                                   | TyBase _   -> coreTy_e2
+                                 end
+            end
+    
+    
+   (*
+    +    Γ ⊢ e1 : T1   ...   Γ ⊢ ek : Tk            T = if none of the Ti are effectful then
+    +  ----------------------------------- (unseq)  (T1, ..., Tk) else (T1, ..., Tk)*
+    +  Γ ⊢ e1 || ... || ek : T                      
+    ----------------------------------------------------------------------------------------------*)
+    | Kunseq es ->
+      E.mapM infer es >>= fun coreTys ->
+      E.return $
+        List.fold_left
+          (fun acc coreTy ->
+             let base   x        = TyBase x   in
+             let effect x        = TyEffect x in
+             let (kind, baseTys) = match acc with
+                                     | TyBase (tuple baseTys)   -> (base,   baseTys)
+                                     | TyEffect (tuple baseTys) -> (effect, baseTys)
+                                   end in
+             match coreTy with
+               | TyBase   baseTy -> kind (tuple (baseTy :: baseTys))
+               | TyEffect baseTy -> TyEffect (tuple (baseTy :: baseTys))
+             end)
+          (TyBase (tuple [])) (List.rev coreTys)
+    
+    
+   (*
+    +   Γ ⊢ e : T              Γ ⊢ e : T
+    +  ----------- (intet)    ----------- (atom)
+    +  Γ ⊢ [e] : T            Γ ⊢ {e} : T
+    ----------------------------------------------------------------------------------------------*)
+    | Kindet e -> infer e
+    | Katom e  -> infer e
+    
+    
+   (*
+    +  ------------------------ (create)
+    +  Γ ⊢ create{τ} : address*
+    ----------------------------------------------------------------------------------------------*)
+    | Kcreate ty -> E.return (TyEffect address)
+    
+    
+   (*
+    +      Γ ⊢ e : value
+    +  ---------------------- (alloc)
+    +  Γ ⊢ alloc e : address*
+    ----------------------------------------------------------------------------------------------*)
+    | Kalloc e   ->
+        check (TyBase value) e >>
+        E.return (TyEffect address)
+    
+    
+   (*
+    +   Γ ⊢ e : address
+    +  ------------------ (kill)
+    +  Γ ⊢ kill e : unit*
+    ----------------------------------------------------------------------------------------------*)
+    | Kkill a ->
+        E.get a                      >>= fun baseTy_a ->
+        E.guard (baseTy_a = address)
+                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a) (TyBase address)) >>
+        E.return (TyEffect unit)
+    
+    
+   (*
+    +   Γ ⊢ e1 : address    Γ ⊢ e2 : value
+    +  ----------------------------------- (store)
+    +      Γ ⊢ store{τ} e1 e2 : unit*
+    ----------------------------------------------------------------------------------------------*)
+    | Kstore ty e1 e2 ->
+        check (TyBase address) e1 >>
+        check (TyBase value)   e2 >>
+        E.return (TyEffect unit)
+    
+    
+   (*
+    +     Γ ⊢ e : address
+    +  ---------------------- (load)
+    +  Γ ⊢ load{τ} e : value*
+    ----------------------------------------------------------------------------------------------*)
+    | Kload ty e ->
+        check (TyBase address) e >>
+        E.return (TyEffect value)
+    
+    
+   (*
+    +   (α1,address) ∈ Γ    (α2,address) ∈ Γ
+    +  ------------------------------------- (same)
+    +         Γ ⊢ same α1 α2 : unit*
+    ----------------------------------------------------------------------------------------------*)
+    | Ksame a1 a2 ->
+        E.get a1                        >>= fun baseTy_a1 ->
+        E.get a2                        >>= fun baseTy_a2 ->
+        E.guard (baseTy_a1 = address)
+                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a1) (TyBase address)) >>
+        E.guard (baseTy_a2 = address)
+                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a2) (TyBase address)) >>
+        E.return (TyEffect unit)
+    
+    | Kmax ty         -> E.return (TyBase value)
+    | Kmin ty         -> E.return (TyBase value)
+    | Ksizeof ty      -> E.return (TyBase value)
+    | Kalignof ty     -> E.return (TyBase value)
+    | Koffsetof ty    -> E.return (TyBase value)
+    | Kshift a e      -> E.return (TyBase value) (* pointer ? *) (* TODO: check a, e *)
+    | Kconv ty1 ty2 a ->
+        E.get a                    >>= fun baseTy_a ->
+        E.guard (baseTy_a = value)
+              (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a) (TyBase value)) >>
+        E.return (TyBase value)
+    
+    | _ -> E.fail (Errors.CORE_TYPECHECK "TODO")
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+and check expected_type e =
+  match expected_type with
+    | TyBase wildcard -> E.return ()
+    | expected_type   ->
+        match e with
+          | COMMENT _ e -> check expected_type e
+          | DEBUG msg   -> E.fail (Errors.CORE_TYPECHECK ("(check) found a DEBUG: `" ^ msg ^ "'."))
+          
+          | Kconst n ->
+              E.guard (expected_type = TyBase value)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase value) expected_type)
+          | Ksym a ->
+              E.get a >>= fun baseTy ->
+              E.guard (expected_type = TyBase baseTy)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy) expected_type)
+          | Kop op e1 e2 ->
+              let check_arith =
+                check (TyBase value) e1 >>
+                check (TyBase value) e2 >>
+                E.guard (core_type_eq expected_type (TyBase value))
+                        (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase value) expected_type) in
+              let check_rel =
+                check (TyBase value) e1 >>
+                check (TyBase value) e2 >>
+                E.guard (expected_type = TyBase boolean)
+                        (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase boolean) expected_type) in
+              let check_logic =
+                check (TyBase boolean) e1 >>
+                check (TyBase boolean) e2 >>
+                E.guard (expected_type = TyBase boolean)
+                        (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase boolean) expected_type) in
+              match op with
+                | OpAdd -> check_arith
+                | OpSub -> check_arith
+                | OpMul -> check_arith
+                | OpDiv -> check_arith
+                | OpMod -> check_arith
+                | OpEq  -> check_rel
+                | OpLt  -> check_rel
+                | OpAnd -> check_logic
+                | OpOr  -> check_logic
+              end
+          
+          | Ktrue ->
+              E.guard (expected_type = TyBase boolean)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase boolean) expected_type)
+          | Kfalse ->
+              E.guard (expected_type = TyBase boolean)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase boolean) expected_type)
+          | Knot e ->
+              check (TyBase boolean) e >>
+              E.guard (expected_type = TyBase boolean)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase boolean) expected_type)
+          | Kctype ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check ctype)")
+          | Klet _as e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check let)")
+          | Kif b e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check if)")
+          | Kcall f args ->
+              E.return ()
+              (* E.fail "TODO(check call)" *)
+
+
+
+          | Kundef -> E.fail (Errors.CORE_TYPECHECK "TODO(check undef)")
+          | Kerror -> E.fail (Errors.CORE_TYPECHECK "TODO(check error)")
+
+          | Kskip ->
+              E.guard (expected_type = TyBase unit)
+                      (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase unit) expected_type)
+          
+          | Kseq _as e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check seq)")
+          | Kunseq es -> E.fail (Errors.CORE_TYPECHECK "TODO(check unseq)")
+          | Kindet e -> E.fail (Errors.CORE_TYPECHECK "TODO(check indet)")
+          | Katom e  -> E.fail (Errors.CORE_TYPECHECK "TODO(check atom)")
+          | Kcreate ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check create)")
+          | Kalloc a -> E.fail (Errors.CORE_TYPECHECK "TODO(check alloc)")
+          | Kkill a -> E.fail (Errors.CORE_TYPECHECK "TODO(check kill)")
+          | Kstore ty e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check store)")
+          | Kload ty e -> E.fail (Errors.CORE_TYPECHECK "TODO(check load)")
+          | Ksame a1 a2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check same)")
+          | Kmax ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check max)")
+          | Kmin ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check min)")
+          | Ksizeof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check sizeof)")
+          | Kalignof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check alignof)")
+          | Koffsetof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check offstof)")
+          | Kshift a e -> E.fail (Errors.CORE_TYPECHECK "TODO(check shift)")
+          | Kconv ty1 ty2 a -> E.fail (Errors.CORE_TYPECHECK "TODO(check conv)")
+      
+          | _ -> E.fail (Errors.CORE_TYPECHECK "TODO(check)")
+        end
+  end
+
+
+
+let typecheck file =
+  let functions = Pmap.bindings file.fun_map in
+  
+  (* collect the symbolic names of the functions for the initial function environment. *)
+  let init_fenv =
+    List.fold_left (fun acc (fname, (ftype, args, _)) ->
+      Pmap.add fname (List.map snd args, ftype) acc) core_stdlib functions in
+  
+  let process_function (ty, args, body) : core_type E.error =
+    (* TODO: pointer should be of type 'address' (?) *)
+    State.run (E.mapM_ (fun (a,ty) -> E.put a ty) args >> infer body)
+              (Pmap.empty, init_fenv) in
+  Exception.bind
+  (List.fold_right
+    (fun (name, def) acc ->
+      Exception.bind acc (fun _ ->
+      match process_function def with
+        | E.Success coreTy -> Exception.return ()
+        | E.Error msg      -> Exception.throw msg
+      end)
+    ) (Pmap.bindings file.fun_map)
+      (Exception.return ()))
+  (fun _ -> Exception.return file)

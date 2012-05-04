@@ -776,8 +776,8 @@ module Solver = struct
   let rec simplify_loop p =
     let rewrite p = 
       normalise_const_map p
-      >> simplify
-      >> check_unsat in
+      >|> simplify
+      >|> check_unsat in
     match collect_eqs (rewrite p) with
     | (true,  p) -> simplify_loop p
     | (false, p) -> p

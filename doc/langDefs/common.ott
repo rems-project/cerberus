@@ -5,7 +5,7 @@ metavar n                   ::=  {{ com integer constants }}
 metavar id                  ::=  {{ com identifiers (\ailtau{} variables, functions and types names, struct/union members) }}
                                  {{ lem Symbol.t }}
 metavar fname {{ tex \varphi }} ::=  {{ com \core{} function }}
-metavar a {{ tex \alpha  }} ::=  {{ com symbolic name }}
+metavar a {{ tex \alpha  }} ::=  {{ com symbolic name }} {{ lex number }}
 
 
 grammar

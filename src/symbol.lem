@@ -89,4 +89,4 @@ let shift_r      = (48, Some "impl_shift_r")
 
 let return       = (49, Some "return")
 
-let init = 50
+let init = 100
