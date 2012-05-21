@@ -1,0 +1,533 @@
+metavar P, Pi ::=
+  {{ phantom }}
+  {{ tex \Pi }}
+
+grammar
+
+value :: 'value' ::=
+  | ( range P ty ) . max :: M :: TyRangeMax
+      {{ coq ([[P]].range [[ty]]).max }}
+  | ( range P ty ) . min :: M :: TyRangeMin
+      {{ coq ([[P]].range [[ty]]).min }}
+  | true :: :: True
+  | n :: :: Integer
+
+formula :: 'formula_' ::=
+  | value1 <= value2 :: M :: Le
+      {{ tex [[value1]] \leqslant [[value2]] }}
+      {{ coq [[value1]] <= [[value2]] }}
+  | value1 = value2 :: M :: Eq
+      {{ coq [[value1]] = [[value2]] }}
+  | P |= isCharSigned :: :: IsCharSigned
+      {{ coq [[P]].isCharSigned = true }}
+  | P |= size_t = ty :: M :: SizeT
+      {{ coq [[P]].size_t = [[ty]] }}
+  | P |= ptrdiff_t = ty :: M :: PtrdiffT
+      {{ coq [[P]].ptrdiff_t = [[ty]] }}
+  | P |= ty1 <precision ty2 :: M :: LtPrecision
+      {{ coq [[P]].precision [[ty1]] < [[P]].precision [[ty2]] }}
+  | qualifiers1 sub qualifiers2 :: M :: QualifiersSubset
+      {{ coq sub [[qualifiers1]] [[qualifiers2]] }}
+
+terminals :: 'terminals_' ::=
+  | |- :: :: Turnstile
+      {{ tex \vdash }}
+  | |= :: :: Entails
+      {{ tex \vDash }}
+  | max :: :: Max
+  | min :: :: Min
+  | <=range :: :: LeRange
+      {{ tex \leqslant_{range} }}
+  | =rank :: :: EqRank
+      {{ tex =_{rank} }}
+  | <rank :: :: LtRank
+      {{ tex <_{rank} }}
+  | <=rank :: :: LeRank
+      {{ tex \leqslant_{rank} }}
+  | <= :: :: Leq
+      {{ tex \leqslant }}
+  | sub :: :: Subset
+      {{ tex \subset }}
+
+funs
+TypeTransformation ::=
+
+fun unqualify ty' :: ty :: Unqualify by
+
+unqualify (qualifiers void) === void
+unqualify (qualifiers basicType) === basicType
+unqualify (qualifiers ty *) === ty *
+unqualify (ty [n]) === ty [n]
+unqualify (ty (ty1, .., tyk)) === ty (ty1, .., tyk)
+
+fun pointerConvert ty' :: ty :: PointerConvert by
+pointerConvert (qualifiers void) === qualifiers void
+pointerConvert (qualifiers basicType) === qualifiers basicType
+pointerConvert (qualifiers ty *) === qualifiers ty *
+pointerConvert (ty [n]) === ty *
+pointerConvert (ty (ty1, .., tyk)) === ty (ty1, .., tyk) *
+
+fun qualifiersOf ty :: qualifiers :: QualifiersOf by
+qualifiersOf (qualifiers void) === qualifiers
+qualifiersOf (qualifiers basicType) === qualifiers
+qualifiersOf (qualifiers ty *) === qualifiers
+qualifiersOf (ty [n]) === []
+qualifiersOf (ty (ty1, .., tyk)) === []
+ 
+fun mergeQualifiers ty1 ty2 :: qualifiers :: MergeQualifiers by
+mergeQualifiers ty1 ty2 === qualifiersOf ty1 @ qualifiersOf ty2
+
+fun addQualifiers qualifiers' ty' :: ty :: addQualifiers by
+addQualifiers qualifiers' (qualifiers void) === qualifiers' @ qualifiers void
+addQualifiers qualifiers' (qualifiers basicType) === qualifiers' @ qualifiers basicType
+addQualifiers qualifiers' (qualifiers ty *) === qualifiers' @ qualifiers ty *
+addQualifiers qualifiers' (ty [n]) === ty [n]
+addQualifiers qualifiers' (ty (ty1, .., tyk)) === ty (ty1, .., tyk)
+
+defns
+Jtype :: '' ::=
+
+defn
+qualifiersSub ty1 ty2 :: :: qualifiersSub :: QeualifiersSub by
+
+(qualifiersOf ty1) sub (qualifiersOf ty2)
+----------------------------------------- :: Def
+qualifiersSub ty1 ty2
+
+defn
+isRegister ty :: :: isRegister :: IsRegister
+  {{ com TODO }}
+by
+
+defn
+isConst ty :: :: isConst :: IsConst by
+
+qualifieri = const
+--------------------------------------- :: Void
+isConst (qualifier1 .. qualifierk void)
+
+qualifieri = const
+--------------------------------------- :: BasicType
+isConst (qualifier1 .. qualifierk void)
+
+qualifieri = const
+--------------------------------------- :: Pointer
+isConst (qualifier1 .. qualifierk ty *)
+
+
+defn
+P |= isSigned ty :: :: isSigned :: IsSigned by
+
+---------------------------------------------- :: Int
+P |= isSigned (qualifiers signed integerBaseType)
+
+P |= isCharSigned
+------------------------------- :: Char
+P |= isSigned (qualifiers char)
+
+defn
+P |= isUnsigned ty :: :: isUnsigned :: IsUnsigned by
+
+----------------------------------------------------- :: Int
+P |= isUnsigned (qualifiers unsigned integerBaseType)
+
+--------------------------------- :: Bool
+P |= isUnsigned (qualifiers bool)
+
+not (P |= isCharSigned)
+------------------------------- :: Char
+P |= isUnsigned (qualifiers char)
+
+
+defn
+ty1 =rank ty2 :: :: eqRank :: EqRank by
+
+------------------------------------------------------ :: Unsigned
+signed integerBaseType =rank unsigned integerBaseType
+
+------------------------ :: UnsignedChar
+char =rank unsigned char
+
+---------------------- :: SignedChar
+char =rank signed char
+
+----------- :: Eq
+ty =rank ty
+
+defn
+P |= ty1 <rank ty2 :: :: ltRank :: LtRank by
+
+P |= ty1 <precision ty2
+----------------------- :: Precision
+P |= ty1 <rank ty2
+
+isInteger ty
+------------------ :: Bool
+P |= bool <rank ty
+
+--------------------------------------- :: LongLong
+P |= signed long <rank signed long long
+
+--------------------------------- :: Long
+P |= signed int <rank signed long
+
+---------------------------------- :: Int
+P |= signed short <rank signed int
+
+----------------------------------- :: Short
+P |= signed char <rank signed short
+
+P |= ty1 <rank ty
+P |= ty  <rank ty2
+------------------ :: Transitive
+P |= ty1 <rank ty2
+
+ty1 =rank ty1'
+ty2 =rank ty2'
+P |= ty1' <rank ty2'
+-------------------- :: Congruence
+P |= ty1 <rank ty2
+
+defn
+P |= ty1 <=rank ty2 :: :: leRank :: LeRank by
+
+ty1 =rank ty2
+------------------- :: Eq
+P |= ty1 <=rank ty2
+
+P |= ty1 <rank ty2
+------------------- :: Lt
+P |= ty1 <=rank ty2
+
+defn
+isInteger ty :: :: isInteger :: 'IsInteger' by
+
+---------------------------------- :: Integer
+isInteger (qualifiers integerType)
+
+--------------------------- :: Char
+isInteger (qualifiers char)
+
+defn
+isVoid ty :: :: isVoid :: IsVoid by
+
+------------------------ :: Def
+isVoid (qualifiers void)
+
+defn
+isPointer ty :: :: isPointer :: IsPointer by
+
+------------------------- :: Def
+isPointer qualifiers ty *
+
+defn
+isBool ty :: :: isBool :: IsBool by
+
+---------------------- :: Def
+isBool qualifiers bool
+
+
+defn
+isArithmetic ty :: :: isArithmetic :: IsArithmetic
+{{ com TODO floats }}
+by
+
+isInteger ty
+--------------- :: Integer
+isArithmetic ty
+
+defn
+isScalar ty :: :: isScalar :: IsScalar by
+
+isPointer ty
+------------ :: Pointer
+isScalar ty
+
+isArithmetic ty
+--------------- :: Arithmetic
+isScalar ty
+
+defn
+isArray ty :: :: isArray :: IsArray by
+
+-------------- :: Def
+isArray ty [n]
+
+defn
+isFunction ty :: :: isFunction :: IsFunction by
+
+------------------------------ :: Def
+isFunction (ty (ty1, .., tyk))
+
+defn
+isUnsignedOf ty1 ty2 :: :: isCorrespondingUnsigned :: IsCorrespondingUnsigned by
+
+---------------------------------------------------------------- :: Def
+isUnsignedOf (signed integerBaseType) (unsigned integerBaseType)
+
+defn
+P |= isPromotion ty1 ty2 :: :: isPromotion :: IsPromotion by
+
+not (integerType = unsigned int)
+not (integerType = signed int)
+P |= integerType <=rank signed int
+P |= integerType <=range signed int
+----------------------------------------- :: ToSignedInt
+P |= isPromotion integerType (signed int)
+
+not (integerType = unsigned int)
+not (integerType = signed int)
+P |= integerType <=rank signed int
+not (P |= integerType <=range signed int)
+------------------------------------------- :: ToUnsignedInt
+P |= isPromotion integerType (unsigned int)
+
+---------------------------------------------- :: UnsignedInt
+P |= isPromotion (unsigned int) (unsigned int)
+
+------------------------------------------ :: SignedInt
+P |= isPromotion (signed int) (signed int)
+
+not (P |= integerType <=rank signed int)
+---------------------------------------- :: Rank
+P |= isPromotion integerType integerType
+
+defn
+P |= isUsualArithmetic ty1 ty2 ty :: :: isUsualArithmetic :: IsUsualArithmetic
+{{ com TODO floats }}
+by
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty
+P |= isPromotion ty2 ty
+--------------------------------- :: Eq
+P |= isUsualArithmetic ty1 ty2 ty
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isSigned ty1'
+P |= isSigned ty2'
+P |= ty2' <rank ty1'
+----------------------------------- :: GtSameSigned
+P |= isUsualArithmetic ty1 ty2 ty1'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isUnsigned ty1'
+P |= isUnsigned ty2'
+P |= ty2' <rank ty1'
+----------------------------------- :: GtSameUnsigned
+P |= isUsualArithmetic ty1 ty2 ty1'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isSigned ty1'
+P |= isSigned ty2'
+P |= ty1' <rank ty2'
+----------------------------------- :: LtSameSigned
+P |= isUsualArithmetic ty1 ty2 ty2'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isUnsigned ty1'
+P |= isUnsigned ty2'
+P |= ty1' <rank ty2'
+----------------------------------- :: LtSameUnsigned
+P |= isUsualArithmetic ty1 ty2 ty2'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isSigned ty1'
+P |= isUnsigned ty2'
+P |= ty1' <=rank ty2'
+----------------------------------- :: LtUnsigned
+P |= isUsualArithmetic ty1 ty2 ty2'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isUnsigned ty1'
+P |= isSigned ty2'
+P |= ty2' <=rank ty1'
+----------------------------------- :: GtUnsigned
+P |= isUsualArithmetic ty1 ty2 ty1'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isUnsigned ty1'
+P |= isSigned ty2'
+P |= ty1' <=rank ty2'
+P |= ty1' <=range ty2'
+----------------------------------- :: LtSigned
+P |= isUsualArithmetic ty1 ty2 ty2'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isSigned ty1'
+P |= isUnsigned ty2'
+P |= ty2' <=rank ty1'
+P |= ty2' <=range ty1'
+----------------------------------- :: GtSigned
+P |= isUsualArithmetic ty1 ty2 ty1'
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isUnsigned ty1'
+P |= isSigned ty2'
+P |= ty1' <=rank ty2'
+not (P |= ty1' <=range ty2')
+isUnsignedOf ty2' ty2''
+------------------------------------ :: LtSigned'
+P |= isUsualArithmetic ty1 ty2 ty2''
+
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+P |= isPromotion ty2 ty2'
+not (ty1' = ty2')
+P |= isSigned ty1'
+P |= isUnsigned ty2'
+P |= ty2' <=rank ty1'
+not (P |= ty2' <=range ty1')
+isUnsignedOf ty1' ty1''
+------------------------------------ :: GtSigned'
+P |= isUsualArithmetic ty1 ty2 ty1''
+
+
+defn
+isLvalueConversion ty1 ty2 :: :: isLvalueConversion :: IsLvalueConversion
+{{ com TODO incomplete non-array type results in undefined behaviour }}by
+
+not (isArray ty)
+isComplete ty
+------------------------------------ :: Def
+isLvalueConversion ty (unqualify ty)
+
+
+defn
+isObject ty :: :: isObject :: IsObject
+{{ com TODO struct/enum }}
+by
+
+------------------------------- :: BasicType
+isObject (qualifiers basicType)
+
+-------------------------- :: Void
+isObject (qualifiers void)
+
+-------------------------- :: Pointer
+isObject (qualifiers ty *)
+
+----------------- :: Array
+isObject (ty [n])
+
+defn
+isComplete ty :: :: isComplete :: IsComplete
+% No VLA implies that arrays are always complete.
+% Note: Completeness is a property of object types, i.e
+%   isComplete ty -> isObject ty
+by
+
+--------------------------------- :: BasicType
+isComplete (qualifiers basicType)
+
+---------------------------- :: Pointer
+isComplete (qualifiers ty *)
+
+------------------- :: Array
+isComplete (ty [n])
+
+defn
+isIncomplete ty :: :: isIncomplete :: IsIncomplete by
+
+------------------------------ :: Void
+isIncomplete (qualifiers void)
+
+defn
+P |= ty1 <=range ty2 :: :: leRange :: LeRange by
+
+(range P ty1).max <= (range P ty2).max
+(range P ty2).min <= (range P ty1).min
+-------------------------------------- :: Def
+P |= ty1 <=range ty2
+
+defn
+P |= n in range ty :: :: inRange :: InRange by
+
+n <= (range P ty).max
+(range P ty).min <= n
+--------------------- :: Def
+P |= n in range ty
+
+defn
+isModifiable ty :: :: isModifiable :: IsModifiable
+{{ com TODO struct/enum types }}
+by
+
+not (isArray ty)
+not (isIncomplete ty)
+not (isConst ty)
+--------------------- :: Def
+isModifiable ty
+
+defn
+isReal ty :: :: isReal :: IsReal
+{{ com TODO floating }}
+by
+
+isInteger ty
+------------:: Integer
+isReal ty
+
+defn
+isCompatible ty1 ty2 :: :: isCompatible :: IsCompatible by
+
+------------------ :: Eq
+isCompatible ty ty
+
+
+defn
+isComposite ty1 ty2 ty :: :: isComposite :: IsComposite
+{{ com Currently, only first rule is relevant (missing function prototypes, VLAs, arrays of unknown size).}}
+by
+% lemma: isComposite ty1 ty2 ty ->
+%          isCompatible ty1 ty2 /\isCompatible ty1 ty /\ isCompatible ty2 ty
+
+-------------------- :: Eq
+isComposite ty ty ty
+
+isComposite ty1 ty2 ty
+---------------------------------------- :: Array
+isComposite (ty1 [n]) (ty2 [n]) (ty [n])
+
+isComposite ty' ty'' ty
+isComposite ty'1 ty''1 ty1 .. isComposite ty'k ty''k tyk
+-------------------------------------------------------------------------------- :: Function
+isComposite (ty' (ty'1, .., ty'k)) (ty'' (ty''1, .., ty''k)) (ty (ty1, .., tyk))
