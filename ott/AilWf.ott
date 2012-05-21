@@ -1,0 +1,230 @@
+defns
+Jwf :: '' ::=
+
+defn
+wf ty :: :: wfTy :: WfTy by
+
+wf' ty
+isObject ty
+-------------------- :: PointerObject
+wf (qualifiers ty *)
+
+wf ty'
+not (isObject ty)
+not (restrict in qualifiers)
+---------------------------- :: PointerOther
+wf (qualifiers ty *)
+
+not (restrict in qualifiers)
+---------------------------- :: BasicType
+wf (qualifiers basicType)
+
+not (restrict in qualifiers)
+---------------------------- :: Void
+wf (qualifiers void)
+
+wf' ty
+not (isIncomplete ty)
+------------------- :: Array
+wf (ty [n])
+
+wf' ty
+wf ty1 .. wf tyk
+not(isIncomplete ty1) .. not(isIncomplete tyk)
+------------------------------------------ :: Function
+wf (ty (ty1, .., tyk))
+
+defn
+wf' ty :: :: wfNestedTy :: WfNestedTy
+{{ com nested types }}
+by
+
+wf ty
+isObject ty
+--------------------- :: PointerObject
+wf' (qualifiers ty *)
+
+wf ty'
+not (isObject ty)
+not (restrict in qualifiers)
+---------------------------- :: PointerOther
+wf' (qualifiers ty *)
+
+not (restrict in qualifiers)
+---------------------------- :: BasicType
+wf' (qualifiers basicType)
+
+not (restrict in qualifiers)
+---------------------------- :: Void
+wf' (qualifiers void)
+
+defn
+G ; S |- wf e :: :: wfE :: WfE by
+
+G; S |- wf e_l
+------------------------------ :: Unary
+G; S |- wf (unaryOperator e_l)
+
+G; S |- wf e_l1
+G; S |- wf e_l2
+------------------------------------- :: Binary
+G; S |- wf (e_l1 binaryOperator e_l2)
+
+G; S |- wf e_l1
+G; S |- wf e_l2
+------------------------ :: Assign
+G; S |- wf (e_l1 = e_l2)
+
+G; S |- wf e_l1
+G; S |- wf e_l2
+------------------------------------------- :: CompoundAssign
+G; S |- wf (e_l1 arithmeticOperator = e_l2)
+
+G; S |- wf e_l1
+G; S |- wf e_l2
+G; S |- wf e_l3
+------------------------------- :: Conditional
+G; S |- wf (e_l1 ? e_l2 : e_l3)
+
+wf ty
+G; S |- wf e_l
+--------------------- :: Cast
+G; S |- wf ((ty) e_l)
+
+G; S |- wf e_l1 .. G; S |- wf e_lk
+---------------------------------- :: Call
+G; S |- wf (e_l ( e_l1, .., e_lk))
+
+------------------- :: Constant
+G; S |- wf constant
+
+id : ty in G
+------------- :: Variable
+G; S |- wf id
+
+id :ty = s_l in S
+----------------- :: Function
+G; S |- wf id
+
+not (isIncomplete ty)
+not (isFunction ty)
+----------------------- :: SizeOf
+G; S |- wf (size_of ty)
+
+not (isIncomplete ty)
+not (isFunction ty)
+------------------------ :: AlignOf
+G; S |- wf (align_of ty)
+
+defn
+G ; S |- wf e_l :: :: wfEL :: WfEL by
+
+G; S |- wf e
+---------------- :: Def
+G; S |- wf (a e)
+
+defn
+G ; S ; ty ; b |- wf s :: :: wfS :: WfS by
+
+------------------- :: Skip
+G; S; ty; b |- wf ;
+
+G; S |- wf e_l
+--------------------- :: Expression
+G; S; ty; b |- wf (e_l;)
+
+wf G'
+(G' @ G); S; ty; b |- wf s_l1 .. (G' @ G); S; ty; b |- wf s_lk
+-------------------------------------------------------------- :: Block
+G; S; ty; b |- wf ({ G' | s_l1 .. s_lk })
+
+G; S |- wf e_l
+G; S; ty; b |- wf s_l1
+G; S; ty; b |- wf s_l2
+------------------------------------------- :: If
+G; S; ty; b |- wf (if (e_l) s_l1 else s_l2)
+
+G; S |- wf e_l
+G; S; ty; true |- wf s_l
+----------------------------------- :: While
+G; S; ty; b |- wf (while (e_l) s_l)
+
+G; S |- wf e_l
+G; S; ty; true |- wf s_l
+--------------------------------------- :: Do
+G; S; ty; b |- wf (do s_l while (e_l);)
+
+----------------------------- :: Break
+G; S; ty; true |- wf (break;)
+
+-------------------------------- :: Continue
+G; S; ty; true |- wf (continue;)
+
+isVoid ty
+------------------------------------------ :: ReturnVoid
+G; S; ty (ty1, .., tyk); b |- wf (return;)
+
+not (isVoid ty)
+G; S |- wf e_l
+---------------------------------------------- :: Return
+G; S; ty (ty1, .., tyk); b |- wf (return e_l;)
+
+% TODO (switch (e_l) s_l) :: Switch
+% TODO (case integerConstant : s_l) :: Case
+% TODO (default : s_l) :: Default
+% TODO (id : s_l) :: Label
+% TODO (goto id;) :: Goto
+
+G; S |- wf definition1 .. G; S |- wf definitionk
+------------------------------------------------- :: Declaration
+G; S; ty; b |- wf (definition1, .., definitionk;)
+
+defn
+G ; S ; ty ; b |- wf s_l :: :: wfSL :: WfSL by
+
+G; S; ty; b |- wf s
+----------------------- :: Def
+G; S; ty; b |- wf (a s)
+
+defn
+G ; S |- wf definition :: :: wfDefinition :: WfDefinition by
+
+id : ty in G
+G; S |- wf e_l
+------------------- :: Def
+G; S |- wf id = e_l
+
+defn
+wf G :: :: wfGamma :: WfGamma by
+
+wf G
+wf ty
+not (isFunction ty)
+isComplete ty
+% Technically, this is a semantic constraint (c.f. 6.7#7).
+-------------------- :: Ctx
+wf (G, id : ty)
+
+-------- :: Empty
+wf empty
+
+defn
+S |- wf S' :: :: wfSigma :: WfSigma by
+
+S |- wf S'
+wf ty
+isFunction ty
+empty; S; ty; false |- wf s_l
+----------------------------- :: Ctx
+S |- wf S', id : ty = s_l
+
+------------- :: Empty
+S |- wf empty
+
+defn
+wf program :: :: wfProgram :: WfProgram by
+
+S |- wf S
+id : ty = s_l in S
+------------------ :: Def
+wf id S
