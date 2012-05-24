@@ -38,7 +38,7 @@ storageDuration :: '' ::=
   | automatic :: :: Automatic
   | allocated :: :: Allocated % TODO: look at (§7.22.3)
 
-integerBaseType :: '' ::=
+integerBaseType, ibt :: '' ::=
   {{ com standard signed integer types (\S6.2.5\#4) }}
   | char :: :: IChar
       {{ com corresponds to \textbf{signed/unsigned char} }}
@@ -50,7 +50,7 @@ integerBaseType :: '' ::=
   | long long :: :: LongLong
       {{ com corresponds to \textbf{long long int}        }}
 
-integerType :: '' ::=
+integerType, it :: '' ::=
   {{ com integer types (\S6.2.5\#17) }}
   % TODO: add enumerated types
   | bool :: :: Bool
@@ -58,7 +58,7 @@ integerType :: '' ::=
   | signed integerBaseType :: :: Signed
   | unsigned integerBaseType :: :: Unsigned
 
-basicType :: '' ::=
+basicType, bt :: '' ::=
   {{ com basic types (\S6.2.5\#14) }}
   | char :: :: Char
   | integerType :: :: Integer
@@ -69,7 +69,7 @@ qualifier :: '' ::=
   | restrict :: :: Restrict
   | volatile :: :: Volatile
 
-qualifiers :: 'Qualifiers' ::=
+qualifiers, qs :: 'Qualifiers' ::=
   | qualifier1 .. qualifierk :: :: Def
   | [] :: M :: Empty
       {{ tex \emptyset }}
@@ -80,27 +80,27 @@ qualifiers :: 'Qualifiers' ::=
   | ( qualifiers ) :: S :: Parens
       {{ coq [[qualifiers]] }}
 
-ty {{ tex \tau }} :: '' ::=
+type, ty {{ tex \tau }} :: '' ::=
   {{ com $\texttt{Ail}_\tau$ types }}
   | ( ty ) :: S :: TyParens
       {{ icho [[ty]] }}
-  | qualifiers void :: :: Void
+  | void :: :: Void
       {{ com \texttt{void} type (\S6.2.5\#19) }}
-  | qualifiers basicType :: :: Basic
+  | basicType :: :: Basic
       {{ com basic types (\S6.2.5\#14) }}
 % TODO:
 %  | enum id                         ::   :: Enum
 %      {{ com enumerate types (\S6.2.5\#16) }}
      % TODO: add names to an env + MOVE TO INTEGER_TYPE
-  | ty [ n ]                        ::   :: Array
+  | qualifiers ty [ n ] ::   :: Array
       {{ com array types (\S6.2.5\#20) }}
 % TODO:
 %  | struct 
 % TODO:
 %  | union
-  | ty ( ty1 , .. , tyk )           ::   :: Function
+  | ty ( qualifiers1 ty1 , .. , qualifiersk tyk ) :: :: Function
       {{ com function types }}
-  | qualifiers ty *                 ::   :: Pointer
+  | qualifiers ty *  :: :: Pointer
       {{ com pointer types }}
 % TODO:
 % atomic types 
@@ -109,6 +109,6 @@ ty {{ tex \tau }} :: '' ::=
 %  | usualArithmetic ty1 ty2 :: :: UsualArithmetic
 %      {{ tex \texttt{usual\_arithmetic}([[ty1]],[[ty2]]) }}
 
-typeCategory :: '' ::=
-  | lvalueT ty :: :: LvalueT
+typeCategory, tyC :: '' ::=
+  | lvalueT qualifiers ty :: :: LvalueT
   | expressionT ty :: :: ExpressionT

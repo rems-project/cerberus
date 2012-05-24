@@ -2,61 +2,52 @@ defns
 Jwf :: '' ::=
 
 defn
-wf ty :: :: wfTy :: WfTy by
+wfLvalue qualifiers type :: :: wfLvalueType :: WfLvalueType by
 
-wf' ty
+wfLvalue qs ty
 isObject ty
--------------------- :: PointerObject
-wf (qualifiers ty *)
+---------------------- :: PointerObject
+wfLvalue qs' (qs ty *)
 
-wf ty'
+wfLvalue qs ty
 not (isObject ty)
-not (restrict in qualifiers)
----------------------------- :: PointerOther
-wf (qualifiers ty *)
+not (restrict in qs')
+---------------------- :: PointerOther
+wfLvalue qs' (qs ty *)
 
-not (restrict in qualifiers)
----------------------------- :: BasicType
-wf (qualifiers basicType)
+not (restrict in qs)
+---------------------- :: BasicType
+wfLvalue qs basicType
 
-not (restrict in qualifiers)
----------------------------- :: Void
-wf (qualifiers void)
+not (restrict in qs)
+-------------------- :: Void
+wfLvalue qs void
 
-wf' ty
+wfLvalue qs ty
 not (isIncomplete ty)
-------------------- :: Array
-wf (ty [n])
+----------------------- :: Array
+wfLvalue [] (qs ty [n])
 
-wf' ty
-wf ty1 .. wf tyk
+wf ty
+wfLvalue qs1 ty1 .. wfLvalue qsk tyk
 not(isIncomplete ty1) .. not(isIncomplete tyk)
------------------------------------------- :: Function
-wf (ty (ty1, .., tyk))
+---------------------------------------------- :: Function
+wfLvalue [] (ty (qs1 ty1, .., qsk tyk))
 
 defn
-wf' ty :: :: wfNestedTy :: WfNestedTy
+wf type :: :: wfType :: WfType
 {{ com nested types }}
 by
 
-wf ty
-isObject ty
---------------------- :: PointerObject
-wf' (qualifiers ty *)
+wfLvalue qs ty
+-------------- :: PointerObject
+wf (qs ty *)
 
-wf ty'
-not (isObject ty)
-not (restrict in qualifiers)
----------------------------- :: PointerOther
-wf' (qualifiers ty *)
+------------ :: BasicType
+wf basicType
 
-not (restrict in qualifiers)
----------------------------- :: BasicType
-wf' (qualifiers basicType)
-
-not (restrict in qualifiers)
----------------------------- :: Void
-wf' (qualifiers void)
+------- :: Void
+wf void
 
 defn
 G ; S |- wf e :: :: wfE :: WfE by
@@ -86,14 +77,14 @@ G; S |- wf e_l3
 ------------------------------- :: Conditional
 G; S |- wf (e_l1 ? e_l2 : e_l3)
 
-wf ty
+wfLvalue qs ty
 G; S |- wf e_l
 --------------------- :: Cast
-G; S |- wf ((ty) e_l)
+G; S |- wf ((qs ty) e_l)
 
 G; S |- wf e_l1 .. G; S |- wf e_lk
 ---------------------------------- :: Call
-G; S |- wf (e_l ( e_l1, .., e_lk))
+G; S |- wf (e_l (e_l1, .., e_lk))
 
 ------------------- :: Constant
 G; S |- wf constant
@@ -198,12 +189,12 @@ defn
 wf G :: :: wfGamma :: WfGamma by
 
 wf G
-wf ty
+wfLvalue qs ty
 not (isFunction ty)
 isComplete ty
 % Technically, this is a semantic constraint (c.f. 6.7#7).
 -------------------- :: Ctx
-wf (G, id : ty)
+wf (G, id : qs ty)
 
 -------- :: Empty
 wf empty
@@ -212,7 +203,7 @@ defn
 S |- wf S' :: :: wfSigma :: WfSigma by
 
 S |- wf S'
-wf ty
+wfLvalue [] ty
 isFunction ty
 empty; S; ty; false |- wf s_l
 ----------------------------- :: Ctx
