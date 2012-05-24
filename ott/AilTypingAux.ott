@@ -52,47 +52,15 @@ terminals :: 'terminals_' ::=
 funs
 TypeTransformation ::=
 
-fun unqualify ty' :: ty :: Unqualify by
-
-unqualify (qualifiers void) === void
-unqualify (qualifiers basicType) === basicType
-unqualify (qualifiers ty *) === ty *
-unqualify (ty [n]) === ty [n]
-unqualify (ty (ty1, .., tyk)) === ty (ty1, .., tyk)
-
 fun pointerConvert ty' :: ty :: PointerConvert by
-pointerConvert (qualifiers void) === qualifiers void
-pointerConvert (qualifiers basicType) === qualifiers basicType
-pointerConvert (qualifiers ty *) === qualifiers ty *
-pointerConvert (ty [n]) === ty *
-pointerConvert (ty (ty1, .., tyk)) === ty (ty1, .., tyk) *
-
-fun qualifiersOf ty :: qualifiers :: QualifiersOf by
-qualifiersOf (qualifiers void) === qualifiers
-qualifiersOf (qualifiers basicType) === qualifiers
-qualifiersOf (qualifiers ty *) === qualifiers
-qualifiersOf (ty [n]) === []
-qualifiersOf (ty (ty1, .., tyk)) === []
- 
-fun mergeQualifiers ty1 ty2 :: qualifiers :: MergeQualifiers by
-mergeQualifiers ty1 ty2 === qualifiersOf ty1 @ qualifiersOf ty2
-
-fun addQualifiers qualifiers' ty' :: ty :: addQualifiers by
-addQualifiers qualifiers' (qualifiers void) === qualifiers' @ qualifiers void
-addQualifiers qualifiers' (qualifiers basicType) === qualifiers' @ qualifiers basicType
-addQualifiers qualifiers' (qualifiers ty *) === qualifiers' @ qualifiers ty *
-addQualifiers qualifiers' (ty [n]) === ty [n]
-addQualifiers qualifiers' (ty (ty1, .., tyk)) === ty (ty1, .., tyk)
+pointerConvert void === void
+pointerConvert basicType === basicType
+pointerConvert (qs ty *) === qualifiers ty *
+pointerConvert (qs ty [n]) === qs ty *
+pointerConvert (ty (qs1 ty1, .., qsk tyk)) === ty (qs1 ty1, .., qsk tyk) *
 
 defns
 Jtype :: '' ::=
-
-defn
-qualifiersSub ty1 ty2 :: :: qualifiersSub :: QeualifiersSub by
-
-(qualifiersOf ty1) sub (qualifiersOf ty2)
------------------------------------------ :: Def
-qualifiersSub ty1 ty2
 
 defn
 isRegister ty :: :: isRegister :: IsRegister
@@ -100,43 +68,27 @@ isRegister ty :: :: isRegister :: IsRegister
 by
 
 defn
-isConst ty :: :: isConst :: IsConst by
-
-qualifieri = const
---------------------------------------- :: Void
-isConst (qualifier1 .. qualifierk void)
-
-qualifieri = const
---------------------------------------- :: BasicType
-isConst (qualifier1 .. qualifierk void)
-
-qualifieri = const
---------------------------------------- :: Pointer
-isConst (qualifier1 .. qualifierk ty *)
-
-
-defn
 P |= isSigned ty :: :: isSigned :: IsSigned by
 
----------------------------------------------- :: Int
-P |= isSigned (qualifiers signed integerBaseType)
+-------------------------------------- :: Int
+P |= isSigned (signed integerBaseType)
 
 P |= isCharSigned
-------------------------------- :: Char
-P |= isSigned (qualifiers char)
+------------------ :: Char
+P |= isSigned char
 
 defn
 P |= isUnsigned ty :: :: isUnsigned :: IsUnsigned by
 
------------------------------------------------------ :: Int
-P |= isUnsigned (qualifiers unsigned integerBaseType)
+---------------------------------------- :: Int
+P |= isUnsigned unsigned integerBaseType
 
---------------------------------- :: Bool
-P |= isUnsigned (qualifiers bool)
+-------------------- :: Bool
+P |= isUnsigned bool
 
 not (P |= isCharSigned)
-------------------------------- :: Char
-P |= isUnsigned (qualifiers char)
+----------------------- :: Char
+P |= isUnsigned char
 
 
 defn
@@ -151,7 +103,8 @@ char =rank unsigned char
 ---------------------- :: SignedChar
 char =rank signed char
 
------------ :: Eq
+isInteger ty
+------------ :: Eq
 ty =rank ty
 
 defn
@@ -162,6 +115,7 @@ P |= ty1 <precision ty2
 P |= ty1 <rank ty2
 
 isInteger ty
+not (isBool ty)
 ------------------ :: Bool
 P |= bool <rank ty
 
@@ -183,9 +137,13 @@ P |= ty  <rank ty2
 P |= ty1 <rank ty2
 
 ty1 =rank ty1'
+P |= ty1' <rank ty2
+-------------------- :: Congruence1
+P |= ty1 <rank ty2
+
 ty2 =rank ty2'
-P |= ty1' <rank ty2'
--------------------- :: Congruence
+P |= ty1 <rank ty2'
+-------------------- :: Congruence2
 P |= ty1 <rank ty2
 
 defn
@@ -202,29 +160,29 @@ P |= ty1 <=rank ty2
 defn
 isInteger ty :: :: isInteger :: 'IsInteger' by
 
----------------------------------- :: Integer
-isInteger (qualifiers integerType)
+--------------------- :: Integer
+isInteger integerType
 
---------------------------- :: Char
-isInteger (qualifiers char)
+-------------- :: Char
+isInteger char
 
 defn
 isVoid ty :: :: isVoid :: IsVoid by
 
------------------------- :: Def
-isVoid (qualifiers void)
+----------- :: Def
+isVoid void
 
 defn
 isPointer ty :: :: isPointer :: IsPointer by
 
-------------------------- :: Def
-isPointer qualifiers ty *
+----------------- :: Def
+isPointer qs ty *
 
 defn
 isBool ty :: :: isBool :: IsBool by
 
----------------------- :: Def
-isBool qualifiers bool
+----------- :: Def
+isBool bool
 
 
 defn
@@ -250,14 +208,14 @@ isScalar ty
 defn
 isArray ty :: :: isArray :: IsArray by
 
--------------- :: Def
-isArray ty [n]
+----------------- :: Def
+isArray qs ty [n]
 
 defn
 isFunction ty :: :: isFunction :: IsFunction by
 
------------------------------- :: Def
-isFunction (ty (ty1, .., tyk))
+-------------------------------------- :: Def
+isFunction (ty (qs1 ty1, .., qsk tyk))
 
 defn
 isUnsignedOf ty1 ty2 :: :: isCorrespondingUnsigned :: IsCorrespondingUnsigned by
@@ -422,13 +380,13 @@ P |= isUsualArithmetic ty1 ty2 ty1''
 
 
 defn
-isLvalueConversion ty1 ty2 :: :: isLvalueConversion :: IsLvalueConversion
+isLvalueConvertable ty :: :: isLvalueConvertable :: IsLvalueConvertable
 {{ com TODO incomplete non-array type results in undefined behaviour }}by
 
 not (isArray ty)
 isComplete ty
------------------------------------- :: Def
-isLvalueConversion ty (unqualify ty)
+---------------------- :: Def
+isLvalueConvertable ty
 
 
 defn
@@ -436,17 +394,17 @@ isObject ty :: :: isObject :: IsObject
 {{ com TODO struct/enum }}
 by
 
-------------------------------- :: BasicType
-isObject (qualifiers basicType)
+------------------- :: BasicType
+isObject basicType
 
--------------------------- :: Void
-isObject (qualifiers void)
+------------- :: Void
+isObject void
 
--------------------------- :: Pointer
-isObject (qualifiers ty *)
+------------------ :: Pointer
+isObject (qs ty *)
 
------------------ :: Array
-isObject (ty [n])
+-------------------- :: Array
+isObject (qs ty [n])
 
 defn
 isComplete ty :: :: isComplete :: IsComplete
@@ -455,20 +413,20 @@ isComplete ty :: :: isComplete :: IsComplete
 %   isComplete ty -> isObject ty
 by
 
---------------------------------- :: BasicType
-isComplete (qualifiers basicType)
+-------------------- :: BasicType
+isComplete basicType
 
----------------------------- :: Pointer
-isComplete (qualifiers ty *)
+-------------------- :: Pointer
+isComplete (qs ty *)
 
-------------------- :: Array
-isComplete (ty [n])
+---------------------- :: Array
+isComplete (qs ty [n])
 
 defn
 isIncomplete ty :: :: isIncomplete :: IsIncomplete by
 
------------------------------- :: Void
-isIncomplete (qualifiers void)
+----------------- :: Void
+isIncomplete void
 
 defn
 P |= ty1 <=range ty2 :: :: leRange :: LeRange by
@@ -487,15 +445,15 @@ n <= (range P ty).max
 P |= n in range ty
 
 defn
-isModifiable ty :: :: isModifiable :: IsModifiable
+isModifiable qualifiers type :: :: isModifiable :: IsModifiable
 {{ com TODO struct/enum types }}
 by
 
 not (isArray ty)
 not (isIncomplete ty)
-not (isConst ty)
+not (const in qs)
 --------------------- :: Def
-isModifiable ty
+isModifiable qs ty
 
 defn
 isReal ty :: :: isReal :: IsReal
@@ -512,6 +470,10 @@ isCompatible ty1 ty2 :: :: isCompatible :: IsCompatible by
 ------------------ :: Eq
 isCompatible ty ty
 
+isCompatible ty ty'
+isCompatible ty1 ty'1 .. isCompatible tyk ty'k
+------------------------------------------------------------------------- :: Function
+isCompatible (ty (qs1 ty1, .., qsk tyk)) (ty' (qs'1 ty'1, .., qs'k ty'k))
 
 defn
 isComposite ty1 ty2 ty :: :: isComposite :: IsComposite
@@ -524,10 +486,10 @@ by
 isComposite ty ty ty
 
 isComposite ty1 ty2 ty
----------------------------------------- :: Array
-isComposite (ty1 [n]) (ty2 [n]) (ty [n])
+------------------------------------------------- :: Array
+isComposite (qs ty1 [n]) (qs ty2 [n]) (qs ty [n])
 
 isComposite ty' ty'' ty
 isComposite ty'1 ty''1 ty1 .. isComposite ty'k ty''k tyk
--------------------------------------------------------------------------------- :: Function
-isComposite (ty' (ty'1, .., ty'k)) (ty'' (ty''1, .., ty''k)) (ty (ty1, .., tyk))
+------------------------------------------------------------------------------------------------------ :: Function
+isComposite (ty' (qs'1 ty'1, .., qs'k ty'k)) (ty'' (qs''1 ty''1, .., qs''k ty''k)) (ty (ty1, .., tyk))

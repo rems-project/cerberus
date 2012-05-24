@@ -63,7 +63,7 @@ terminals :: 'terminals_' ::=
       {{ tex \cup }}
 
 formula :: 'formula_' ::=
-  | id : ty in G :: :: InGamma
+  | id : qualifiers ty in G :: :: InGamma
   | id : ty = s_l in S :: :: InSigma
 
 gamma, G :: gamma ::=
@@ -71,8 +71,8 @@ gamma, G :: gamma ::=
   {{ coq }}
   | empty :: M :: Empty
       {{ coq empty }}
-  | G , id : ty :: M :: Ctor
-      {{ coq add ([[id]], [[ty]]) [[G]] }}
+  | G , id : qualifiers type :: M :: Ctor
+      {{ coq insert [[id]] ([[qualifiers]], [[type]]) [[G]] }}
   | G1 @ G2 :: M :: App
       {{ coq update [[G1]] [[G2]] }}
   | ( G ) :: S :: Parens
@@ -167,7 +167,7 @@ expression, e :: Expression ::=
   | e_l1 = e_l2 :: :: Assign
   | e_l1 arithmeticOperator = e_l2 :: :: CompoundAssign
   | e_l1 ? e_l2 : e_l3 :: :: Conditional
-  | ( ty ) e_l :: :: Cast
+  | ( qualifiers ty ) e_l :: :: Cast
   | e_l ( e_l1 , .. , e_lk ) :: :: Call
 %  | e_l . id :: :: Memberof
 %  | e_l -> id :: :: Memberofptr
