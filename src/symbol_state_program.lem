@@ -1,0 +1,39 @@
+open Global
+
+type ('a, 'msg) t = Symbol.sset -> ('a * Symbol.sset, 'msg) Program.t
+
+let return a = fun s -> Program.return (a, s)
+let map f m =
+  fun s -> Program.bind (m s) (fun (a, s') -> Program.return (f a, s'))
+let join mm = fun s -> Program.bind (mm s) (fun (m, s') -> m s')
+let bind m f = join (map f m)
+let app mf m = bind mf (fun f -> map f m)
+
+let fail      msg = fun _ -> Program.fail      msg
+let undefined msg = fun _ -> Program.undefined msg
+let bug       msg = fun _ -> Program.bug       msg
+
+let fresh          = fun s -> Program.return (Symbol.fresh          s)
+let fresh_pretty n = fun s -> Program.return (Symbol.fresh_pretty n s)
+
+let init m = Program.map fst (m Symbol.init)
+
+let of_symbol_state m =
+  fun s ->
+    let (a, s') = Symbol_state.run_impl m s in
+    (return a) s'
+
+(*
+let of_exception m = fun s -> (Program.of_exception m, s)
+*)
+
+let of_option m = function
+  | Some v -> return v
+  | None   -> m
+  end
+
+let rec foldr_list f l a =
+  match l with
+  | [] -> return a
+  | x::xs -> bind (f x a) (fun a' -> foldr_list f xs a')
+  end

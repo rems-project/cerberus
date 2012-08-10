@@ -1,0 +1,635 @@
+open Ail
+open Ail_aux (* lift_int *)
+
+(* *************************************************************************
+   * Predicates over types, corresponding to the name conventions and type *
+   * correspondences defined in 6.2.5.                                     *
+   *************************************************************************
+
+   [signed integer types] (6.2.5#4)
+   
+   "(...) The standard (...) integer types are collectively called signed
+    integer types."
+*)
+let is_signed_integer = lift_int
+  function
+    | SIGNED   _ -> true
+    | UNSIGNED _ -> false
+    | BOOL       -> false
+  end false
+
+
+(* [unsigned integer types] (6.2.5#6)
+   
+   "The type *_Bool* and the unsigned integer types that correspond to the
+    standard signed integer types are the `standard unsigned integer types`.
+    (...) The standard (...) integer types are collectively called
+    `unsigned integer types`"
+   
+   NOT_SUPPORTED: extended unsigned integer types
+*)
+(* TODO: don't seems to be used outside from Types.lem *)
+let is_unsigned_integer = lift_int
+  function
+    | BOOL       -> true
+    | UNSIGNED _ -> true
+    | SIGNED   _ -> false
+  end false
+
+
+(* [real floating types] (6.2.5#10)
+   
+   "(...)"
+   
+   NOT_SUPPORTED
+*)
+(* TODO: don't seems to be used outside from Types.lem *)
+let is_real_floating t = false
+
+
+(* [complex types, floating types] (6.2.5#11)
+   
+   "(...) The real floating and complex types are collectively called the
+    `floating types`."
+   
+   NOT_SUPPORTED
+*)
+(* TODO: not used outside from Types.lem *)
+let is_complex t = false
+let is_floating t = is_real_floating t || is_complex t
+
+
+(* [basic types] (6.2.5#14)
+   
+   "The type *char*, the signed and unsigned integer types, and the floating
+    types are collectively called the `basic types`."
+*)
+(* let is_basic = function *)
+(*   | BASIC _ CHAR -> true *)
+(*   | t            -> is_unsigned_integer t || is_signed_integer t || *)
+(*                     is_floating t *)
+(*   end *)
+
+
+(* [character types] (6.2.5#15)
+   
+   "The three types *char*, *signed char*, and *unsigned char* are collectively
+    called the `character types`. (...)"
+*)
+(* let is_character = function *)
+(*   | BASIC _ CHAR                       -> true *)
+(*   | BASIC _ (INTEGER (SIGNED   ICHAR)) -> true *)
+(*   | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true *)
+(*   | _                                  -> false *)
+(*   end *)
+
+
+(* [enumerated types] (6.2.5#16)
+   
+   "(...)"
+   
+   TODO
+*)
+let is_enumerated t = false
+
+
+(* [integer types, real types] (6.2.5#17)
+   
+   "The type *char*, the signed and unsigned integer types, and the enumerated
+    types are collectively called `integer types`. The integer and real floating
+    types are collectively called `real types`."
+*)
+let is_integer = function
+  | BASIC _ CHAR -> true
+  | t            -> is_signed_integer t || is_unsigned_integer t ||
+                    is_enumerated t
+  end
+let is_real t = is_integer t || is_real_floating t
+
+
+(* [arithmetic types] (6.2.5#18)
+   
+   "Integer and floating types are collectively called `arithmetic types`.
+    (...)"
+*)
+let is_arithmetic t = is_integer t || is_floating t
+
+
+(* TODO: would be nice to get rid of this *)
+let is_void = function
+  | VOID _ -> true
+  | _      -> false
+  end
+
+
+
+
+
+
+
+
+
+
+(* TODO *)
+let is_structure t = false
+let is_union t = false
+let is_enum t = false
+let is_atomic t = false
+
+let is_pointer = function
+  | POINTER _ _ -> true
+  | _           -> false
+  end
+
+let is_function = function
+  | FUNCTION _ _ -> true
+  | _            -> false
+  end
+
+let is_array = function
+  | ARRAY _ _ -> true
+  | _         -> false
+  end
+
+let is_derived t =
+  is_array t
+  || is_structure t
+  || is_union t
+  || is_function t
+  || is_pointer t
+  || is_atomic t
+
+let is_scalar t = is_arithmetic t || is_pointer t
+
+let is_aggregate t = is_array t || is_structure t
+
+let is_unqualified = function
+  | BASIC    q _ -> q = {}
+  | POINTER  q _ -> q = {}
+  | _            -> true
+  end
+
+let is_object = function
+  | FUNCTION _ _ -> false
+  | _            -> true
+  end
+
+let is_complete_object t =
+  match t with
+  | VOID _ -> false
+  | _      -> is_object t
+  end
+
+let is_pointer_to_object = function
+  | POINTER _ t -> is_object t
+  | _           -> false
+  end
+
+let is_pointer_to_void = function
+  | POINTER _ t -> is_void t
+  | _           -> false
+  end
+
+let is_pointer_to_function = function
+  | POINTER _ t -> is_function t
+  | _           -> false
+  end
+
+let is_pointer_to_complete_object = function
+  | POINTER _ t -> is_complete_object t
+  | _           -> false 
+  end
+
+let compatible_basic s1 s2 = (s1 = s2)
+
+
+(* (§6.2.7) Compatible type and composite type *)
+let rec compatible type1 type2 =
+  match (type1, type2) with
+  | (BASIC q1 s1, BASIC q2 s2) ->
+      compatible_basic s1 s2 && Ocaml.Pset.equal q1 q2
+  | (POINTER q1 t1, POINTER q2 t2) ->
+      compatible t1 t2 && Ocaml.Pset.equal q1 q2
+  | (ARRAY t1 size1, ARRAY t2 size2) ->
+      size1 = size2 && compatible t1 t2
+  | (FUNCTION t1 args1, FUNCTION t2 args2) ->
+      compatible t1 t2
+      && List.length args1 = List.length args2
+      && List.for_all2 compatible args1 args2
+  
+(*
+  (* (§6.2.7#1) Structure types *)
+  | (STRUCT tag1 members1, STRUCT tag2 members2) ->
+      (* ... If one is declared with a tag, the other shall be declared with the
+         same tag. ... *)
+      tag1 = tag2 &&
+*)
+  
+  | _ -> false
+  end
+
+let unqualify t =
+  match t with
+  | BASIC _ b    -> BASIC {} b
+  | POINTER _ t' -> POINTER {} t'
+  | _            -> t
+  end
+
+let compatible_unqualified type1 type2 =
+  compatible (unqualify type1) (unqualify type2)
+
+let qualifiers = function
+  | POINTER  q _ -> q
+  | BASIC    q _ -> q
+  | FUNCTION _ _ -> {}
+  | ARRAY    _ _ -> {}
+  end
+
+let merge_qualifiers t1 t2 = (qualifiers t1) union (qualifiers t2)
+
+let include_qualifiers t q =
+  match t with
+  | BASIC    q' b' -> BASIC (q union q') b'
+  | POINTER  q' t' -> POINTER (q union q') t'
+  | FUNCTION _  _  -> t
+  | ARRAY    _  _  -> t
+  end
+
+let rec eq t1 t2 =
+  match (t1, t2) with
+  | (BASIC _ b1, BASIC _ b2) -> b1 = b2
+  | (POINTER _ t1, POINTER _ t2) -> eq t1 t2
+  | (FUNCTION t1 ts1, FUNCTION t2 ts2) ->
+      eq t1 t2 && List.for_all2 eq ts1 ts2
+  | (ARRAY t1 size1, ARRAY t2 size2) ->
+      size1 = size2 && eq t1 t2
+  | _ -> false
+  end
+
+let eq_rank i1 i2 =
+  i1 = i2 || match (i1, i2) with
+  | (SIGNED   b1, UNSIGNED b2) -> b1 = b2
+  | (UNSIGNED b1, SIGNED   b2) -> b1 = b2
+  | _ -> false
+  end
+
+let rec leq_rank i1 i2 = (eq_rank i1 i2 || lt_rank i1 i2)
+
+(* We exploit the "linear" transitivity to avoid listing all pairs/building the
+   transitive closure. *)
+and lt_rank i1 i2 =
+  let leq = leq_rank i1 in
+  match i2 with
+  | BOOL             -> false
+  | SIGNED ICHAR     -> leq BOOL
+  | SIGNED SHORT     -> leq (SIGNED ICHAR)
+  | SIGNED INT       -> leq (SIGNED SHORT)
+  | SIGNED LONG      -> leq (SIGNED INT)
+  | SIGNED LONG_LONG -> leq (SIGNED LONG)
+  (* Corresponding signed and unsigned integers have the same rank. *)
+  | UNSIGNED b       -> lt_rank i1 (SIGNED b)
+  end
+
+
+(* [leq_integer_precision i1 i2] returns true iff 
+     precision of i1 ≤ precision of i2
+   
+   the "precision of an integer type" is the number of bits used to represent
+   the values of that type, excluding sign and padding bits.
+   (see. in §6.2.6.2#6) *)
+let leq_integer_precision (i1: Ail.integer_type) (i2: Ail.integer_type) =
+  match (i1, i2) with
+  (* By reading 6.3.1.1#1:
+       
+       * _Bool has the smallest integer conversion rank (7th bullet)
+       * by the 2nd bullet, the precision of _Bool is less then the precision of
+         any signed integer type
+       * by the 4th bullet, this extends to any integer type. *)
+  | (BOOL      ,  _         ) -> true
+  | (_         ,  BOOL      ) -> false
+  (* Follows from 6.3.1.1 #1, 2nd bullet. *) (* TODO *)
+  | (SIGNED   _,  SIGNED   _) -> leq_rank i1 i2
+  (* Smaller rank implies smaller range (6.2.5 #8):
+For any two integer types with the same signedness and different integer 
+conversion rank (see 6.3.1.1), the range of values of the type with smaller 
+integer conversion rank is a subrange of the values of the other type. *)
+  | (UNSIGNED _,  UNSIGNED _) -> leq_rank i1 i2
+(* Unsigned int has at least as many value bits as signed int (6.2.6.2 #2):
+"Each bit that is a value bit shall have the same value as the same bit in the
+object representation of the corresponding unsigned type (if there are M value
+bits in the signed type and N in the unsigned type, then M ≤ N)." *)
+  | (UNSIGNED   _,  SIGNED _) ->
+      if leq_rank i1 i2 then
+        true
+      else
+        (* TODO Implementation defined! *)
+        false
+  | (SIGNED   _,  UNSIGNED _) ->
+      if leq_rank i1 i2 then
+        true
+      else
+        (* TODO Implementation defined! *)
+        false
+  end
+
+let rec common_int i1 i2 =
+  if i1 = i2 then i1 else
+    match (i1, i2) with
+    | (BOOL, _) -> i2
+    | (_, BOOL) -> i1
+    | (SIGNED   _, SIGNED   _) ->
+        if lt_rank i1 i2 then i2 else i1
+    | (UNSIGNED _, UNSIGNED _) ->
+        if lt_rank i1 i2 then i2 else i1
+    | (SIGNED b1, UNSIGNED _) ->
+        if leq_rank i1 i2 then
+          i2
+        else if leq_integer_precision i2 i1 then
+          i1
+        else
+          UNSIGNED b1
+    | _ -> common_int i2 i1
+    end
+
+let rec common t1 t2 =
+  match (t1, t2) with
+  | (BASIC _ (INTEGER i1), BASIC _ (INTEGER i2)) ->
+      BASIC {} (INTEGER (common_int i1 i2))
+  end
+
+
+(* KKK *)
+
+let promote_int (i: Ail.integer_type) =
+  let promoted_i =
+    if leq_rank i (SIGNED INT) then
+      if leq_integer_precision i (SIGNED INT) then
+        SIGNED INT
+      else UNSIGNED INT
+    else
+      i
+  in
+  match i with
+  | SIGNED   INT -> i
+  | UNSIGNED INT -> i
+  (* "Other than unsigned int or signed int." *)
+  | BOOL       -> promoted_i
+  | SIGNED   _ -> promoted_i
+  | UNSIGNED _ -> promoted_i
+  end
+
+
+
+(* Perform the "integer promotion" on a given type. (see. §6.3.1.1#2) *)
+
+(*
+The following may be used in an expression wherever an int or unsigned int may
+be used:
+  — An object or expression with an integer type (other than int or
+    unsigned int) whose integer conversion rank is less than or equal to the
+    rank of int and unsigned int.
+  — A bit-field of type _Bool, int, signed int, or unsigned int.
+
+If an int can represent all values of the original type (as restricted by the
+width, for a bit-field), the value is converted to an int; otherwise, it is
+converted to an unsigned int. These are called the integer promotions.58) All
+other types are unchanged by the integer promotions.
+
+
+REWRITTEN PROPERLY
+
+
+We define a unary operation over types called "integer promotion" as follow:
+  
+  for a given type τ:
+    
+    IF τ = int \/ τ = (unsigned int) THEN
+      the operation simply gives back τ
+    
+    IF is_integer_type τ /\ τ ≤_rank int /\ τ ≤_rank (unsigned int) THEN
+      TODO
+    
+    IF τ = bit_field(_Bool) \/ τ = bit_field(int) \/
+       τ = bit_field(signed int) \/ τ = bit_field(unsigned int) THEN
+      TODO
+
+*)
+let promote (ty: Ail.ctype) =
+(*
+  match ty with
+    (* if [ty] is an integer type: *)
+    | BASIC q (INTEGER i) ->
+        let i' =
+          match i with
+            (* integer promotion has no effect on [int] and [unsigned int] *)
+            | SIGNED   INT
+            | UNSIGNED INT -> i
+            (* *)
+            | BOOL
+            | SIGNED   _
+            | UNSIGNED _ -> (* if the integer conversion rank of [i] is less or
+                               equal the rank of both [int] and [unsigned int]
+                             *)
+                            if leq_rank i (SIGNED INT) &&
+                               leq_rank i (UNSIGNED INT) then
+                          
+                              if leq_integer_precision i (SIGNED INT) then
+          end
+        in BASIC q (INTEGER i')
+    (* otherwise integer promotion has no effect. *)
+    | _ -> ty
+  
+  
+  
+  let promote_integer_type (ty: Ail.int_type) =
+    match ty with
+      
+      | SIGNED   INT
+      | UNSIGNED INT -> ty
+      (*  *)
+      | BOOL
+      | SIGNED _
+      | UNSIGNED _ -> 
+
+  let promoted_i =
+    if leq_rank i (SIGNED INT) then
+      if leq_integer_precision i (SIGNED INT) then
+        SIGNED INT
+      else UNSIGNED INT
+    else
+      i
+  in
+  match i with
+  | SIGNED   INT -> i
+  | UNSIGNED INT -> i
+  (* "Other than unsigned int or signed int." *)
+  | BOOL       -> promoted_i
+  | SIGNED   _ -> promoted_i
+  | UNSIGNED _ -> promoted_i
+  end
+  in
+*)
+
+  match ty with
+  | BASIC q (INTEGER i) -> BASIC q (INTEGER (promote_int i))
+  | _ -> ty
+  end
+
+let usual_arithmetic t1 t2 = common (promote t1) (promote t2)
+
+let is_complete t =
+  match t with
+  | BASIC    _ _ -> is_complete_object t
+  | POINTER  _ _ -> is_complete_object t
+  | ARRAY    _ _ -> true
+  | FUNCTION _ _ -> false
+  end
+
+let is_incomplete t = not (is_complete t)
+
+let is_const = function
+  | BASIC    q _ -> Cabs.CONST IN q
+  | POINTER  q _ -> Cabs.CONST IN q
+  | ARRAY    _ _ -> false
+  | FUNCTION _ _ -> false
+  end
+
+let is_modifiable t =
+  not (is_array t)
+  && not (is_incomplete t)
+  && not (is_const t)
+
+let is_bool = function
+  | BASIC _ (INTEGER BOOL) -> true
+  | _                      -> false
+  end
+
+let base_of_pointer = function
+  | POINTER _ t -> t
+  end
+
+let base_of_array = function
+  | ARRAY t _ -> t
+  end
+
+let size_of_array = function
+  | ARRAY _ s -> s
+  end
+
+let function_return = function
+  | FUNCTION t _ -> t
+  end
+
+let function_parameters = function
+  | FUNCTION _ ts -> ts
+  end
+
+let well_formed t = true
+
+let composite t1 t2 = if compatible t1 t2 then Some t1 else None
+
+let pointer_convert (t: Ail.ctype) : Ail.ctype =
+  match t with
+  | FUNCTION _  _ -> POINTER {} t
+  | ARRAY    t' _ -> POINTER {} t'
+  | _             -> t
+  end
+
+let lvalue_convert (t: Ail.ctype) : Ail.ctype option =
+  if is_incomplete t && not (is_array t) then
+    None
+  else
+    Some (unqualify t)
+
+let lvalue_convert' = unqualify
+
+let is_lvalue = function
+  | T_LVALUE _ -> true
+  | T_EXP    _ -> false
+  end
+
+let is_unsigned_of t1 t2 =
+  match (t1, t2) with
+  | (BASIC _ (INTEGER (SIGNED i1)), BASIC _ (INTEGER (UNSIGNED i2))) -> i1 = i2
+  | _                                                                -> false
+  end
+
+let is_signed_of t1 t2 =
+  match (t1, t2) with
+  | (BASIC _ (INTEGER (UNSIGNED i1)), BASIC _ (INTEGER (SIGNED i2))) -> i1 = i2
+  | _                                                                -> false
+  end
+
+
+(*
+(* K experimenting ****************************************************************************** *)
+
+let is_signed = function
+  | BASIC _ (INTEGER (SIGNED _)) -> true
+  (* TODO: plus sometime 'char' (implementation-defined)  *)
+  | _ -> false
+  end 
+
+let is_unsigned = function
+  | BASIC _ (INTEGER (UNSIGNED _)) -> true
+  | BASIC _ (INTEGER BOOL) -> true  
+  (* TODO: plus sometime 'char' (implementation-defined)  *)
+  | _ -> false
+  end
+
+
+
+(* Highly non "optimised" but readable *)
+let usual_arithmetic (t1: Ail.ctype) (t2: Ail.ctype) : Ail.ctype =
+  if is_integer t1 && is_integer t2 then
+    let t1' = promote t1 in
+    let t2' = promote t2 in
+    if t1' = t2' then
+      (* IsUsualArithmeticEq *)
+      t1'
+    
+    else if is_signed t1' && is_signed t2' && rank_lt t2' t1' then
+      (* IsUsualArithmeticGtSameSigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_unsigned t2' && rank_lt t2' t1' then
+      (* IsUsualArithmeticGtSameUnsigned *)
+      t1'
+    
+    else if is_signed t1' && is_signed t2' && rank_lt t1' t2' then
+      (* IsUsualArithmeticLtSameSigned *)
+      t2'
+    
+    else if is_unsigned t1' && is_unsigned t2' && rank_lt t1' t2' then
+      (* IsUsualArithmeticLtSameUnsigned *)
+      t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t1' t2' then
+      (* IsUsualArithmeticLtUnsigned *)
+      t2'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t2' t1' then
+      (* IsUsualArithmeticGtUnsigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t1' t2' && range_le t1' t2' then
+      (* IsUsualArithmeticLtSigned *)
+      t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t2' t1' && range_le t2' t1' then
+      (* IsUsualArithmeticGtSigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t1' t2' && not (range_le t1' t2') then
+      (* IsUsualArithmeticLtSigned' *)
+      unsigned_of t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t2' t1' && not (range_le t2' t1') then
+      (* IsUsualArithmeticGtSigned' *)
+      unsigned_of t1'
+    else
+      (* TODO: doc *)
+      Boot.debug "ERROR in usual_arith"
+  else
+    Boot.debug "ERROR in usual_arith"
+*)

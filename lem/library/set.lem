@@ -1,0 +1,60 @@
+(* TODO: make the following work *)
+(*let inline {hol} for_all f xs = forall (x IN xs). f x*)
+val for_all : forall 'a. ('a -> bool) -> 'a set -> bool
+let inline {ocaml} for_all = Ocaml.Pset.for_all
+let inline {hol} for_all f xs = Hol.EVERY f (Hol.SET_TO_LIST xs)
+let inline {isabelle} for_all P S = Isabelle.Set.Ball S P
+
+(*let inline {hol} exists f xs = exist (x IN xs). f x*)
+val exists : forall 'a. ('a -> bool) -> 'a set -> bool
+let inline {ocaml} exists = Ocaml.Pset.exists
+let inline {hol} exists f xs = Hol.EXISTS f (Hol.SET_TO_LIST xs)
+let inline {isabelle} exists P S = Isabelle.Set.Bex S P 
+
+val cardinal : forall 'a. 'a set -> num
+let inline {ocaml} cardinal = Ocaml.Pset.cardinal
+let inline {hol} cardinal = Hol.CARD
+
+val from_list : forall 'a. 'a list -> 'a set
+let inline {ocaml} from_list = Ocaml.Pset.from_list Ocaml.compare
+let inline {hol} from_list = Hol.LIST_TO_SET
+let inline {isabelle} from_list = Isabelle.List.set
+
+val to_list : forall 'a. 'a set -> 'a list
+let inline {ocaml} to_list = Ocaml.Pset.elements
+let inline {hol} to_list = Hol.SET_TO_LIST
+
+val is_empty : forall 'a. 'a set -> bool
+let inline {ocaml} is_empty = Ocaml.Pset.is_empty
+let inline {hol} is_empty xs = xs = Hol.EMPTY
+let inline {isabelle} is_empty xs = (xs = Isabelle.Set.empty)
+
+val choose : forall 'a. 'a set -> 'a
+let inline {ocaml} choose = Ocaml.Pset.choose
+let inline {hol} choose = Hol.CHOICE
+
+val fold : forall 'a 'b. ('a -> 'b -> 'b) -> 'a set -> 'b -> 'b
+let inline {ocaml} fold = Ocaml.Pset.fold
+let inline {hol} fold = Hol.ITSET
+let inline {isabelle} fold = Isabelle.Finite_Set.fold
+
+val add : forall 'a. 'a -> 'a set -> 'a set
+let inline {hol} add = Hol.INSERT
+let inline {ocaml} add = Ocaml.Pset.add
+let inline {isabelle} add = Isabelle.Set.insert
+
+(* TODO: Document and add HOL/Isa implementation *)
+val lfp : forall 'a. 'a set -> ('a set -> 'a set) -> 'a set
+let inline {ocaml} lfp = Ocaml.Pset.lfp
+
+val diff: forall 'a. 'a set -> 'a set -> 'a set
+let inline {ocaml} diff = Ocaml.Pset.diff
+
+val map : forall 'a 'b. ('a -> 'b) -> 'a set -> 'b set
+let inline {ocaml} map = Ocaml.Pset.map Ocaml.Pervasives.compare
+
+val partition : forall 'a. ('a -> bool) -> 'a set -> 'a set * 'a set
+let inline {ocaml} partition = Ocaml.Pset.partition
+
+val equal : forall 'a. 'a set -> 'a set -> bool
+let inline {ocaml} equal = Ocaml.Pset.equal 

@@ -1,0 +1,379 @@
+open Global
+
+module A = Ail
+module C = Constraint
+
+type address  = C.constant
+type value    = C.constant
+
+type action =
+  | Load    of A.ctype * address * value
+  | Store   of A.ctype * address * value
+  | FnStore of A.ctype * address * value
+  | Create  of A.ctype * address
+  | Kill    of address
+  | Same    of address * address
+  | Call
+
+type uid = Symbol.t
+type t = Action of action * uid
+
+let compare (Action _ uid1) (Action _ uid2) = Symbol.compare uid1 uid2
+let compare_pair = Pair.compare compare compare
+
+let ne a1 a2 = compare a1 a2 <> Ord.Eq
+
+let compare_int a1 a2 = Ord.to_int (compare a1 a2)
+let compare_pair_int p1 p2 = Ord.to_int (compare_pair p1 p2)
+
+let (<$>) = Symbol_state.Operators.(<$>)
+
+let load     t a v   = Action (Load   t a v)   <$> Symbol_state.fresh
+let store    t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
+let fn_store t a v   = Action (Store  t a v)   <$> Symbol_state.fresh
+let create   t a     = Action (Create t a)     <$> Symbol_state.fresh
+let kill a           = Action (Kill     a)     <$> Symbol_state.fresh
+let same a a'        = Action (Same a a')      <$> Symbol_state.fresh
+let call             = Action (Call)           <$> Symbol_state.fresh
+
+let uid (Action _ id) = id
+
+let is_call (Action a _) =
+  match a with
+  | Call -> true
+  | _ -> false
+  end
+
+let is_access (Action a _) =
+  match a with
+  | Store   _ _ _   -> true
+  | FnStore _ _ _   -> true
+  | Load    _ _ _   -> true
+  | _               -> false
+  end
+
+let is_fn_store (Action a _) =
+  match a with
+  | FnStore _ _ _ -> true
+  | _             -> false
+  end
+
+let address_of (Action action _) =
+  match action with
+    | Store   _ a _   -> a
+    | FnStore _ a _   -> a
+    | Load    _ a _   -> a
+(*
+    | _               ->
+*)
+  end
+
+let filter_store ((Action action _) as a) =
+  match action with
+    | FnStore _ _ _   -> Some a
+    | Store   _ _ _   -> Some a
+    | _               -> None 
+  end
+
+let filter_load ((Action action _) as a) =
+  match action with 
+    | Load _ _ _ -> Some a
+    | _          -> None 
+  end
+
+let conflicts sb ts =
+  (* Hack: Original function in module Set_. *)
+  let action_set_filter_map (f : t -> t option) s =
+    let f' a s =
+      match f a with
+        | Some b -> s union {b}
+        | None   -> s
+      end in
+    Set.fold f' s {} in
+  let stores = action_set_filter_map filter_store ts in
+  let loads  = action_set_filter_map filter_load  ts in
+  let alias a a' = C.implies (C.eq (address_of a) (address_of a')) C.undef in
+  (* HACK: should be <> instead of ne. *)
+  let unseq a a' = ne a a' && not ((a, a') IN sb) && not ((a', a) IN sb) in
+  (* TODO Set comparison needs to be symmetric in Eq c1 c2! *)
+  {alias a a' | forall (a IN stores) (a' IN stores union loads) | unseq a a'}
+
+module Print = struct
+  module P = Pprint
+
+  open P.Operators
+
+  let pp_c = C.Print.pp_constant
+  let pp_t = A.Print.pp_type
+  let pp_s s = !^ (Symbol.to_string s)
+
+  let pp_uid (Action _ uid) = pp_s uid
+
+  let pp (Action action uid) =
+    let eq = (^^^) (pp_s uid ^^^ P.colon) in
+    let (^%^) d1 d2 = d1 ^^ P.comma ^^^ d2 in
+    match action with
+    | Load t a v ->
+        eq (!^ "load")   ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | Store t a v ->
+        eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | FnStore t a v ->
+        eq (!^ "store")  ^^^ P.parens (pp_t t ^%^ pp_c a ^%^ pp_c v)
+    | Create t a ->
+        eq (!^ "create") ^^^ P.parens (pp_t t ^%^ pp_c a)
+    | Kill a ->
+        eq (!^ "kill")   ^^^ P.parens (pp_c a)
+    | Same a1 a2 ->
+        eq (!^ "same")   ^^^ P.parens (pp_c a1 ^%^ pp_c a2)
+    | Call ->
+        eq (!^ "call")
+    end
+
+  let pp_latex a =
+    let pp_c = C.Print.pp_constant_latex in
+    let pp_id (Action _ s) = !^ (Symbol.to_string_id s) in
+    let pp_name (Action a _) =
+      match a with
+      | Load    _ _ _   -> !^ "Load"
+      | Store   _ _ _   -> !^ "Store"
+      | FnStore _ _ _   -> !^ "Store"
+      | Create  _ _     -> !^ "Create"
+      | Kill    _       -> !^ "Kill"
+      | Same    _ _     -> !^ "Same"
+      | Call            -> !^ "Call"
+      end in
+    let pp_args (Action a _) =
+      let tt d = !^ "\\\\cc" ^^ P.braces d in
+      match a with
+      | Load    t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | Store   t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | FnStore t a v   -> [tt (pp_t t); pp_c a; pp_c v]
+      | Create  t a     -> [tt (pp_t t); pp_c a]
+      | Kill    a       -> [pp_c a]
+      | Same    a1 a2   -> [pp_c a1; pp_c a2]
+      | Call            -> []
+      end in
+    let pp_opts args =
+      match args with
+      | [] -> P.empty
+      | _ -> P.parens (P.sepmap (P.comma ^^ P.space) (fun i -> i) args)
+      end in
+    let context name id args =
+      !^ "\\\\sem" ^^ P.braces name ^^ P.underscore ^^ P.braces id
+      ^^^  pp_opts args in
+    context (pp_name a) (pp_id a) (pp_args a)
+
+  let pp_dot sb =
+    let sem_list = P.sep0map (P.semi ^^ P.break1) (fun i -> i) in
+    let pre = !^
+      "\\newcommand{\\sem}[1]{\\small{\\textsf{#1}}}\
+       \\newcommand{\\cc}[1]{\\text{\\footnotesize\\ttfamily{#1}}}" in
+    let style = !^ "node [shape=none]" in
+    let context d =
+      !^ "digraph G" ^^^ P.braces (
+        sem_list ((!^ "d2tdocpreamble" ^^ P.equals ^^ P.dquotes pre)::style::d)
+      ) in
+    let arrow a1 a2 = pp_uid a1 ^^^ P.minus ^^ P.rangle ^^^ pp_uid a2 in
+    let rd = Transitive_reduction.reduce sb in
+    let d = [arrow a1 a2 | forall ((a1, a2) MEM Set.to_list rd) | true] in
+    let s = {a1 | forall ((a1, _) IN rd) | true} union {a2 | forall ((_, a2) IN rd) | true} in
+    let def a = pp_uid a ^^^ P.brackets (
+      !^ "label" ^^ P.equals ^^ P.dquotes (pp_latex a)
+    ) in
+    context (Set.fold (fun a d -> def a::d) s d)
+end
+
+let unfold (Action a _) = a
+
+module Memory = struct
+  module S = C.Solver
+  module T = Types
+  module Tc = Type_constraint
+
+  module Effect = struct
+    module M = Symbol_state_program
+
+    let return = M.return
+
+    let init = M.init
+
+    module Operators = struct
+      let (>>=) = M.bind
+    end
+
+    let undef t msg = M.undefined (t, msg)
+    let bug   = M.bug
+
+    let foldr_list = M.foldr_list
+    let of_option = M.of_option
+
+    let conv_int t const = M.of_symbol_state (Tc.conv_int t const)
+  end
+
+  module E = Effect
+  open E.Operators
+
+  type value =
+    | Indeterminate
+    | Value of C.constant
+
+  type obj =
+    | Scalar of A.ctype * value
+    | Array  of A.ctype * value Braun.t
+
+  type mem = (Symbol.t, obj) map
+
+  type t = <|p : S.p; mem : mem|>
+
+  let address t const =
+    let (addr, p') = S.address t.p const in
+    (addr, <|t with p = p'|>)
+
+  let same_size ct s = C.compare_const s (Tc.size ct) = Ord.Eq
+
+  let is_valid t addr =
+    match addr with
+    | S.Base      l     -> Pmap.mem l t.mem
+    | S.Displaced l i s ->
+        match Map_.find l t.mem with
+        | Some o ->
+            let (ct, length) =
+              match o with
+              | Scalar ct _  -> (ct, 1)
+              | Array  ct vs -> (ct, Braun.size vs)
+              end in
+            i >= 0 && i <= length && same_size ct s
+        | None -> false
+        end
+    | S.NullAddress -> false
+    end
+
+  let base_of = function
+    | S.Base      l     -> l
+    | S.Displaced l _ _ -> l
+  end
+
+  let same_base t addr1 addr2 =
+    base_of addr1 = base_of addr2 && is_valid t addr1 && is_valid t addr2
+
+  let retrieve t addr =
+    match addr with
+    | S.Base      l     -> E.of_option (E.undef t "Invalid address.") (Map_.find l t.mem)
+    | S.Displaced l i s -> E.of_option (E.undef t "Invalid address.") (Map_.find l t.mem)
+    | S.NullAddress     -> E.undef t "Null pointer access."
+    | S.NaA             -> E.bug "Could not retrieve address."
+    end
+
+  let load_scalar t ct' v' ct v =
+    if T.compatible ct ct' then
+      E.return <|t with p = S.add_constr t.p (C.eq v v')|>
+    else if T.is_unsigned_of ct' ct then
+      E.conv_int ct v' >>= fun (a, conv) ->
+      E.return <|t with p = S.add_constr (S.add_constr t.p conv) (C.eq v a)|>
+    else if T.is_signed_of ct' ct then
+      let overflow = C.implies (C.neg (Tc.in_range ct v')) C.undef in
+      E.return <|t with p = S.add_constr (S.add_constr t.p (C.eq v v')) overflow|>
+    else E.undef t "Access and effective type are incompatible."
+
+  let load_event t ct a v =
+    let msg = "Tried to read an Indeterminate value." in
+    let (addr, t) = address t a in
+    retrieve t addr >>= function
+    | Scalar _ Indeterminate ->
+        E.undef t msg
+    | Scalar ct' (Value v') ->
+        load_scalar t ct' v' ct v
+    | Array ct' vs' ->
+        if T.compatible ct' ct then
+          match addr with
+          | S.Base _ ->
+              match Braun.get vs' 0 with
+              | Value v' -> load_scalar t ct' v' ct v
+              | Indeterminate -> E.undef t msg
+              end
+          | S.Displaced _ i s ->
+              if i >= 0 && i < Braun.size vs' && same_size ct' s then
+                match Braun.get vs' i with
+                | Value v' -> load_scalar t ct' v' ct v
+                | Indeterminate -> E.undef t msg
+                end
+              else E.undef t "Out-of-bounds access."
+          | S.NullAddress -> E.undef t "Null pointer access."
+          end
+        else E.undef t "Access and effective type are incompatible."
+    end
+
+  let write_scalar t ct' ct v =
+    if T.compatible ct ct' then
+      E.return (Value v, t)
+    else if T.is_signed_of ct' ct then
+      E.conv_int ct' v >>= fun (a, conv) ->
+      E.return (Value a, <|t with p = S.add_constr t.p conv|>)
+    else if T.is_unsigned_of ct' ct then
+      let overflow = C.implies (C.neg (Tc.in_range ct' v)) C.undef in
+      E.return (Value v, <|t with p = S.add_constr t.p overflow|>)
+    else E.undef t "Access and effective type are incompatible."
+
+  let write_event t ct a v =
+    let (addr, t) = address t a in
+    retrieve t addr >>= function
+    | Scalar ct' _ ->
+        write_scalar t ct' ct v >>= fun (v, t) ->
+        E.return <|t with mem = Pmap.add (base_of addr) (Scalar ct' v) t.mem|>
+    | Array ct' vs' ->
+        if T.compatible ct' ct then
+          match addr with
+          | S.Base _ ->
+              write_scalar t ct' ct v >>= fun (v, t) ->
+              let vs = Braun.set vs' 0 v in
+              E.return <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
+          | S.Displaced _ i s ->
+              if i >= 0 && i < Braun.size vs' && same_size ct' s then
+                write_scalar t ct' ct v >>= fun (v, t) ->
+                let vs = Braun.set vs' i v in
+                E.return <|t with mem = Pmap.add (base_of addr) (Array ct' vs) t.mem|>
+              else E.undef t "Out-of-bounds access."
+          end
+        else E.undef t "Access and effective type are incompatible."
+    end
+
+  let event (Action a uid) t =
+(*
+    let () = Document.print (Print.pp (Action (a, uid))); print_endline "" in
+*)
+    match a with
+    | Same a1 a2 ->
+        let (addr1, t) = address t a1 in
+        let (addr2, t) = address t a2 in
+        if same_base t addr1 addr2
+          then E.return  t
+          else E.undef t "Comparing addresses of distinct object."
+    | Create ct a -> 
+        if T.is_scalar ct then
+          let (addr, t) = address t a in
+          E.return <|t with mem = Pmap.add (base_of addr) (Scalar ct Indeterminate) t.mem|>
+        else if T.is_array ct then
+          let (addr, t) = address t a in
+          let value = Braun.make (T.size_of_array ct) Indeterminate in
+          let obj = Array (T.base_of_array ct) value in
+          E.return <|t with mem = Pmap.add (base_of addr) obj t.mem|>
+        else E.bug "event"
+    | Kill a ->
+        let (addr, t) = address t a in
+        E.return <|t with mem = Ocaml.Pmap.remove (base_of addr) t.mem|>
+    | Load    ct a v -> load_event  t ct a v
+    | Store   ct a v -> write_event t ct a v
+    | FnStore ct a v -> write_event t ct a v
+    | Call -> E.return t
+    end
+
+  let replay_init p' es =
+    E.foldr_list event es <|p = p'; mem = Pmap.empty|> >>= fun t ->
+    E.return (S.complete t.p)
+(*
+    with Undefined t ->
+      S.complete (*print_endline "UNDEF";*) S.add_constr t.p C.undef
+*)
+
+  let replay p es = Program.map_undef (fun (t, msg) -> (* print_endline msg; *) S.complete (S.add_constr t.p C.undef)) (E.init (replay_init p es))
+end

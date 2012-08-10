@@ -1,0 +1,174 @@
+\documentclass[12pt,a4paper,titlepage]{article}
+
+\usepackage{amssymb}
+\usepackage{amscd}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{graphicx}
+%\usepackage{asymptote}
+\usepackage{setspace}
+\usepackage{version}
+\usepackage[british]{babel}
+\usepackage[colorlinks=true]{hyperref}
+\usepackage{url}
+\usepackage{courier}
+\usepackage{listings}
+
+
+\title{Mathematizing the C Programming Language}
+\author{Justus Matthiesen}
+\date{}
+
+\begin{document}
+\begin{titlepage}
+\begin{flushright}
+Justus Matthiesen
+
+Gonville \& Caius College
+
+jm614
+\end{flushright}
+
+\vspace{2\baselineskip}
+
+\begin{center}
+Computer Science Tripos Part II Project Proposal
+
+\vspace{1.5\baselineskip}
+
+\Large{\bfseries Mathematizing the C Programming Language}
+
+\vspace{1\baselineskip}
+
+\normalsize\today
+\end{center}
+
+\vspace{6\baselineskip}
+
+\begin{flushleft}
+{\bfseries Project Originator:} Dr Peter Sewell
+
+\vspace{0.5\baselineskip}
+{\bfseries Resources Required:} See attached Project Resource Form.
+
+\vspace{2\baselineskip}
+
+{\bfseries Project Supervisor:} Dr Peter Sewell \\
+\vspace{0.5\baselineskip}
+Signature
+
+\vspace{2\baselineskip}
+
+{\bfseries Director of Studies:} Prof Peter Robinson \\
+\vspace{0.5\baselineskip}
+Signature
+
+\vspace{2\baselineskip}
+
+{\bf Project Overseers:} Prof Jean Bacon and  Dr Andrew Rice\\
+\vspace{0.5\baselineskip}
+Signatures
+\end{flushleft}
+\end{titlepage}
+
+
+\section*{Introduction and Description of the Work}
+The C programming language was created in the early 1970s by Dennis M. Ritchie at the Bell Telephone Laboratories to fill the need of the new operating system Unix for a system programming language \cite{developmentOfC}. The language evolved into a general-purpose programming language over the next two decades and its use spread so widely that a standardisation became necessary to avoid the different dialects of C to diverge even further. Thus, in 1989, the first C Standard was established by the American National Standards Institute. In the rationale that accompanies the standard the authors state that their \textquotedblleft overall goal was to develop a clear, consistent, and unambiguous Standard for the C programming language\textquotedblright \cite{ansiC}. The language specification given by ANSI was later adopted as an ISO standard, which in turn was superseded by an updated and extended version of the standard which is informally known as C99. Since 2007 the ISO working group for C is discussing the next revision of the C standard called C1X.
+
+The purpose of the standard is to specify the semantics of C programs. Like most programming language specifications the C standard is written in natural language leaving room for ambiguity and making it unsuitable as a basis for a formal treatment of the language. However, a formal understanding of C is especially desirable since the language is very widespread in safety critical applications and also since it combines features whose interaction are difficult to predict without a formal model: The order of side-effect applications, evaluation order of expressions, and even the semantics of signed integer arithmetic are underspecified in the C standard and these are just a few sources of non-determinism and implementation-dependent behaviour in C.
+
+The aim of the project is to write a tool that aids understanding C's implicit non-determinism. For a given C program the tool will compute the set of all standard-conforming execution paths. Such a tool could be used to find flaws in the standard, to empirically explore how a change to the standard would affect the overall language, or to test whether a compiler is generating standard-compliant code. However, covering the entirety of C is beyond the reach of this project: The C programming language is too large and its semantics too involved. Thus, the project will only work with a selected fragment of C.
+
+\section*{Substance and Structure of the Project}
+Given the size of the project, it is necessary for realistic planning to divide the project into manageably sized components. Fortunately, the processing done by the tool naturally divides into a number of distinct stages where each stage only depends on the completion of the previous stage.
+
+To further reduce the risk of the project, I will adopt an iterative development style, i.e. when building a particular stage of the tool I will implement the smallest set of features that is sufficient to meet the success criteria of the project, repeat the process for the next stage, and then later continually revisit each stage to augment the tool with one new feature at a time.
+
+The first phase of development will look at the most crucial part of the project: Finding a suitable structural operational semantics that captures the intent of C1X as closely as possible for a small part of C, namely integer expressions including bitwise operators. The subset of C has been chosen since it does not require an involved memory model, which would add too much complexity at a very early stage, and also since it contains
+\begin{itemize}
+ \item undefined behaviour, e.g.~adding $1$ to the largest representable integer,
+ \item unspecified behaviour, e.g.~an implementation can freely choose whether to represent signed integers in sign-and-magnitude, one's complement, or two's complement form,
+ \item underspecified evaluation order, e.g.~the expression $e_1 + e_2$ can be evaluated in any particular order\footnote{Assuming the expression does not contain any \textit{sequence points}.}.
+\end{itemize}
+To avoid duplicating already existing research on the semantics of C, a significant part of the initial phase of this project will be spent on reading and familiarisation with relevant papers on the subject. In particular, the semantics for this project will borrow ideas from Michael Norrish's Cholera project \cite{norrishPhd} which gives an almost complete operational semantics for a large subset of C. It will have to be adapted, however, to accommodate for the particular needs of the tool: The semantics has to work with symbolic rather than concrete values, it needs to be executable such that it can later be used to compute the set of all legal outcomes of a program, and it will need a more sophisticated memory model at a later phase of the project when the subset of C dealt with is extended with pointers or a similar construct that depends on correct memory alignment.
+
+Once a semantics suitable for our purposes has been specified, it will be re-written in the second phase of the project within the framework of a proof assistant, most likely Isabelle/HOL\footnote{The choice of Isabelle/HOL is still tentative. A final decision will be made within the first weeks of the project but for now I will only refer to Isabelle/HOL.} \cite{isabelle}. The Isabelle/HOL formalisation of the semantics will then be used to calculate the set of all valid execution paths of a given program which involves symbolically solving the particular constraints the C standard imposes on the standard-conforming evaluations of the program. At the core of the process an SMT solver might be employed to allow for fast constraint solving.
+
+The previous two stages of the project implement the computational heart of the tool, the next two will build the front- and back-end. Both will be written in OCaml. The front-end to read in, parse, and translate C programs to an appropriate intermediate representation will rely on CIL (C Intermediate Language) \cite{cil}, which simplifies this process significantly. The r\^ole of the back-end is to visualise the set of standard-conforming execution paths using a graph representation similar to \cite{cpp}. The graphs will be drawn with the Graphviz\footnote{Graphviz -- Graph Visualization Software, \url{http://www.graphviz.org}.} toolkit as it supports automatic graph layout and has API bindings for OCaml.
+
+The implementation of the back-end concludes the core of the project but the tool allows for a range of possible extensions. The most obvious is to extend the subset of C the tool can process.
+Another would be to write a testing framework that allows automatic compiler checking: Given a test program it would run both the compiler and the tool and then determine whether the program produced by the compiler gives a result that is in the set of allowable outcomes. The framework would build on top on the constraint solving facilities of the tool.
+
+\section*{Success Criteria}
+The core of the project will be deemed a success if the following criteria are met.
+\begin{enumerate}
+ \item The tool accepts C programs restricted to integer expressions, which may exhibit non-deterministic behaviour, and generates a graph presenting the full set of standard-conforming execution paths of the program.
+ \item When given relevant programs from GCC's C language test suite\footnote{Chapter 7.4 C Language Testsuites. \textit{GCC Internals Manual}, \url{http://gcc.gnu.org/onlinedocs/gccint/C-Tests.html}.}, the set of execution paths calculated by the tool includes the one chosen by the GCC compiler. If not, the discrepancy must be explained in the dissertation.
+\end{enumerate}
+
+\section*{Starting Point}
+The tool proposed will be implemented in OCaml as well as Isabelle/HOL. Even though I have only very limited experience with OCaml, using it throughout the project should not prove too challenging as I do have a working knowledge of the two closely related languages F\# and Standard ML. Unfortunately, I do not have any prior experience with Isabelle/HOL but my supervisor has agreed to give me an introduction to reduce the time I have to invest in familiarising myself with the system.
+
+Before devising an operational semantics I will study Michael Norrish's Cholera semantics in detail. Furthermore, Susmit Sarkar\footnote{Website: \url{http://www.cl.cam.ac.uk/~ss726/}, Email: \href{mailto:Susmit.Sarkar@cl.cam.ac.uk}{\nolinkurl{Susmit.Sarkar@cl.cam.ac.uk}}.} has already produced an executable semantics for a very small fragment of C written in OCaml that I will use to produce an initial semantics for the tool.
+
+\section*{Resources Required}
+The project has no special requirements. The development will take place on my personal machine and I intend to use the services provided by the PWF and SRCF for back-up purposes.
+
+\section*{Timetable and Milestones}
+Officially, the project begins with the submission of the project proposal on 22nd October 2010 and ends with the submission of the dissertation on 14th May 2010. This period has been broken down into ten units of work each of which should take approximately three weeks to complete.
+
+\subsection*{Slot 0 \hfill {\small Sat, 6th Oct -- Fri, 22nd Oct}}
+The weeks preceding the start of the project will be used to discuss the scope and feasibility with supervisor and overseers, to begin the study of relevant papers and the C programming language standard, to set up a development environment including a source code management system, and also to devise a back-up strategy.
+\\
+{\bfseries Milestone:} Submission of project proposal.
+
+\subsection*{Slot 1 \hfill {\small Sat, 23rd Oct -- Fri, 12th Nov}}
+Starting with Susmit Sarkar's semantics, iteratively produce a more and more refined operational semantics for integer expressions in C. Study the intermediate representation of C used in CIL, familiarise with Isabelle/HOL, and begin re-writing the semantics in Isabelle/HOL. Also source C programs from compiler test suites for later evaluation of the tool. 
+\\
+{\bfseries Milestone:} Operational semantics for integer expressions, selection of test programs.
+
+\subsection*{Slot 2 \hfill {\small Sat, 13th Nov -- Fri, 3rd Dec}}
+Research the use of an SMT solver within the proof assistant. Start implementing the constraint solving necessary to compute the set of valid execution paths.
+\\
+{\bfseries Milestone:} An Isabelle/HOL formulation of the semantics.
+
+\subsection*{Slot 3 \hfill {\small Sat, 4th Dec -- Fri, 24th Dec}}
+Finish implementation of algorithm to generate the set of execution paths. 
+\\
+{\bfseries Milestone:} Working constraint solving for integer expression, a working algorithm to determine the set of allowable execution paths.
+
+\subsection*{Slot 4 \hfill {\small Sat, 25th Dec -- Fri, 14th Jan}}
+Use remaining time to extend the fragment of C dealt with as far as time allows.
+
+\subsection*{Slot 5 \hfill {\small Sat, 15th Jan -- Fri, 4th Feb}}
+Write front-end and back-end for the tool. Start drafting preparation and implementation chapters for the core of the project. Prepare progress report and presentation.
+\\
+{\bfseries Milestone:} A working core implementation, a skeleton dissertation with content for preparation/implementation of the core project. Progress report and slides for the presentation.
+
+\subsection*{Slot 6 \hfill {\small Sat, 5th Feb -- Fri, 25th Feb}}
+Run selected test programs through the tool, GCC, and other compilers. Compare results. Update preparation and implementation chapters and start writing the evaluation chapter.
+
+\subsection*{Slot 7 \hfill {\small Sat, 26th Feb -- Fri, 18th Mar}}
+Further write-up of the evaluation chapter. Write introduction and conclusion.
+\\
+{\bfseries Milestone:} Send first draft version of the dissertation to supervisor.
+
+\subsection*{Slot 8 \hfill {\small Sat, 19th Mar -- Fri, 8th Apr}}
+Incorporate any comments received into the dissertation text, finish outstanding evaluation work, and send out a second draft to proofreaders.
+\\
+{\bfseries Milestone:} Produce a second draft.
+
+\subsection*{Slot 9 \hfill {\small Sat, 9th Apr -- Fri, 29th Apr}}
+Address any issues brought up by proofreaders and produce a printed and bound dissertation by the end of the time slot.
+\\
+{\bfseries Milestone:} Printed dissertation.
+
+\subsection*{Slot 10 \hfill {\small Sat, 30th Apr -- Fri, 20th May}}
+The final time slot ends with the dissertation deadline. Ideally, the slot should not be used for any further work and instead it provides a buffer in case any serious issues still remain.
+\\
+{\bfseries Milestone:} Submission of dissertation.
+
+\bibliography{proposal}{}
+\bibliographystyle{annotate}
+
+\end{document}

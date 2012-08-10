@@ -1,0 +1,439 @@
+type cause =
+  | CALL_RETURN
+  | CALL_ARGUMENTS_ASSIGNABLE
+  | CALL_NUMBER_OF_ARGUMENTS
+  | CALL_FUNCTION_POINTER
+  | INCR_LVALUE
+  | INCR_REAL_OR_POINTER
+  | ADDRESS_FUNCTION_OR_LVALUE
+  | INDIRECTION_POINTER
+  | MINUS_ARITHMETIC
+  | PLUS_ARITHMETIC
+  | BNOT_INTEGER
+  | SIZEOF_INCOMPLETE
+  | SIZEOF_FUNCTION
+  | ALIGNOF_INCOMPLETE
+  | CAST_NAME_SCALAR
+  | CAST_OPERAND_SCALAR
+  | MUL_ARITHMETIC
+  | MOD_INTEGER
+  | ADD_POINTER_INTEGER
+  | ADD_INTEGER_POINTER
+  | ADD_ALL
+  | SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
+  | SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
+  | SUB_COMPATIBLE_POINTERS
+  | SUB_POINTER_TO_COMPLETE_OBJECT
+  | SUB_INTEGER_OR_POINTER
+  | SUB_ALL
+  | SHR_INTEGER_FIRST
+  | SHR_INTEGER_SECOND
+  | GE_COMPATIBLE
+  | GE_POINTER_TO_OBJECT_FIRST
+  | GE_POINTER_TO_OBJECT_SECOND
+  | GE_REAL
+  | GE_ALL
+  | NE_POINTERS
+  | NE_NULL_POINTER_CONSTANT_FIRST
+  | NE_NULL_POINTER_CONSTANT_SECOND
+  | NE_ARITHMETIC
+  | NE_ALL
+  | BAND_INTEGER
+  | XOR_INTEGER
+  | BOR_INTEGER
+  | AND_SCALAR
+  | OR_SCALAR
+  | CONDITIONAL_SCALAR_FIRST
+  | CONDITIONAL_NULL_POINTER_CONSTANT_SECOND
+  | CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
+  | CONDITIONAL_POINTERS
+  | CONDITIONAL_ARITHMETIC_SECOND
+  | CONDITIONAL_STRUCTURE_OR_UNION
+  | CONDITIONAL_COMPATIBLE_POINTERS
+  | CONDITIONAL_ALL
+  | ASSIGN_LVALUE
+  | ASSIGN_STRUCTURE_OR_UNION
+  | ASSIGN_VOID_POINTER_QUALIFIERS
+  | ASSIGN_VOID_POINTER_FIRST
+  | ASSIGN_VOID_POINTER_SECOND
+  | ASSIGN_NULL_POINTER_CONSTANT
+  | ASSIGN_POINTER_QUALIFIERS
+  | ASSIGN_COMPATIBLE_POINTERS
+  | ASSIGN_POINTERS
+  | ASSIGN_ALL
+  | ASSIGN_SUB_POINTER
+  | ASSIGN_SUB_ARITHMETIC
+  | ASSIGN_SUB_ALL
+  | ASSIGN_OTHER_ARITHMETIC
+  | IF_SCALAR
+  | WHILE_SCALAR
+  | DO_SCALAR
+  | LVALUE_UNDEFINED
+  | UNSUPPORTED of string
+
+let to_string e =
+  match e with
+  | CALL_RETURN ->
+      "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``The \
+       expression that denotes the function shall have type pointer to \
+       function returning void or returning a complete object type other than \
+       an array type.``"
+  | CALL_ARGUMENTS_ASSIGNABLE ->
+      "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``Each \
+       argument shall have a type such that its value may be assigned to an \
+       object [...] of the type corresponding to its parameter.``"
+  | CALL_NUMBER_OF_ARGUMENTS ->
+      "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``[T]he \
+       number of arguments shall agree with the number of parameters.``"
+  | CALL_FUNCTION_POINTER ->
+      "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``The \
+       expression that denotes the function shall have type pointer to \
+       function [...].``"
+
+  | INCR_LVALUE ->
+      "Violation of constraint 6.5.2.4#1 Postfix increment and decrement \
+       operators, Constraints: ``The operand of the postfix [...] decrement \
+       operator [...] shall be a modifiable lvalue.``"
+  | INCR_REAL_OR_POINTER ->
+      "Violation of constraint 6.5.2.4#1 Postfix increment and decrement \
+       operators, Constraints: ``The operand of the postfix [...] decrement \
+       operator [...] shall have [...] real or pointer type [...].``"
+
+  | ADDRESS_FUNCTION_OR_LVALUE ->
+      "Violation of constraint 6.5.3.2#1 Address and indirection operators, \
+       Constraints: ``The operand of the & operator shall be either a function \
+       designator [...] or an lvalue that designates an object [...].``"
+
+  | INDIRECTION_POINTER ->
+       "Violation of constraint 6.5.3.2#2 Address and indirection operators, \
+        Constraints: ``The operand of the unary * operator shall have pointer \
+        type.``"
+
+  | MINUS_ARITHMETIC ->
+      "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+       Constraints: ``The operand of the unary [...] - operator shall have \
+       arithmetic type [...].``"
+
+  | PLUS_ARITHMETIC ->
+      "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+       Constraints: ``The operand of the unary + [...] operator shall have \
+       arithmetic type [...].``"
+
+  | BNOT_INTEGER ->
+      "Violation of constraint 6.5.3.3#1 Unary arithmetic operators, \
+       Constraints: ``The operand [...] of the ~ operator [shall have] integer \
+       type [...].``"
+
+  | SIZEOF_INCOMPLETE ->
+      "Violation of constraint 6.5.3.4#1 The sizeof and alignof operators, \
+       Constraints: ``The sizeof operator shall not be applied to an [...] \
+       incomplete type [...].``"
+  | SIZEOF_FUNCTION ->
+      "Violation of constraint 6.5.3.4#1 The sizeof and alignof operators, \
+       Constraints: ``The sizeof operator shall not be applied to [a] [...] \
+       function type [...].``"
+
+  | ALIGNOF_INCOMPLETE ->
+      "Violation of constraint 6.5.3.4#1 The sizeof and alignof operators, \
+       Constraints: ``The alignof operator shall not be applied to [...] an \
+       incomplete type.``"
+
+  | CAST_NAME_SCALAR ->
+      "Violation of constraint 6.5.4#1 Cast operators, Constraints: ``[T]he \
+       type name shall specify [...] scalar type [...].``"
+  | CAST_OPERAND_SCALAR ->
+      "Violation of constraint 6.5.4#1 Cast operators, Constraints: ``[T]he \
+       operand shall have scalar type.``"
+
+  | MUL_ARITHMETIC ->
+      "Violation of constraint 6.5.5#2 Multiplicative operators, Contraints: \
+       ``Each operand shall have arithmetic type.``"
+
+  | MOD_INTEGER ->
+      "Violation of constraint 6.5.5#2 Multiplicative operators, Contraints: \
+       ``The operands of the % operator shall have integer type.``"
+
+  | ADD_POINTER_INTEGER ->
+      "Violation of constraint 6.5.6#2 Additive operators, Constraints: \
+       ``[O]ne operand shall be a pointer to a complete object type and the \
+       other shall have integer type.`` (Second operand is not of integer \
+       type.)"
+  | ADD_INTEGER_POINTER ->
+      "Violation of constraint 6.5.6#2 Additive operators, Constraints: \
+       ``[O]ne operand shall be a pointer to a complete object type and the \
+       other shall have integer type.`` (First operand is not of integer type.)"
+  | ADD_ALL ->
+      "Violation of constraint 6.5.6#2 Additive operators, Constraints: \
+       `` [E]ither both operands shall have arithmetic type, or one operand \
+       shall be a pointer to a complete object type and the other shall have \
+       integer type.``"
+
+  | SUB_POINTER_TO_COMPLETE_OBJECT_FIRST ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
+       ``[B]oth operands [shall be] pointers to [...] compatible complete \
+       object types [...].`` (Operands are pointers but the left operand \
+       doesn't point to a complete object.)"
+  | SUB_POINTER_TO_COMPLETE_OBJECT_SECOND ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
+       ``[B]oth operands [shall be] pointers to [...] compatible complete \
+       object types [...].`` (Operands are pointers but the right operand \
+       doesn't point to a complete object.)"
+  | SUB_COMPATIBLE_POINTERS ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraint: \
+       ``[B]oth operands [shall be] pointers to [...] compatible complete \
+       object types [...].`` (Operands are pointers to incompatible types.)"
+  | SUB_POINTER_TO_COMPLETE_OBJECT ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraints: \
+       ``[T]he left operand [shall be] a pointer to a complete object type and \
+       the right operand [shall have] integer type.`` (Left operand is a \
+       pointer, right operand is not a pointer but the left operand doesn't \
+       pointer to a complete object.)"
+  | SUB_INTEGER_OR_POINTER ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraints: \
+       ``[B]oth operands [shall either be] pointers to [...] compatible \
+       complete object types[,] or the left operand [shall be] a pointer to a \
+       complete object type and the right operand [shall have] integer type.`` \
+       (Second operand expected to be a pointer or an integer.)"
+  | SUB_ALL ->
+      "Violation of constraint 6.5.6#3 Additive operators, Constraints: \
+       ``[B]oth operands [shall] have arithmetic type[, or shall be] pointers \
+       to [...] compatible complete object types[,] or the left operand [shall \
+       be] a pointer to a complete object type and the right operand [shall \
+       have] integer type.``"
+
+  | SHR_INTEGER_FIRST ->
+      "Violation of constraint 6.5.7#2 Bitwise shift operators, Constraints: \
+       ``Each of the operands shall have integer type.`` (Left operand is not \
+       an integer.)"
+  | SHR_INTEGER_SECOND ->
+      "Violation of constraint 6.5.7#2 Bitwise shift operators, Constraints: \
+       ``Each of the operands shall have integer type.`` (Right operand is not \
+       an integer.)"
+
+  | GE_COMPATIBLE ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``[B]oth operands [shall be] pointers to [...] compatible object \
+       types.`` (Operands are pointers to incompatible object types.)"
+  | GE_POINTER_TO_OBJECT_FIRST ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``[B]oth operands [shall be] pointers to [...] compatible object \
+       types.`` (Both operands are pointers but the left operand doesn't point \
+       point to an object.)"
+  | GE_POINTER_TO_OBJECT_SECOND ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``[B]oth operands [shall be] pointers to [...] compatible object \
+       types.`` (Both operands are pointers but the right operand doesn't point \
+       point to an object.)"
+  | GE_REAL ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``[B]oth operands [shall] have real type [...].`` (First operand has \
+       type real but second doesn't.)"
+  | GE_ALL ->
+      "Violation of constraint 6.5.8#2 Relational operators, Constraints: \
+       ``One of the following shall hold: both operands have real type or both \
+       operands are pointers to [...] compatible types.``"
+
+  | NE_POINTERS ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``One of the \
+       following shall hold: [...] both operands are pointers to [...] \
+       compatible types[, or] one operand is a pointer to an object type and \
+       the other is a pointer to [...] void[, or] one operand is a pointer and \
+       the other is a null pointer constant.`` (Both operand are pointers but \
+       none of the other constraints are satisfied.)"
+  | NE_NULL_POINTER_CONSTANT_FIRST ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
+       a pointer and the other is a null pointer constant.`` (Right operand is \
+       a pointer but the left operand isn't a null pointer constant.)"
+  | NE_NULL_POINTER_CONSTANT_SECOND ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``[O]ne operand is \
+       a pointer and the other is a null pointer constant.`` (Left operand is \
+       a pointer but the right operand isn't a null pointer constant.)"
+  | NE_ARITHMETIC ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``[B]oth operands \
+       [shall] have arithmetic type.`` (Left operand has arithmetic type but
+       right operand doesn't.)"
+  | NE_ALL ->
+      "Constraint 6.5.9#2 Equality operators, Constraints: ``One of the \
+       following shall hold: both operands have arithmetic type[, or] both \
+       operands are pointers to [...] compatible types[, or] one operand is a \
+       pointer to an object type and the other is a pointer to [...] void[, \
+       or] one operand is a pointer and the other is a null pointer constant.``"
+
+  | BAND_INTEGER ->
+      "Violation of constraint 6.5.10#2 Bitwise AND operator, Contraints: \
+       ``Each of the operands shall have integer type.``"
+
+  | XOR_INTEGER ->
+      "Violation of constraint 6.5.11#2 Bitwise exclusive OR operator, \
+       Contraints: ``Each of the operands shall have integer type.``"
+
+  | BOR_INTEGER ->
+      "Violation of constraint 6.5.12#2 Bitwise inclusive OR operator, \
+       Contraints: ``Each of the operands shall have integer type.``"
+
+  | AND_SCALAR ->
+      "Violation of constraint 6.5.13#2 Logical AND operator, Constraints: \
+       ``Each of the operands shall have scalar type.``"
+
+  | OR_SCALAR ->
+      "Violation of constraint 6.5.14#2 Logical OR operator, Contraints: \
+       ``Each of the operands shall have scalar type.``"
+
+  | CONDITIONAL_SCALAR_FIRST ->
+      "Violation of constraint 6.5.15#2 Conditional operator, Constraints: \
+       ``The first operand shall have scalar type.``"
+  | CONDITIONAL_NULL_POINTER_CONSTANT_SECOND ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+        (Third operand is a pointer but the second operand is not a null pointer constant.)"
+  | CONDITIONAL_NULL_POINTER_CONSTANT_THIRD ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``[T]he following shall hold for the second and third operands: [...] \
+       one operand is a pointer to an object type and the other is a pointer \
+       to [...] void.`` (Third operand is a pointer but the second operand is \
+       not a null pointer constant.)"
+  | CONDITIONAL_POINTERS ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``One of the following shall hold for the second and third operands: \
+       [Either] both operands have the same structure or union type[, or] both \
+       operands have void type[, or] both operands are pointers to [...] \
+       compatible types[, or] one operand is a pointer and the other is a null \
+       pointer constant[, or] one operand is a pointer to an object type and \
+       the other is a pointer [...] to void.`` (Second and third operands are \
+       pointers but none of the other constraints are satisfied.)"
+  | CONDITIONAL_COMPATIBLE_POINTERS ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``[T]he following shall hold for the second and third operands: [...] \
+       both operands are pointers to compatible types [...].`` (Second and \
+       third operand are pointers to incompatible types.)"
+  | CONDITIONAL_ARITHMETIC_SECOND ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``[T]he following shall hold for the second and third operands: [...] \
+       both operands have arithmetic type [...].`` (Second operand has
+       arithmetic type but the third doesn't.)"
+  | CONDITIONAL_STRUCTURE_OR_UNION ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``[T]he following shall hold for the second and third operands: [...] \
+       both operands have the same structure or union type [...].``"
+  | CONDITIONAL_ALL ->
+      "Violation of constraint 6.5.15#3 Conditional operator, Constraints: \
+       ``One of the following shall hold for the second and third operands: \
+       [Either] both operands have arithmetic type[, or] both operands have \
+       the same structure or union type[, or] both operands have void type[, \
+       or] both operands are pointers to [...] compatible types[, or] one \
+       operand is a pointer and the other is a null pointer constant[, or] one \
+       operand is a pointer to an object type and the other is a pointer [...] \
+       to void.``"
+
+  | ASSIGN_LVALUE ->
+      "Violation of constraint 6.5.16#1 Assignment operators, Constraints: \
+       ``An assignment operator shall have a modifiable lvalue as its left \
+       operand.``"
+  | ASSIGN_STRUCTURE_OR_UNION ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand has [...] structure or union type compatible with \
+       the type of the right [...]``"
+  | ASSIGN_VOID_POINTER_QUALIFIERS ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand [shall have] [...] pointer type, and [...] one \
+       operand [shall be] a pointer to an object type, and the other [shall be]\
+       a pointer to [...] void, and the type pointed to by the left has all \
+       the qualifiers of type pointed to by the right [...].`` (Left operand \
+       doesn't have all the qualifiers of the right operand.)"
+  | ASSIGN_VOID_POINTER_FIRST ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand [shall have] [...] pointer type, and [...] one \
+       operand [shall be] a pointer to an object type, and the other [shall \
+       be] a pointer to [...] void [...].`` (Left operand is a void pointer \
+       but the right operand is not a pointer to an object type.)"
+  | ASSIGN_VOID_POINTER_SECOND ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand [shall have] [...] pointer type, and [...] one \
+       operand [shall be] a pointer to an object type, and the other [shall \
+       be] a pointer to [...] void [...].`` (Right operand is a void pointer \
+       but the left operand is not a pointer to an object type.)"
+  | ASSIGN_POINTER_QUALIFIERS ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand [shall have] [...] pointer type and [...] both \
+       operands [shall be] pointers to [...] compatible types, and the type \
+       pointed to by the left [shall have] all the qualifiers of the type \
+       pointed to by the right [...].`` (Left operand doesn't  have all the \
+       qualifiers of the right operand.)"
+  | ASSIGN_COMPATIBLE_POINTERS ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand [shall have] [...] pointer type and [...] both \
+       operands [shall be] pointers to [...] compatible types [...].`` \
+       (Operands are pointers to incompatible types.)"
+  | ASSIGN_POINTERS ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``One of the following shall hold: [...] both operands are pointer to \
+       [...] compatible types, and the type pointed to by the left has all the \
+       qualifiers of the type pointed to by the right[, or] the left operand \
+       has [...] pointer type, and [...] one operand is a pointer to an object \
+       type, and the other is a pointer to [...] void, and the type pointed to \
+       by the left has all the qualifiers of the type pointed to by the \
+       right[, or] the left operand is [a] [...] pointer, and the right is a \
+       null pointer constant.`` (Both operands are pointer but none of the \
+      others constraints is satisfied.)"
+  | ASSIGN_NULL_POINTER_CONSTANT ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``[T]he left operand is [a] [...] pointer, and the right is a null \
+       pointer constant.`` (Left operand is a point but right operand is not \
+       a pointer nor a null pointer constant.)"
+  | ASSIGN_ALL ->
+      "Violation of constraint 6.5.16.1#1 Simple assignment, Constraints: \
+       ``One of the following shall hold: the left operand has [...] \
+       arithmetic type, and the right has arithmetic type[, or] the left \
+       operand has [...] structure or union type compatible with the type of \
+       the right[, or] the left operand has [...] pointer type, and [...] both \
+       operands are pointer to [...] compatible types, and the type pointed to \
+       by the left has all the qualifiers of the type pointed to by the \
+       right[, or] the left operand has [...] pointer type, and [...] one \
+       operand is a pointer to an object type, and the other is a pointer to \
+       [...] void, and the type pointed to by the left has all the qualifiers \
+       of the type pointed to by the right[, or] the left operand is [a] [...] \
+       pointer, and the right is a null pointer constant[, or] the left \
+       operand has type [...] _Bool, and the right is a pointer.``"
+
+  | ASSIGN_SUB_POINTER ->
+      "Violation of constraint 6.5.16.2#1 Compound assignment, Constraints: \
+       ``[T]he left operand shall be [a] [...] pointer to a complete object \
+       type, and the right shall have integer type [...].`` (Left operand is a \
+       pointer to a complete object but the right operand doesn't have integer \
+       type.)"
+  | ASSIGN_SUB_ARITHMETIC ->
+      "Violation of constraint 6.5.16.2#1 Compound assignment, Constraints: \
+       ``[T]he left operand shall have [...] arithmetic type, and the right \
+       shall have arithmetic type.`` (Left operand has arithmetic type but the \
+       right operand doesn't.)"
+  | ASSIGN_SUB_ALL ->
+      "Violation of constraint 6.5.16.2#1 Compound assignment, Constraints: \
+       ``For the operators += and -= only, either the left operand shall be \
+       [a] [...] pointer to a complete object type, and the right shall have \
+       integer type[, or] the left operand shall have [...] arithmetic type \
+       and the right shall have arithmetic type.``"
+
+  | ASSIGN_OTHER_ARITHMETIC ->
+      "Violation of constraint 6.5.16.2#2 Compound assignment, Constraints: \
+       ``[T]he left operand shall have [...] arithmetic type [...].``"
+
+  | IF_SCALAR ->
+      "Violation of constraint 6.8.4.1 The if statement, Constraints: ``The \
+       controlling expression of an if statement shall have scalar type.``"
+
+  | WHILE_SCALAR ->
+      "Violation of constraint 6.8.4.1 Iteration statements, Constraints: \
+       ``The controlling expression of an iteration statement shall have \
+       scalar type.``"
+
+  | DO_SCALAR ->
+      "Violation of constraint 6.8.4.1 Iteration statements, Constraints: \
+       ``The controlling expression of an iteration statement shall have \
+       scalar type.``"
+
+  | LVALUE_UNDEFINED ->
+      "Undefined behaviour according to 6.3.2.1#2 Lvalues, arrays, and \
+       function designators: ``If the value has an incomplete type and does \
+       not have array type, the behaviour is undefined. [...]``"
+
+  | UNSUPPORTED msg -> msg
+  end
