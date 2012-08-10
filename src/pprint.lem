@@ -2,113 +2,113 @@ type t = Ocaml.Pprint.t
 
 module Unicode = struct
   val null : t
-  sub [ocaml] null = Pprint.Unicode.null
+  let inline {ocaml} null = Ocaml.Pprint.Unicode.null
   val le : t
-  sub [ocaml] le = Pprint.Unicode.le
+  let inline {ocaml} le = Ocaml.Pprint.Unicode.le
   val ge : t
-  sub [ocaml] ge = Pprint.Unicode.ge
+  let inline {ocaml} ge = Ocaml.Pprint.Unicode.ge
   val disj : t
-  sub [ocaml] disj = Pprint.Unicode.disj
+  let inline {ocaml} disj = Ocaml.Pprint.Unicode.disj
   val conj : t
-  sub [ocaml] conj = Pprint.Unicode.conj
+  let inline {ocaml} conj = Ocaml.Pprint.Unicode.conj
   val compl : t
-  sub [ocaml] compl = Pprint.Unicode.compl
+  let inline {ocaml} compl = Ocaml.Pprint.Unicode.compl
   val implies : t
-  sub [ocaml] implies = Pprint.Unicode.implies
+  let inline {ocaml} implies = Ocaml.Pprint.Unicode.implies
   val mapsto : t
-  sub [ocaml] mapsto = Pprint.Unicode.mapsto
+  let inline {ocaml} mapsto = Ocaml.Pprint.Unicode.mapsto
 end
 
 module Operators = struct
   val (^^) : t -> t -> t
-  sub [ocaml] (^^) = Pprint.Operators.(^^)
+  let inline {ocaml} (^^) = Ocaml.Pprint.Operators.(^^)
   val (^^^) : t -> t -> t
-  sub [ocaml] (^^^) = Pprint.Operators.(^^^)
+  let inline {ocaml} (^^^) = Ocaml.Pprint.Operators.(^^^)
   val (^/^) : t -> t -> t
-  sub [ocaml] (^/^) = Pprint.Operators.(^/^)
+  let inline {ocaml} (^/^) = Ocaml.Pprint.Operators.(^/^)
   val !^ : string -> t
-  sub [ocaml] !^ = Pprint.text
+  let inline {ocaml} !^ = Ocaml.Pprint.text
 end
 
 val lbrace : t
-sub [ocaml] lbrace = Pprint.lbrace
+let inline {ocaml} lbrace = Ocaml.Pprint.lbrace
 val rbrace : t
-sub [ocaml] rbrace = Pprint.rbrace
+let inline {ocaml} rbrace = Ocaml.Pprint.rbrace
 val comma : t
-sub [ocaml] comma = Pprint.comma
+let inline {ocaml} comma = Ocaml.Pprint.comma
 val star : t
-sub [ocaml] star = Pprint.star
+let inline {ocaml} star = Ocaml.Pprint.star
 val plus : t
-sub [ocaml] plus = Pprint.plus
+let inline {ocaml} plus = Ocaml.Pprint.plus
 val minus : t
-sub [ocaml] minus = Pprint.minus
+let inline {ocaml} minus = Ocaml.Pprint.minus
 val percent : t
-sub [ocaml] percent = Pprint.percent
+let inline {ocaml} percent = Ocaml.Pprint.percent
 val slash : t
-sub [ocaml] slash = Pprint.slash
+let inline {ocaml} slash = Ocaml.Pprint.slash
 val caret : t
-sub [ocaml] caret = Pprint.caret
+let inline {ocaml} caret = Ocaml.Pprint.caret
 val equals : t
-sub [ocaml] equals = Pprint.equals
+let inline {ocaml} equals = Ocaml.Pprint.equals
 val langle : t
-sub [ocaml] langle = Pprint.langle
+let inline {ocaml} langle = Ocaml.Pprint.langle
 val rangle : t
-sub [ocaml] rangle = Pprint.rangle
+let inline {ocaml} rangle = Ocaml.Pprint.rangle
 val ampersand : t
-sub [ocaml] ampersand = Pprint.ampersand
+let inline {ocaml} ampersand = Ocaml.Pprint.ampersand
 val tilde : t
-sub [ocaml] tilde = Pprint.tilde
+let inline {ocaml} tilde = Ocaml.Pprint.tilde
 val bar : t
-sub [ocaml] bar = Pprint.bar
+let inline {ocaml} bar = Ocaml.Pprint.bar
 val bang : t
-sub [ocaml] bang = Pprint.bang
+let inline {ocaml} bang = Ocaml.Pprint.bang
 val space : t
-sub [ocaml] space = Pprint.space
+let inline {ocaml} space = Ocaml.Pprint.space
 val qmark : t
-sub [ocaml] qmark = Pprint.qmark
+let inline {ocaml} qmark = Ocaml.Pprint.qmark
 val colon : t
-sub [ocaml] colon = Pprint.colon
+let inline {ocaml} colon = Ocaml.Pprint.colon
 val semi : t
-sub [ocaml] semi = Pprint.semi
+let inline {ocaml} semi = Ocaml.Pprint.semi
 val underscore : t
-sub [ocaml] underscore = Pprint.underscore
+let inline {ocaml} underscore = Ocaml.Pprint.underscore
 
 val empty : t
-sub [ocaml] empty = Pprint.empty
+let inline {ocaml} empty = Ocaml.Pprint.empty
 
 val text : string -> t
-sub [ocaml] text = Pprint.text
+let inline {ocaml} text = Ocaml.Pprint.text
 
 val nest : num -> t -> t
-sub [ocaml] nest = Pprint.nest
+let inline {ocaml} nest = Ocaml.Pprint.nest
 val group : t -> t
-sub [ocaml] group = Pprint.group
+let inline {ocaml} group = Ocaml.Pprint.group
 
 val parens : t -> t
-sub [ocaml] parens = Pprint.parens
+let inline {ocaml} parens = Ocaml.Pprint.parens
 val brackets : t -> t
-sub [ocaml] brackets = Pprint.brackets
+let inline {ocaml} brackets = Ocaml.Pprint.brackets
 val braces : t -> t
-sub [ocaml] braces = Pprint.braces
+let inline {ocaml} braces = Ocaml.Pprint.braces
 val dquotes : t -> t
-sub [ocaml] dquotes = Pprint.dquotes
+let inline {ocaml} dquotes = Ocaml.Pprint.dquotes
 
 (*
 val optional : forall 'a. ('a -> t) -> 'a option -> t
-sub [ocaml] optional = Pprint.optional
+let inline {ocaml} optional = Ocaml.Pprint.optional
 *)
 val comma_list : forall 'a. ('a -> t) -> 'a list -> t
-sub [ocaml] comma_list = Pprint.comma_list
+let inline {ocaml} comma_list = Ocaml.Pprint.comma_list
 val sepmap : forall 'a. t -> ('a -> t) -> 'a list -> t
-sub [ocaml] sepmap = Pprint.sepmap
+let inline {ocaml} sepmap = Ocaml.Pprint.sepmap
 val sep0map: forall 'a. t -> ('a -> t) -> 'a list -> t
-sub [ocaml] sep0map = Pprint.sepmap
+let inline {ocaml} sep0map = Ocaml.Pprint.sepmap
 val fold : forall 'a. (t -> t -> t) -> t list -> t
-sub [ocaml] fold = Pprint.fold
+let inline {ocaml} fold = Ocaml.Pprint.fold
 
 val break0 : t
-sub [ocaml] break0 = Pprint.break0
+let inline {ocaml} break0 = Ocaml.Pprint.break0
 val break1 : t
-sub [ocaml] break1 = Pprint.break1
+let inline {ocaml} break1 = Ocaml.Pprint.break1
 val group2 : t -> t
-sub [ocaml] group2 = Pprint.group2
+let inline {ocaml} group2 = Ocaml.Pprint.group2

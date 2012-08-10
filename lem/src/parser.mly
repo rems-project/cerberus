@@ -20,6 +20,7 @@
    TODO: BquoteX
 
    *)
+let r = Ulib.Text.of_latin1
 
 open Ast
 
@@ -50,22 +51,22 @@ let pat_to_letfun p =
         raise (Parse_error_locn(l,"Bad pattern for let binding of a function"))
 
 let get_target (s1,n) =
-  if BatRope.compare n r"hol" = 0 then
+  if Ulib.Text.compare n (r"hol") = 0 then
     Target_hol(s1)
-  else if BatRope.compare n r"ocaml" = 0 then
+  else if Ulib.Text.compare n (r"ocaml") = 0 then
     Target_ocaml(s1)
-  else if BatRope.compare n r"coq" = 0 then
+  else if Ulib.Text.compare n (r"coq") = 0 then
     Target_coq(s1)
-  else if BatRope.compare n r"isabelle" = 0 then
+  else if Ulib.Text.compare n (r"isabelle") = 0 then
     Target_isa(s1)
-  else if BatRope.compare n r"tex" = 0 then
+  else if Ulib.Text.compare n (r"tex") = 0 then
     Target_tex(s1)
   else
-    raise (Parse_error_locn(loc (),"Expected substitution target in {hol; isabelle; ocaml; coq; tex}, given " ^ BatRope.to_string n))
+    raise (Parse_error_locn(loc (),"Expected substitution target in {hol; isabelle; ocaml; coq; tex}, given " ^ Ulib.Text.to_string n))
 
 let build_fexp (Expr_l(e,_)) l =
   match e with
-    | Infix(Expr_l(Ident(i), l'),SymX_l((stx,op),l''),e2) when BatRope.compare op r"=" = 0 ->
+    | Infix(Expr_l(Ident(i), l'),SymX_l((stx,op),l''),e2) when Ulib.Text.compare op (r"=") = 0 ->
         Fexp(i, stx, e2, l)
     | _ ->
         raise (Parse_error_locn(l,"Invalid record field assignment (should be id = exp)"))
@@ -83,14 +84,14 @@ let mod_cap n =
 %token <Ast.terminal> Semi Lsquare Rsquare Fun_ Function_ Bar With Match Let_ And
 %token <Ast.terminal> In Of Rec Type Module_ Struct End Open_ SemiSemi Eof
 %token <Ast.terminal> True False Begin_ If_ Then Else Val
-%token <Ast.terminal * BatRope.t> AmpAmp BarBar ColonColon Star Eq
-%token <Ast.terminal * BatRope.t> X Tyvar BquoteX
-%token <Ast.terminal * BatRope.t> StarstarX StarX PlusX AtX EqualX 
+%token <Ast.terminal * Ulib.Text.t> AmpAmp BarBar ColonColon Star Eq
+%token <Ast.terminal * Ulib.Text.t> X Tyvar BquoteX
+%token <Ast.terminal * Ulib.Text.t> StarstarX StarX PlusX AtX EqualX 
 %token <Ast.terminal * int> Num
 %token <Ast.terminal * string> String
 
-%token <Ast.terminal> Indreln Forall EqEqGt Sub LtBar BarGt Exists EqGt
-%token <Ast.terminal * BatRope.t> IN MEM MinusMinusGt
+%token <Ast.terminal> Indreln Forall EqEqGt Inline LtBar BarGt Exists EqGt
+%token <Ast.terminal * Ulib.Text.t> IN MEM MinusMinusGt
 %token <Ast.terminal> Class_ Inst
 
 %start file
@@ -675,6 +676,8 @@ val_def:
     { Let_def($1,$2,$3) }
   | Let_ Rec targets_opt funcls
     { Let_rec($1,$2,$3,$4) }
+  | Let_ Inline targets_opt letbind
+    { Let_inline($1,$2,$3,$4) }
 
 val_defs:
   | val_def
@@ -697,8 +700,6 @@ def:
     { dloc (Indreln($1,$2,$3)) }
   | val_spec
     { dloc (Spec_def($1)) }
-  | Sub Lsquare X Rsquare x xs Eq exp
-    { dloc (Subst($1,$2, get_target $3, $4,$5,$6,fst $7,$8)) }
   | Class_ Lparen x tyvar Rparen class_val_specs End
     { dloc (Class($1,$2,$3,$4,$5,$6,$7)) }
   | Inst instschm val_defs End

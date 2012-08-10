@@ -10,6 +10,7 @@ val remove_indrelns : def_macro
 val remove_opens : def_macro
 val remove_classes : def_macro
 val instance_to_module : def_macro
+val type_annotate_definitions : def_macro
 
 val prune_target_bindings : Ast.target -> def list -> def list
 

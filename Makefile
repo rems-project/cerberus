@@ -47,6 +47,7 @@ ail_aux.lem \
 ail_rewrite.lem \
 core.lem \
 errors.lem \
+core_simpl.lem \
 core_typing.lem \
 core_run.lem \
 types.lem \
@@ -145,10 +146,10 @@ ocaml: lem_ocaml
 	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cparser.mly
-# Open batteries to for List.take, List.drop, list.split_at.
-	sed -i"" -e 's/List\.take/BatList.take/' $(OCAML_BUILD_DIR)/braun.ml
-	sed -i"" -e 's/List\.drop/BatList.drop/' $(OCAML_BUILD_DIR)/braun.ml
-	sed -i"" -e 's/List\.split_at/BatList.split_at/' $(OCAML_BUILD_DIR)/braun.ml
+## Open batteries to for List.take, List.drop, list.split_at.
+#	sed -i"" -e 's/List\.take/BatList.take/' $(OCAML_BUILD_DIR)/braun.ml
+#	sed -i"" -e 's/List\.drop/BatList.drop/' $(OCAML_BUILD_DIR)/braun.ml
+#	sed -i"" -e 's/List\.split_at/BatList.split_at/' $(OCAML_BUILD_DIR)/braun.ml
 # Fixing up OCaml syntax.
 	sed -i"" -e 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
 	sed -i"" -e 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
@@ -196,7 +197,7 @@ unpatch_lem:
 	make -C patches unpatch_lem
 
 clean:
-	rm csem
-	rm -R $(OCAML_BUILD_DIR)
-	rm -R $(TEX_BUILD_DIR)
-	rm -R $(HOL_BUILD_DIR)
+	rm -f csem
+	rm -fR $(OCAML_BUILD_DIR)
+	rm -fR $(TEX_BUILD_DIR)
+	rm -fR $(HOL_BUILD_DIR)

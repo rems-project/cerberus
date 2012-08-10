@@ -33,6 +33,3 @@ val sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
 val stable_sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
 val fast_sort : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list
 val merge : forall 'a.  ('a -> 'a -> int) -> 'a list -> 'a list -> 'a list
-val take : forall 'a. num -> 'a list -> 'a list
-val drop : forall 'a. num -> 'a list -> 'a list
-val split_at : forall 'a. num -> 'a list -> ('a list * 'a list)

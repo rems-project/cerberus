@@ -57,8 +57,8 @@ let is_infix = function
 let not_infix = (0,Left)
 
 let oper_char = "[-!$%&*+./:<=>?@^|~]"
-let star_star = regexp (Printf.sprintf "^[*][*]%s*$" oper_char)
-let star = regexp (Printf.sprintf "^\\([*/%%]%s*\\|inter\\)$" oper_char)
+let star_star = regexp (Printf.sprintf "^[*][*]%s*\\|lsl\\|lsr\\|asr$" oper_char)
+let star = regexp (Printf.sprintf "^\\([*/%%]%s*\\|inter\\|mod\\|land\\|lor\\|lxor\\)$" oper_char)
 let plus = regexp (Printf.sprintf "^\\([+-]%s*\\|union\\)$" oper_char)
 let cons = regexp "^::$"
 let at = regexp (Printf.sprintf "^[@^]%s*$" oper_char)
@@ -95,7 +95,7 @@ let get_prec s =
     (0,Left)
 
 
-let star_ocaml = regexp (Printf.sprintf "^\\([*/%%]%s*\\)$" oper_char)
+let star_ocaml = regexp (Printf.sprintf "^\\([*/%%]%s*\\|mod\\|land\\|lor\\|lxor\\)$" oper_char)
 let plus_ocaml = regexp (Printf.sprintf "^\\([+-]%s*\\)$" oper_char)
 let eq_ocaml = regexp (Printf.sprintf "^\\([=<>|&$]%s*\\)$" oper_char)
 
@@ -145,23 +145,23 @@ Application and '
  *)
   if List.mem s ["O"; "o"] then
     (1,Right)
-  else if List.mem s ["@@"; "**"; "EXP"] then
+  else if List.mem s ["@@"; "**"; "EXP"; "int_exp"] then
     (2,Right)
   else if List.mem s ["#<<"; "#>>"; ">>>"; ">>"; "<<"] then
     (3,Left)
-  else if List.mem s ["MOD"] then
+  else if List.mem s ["MOD"; "%"] then
     (4,Left)
   else if List.mem s ["*,"] then
     (5,Right)
-  else if List.mem s ["/"; "//"; "\\"; "|+"; "CROSS"; "INTER"; "DIV"; "*"; "RINTER"] then
+  else if List.mem s ["tint_mul"; "quot"; "/"; "//"; "\\"; "|+"; "CROSS"; "INTER"; "DIV"; "*"; "RINTER"] then
     (6,Left)
-  else if List.mem s ["fcp_index"; "UNION"; "f_o"; "o_f"; "f_o_f"; "|++"; "DELETE"; "DIFF"; "-"; "+"; "RUNION"] then
+  else if List.mem s ["int_sub"; "tint_add"; "fcp_index"; "UNION"; "f_o"; "o_f"; "f_o_f"; "|++"; "DELETE"; "DIFF"; "-"; "+"; "RUNION"] then
     (7,Left)
   else if List.mem s ["###"; "===>"; "-->"; "::"; "INSERT"; "LEX"; "##"] then
     (8,Right)
   else if List.mem s ["+++"; "++"] then
     (9,Left)
-  else if List.mem s [">=+"; "<+"; ">+"; "<=+"; "=="; "SUBMAP"; "<<="; "PSUBSET"; "SUBSET"; ">="; "<="; ">"; "<"; "RSUBSET"; "<>"] then
+  else if List.mem s ["int_divides"; ">=+"; "<+"; ">+"; "<=+"; "=="; "SUBMAP"; "<<="; "PSUBSET"; "SUBSET"; ">="; "<="; ">"; "<"; "RSUBSET"; "<>"] then
     (10,Nonassoc)
   else if List.mem s ["equiv_on"; "NOTIN"; "IN"] then
     (11,Nonassoc)

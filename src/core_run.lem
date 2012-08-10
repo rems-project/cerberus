@@ -149,7 +149,7 @@ module Effect = struct
   
   val get_nodes: (num list) t
   let get_nodes =
-    fun (n,env) -> [(List.map fst (Pmap.bindings env.nodes), (n,env))]
+    fun (n,env) -> [(List.map fst (Ocaml.Pmap.bindings env.nodes), (n,env))]
   
   let get_edges =
     fun (n,env) -> [(env.edges, (n,env))]
@@ -309,13 +309,6 @@ let rec exec e =
   | Kstore ty e1 e2 -> E.return ()
   | Kload ty e -> E.return ()
   | Ksame a1 a2 -> E.return ()
-  | Kmax ty -> E.return ()
-  | Kmin ty -> E.return ()
-  | Ksizeof ty -> E.return ()
-  | Kalignof ty -> E.return ()
-  | Koffsetof ty -> E.return ()
-  | Kshift a e -> E.return ()
-  | Kconv ty1 ty2 a -> E.return ()
   end
 
 (* move to Exception *)
@@ -336,4 +329,4 @@ let run file =
   foldM_exception
     (fun acc (_, def) -> Exception.return $ (process_file def) @ acc)
     []
-    (Pmap.bindings file.fun_map)
+    (Ocaml.Pmap.bindings file.fun_map)

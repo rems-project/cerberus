@@ -184,64 +184,64 @@ let rec desugar_exp (e, l) =
   end)
 
 and desugar_specifier specifiers =
-  let mset = Multiset.from_list in
-  let smap =
+  let mk_mset = Multiset.from_list in
+  let desugar_map =
     List.fold_left
       (fun m (x, y) -> Pmap.add x y m)
-(* TODO compare
-      (Pmap.create Multiset.compare)
-*)
-      Pmap.empty
-      ( (* [(mset [C.VOID], A.VOID)] TODO: (K) Does this break anything ?
-        @ *) [(mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
-        @ [(mset [C.UNSIGNED; C.CHAR], A.INTEGER (A.UNSIGNED A.ICHAR))]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.SHORT)))
+      (Ocaml.Pmap.empty Multiset.compare_int)
+      (   [(mk_mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
+        @ [(mk_mset [C.UNSIGNED; C.CHAR], A.INTEGER (A.UNSIGNED A.ICHAR))]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.SHORT)))
           [ [C.SHORT];
             [C.SIGNED; C.SHORT];
             [C.SHORT; C.INT];
             [C.SIGNED; C.SHORT; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.UNSIGNED A.SHORT)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.SHORT)))
           [ [C.UNSIGNED; C.SHORT];
             [C.UNSIGNED; C.SHORT; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.INT)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.INT)))
           [ [C.INT];
             [C.SIGNED];
             [C.SIGNED; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.UNSIGNED A.INT)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.INT)))
           [ [C.UNSIGNED];
             [C.UNSIGNED; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.LONG)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG)))
           [ [C.LONG];
             [C.SIGNED; C.LONG];
             [C.LONG; C.INT];
             [C.SIGNED; C.LONG; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.UNSIGNED A.LONG)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG)))
           [ [C.UNSIGNED; C.LONG];
             [C.UNSIGNED; C.LONG; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.SIGNED A.LONG_LONG)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG_LONG)))
           [ [C.LONG; C.LONG];
             [C.SIGNED; C.LONG; C.LONG];
             [C.LONG; C.LONG; C.INT];
             [C.SIGNED; C.LONG; C.LONG; C.INT]
           ]
-        @ List.map (fun s -> (mset s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
           [ [C.UNSIGNED; C.LONG; C.LONG];
             [C.UNSIGNED; C.LONG; C.LONG; C.INT]
           ]
-        @ [(mset [C.BOOL], A.INTEGER A.BOOL)]
+        @ [(mk_mset [C.BOOL], A.INTEGER A.BOOL)]
+        
       ) in
-  E.of_option (Errors.OTHER "") (Map_.find specifiers smap)
+  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.") (Map_.find specifiers desugar_map)
+
 
 and desugar_type t =
   let ft = desugar_type in
   match t with
-  | C.BASE qs ss -> A.BASIC qs <$> desugar_specifier ss
+  | C.BASE qs ss -> if Ocaml.Pmap.equal Ocaml.Pervasives.(=) (Multiset.from_list [C.VOID]) ss
+                      then E.return (A.VOID qs)
+                      else A.BASIC qs <$> desugar_specifier ss
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
@@ -333,11 +333,10 @@ and desugar_stmt st (s, l) =
   (* (§6.8.5) Iteration statements ****************************************** *)
   | C.WHILE  e s -> A.WHILE  <$> fe e <*> fs s
   
-  | C.DO     e s ->
-      fs s >>= fun s ->
+  | C.DO     e s -> A.DO     <$> fe e <*> fs s
+(*      fs s >>= fun s ->
       fe e >>= fun e ->
-      E.return (A.BLOCK [] [s; Pair.make l (A.WHILE e s)])
-   (*A.DO     <$> fe e <*> fs s*)
+      E.return (A.BLOCK [] [s; Pair.make l (A.WHILE e s)]) *) (* NOTE: this translation is wrong because is duplicates potential labels *)
   
   (* We transform all for statements into while statements. *)
   | C.FOR_EXP e1_opt e2_opt e3_opt s ->
@@ -429,7 +428,8 @@ and desugar_stmt st (s, l) =
 
 
 
-
+  | C.PAR ss -> E.mapM fs ss>>= fun d_ss ->
+                E.return (A.PAR d_ss)
 
 
 

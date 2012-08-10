@@ -3,7 +3,8 @@ open Parser
 module M = Map.Make(String)
 exception LexError of char * Lexing.position
 
-let (^^^) = BatRope.(^^^)
+let (^^^) = Ulib.Text.(^^^)
+let r = Ulib.Text.of_latin1
 
 let kw_table = 
   List.fold_left
@@ -36,7 +37,7 @@ let kw_table =
      ("indreln",                 (fun x -> Indreln(x)));
      ("forall",                  (fun x -> Forall(x)));
      ("exist",                   (fun x -> Exists(x)));
-     ("sub",                     (fun x -> Sub(x)));
+     ("inline",                  (fun x -> Inline(x)));
      ("IN",                      (fun x -> IN(x,r"IN")));
      ("MEM",                     (fun x -> MEM(x,r"MEM")))]
 
@@ -56,7 +57,7 @@ let com_body = com_help*"*"*
 
 rule token skips = parse
   | ws as i
-    { token (Ast.Ws(BatRope.of_latin1 i)::skips) lexbuf }
+    { token (Ast.Ws(Ulib.Text.of_latin1 i)::skips) lexbuf }
   | "\n"
     { Lexing.new_line lexbuf;
       token (Ast.Nl::skips) lexbuf } 
@@ -78,23 +79,25 @@ rule token skips = parse
   | "|"                                 { (Bar(Some(skips))) }
   | "->"                                { (Arrow(Some(skips))) }
   | ";;"                                { (SemiSemi(Some(skips))) }
-  | "::" as i                           { (ColonColon(Some(skips),BatRope.of_latin1 i)) }
-  | "&&" as i                           { (AmpAmp(Some(skips),BatRope.of_latin1 i)) }
-  | "||" as i                           { (BarBar(Some(skips),BatRope.of_latin1 i)) }
+  | "::" as i                           { (ColonColon(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "&&" as i                           { (AmpAmp(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "||" as i                           { (BarBar(Some(skips),Ulib.Text.of_latin1 i)) }
   | "=>"                                { (EqGt(Some(skips))) }
 
   | "==>"                               { (EqEqGt(Some(skips))) }
-  | "-->" as i                          { (MinusMinusGt(Some(skips),BatRope.of_latin1 i)) }
+  | "-->" as i                          { (MinusMinusGt(Some(skips),Ulib.Text.of_latin1 i)) }
   | "<|"                                { (LtBar(Some(skips))) }
   | "|>"                                { (BarGt(Some(skips))) }
 
-  | "union" as i                        { (PlusX(Some(skips),BatRope.of_latin1 i)) }
-  | "inter" as i                        { (StarX(Some(skips),BatRope.of_latin1 i)) }
-  | "subset" | "\\" as i                { (EqualX(Some(skips),BatRope.of_latin1 i)) }
+  | "union" as i                        { (PlusX(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "inter" as i                        { (StarX(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "subset" | "\\" as i                { (EqualX(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "lsl" | "lsr" | "asr" as i          { (StarstarX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | "mod" | "land" | "lor" | "lxor" as i  { (StarX(Some(skips), Ulib.Text.of_latin1 i)) }
 
   (* TODO: Add checking that keywords aren't used in these *)
   (* TODO: make union, inter, subset appear as oper_char+, or make them not infix *)
-  | "`" (startident ident* as i) "`"    { (BquoteX(Some(skips),BatRope.of_latin1 i)) }
+  | "`" (startident ident* as i) "`"    { (BquoteX(Some(skips),Ulib.Text.of_latin1 i)) }
 
   | "(*"                           
     { token (Ast.Com(Ast.Comment(comment lexbuf))::skips) lexbuf }
@@ -102,19 +105,19 @@ rule token skips = parse
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) (Some(skips))
                                           else
-                                            X(Some(skips), BatRope.of_latin1 i) }
+                                            X(Some(skips), Ulib.Text.of_latin1 i) }
 
-  | "\\\\" ([^' ' '\t' '\n']+ as i)     { (X(Some(skips), BatRope.of_latin1 i)) } 
+  | "\\\\" ([^' ' '\t' '\n']+ as i)     { (X(Some(skips), Ulib.Text.of_latin1 i)) } 
 
-  | "'" (startident ident* as i)        { (Tyvar(Some(skips), BatRope.of_latin1 i)) }
-  | ['!''?''~'] oper_char* as i         { (X(Some(skips), BatRope.of_latin1 i)) }
+  | "'" (startident ident* as i)        { (Tyvar(Some(skips), Ulib.Text.of_latin1 i)) }
+  | ['!''?''~'] oper_char* as i         { (X(Some(skips), Ulib.Text.of_latin1 i)) }
 
-  | "**" oper_char* as i                { (StarstarX(Some(skips), BatRope.of_latin1 i)) }
-  | ['/''%'] oper_char* as i         { (StarX(Some(skips), BatRope.of_latin1 i)) }
-  | "*" oper_char+ as i         { (StarX(Some(skips), BatRope.of_latin1 i)) }
-  | ['+''-'] oper_char* as i            { (PlusX(Some(skips), BatRope.of_latin1 i)) }
-  | ['@''^'] oper_char* as i            { (AtX(Some(skips), BatRope.of_latin1 i)) }
-  | ['=''<''>''|''&''$'] oper_char* as i { (EqualX(Some(skips), BatRope.of_latin1 i)) }
+  | "**" oper_char* as i                { (StarstarX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | ['/''%'] oper_char* as i         { (StarX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | "*" oper_char+ as i         { (StarX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | ['+''-'] oper_char* as i            { (PlusX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | ['@''^'] oper_char* as i            { (AtX(Some(skips), Ulib.Text.of_latin1 i)) }
+  | ['=''<''>''|''&''$'] oper_char* as i { (EqualX(Some(skips), Ulib.Text.of_latin1 i)) }
   | digit+ as i                         { (Num(Some(skips),int_of_string i)) }
   | '"'                                 { (String(Some(skips), string lexbuf)) }
   | eof                                 { (Eof(Some(skips))) }
@@ -124,10 +127,10 @@ rule token skips = parse
 and comment = parse
   | (com_body "("* as i) "(*"           { let c1 = comment lexbuf in
                                           let c2 = comment lexbuf in
-                                            Ast.Chars(BatRope.of_latin1 i) :: Ast.Comment(c1) :: c2}
-  | (com_body as i) "*)"                { [Ast.Chars(BatRope.of_latin1 i)] }
+                                            Ast.Chars(Ulib.Text.of_latin1 i) :: Ast.Comment(c1) :: c2}
+  | (com_body as i) "*)"                { [Ast.Chars(Ulib.Text.of_latin1 i)] }
   | com_body "("* "\n" as i             { Lexing.new_line lexbuf; 
-                                          (Ast.Chars(BatRope.of_latin1 i) :: comment lexbuf) }
+                                          (Ast.Chars(Ulib.Text.of_latin1 i) :: comment lexbuf) }
   | _  as c                             { raise (LexError(c, Lexing.lexeme_start_p lexbuf)) }
   | eof                                 { [] }
 

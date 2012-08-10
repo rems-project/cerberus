@@ -15,7 +15,3 @@ let (-) x y =
 let ( * ) = BI.mult_big_int
 let (/) = BI.div_big_int
 let string_of_num = BI.string_of_big_int
-let compare_num x y = BI.big_int_of_int (compare x y)
-let (%) n m = BI.mod_big_int n m
-
-let ( ** ) = BI.power_big_int_positive_big_int

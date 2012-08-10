@@ -294,6 +294,7 @@ let rec fix_infix_and_parens get_prec defs =
                      (nl, List.map (fun p -> fix_pat get_prec p) ps,
                       topt,s3,fix_exp get_prec e))
                   clauses)
+    | let_inline -> let_inline
   in
   let rec fix_def = function
     | Val_def(d,tvs) -> Val_def(fix_val_def d,tvs)

@@ -25,3 +25,25 @@ let rec zip_with3 f l1 l2 l3 =
     | (x::xs, y::ys, z::zs) -> f x y z :: zip_with3 f xs ys zs
     | _                     -> []
   end
+
+
+(* TODO: redo efficient *)
+let rec take n l =
+  if n <= 0 then
+    []
+  else match l with
+    | []    -> []
+    | x::xs -> x :: take (n-1) xs
+  end
+
+let rec drop n l =
+  if n <= 0 then
+    l
+  else match l with
+    | []    -> []
+    | _::xs -> drop (n-1) xs
+end
+
+(* AHEM *)
+let rec split_at k l =
+  (take k l, drop k l)

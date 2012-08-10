@@ -64,21 +64,33 @@ let pp ppf p =
     | Path_unit ->
         fprintf ppf "unit"
 
+let r = Ulib.Text.of_latin1
+
 let flat = function
   | [] -> r""
-  | r2 -> BatRope.concat r"" r2
+  | r2 -> Ulib.Text.concat (r"") r2
 
-let (^) = BatRope.(^^^)
+let (^) = Ulib.Text.(^^^)
 
 let to_ident p =  match p with 
-    | Path_def([],v) -> Ident.mk_ident [] (Name.add_lskip v)
-    | Path_def(vs,v) -> Ident.mk_ident (List.map Name.add_lskip vs) (Name.add_lskip v)
-    | Path_list -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"list"))
-    | Path_bool -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"bool"))
-    | Path_num -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"num"))
-    | Path_set -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"set"))
-    | Path_string -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"string"))
-    | Path_unit -> Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"unit"))
+    | Path_def([],v) -> Ident.mk_ident [] (Name.add_lskip v) Ast.Unknown
+    | Path_def(vs,v) -> 
+        Ident.mk_ident 
+          (List.map (fun v -> (Name.add_lskip v, None)) vs) 
+          (Name.add_lskip v)
+          Ast.Unknown
+    | Path_list -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"list"))) Ast.Unknown
+    | Path_bool -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"bool"))) Ast.Unknown
+    | Path_num -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"num"))) Ast.Unknown
+    | Path_set -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"set"))) Ast.Unknown
+    | Path_string -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"string"))) Ast.Unknown
+    | Path_unit -> 
+        Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"unit"))) Ast.Unknown
 
 let numpath = Path_num
 
@@ -103,21 +115,21 @@ let check_prefix n p = match p with
            
 let to_name = function
   | Path_list ->
-      Name.from_rope r"list"
+      Name.from_rope (r"list")
   | Path_bool ->
-      Name.from_rope r"bool"
+      Name.from_rope (r"bool")
   | Path_num ->
-      Name.from_rope r"num"
+      Name.from_rope (r"num")
   | Path_set ->
-      Name.from_rope r"set"
+      Name.from_rope (r"set")
   | Path_string ->
-      Name.from_rope r"string"
+      Name.from_rope (r"string")
   | Path_unit ->
-      Name.from_rope r"unit"
+      Name.from_rope (r"unit")
   | Path_def([],n) -> n
   | Path_def(ns,n) ->
       Name.from_rope 
-        (BatRope.concat r"_" (List.map Name.to_rope ns @ [Name.to_rope n]))
+        (Ulib.Text.concat (r"_") (List.map Name.to_rope ns @ [Name.to_rope n]))
 
 
 

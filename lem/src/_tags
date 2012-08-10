@@ -1,2 +1,4 @@
 <**/*.ml> : annot
-<*>: package(batteries), package(batteries.pa_string.syntax), syntax(camlp4o)
+<**/*.native> : use_str
+<**/*.mli> : annot
+"ulib" : include

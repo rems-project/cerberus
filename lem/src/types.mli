@@ -1,7 +1,3 @@
-exception No_type of Ast.l * string
-
-val raise_error : Ast.l -> string -> (Format.formatter -> 'a -> unit) -> 'a -> 'b
-
 module Pfmap : Finite_map.Fmap with type k = Path.t
 module TVfmap : Finite_map.Fmap with type k = Tyvar.t
 module TVset : sig
@@ -62,5 +58,3 @@ end
 val pp_type : Format.formatter -> t -> unit
 val pp_class_constraint : Format.formatter -> Path.t * Tyvar.t -> unit
 val pp_instance : Format.formatter -> instance -> unit
-exception No_type of Ast.l * string
-

@@ -302,7 +302,8 @@ let rec compare_constr constr1 constr2 =
 
 let compare_constr_int c1 c2 = Ord.to_int (compare_constr c1 c2)
 
-sub [ocaml] set_compare_int = Pset.compare
+val set_compare_int : forall 'a. 'a set -> 'a set -> int
+let inline {ocaml} set_compare_int = Ocaml.Pset.compare
 let compare_int = set_compare_int
 
 (* TODO compare *)
@@ -478,9 +479,9 @@ module Print = struct
   let pp_constant = pp_constant_inner Symbol.to_string_pretty
   let pp_constr = pp_constr_inner Symbol.to_string_pretty
 
-  let rec pp t = U.conj ^^ nbraces (P.comma_list pp_constr  [e | forall (e IN t) | true])
+  let rec pp t = U.conj ^^ nbraces (P.comma_list pp_constr  (Set.to_list t))
 
-  let pp_set ts = P.sepmap P.break1 pp [t | forall (t IN ts) | true]
+  let pp_set ts = P.sepmap P.break1 pp (Set.to_list ts)
 end
 
 module Solver = struct
@@ -647,14 +648,14 @@ module Solver = struct
           replace (Integer (i1 * i2))
       | Mod (Integer i1) (Integer i2) ->
           if i2 <> 0 then
-            replace (Integer (i1 % i2))
+            replace (Integer (Ocaml.Nat_num.(%) i1 i2))
           else (const, p)
       | Div (Integer i1) (Integer i2) ->
           if i2 <> 0 then
             replace (Integer (i1 / i2))
           else (const, p)
       | Pow (Integer i) ->
-          replace (Integer (2 ** i))
+          replace (Integer (Ocaml.Nat_num.( ** ) 2 i))
       | Name _ ->
           let (n, p) = normalise_const p const in
           let n =
@@ -693,9 +694,10 @@ module Solver = struct
       | If True  c2 _  -> (c2, p)
       | If False _  c3 -> (c3, p)
       | Le (Integer i1) (Integer i2) ->
-          (if i1 <= i2 then True else False, p)
+          ((if i1 <= i2 then True else False), p) (* TODO: the parenthesis around the if are required
+                                                           for a proper translation to Ocaml *)
       | Lt (Integer i1) (Integer i2) ->
-          (if i1 <  i2 then True else False, p)
+          ((if i1 <  i2 then True else False), p) (* the same here. For some reason the sed in the Makefile stopped working?*)
       | Lt (Address a1) (Address a2) ->
           if a1 = a2
             then (False,  p)
@@ -768,7 +770,7 @@ module Solver = struct
     let (m, p) = List.fold_left
       (fun (m, p) (n, c) -> norm p m n c)
       (Pmap.empty, p)
-      (Pmap.bindings p.const_map) in
+      (Ocaml.Pmap.bindings p.const_map) in
     <|p with const_map = m|>
 
   let convert = fold_constr (fun c p -> snd (convert_const c p))

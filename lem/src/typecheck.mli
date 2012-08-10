@@ -1,6 +1,7 @@
 open Types
 
 val check_defs : 
+  Typed_ast.Targetset.t ->
   Name.t list ->
   type_defs * instance list Pfmap.t ->
   Typed_ast.env ->

@@ -23,7 +23,7 @@ let mem a t = Option.is_some (find a t)
 
 let symbols t =
   match t with
-    | m::_ -> Pmap.fold (fun _ b l -> b::l) m []
+    | m::_ -> Ocaml.Pmap.fold (fun _ b l -> b::l) m []
   end
 
 let create_scope t = Pmap.empty::t

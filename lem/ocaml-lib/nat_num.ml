@@ -4,9 +4,18 @@ let (<=) = (<=)
 let (>) = (>)
 let (>=) = (>=)
 let (+) = (+)
-let (-) = (-)
+let (-) x y =
+  let d = x - y in
+    if d < 0 then
+      0
+    else
+      d
 let ( * ) = ( * )
 let (/) = (/)
+let (land) = (land)
+let string_of_num n = string_of_int n
+
+(* CSEM STUFF *)
 let (%) n m = n mod m
 let rec pow a n =
   match n with
@@ -19,7 +28,7 @@ let ( ** ) = pow
 
 let int_of_num n = n
 let num_of_int n = n
-let string_of_num n = string_of_int n
 let num_of_string s = int_of_string s
 
 let compare_num x y = compare x y
+

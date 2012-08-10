@@ -28,7 +28,7 @@ module Effect = struct
   end
   
   let string_of_senv senv =
-    List.fold_right (fun (x,_) acc -> Symbol.to_string_pretty x ^ "; " ^ acc) (Pmap.bindings senv) ""
+    List.fold_right (fun (x,_) acc -> Symbol.to_string_pretty x ^ "; " ^ acc) (Ocaml.Pmap.bindings senv) ""
   
   let get a = fun (senv, fenv) ->
       let ret = if Pmap.mem a senv then Success (Pmap.find a senv)
@@ -423,18 +423,6 @@ let rec infer e =
                 (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a2) (TyBase address)) >>
         E.return (TyEffect unit)
     
-    | Kmax ty         -> E.return (TyBase value)
-    | Kmin ty         -> E.return (TyBase value)
-    | Ksizeof ty      -> E.return (TyBase value)
-    | Kalignof ty     -> E.return (TyBase value)
-    | Koffsetof ty    -> E.return (TyBase value)
-    | Kshift a e      -> E.return (TyBase value) (* pointer ? *) (* TODO: check a, e *)
-    | Kconv ty1 ty2 a ->
-        E.get a                    >>= fun baseTy_a ->
-        E.guard (baseTy_a = value)
-              (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a) (TyBase value)) >>
-        E.return (TyBase value)
-    
     | _ -> E.fail (Errors.CORE_TYPECHECK "TODO")
   end
 
@@ -536,13 +524,6 @@ and check expected_type e =
           | Kstore ty e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check store)")
           | Kload ty e -> E.fail (Errors.CORE_TYPECHECK "TODO(check load)")
           | Ksame a1 a2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check same)")
-          | Kmax ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check max)")
-          | Kmin ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check min)")
-          | Ksizeof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check sizeof)")
-          | Kalignof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check alignof)")
-          | Koffsetof ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check offstof)")
-          | Kshift a e -> E.fail (Errors.CORE_TYPECHECK "TODO(check shift)")
-          | Kconv ty1 ty2 a -> E.fail (Errors.CORE_TYPECHECK "TODO(check conv)")
       
           | _ -> E.fail (Errors.CORE_TYPECHECK "TODO(check)")
         end
@@ -551,7 +532,7 @@ and check expected_type e =
 
 
 let typecheck file =
-  let functions = Pmap.bindings file.fun_map in
+  let functions = Ocaml.Pmap.bindings file.fun_map in
   
   (* collect the symbolic names of the functions for the initial function environment. *)
   let init_fenv =
@@ -570,6 +551,6 @@ let typecheck file =
         | E.Success coreTy -> Exception.return ()
         | E.Error msg      -> Exception.throw msg
       end)
-    ) (Pmap.bindings file.fun_map)
+    ) (Ocaml.Pmap.bindings file.fun_map)
       (Exception.return ()))
   (fun _ -> Exception.return file)

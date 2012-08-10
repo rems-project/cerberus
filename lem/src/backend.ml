@@ -33,16 +33,18 @@
 open Typed_ast
 open Output
 
+let r = Ulib.Text.of_latin1
+
 let gensym_tex_command =
   let n = ref 0 in
   function () ->
     n := 1 + !n;
-    tex_command_escape (BatRope.of_string (string_of_int !n))
+    tex_command_escape (Ulib.Text.of_string (string_of_int !n))
 
-let space = ws (Some [Ast.Ws r" "])
+let space = ws (Some [Ast.Ws (r" ")])
 
 module type Target = sig
-  val lex_skip : Ast.lex_skip -> BatRope.t
+  val lex_skip : Ast.lex_skip -> Ulib.Text.t
   val need_space : Output.t' -> Output.t' -> bool
 
   val target : Ast.target option
@@ -60,7 +62,7 @@ module type Target = sig
   val typ_rec_end : t
   val typ_rec_sep : t
   val typ_constr_sep : t
-  val typ_var : BatRope.t
+  val typ_var : Ulib.Text.t
 
   (* Patterns *)
   val ctor_arg_start : t
@@ -74,7 +76,7 @@ module type Target = sig
   (* Constants *)
   val const_true : t
   val const_false : t
-  val string_quote : BatRope.t
+  val string_quote : Ulib.Text.t
 
   (* Expressions *)
   val case_start : t
@@ -209,7 +211,7 @@ module Identity : Target = struct
             else
               (false,false)
         | Ident'(r) ->
-            (false, is_symbolic (BatRope.to_string r))
+            (false, is_symbolic (Ulib.Text.to_string r))
         | Num' _ ->
             (false,false)
     in
@@ -334,8 +336,8 @@ module Identity : Target = struct
   let module_end = kwd "end"
   let module_open = kwd "open"
 
-  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"Some"))
-  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"None"))
+  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"Some"))) Ast.Unknown
+  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"None"))) Ast.Unknown
 end
 
 
@@ -481,8 +483,8 @@ module Tex : Target = struct
   let module_end = tkwdr "end"
   let module_open = tkwdl "open"
 
-  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"Some"))
-  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"None"))
+  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"Some"))) Ast.Unknown
+  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"None"))) Ast.Unknown
 end
 
 
@@ -631,20 +633,22 @@ module Isa : Target = struct
 
 end
 
-let back_tick = List.hd (BatRope.explode r"`")
+let back_tick = List.hd (Ulib.Text.explode (r"`"))
 
 module Hol : Target = struct
   open Str
 
   let lex_skip = function
     | Ast.Com(r) -> 
-        BatRope.replace_chars 
+        (*
+        Ulib.Text.replace 
           (fun c -> 
              if c = back_tick then 
                (* TODO: Use ^` instead? *)
-               BatRope.to_ustring r"REPLACED BACKQUOTE" 
+               Ulib.Text.to_ustring (r"REPLACED BACKQUOTE") 
              else 
                BatUTF8.of_char c)
+         *)
           (ml_comment_to_rope r)
     | Ast.Ws(r) -> r
     | Ast.Nl -> r"\n"
@@ -671,7 +675,7 @@ module Hol : Target = struct
             else
               (false,false)
         | Ident'(r) ->
-            (false, is_symbolic (BatRope.to_string r))
+            (false, is_symbolic (Ulib.Text.to_string r))
         | Num' _ ->
             (false,false)
     in
@@ -760,12 +764,11 @@ module Hol : Target = struct
   let def_sep = kwd "/\\"
   let rec_def_header sk1 sk2 n = 
     ws sk1 ^ ws sk2 ^ 
-    let n = Name.to_rope n in 
-    let open Batteries_uni in 
-      meta (BatPrint.sprintf p"val %rope_defn = Hol_defn \"%rope\" `\n" n n)
+    let n = Ulib.Text.to_string (Name.to_rope n) in 
+      meta (Format.sprintf "val %s_defn = Hol_defn \"%s\" `\n" n n)
   let rec_def_footer n =
-    let open Batteries_uni in 
-      meta (BatPrint.sprintf p"\nval _ = Defn.save_defn %rope_defn;" (Name.to_rope n))
+    meta (Format.sprintf "\nval _ = Defn.save_defn %s_defn;" 
+            (Ulib.Text.to_string (Name.to_rope n)))
 
   let letbind_sep = kwd "/\\" 
   let letbind_initial_sep = space
@@ -804,8 +807,8 @@ module Hol : Target = struct
   let module_end = kwd "end"
   let module_open = kwd "open"
 
-  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"SOME"))
-  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"NONE"))
+  let some = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"SOME"))) Ast.Unknown
+  let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"NONE"))) Ast.Unknown
 
 end
 
@@ -891,7 +894,7 @@ module Coq : Target = struct
 end
 
 
-module F(T : Target)(C : Exp_context)(X : sig val comment_def : def -> BatRope.t end) = struct
+module F(T : Target)(C : Exp_context)(X : sig val comment_def : def -> Ulib.Text.t end) = struct
 
 module C = Exps_in_context(C)
 
@@ -915,16 +918,17 @@ let lit l = match l.term with
   | L_true(s) -> ws s ^ T.const_true
   | L_false(s) -> ws s ^ T.const_false
   | L_num(s,i) -> ws s ^ num i
-  | L_string(s,i) -> ws s ^ str (BatRope.of_latin1 i)
+  | L_string(s,i) -> ws s ^ str (Ulib.Text.of_latin1 i)
   | L_unit(s1,s2) -> ws s1 ^ kwd "(" ^ ws s2 ^ kwd ")"
 
 
-(* PB: Hack to get rid of the "Pervasive." when the option type contrucor is printed. *)
+(* TODO: PB: Hack to get rid of the "Pervasive." when the option type contrucor
+* is printed. *)
 let typ_ident_to_output p =     
   let id = 
     if Path.compare p.descr 
-        (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"option")) = 0 
-    then  Ident.mk_ident [] (Name.add_lskip (Name.from_rope r"option"))
+        (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"option"))) = 0 
+    then  Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"option"))) Ast.Unknown
     else p.id_path
   in Ident.to_output Type_ctor T.path_sep id
 
@@ -933,7 +937,7 @@ let rec typ t = match t.term with
   | Typ_wild(s) ->
       ws s ^ kwd "_"
   | Typ_var(s,v) ->
-      ws s ^ id Type_var (BatRope.(^^^) T.typ_var (Tyvar.to_rope v))
+      ws s ^ id Type_var (Ulib.Text.(^^^) T.typ_var (Tyvar.to_rope v))
   | Typ_fn(t1,s,t2) ->
       typ t1 ^
       ws s ^
@@ -965,10 +969,10 @@ let ctor_ident_to_output cd =
   (* TODO: remove this hack *)
   let id = 
     if Path.compare cd.descr.constr_binding 
-         (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"None")) = 0 then
+         (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"None"))) = 0 then
       Ident.replace_first_lskip T.none (Ident.get_first_lskip cd.id_path)
     else if Path.compare cd.descr.constr_binding 
-              (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"Some")) = 0 then
+              (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"Some"))) = 0 then
       Ident.replace_first_lskip T.some (Ident.get_first_lskip cd.id_path)
     else
       cd.id_path
@@ -980,12 +984,12 @@ let const_ident_to_output cd =
   (* TODO: remove this hack *)
   match T.target with
   | Some (Ast.Target_tex _) -> 
-      if      Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"union")) = 0 then kwd "\\cup"
-      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"inter")) = 0 then kwd "\\cap"
-      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"IN"))    = 0 then kwd "\\in"
-      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"&&"))    = 0 then kwd "\\lemwedge"
-      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"||"))    = 0 then kwd "\\lemvee"
-      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope r"Pervasives"] (Name.from_rope r"not"))   = 0 then kwd "\\lemnot"
+      if      Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"union"))) = 0 then kwd "\\cup"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"inter"))) = 0 then kwd "\\cap"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"IN")))    = 0 then kwd "\\in"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"&&")))    = 0 then kwd "\\lemwedge"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"||")))    = 0 then kwd "\\lemvee"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"not")))   = 0 then kwd "\\lemnot"
       else
         Ident.to_output Term_const T.path_sep cd.id_path
   | _ -> 
@@ -1224,7 +1228,7 @@ let rec exp e = match C.exp_to_term e with
   | Let(s1,bind,s2,e) ->
       ws s1 ^
       T.let_start ^
-      letbind bind ^
+      letbind Types.TVset.empty bind ^
       ws s2 ^
       T.let_in ^
       exp e ^
@@ -1387,10 +1391,23 @@ and case_line (p,s1,e,_) =
   T.case_line_sep ^
   exp e
 
-and funcl ({term = n}, ps, topt, s1, e) =
+and coq_tyvar_binding tvs =
+  if T.target = Some (Ast.Target_coq None) then
+    flat (List.map 
+            (fun tv -> 
+               kwd"(" ^ 
+               id Type_var (Ulib.Text.(^^^) T.typ_var (Tyvar.to_rope tv)) ^ 
+               meta ":Type" ^ 
+               kwd ")") 
+            (Types.TVset.elements tvs))
+  else 
+    emp
+
+and funcl tvs ({term = n}, ps, topt, s1, e) =
   ws (Name.get_lskip n) ^ 
   T.funcase_start ^
   Name.to_output Term_var (Name.replace_lskip n None) ^
+  coq_tyvar_binding tvs ^
   (match ps with [] -> emp | _ -> texspace) ^
   patlist ps ^
   begin
@@ -1403,9 +1420,10 @@ and funcl ({term = n}, ps, topt, s1, e) =
   exp e ^
   T.funcase_end
     
-and letbind (lb, _) : Output.t = match lb with
+and letbind tvs (lb, _) : Output.t = match lb with
   | Let_val(p,topt,s2,e) ->
       pat p ^ 
+      coq_tyvar_binding tvs ^
       begin
         match topt with
           | None -> emp 
@@ -1413,10 +1431,10 @@ and letbind (lb, _) : Output.t = match lb with
       end ^
       ws s2 ^ T.def_binding ^ exp e
   | Let_fun(clause) ->
-      funcl clause
+      funcl tvs clause
 
 let tyvar (s, tv, l) =
-  ws s ^ id Type_var (BatRope.(^^^) T.typ_var tv)
+  ws s ^ id Type_var (Ulib.Text.(^^^) T.typ_var tv)
 
 let tyfield ((n,l),s1,t) =
   Name.to_output Term_field n ^
@@ -1732,7 +1750,7 @@ let rec def d : Output.t = match d with
            targets_opt targets 
          else
            emp) ^
-        letbind bind ^
+        letbind tvs bind ^
         T.def_end
       else
         emp
@@ -1748,10 +1766,24 @@ let rec def d : Output.t = match d with
              targets_opt targets 
            else
              emp) ^
-          flat (Seplist.to_sep_list funcl (sep T.def_sep) clauses) ^
+          flat (Seplist.to_sep_list (funcl tvs) (sep T.def_sep) clauses) ^
           T.def_end ^
           T.rec_def_footer n
           else
+        emp
+  | Val_def(Let_inline(s1,s2,targets,n,args,s4,body),tvs) ->
+      if (T.target = None) then
+        ws s1 ^
+        kwd "let" ^
+        ws s2 ^
+        kwd "inline" ^
+        targets_opt targets ^
+        Name.to_output Term_var n.term ^
+        flat (List.map (fun n -> Name.to_output Term_var n.term) args) ^ 
+        ws s4 ^
+        kwd "=" ^
+        exp body
+      else
         emp
   | Module(s1,(n,l),s2,s3,ds,s4) -> 
       ws s1 ^
@@ -1799,22 +1831,6 @@ let rec def d : Output.t = match d with
           | Some(cp) -> constraint_prefix cp
       end ^
       typ t
-  | Subst(s1,s2,target,s3,n,args,s4,body) ->
-      if (T.target = None) then
-        ws s1 ^
-        kwd "sub" ^
-        ws s2 ^
-        kwd "[" ^
-        target_to_output Term_var target ^
-        ws s3 ^
-        kwd "]" ^
-        Name.to_output Term_var n.term ^
-        flat (List.map (fun n -> Name.to_output Term_var n.term) args) ^ 
-        ws s4 ^
-        kwd "=" ^
-        exp body
-      else
-        emp
   | Instance(s1,(cp,s2,id,t,s3),methods,s4,e_v,name) ->
       ws s1 ^
       kwd "instance" ^
@@ -1888,7 +1904,7 @@ The concatentation of the lhs keyword, the lhs, and the rhs should be exactly wh
 
 
 and make_lemdefn latex_name latex_label typeset_name pre_comment lhs_keyword lhs rhs post_comment = 
-  r"\\newcommand{" ^^^^ latex_name ^^^^ r"}{%\n" ^^^^
+  (r"\\newcommand{" ^^^^ latex_name ^^^^ r"}{%\n" ^^^^
   r"\\lemdefn\n" ^^^^ 
   r"{" ^^^^ latex_label ^^^^ r"}\n" ^^^^
   r"{" ^^^^ typeset_name ^^^^ r"}\n" ^^^^ 
@@ -1897,13 +1913,14 @@ and make_lemdefn latex_name latex_label typeset_name pre_comment lhs_keyword lhs
   r"{" ^^^^ lhs ^^^^ r"}\n" ^^^^ 
   r"{" ^^^^ rhs ^^^^ r"}\n" ^^^^
   r"{" ^^^^ post_comment ^^^^ r"}%\n" ^^^^
-  r"}\n"  
+  r"}\n",
+  latex_name ^^^^ r"\n")
  
 
 
 (* keep locations for latex-name-clash error reporting... *)
 
-and names_of_pat p : (BatRope.t * BatRope.t * Ast.l) list = match p.term with
+and names_of_pat p : (Ulib.Text.t * Ulib.Text.t * Ast.l) list = match p.term with
   | P_wild(s) ->
       []
   | P_as(p,s,(n,l)) ->
@@ -1953,8 +1970,8 @@ and tex_inc_letbind (lb, l) lhs_keyword = match lb with
       let pre_comment = r"" (* PLACEHOLDER *) in      
       let post_comment = r"" (* PLACEHOLDER *) in      
       let lhs_output = 
-        pat p ^ 
         begin
+          pat p ^ 
           match topt with
           | None -> emp 
           | Some(s,t) -> ws s ^ T.typ_sep ^ typ t
@@ -1968,11 +1985,37 @@ and tex_inc_letbind (lb, l) lhs_keyword = match lb with
 
 
   | Let_fun(clause) ->
-      r"" (* PLACEHOLDER *)
+      let (function_name, ps, topt, pre_equal_comment, e) = clause in
+      let source_name =  (function_name.term : Name.lskips_t) in
+      let typeset_name = (Name.to_rope_tex Term_var (Name.strip_lskip source_name)) in
+      let latex_name = Output.tex_command_name (Name.to_rope (Name.strip_lskip source_name)) in
+      let latex_label = Output.tex_command_label (Name.to_rope (Name.strip_lskip source_name)) in
+      let pre_comment = r"" (* PLACEHOLDER *) in      
+      let post_comment = r"" (* PLACEHOLDER *) in      
+
+      let lhs_output = 
+        (Name.to_output Term_var source_name) ^ 
+        begin
+          match ps with
+          | [] ->
+              emp
+          | _ ->
+              texspace ^ 
+              concat texspace (List.map pat ps) 
+        end ^
+        begin
+          match topt with
+          | None -> emp 
+          | Some(s,t) -> ws s ^ T.typ_sep ^ typ t
+        end ^
+        ws pre_equal_comment ^ T.def_binding in
+      let rhs_output = exp e in
+      let lhs = tex_of_output lhs_output in
+      let rhs = tex_of_output rhs_output in
+      make_lemdefn latex_name latex_label typeset_name pre_comment lhs_keyword lhs rhs post_comment
 
 
-
-and def_tex_inc d : BatRope.t list = match d with
+and def_tex_inc d : (Ulib.Text.t*Ulib.Text.t) list = match d with
 
 (*   (\* A single type abbreviation *\) *)
 (*   | Type_def(s1, l) when is_abbrev l-> *)
@@ -2014,22 +2057,9 @@ and def_tex_inc d : BatRope.t list = match d with
       else
         []
 
+
   | _ -> []
 
-(*   | Val_def(Rec_def(s1, s2, targets, clauses)) ->  *)
-(*       if in_target targets then *)
-(*         ws s1 ^ *)
-(*         T.def_start ^ *)
-(*         ws s2 ^ *)
-(*         T.def_rec ^ *)
-(*         (if T.target = None then *)
-(*            targets_opt targets  *)
-(*          else *)
-(*            emp) ^ *)
-(*         flat (Seplist.to_sep_list funcl (sep T.def_sep) clauses) ^ *)
-(*         T.def_end *)
-(*       else *)
-(*         emp *)
 (*   | Module(s1,(n,l),s2,s3,ds,s4) ->  *)
 (*       ws s1 ^ *)
 (*       T.module_module ^ *)
@@ -2256,35 +2286,40 @@ and check_type_name n = List.mem (Name.to_rope (Name.strip_lskip n)) Isa_keyword
 
 (*********************)
 
-and (^^^^) = BatRope.(^^^)
+and (^^^^) = Ulib.Text.(^^^)
 
-and to_rope_tex_def d : BatRope.t = 
+and to_rope_tex_def d : Ulib.Text.t = 
   match to_rope_option_tex T.lex_skip T.need_space true (def d) with
   | None -> r""
-  | Some r -> 
+  | Some rr -> 
       r"\\lemdef{\n" ^^^^
-      r  ^^^^
+      rr  ^^^^
       r"\n}\n"
 
 
 let defs ((ds:def list),end_lex_skips) =
   match T.target with
   | Some (Ast.Target_tex _) -> 
-      BatRope.concat r"" (List.map (function ((d,s),l) -> to_rope_tex_def d) ds) ^^^^
-      (match to_rope_option_tex T.lex_skip T.need_space true (ws end_lex_skips) with None -> r"" | Some r -> 
+      Ulib.Text.concat (r"") (List.map (function ((d,s),l) -> to_rope_tex_def d) ds) ^^^^
+      (match to_rope_option_tex T.lex_skip T.need_space true (ws end_lex_skips) with None -> r"" | Some rr -> 
         r"\\lemdef{\n" ^^^^
-        r  ^^^^
+        rr  ^^^^
         r"\n}\n"
       )(* TODO*)
   | _ ->
       to_rope T.string_quote T.lex_skip T.need_space (defs ds ^ ws end_lex_skips)
 
 
+let rec batrope_pair_concat : (Ulib.Text.t * Ulib.Text.t) list -> (Ulib.Text.t * Ulib.Text.t)
+  = function
+    |  [] -> (r"",r"")
+    |  (r1,r2)::rrs  -> let (r1',r2') = batrope_pair_concat rrs in (r1^^^^r1', r2^^^^r2') 
+
 (* for -inc.tex file *)
 let defs_inc ((ds:def list),end_lex_skips) =
   match T.target with
   | Some (Ast.Target_tex _) -> 
-      BatRope.concat r"" (List.map (function ((d,s),l) -> BatRope.concat r"\n" (def_tex_inc d)) ds)
+      batrope_pair_concat (List.map (function ((d,s),l) -> batrope_pair_concat (def_tex_inc d)) ds)
   | _ ->
       raise (Failure "defs_inc called on non-tex target")
 

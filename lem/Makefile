@@ -1,7 +1,9 @@
 #OTTLIB=/Users/sowens/ott/hol
 OTTLIB=$(dir $(shell which ott))../hol
-LEMVERSION=0.2
+LEMVERSION=0.3
 DDIR=lem-$(LEMVERSION)
+
+PATH := $(CURDIR)/$(FINDLIB)/bin:$(PATH)
 
 #all: il.pdf build-main ilTheory.uo
 all: lem.pdf build-lem
@@ -10,13 +12,49 @@ build-doc:
 do-tests:
 	make -C tests
 
-test-other:
+test-other: test-ppcmem test-cpp test-cppppc
+
+test-ppc:
+	# ppc model
+	make -C ../../sem/WeakMemory/ppc-abstract-machine 
+	# pull ppc model into ppcmem directory
+	# DON'T COMMIT
 	make -C ../ppcmem/system model
+
+test-axppc:
+	# Sela model	
+	make -C ../axppc
+	# pull Sela model into ppcmem directory
+	# DON'T COMMIT
+	make -C ../ppcmem/system axmodel
+
+test-arm:
+	# ARM flowing model
+	make -C ../arm/flowing-things
+	# pull ARM model into ppcmem directory
+	# DON'T COMMIT
+	make -C ../ppcmem/system flowingmodel
+
+test-ppcmem: test-ppc test-axppc test-arm
+	# next 3 compile PPCMEM
+	# Check makefile in ppcmem/system is set to "text"
+	# DON'T commit
+	make -C ../ppcmem/system clean
 	make -C ../ppcmem/system depend_text
 	make -C ../ppcmem/system text
-	make -C ../cpp/axiomatic/ntc atomic.cmx AtomicTheory.uo
-#	make -C ../cpp/opsem
-#	make -C ../cppppc all
+
+test-cpp:
+	# C++. Chat with Mark to fix
+	make -C ../cpp/axiomatic/ntc deadlock
+	# C++. Chat with Mark to fix HOL building and Mark/Susmit/Mike ML
+	# building
+	#make -C ../cpp/opsem
+	#make -C ../cpp/axiomatic/ntc/proofs all
+
+test-cppppc:
+	make -C ../cppppc proof
+	make -C ../cppppc/proof2 lem
+
 
 MACHINEFILES=\
 MachineDefUtils.lem \
@@ -56,13 +94,13 @@ test-texw:
 test-texgw:
 	g tests/test-tex/test-tex-inc-wrapper
 
-debug: src/ast.ml 
+debug: src/ast.ml src/version.ml
 	rm -f library/lib_cache
 	make -C src debug
 	ln -sf src/main.d.byte lem
 
 
-build-lem: src/ast.ml
+build-lem: src/ast.ml src/version.ml
 	rm -f library/lib_cache
 	make -C ocaml-lib all
 	make -C src all
@@ -81,28 +119,42 @@ lem.tex src/ast.ml lemScript.sml: lem.ott
 	ott -ocaml_include_terminals true -o lem.tex -o src/ast.ml -o lemScript.sml -picky_multiple_parses true lem.ott
 	chmod a-w src/ast.ml
 
+headache: headache-1.03.tar.gz
+	tar xzf headache-1.03.tar.gz
+	cd headache-1.03; ./configure --bindir $(CURDIR)/headache
+	make -C headache-1.03
+	make -C headache-1.03 install
+	rm -rf headache-1.03
+
 lem_unwrapped.tex: lem.ott
 	ott -tex_wrap false -o lem_unwrapped.tex lem.ott
 
 install_lem_unwrapped: lem_unwrapped.tex
 	cp lem_unwrapped.tex ../../ott/examples/ich/generated/lem_unwrapped.tex
 
-distrib: src/ast.ml headache
+src/version.ml: Makefile
+	echo 'let v="$(LEMVERSION)"' > src/version.ml
+	chmod a-x src/version.ml
+
+distrib: src/ast.ml src/version.ml headache
 	rm -rf $(DDIR)
 	rm -rf $(DDIR).tar.gz
 	mkdir $(DDIR)
 	mkdir $(DDIR)/src
+	mkdir $(DDIR)/src/ulib
 	cp src/*.ml $(DDIR)/src/
 	chmod a+w $(DDIR)/src/ast.ml
+	chmod a+w $(DDIR)/src/version.ml
 	cp src/*.mli $(DDIR)/src/
 	cp src/*.mll $(DDIR)/src/
 	cp src/*.mly $(DDIR)/src/
 	cp src/_tags $(DDIR)/src/
+	cp src/ulib/*.ml $(DDIR)/src/ulib/*.ml
+	cp src/ulib/*.mli $(DDIR)/src/ulib/*.mli
 	mkdir $(DDIR)/library
 	mkdir $(DDIR)/library/hol
 	mkdir $(DDIR)/library/isabelle
 	mkdir $(DDIR)/library/ocaml
-	cp library/isa_fixes.thy $(DDIR)/library
 	cp library/*.lem $(DDIR)/library/
 	cp library/isabelle/constants $(DDIR)/library/isabelle/
 	cp library/isabelle/*.lem $(DDIR)/library/isabelle/
@@ -129,19 +181,19 @@ distrib: src/ast.ml headache
 	./headache -c head_config -h header `ls $(DDIR)/library/hol/*.lem`
 	./headache -c head_config -h header `ls $(DDIR)/library/isabelle/*.lem`
 	./headache -c head_config -h header `ls $(DDIR)/library/ocaml/*.lem`
-	./headache -c head_config -h header `ls $(DDIR)/library/isa_fixes.thy`
 	tar cf $(DDIR).tar $(DDIR)
 	gzip $(DDIR).tar
 	rm -rf $(DDIR)
 
 clean:
 	-make -C src clean
-	-rm -rf *.uo *.ui lemTheory.sig lemTheory.sml lem.tex src/ast.ml lemScript.sml lem.aux lem.log lem.pdf lem.dvi lem.ps lem_unwrapped.tex .HOLMK lem.sys lem library/lib_cache
+	-rm -rf *.uo *.ui lemTheory.sig lemTheory.sml lem.tex src/ast.ml src/version.ml lemScript.sml lem.aux lem.log lem.pdf lem.dvi lem.ps lem_unwrapped.tex .HOLMK lem.sys lem library/lib_cache
 
 cleanall: clean
 	-make -C doc clean
 	-make -C slides clean
-	-make -C manual clean
+	-make -C manual cleanall
 	-make -C ocaml-lib clean
 	-make -C tests clean
+	-rm -rf headache
 	-rm -rf lem-$(LEMVERSION) lem-$(LEMVERSION).tar.gz

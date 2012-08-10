@@ -41,6 +41,70 @@ let ansi_format f s =
   "\x1b[" ^ g f ^ s ^ "\x1b[0m" (* TODO: optimize, someday *)
 
 
+
+let precedence = function
+    | IDENTIFIER _
+    | CONSTANT _
+    | STRING_LITERAL _ -> Some 0
+    
+    | SUBSCRIPT (_, _)
+    | CALL (_, _)
+    | MEMBEROF (_, _)
+    | MEMBEROFPTR (_, _)
+    | UNARY (POSTFIX_INCR, _)
+    | UNARY (POSTFIX_DECR, _) -> Some 1
+    
+    | UNARY (_, _)
+    | CAST (_, _)
+    | TYPE_SIZEOF _
+    | TYPE_ALIGNOF _ -> Some 2
+    
+    | BINARY (ARITHMETIC MUL, _, _)
+    | BINARY (ARITHMETIC DIV, _, _)
+    | BINARY (ARITHMETIC MOD, _, _) -> Some 3
+    
+    | BINARY (ARITHMETIC ADD, _, _)
+    | BINARY (ARITHMETIC SUB, _, _) -> Some 4
+    
+    | BINARY (ARITHMETIC SHL, _, _)
+    | BINARY (ARITHMETIC SHR, _, _) -> Some 5
+    
+    | BINARY (LT, _, _)
+    | BINARY (GT, _, _)
+    | BINARY (LE, _, _)
+    | BINARY (GE, _, _) -> Some 6
+    
+    | BINARY (EQ, _, _)
+    | BINARY (NE, _, _) -> Some 7
+    
+    | BINARY (ARITHMETIC BAND, _, _) -> Some 8
+    
+    | BINARY (ARITHMETIC XOR, _, _) -> Some 9
+    
+    | BINARY (ARITHMETIC BOR, _, _) -> Some 10
+    
+    | BINARY (AND, _, _) -> Some 11
+    
+    | BINARY (OR, _, _) -> Some 12
+    
+    | CONDITIONAL (_, _, _) -> Some 13
+    
+    | ASSIGN (_, _, _) -> Some 14
+    
+    | BINARY (COMMA, _, _) -> Some 15
+
+
+let lt_precedence p1 p2 =
+  match p1, p2 with
+    | Some n1, Some n2 -> n1 < n2
+    | Some _ , None    -> true
+    | None   , _       -> false
+
+
+
+
+
+
 module Print = struct
   module P = Pprint
   
@@ -144,15 +208,17 @@ module Print = struct
   and pp_type = function
     | BASE (qs, ss)     -> pp_qs qs ^^ pp_ss ss
     | ARRAY (qs, ty, e) -> (* pp_qs qs ^^ pp_type ty ^^^ P.brackets (match e with
-                                                                       | Some e -> pp_exp e
+                                                                       | Some e -> pp_exp None e
                                                                        | None   -> P.empty) *)
                            !^ "BOOM"
     | POINTER (qs, ty)  -> pp_qs qs ^^ P.parens (pp_type ty) ^^^ P.star
     | FUNCTION (ty, ds) -> pp_type ty ^^ P.parens (!^ "TODO") (* (P.comma_list f ts) *) (* TODO *)
   
   
-  and pp_exp (exp, _) =
-    let f = P.group -| P.parens -| pp_exp in
+  and pp_exp p (exp, _) =
+    let p' = precedence exp in
+    let f = P.group -| pp_exp p' in
+    (if lt_precedence p' p then fun x -> x else P.parens) $
     match exp with
       | IDENTIFIER id                 -> !^ id
 (* TODO: incomplete pattern *)
@@ -187,7 +253,7 @@ module Print = struct
   and pp_struct_union_declarator ss qs = function
     | STRUCT_DECL (id, mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] id)
     | BITFIELD (x_opt, e)  -> P.optional (fun (s,mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] s)) x_opt ^^^
-                              P.colon ^^ pp_exp e
+                              P.colon ^^ pp_exp None e
   
   and pp_struct_union_declaration (ss, qs, decls) =
     pp_qs qs ^^ pp_ss ss ^^ P.sepmap (P.comma ^^ P.space) (pp_struct_union_declarator ss qs) decls ^^ P.semi
@@ -216,39 +282,41 @@ module Print = struct
     match stmt with
       | SKIP                                -> P.semi
       | LABEL (id, s)                       -> !^ id ^^ P.colon ^^^ pp_stmt s
-      | CASE (e, s)                         -> pp_exp e ^^ P.colon ^^^ pp_stmt s
+      | CASE (e, s)                         -> pp_exp None e ^^ P.colon ^^^ pp_stmt s
       | DEFAULT s                           -> !^ "default" ^^ P.colon ^^^ pp_stmt s
       | BLOCK ss                            -> let block = P.sepmap P.break1 pp_stmt ss in
                                                P.lbrace ^^ P.nest 2 (P.break1 ^^ block) ^/^ P.rbrace
-      | EXPRESSION e                        -> pp_exp e ^^ P.semi
-      | IF (e, s1, Some s2)                 -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp e) ^^^
+      | EXPRESSION e                        -> pp_exp None e ^^ P.semi
+      | IF (e, s1, Some s2)                 -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp None e) ^^^
                                                pp_stmt s1 ^^^ !^ (ansi_format [Cyan; Bold] "else") ^^^
                                                pp_stmt s2
-      | IF (e, s1, None)                    -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp e) ^^^
+      | IF (e, s1, None)                    -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp None e) ^^^
                                                pp_stmt s1
       | SWITCH (e, s)                       -> !^ (ansi_format [Cyan; Bold] "switch") ^^^
-                                               P.parens (pp_exp e) ^/^ pp_stmt s
+                                               P.parens (pp_exp None e) ^/^ pp_stmt s
       | WHILE (e, s)                        -> !^ (ansi_format [Cyan; Bold] "while") ^^^
-                                               P.parens (pp_exp e) ^/^ pp_stmt s
+                                               P.parens (pp_exp None e) ^/^ pp_stmt s
       | DO (e, s)                           -> !^ (ansi_format [Cyan; Bold] "do") ^/^ pp_stmt s ^/^
-                                               !^ (ansi_format [Cyan; Bold] "while") ^^^ P.parens (pp_exp e)
+                                               !^ (ansi_format [Cyan; Bold] "while") ^^^ P.parens (pp_exp None e)
       | FOR_EXP (e1_opt, e2_opt, e3_opt, s) -> !^ (ansi_format [Cyan; Bold] "for") ^^
-                                               P.parens (P.optional pp_exp e1_opt ^^ P.semi ^^^
-                                                         P.optional pp_exp e2_opt ^^ P.semi ^^^
-                                                         P.optional pp_exp e3_opt) ^/^ pp_stmt s
+                                               P.parens (P.optional (pp_exp None) e1_opt ^^ P.semi ^^^
+                                                         P.optional (pp_exp None) e2_opt ^^ P.semi ^^^
+                                                         P.optional (pp_exp None) e3_opt) ^/^ pp_stmt s
       | FOR_DECL (defs, e1_opt, e2_opt, s)  -> !^ "for" (* TODO *)
       | GOTO id                             -> !^ (ansi_format [Cyan; Bold] "goto") ^^^ !^ id ^^ P.semi
       | CONTINUE                            -> !^ (ansi_format [Cyan; Bold] "continue") ^^ P.semi
       | BREAK                               -> !^ (ansi_format [Cyan; Bold] "break") ^^ P.semi
-      | RETURN (Some e)                     -> !^ (ansi_format [Cyan; Bold] "return") ^^^ pp_exp e ^^ P.semi
+      | RETURN (Some e)                     -> !^ (ansi_format [Cyan; Bold] "return") ^^^ pp_exp None e ^^ P.semi
       | RETURN None                         -> !^ (ansi_format [Cyan; Bold] "return") ^^ P.semi
       | DECLARATION defs                    -> P.comma_list pp_definition defs ^^ P.semi
+      | PAR ss                              -> let par = P.sepmap (P.bar ^^ P.bar ^^ P.bar) pp_stmt ss in
+                                               P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break1 ^^ par) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
   
   and pp_declaration ((s, ty, scs), _) =
     P.fold ins_space (List.map pp_storage_class scs) ^^
     (match ty with
       | ARRAY (qs, ty, e) -> pp_qs qs ^^ pp_type ty ^^^ (!^ s) ^^
-                             P.brackets (match e with Some e -> pp_exp e | None -> P.empty)
+                             P.brackets (match e with Some e -> pp_exp None e | None -> P.empty)
       | FUNCTION (ty, decls) -> pp_type ty ^^ !^ (ansi_format [Blue] s) ^^
                                 P.parens (P.sepmap (P.comma ^^ P.space) pp_declaration decls)
       | ty                   -> pp_type ty ^^ !^ (ansi_format [Yellow] s))
@@ -256,7 +324,7 @@ module Print = struct
   
   and pp_definition ((dec, exp_opt), _) =
     pp_declaration dec ^^^
-    (match exp_opt with Some exp -> P.equals ^^^ pp_exp exp | None -> P.empty)
+    (match exp_opt with Some exp -> P.equals ^^^ pp_exp None exp | None -> P.empty)
   
   let pp_global_definition (def, _) =
     match def with

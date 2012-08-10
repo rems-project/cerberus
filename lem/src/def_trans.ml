@@ -68,6 +68,44 @@ let remove_classes _ env (((d,s),l) as def) =
         Some((env, simple_def (Comment(def))))
     | _ -> None
 
+(* For Coq, add return types to function definitions that have type variables *)
+let type_annotate_definitions _ env ((d,s),l) =
+  match d with
+    | Val_def(Let_def(sk1,topt,(Let_val(ps,Some _,sk2,e),l')),tvs) ->
+        None
+    | Val_def(Let_def(sk1,topt,(Let_val(ps,None,sk2,e),l')),tvs) ->
+        if Types.TVset.is_empty (Types.free_vars (exp_to_typ e)) then
+          None
+        else
+          let module C = Exps_in_context(struct 
+                                           let avoid = None
+                                           let check = None
+                                         end)
+         in
+          let t = (None,C.t_to_src_t (exp_to_typ e)) in
+            Some
+              (env,
+               [((Val_def(Let_def(sk1,topt,(Let_val(ps,Some t,sk2,e),l')),tvs),
+                  s),l)])
+    | Val_def(Let_def(sk1,topt,((Let_fun(n,ps,Some _,sk2,e),l'))),tvs) ->
+        None
+    | Val_def(Let_def(sk1,topt,((Let_fun(n,ps,None,sk2,e),l'))),tvs) ->
+        if Types.TVset.is_empty (Types.free_vars (exp_to_typ e)) then
+          None
+        else
+          let module C = Exps_in_context(struct 
+                                           let avoid = None
+                                           let check = None
+                                         end)
+         in
+          let t = (None,C.t_to_src_t (exp_to_typ e)) in
+            Some
+              (env,
+               [((Val_def(Let_def(sk1,topt,((Let_fun(n,ps,Some t,sk2,e),l'))),tvs), s), l)])
+    (* TODO: Rec_def *)
+    | _ -> None
+
+
 let instance_to_module _ env ((d,s),l) =
   let l_unk = Ast.Trans("instance_to_module") in
     match d with

@@ -190,6 +190,7 @@ type statement =
   | LABEL of string * stmt_l
   | GOTO of string
   | DECLARATION of defn_l list
+  | PAR of stmt_l list (* TODO: (temporary) adding cppmem's parallel composition *)
 
 and stmt_l = statement * location
 

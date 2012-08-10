@@ -1,10 +1,8 @@
-PATH := $(CURDIR)/../findlib-1.2.7/bin:$(PATH)
-
 all:
-	ocamlbuild -use-ocamlfind main.native
+	ocamlbuild -tag debug main.native
 
 debug: 
-	ocamlbuild -use-ocamlfind main.d.byte
+	ocamlbuild main.d.byte
 
 clean:
 	-ocamlbuild -clean

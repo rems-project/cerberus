@@ -54,7 +54,7 @@ let compose o1 o2 =
     o1
 
 let to_num = function
- | Lt -> ~1
+ | Lt -> 0 - 1
  | Eq -> 0
  | Gt -> 1
  end

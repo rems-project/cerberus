@@ -70,6 +70,7 @@ type cause =
   | AIL_TYPECHECK_IF_SCALAR
   | AIL_TYPECHECK_WHILE_SCALAR
   | AIL_TYPECHECK_DO_SCALAR
+  | AIL_TYPECHECK_SWITCH_INTEGER
   | AIL_TYPECHECK_LVALUE_UNDEFINED
   | AIL_TYPECHECK_UNSUPPORTED of string
 
@@ -455,16 +456,23 @@ let to_string = function
        ``The controlling expression of an iteration statement shall have \
        scalar type.``"
 
-  | AIL_TYPECHECK_DO_SCALAR ->
+  | AIL_TYPECHECK_WHILE_SCALAR ->
       "Violation of constraint 6.8.4.1 Iteration statements, Constraints: \
        ``The controlling expression of an iteration statement shall have \
        scalar type.``"
+
+  | AIL_TYPECHECK_SWITCH_INTEGER ->
+      "[Violation of constraint 6.8.4.2#1] The switch statement, Constraints: \
+       ``The controlling expression of a switch statement shall have integer type.``"
 
   | AIL_TYPECHECK_LVALUE_UNDEFINED ->
       "Undefined behaviour according to 6.3.2.1#2 Lvalues, arrays, and \
        function designators: ``If the value has an incomplete type and does \
        not have array type, the behaviour is undefined. [...]``"
   
+  | AIL_TYPECHECK_UNSUPPORTED s ->
+      "[Unsupported feature by Ail typecheck] " ^ s
+      
   | CASE_OUTSIDE_SWITCH ->
       "[Violation of 6.8.1#1] Labeled statements, Constraints: ``A \
        case [...] label shall appear only in a switch statement.``"
@@ -501,5 +509,5 @@ let to_string = function
        string_of_num exprArity ^ "."
   
   | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg
-
+  
   end

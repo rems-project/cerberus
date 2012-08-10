@@ -33,30 +33,30 @@ val target_compare : target -> target -> int
 
 (* target keyed finite maps *)
 module Targetmap : Finite_map.Fmap with type k = target
+module Targetset : Set.S with type elt = target
+
+(* The set of all the possible targets *)
+val all_targets : Targetset.t
 
 val target_to_string : target -> string
 val target_to_output : Output.id_annot -> Ast.target -> Output.t
 val target_to_mname : target -> Name.t
 
 (* What kind of top-level definition a particular constant is *)
-type kind = 
-  (* A (data) constructor *)
-  | K_ctor
-
+type env_tag = 
   (* A class method *)
   | K_method
 
-  (* A val specification *)
-  | K_spec
+  (* A val specification that has no definitions *)
+  | K_val
 
-  (* A definition *)
+  (* A let definition with no target specific definitions or val spec *)
   | K_let
 
-  (* A target-specific definition *)
-  | K_target of target
-
-(* Sets of kinds *)
-module Kset : Set.S with type elt = kind
+  (* A definition that also has a val specification.  There is a target-specific
+   * definition for each target in the set, and the bool is true if there is a
+   * target non-specific definition *)
+  | K_target of bool * Targetset.t
 
 type ('a,'b) annot = { term : 'a; locn : Ast.l; typ : Types.t; rest : 'b }
 val annot_to_typ : ('a,'b) annot -> Types.t
@@ -102,6 +102,7 @@ type field_descr =
       field_names : NameSet.t;
     }
 
+(* Maps a type name to the unique path representing that type *)
 type p_env = Path.t Nfmap.t
 
 (* Represents a usage of an 'a (usually in constr_descr, field_descr,
@@ -181,10 +182,8 @@ and const_descr =
     (* Its type *)
     const_type : Types.t; 
 
-    (* What kind of definition it is.  Must not contain K_ctor.  Must be a
-    * singleton { K_method } or not contain K_method. 
-    * TODO: add other invariants about the other cases *)
-    kinds : Kset.t;
+    (* What kind of definition it is. *)
+    env_tag : env_tag;
 
     (* The location for the first occurrence of a definition/specification of
      * this constant *)
@@ -258,7 +257,7 @@ and letbind_aux =
   | Let_val of pat * (lskips * src_t) option * lskips * exp
   | Let_fun of funcl_aux
 
-type tyvar = lskips * BatRope.t * Ast.l
+type tyvar = lskips * Ulib.Text.t * Ast.l
 
 type texp = 
   | Te_opaque
@@ -287,6 +286,7 @@ type targets_opt = (lskips * Ast.target lskips_seplist * lskips) option
 type val_def = 
   | Let_def of lskips * targets_opt * letbind
   | Rec_def of lskips * lskips * targets_opt * funcl_aux lskips_seplist
+  | Let_inline of lskips * lskips * targets_opt * name_lskips_annot * name_lskips_annot list * lskips * exp
 
 type def = (def_aux * lskips option) * Ast.l
 
@@ -304,7 +304,6 @@ and def_aux =
   | Indreln of lskips * targets_opt * 
                (lskips * name_lskips_annot list * lskips * exp * lskips * name_lskips_annot * exp list) lskips_seplist
   | Val_spec of val_spec
-  | Subst of lskips * lskips * Ast.target * lskips * name_lskips_annot * name_lskips_annot list * lskips * exp
   | Class of lskips * lskips * name_l * tyvar * lskips * class_val_spec list * lskips
   | Instance of lskips * instschm * val_def list * lskips * v_env * Name.t
 
@@ -343,7 +342,7 @@ type checked_module =
       untyped_ast : Ast.defs * Ast.lex_skips;
       typed_ast : def list * Ast.lex_skips; }
 
-type var_avoid_f = (Name.t -> bool) * (BatRope.t -> (Name.t -> bool) -> Name.t)
+type var_avoid_f = (Name.t -> bool) * (Ulib.Text.t -> (Name.t -> bool) -> Name.t)
 
 module type Exp_context = sig
   (* Whether the constructor functions should do type checking too *)

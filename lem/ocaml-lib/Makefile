@@ -1,5 +1,5 @@
 all:
-#	ocamlbuild -package text extract.cmxa
-	ocamlbuild -use-ocamlfind -package text extract.cma
+	ocamlbuild extract.cmxa
+	ocamlbuild extract.cma
 clean:
 	-ocamlbuild -clean

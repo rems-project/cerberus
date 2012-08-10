@@ -175,7 +175,7 @@ module Print = struct
       ) in
     let arrow a1 a2 = pp_uid a1 ^^^ P.minus ^^ P.rangle ^^^ pp_uid a2 in
     let rd = Transitive_reduction.reduce sb in
-    let d = [arrow a1 a2 | forall ((a1, a2) IN rd) | true] in
+    let d = [arrow a1 a2 | forall ((a1, a2) MEM Set.to_list rd) | true] in
     let s = {a1 | forall ((a1, _) IN rd) | true} union {a2 | forall ((_, a2) IN rd) | true} in
     let def a = pp_uid a ^^^ P.brackets (
       !^ "label" ^^ P.equals ^^ P.dquotes (pp_latex a)
@@ -360,7 +360,7 @@ module Memory = struct
         else E.bug "event"
     | Kill a ->
         let (addr, t) = address t a in
-        E.return <|t with mem = Pmap.remove (base_of addr) t.mem|>
+        E.return <|t with mem = Ocaml.Pmap.remove (base_of addr) t.mem|>
     | Load    ct a v -> load_event  t ct a v
     | Store   ct a v -> write_event t ct a v
     | FnStore ct a v -> write_event t ct a v

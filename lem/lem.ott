@@ -18,7 +18,7 @@ metavar string ::=
 embed
 {{ ocaml
 
-type text = BatRope.t
+type text = Ulib.Text.t
 
 type l =
   | Unknown
@@ -28,15 +28,30 @@ type l =
 exception Parse_error_locn of l * string
 
 type ml_comment = 
-  | Chars of BatRope.t
+  | Chars of Ulib.Text.t
   | Comment of ml_comment list
 
 type lex_skip =
   | Com of ml_comment
-  | Ws of BatRope.t
+  | Ws of Ulib.Text.t
   | Nl
 
 type lex_skips = lex_skip list option
+
+let pp_lex_skips ppf sk = 
+  match sk with
+    | None -> ()
+    | Some(sks) ->
+        List.iter
+          (fun sk ->
+             match sk with
+               | Com(ml_comment) ->
+                   (* TODO: fix? *)
+                   Format.fprintf ppf "(**)"
+               | Ws(r) ->
+                   Format.fprintf ppf "%s" (Ulib.Text.to_string r)
+               | Nl -> Format.fprintf ppf "\\n")
+          sks
 
 let combine_lex_skips s1 s2 =
   match (s1,s2) with
@@ -60,7 +75,7 @@ metavar ix ::=
   {{ ocaml terminal * text }}
   {{ hol string }}
   {{ com Variables }}
-  {{ ocamlvar "[[x]]" }}
+  {{ ocamlvar "[[ix]]" }}
 
 
 
@@ -440,11 +455,12 @@ target :: 'Target_' ::=
   | coq								:: :: coq
   | tex								:: :: tex
 
-targets :: 'Targets_' ::=
+targets {{ tex \ensuremath{\tau} }} :: 'Targets_' ::=		{{ hol target list }}
   {{ com Backend target name lists }}
-  | { target1 ; ... ; targetn }					:: :: concrete
+  | { target1 ; .. ; targetn }					:: :: concrete
+    {{ hol [[target1..targetn]] }}
 
-targets_opt {{ tex \ensuremath{\ottnt{targets}^?} }} :: 'Targ_' ::= {{ phantom }}
+targets_opt {{ tex \ensuremath{\tau^?} }} :: 'Targ_' ::= {{ phantom }}
 								{{ hol targets option }}
 								{{ ocaml targets option }}
    {{ com Optional targets }}
@@ -461,6 +477,8 @@ val_def :: '' ::=
     {{ com Non-recursive value definitions }}
   | let rec targets_opt funcl1 and ... and funcln		:: :: Let_rec
     {{ com Recursive function definitions }}
+  | let inline targets_opt letbind 				:: :: Let_inline
+    {{ com Function definitions to be inlined }}
 
 val_spec :: '' ::=
   {{ com Value type specifications }} 
@@ -484,8 +502,6 @@ def_aux :: '' ::=
     {{ com Inductively defined relations }}
   | val_spec 							:: :: Spec_def
     {{ com Top-level type constraints }}
-  | sub [ target ] x_l x_l1 .. x_li = exp			:: :: Subst
-    {{ com Target-specific functions to inline }}
   | class ( x_l a_l ) val x_l1 : typ1 l1 ... val x_ln : typn ln end	:: :: Class
     {{ com Typeclass definitions }}
   | instance instschm val_def1 l1 ... val_defn ln end 		:: :: Instance
@@ -585,7 +601,7 @@ tvs :: '' ::=					{{ hol a list }}
     {{ ocaml [[a1..an]] }}
 
 names :: '' ::=					{{ phantom }}
-						{{ hol v set }}
+						{{ hol x set }}
 						{{ ocaml Set.Make(String).t }}
   {{ com Sets of names }}
   | { x1 , .. , xn }				:: :: Names
@@ -597,37 +613,32 @@ semC {{ tex \ensuremath{\mathcal{C} } }} :: '' ::=
   | ( p1 a1 ) .. ( pn an )					:: :: SemC_concrete
     {{ hol ([[p1 a1..pn an]]) }}
 
+env_tag :: '' ::=
+  {{ com Tags for the (non-constructor) value descriptions }}
+  | method							:: :: method
+    {{ com Bound to a method }}
+  | val								:: :: spec
+    {{ com Specified with val }}
+  | let								:: :: def
+    {{ com Defined with let or indreln }}
+
 v_desc :: 'V_' ::=
   {{ com Value descriptions }}
   | < forall tvs . t_multi -> p , ( x of names ) >		:: :: constr
     {{ com Constructors }}
-  | < forall tvs . p -> t , ( x of names ) >			:: :: field
-    {{ com Fields }}
-  | forall tvs . semC => t					:: :: val
+  | < forall tvs . semC => t , env_tag >			:: :: val
     {{ com Values }}
 
-kind :: 'K_' ::=
-  {{ com Sorts of value bindings }}
-  | ctor							:: :: ctor
-  | field							:: :: field
-  | mthd							:: :: method
-  | let								:: :: let
-  | spec							:: :: spec
-  | target							:: :: target
-
-kinds {{ tex \ensuremath{\kappa} }}:: 'Ks_' ::=			{{ hol kind set }}
-  | { kind1 ; .. ; kindn }					:: :: concrete
-    {{ hol (LIST_TO_SET [[kind1..kindn]]) }}
-  | kinds1 union kinds2							:: M :: union
-    {{ hol ([[kinds1]] UNION [[kinds2]]) }}
-    {{ ocaml assert false }}
+f_desc :: 'F_' ::=
+  | < forall tvs . p -> t , ( x of names ) >			:: :: field
+    {{ com Fields }}
 
 embed
 {{ hol
 load "fmaptreeTheory";
 val _ = 
   Hol_datatype 
-    `env_body = <| env_p : v|->p; env_v : v|->kinds#v_desc |>`;
+    `env_body = <| env_p : x|->p; env_f : x|->f_desc; env_v : x|->v_desc |>`;
 
 val _ = Define `
   env_union e1 e2 =
@@ -636,6 +647,7 @@ val _ = Define `
     let i2 = item e2 in
     let m2 = map e2 in
       FTNode <| env_p:=FUNION i1.env_p i2.env_p; 
+                env_f:=FUNION i1.env_f i2.env_f;
                 env_v:=FUNION i1.env_v i2.env_v |>
              (FUNION m1 m2)`;
 }}
@@ -655,22 +667,31 @@ S {{ tex \ensuremath{\Sigma} }} :: '' ::=			{{ phantom }}
 E :: '' ::=							{{ phantom }}
 								{{ hol ((string,env_body) fmaptree) }}
   {{ com Environments }}
-  | < E_m , E_p , E_x >						:: :: E
-    {{ hol (FTNode <|env_p:=[[E_p]]; env_v:=[[E_x]]|> ([[E_m]])) }}
+  | < E_m , E_p , E_f , E_x >						:: :: E
+    {{ hol (FTNode <|env_p:=[[E_p]]; env_f:=[[E_f]]; env_v:=[[E_x]]|> ([[E_m]])) }}
   | E1 u+ E2							:: M :: E_union
     {{ hol (env_union [[E1]] [[E2]]) }}
     {{ ocaml assert false }}
   | empty							:: M :: E_empty
-    {{ hol (FTNode <|env_p:=FEMPTY; env_v:=FEMPTY|> FEMPTY) }}
+    {{ hol (FTNode <|env_p:=FEMPTY; env_f:=FEMPTY; env_v:=FEMPTY|> FEMPTY) }}
     {{ ocaml assert false }}
 
 E_x {{ tex \ottnt{E}^{\textsc{x} } }} :: 'E_x_' ::=		{{ phantom }}
-								{{ hol (x |-> kinds#v_desc) }}
+								{{ hol (x|-> v_desc) }}
   {{ com Value environments }}
-  | { x1 |-> kinds1 v_desc1 , .. , xn |-> kindsn v_descn }	:: :: concrete
-    {{ hol (FOLDR (\(k1,k2,x) E. E |+ (k1,(k2,x))) FEMPTY [[x1 kinds1 v_desc1 .. xn kindsn v_descn]]) }}
+  | { x1 |-> v_desc1 , .. , xn |-> v_descn }	:: :: concrete
+    {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[x1 v_desc1 .. xn v_descn]]) }}
   | E_x1 u+ .. u+ E_xn						:: M :: union
     {{ hol (FOLDR FUNION FEMPTY [[E_x1..E_xn]]) }}
+    {{ ocaml (assert false) }}
+
+E_f {{ tex \ottnt{E}^{\textsc{f} } }} :: 'E_f_' ::=		{{ phantom }}
+								{{ hol (x |-> f_desc) }}
+  {{ com Field environments }}
+  | { x1 |-> f_desc1 , .. , xn |-> f_descn }			:: :: concrete
+    {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[x1 f_desc1 .. xn f_descn]]) }}
+  | E_f1 u+ .. u+ E_fn						:: M :: union
+    {{ hol (FOLDR FUNION FEMPTY [[E_f1..E_fn]]) }}
     {{ ocaml (assert false) }}
 
 E_m {{ tex \ottnt{E}^{\textsc{m} } }} :: 'E_m_' ::=		{{ phantom }}
@@ -747,12 +768,12 @@ I :: '' ::=							{{ phantom }}
  
 
 D :: 'D_' ::=							{{ phantom }}
-								{{ hol ((p |-> tc_def) # (p |-> v list) # (inst list)) }}
+								{{ hol ((p |-> tc_def) # (p |-> x list) # (inst list)) }}
   {{ com Global type definition store }}
   | < TD , TC , I >							:: :: concrete
     {{ hol ([[TD]], [[TC]], [[I]]) }}
   | D1 u+ D2							:: M :: union
-    {{ hol (case ([[D1]],[[D2]]) of ((x1,x2,x3),(y1,y2,y3)) -> (FUNION x1 y1, FUNION x2 y2, x3 ++ y3)) }}
+    {{ hol (case ([[D1]],[[D2]]) of ((x1,x2,x3),(y1,y2,y3)) => (FUNION x1 y1, FUNION x2 y2, x3 ++ y3)) }}
     {{ ocaml (assert false) }}
   | empty							:: M :: empty
     {{ hol (FEMPTY, FEMPTY, []) }}
@@ -832,9 +853,13 @@ formula :: formula_ ::=
     {{ com Path lookup }}
     {{ hol (FLOOKUP [[E_p]] [[x]] = SOME [[p]]) }}
 
-  | E_x ( x ) gives kinds v_desc				:: :: lookup_v
+  | E_f ( x ) gives f_desc					:: :: lookup_f
+    {{ com Field lookup }}
+    {{ hol (FLOOKUP [[E_f]] [[x]] = SOME [[f_desc]]) }}
+
+  | E_x ( x ) gives v_desc					:: :: lookup_v
     {{ com Value lookup }}
-    {{ hol (FLOOKUP [[E_x]] [[x]] = SOME ([[kinds]],[[v_desc]])) }}
+    {{ hol (FLOOKUP [[E_x]] [[x]] = SOME [[v_desc]]) }}
 
   | E_l ( x ) gives t						:: :: lookup_l
     {{ com Lexical binding lookup }}
@@ -857,17 +882,19 @@ formula :: formula_ ::=
   | dom ( E_p1 ) inter dom ( E_p2 ) = emptyset			:: :: E_p_disjoint
     {{ hol (DISJOINT (FDOM [[E_p1]]) (FDOM [[E_p2]])) }}
 
-  | disjoint doms ( E_l1 , .. , E_ln )				:: :: E_l_disjoint
-    {{ hol (FOLDR (\E b. case b of NONE -> NONE || SOME s -> if DISJOINT (FDOM E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_l1..E_ln]] <> NONE) }}
+  | disjoint doms ( E_l1 , .... , E_ln )			:: :: E_l_disjoint
+    {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
+E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_l1....E_ln]] <> NONE) }}
     {{ com Pairwise disjoint domains }}
 
-  | disjoint doms ( E_x1 , .. , E_xn )				:: :: E_x_disjoint_many
-    {{ hol (FOLDR (\E b. case b of NONE -> NONE || SOME s -> if DISJOINT (FDOM E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_x1..E_xn]] <> NONE) }}
+  | disjoint doms ( E_x1 , .... , E_xn )			:: :: E_x_disjoint_many
+    {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
+E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_x1....E_xn]] <> NONE) }}
     {{ com Pairwise disjoint domains }}
 
-  | compatible overlap ( { x1 |-> t1 } , .. , { xn |-> tn } )	:: :: E_l_compat
+  | compatible overlap ( x1 |-> t1 , .. , xn |-> tn )		:: :: E_l_compat
     {{ hol (!__n __m. MEM __m [[x1 t1 .. xn tn]] /\ MEM __n [[x1 t1..xn tn]] /\ (FST __m  = FST __n) ==> (SND __m = SND __n)) }}
-    {{ com $(\ottnt{x}_i = \ottnt{x}_j) [[==>]] (\ottnt{t}_i = \ottnt{t}_j)$ }}
+    {{ com $(\ottnt{x}_i = \ottnt{x}_j) \ensuremath{\Longrightarrow} (\ottnt{t}_i = \ottnt{t}_j)$ }}
 
   | duplicates ( tvs ) = emptyset				:: :: no_dups_tvs
     {{ hol (ALL_DISTINCT [[tvs]]) }}
@@ -881,24 +908,14 @@ formula :: formula_ ::=
   | x NOTIN dom ( E_x )						:: :: notin_dom_v
     {{ hol ([[x]] NOTIN FDOM [[E_x]]) }}
 
+  | x NOTIN dom ( E_f )						:: :: notin_dom_f
+    {{ hol ([[x]] NOTIN FDOM [[E_f]]) }}
+
   | p NOTIN dom ( TC )						:: :: notin_dom_tc
     {{ hol ([[p]] NOTIN FDOM [[TC]]) }}
 
   | p NOTIN dom ( TD )						:: :: notin_dom_td
     {{ hol ([[p]] NOTIN FDOM [[TD]]) }}
-
-  | kind NOTIN kinds						:: :: kind_notin
-    {{ hol ([[kind]] NOTIN [[kinds]]) }}
-
-  | kind In kinds						:: :: kind_in
-    {{ hol ([[kind]] IN [[kinds]]) }}
-    {{ tex [[kind]] \in [[kinds]] }}
-
-  | kinds1 inter kinds2 = emptyset				:: :: kinds_disj
-    {{ hol ([[kinds1]] INTER [[kinds2]] = {}) }}
-
-  | kinds1 NOTEQ kinds2 					:: :: kinds_noteq
-    {{ hol ([[kinds1]] <> [[kinds2]]) }}
 
   | FV ( t ) SUBSET tvs						:: :: FV_t
     {{ com Free type variables }}
@@ -923,6 +940,9 @@ formula :: formula_ ::=
 
   | E_x1 = E_x2							:: :: E_x_eqn
     {{ hol ([[E_x1]] = [[E_x2]]) }}
+
+  | E_f1 = E_f2							:: :: E_f_eqn
+    {{ hol ([[E_f1]] = [[E_f2]]) }}
 
   | E1 = E2							:: :: E_eqn
     {{ hol ([[E1]] = [[E2]]) }}
@@ -983,9 +1003,9 @@ by
 E() gives E
 
 E_m(x) gives E1
-E1(y_l1 .. y_ln) gives E2
+E1(</y_li//i/>) gives E2
 ------------------------------------------------------------ :: some
-<E_m,E_p,E_x>(x l y_l1 .. y_ln) gives E2
+<E_m,E_p,E_f,E_x>(x l </y_li//i/>) gives E2
 
 defns
 look_m_id :: '' ::=
@@ -995,9 +1015,9 @@ E1 ( id ) gives E2 :: :: look_m_id :: look_m_id_
 {{ com Module identifier lookup }}
 by
 
-E1(y_l1 .. y_ln x l1) gives E2
+E1(</y_li//i/> x l1) gives E2
 ------------------------------------------------------------ :: all
-E1(y_l1 . .. y_ln . x l1 l2) gives E2
+E1(</y_li.//i/> x l1 l2) gives E2
 
 defns
 look_tc :: '' ::=
@@ -1007,24 +1027,10 @@ E ( id ) gives p :: :: look_tc :: look_tc_
 {{ com Path identifier lookup }}
 by
 
-E(y_l1 .. y_ln) gives <E_m,E_p,E_x>
+E(</y_li//i/>) gives <E_m,E_p,E_f,E_x>
 E_p(x) gives p
 ------------------------------------------------------------ :: all
-E(y_l1 . .. y_ln . x l1 l2) gives p
-
-defns
-look_val :: '' ::=
-
-defn
-E ( id ) gives kinds v_desc :: :: look_val :: look_var_ 
-{{ com Value identifier lookup }}
-by
-
-E(y_l1 .. y_ln) gives <E_m,E_p,E_x>
-E_x(x) gives kinds v_desc
------------------------------------------------------------- :: all
-E(y_l1 . .. y_ln . x l1 l2) gives kinds v_desc
-
+E(</y_li.//i/> x l1 l2) gives p
 
 defns
 check_t :: '' ::=
@@ -1175,10 +1181,11 @@ TD , E |- field id : t_args p -> t gives ( x of names ) :: :: inst_field :: inst
 {{ com Field typing (also returns canonical field names) }} 
 by
 
-E(id) gives {field} <forall a1..an. p -> t, (x of names)>
+E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
+E_f(y) gives <forall a1..an. p -> t, (z of names)>
 TD |- t1 ok .. TD |- tn ok
 ------------------------------------------------------------ :: all
-TD,E |- field id : (t1, .., tn) p -> {a1|->t1..an|->tn}(t) gives (x of names)
+TD,E |- field </x_li.//i/> y l1 l2: (t1, .., tn) p -> {a1|->t1..an|->tn}(t) gives (z of names)
 
 
 defns
@@ -1189,11 +1196,11 @@ TD , E |- ctor id : t_multi -> t_args p gives ( x of names ) :: :: inst_ctor :: 
 {{ com Data constructor typing (also returns canonical constructor names) }} 
 by
 
-E(id) gives {ctor} <forall a1..an. t_multi -> p, (x of names)>
+E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
+E_x(y) gives <forall a1..an. t_multi -> p, (z of names)>
 TD |- t1 ok .. TD |- tn ok
 ------------------------------------------------------------ :: all
-TD,E |- ctor id : {a1|->t1..an|->tn}(t_multi) -> (t1,..,tn)p gives (x of names)
-
+TD,E |- ctor </x_li.//i/> y l1 l2 : {a1|->t1..an|->tn}(t_multi) -> (t1,..,tn)p gives (z of names)
 
 defns
 inst_val :: '' ::=
@@ -1203,13 +1210,14 @@ TD , E |- val id : t gives S :: :: inst_val :: inst_val_
 {{ com Typing top-level bindings, collecting typeclass constraints }}
 by
 
-E(id) gives kinds forall a1..an. (p1 a'1) .. (pi a'i) => t
+%TODO: Should a val tag be allowed here?
+
+E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
+E_x(y) gives <forall a1..an. (p1 a'1) .. (pi a'i) => t,env_tag>
 TD |- t1 ok .. TD |- tn ok
 t_subst = {a1|->t1..an|->tn}
-kinds NOTEQ {spec}
 ------------------------------------------------------------ :: all
-TD, E |- val id : t_subst(t) gives {(p1 t_subst(a'1)), .., (pi t_subst(a'i))}
-
+TD, E |- val </x_li.//i/> y l1 l2 : t_subst(t) gives {(p1 t_subst(a'1)), .., (pi t_subst(a'i))}
 
 defns
 not_ctor :: '' ::=
@@ -1225,12 +1233,11 @@ E,E_l |- x not ctor
 
 x NOTIN dom(E_x)
 ------------------------------------------------------------ :: unbound
-<E_m,E_p,E_x>,E_l |- x not ctor
+<E_m,E_p,E_f,E_x>,E_l |- x not ctor
 
-E_x(x) gives kinds v_desc
-ctor NOTIN kinds
+E_x(x) gives <forall a1..an. (p1 a'1)..(pi a'i) => t,env_tag>
 ------------------------------------------------------------ :: bound
-<E_m,E_p,E_x>,E_l |- x not ctor
+<E_m,E_p,E_f,E_x>,E_l |- x not ctor
 
 defns
 not_shadowed :: '' ::=
@@ -1291,13 +1298,12 @@ E,E_l |- x not ctor
 ------------------------------------------------------------ :: var
 TD,E,E_l |- x l1 l2 : t gives {x|->t}
 
-E_l |- id1 not shadowed ... E_l |- idn not shadowed
-TD,E |- field id1 : t_args p -> t1 gives (x1 of names) ... TD,E |- field idn : t_args p -> tn gives (xn of names)
-TD,E,E_l |- pat1 : t1 gives E_l1 ... TD,E,E_l |- patn : tn gives E_ln
-disjoint doms(E_l1,...,E_ln)
-duplicates(x1,...,xn) = emptyset
+</TD,E |- field idi : t_args p -> ti gives (xi of names) // i />
+</TD,E,E_l |- pati : ti gives E_li//i/>
+disjoint doms(</E_li//i/>)
+duplicates(</xi//i/>) = emptyset
 ------------------------------------------------------------ :: record
-TD,E,E_l |- <| id1 = pat1 l1; ...; idn = patn ln semi_opt |> : t_args p gives E_l1 u+ ... u+ E_ln
+TD,E,E_l |- <| </idi = pati li//i/> semi_opt |> : t_args p gives u+ </E_li//i/>
 
 TD,E,E_l |- pat1 : t1 gives E_l1 .... TD,E,E_l |- patn : tn gives E_ln
 disjoint doms(E_l1,....,E_ln)
@@ -1325,6 +1331,44 @@ TD,E,E_l1 |- pat1 :: pat2 : t gives E_l2 u+ E_l3
 TD,E,E_l |- lit : t gives {}
 
 defns
+id_field :: '' ::=
+
+defn
+E |- id field :: :: id_field :: id_field_
+{{ com Check that the identifier is a permissible field identifier }}
+by
+
+E_f(x) gives f_desc
+------------------------------------------------------------ :: empty
+<E_m,E_p,E_f,E_x> |- x l1 l2 field
+
+
+E_m(x) gives E
+x NOTIN dom(E_f)
+E |- </y_li.//i/> z_l l2 field
+------------------------------------------------------------ :: cons
+<E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 field
+
+defns
+id_value :: '' ::=
+
+defn
+E |- id value :: :: id_value :: id_value_
+{{ com Check that the identifier is a permissible value identifier }}
+by
+
+E_x(x) gives v_desc
+------------------------------------------------------------ :: empty
+<E_m,E_p,E_f,E_x> |- x l1 l2 value
+
+
+E_m(x) gives E
+x NOTIN dom(E_x)
+E |- </y_li.//i/> z_l l2 value
+------------------------------------------------------------ :: cons
+<E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 value
+
+defns
 check_exp :: '' ::=
 
 defn
@@ -1342,18 +1386,21 @@ TD , E , E_l |- exp_aux : t gives S :: :: check_exp_aux :: check_exp_aux_
 by
 
 E_l(x) gives t
------------------------------------------------------------- :: ident_val
+------------------------------------------------------------ :: var
 TD,E,E_l |- x l1 l2 : t gives {}
 
-TD,E |- ctor id : t_multi -> t_args p gives (x of names)
 E_l |- id not shadowed
------------------------------------------------------------- :: ident_constr
+E |- id value
+TD,E |- ctor id : t_multi -> t_args p gives (x of names)
+------------------------------------------------------------ :: ctor
 TD,E,E_l |- id : curry(t_multi, t_args p) gives {}
 
-TD,E |- val id : t gives S
 E_l |- id not shadowed
------------------------------------------------------------- :: ident_const
-TD,E,E_l |- id : t gives S
+E |- id value
+TD, E |- val id : t gives S
+------------------------------------------------------------ :: val
+TD,E,E_l |- id : t gives S 
+
 
 TD,E,E_l |- pat1 : t1 gives E_l1 ... TD,E,E_l |- patn : tn gives E_ln
 TD,E,E_l u+ E_l1 u+ ... u+ E_ln |- exp : u gives S
@@ -1361,10 +1408,10 @@ disjoint doms(E_l1,...,E_ln)
 ------------------------------------------------------------ :: fn
 TD,E,E_l |- fun pat1 ... patn -> exp l : curry((t1*...*tn), u) gives S
 
-TD,E,E_l |- pat1 : t gives E_l1 ... TD,E,E_l |- patn : t gives E_ln
-TD,E,E_l u+ E_l1 |- exp1 : u gives S1 ... TD,E,E_l u+ E_ln |- expn : u gives Sn
+</TD,E,E_l |- pati : t gives E_li//i/>
+</TD,E,E_l u+ E_li |- expi : u gives Si//i/>
 ------------------------------------------------------------ :: function
-TD,E,E_l |- function bar_opt pat1 -> exp1 l1 | ... | patn -> expn ln end : t -> u gives S1 union ... union Sn 
+TD,E,E_l |- function bar_opt </pati -> expi li//i/> end : t -> u gives </Si//i/> 
 
 TD,E,E_l |- exp1 : t1 -> t2 gives S1
 TD,E,E_l |- exp2 : t1 gives S2
@@ -1383,33 +1430,31 @@ TD,E,E_l |- exp2 : t2 gives S3
 ------------------------------------------------------------ :: infix_app2
 TD,E,E_l |- exp1 `x` l exp2 : t3 gives S1 union S2 union S3
 
-E_l |- id1 not shadowed ... E_l |- idn not shadowed
-TD,E |- field id1 : t_args p -> t1 gives (x1 of names) ... TD,E |- field idn : t_args p -> tn gives (xn of names)
-TD,E,E_l |- exp1 : t1 gives S1 ... TD,E,E_l |- expn : tn gives Sn
-duplicates(x1,...,xn) = emptyset
-names = {x1,...,xn}
+</TD,E |- field idi : t_args p -> ti gives (xi of names)//i/>
+</TD,E,E_l |- expi : ti gives Si//i/>
+duplicates(</xi//i/>) = emptyset
+names = {</xi//i/>}
 ------------------------------------------------------------ :: record
-TD,E,E_l |- <| id1 = exp1 l1 ; ... ; idn = expn ln semi_opt l |> : t_args p gives S1 union ... union Sn
+TD,E,E_l |- <| </idi = expi li//i/> semi_opt l |> : t_args p gives </Si//i/>
 
-E_l |- id1 not shadowed ... E_l |- idn not shadowed
-TD,E |- field id1 : t_args p -> t1 gives (x1 of names) ... TD,E |- field idn : t_args p -> tn gives (xn of names)
-TD,E,E_l |- exp1 : t1 gives S1 ... TD,E,E_l |- expn : tn gives Sn
-duplicates(x1,...,xn) = emptyset
+</TD,E |- field idi : t_args p -> ti gives (xi of names)//i/>
+</TD,E,E_l |- expi : ti gives Si//i/>
+duplicates(</xi//i/>) = emptyset
 TD,E,E_l |- exp : t_args p gives S'
 ------------------------------------------------------------ :: recup
-TD,E,E_l |- <| exp with id1 = exp1 l1 ; ... ; idn = expn ln semi_opt l |> : t_args p gives S' union S1 union ... union Sn
+TD,E,E_l |- <| exp with </idi = expi li//i/> semi_opt l |> : t_args p gives S' union </Si//i/>
 
-E_l |- id not shadowed
+E |- id field
 TD,E |- field id : t_args p -> t gives (x of names)
 TD,E,E_l |- exp : t_args p gives S
 ------------------------------------------------------------ :: field
 TD,E,E_l |- exp.id : t gives S
 
-TD,E,E_l |- pat1 : t gives E_l1 ... TD,E,E_l |- patn : t gives E_ln
-TD,E,E_l u+ E_l1 |- exp1 : u gives S1 ... TD,E,E_l u+ E_ln |- expn : u gives Sn
+</TD,E,E_l |- pati : t gives E_li//i/>
+</TD,E,E_l u+ E_li |- expi : u gives Si//i/>
 TD,E,E_l |- exp : t gives S'
 ------------------------------------------------------------ :: case
-TD,E,E_l |- match exp with bar_opt pat1 -> exp1 l1 | ... | patn -> expn ln l end : u gives S' union S1 union ... union Sn
+TD,E,E_l |- match exp with bar_opt </pati -> expi li//i/> l end : u gives S' union </Si//i/>
 
 TD,E,E_l |- exp : t gives S
 TD,E |- typ ~> t
@@ -1453,36 +1498,37 @@ TD,E,E_l |- exp1 :: exp2 : (t) __list gives S1 union S2
 ------------------------------------------------------------ :: lit
 TD,E,E_l |- lit : t gives {}
 
-TD |- t1 ok .. TD |- tn ok
-TD,E,E_l u+ {x1|->t1,..,xn|->tn} |- exp1 : t gives S1
-TD,E,E_l u+ {x1|->t1,..,xn|->tn} |- exp2 : () __bool gives S2
-disjoint doms(E_l, {x1|->t1,..,xn|->tn})
-E = <E_m,E_p,E_x>
-x1 NOTIN dom(E_x) .. xn NOTIN dom(E_x)
+% TODO: should require that each xi actually appears free in exp1
+</TD |- ti ok//i/>
+TD,E,E_l u+ {</xi|->ti//i/>} |- exp1 : t gives S1
+TD,E,E_l u+ {</xi|->ti//i/>} |- exp2 : () __bool gives S2
+disjoint doms(E_l, {</xi|->ti//i/>})
+E = <E_m,E_p,E_f,E_x>
+</xi NOTIN dom(E_x)//i/>
 ------------------------------------------------------------ :: set_comp
 TD,E,E_l |- { exp1 | exp2 } : (t) __set gives S1 union S2
 
-TD,E,E_l1 |- qbind1 .. qbindn gives E_l2,S1
+TD,E,E_l1 |- </qbindi//i/> gives E_l2,S1
 TD,E,E_l1 u+ E_l2 |- exp1 : t gives S2
 TD,E,E_l1 u+ E_l2 |- exp2 : () __bool gives S3
 ------------------------------------------------------------ :: set_comp_binding
-TD,E,E_l1 |- { exp1 | forall qbind1 .. qbindn | exp2 } : (t) __set gives S1 union S2 union S3
+TD,E,E_l1 |- { exp1 | forall </qbindi//i/> | exp2 } : (t) __set gives S1 union S2 union S3
 
 TD |- t ok
 TD,E,E_l |- exp1 : t gives S1 .. TD,E,E_l |- expn : t gives Sn
 ------------------------------------------------------------ :: set
 TD,E,E_l |- { exp1; ..; expn semi_opt } : (t) __set gives S1 union .. union Sn
 
-TD,E,E_l1 |- qbind1 ... qbindn gives E_l2,S1
+TD,E,E_l1 |- </qbindi//i/> gives E_l2,S1
 TD,E,E_l1 u+ E_l2 |- exp : () __bool gives S2
 ------------------------------------------------------------ :: quant
-TD,E,E_l1 |- q qbind1 ... qbindn . exp : () __bool gives S1 union S2
+TD,E,E_l1 |- q </qbindi//i/> . exp : () __bool gives S1 union S2
 
-TD,E,E_l1 |- list qbind1 .. qbindn gives E_l2,S1
+TD,E,E_l1 |- list </qbindi//i/> gives E_l2,S1
 TD,E,E_l1 u+ E_l2 |- exp1 : t gives S2
 TD,E,E_l1 u+ E_l2 |- exp2 : () __bool gives S3
 ------------------------------------------------------------ :: list_comp_binding
-TD,E,E_l1 |- [ exp1 | forall qbind1 .. qbindn | exp2 ] : (t) __list gives S1 union S2 union S3
+TD,E,E_l1 |- [ exp1 | forall </qbindi//i/> | exp2 ] : (t) __list gives S1 union S2 union S3
 
 defn
 TD , E , E_l1 |- qbind1 .. qbindn gives E_l2 , S :: :: check_listquant_binding
@@ -1494,24 +1540,24 @@ TD , E , E_l1 |- qbind1 .. qbindn gives E_l2 , S :: :: check_listquant_binding
 TD,E,E_l |- gives {},{}
 
 TD |- t ok
-TD,E,E_l1 u+ {x |-> t} |- qbind1 .. qbindn gives E_l2,S1
+TD,E,E_l1 u+ {x |-> t} |- </qbindi//i/> gives E_l2,S1
 disjoint doms({x |-> t}, E_l2)
 ------------------------------------------------------------ :: var
-TD,E,E_l1 |- x l qbind1 .. qbindn gives {x |-> t} u+ E_l2,S1
+TD,E,E_l1 |- x l </qbindi//i/> gives {x |-> t} u+ E_l2,S1
 
 TD,E,E_l1 |- pat : t gives E_l3
 TD,E,E_l1 |- exp : (t) __set gives S1
-TD,E,E_l1 u+ E_l3 |- qbind1 .. qbindn gives E_l2,S2
+TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: restr
-TD,E,E_l1 |- (pat IN exp) qbind1 .. qbindn gives E_l2 u+ E_l3,S1 union S2
+TD,E,E_l1 |- (pat IN exp) </qbindi//i/> gives E_l2 u+ E_l3,S1 union S2
 
 TD,E,E_l1 |- pat : t gives E_l3
 TD,E,E_l1 |- exp : (t) __list gives S1
-TD,E,E_l1 u+ E_l3 |- qbind1 .. qbindn gives E_l2,S2
+TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: list_restr
-TD,E,E_l1 |- (pat MEM exp) qbind1 .. qbindn gives E_l2 u+ E_l3,S1 union S2
+TD,E,E_l1 |- (pat MEM exp) </qbindi//i/> gives E_l2 u+ E_l3,S1 union S2
 
 defn
 TD , E , E_l1 |- list qbind1 .. qbindn gives E_l2 , S :: :: check_quant_binding :: check_quant_binding_
@@ -1523,10 +1569,10 @@ TD,E,E_l |- list gives {},{}
 
 TD,E,E_l1 |- pat : t gives E_l3
 TD,E,E_l1 |- exp : (t) __list gives S1
-TD,E,E_l1 u+ E_l3 |- qbind1 .. qbindn gives E_l2,S2
+TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: restr
-TD,E,E_l1 |- list (pat MEM exp) qbind1 .. qbindn gives E_l2 u+ E_l3,S1 union S2
+TD,E,E_l1 |- list (pat MEM exp) </qbindi//i/> gives E_l2 u+ E_l3,S1 union S2
 
 
 defn
@@ -1576,12 +1622,12 @@ TD , E , E_l |- rule gives { x |-> t } , S :: :: check_rule :: check_rule_
 {{ com Build the environment for an inductive relation clause, collecting typeclass constraints }}
 by
 
-TD |- t1 ok .. TD |- tn ok
-E_l2 = {y1|->t1,..,yn|->tn} 
+</TD |- ti ok//i/>
+E_l2 = {</yi|->ti//i/>} 
 TD,E,E_l1 u+ E_l2 |- exp' : () __bool gives S'
-TD,E,E_l1 u+ E_l2 |- exp1 : u1 gives S1 .. TD,E,E_l1 u+ E_l2 |- expi : ui gives Si
+TD,E,E_l1 u+ E_l2 |- exp1 : u1 gives S1 .. TD,E,E_l1 u+ E_l2 |- expn : un gives Sn
 ------------------------------------------------------------ :: rule
-TD,E,E_l1 |- forall y1 l1 .. yn ln . exp' ==> x l exp1 .. expi l' gives {x|->curry((u1 * .. * ui) , () __bool)}, S' union S1 union .. union Si
+TD,E,E_l1 |- forall </yi li//i/> . exp' ==> x l exp1 .. expn l' gives {x|->curry((u1 * .. * un) , () __bool)}, S' union S1 union .. union Sn
 
 defns
 check_texp_tc :: '' ::=
@@ -1595,27 +1641,27 @@ tyvars ~> tvs
 TD,E |- typ ~> t
 duplicates(tvs) = emptyset
 FV(t) SUBSET tvs
-y1. .. yn.x NOTIN dom(TD)
+</yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: abbrev
-y1..yn,TD,E |- tc tyvars x l = typ gives {y1. .. yn.x|->tvs.t},{x|->y1. .. yn.x}
+</yi//i/>,TD,E |- tc tyvars x l = typ gives {</yi.//i/>x|->tvs.t},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
-y1. .. yn.x NOTIN dom(TD)
+</yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: abstract
-y1..yn,TD,E1 |- tc tyvars x l gives {y1. .. yn.x|->tvs},{x|->y1. .. yn.x}
+</yi//i/>,TD,E1 |- tc tyvars x l gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
-y1. .. yn.x NOTIN dom(TD)
+</yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: rec
-y1..yn,TD1,E |- tc tyvars x l = <| x_l1 : typ1 ; ... ; x_lj : typj semi_opt |> gives {y1. .. yn.x|->tvs},{x|->y1. .. yn.x}
+</yi//i/>,TD1,E |- tc tyvars x l = <| x_l1 : typ1 ; ... ; x_lj : typj semi_opt |> gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
-y1. .. yn.x NOTIN dom(TD)
+</yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: var
-y1..yn,TD1,E |- tc tyvars x l = bar_opt ctor_def1 | ... | ctor_defj gives {y1. .. yn.x|->tvs},{x|->y1. .. yn.x}
+</yi//i/>,TD1,E |- tc tyvars x l = bar_opt ctor_def1 | ... | ctor_defj gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 defns
 check_texps_tc :: '' ::=
@@ -1629,57 +1675,57 @@ by
 xs,TD,E |- tc gives {},{}
 
 :check_texp_tc: xs,TD1,E |- tc td gives TD2,E_p2
-xs,TD1 u+ TD2,E u+ <{},E_p2,{}> |- tc td1..tdi gives TD3,E_p3
+xs,TD1 u+ TD2,E u+ <{},E_p2,{},{}> |- tc </tdi//i/> gives TD3,E_p3
 dom(E_p2) inter dom(E_p3) = emptyset
 ------------------------------------------------------------ :: abbrev
-xs,TD1,E |- tc td td1..tdi gives TD2 u+ TD3,E_p2 u+ E_p3
+xs,TD1,E |- tc td </tdi//i/> gives TD2 u+ TD3,E_p2 u+ E_p3
 
 defns
 check_texp :: '' ::=
 
 defn
-TD , E |- tvs p = texp gives E_x :: :: check_texp :: check_texp_ 
+TD , E |- tvs p = texp gives < E_f , E_x > :: :: check_texp :: check_texp_ 
 {{ com Check a type definition, with its path already resolved }}
 by
 
 ------------------------------------------------------------ :: abbrev
-TD,E |- tvs p = typ gives {}
+TD,E |- tvs p = typ gives <{},{}>
 
-TD,E |- typ1 ~> t1 ... TD,E |- typn ~> tn
-names = {x1,...,xn}
-duplicates(x1,...,xn) = emptyset
-FV(t1) SUBSET tvs ... FV(tn) SUBSET tvs
-E_x = {x1|->{field} <forall tvs. p -> t1, (x1 of names)>, ..., xn|->{field} <forall tvs. p -> tn, (xn of names)>}
+</TD,E |- typi ~> ti//i/>
+names = {</xi//i/>}
+duplicates(</xi//i/>) = emptyset
+</FV(ti) SUBSET tvs//i/>
+E_f = {</xi|-> <forall tvs. p -> ti, (xi of names)>//i/>}
 ------------------------------------------------------------ :: rec
-TD,E |- tvs p = <| x_l1:typ1; ...; x_ln:typn semi_opt |> gives E_x
+TD,E |- tvs p = <| </x_li:typi//i/> semi_opt |> gives <E_f,{}>
 
-TD,E |- typs1 ~> t_multi1 ... TD,E |- typsn ~> t_multin
-names = {x1,...,xn}
-duplicates(x1,...,xn) = emptyset
-FV(t_multi1) SUBSET tvs ... FV(t_multin) SUBSET tvs
-E_x = {x1|->{ctor}<forall tvs. t_multi1 -> p, (x1 of names)>, ..., xn|->{ctor}<forall tvs. t_multin -> p, (xn of names)>}
+</TD,E |- typsi ~> t_multii//i/>
+names = {</xi//i/>}
+duplicates(</xi//i/>) = emptyset
+</FV(t_multii) SUBSET tvs//i/>
+E_x = {</xi|-><forall tvs. t_multii -> p, (xi of names)>//i/>}
 ------------------------------------------------------------ :: var
-TD,E |- tvs p = bar_opt x_l1 of typs1 | ... | x_ln of typsn gives E_x
+TD,E |- tvs p = bar_opt </x_li of typsi//i/> gives <{},E_x>
 
 defns
 check_texps :: '' ::=
 
 defn
-xs , TD , E |- td1 .. tdn gives E_x :: :: check_texps :: check_texps_ by
+xs , TD , E |- td1 .. tdn gives < E_f , E_x > :: :: check_texps :: check_texps_ by
 
 ------------------------------------------------------------ :: empty
-xs,TD,E |- gives {}
+</yi//i/>,TD,E |- gives <{},{}>
 
 tyvars ~> tvs
-TD,E1 |- tvs y1. .. yn.x = texp gives E_x1
-y1..yn,TD,E |- td1..tdi gives E_x2
+TD,E1 |- tvs </yi.//i/>x = texp gives <E_f1,E_x1>
+</yi//i/>,TD,E |- </tdj//j/> gives <E_f2,E_x2>
 dom(E_x1) inter dom(E_x2) = emptyset
 ------------------------------------------------------------ :: cons_concrete
-y1..yn,TD,E |- tyvars x l = texp td1..tdi gives E_x1 u+ E_x2
+</yi//i/>,TD,E |- tyvars x l = texp </tdj//j/> gives <E_f1 u+ E_f2, E_x1 u+ E_x2>
 
-xs,TD,E |- td1..tdn gives E_x
+</yi//i/>,TD,E |- </tdj//j/> gives <E_f,E_x>
 ------------------------------------------------------------ :: cons_abstract
-xs,TD,E |- tyvars x l td1..tdn gives E_x
+</yi//i/>,TD,E |- tyvars x l </tdj//j/> gives <E_f,E_x>
 
 defns
 convert_class :: '' ::=
@@ -1723,20 +1769,6 @@ I |- (p1 t1) IN semC ..  I |- (pn tn) IN semC
 I |- {(p1 t1), .., (pn tn)} gives semC
 
 defns
-targets_opt_to_kinds :: '' ::=
-
-defn
-targets_opt ~> kinds :: :: targets_opt_to_kinds :: targets_opts_to_kinds_
-{{ com Get the binding type for an optional target }}
-by
-
------------------------------------------------------------- :: none
-~> {let}
-
------------------------------------------------------------- :: some
-{target1;..;targetn} ~> {target1;..;targetn}
-
-defns
 check_val_def :: '' ::=
 
 defn
@@ -1744,23 +1776,21 @@ TD , I , E |- val_def gives E_x :: :: check_val_def :: check_val_def_
 {{ com Check a value definition }}
 by
 
-TD,E,{} |- letbind gives {x1|->t1, .., xn|->tn},S
+TD,E,{} |- letbind gives {</xi|->ti//i/>},S
 I |- S gives semC
-FV(t1) SUBSET tvs .. FV(tn) SUBSET tvs
+</FV(ti) SUBSET tvs//i/>
 FV(semC) SUBSET tvs
-targets_opt ~> kinds
 ------------------------------------------------------------ :: val
-TD,I,E1 |- let targets_opt letbind gives {x1 |->kinds forall tvs. semC => t1, .., xn |->kinds forall tvs. semC => tn}
+TD,I,E1 |- let targets_opt letbind gives {</xi |-> <forall tvs. semC => ti, let>//i/>}
 
-TD,E,E_l |- funcl1 gives {x1|->t1},S1 ... TD,E,E_l |- funcln gives {xn|->tn},Sn
+</TD,E,E_l |- funcli gives {xi|->ti},Si//i/>
 I |- S gives semC
-FV(t1) SUBSET tvs ... FV(tn) SUBSET tvs
+</FV(ti) SUBSET tvs//i/>
 FV(semC) SUBSET tvs
-compatible overlap({x1|->t1}, ..., {xn|->tn})
-E_l = {x1|->t1,...,xn|->tn}
-targets_opt ~> kinds
+compatible overlap(</xi|->ti//i/>)
+E_l = {</xi|->ti//i/>}
 ------------------------------------------------------------ :: recfun
-TD,I,E |- let rec targets_opt funcl1 and ... and funcln gives {x1 |->kinds forall tvs. semC => t1, ..., xn|->kinds forall tvs. semC => tn}
+TD,I,E |- let rec targets_opt </funcli//i/> gives {</xi|-><forall tvs. semC => ti,let>//i/>}
 
 defns
 check_t_instance :: '' ::=
@@ -1785,137 +1815,105 @@ TD(p) gives a'1..a'n
 TD , (a1, .., an) |- (a1,..,an) p instance
 
 defns
-convert_v_env :: '' ::=
-
-defn
-E_x1 |- E_x2 ~> E_x3 :: :: convert_v_env :: convert_v_env_ 
-{{ com Check that new definitions are compatible with existing ones }}
-by
-
------------------------------------------------------------- :: empty
-E_x1 |- {} ~> {}
-
-x NOTIN dom(E_x1)
-E_x1 |- E_x2 ~> E_x3
------------------------------------------------------------- :: first
-E_x1 |- E_x2 u+ {x |-> kinds v_desc} ~> E_x3 u+ {x |-> kinds v_desc}
-
-E_x1(x) gives kinds' v_desc
-kinds inter kinds' = emptyset
-kinds inter {mthd; ctor; field} = emptyset
-kinds' inter {mthd; ctor; field} = emptyset
-spec In kinds
-E_x1 |- E_x2 ~> E_x3
------------------------------------------------------------- :: duplicate
-E_x1 |- E_x2 u+ {x |-> kinds v_desc} ~> E_x3 u+ {x |-> kinds union kinds' v_desc}
-
-
-defns
 check_defs :: '' ::=
 
 defn
 
-xs , D1 , E1 |- def gives D2 , E2 :: :: check_def :: check_def_ 
+</ zj // j /> , D1 , E1 |- def gives D2 , E2 :: :: check_def :: check_def_ 
 {{ com Check a definition }}
 by
 
 
-xs,TD1,E |- tc td1 ... tdn gives TD2,E_p
-xs,TD1 u+ TD2,E u+ <{},E_p,{}> |- td1 ... tdn gives E_x
+</zj//j/>,TD1,E |- tc </tdi//i/> gives TD2,E_p
+</zj//j/>,TD1 u+ TD2,E u+ <{},E_p,{},{}> |- </tdi//i/> gives <E_f,E_x>
 ------------------------------------------------------------ :: type 
-xs,<TD1,TC,I>,E |- type td1 and ... and tdn l gives <TD2,{},{}>,<{},E_p,E_x>
+</zj//j/>,<TD1,TC,I>,E |- type </tdi//i/> l gives <TD2,{},{}>,<{},E_p,E_f,E_x>
 
 TD,I,E |- val_def gives E_x
 ------------------------------------------------------------ :: val_def
-xs,<TD,TC,I>,E |- val_def l gives empty,<{},{},E_x>
+</zj//j/>,<TD,TC,I>,E |- val_def l gives empty,<{},{},{},E_x>
 
-TD,E1,E_l |- rule1 gives {x1|->t1},S1 ... TD,E1,E_l |- rulen gives {xn|->tn},Sn
-I |- S1 union ... union Sn gives semC
-FV(t1) SUBSET tvs ... FV(tn) SUBSET tvs
+</TD,E1,E_l |- rulei gives {xi|->ti},Si//i/>
+I |- </Si//i/> gives semC
+</FV(ti) SUBSET tvs//i/>
 FV(semC) SUBSET tvs
-compatible overlap({x1|->t1}, ..., {xn|->tn})
-E_l = {x1|->t1,...,xn|->tn}
-targets_opt ~> kinds
-E2 = <{},{},{x1 |->kinds forall tvs. semC => t1, ..., xn |->kinds forall tvs. semC => tn}> 
+compatible overlap(</xi|->ti//i/>)
+E_l = {</xi|->ti//i/>}
+E2 = <{},{},{},{</xi |-><forall tvs. semC => ti,let>//i/>}>
 ------------------------------------------------------------ :: indreln
-xs,<TD,TC,I>,E1 |- indreln targets_opt rule1 and ... and rulen l gives empty,E2
+</zj//j/>,<TD,TC,I>,E1 |- indreln targets_opt </rulei//i/> l gives empty,E2
 
-x1..xn x,D1,E1,{} |- defs gives D2,E2
+</zj//j/> x,D1,E1 |- defs gives D2,E2
 ------------------------------------------------------------ :: module
-x1..xn,D1,E1 |- module x l1 = struct defs end l2 gives D2,<{x|->E2},{},{}>
+</zj//j/>,D1,E1 |- module x l1 = struct defs end l2 gives D2,<{z|->E2},{},{},{}>
 
 E1(id) gives E2
 ------------------------------------------------------------ :: module_rename
-xs,D,E1 |- module x l1 = id l2 gives empty,<{x|->E2},{},{}>
+</zj//j/>,D,E1 |- module x l1 = id l2 gives empty,<{x|->E2},{},{},{}>
 
 TD,E |- typ ~> t
-FV(t) SUBSET a1..ai
-FV(a'1 * .. * a'j) SUBSET a1..ai
-TC,E |- id1 ~> p1 .. TC,E |- idj ~> pj
-E' = <{},{},{x|->{spec} forall a1..ai. (p1 a'1) .. (pj a'j) => t}>
+FV(t) SUBSET </ai//i/>
+FV(</a'k//k/>) SUBSET </ai//i/>
+</TC,E |- idk ~> pk//k/>
+E' = <{},{},{},{x|-><forall </ai//i/>. </(pk a'k)//k/> => t,val>}>
 ------------------------------------------------------------ :: spec
-xs,<TD,TC,I>,E |- val x l1 : forall a1 l''1 .. ai l''i. (id1 a'1 l'1) .. (idj a'j l'j) => typ l2 gives empty,E'
+</zj//j/>,<TD,TC,I>,E |- val x l1 : forall </ai l''i//i/>. </(idk a'k l'k)//k/> => typ l2 gives empty,E'
 
 TD |- t1 ok .. TD |- tn ok
 disjoint doms({y1|->t1},..,{yn|->tn})
 TD,E1,{y1|->t1, .., yn|->tn} |- exp : t gives {}
 t' = curry((t1 * .. * tn), t)
 FV(t') SUBSET tvs
-E2 = <{},{},{x |->{target} forall tvs. => t'}> 
+E2 = <{},{},{},{x |-><forall tvs. => t',let>}> 
 ------------------------------------------------------------ :: sub
-xs,<TD,TC,I>,E1 |- sub [ target ] x l y1 l1 .. yn ln = exp l' gives empty,E2
+</zj//j/>,<TD,TC,I>,E1 |- sub [ target ] x l y1 l1 .. yn ln = exp l' gives empty,E2
 
-TD,E1 |- typ1 ~> t1 ... TD,E1 |- typn ~> tn
-FV(t1) SUBSET a ... FV(tn) SUBSET a
-p = z1...zi.x
-E2 = <{},{x|->p},{y1 |->{mthd} forall a. (p a) => t1, ..., yn |->{mthd} forall a. (p a) => tn}>
-TC2 = {p|->y1...yn}
+</TD,E1 |- typi ~> ti//i/>
+</FV(ti) SUBSET a//i/>
+p = </zj.//j/>x
+E2 = <{},{x|->p},{},{</yi |-><forall a. (p a) => ti,method>//i/>}>
+TC2 = {p|-></yi//i/>}
 p NOTIN dom(TC1)
 ------------------------------------------------------------ :: class
-z1..zi,<TD,TC1,I>,E1 |- class (x l a l'') val y1 l1 : typ1 l1 ... val yn ln : typn ln end l' gives <{},TC2,{}>,E2
+</zj//j/>,<TD,TC1,I>,E1 |- class (x l a l'') </val yi li : typi li//i/> end l' gives <{},TC2,{}>,E2
 
-E = <E_m,E_p,E_x>
+E = <E_m,E_p,E_f,E_x>
 TD,E |- typ' ~> t'
-TD,(a1,..,ai) |- t' instance
-tvs = a1..ai
+TD,(</ai//i/>) |- t' instance
+tvs = </ai//i/>
 duplicates(tvs) = emptyset
-TC,E |- id1 ~> p1 .. TC,E |- idj ~> pj
-FV(a'1 * .. * a'j) SUBSET tvs
+</TC,E |- idk ~> pk//k/>
+FV(</a'k//k/>) SUBSET tvs
 E(id) gives p
-TC(p) gives xs
-I2 = { => (p1 a'1), .., => (pj a'j) }
-TD,I union I2,E |- val_def1 gives E_x1 ... TD,I union I2,E|- val_defn gives E_xn
-disjoint doms(E_x1,...,E_xn)
-E_x(x1) gives {mthd} forall a''. (p a'') => t1 .. E_x(xk) gives {mthd} forall a''. (p a'') => tk
-{x1 |->{let} forall tvs. => {a''|->t'}(t1) , .., xk |->{let} forall tvs. => {a''|->t'}(tk)} = E_x1 u+ ... u+ E_xn
-x1..xk = xs
-I3 = {(p1 a'1) .. (pj a'j) => (p t')}
-(p {a1 |-> a'''1 .. ai |-> a'''i}(t')) NOTIN I
+TC(p) gives </zj//j/>
+I2 = { </=> (pk a'k)//k/> }
+</TD,I union I2,E |- val_defn gives E_xn//n/>
+disjoint doms(</E_xn//n/>)
+</E_x(xk) gives <forall a''. (p a'') => tk,method>//k/>
+{</xk |-> <forall tvs. => {a''|->t'}(tk),let>//k/>} = </E_xn//n/>
+</xk//k/> = </zj//j/>
+I3 = {</(pk a'k) => (p t')//k/>}
+(p {</ai |-> a'''i//i/>}(t')) NOTIN I
 ------------------------------------------------------------ :: instance_tc
-xs,<TD,TC,I>,E |- instance forall a1 l'1 .. ai l'i. (id1 a'1 l''1) .. (idj a'j l''j) => (id typ') val_def1 l1 ... val_defn ln end l' gives <{},{},I3>,empty
-
+</zj//j/>,<TD,TC,I>,E |- instance forall </ai l'i//i/>. </(idk a'k l''k)//k/> => (id typ') </val_defn ln//n/> end l' gives <{},{},I3>,empty
 
 defn
-xs , D1 , E1 , E_x |- defs gives D2 , E2 :: :: check_defs :: check_defs_ 
-{{ com Check definitions }}
+</ zj // j /> , D1 , E1 |- defs gives D2 , E2 :: :: check_defs :: check_defs_ 
+{{ com Check definitions, given module path, definitions and environment }}
 by
 
+% TODO: Check compatibility for duplicate definitions
+
 ------------------------------------------------------------ :: empty
-xs,D,E,E_x |- gives empty,empty
+</zj//j/>,D,E |- gives empty,empty
 
-% TODO: Ensure that a value name is not defined after its first use.
-:check_def: xs,D1,E1 |- def gives D2,E2
-E2 = <E_m2,E_p2,E_x2>
-E_x1 |- E_x2 ~> E_x4
-xs,D1 u+ D2,E1 u+ <E_m2,E_p2,E_x4>,E_x1 u+ E_x4 |- def1 semisemi_opt1 .. defn semisemi_optn gives D3,E3
-E3 = <E_m3,E_p3,E_x3>
-dom(E_m2) inter dom(E_m3) = emptyset
-dom(E_p2) inter dom(E_p3) = emptyset
------------------------------------------------------------- :: def 
-xs,D1,E1,E_x1 |- def semisemi_opt def1 semisemi_opt1 .. defn semisemi_optn gives D2 u+ D3, E2 u+ E3
+:check_def: </zj//j/>,D1,E1 |- def gives D2,E2
+</zj//j/>,D1 u+ D2,E1 u+ E2 |- </defi semisemi_opti // i/> gives D3,E3
+------------------------------------------------------------ :: relevant_def 
+</zj//j/>,D1,E1 |- def semisemi_opt </defi semisemi_opti // i/> gives D2 u+ D3, E2 u+ E3
 
-E1(id) gives E3
-xs,D1,E1 u+ E3,E_x |- def1 semisemi_opt1 .. defn semisemi_optn gives D2,E2
+E1(id) gives E2
+</zj//j/>,D1,E1 u+ E2 |- </defi semisemi_opti // i/> gives D3,E3
 ------------------------------------------------------------ :: open
-xs,D1,E1,E_x |- open id l semisemi_opt def1 semisemi_opt1 .. defn semisemi_optn gives D2,E2
+</zj//j/>,D1,E1 |- open id l semisemi_opt </defi semisemi_opti // i/> gives D3,E3
 

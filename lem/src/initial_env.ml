@@ -3,10 +3,11 @@ open Types
 open Process_file
 
 let (^^) = Filename.concat
+let r = Ulib.Text.of_latin1
 
 let tds = 
-  [(Path.listpath, Tc_abbrev([Tyvar.from_rope r"a"], None));
-   (Path.setpath, Tc_abbrev([Tyvar.from_rope r"a"], None));
+  [(Path.listpath, Tc_abbrev([Tyvar.from_rope (r"a")], None));
+   (Path.setpath, Tc_abbrev([Tyvar.from_rope (r"a")], None));
    (Path.numpath, Tc_abbrev([], None));
    (Path.stringpath, Tc_abbrev([], None));
    (Path.boolpath, Tc_abbrev([], None));
@@ -20,12 +21,12 @@ let initial_env : Typed_ast.env =
     v_env = Nfmap.empty;
     f_env = Nfmap.empty;
     p_env = Nfmap.from_list 
-              [(Name.from_rope r"bool", Path.boolpath);
-               (Name.from_rope r"set", Path.setpath);
-               (Name.from_rope r"list", Path.listpath);
-               (Name.from_rope r"string", Path.stringpath);
-               (Name.from_rope r"unit", Path.unitpath);
-               (Name.from_rope r"num", Path.numpath)] }
+              [(Name.from_rope (r"bool"), Path.boolpath);
+               (Name.from_rope (r"set"), Path.setpath);
+               (Name.from_rope (r"list"), Path.listpath);
+               (Name.from_rope (r"string"), Path.stringpath);
+               (Name.from_rope (r"unit"), Path.unitpath);
+               (Name.from_rope (r"num"), Path.numpath)] }
 
 let space = Str.regexp "[ \t\n]+"
 
@@ -34,7 +35,7 @@ let read_constants file =
   let rec f () =
     try 
       let s = input_line i in
-        List.map BatRope.of_latin1 (Str.split space s) @ f ()
+        List.map Ulib.Text.of_latin1 (Str.split space s) @ f ()
     with
       | End_of_file ->
           close_in i;
@@ -43,10 +44,25 @@ let read_constants file =
 
 type t = 
     ((type_defs * instance list Pfmap.t) * Typed_ast.env) *
-    (Typed_ast.target option * BatRope.t list) list
+    (Typed_ast.target option * Ulib.Text.t list) list
 
 let filename_to_mod file =
-  BatRope.of_latin1 (String.capitalize (Filename.basename (Filename.chop_extension file))) 
+  Ulib.Text.of_latin1 (String.capitalize (Filename.basename (Filename.chop_extension file))) 
+
+(* These library specifications are all built with "val" definitions, but need
+ * to indicate that they are actually defined in the given target *)
+let rec add_target_to_def target defs =
+  { defs with 
+        m_env = Nfmap.map (fun k e -> add_target_to_def target e) defs.m_env;
+        v_env = 
+          Nfmap.map 
+            (fun k v -> 
+               match v with 
+                 | Constr _ -> v
+                 | Val(c) -> 
+                     assert (c.env_tag = K_val);
+                     Val ({ c with env_tag = K_target(false,Targetset.singleton target) }))
+            defs.v_env }
 
 let process_lib target file mod_name init_env =
   let mp = 
@@ -56,9 +72,14 @@ let process_lib target file mod_name init_env =
   in
   let ast = parse_file file in
   let ((tdefs,instances,_),new_defs,_) =
-    Process_file.check_ast_as_module mp init_env mod_name ast
+    Process_file.check_ast_as_module all_targets mp init_env mod_name ast
   in
-    ((tdefs,instances), new_defs)
+  let new_defs2 =
+    match target with
+      | None -> new_defs
+      | Some(tgt) -> add_target_to_def tgt new_defs 
+  in
+    ((tdefs,instances), new_defs2)
 
 let add_lib e1 e2 = env_union e1 e2
 
@@ -116,7 +137,7 @@ module Initial_libs (P : sig val path : string end) = struct
     List.fold_left
       (fun init_env t -> proc_open (Some(Target_hol)) (full_filename Target_hol t) init_env)
       (td,initial_env)
-      ["min"; "bool"; "pair"; "arithmetic"; "pred_set"; "finite_map"; "list"; "string"; "sorting"; "set_relation"]
+      ["min"; "bool"; "pair"; "arithmetic"; "pred_set"; "finite_map"; "list"; "string"; "sorting"; "set_relation"; "integer"]
 
   let target = Target_ocaml
 
@@ -134,7 +155,7 @@ module Initial_libs (P : sig val path : string end) = struct
     List.fold_left
       (fun init_env t -> proc (Some(Target_ocaml)) (full_filename Target_ocaml t) init_env)
       (td,ocaml_perv)
-      ["list"; "pset"; "pmap"]
+      ["list"; "pset"; "pmap"; "nat_num"]
   
   
   (* Isabelle Env *)
@@ -168,7 +189,7 @@ module Initial_libs (P : sig val path : string end) = struct
   let init =
     (List.fold_left (fun (td,env) t -> proc None (Filename.concat path (t ^ ".lem")) (td,env))
        (td, perv)
-       ["list"; "set"; "pmap"],
+       ["list"; "set"; "pmap"; "int"],
      [(Some(Target_hol),
        read_constants (path ^^ target_to_string Target_hol ^^ "constants"));
       (Some(Target_isa),

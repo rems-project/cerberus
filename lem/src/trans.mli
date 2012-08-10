@@ -21,6 +21,6 @@ module Macros(I : Types.Global_defs)(E : sig val env : env end) : sig
   val remove_letfun : bool -> exp macro
   val remove_class_const : exp macro
 
-  val peanoize_num_pats : bool -> pat macro
-  val coq_type_annot_pat_vars : bool -> pat macro
+  val peanoize_num_pats : Macro_expander.pat_position -> pat macro
+  val coq_type_annot_pat_vars : Macro_expander.pat_position -> pat macro
 end

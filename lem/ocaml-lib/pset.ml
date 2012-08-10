@@ -482,3 +482,11 @@ let comprehension7 cmp f p s1 s2 s3 s4 s5 s6 s7 =
 
 let bigunion c xss =
   fold union xss (empty c)
+
+let rec lfp s f =
+  let s' = f s in
+    if subset s' s then
+      s
+    else
+      lfp (union s' s) f
+

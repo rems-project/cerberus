@@ -1,3 +1,3 @@
 
-let keywords = List.map BatRope.of_string ["value"]
+let keywords = List.map Ulib.Text.of_string ["value"]
 

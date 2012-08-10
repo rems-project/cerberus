@@ -274,6 +274,7 @@ let bindings s =
     
 let choose = min_binding
 
+
 (* Wrapper functions now *)
 
 type ('key,'a) map = {cmp:'key -> 'key -> int; m:('key,'a) rep}

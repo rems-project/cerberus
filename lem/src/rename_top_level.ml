@@ -124,8 +124,9 @@ let apply_rename_opt path (renames : top_level_renames) k binding set_binding id
                           x::y
                 in
                 let i = 
-                  Ident.mk_ident (List.map Name.add_lskip local_new_p)
+                  Ident.mk_ident (List.map (fun x -> (Name.add_lskip x, None)) local_new_p)
                     (Name.add_lskip new_n)
+                    Ast.Unknown
                 in
                   Some({ id with id_path = i;
                                  descr = set_binding id.descr p })
@@ -203,6 +204,7 @@ let compute_ocaml_rename_f nk path n =
       path
       new_n
       n
+let r = Ulib.Text.of_latin1
 
 (* TODO: Check that the new names are good *)
 let compute_module_rename_f nk path n =
@@ -210,7 +212,7 @@ let compute_module_rename_f nk path n =
     | [] | [_] -> None
     | x::y -> 
         let new_n = 
-          Name.from_rope (BatRope.concat r"_" (List.map Name.to_rope (y @ [n])))
+          Name.from_rope (Ulib.Text.concat (r"_") (List.map Name.to_rope (y @ [n])))
         in
           Some([x],new_n)
 
@@ -268,13 +270,14 @@ let rename_pat_macro path renames top_level p =
       | _ -> None
 
 let rename_def_pat path renames p =
-  M.expand_pat true p 
+  M.expand_pat (Macro_expander.Top_level,Macro_expander.Bind) p 
     (Macro_expander.list_to_bool_mac 
        [rename_def_pat_macro path renames;
         rename_pat_macro path renames])
 
 let rename_pat path renames p =
-  M.expand_pat true p (rename_pat_macro path renames)
+  M.expand_pat (Macro_expander.Top_level,Macro_expander.Param) p 
+    (rename_pat_macro path renames)
 
 let rename_exp_macro path renames (e : exp) : exp option =
   let do_fields fields =

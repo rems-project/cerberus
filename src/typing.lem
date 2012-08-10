@@ -244,8 +244,10 @@ let rec check_exp env l e_head =
           else E.fail Errors.AIL_TYPECHECK_SUB_ALL
       end
   (* TODO: this is looping, I guess C.SHL is meant to be C.SHR (ugly btw) *)
+  (* TODO: (K) did applied the correction SHL --> SHR.
+           J should check *)
   | A.BINARY (C.ARITHMETIC C.SHL) e1 e2 ->
-      check_exp env l (A.BINARY (C.ARITHMETIC C.SHL) e1 e2)
+      check_exp env l (A.BINARY (C.ARITHMETIC C.SHR) e1 e2)
 
   | A.BINARY (C.ARITHMETIC C.SHR) e1 e2  ->
       type_of e1 >>= fun t1 ->
@@ -547,8 +549,15 @@ let rec annotate_stmt env (l, stmt) =
       else
         E.map2 (A.IF e') (f_s s1) (f_s s2)
 
-  | A.SWITCH _ _ ->
-      E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "No support for switch statements yet.")
+  (* TODO: (6.8.4.2#2) (looks annoying) *)
+  (* TODO: (6.8.4.2#3) unicity of the cases, and of the default case *)
+  | A.SWITCH e s ->
+      f_e e      >>= fun e' ->
+      type_of e' >>= fun t  ->
+      if T.is_integer t then
+        E.map (A.SWITCH e') (f_s s)
+      else
+        E.fail Errors.AIL_TYPECHECK_SWITCH_INTEGER
 
   | A.WHILE e s ->
       f_e e      >>= fun e' ->
@@ -583,6 +592,7 @@ let rec annotate_stmt env (l, stmt) =
         | A.CONTINUE    -> E.return A.CONTINUE
         | A.RETURN_VOID -> E.return A.RETURN_VOID
         | A.GOTO id -> E.return (A.GOTO id)
+        | A.PAR ss -> E.map A.PAR (E.map_list fs ss)
         end in
       map_stmt f_s f_e stmt
   end)

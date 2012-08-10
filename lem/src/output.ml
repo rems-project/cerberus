@@ -1,6 +1,7 @@
 exception Backend of string
 
-let (^^) = BatRope.(^^^)
+let (^^) = Ulib.Text.(^^^)
+let r = Ulib.Text.of_latin1
 
 type id_annot =  (* kind annotation for latex'd identifiers *)
   | Term_const
@@ -19,10 +20,10 @@ type id_annot =  (* kind annotation for latex'd identifiers *)
 type t = 
   | Empty                          (* Empty output *)
   | Kwd of string                  (* Keyword *)
-  | Ident of id_annot * BatRope.t  (* Identifier *)
+  | Ident of id_annot * Ulib.Text.t  (* Identifier *)
   | Num of int                     (* Literal int *)
   | Inter of Ast.lex_skip          (* Interstitial: Comment (currently including (* *), Pure whitespace [' ''\t']+, or Newline *)
-  | Str of BatRope.t               (* String literal, without surrounding "" *)
+  | Str of Ulib.Text.t               (* String literal, without surrounding "" *)
   | Err of string                  (* Causes to_rope to raise an exception *) 
   | Meta of string                 (* Data that is not subject to the target lexical convention *)
   | Texspace                       (* Force latex space except at start or end of line *)
@@ -30,7 +31,7 @@ type t =
 
 type t' =
   | Kwd' of string
-  | Ident' of BatRope.t
+  | Ident' of Ulib.Text.t
   | Num' of int
 
 let emp = Empty
@@ -91,20 +92,20 @@ let ns need_space t1 t2 =
 let to_rope quote_char lex_skips_to_rope need_space t = 
   let rec to_rope_help t = match t with
     | Empty -> (t,r"",t)
-    | Kwd(s) -> (t, BatRope.of_latin1 s, t)
+    | Kwd(s) -> (t, Ulib.Text.of_latin1 s, t)
     | Ident(a,r) -> (t, r, t)
-    | Num(i) -> (t, BatRope.of_latin1 (BatInt.to_string i), t)
+    | Num(i) -> (t, Ulib.Text.of_latin1 (string_of_int i), t)
     | Inter(i) -> (t,lex_skips_to_rope i,t)
 (*
     | Ws(ws) -> 
-        let r = BatRope.concat r"" (List.map lex_skips_to_rope (List.rev ws)) in
-          if BatRope.compare r r"" = 0 then
+        let r = Ulib.Text.concat r"" (List.map lex_skips_to_rope (List.rev ws)) in
+          if Ulib.Text.compare r r"" = 0 then
             raise (Backend("non-empty Ast.lex_skips to empty rope"));
           (t,r,t)
 *)
     | Str(s) -> (t, quote_string quote_char s, t)
     | Err(s) -> raise (Backend(s))
-    | Meta(s) -> (t,BatRope.of_latin1 s,t)
+    | Meta(s) -> (t,Ulib.Text.of_latin1 s,t)
     | Texspace -> (t,r"",t)   (* placeholder *)
     | Cons(Texspace,t) -> to_rope_help t
     | Cons(t,Texspace) -> to_rope_help t
@@ -119,7 +120,7 @@ let to_rope quote_char lex_skips_to_rope need_space t =
 
 let rec ml_comment_to_rope = function
   | Ast.Chars(r) -> r
-  | Ast.Comment(coms) -> r"(*" ^^ BatRope.concat r"" (List.map ml_comment_to_rope coms) ^^ r"*)"
+  | Ast.Comment(coms) -> r"(*" ^^ Ulib.Text.concat (r"") (List.map ml_comment_to_rope coms) ^^ r"*)"
 
 
 (* ******** *)
@@ -144,15 +145,15 @@ let pp_raw_id_annot = function
 let rec pp_raw_t t = 
   match t with
   | Empty -> r"Empty"
-  | Kwd(s) -> r"Kwd(" ^^ BatRope.of_latin1 s ^^r")"
-  | Ident(a,r) -> r"Ident(" ^^ pp_raw_id_annot a ^^ r"," ^^ r ^^ r")"
-  | Num(i) -> r"Num(" ^^  BatRope.of_latin1 (BatInt.to_string i) ^^ r")"
-  | Inter(Ast.Com(r)) -> r"Inter(Ast.Com(" ^^ ml_comment_to_rope r ^^ r")"
-  | Inter(Ast.Ws(r)) -> r"Inter(Ast.Ws(" ^^ r ^^ r")"
+  | Kwd(s) -> r"Kwd(" ^^ Ulib.Text.of_latin1 s ^^r")"
+  | Ident(a,rr) -> r"Ident(" ^^ pp_raw_id_annot a ^^ r"," ^^ rr ^^ r")"
+  | Num(i) -> r"Num(" ^^  Ulib.Text.of_latin1 (string_of_int i) ^^ r")"
+  | Inter(Ast.Com(rr)) -> r"Inter(Ast.Com(" ^^ ml_comment_to_rope rr ^^ r")"
+  | Inter(Ast.Ws(rr)) -> r"Inter(Ast.Ws(" ^^ rr ^^ r")"
   | Inter(Ast.Nl) -> r"Inter(Ast.Nl)"
   | Str(s) -> r"Str(" ^^ s ^^ r")"
-  | Err(s) -> r"Str(" ^^ BatRope.of_latin1 s ^^ r")"
-  | Meta(s) -> r"Str(" ^^ BatRope.of_latin1 s ^^ r")"
+  | Err(s) -> r"Str(" ^^ Ulib.Text.of_latin1 s ^^ r")"
+  | Meta(s) -> r"Str(" ^^ Ulib.Text.of_latin1 s ^^ r")"
   | Texspace -> r"Texspace"
   | Cons(t1,t2) -> r"Cons(" ^^ pp_raw_t t1 ^^ r"," ^^ pp_raw_t t2 ^^ r")"
 
@@ -168,51 +169,51 @@ let tex_sty_prefix     = r"lem"  (* for LaTeX commands in the lem.sty file *)
 (* escaping of Lem source names to use in LaTeX command names
  (probably it needs to be more aggressive)
  (and it isn't injective, so we should do some global check or rename too...) *)
-let tex_command_escape r = 
-  BatRope.concat
-    BatRope.empty
+let tex_command_escape rr = 
+  Ulib.Text.concat
+    Ulib.Text.empty
     (List.map
        (fun c -> 
-       if c=BatCamomile.UChar.of_char '_'  then r"T"     else
-       if c=BatCamomile.UChar.of_char '#'  then r"H"     else
-       if c=BatCamomile.UChar.of_char '\'' then r"P"     else
-       if c=BatCamomile.UChar.of_char '0'  then r"Zero"  else
-       if c=BatCamomile.UChar.of_char '1'  then r"One"   else
-       if c=BatCamomile.UChar.of_char '2'  then r"Two"   else
-       if c=BatCamomile.UChar.of_char '3'  then r"Three" else
-       if c=BatCamomile.UChar.of_char '4'  then r"Four"  else
-       if c=BatCamomile.UChar.of_char '5'  then r"Five"  else
-       if c=BatCamomile.UChar.of_char '6'  then r"Six"   else
-       if c=BatCamomile.UChar.of_char '7'  then r"Seven" else
-       if c=BatCamomile.UChar.of_char '8'  then r"Eight" else
-       if c=BatCamomile.UChar.of_char '9'  then r"Nine"  else
-       BatRope.of_uchar c)
-       (BatRope.explode r))
+       if c=Ulib.UChar.of_char '_'  then r"T"     else
+       if c=Ulib.UChar.of_char '#'  then r"H"     else
+       if c=Ulib.UChar.of_char '\'' then r"P"     else
+       if c=Ulib.UChar.of_char '0'  then r"Zero"  else
+       if c=Ulib.UChar.of_char '1'  then r"One"   else
+       if c=Ulib.UChar.of_char '2'  then r"Two"   else
+       if c=Ulib.UChar.of_char '3'  then r"Three" else
+       if c=Ulib.UChar.of_char '4'  then r"Four"  else
+       if c=Ulib.UChar.of_char '5'  then r"Five"  else
+       if c=Ulib.UChar.of_char '6'  then r"Six"   else
+       if c=Ulib.UChar.of_char '7'  then r"Seven" else
+       if c=Ulib.UChar.of_char '8'  then r"Eight" else
+       if c=Ulib.UChar.of_char '9'  then r"Nine"  else
+       Ulib.Text.of_uchar c)
+       (Ulib.Text.explode rr))
 
-let tex_command_name r = r"\\" ^^ tex_command_prefix ^^ tex_command_escape r 
-let tex_command_label r =  tex_label_prefix ^^ tex_command_escape r 
+let tex_command_name rr = r"\\" ^^ tex_command_prefix ^^ tex_command_escape rr 
+let tex_command_label rr =  tex_label_prefix ^^ tex_command_escape rr 
 
 (* escaping of Lem source identifiers to appear in LaTeX *)
-let tex_escape r = 
-  BatRope.concat
-    BatRope.empty
+let tex_escape rr = 
+  Ulib.Text.concat
+    Ulib.Text.empty
     (List.map
        (fun c ->  
-         if c=BatCamomile.UChar.of_char '_'  then r"\\_" else 
-         if c=BatCamomile.UChar.of_char '%'  then r"\\%" else 
-         if c=BatCamomile.UChar.of_char '$'  then r"\\$" else 
-         if c=BatCamomile.UChar.of_char '#'  then r"\\#" else 
-         if c=BatCamomile.UChar.of_char '?'  then r"\\mbox{?}" else 
-         if c=BatCamomile.UChar.of_char '^'  then r"\\mbox{$\\uparrow$}" else 
-         if c=BatCamomile.UChar.of_char '{'  then r"\\{" else 
-         if c=BatCamomile.UChar.of_char '}'  then r"\\}" else 
-         if c=BatCamomile.UChar.of_char '<'  then r"\\mbox{$<$} " else 
-         if c=BatCamomile.UChar.of_char '>'  then r"\\mbox{$>$} " else 
-         if c=BatCamomile.UChar.of_char '&'  then r"\\&" else 
-         if c=BatCamomile.UChar.of_char '\\' then r"\\mbox{$\\backslash{}$}" else 
-         if c=BatCamomile.UChar.of_char '|'  then r"\\mbox{$\\mid$}" else 
-         BatRope.of_uchar c)
-       (BatRope.explode r))
+         if c=Ulib.UChar.of_char '_'  then r"\\_" else 
+         if c=Ulib.UChar.of_char '%'  then r"\\%" else 
+         if c=Ulib.UChar.of_char '$'  then r"\\$" else 
+         if c=Ulib.UChar.of_char '#'  then r"\\#" else 
+         if c=Ulib.UChar.of_char '?'  then r"\\mbox{?}" else 
+         if c=Ulib.UChar.of_char '^'  then r"\\mbox{$\\uparrow$}" else 
+         if c=Ulib.UChar.of_char '{'  then r"\\{" else 
+         if c=Ulib.UChar.of_char '}'  then r"\\}" else 
+         if c=Ulib.UChar.of_char '<'  then r"\\mbox{$<$} " else 
+         if c=Ulib.UChar.of_char '>'  then r"\\mbox{$>$} " else 
+         if c=Ulib.UChar.of_char '&'  then r"\\&" else 
+         if c=Ulib.UChar.of_char '\\' then r"\\mbox{$\\backslash{}$}" else 
+         if c=Ulib.UChar.of_char '|'  then r"\\mbox{$\\mid$}" else 
+         Ulib.Text.of_uchar c)
+       (Ulib.Text.explode rr))
 
 let tex_id_wrap = function
   | Term_const         -> r"\\" ^^ tex_sty_prefix ^^ r"TermConst"        
@@ -245,8 +246,8 @@ let split_suffix s =
     raise (Failure "split_suffix")
 
 let split_suffix_rope r = 
-  let (s1,s2) = split_suffix (BatRope.to_string r) in
-  (BatRope.of_string s1, BatRope.of_string s2)
+  let (s1,s2) = split_suffix (Ulib.Text.to_string r) in
+  (Ulib.Text.of_string s1, Ulib.Text.of_string s2)
 
 (* flatten into a list of Cons-free and Emp-free t *)
 (* poor complexity *)
@@ -270,8 +271,8 @@ let line_break : t list -> t list list  =
 
 let debug = false
 
-let to_rope_ident a r =
-  let (r1,r2) = split_suffix_rope r in
+let to_rope_ident a rr =
+  let (r1,r2) = split_suffix_rope rr in
   tex_id_wrap a ^^ r"{" ^^ tex_escape r1 ^^ r"}" ^^ r2
 
 let quote_char = r"\""
@@ -279,24 +280,24 @@ let quote_char = r"\""
 let rec to_rope_single t = 
   match t with
   | Empty -> r""
-  | Kwd(s) ->  BatRope.of_latin1 s
+  | Kwd(s) ->  Ulib.Text.of_latin1 s
   | Ident(a,r) -> to_rope_ident a r
-  | Num(i) ->  BatRope.of_latin1 (BatInt.to_string i)
-  | Inter(Ast.Com(r)) -> r"\\tsholcomm{" ^^ tex_escape (ml_comment_to_rope r)  ^^ r"}" 
-  | Inter(Ast.Ws(r)) -> r
+  | Num(i) ->  Ulib.Text.of_latin1 (string_of_int i)
+  | Inter(Ast.Com(rr)) -> r"\\tsholcomm{" ^^ tex_escape (ml_comment_to_rope rr)  ^^ r"}" 
+  | Inter(Ast.Ws(rr)) -> rr
   | Inter(Ast.Nl) -> raise (Failure "Nl in to_rope_tex")
   | Str(s) ->  quote_string quote_char s
   | Err(s) -> raise (Backend(s))
-  | Meta(s) -> BatRope.of_latin1 s
+  | Meta(s) -> Ulib.Text.of_latin1 s
   | Texspace -> r"\\ "   
   | Cons(t1,t2) -> raise (Failure "Cons in to_rope_tex") 
 
 
 let make_indent r = 
-  let n = BatRope.length r in
+  let n = Ulib.Text.length r in
   let single_indent = "\\ " in
   let rec n_of x n = if n=0 then [] else x::n_of x (n-1) in
-  BatRope.of_string (String.concat "" (n_of single_indent n)) 
+  Ulib.Text.of_string (String.concat "" (n_of single_indent n)) 
 
 let strip_initial_and_final_texspace ts =
   let rec strip_initial_texspace ts = match ts with
@@ -307,7 +308,7 @@ let strip_initial_and_final_texspace ts =
     
 
 (* returns None if all whitespace or texspace, otherwise Some of the indented rope *)
-let to_rope_option_line : t list -> BatRope.t option 
+let to_rope_option_line : t list -> Ulib.Text.t option 
     = function ts -> 
       let rec f indent_acc ts = 
         match ts with
@@ -317,7 +318,7 @@ let to_rope_option_line : t list -> BatRope.t option
             None
         | _ :: ts' -> 
             Some ( make_indent indent_acc ^^ 
-                   BatRope.concat (r"") 
+                   Ulib.Text.concat (r"") 
                      (List.map to_rope_single 
                         (strip_initial_and_final_texspace ts))) in
       f (r"") ts 
@@ -344,8 +345,8 @@ let rec to_rope_lines strip_blanks tss =
   let rec f rs = 
     match rs with
     | [] -> r""
-    | [r] -> r
-    | r :: rs' -> r ^^ r"\\\\{}\n" ^^ f rs' in
+    | [rr] -> rr
+    | rr :: rs' -> rr ^^ r"\\\\{}\n" ^^ f rs' in
   
   match rs with 
   | [] -> None
@@ -354,13 +355,13 @@ let rec to_rope_lines strip_blanks tss =
 
 let to_rope_option_tex term need_space strip_blanks t = 
 
-  if debug then Printf.printf "\n\n\nto_rope_tex input:\n%s" (BatRope.to_string (pp_raw_t t));
+  if debug then Printf.printf "\n\n\nto_rope_tex input:\n%s" (Ulib.Text.to_string (pp_raw_t t));
 
   let lines = line_break (flatten_to_list t) in
   
   let ro = to_rope_lines strip_blanks lines in
   
-  (if debug then Printf.printf "\n\nto_rope_tex output:\n%s" (BatRope.to_string (match ro with None -> r"None" | Some r -> r"Some(" ^^ r ^^ r")")));
+  (if debug then Printf.printf "\n\nto_rope_tex output:\n%s" (Ulib.Text.to_string (match ro with None -> r"None" | Some rr -> r"Some(" ^^ rr ^^ r")")));
   
   ro
 

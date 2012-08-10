@@ -1,45 +1,46 @@
 open Format
 open Pp
 
-(* These compare faster than BatRope.t *)
-type t = BatUTF8.t
-let compare r1 r2 = 
-  BatUTF8.compare r1 r2
-
-let from_rope r = BatRope.to_ustring r
-
-let to_rope n = BatRope.of_ustring n
-let to_string = BatUTF8.to_string
-
+(* These compare faster than Ulib.Text.t *)
 (*
+type t = Ulib.UTF8.t
+let compare r1 r2 = 
+  Ulib.UTF8.compare r1 r2
+
+let from_rope r = Ulib.Text.to_string r
+
+let to_rope n = Ulib.Text.of_string n
+let to_string = Ulib.UTF8.to_string
+*)
+
 type t = string
 let compare r1 r2 = 
   Pervasives.compare r1 r2
 
-let from_rope r = BatRope.to_string r
+let from_rope r = Ulib.Text.to_string r
 
-let to_rope n = BatRope.of_string n
+let to_rope n = Ulib.Text.of_string n
 let to_string n = n
- *)
+
   (*
-type t = BatRope.t
+type t = Ulib.Text.t
 let compare r1 r2 = 
   if r1 == r2 then 
     0 
   else 
-    BatRope.compare r1 r2
+    Ulib.Text.compare r1 r2
 
 let from_rope r = r
 
 let to_rope n = n
-let to_string n = BatRope.to_string n
+let to_string n = Ulib.Text.to_string n
    *)
 
-let (^) = BatRope.(^^^)
+let (^) = Ulib.Text.(^^^)
 
 let fresh_start start s ok =
   let rec f (n:int) =
-    let name = s ^ BatRope.of_latin1 (BatInt.to_string n) in
+    let name = s ^ Ulib.Text.of_latin1 (string_of_int n) in
       if ok (from_rope name) then 
         name
       else
@@ -67,24 +68,36 @@ let rename f r = from_rope (f (to_rope r))
 
 let pp ppf n = pp_str ppf (to_string n)
 
-let starts_with_upper_letter x = BatCamomile.UCharInfo.general_category (BatRope.get (to_rope x) 0) = `Lu
+let starts_with_upper_letter x = 
+  try 
+    let c = Ulib.UChar.char_of (Ulib.UTF8.get x 0) in
+      Str.string_match (Str.regexp "[A-Z]") (String.make 1 c) 0
+  with 
+    | Ulib.UChar.Out_of_range -> false
 
-let starts_with_lower_letter x = BatCamomile.UCharInfo.general_category (BatRope.get (to_rope x) 0) = `Ll
+let starts_with_lower_letter x = 
+  try 
+    let c = Ulib.UChar.char_of (Ulib.UTF8.get x 0) in
+      Str.string_match (Str.regexp "[a-z]") (String.make 1 c) 0
+  with 
+    | Ulib.UChar.Out_of_range -> false
 
 let uncapitalize x = 
   assert (starts_with_upper_letter x);
-  from_rope (BatRope.uncapitalize (to_rope x))
+  let c = Ulib.UChar.of_char (Char.lowercase (Ulib.UChar.char_of (Ulib.UTF8.get x 0))) in
+    from_rope (Ulib.Text.set (to_rope x) 0 c)
 
 let capitalize x =
   assert (starts_with_lower_letter x);
-  from_rope (BatRope.capitalize (to_rope x))
+  let c = Ulib.UChar.of_char (Char.uppercase (Ulib.UChar.char_of (Ulib.UTF8.get x 0))) in
+    from_rope (Ulib.Text.set (to_rope x) 0 c)
 
 type name_type =
   | Bquote
   | Paren of Ast.lex_skips * Ast.lex_skips
   | Plain
 
-type lskips_t = Ast.lex_skips * BatRope.t * name_type
+type lskips_t = Ast.lex_skips * Ulib.Text.t * name_type
 
 let from_ix = function 
   | Ast.SymX_l((s,x),l) -> (s,x,Plain)
@@ -111,9 +124,11 @@ let to_output a (s,x,nt)=
       | Bquote -> 
           ws s ^ kwd "`" ^ id a x ^ kwd "`"
 
+let r = Ulib.Text.of_latin1
+
 let to_output_quoted a (s,x,nt)= 
   let open Output in
-  let (^^) = BatRope.(^^^) in
+  let (^^) = Ulib.Text.(^^^) in
     match nt with
       | Plain -> ws s ^ id a (r"\"" ^^ x ^^ r"\"")
       (* TODO : Parens might not be correct for all targets *)
@@ -155,11 +170,18 @@ let add_parens (s,x,nt) =
 
 let lskip_pp ppf (s,x,nt) = 
   match nt with
-    | Plain -> pp ppf (from_rope x)
+    | Plain -> 
+        Format.fprintf ppf "%a%a" 
+          Ast.pp_lex_skips s
+          pp (from_rope x)
     | Paren _ -> 
-        Format.fprintf ppf "(%a)" pp (from_rope x)
+        Format.fprintf ppf "%a(%a)" 
+          Ast.pp_lex_skips s
+          pp (from_rope x)
     | Bquote -> 
-        Format.fprintf ppf "`%a`" pp (from_rope x)
+        Format.fprintf ppf "%a`%a`" 
+          Ast.pp_lex_skips s 
+          pp (from_rope x)
 
 let lskip_rename f (s,x,nt) =
   (s,f x,nt)
@@ -170,4 +192,4 @@ let replace_lskip (s,x,nt) s_new =
     | Paren(s1,s2) -> (s,x,Paren(s_new,s2))
 
 let get_prec gp (s,x,nt) =
-  gp (Precedence.Op (BatRope.to_string x))
+  gp (Precedence.Op (Ulib.Text.to_string x))

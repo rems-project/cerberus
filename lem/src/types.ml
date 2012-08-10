@@ -1,10 +1,3 @@
-exception No_type of Ast.l * string
-
-let raise_error l msg pp n =
-  let pp ppf = Format.fprintf ppf "%s: %a" msg pp n in
-    raise (No_type(l, Pp.pp_to_string pp))
-
-
 module TVfmap = Finite_map.Fmap_map(Tyvar)
 module TVset' = Set.Make(Tyvar)
 module TVset = struct
@@ -140,7 +133,7 @@ type type_defs = tc_def Pfmap.t
 
 type instance = Tyvar.t list * (Path.t * Tyvar.t) list * t * Name.t list
 
-module IM = Map.Make(struct type t = int let compare = BatInt.compare end)
+module IM = Map.Make(struct type t = int let compare = Pervasives.compare end)
 open Format
 open Pp
 
@@ -280,7 +273,7 @@ let rec get_matching_instance d (p,t) instances =
 let type_mismatch l t1 t2 = 
   let t1 = t_to_string t1 in
   let t2 = t_to_string t2 in
-    raise (No_type(l, "type mismatch:\n" ^ t1 ^ "\nand\n" ^ t2))
+    raise (Ident.No_type(l, "type mismatch:\n" ^ t1 ^ "\nand\n" ^ t2))
 
 let rec assert_equal l (d : type_defs) (t1 : t) (t2 : t) : unit =
   if t1 == t2 then
@@ -356,7 +349,7 @@ module Constraint (T : Global_defs) : Constraint = struct
   let rec occurs_check (t_box : t) (t : t) : unit =
     let t = resolve_subst t in
       if t_box == t then
-        raise (No_type(Ast.Unknown, "Failed occurs check"))
+        raise (Ident.No_type(Ast.Unknown, "Failed occurs check"))
       else
         match t.t with
           | Tfn(t1,t2) ->
@@ -463,7 +456,7 @@ module Constraint (T : Global_defs) : Constraint = struct
           let t1 = 
             Pp.pp_to_string (fun ppf -> pp_instance_constraint ppf (p, t))
           in 
-            raise (No_type(l, "unsatisfied type class constraint:\n" ^ t1))
+            raise (Ident.No_type(l, "unsatisfied type class constraint:\n" ^ t1))
 
   let inst_leftover_uvars l =  
     let used_tvs = ref TVset.empty in

@@ -388,6 +388,9 @@ rule initial = parse
   | ')'	   {P.RPAREN}
   | '{'    {P.LBRACE}
   | '}'    {P.RBRACE}
+  | "{{{"  {P.LBRACES_3}
+  | "}}}"  {P.RBRACES_3}
+  | "|||"  {P.PIPES_3}
   | '.'    {P.DOT}
   | "->"   {P.ARROW}
   | "++"   {P.PLUS_PLUS}

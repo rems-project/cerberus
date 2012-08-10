@@ -1,9 +1,9 @@
-open Batteries_uni
 open Process_file
 
 
 let backends = ref []
 let opt_print_types = ref false
+let opt_print_version = ref false
 let opt_library = ref None
 let ocaml_lib = ref []
 let hol_lib = ref []
@@ -54,10 +54,13 @@ let options = Arg.align [
   ( "-coq_lib", 
     Arg.String (fun l -> coq_lib := l::!coq_lib),
     "                  add to Coq library");
+  ( "-v",
+    Arg.Unit (fun b -> opt_print_version := true),
+    "                  print version");
 ] 
 
 let usage_msg = 
-    ("Lem 0.2\n"
+    ("Lem " ^ Version.v ^ "\n"
      ^ "example usage:       lem -hol -ocaml -lib ../lem/library test.lem\n" 
     )
 
@@ -69,7 +72,7 @@ let _ =
 
 (* Do the transformations for a given target, and then generate the output files
  * *)
-let per_target libpath modules (def_info,env) consts alldoc_accum alldoc_inc_accum targ =
+let per_target libpath modules (def_info,env) consts alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum targ =
   let module C = struct
     let consts = List.assoc targ consts
     let (d,i) = def_info
@@ -86,16 +89,17 @@ let per_target libpath modules (def_info,env) consts alldoc_accum alldoc_inc_acc
           (env,[])
           modules
       in
-       output libpath targ avoid def_info (List.rev transformed_m) alldoc_accum alldoc_inc_accum
+       output libpath targ avoid def_info (List.rev transformed_m) alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum
     with
       | Trans.Trans_error(l,msg) ->
           Process_file.print_msg l "Translation error" msg;
           raise Exit
-      | Types.No_type(l,msg) ->
+      | Ident.No_type(l,msg) ->
           Process_file.print_msg l "LEM internal error" msg;
           raise Exit
 
 let main () =
+  let _ = if !opt_print_version then print_string ("Lem " ^ Version.v ^ "\n") in
   let lib_path = 
     match !opt_library with
       | None -> (try 
@@ -165,9 +169,19 @@ let main () =
          let ast = parse_file f in
          let f' = Filename.basename (Filename.chop_extension f) in
          let mod_name = String.capitalize f' in
-         let mod_name_name = Name.from_rope (BatRope.of_latin1 mod_name) in
+         let mod_name_name = Name.from_rope (Ulib.Text.of_latin1 mod_name) in
+         let backend_set = 
+           List.fold_right 
+             (fun x s ->
+                match x with
+                  | None -> s
+                  | Some(Typed_ast.Target_tex) -> s
+                  | Some(t) -> Typed_ast.Targetset.add t s)
+             !backends
+             Typed_ast.Targetset.empty 
+         in
          let ((tdefs,instances,new_instances),new_env,tast) = 
-           check_ast [mod_name_name] (def_info,env) ast
+           check_ast backend_set [mod_name_name] (def_info,env) ast
          in
          let e = { env with Typed_ast.m_env = Typed_ast.Nfmap.insert env.Typed_ast.m_env (mod_name_name,new_env) } in
          let module_record = 
@@ -179,6 +193,10 @@ let main () =
          in
            if !opt_print_types then
              begin
+               (*
+               Format.fprintf Format.std_formatter "%s@\nlibrary:@\n" f;
+               Typed_ast.pp_env Format.std_formatter (snd type_info);
+                *)
                Format.fprintf Format.std_formatter "%s@\nenvironment:@\n" f;
                Typed_ast.pp_env Format.std_formatter new_env;
                Format.fprintf Format.std_formatter "@\ninstances:@\n";
@@ -189,11 +207,12 @@ let main () =
       ([],type_info,[])
       !opt_file_arguments
   in
-  let alldoc_accum = ref ([] : BatRope.t list) in
-  let alldoc_inc_accum = ref ([] : BatRope.t list) in
-    ignore (List.iter (per_target lib_path (List.rev modules) type_info consts alldoc_accum alldoc_inc_accum) !backends);
+  let alldoc_accum = ref ([] : Ulib.Text.t list) in
+  let alldoc_inc_accum = ref ([] : Ulib.Text.t list) in
+  let alldoc_inc_usage_accum = ref ([] : Ulib.Text.t list) in
+    ignore (List.iter (per_target lib_path (List.rev modules) type_info consts alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum) !backends);
     (if List.mem (Some(Typed_ast.Target_tex)) !backends then 
-       output_alldoc "alldoc" (String.concat " " !opt_file_arguments) alldoc_accum alldoc_inc_accum)
+       output_alldoc "alldoc" (String.concat " " !opt_file_arguments) alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum)
 
 let _ = 
   try 

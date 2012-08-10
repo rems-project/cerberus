@@ -207,9 +207,9 @@ let compatible_basic s1 s2 = (s1 = s2)
 let rec compatible type1 type2 =
   match (type1, type2) with
   | (BASIC q1 s1, BASIC q2 s2) ->
-      compatible_basic s1 s2 && Set.equal q1 q2
+      compatible_basic s1 s2 && Ocaml.Pset.equal q1 q2
   | (POINTER q1 t1, POINTER q2 t2) ->
-      compatible t1 t2 && Set.equal q1 q2
+      compatible t1 t2 && Ocaml.Pset.equal q1 q2
   | (ARRAY t1 size1, ARRAY t2 size2) ->
       size1 = size2 && compatible t1 t2
   | (FUNCTION t1 args1, FUNCTION t2 args2) ->
@@ -318,6 +318,12 @@ integer conversion rank is a subrange of the values of the other type. *)
 "Each bit that is a value bit shall have the same value as the same bit in the
 object representation of the corresponding unsigned type (if there are M value
 bits in the signed type and N in the unsigned type, then M ≤ N)." *)
+  | (UNSIGNED   _,  SIGNED _) ->
+      if leq_rank i1 i2 then
+        true
+      else
+        (* TODO Implementation defined! *)
+        false
   | (SIGNED   _,  UNSIGNED _) ->
       if leq_rank i1 i2 then
         true
@@ -553,3 +559,77 @@ let is_signed_of t1 t2 =
   | (BASIC _ (INTEGER (UNSIGNED i1)), BASIC _ (INTEGER (SIGNED i2))) -> i1 = i2
   | _                                                                -> false
   end
+
+
+(*
+(* K experimenting ****************************************************************************** *)
+
+let is_signed = function
+  | BASIC _ (INTEGER (SIGNED _)) -> true
+  (* TODO: plus sometime 'char' (implementation-defined)  *)
+  | _ -> false
+  end 
+
+let is_unsigned = function
+  | BASIC _ (INTEGER (UNSIGNED _)) -> true
+  | BASIC _ (INTEGER BOOL) -> true  
+  (* TODO: plus sometime 'char' (implementation-defined)  *)
+  | _ -> false
+  end
+
+
+
+(* Highly non "optimised" but readable *)
+let usual_arithmetic (t1: Ail.ctype) (t2: Ail.ctype) : Ail.ctype =
+  if is_integer t1 && is_integer t2 then
+    let t1' = promote t1 in
+    let t2' = promote t2 in
+    if t1' = t2' then
+      (* IsUsualArithmeticEq *)
+      t1'
+    
+    else if is_signed t1' && is_signed t2' && rank_lt t2' t1' then
+      (* IsUsualArithmeticGtSameSigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_unsigned t2' && rank_lt t2' t1' then
+      (* IsUsualArithmeticGtSameUnsigned *)
+      t1'
+    
+    else if is_signed t1' && is_signed t2' && rank_lt t1' t2' then
+      (* IsUsualArithmeticLtSameSigned *)
+      t2'
+    
+    else if is_unsigned t1' && is_unsigned t2' && rank_lt t1' t2' then
+      (* IsUsualArithmeticLtSameUnsigned *)
+      t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t1' t2' then
+      (* IsUsualArithmeticLtUnsigned *)
+      t2'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t2' t1' then
+      (* IsUsualArithmeticGtUnsigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t1' t2' && range_le t1' t2' then
+      (* IsUsualArithmeticLtSigned *)
+      t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t2' t1' && range_le t2' t1' then
+      (* IsUsualArithmeticGtSigned *)
+      t1'
+    
+    else if is_unsigned t1' && is_signed t2' && rank_le t1' t2' && not (range_le t1' t2') then
+      (* IsUsualArithmeticLtSigned' *)
+      unsigned_of t2'
+    
+    else if is_signed t1' && is_unsigned t2' && rank_le t2' t1' && not (range_le t2' t1') then
+      (* IsUsualArithmeticGtSigned' *)
+      unsigned_of t1'
+    else
+      (* TODO: doc *)
+      Boot.debug "ERROR in usual_arith"
+  else
+    Boot.debug "ERROR in usual_arith"
+*)

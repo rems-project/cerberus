@@ -8,7 +8,7 @@ struct
   type trans =
       { defs : Def_trans.def_macro list;
         exps : env -> (exp -> exp option) list;
-        pats : env -> (bool -> pat -> pat option) list; 
+        pats : env -> (Macro_expander.pat_position -> pat -> pat option) list; 
         get_prec : Precedence.op -> Precedence.t; 
         (* Perform the extra translations after the above, left-to-right *)
         extra : (Name.t -> env -> def list -> def list) list}
@@ -95,7 +95,7 @@ struct
 
   (* TODO: (Trans.coq_synt_records defs) *)
   let coq =
-    { defs = []; 
+    { defs = [Def_trans.type_annotate_definitions]; 
       exps = 
         (fun env -> 
            let module T = T(struct let env = env end) in
@@ -127,7 +127,7 @@ struct
        (fun n check -> 
           Name.fresh 
             (if Name.starts_with_upper_letter (Name.from_rope n) then
-               BatRope.uncapitalize n
+               Name.to_rope (Name.uncapitalize (Name.from_rope n))
              else 
                n)
             (fun n -> check n && is_good n)))
@@ -184,7 +184,7 @@ struct
       Def_trans.process_defs 
         []
         (Def_trans.list_to_mac params.defs)
-        (Name.from_rope (BatRope.of_latin1 m.module_name))
+        (Name.from_rope (Ulib.Text.of_latin1 m.module_name))
         env
         defs
     in
@@ -200,12 +200,18 @@ struct
     in
     let defs =
       List.fold_left
-        (fun defs e -> e (Name.from_rope (BatRope.of_latin1 m.module_name)) env defs)
+        (fun defs e -> e (Name.from_rope (Ulib.Text.of_latin1 m.module_name)) env defs)
         defs
         params.extra
     in
     let rdp = rename_def_params ttarg in
     let defs = List.map rdp defs in
+    let defs = 
+      match ttarg with
+        | None -> defs
+        | Some(ttarg) ->
+            Target_binding.fix_binding (target_to_mname ttarg) defs 
+    in
     let defs = Target_syntax.fix_infix_and_parens params.get_prec defs in
       (* Note: this is the environment from the macro translations, ignoring the
        * extra translations *)

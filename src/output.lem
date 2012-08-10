@@ -1,6 +1,6 @@
 type t = Ocaml.Output.t
 
 val write : string -> t -> unit
-sub [ocaml] write = Output.write
+let inline {ocaml} write = Ocaml.Output.write
 val file  : string -> t
-sub [ocaml] file = Output.file
+let inline {ocaml} file = Ocaml.Output.file

@@ -2,7 +2,9 @@
 * defined constants in it.  The Unicode characters need to be removed manually.
 * *)
 
-val _ = List.app load ["finite_mapTheory", "listTheory", "pairTheory", "pred_setTheory", "set_relationTheory", "sortingTheory", "stringTheory", "wordsTheory"]
+val _ = List.app load ["finite_mapTheory", "listTheory", "pairTheory",
+"pred_setTheory", "set_relationTheory", "sortingTheory", "stringTheory",
+"integerTheory", "wordsTheory"]
 
 open TextIO
 

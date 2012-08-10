@@ -25,8 +25,8 @@ let set_print_ail () = print_ail := true
 let print_core = ref false
 let set_print_core () = print_core := true
 
-let core = ref false
-let set_core () = core := true
+let core = ref true
+let unset_core () = core := false
 
 let core_run = ref false
 let set_core_run () = core := true; core_run := true
@@ -48,15 +48,15 @@ let options = Arg.align [
   ("-o", Arg.Unit   set_output, "       Print m-sets                 (original backend)");
   
   (* core backend options *)
-  ("--core",                Arg.Unit   set_core,                "       Use the Core backend");
-  ("--core-run",            Arg.Unit   set_core_run,            "       Execute the Core program (adds --core)");
-  ("--core-graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of the executions (adds --core)");
-  ("--core-skip-typecheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
+  ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
+  ("--run",            Arg.Unit   set_core_run,            "       Execute the Core program");
+  ("--graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of the executions");
+  ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
   
   (* printing options *)
   ("--print-cabs", Arg.Unit   set_print_cabs, "       Pretty-print the Cabs intermediate representation");
   ("--print-ail",  Arg.Unit   set_print_ail,  "       Pretty-print the Ail intermediate representation");
-  ("--print-core", Arg.Unit   set_print_core,  "       Pretty-print the Code generated program (needs --core)");
+  ("--print-core", Arg.Unit   set_print_core,  "       Pretty-print the Code generated program");
   ("--debug",      Arg.Unit   set_debug,      "       Display some debug noise")
 ]
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
@@ -100,24 +100,32 @@ let () =
     >|> Input.file
     >|> Lexer.make
     >|> Parser.parse
-    >|> pass_through_test !print_cabs pp_cabs
     >|> pass_message "1. Parsing completed!"
+    >|> pass_through_test !print_cabs pp_cabs
        
     >|> Exception.rbind (Cabs_to_ail.desugar "main")
     >|> pass_message "2. Cabs -> Ail completed!"
-       
     >|> pass_through_test !print_ail pp_ail
+       
     >|> Exception.rbind Typing.annotate
     >|> pass_message "3. Ail typechecking completed!"
+(*    >|> Exception.map (fun v -> print_endline (Hack.ansi_format [] (Translation.foo v)); v) (* TODO *) *)
     
     >?> !core)
       (* Core backend *)
       (fun m ->
-        Exception.map Translation.translate m (* TODO: map is bad *)
+        (Exception.map Translation.translate m (* TODO: map is bad *)
         >|> pass_message "4. Translation to Core completed!"
         >|> pass_through_test !print_core pp_core
-        >|> Exception.rbind Core_typing.typecheck
-        >|> pass_message "5. Core typechecking completed!"
+        >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
+        >|> Exception.map (Core_simpl.simplify)
+        >|> pass_through_test !print_core pp_core
+        >?> not !core_skip_typecheck)
+          (fun m ->
+            Exception.rbind Core_typing.typecheck m
+            >|> pass_message "5. Core's typechecking completed!"
+          )
+          (pass_message "5. Skipping Core's typechecking completed!")
         >|> Exception.rbind Core_run.run
         >|> pass_through_test !core_run run_core
         >|> return_unit

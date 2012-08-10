@@ -1,2 +1,5 @@
-val outOfHomeomorphism: forall 'a. 'a
-sub [ocaml] outOfHomeomorphism = Boot.outOfHomeomorphism
+val outOfHomeomorphism: forall 'a. unit -> 'a
+let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism
+
+val debug: forall 'a. string -> 'a
+let inline {ocaml} debug = Ocaml.Boot.debug

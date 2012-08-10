@@ -55,13 +55,13 @@ let t_list t xs = sequence (t xs)
 let map_list f = t_list (List.map f)
 
 let sequence_map mmap =
-  Pmap.fold (fun k m mm->
+  Ocaml.Pmap.fold (fun k m mm->
     m  >>= fun x   ->
     mm >>= fun map ->
     return (Pmap.add k x map)
   ) mmap (return Pmap.empty)
 
-let map_map f m = sequence_map (Pmap.map f m)
+let map_map f m = sequence_map (Ocaml.Pmap.map f m)
 
 let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
 

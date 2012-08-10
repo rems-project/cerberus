@@ -1,5 +1,15 @@
 open Typed_ast
 
+type level = 
+  | Top_level
+  | Nested
+
+type pat_pos = 
+  | Bind
+  | Param
+
+type pat_position = level * pat_pos
+
 let rec list_to_mac = function
   | [] -> (fun e -> None)
   | m1::ms ->
@@ -24,11 +34,11 @@ module Expander(C : Exp_context) = struct
 (* Using the checks here adds significant overhead *)
 module C = Exps_in_context(C)
 
-let rec expand_pat top_level p r : pat = 
-  let trans p = expand_pat top_level p r in 
+let rec expand_pat pat_pos p r : pat = 
+  let trans p = expand_pat pat_pos p r in 
   let old_t = Some(p.typ) in
   let old_l = p.locn in
-    match r top_level p with
+    match r pat_pos p with
       | Some(p') -> trans p'
       | None ->
           match p.term with
@@ -65,7 +75,7 @@ let rec expand_pat top_level p r : pat =
 
 let rec expand_exp (r,pat_r) (e : exp) : exp = 
   let trans = expand_exp (r,pat_r) in 
-  let transp p = expand_pat false p pat_r in
+  let transp b p = expand_pat (Nested, b) p pat_r in
   let old_t = Some(exp_to_typ e) in
   let old_l = exp_to_locn e in
     match r e with
@@ -83,13 +93,13 @@ let rec expand_exp (r,pat_r) (e : exp) : exp =
                     s1 (Seplist.map trans es) s2 old_t
               | Fun(s1,ps,s2,e) ->
                   C.mk_fun old_l 
-                    s1 (List.map (fun p -> transp p) ps) 
+                    s1 (List.map (fun p -> transp Param p) ps) 
                     s2 (trans e)
                     old_t
               | Function(s1,pes,s2) ->
                   C.mk_function old_l
                     s1 (Seplist.map 
-                          (fun (p,s1,e,l) -> (transp p,s1,trans e,l))
+                          (fun (p,s1,e,l) -> (transp Param p,s1,trans e,l))
                           pes)
                     s2
                     old_t
@@ -132,7 +142,7 @@ let rec expand_exp (r,pat_r) (e : exp) : exp =
                   C.mk_case old_l
                     s1 (trans e) s2
                     (Seplist.map
-                       (fun (p,s1,e,l) -> (transp p,s1,trans e,l))
+                       (fun (p,s1,e,l) -> (transp Bind p,s1,trans e,l))
                        patexps)
                     s3
                     old_t
@@ -142,7 +152,7 @@ let rec expand_exp (r,pat_r) (e : exp) : exp =
                     old_t
               | Let(s1,letbind,s2,e) ->
                   C.mk_let old_l
-                    s1 (expand_letbind false (r,pat_r) letbind) s2 (trans e)
+                    s1 (expand_letbind (Nested,Bind) (r,pat_r) letbind) s2 (trans e)
                     old_t
               | Tup(s1,es,s2) ->
                   C.mk_tup old_l
@@ -206,28 +216,32 @@ and skip_apps r e = match (C.exp_to_term e) with
         (Some(exp_to_typ e))
   | _ -> expand_exp r e
 
-and expand_letbind top_level (r,pat_r) (lb,l) = match lb with
+and expand_letbind (level,_) (r,pat_r) (lb,l) = match lb with
   | Let_val(p,topt,s,e) ->
       C.mk_let_val l
-        (expand_pat top_level p pat_r) topt s (expand_exp (r,pat_r) e)
+        (expand_pat (level,Bind) p pat_r) topt s (expand_exp (r,pat_r) e)
   | Let_fun(n,ps,t,s1,e) -> 
       C.mk_let_fun l
-        n (List.map (fun p -> expand_pat top_level p pat_r) ps) t s1 
+        n (List.map (fun p -> expand_pat (level,Param) p pat_r) ps) t s1 
         (expand_exp (r,pat_r) e)
 
 let rec expand_defs defs r =
   let expand_val_def = function
     | Let_def(s1,targets,lb) ->
-        Let_def(s1, targets,expand_letbind true r lb)
+        Let_def(s1, targets,expand_letbind (Top_level,Bind) r lb)
     | Rec_def(s1,s2,targets,clauses) ->
         Rec_def(s1,
                 s2,
                 targets,
                 Seplist.map
                   (fun (nl,ps,topt,s3,e) -> 
-                     (nl, List.map (fun p -> expand_pat true p (snd r)) ps,
+                     (nl,
+                      List.map 
+                        (fun p -> expand_pat (Top_level,Param) p (snd r)) 
+                        ps,
                       topt,s3,expand_exp r e))
                   clauses)
+    | let_inline -> let_inline
   in
   let rec expand_def = function
     | Val_def(d,tvs) -> Val_def(expand_val_def d,tvs)

@@ -5,6 +5,8 @@ module Nfmap = Finite_map.Fmap_map(Name)
 type name_l = Name.lskips_t * Ast.l
 type lskips = Ast.lex_skips
 
+let r = Ulib.Text.of_latin1
+
 let no_lskips = None
 let space = Some([Ast.Ws(r" ")])
 
@@ -41,7 +43,7 @@ type target =
   | Target_isa
   | Target_coq
   | Target_tex
-      
+
 let target_compare = Pervasives.compare
 
 module Targetmap = Finite_map.Fmap_map(
@@ -50,6 +52,16 @@ struct
   let compare = target_compare
 end)
 
+module Targetset = Set.Make(
+struct 
+  type t = target
+  let compare = target_compare
+end)
+
+let all_targets = 
+  List.fold_right Targetset.add 
+    [Target_hol; Target_ocaml; Target_isa; Target_coq; Target_tex] 
+    Targetset.empty
 
 let target_to_string = function
   | Target_hol -> "hol"
@@ -61,57 +73,25 @@ let target_to_string = function
 let target_to_output a t = 
   let open Output in
     match t with
-      | Ast.Target_hol(s) -> ws s ^ id a r"hol"
-      | Ast.Target_ocaml(s) -> ws s ^ id a r"ocaml"
-      | Ast.Target_isa(s) -> ws s ^ id a r"isabelle"
-      | Ast.Target_coq(s) -> ws s ^ id a r"coq"
-      | Ast.Target_tex(s) -> ws s ^ id a r"tex"
+      | Ast.Target_hol(s) -> ws s ^ id a (r"hol")
+      | Ast.Target_ocaml(s) -> ws s ^ id a (r"ocaml")
+      | Ast.Target_isa(s) -> ws s ^ id a (r"isabelle")
+      | Ast.Target_coq(s) -> ws s ^ id a (r"coq")
+      | Ast.Target_tex(s) -> ws s ^ id a (r"tex")
 
 let target_to_mname = function
-  | Target_hol -> Name.from_rope r"Hol"
-  | Target_ocaml -> Name.from_rope r"Ocaml"
-  | Target_isa -> Name.from_rope r"Isabelle"
-  | Target_coq -> Name.from_rope r"Coq"
-  | Target_tex -> Name.from_rope r"Tex"
+  | Target_hol -> Name.from_rope (r"Hol")
+  | Target_ocaml -> Name.from_rope (r"Ocaml")
+  | Target_isa -> Name.from_rope (r"Isabelle")
+  | Target_coq -> Name.from_rope (r"Coq")
+  | Target_tex -> Name.from_rope (r"Tex")
 
 
-type kind = 
-  | K_ctor
+type env_tag = 
   | K_method
-  | K_spec
+  | K_val
   | K_let
-  | K_target of target
-
-let kind_to_string = function
-  | K_ctor -> "constructor"
-  | K_method -> "method"
-  | K_spec -> "type specification"
-  | K_let -> "let"
-  | K_target(t) -> target_to_string t
-
-let kind_compare x y = match (x,y) with
-  | (K_ctor, K_ctor) -> 0
-  | (K_ctor, _) -> 1
-  | (_, K_ctor) -> -1
-  | (K_method, K_method) -> 0
-  | (K_method, _) -> 1
-  | (_, K_method) -> -1
-  | (K_spec, K_spec) -> 0
-  | (K_spec, _) -> 1
-  | (_, K_spec) -> -1
-  | (K_let, K_let) -> 0
-  | (K_let, _) -> 1
-  | (_, K_let) -> -1
-  | (K_target(t1), K_target(t2)) ->
-     target_compare t1 t2 
-  (*| (K_target _, _) -> 1
-  | (_, K_target _) -> -1*)
-
-module Kset = Set.Make(
-struct
-  type t = kind
-  let compare = kind_compare
-end)
+  | K_target of bool * Targetset.t
 
 type ('a,'b) annot = { term : 'a; locn : Ast.l; typ : t; rest : 'b }
 
@@ -176,7 +156,7 @@ and const_descr = { const_binding : Path.t;
                     const_tparams : Tyvar.t list;
                     const_class : (Path.t * Tyvar.t) list;
                     const_type : t; 
-                    kinds : Kset.t;
+                    env_tag : env_tag;
                     spec_l : Ast.l;
                     substitutions : ((Name.t,unit) annot list * exp) Targetmap.t }
 
@@ -254,7 +234,7 @@ and letbind_aux =
   | Let_val of pat * (lskips * src_t) option * lskips * exp
   | Let_fun of funcl_aux
 
-type tyvar = lskips * BatRope.t * Ast.l
+type tyvar = lskips * Ulib.Text.t * Ast.l
 
 type texp = 
   | Te_opaque
@@ -283,6 +263,7 @@ type targets_opt = (lskips * Ast.target lskips_seplist * lskips) option
 type val_def = 
   | Let_def of lskips * targets_opt * letbind
   | Rec_def of lskips * lskips * targets_opt * funcl_aux lskips_seplist
+  | Let_inline of lskips * lskips * targets_opt * name_lskips_annot * name_lskips_annot list * lskips * exp
 
 type def = (def_aux * lskips option) * Ast.l
 
@@ -298,7 +279,6 @@ and def_aux =
   | Indreln of lskips * targets_opt * 
                (lskips * name_lskips_annot list * lskips * exp * lskips * name_lskips_annot * exp list) lskips_seplist
   | Val_spec of val_spec
-  | Subst of lskips * lskips * Ast.target * lskips * name_lskips_annot * name_lskips_annot list * lskips * exp
   | Class of lskips * lskips * name_l * tyvar * lskips * class_val_spec list * lskips
   (* The v_env and name are for converting the instance into a module. *)
   | Instance of lskips * instschm * val_def list * lskips * v_env * Name.t
@@ -483,6 +463,9 @@ let rec def_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (((d,s),l) 
       | Val_def(Rec_def(sk1, sk2, topt, funs),tvs) -> 
           let (s_new, s_ret) = lskips_f sk1 in
             res (Val_def(Rec_def(s_new, sk2, topt, funs),tvs)) s_ret
+      | Val_def(Let_inline(sk1,sk2,targ,n,ns,sk4,e), tvs) ->
+          let (s_new, s_ret) = lskips_f sk1 in
+            res (Val_def(Let_inline(s_new,sk2,targ,n,ns,sk4,e), tvs)) s_ret
       | Module(sk1, n, sk2, sk3, ds, sk4) ->
           let (s_new, s_ret) = lskips_f sk1 in
             res (Module(s_new, n, sk2, sk3, ds, sk4)) s_ret
@@ -498,9 +481,6 @@ let rec def_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (((d,s),l) 
       | Val_spec(sk1,n,sk2,ts) ->
           let (s_new, s_ret) = lskips_f sk1 in
             res (Val_spec(s_new,n,sk2,ts)) s_ret
-      | Subst(sk1,sk2,targ,sk3,n,ns,sk4,e) ->
-          let (s_new, s_ret) = lskips_f sk1 in
-            res (Subst(s_new,sk2,targ,sk3,n,ns,sk4,e)) s_ret
       | Class(sk1,sk2,n,tvar,sk3,body,sk4) ->
           let (s_new, s_ret) = lskips_f sk1 in
             res (Class(s_new,sk2,n,tvar,sk3,body,sk4)) s_ret
@@ -542,7 +522,7 @@ let unsat_constraint_err l = function
           (fun ppf -> 
              (Pp.lst "@\nand@\n" pp_class_constraint) ppf cs)
       in
-        raise (No_type(l, "unsatisfied type class constraints:\n" ^ t1))
+        raise (Ident.No_type(l, "unsatisfied type class constraints:\n" ^ t1))
 
 let pp_const_descr ppf c =
   fprintf ppf "@[<2>forall@ (@[%a@]).@ @[%a@]@ =>@ %a@]@ (%a)"
@@ -587,7 +567,7 @@ type checked_module =
       untyped_ast : Ast.defs * Ast.lex_skips;
       typed_ast : def list * Ast.lex_skips; }
 
-type var_avoid_f = (Name.t -> bool) * (BatRope.t -> (Name.t -> bool) -> Name.t)
+type var_avoid_f = (Name.t -> bool) * (Ulib.Text.t -> (Name.t -> bool) -> Name.t)
 
 module type Exp_context = sig
   val check : type_defs option
@@ -627,15 +607,15 @@ module Exps_in_context(D : Exp_context) = struct
                 | (_,None) -> v1
                 | (Some(v),Some(v')) ->
                     if for_pat then
-                      raise (No_type(l, "Duplicate variable in a pattern" ^
+                      raise (Ident.No_type(l, "Duplicate variable in a pattern" ^
                                         Pp.pp_to_string (fun ppf -> Name.pp ppf k)))
                     else
                       begin
                         try
                           type_eq l v v'
                         with
-                          | No_type(l,s) ->
-                              raise (No_type(l,s ^ "\n in merging: " ^ Pp.pp_to_string (fun ppf -> Name.pp ppf k)))
+                          | Ident.No_type(l,s) ->
+                              raise (Ident.No_type(l,s ^ "\n in merging: " ^ Pp.pp_to_string (fun ppf -> Name.pp ppf k)))
                       end;
                     v1)
            e_res
@@ -653,8 +633,8 @@ module Exps_in_context(D : Exp_context) = struct
                  try
                    type_eq l v v'
                  with
-                   | No_type(l,s) ->
-                       raise (No_type(l,s ^ "\nin binding " ^ Pp.pp_to_string (fun ppf -> Name.pp ppf k)))
+                   | Ident.No_type(l,s) ->
+                       raise (Ident.No_type(l,s ^ "\nin binding " ^ Pp.pp_to_string (fun ppf -> Name.pp ppf k)))
                end;
                Nfmap.remove e_res k)
       exp_env
@@ -1188,7 +1168,7 @@ module Exps_in_context(D : Exp_context) = struct
         | (Fld(f1), Fld(f2)) when Path.compare f1.field_binding f2.field_binding = 0 ->
             ()
         | _ ->
-            raise (No_type(l,"Incompatible assumptions over " ^ 
+            raise (Ident.No_type(l,"Incompatible assumptions over " ^ 
                              Pp.pp_to_string (fun ppf -> Path.pp ppf id) ^
                              "\n" ^
                              Pp.pp_to_string (fun ppf -> pp_val_descr ppf vd1) ^
@@ -1369,7 +1349,7 @@ module Exps_in_context(D : Exp_context) = struct
                  type_eq l t1 e2.typ;
                  t2
              | _ -> 
-                 raise (No_type(l, "non-function in application")))
+                 raise (Ident.No_type(l, "non-function in application")))
     in
       { term = App(e1,e2);
         locn = l;
@@ -1391,10 +1371,10 @@ module Exps_in_context(D : Exp_context) = struct
                          type_eq l t3 e3.typ;
                          t4
                      | _ -> 
-                         raise (No_type(l, "non-function in infix application"))
+                         raise (Ident.No_type(l, "non-function in infix application"))
                  end
              | _ ->
-                 raise (No_type(l, "non-function in infix application")))
+                 raise (Ident.No_type(l, "non-function in infix application")))
     in
       match exp_to_term e2 with
         | Var _ | Constant _ | Constructor _ -> 
@@ -1439,7 +1419,7 @@ module Exps_in_context(D : Exp_context) = struct
     let s = 
       Format.flush_str_formatter (Types.pp_type Format.str_formatter t) in 
 
-    { term = Record_coq((Name.add_lskip (Name.from_rope (BatRope.of_string s)),l),s1,fes,s2);
+    { term = Record_coq((Name.add_lskip (Name.from_rope (Ulib.Text.of_string s)),l),s1,fes,s2);
       locn = l;
       typ = t;
       rest = 

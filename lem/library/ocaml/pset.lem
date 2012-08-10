@@ -34,5 +34,6 @@ val comprehension5 : forall 'a 'b 'c 'd 'e 'f. ('f -> 'f -> int) -> ('a -> 'b ->
 val comprehension6 : forall 'a 'b 'c 'd 'e 'f 'g. ('g -> 'g -> int) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set -> 'f set -> 'g set
 val comprehension7 : forall 'a 'b 'c 'd 'e 'f 'g 'h. ('h -> 'h -> int) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> 'h) -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> bool) -> 'a set -> 'b set -> 'c set -> 'd set -> 'e set -> 'f set -> 'g set -> 'h set
 
-val map : forall 'a 'b. ('b -> 'b -> int) -> ('a -> 'b) -> 'a set -> 'b set
+val lfp : forall 'a. 'a set -> ('a set -> 'a set) -> 'a set
 
+val map : forall 'a 'b. ('b -> 'b -> int) -> ('a -> 'b) -> 'a set -> 'b set

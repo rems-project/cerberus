@@ -25,7 +25,7 @@ module Denotation = struct
     seq_before   = t1.seq_before   union t2.seq_before;
     constraints  = t1.constraints  union t2.constraints;
     ls_map       = Pmap.concat t1.ls_map   t2.ls_map;
-    call_map     = Pmap.concat t1.call_map t2.call_map
+    call_map     = Ocaml.Pmap.concat t1.call_map t2.call_map
   |>
 
   (* Hack: Original function in module Set_. *)
@@ -76,9 +76,12 @@ module Denotation = struct
       ls_map       = Pmap.add l s t.ls_map
     |>
 
-  sub [ocaml] set_compare_int = Pset.compare
-  sub [ocaml] map_compare_int = Pmap.compare
-  sub [ocaml] unv_compare_int = Pervasives.compare
+  val set_compare_int : forall 'a. 'a set -> 'a set -> int
+  let inline {ocaml} set_compare_int = Ocaml.Pset.compare
+  val map_compare_int : forall 'key 'a.  ('a -> 'a -> int) -> ('key,'a) map -> ('key,'a) map -> int
+  let inline {ocaml} map_compare_int = Ocaml.Pmap.compare
+  val unv_compare_int : forall 'a. 'a -> 'a -> int
+  let inline {ocaml} unv_compare_int = Ocaml.Pervasives.compare
 
   let compare_int t1 t2 =
     let (++) p n = if n = 0 then p else n in
@@ -280,7 +283,7 @@ module Solve = struct
   type trace = Constraint.t * Action.t list
 
   let schedule pre s =
-    let actions = [a | forall (a IN s) | true] in
+    let actions = [a | forall (a MEM Set.to_list s) | true] in
     match pre with
       | [] -> [actions]
       | _  -> [ls @ actions | forall (ls MEM pre) | true]
@@ -392,7 +395,7 @@ module Solve = struct
         let todo_list = make_todo d [] (sb_accesses union sa_rest_todo) in
         let call_map =
           let seq_call c = seq d [] (Pmap.find c d.call_map) in
-          Map_.of_list [(c, seq_call c) | forall (c IN calls) | true] in
+          Map_.of_list [(c, seq_call c) | forall (c MEM Set.to_list calls) | true] in
         let perms = permute d.seq_before calls in
         let merge lls cs =
           let parts = partition d.seq_before cs todo_list in

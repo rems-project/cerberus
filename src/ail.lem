@@ -105,6 +105,7 @@ type 'a statement =
   | LABEL of id * 'a statement_l
   | GOTO of id
   | DECLARATION of 'a definition list
+  | PAR of 'a statement_l list
 
 and 'a statement_l = 'a * 'a statement
 
@@ -121,15 +122,94 @@ type 'a env = <|
   file : 'a file
 |>
 
+
+(* HACK: equality over ctypes. *)
+let rec and2 f l1 l2 =
+  match (l1,l2) with
+    | ([]   ,[]    ) -> true
+    | (x::xs, y::ys) -> f x y && and2 f xs ys
+  end
+
+let rec ctype_eq ty1 ty2 =
+  match (ty1, ty2) with
+    | (VOID qs1             ,     VOID qs2         ) -> Set.equal qs1 qs2
+    | (BASIC qs1 b1         , BASIC qs2 b2         ) -> Set.equal qs1 qs2 && b1 = b2
+    | (ARRAY ty1 n1         , ARRAY ty2 n2         ) -> ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1      , POINTER qs2 ty2      ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 tys1    , FUNCTION ty2 tys2    ) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
+    | (STRUCT x1_opt membrs1, STRUCT x2_opt membrs2) -> x1_opt = x2_opt &&
+                                                        and2 (fun (x1,y1,z1) (x2,y2,z2) -> x1=x2 && ctype_eq y1 y2 && z1=z2) membrs1 membrs2
+  end
+
+
+
+
 module Print = struct
   module P = Pprint
 
   open P.Operators
+  
+  let precedence = function
+    | VARIABLE _ -> Some 0
+    | CONSTANT _ -> Some 0
+    
+    | CALL _ _             -> Some 1
+    | MEMBEROF _ _         -> Some 1
+    | MEMBEROFPTR _ _      -> Some 1
+    | UNARY POSTFIX_INCR _ -> Some 1
+    | UNARY POSTFIX_DECR _ -> Some 1
+    
+    | UNARY _ _ -> Some 2
+    | CAST _ _  -> Some 2
+    | SIZEOF _  -> Some 2
+    | ALIGNOF _ -> Some 2
+    
+    | BINARY (Cabs.ARITHMETIC MUL) _ _ -> Some 3
+    | BINARY (Cabs.ARITHMETIC DIV) _ _ -> Some 3
+    | BINARY (Cabs.ARITHMETIC MOD) _ _ -> Some 3
+    
+    | BINARY (Cabs.ARITHMETIC ADD) _ _ -> Some 4
+    | BINARY (Cabs.ARITHMETIC SUB) _ _ -> Some 4
+    
+    | BINARY (Cabs.ARITHMETIC SHL) _ _ -> Some 5
+    | BINARY (Cabs.ARITHMETIC SHR) _ _ -> Some 5
+    
+    | BINARY LT _ _ -> Some 6
+    | BINARY GT _ _ -> Some 6
+    | BINARY LE _ _ -> Some 6
+    | BINARY GE _ _ -> Some 6
+    
+    | BINARY EQ _ _ -> Some 7
+    | BINARY NE _ _ -> Some 7
+    
+    | BINARY (Cabs.ARITHMETIC BAND) _ _ -> Some 8
+    
+    | BINARY (Cabs.ARITHMETIC XOR) _ _ -> Some 9
+    
+    | BINARY (Cabs.ARITHMETIC BOR) _ _ -> Some 10
+    
+    | BINARY AND _ _ -> Some 11
+    
+    | BINARY OR _ _ -> Some 12
+    
+    | CONDITIONAL _ _ _ -> Some 13
+    
+    | ASSIGN _ _ _ -> Some 14
+    
+    | BINARY COMMA _ _ -> Some 15
+  end
+
+  let lt_precedence p1 p2 =
+    match (p1, p2) with
+      | (Some n1, Some n2) -> n1 < n2
+      | (Some _ , None   ) -> true
+      | (None   , _      ) -> false
+    end
 
   let optional pp = function
     | Some x -> pp x
     | None   -> P.empty
-    end
+  end
 
   let pp_unop = function
     | MINUS        -> P.minus
@@ -208,7 +288,7 @@ module Print = struct
     let f = pp_type in
     let pp_qs qs =
       let ins_space ds d = ds ^^ d ^^ P.space in
-      P.fold ins_space (List.map pp_qualifier [q | forall (q IN qs) | true]) in
+      P.fold ins_space (List.map pp_qualifier (Set.to_list qs)) in
     match t with
       | VOID qs   -> pp_qs qs ^^ (!^ "void")
       | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
@@ -229,8 +309,10 @@ module Print = struct
 
   let pp_id id = !^ (Symbol.to_string_pretty id)
 
-  let rec pp_exp (d, exp) =
-    let f = P.group -| P.parens -| pp_exp in
+  let rec pp_exp p (d, exp) =
+    let p' = precedence exp in
+    let f = P.group -| pp_exp p' in
+    (if lt_precedence p' p then fun x -> x else P.parens) $
     match exp with
       | VARIABLE id -> pp_id id
       | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
@@ -255,7 +337,7 @@ module Print = struct
     pp_type t ^^^ pp_id id
 
   let rec pp_stmt file (d, stmt) =
-    let f_e = pp_exp in
+    let f_e = pp_exp None in
     let f_s = pp_stmt file in
     match stmt with
       | SKIP -> P.semi
@@ -283,6 +365,8 @@ module Print = struct
             let (t, st) = Pmap.find id file.id_map in
             pp_type t ^^^ pp_id id ^^^ P.equals ^^^ f_e e in
           P.comma_list f_d ds ^^ P.semi
+      | PAR ss -> let par = P.sepmap (P.bar ^^ P.bar ^^ P.bar) f_s ss in
+                  P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break1 ^^ par) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
     end
 
   let pp_function file (id, (args, s)) =
@@ -294,5 +378,5 @@ module Print = struct
 
   let pp_file file =
     let pp d f = d ^^ pp_function file f ^^ P.break1 in
-    List.fold_left pp P.empty (Pmap.bindings file.fn_map)
+    List.fold_left pp P.empty (Ocaml.Pmap.bindings file.fn_map)
 end

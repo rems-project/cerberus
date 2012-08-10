@@ -62,6 +62,8 @@ type struct_union =
 %token TYPEOF FUNCTION__ PRETTY_FUNCTION__
 %token LABEL__
 
+%token LBRACES_3 RBRACES_3 PIPES_3
+
 
 (* TODO: organize *)
 %token FLOAT DOUBLE
@@ -924,7 +926,11 @@ labeled_statement:
 compound_statement:
 | LBRACE l = loption(block_item_list) RBRACE
     {C.BLOCK (List.rev l), L.make $startpos $endpos}
+(* TODO: cppmem's parallel composition (this is not C11) *)
+| LBRACES_3 xs = separated_nonempty_list(PIPES_3, statement) RBRACES_3
+    {C.PAR xs, L.make $startpos $endpos}
 ;
+
 
 block_item_list:
 | x = block_item                      {[x]}

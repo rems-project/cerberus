@@ -13,6 +13,10 @@ let add e m = Pmap.add e (1 + count e m) m
 
 let from_list ls = List.fold_left (fun m e -> add e m) emp ls
 
-sub [ocaml] unv_compare_int = Pervasives.compare
-sub [ocaml] map_compare_int = Pmap.compare
+val unv_compare_int: forall 'a. 'a -> 'a -> int
+let inline {ocaml} unv_compare_int = Ocaml.Pervasives.compare
+
+val map_compare_int: forall 'a. (num -> num -> int) -> 'a t -> 'a t -> int
+let inline {ocaml} map_compare_int = Ocaml.Pmap.compare
 let compare_int t1 t2 = map_compare_int unv_compare_int t1 t2
+

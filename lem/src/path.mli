@@ -18,7 +18,7 @@ val check_prefix : Name.t -> t -> bool
 val to_ident : t -> Ident.t
 val to_name : t -> Name.t
 (*
-val to_rope : (Ast.lex_skips -> BatRope.t) -> BatRope.t -> t -> BatRope.t
+val to_rope : (Ast.lex_skips -> Ulib.Text.t) -> Ulib.Text.t -> t -> Ulib.Text.t
 val get_lskip: t -> Ast.lex_skips
 val add_pre_lskip : Ast.lex_skips -> t -> t
 val drop_parens : t -> t

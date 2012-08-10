@@ -76,13 +76,14 @@ module Print = struct
 (*      | Kstore (ty, e1, e2) -> pp_keyword "store" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_expr e1 ^^^ pp_expr e2 *)
 (*      | Kload (ty, e)      -> pp_keyword "load" ^^ P.braces (Ail.Print.pp_type ty) ^^^ pp_expr e *)
 (*      | Ksame (a1, a2)     -> pp_keyword "same" ^^^ pp_symbol a1 ^^^ pp_symbol a2 *)
-      | Kmax ty         -> !^ "\\text{max}" ^^ P.braces (Ail.Print.pp_type ty)
+(*      | Kmax ty         -> !^ "\\text{max}" ^^ P.braces (Ail.Print.pp_type ty)
       | Kmin ty         -> !^ "\\text{min}" ^^ P.braces (Ail.Print.pp_type ty)
       | Ksizeof ty      -> !^ "\\text{sizeof}" ^^ P.braces (Ail.Print.pp_type ty)
       | Kalignof ty     -> !^ "\\text{alignof}" ^^ P.braces (Ail.Print.pp_type ty)
       | Koffsetof ty    -> !^ "\\text{offset}" ^^ P.braces (Ail.Print.pp_type ty)
       | Kshift (a, e)      -> !^ "\\text{shift}" ^^^ pp_symbol a ^^^ pp_expr e
       | Kconv (ty1, ty2, a) -> !^ "\\text{conv}" ^^ P.braces (Ail.Print.pp_type ty1 ^^ !^"\\" ^^ Ail.Print.pp_type ty2) ^^^ pp_symbol a
+*)
   
 end
 
