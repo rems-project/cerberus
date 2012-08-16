@@ -232,7 +232,7 @@ let rec sem_core e =
     | Kerror -> E.add_actions [Aerror]
     
     | Kskip  -> E.return []
-    | Kseq _ e1 e2 ->
+    | Kseq SOpSeq _ e1 e2 ->
         sem_core e1 >>= fun as1 ->
         sem_core e2 >>= fun as2 ->
         E.mapM (fun edge -> E.add_edge edge)
@@ -299,10 +299,9 @@ let rec exec e =
   | Kundef -> E.return ()
   | Kerror -> E.return ()
   | Kskip -> E.return ()
-  | Kseq _as e1 e2 -> E.return ()
+  | Kseq sop _as e1 e2 -> E.return ()
   | Kunseq es -> E.return ()
   | Kindet e -> E.return ()
-  | Katom e -> E.return ()
   | Kcreate ty -> E.return ()
   | Kalloc e -> E.return ()
   | Kkill a -> E.return ()

@@ -94,6 +94,7 @@ type cause =
   | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS
   | CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY of num * num
+  | CORE_TYPECHECK_UNSEQ_PURE
   | CORE_TYPECHECK of string
 
   | PARSER of string
@@ -508,6 +509,10 @@ let to_string = function
        string_of_num patternArity ^ ", while the type of the first argument has arity = " ^
        string_of_num exprArity ^ "."
   
+  | CORE_TYPECHECK_UNSEQ_PURE ->
+      "[Core Typechecking] the operands of an unseq must all be effectful."
+
+
   | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg
   
   end

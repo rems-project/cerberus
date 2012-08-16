@@ -304,7 +304,7 @@ let rec infer e =
     +  ------------------------------------------------------- (let)
     +    Γ ⊢ let _αs = e1 in e2 : [the effectful version of T2 if not already effectful]
     ----------------------------------------------------------------------------------------------*)
-    | Kseq _as e1 e2 ->
+    | Kseq sop _as e1 e2 ->
         infer e1 >>= fun coreTy_e1 ->
         let baseTys = base_type_to_list (base_type coreTy_e1) in
         let n = List.length _as in
@@ -328,12 +328,17 @@ let rec infer e =
     
     
    (*
-    +    Γ ⊢ e1 : T1   ...   Γ ⊢ ek : Tk            T = if none of the Ti are effectful then
-    +  ----------------------------------- (unseq)  (T1, ..., Tk) else (T1, ..., Tk)*
-    +  Γ ⊢ e1 || ... || ek : T                      
+    +    Γ ⊢ e1 : T1*   ...   Γ ⊢ ek : Tk*
+    +  ----------------------------------- (unseq)
+    +  Γ ⊢ e1 || ... || ek : T*
     ----------------------------------------------------------------------------------------------*)
     | Kunseq es ->
       E.mapM infer es >>= fun coreTys ->
+      if List.exists (function TyBase _ -> true | _ -> false end) coreTys then
+        E.fail Errors.CORE_TYPECHECK_UNSEQ_PURE
+      else
+        E.return $ TyEffect (tuple (List.map (function TyEffect b -> b end) coreTys))
+(*
       E.return $
         List.fold_left
           (fun acc coreTy ->
@@ -348,7 +353,7 @@ let rec infer e =
                | TyEffect baseTy -> TyEffect (tuple (baseTy :: baseTys))
              end)
           (TyBase (tuple [])) (List.rev coreTys)
-    
+*)
     
    (*
     +   Γ ⊢ e : T              Γ ⊢ e : T
@@ -356,7 +361,6 @@ let rec infer e =
     +  Γ ⊢ [e] : T            Γ ⊢ {e} : T
     ----------------------------------------------------------------------------------------------*)
     | Kindet e -> infer e
-    | Katom e  -> infer e
     
     
    (*
@@ -514,10 +518,9 @@ and check expected_type e =
               E.guard (expected_type = TyBase unit)
                       (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase unit) expected_type)
           
-          | Kseq _as e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check seq)")
+          | Kseq sop _as e1 e2 -> E.fail (Errors.CORE_TYPECHECK "TODO(check seq)")
           | Kunseq es -> E.fail (Errors.CORE_TYPECHECK "TODO(check unseq)")
           | Kindet e -> E.fail (Errors.CORE_TYPECHECK "TODO(check indet)")
-          | Katom e  -> E.fail (Errors.CORE_TYPECHECK "TODO(check atom)")
           | Kcreate ty -> E.fail (Errors.CORE_TYPECHECK "TODO(check create)")
           | Kalloc a -> E.fail (Errors.CORE_TYPECHECK "TODO(check alloc)")
           | Kkill a -> E.fail (Errors.CORE_TYPECHECK "TODO(check kill)")
