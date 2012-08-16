@@ -9,8 +9,8 @@ type core_base_type =
   | address
   | ctype
   | unit
-  | wildcard (* TODO: discuss about that *)
   | tuple of core_base_type list
+  | wildcard
 
 type core_type =
   | TyBase   of core_base_type
@@ -30,7 +30,6 @@ and string_of_core_base_type baseTy =
     | address       -> "address"
     | ctype         -> "ctype"
     | unit          -> "unit"
-    | wildcard      -> "*"
     | tuple baseTys -> "(" ^ string_of_core_base_type_aux baseTys
 end
 
@@ -59,6 +58,14 @@ type binop =
   (* logical connectives *)
   | OpAnd
   | OpOr
+
+(* Sequencing operator *)
+type seqop =
+  (* Normal sequencing *)
+  | SOpSeq
+  (* "Strong sequencing" for incr/decr *)
+  | SOpSSeq
+
 
 (* Merged pure and effectful expressions *)
 type expr =
@@ -95,13 +102,14 @@ type expr =
        
        S is effectful, S' may be effectful, E is pure
      *)
-  | Kwhile of sym * expr * expr * expr
+(*  | Kwhile of sym * expr * expr * expr *)
   
   | Kskip
-  | Kseq of sym list * expr * expr
   | Kunseq of expr list
+  | Kseq of seqop * sym list * expr * expr
+  
   | Kindet of expr
-  | Katom of expr
+  
   
   (* memory actions *)
   | Kcreate of Ail.ctype
@@ -157,18 +165,18 @@ let test: file =
     let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
     Kunseq
     [
-      Kseq [a1; a2] (Kunseq [Kcreate signed_int; Kcreate signed_int])
-        (Kseq [] (Kunseq [Kstore signed_int (Ksym a1) (Kconst 4); Kstore signed_int (Ksym a2) (Kconst 5)])
-           (Kseq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kseq [] (Kunseq [Kkill a1; Kkill a2])
+      Kseq SOpSeq [a1; a2] (Kunseq [Kcreate signed_int; Kcreate signed_int])
+        (Kseq SOpSeq [] (Kunseq [Kstore signed_int (Ksym a1) (Kconst 4); Kstore signed_int (Ksym a2) (Kconst 5)])
+           (Kseq SOpSeq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
+              (Kseq SOpSeq [] (Kunseq [Kkill a1; Kkill a2])
                  (Kconst 0)
               )
            )
         );
-      Kseq [a1; a2] (Kunseq [Kcreate signed_int; Kcreate signed_int])
-        (Kseq [] (Kunseq [Kstore signed_int (Ksym a1) (Kconst 4); Kstore signed_int (Ksym a2) (Kconst 5)])
-           (Kseq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kseq [] (Kunseq [Kkill a1; Kkill a2])
+      Kseq SOpSeq [a1; a2] (Kunseq [Kcreate signed_int; Kcreate signed_int])
+        (Kseq SOpSeq [] (Kunseq [Kstore signed_int (Ksym a1) (Kconst 4); Kstore signed_int (Ksym a2) (Kconst 5)])
+           (Kseq SOpSeq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
+              (Kseq SOpSeq [] (Kunseq [Kkill a1; Kkill a2])
                  (Kconst 0)
               )
           )
@@ -187,9 +195,9 @@ let test2: file =
   let f_body    = Kconst 0         in
   let main_body =
     let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
-      Kseq [a_x; a_y] (Kunseq [Kcreate signed_int; Kcreate signed_int])
-        (Kseq [] (Kif (Ktrue) (Kstore signed_int (Ksym a_x) (Kconst 1))
-                              (Kstore signed_int (Ksym a_y) (Kconst 2)))
+      Kseq SOpSeq [a_x; a_y] (Kunseq [Kcreate signed_int; Kcreate signed_int])
+        (Kseq SOpSeq [] (Kif (Ktrue) (Kstore signed_int (Ksym a_x) (Kconst 1))
+                                     (Kstore signed_int (Ksym a_y) (Kconst 2)))
            (Kunseq [Kkill a_x; Kkill a_y]))
 
   in
@@ -277,7 +285,6 @@ module Print = struct
     
     | Knot _   -> Some 1
     | Kindet _ -> Some 1
-    | Katom _  -> Some 1
 
     | Kcreate _    -> Some 2
     | Kalloc _     -> Some 2
@@ -301,7 +308,7 @@ module Print = struct
     | Klet _ _ _ ->     Some 10
 
     | Kunseq _ -> Some 11
-    | Kseq _ _ _ -> Some 12
+    | Kseq _ _ _ _ -> Some 12
 
 (*    | Kwhile _ _ _ _ -> None *)
     | COMMENT _ _ ->    None
@@ -371,7 +378,7 @@ module Print = struct
       | Kop op e1 e2    -> f e1 ^^^ pp_binop op ^^^ f e2
       | Ktrue           -> pp_constant "true"
       | Kfalse          -> pp_constant "false"
-      | Knot e          -> pp_keyword "not" ^^ f e
+      | Knot e          -> pp_keyword "not" ^^^ f e
       | Kctype ty       -> Ail.Print.pp_type ty
       | Klet [] e1 e2   -> !^ "BUG: for now LET must have at least one symbol."
       | Klet [a] e1 e2  -> pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^ 
@@ -388,21 +395,21 @@ module Print = struct
       | Kerror          -> pp_keyword "error"
       | Kskip           -> pp_keyword "skip"
 
-      | Kwhile a s1 e s2 -> pp_control "while" ^^^ pp_symbol a ^^^ !^ "<-" ^^^ f s1 ^^ P.semi ^^^ f e ^^^ pp_control "do" ^^
+(*      | Kwhile a s1 e s2 -> pp_control "while" ^^^ pp_symbol a ^^^ !^ "<-" ^^^ f s1 ^^ P.semi ^^^ f e ^^^ pp_control "do" ^^
                             P.nest 2 (P.break1 ^^ f s2) ^^ P.break1 ^^ pp_control "done"
+*)
 
-      | Kseq [] e1 e2   -> f e1 ^^ P.semi ^^ P.break1 ^^ f e2
-      | Kseq [a] e1 e2  -> pp_symbol a ^^^ !^ "<-" ^^
-                           P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
-                           ^^ P.break1 ^^ f e2
-      | Kseq _as e1 e2  -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^
-                           P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
-                           ^^ P.break1 ^^ f e2
+      | Kseq SOpSeq [] e1 e2   -> f e1 ^^ P.semi ^^ P.break1 ^^ f e2
+      | Kseq SOpSeq [a] e1 e2  -> pp_symbol a ^^^ !^ "<-" ^^
+                                  P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
+                                  ^^ P.break1 ^^ f e2
+      | Kseq SOpSeq _as e1 e2  -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^
+                                  P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
+                                  ^^ P.break1 ^^ f e2
       | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
       | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
       | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
       | Kindet e        -> P.brackets (f e)
-      | Katom e         -> P.braces (f e)
       | Kcreate ty      -> pp_keyword "create" ^^ P.braces (Ail.Print.pp_type ty)
       | Kalloc e        -> pp_keyword "alloc" ^^^ f e
       | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
