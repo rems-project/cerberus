@@ -20,7 +20,7 @@ type constant =
   | BitOr of constant * constant
   | BitXor of constant * constant
   | BitComplement of constant
-  | Fn of name * constant list
+  | Fn of name * list constant
 
 let rec fold_map_const f const i =
   let fm = fold_map_const f in
@@ -302,12 +302,12 @@ let rec compare_constr constr1 constr2 =
 
 let compare_constr_int c1 c2 = Ord.to_int (compare_constr c1 c2)
 
-val set_compare_int : forall 'a. 'a set -> 'a set -> int
+val set_compare_int : forall 'a. set 'a -> set 'a -> int
 let inline {ocaml} set_compare_int = Ocaml.Pset.compare
 let compare_int = set_compare_int
 
 (* TODO compare *)
-type t = constr set
+type t = set constr
 
 let from_list cs = {c | forall (c MEM cs) | true}
 
@@ -508,10 +508,10 @@ module Solver = struct
     eqs : t;
     cc : Cc.t;
     counter : num;
-    int_map : (num, num) map;
-    name_map : (Symbol.t, num) map;
-    const_map : (num, constant) map;
-    apply_map : (num * num, num) map;
+    int_map : map num num;
+    name_map : map Symbol.t num;
+    const_map : map num constant;
+    apply_map : map (num * num) num;
   |>
 
   let n_fresh p =
@@ -655,7 +655,7 @@ module Solver = struct
             replace (Integer (i1 / i2))
           else (const, p)
       | Pow (Integer i) ->
-          replace (Integer (Ocaml.Nat_num.( ** ) 2 i))
+        replace (Integer (Ocaml.Nat_num.( ** ) 2 i))
       | Name _ ->
           let (n, p) = normalise_const p const in
           let n =

@@ -236,6 +236,9 @@ struct
       | Some(Target_tex) -> 
           (trans (Some(Ast.Target_tex(None))) targ tex,
            get_avoid_f targ)
+      | Some(Target_html) -> 
+          (trans None targ ident,
+           get_avoid_f targ)
       | None -> 
           (trans None targ ident,
            get_avoid_f targ)

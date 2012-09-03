@@ -102,7 +102,7 @@ and reduce_exp (n: num) b env file exp =
         C.fresh      >>= fun v      ->
         Action.load (lvalue_type exp) a v >>= fun load ->
         E.return (v, m -@> load)
-  | A.CONSTANT (Cabs.CONST_INT (i, _)) ->
+  | A.CONSTANT (A.CONST_INT (i, _)) ->
       E.return (C.const i, Me.unit)
   
   (* (6.5.2.4) Postfix increment and decrement operators *)
@@ -130,7 +130,7 @@ and reduce_exp (n: num) b env file exp =
   | A.UNARY A.ADDRESS (_, (A.UNARY A.INDIRECTION e)) -> f e
   | A.UNARY A.ADDRESS e -> f_lvalue e
   | A.CAST t e -> conv t (exp_type e) (f e)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         conv_exp e1 >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -155,7 +155,7 @@ and reduce_exp (n: num) b env file exp =
           let a = C.offset a2 a1 size in
           Action.same a a1 >>= fun same ->
           E.return (a, (m1 -&- m2) -@> same)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         conv_exp e1 >>= fun (a1, m1) ->
         conv_exp e2 >>= fun (a2, m2) ->
@@ -174,7 +174,7 @@ and reduce_exp (n: num) b env file exp =
         let a = C.offset a1 (C.minus C.zero a2) size in
         Action.same a1 a >>= fun same ->
         E.return (a, (m1 -&- m2) -@> same)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       let modulo = C.modulo a1 a2 in
@@ -185,7 +185,7 @@ and reduce_exp (n: num) b env file exp =
       else
         Tc.conv_int (exp_type exp) modulo >>= fun (a, c) ->
         E.return (a, (m1 -&- m2 +& c) +& div_zero)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.MUL) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.MUL) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       let mult = C.mult a1 a2 in
@@ -195,11 +195,11 @@ and reduce_exp (n: num) b env file exp =
       else
         Tc.conv_int (exp_type exp) mult >>= fun (a, c) ->
         E.return (a, (m1 -&- m2 +& c))
-  | A.BINARY Cabs.COMMA e1 e2 ->
+  | A.BINARY A.COMMA e1 e2 ->
       f e1 >>= fun (_,  m1) ->
       f e2 >>= fun (a2, m2) ->
       E.return (a2, m1 -&> m2)
-  | A.BINARY Cabs.OR e1 e2 ->
+  | A.BINARY A.OR e1 e2 ->
       f e1 >>= fun (a1, m1) ->
       f e2 >>= fun (a2, m2) ->
       C.fresh >>= fun a ->
@@ -208,7 +208,7 @@ and reduce_exp (n: num) b env file exp =
         (C.eq a1 C.zero)
         (C.case (C.eq a2 C.zero) (C.eq a C.zero) (C.eq a C.one)) in
       E.return (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
-  | A.BINARY Cabs.AND e1 e2 ->
+  | A.BINARY A.AND e1 e2 ->
       f e1 >>= fun (a1, m1) ->
       f e2 >>= fun (a2, m2) ->
       C.fresh >>= fun a ->
@@ -217,7 +217,7 @@ and reduce_exp (n: num) b env file exp =
         (C.neq a1 C.zero)
         (C.case (C.neq a2 C.zero) (C.eq a C.one) (C.eq a C.zero)) in
       E.return (a, (m1 +& first_only) -/- ((m1 -&> m2) +& both))
-  | A.BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.SHL) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_int (T.promote (exp_type e1)) e2 >>= fun (a2, m2) ->
       let shifted = C.mult a1 (C.pow a2) in
@@ -229,7 +229,7 @@ and reduce_exp (n: num) b env file exp =
       else
         Tc.conv_int (exp_type exp) shifted >>= fun (a, c) ->
         E.return (a, m1 -&- m2 +& c)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.SHR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_int (T.promote (exp_type e1)) e2 >>= fun (a2, m2) ->
       let shifted = C.div a1 (C.pow a2) in
@@ -242,7 +242,7 @@ and reduce_exp (n: num) b env file exp =
         E.return (shifted, (m1 -&- m2) +& c)
       else
         E.return (shifted, m1 -&- m2)
-  | A.BINARY Cabs.EQ e1 e2 ->
+  | A.BINARY A.EQ e1 e2 ->
       if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -255,7 +255,7 @@ and reduce_exp (n: num) b env file exp =
       else if Typing.is_null_pointer_constant e1 then
         (*TODO*) E.return (C.one, Me.null)
       else (*TODO*) E.return (C.one, Me.null)
-  | A.BINARY Cabs.NE e1 e2 ->
+  | A.BINARY A.NE e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -265,7 +265,7 @@ and reduce_exp (n: num) b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY Cabs.LT e1 e2 ->
+  | A.BINARY A.LT e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -275,7 +275,7 @@ and reduce_exp (n: num) b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY Cabs.LE e1 e2 ->
+  | A.BINARY A.LE e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -285,7 +285,7 @@ and reduce_exp (n: num) b env file exp =
         E.return (a, (m1 -&- m2) +& c)
       else (*TODO*) E.return (C.one, Me.null)
         (* Pointer comparison. *)
-  | A.BINARY Cabs.GT e1 e2 ->
+  | A.BINARY A.GT e1 e2 ->
       if T.is_real (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -303,7 +303,7 @@ and reduce_exp (n: num) b env file exp =
         let c = C.case (C.gt a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         Action.same a1 a2 >>= fun same ->
         E.return (a, (m1 -&- m2) +& c -@> same)
-  | A.BINARY Cabs.GE e1 e2 ->
+  | A.BINARY A.GE e1 e2 ->
       if T.is_arithmetic (exp_type e1) then
         let t = usual_arithmetic e1 e2 in
         conv_int t e1 >>= fun (a1, m1) ->
@@ -321,17 +321,17 @@ and reduce_exp (n: num) b env file exp =
         let c = C.case (C.ge a1 a2) (C.eq a C.one) (C.eq a C.zero) in
         Action.same a1 a2 >>= fun same ->
         E.return (a, (m1 -&- m2) +& c -@> same)
-  | A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
       E.return (a, (m1 -&- m2) +& (C.eq a (C.bit_and a1 a2)))
-  | A.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
       E.return (a, (m1 -&- m2) +& (C.eq a (C.bit_or a1 a2)))
-  | A.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
       conv_exp e1 >>= fun (a1, m1) ->
       conv_exp e2 >>= fun (a2, m2) ->
       C.fresh     >>= fun a        ->
@@ -402,7 +402,7 @@ and reduce_exp (n: num) b env file exp =
 
 
 (* reduce_stmt n b Pmap.empty file file.A.main C.Constants.return s *)
-and reduce_stmt (n: num) b env (file: _ Ail.file) fid return (_, stmt) =
+and reduce_stmt (n: num) b env (file: Ail.file _) fid return (_, stmt) =
   let f_s = reduce_stmt n b env file fid return in
   let f_e = reduce_exp  n b env file in
   let lift x = x >>= fun (a, m) -> E.return (a, Ms.normal m) in
@@ -456,7 +456,7 @@ and reduce_stmt (n: num) b env (file: _ Ail.file) fid return (_, stmt) =
 
 
 (*  *)
-let reduce_file (n: num) (file: _ A.file) : Meaning.Denotation.t set E.M.t =
+let reduce_file (n: num) (file: A.file _) : E.M.t (set Meaning.Denotation.t) =
   let b =
     let f m (fid, _) = Pmap.add fid n m in
     List.fold_left f Pmap.empty (Pmap.bindings file.A.fn_map) in
@@ -470,4 +470,4 @@ let reduce_file (n: num) (file: _ A.file) : Meaning.Denotation.t set E.M.t =
 
 
 (* This is the entry function (called from main) *)
-let reduce (n: num) (file: _ A.file) : Meaning.Denotation.t set = E.init (reduce_file n file)
+let reduce (n: num) (file: A.file _) : set Meaning.Denotation.t = E.init (reduce_file n file)

@@ -2,11 +2,11 @@ open Global
 
 module Denotation = struct
   type t = <|
-    actions      : Action.t set;
-    side_effects : Action.t set; (* subset of actions*)
-    seq_before   : (Action.t * Action.t) set;
-    ls_map       : (Action.t, Action.t) map; (* encodes postfix increment/decrement dependencies *)
-    call_map     : (Action.t,  Action.t set) map;
+    actions      : set Action.t;
+    side_effects : set Action.t; (* subset of actions*)
+    seq_before   : set (Action.t * Action.t);
+    ls_map       : map Action.t Action.t; (* encodes postfix increment/decrement dependencies *)
+    call_map     : map Action.t (set Action.t);
     constraints  : Constraint.t
   |>
 
@@ -29,7 +29,7 @@ module Denotation = struct
   |>
 
   (* Hack: Original function in module Set_. *)
-  let product (s1 : Action.t set) (s2 : Action.t set) =
+  let product (s1 : set Action.t) (s2 : set Action.t) =
     {(e1, e2) | forall (e1 IN s1) (e2 IN s2) | true}
 
   let conj_sb t1 t2 = <|
@@ -76,9 +76,9 @@ module Denotation = struct
       ls_map       = Pmap.add l s t.ls_map
     |>
 
-  val set_compare_int : forall 'a. 'a set -> 'a set -> int
+  val set_compare_int : forall 'a. set 'a -> set 'a -> int
   let inline {ocaml} set_compare_int = Ocaml.Pset.compare
-  val map_compare_int : forall 'key 'a.  ('a -> 'a -> int) -> ('key,'a) map -> ('key,'a) map -> int
+  val map_compare_int : forall 'key 'a.  ('a -> 'a -> int) -> map 'key 'a -> map 'key 'a -> int
   let inline {ocaml} map_compare_int = Ocaml.Pmap.compare
   val unv_compare_int : forall 'a. 'a -> 'a -> int
   let inline {ocaml} unv_compare_int = Ocaml.Pervasives.compare
@@ -95,7 +95,7 @@ module Denotation = struct
 end
 
 module Expression = struct
-  type t = Denotation.t set
+  type t = set Denotation.t
 
   let unit : t = {Denotation.unit}
   let null : t = {}
@@ -280,7 +280,7 @@ end
 module Solve = struct
   open Denotation
 
-  type trace = Constraint.t * Action.t list
+  type trace = Constraint.t * list Action.t
 
   let schedule pre s =
     let actions = [a | forall (a MEM Set.to_list s) | true] in
@@ -290,7 +290,7 @@ module Solve = struct
     end
 
   let partition_sb d u =
-    let sa a u = exist (a' IN u). (a', a) IN d.seq_before in
+    let sa a u = exists (a' IN u). (a', a) IN d.seq_before in
     Set.partition (fun a -> not (sa a u)) u
 
   let rec perm t lls front tail =
@@ -326,7 +326,7 @@ module Solve = struct
       | ([], [a]) -> (front @ [e :: a]) :: lls
       | (c::cs', a::rest) ->
           let lls' = (front @ ((e :: a) :: rest)) :: lls in
-          if (e, c) IN sb || exist (t MEM a). (e, t) IN sb then
+          if (e, c) IN sb || exists (t MEM a). (e, t) IN sb then
             lls'
           else
             if Action.is_access e && not (Action.is_fn_store e) then
@@ -378,7 +378,7 @@ module Solve = struct
       let (sa_ucalls, sa_rest) =
         Set.partition
           (fun a ->
-            Action.is_call a && exist (a' IN sb). not ((a',a) IN d.seq_before)
+            Action.is_call a && exists (a' IN sb). not ((a',a) IN d.seq_before)
           ) sa in
       let calls = sb_calls union sa_ucalls in
       (* Hack: calls = {}. *)
@@ -389,7 +389,7 @@ module Solve = struct
         let pre = schedule pre sb_other in
         let (sa_rest_todo, sa_rest_rest) =
           Set.partition
-            (fun a -> exist (c IN calls).
+            (fun a -> exists (c IN calls).
               (a, c) IN d.seq_before || not ((c, a) IN d.seq_before)
             ) sa_rest in
         let todo_list = make_todo d [] (sb_accesses union sa_rest_todo) in

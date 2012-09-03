@@ -1,6 +1,6 @@
 open Global
 
-type ('a, 's, 'msg) t = 's -> ('a * 's, 'msg) Exception.t
+type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
 
 let return a = fun s -> Exception.return (a, s)
 let map f m =

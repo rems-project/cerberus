@@ -275,7 +275,7 @@ module Identity : Target = struct
   let begin_kwd = kwd "begin"
   let end_kwd = kwd "end"
   let forall = kwd "forall"
-  let exists = kwd "exist"
+  let exists = kwd "exists"
   let set_quant_binding = kwd "IN"
   let list_quant_binding = kwd "MEM"
   let quant_binding_start = kwd "("
@@ -327,7 +327,7 @@ module Identity : Target = struct
   let last_list_sep = Seplist.Optional
   let last_set_sep = Seplist.Optional
   let first_variant_sep = Seplist.Optional
-  let type_params_pre = true
+  let type_params_pre = false
   let type_abbrev_sep = kwd "="
   let type_abbrev_end = emp
   let type_abbrev_name_quoted = false
@@ -340,6 +340,17 @@ module Identity : Target = struct
   let none = Ident.mk_ident [] (Name.add_lskip (Name.from_rope (r"None"))) Ast.Unknown
 end
 
+module Html : Target = struct
+  include Identity 
+  let target = Some (Ast.Target_html None)
+
+  let forall = kwd "&forall;"
+  let exists = kwd "&exist;"
+  let set_quant_binding = kwd "&isin;"
+  let setcomp_binding_start = kwd "&forall;"
+  let reln_clause_start = kwd "&forall;"
+
+end
 
 module Tex : Target = struct
   open Str
@@ -517,6 +528,7 @@ module Ocaml : Target = struct
   let rec_end = kwd "}"
 
   let def_sep = kwd "and"
+  let type_params_pre = true
   
 end
 
@@ -906,12 +918,14 @@ let rec interspace os =
 
 let sep x s = ws s ^ x
 
-let bracket_many f s s1 b1 s2 b2 l =
-  let args = flat (Seplist.to_sep_list f (sep s) l) in
-    (if Seplist.length l < 2 then
-       ws s1 ^ args ^ ws s2 
-     else
-       ws s1 ^ b1 ^ args ^ ws s2 ^ b2)
+let bracket_many f s b1 b2 l =
+  match l with
+    | [] -> emp
+    | [t] -> f t
+    | (t::ts) -> 
+        (* Put the parenthesis right before the first type *)
+        let (t', sk) = typ_alter_init_lskips (fun (s) -> (None,s)) t in
+          ws sk ^ b1 ^ concat s (List.map f (t'::ts))  ^ b2
 
 
 let lit l = match l.term with
@@ -945,16 +959,16 @@ let rec typ t = match t.term with
       typ t2
   | Typ_tup(ts) ->
       flat (Seplist.to_sep_list typ (sep T.typ_tup_sep) ts)
-  | Typ_app(s1, ts, s2, p) ->
+  | Typ_app(p, ts) ->
       if T.type_params_pre then
-        bracket_many typ (T.tup_sep) s1 (kwd "(") s2 (kwd ")") ts ^
+        bracket_many typ (T.tup_sep) (kwd "(") (kwd ")") ts ^
         texspace ^ (typ_ident_to_output p)
       else
         (* FZ again, slightly distasteful: we know that the backend is *)
         (* Coq and we do not print parentheses; however parentheses *)
         (* should be parametrised *)
        (Ident.to_output Type_ctor T.path_sep p.id_path) ^
-        bracket_many typ (kwd " ") s1 (kwd " ") s2 (kwd " ") ts
+        flat (List.map typ ts)
         
   | Typ_paren(s1,t,s2) ->
       ws s1 ^
@@ -992,6 +1006,18 @@ let const_ident_to_output cd =
       else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"not")))   = 0 then kwd "\\lemnot"
       else
         Ident.to_output Term_const T.path_sep cd.id_path
+  | Some (Ast.Target_html _) -> 
+      if      Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"union"))) = 0 then kwd "&cup;" 
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"inter"))) = 0 then kwd "^cap;"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"-->")))    = 0 then kwd "&rarr;"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"IN")))    = 0 then kwd "&isin;"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"&&")))    = 0 then kwd "&amp;&amp;"
+(*
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"||")))    = 0 then kwd "\\lemvee"
+      else if Path.compare cd.descr.const_binding (Path.mk_path [Name.from_rope (r"Pervasives")] (Name.from_rope (r"not")))   = 0 then kwd "\\lemnot"
+*)
+      else
+        Ident.to_output Term_const T.path_sep cd.id_path
   | _ -> 
         Ident.to_output Term_const T.path_sep cd.id_path
 
@@ -1005,11 +1031,13 @@ let rec pat p = match p.term with
       ws s ^
       T.pat_wildcard
 
-  | P_as(p,s,(n,l)) ->
+  | P_as(s1,p,s2,(n,l),s3) ->
+      ws s1 ^ 
       pat p ^
-      ws s ^ 
+      ws s2 ^ 
       T.pat_as ^
-      Name.to_output Term_var n
+      Name.to_output Term_var n ^
+      ws s3
 
   | P_typ(s1,p,s2,t,s3) ->
       ws s1 ^
@@ -1465,7 +1493,7 @@ let tyconstr_coq ((n,l),s1,targs,(n1,l1),tvs) =
      T.typ_start ^
      flat (Seplist.to_sep_list typ (sep T.constr_sep) targs) ^
      T.constr_sep ^ Name.to_output Type_ctor n1 ^ space ^
-     (flat (Seplist.to_sep_list tyvar (fun _ -> space) tvs)) ^ (* FZ discharging comments here *)
+     (flat (List.map tyvar tvs)) ^ (* FZ discharging comments here *)
      T.typ_end)
     
 let tyexp_abbrev s4 t =
@@ -1554,39 +1582,37 @@ let tdef_start = function
       T.typedef_start  
  *)   
 
-let tdef_tvars ml_style s1 tvs s2 = 
-  if Seplist.is_empty tvs then
-    emp
-  else if Seplist.is_empty (Seplist.tl tvs) then
-    T.before_tyvars ^
-    tyvar (Seplist.hd tvs) ^
-    T.after_tyvars
-  else
-    let s = if ml_style then T.tup_sep else emp in
-    T.before_tyvars ^
-    ws s1 ^
-    (if ml_style then kwd "(" else emp) ^
-    flat (Seplist.to_sep_list tyvar (sep s) tvs) ^
-    ws s2 ^
-    (if ml_style then kwd ")" else emp) ^
-    T.after_tyvars
+let tdef_tvars ml_style tvs = 
+  match tvs with
+    | [] -> emp
+    | [tv] ->
+        T.before_tyvars ^
+        tyvar tv ^
+        T.after_tyvars
+    | tvs ->
+        let s = if ml_style then T.tup_sep else emp in
+          T.before_tyvars ^
+          (if ml_style then kwd "(" else emp) ^
+          flat (Seplist.to_sep_list tyvar (sep s) (Seplist.from_list (List.map (fun tv -> (tv,None)) tvs))) ^
+          (if ml_style then kwd ")" else emp) ^
+          T.after_tyvars
 
-let tdef_tctor quoted_name s1 tvs s2 n =
+let tdef_tctor quoted_name tvs n =
   let nout = 
     if quoted_name then Name.to_output_quoted Type_ctor n else Name.to_output Type_ctor n 
   in
     if T.type_params_pre then
-      tdef_tvars true s1 tvs s2 ^
+      tdef_tvars true tvs ^
       nout 
     else
       (* FZ slightly distasteful: in this case we know that the backend *)
       (* is Coq and we do not print parentheses; however parentheses *)
       (* should be parametrised *)
       nout ^
-      tdef_tvars false s1 tvs s2
+      tdef_tvars false tvs
 
-let tdef (s1, tvs, s2, (n,l), texp) =
-  tdef_tctor false s1 tvs s2 n ^
+let tdef ((n,l), tvs, texp) =
+  tdef_tctor false tvs n ^
   tyexp texp
 
 let indreln_clause (s1, qnames, s2, e, s3, rname, es) =
@@ -1673,14 +1699,11 @@ let isa_indreln_clause (s1, qnames, s2, e, s3, rname, es) =
 let constraints = function
   | None -> emp
   | Some(Cs_list(l,s)) ->
-      flat (List.map
-              (fun (s1,id,tv,s2) ->
-                 ws s1 ^
-                 kwd "(" ^
+      flat (Seplist.to_sep_list
+              (fun (id,tv) ->
                  Ident.to_output Type_var T.path_sep id ^
-                 tyvar tv ^
-                 ws s2 ^
-                 kwd ")")
+                 tyvar tv)
+              (sep (kwd","))
               l) ^
       ws s ^
       kwd "=>"
@@ -1689,7 +1712,7 @@ let constraints = function
 
 let constraint_prefix (Cp_forall(s1,tvs,s2,constrs)) =
   ws s1 ^
-  kwd "forall" ^
+  T.forall ^
   flat (List.map tyvar tvs) ^
   ws s2 ^
   kwd "." ^
@@ -1698,13 +1721,13 @@ let constraint_prefix (Cp_forall(s1,tvs,s2,constrs)) =
 let is_abbrev l = 
   Seplist.length l = 1 &&
   match Seplist.hd l with
-    | (_,_,_,_,Te_abbrev _) -> true
+    | (_,_,Te_abbrev _) -> true
     | _ -> false
 
 let is_rec l = 
   Seplist.length l = 1 &&
   match Seplist.hd l with
-    | (_,_,_,_,Te_record _) -> true
+    | (_,_,Te_record _) -> true
     | _ -> false
 
 
@@ -1714,10 +1737,10 @@ let rec def d : Output.t = match d with
   | Type_def(s1, l) when is_abbrev l->
       begin
         match Seplist.hd l with
-          | (s2,tvs,s3,(n,l),Te_abbrev(s4,t)) ->
+          | ((n,l),tvs,Te_abbrev(s4,t)) ->
               ws s1 ^
               T.type_abbrev_start ^
-              tdef_tctor T.type_abbrev_name_quoted s2 tvs s3 n ^
+              tdef_tctor T.type_abbrev_name_quoted tvs n ^
               tyexp_abbrev s4 t ^
               T.type_abbrev_end
           | _ -> assert false
@@ -1727,10 +1750,10 @@ let rec def d : Output.t = match d with
   | Type_def(s1, l) when is_rec l->
       begin
         match Seplist.hd l with
-          | (s2,tvs,s3,(n,l),Te_record(s4,s5,fields,s6)) ->
+          | ((n,l),tvs,Te_record(s4,s5,fields,s6)) ->
               ws s1 ^
               T.typedefrec_start ^
-              tdef_tctor false s2 tvs s3 n ^
+              tdef_tctor false tvs n ^
               tyexp_rec s4 s5 fields s6 ^
               T.typedefrec_end
           | _ -> assert false
@@ -1923,7 +1946,7 @@ and make_lemdefn latex_name latex_label typeset_name pre_comment lhs_keyword lhs
 and names_of_pat p : (Ulib.Text.t * Ulib.Text.t * Ast.l) list = match p.term with
   | P_wild(s) ->
       []
-  | P_as(p,s,(n,l)) ->
+  | P_as(s1,p,s2,(n,l),s3) ->
       let n' = Name.strip_lskip n in 
       names_of_pat p  @ [(Name.to_rope n',Name.to_rope_tex Term_var n', p.locn)]
   | P_typ(s1,p,s2,t,s3) ->
@@ -2161,6 +2184,29 @@ and def_tex_inc d : (Ulib.Text.t*Ulib.Text.t) list = match d with
 (*       kwd "end" *)
 
 
+and html_source_name_letbind (lb,l) = match lb with
+  | Let_val(p,topt,s2,e) ->
+      (match names_of_pat p with 
+      | [(source_name, typeset_name, l)] -> Some source_name
+    (* ghastly temporary hacks *)
+      | (source_name, typeset_name, l)::_ -> Some source_name
+      | [] -> None)
+  | Let_fun(clause) ->
+      let (function_name, ps, topt, pre_equal_comment, e) = clause in
+      let source_name =  (function_name.term : Name.lskips_t) in
+      Some (Name.to_rope (Name.strip_lskip (source_name)))
+
+and html_source_name_def d = match d with
+  | Val_def(Let_def(s1, targets,bind),tvs) ->
+      html_source_name_letbind bind
+  | _ -> None
+
+and html_link_def d = 
+  match html_source_name_def d with
+  | None -> emp
+  | Some s -> 
+      let sr = Ulib.Text.to_string s in
+      kwd ( String.concat "" ["\n<a name=\"";sr;"\">"])
 
 
 and defs (ds:def list) =
@@ -2170,6 +2216,7 @@ and defs (ds:def list) =
          match T.target with 
          | Some (Ast.Target_isa _) -> isa_def d
          | Some (Ast.Target_tex _) -> raise (Failure "should be unreachable")
+         | Some (Ast.Target_html _) -> html_link_def d ^ def d
          | _ -> def d
        end ^
 
@@ -2195,10 +2242,10 @@ and isa_def d : Output.t = match d with
   | Type_def(s1, l) when is_abbrev l->
       begin
         match Seplist.hd l with
-          | (s2,tvs,s3,(n,l),Te_abbrev(s4,t)) ->
+          | ((n,l),tvs,Te_abbrev(s4,t)) ->
               ws s1 ^
               T.type_abbrev_start ^
-              tdef_tctor (check_type_name n) s2 tvs s3 n ^
+              tdef_tctor (check_type_name n) tvs n ^
               tyexp_abbrev s4 t ^
               T.type_abbrev_end
           | _ -> assert false
@@ -2207,10 +2254,10 @@ and isa_def d : Output.t = match d with
   | Type_def(s1, l) when is_rec l->
       begin
         match Seplist.hd l with
-          | (s2,tvs,s3,(n,l),Te_record(s4,s5,fields,s6)) ->
+          | ((n,l),tvs,Te_record(s4,s5,fields,s6)) ->
               ws s1 ^
               T.typedefrec_start ^
-              tdef_tctor (check_type_name n) s2 tvs s3 n ^
+              tdef_tctor (check_type_name n) tvs n ^
               tyexp_rec s4 s5 fields s6 ^
               T.typedefrec_end
           | _ -> assert false
@@ -2237,8 +2284,7 @@ and isa_def d : Output.t = match d with
       else emp
       
   | Val_spec(s1,(n,l),s2,t) ->
-      raise (Util.TODO "Isabelle: Top-level type constraints omited; should not
-             occur at the moment")
+      raise (Util.TODO(l, "Isabelle: Top-level type constraints omited; should not occur at the moment"))
 
   | Indreln(s,targets,clauses) ->
       if in_target targets then
@@ -2252,7 +2298,7 @@ and isa_def d : Output.t = match d with
           let (s1, qnames, s2, e, s3, rname, es) = List.hd (Seplist.to_list clauses) in 
           isa_mk_typed_def_header(Name.to_output Term_var rname.term,[], None,Typed_ast.annot_to_typ rname) 
         with 
-          | Failure _ -> raise (Util.TODO "Isabelle: inductive relation without clauses?")
+          | Failure _ -> raise (Util.TODO(Ast.Unknown,"Isabelle: inductive relation without clauses?"))
         )^
         flat (Seplist.to_sep_list isa_indreln_clause (sep T.reln_sep) clauses) ^
         T.reln_end
@@ -2354,6 +2400,10 @@ module Make(C : sig val avoid : var_avoid_f end) = struct
 
   let ident_defs defs =
     let module B = F(Identity)(C)(Dummy) in
+      B.defs defs
+
+  let html_defs defs =
+    let module B = F(Html)(C)(Dummy) in
       B.defs defs
 
   let tex_defs defs =

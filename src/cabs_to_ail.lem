@@ -4,43 +4,42 @@ module C = Cabs
 module A = Ail
 
 module Effect = struct
-  module M = State_exception
-
+  module M  = State_exception
   module St = Symbol_table
 
   type id = Symbol.t
   type id_set = Symbol.sset
 
-  type 'a env = <|
-    symbol_set : id_set;
-    symbol_table : (string, id) St.t;
-    id_map : (id, A.declaration) map;
-    globals : (id * 'a A.expression_l) list;
-    fn_map : (id, (id list * 'a A.statement_l)) map
+  type env 'a = <|
+    symbol_set   : id_set;
+    symbol_table : St.t string id;
+    id_map       : map id A.declaration;
+    globals      : list (id * A.expression_l 'a);
+    fn_map       : map id (list id * A.statement_l 'a)
   |>
-
-  type ('b, 'a, 'msg) t = ('b, 'a env, 'msg) M.t
-
+  type t 'a 'b 'msg = M.t 'a (env 'b) 'msg
+  
   let return = M.return
-  let fail = M.fail
-
+  let fail   = M.fail
+  
   let option = M.option
   let of_option = M.of_option
   let mapM = M.mapM
   let foldrM = M.foldrM
   let iter = M.iter
-
+  
   let init m =
     M.run m <|
-      symbol_set = Symbol.init;
-      symbol_table = St.create_scope St.emp;
-      id_map = Pmap.empty;
-      globals = [];
-      fn_map = Pmap.empty
+      symbol_set   = Symbol.init;
+      symbol_table = St.create_scope St.empty;
+      id_map       = Pmap.empty;
+      globals      = [];
+      fn_map       = Pmap.empty
     |>
-
+  
+  
   let destroy_scope =
-    let f env = <|env with symbol_table = St.destroy_scope env.symbol_table|> in
+    let f env = <| env with symbol_table = St.destroy_scope env.symbol_table |> in
     M.update f
 
   let create_scope =
@@ -103,6 +102,8 @@ module Effect = struct
   end
 end
 
+(* ---------------------------------------------------------------------------------------------- *)
+
 module E = Effect
 open E.Operators
 
@@ -117,10 +118,10 @@ let initial_desugar_state = <|
 
 
 
-let zero l = (C.CONSTANT (C.CONST_INT (0, None)), l)
-let one  l = (C.CONSTANT (C.CONST_INT (1, None)), l)
-let d_zero l = Pair.make l (A.CONSTANT (C.CONST_INT (0, None)))
-let d_one  l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
+let zero l = (A.CONSTANT (A.CONST_INT (0, None)), l)
+let one  l = (A.CONSTANT (A.CONST_INT (1, None)), l)
+let d_zero l = Pair.make l (A.CONSTANT (A.CONST_INT (0, None)))
+let d_one  l = Pair.make l (A.CONSTANT (A.CONST_INT (1, None)))
 
 let subst l name =
   let msg = "Violation of constraint 6.7#3 as described by footnote 91 \
@@ -137,11 +138,65 @@ let desugar_unop = function
   | C.INDIRECTION  -> A.INDIRECTION
 end
 
+
+let desugar_qualifier = function
+  | C.CONST    -> A.CONST
+  | C.RESTRICT -> A.RESTRICT
+  | C.VOLATILE -> A.VOLATILE
+  | C.ATOMIC   -> A.ATOMIC
+end
+
+let desugar_qualifiers = Set.map desugar_qualifier
+
+let desugar_arithop = function
+  | C.MUL  -> A.MUL
+  | C.DIV  -> A.DIV
+  | C.MOD  -> A.MOD
+  | C.ADD  -> A.ADD
+  | C.SUB  -> A.SUB
+  | C.SHL  -> A.SHL
+  | C.SHR  -> A.SHR
+  | C.BAND -> A.BAND
+  | C.XOR  -> A.XOR
+  | C.BOR  -> A.BOR
+end
+
+let desugar_binop = function
+  | C.ARITHMETIC o -> A.ARITHMETIC (desugar_arithop o)
+  | C.EQ           -> A.EQ
+  | C.NE           -> A.NE
+  | C.LT           -> A.LT
+  | C.GT           -> A.GT
+  | C.LE           -> A.LE
+  | C.GE           -> A.GE
+  | C.AND          -> A.AND
+  | C.OR           -> A.OR
+  | C.COMMA        -> A.COMMA
+end
+
+let desugar_integer_suffix = function
+  | C.SUFFIX_UNSIGNED           -> A.SUFFIX_UNSIGNED
+  | C.SUFFIX_UNSIGNED_LONG      -> A.SUFFIX_UNSIGNED_LONG
+  | C.SUFFIX_UNSIGNED_LONG_LONG -> A.SUFFIX_UNSIGNED_LONG_LONG
+  | C.SUFFIX_LONG               -> A.SUFFIX_LONG
+  | C.SUFFIX_LONG_LONG          -> A.SUFFIX_LONG_LONG
+end
+
+let desugar_integer_constant (n, suff_opt) =
+  match suff_opt with
+    | Some suff -> (n, Some (desugar_integer_suffix suff))
+    | None      -> (n, None)
+  end
+
+let desugar_constant = function
+  | C.CONST_INT c  -> A.CONST_INT (desugar_integer_constant c)
+end
+
 let rec desugar_exp (e, l) =
   let f  = desugar_exp in
   let ft = desugar_type in
   Pair.make l <$> (match e with
-  | C.CONSTANT c           -> E.return (A.CONSTANT c)
+  | C.CONSTANT c           -> E.return (A.CONSTANT (desugar_constant c))
   | C.IDENTIFIER x         -> A.VARIABLE <$> subst l x
 (*  | STRING_LITERAL s (* TODO *) *)
   
@@ -150,7 +205,7 @@ let rec desugar_exp (e, l) =
      ( *((E1)+(E2))) ]]". *)
   | C.SUBSCRIPT e1 e2 ->
       A.UNARY A.INDIRECTION <$> (
-        Pair.make l <$> (A.BINARY (C.ARITHMETIC C.ADD) <$> f e1 <*> f e2)
+        Pair.make l <$> (A.BINARY (A.ARITHMETIC A.ADD) <$> f e1 <*> f e2)
       )
   
   | C.CALL e es            -> A.CALL <$> f e <*> E.mapM f es
@@ -160,23 +215,27 @@ let rec desugar_exp (e, l) =
   (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
      equivalent to [[ (E+=1) ]]". *)
   | C.UNARY C.PREFIX_INCR e ->
-      A.ASSIGN (Some C.ADD) <$> f e <@> d_one l
+      A.ASSIGN (Some A.ADD) <$> f e <@> d_one l
   
   (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
      analogous to the prefix [[ ++ ]] operator". *)
   | C.UNARY C.PREFIX_DECR e ->
-      A.ASSIGN (Some C.SUB) <$> f e <@> d_one l
+      A.ASSIGN (Some A.SUB) <$> f e <@> d_one l
   
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
-  | C.UNARY C.NOT e        -> A.BINARY C.EQ (d_zero l) <$> f e
+  | C.UNARY C.NOT e        -> A.BINARY A.EQ (d_zero l)    <$> f e
   | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
-  | C.TYPE_SIZEOF  t       -> A.SIZEOF      <$> ft t
-  | C.TYPE_ALIGNOF t       -> A.ALIGNOF     <$> ft t
-  | C.CAST t e             -> A.CAST        <$> ft t <*> f e
-  | C.BINARY o e1 e2       -> A.BINARY o    <$> f e1 <*> f e2
+  | C.TYPE_SIZEOF  t       -> A.SIZEOF                    <$> ft t
+  | C.TYPE_ALIGNOF t       -> A.ALIGNOF                   <$> ft t
+  | C.CAST t e             -> A.CAST                      <$> ft t <*> f e
+  | C.BINARY o e1 e2       -> A.BINARY (desugar_binop o)  <$> f e1 <*> f e2
   | C.CONDITIONAL e1 e2 e3 -> A.CONDITIONAL <$> f e1 <*> f e2 <*> f e3
-  | C.ASSIGN o e1 e2       -> A.ASSIGN o    <$> f e1 <*> f e2
+  | C.ASSIGN o_opt e1 e2   -> A.ASSIGN match o_opt with
+                                         | Some o -> Some (desugar_arithop o)
+                                         | None   -> None
+                                       end
+                              <$> f e1 <*> f e2
 (*
   | C.COMPOUND_LITERAL _ ->
         raise_bug "Compound literals are not yet supported." (* TODO *)
@@ -240,8 +299,8 @@ and desugar_type t =
   let ft = desugar_type in
   match t with
   | C.BASE qs ss -> if Ocaml.Pmap.equal Ocaml.Pervasives.(=) (Multiset.from_list [C.VOID]) ss
-                      then E.return (A.VOID qs)
-                      else A.BASIC qs <$> desugar_specifier ss
+                      then E.return (A.VOID (desugar_qualifiers qs))
+                      else A.BASIC (desugar_qualifiers qs) <$> desugar_specifier ss
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
@@ -277,7 +336,7 @@ and desugar_type t =
           end in
       let d_decls = E.mapM f decls in
       A.FUNCTION <$> ft t <*> d_decls
-  | C.POINTER qs t -> A.POINTER qs <$> ft t
+  | C.POINTER qs t -> A.POINTER (desugar_qualifiers qs) <$> ft t
   end
 
 and desugar_stmt st (s, l) =
@@ -297,7 +356,7 @@ and desugar_stmt st (s, l) =
       else
         let integer_constant =
           match e with
-            | C.CONSTANT (C.CONST_INT i) -> E.return i
+            | C.CONSTANT (C.CONST_INT i) -> E.return (desugar_integer_constant i)
             | _ -> E.fail (Errors.OTHER "We don't support anything but integer \
                        constants as [[ case ]] labels.")
         end in
@@ -354,7 +413,7 @@ and desugar_stmt st (s, l) =
            long as representable, does not matter with respect to the
            semantics. Hence, we arbitrarily choose "1" (which can always be
            represented as an object of type int). *)
-        | None -> one l
+        | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
         end in
       let s3 =
         match e3_opt with
@@ -368,7 +427,7 @@ and desugar_stmt st (s, l) =
       E.return d_s end
   | C.FOR_DECL defns e2_opt e3_opt s ->
       let is_auto_or_register ((((_, _, storage), l), _), _) =
-        if List.exists (fun s -> s <> C.AUTO && s <> C.REGISTER) storage then
+        if List.exist (fun s -> s <> C.AUTO && s <> C.REGISTER) storage then
           false
 (*
           CpLogger.info (CpPrint.pp_program msg) l;
@@ -387,7 +446,7 @@ and desugar_stmt st (s, l) =
           match e2_opt with
           | Some e2 -> e2
           (* See comment above. *)
-          | None -> one l
+          | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
           end in
         let s3 =
           match e3_opt with
@@ -560,11 +619,13 @@ let desugar_global_defn st (defn, l) =
       E.add_globals d_defns
    end
 
+
 let desugar_program startup global_defns =
   let msg = "Could not find startup function .." ^ startup ^ "...\n" in
   E.iter (desugar_global_defn initial_desugar_state) global_defns >>= fun () ->
   E.option (Errors.OTHER msg) (E.resolve "main") >>= fun main ->
   E.to_program main
+
 
 let desugar startup (name, global_defns) =
   E.init (desugar_program startup global_defns)

@@ -28,6 +28,7 @@ type target =
   | Target_isa
   | Target_coq
   | Target_tex
+  | Target_html
 
 val target_compare : target -> target -> int
 
@@ -135,7 +136,7 @@ and src_t_aux =
  | Typ_var of lskips * Tyvar.t
  | Typ_fn of src_t * lskips * src_t
  | Typ_tup of src_t lskips_seplist
- | Typ_app of lskips * src_t lskips_seplist * lskips * Path.t id
+ | Typ_app of Path.t id * src_t list
  | Typ_paren of lskips * src_t * lskips
 
 type lit = (lit_aux,unit) annot
@@ -152,7 +153,7 @@ and pat_annot = { pvars : Types.t Nfmap.t }
 
 and pat_aux = 
   | P_wild of lskips
-  | P_as of pat * lskips * name_l
+  | P_as of lskips * pat * lskips * name_l * lskips
   | P_typ of lskips * pat * lskips * src_t * lskips
   | P_var of Name.lskips_t
   | P_constr of constr_descr id * pat list
@@ -265,10 +266,10 @@ type texp =
   | Te_record of lskips * lskips * (name_l * lskips * src_t) lskips_seplist * lskips
   | Te_record_coq of lskips * name_l * lskips * (name_l * lskips * src_t) lskips_seplist * lskips
   | Te_variant of lskips * (name_l * lskips * src_t lskips_seplist) lskips_seplist
-  | Te_variant_coq of lskips * (name_l * lskips * src_t lskips_seplist * name_l * tyvar lskips_seplist) lskips_seplist
+  | Te_variant_coq of lskips * (name_l * lskips * src_t lskips_seplist * name_l * tyvar list) lskips_seplist
 
 type constraints = 
-  | Cs_list of (lskips * Ident.t * tyvar * lskips) list * lskips
+  | Cs_list of (Ident.t * tyvar) lskips_seplist * lskips
 
 type constraint_prefix =
   | Cp_forall of lskips * tyvar list * lskips * constraints option
@@ -291,10 +292,7 @@ type val_def =
 type def = (def_aux * lskips option) * Ast.l
 
 and def_aux =
-  | Type_def of lskips * ((* ( *) lskips * 
-                       tyvar lskips_seplist * 
-                       (* ) *) lskips * 
-                       name_l * texp) lskips_seplist
+  | Type_def of lskips * (name_l * tyvar list * texp) lskips_seplist
   (* The TVset contains the type variables that the definition is parameterized
    * over *)
   | Val_def of val_def * Types.TVset.t
@@ -327,6 +325,7 @@ val pat_append_lskips : lskips -> pat -> pat
  * The preceding whitespace/newline/comments are replaced with the fst of the
  * function's result, and the snd of the function's result is returned from
  * alter_init_lskips *)
+val typ_alter_init_lskips : (lskips -> lskips * lskips) -> src_t -> src_t * lskips 
 val pat_alter_init_lskips : (lskips -> lskips * lskips) -> pat -> pat * lskips
 val alter_init_lskips : (lskips -> lskips * lskips) -> exp -> exp * lskips
 val def_alter_init_lskips : (lskips -> lskips * lskips) -> def -> def * lskips
@@ -364,11 +363,11 @@ module Exps_in_context(C : Exp_context) : sig
   val mk_tvar : Ast.l -> lskips -> Tyvar.t -> Types.t -> src_t
   val mk_tfn : Ast.l -> src_t -> lskips -> src_t -> Types.t option -> src_t
   val mk_ttup : Ast.l -> src_t lskips_seplist -> Types.t option -> src_t
-  val mk_tapp : Ast.l -> lskips -> src_t lskips_seplist -> lskips -> Path.t id -> Types.t option -> src_t
+  val mk_tapp : Ast.l -> Path.t id -> src_t list -> Types.t option -> src_t
   val mk_tparen : Ast.l -> lskips -> src_t -> lskips -> Types.t option -> src_t
 
   val mk_pwild : Ast.l -> lskips -> Types.t -> pat
-  val mk_pas : Ast.l -> pat -> lskips -> name_l -> Types.t option -> pat
+  val mk_pas : Ast.l -> lskips -> pat -> lskips -> name_l -> lskips -> Types.t option -> pat
   val mk_ptyp : Ast.l -> lskips -> pat -> lskips -> src_t -> lskips -> Types.t option -> pat
   val mk_pvar : Ast.l -> Name.lskips_t -> Types.t -> pat
   val mk_pconstr : Ast.l -> constr_descr id -> pat list -> Types.t option -> pat

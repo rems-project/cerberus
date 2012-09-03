@@ -2,17 +2,18 @@ open Global
 
 type id = Symbol.t
 
-(* [storage duration] (6.2.4#1)
-   
-   "An object has a storage duration that determines its lifetime. There are
-    four storage durations: static, thread, automatic, and allocated. Allocated
-    storage is described in 7.22.3."
-*)
 type storage_duration =
   | STATIC
   | THREAD
   | AUTOMATIC
   | ALLOCATED (*TODO: see 7.22.3 *)
+
+type qualifier =
+  | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC
+and qualifiers = set qualifier
 
 type integer_base_type =
   | ICHAR
@@ -30,32 +31,28 @@ type basic_type =
   | CHAR
   | INTEGER of integer_type
 
-type qualifiers = Cabs.qualifiers
-
-type arithmetic_operator = Cabs.arithmetic_operator
-type binary_operator = Cabs.binary_operator
-
-type unary_operator =
-  | PLUS
-  | MINUS
-  | BNOT
-  | ADDRESS
-  | INDIRECTION
-  | POSTFIX_INCR
-  | POSTFIX_DECR
-
-type integer_constant = Cabs.integer_constant
-type constant = Cabs.constant
-
 type ctype =
-  | VOID of qualifiers
+  | VOID  of qualifiers
   | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
   | ARRAY of ctype * num
+  | STRUCT of qualifiers * id
+  | UNION  of qualifiers * id
+  | FUNCTION of ctype * list ctype
   | POINTER of qualifiers * ctype
-  | FUNCTION of ctype * ctype list
-  | STRUCT of id option * (storage_duration * ctype * member_declarator) list
+(*  | ATOMIC of ctype *)
+  | TYPEDEF of id
+
+
+
+
+
+
+
+
+
+
 
 and member_declarator =
   | MEMBER_DECL of id
@@ -67,59 +64,126 @@ and type_class =
   (* TODO: we need to add a T_BITFIELD *)
 
 
-type declaration = ctype * storage_duration option
 
-type 'a expression =
-  | UNARY of unary_operator * 'a expression_l
-  | BINARY of binary_operator * 'a expression_l * 'a expression_l 
-  | ASSIGN of arithmetic_operator option * 'a expression_l * 'a expression_l
-  | CONDITIONAL of 'a expression_l * 'a expression_l * 'a expression_l
-  | CAST of ctype * 'a expression_l
-  | CALL of 'a expression_l * 'a expression_l list
-  | MEMBEROF of 'a expression * id
-  | MEMBEROFPTR of 'a expression * id
-  | CONSTANT of Cabs.constant
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+type arithmetic_operator =
+  | MUL | DIV | MOD
+  | ADD | SUB
+  | SHL | SHR
+  | BAND
+  | XOR
+  | BOR
+
+type binary_operator =
+  | ARITHMETIC of arithmetic_operator
+  | COMMA
+  | AND
+  | OR
+  | LT | GT | LE | GE
+  | EQ | NE
+
+type unary_operator =
+  | PLUS
+  | MINUS
+  | BNOT
+  | ADDRESS
+  | INDIRECTION
+  | POSTFIX_INCR
+  | POSTFIX_DECR
+
+type integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+and integer_constant = num * option integer_suffix
+
+type constant =
+  | CONST_INT of integer_constant
+(*  | CONST_FLOAT of string (* the textual representaton *) (* LATER *) *)
+  | CONST_ENUM of string
+(* 
+(* TODO *)
+  | CONST_CHAR of list int64
+  | CONST_WCHAR of list int64
+*)
+
+
+
+type declaration = ctype * option storage_duration
+
+type expression 'a =
+  | UNARY of unary_operator * expression_l 'a
+  | BINARY of binary_operator * expression_l 'a * expression_l 'a 
+  | ASSIGN of option arithmetic_operator * expression_l 'a * expression_l 'a
+  | CONDITIONAL of expression_l 'a * expression_l 'a * expression_l 'a
+  | CAST of ctype * expression_l 'a
+  | CALL of expression_l 'a * list (expression_l 'a)
+  | MEMBEROF of expression 'a * id
+  | MEMBEROFPTR of expression 'a * id
+  | CONSTANT of constant
   | VARIABLE of id
   | SIZEOF of ctype
   | ALIGNOF of ctype
 
-and 'a expression_l = 'a * 'a expression
+and expression_l 'a = 'a * expression 'a
 
-type 'a definition = id * 'a expression_l
+type definition 'a = id * expression_l 'a
 
 (* Statements *)
-type 'a statement =
+type statement 'a =
   | SKIP
-  | EXPRESSION of 'a expression_l
-  | BLOCK of id list * 'a statement_l list
-  | IF of 'a expression_l * 'a statement_l * 'a statement_l
-  | WHILE of 'a expression_l * 'a statement_l
-  | DO of 'a expression_l * 'a statement_l
+  | EXPRESSION of expression_l 'a
+  | BLOCK of list id * list (statement_l 'a)
+  | IF of expression_l 'a * statement_l 'a * statement_l 'a
+  | WHILE of expression_l 'a * statement_l 'a
+  | DO of expression_l 'a * statement_l 'a
   | BREAK
   | CONTINUE
   | RETURN_VOID
-  | RETURN_EXPRESSION of 'a expression_l
-  | SWITCH of 'a expression_l * 'a statement_l
-  | CASE of Cabs.integer_constant * 'a statement_l
-  | DEFAULT of 'a statement_l
-  | LABEL of id * 'a statement_l
+  | RETURN_EXPRESSION of expression_l 'a
+  | SWITCH of expression_l 'a * statement_l 'a
+  | CASE of integer_constant * statement_l 'a
+  | DEFAULT of statement_l 'a
+  | LABEL of id * statement_l 'a
   | GOTO of id
-  | DECLARATION of 'a definition list
-  | PAR of 'a statement_l list
+  | DECLARATION of list (definition 'a)
+  | PAR of list (statement_l 'a)
 
-and 'a statement_l = 'a * 'a statement
+and statement_l 'a = 'a * statement 'a
 
-type 'a file = <|
+type file 'a = <|
   main : id;
-  id_map : (id, declaration) map;
-  globals : (id * 'a expression_l) list;
-  fn_map : (id, (id list * 'a statement_l)) map
+  id_map : map id declaration;
+  globals : list (id * expression_l 'a);
+  fn_map : map id (list id * statement_l 'a)
 |>
 
-type 'a env = <|
+type env 'a = <|
   symbol : id;
-  symbol_map : (id, string) map;
-  file : 'a file
+  symbol_map : map id string;
+  file : file 'a
 |>
 
 
@@ -132,13 +196,13 @@ let rec and2 f l1 l2 =
 
 let rec ctype_eq ty1 ty2 =
   match (ty1, ty2) with
-    | (VOID qs1             ,     VOID qs2         ) -> Set.equal qs1 qs2
-    | (BASIC qs1 b1         , BASIC qs2 b2         ) -> Set.equal qs1 qs2 && b1 = b2
-    | (ARRAY ty1 n1         , ARRAY ty2 n2         ) -> ctype_eq ty1 ty2 && n1 = n2
-    | (POINTER qs1 ty1      , POINTER qs2 ty2      ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
-    | (FUNCTION ty1 tys1    , FUNCTION ty2 tys2    ) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
-    | (STRUCT x1_opt membrs1, STRUCT x2_opt membrs2) -> x1_opt = x2_opt &&
-                                                        and2 (fun (x1,y1,z1) (x2,y2,z2) -> x1=x2 && ctype_eq y1 y2 && z1=z2) membrs1 membrs2
+    | (VOID qs1          ,     VOID qs2     ) -> Set.equal qs1 qs2
+    | (BASIC qs1 b1      , BASIC qs2 b2     ) -> Set.equal qs1 qs2 && b1 = b2
+    | (ARRAY ty1 n1      , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1   , POINTER qs2 ty2  ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 tys1 , FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
+    | (STRUCT qs1 x1     , STRUCT qs2 x2    ) -> Set.equal qs1 qs2 && x1 = x2
+    | (UNION qs1 x1      , UNION qs2 x2     ) -> Set.equal qs1 qs2 && x1 = x2
   end
 
 
@@ -164,15 +228,15 @@ module Print = struct
     | SIZEOF _  -> Some 2
     | ALIGNOF _ -> Some 2
     
-    | BINARY (Cabs.ARITHMETIC MUL) _ _ -> Some 3
-    | BINARY (Cabs.ARITHMETIC DIV) _ _ -> Some 3
-    | BINARY (Cabs.ARITHMETIC MOD) _ _ -> Some 3
+    | BINARY (ARITHMETIC MUL) _ _ -> Some 3
+    | BINARY (ARITHMETIC DIV) _ _ -> Some 3
+    | BINARY (ARITHMETIC MOD) _ _ -> Some 3
     
-    | BINARY (Cabs.ARITHMETIC ADD) _ _ -> Some 4
-    | BINARY (Cabs.ARITHMETIC SUB) _ _ -> Some 4
+    | BINARY (ARITHMETIC ADD) _ _ -> Some 4
+    | BINARY (ARITHMETIC SUB) _ _ -> Some 4
     
-    | BINARY (Cabs.ARITHMETIC SHL) _ _ -> Some 5
-    | BINARY (Cabs.ARITHMETIC SHR) _ _ -> Some 5
+    | BINARY (ARITHMETIC SHL) _ _ -> Some 5
+    | BINARY (ARITHMETIC SHR) _ _ -> Some 5
     
     | BINARY LT _ _ -> Some 6
     | BINARY GT _ _ -> Some 6
@@ -182,11 +246,11 @@ module Print = struct
     | BINARY EQ _ _ -> Some 7
     | BINARY NE _ _ -> Some 7
     
-    | BINARY (Cabs.ARITHMETIC BAND) _ _ -> Some 8
+    | BINARY (ARITHMETIC BAND) _ _ -> Some 8
     
-    | BINARY (Cabs.ARITHMETIC XOR) _ _ -> Some 9
+    | BINARY (ARITHMETIC XOR) _ _ -> Some 9
     
-    | BINARY (Cabs.ARITHMETIC BOR) _ _ -> Some 10
+    | BINARY (ARITHMETIC BOR) _ _ -> Some 10
     
     | BINARY AND _ _ -> Some 11
     
@@ -222,35 +286,35 @@ module Print = struct
   end
 
   let pp_arithop = function
-    | Cabs.ADD  -> P.plus
-    | Cabs.SUB  -> P.minus
-    | Cabs.MUL  -> P.star
-    | Cabs.DIV  -> P.slash
-    | Cabs.MOD  -> P.percent
-    | Cabs.BAND -> P.ampersand
-    | Cabs.BOR  -> P.bar
-    | Cabs.XOR  -> P.caret
-    | Cabs.SHL  -> P.langle ^^ P.langle
-    | Cabs.SHR  -> P.rangle ^^ P.rangle
+    | ADD  -> P.plus
+    | SUB  -> P.minus
+    | MUL  -> P.star
+    | DIV  -> P.slash
+    | MOD  -> P.percent
+    | BAND -> P.ampersand
+    | BOR  -> P.bar
+    | XOR  -> P.caret
+    | SHL  -> P.langle ^^ P.langle
+    | SHR  -> P.rangle ^^ P.rangle
   end
 
   let pp_binop = function
-    | Cabs.ARITHMETIC o -> pp_arithop o
-    | Cabs.EQ -> P.equals ^^ P.equals
-    | Cabs.NE -> P.bang   ^^ P.equals
-    | Cabs.LT -> P.langle
-    | Cabs.GT -> P.rangle
-    | Cabs.LE -> P.langle ^^ P.equals
-    | Cabs.GE -> P.rangle ^^ P.equals
-    | Cabs.AND   -> P.ampersand ^^ P.ampersand
-    | Cabs.OR    -> P.bar ^^ P.bar
-    | Cabs.COMMA -> P.comma
+    | ARITHMETIC o -> pp_arithop o
+    | EQ -> P.equals ^^ P.equals
+    | NE -> P.bang   ^^ P.equals
+    | LT -> P.langle
+    | GT -> P.rangle
+    | LE -> P.langle ^^ P.equals
+    | GE -> P.rangle ^^ P.equals
+    | AND   -> P.ampersand ^^ P.ampersand
+    | OR    -> P.bar ^^ P.bar
+    | COMMA -> P.comma
   end
 
   let showParens = P.parens
 
   let pp_qualifier = function
-    | Cabs.CONST -> !^ "const"
+    | CONST -> !^ "const"
   end
 
   let pp_integer_base_type = function
@@ -274,11 +338,11 @@ module Print = struct
 
   let pp_suffix s =
     let to_string = function
-      | Cabs.SUFFIX_UNSIGNED           -> "U"
-      | Cabs.SUFFIX_UNSIGNED_LONG      -> "UL"
-      | Cabs.SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
-      | Cabs.SUFFIX_LONG               -> "L"
-      | Cabs.SUFFIX_LONG_LONG          -> "LL"
+      | SUFFIX_UNSIGNED           -> "U"
+      | SUFFIX_UNSIGNED_LONG      -> "UL"
+      | SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
+      | SUFFIX_LONG               -> "L"
+      | SUFFIX_LONG_LONG          -> "LL"
     end in
     optional (P.text -| to_string) s
 
@@ -318,7 +382,7 @@ module Print = struct
       | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
       | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
       | UNARY o                   e -> pp_unop o ^^ f e
-      | BINARY (Cabs.COMMA as o) e1 e2 ->
+      | BINARY (COMMA as o) e1 e2 ->
           f e1 ^^ pp_binop o ^^ P.space ^^ f e2
       | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
       | CALL e es -> f e ^^ P.parens (P.comma_list f es)
@@ -327,7 +391,7 @@ module Print = struct
       | CONDITIONAL e1 e2 e3 ->
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
       | CAST t e -> P.parens (pp_type t) ^^^ f e
-      | CONSTANT (Cabs.CONST_INT ic) -> pp_int_const ic
+      | CONSTANT (CONST_INT ic) -> pp_int_const ic
       | SIZEOF  t -> !^ "sizeof"  ^^ P.parens (pp_type t)
       | ALIGNOF t -> !^ "alignof" ^^ P.parens (pp_type t)
     end

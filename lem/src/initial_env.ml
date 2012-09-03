@@ -117,6 +117,7 @@ let add_to_init targ file ((td,env), consts) =
       | Target_coq -> proc
       | Target_hol -> proc_open
       | Target_tex -> assert false
+      | Target_html -> assert false
   in
   let starg = Some(targ) in
   let (new_td,new_env) = p starg file (td,targ_env) in
@@ -201,5 +202,7 @@ module Initial_libs (P : sig val path : string end) = struct
       (None,
        []);
       (Some(Target_tex),
+       []);
+      (Some(Target_html),
        [])])
 end

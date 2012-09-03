@@ -12,6 +12,12 @@ build-doc:
 do-tests:
 	make -C tests
 
+lem_dep.tex: lem_dep.ott
+	ott -o lem_dep.tex -picky_multiple_parses true lem_dep.ott
+
+lem_dep.pdf: lem_dep.tex
+	pdflatex lem_dep.tex
+
 test-other: test-ppcmem test-cpp test-cppppc
 
 test-ppc:
@@ -188,6 +194,7 @@ distrib: src/ast.ml src/version.ml headache
 clean:
 	-make -C src clean
 	-rm -rf *.uo *.ui lemTheory.sig lemTheory.sml lem.tex src/ast.ml src/version.ml lemScript.sml lem.aux lem.log lem.pdf lem.dvi lem.ps lem_unwrapped.tex .HOLMK lem.sys lem library/lib_cache
+	-rm -rf lem_dep.tex lem_dep.pdf lem_dep.aux lem_dep.log
 
 cleanall: clean
 	-make -C doc clean

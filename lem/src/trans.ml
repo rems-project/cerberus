@@ -31,7 +31,7 @@ let capitalise_tvar (s,r,l) =
   (s,r,l)
 
 let capitalise_tvar_list tvs = 
-  Seplist.map (fun tv -> capitalise_tvar tv) tvs
+  List.map (fun tv -> capitalise_tvar tv) tvs
 
 let rec coq_synt_records = function
   | [] -> []
@@ -41,7 +41,7 @@ let rec coq_synt_records = function
           | Type_def(s,tdefs) ->
               Type_def(s, 
                        Seplist.map 
-                         (fun (s1,tvs,s2,(n,l),texp) ->
+                         (fun ((n,l),tvs,texp) ->
                             let coq_tvs = capitalise_tvar_list tvs in
                             let new_texp = 
                               match texp with
@@ -69,7 +69,7 @@ let rec coq_synt_records = function
                                 | Te_variant_coq(_,_) ->
                                     failwith ("Cannot happen in coq_synt_records - variant")
                             in
-                              (s1,coq_tvs,s2,(ntl n, l), new_texp))
+                              ((ntl n, l), coq_tvs,new_texp))
                          tdefs)
           | x -> x
       end,s),l) :: coq_synt_records defs
@@ -309,11 +309,13 @@ let rec tup_ctor build_result args e =
 let rec names_get_const env path =
   match path with
     | [] -> assert false
-    | [p] ->
+    | [n] ->
         begin
-          match Nfmap.apply env.v_env p with
+          match Nfmap.apply env.v_env n with
             | Some(Val(x)) -> x
-            | _ -> Format.printf "[Trans.names.get_const] %a\n" Name.pp p; assert false
+            | _ ->
+              Format.printf "%a" Name.pp n;
+              assert false
         end
     | n::p ->
         begin
@@ -753,9 +755,9 @@ let get_quant_impl is_lst t : Ast.q -> exp =
             f [r"Set"] (r"for_all") s
       | Ast.Q_exists(s) ->
           if is_lst then
-            f [r"List"] (r"exists") s
+            f [r"List"] (r"exist") s
           else
-            f [r"Set"] (r"exists") s
+            f [r"Set"] (r"exist") s
 
 (* Turn quantifiers into iteration, fails on unrestricted quantifications *)
 let remove_quant e = 
@@ -818,9 +820,9 @@ let rec pat_to_exp d p =
   let l_unk = Ast.Trans("pat_to_exp") in
   match p.term with
     | P_wild(lskips) -> 
-        raise (Util.TODO "_ pattern in restricted set comprehension")
-    | P_as(p,_,(n,_)) ->
-        raise (Util.TODO "as pattern in restricted set comprehension")
+        raise (Util.TODO(l_unk, "_ pattern in restricted set comprehension"))
+    | P_as(_,p,_,(n,_),_) ->
+        raise (Util.TODO(l_unk, "as pattern in restricted set comprehension"))
     | P_typ(lskips1,p,lskips2,t,lskips3) ->
         C.mk_typed p.locn lskips1 (pat_to_exp d p) lskips2 t lskips3 None
     | P_var(n) ->
@@ -831,7 +833,7 @@ let rec pat_to_exp d p =
           (C.mk_constr p.locn c None)
           ps
     | P_record(_,fieldpats,_) ->
-        raise (Util.TODO "record pattern in restricted set comprehension")
+        raise (Util.TODO(l_unk,"record pattern in restricted set comprehension"))
     | P_tup(lskips1,ps,lskips2) ->
         C.mk_tup p.locn lskips1 (Seplist.map (pat_to_exp d) ps) lskips2 None
     | P_list(lskips1,ps,lskips2) ->
@@ -856,7 +858,7 @@ let rec pat_to_exp d p =
 
 let rec pat_vars_src p = match p.term with
   | P_wild _ -> []
-  | P_as(p,_,(n,_)) ->
+  | P_as(_,p,_,(n,_),_) ->
       { term = n; typ = p.typ; locn = p.locn; rest = (); } :: pat_vars_src p
   | P_typ(_,p,_,_,_) ->
       pat_vars_src p
@@ -1112,7 +1114,7 @@ let remove_class_const e =
                     | None ->
                         Format.fprintf Format.std_formatter "%a@\n"
                           Types.pp_type targ;
-                        raise (Util.TODO "Instance at a type variable")
+                        raise (Util.TODO(l_unk, "Instance at a type variable"))
                     | Some(x) -> x
                 end
             | _ -> assert false
@@ -1136,7 +1138,7 @@ let remove_class_const e =
                 in
                   Some(C.mk_const l_unk id None)
             | _ -> 
-                raise (Util.TODO "Instance with constraints")
+                raise (Util.TODO(l_unk, "Instance with constraints"))
       else
         None
   | _ -> None

@@ -54,8 +54,8 @@ let rec fix_pat get_prec p =
   let old_l = p.locn in
   let trans = fix_pat get_prec in
     match p.term with
-      | P_as(p,s,nl) -> 
-          C.mk_pas old_l (delimit_pat P.Pas_left (trans p)) s nl old_t
+      | P_as(sk1,p,s,nl,sk2) -> 
+          C.mk_pas old_l sk1 (delimit_pat P.Pas_left (trans p)) s nl sk2 old_t
       | P_typ(s1,p,s2,t,s3) -> 
           C.mk_ptyp old_l s1 (trans p) s2 t s3 old_t
       | P_constr(c,ps) -> 

@@ -32,6 +32,7 @@ let ast_target_compare x y = match (x,y) with
   | (Ast.Target_coq _, _) -> 1
   | (_, Ast.Target_coq _) -> -1 
   | (Ast.Target_tex _, Ast.Target_tex _) -> 0
+  | (Ast.Target_html _, Ast.Target_html _) -> 0
 (*
   | (Ast.Target_tex _, _) -> 1
   | (_, Ast.Target_tex _) -> -1 
@@ -43,6 +44,7 @@ type target =
   | Target_isa
   | Target_coq
   | Target_tex
+  | Target_html
 
 let target_compare = Pervasives.compare
 
@@ -60,7 +62,7 @@ end)
 
 let all_targets = 
   List.fold_right Targetset.add 
-    [Target_hol; Target_ocaml; Target_isa; Target_coq; Target_tex] 
+    [Target_hol; Target_ocaml; Target_isa; Target_coq; Target_tex; Target_html] 
     Targetset.empty
 
 let target_to_string = function
@@ -69,6 +71,7 @@ let target_to_string = function
   | Target_isa -> "isabelle"
   | Target_coq -> "coq"
   | Target_tex -> "tex"
+  | Target_html -> "html"
 
 let target_to_output a t = 
   let open Output in
@@ -78,6 +81,7 @@ let target_to_output a t =
       | Ast.Target_isa(s) -> ws s ^ id a (r"isabelle")
       | Ast.Target_coq(s) -> ws s ^ id a (r"coq")
       | Ast.Target_tex(s) -> ws s ^ id a (r"tex")
+      | Ast.Target_html(s) -> ws s ^ id a (r"html")
 
 let target_to_mname = function
   | Target_hol -> Name.from_rope (r"Hol")
@@ -85,6 +89,7 @@ let target_to_mname = function
   | Target_isa -> Name.from_rope (r"Isabelle")
   | Target_coq -> Name.from_rope (r"Coq")
   | Target_tex -> Name.from_rope (r"Tex")
+  | Target_html -> Name.from_rope (r"Html")
 
 
 type env_tag = 
@@ -123,7 +128,7 @@ and src_t_aux =
  | Typ_var of lskips * Tyvar.t
  | Typ_fn of src_t * lskips * src_t
  | Typ_tup of src_t lskips_seplist
- | Typ_app of lskips * src_t lskips_seplist * lskips * Path.t id
+ | Typ_app of Path.t id * src_t list
  | Typ_paren of lskips * src_t * lskips
 
 type lit = (lit_aux,unit) annot
@@ -140,7 +145,7 @@ and pat_annot = { pvars : free_env }
 
 and pat_aux = 
   | P_wild of lskips
-  | P_as of pat * lskips * name_l
+  | P_as of lskips * pat * lskips * name_l * lskips
   | P_typ of lskips * pat * lskips * src_t * lskips
   | P_var of Name.lskips_t
   | P_constr of constr_descr id * pat list
@@ -242,10 +247,10 @@ type texp =
   | Te_record of lskips * lskips * (name_l * lskips * src_t) lskips_seplist * lskips
   | Te_record_coq of lskips * name_l * lskips * (name_l * lskips * src_t) lskips_seplist * lskips
   | Te_variant of lskips * (name_l * lskips * src_t lskips_seplist) lskips_seplist
-  | Te_variant_coq of lskips * (name_l * lskips * src_t lskips_seplist * name_l * tyvar lskips_seplist) lskips_seplist
+  | Te_variant_coq of lskips * (name_l * lskips * src_t lskips_seplist * name_l * tyvar list) lskips_seplist
 
 type constraints = 
-  | Cs_list of (lskips * Ident.t * tyvar * lskips) list * lskips
+  | Cs_list of (Ident.t * tyvar) lskips_seplist * lskips
 
 type constraint_prefix =
   | Cp_forall of lskips * tyvar list * lskips * constraints option
@@ -268,10 +273,7 @@ type val_def =
 type def = (def_aux * lskips option) * Ast.l
 
 and def_aux =
-  | Type_def of lskips * ((* ( *) lskips * 
-                       tyvar lskips_seplist * 
-                       (* ) *) lskips * 
-                       name_l * texp) lskips_seplist
+  | Type_def of lskips * (name_l * tyvar list * texp) lskips_seplist
   | Val_def of val_def * TVset.t
   | Module of lskips * name_l * lskips * lskips * def list * lskips
   | Rename of lskips * name_l * lskips * mod_descr id
@@ -293,8 +295,35 @@ let empty_env = { m_env = Nfmap.empty;
 (* Applies lskips_f to the leftmost lskips in p, replacing it with lskips_f's
  * first result and returning lskips_f's second result *)
 
-let lit_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (l : lit) : lit * lskips = let
-res t s = ({ l with term = t }, s) in
+let rec typ_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (t : src_t) : src_t * lskips = 
+  let res t' s = ({ t with term = t'}, s) in
+    match t.term with
+      | Typ_wild(s) ->
+          let (s_new,s_ret) = lskips_f s in
+            res (Typ_wild(s_new)) s_ret
+      | Typ_var(s,tv) ->
+          let (s_new,s_ret) = lskips_f s in
+            res (Typ_var(s_new,tv)) s_ret
+      | Typ_fn(t1,s,t2) ->
+          let (t_new, s_ret) = typ_alter_init_lskips lskips_f t1 in
+            res (Typ_fn(t_new, s, t2)) s_ret
+      | Typ_tup(ts) ->
+          let t = Seplist.hd ts in
+          let ts' = Seplist.tl ts in
+          let (t_new, s_ret) = typ_alter_init_lskips lskips_f t in
+            res (Typ_tup(Seplist.cons_entry t_new ts')) s_ret
+      | Typ_app(id,ts) ->
+          let (s_new, s_ret) = lskips_f (Ident.get_first_lskip id.id_path) in
+            res (Typ_app({ id with id_path = 
+                              Ident.replace_first_lskip id.id_path s_new }, 
+                         ts))
+              s_ret
+      | Typ_paren(s1,t,s2) ->
+          let (s_new,s_ret) = lskips_f s1 in
+            res (Typ_paren(s_new,t,s2)) s_ret
+
+let lit_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (l : lit) : lit * lskips = 
+  let res t s = ({ l with term = t }, s) in
     match l.term with
       | L_true(s) -> 
           let (s_new,s_ret) = lskips_f s in
@@ -318,9 +347,9 @@ let rec pat_alter_init_lskips (lskips_f : lskips -> lskips * lskips) (p : pat) :
       | P_wild(s) -> 
           let (s_new, s_ret) = lskips_f s in
             res (P_wild(s_new))s_ret
-      | P_as(p,s,nl) -> 
-          let (p_new,s_ret) = pat_alter_init_lskips lskips_f p in
-            res (P_as(p_new, s, nl)) s_ret
+      | P_as(s1,p,s2,nl,s3) -> 
+          let (s_new, s_ret) = lskips_f s1 in
+            res (P_as(s_new,p, s2, nl,s3)) s_ret
       | P_typ(s1,p,s2,t,s3) -> 
           let (s_new, s_ret) = lskips_f s1 in
             res (P_typ(s_new, p, s2, t, s3)) s_ret
@@ -646,9 +675,9 @@ module Exps_in_context(D : Exp_context) = struct
       typ = t;
       rest = { pvars = empty_free_env; }; }
 
-  let mk_pas l p s nl t =
+  let mk_pas l s1 p s2 nl s3 t =
     let t = check_typ l t (fun d -> p.typ) in
-      { term = P_as(p,s,nl);
+      { term = P_as(s1,p,s2,nl,s3);
         locn = l;
         typ = t;
         rest = 
@@ -771,14 +800,14 @@ module Exps_in_context(D : Exp_context) = struct
                     (Name.lskip_rename (fun _ -> Name.to_rope n') n)
                     p.typ
           end
-      | P_as(p,s,(n,l)) -> 
+      | P_as(s1,p,s2,(n,l),s3) -> 
           let n' = 
             match Nfmap.apply rename (Name.strip_lskip n) with
               | None -> n
               | Some(n') ->
                   Name.lskip_rename (fun _ -> Name.to_rope n') n
           in
-            mk_pas l (pat_subst sub p) s (n',l) t
+            mk_pas l s1 (pat_subst sub p) s2 (n',l) s3 t
       | P_typ(s1,p,s2,src_t,s3) -> 
           mk_ptyp l s1 (pat_subst sub p) s2 src_t s3 t
       | P_constr(c,ps) -> 
@@ -1228,13 +1257,13 @@ module Exps_in_context(D : Exp_context) = struct
       typ = t;
       rest = (); }
 
-  let mk_tapp l s1 ts s2 p t =
+  let mk_tapp l p ts t =
     let t =
       check_typ l t 
         (fun d -> 
-           { t = Tapp(Seplist.to_list_map (fun x -> x.typ) ts, p.descr) })
+           { t = Tapp(List.map (fun x -> x.typ) ts, p.descr) })
     in
-    { term = Typ_app(s1,ts,s2,p);
+    { term = Typ_app(p,ts);
       locn = l;
       typ = t;
       rest = (); }
@@ -1737,10 +1766,9 @@ module Exps_in_context(D : Exp_context) = struct
               instantiation = [] } 
           in
           let ts = 
-            Seplist.from_list 
-              (List.map (fun x -> (delimit_typ TC_app (t_to_src_t x), None)) tys)
+            List.map (fun x -> delimit_typ TC_app (t_to_src_t x)) tys
           in
-            mk_tapp Ast.Unknown None ts None pid (Some(texp))
+            mk_tapp Ast.Unknown pid ts (Some(texp))
       | _ -> mk_twild Ast.Unknown None texp
 
 let exp_to_prec get_prec (exp : exp) : P.t = 
@@ -1786,7 +1814,7 @@ let rec single_pat_exhaustive (p : pat) : bool =
           fes
     | P_lit _ | P_list _ | P_cons _ ->
         false
-    | P_as(p,_,_) | P_typ(_,p,_,_,_) | P_paren(_,p,_) -> 
+    | P_as(_,p,_,_,_) | P_typ(_,p,_,_,_) | P_paren(_,p,_) -> 
         single_pat_exhaustive p
 
 let env_union e1 e2 =

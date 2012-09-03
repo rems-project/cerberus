@@ -89,6 +89,31 @@ let tex_preamble =
 let tex_postamble = 
   "\\end{document}\n"
 
+(* TODO: make this not cppmem-specific *)
+let html_preamble = 
+"
+<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"
+          \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\">
+  <head>
+    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/> 
+    <title>C/C++ memory model definitions</title>
+    <link rel=\"stylesheet\" type=\"text/css\" title=\"cppmem style\" media=\"screen\" href=\"cppmem.css\"/>
+  </head>
+  <body>
+    <h1 id=\"title\">C/C++ memory model definitions</h1>
+<pre>
+"
+
+let html_postamble = 
+"
+</pre>
+  </body>
+</html>
+"
+
+
 let output1 libpath targ avoid type_info m alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum =
   let module C = struct
     let avoid = avoid
@@ -101,6 +126,16 @@ let output1 libpath targ avoid type_info m alldoc_accum alldoc_inc_accum alldoc_
       | None ->
           let r = B.ident_defs m.typed_ast in
             Printf.printf "%s" (Ulib.Text.to_string r)
+      | Some(Typed_ast.Target_html) -> 
+          begin
+            let r = B.html_defs m.typed_ast in
+            let o = open_out (f' ^ ".html") in
+              Printf.fprintf o "<!-- %s -->\n" (generated_line m.filename);
+              Printf.fprintf o "%s" html_preamble;
+              Printf.fprintf o "%s" (Ulib.Text.to_string r);
+              Printf.fprintf o "%s" html_postamble;
+              close_out o
+          end
       | Some(Typed_ast.Target_hol) ->
           begin
             let r = B.hol_defs m.typed_ast in

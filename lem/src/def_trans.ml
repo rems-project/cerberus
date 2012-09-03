@@ -135,12 +135,11 @@ let find_target target targets =
   in
     f (Seplist.to_list targets)
 
-let get_name def = match def with
+let get_name def l = match def with
 
   | Indreln(_,_,clauses) -> (match Seplist.to_list clauses with 
     | [] ->  
-        raise (Util.TODO "Error while pruning target definitions: empty Indreln
-        clauses in get_name [debug]")
+        raise (Util.TODO(l, "Error while pruning target definitions: empty Indreln clauses in get_name [debug]"))
         
     | ((_,_,_,_,_,name,_)::cs) -> Name.strip_lskip name.term     
     )
@@ -151,8 +150,7 @@ let get_name def = match def with
      * check only the first TODO: check! *)
     
     | [] ->  
-        raise (Util.TODO "Error while pruning target definitions: empty Rec_def
-        clauses in get_name [debug]")
+        raise (Util.TODO(l, "Error while pruning target definitions: empty Rec_def clauses in get_name [debug]"))
 
     | ((name,_,_,_,_)::cs) -> Name.strip_lskip name.term     
     )
@@ -169,14 +167,11 @@ let get_name def = match def with
           Name.strip_lskip name
           
       | _ -> 
-        raise (Util.TODO "Error while pruning target definitions: unmatched
-        Let_val case in get_name [debug]")
-      )
-    )
-  
+        raise (Util.TODO(l, "Error while pruning target definitions: unmatched Let_val case in get_name [debug]"))
+      ))
+  | Val_def(Let_inline(_,_,_,name,_,_,_), _) -> Name.strip_lskip name.term
   | _ -> 
-    raise (Util.TODO "Error while pruning target definitions: unmatched
-    top-level case in get_name [debug]")
+    raise (Util.TODO(l, "Error while pruning target definitions: unmatched top-level case in get_name [debug]"))
 
 
 let prune_target_bindings target defs =
@@ -188,7 +183,7 @@ let prune_target_bindings target defs =
     | ((def,s),l)::defs -> 
         (match def with 
       | (Val_def _ | Indreln _) -> 
-          if (Name.compare name (get_name def) = 0) then
+          if (Name.compare name (get_name def l) = 0) then
             rem_dups name defs
           else 
             ((def,s),l) :: rem_dups name defs
@@ -208,7 +203,7 @@ let prune_target_bindings target defs =
          Val_def(Rec_def(_,_,Some(_,targs,_),_),_) |
          Indreln(_,Some(_,targs,_),_) ) as d -> 
           if find_target target targs then 
-              let name = get_name d in
+              let name = get_name d l in
               let acc' = rem_dups name acc in  
               let defs' = rem_dups name defs in
             def_walker target (((def,s),l) :: acc') defs' 

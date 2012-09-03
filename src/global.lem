@@ -1,5 +1,5 @@
-type ('a, 'b) map = ('a, 'b) Pmap.map
-type 'a multiset = 'a Multiset.t
+type map 'a 'b = Pmap.map 'a 'b
+type multiset 'a = Multiset.t 'a
 
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)

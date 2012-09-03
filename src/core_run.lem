@@ -8,9 +8,9 @@ type edge_kind =
   | Indet        (* from an indeterminate choice                                *)
   | Indet_trans  (* by transitivity after addition of the indeterminate choices *)
 
-type 'a edge = 'a * 'a * edge_kind
+type edge 'a = 'a * 'a * edge_kind
 
-val edge_eq: forall 'a. 'a edge -> 'a edge -> bool
+val edge_eq: forall 'a. edge 'a -> edge 'a -> bool
 let edge_eq (x,y,_) (x',y',_) = x=x' && y=y'
 
 
@@ -24,28 +24,28 @@ type action =
   | Astore of Ail.ctype * expr * expr
   | Aload of Ail.ctype * expr
   | Asame of sym * sym
-  | Acall of sym * expr list
+  | Acall of sym * list expr
   
   | Atest of expr
 
 
 (* list monad *)
 module L = struct
-  type 'a t = 'a list
+  type t 'a = list 'a
   
-  val return: forall 'a. 'a -> 'a t
+  val return: forall 'a. 'a -> t 'a
   let return x = [x]
   
-  val bind: forall 'a 'b. 'a t -> ('a -> 'b t) -> 'b t
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
   let bind m f = List.fold_right (fun x y -> (f x) @ y) m []
 end
 
 
 (* Representation of the sequenced-before relation as directed graphs *)
-type 'a g = <|
-  nodes: (num, 'a) map;
-  edges: (num edge) list;
-  calls: num list         (* subset of the domain of nodes corresponding
+type g 'a = <|
+  nodes: map num 'a;
+  edges: list (edge num);
+  calls: list num         (* subset of the domain of nodes corresponding
                              to function calls *)
 |>
 
@@ -59,7 +59,7 @@ end
 
 
 (* [isAccessible r x y] = True iff there is a path from x to y in r (irreflexive). *)
-val isAccessible: (num edge) list -> num -> num -> bool
+val isAccessible: list (edge num) -> num -> num -> bool
 let rec isAccessible_ x y r acc =
   L.bind (img x r) (fun z ->     (* for any z such that (x,z) IN r :   *)
   if List.mem z acc then         (* if z has already been visited,     *)
@@ -84,16 +84,16 @@ let unreachablesFrom x vs es = List.filter (comp not (connected es x)) vs
 module Effect = struct
   (* state of the name generator for association with actions, and state
      of the sequenced-before relation *)
-  type state = (num * action g)
+  type state = (num * g action)
   
   (* non-deterministic state monad *)
-  type 'a t = state -> ('a * state) list
+  type t 'a = state -> list ('a * state)
   
-  val return: forall 'a. 'a -> 'a t
+  val return: forall 'a. 'a -> t 'a
   let return x = fun s -> [(x, s)]
   
   module Operators = struct
-    val (>>=): forall 'a 'b. 'a t -> ('a -> 'b t) -> 'b t
+    val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
     let (>>=) m f =
       fun s -> (fun m f -> List.fold_right (fun x y -> (f x) @ y) m [])
                  (m s)
@@ -111,11 +111,11 @@ module Effect = struct
   let mapM f xs = sequence (List.map f xs)
   
   let sequence_ ms = List.fold_right (>>) ms (return ())
-  val mapM_: forall 'a 'b. ('a -> 'b t) -> 'a list -> unit t
+  val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM_ f _as = sequence_ (List.map f _as)
 
 
-  val     folM: forall 'a 'b. ('a -> 'b -> 'a t) -> 'a -> 'b list -> 'a t
+  val     folM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
   let rec foldM f a = function
     | []    -> return a
     | x::xs -> f a x >>= fun fax -> foldM f fax xs
@@ -123,31 +123,31 @@ module Effect = struct
   
 
   (* MonadPlus *)
-  val mzero: forall 'a. 'a t
+  val mzero: forall 'a. t 'a
   let mzero = fun s -> []
-  val mplus: forall 'a. 'a t -> 'a t -> 'a t
+  val mplus: forall 'a. t 'a -> t 'a -> t 'a
   let mplus a b = fun s -> a s @ b s
   
   
   (* operations on sequenced-before *)
-  val add_action: action -> num t
+  val add_action: action -> t num
   let add_action a =
     fun (n,env) -> [(n, (n+1, <| env with nodes= Pmap.add n a env.nodes |>))]
   
-  val add_call: action -> num t
+  val add_call: action -> t num
   let add_call a =
     match a with
       | Acall f args -> add_action a >>= fun sym (n,env) -> [(sym, (n, <| env with calls= sym :: env.calls |>))]
     end
   
-  val add_actions: action list -> (num list) t
+  val add_actions: list action -> t (list num)
   let add_actions _as = mapM add_action _as
   
-  val add_edge: num edge -> unit t
+  val add_edge: edge num -> t unit
   let add_edge edge =
     fun (n,env) -> [((), (n, <| env with edges= edge :: env.edges |>))]
   
-  val get_nodes: (num list) t
+  val get_nodes: t (list num)
   let get_nodes =
     fun (n,env) -> [(List.map fst (Ocaml.Pmap.bindings env.nodes), (n,env))]
   
@@ -158,7 +158,7 @@ module Effect = struct
     fun (n,env) -> [(env.calls, (n,env))]
   
   
-  val close: unit t
+  val close: t unit
   let close =
     get_nodes >>= fun nodes ->
     let f k g =
@@ -180,7 +180,7 @@ open E.Operators
 
 (* [collectNodes es] retrieve the list of nodes associated to
                         the edge-map [es]                           *)
-val collectNodes: forall 'a. ('a edge) list -> 'a list
+val collectNodes: forall 'a. list (edge 'a) -> list 'a
 let rec collectNodes_ acc = function
   | []            -> acc
   | (a,b,_) :: es -> collectNodes_ (a::b::acc) es
@@ -207,7 +207,7 @@ let simpl es =
 (* ---------------------------------------------------------------------------------------------- *)
 
 (* TODO: I don't like it *)
-val sem_core: expr -> (num list) E.t
+val sem_core: expr -> E.t (list num)
 let rec sem_core e =
   match e with
     | COMMENT _ e -> sem_core e
@@ -242,12 +242,12 @@ let rec sem_core e =
         E.foldM (fun acc e -> sem_core e >>= fun _as ->
                               E.return (_as @ acc)) [] es
 
-    | Kcreate ty      -> E.add_actions [Acreate ty]
+(*    | Kcreate ty      -> E.add_actions [Acreate ty] *) (* TODO *)
     | Kalloc e        -> E.add_actions [Aalloc e]
     | Kkill a         -> E.add_actions [Akill a]
-    | Kstore ty e1 e2 -> E.add_actions [Astore ty e1 e2]
-    | Kload ty e      -> E.add_actions [Aload ty e]
-    | Ksame a1 a2     -> E.add_actions [Asame a1 a2]
+(*    | Kstore ty e1 e2 -> E.add_actions [Astore ty e1 e2] *)
+(*    | Kload ty e      -> E.add_actions [Aload ty e] *)
+(*    | Ksame a1 a2     -> E.add_actions [Asame a1 a2] *)
     
     
     (* TODO: do we want the same symbols for Core functions? probably not. *)
@@ -317,7 +317,7 @@ let rec foldM_exception f a = function
   | x::xs -> Exception.bind (f a x) (fun fax -> foldM_exception f fax xs)
 end
 
-val run: Core.file -> ((action g) list, string) Exception.t
+val run: Core.file -> Exception.t (list (g action)) string
 let run file =
   let process_file (ty, args, body) =
     List.map (fun (_,(_,g)) -> g) $

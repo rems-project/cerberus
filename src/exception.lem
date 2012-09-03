@@ -1,6 +1,6 @@
 open Global
 
-type ('a, 'msg) t =
+type t 'a 'msg =
   | Result of 'a
   | Exception of 'msg
 

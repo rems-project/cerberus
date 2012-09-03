@@ -8,9 +8,9 @@ type term =
 
 type t = <|
   delta : Union_find.t;
-  use : (apply * constant) list Braun.t;
-  congr : (constant * constant, constant) map;
-  pending : (constant * constant) list;
+  use : Braun.t (list (apply * constant));
+  congr : map (constant * constant) constant;
+  pending : list (constant * constant);
   length : num
 |>
 
@@ -47,7 +47,7 @@ let propagate cc =
       | Union_find.Equal      -> cc
       | Union_find.Less r1 r2 ->
           List.fold_left 
-            (fun cc ((c1, c2) as f, c) ->
+            (fun cc (((c1, c2) as f), c) ->
               let (c1', cc) = find cc c1 in
               let (c2', cc) = find cc c2 in
               match find_congr cc c1' c2' with

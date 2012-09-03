@@ -8,4 +8,5 @@ module Make(C : sig val avoid : Typed_ast.var_avoid_f end) : sig
   val coq_defs : Typed_ast.def list * Ast.lex_skips -> Ulib.Text.t
   val tex_defs : Typed_ast.def list * Ast.lex_skips -> Ulib.Text.t
   val tex_inc_defs : Typed_ast.def list * Ast.lex_skips -> Ulib.Text.t * Ulib.Text.t
+  val html_defs : Typed_ast.def list * Ast.lex_skips -> Ulib.Text.t
 end

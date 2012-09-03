@@ -12,6 +12,7 @@ type struct_union =
 
 %token <string> IDENTIFIER
 %token <string> QUALIFIER
+%token <string> CONST_ENUM
 %token <int64 list> CONST_CHAR
 %token <int64 list> CONST_WCHAR
 
@@ -106,10 +107,6 @@ start:
 ;
 
 
-(* 6.4.4.3#1 Enumeration constants, Syntax *)
-enumeration_constant:
-| IDENTIFIER
-    {Debug.error "PARSING: 'enumeration-constant' not yet supported." (* TODO *)}
 
 declaration_list_opt:
 | (* empty *)
@@ -135,13 +132,22 @@ string_literal:
 
 
 
+(* 6.5.1.1#1 Generic selection, Syntax *)
+generic_association:
+| ty = type_name SEMICOLON e = assignment_expression {C.TYNAME_ASSOC (ty, e), L.make $startpos $endpos}
+| DEFAULT SEMICOLON e = assignment_expression        {C.DEFAULT_ASSOC e, L.make $startpos $endpos}
+
+generic_selection:
+| GENERIC LPAREN e = assignment_expression COMMA l = separated_nonempty_list(COMMA, generic_association) RPAREN
+  {C.GENERIC_SELECTION (e, l), L.make $startpos $endpos}
+
 (* 6.5.1#1 Primary expressions, Syntax *)
 primary_expression:
 | id = IDENTIFIER              {C.IDENTIFIER id, L.make $startpos $endpos}
 | c = constant                 {C.CONSTANT c, L.make $startpos $endpos}
 | l = STRING_LITERAL           {C.STRING_LITERAL l, L.make $startpos $endpos}
 | LPAREN e = expression RPAREN {e}
-(* TODO: generic-selection *)
+| g = generic_selection        {g}
 ;
 
 (* 6.5.2#1 Postfix operators, Syntax *)
@@ -167,7 +173,7 @@ postfix_expression:
 (* e -- *)
 | e = postfix_expression MINUS_MINUS
     {C.UNARY (C.POSTFIX_DECR, e), L.make $startpos $endpos}
-
+    
 (* TODO I am omitting compound literals for the moment. Adding them at a later stage shouldn't pose much of a challenge.
 | LPAREN type_name RPAREN LBRACE initialiser_list RBRACE
     {C.COMPOUND_LITERAL ($2, C.COMPOUND_INIT $5), $1}
@@ -430,7 +436,14 @@ constant_expression:
 
 (* 6.4.4#1 Constants, Syntax *)
 constant:
-| c = integer_constant {c}
+| c = integer_constant     {c}
+(* TODO: | c = floating_constant *)
+(* REMARK: this would be never used in the parser, instead enum constants
+           are collected as identifier in `expression' and later converted
+           back to enumeration constant in Cabs_to_ail.
+| c = enumeration_constant {c} *)
+
+(* TODO: | c = character_constant *)
 (* TODO Add in later.
 | CONST_CHAR				{C.CONST_CHAR (fst $1), snd $1}
 | CONST_WCHAR				{C.CONST_WCHAR (fst $1), snd $1}
@@ -446,6 +459,11 @@ integer_constant:
 *)
 ;
 
+(* 6.4.4.3#1 Enumeration constants, Syntax *)
+(* NOT USED: see REMARK in `constant' *)
+enumeration_constant:
+| x = CONST_ENUM {x}
+;
 
 (* 6.7 Declarations ********************************************************* *)
 

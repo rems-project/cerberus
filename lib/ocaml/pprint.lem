@@ -52,11 +52,11 @@ val brackets : t -> t
 val braces : t -> t
 val dquotes : t -> t
 
-(*val optional : forall 'a. ('a -> t) -> 'a option -> t*)
-val comma_list : forall 'a. ('a -> t) -> 'a list -> t
-val sepmap : forall 'a. t -> ('a -> t) -> 'a list -> t
-val sep0map: forall 'a. t -> ('a -> t) -> 'a list -> t
-val fold : forall 'a. (t -> t -> t) -> t list -> t
+(*val optional : forall 'a. ('a -> t) -> option 'a -> t*)
+val comma_list : forall 'a. ('a -> t) -> list 'a -> t
+val sepmap : forall 'a. t -> ('a -> t) -> list 'a -> t
+val sep0map: forall 'a. t -> ('a -> t) -> list 'a -> t
+val fold : forall 'a. (t -> t -> t) -> list t -> t
 
 val break0 : t
 val break1 : t

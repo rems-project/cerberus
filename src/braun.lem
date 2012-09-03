@@ -1,4 +1,4 @@
-type 'a t = Node of 'a * 'a t * 'a t | Nil
+type t 'a = Node of 'a * t 'a * t 'a | Nil
 
 let rec cons x t = 
   match t with

@@ -488,8 +488,8 @@ let is_complete t =
 let is_incomplete t = not (is_complete t)
 
 let is_const = function
-  | BASIC    q _ -> Cabs.CONST IN q
-  | POINTER  q _ -> Cabs.CONST IN q
+  | BASIC    q _ -> CONST IN q
+  | POINTER  q _ -> CONST IN q
   | ARRAY    _ _ -> false
   | FUNCTION _ _ -> false
   end
@@ -535,7 +535,7 @@ let pointer_convert (t: Ail.ctype) : Ail.ctype =
   | _             -> t
   end
 
-let lvalue_convert (t: Ail.ctype) : Ail.ctype option =
+let lvalue_convert (t: Ail.ctype) : option Ail.ctype =
   if is_incomplete t && not (is_array t) then
     None
   else

@@ -1,7 +1,6 @@
 open Global
 
 module A = Ail
-module C = Cabs
 module T = Types
 module Annot = Annotate
 
@@ -18,11 +17,11 @@ let lvalue_convert t e =
   end
 
 let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
-let one l = Pair.make l (A.CONSTANT (C.CONST_INT (1, None)))
+let one l = Pair.make l (A.CONSTANT (A.CONST_INT (1, None)))
 
 let rec is_null_pointer_constant e =
   match Annot.exp_of e with
-  | A.CONSTANT (C.CONST_INT (n, _)) -> n = 0
+  | A.CONSTANT (A.CONST_INT (n, _)) -> n = 0
   | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer_constant exp
   | _ -> false
   end
@@ -58,9 +57,9 @@ let rec check_exp env l e_head =
         E.return (A.T_EXP t)
       else
         E.return (A.T_LVALUE t)
-  | A.CONSTANT (C.CONST_INT (i, None)) ->
+  | A.CONSTANT (A.CONST_INT (i, None)) ->
       E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
-  | A.CONSTANT (C.CONST_INT (_, Some suffix)) ->
+  | A.CONSTANT (A.CONST_INT (_, Some suffix)) ->
       (* (§6.4.4.1) Integer constants, with suffix *)
       match suffix with
       | SUFFIX_UNSIGNED           -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED")
@@ -141,7 +140,7 @@ let rec check_exp env l e_head =
       if T.is_modifiable t then
         if T.is_real t || T.is_pointer t then
           annotate_exp env (one l) >>= fun a_one ->
-          check_exp env l (A.ASSIGN (Some C.ADD) e a_one)
+          check_exp env l (A.ASSIGN (Some A.ADD) e a_one)
         else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
       else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
 
@@ -150,7 +149,7 @@ let rec check_exp env l e_head =
       if T.is_modifiable t then
         if T.is_real t || T.is_pointer t then
           annotate_exp env (one l) >>= fun a_one ->
-          check_exp env l (A.ASSIGN (Some C.SUB) e a_one)
+          check_exp env l (A.ASSIGN (Some A.SUB) e a_one)
         else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
       else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
 
@@ -181,24 +180,24 @@ let rec check_exp env l e_head =
       else E.fail Errors.AIL_TYPECHECK_CAST_NAME_SCALAR
 
   (* K: seriously? This hack is at the edge of decency  *)
-  | A.BINARY (C.ARITHMETIC C.MUL) e1 e2 ->
-      check_exp env l (A.BINARY (C.ARITHMETIC C.DIV) e1 e2)
+  | A.BINARY (A.ARITHMETIC A.MUL) e1 e2 ->
+      check_exp env l (A.BINARY (A.ARITHMETIC A.DIV) e1 e2)
 
-  | A.BINARY (C.ARITHMETIC C.DIV) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_arithmetic t1 && T.is_arithmetic t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_MUL_ARITHMETIC
 
-  | A.BINARY (C.ARITHMETIC C.MOD) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 && T.is_integer t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_MOD_INTEGER
 
-  | A.BINARY (C.ARITHMETIC C.ADD) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -219,7 +218,7 @@ let rec check_exp env l e_head =
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
 
       else E.fail Errors.AIL_TYPECHECK_ADD_ALL
-  | A.BINARY (C.ARITHMETIC C.SUB) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       match (t1, t2) with
@@ -243,13 +242,13 @@ let rec check_exp env l e_head =
             E.return (A.T_EXP (T.usual_arithmetic t1 t2))
           else E.fail Errors.AIL_TYPECHECK_SUB_ALL
       end
-  (* TODO: this is looping, I guess C.SHL is meant to be C.SHR (ugly btw) *)
+  (* TODO: this is looping, I guess A.SHL is meant to be A.SHR (ugly btw) *)
   (* TODO: (K) did applied the correction SHL --> SHR.
            J should check *)
-  | A.BINARY (C.ARITHMETIC C.SHL) e1 e2 ->
-      check_exp env l (A.BINARY (C.ARITHMETIC C.SHR) e1 e2)
+  | A.BINARY (A.ARITHMETIC A.SHL) e1 e2 ->
+      check_exp env l (A.BINARY (A.ARITHMETIC A.SHR) e1 e2)
 
-  | A.BINARY (C.ARITHMETIC C.SHR) e1 e2  ->
+  | A.BINARY (A.ARITHMETIC A.SHR) e1 e2  ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 then
@@ -259,13 +258,13 @@ let rec check_exp env l e_head =
       else E.fail Errors.AIL_TYPECHECK_SHR_INTEGER_SECOND
 
   (* TODO: beurk *)
-  | A.BINARY C.LT e1 e2 ->
-      check_exp env l (A.BINARY C.GE e1 e2)
-  | A.BINARY C.GT e1 e2 ->
-      check_exp env l (A.BINARY C.GE e1 e2)
-  | A.BINARY C.LE e1 e2 ->
-      check_exp env l (A.BINARY C.GE e1 e2)
-  | A.BINARY C.GE e1 e2 ->
+  | A.BINARY A.LT e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.GT e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.LE e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.GE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -285,9 +284,9 @@ let rec check_exp env l e_head =
             else E.fail Errors.AIL_TYPECHECK_GE_REAL
           else E.fail Errors.AIL_TYPECHECK_GE_ALL
       end
-  | A.BINARY C.EQ e1 e2 ->
-      check_exp env l (A.BINARY C.NE e1 e2)
-  | A.BINARY C.NE e1 e2 ->
+  | A.BINARY A.EQ e1 e2 ->
+      check_exp env l (A.BINARY A.NE e1 e2)
+  | A.BINARY A.NE e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
 
@@ -327,32 +326,32 @@ let rec check_exp env l e_head =
             else E.fail Errors.AIL_TYPECHECK_NE_ARITHMETIC
           else E.fail Errors.AIL_TYPECHECK_NE_ALL
       end
-  | A.BINARY (C.ARITHMETIC C.BAND) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 && T.is_integer t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_BAND_INTEGER
 
-  | A.BINARY (C.ARITHMETIC C.XOR) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 && T.is_integer t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_XOR_INTEGER
-  | A.BINARY (C.ARITHMETIC C.BOR) e1 e2 ->
+  | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_integer t1 && T.is_integer t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_BOR_INTEGER
-  | A.BINARY C.AND e1 e2 ->
+  | A.BINARY A.AND e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
         E.return (A.T_EXP int)
       else E.fail Errors.AIL_TYPECHECK_AND_SCALAR
-  | A.BINARY C.OR e1 e2 ->
+  | A.BINARY A.OR e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
       if T.is_scalar t1 && T.is_scalar t2 then
@@ -465,9 +464,9 @@ let rec check_exp env l e_head =
             else E.fail Errors.AIL_TYPECHECK_ASSIGN_ALL
         end
       else E.fail Errors.AIL_TYPECHECK_ASSIGN_LVALUE
-  | A.ASSIGN (Some C.ADD) e1 e2 ->
-      check_exp env l (A.ASSIGN (Some C.SUB) e1 e2)
-  | A.ASSIGN (Some C.SUB) e1 e2 ->
+  | A.ASSIGN (Some A.ADD) e1 e2 ->
+      check_exp env l (A.ASSIGN (Some A.SUB) e1 e2)
+  | A.ASSIGN (Some A.SUB) e1 e2 ->
       lvalue_type_of Errors.AIL_TYPECHECK_ASSIGN_LVALUE e1 >>= fun t1 ->
       type_of e2                                           >>= fun t2 ->
       lvalue_convert t1 e1                                 >>= fun t  ->
@@ -492,13 +491,13 @@ let rec check_exp env l e_head =
       if T.is_modifiable t1 then
 
         if T.is_arithmetic t1 then
-          let bexp = A.BINARY (C.ARITHMETIC o) e1 e2 in
+          let bexp = A.BINARY (A.ARITHMETIC o) e1 e2 in
           check_exp env l bexp >>= fun _ ->
           E.return (A.T_EXP t)
         else E.fail Errors.AIL_TYPECHECK_ASSIGN_OTHER_ARITHMETIC
 
       else E.fail Errors.AIL_TYPECHECK_ASSIGN_LVALUE
-  | A.BINARY C.COMMA e1 e2 ->
+  | A.BINARY A.COMMA e1 e2 ->
       type_of e1 >>= fun _ ->
       type_of e2 >>= fun t ->
       E.return (A.T_EXP t)

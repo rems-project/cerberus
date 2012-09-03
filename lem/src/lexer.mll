@@ -36,7 +36,7 @@ let kw_table =
      ("instance",                (fun x -> Inst(x)));
      ("indreln",                 (fun x -> Indreln(x)));
      ("forall",                  (fun x -> Forall(x)));
-     ("exist",                   (fun x -> Exists(x)));
+     ("exists",                  (fun x -> Exists(x)));
      ("inline",                  (fun x -> Inline(x)));
      ("IN",                      (fun x -> IN(x,r"IN")));
      ("MEM",                     (fun x -> MEM(x,r"MEM")))]

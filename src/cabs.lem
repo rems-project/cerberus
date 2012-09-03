@@ -17,14 +17,14 @@ type integer_suffix =
   | SUFFIX_UNSIGNED_LONG_LONG
   | SUFFIX_LONG
   | SUFFIX_LONG_LONG
-type integer_constant = num * integer_suffix option
+type integer_constant = num * option integer_suffix
 
 
 (* 6.4.4 Constants *)
 type constant =
   | CONST_INT of integer_constant
 (*  | CONST_FLOAT of string (* the textual representaton *) (* LATER *) *)
-  | CONST_ENUM of string (* 6.4.4.3 Enumeration constants *)
+(* NOT USED, see REMARK in Cparser.constant  | CONST_ENUM of string (* 6.4.4.3 Enumeration constants *) *)
 (*
 (* TODO *)
   | CONST_CHAR of int64 list
@@ -38,7 +38,7 @@ type encoding_prefix =
   | ENCODING_u
   | ENCODING_U
   | ENCODING_L
-type string_literal = encoding_prefix option * string
+type string_literal = option encoding_prefix * string
 
 
 (* -- EXPRESSIONS -- *)
@@ -113,30 +113,31 @@ type specifier =
   | UNSIGNED
   | BOOL
 (*  | COMPLEX *)
-  | STRUCT of string option * struct_union_declaration list (* TODO: STRUCT_HACK *)
-  | UNION of string option * struct_union_declaration list (* TODO: STRUCT_HACK *)
+  | STRUCT of option string * list struct_union_declaration (* TODO: STRUCT_HACK *)
+  | UNION of option string * list struct_union_declaration (* TODO: STRUCT_HACK *)
 (* TODO: enum-specifier *)
 (* TODO: typedef-name *)
 
-and specifiers = specifier multiset
-and qualifiers = qualifier set
+and specifiers = multiset specifier
+and qualifiers = set qualifier
 
 and c_type =
   | BASE of qualifiers * specifiers
-  | ARRAY of qualifiers * c_type * exp_l option
+  | ARRAY of qualifiers * c_type * option exp_l
   | POINTER of qualifiers * c_type
-  | FUNCTION of c_type * decl_l list
+  | FUNCTION of c_type * list decl_l
+  | ENUM of string
 
 and expression =
   (* 6.5.1 Primary expressions *)
   | IDENTIFIER of string
   | CONSTANT of constant
   | STRING_LITERAL of string_literal
-(* TODO: generic_selection *)
+  | GENERIC_SELECTION of exp_l * list generic_association_l
   (* 6.5.2.1 Array subscripting *)
   | SUBSCRIPT of exp_l * exp_l
   (* 6.5.2.2 Function call *)
-  | CALL of exp_l * exp_l list
+  | CALL of exp_l * list exp_l
   (* 6.5.2.3 Structure and union members *)
   | MEMBEROF of exp_l * string
   | MEMBEROFPTR of exp_l * string
@@ -156,50 +157,59 @@ and expression =
   (* 6.5.15 Conditional operator *)
   | CONDITIONAL of exp_l * exp_l * exp_l
   (* 6.5.16 Assignment operators *)
-  | ASSIGN of arithmetic_operator option * exp_l * exp_l
+  | ASSIGN of option arithmetic_operator * exp_l * exp_l
+
+and generic_association =
+  | TYNAME_ASSOC of c_type * exp_l
+  | DEFAULT_ASSOC of exp_l
+
+and generic_association_l = generic_association * location
 
 and exp_l = expression * location
 
 (* TODO: STRUCT_HACK *)
 and struct_union_declarator =
   | STRUCT_DECL of string * (c_type -> c_type)
-  | BITFIELD of (string * (c_type -> c_type)) option * exp_l
-and struct_union_declaration = specifiers * qualifiers * struct_union_declarator list
+  | BITFIELD of option (string * (c_type -> c_type)) * exp_l
+and struct_union_declaration = specifiers * qualifiers * list struct_union_declarator
+
+and enum_specifier =
+  | ENUM_SPEC of option string * list (option expression)
 
 
-and declaration = string * c_type * storage_class list
+and declaration = string * c_type * list storage_class
 and decl_l = declaration * location
-and definition = decl_l * exp_l option
+and definition = decl_l * option exp_l
 and defn_l = definition * location
 
 type statement =
   | SKIP
   | EXPRESSION of exp_l
-  | BLOCK of stmt_l list
-  | IF of exp_l * stmt_l * stmt_l option
+  | BLOCK of list stmt_l
+  | IF of exp_l * stmt_l * option stmt_l
   | WHILE of exp_l * stmt_l
   | DO of exp_l * stmt_l
-  | FOR_EXP of exp_l option * exp_l option * exp_l option * stmt_l
-  | FOR_DECL of defn_l list * exp_l option * exp_l option * stmt_l
+  | FOR_EXP of option exp_l * option exp_l * option exp_l * stmt_l
+  | FOR_DECL of list defn_l * option exp_l * option exp_l * stmt_l
   | BREAK
   | CONTINUE
-  | RETURN of exp_l option
+  | RETURN of option exp_l
   | SWITCH of exp_l * stmt_l
   | CASE of exp_l * stmt_l
   | DEFAULT of stmt_l
   | LABEL of string * stmt_l
   | GOTO of string
-  | DECLARATION of defn_l list
-  | PAR of stmt_l list (* TODO: (temporary) adding cppmem's parallel composition *)
+  | DECLARATION of list defn_l
+  | PAR of list stmt_l (* TODO: (temporary) adding cppmem's parallel composition *)
 
 and stmt_l = statement * location
 
 type global_definition =
   | FUNCTION_DEFINITION of decl_l * stmt_l
-  | EXTERNAL_DECLARATION of defn_l list
+  | EXTERNAL_DECLARATION of list defn_l
   | STRUCT_ (* TODO: struct *)
 
 type g_defn_l = global_definition * location
 
 (* file name, list of toplevel definitions *)
-type file = string * g_defn_l list
+type file = string * list g_defn_l
