@@ -94,7 +94,7 @@ let capitalize x =
 
 type name_type =
   | Bquote
-  | Paren of Ast.lex_skips * Ast.lex_skips
+  | Paren
   | Plain
 
 type lskips_t = Ast.lex_skips * Ulib.Text.t * name_type
@@ -106,20 +106,31 @@ let from_ix = function
 
 let from_x = function 
   | Ast.X_l((s,x),l) -> (s,x,Plain)
-  | Ast.PreX_l(s1,(s2,x),s3,l) -> (s2,x,Paren(s1,s3))
+  | Ast.PreX_l(s1,(None,x),None,l) -> (s1,x,Paren)
+  | Ast.PreX_l(s1,(_,x),_,l) -> 
+      (* The parser should prevent this from happening in its mk_pre_x_l
+       * function *)
+      assert false
+
 
 let strip_lskip (_,x,_) = from_rope x
 
 let add_lskip n = 
   (None,to_rope n,Plain)
 
+let star = Ulib.Text.of_latin1 "*"
+let space = Output.ws (Some [Ast.Ws (Ulib.Text.of_latin1 " ")])
+
 let to_output a (s,x,nt)= 
   let open Output in
     match nt with
       | Plain -> ws s ^ id a x
       (* TODO : Parens might not be correct for all targets *)
-      | Paren(s1,s2) -> 
-          ws s1 ^ kwd "(" ^ ws s ^ id a x ^ ws s2 ^ kwd ")"
+      | Paren ->
+          if (Ulib.Text.left x 1 = star || Ulib.Text.right x 1 = star) then
+            ws s ^ kwd "(" ^ space ^ id a x ^ space ^ kwd ")"
+          else
+            ws s ^ kwd "(" ^ id a x ^ kwd ")"
       (* TODO : Bquote might not be correct for all targets *)
       | Bquote -> 
           ws s ^ kwd "`" ^ id a x ^ kwd "`"
@@ -132,8 +143,8 @@ let to_output_quoted a (s,x,nt)=
     match nt with
       | Plain -> ws s ^ id a (r"\"" ^^ x ^^ r"\"")
       (* TODO : Parens might not be correct for all targets *)
-      | Paren(s1,s2) -> 
-          ws s1 ^ kwd "(" ^ ws s ^ id a (r"\"" ^^ x ^^ r"\"") ^ ws s2 ^ kwd ")"
+      | Paren ->
+          ws s ^ kwd "(" ^ id a (r"\"" ^^ x ^^ r"\"") ^ kwd ")"
       (* TODO : Bquote might not be correct for all targets *)
       | Bquote -> 
           ws s ^ kwd "`" ^ id a (r"\"" ^^ x ^^ r"\"") ^ kwd "`"
@@ -142,11 +153,7 @@ let to_rope_tex a n =
   Output.to_rope_ident a (to_rope n)
 
 let add_pre_lskip lskip (s,x,nt) = 
-  match nt with
-    | Plain | Bquote ->
-        (Ast.combine_lex_skips lskip s,x,nt)
-    | Paren(s1,s2) ->
-        (s,x,Paren(Ast.combine_lex_skips lskip s1,s2))
+  (Ast.combine_lex_skips lskip s,x,nt)
 
 let get_lskip (s,x,nt) = s
 
@@ -154,17 +161,17 @@ let drop_parens (s,x,nt) =
   match nt with
     | Plain ->
         (s,x,Plain)
-    | Paren(s1,s2) ->
-        (Ast.combine_lex_skips s1 (Ast.combine_lex_skips s s2),x,Plain)
+    | Paren ->
+        (s,x,Plain)
     | Bquote -> 
         assert false
 
 let add_parens (s,x,nt) = 
   match nt with
     | Plain ->
-        (None,x,Paren(s,None))
-    | Paren(s1,s2) ->
-        (s,x,Paren(s1,s2))
+        (s,x,Paren)
+    | Paren ->
+        (s,x,Paren)
     | Bquote -> 
         assert false
 
@@ -174,7 +181,7 @@ let lskip_pp ppf (s,x,nt) =
         Format.fprintf ppf "%a%a" 
           Ast.pp_lex_skips s
           pp (from_rope x)
-    | Paren _ -> 
+    | Paren -> 
         Format.fprintf ppf "%a(%a)" 
           Ast.pp_lex_skips s
           pp (from_rope x)
@@ -187,9 +194,7 @@ let lskip_rename f (s,x,nt) =
   (s,f x,nt)
 
 let replace_lskip (s,x,nt) s_new = 
-  match nt with
-    | Plain | Bquote -> (s_new,x,nt)
-    | Paren(s1,s2) -> (s,x,Paren(s_new,s2))
+  (s_new,x,nt)
 
 let get_prec gp (s,x,nt) =
   gp (Precedence.Op (Ulib.Text.to_string x))

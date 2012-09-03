@@ -3,17 +3,17 @@ type t = Location.t * Ail.type_class
 
 let a_type (l: Location.t) (t: Ail.type_class) = (l, t)
 
-val loc_of: forall 'a. t * 'a Ail.expression -> Location.t
+val loc_of: forall 'a. t * Ail.expression 'a -> Location.t
 let loc_of  ((l, _), _) = l
 
-val type_of: forall 'a. t * 'a Ail.expression -> Ail.type_class
+val type_of: forall 'a. t * Ail.expression 'a -> Ail.type_class
 let type_of ((_, t), _) = t
 
-val exp_of: forall 'a. t * 'a Ail.expression -> 'a Ail.expression
+val exp_of: forall 'a. t * Ail.expression 'a -> Ail.expression 'a
 let exp_of  (_,      e) = e
 
 (*  *)
-let exp_type_of (e: t Ail.expression_l) : Ail.ctype =
+let exp_type_of (e: Ail.expression_l t) : Ail.ctype =
   let t =
     match type_of e with
       | Ail.T_EXP    t -> t
@@ -26,7 +26,7 @@ let lvalue_type_of e =
     | Ail.T_LVALUE t -> Types.pointer_convert t
   end
 
-let ctype_of (e: t Ail.expression_l) : Ail.ctype =
+let ctype_of (e: Ail.expression_l t) : Ail.ctype =
   match type_of e with
     | Ail.T_EXP    t -> t
     | Ail.T_LVALUE t -> t

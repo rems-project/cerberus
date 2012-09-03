@@ -1,1 +1,1 @@
-val fold: forall 'a 'b. ('a -> 'b -> 'b) -> 'a set -> 'b -> 'b
+val fold: forall 'a 'b. ('a -> 'b -> 'b) -> set 'a -> 'b -> 'b

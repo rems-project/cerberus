@@ -1,24 +1,35 @@
+(* Symbols table with stacked scopes *)
 open Global
 
-type ('a, 'b) t = ('a, 'b) map list
+type t 'a 'b = list (map 'a 'b)
 
-let emp = []
+(* Return a empty association table (with an opened scope). *)
+let empty = []
 
+(* Add a symbol  *)
+(* val add: forall 'a 'b. 'a -> 'b -> ('a, 'b) t -> ('a, 'b) t *)
 let add a b t =
   match t with
     | t::ts -> Pmap.add a b t :: ts
+    | _     -> Boot.outOfHomeomorphism "`Symbol_table.add' called on a table without any opened scope"
   end
 
+(* Return the value associated to a symbol, if it exists (look over all the opened scopes). *)
+(* val     find: forall 'a 'b. 'a -> ('a, 'b) t -> 'b option *)
 let rec find a t =
   match t with
-    | m::ms ->
-       match Pmap.mem a m with
-         | true  -> Some (Pmap.find a m)
-         | false -> find a ms
-      end
-    | [] -> None
+    | m::ms -> match Pmap.mem a m with
+        | true  -> Some (Pmap.find a m)
+        | false -> find a ms
+        end
+(*
+    | m::ms -> if Pmap.mem a m then Some (Pmap.find a m)
+                               else find a ms
+*)
+    | []    -> None
   end
 
+(* val mem: forall 'a 'b. 'a -> ('a, 'b) t -> bool *)
 let mem a t = Option.is_some (find a t)
 
 let symbols t =

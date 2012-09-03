@@ -77,6 +77,20 @@ let mod_cap n =
   else
     ()
 
+let space = Ulib.Text.of_latin1 " "
+let star = Ulib.Text.of_latin1 "*"
+
+let mk_pre_x_l sk1 (sk2,id) sk3 l =
+  if (sk2 = None || sk2 = Some []) && (sk3 = None || sk3 = Some []) then
+    PreX_l(sk1,(None,id),None,l)
+  else if (sk2 = Some [Ws space] && 
+           sk3 = Some [Ws space] && 
+           (Ulib.Text.left id 1 = star ||
+            Ulib.Text.right id 1 = star)) then
+    PreX_l(sk1,(None,id),None,l)
+  else
+    raise (Parse_error_locn(l, "illegal whitespace in parenthesised infix name"))
+
 
 %}
 
@@ -108,31 +122,31 @@ x:
   | X
     { X_l($1, loc ()) }
   | Lparen Eq Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen IN Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen MEM Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen MinusMinusGt Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen AmpAmp Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen BarBar Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen ColonColon Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen Star Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen PlusX Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen StarX Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen EqualX Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen StarstarX Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen AtX Rparen
-    { PreX_l($1, $2, $3, loc ()) }
+    { mk_pre_x_l $1 $2 $3 (loc ()) }
 
 id:
   | id_help
@@ -155,19 +169,22 @@ atomic_typ:
   | tyvar
     { tloc (Typ_var($1)) }
   | id
-    { tloc (Typ_app(None,[],None,$1)) }
-  | Lparen comma_typs Rparen id
-    { tloc (Typ_app($1,$2,$3,$4)) }
+    { tloc (Typ_app($1,[])) }
   | Lparen typ Rparen
     { tloc (Typ_paren($1,$2,$3)) }
+
+atomic_typs:
+  | atomic_typ
+    { [$1] }
+  | atomic_typ atomic_typs
+    { $1::$2 }
 
 app_typ:
   | atomic_typ
     { $1 }
-  | app_typ id
-    { tloc (Typ_app(None,[($1,None)],None,$2)) }
+  | id atomic_typs
+    { tloc (Typ_app($1,$2)) }
   
-
 star_typ_list:
   | app_typ
     { [($1,None)] }
@@ -187,12 +204,6 @@ typ:
     { $1 }
   | star_typ Arrow typ
     { tloc (Typ_fn($1,$2,$3)) }
-
-comma_typs:
-  | typ Comma typ
-  { [($1,$2);($3,None)] }
-  | typ Comma comma_typs
-    { ($1,$2)::$3 }
 
 lit:
   | True
@@ -223,10 +234,8 @@ atomic_pat:
     { ploc (P_list($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
   | lit
     { ploc (P_lit($1)) }
-
-left_atomic_pat:
-  | pat As x
-    { ploc (P_as($1,$2,$3)) }
+  | Lparen pat As x Rparen
+    { ploc (P_as($1,$2,$3,$4,$5)) }
 
 atomic_pats:
   | atomic_pat
@@ -240,23 +249,11 @@ app_pat:
   | id atomic_pats
     { ploc (P_app($1,$2)) }
 
-cons_pat:
+pat:
   | app_pat
     { $1 }
-  | app_pat ColonColon cons_pat
+  | app_pat ColonColon pat
     { ploc (P_cons($1,fst $2,$3)) } 
-
-left_cons_pat:
-  | left_atomic_pat
-    { $1 }
-  | left_atomic_pat ColonColon cons_pat
-    { ploc (P_cons($1,fst $2,$3)) } 
-
-pat:
-  | cons_pat
-    { $1 }
-  | left_cons_pat
-    { $1 }
 
 semi_pats_help:
   | pat
@@ -602,30 +599,30 @@ tvs:
     { $1::$2 }
 
 c:
-  | Lparen id tyvar Rparen
-    { C($1,$2,$3,$4) }
+  | id tyvar
+    { C($1,$2) }
 
 cs:
   | c
-    { [$1] }
-  | c cs
-    { $1::$2 }
+    { [($1,None)] }
+  | c Comma cs
+    { ($1,$2)::$3 }
 
 c2:
-  | Lparen id typ Rparen
+  | id typ
     { 
-      match $3 with
+      match $2 with
         | Typ_l(Typ_var(a_l),_) ->
-            C($1,$2,a_l,$4) 
+            C($1,a_l) 
         | _ -> 
           raise (Parse_error_locn(loc (),"Invalid class constraint"))
     }
 
 cs2:
   | c2
-    { [$1] }
-  | c2 cs2
-    { $1::$2 }
+    { [($1, None)] }
+  | c2 Comma cs2
+    { ($1,$2)::$3 }
 
 typschm:
   | typ
@@ -745,25 +742,11 @@ texp:
   | ctor_single_texp
     { Te_variant(None,false,[($1,None)]) }
  
-comma_tvs:
-  | tyvar Comma tyvar
-    { [($1,$2);($3,None)] }
-  | tyvar Comma comma_tvs
-    { ($1,$2)::$3 }
-
 td:
-  | x
-    { Td_opaque(None,[],None,$1) }
-  | x Eq texp
-    { Td(None,[],None,$1,fst $2,$3) }
-  | tyvar x
-    { Td_opaque(None,[($1,None)],None,$2) }
-  | tyvar x Eq texp
-    { Td(None,[($1,None)],None,$2,fst $3,$4) }
-  | Lparen comma_tvs Rparen x
-    { Td_opaque($1,$2,$3,$4) }
-  | Lparen comma_tvs Rparen x Eq texp
-    { Td($1,$2,$3,$4,fst $5,$6) }
+  | x tvs
+    { Td_opaque($1,$2) }
+  | x tvs Eq texp
+    { Td($1,$2,fst $3,$4) }
 
 tds:
   | td

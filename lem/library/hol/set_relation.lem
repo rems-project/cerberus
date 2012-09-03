@@ -1,26 +1,26 @@
-type 'a reln = ('a * 'a) set
+type reln 'a = set ('a * 'a)
 
-val acyclic : forall 'a. 'a reln -> bool
-val all_choices : forall 'a. 'a set set -> 'a set set
-val antisym : forall 'a. 'a reln -> bool
-val chain : forall 'a. 'a set -> 'a reln -> bool
-val domain : forall 'a. 'a reln -> 'a set
-val finite_prefixes : forall 'a. 'a reln -> 'a set -> bool
-val irreflexive : forall 'a. 'a reln -> 'a set -> bool
-val linear_order : forall 'a. 'a reln -> 'a set -> bool
-val maximal_elements : forall 'a. 'a set -> 'a reln -> 'a set
-val minimal_elements : forall 'a. 'a set -> 'a reln -> 'a set
-val num_order : forall 'a. ('a -> num) -> 'a set -> 'a reln
-val partial_order : forall 'a. 'a reln -> 'a set -> bool
-val per : forall 'a. 'a set -> 'a set set -> bool
-val per_restrict : forall 'a. 'a set set -> 'a set -> 'a set
-val range : forall 'a. 'a reln -> 'a set
-val rcomp : forall 'a. 'a reln -> 'a reln -> 'a reln
-val reflexive : forall 'a. 'a reln -> 'a set -> bool
-val rrestrict : forall 'a. 'a reln -> 'a set -> 'a reln
-val strict : forall 'a. 'a reln -> 'a reln
-val strict_linear_order : forall 'a. 'a reln -> 'a set -> bool
-val tc : forall 'a. 'a reln -> 'a reln
-val transitive : forall 'a. 'a reln -> 'a reln
-val univ_reln : forall 'a. 'a set -> 'a reln
-val upper_bounds : forall 'a. 'a set -> 'a reln -> 'a set
+val acyclic : forall 'a. reln 'a -> bool
+val all_choices : forall 'a. set (set 'a) -> set (set 'a)
+val antisym : forall 'a. reln 'a -> bool
+val chain : forall 'a. set 'a -> reln 'a -> bool
+val domain : forall 'a. reln 'a -> set 'a
+val finite_prefixes : forall 'a. reln 'a -> set 'a -> bool
+val irreflexive : forall 'a. reln 'a -> set 'a -> bool
+val linear_order : forall 'a. reln 'a -> set 'a -> bool
+val maximal_elements : forall 'a. set 'a -> reln 'a -> set 'a
+val minimal_elements : forall 'a. set 'a -> reln 'a -> set 'a
+val num_order : forall 'a. ('a -> num) -> set 'a -> reln 'a
+val partial_order : forall 'a. reln 'a -> set 'a -> bool
+val per : forall 'a. set 'a -> set (set 'a) -> bool
+val per_restrict : forall 'a. set (set 'a) -> set 'a -> set 'a
+val range : forall 'a. reln 'a -> set 'a
+val rcomp : forall 'a. reln 'a -> reln 'a -> reln 'a
+val reflexive : forall 'a. reln 'a -> set 'a -> bool
+val rrestrict : forall 'a. reln 'a -> set 'a -> reln 'a
+val strict : forall 'a. reln 'a -> reln 'a
+val strict_linear_order : forall 'a. reln 'a -> set 'a -> bool
+val tc : forall 'a. reln 'a -> reln 'a
+val transitive : forall 'a. reln 'a -> reln 'a
+val univ_reln : forall 'a. set 'a -> reln 'a
+val upper_bounds : forall 'a. set 'a -> reln 'a -> set 'a

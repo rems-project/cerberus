@@ -17,26 +17,32 @@ end
 (* -------------------------------------------------------------------------- *)
 
 module Effect = struct
-  type 'a t = ('a, Symbol.sset * (* symbol counter for Core's symbolic names (including function names) *)
-                   (* map of functions generated while processing the current Ail function *)
-                   (Symbol.t, C.core_type * (Symbol.t * C.core_base_type) list * C.expr) map 
-              ) State.t
+  type t 'a = State.t
+      'a
+      (* symbol counter for Core's symbolic names (including function names) *)
+      (Symbol.sset *
+      (* the return label of the current function *)
+      option Symbol.t *
+      (* the closest looping label *)
+      option Symbol.t *
+      (* map of functions generated while processing the current Ail function *)
+      map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr))
   
-  val return: forall 'a. 'a -> 'a t
+  val return: forall 'a. 'a -> t 'a
   let return = State.return
   
-  val bind: forall 'a 'b. 'a t -> ('a -> 'b t) -> 'b t
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
   let bind = State.bind
   
-  val map: forall 'a 'b. ('a -> 'b) -> 'a t -> 'b t
+  val map: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
   let map = State.map
   
   module Operators = struct
     let (>>=) = bind
   end
   
-  val init: forall 'a. 'a t -> 'a
-  let init m = State.run m (Symbol.init, Pmap.empty)
+  val init: forall 'a. t 'a -> 'a
+  let init m = State.run m (Symbol.init, None, None, Pmap.empty)
   
 
 (*
@@ -47,7 +53,7 @@ module Effect = struct
     end
 *)
 
-  val     foldlM: forall 'a 'b. ('a -> 'b -> 'b t) -> 'a list -> 'b -> 'b t
+  val     foldlM: forall 'a 'b. ('a -> 'b -> t 'b) -> list 'a -> 'b -> t 'b
   let rec foldlM f l a =
     match l with
       | []    -> return a
@@ -81,24 +87,24 @@ open E.Operators
 let exp_type    = Annotate.exp_type_of
 let lvalue_type = Annotate.lvalue_type_of
 
-val fresh_symbol: Symbol.t E.t
-let fresh_symbol = E.map (fun x -> x) (fun (x,y) -> ((x, None), (x+1, y)))
+val fresh_symbol: E.t Symbol.t
+let fresh_symbol = E.map (fun x -> x) (fun (x,ret,loop,y) -> ((x, None), (x+1, ret, loop, y)))
 
-val fresh_fname: string -> Symbol.t E.t
-let fresh_fname name = E.map (fun x -> x) (fun (x,y) -> ((x, Some (name ^ "_" ^ string_of_num x)), (x+1, y)))
+val fresh_fname: string -> E.t Symbol.t
+let fresh_fname name = E.map (fun x -> x) (fun (x,ret,loop,y) -> ((x, Some (name ^ "_" ^ string_of_num x)), (x+1, ret, loop, y)))
 
 (* create a new Core function *)
-val add_function: Symbol.t -> C.core_type -> (Symbol.t * C.core_base_type) list -> C.expr -> unit E.t
+val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr -> E.t unit
 let add_function fname typ args body =
-  fun (x,y) ->
-    ((), (x, Pmap.add fname (typ, args, body) y))
+  fun (a,b,c,d) ->
+    ((), (a, b, c, Pmap.add fname (typ, args, body) d))
 
 
 
 
 
 (* 'optimised' implementation of [\f -> unzip . map f] *)
-val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> 'a list -> 'b list * 'c list
+val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
 let rec mapUnzip_ f (xs, ys) = function
   | []      -> (xs, ys)
   | (l::ls) -> let (x,y) = f l in mapUnzip_ f (x::xs, y::ys) ls
@@ -125,7 +131,6 @@ let is_function_id file e =
 
 
 
-let mark_cexpr m = m >>= fun core_e -> E.return (C.CEXPR core_e)
 
 
 
@@ -282,8 +287,8 @@ and translate_exp file exp =
         translate_lvalue file e >>= fun core_e   ->
         E.return $
           C.Kseq C.SOpSeq [a_lvalue] core_e
-            (C.Kseq C.SOpSeq [a_load] (C.Kload (lvalue_type e) (C.Ksym a_lvalue))
-               (C.Kseq C.SOpSeq [] (C.Kstore (lvalue_type e)
+            (C.Kseq C.SOpSeq [a_load] (C.Kload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
+               (C.Kseq C.SOpSeq [] (C.Kstore (C.Kctype (lvalue_type e))
                                            (C.Ksym a_lvalue)
                                            (C.Kcall C.conv_int
                                              [C.Kctype (exp_type e);
@@ -304,7 +309,7 @@ and translate_exp file exp =
     (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
        (6.5.5#4) The result of the binary * operator is the product of the operands. *)
     (* TODO: check *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.MUL) e1 e2 ->
+    | A.BINARY (A.ARITHMETIC A.MUL) e1 e2 ->
         fresh_symbol          >>= fun a_e1    ->
         fresh_symbol          >>= fun a_e2    ->
         translate_exp file e1 >>= fun core_e1 ->
@@ -325,8 +330,8 @@ and translate_exp file exp =
                  by the second; the result of the % operator is the remainder. In both operations,
                  if the value of the second operand is zero, the behavior is undefined. *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.DIV) e1 e2 ->
-        E.return (C.DEBUG "TODO: [translate] for `A.BINARY (Cabs.ARITHMETIC Cabs.DIV) e1 e2'")
+    | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
+        E.return (C.DEBUG "TODO: [translate] for `A.BINARY (A.ARITHMETIC A.DIV) e1 e2'")
     
     
     (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
@@ -338,7 +343,7 @@ and translate_exp file exp =
                  expression (a/b)*b + a%b shall equal a; otherwise, the behavior of both a/b and a%b
                  is undefined. *)
     (* TODO: check *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.MOD) e1 e2 ->
+    | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
       E.return (C.Kconst 42) (* TODO *)
 (*
         fresh_symbol          >>= fun a_e1    ->
@@ -394,7 +399,7 @@ and translate_exp file exp =
                  used as the operand of a unary * operator that is evaluated.
 *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.ADD) e1 e2 ->
+    | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
         if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
           (* if both operand have arithmetic types, then semantics is quite
              straightforward and we do the 'usual arithmetic conversion' *)
@@ -431,7 +436,7 @@ and translate_exp file exp =
           translate_exp file e1 >>= fun core_e1 ->
           translate_exp file e2 >>= fun core_e2 ->
           if T.is_pointer (exp_type e1) then
-            E.return $ C.DEBUG "Cabs.ARITHMETIC Cabs.ADD e1 e2 <pointer case>"
+            E.return $ C.DEBUG "A.ARITHMETIC A.ADD e1 e2 <pointer case>"
 
 (*
             C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
@@ -440,7 +445,7 @@ and translate_exp file exp =
                   (C.Ksym a_shift)))
 *)
           else
-            E.return $ C.DEBUG "Cabs.ARITHMETIC Cabs.ADD e1 e2 <pointer case>"
+            E.return $ C.DEBUG "A.ARITHMETIC A.ADD e1 e2 <pointer case>"
 (*        
       else
         (* Pointer arithmetic. *)
@@ -474,7 +479,7 @@ and translate_exp file exp =
                 reduced modulo one more than the maximum value representable in the result type. If
                 E1 has a signed type and nonnegative value, and E1 × 2^E2 is representable in the
                 result type, then that is the resulting value; otherwise, the behavior is undefined. *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.SHL) e1 e2 -> (* DONE (check) *)
+    | A.BINARY (A.ARITHMETIC A.SHL) e1 e2 -> (* DONE (check) *)
         fresh_symbol          >>= fun a_e1    ->
         fresh_symbol          >>= fun a_e2    ->
         fresh_symbol          >>= fun a_res   ->
@@ -514,8 +519,8 @@ and translate_exp file exp =
                 the integral part of the quotient of E1 / 2E2. If E1 has a signed type and a
                 negative value, the resulting value is implementation-defined. *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.SHR) e1 e2 -> 
-        E.return $ C.DEBUG "Cabs.ARITHMETIC Cabs.SHR e1 e2 <TODO (has an implementation defined case)>"
+    | A.BINARY (A.ARITHMETIC A.SHR) e1 e2 -> 
+        E.return $ C.DEBUG "A.ARITHMETIC A.SHR e1 e2 <TODO (has an implementation defined case)>"
     
     
    (* (6.5.10#3) The usual arithmetic conversions are performed on the operands.
@@ -523,8 +528,8 @@ and translate_exp file exp =
                  each bit in the result is set if and only if each of the corresponding bits in the
                  converted operands is set). *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2 ->
-        E.return (C.DEBUG "A.BINARY (Cabs.ARITHMETIC Cabs.BAND) e1 e2  <implementation defined>")
+    | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.BAND) e1 e2  <implementation defined>")
     
     
    (* (6.5.11#3) The usual arithmetic conversions are performed on the operands.
@@ -532,8 +537,8 @@ and translate_exp file exp =
                  each bit in the result is set if and only if exactly one of the corresponding bits
                  in the converted operands is set). *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2 ->
-        E.return (C.DEBUG "A.BINARY (Cabs.ARITHMETIC Cabs.XOR) e1 e2  <implementation defined>")
+    | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.XOR) e1 e2  <implementation defined>")
     
     
    (* (6.5.12#3) The usual arithmetic conversions are performed on the operands.
@@ -541,14 +546,14 @@ and translate_exp file exp =
                  each bit in the result is set if and only if at least one of the corresponding bits
                  in the converted operands is set). *)
     (* TODO *)
-    | A.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2 ->
-        E.return (C.DEBUG "A.BINARY (Cabs.ARITHMETIC Cabs.BOR) e1 e2  <implementation defined>")
+    | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.BOR) e1 e2  <implementation defined>")
     
     
     (* (6.5.17#2) The left operand of a comma operator is evaluated as a void expression; there is
                   a sequence point between its evaluation and that of the right operand. Then the
                   right operand is evaluated; the result has its type and value. *)
-    | A.BINARY Cabs.COMMA e1 e2 -> (* DONE (maybe not, be careful when mixing with assignments) *)
+    | A.BINARY A.COMMA e1 e2 -> (* DONE (maybe not, be careful when mixing with assignments) *)
         translate_exp file e1 >>= fun core_e1 ->
         translate_exp file e2 >>= fun core_e2 ->
         E.return $ C.Kseq C.SOpSeq [] core_e1 core_e2
@@ -560,7 +565,7 @@ and translate_exp file exp =
                   evaluation; if the second operand is evaluated, there is a sequence point between
                   the evaluations of the first and second operands. If the first operand compares
                   equal to 0, the second operand is not evaluated. *)
-    | A.BINARY Cabs.AND e1 e2 -> (* DONE *)
+    | A.BINARY A.AND e1 e2 -> (* DONE *)
         fresh_symbol          >>= fun a_e1    ->
         fresh_symbol          >>= fun a_e2    ->
         translate_exp file e1 >>= fun core_e1 ->
@@ -584,7 +589,7 @@ and translate_exp file exp =
                   evaluation; if the second operand is evaluated, there is a sequence point between
                   the evaluations of the first and second operands. If the first operand compares
                   unequal to 0, the second operand is not evaluated. *)
-    | A.BINARY Cabs.OR e1 e2 -> (* DONE *)
+    | A.BINARY A.OR e1 e2 -> (* DONE *)
         fresh_symbol          >>= fun a_e1    ->
         fresh_symbol          >>= fun a_e2    ->
         translate_exp file e1 >>= fun core_e1 ->
@@ -623,19 +628,19 @@ and translate_exp file exp =
                  and >= (greater than or equal to) shall yield 1 if the specified relation is true
                  and 0 if it is false. The result has type int. *)
     (* TODO *)
-    | A.BINARY Cabs.LT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY Cabs.LT e1 e2")
+    | A.BINARY A.LT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.LT e1 e2")
     
     
     (* TODO *)
-    | A.BINARY Cabs.GT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY Cabs.GT e1 e2")
+    | A.BINARY A.GT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GT e1 e2")
     
     
     (* TODO *)
-    | A.BINARY Cabs.LE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY Cabs.LE e1 e2")
+    | A.BINARY A.LE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.LE e1 e2")
     
     
     (* TODO *)
-    | A.BINARY Cabs.GE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY Cabs.GE e1 e2")
+    | A.BINARY A.GE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GE e1 e2")
     
     
    (* (6.5.9#3) The == (equal to) and != (not equal to) operators are analogous to the relational
@@ -663,7 +668,7 @@ and translate_exp file exp =
       (6.5.9#7) For the purposes of these operators, a pointer to an object that is not an element
                 of an array behaves the same as a pointer to the first element of an array of length
                 one with the type of the object as its element type. *)
-    | A.BINARY Cabs.EQ e1 e2 ->
+    | A.BINARY A.EQ e1 e2 ->
         if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
           fresh_symbol          >>= fun a_e1    ->
           fresh_symbol          >>= fun a_e2    ->
@@ -676,17 +681,17 @@ and translate_exp file exp =
                      (C.Kconst 0)
               )
         else if T.is_pointer (exp_type e1) && T.is_pointer (exp_type e2) then
-          E.return (C.DEBUG "A.BINARY Cabs.EQ e1 e2 <when e1 and e2 are pointers>")
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers>")
         else if Typing.is_null_pointer_constant e1 then
-          E.return (C.DEBUG "A.BINARY Cabs.EQ e1 e2 <when e1 and e2 are pointers, and e1 is a \
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers, and e1 is a \
                              null constant")
         else
-          E.return (C.DEBUG "A.BINARY Cabs.EQ e1 e2 <when e1 and e2 are pointers, and e1 is NOT \
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers, and e1 is NOT \
                              a null constant")
     
     
    (* ------------------------------------------------------------------------------------------- *)
-    | A.BINARY Cabs.NE e1 e2 -> E.return (C.DEBUG "A.BINARY Cabs.NE e1 e2")
+    | A.BINARY A.NE e1 e2 -> E.return (C.DEBUG "A.BINARY A.NE e1 e2")
     
     
     
@@ -827,7 +832,7 @@ C.seq [a_id] (C.Kcreate ty)
     
     
     (* ------------------------------------------------------------------------------------------ *)
-    | A.CONSTANT (Cabs.CONST_INT (i, _)) -> (* DONE *)
+    | A.CONSTANT (A.CONST_INT (i, _)) -> (* DONE *)
           E.return (C.Kconst i)
     
     
@@ -836,7 +841,7 @@ C.seq [a_id] (C.Kcreate ty)
     
     (* WARNING: this is not enought (DEBUG FOR NOW) *)
     | A.VARIABLE id ->
-        E.return $ C.Kload (lvalue_type exp) (C.Ksym id)
+        E.return $ C.Kload (C.Kctype (lvalue_type exp)) (C.Ksym id)
     
     
    (* ------------------------------------------------------------------------------------------- *)
@@ -940,7 +945,7 @@ C.seq [a_id] (C.Kcreate ty)
         Action.same a1 a >>= fun same ->
         E.return (a, (m1 -&- m2) -@> same)
 *)
-      | A.BINARY (Cabs.ARITHMETIC Cabs.SUB) e1 e2 ->
+      | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
           if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
             fresh_symbol          >>= fun a_e1    ->
             fresh_symbol          >>= fun a_e2    ->
@@ -959,7 +964,7 @@ C.seq [a_id] (C.Kcreate ty)
           else (*if T.is_integer (exp_type e2) then*)
             (* Pointer arithmetic. *)
             (* TODO: pointer arith *)
-            E.return $ C.DEBUG "Cabs.ARITHMETIC Cabs.SUB e1 e2 <pointer case>"
+            E.return $ C.DEBUG "A.ARITHMETIC A.SUB e1 e2 <pointer case>"
       
     
     
@@ -983,7 +988,7 @@ C.seq [a_id] (C.Kcreate ty)
         translate_exp    file e2 >>= fun core_e2 ->
         E.return $
           C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Kstore (lvalue_type e1)
+            (C.Kstore (C.Kctype (lvalue_type e1))
                       (C.Ksym a_e1)
                       (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2])
             )
@@ -1018,7 +1023,7 @@ C.seq [a_id] (C.Kcreate ty)
 (* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
-and translate_stmt file current_function (_, stmt) : C.expr E.t =
+and translate_stmt file current_function (_, stmt) : E.t C.expr =
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   
@@ -1040,7 +1045,7 @@ and translate_stmt file current_function (_, stmt) : C.expr E.t =
       let n     = List.length decls                                  in
       
       (* prepare the code creating the objects for the block local variables. *)
-      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.Kcreate ty)) (List.rev decls) in
+      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.Kcreate (C.Kctype ty))) (List.rev decls) in
                         match n with
                           | 0 -> fun x -> x
                           | 1 -> C.Kseq C.SOpSeq syms (List.hd xs)
@@ -1168,7 +1173,7 @@ and translate_stmt file current_function (_, stmt) : C.expr E.t =
         conv (exp_type e) (lookup_type id)
              ((* mark_cexpr *) (translate_exp file e)) >>= fun core_e ->
         E.return $ C.Kseq C.SOpSeq [a] core_e
-                     (C.Kseq C.SOpSeq [] (C.Kstore (lookup_type id) (C.Ksym id) (C.Ksym a)) (* TODO: the id is probably wrong *)
+                     (C.Kseq C.SOpSeq [] (C.Kstore (C.Kctype (lookup_type id)) (C.Ksym id) (C.Ksym a)) (* TODO: the id is probably wrong *)
                        acc)
       in E.foldlM f defns C.Kskip
   
@@ -1191,7 +1196,7 @@ and translate_block file current_function (_, stmt) : C.expr Symbol_state.t =
 
 
 (* Run the translator on different functions *)
-let translate_file (file: _ A.file) : C.file E.t =
+let translate_file (file: A.file _) : E.t C.file =
   E.foldlM
     (fun (name, (args, body)) acc ->
        (* translate the body to Core *)
@@ -1206,11 +1211,13 @@ let translate_file (file: _ A.file) : C.file E.t =
 
 
 (* This is the entry function (called from main.ml) *)
-let translate (file: _ A.file) : C.file =
-let (cfile, (_, funs)) = (translate_file file) (Symbol.init, Pmap.empty) in
+let translate (file: A.file _) : C.file =
+  C.test4
+(*
+let (cfile, (_, _, _, funs)) = (translate_file file) (Symbol.init, None, None, Pmap.empty) in
   <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
 
-
+*)
 
 (* E.init (translate_file file) *)
 (* C.test2 *)
@@ -1234,7 +1241,7 @@ let rec str_concat l =
 
 
 
-let rec bar (l: (Cabs.integer_constant option * _ A.statement_l) list) :  (Cabs.integer_constant option * _ A.statement_l) list =
+let rec bar (l: list (option A.integer_constant * A.statement_l _)) : list (option A.integer_constant * A.statement_l _) =
   match l with
     | [] -> []
     | (c, (d, x)) :: xs -> (c, (d, A.BLOCK [] ((d,x) :: List.map snd xs))) :: bar xs
@@ -1335,7 +1342,7 @@ let rec string_concat z l =
     | x::xs -> x ^ z ^ string_concat z xs
   end
 
-let foo (file: _ A.file) =
+let foo (file: A.file _) =
   let [a;_] =
     List.map(fun (_, (args, body)) ->
       string_concat "\n" (List.map (pp_decode file) (decode_switch body))

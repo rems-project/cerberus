@@ -129,9 +129,9 @@ let conv_int_type i const =
     match i with
     | A.BOOL ->
         C.case (C.eq C.zero const) (C.eq a C.zero) (C.eq a C.one)
-    | A.UNSIGNED _ as i ->
+    | (A.UNSIGNED _ as i) ->
         C.eq a (C.modulo const (max i))
-    | A.SIGNED   _ as i ->
+    | (A.SIGNED   _ as i) ->
         C.case (in_range_int i const)
           (C.eq a const)
           (C.eq a (conv_impl i const))

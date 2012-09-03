@@ -2,7 +2,7 @@
 type int = Hol.Integer.int
 val compare : forall 'a. 'a -> 'a -> int
 
-val (::) : forall 'a. 'a -> 'a list -> 'a list
+val (::) : forall 'a. 'a -> list 'a -> list 'a
 val (=) : forall 'a. 'a -> 'a -> bool
 val (<>) : forall 'a. 'a -> 'a -> bool
 val (<) : int -> int -> bool
@@ -17,10 +17,10 @@ val (&&) : bool -> bool -> bool
 val (||) : bool -> bool -> bool
 val (+) : int -> int -> int
 val (-) : int -> int -> int
-val ( *) : int -> int -> int
+val ( * ) : int -> int -> int
 val (/) : int -> int -> int
 val (mod) : int -> int -> int
 val fst : forall 'a 'b. 'a * 'b -> 'a
 val snd : forall 'a 'b. 'a * 'b -> 'b
-val (@) : forall 'a. 'a list -> 'a list -> 'a list
+val (@) : forall 'a. list 'a -> list 'a -> list 'a
 val (^) : string -> string -> string

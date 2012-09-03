@@ -1,8 +1,8 @@
-type 'partial error =
+type error 'partial =
   | Undefined of 'partial
   | Bug of string
 
-type ('a, 'partial) t = ('a, 'partial error) Exception.t
+type t 'a 'partial = Exception.t 'a (error 'partial)
 
 let return = Exception.return
 let bind = Exception.bind
@@ -22,13 +22,13 @@ let of_exception = function
 
 let iter_set f s =
   let f' v () =
-    let (_ : (unit, _) t) = map f v in
+    let (_ : t unit _) = map f v in
     () in
   Set.fold f' s ()
 
 let iter_list f ls =
   let f' v () =
-    let (_ : (unit, _) t) = map f v in
+    let (_ : t unit _) = map f v in
     () in
   List.fold_right f' ls ()
 

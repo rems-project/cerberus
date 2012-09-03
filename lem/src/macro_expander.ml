@@ -42,8 +42,8 @@ let rec expand_pat pat_pos p r : pat =
       | Some(p') -> trans p'
       | None ->
           match p.term with
-            | P_as(p,s,nl) -> 
-                C.mk_pas old_l (trans p) s nl old_t
+            | P_as(s1,p,s2,nl,s3) -> 
+                C.mk_pas old_l s1 (trans p) s2 nl s3 old_t
             | P_typ(s1,p,s2,t,s3) -> 
                 C.mk_ptyp old_l s1 (trans p) s2 t s3 old_t
             | P_constr(c,ps) -> 

@@ -16,6 +16,10 @@ let options = Arg.align [
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_tex)) !backends) then
                 backends := Some(Typed_ast.Target_tex)::!backends),
     "                  generate LaTeX");
+  ( "-html", 
+    Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_html)) !backends) then
+                backends := Some(Typed_ast.Target_html)::!backends),
+    "                  generate Html");
   ( "-hol", 
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_hol)) !backends) then
                 backends := Some(Typed_ast.Target_hol)::!backends),
@@ -97,6 +101,9 @@ let per_target libpath modules (def_info,env) consts alldoc_accum alldoc_inc_acc
       | Ident.No_type(l,msg) ->
           Process_file.print_msg l "LEM internal error" msg;
           raise Exit
+      | Util.TODO(l,msg) ->
+          Process_file.print_msg l "LEM internal error: unimplemented feature" msg;
+          raise Exit
 
 let main () =
   let _ = if !opt_print_version then print_string ("Lem " ^ Version.v ^ "\n") in
@@ -176,6 +183,7 @@ let main () =
                 match x with
                   | None -> s
                   | Some(Typed_ast.Target_tex) -> s
+                  | Some(Typed_ast.Target_html) -> s
                   | Some(t) -> Typed_ast.Targetset.add t s)
              !backends
              Typed_ast.Targetset.empty 

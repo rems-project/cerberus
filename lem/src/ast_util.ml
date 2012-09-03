@@ -25,7 +25,7 @@ let rec pat_vars not_shadowed (Pat_l(p,_)) =
   let psv = pats_vars not_shadowed in
     match p with
       | P_wild _ -> emp
-      | P_as(p,_,xl) ->
+      | P_as(_,p,_,xl,_) ->
           NameSet.add (xl_to_name xl) (pv p)
       | P_typ(_,p,_,_,_) ->
           pv p

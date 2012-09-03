@@ -91,16 +91,19 @@ type cause =
 
 
   | CORE_TYPECHECK_GET_FAILURE
-  | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS
+  | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS of num * num
   | CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
+  | CORE_TYPECHECK_LET_EFFECT
+  | CORE_TYPECHECK_LET_INCOMPATIBLE_ARITY of num * num
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY of num * num
   | CORE_TYPECHECK_UNSEQ_PURE
+  | CORE_TYPECHECK_UNDECLARED_FUNCTION of sym
+  | CORE_TYPECHECK_UNDECLARED_SYMBOL of sym
+
   | CORE_TYPECHECK of string
 
   | PARSER of string
   | OTHER of string
-
-
 
 
 
@@ -498,12 +501,20 @@ let to_string = function
   | CORE_TYPECHECK_GET_FAILURE ->
       "[Core Typechecking] `get' failed to find a symbolic name."
   
-  | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS ->
-      "[Core Typechecking] incorrect number of argument passed to a function call."
+  | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS seen expected ->
+      "[Core Typechecking] incorrect number of argument, seen: " ^ (string_of_num seen) ^ " while expecting " ^ (string_of_num expected) ^ "."
   
   | CORE_TYPECHECK_CALL_ARGUMENT_EFFECT ->
       "[Core Typechecking] arguments of a call cannot have an effect type"
   
+  | CORE_TYPECHECK_LET_EFFECT ->
+      "[Core Typechecking] the first argument of let must be pure."
+
+  | CORE_TYPECHECK_LET_INCOMPATIBLE_ARITY patternArity exprArity ->
+      "[Core Typechecking] incompatible arities in a let expression: pattern arity = " ^
+       string_of_num patternArity ^ ", while the type of the first argument has arity = " ^
+       string_of_num exprArity ^ "."
+
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY patternArity exprArity ->
       "[Core Typechecking] incompatible arities in a seq expression: pattern arity = " ^
        string_of_num patternArity ^ ", while the type of the first argument has arity = " ^
@@ -511,6 +522,12 @@ let to_string = function
   
   | CORE_TYPECHECK_UNSEQ_PURE ->
       "[Core Typechecking] the operands of an unseq must all be effectful."
+  
+  | CORE_TYPECHECK_UNDECLARED_FUNCTION fname ->
+      "[Core Typechecking] the function `" ^ (Symbol.to_string_pretty fname) ^ "' was not declared."
+
+  | CORE_TYPECHECK_UNDECLARED_SYMBOL sym ->
+      "[Core Typechecking] the symbolic name `" ^ (Symbol.to_string_pretty sym) ^ "' was not declared."
 
 
   | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg

@@ -1,4 +1,4 @@
-exception TODO of string
+exception TODO of Ast.l * string
 
 module Duplicate(S : Set.S) = struct
 

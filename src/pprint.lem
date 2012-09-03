@@ -97,13 +97,13 @@ let inline {ocaml} dquotes = Ocaml.Pprint.dquotes
 val optional : forall 'a. ('a -> t) -> 'a option -> t
 let inline {ocaml} optional = Ocaml.Pprint.optional
 *)
-val comma_list : forall 'a. ('a -> t) -> 'a list -> t
+val comma_list : forall 'a. ('a -> t) -> list 'a -> t
 let inline {ocaml} comma_list = Ocaml.Pprint.comma_list
-val sepmap : forall 'a. t -> ('a -> t) -> 'a list -> t
+val sepmap : forall 'a. t -> ('a -> t) -> list 'a -> t
 let inline {ocaml} sepmap = Ocaml.Pprint.sepmap
-val sep0map: forall 'a. t -> ('a -> t) -> 'a list -> t
+val sep0map: forall 'a. t -> ('a -> t) -> list 'a -> t
 let inline {ocaml} sep0map = Ocaml.Pprint.sepmap
-val fold : forall 'a. (t -> t -> t) -> t list -> t
+val fold : forall 'a. (t -> t -> t) -> list t -> t
 let inline {ocaml} fold = Ocaml.Pprint.fold
 
 val break0 : t

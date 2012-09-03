@@ -132,18 +132,12 @@ id :: '' ::=
 
 tyvars :: '' ::=				{{ phantom }}
 						{{ hol a_l list }}
-						{{ ocaml terminal * (a_l * terminal) list * terminal }}
+						{{ ocaml a_l list }}
   {{ com Type variable lists }}
-  | ( a_l1 , .. , a_ln )			:: :: Tvs_l
+  | a_l1 .. a_ln				:: :: Tvs_l
     {{ com Must have $>1$ type variables }}
     {{ hol [[a_l1..a_ln]] }}
     {{ ocaml [[a_l1..a_ln]] }}
-  | a_l						:: S :: Tvs_single
-    {{ hol [ [[a_l]] ] }}
-    {{ ocaml [ [[a_l]] ] }}
-  |						:: S :: Tvs_none
-    {{ hol [] }}
-    {{ ocaml [] }}
 
 typ_aux :: 'Typ_' ::=
   {{ com Types }}
@@ -155,16 +149,8 @@ typ_aux :: 'Typ_' ::=
     {{ com Function types }}
   | typ1 * .... * typn				:: :: tup
     {{ com Tuple types }}
-  | ( typ1 , .. , typn ) id			:: :: app
-    {{ com Type applications, must have $>1$ type arguments }}
-  | typ id					:: S :: app1
-    {{ hol (Typ_app [ [[typ]] ] [[id]]) }}
-    {{ ocaml (Typ_app([ [[typ]] ], [[id]])) }}
-    {{ com Type applications (single argument) }}
-  | id				        	:: S :: app0
-    {{ hol (Typ_app [] [[id]]) }}
-    {{ ocaml (Typ_app([], [[id]])) }}
-    {{ com Type applications (no argument) }}
+  | id typ1 .. typn				:: :: app
+    {{ com Type constructor application }}
   | ( typ )					:: :: paren
 
 typ :: '' ::=
@@ -176,8 +162,8 @@ parsing
 Typ_tup <= Typ_tup
 Typ_fn right Typ_fn
 Typ_fn <= Typ_tup
-Typ_fn right Typ_app1
-Typ_tup right Typ_app1
+%Typ_fn right Typ_app1
+%Typ_tup right Typ_app1
 
 grammar
 
@@ -209,7 +195,7 @@ pat_aux :: 'P_' ::=
   {{ com Patterns }}
   | _							:: :: wild  
     {{ com Wildcards }}
-  | pat as x_l						:: :: as
+  | ( pat as x_l )					:: :: as
     {{ com Named patterns }}
   | ( pat : typ )					:: :: typ
     {{ com Typed patterns }}
@@ -307,7 +293,7 @@ exp  :: '' ::=
 q :: 'Q_' ::=
   {{ com Quantifiers }}
   | forall					:: :: forall
-  | exist					:: :: exists
+  | exists					:: :: exists
 
 qbind :: 'Qb_' ::=
   {{ com Bindings for quantifiers}}
@@ -418,18 +404,18 @@ texp :: 'Te_' ::=
 
 td :: '' ::=
   {{ com Type definitions }}
-  | tyvars x_l = texp			 			:: :: Td
-  | tyvars x_l							:: :: Td_opaque
+  | x_l tyvars = texp			 			:: :: Td
+  | x_l	tyvars							:: :: Td_opaque
     {{ com Definitions of opaque types }}
 
 c :: '' ::=
   {{ com Typeclass constraints }}
-  | ( id a_l )							:: :: C
+  | id a_l 							:: :: C
 
 cs :: 'Cs_' ::=
   {{ com Typeclass constraint lists }}
   | 								:: :: empty
-  | c1 .. ci =>							:: :: list
+  | c1 , .. , ci =>						:: :: list
     {{ com Must have $>0$ constraints }}
 
 
@@ -454,6 +440,7 @@ target :: 'Target_' ::=
   | ocaml							:: :: ocaml
   | coq								:: :: coq
   | tex								:: :: tex
+  | html							:: :: html
 
 targets {{ tex \ensuremath{\tau} }} :: 'Targets_' ::=		{{ hol target list }}
   {{ com Backend target name lists }}
@@ -558,7 +545,7 @@ t , u :: 'T_' ::=
   | a						:: :: var
   | t1 -> t2					:: :: fn
   | t1 * .... * tn				:: :: tup
-  | t_args p					:: :: app 
+  | p t_args					:: :: app 
   | t_subst ( t	)				:: M :: subst_app
     {{ com Multiple substitutions }}
     {{ ocaml (assert false) }}
@@ -570,7 +557,7 @@ t , u :: 'T_' ::=
 
 t_args :: '' ::=
   {{ com Lists of types }}
-  | ( t1 , .. , tn )				:: :: T_args
+  | t1 .. tn		 			:: :: T_args
   | t_subst ( t_args )				:: M :: T_args_subst_app
     {{ com Multiple substitutions }}
     {{ ocaml (assert false) }}
@@ -879,6 +866,9 @@ formula :: formula_ ::=
   | dom ( E_x1 ) inter dom ( E_x2 ) = emptyset			:: :: E_x_disjoint
     {{ hol (DISJOINT (FDOM [[E_x1]]) (FDOM [[E_x2]])) }}
 
+  | dom ( E_f1 ) inter dom ( E_f2 ) = emptyset			:: :: E_f_disjoint
+    {{ hol (DISJOINT (FDOM [[E_f1]]) (FDOM [[E_f2]])) }}
+
   | dom ( E_p1 ) inter dom ( E_p2 ) = emptyset			:: :: E_p_disjoint
     {{ hol (DISJOINT (FDOM [[E_p1]]) (FDOM [[E_p2]])) }}
 
@@ -989,7 +979,7 @@ tyvars ~> tvs :: :: convert_tvs :: convert_tvs_
 by
 
 ------------------------------------------------------------ :: none
-(a1 l1,..,an ln) ~> a1..an
+a1 l1..an ln ~> a1..an
 
 defns
 look_m :: '' ::=
@@ -1053,10 +1043,10 @@ TD |- t1 ok .... TD |- tn ok
 ------------------------------------------------------------ :: tup
 TD |- t1 * .... * tn ok
 
-TD |- t1 ok .. TD |- tn ok
 TD(p) gives a1..an tc_abbrev
+TD |- t1 ok .. TD |- tn ok
 ------------------------------------------------------------ :: app
-TD |- (t1, .., tn) p ok
+TD |- p t1 .. tn ok
 
 defns
 teq :: '' ::=
@@ -1066,7 +1056,6 @@ TD |- t1 = t2 :: :: teq :: teq_
 {{ com Type equality }}
 by
 
-TD |- t ok
 ------------------------------------------------------------ :: refl
 TD |- t = t
 
@@ -1090,11 +1079,11 @@ TD |- t1*....*tn = u1*....*un
 
 TD |- t1 = u1 .. TD |- tn = un
 ------------------------------------------------------------ :: app
-TD |- (t1,..,tn) p = (u1,..,un) p
+TD |- p t1 .. tn = p u1 .. un
 
 TD(p) gives a1..an . u 
 ------------------------------------------------------------ :: expand
-TD |- (t1,..,tn) p = {a1|->t1..an|->tn}(u)
+TD |- p t1 .. tn = {a1|->t1..an|->tn}(u)
 
 
 defns
@@ -1127,7 +1116,7 @@ TD,E |- typ1 ~> t1 .. TD,E |- typn ~> tn
 E(id) gives p
 TD(p) gives a1..an tc_abbrev
 ------------------------------------------------------------ :: app
-TD,E |- (typ1, .., typn) id l ~> (t1, .., tn) p
+TD,E |- id typ1 .. typn l ~> p t1 .. tn
 
 TD,E |- typ ~> t
 ------------------------------------------------------------ :: paren
@@ -1135,6 +1124,7 @@ TD,E |- (typ) l ~> t
 
 
 TD,E |- typ ~> t1
+TD |- t2 ok
 TD |- t1 = t2
 ------------------------------------------------------------ :: eq
 TD,E |- typ ~> t2
@@ -1158,26 +1148,26 @@ defn
 by
 
 ------------------------------------------------------------ :: true
-|- true l : () __bool
+|- true l : __bool
 
 ------------------------------------------------------------ :: false
-|- false l : () __bool
+|- false l : __bool
 
 ------------------------------------------------------------ :: num
-|- num l : () __num
+|- num l : __num
 
 ------------------------------------------------------------ :: string
-|- string l : () __string
+|- string l : __string
 
 ------------------------------------------------------------ :: unit
-|- () l : () __unit
+|- () l : __unit
 
 
 defns
 inst_field :: '' ::=
 
 defn
-TD , E |- field id : t_args p -> t gives ( x of names ) :: :: inst_field :: inst_field_
+TD , E |- field id : p t_args -> t gives ( x of names ) :: :: inst_field :: inst_field_
 {{ com Field typing (also returns canonical field names) }} 
 by
 
@@ -1185,14 +1175,14 @@ E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
 E_f(y) gives <forall a1..an. p -> t, (z of names)>
 TD |- t1 ok .. TD |- tn ok
 ------------------------------------------------------------ :: all
-TD,E |- field </x_li.//i/> y l1 l2: (t1, .., tn) p -> {a1|->t1..an|->tn}(t) gives (z of names)
+TD,E |- field </x_li.//i/> y l1 l2: p t1 .. tn -> {a1|->t1..an|->tn}(t) gives (z of names)
 
 
 defns
 inst_ctor :: '' ::=
 
 defn
-TD , E |- ctor id : t_multi -> t_args p gives ( x of names ) :: :: inst_ctor :: inst_ctor_ 
+TD , E |- ctor id : t_multi -> p t_args gives ( x of names ) :: :: inst_ctor :: inst_ctor_ 
 {{ com Data constructor typing (also returns canonical constructor names) }} 
 by
 
@@ -1200,7 +1190,7 @@ E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
 E_x(y) gives <forall a1..an. t_multi -> p, (z of names)>
 TD |- t1 ok .. TD |- tn ok
 ------------------------------------------------------------ :: all
-TD,E |- ctor </x_li.//i/> y l1 l2 : {a1|->t1..an|->tn}(t_multi) -> (t1,..,tn)p gives (z of names)
+TD,E |- ctor </x_li.//i/> y l1 l2 : {a1|->t1..an|->tn}(t_multi) -> p t1 .. tn gives (z of names)
 
 defns
 inst_val :: '' ::=
@@ -1279,31 +1269,31 @@ TD,E,E_l |- _ : t gives {}
 TD,E,E_l1 |- pat : t gives E_l2
 x NOTIN dom(E_l2)
 ------------------------------------------------------------ :: as
-TD,E,E_l1 |- pat as x l : t gives E_l2 u+ {x|->t}
+TD,E,E_l1 |- (pat as x l) : t gives E_l2 u+ {x|->t}
 
 TD,E,E_l1 |- pat : t gives E_l2
 TD,E |- typ ~> t
 ------------------------------------------------------------ :: typ
 TD,E,E_l1 |- (pat : typ) : t gives E_l2
 
-TD,E |- ctor id : (t1*..*tn) -> t_args p gives (x of names)
+TD,E |- ctor id : (t1*..*tn) -> p t_args gives (x of names)
 E_l |- id not shadowed
 TD,E,E_l |- pat1 : t1 gives E_l1 .. TD,E,E_l |- patn : tn gives E_ln
 disjoint doms(E_l1,..,E_ln)
 ------------------------------------------------------------ :: ident_constr
-TD,E,E_l |- id pat1 .. patn : t_args p gives E_l1 u+ .. u+ E_ln
+TD,E,E_l |- id pat1 .. patn : p t_args gives E_l1 u+ .. u+ E_ln
 
 TD |- t ok
 E,E_l |- x not ctor
 ------------------------------------------------------------ :: var
 TD,E,E_l |- x l1 l2 : t gives {x|->t}
 
-</TD,E |- field idi : t_args p -> ti gives (xi of names) // i />
+</TD,E |- field idi : p t_args -> ti gives (xi of names) // i />
 </TD,E,E_l |- pati : ti gives E_li//i/>
 disjoint doms(</E_li//i/>)
 duplicates(</xi//i/>) = emptyset
 ------------------------------------------------------------ :: record
-TD,E,E_l |- <| </idi = pati li//i/> semi_opt |> : t_args p gives u+ </E_li//i/>
+TD,E,E_l |- <| </idi = pati li//i/> semi_opt |> : p t_args gives u+ </E_li//i/>
 
 TD,E,E_l |- pat1 : t1 gives E_l1 .... TD,E,E_l |- patn : tn gives E_ln
 disjoint doms(E_l1,....,E_ln)
@@ -1314,17 +1304,17 @@ TD |- t ok
 TD,E,E_l |- pat1 : t gives E_l1 .. TD,E,E_l |- patn : t gives E_ln
 disjoint doms(E_l1,..,E_ln)
 ------------------------------------------------------------ :: list
-TD,E,E_l |- [pat1; ..; patn semi_opt] : (t) __list gives E_l1 u+ .. u+ E_ln 
+TD,E,E_l |- [pat1; ..; patn semi_opt] : __list t gives E_l1 u+ .. u+ E_ln 
 
 TD,E,E_l1 |- pat : t gives E_l2
 ------------------------------------------------------------ :: paren
 TD,E,E_l1 |- (pat) : t gives E_l2
 
 TD,E,E_l1 |- pat1 : t gives E_l2
-TD,E,E_l1 |- pat2 : (t) __list gives E_l3
+TD,E,E_l1 |- pat2 : __list t gives E_l3
 disjoint doms(E_l2,E_l3)
 ------------------------------------------------------------ :: cons
-TD,E,E_l1 |- pat1 :: pat2 : t gives E_l2 u+ E_l3
+TD,E,E_l1 |- pat1 :: pat2 : __list t gives E_l2 u+ E_l3
 
 |- lit : t
 ------------------------------------------------------------ :: lit
@@ -1391,9 +1381,9 @@ TD,E,E_l |- x l1 l2 : t gives {}
 
 E_l |- id not shadowed
 E |- id value
-TD,E |- ctor id : t_multi -> t_args p gives (x of names)
+TD,E |- ctor id : t_multi -> p t_args gives (x of names)
 ------------------------------------------------------------ :: ctor
-TD,E,E_l |- id : curry(t_multi, t_args p) gives {}
+TD,E,E_l |- id : curry(t_multi, p t_args) gives {}
 
 E_l |- id not shadowed
 E |- id value
@@ -1430,23 +1420,23 @@ TD,E,E_l |- exp2 : t2 gives S3
 ------------------------------------------------------------ :: infix_app2
 TD,E,E_l |- exp1 `x` l exp2 : t3 gives S1 union S2 union S3
 
-</TD,E |- field idi : t_args p -> ti gives (xi of names)//i/>
+</TD,E |- field idi : p t_args -> ti gives (xi of names)//i/>
 </TD,E,E_l |- expi : ti gives Si//i/>
 duplicates(</xi//i/>) = emptyset
 names = {</xi//i/>}
 ------------------------------------------------------------ :: record
-TD,E,E_l |- <| </idi = expi li//i/> semi_opt l |> : t_args p gives </Si//i/>
+TD,E,E_l |- <| </idi = expi li//i/> semi_opt l |> : p t_args gives </Si//i/>
 
-</TD,E |- field idi : t_args p -> ti gives (xi of names)//i/>
+</TD,E |- field idi : p t_args -> ti gives (xi of names)//i/>
 </TD,E,E_l |- expi : ti gives Si//i/>
 duplicates(</xi//i/>) = emptyset
-TD,E,E_l |- exp : t_args p gives S'
+TD,E,E_l |- exp : p t_args gives S'
 ------------------------------------------------------------ :: recup
-TD,E,E_l |- <| exp with </idi = expi li//i/> semi_opt l |> : t_args p gives S' union </Si//i/>
+TD,E,E_l |- <| exp with </idi = expi li//i/> semi_opt l |> : p t_args gives S' union </Si//i/>
 
 E |- id field
-TD,E |- field id : t_args p -> t gives (x of names)
-TD,E,E_l |- exp : t_args p gives S
+TD,E |- field id : p t_args -> t gives (x of names)
+TD,E,E_l |- exp : p t_args gives S
 ------------------------------------------------------------ :: field
 TD,E,E_l |- exp.id : t gives S
 
@@ -1473,7 +1463,7 @@ TD,E,E_l |- (exp1, ...., expn) : t1 * .... * tn gives S1 union .... union Sn
 TD |- t ok
 TD,E,E_l |- exp1 : t gives S1 .. TD,E,E_l |- expn : t gives Sn
 ------------------------------------------------------------ :: list
-TD,E,E_l |- [exp1; ..; expn semi_opt] : (t) __list gives S1 union .. union Sn
+TD,E,E_l |- [exp1; ..; expn semi_opt] : __list t gives S1 union .. union Sn
 
 TD,E,E_l |- exp : t gives S
 ------------------------------------------------------------ :: paren
@@ -1483,16 +1473,16 @@ TD,E,E_l |- exp : t gives S
 ------------------------------------------------------------ :: begin
 TD,E,E_l |- begin exp end : t gives S
 
-TD,E,E_l |- exp1 : () __bool gives S1
+TD,E,E_l |- exp1 : __bool gives S1
 TD,E,E_l |- exp2 : t gives S2
 TD,E,E_l |- exp3 : t gives S3
 ------------------------------------------------------------ :: if
 TD,E,E_l |- if exp1 then exp2 else exp3 : t gives S1 union S2 union S3
 
 TD,E,E_l |- exp1 : t gives S1
-TD,E,E_l |- exp2 : (t) __list gives S2
+TD,E,E_l |- exp2 : __list t gives S2
 ------------------------------------------------------------ :: cons
-TD,E,E_l |- exp1 :: exp2 : (t) __list gives S1 union S2
+TD,E,E_l |- exp1 :: exp2 : __list t gives S1 union S2
 
 |- lit : t
 ------------------------------------------------------------ :: lit
@@ -1501,34 +1491,34 @@ TD,E,E_l |- lit : t gives {}
 % TODO: should require that each xi actually appears free in exp1
 </TD |- ti ok//i/>
 TD,E,E_l u+ {</xi|->ti//i/>} |- exp1 : t gives S1
-TD,E,E_l u+ {</xi|->ti//i/>} |- exp2 : () __bool gives S2
+TD,E,E_l u+ {</xi|->ti//i/>} |- exp2 : __bool gives S2
 disjoint doms(E_l, {</xi|->ti//i/>})
 E = <E_m,E_p,E_f,E_x>
 </xi NOTIN dom(E_x)//i/>
 ------------------------------------------------------------ :: set_comp
-TD,E,E_l |- { exp1 | exp2 } : (t) __set gives S1 union S2
+TD,E,E_l |- { exp1 | exp2 } : __set t gives S1 union S2
 
 TD,E,E_l1 |- </qbindi//i/> gives E_l2,S1
 TD,E,E_l1 u+ E_l2 |- exp1 : t gives S2
-TD,E,E_l1 u+ E_l2 |- exp2 : () __bool gives S3
+TD,E,E_l1 u+ E_l2 |- exp2 :  __bool gives S3
 ------------------------------------------------------------ :: set_comp_binding
-TD,E,E_l1 |- { exp1 | forall </qbindi//i/> | exp2 } : (t) __set gives S1 union S2 union S3
+TD,E,E_l1 |- { exp1 | forall </qbindi//i/> | exp2 } : __set t gives S1 union S2 union S3
 
 TD |- t ok
 TD,E,E_l |- exp1 : t gives S1 .. TD,E,E_l |- expn : t gives Sn
 ------------------------------------------------------------ :: set
-TD,E,E_l |- { exp1; ..; expn semi_opt } : (t) __set gives S1 union .. union Sn
+TD,E,E_l |- { exp1; ..; expn semi_opt } : __set t gives S1 union .. union Sn
 
 TD,E,E_l1 |- </qbindi//i/> gives E_l2,S1
-TD,E,E_l1 u+ E_l2 |- exp : () __bool gives S2
+TD,E,E_l1 u+ E_l2 |- exp : __bool gives S2
 ------------------------------------------------------------ :: quant
-TD,E,E_l1 |- q </qbindi//i/> . exp : () __bool gives S1 union S2
+TD,E,E_l1 |- q </qbindi//i/> . exp : __bool gives S1 union S2
 
 TD,E,E_l1 |- list </qbindi//i/> gives E_l2,S1
 TD,E,E_l1 u+ E_l2 |- exp1 : t gives S2
-TD,E,E_l1 u+ E_l2 |- exp2 : () __bool gives S3
+TD,E,E_l1 u+ E_l2 |- exp2 : __bool gives S3
 ------------------------------------------------------------ :: list_comp_binding
-TD,E,E_l1 |- [ exp1 | forall </qbindi//i/> | exp2 ] : (t) __list gives S1 union S2 union S3
+TD,E,E_l1 |- [ exp1 | forall </qbindi//i/> | exp2 ] : __list t gives S1 union S2 union S3
 
 defn
 TD , E , E_l1 |- qbind1 .. qbindn gives E_l2 , S :: :: check_listquant_binding
@@ -1546,14 +1536,14 @@ disjoint doms({x |-> t}, E_l2)
 TD,E,E_l1 |- x l </qbindi//i/> gives {x |-> t} u+ E_l2,S1
 
 TD,E,E_l1 |- pat : t gives E_l3
-TD,E,E_l1 |- exp : (t) __set gives S1
+TD,E,E_l1 |- exp : __set t gives S1
 TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: restr
 TD,E,E_l1 |- (pat IN exp) </qbindi//i/> gives E_l2 u+ E_l3,S1 union S2
 
 TD,E,E_l1 |- pat : t gives E_l3
-TD,E,E_l1 |- exp : (t) __list gives S1
+TD,E,E_l1 |- exp : __list t gives S1
 TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: list_restr
@@ -1568,7 +1558,7 @@ TD , E , E_l1 |- list qbind1 .. qbindn gives E_l2 , S :: :: check_quant_binding 
 TD,E,E_l |- list gives {},{}
 
 TD,E,E_l1 |- pat : t gives E_l3
-TD,E,E_l1 |- exp : (t) __list gives S1
+TD,E,E_l1 |- exp : __list t gives S1
 TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S2
 disjoint doms(E_l3, E_l2)
 ------------------------------------------------------------ :: restr
@@ -1624,10 +1614,10 @@ by
 
 </TD |- ti ok//i/>
 E_l2 = {</yi|->ti//i/>} 
-TD,E,E_l1 u+ E_l2 |- exp' : () __bool gives S'
+TD,E,E_l1 u+ E_l2 |- exp' : __bool gives S'
 TD,E,E_l1 u+ E_l2 |- exp1 : u1 gives S1 .. TD,E,E_l1 u+ E_l2 |- expn : un gives Sn
 ------------------------------------------------------------ :: rule
-TD,E,E_l1 |- forall </yi li//i/> . exp' ==> x l exp1 .. expn l' gives {x|->curry((u1 * .. * un) , () __bool)}, S' union S1 union .. union Sn
+TD,E,E_l1 |- forall </yi li//i/> . exp' ==> x l exp1 .. expn l' gives {x|->curry((u1 * .. * un) , __bool)}, S' union S1 union .. union Sn
 
 defns
 check_texp_tc :: '' ::=
@@ -1643,25 +1633,25 @@ duplicates(tvs) = emptyset
 FV(t) SUBSET tvs
 </yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: abbrev
-</yi//i/>,TD,E |- tc tyvars x l = typ gives {</yi.//i/>x|->tvs.t},{x|-></yi.//i/>x}
+</yi//i/>,TD,E |- tc x l tyvars = typ gives {</yi.//i/>x|->tvs.t},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
 </yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: abstract
-</yi//i/>,TD,E1 |- tc tyvars x l gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
+</yi//i/>,TD,E1 |- tc x l tyvars gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
 </yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: rec
-</yi//i/>,TD1,E |- tc tyvars x l = <| x_l1 : typ1 ; ... ; x_lj : typj semi_opt |> gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
+</yi//i/>,TD1,E |- tc x l tyvars = <| x_l1 : typ1 ; ... ; x_lj : typj semi_opt |> gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 tyvars ~> tvs
 duplicates(tvs) = emptyset
 </yi.//i/>x NOTIN dom(TD)
 ------------------------------------------------------------ :: var
-</yi//i/>,TD1,E |- tc tyvars x l = bar_opt ctor_def1 | ... | ctor_defj gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
+</yi//i/>,TD1,E |- tc x l tyvars = bar_opt ctor_def1 | ... | ctor_defj gives {</yi.//i/>x|->tvs},{x|-></yi.//i/>x}
 
 defns
 check_texps_tc :: '' ::=
@@ -1720,12 +1710,13 @@ tyvars ~> tvs
 TD,E1 |- tvs </yi.//i/>x = texp gives <E_f1,E_x1>
 </yi//i/>,TD,E |- </tdj//j/> gives <E_f2,E_x2>
 dom(E_x1) inter dom(E_x2) = emptyset
+dom(E_f1) inter dom(E_f2) = emptyset
 ------------------------------------------------------------ :: cons_concrete
-</yi//i/>,TD,E |- tyvars x l = texp </tdj//j/> gives <E_f1 u+ E_f2, E_x1 u+ E_x2>
+</yi//i/>,TD,E |- x l tyvars = texp </tdj//j/> gives <E_f1 u+ E_f2, E_x1 u+ E_x2>
 
 </yi//i/>,TD,E |- </tdj//j/> gives <E_f,E_x>
 ------------------------------------------------------------ :: cons_abstract
-</yi//i/>,TD,E |- tyvars x l </tdj//j/> gives <E_f,E_x>
+</yi//i/>,TD,E |- x l tyvars </tdj//j/> gives <E_f,E_x>
 
 defns
 convert_class :: '' ::=
@@ -1812,7 +1803,7 @@ TD , (a1, a2) |- a1 -> an instance
 
 TD(p) gives a'1..a'n
 ------------------------------------------------------------ :: tc
-TD , (a1, .., an) |- (a1,..,an) p instance
+TD , (a1, .., an) |- p a1 .. an instance
 
 defns
 check_defs :: '' ::=
@@ -1845,7 +1836,7 @@ E2 = <{},{},{},{</xi |-><forall tvs. semC => ti,let>//i/>}>
 
 </zj//j/> x,D1,E1 |- defs gives D2,E2
 ------------------------------------------------------------ :: module
-</zj//j/>,D1,E1 |- module x l1 = struct defs end l2 gives D2,<{z|->E2},{},{},{}>
+</zj//j/>,D1,E1 |- module x l1 = struct defs end l2 gives D2,<{x|->E2},{},{},{}>
 
 E1(id) gives E2
 ------------------------------------------------------------ :: module_rename
@@ -1857,7 +1848,7 @@ FV(</a'k//k/>) SUBSET </ai//i/>
 </TC,E |- idk ~> pk//k/>
 E' = <{},{},{},{x|-><forall </ai//i/>. </(pk a'k)//k/> => t,val>}>
 ------------------------------------------------------------ :: spec
-</zj//j/>,<TD,TC,I>,E |- val x l1 : forall </ai l''i//i/>. </(idk a'k l'k)//k/> => typ l2 gives empty,E'
+</zj//j/>,<TD,TC,I>,E |- val x l1 : forall </ai l''i//i/>. </idk a'k l'k//k/> => typ l2 gives empty,E'
 
 TD |- t1 ok .. TD |- tn ok
 disjoint doms({y1|->t1},..,{yn|->tn})
@@ -1895,7 +1886,7 @@ disjoint doms(</E_xn//n/>)
 I3 = {</(pk a'k) => (p t')//k/>}
 (p {</ai |-> a'''i//i/>}(t')) NOTIN I
 ------------------------------------------------------------ :: instance_tc
-</zj//j/>,<TD,TC,I>,E |- instance forall </ai l'i//i/>. </(idk a'k l''k)//k/> => (id typ') </val_defn ln//n/> end l' gives <{},{},I3>,empty
+</zj//j/>,<TD,TC,I>,E |- instance forall </ai l'i//i/>. </idk a'k l''k//k/> => (id typ') </val_defn ln//n/> end l' gives <{},{},I3>,empty
 
 defn
 </ zj // j /> , D1 , E1 |- defs gives D2 , E2 :: :: check_defs :: check_defs_ 

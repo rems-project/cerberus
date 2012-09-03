@@ -116,16 +116,15 @@ let rec typ_to_src_t (wild_f : Ast.l -> lskips -> src_t)
             locn = l; 
             typ = { t = Ttup(Seplist.to_list_map annot_to_typ sts) };
             rest = (); }
-    | Ast.Typ_app(sk1,typs,sk2,i) ->
+    | Ast.Typ_app(i,typs) ->
         let p = lookup_p "constructor" e i in
           begin
             match Pfmap.apply d p with
               | None -> assert false
               | Some(Tc_abbrev(tvs,_)) ->
                   if List.length tvs = List.length typs then
-                    let typs = Seplist.from_list typs in
                     let sts = 
-                      Seplist.map (typ_to_src_t wild_f do_tvar d e) typs 
+                      List.map (typ_to_src_t wild_f do_tvar d e) typs 
                     in
                     let id = {id_path = Ident.from_id i; 
                               id_locn = (match i with Ast.Id(_,_,l) -> l);
@@ -133,9 +132,9 @@ let rec typ_to_src_t (wild_f : Ast.l -> lskips -> src_t)
                               instantiation = []; }
                     in
 
-                      { term = Typ_app(sk1,sts,sk2,id);
+                      { term = Typ_app(id,sts);
                         locn = l;
-                        typ = { t = Tapp(Seplist.to_list_map annot_to_typ sts,p) };
+                        typ = { t = Tapp(List.map annot_to_typ sts,p) };
                         rest = (); }
                   else
                     raise_error l (Printf.sprintf "type constructor expected %d type arguments, given %d" 
@@ -244,7 +243,7 @@ module Make_checker(T : sig
         descr = descr; 
         instantiation = ts_inst; }
 
-  (* Assume that mp refers to only modules and xl a field name.  Corresponds to
+  (* Assumes that mp refers to only modules and xl a field name.  Corresponds to
    * judgment inst_field 'Delta,E |- field id : t_args p -> t gives (x of
    * names)'.  Instantiates the field descriptor with fresh type variables, also
    * calculates the type of the field as a function from the record type to the
@@ -334,13 +333,13 @@ module Make_checker(T : sig
             let a = C.new_type () in
               C.equate_types l ret_type a;
               (A.mk_pwild l sk ret_type, acc)
-        | Ast.P_as(p, sk, xl) -> 
+        | Ast.P_as(s1,p, s2, xl,s3) -> 
             let nl = xl_to_nl xl in
             let (pat,pat_e) = check_pat l_e p acc in
             let ax = C.new_type () in
               C.equate_types (snd nl) ax pat.typ;
               C.equate_types l pat.typ ret_type;
-              (A.mk_pas l pat sk nl rt, add_binding pat_e nl ax)
+              (A.mk_pas l s1 pat s2 nl s3 rt, add_binding pat_e nl ax)
         | Ast.P_typ(sk1,p,sk2,typ,sk3) ->
             let (pat,pat_e) = check_pat l_e p acc in
             let src_t = 
@@ -912,8 +911,8 @@ module Make_checker(T : sig
 
   (* Check that a value definition has the right type according to previous
    * definitions of that name in the same module.
-   * def_targets is None if the definitions is target specific, otherwise it is
-   * the set of targets that the definition is for.  def_env is the name and
+   * def_targets is None if the definitions is not target specific, otherwise it
+   * is the set of targets that the definition is for.  def_env is the name and
    * types of all of the variables defined *)
   let apply_specs_for_def (def_targets : Targetset.t option) l def_env  =
     Nfmap.iter
@@ -1114,8 +1113,8 @@ let rec check_free_tvs (tvs : TVset.t) (Ast.Typ_l(t,l)) : unit =
         check_free_tvs tvs t1; check_free_tvs tvs t2
     | Ast.Typ_tup(ts) -> 
         List.iter (check_free_tvs tvs) (List.map fst ts)
-    | Ast.Typ_app(_,ts,_,_) -> 
-        List.iter (check_free_tvs tvs) (List.map fst ts)
+    | Ast.Typ_app(_,ts) -> 
+        List.iter (check_free_tvs tvs) ts
     | Ast.Typ_paren(_,t,_) -> 
         check_free_tvs tvs t
 
@@ -1309,13 +1308,13 @@ let build_type_def_help (mod_path : Name.t list) (context : defn_ctxt)
 let build_type_def (mod_path : Name.t list) (context : defn_ctxt) (td : Ast.td)
       : defn_ctxt = 
   match td with
-    | Ast.Td(_,tvs,_, xl, _, td) ->
-        build_type_def_help mod_path context (List.map fst tvs) xl
+    | Ast.Td(xl, tvs, _, td) ->
+        build_type_def_help mod_path context tvs xl
           (match td with
              | Ast.Te_abbrev(t) -> Some(t)
              | _ -> None)
-    | Ast.Td_opaque(_,tvs,_, xl) ->
-        build_type_def_help mod_path context (List.map fst tvs) xl None
+    | Ast.Td_opaque(xl,tvs) ->
+        build_type_def_help mod_path context tvs xl None
 
 (* Check a type definition and add it to the context.  mod_path is the path to
  * the enclosing module.  Ignores any constructors or fields, just handles the
@@ -1400,22 +1399,21 @@ let rec build_variant build_descr tvs_set (ctxt : defn_ctxt)
     vars
 
 let build_ctor_def (mod_path : Name.t list) (context : defn_ctxt)
-      sk1 tvs sk2 type_name td
-      : (lskips * tyvar lskips_seplist * lskips * name_l * texp) * defn_ctxt= 
+      type_name tvs td
+      : (name_l * tyvar list * texp) * defn_ctxt= 
   let l = Ast.xl_to_l type_name in
-  let tvs = Seplist.map a_l_to_tyvar (Seplist.from_list tvs) in
+  let tvs = List.map a_l_to_tyvar tvs in
   let tvs_set = 
     tvs_to_set 
-      (List.map (fun (_,tv,l) -> (Tyvar.from_rope tv, l))
-         (Seplist.to_list tvs))
+      (List.map (fun (_,tv,l) -> (Tyvar.from_rope tv, l)) tvs)
   in
   let tn = Name.from_x type_name in
   let type_path = Path.mk_path mod_path (Name.strip_lskip tn) in
     match td with
       | None -> 
-          ((sk1,tvs,sk2,(tn,l),Te_opaque), context)
+          (((tn,l),tvs,Te_opaque), context)
       | Some(sk3, Ast.Te_abbrev(t)) -> 
-          ((sk1,tvs,sk2,(tn,l),
+          (((tn,l), tvs,
             Te_abbrev(sk3,
                       typ_to_src_t anon_error ignore context.all_tdefs context.cur_env t)),
            context)
@@ -1433,7 +1431,7 @@ let build_ctor_def (mod_path : Name.t list) (context : defn_ctxt)
               (fun fname t ->
                  { field_binding = Path.mk_path mod_path fname;
                    field_tparams =
-                     Seplist.to_list_map (fun (_,tv,_) -> Tyvar.from_rope tv) tvs;
+                     List.map (fun (_,tv,_) -> Tyvar.from_rope tv) tvs;
                    field_tconstr = type_path;
                    field_arg = t;
                    field_names = field_names; })
@@ -1441,7 +1439,7 @@ let build_ctor_def (mod_path : Name.t list) (context : defn_ctxt)
               context
               ntyps
           in
-            ((sk1, tvs, sk2,(tn,l), Te_record(sk3,sk1',recs,sk3')), ctxt)
+            (((tn,l), tvs, Te_record(sk3,sk1',recs,sk3')), ctxt)
       | Some(sk3, Ast.Te_variant(sk_init_bar,bar,ntyps)) ->
           let ntyps = Seplist.from_list_prefix sk_init_bar bar ntyps in
           let ctor_names = 
@@ -1456,7 +1454,7 @@ let build_ctor_def (mod_path : Name.t list) (context : defn_ctxt)
               (fun cname ts ->
                  Constr({ constr_binding = Path.mk_path mod_path cname;
                           constr_tparams =
-                            Seplist.to_list_map (fun (_,tv,_) -> Tyvar.from_rope tv) tvs;
+                            List.map (fun (_,tv,_) -> Tyvar.from_rope tv) tvs;
                           constr_args = 
                             Seplist.to_list_map (fun t -> annot_to_typ t) ts;
                           constr_tconstr = type_path;
@@ -1465,20 +1463,20 @@ let build_ctor_def (mod_path : Name.t list) (context : defn_ctxt)
               context
               ntyps
           in
-            ((sk1, tvs, sk2,(tn,l),Te_variant(sk3,vars)), ctxt)
+            (((tn,l),tvs,Te_variant(sk3,vars)), ctxt)
 
 (* Builds the constructors and fields for a type definition, and the typed AST
  * *) 
 let rec build_ctor_defs (mod_path : Name.t list) (ctxt : defn_ctxt) 
       (tds : Ast.td lskips_seplist) 
-      : ((lskips * tyvar lskips_seplist * lskips * name_l * texp) lskips_seplist * defn_ctxt) =
+      : ((name_l * tyvar list * texp) lskips_seplist * defn_ctxt) =
   Seplist.map_acc_left
     (fun td ctxt -> 
        match td with
-         | Ast.Td(sk1, tvs, sk2, type_name, sk3, td) ->
-             build_ctor_def mod_path ctxt sk1 tvs sk2 type_name (Some (sk3,td))
-         | Ast.Td_opaque(sk1, tvs, sk2,type_name) ->
-             build_ctor_def mod_path ctxt sk1 tvs sk2 type_name None)
+         | Ast.Td(type_name, tvs, sk3, td) ->
+             build_ctor_def mod_path ctxt type_name tvs (Some (sk3,td))
+         | Ast.Td_opaque(type_name, tvs) ->
+             build_ctor_def mod_path ctxt type_name tvs None)
     ctxt
     tds
 
@@ -1519,7 +1517,7 @@ let check_constraint_prefix (ctxt : defn_ctxt)
         let constraints = 
           let cs =
             List.map
-              (fun (Ast.C(sk1, id, (Ast.A_l((_,tv),l) as a_l), sk3)) ->
+              (fun (Ast.C(id, (Ast.A_l((_,tv),l) as a_l)),sk) ->
                  let (p,_) = lookup_class_p ctxt id in
                    begin
                      if TVset.mem (Tyvar.from_rope tv) tyvarset then
@@ -1528,14 +1526,13 @@ let check_constraint_prefix (ctxt : defn_ctxt)
                        raise_error l "unbound type variable" 
                          Tyvar.pp (Tyvar.from_rope tv)
                    end;
-                   ((sk1, 
-                     Ident.from_id id, 
-                     a_l_to_tyvar a_l, 
-                     sk3)),
-                   (p, (Tyvar.from_rope tv)))
+                   (((Ident.from_id id, 
+                     a_l_to_tyvar a_l),
+                    sk),
+                   (p, Tyvar.from_rope tv)))
               c
           in
-            (Cs_list(List.map fst cs,sk3), List.map snd cs)
+            (Cs_list(Seplist.from_list (List.map fst cs),sk3), List.map snd cs)
         in
           (Some(Cp_forall(sk1, 
                           List.map a_l_to_tyvar tvs, 
@@ -1736,14 +1733,14 @@ let rec check_instance_type_shape (ctxt : defn_ctxt) (src_t : src_t)
         (tvs_to_set [to_tyvar t1; to_tyvar t2], r"fun")
     | Typ_tup(ts) ->
         (tvs_to_set (Seplist.to_list_map to_tyvar ts), r"tup")
-    | Typ_app(_,ts,_,p) ->
+    | Typ_app(p,ts) ->
         begin
           match Pfmap.apply ctxt.all_tdefs p.descr with
             | Some(Tc_abbrev(_,Some _)) ->
                 raise_error p.id_locn "type abbreviation in class instance type"
                   Ident.pp p.id_path
             | _ -> 
-                (tvs_to_set (Seplist.to_list_map to_tyvar ts),
+                (tvs_to_set (List.map to_tyvar ts),
                  Name.to_rope (Path.to_name p.descr))
         end
     | Typ_paren(_,t,_) -> check_instance_type_shape ctxt t

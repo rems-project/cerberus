@@ -1,6 +1,6 @@
 open Global
 
-type ('a, 's) t = 's -> ('a * 's)
+type t 'a 's = 's -> ('a * 's)
 
 let return a = fun s -> (a, s)
 let bind m f =

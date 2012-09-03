@@ -1,5 +1,5 @@
 module R = struct
-  type 'a t = ('a, 'a set) Pmap.map
+  type t 'a = Pmap.map 'a (set 'a)
 
   let emp = Pmap.empty
 
@@ -26,5 +26,5 @@ end
 
 let reduce edges =
   let r = R.make edges in
-  let redundant (v1, v2) = exist (v IN R.reachable_set r v1). R.reachable r v v2 in
+  let redundant (v1, v2) = exists (v IN R.reachable_set r v1). R.reachable r v v2 in
   {e | forall (e IN edges) | not (redundant e)}

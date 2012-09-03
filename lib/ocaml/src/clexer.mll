@@ -16,6 +16,11 @@ let skip_lexeme lexbuf =
   ()
 
 
+
+(* Enumeration constant hash table *)
+let enum_tbl = H.create 52
+
+
 (* 6.4 [Lexical elements]
     
     token:
@@ -97,7 +102,11 @@ let scan_ident lexbuf =
     BatMap.find id keywords
   (* default to variable name, as opposed to type *)
   with Not_found ->
-    P.IDENTIFIER id
+    (* Check if the token is an enumeration constant *)
+    if H.mem enum_tbl id then
+      P.CONST_ENUM id
+    else
+      P.IDENTIFIER id
 
 
 

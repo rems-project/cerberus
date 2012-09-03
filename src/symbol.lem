@@ -1,4 +1,4 @@
-type t = num * string option
+type t = num * option string
 type sset = num
 
 let count set = set

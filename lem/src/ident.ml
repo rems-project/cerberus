@@ -15,29 +15,37 @@ let pp ppf (sk,ns,n) =
   fprintf ppf "%a" 
     (Pp.lst "." Name.lskip_pp) (ns @ [n])
 
+
+let error_pp_help ppf (n,sk) =
+  fprintf ppf "%a%a" 
+    Name.lskip_pp n
+    Ast.pp_lex_skips sk
+
+let error_pp ppf (sk,ns,n) =
+  fprintf ppf "%a" 
+    (Pp.lst "." error_pp_help) (ns @ [n])
+
+
 let mk_ident m n l : t = 
   let ms = List.map (fun (n,sk) -> n) m in
-  let prelim_id = (None, ms, n) in
+  let prelim_id = (None, m, (n,None)) in
     List.iter (fun (_, sk) ->
                  if sk <> None && sk <> Some([]) then
                    raise_error l "illegal whitespace in identifier"
-                     pp prelim_id)
+                     error_pp prelim_id)
       m;
     match ms with
       | [] ->
-          (None, [], n)
+          (Name.get_lskip n, [], Name.replace_lskip n None)
       | m'::ms' ->
           List.iter 
             (fun n ->
                if Name.get_lskip n <> None && Name.get_lskip n <> Some([]) then
                  raise_error l "illegal whitespace in identifier"
-                   pp prelim_id 
+                   error_pp prelim_id 
                else
                  ())
-            (ms' (* TODO: we'd like to add this check, but have to support 
-                          "X.( * )" to avoid accidentally parsing as a comment
-                          opener/closer 
-                 @ [n]*));
+            (ms' @ [n]);
           (Name.get_lskip m', Name.replace_lskip m' None::ms', n)
 
 let from_id (Ast.Id(m,xl,l)) : t =

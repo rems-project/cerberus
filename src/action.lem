@@ -83,7 +83,7 @@ let filter_load ((Action action _) as a) =
 
 let conflicts sb ts =
   (* Hack: Original function in module Set_. *)
-  let action_set_filter_map (f : t -> t option) s =
+  let action_set_filter_map (f : t -> option t) s =
     let f' a s =
       match f a with
         | Some b -> s union {b}
@@ -219,9 +219,9 @@ module Memory = struct
 
   type obj =
     | Scalar of A.ctype * value
-    | Array  of A.ctype * value Braun.t
+    | Array  of A.ctype * Braun.t value
 
-  type mem = (Symbol.t, obj) map
+  type mem = map Symbol.t obj
 
   type t = <|p : S.p; mem : mem|>
 

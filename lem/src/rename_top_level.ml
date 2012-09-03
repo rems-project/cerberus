@@ -153,11 +153,11 @@ let rec rename_type_opt renames src_t =
           option_map
             (fun new_ts -> Typ_tup(new_ts))
             (Seplist.map_changed (rename_type_opt renames) ts)
-      | Typ_app(sk1,ts,sk2,id) ->
+      | Typ_app(id,ts) ->
           (* TODO: Actually rename the id *)
           changed2
-            (fun new_ts new_id -> Typ_app(sk1,new_ts,sk2,new_id))
-            (Seplist.map_changed (rename_type_opt renames))
+            (fun new_ts new_id -> Typ_app(new_id,new_ts))
+            (Util.map_changed (rename_type_opt renames))
             ts
             (fun _ -> None)
             id
@@ -229,9 +229,9 @@ let rename_def_pat_macro path (renames : top_level_renames) top_level p =
   let l = p.locn in
   let t = p.typ in
     match p.term with
-      | P_as(p,sk,(n,l')) ->
+      | P_as(sk1,p,sk,(n,l'),sk2) ->
           option_map 
-            (fun n -> E.mk_pas l p sk (n,l') (Some(t)))
+            (fun n -> E.mk_pas l sk1 p sk (n,l') sk2 (Some(t)))
             (apply_def_rename_opt renames Nk_const path n)
       | P_var(n) ->
           option_map
@@ -350,7 +350,7 @@ let rec rename_def renames path ((d,s),l) =
       | Type_def(s,tdefs) ->
           let new_tdefs = 
             Seplist.map
-              (fun (s1,tvs,s2,(n,l),texp) ->
+              (fun ((n,l),tvs,texp) ->
                  let new_texp = 
                    match texp with
                      | Te_opaque -> Te_opaque
@@ -379,8 +379,8 @@ let rec rename_def renames path ((d,s),l) =
                          (* FZ asks: this should never happen...  not implemented *)
                          failwith "Cannot happen in ocaml_fix_names_defs - variant"
                  in
-                   (s1,tvs,s2,
-                    (apply_def_rename renames Nk_typeconstr path n,l),
+                   ((apply_def_rename renames Nk_typeconstr path n,l),
+                    tvs,
                     new_texp))
               tdefs
           in
