@@ -44,11 +44,7 @@ module Print = struct
       | Kfalse           -> !^ "\\text{false}"
       | Knot e           -> !^ "\\text{not}" ^^ P.parens (pp_expr e)
       | Kctype ty        -> Ail.Print.pp_type ty
-      | Klet ([], e1, e2)   -> !^ "BUG: for now LET must have at least one symbol."
-      | Klet ([a], e1, e2)  -> !^ "\\text{let}" ^^^ pp_symbol a ^^^ P.equals ^^ 
-                           P.nest 2 (P.break1 ^^ pp_expr e1 ^^^ !^ "\\text{in}")
-                           ^^ P.break1 ^^ pp_expr e2
-      | Klet (_as, e1, e2)  -> !^ "\\text{let}" ^^^ (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ P.equals ^^^
+      | Klet (a, e1, e2)  -> !^ "\\text{let}" ^^^ pp_symbol a ^^^ P.equals ^^ 
                            P.nest 2 (P.break1 ^^ pp_expr e1 ^^^ !^ "\\text{in}")
                            ^^ P.break1 ^^ pp_expr e2
       | Kif (b, e1, e2)     -> !^ "\\text{if}" ^^^ pp_expr b ^^^ !^ "\\text{then}" ^^

@@ -232,7 +232,7 @@ let rec sem_core e =
     | Kerror -> E.add_actions [Aerror]
     
     | Kskip  -> E.return []
-    | Kseq SOpSeq _ e1 e2 ->
+    | Kwseq _ e1 e2 ->
         sem_core e1 >>= fun as1 ->
         sem_core e2 >>= fun as2 ->
         E.mapM (fun edge -> E.add_edge edge)
@@ -243,8 +243,8 @@ let rec sem_core e =
                               E.return (_as @ acc)) [] es
 
 (*    | Kcreate ty      -> E.add_actions [Acreate ty] *) (* TODO *)
-    | Kalloc e        -> E.add_actions [Aalloc e]
-    | Kkill a         -> E.add_actions [Akill a]
+    | Kaction (p, Kalloc e) -> E.add_actions [Aalloc e]
+    | Kaction (p, Kkill a)  -> E.add_actions [Akill a]
 (*    | Kstore ty e1 e2 -> E.add_actions [Astore ty e1 e2] *)
 (*    | Kload ty e      -> E.add_actions [Aload ty e] *)
 (*    | Ksame a1 a2     -> E.add_actions [Asame a1 a2] *)
@@ -299,14 +299,14 @@ let rec exec e =
   | Kundef -> E.return ()
   | Kerror -> E.return ()
   | Kskip -> E.return ()
-  | Kseq sop _as e1 e2 -> E.return ()
+  | Kwseq _as e1 e2 -> E.return ()
   | Kunseq es -> E.return ()
   | Kindet e -> E.return ()
-  | Kcreate ty -> E.return ()
-  | Kalloc e -> E.return ()
-  | Kkill a -> E.return ()
-  | Kstore ty e1 e2 -> E.return ()
-  | Kload ty e -> E.return ()
+  | Kaction (p, Kcreate ty) -> E.return ()
+  | Kaction (p, Kalloc e) -> E.return ()
+  | Kaction (p, Kkill a) -> E.return ()
+  | Kaction (p, Kstore ty e1 e2) -> E.return ()
+  | Kaction (p, Kload ty e) -> E.return ()
   | Ksame a1 a2 -> E.return ()
   end
 

@@ -94,7 +94,8 @@ type cause =
   | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS of num * num
   | CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
   | CORE_TYPECHECK_LET_EFFECT
-  | CORE_TYPECHECK_LET_INCOMPATIBLE_ARITY of num * num
+  | CORE_TYPECHECK_LET_TUPLE
+  | CORE_TYPECHECK_SEQ_PURE
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY of num * num
   | CORE_TYPECHECK_UNSEQ_PURE
   | CORE_TYPECHECK_UNDECLARED_FUNCTION of sym
@@ -510,10 +511,11 @@ let to_string = function
   | CORE_TYPECHECK_LET_EFFECT ->
       "[Core Typechecking] the first argument of let must be pure."
 
-  | CORE_TYPECHECK_LET_INCOMPATIBLE_ARITY patternArity exprArity ->
-      "[Core Typechecking] incompatible arities in a let expression: pattern arity = " ^
-       string_of_num patternArity ^ ", while the type of the first argument has arity = " ^
-       string_of_num exprArity ^ "."
+  | CORE_TYPECHECK_LET_TUPLE ->
+      "[Core Typechecking] the first operand of a `let' cannot have a tuple type."
+  | CORE_TYPECHECK_SEQ_PURE ->
+      "[Core Typechecking] the first operand of `seq' operator must be effectful."
+
 
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY patternArity exprArity ->
       "[Core Typechecking] incompatible arities in a seq expression: pattern arity = " ^
