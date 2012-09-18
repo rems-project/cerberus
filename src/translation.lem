@@ -118,7 +118,7 @@ let conv ty1 ty2 exp =
   fresh_symbol      >>= fun a_exp  ->
   fresh_symbol      >>= fun a_conv ->
   exp               >>= fun core_e ->
-  E.return $ C.Kseq C.SOpSeq [a_exp] core_e (C.Klet [a_conv] (C.Kcall C.conv [C.Kctype ty1; C.Kctype ty2; C.Ksym a_exp]) (C.Ksym a_conv))
+  E.return $ C.Kwseq [Some a_exp] core_e (C.Klet a_conv (C.Kcall C.conv [C.Kctype ty1; C.Kctype ty2; C.Ksym a_exp]) (C.Ksym a_conv))
 
 
 let is_function_id file e =
@@ -198,25 +198,11 @@ let rec translate_lvalue file exp =
 and translate_exp file exp =
   let ty = Annotate.ctype_of exp in
   match Annotate.exp_of exp with
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     (* (6.5.3.3#2) The result of the unary + operator is the value of its (promoted) operand. The
                    integer promotions are performed on the operand, and the result has the promoted
                    type. *)
     | A.UNARY A.PLUS e ->
-        translate_lvalue file e >>= fun core_e ->
+        translate_exp file e >>= fun core_e ->
         E.return (promote_value core_e)
     
     
@@ -224,8 +210,10 @@ and translate_exp file exp =
                    integer promotions are performed on the operand, and the result has the promoted
                    type. *)
     | A.UNARY A.MINUS e ->
-        translate_lvalue file e >>= fun core_e ->
-        E.return $ C.Kop C.OpSub (C.Kconst 0) (promote_value core_e)
+        fresh_symbol         >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        E.return $ C.Kwseq [Some a_e] (promote_value core_e)
+                     (C.Kop C.OpSub (C.Kconst 0) (C.Ksym a_e))
     
     
     (* (6.5.3.3#4) The result of the ~ operator is the bitwise complement of its (promoted) operand
@@ -235,10 +223,10 @@ and translate_exp file exp =
                    unsigned type, the expression ~E is equivalent to the maximum value representable
                    in that type minus E. *)
     | A.UNARY A.BNOT e ->
-        fresh_symbol            >>= fun a_e    ->
-        translate_lvalue file e >>= fun core_e ->
+        fresh_symbol         >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
           if Types.is_unsigned_integer ty then
-            E.return $ C.Kseq C.SOpSeq [a_e] (promote_value core_e)
+            E.return $ C.Kwseq [Some a_e] (promote_value core_e)
                          (C.Kop C.OpSub (C.Kcall C.max [C.Kctype ty]) (C.Ksym a_e))
           else
             Boot.debug "TODO: the bitwise complement is implementation-defined (sort of) when the promoted type is signed."
@@ -252,6 +240,7 @@ and translate_exp file exp =
                    were removed and the [] operator were changed to a + operator. *)
     | A.UNARY A.ADDRESS (_, (A.UNARY A.INDIRECTION e)) ->
         translate_exp file e (* DONE *)
+    
     
     (* (6.5.3.2#3) Otherwise, the result is a pointer to the object or function designated by its
                    operand. *)
@@ -278,32 +267,64 @@ and translate_exp file exp =
                    operation of postfix ++ is a single evaluation. Postfix ++ on an object with
                    atomic type is a read-modify-write operation with memory_order_seq_cst memory
                    order semantics. *)
-    (* TODO: atomic *)
+    (* TODO: "atomicity" of the load-store pair *)
     (* CHECK *)
     | A.UNARY A.POSTFIX_INCR e ->
         fresh_symbol            >>= fun a_lvalue ->
         fresh_symbol            >>= fun a_load   ->
-        fresh_symbol            >>= fun a_incr   ->
         translate_lvalue file e >>= fun core_e   ->
         E.return $
-          C.Kseq C.SOpSeq [a_lvalue] core_e
-            (C.Kseq C.SOpSeq [a_load] (C.Kload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
-               (C.Kseq C.SOpSeq [] (C.Kstore (C.Kctype (lvalue_type e))
-                                           (C.Ksym a_lvalue)
-                                           (C.Kcall C.conv_int
-                                             [C.Kctype (exp_type e);
-                                             (C.Kop C.OpAdd (C.Ksym a_load) (C.Kconst 1))]))
+          C.Kwseq [Some a_lvalue] core_e
+            (C.Kaseq (Some a_load) (C.Kload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
+                                   (C.Neg, C.Kstore (C.Kctype (lvalue_type e))
+                                      (C.Ksym a_lvalue)
+                                      (C.Kcall C.conv_int
+                                              [C.Kctype (exp_type e); (C.Kop C.OpAdd (C.Ksym a_load) (C.Kconst 1))]
+                                      )
+                            )
+            )
+
+
+
+
+
+
+
+
+
+(*
+          C.Kwseq [Some a_lvalue] core_e
+            (C.Kwseq [Some a_load] (C.pload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
+               (C.Kwseq [] (C.store (C.Kctype (lvalue_type e))
+                                   (C.Ksym a_lvalue)
+                                   (C.Kcall C.conv_int
+                                            [C.Kctype (exp_type e);
+                                            (C.Kop C.OpAdd (C.Ksym a_load) (C.Kconst 1))]))
                   (C.Ksym a_load)
                )
             )
+*)
     
     
    (* (6.5.2.4#3) The postfix -- operator is analogous to the postfix ++ operator, except that the
                   value of the operand is decremented (that is, the value 1 of the appropriate type
                   is subtracted from it). *)
-    (* TODO *)
+    (* TODO: "atomicity" of the load-store pair *)
     | A.UNARY A.POSTFIX_DECR e ->
-        E.return (C.DEBUG "TODO: [translate] for `A.UNARY A.POSTFIX_DECR e'")
+        fresh_symbol            >>= fun a_lvalue ->
+        fresh_symbol            >>= fun a_load   ->
+        translate_lvalue file e >>= fun core_e   ->
+        E.return $
+          C.Kwseq [Some a_lvalue] core_e
+            (C.Kwseq [Some a_load] (C.pload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
+               (C.Kwseq [] (C.pstore (C.Kctype (lvalue_type e))
+                                     (C.Ksym a_lvalue)
+                                     (C.Kcall C.conv_int
+                                             [C.Kctype (exp_type e);
+                                             (C.Kop C.OpSub (C.Ksym a_load) (C.Kconst 1))]))
+                  (C.Ksym a_load)
+               )
+            )
     
     
     (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
@@ -316,8 +337,8 @@ and translate_exp file exp =
         translate_exp file e2 >>= fun core_e2 ->
         fresh_symbol          >>= fun a_mul   ->
         let mul_ctx x =
-          C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Klet [a_mul] (C.Kop C.OpMul (C.Ksym a_e1) (C.Ksym a_e2))
+          C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
+            (C.Klet a_mul (C.Kop C.OpMul (C.Ksym a_e1) (C.Ksym a_e2))
                x) in
         if T.is_signed_integer(exp_type exp) then
           E.return $ mul_ctx (C.Kcall C.overflow [C.Kctype (exp_type exp); C.Ksym a_mul])
@@ -354,18 +375,18 @@ and translate_exp file exp =
         translate_exp file e2 >>= fun core_e2 ->
         fresh_symbol          >>= fun a_mod   ->
         C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-          (C.Klet [a_res_ty] (C.Kcall C.usual_arithmetic [C.Kctype exp_type e1; C.Kctype exp_type e2])
-             (C.Klet [a_e1'] (usual_arithmetic_conv (C.Ksym a_e1))
-                (C.Klet [a_e2'] (usual_arithmetic_conv (C.Ksym a_e2))
+          (C.Klet a_res_ty (C.Kcall C.usual_arithmetic [C.Kctype exp_type e1; C.Kctype exp_type e2])
+             (C.Klet a_e1' (usual_arithmetic_conv (C.Ksym a_e1))
+                (C.Klet a_e2' (usual_arithmetic_conv (C.Ksym a_e2))
                    (C.Kif (C.Kop C.OpEq (C.Ksym a_e2') (C.Kconst 0))
                       (C.Kundef)
-                      ((C.Klet [a_mod] (C.Kop C.OpMod (C.Ksym a_e1') (C.Ksym a_e2')))
+                      ((C.Klet a_mod (C.Kop C.OpMod (C.Ksym a_e1') (C.Ksym a_e2')))
                           (C.Kif (C.Knot (C.Kcall C.representable []))
         
         
         let mod_ctx x =
           C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Klet [a_mod] (C.Kop C.OpMod (C.Ksym a_e1)
+            (C.Klet a_mod (C.Kop C.OpMod (C.Ksym a_e1)
                                            (C.Kcall C.guard_zero [C.Ksym a_e2]))
                x) in
         if T.is_signed_integer(exp_type exp) then
@@ -375,8 +396,22 @@ and translate_exp file exp =
 *)
     
     
-    (* (6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
-                 performed on them.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (* 
        (6.5.6#5) The result of the binary + operator is the sum of the operands.
        (6.5.6#7) For the purposes of these operators, a pointer to an object that is not an element
                  of an array behaves the same as a pointer to the first element of an array of
@@ -400,9 +435,11 @@ and translate_exp file exp =
 *)
     (* TODO *)
     | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
-        if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
-          (* if both operand have arithmetic types, then semantics is quite
-             straightforward and we do the 'usual arithmetic conversion' *)
+        let ctype_e1 = exp_type e1 in
+        let ctype_e2 = exp_type e2 in
+        if T.is_arithmetic ctype_e1 && T.is_arithmetic ctype_e2 then
+          (* (6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
+                       performed on them. *)
           fresh_symbol          >>= fun a_e1    ->
           fresh_symbol          >>= fun a_e2    ->
           fresh_symbol          >>= fun a_add   ->
@@ -410,13 +447,23 @@ and translate_exp file exp =
           translate_exp file e1 >>= fun core_e1 ->
           translate_exp file e2 >>= fun core_e2 ->
           
+(*
+          C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
+            (usual_arithmetic_conv (C.Kop C.OpAdd (C.Ksym a_e1) (C.Ksym a_e2))
+                                   () () KKK
+            )
+
+ (ty1: Ail.ctype) (ty2: Ail.ctype) : C.expr
+
+*)
+
           (* Prepare the expression composing the evaluation of the operands which
              are unsequenced with respect to each other *)
           (* If we are ok with passing "complexe" expressions of type 'value' to
              functions, then we can get rid of the Klet *)
           let add_ctx x =
-            C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-              (C.Klet [a_add] (C.Kop C.OpAdd (C.Ksym a_e1) (C.Ksym a_e2))
+            C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
+              (C.Klet a_add (C.Kop C.OpAdd (C.Ksym a_e1) (C.Ksym a_e2))
                  x) in
           
           (* The 'usual arithmetic conversion' *)
@@ -440,7 +487,7 @@ and translate_exp file exp =
 
 (*
             C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-              (C.Klet [a_offset] (C.Kshift a_e1 a_e2 (C.Ksizeof (exp_type e1)))
+              (C.Klet a_offset (C.Kshift a_e1 a_e2 (C.Ksizeof (exp_type e1)))
                 (C.Kseq C.SOpSeq [] (C.Ksame a_e1 a_shift)
                   (C.Ksym a_shift)))
 *)
@@ -464,7 +511,33 @@ and translate_exp file exp =
 *)
     
     
+     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+   
     
     (* TODO: e1 - e2 *)
     
@@ -486,7 +559,7 @@ and translate_exp file exp =
         translate_exp file e1 >>= fun core_e1 ->
         translate_exp file e2 >>= fun core_e2 ->
         E.return $
-          C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
+          C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
           (* if a_e2 < 0 || width{ty} < a_e2 || width{ty} = a_e2 then undef *)
           (C.Kif (C.Kop C.OpOr (C.Kop C.OpLt (C.Ksym a_e2) (C.Kconst 0))
                               (C.Kop C.OpOr (C.Kop C.OpLt (C.Kcall C.ctype_width [C.Kctype ty]) (C.Ksym a_e2))
@@ -499,7 +572,7 @@ and translate_exp file exp =
                                  (C.Kop C.OpAdd (C.Kcall C.max [C.Kctype ty]) (C.Kconst 1))
                  else (* e1 has a signed type *)
                    (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                   C.Klet [a_res] (C.Kop C.OpMod (C.Kop C.OpMul (C.Ksym a_e1) (C.Kcall C.exp [C.Kconst 2; C.Ksym a_e2]))
+                   C.Klet a_res (C.Kop C.OpMod (C.Kop C.OpMul (C.Ksym a_e1) (C.Kcall C.exp [C.Kconst 2; C.Ksym a_e2]))
                                                  (C.Kop C.OpAdd (C.Kcall C.max [C.Kctype ty]) (C.Kconst 1)))
                                   (* if a_e2 < 0 && not representable(ty, a_res) then undef [...] *)
                                   (C.Kif (C.Kop C.OpAnd (C.Kop C.OpLt (C.Ksym a_e1) (C.Kconst 0))
@@ -556,7 +629,7 @@ and translate_exp file exp =
     | A.BINARY A.COMMA e1 e2 -> (* DONE (maybe not, be careful when mixing with assignments) *)
         translate_exp file e1 >>= fun core_e1 ->
         translate_exp file e2 >>= fun core_e2 ->
-        E.return $ C.Kseq C.SOpSeq [] core_e1 core_e2
+        E.return $ C.Kwseq [] core_e1 core_e2
     
     
     (* (6.5.13#3) The && operator shall yield 1 if both of its operands compare unequal to 0;
@@ -571,10 +644,10 @@ and translate_exp file exp =
         translate_exp file e1 >>= fun core_e1 ->
         translate_exp file e2 >>= fun core_e2 ->
         E.return $
-          C.Kseq C.SOpSeq [a_e1] core_e1
+          C.Kwseq [Some a_e1] core_e1
             (C.Kif (C.Kop C.OpEq (C.Ksym a_e1) (C.Kconst 0))
                    (C.Kconst 0)
-                   (C.Kseq C.SOpSeq [a_e2] core_e2
+                   (C.Kwseq [Some a_e2] core_e2
                      (C.Kif (C.Kop C.OpEq (C.Ksym a_e2) (C.Kconst 0))
                             (C.Kconst 0)
                             (C.Kconst 1)
@@ -595,10 +668,10 @@ and translate_exp file exp =
         translate_exp file e1 >>= fun core_e1 ->
         translate_exp file e2 >>= fun core_e2 ->
         E.return $
-          C.Kseq C.SOpSeq [a_e1] core_e1
+          C.Kwseq [Some a_e1] core_e1
             (C.Kif (C.Knot (C.Kop C.OpEq (C.Ksym a_e1) (C.Kconst 0)))
                    (C.Kconst 1)
-                   (C.Kseq C.SOpSeq [a_e2] core_e2
+                   (C.Kwseq [Some a_e2] core_e2
                      (C.Kif (C.Kop C.OpEq (C.Ksym a_e2) (C.Kconst 0))
                             (C.Kconst 0)
                             (C.Kconst 1)
@@ -675,7 +748,7 @@ and translate_exp file exp =
           translate_exp file e1 >>= fun core_e1 ->
           translate_exp file e2 >>= fun core_e2 ->
           E.return $
-            C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
+            C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
               (C.Kif (C.Kop C.OpEq (C.Ksym a_e1) (C.Ksym a_e2))
                      (C.Kconst 1)
                      (C.Kconst 0)
@@ -718,7 +791,7 @@ and translate_exp file exp =
           translate_exp file e2 >>= fun core_e2 ->
           translate_exp file e3 >>= fun core_e3 ->
           E.return $
-            C.Kseq C.SOpSeq [a_e1] core_e1
+            C.Kwseq [Some a_e1] core_e1
               (C.Kif (C.Kop C.OpEq (C.Ksym a_e1) (C.Kconst 0))
                      core_e2
                      core_e3)
@@ -744,7 +817,7 @@ and translate_exp file exp =
       let n     = List.length decls                                                 in
       
       (* prepare the code creating the objects for the block local variables. *)
-      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.Kcreate ty)) (List.rev decls) in
+      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.create ty)) (List.rev decls) in
                         match n with
                           | 0 -> fun x -> x
                           | 1 -> C.Kseq C.SOpSeq syms (List.hd xs)
@@ -753,8 +826,8 @@ and translate_exp file exp =
 
 
 translate_exp env file e >>= fun core_e ->
-C.seq [a_id] (C.Kcreate ty)
-  (C.Kstore ty a_id (C.Kcall C.conv [C.Kctype (Types.unqualify ty); C.Kctype (exp_type e); core_e]))
+C.seq [a_id] (C.create ty)
+  (C.store ty a_id (C.Kcall C.conv [C.Kctype (Types.unqualify ty); C.Kctype (exp_type e); core_e]))
 
 (*
             let f_create (l, t, e) m' =
@@ -841,7 +914,7 @@ C.seq [a_id] (C.Kcreate ty)
     
     (* WARNING: this is not enought (DEBUG FOR NOW) *)
     | A.VARIABLE id ->
-        E.return $ C.Kload (C.Kctype (lvalue_type exp)) (C.Ksym id)
+        E.return $ C.pload (C.Kctype (lvalue_type exp)) (C.Ksym id)
     
     
    (* ------------------------------------------------------------------------------------------- *)
@@ -953,8 +1026,8 @@ C.seq [a_id] (C.Kcreate ty)
             translate_exp file e2 >>= fun core_e2 ->
             fresh_symbol         >>= fun a_sub    ->
             let sub_ctx x =
-              C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-                (C.Klet [a_sub] (C.Kop C.OpSub (C.Ksym a_e1) (C.Ksym a_e2))
+              C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
+                (C.Klet a_sub (C.Kop C.OpSub (C.Ksym a_e1) (C.Ksym a_e2))
                    x) in
             if T.is_signed_integer (exp_type exp) then
               E.return $ sub_ctx (C.Kcall C.overflow [C.Kctype (exp_type exp); C.Ksym a_sub])
@@ -987,10 +1060,11 @@ C.seq [a_id] (C.Kcreate ty)
         translate_lvalue file e1 >>= fun core_e1 ->
         translate_exp    file e2 >>= fun core_e2 ->
         E.return $
-          C.Kseq C.SOpSeq [a_e1; a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Kstore (C.Kctype (lvalue_type e1))
-                      (C.Ksym a_e1)
-                      (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2])
+          C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
+            (C.Kaction (C.Neg, C.Kstore (C.Kctype (lvalue_type e1))
+                                        (C.Ksym a_e1)
+                                        (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2])
+                       )
             )
     
     
@@ -1003,8 +1077,6 @@ C.seq [a_id] (C.Kcreate ty)
    (* ------------------------------------------------------------------------------------------- *)
 (*    | _ -> E.return (C.DEBUG "translate_exp, _ case") *)
   end
-
-
 
 
 
@@ -1045,19 +1117,19 @@ and translate_stmt file current_function (_, stmt) : E.t C.expr =
       let n     = List.length decls                                  in
       
       (* prepare the code creating the objects for the block local variables. *)
-      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.Kcreate (C.Kctype ty))) (List.rev decls) in
+      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (Some a, C.pcreate (C.Kctype ty))) (List.rev decls) in
                         match n with
                           | 0 -> fun x -> x
-                          | 1 -> C.Kseq C.SOpSeq syms (List.hd xs)
-                          | _ -> C.Kseq C.SOpSeq syms (C.Kunseq xs)
+                          | 1 -> C.Kwseq syms (List.hd xs)
+                          | _ -> C.Kwseq syms (C.Kunseq xs)
                         end in
       
       (* prepare the code killing the objects. *)
-      let kills_ctx = let xs = List.map (fun (a, _) -> C.Kkill a) decls in
+      let kills_ctx = let xs = List.map (fun (a, _) -> C.pkill a) decls in
                       match n with
                         | 0 -> fun x -> x
-                        | 1 -> C.Kseq C.SOpSeq [] (List.hd xs)
-                        | _ -> C.Kseq C.SOpSeq [] (C.Kunseq xs)
+                        | 1 -> C.Kwseq [] (List.hd xs)
+                        | _ -> C.Kwseq [] (C.Kunseq xs)
                       end in
       
       (* translate the statements with a symbolic name bound to the result of the last statement *)
@@ -1065,12 +1137,12 @@ and translate_stmt file current_function (_, stmt) : E.t C.expr =
       E.mapWithLastM (fun s -> translate_stmt file current_function s >>= fun core_s ->
                                E.return ([], core_s))
                      (fun s -> translate_stmt file current_function s >>= fun core_s ->
-                               E.return ([a_last], core_s))
+                               E.return ([Some a_last], core_s))
                      ss >>= fun core_ss ->
       
       (* connecting everything an returning that symbolic name bounded to the result of last statement *)
       E.return $ creates_ctx
-                 (List.fold_left (fun acc (_as, stmt) -> C.Kseq C.SOpSeq _as stmt acc)
+                 (List.fold_left (fun acc (_as, stmt) -> C.Kwseq _as stmt acc)
                     (kills_ctx (if List.length ss = 0 then C.Kskip else C.Ksym a_last))
                     (List.rev core_ss))
   
@@ -1078,14 +1150,14 @@ and translate_stmt file current_function (_, stmt) : E.t C.expr =
   (* ------------------------------------------------------------------------------------------------------ *)
   | A.IF e s1 s2 ->
       fresh_symbol                            >>= fun a_test  ->
-      (* mark_cexpr *) (translate_exp file e)       >>= fun core_e  ->
+      translate_exp file e                    >>= fun core_e  ->
       translate_stmt file current_function s1 >>= fun core_s1 ->
       translate_stmt file current_function s2 >>= fun core_s2 ->
-      E.return $ C.Kseq C.SOpSeq [a_test] core_e
-                                 (C.Kif (C.Knot (C.Kop C.OpEq (C.Ksym a_test) (C.Kconst 0)))
-                                    core_s1
-                                    core_s2
-                                 )
+      E.return $ C.Kwseq [Some a_test] core_e
+                         (C.Kif (C.Knot (C.Kop C.OpEq (C.Ksym a_test) (C.Kconst 0)))
+                            core_s1
+                            core_s2
+                         )
   
   
   (* ------------------------------------------------------------------------------------------------------ *)
@@ -1096,9 +1168,9 @@ and translate_stmt file current_function (_, stmt) : E.t C.expr =
       translate_exp file e                   >>= fun core_e ->
       translate_stmt file current_function s >>= fun core_s ->
       fresh_fname "while_body"               >>= fun fname  ->
-      let fbody = C.Kseq C.SOpSeq [a] core_e
+      let fbody = C.Kwseq [Some a] core_e
                     (C.Kif (C.Knot (C.Kop C.OpEq (C.Ksym a) (C.Kconst 0)))
-                           (C.Kseq C.SOpSeq [] core_s (C.Kcall fname []))
+                           (C.Kwseq [] core_s (C.Kcall fname []))
                            C.Kskip
                     ) in
       add_function fname (C.TyEffect C.unit) [] fbody >>= fun () ->
@@ -1172,8 +1244,8 @@ and translate_stmt file current_function (_, stmt) : E.t C.expr =
         fresh_symbol                                   >>= fun a      ->
         conv (exp_type e) (lookup_type id)
              ((* mark_cexpr *) (translate_exp file e)) >>= fun core_e ->
-        E.return $ C.Kseq C.SOpSeq [a] core_e
-                     (C.Kseq C.SOpSeq [] (C.Kstore (C.Kctype (lookup_type id)) (C.Ksym id) (C.Ksym a)) (* TODO: the id is probably wrong *)
+        E.return $ C.Kwseq [Some a] core_e
+                     (C.Kwseq [] (C.pstore (C.Kctype (lookup_type id)) (C.Ksym id) (C.Ksym a)) (* TODO: the id is probably wrong *)
                        acc)
       in E.foldlM f defns C.Kskip
   
@@ -1212,12 +1284,9 @@ let translate_file (file: A.file _) : E.t C.file =
 
 (* This is the entry function (called from main.ml) *)
 let translate (file: A.file _) : C.file =
-  C.test4
-(*
 let (cfile, (_, _, _, funs)) = (translate_file file) (Symbol.init, None, None, Pmap.empty) in
   <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
 
-*)
 
 (* E.init (translate_file file) *)
 (* C.test2 *)

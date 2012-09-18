@@ -64,11 +64,18 @@ type binop =
   | OpOr
 
 (* Sequencing operator *)
-type seqop =
+(*type seqop =
   (* Normal sequencing *)
   | SOpSeq
+*)
   (* "Strong sequencing" for incr/decr *)
-  | SOpSSeq
+(*  | SOpSSeq *) (* WE DON'T HAVE THIS ANYMORE, MAYBE EVENT GET RID OF seqop *)
+
+
+(* Polarity for actions *)
+type polarity =
+  | Pos
+  | Neg
 
 
 (* Merged pure and effectful expressions *)
@@ -106,18 +113,17 @@ type expr =
 (*  | Kwhile of sym * expr * expr * expr *)
   
   | Kskip
+  
+  | Kaction of paction
   | Kunseq of list expr
-  | Kseq of seqop * list sym * expr * expr
+  | Kwseq of list (option sym) * expr * expr
+  | Kaseq of option sym * action * paction
+  | Ksp of list (option sym) * expr * expr
+  
   
   | Kindet of expr
   
   
-  (* memory actions *)
-  | Kcreate of expr
-  | Kalloc of expr
-  | Kkill of sym
-  | Kstore of expr * expr * expr
-  | Kload of expr * expr
   | Ksame of expr * expr
   
 (*
@@ -135,6 +141,22 @@ type expr =
   | Kshift of sym * expr
   | Kconv of Ail.ctype * Ail.ctype * sym
 *)
+
+and action =
+  | Kcreate of expr
+  | Kalloc of expr
+  | Kkill of sym
+  | Kstore of expr * expr * expr
+  | Kload of expr * expr
+
+and paction = polarity * action
+
+
+let pcreate ty = Kaction (Pos, Kcreate ty)
+let palloc e = Kaction (Pos, Kalloc e)
+let pkill x = Kaction (Pos, Kkill x)
+let pstore ty x n = Kaction (Pos, Kstore ty x n)
+let pload ty x = Kaction (Pos, Kload ty x)
 
 
 (* a Core file is just a sequence of functions *)
@@ -171,18 +193,18 @@ let test: file =
     let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
     Kunseq
     [
-      Kseq SOpSeq [a1; a2] (Kunseq [Kcreate (Kctype signed_int); Kcreate (Kctype signed_int)])
-        (Kseq SOpSeq [] (Kunseq [Kstore (Kctype signed_int) (Ksym a1) (Kconst 4); Kstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
-           (Kseq SOpSeq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kseq SOpSeq [] (Kunseq [Kkill a1; Kkill a2])
+      Kwseq [Some a1; Some a2] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
+        (Kwseq [] (Kunseq [pstore (Kctype signed_int) (Ksym a1) (Kconst 4); pstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
+           (Kwseq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
+              (Kwseq [] (Kunseq [pkill a1; pkill a2])
                  (Kconst 0)
               )
            )
         );
-      Kseq SOpSeq [a1; a2] (Kunseq [Kcreate (Kctype signed_int); Kcreate (Kctype signed_int)])
-        (Kseq SOpSeq [] (Kunseq [Kstore (Kctype signed_int) (Ksym a1) (Kconst 4); Kstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
-           (Kseq SOpSeq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kseq SOpSeq [] (Kunseq [Kkill a1; Kkill a2])
+      Kwseq [Some a1; Some a2] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
+        (Kwseq [] (Kunseq [pstore (Kctype signed_int) (Ksym a1) (Kconst 4); pstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
+           (Kwseq  [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
+              (Kwseq [] (Kunseq [pkill a1; pkill a2])
                  (Kconst 0)
               )
           )
@@ -201,10 +223,10 @@ let test2: file =
   let f_body    = Kconst 0         in
   let main_body =
     let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
-      Kseq SOpSeq [a_x; a_y] (Kunseq [Kcreate (Kctype signed_int); Kcreate (Kctype signed_int)])
-        (Kseq SOpSeq [] (Kif (Ktrue) (Kstore (Kctype signed_int) (Ksym a_x) (Kconst 1))
-                                     (Kstore (Kctype signed_int) (Ksym a_y) (Kconst 2)))
-           (Kunseq [Kkill a_x; Kkill a_y]))
+      Kwseq [Some a_x; Some a_y] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
+        (Kwseq [] (Kif (Ktrue) (pstore (Kctype signed_int) (Ksym a_x) (Kconst 1))
+                               (pstore (Kctype signed_int) (Ksym a_y) (Kconst 2)))
+           (Kunseq [pkill a_x; pkill a_y]))
 
   in
   <| main= a_main; fun_map= Pmap.add a_main (TyEffect value, [], main_body) Pmap.empty |>
@@ -228,15 +250,14 @@ let test4: file =
   let f_body    = Kconst 0         in
   let main_body =
     let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
-(*
-      Kseq SOpSeq [a_x] (Kcreate (Kctype signed_int))
+      Kwseq [Some a_x] (pcreate (Kctype signed_int))
         (Klet a_n (Kconst 42)
-           (Kstore (Kctype signed_int) (Ksym a_x) (Ksym a_n)))
-*)
-    Klet a_n (Kconst 42)
-             (Kop OpAdd (Kconst 10) (Ksym a_n))
+           (Kif Ktrue
+              (pstore (Kctype signed_int) (Ksym a_x) (Ksym a_n))
+              Kskip
+           ))
   in
-  <| main= a_main; fun_map= Pmap.add a_main (TyBase value, [], main_body) Pmap.empty |>
+  <| main= a_main; fun_map= Pmap.add a_main (TyEffect unit, [], main_body) Pmap.empty |>
 
 
 
@@ -256,6 +277,7 @@ let conv     = (53, Some "conv")
 (* [guard_zero n] = if n = 0 then undef else n  *)
 let guard_zero = (54, Some "div_zero")
 
+(* Returns the "common real type" of two given ctypes (§6.3.1.8) *)
 let usual_arithmetic = (55, Some "usual_arithmetic")
 
 
@@ -318,11 +340,11 @@ module Print = struct
     | Knot _   -> Some 1
     | Kindet _ -> Some 1
 
-    | Kcreate _    -> Some 2
-    | Kalloc _     -> Some 2
-    | Kkill _      -> Some 2
-    | Kstore _ _ _ -> Some 2
-    | Kload _ _    -> Some 2
+    | Kaction (_, Kcreate _)    -> Some 2
+    | Kaction (_, Kalloc _)     -> Some 2
+    | Kaction (_, Kkill _)      -> Some 2
+    | Kaction (_, Kstore _ _ _) -> Some 2
+    | Kaction (_, Kload _ _)    -> Some 2
     | Ksame _ _    -> Some 2
     | Kcall _ _    -> Some 2
     
@@ -336,11 +358,13 @@ module Print = struct
     | Kop OpAnd _ _ -> Some 7
     | Kop OpOr  _ _ -> Some 8
     
-    | Kif _ _ _ ->      Some 9
-    | Klet _ _ _ ->     Some 10
+    | Kif _ _ _  -> Some 9
+    | Klet _ _ _ -> Some 10
 
-    | Kunseq _ -> Some 11
-    | Kseq _ _ _ _ -> Some 12
+    | Kaseq _ _ _ -> Some 11
+    | Kwseq _ _ _ -> Some 12
+    | Ksp _ _ _   -> Some 13
+    | Kunseq _    -> Some 14
 
 (*    | Kwhile _ _ _ _ -> None *)
     | COMMENT _ _ ->    None
@@ -425,22 +449,48 @@ module Print = struct
                             P.nest 2 (P.break1 ^^ f s2) ^^ P.break1 ^^ pp_control "done"
 *)
 
-      | Kseq SOpSeq [] e1 e2   -> f e1 ^^ P.semi ^^ P.break1 ^^ f e2
-      | Kseq SOpSeq [a] e1 e2  -> pp_symbol a ^^^ !^ "<-" ^^
-                                  P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
-                                  ^^ P.break1 ^^ f e2
-      | Kseq SOpSeq _as e1 e2  -> (P.parens (P.sepmap P.comma pp_symbol _as)) ^^^ !^ "<-" ^^
-                                  P.nest 2 (P.break1 ^^ f e1 ^^ P.semi)
-                                  ^^ P.break1 ^^ f e2
+      | Kaseq None act y     -> f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
+      | Kaseq (Some a) act y -> pp_symbol a ^^^ !^ "<-" ^^ f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
+      
+      | Ksp [] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksp [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
+                              P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>"))
+                              ^^ P.break1 ^^ f e2
+      | Ksp [None] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksp _as e1 e2 -> let g x = match x with
+                                     | Some x -> pp_symbol x
+                                     | None   -> P.underscore
+                                   end
+                         in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
+                             P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
+
+      | Kwseq [] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi)
+                                ^^ P.break1 ^^ f e2
+      | Kwseq [None] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq _as e1 e2      -> let g x = match x with
+                                            | Some x -> pp_symbol x
+                                            | None   -> P.underscore
+                                          end
+                                in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
+                                   P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi) ^^ P.break1 ^^ f e2
       | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
       | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
       | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
       | Kindet e        -> P.brackets (f e)
-      | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
-      | Kalloc e        -> pp_keyword "alloc" ^^^ f e
-      | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
-      | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
-      | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
+      | Kaction (p, a)  -> (match p with
+                              | Pos -> P.empty
+                              | Neg -> P.tilde
+                            end) ^^
+                           (match a with
+                              | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
+                              | Kalloc a        -> pp_keyword "alloc" ^^^ f e
+                              | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
+                              | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
+                              | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
+                            end)
+      
       | Ksame a1 a2     -> pp_keyword "same" ^^^ f a1 ^^^ f a2
 (*
       | Kmax ty         -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
