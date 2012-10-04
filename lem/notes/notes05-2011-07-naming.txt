@@ -1,0 +1,198 @@
+Lem has many different kinds of identifiers
+
+Definitions at a module top-level
+- type constructor
+- value
+- field
+- constructor
+- module
+- class
+
+Scoped bindings
+- type variable
+- value
+
+Uses may have an explicit module path, or not.
+
+Type variables are lexically distinct from the other classes.
+
+Type constructors and classes are naturally disambiguated by the parsing
+context.
+
+Modules and fields are naturally disambiguated from constructors and values by
+the parsing context.
+
+Modules and fields are disambiguated from each other by using ` instead of . for
+module paths.
+
+Values and constructors are disambiguated by the type system.  There is a
+serious complication involving pattern bindings:
+type inth = 
+  | C
+let f (C:int) = C
+
+Values that refer to lexical bindings and values that refer to top-level
+bindings are disambiguated by scoping rules (when there is no module path)
+taking into account the ordering of open statements.
+
+
+Current restrictions to support various backends:
+
+In a top-level definition, no defined name can shadow a pre-defined (or
+pre-opened) field name.
+
+--------------------------------------------------------------------------------
+
+Identifiers in OCaml:
+
+Definitions at a module top-level
+- type constructor (initial lower case)
+- value            (initial lower case)
+- field            (initial lower case)
+- constructor      (initial upper case)
+- module           (initial upper case)
+
+Scoped bindings
+- type variable    (initial `)
+- value            (initial upper case)
+
+Uses may have an explicit module path, or not.
+
+All names are disambiguated by lexical structure and parsing context except as
+in the next item.
+
+As in Lem, values that refer to lexical bindings and values that refer to
+top-level bindings are disambiguated by scoping rules (when there is no module
+path) taking into account the ordering of open statements.
+
+--------------------------------------------------------------------------------
+
+Identifiers in HOL:
+
+Definitions at a module top-level
+- type constructor
+- value
+- field
+- constructor
+
+Scoped bindings
+- type variable
+- value
+
+Type variables are lexically distinct from the other classes.
+
+Values, fields and constructors all share a namespace and aren't disambiguated.
+
+There is a serious complication involving pattern bindings, as in Lem:
+type t = C
+let f C = C
+but worse, as in
+let x = 1
+let f x = x && true
+which doesn't typecheck
+
+Value references that are not to locally scpoed bindings are disambiguated
+taking into account the order of Theory loading (and not the order of opens).
+
+2 part set comprehensions ({ f x | P x }) don't always work right.  3 part ones
+({ f x | x | P x }) do.
+
+--------------------------------------------------------------------------------
+
+Translation goals:
+- Never change the name of a top-level definition
+- Use some restraint in changing the name of locally scoped bindings
+- Use some restraint in changing the module paths at uses of top-level bindings
+
+Translation problems:
+
+How to flatten the module system
+
+module f = struct
+  let g_x = 1
+  module g = struct
+    let x = 2
+  end
+end
+
+
+
+How to get rid of opens and module renames
+
+module M = struct
+  let x = 1
+end
+
+module N = struct
+  let x = true
+end
+
+module Z = struct
+  let x = 1
+  ley y = x
+  open N
+  let a = true && x
+  open M
+  let b = 1 + x
+end
+
+(especially where HOL loads M before N)
+
+
+
+Locally bound names that shadow top-level names in the target
+
+let m f MAP = List`map f MAP
+
+becomes
+
+val _ = Define `
+ m f MAP = MAP f MAP`;
+
+
+
+Top-level names that shadow top-level names in the target
+
+
+let MAP = [1]
+let m f = List`map f MAP
+
+becomes
+
+val _ = Define `
+ MAP = [1]`;
+
+val _ = Define `
+ m f = MAP f MAP`;
+
+
+
+
+Less contextual information in the target for disambiguation
+
+let f = 1
+type <| f : num |>
+
+when converted to HOL, the field name hides the top-level binding
+
+
+
+
+
+Different lexical structure for names of the same kind
+
+let x = 1
+let X = 1
+
+in OCaml
+
+
+
+
+What to do about 
+
+let x = 1
+let f x = x
+
+in HOL where f's parameter doesn't work right
+
