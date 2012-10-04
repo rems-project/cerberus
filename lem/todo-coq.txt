@@ -1,0 +1,129 @@
+(going over the ppc machine .lem files).
+
+1-- big-cap for type variables
+
+  Inductive option A := 
+    | Some :( A -> option  A)%type
+    | None.
+
+instead of
+
+  Inductive option a := 
+    | Some :( a-> option  a)%type
+    | None.
+
+Requires the type-macro setup.  Low priority.
+
+2-- Fixpoint keyword instead of Definition when defining recursive functions.  
+
+Requires some mild re-engineering of the def_start / def_rec keywords.
+
+3 -- polymorphic functions must abstract their type variables (DONE)
+(system-F like) (and concretise them at call places) (HOPE CAN CHEAT
+WITH IMPLICIT ARGS; NOT SURE ABOUT RECURSIVE STUFF)
+
+Fixpoint opt_map A B (f:A -> option B) (al : list A) : list B :=
+  match al with ...
+  | a :: al' =>
+      let fal' := opt_map A B f al' in
+      ...
+
+instead of 
+
+Definition rec opt_map (f:a -> option b) (al : list a) : list b :=
+  match al with ...
+  | a :: al' =>
+      let fal' := opt_map f al' in
+      ...
+
+Requires exporting some type informations as we discussed in Cambridge.
+
+For polymorphic types eg.
+
+  Inductive option (a:Type) := 
+    | Some : a -> option  a
+    | None.
+
+one should also instatiate the type, eg. "Some nat 1".  I hope that
+declaring these type variables as "Implicit Arguments" will be enough,
+and that we'll be able to just write "Some 1" (it usually works).
+
+4-- equality
+
+We must define equality functions (in bool) over all the lem defined
+data-types (as we did for Coq).
+
+5-- polymorphic equality (TRICKY)
+
+SCOTT: This looks very similar to the problem that we have in OCaml, i.e.,
+polymorphic equality is not suitable for comparing sets.  I've always been
+planning to fix the problem using the type classes, and writing the dictionary
+passing transformation to implement them is high on my TODO list, but it will
+take a few weeks of effort.
+
+Look at 
+
+  let funupd f x y := fun x' => if x'=x then y else f x'
+
+Here we must not only abstract the type variables, as in (3) but we
+must also abstract over the equality function that will be used to
+test x and x':
+
+  Definition funupd A B f (x:A) (y:B) (eqA: forall x y:A, {x=y}+{x<>y}) :=
+    fun x' => if eqA x' x then y else f x'.
+
+As you imagine, the right equality function must be passed at each use
+of funupd.  This implies that for each function we must record not
+only which types we must concretise, but also which equality
+functions, if any (if we have a decent naming scheme for equality
+functions, then knowing the types over which we need equality
+functions should be enough).
+
+Scott, Peter, we'll have to update the internal representation here,
+maybe together with (3)?  Tricky.
+
+Things are worse than expected, as in some cases these propagates...  for instance, consider
+
+let rec pos_in' l e acc =
+       match l with
+       | [] -> None
+       | e1::l' -> if e = e1 then Some acc else pos_in' l' e (acc+1)
+       end
+
+let pos_in l e =
+       pos_in' l e 0
+
+and its compilation
+
+Fixpoint pos_in' A (eqA: forall x y:A, {x=y}+{x<>y}) (l:list A) (e:A) (acc:nat) :=
+       match l with
+       | nil => None 
+       | e1::l' => if eqA e e1 then Some acc else pos_in' A eqA l' e (acc+1)
+       end.
+
+Definition pos_in A (eqA: forall x y:A, {x=y}+{x<>y}) (l:list A) (e:A) :=
+       pos_in' A eqA l e 0.
+
+6-- sets
+
+TODO (talk to Assia tomorrow), probably looking at finite sets only for now.
+
+
+-- tentatively, split into finite and infinite sets?
+
+-------------------------------
+
+7 type name homs 
+
+8 totality and incomplete pattern matching - we think csem and ppcmem
+can just be made total, and its functions can be made primitive
+recursive.   Longer-term, we might play with automatic optionisation,
+but not just now. 
+
+-------------------------------
+
+9 nat-indexed types for instruction semantics ???
+
+10  inductive relations ???
+
+

@@ -1,0 +1,13 @@
+- think a bit about comments and linebreaks/indentation and user
+  parens
+
+- ott the grammar and type system  (inventing concrete syntax - a lot
+  like ocaml) 
+
+- write short note, stealing liberally from the two ich documents, for
+  Daniel etc
+
+- generally be AST-inclusive of common ML-ish syntax
+
+- overloading: um
+
