@@ -1,0 +1,320 @@
+open Global
+open Core
+
+module Effect = struct
+  type st = bool
+  type t 'a = State.t 'a st
+  
+  val return: forall 'a. 'a -> t 'a
+  let return = State.return
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind = State.bind
+  
+  module Operators = struct
+    let (>>=)    = bind
+    let (>>) m f = bind m (fun _ -> f)
+  end
+  
+  open Operators
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  
+  val flagModify : t unit
+  let flagModify = fun _ -> ((), true)
+  
+end
+
+module E = Effect 
+open E.Operators
+
+
+let simplify_arith_rel op n1 n2 =
+  let f = function
+    | true  -> Ktrue
+    | false -> Kfalse
+  end in
+  match op with
+    | OpAdd -> Kconst (n1 + n2)
+    | OpSub -> Kconst (n1 - n2)
+    | OpMul -> Kconst (n1 * n2)
+    | OpDiv -> Kconst (n1 / n2)
+    (* | OpMod -> Kconst (n1 mod n2) *)
+     | OpEq  -> f (n1 = n2)
+    | OpLt  -> f (n1 < n2)
+  end 
+
+let rec subst_symbols (expr : expr) (sigma : Pmap.map sym expr) : E.t expr =
+  let g a = if Pmap.mem a sigma then E.flagModify >> E.return (Pmap.find a sigma) else E.return $ Ksym a in
+  match expr with
+    | Ksym a -> g a
+    | Kop op e1 e2 ->
+        subst_symbols e1 sigma >>= fun e1' ->
+        subst_symbols e2 sigma >>= fun e2' ->
+        E.return $ Kop op e1' e2'
+    | Knot e ->
+        subst_symbols e sigma >>= fun e' ->
+        E.return $ Knot e'
+    | Klet a e1 e2 ->
+        subst_symbols e1 sigma >>= fun e1' ->
+        subst_symbols e2 sigma >>= fun e2' ->
+        E.return $ Klet a e1' e2'
+    | Kif b e1 e2 ->
+        subst_symbols b sigma  >>= fun b'  ->
+        subst_symbols e1 sigma >>= fun e1' ->
+        subst_symbols e2 sigma >>= fun e2' ->
+        E.return $ Kif b' e1' e2'
+    | Kcall f args ->
+        E.mapM (fun e -> subst_symbols e sigma) args >>= fun args' ->
+        E.return $ Kcall f args'
+    | Kwseq _as e1 e2 ->
+        subst_symbols e1 sigma >>= fun e1' ->
+        subst_symbols e2 sigma >>= fun e2' ->
+        E.return $ Kwseq _as e1' e2'
+    | Kunseq es ->
+        E.mapM (fun e -> subst_symbols e sigma) es >>= fun es' ->
+        E.return $ Kunseq es'
+    | Kindet e ->
+        subst_symbols e sigma >>= fun e' ->
+        E.return $ Kindet e'
+    | Kaction (p, Kalloc e) ->
+        subst_symbols e sigma >>= fun e' ->
+        E.return $ Kaction (p, Kalloc e')
+    | Kaction (p, Kkill a) -> if Pmap.mem a sigma then
+                                Boot.debug "subst_symbols on a symbol used by  'kill'"
+                              else
+                                E.return $ Kaction (p, Kkill a)
+    | Kaction (p, Kstore ty e1 e2) ->
+        subst_symbols e1 sigma >>= fun e1' ->
+        subst_symbols e2 sigma >>= fun e2' ->
+        E.return $ Kaction (p, Kstore ty e1' e2')
+    | Kaction (p, Kload ty e) ->
+        subst_symbols e sigma >>= fun e' ->
+        E.return $ Kaction (p, Kload ty e')
+    | Ksame (Ksym a1) (Ksym a2) -> if Pmap.mem a1 sigma || Pmap.mem a2 sigma then
+                                     Boot.debug "subst_symbol on a symbol used by a 'same'"
+                                   else
+                                     E.return $ expr
+    | _ -> E.return expr
+  end
+
+
+let rec collapse_unseq (expr : expr) : list expr =
+  match expr with
+    | Kunseq es -> List.concat (List.map collapse_unseq es)
+    | _         -> [expr]
+  end
+
+
+
+let rec trivialy_pure fun_map exp =
+  let trivialy_pure = trivialy_pure fun_map in
+  match exp with
+    | Kconst _    -> true
+    | Kctype _    -> true
+    | Ksym _      -> true
+    | Ktrue       -> true
+    | Kfalse      -> true
+    | Kcall f _   -> match Pmap.find f fun_map with
+                       | (TyBase _, _, _) -> true
+                       | _                -> false
+                     end
+    | Kop _ e1 e2 -> trivialy_pure e1 && trivialy_pure e2
+
+    (* TODO: asume the first operand is pure (which it should be to typecheck) *)
+    | Klet _ _ e2 -> trivialy_pure e2
+    | _ -> false
+  end
+
+
+
+let rec simplify_expr fun_map (exp: expr) : E.t expr =
+  let simplify_expr = simplify_expr fun_map in
+  match exp with
+    (* Perform trivial simplifications on binary operators with constant operands. *)
+    | Kop op e1 e2 ->
+        simplify_expr e1 >>= fun e1' ->
+        simplify_expr e2 >>= fun e2' ->
+        match (op, e1', e2') with
+          | (_, Kconst n1, Kconst n2) -> E.flagModify >> E.return (simplify_arith_rel op n1 n2)
+          | (OpAnd, Ktrue, Ktrue)     -> E.flagModify >> E.return Ktrue
+          | (OpAnd, _, _)             -> E.flagModify >> E.return Kfalse
+          | _                         -> E.return $ Kop op e1' e2'
+        end
+    
+    (* Similarly from the boolean negation. *)
+    | Knot Ktrue  -> E.flagModify >> E.return Kfalse
+    | Knot Kfalse -> E.flagModify >> E.return Ktrue
+    | Knot e      -> simplify_expr e >>= fun e' ->
+                     E.return $ Knot e'
+    
+    (* A convertion from a type to itself can be removed. *)
+    | Kcall conv [Kctype ty1; Kctype ty2; e] -> if Ail.ctype_eq ty1 ty2 then E.flagModify >> E.return e else E.return exp
+    
+    (* as <- e1; skip  -->  e1 *)
+    | Kwseq _ e Kskip -> E.flagModify >> simplify_expr e
+    (* skip; e2  -->  e2 *)
+    | Kwseq [] Kskip e -> E.flagModify >> simplify_expr e
+    
+    (* META HACK: the Translation module doesn't produce well typed Core program (for now), one reason is
+                  that it doesn't ensure that the first operand of a seq is effectful. Here we remove these
+                  erronous seq by substitution of the pure first operands into the second operands.
+                  (NOTE: this simplification is NOT complete, it only simplify "trivialy pure" expression.) *)
+    | Kwseq _as e1 e2 ->
+        simplify_expr e1 >>= fun e1' ->
+        match _as with
+          | [] -> simplify_expr e2 >>= fun e2' ->
+                  if trivialy_pure fun_map e1' then E.flagModify >> E.return e2'
+                                               else E.return $ Kwseq [] e1' e2'
+
+          | _  -> let (_as', e1'', sigma) =
+                    (List.fold_right2 (fun a e (_as, es, m) ->
+                      match a with
+                        | Some a -> if trivialy_pure fun_map e then (_as, es, Pmap.add a e m) else (Some a :: _as, e :: es, m)
+                        | None   -> (a::_as, e::es, m)
+                      end
+                     ) _as (collapse_unseq e1') ([],[],Pmap.empty)) in
+                  subst_symbols e2 sigma >>= simplify_expr >>= fun e2' ->
+                  E.return $ Kwseq _as' (match e1'' with [] -> Kskip | [e] -> e | _ -> Kunseq e1'' end) e2'
+        end
+    
+    (* let a = e in skip  -->  e *)
+    | Klet _ e Kskip -> E.flagModify >> E.return Kskip (* TODO: assumes that the first operand of Klet must be pure *)
+    
+
+      (* TODO: check *)
+    | Klet a e1 e2 ->
+        simplify_expr e1 >>= fun e1' ->
+        simplify_expr e2 >>= fun e2' ->
+        if trivialy_pure fun_map e1' then E.flagModify >> subst_symbols e2' (Pmap.add a e1 Pmap.empty) else E.return $ Klet a e1' e2'
+    
+    (*  *)
+    | Kif b e1 e2 ->
+        simplify_expr b  >>= fun b' ->
+        simplify_expr e1 >>= fun e1' ->
+        simplify_expr e2 >>= fun e2' ->
+        E.return $ Kif b' e1' e2'
+    | Kcall f args ->
+        E.mapM simplify_expr args >>= fun args' ->
+       E.return $ Kcall f args'
+    | Kwseq _as e1 e2 ->
+        simplify_expr e1 >>= fun e1' ->
+        simplify_expr e2 >>= fun e2' ->
+        E.return $ Kwseq _as e1' e2'
+    | Kunseq es ->
+        E.mapM simplify_expr es >>= fun es' ->
+        E.return $ Kunseq es'
+    | Kindet e ->
+        simplify_expr e >>= fun e' ->
+        E.return $ Kindet e'
+    | Kaction (p, Kalloc e) ->
+        simplify_expr e >>= fun e' ->
+        E.return $ Kaction (p, Kalloc e')
+    | Kaction (p, Kstore ty e1 e2) ->
+        simplify_expr e1 >>= fun e1' ->
+        simplify_expr e2 >>= fun e2' ->
+        E.return $ Kaction (p, Kstore ty e1' e2')
+    | Kaction (p, Kload ty e) ->
+        simplify_expr e >>= fun e' ->
+        E.return $ Kaction (p, Kload ty e')
+    | _ -> E.return exp
+  end 
+
+
+
+
+(*
+  | Kconst n -> 
+  | Ksym a -> 
+  | Kop op e1 e2 -> 
+  | Ktrue -> 
+  | Kfalse -> 
+  | Knot e -> 
+  | Kctype ty -> 
+  | Klet a e1 e2 -> 
+  | Kif b e1 e2 -> 
+  | Kcall f args -> 
+  | Kundef -> 
+  | Kerror -> 
+  | Kskip -> 
+  | Kwseq as e1 e2 -> 
+  | Kunseq es -> 
+  | Kindet e -> 
+  | Katom e -> 
+  | Kcreate ty -> 
+  | Kalloc e -> 
+  | Kkill a -> 
+  | Kstore ty e1 e2 -> 
+  | Kload ty e -> 
+  | Ksame a1 a2 -> 
+*)
+
+let rec foo e =
+  match e with
+    | Kwseq _as (Kwseq _as' e1 e2) e3 ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        foo e3 >>= fun e3' ->
+        E.flagModify >> E.return (Kwseq _as' e1' (Kwseq _as e2' e3'))
+      
+    | Kop op e1 e2 ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        E.return $ Kop op e1' e2'
+    | Knot e ->
+        foo e >>= fun e' ->
+        E.return $ Knot e'
+    | Klet a e1 e2 ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        E.return $ Klet a e1' e2'
+    | Kif b e1 e2 ->
+        foo b  >>= fun b'  ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        E.return $ Kif b' e1' e2'
+    | Kcall f args ->
+        E.mapM foo args >>= fun args' ->
+        E.return $ Kcall f args'
+    | Kwseq _as e1 e2 ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        E.return $ Kwseq _as e1' e2'
+    | Kunseq es ->
+        E.mapM foo es >>= fun es' ->
+        E.return $ Kunseq es'
+    | Kindet e ->
+        foo e >>= fun e' ->
+        E.return $ Kindet e'
+    | Kaction (p, Kalloc e) ->
+        foo e >>= fun e' ->
+        E.return $ Kaction (p, Kalloc e')
+    | Kaction (p, Kstore ty e1 e2) ->
+        foo e1 >>= fun e1' ->
+        foo e2 >>= fun e2' ->
+        E.return $ Kaction (p, Kstore ty e1' e2')
+    | Kaction (p, Kload ty e) ->
+        foo e >>= fun e' ->
+        E.return $ Kaction (p, Kload ty e')
+    | _ -> E.return e
+  end
+
+let rec bar e =
+  let (e', modified) = foo e false in
+  if modified then bar e' else e
+
+let rec simpl fun_map e =
+  let (e', modified) = simplify_expr fun_map e false in
+  if modified then simpl fun_map e' else bar e
+
+
+
+let simplify (f: file) : file =
+  <|
+      main= f.main;
+      fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl f.fun_map fbody)) f.fun_map
+  |>
+
