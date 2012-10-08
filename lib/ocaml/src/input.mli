@@ -1,5 +1,7 @@
 type t
-val read : (BatIO.input -> 'a) -> t -> 'a
+type input = in_channel
+
+val read : (input -> 'a) -> t -> 'a
 val name : t -> string
 
 val file : string -> t

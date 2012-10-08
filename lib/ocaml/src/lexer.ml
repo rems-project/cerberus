@@ -21,9 +21,9 @@ let fname name lexbuf =
 let make input =
   let name = Input.name input in
   let lexbuf f =
-    Input.read (f -| fname name -| BatLexing.from_input) input in
+    Input.read (f -| fname name -| Lexing.from_channel) input in
   let stream f =
     let to_stream lexbuf =
       fun () -> Clexer.initial lexbuf in
-    Input.read (f -| to_stream -| fname name -| BatLexing.from_input) input in
+    Input.read (f -| to_stream -| fname name -| Lexing.from_channel) input in
   {name; lexbuf; stream}

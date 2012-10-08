@@ -43,8 +43,8 @@ let enum_tbl = H.create 52
 (* 6.4.1 [Keywords] *)
 let keywords =
   List.fold_left
-    (fun m (k, e) -> BatMap.add k e m)
-    BatMap.empty
+    (fun m (k, e) -> Pmap.add k e m)
+    (Pmap.empty Pervasives.compare)
     [
       ("auto",           P.AUTO);
       ("break",          P.BREAK);
@@ -99,7 +99,7 @@ let keywords =
 let scan_ident lexbuf =
   let id = Lexing.lexeme lexbuf in
   try
-    BatMap.find id keywords
+    Pmap.find id keywords
   (* default to variable name, as opposed to type *)
   with Not_found ->
     (* Check if the token is an enumeration constant *)

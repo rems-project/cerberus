@@ -1,11 +1,12 @@
-type t = {
-  name : string;
-  input : 'a. (BatIO.input -> 'a) -> 'a
-}
+type t = string
+type input = in_channel
 
-let read f {input; _} = input f
-let name {name; _} = name
+let read f input =
+  let channel = open_in input in  
+  let result  = f channel in
+  let ()      = close_in channel in
+  result
 
-let file name =
-  let input f = BatFile.with_file_in name f in
-  {name; input}
+let name input = input
+
+let file name = name

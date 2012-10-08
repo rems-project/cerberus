@@ -9,7 +9,7 @@ TEX_BUILD_DIR=_build_tex
 HOL_BUILD_DIR=_build_hol
 COQ_BUILD_DIR=_build_coq
 
-OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text -package batteries
+OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text
 
 FILES=\
 boot.lem \
