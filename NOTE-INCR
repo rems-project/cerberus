@@ -229,13 +229,8 @@ used by a Core expression, hence the _) (NOTE: observe that the action
 remains negative because we need transitivity of negativeness, e.g. in
 x=y=z++ the store of z should be unseq wrt the store of x):
 
-NEW: I modified, this rule. Instead of doing an epsilon reduction simply
-     moving the negative action past the wseq operator, we can also do a
-     reduction of A. This avoid duplicating normal forms.
-
-       (s, A) --a--> (s', A')
------------------------------------- (neg_wseq)
-(s, _ ← ~a; A) --ε--> (s', ~a || A')
+----------------------------------- (neg_wseq)
+(s, _ ← ~a; A) --ε--> (s', ~a || A)
 
 
 In contrast, a sequence point forces an ordering on all actions. So
