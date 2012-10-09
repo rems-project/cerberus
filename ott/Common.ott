@@ -1,0 +1,32 @@
+metavar n ::=
+  {{ coq nat }}
+  {{ lex numeral }}
+indexvar i, j, k ::=
+  {{ coq nat }}
+
+grammar
+formula :: 'formula_' ::=
+  | not formula :: M :: Not
+      {{ tex \neg [[formula]] }}
+      {{ coq ~ ([[formula]]) }}
+  | formula1 \/ formula2 :: M :: Disj
+      {{ coq [[formula1]] \/ [[formula2]] }}
+  | formula1 /\ formula2 :: M :: Conj
+      {{ coq [[formula1]] /\ [[formula2]] }}
+  | ( formula ) :: S :: Parens
+      {{ icho [[formula]] }}
+  | formula1 ... formulak :: :: dots
+  | judgement :: :: judgement
+
+terminals :: 'terminals_' ::=
+  | \/ :: :: Disj
+      {{ tex \vee }}
+  | /\ :: :: Conj
+      {{ tex \wedge }}
+
+b :: bool ::=
+  {{ phantom }}
+  | true :: M :: True
+     {{ coq true }}
+  | false :: M :: False
+     {{ coq false }}

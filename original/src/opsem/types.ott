@@ -1,0 +1,281 @@
+% Type equality
+defns
+type_cmp :: type_cmp_ ::=
+
+defn
+t1 = t2 :: :: eq :: eq_ by
+
+%----- :: reflexivity
+%t = t
+
+%t2 = t1
+%------- :: symmetry
+%t1 = t2
+
+%t1 = t2
+%t2 = t3
+%------- :: transitivity
+%t1 = t3
+
+defn
+t1 neq t2 :: :: neq :: neq_ by
+
+
+% Width and precision of integer types
+grammar
+t_width {{ tex t_{width} }} :: type_width_ ::=
+  | CHAR_WIDTH :: :: char
+  | SHORT_WIDTH :: :: short
+  | INT_WIDTH :: :: int
+  | LONG_WIDTH :: :: long
+  | LONGLONG_WIDTH :: :: longlong
+
+defns
+type_representation :: type_representation_ ::=
+
+defn
+t_width < t_width' :: :: width_lt :: width_lt_ by
+
+%t_width < t_width'
+%t_width' < t_width''
+%-------------------- :: reflexivity
+%t_width < w_width''
+
+defn
+t_width = t_width' :: :: width_eq :: width_eq_ by
+
+defn
+t_width <= t_width' :: :: width_leq :: width_leq_ by
+
+%t_width = t_width'
+%------------------- :: eq
+%t_width <= t_width'
+
+%t_width < t_width'
+%------------------ :: lt
+%t_width <= t_width
+
+defn
+width ( t_int ) = t_width :: :: width :: width_ by
+
+%--------------------------------- :: char
+%width(unsigned char) = CHAR_WIDTH
+
+%----------------------------------- :: short
+%width(unsigned short) = SHORT_WIDTH
+
+%------------------------------- :: int
+%width(unsigned int) = INT_WIDTH
+
+%--------------------------------- :: long
+%width(unsigned long) = LONG_WIDTH
+
+%----------------------------------------- :: longlong
+%width(unsigned longlong) = LONGLONG_WIDTH
+
+%width(unsigned t_base) = t_width
+%-------------------------------- :: signed
+%width(signed t_base) = t_width
+
+defn
+precision ( t_int1 ) < precision ( t_int2 ) :: :: prec_lt :: prec_lt_ by
+
+%width(t_int1) = t_width
+%width(t_int2) = t_width'
+%t_width < t_width'
+%------------------------------------ :: width
+%precision(t_int1) < precision(t_int2)
+
+%width(signed t_base1) = t_width
+%width(unsigned t_base2) = t_width'
+%t_width <= t_width'
+%------------------------------------------------------- :: signed
+%precision(signed t_base1) < precision(unsigned t_base2)
+
+defn
+precision ( t_int1 ) = precision ( t_int2 ) :: :: prec_eq :: prec_eq_ by
+
+defn
+precision ( t_int1 ) <= precision ( t_int2 ) :: :: prec_leq :: prec_leq by
+
+
+% Integer rank conversion
+
+defns
+type_rank :: type_rank_ ::=
+
+defn
+t_int1 <rank t_int2 :: :: lt :: lt_ by
+
+t_int1 <rank t_int2
+t_int2 <rank t_int3
+------------------- :: transitivity
+t_int1 <rank t_int3
+
+t_int1 =rank t_int2
+t_int2 <rank t_int3
+------------------- :: eq_left
+t_int1 <rank t_int3
+
+t_int3 =rank t_int2
+t_int1 <rank t_int2
+------------------- :: eq_right
+t_int1 <rank t_int3
+
+---------------- :: bool
+bool <rank t_int
+
+------------------------------ :: char_short
+signed char <rank signed short
+
+----------------------------- :: short_int
+signed short <rank signed int
+
+---------------------------- :: int_long
+signed int <rank signed long
+
+--------------------------------- :: long_longlong
+signed long <rank signed longlong
+
+defn
+t_int1 =rank t_int2 :: :: eq :: eq_ by
+
+------------------------------------------ :: signed_unsigned
+signed t_base =rank unsigned t_base
+
+defn
+t_int1 <=rank t_int2 :: :: leq :: leq_ by
+
+t_int1 =rank t_int2
+-------------------- :: eq
+t_int1 <=rank t_int2
+
+t_int1 <rank t_int2
+-------------------- :: lt
+t_int1 <=rank t_int2
+
+defns
+type_class :: type_class_ ::=
+
+defn
+integer ( t ) :: :: int :: int by
+
+-------------- :: ''
+integer(t_int)
+
+defn
+arith ( t ) :: :: arith :: arith by
+
+-------------- :: ''
+arith(t_arith)
+
+defn
+scalar ( t ) :: :: scalar :: scalar by
+
+---------------- :: ''
+scalar(t_scalar)
+
+% Common type of real types
+
+defns
+type_common :: type_common_ ::=
+
+defn
+common_type ( t_arith1 , t_arith2 ) = t_arith3 :: :: arith :: arith_ by
+
+% The generic 'reflexivity' and 'symmetry' rules are not part of the standard.
+
+--------------------------------------- :: reflexivity
+common_type(t_arith, t_arith) = t_arith
+
+common_type(t_arith2, t_arith1) = t_arith3
+------------------------------------------ :: symmetry
+common_type(t_arith1, t_arith2) = t_arith3
+
+signed t_base1 <rank signed t_base2
+------------------------------------------------------------ :: signed
+common_type(signed t_base1, signed t_base2) = signed t_base2
+
+unsigned t_base1 <rank unsigned t_base2
+------------------------------------------------------------------ :: unsigned
+common_type(unsigned t_base1, unsigned t_base2) = unsigned t_base2
+
+signed t_base1 <=rank unsigned t_base2
+---------------------------------------------------------------- :: signed_lt
+common_type(signed t_base1, unsigned t_base2) = unsigned t_base2
+
+precision(unsigned t_base2) <= precision(signed t_base1)
+unsigned t_base2 <rank signed t_base1
+-------------------------------------------------------------- :: unsigned_prec_leq
+common_type(signed t_base1, unsigned t_base2) = signed t_base1
+
+precision(signed t_base1) < precision(unsigned t_base2)
+unsigned t_base2 <rank signed t_base1
+---------------------------------------------------------------- :: signed_prec_lt
+common_type(signed t_base1, unsigned t_base2) = unsigned t_base1
+
+% Integer promotion
+
+defns
+type_promote :: type_promote_ ::=
+
+defn
+promote ( t1 ) = t2 :: :: int :: int_ by
+
+% signed int can represent all values
+t_int neq signed int
+t_int neq unsigned int
+t_int <=rank signed int
+precision(t_int) <= precision(signed int)
+----------------------------------------- :: signed_int
+promote(t_int) = signed int
+
+% signed int cannot represent all values
+t_int neq signed int
+t_int neq unsigned int
+t_int <=rank signed int
+precision(signed int) < precision(t_int)
+---------------------------------------- :: unsigned_int
+promote(t_int) = unsigned int
+
+% higher conversion rank prohibits integer promotion
+% includes the case where t_int = signed int, unsigned int
+signed int <rank t_int
+----------------------- :: rank_geq
+promote(t_int) = t_int
+
+% integer promotion only affects integer types
+% TODO remove the abuse of syntax in the neq term
+% TODO bit-fields
+t neq t_int
+--------------- :: otherwise
+promote(t) = t
+
+
+% Type compatibility
+defns
+type_compat :: type_compat_ ::=
+
+defn
+t1 =compat t2 :: :: '' :: '' by
+
+----------- :: reflexivity
+t =compat t
+
+t2 =compat t1
+------------- :: symmetry
+t1 =compat t2
+
+t1 =compat t2
+t2 =compat t3
+------------- :: transitivity
+t1 =compat t3
+
+defns
+type_composite :: type_composite_ ::=
+
+defn
+composite ( t1 , t2 ) = t3 :: :: '' :: '' by
+
+------------------- :: reflexivity
+composite(t, t) = t

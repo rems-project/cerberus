@@ -1,0 +1,255 @@
+% embed
+%   {{ tex
+% \newcommand{\mknewline}{\\}
+%   }}
+
+% Core syntax %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+grammar
+core_binop {{ tex \bullet }} :: 'core_binop' ::= {{ com binary operators }}
+  | +   :: :: ADD    {{ tex \texttt{+}  }}
+  | -   :: :: SUB    {{ tex \texttt{-}  }}
+  | *   :: :: MULT   {{ tex \texttt{*}  }}
+  | /   :: :: DIV    {{ tex \texttt{/}  }}
+  | %   :: :: MODULO {{ tex \texttt{\%} }}
+  
+  | =   :: :: EQ     {{ tex \texttt{=}  }}
+  | <   :: :: LT     {{ tex \texttt{<}  }}
+  | /\  :: :: AND   {{ tex \wedge      }}
+  | \/  :: :: OR    {{ tex \vee        }}
+
+
+p :: '' ::= {{ com patterns }}
+  | a                :: :: ATOM  (+ b = a +)
+  | ( p1 , .. , pk ) :: :: TUPLE (+ b = b(p1 .. pk) +)
+
+core_syn {{ tex e^\text{core} }} :: 'coreSyn_' ::=
+  % arithmetic, boolean and ctype expressions
+  | n                                          :: :: CONSTANT 
+  | a                                          :: :: SYMBOL   
+  | core_syn1 core_binop core_syn2             :: :: BINOP    
+  | true                                       :: :: TRUE  {{ tex \textbm{true}                                                      }}
+  | false                                      :: :: FALSE {{ tex \textbm{false}                                                     }}
+  | ctype                                      :: :: CTYPE    
+  | let p := core_syn1 in core_syn2            :: :: LET (+ bind b(p) in core_syn2 +)
+                                                           {{ tex \textbm{let} \ [[p]] = [[core_syn1]] \ \textbm{in} \ [[core_syn2]] }}
+  | if core_syn1 then core_syn2 else core_syn3 :: :: IF    {{ tex \textbm{if} \ [[core_syn1]] \ \textbm{then} \ [[core_syn2]] \
+                                                                  \textbm{else} \ [[core_syn3]]                                      }}
+  | f core_syn1  .. core_synk          :: :: FUNCALL                        
+  
+  % undefined behaviour and static error exceptions
+  | undef :: :: UNDEF {{ tex \textbm{undef} }}
+  | error :: :: ERROR {{ tex \textbm{error} }}
+  | skip  :: :: SKIP  {{ tex \textbm{skip}  }}
+  
+  % sequence-before constructors
+  | p <- core_syn1 ; core_syn2 :: :: SEQ (+ bind b(p) in core_syn2 +)
+  | core_syn1 || core_syn2     :: :: UNSEQ {{ tex [[core_syn1]] \ || \ [[core_syn2]] }}
+  | [ core_syn ]               :: :: INDET       
+  | { core_syn }               :: :: ATOMICBLOCK 
+  
+  % memory actions
+  | create { ctype }      :: :: CREATE {{ tex \textbm{create}_{[[ctype]]}                  }}
+  | alloc a               :: :: ALLOC  {{ tex \textbm{alloc} \ [[a]]                       }}
+  | kill a                :: :: KILL   {{ tex \textbm{kill} \ [[a]]                        }}
+  | store { ctype } a1 a2 :: :: STORE  {{ tex \textbm{store}_{[[ctype]]} \ [[a1]] \ [[a2]] }}
+  | load { ctype } a      :: :: LOAD   {{ tex \textbm{load}_{[[ctype]]} \ [[a]]            }}
+  | same a1 a2            :: :: SAME   {{ tex \textbm{same} \ [[a1]] \ [[a2]]              }}
+  
+% TODO: would it be better to make these become function
+%       part of a standard library ?
+  | max { ctype }                     :: :: MAX      {{ tex \textbm{max}_{[[ctype]]}                                         }}
+  | min { ctype }                     :: :: MIN      {{ tex \textbm{min}_{[[ctype]]}                                         }}
+  | sizeof { ctype }                  :: :: SIZEOF   {{ tex \textbm{sizeof}_{[[ctype]]}                                      }}
+  | alignof { ctype }                 :: :: ALIGNOF  {{ tex \textbm{alignof}_{[[ctype]]}                                     }}
+  | offsetof { ctype }                :: :: OFFSETOF {{ tex \textbm{offsetof}_{[[ctype]]}                                    }}
+  | shift a core_syn                  :: :: SHIFT    {{ tex \textbm{shift} \ [[a]] \ [[core_syn]]                            }}
+  | conv { ctype1 \ ctype2 } core_syn :: :: CONV     {{ tex \textbm{conv}_{[[ctype1]] \rightarrow [[ctype2]]} \ [[core_syn]] }}
+  
+  | ( core_syn ) :: M :: paren
+
+  % TYPESETTING HACK
+  | < core_syn >                          :: M :: attach                       {{ tex [[core_syn]] }}
+  | [multiline] core_syn :: M :: multiline {{ com typesetting hack }} {{ tex \left[ \begin{array}{l}[[core_syn]]\end{array} \right] }}
+  | [newline] core_syn   :: M :: newline   {{ com typesetting hack }} {{ tex \\ [[core_syn]]                         }}
+  | core_syn [break]     :: M :: break     {{ com typesetting hack }} {{ tex [[core_syn]] \\                         }}
+
+
+% Function names %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+f :: '' ::=
+  | fname    ::   :: '' {{ com user defined functions }}
+  | overflow :: M :: overlow {{ com }}
+  | conv_int :: M :: conv_int
+
+% Function definition %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+fun_def :: 'function_definition_' ::= {{ com pure functions }}
+  | fun fname ( a1 , .. , ak ) = core_syn :: :: '' (+ bind a1 .. ak in core_syn +)
+
+
+program, P :: 'program_' ::=
+  | fun_def1 ; .. ; fun_defj ; core_syn :: :: PROGRAM
+
+% Core types %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+coreBaseTy, T :: 'cBaseTy_' ::=
+  | unit             :: :: UNIT
+  | bool             :: :: BOOL
+  | num              :: :: NUM
+  | addr             :: :: ADDR
+  | type             :: :: CTYPE
+  | ( T1 , .. , Tk ) :: :: TUPLE
+
+coreTy, Ty :: 'cTy_' ::=
+  | T   :: :: BASE_TY
+  | T * :: :: STMT_TY
+
+
+
+
+
+  G_core {{ tex \Gamma }} :: 'G_core_' ::=
+%    | empty     :: :: base {{ tex \emptyset }}
+%    | overflow : type -> val -> val :: :: STD
+    | G_core , a : T                :: :: ctor
+
+
+
+
+
+  core_formula :: 'core_formula_' ::=          
+    | ( a , T ) _in G_core                              :: :: xTG_core 
+    | core_binop _in { core_binop1 , .. , core_binopk } :: :: binOpSet
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+defns
+  Jtype_core :: '' ::=
+    
+    defn G_core |- core_syn : Ty :: :: coreETyping :: 'CoreE_' by
+      ------------------ :: const
+      G_core |- n : num
+      
+      (a,T) _in G_core
+      ---------------- :: sym
+      G_core |- a : T
+      
+      core_binop _in {+,*,/,%}
+      G_core |- core_syn1 : num
+      G_core |- core_syn2 : num
+      ----------------------------------------------- :: arith
+      G_core |- core_syn1 core_binop core_syn2 : num
+      
+      core_binop _in {=,<}
+      G_core |- core_syn1 : num
+      G_core |- core_syn2 : num
+      ------------------------------------------------ :: rel
+      G_core |- core_syn1 core_binop core_syn2 : bool
+      
+      core_binop _in {/\,\/}
+      G_core |- core_syn1 : bool
+      G_core |- core_syn2 : bool
+      ------------------------------------------------ :: connective
+      G_core |- core_syn1 core_binop core_syn2 : bool
+      
+      ---------------------- :: true
+      G_core |- true : bool
+      
+      ----------------------- :: false
+      G_core |- false : bool
+      
+      ----------------------- :: ty
+      G_core |- ctype : type
+      
+      G_core |- core_syn1 : T1
+      G_core |- core_syn2 : Ty2
+      --------------------------------------------- :: let
+      G_core |- let p = core_syn1 in core_syn2 : Ty2
+      
+      G_core |- core_e  : bool
+      G_core |- core_e1 : T
+      G_core |- core_e2 : T
+      -------------------------------------------------- :: if
+      G_core |- if core_e then core_e1 else core_e2 : T
+      
+      ----------------------- :: undef
+      G_core |- undef : T
+      
+      ----------------------- :: error
+      G_core |- error : T
+      
+      % ------------------------ :: max
+      % G_core |- max{ctype} : val
+      
+      % ------------------------ :: min
+      % G_core |- min{ctype} : val
+      
+      % --------------------------- :: sizeof
+      % G_core |- sizeof{ctype} : val
+      
+      % ---------------------------- :: alignof
+      % G_core |- alignof{ctype} : val
+      
+      % ----------------------------- :: offsetof
+      % G_core |- offsetof{ctype} : val
+      
+      % (a, addr) _in G_core
+      % G_core |- core_e : val
+      % ------------------------------- :: shift
+      % G_core |- shift a core_e : val
+      
+      % G_core |- core_e : val
+      % ------------------------------------- :: conv
+      % G_core |- conv{ctype1\ctype2} core_e : val
+      
+      
+      
+      
+    % Core statements typing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    defn G_core |s- S : T :: :: coreSTyping :: CoreS_ by
+      
+      G_core |- core_e : T
+      --------------------- :: expr
+      G_core |s- core_e : T
+      
+      % let
+      
+      G_core |b- B : val
+      G_core |s- S1 : T
+      G_core |s- S2 : T
+      ------------------------------ :: if
+      G_core |s- if B then S1 else S2 : T
+      
+      G_core |s- S1 : T1
+      G_core |s- S2 : T2
+      ----------------------------- :: par
+      G_core |s- S1 || S2 : (T1,T2)
+      
+      ------------------------------- :: create
+      G_core |s- create{ctype} : addr
+      
+          (a,val) _in G_core
+      ------------------------- :: alloc
+      G_core |s- alloc a : addr
+      
+         (a,addr) _in G_core
+      ------------------- :: kill
+      G_core |s- kill a : unit
+      
+      (a1,addr) _in G_core
+      (a2,val) _in G_core
+      ---------------------------- :: store
+      G_core |s- store{ctype} a1 a2 : unit
+      
+          (a,addr) _in G_core
+      ---------------------- :: load
+      G_core |s- load{ctype} a : val
+      
+      (a1,addr) _in G_core
+      (a2,addr) _in G_core
+      ----------------------- :: same
+      G_core |s- same a1 a2 : unit
+      
+      % FUN
+      % CALL
+

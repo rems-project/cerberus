@@ -1,0 +1,215 @@
+metavar a ::=
+  {{ phantom }}
+metavar id ::=
+  {{ phantom }}
+  {{ coq nat }}
+  {{ lex alphanum }}
+  {{ coq-equality }}
+embed {{ coq
+Parameter a  : Set.
+}}
+
+grammar
+terminals :: 'terminals_' ::=
+  | * :: :: Mul
+  | / :: :: Div
+  | % :: :: Mod
+  | + :: :: Add
+  | - :: :: Sub
+  | << :: :: Shl
+  | >> :: :: Shr
+  | & :: :: Band
+  | | :: :: Bor
+  | ^ :: :: Xor
+  | , :: :: Comma
+  | && :: :: And
+  | || :: :: Or
+  | < :: :: Lt
+  | > :: :: Gt
+  | <= :: :: Le
+  | >= :: :: Ge
+  | == :: :: Eq
+  | != :: :: Ne
+  | + :: :: Plus
+  | - :: :: Minus
+  | ! :: :: Bnot
+  | & :: :: Address
+  | * :: :: Indirection
+  | ++ :: :: PostfixIncr
+  | -- :: :: PostfixDecr
+  | = :: :: Assign
+  | ? :: :: Question
+  | : :: :: Colon
+  | . :: :: Dot
+  | -> :: :: Arrow
+  | size_of :: :: Sizeof
+  | align_of :: :: Alignof
+  | ; :: :: Semicolon
+  | { :: :: RBRACE
+  | } :: :: LBRACE
+  | if :: :: If
+  | else :: :: Else
+  | while :: :: While
+  | do :: :: Do
+  | break :: :: Break
+  | continue :: :: Continue
+  | return :: :: Return
+  | switch  :: :: Switch
+  | case :: :: Case
+  | default :: :: Default
+  | goto :: :: Goto
+  | | :: :: Pipe
+  | @ :: :: Union
+      {{ tex \cup }}
+
+formula :: 'formula_' ::=
+  | id : qualifiers ty in G :: :: InGamma
+  | id : ty = s_l in S :: :: InSigma
+
+gamma, G :: gamma ::=
+  {{ tex \Gamma }}
+  {{ coq }}
+  | empty :: M :: Empty
+      {{ coq empty }}
+  | G , id : qualifiers type :: M :: Ctor
+      {{ coq insert [[id]] ([[qualifiers]], [[type]]) [[G]] }}
+  | G1 @ G2 :: M :: App
+      {{ coq update [[G1]] [[G2]] }}
+  | ( G ) :: S :: Parens
+      {{ icho [[G]] }}
+
+sigma, S :: sigma ::=
+  {{ tex \Sigma }}
+  | empty :: M :: Empty
+      {{ coq empty }}
+  | S , id : ty = s_l :: M :: Ctor
+      {{ coq add ([[id]], [[ty]], [[s_l]]) [[S]] }}
+
+arithmeticOperator :: '' ::=
+  {{ com 6.5.5 Multiplicative operators }}
+  | * :: :: Mul
+  | / :: :: Div
+  | % :: :: Mod
+  {{ com 6.5.6 Additive operators }}
+  | + :: :: Add
+  | - :: :: Sub
+  {{ com 6.5.7 Bitwise shift operators }}
+  | << :: :: Shl
+  | >> :: :: Shr
+  {{ com 6.5.10 Bitwise AND operator }}
+  | & :: :: Band
+  {{ com 6.5.11 Bitwise exclusive OR operator }}
+  | | :: :: Bor
+  {{ com 6.5.12 Bitwise inclusive OR operator }}
+  | ^ :: :: Xor
+
+{{ com Binary operators from 6.5.5-14, 6.5.17 }}
+binaryOperator :: '' ::=
+  {{ com Group of operators also used for assigments }}
+  | arithmeticOperator :: :: Arithmetic
+  {{ com 6.5.17 Comma operator }}
+  | , :: :: Comma
+  {{ com 6.5.13 Logical AND operator }}
+  | && :: :: And
+  {{ com 6.5.14 Logical OR operator }}
+  | || :: :: Or
+  {{ com 6.5.8 Relational operators }}
+  | < :: :: Lt
+  | > :: :: Gt
+  | <= :: :: Le
+  | >= :: :: Ge
+  {{ com 6.5.9 Equality operators }}
+  | == :: :: Eq
+  | != :: :: Ne
+
+unaryOperator :: '' ::=
+  | + :: :: Plus
+  | - :: :: Minus
+  | ~ :: :: Bnot
+  | & :: :: Address
+  | * :: :: Indirection
+  | ++ :: :: PostfixIncr
+      {{ com Note: Appears prefix in concrete syntax. }}
+  | -- :: :: PostfixDecr
+      {{ com Note: Appears prefix in concrete syntax. }}
+
+{{ com 6.4.4.1 Integer constants }}
+integerSuffix :: Suffix ::=
+  | unsigned :: :: Unsigned
+  | unsigned long :: :: UnsignedLong
+  | unsigned long long :: :: UnsignedLongLong
+  | long :: :: Long
+  | long long :: :: LongLong
+
+integerConstant :: IntegerConstant ::=
+  | n :: :: Suffix
+  | n integerSuffix :: :: Plain
+
+{{ com 6.4.4 Constants }}
+constant :: Constant ::=
+  | integerConstant :: :: Integer
+%  | float :: :: Float
+%  | enum :: :: Enum
+%     com 6.4.4.3 Enumeration constants
+%  | char :: :: Char
+%  | wchar :: :: Wchar
+
+
+declaration :: Declaration ::=
+  | ty :: :: Plain
+  | ty storageDuration :: :: Storage
+
+expression, e :: Expression ::=
+  | ( e ) :: S :: Parens
+      {{ icho [[e]] }}
+  | unaryOperator e_l :: :: Unary
+  | e_l1 binaryOperator e_l2 :: :: Binary
+  | e_l1 = e_l2 :: :: Assign
+  | e_l1 arithmeticOperator = e_l2 :: :: CompoundAssign
+  | e_l1 ? e_l2 : e_l3 :: :: Conditional
+  | ( qualifiers ty ) e_l :: :: Cast
+  | e_l ( e_l1 , .. , e_lk ) :: :: Call
+%  | e_l . id :: :: Memberof
+%  | e_l -> id :: :: Memberofptr
+  | constant :: :: Constant
+  | id :: :: Variable
+% TODO size_of e_l
+  | size_of ty :: :: Sizeof
+  | align_of ty :: :: Alignof
+
+expressionL, e_l :: ExpressionL ::=
+  | ( e_l ) :: S :: Parens
+      {{ icho [[e_l]] }}
+  | a e :: :: Def
+
+definition :: Definition ::=
+  | id = e_l :: :: Def	
+
+{{ com Statements }}
+statement, s :: Statement ::=
+  | ( s ) :: S :: Parens
+      {{ icho [[s]] }}
+  | ; :: :: Skip
+  | e_l ; :: :: Expression
+  | { G | s_l1 .. s_lk } :: :: Block
+  | if ( e_l ) s_l1 else s_l2 :: :: If
+  | while ( e_l ) s_l :: :: While
+  | do s_l while ( e_l ) ; :: :: Do
+  | break ; :: :: Break
+  | continue ; :: :: Continue
+  | return ; :: :: ReturnVoid
+  | return e_l ; :: :: Return
+  | switch ( e_l ) s_l :: :: Switch
+  | case integerConstant : s_l :: :: Case
+  | default : s_l :: :: Default
+  | id : s_l :: :: Label
+  | goto id ; :: :: Goto
+  | definition1 , ... , definitionk ; :: :: Declaration
+
+statementL, s_l :: StatementL ::=
+  | ( s_l ) :: S :: Parens
+      {{ icho [[s_l]] }}
+  | a s :: :: Def
+
+program :: '' ::=
+  | id S :: :: Program

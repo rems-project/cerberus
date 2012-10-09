@@ -1,0 +1,815 @@
+grammar
+terminals :: 'terminals_' ::=
+  | |e- :: :: ETurnstile
+      {{ tex \vdash_e }}
+  | |l- :: :: LTurnstile
+      {{ tex \vdash_l }}
+  | in :: :: In
+      {{ tex \in }}
+  | empty :: :: Empty
+
+defns
+Jtype :: '' ::=
+
+defn
+P ; G ; S |- e_l : typeCategory :: :: eTypeL :: ETypeL by
+
+P ; G ; S |- e : typeCategory
+--------------------------------- :: Def
+P ; G ; S |- (a e) : typeCategory
+
+defn
+P ; G ; S |- e : typeCategory :: :: eType :: EType by
+
+id : qs ty in G
+----------------------------- :: Variable
+P; G; S |- id : lvalueT qs ty
+
+id : ty = s_l in S
+------------------------------ :: Function
+P; G; S |- id : expressionT ty
+
+P |= n in range signed int
+------------------------------------- :: ConstantInt
+P; G; S |- n : expressionT signed int
+
+not (P |= n in range signed int)
+P |= n in range signed long
+--------------------------------------- :: ConstantLong
+P; G; S |- n : expressionT signed long
+
+not (P |= n in range signed long)
+P |= n in range signed long long
+--------------------------------------- :: ConstantLongLong
+P; G; S |- n : expressionT signed long
+
+P |= n in range unsigned int
+------------------------------------------------ :: ConstantUInt
+P; G; S |- n unsigned : expressionT unsigned int
+
+not (P |= n in range unsigned int)
+P |= n in range unsigned long
+------------------------------------------------- :: ConstantULong
+P; G; S |- n unsigned : expressionT unsigned long
+
+not (P |= n in range unsigned long)
+P |= n in range unsigned long long
+------------------------------------------------------ :: ConstantULongLong
+P; G; S |- n unsigned : expressionT unsigned long long
+
+P |= n in range signed long
+------------------------------------------- :: ConstantLLong
+P; G; S |- n long : expressionT signed long
+
+not (P |= n in range signed long)
+P |= n in range signed long long
+------------------------------------------------ :: ConstantLLongLong
+P; G; S |- n long : expressionT signed long long
+
+P |= n in range unsigned long
+--------------------------------------------- :: ConstantULLong
+P; G; S |- n long : expressionT unsigned long
+
+not (P |= n in range unsigned long)
+P |= n in range unsigned long long
+-------------------------------------------------- :: ConstantULLongLong
+P; G; S |- n long : expressionT unsigned long long
+
+P |= n in range signed long long
+------------------------------------------------ :: ConstantLL
+P; G; S |- n long : expressionT signed long long
+
+P |= n in range unsigned long long
+-------------------------------------------------- :: ConstantULL
+P; G; S |- n long : expressionT unsigned long long
+
+P; G; S |e- e_l : ty (qs1 ty1, .., qsk tyk) *
+P |= isAssignable G S e_l1 ty1 .. P |= isAssignable G S e_lk tyk
+---------------------------------------------------------------- :: Call
+P; G; S |- e_l (e_l1, .., e_lk) : expressionT ty
+
+P; G; S |- e_l : expressionT ty (qs1 ty1, .., qsk tyk)
+---------------------------------------------------------- :: AddressFunction
+P; G; S |- & e_l : expressionT ty (qs1 ty1, .., qsk tyk) *
+
+P; G; S |- e_l : lvalueT qs ty
+not (isRegister ty)
+% TODO not (isBitfield ty) 
+-------------------------------------- :: AddressLvalue
+P; G; S |- & e_l : expressionT qs ty *
+
+P; G; S |e- e_l : qs ty *
+isComplete ty
+isObject ty
+-------------------------------- :: IndirectionObject
+P; G; S |- * e_l : lvalueT qs ty
+
+P; G; S |e- e_l : ty (qs1 ty1, .., qsk tyk) *
+--------------------------------------------------------- :: IndirectionFunction
+P; G; S |- * e_l : expressionT ty (qs1 ty1, .., qsk tyk)*
+
+%TODO expand theses definitions (c.f. Coq version)
+P; G; S |l- e_l : qs ty
+isReal ty \/ isPointer ty
+isModifiable qs ty
+P; G; S |- e_l + = (a 1) : typeCategory
+--------------------------------------- :: PostfixIncrement
+P; G; S |- ++ e_l : typeCategory
+
+P; G; S |l- e_l : qs ty
+isReal ty \/ isPointer ty
+isModifiable qs ty
+P; G; S |- e_l - = (a 1) : typeCategory
+--------------------------------------- :: PostfixDecrement
+P; G; S |- -- e_l : typeCategory
+
+P; G; S |e- e_l : ty'
+isArithmetic ty'
+P |= isPromotion ty' ty
+---------------------------------- :: Plus
+P; G; S |- + e_l : expressionT ty
+
+P; G; S |e- e_l : ty'
+isArithmetic ty'
+P |= isPromotion ty' ty
+---------------------------------- :: Minus
+P; G; S |- - e_l : expressionT ty
+
+P; G; S |e- e_l : ty'
+isInteger ty'
+P |= isPromotion ty' ty
+---------------------------------- :: Bnot
+P; G; S |- ~ e_l : expressionT ty
+
+not (isFunction ty)
+not (isIncomplete ty)
+P |= size_t = ty'
+---------------------------------------- :: SizeOf
+P; G; S |- size_of ty :  expressionT ty'
+
+not (isFunction ty)
+not (isIncomplete ty)
+P |= size_t = ty'
+----------------------------------------- :: AlignOf
+P; G; S |- align_of ty :  expressionT ty'
+
+P; G; S |e- e_l : ty'
+isScalar ty'
+isScalar ty
+% TODO Don't cast pointers to floats and vice versa.
+----------------------------------------------- :: CastScalar
+P; G; S |- (qualifiers ty) e_l : expressionT ty
+
+P; G; S |e- e_l : ty
+--------------------------------------------------- :: CastVoid
+P; G; S |- (qualifiers void) e_l : expressionT void
+
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Mult
+P; G; S |- e_l1 * e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Div
+P; G; S |- e_l1 / e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Mod
+P; G; S |- e_l1 % e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: AddArithmetic
+P; G; S |- e_l1 + e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isComplete ty1
+isInteger ty2
+---------------------------------------------- :: AddPointer1
+P; G; S |- e_l1 + e_l2 : expressionT qs1 ty1 *
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : qs2 ty2 *
+isInteger ty1
+isComplete ty2
+---------------------------------------------- :: AddPointer2
+P; G; S |- e_l1 + e_l2 : expressionT qs2 ty2 *
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: SubArithmetic
+P; G; S |- e_l1 - e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isComplete ty1
+isInteger ty2
+---------------------------------------------- :: SubPointer
+P; G; S |- e_l1 - e_l2 : expressionT qs1 ty1 *
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isComplete ty1
+isComplete ty2
+isCompatible ty1 ty2
+P |= ptrdiff_t = ty
+--------------------------------------- :: SubPointerDiff
+P; G; S |- e_l1 - e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+------------------------------------------ :: ShiftL
+P; G; S |- e_l1 << e_l2 : expressionT ty1'
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isPromotion ty1 ty1'
+------------------------------------------ :: ShiftR
+P; G; S |- e_l1 >> e_l2 : expressionT ty1'
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isReal ty1
+isReal ty2
+------------------------------------------------- :: LtReal
+P; G; S |- e_l1 < e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty1
+isObject ty2
+isCompatible ty1 ty2
+------------------------------------------------- :: LtPointer
+P; G; S |- e_l1 < e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isReal ty1
+isReal ty2
+------------------------------------------------- :: GtReal
+P; G; S |- e_l1 > e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty1
+isObject ty2
+isCompatible ty1 ty2
+------------------------------------------------- :: GtPointer
+P; G; S |- e_l1 > e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isReal ty1
+isReal ty2
+-------------------------------------------------- :: LeReal
+P; G; S |- e_l1 <= e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty1
+isObject ty2
+isCompatible ty1 ty2
+-------------------------------------------------- :: LePointer
+P; G; S |- e_l1 <= e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isReal ty1
+isReal ty2
+-------------------------------------------------- :: GeReal
+P; G; S |- e_l1 >= e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty1
+isObject ty2
+isCompatible ty1 ty2
+-------------------------------------------------- :: GePointer
+P; G; S |- e_l1 >= e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+-------------------------------------------------- :: EqArithmetic
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isCompatible ty1 ty2
+-------------------------------------------------- :: EqPointer
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 void *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty2
+-------------------------------------------------- :: EqVoid1
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 void *
+isObject ty1
+-------------------------------------------------- :: EqVoid2
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : qs2 ty2 *
+isNullPointerConstant e_l1
+-------------------------------------------------- :: EqNull1
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isNullPointerConstant e_l2
+-------------------------------------------------- :: EqNull2
+P; G; S |- e_l1 == e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isArithmetic ty1
+isArithmetic ty2
+-------------------------------------------------- :: NeArithmetic
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isCompatible ty1 ty2
+-------------------------------------------------- :: NePointer
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 void *
+P; G; S |e- e_l2 : qs2 ty2 *
+isObject ty2
+-------------------------------------------------- :: NeVoid1
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 void *
+isObject ty1
+-------------------------------------------------- :: NeVoid2
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2 *
+isNullPointerConstant e_l1
+-------------------------------------------------- :: NeNull1
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isNullPointerConstant e_l2
+-------------------------------------------------- :: NeNull2
+P; G; S |- e_l1 != e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Band
+P; G; S |- e_l1 & e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Xor
+P; G; S |- e_l1 ^ e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isInteger ty1
+isInteger ty2
+P |= isUsualArithmetic ty1 ty2 ty
+--------------------------------------- :: Bor
+P; G; S |- e_l1 | e_l2 : expressionT ty
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isScalar ty1
+isScalar ty2
+-------------------------------------------------- :: And
+P; G; S |- e_l1 && e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isScalar ty1
+isScalar ty2
+-------------------------------------------------- :: Or
+P; G; S |- e_l1 || e_l2 : expressionT (signed int)
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : ty2
+P; G; S |e- e_l3 : ty3
+isArithmetic ty2
+isArithmetic ty3
+P |= isUsualArithmetic ty2 ty3 ty
+---------------------------------------------- :: ConditionalArithmetic
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty
+
+% TODO struct/enum
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : void
+P; G; S |e- e_l3 : void
+------------------------------------------------ :: ConditionalVoid
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT void
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : qs2 ty2 *
+P; G; S |e- e_l3 : qs3 ty3 *
+isCompatible ty2 ty3
+isComposite ty2 ty3 ty
+------------------------------------------------------------ :: ConditionalPointer
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT (qs2 @ qs3) ty *
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : ty2
+P; G; S |e- e_l3 : ty3
+isPointer ty3
+not (isCompatible ty2 ty3)
+isNullPointerConstant e_l2
+----------------------------------------------- :: ConditionalNullPointer1
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty3
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : ty2
+P; G; S |e- e_l3 : ty3
+isPointer ty2
+not (isCompatible ty2 ty3)
+isNullPointerConstant e_l2
+----------------------------------------------- :: ConditionalNullPointer2
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty2
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : qs2 ty2 *
+P; G; S |e- e_l3 : qs3 ty3 *
+isVoid ty2
+isObject ty3
+not (isCompatible ty2 ty3)
+------------------------------------------------- :: ConditionalPointerVoid1
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty2 *
+
+P; G; S |e- e_l1 : ty1
+isScalar ty1
+P; G; S |e- e_l2 : qs2 ty2 *
+P; G; S |e- e_l3 : qs3 ty3 *
+isObject ty2
+isVoid ty3
+not (isCompatible ty2 ty3)
+------------------------------------------------- :: ConditionalPointerVoid2
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty3 *
+
+P; G; S |l- e_l1 : qs1' ty1'
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs1' ty1'
+isArithmetic ty1'
+isArithmetic ty2
+---------------------------------------- :: AssignArithmetic
+P; G; S |- e_l1 = e_l2 : expressionT ty1
+
+% TODO struct/enum
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isModifiable qs ty
+isPointer ty
+isCompatible ty1 ty2
+qs2 sub qs1
+------------------------------------------ :: AssignPointer
+P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isModifiable qs ty
+isPointer ty
+isVoid ty1
+isObject ty2
+qs2 sub qs1
+------------------------------------------ :: AssignVoidPointer1
+P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : qs2 ty2 *
+isModifiable qs ty
+isPointer ty1'
+isObject ty1
+isVoid ty2
+qs2 sub qs1
+------------------------------------------ :: AssignVoidPointer2
+P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isPointer ty
+isNullPointerConstant e_l2
+------------------------------------------- :: AssignNullPointerConstant
+P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : qs1 ty1 *
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isBool ty
+isPointer ty2
+------------------------------------------ :: AssignBool
+P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+
+% lemma:
+%   P; G; S |- e_l1 arithmeticOperator = e_l2 : expressionT ty <->
+%     P; G; S |- e_l1 = e_l1 arithmeticOperator e_l2 : expressionT ty
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isArithmetic ty1'
+isArithmetic ty2
+------------------------------------------ :: CompoundAssignPlusArithmetic
+P; G; S |- e_l1 + = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs' (qs ty *)
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs (qs ty *)
+isComplete ty
+isInteger ty2
+------------------------------------------ :: CompoundAssignPlusPointer
+P; G; S |- e_l1 + = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isArithmetic ty
+isArithmetic ty2
+------------------------------------------ :: CompoundAssignMinusArithmetic
+P; G; S |- e_l1 - = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs' (qs ty *)
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs' (qs ty *)
+isComplete ty
+isInteger ty2
+------------------------------------------ :: CompoundAssignMinusPointer
+P; G; S |- e_l1 + = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isArithmetic ty
+isArithmetic ty2
+------------------------------------------ :: CompoundAssignMult
+P; G; S |- e_l1 * = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isArithmetic ty
+isArithmetic ty2
+------------------------------------------ :: CompoundAssignDiv
+P; G; S |- e_l1 / = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty1'
+isInteger ty2
+------------------------------------------ :: CompoundAssignMod
+P; G; S |- e_l1 % = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty
+isInteger ty2
+------------------------------------------- :: CompoundAssignShiftL
+P; G; S |- e_l1 << = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty
+isInteger ty2
+------------------------------------------- :: CompoundAssignShiftR
+P; G; S |- e_l1 >> = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty
+isInteger ty2
+------------------------------------------- :: CompoundAssignBand
+P; G; S |- e_l1 & = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty
+isInteger ty2
+------------------------------------------- :: CompoundAssignBor
+P; G; S |- e_l1 | = e_l2 : expressionT ty1
+
+P; G; S |l- e_l1 : qs ty
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+isModifiable qs ty
+isInteger ty
+isInteger ty2
+------------------------------------------- :: CompoundAssignXor
+P; G; S |- e_l1 ^ = e_l2 : expressionT ty1
+
+P; G; S |e- e_l1 : ty1
+P; G; S |e- e_l2 : ty2
+---------------------------------------- :: Comma
+P; G; S |- e_l1 , e_l2 : expressionT ty2
+
+defn
+P ; G ; S |e- e_l : ty :: :: expressionType :: ExpressionType by
+
+P; G; S |- e : expressionT ty
+----------------------------- :: ExpressionT
+P; G; S |e- (a e) : ty
+
+P; G; S |- e_l : lvalueT qs ty
+isLvalueConvertable ty
+------------------------------ :: LvalueT
+P; G; S |e- e_l : ty
+
+defn
+P ; G ; S |l- e_l : qualifiers type :: :: lvalueType :: LvalueType by
+
+P; G; S |- e_l : lvalueT qs ty
+---------------------------------------- :: Def
+P; G; S |l- e_l : qs (pointerConvert ty)
+
+defn P |= typeable G S e :: :: typeable :: Typeable by
+
+P; G; S |- e : typeCategory
+--------------------------- :: Def
+P |= typeable G S e
+
+defn P |= typeable G S e_l :: :: typeableL :: TypeableL by
+
+P; G; S |- e_l : typeCategory
+----------------------------- :: Def
+P |= typeable G S e_l
+
+defn
+P |= isAssignable G S e_l ty :: :: isAssignable :: IsAssignable by
+
+not (id fv e_l)
+P |= typeable (G, id : ty) S (a id = e_l)
+----------------------------------------- :: Def
+P |= isAssignable G S e_l ty
+
+defn
+P ; G ; S |- s_l :: :: sTypeL :: STypeL by
+
+P ; G ; S |- s
+------------------ :: Def
+P ; G ; S |- (a s)
+
+defn
+P ; G ; S |- s :: :: sType :: SType by
+
+P; G; S |- s_l
+------------------- :: Label
+P; G; S |- id : s_l
+
+P; G; S |- s_l
+P |= typeable G S integerConstant
+------------------------------------- :: Case
+P; G; S |- case integerConstant : s_l
+
+P; G; S |- s_l
+------------------------ :: Default
+P; G; S |- default : s_l
+
+P; G @ G'; S |- s_l1 .. P; G @ G'; S |- s_lk
+--------------------------------------------:: Block
+P; G; S |- {G' | s_l1 .. s_lk}
+
+-------------- :: Skip
+P; G; S |- ;
+
+P |= typeable G S e_l
+--------------------- :: Expression
+P; G; S |- e_l ;
+
+P; G; S |e- e_l : ty
+isScalar ty
+P; G; S |- s_l1
+P; G; S |- s_l2
+---------------------------------- :: If
+P; G; S |- if (e_l) s_l1 else s_l2
+
+P; G; S |e- e_l : ty
+isInteger ty
+P; G; S |- s_l
+--------------------------- :: Switch
+P; G; S |- switch (e_l) s_l
+
+P; G; S |e- e_l : ty
+isScalar ty
+P; G; S |- s_l
+-------------------------- :: While
+P; G; S |- while (e_l) s_l
+
+P; G; S |e- e_l : ty
+isScalar ty
+P; G; S |- s_l
+---------------------------- :: Do
+P; G; S |- do s_l while (e_l);
+
+------------------- :: Goto
+P; G; S |- goto id;
+
+-------------------- :: Continue
+P; G; S |- continue;
+
+----------------- :: Break
+P; G; S |- break;
+
+------------------ :: ReturnVoid
+P; G; S |- return;
+
+P |= typeable G S e_l
+---------------------- :: Return
+P; G; S |- return e_l;
+
+P; G; S |- definition1 ... P; G; S |- definitionk
+------------------------------------------------- :: Declaration
+P; G; S |- definition1, ..., definitionk;
+
+defn
+P ; G ; S |- definition :: :: dType :: DType by
+
+P |= typeable G S (a id = e_l)
+---------------------------- :: Def
+P ; G ; S |- id = e_l
+
+defn
+P; S |- S' :: :: sigmaType :: SigmaType by
+
+-------------- :: Empty
+P; S |- empty
+
+P; empty; S |- s_l
+P; S |- S'
+------------------------- :: Ctx
+P; S |- S', id : ty = s_l
+
+defn
+P |- program :: :: pType :: PType by
+% TODO second type of main function
+
+P; S |- S
+id : (signed int ()) = s_l in S
+------------------------------- :: Def
+P |- id S
