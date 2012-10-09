@@ -57,6 +57,203 @@ and action = set trace_action * action_
 and paction = Core.polarity * action
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+(* -- Pretty printing --------------------------------------------------------------------------- *)
+module Print = struct
+  module P = Pprint
+
+  open P.Operators
+  
+  
+  let precedence = function
+    | Kconst _ -> Some 0
+    | Ksym _   -> Some 0
+    | Ktrue    -> Some 0
+    | Kfalse   -> Some 0
+    | Kaddr _  -> Some 0
+    | Kctype _ -> Some 0
+    | Kundef   -> Some 0
+    | Kerror   -> Some 0
+    | Kskip    -> Some 0
+    
+    | Knot _   -> Some 1
+
+    | Kaction _    -> Some 2
+    | Ksame _ _    -> Some 2
+    | Kcall _ _    -> Some 2
+    
+    | Kop OpMul _ _ -> Some 3
+    | Kop OpDiv _ _ -> Some 3
+    | Kop OpMod _ _ -> Some 3
+    | Kop OpAdd _ _ -> Some 4
+    | Kop OpSub _ _ -> Some 4
+    | Kop OpLt  _ _ -> Some 5
+    | Kop OpEq  _ _ -> Some 6
+    | Kop OpAnd _ _ -> Some 7
+    | Kop OpOr  _ _ -> Some 8
+    
+    | Kif _ _ _  -> Some 9
+    | Klet _ _ _ -> Some 10
+
+    | Kaseq _ _ _ -> Some 11
+    | Kwseq _ _ _ -> Some 12
+    | Ksseq _ _ _ -> Some 13
+    | Kunseq _    -> Some 14
+  end
+
+  let lt_precedence p1 p2 =
+    match (p1, p2) with
+      | (Some n1, Some n2) -> n1 <= n2
+      | (Some _ , None   ) -> true
+      | (None   , _      ) -> false
+    end
+  
+  let pp_keyword  w = !^ ("\x1b[1;35m" ^ w ^ "\x1b[0m")
+  let pp_constant c = !^ ("\x1b[35m" ^ c ^ "\x1b[0m")
+  let pp_control  w = !^ ("\x1b[1;36m" ^ w ^ "\x1b[0m")
+  let pp_symbol   a = !^ ("\x1b[34m" ^ (Symbol.to_string_pretty a) ^ "\x1b[0m")
+  let pp_number   n = !^ ("\x1b[33m" ^ n ^ "\x1b[0m")
+  
+  
+  let optional pp = function
+    | Some x -> pp x
+    | None   -> P.empty
+  end
+  
+  
+  let pp_trace_action = function
+    | Tcreate ty    -> !^ ("create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
+    | Talloc n      -> !^ ("alloc " ^ string_of_num n)
+    | Tkill o       -> !^ ("kill @" ^ string_of_num o)
+    | Tstore ty o n -> !^ ("store {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " " ^ string_of_num n)
+    | Tload ty o    -> !^ ("load {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o)
+  end
+  
+  let rec pp_expr p e =
+    let p' = precedence e in
+    let f = P.group -| pp_expr p' in
+    (if lt_precedence p' p then fun x -> x else P.parens) $
+    match e with
+      
+      | Kconst n        -> pp_number (string_of_num n)
+      | Ksym a          -> pp_symbol a
+      | Kaddr o         -> !^ ("addr[" ^ string_of_num o ^ "]")
+      | Kop op e1 e2    -> f e1 ^^^ Core.Print.pp_binop op ^^^ f e2
+      | Ktrue           -> pp_constant "true"
+      | Kfalse          -> pp_constant "false"
+      | Knot e          -> pp_keyword "not" ^^^ f e
+      | Kctype ty       -> Ail.Print.pp_type ty
+      | Klet a e1 e2    -> pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^ 
+                           P.nest 2 (P.break1 ^^ f e1 ^^^ pp_control "in")
+                           ^^ P.break1 ^^ f e2
+      | Kif b e1 e2     -> pp_control "if" ^^^ f b ^^^ pp_control "then" ^^
+                           P.nest 2 (P.break1 ^^ f e1) ^^ P.break1 ^^
+                           pp_control "else" ^^ P.nest 2 (P.break1 ^^ f e2) ^^ P.break1
+      | Kcall a es      -> pp_symbol a ^^ P.parens (P.sepmap (P.comma ^^ P.space) f es)
+      | Kundef          -> pp_keyword "undef"
+      | Kerror          -> pp_keyword "error"
+      | Kskip           -> pp_keyword "skip"
+
+(*      | Kwhile a s1 e s2 -> pp_control "while" ^^^ pp_symbol a ^^^ !^ "<-" ^^^ f s1 ^^ P.semi ^^^ f e ^^^ pp_control "do" ^^
+                            P.nest 2 (P.break1 ^^ f s2) ^^ P.break1 ^^ pp_control "done"
+*)
+
+      | Kaseq None act y     -> f (Kaction (Core.Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
+      | Kaseq (Some a) act y -> pp_symbol a ^^^ !^ "<-" ^^ f (Kaction (Core.Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
+      
+      | Ksseq [] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>"))
+                                ^^ P.break1 ^^ f e2
+      | Ksseq [None] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq _as e1 e2 -> let g x = match x with
+                                       | Some x -> pp_symbol x
+                                       | None   -> P.underscore
+                                     end
+                           in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
+                               P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
+
+      | Kwseq [] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi)
+                                ^^ P.break1 ^^ f e2
+      | Kwseq [None] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq _as e1 e2      -> let g x = match x with
+                                            | Some x -> pp_symbol x
+                                            | None   -> P.underscore
+                                          end
+                                in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
+                                   P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi) ^^ P.break1 ^^ f e2
+      | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
+      | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
+      | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
+      | Kaction (p, (bs, a)) ->
+          (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^ P.rangle ^^ P.space) ^^
+          (match p with
+            | Pos -> P.empty
+            | Neg -> P.tilde
+           end) ^^
+          (match a with
+            | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
+            | Kalloc a        -> pp_keyword "alloc" ^^^ f e
+            | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
+            | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
+            | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
+           end)
+      
+      | Ksame a1 a2     -> pp_keyword "same" ^^^ f a1 ^^^ f a2
+(*
+      | Kmax ty         -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kmin ty         -> pp_keyword "min" ^^ P.braces (Ail.Print.pp_type ty)
+      | Ksizeof ty      -> pp_keyword "sizeof" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kalignof ty     -> pp_keyword "alignof" ^^ P.braces (Ail.Print.pp_type ty)
+      | Koffsetof ty    -> pp_keyword "offset" ^^ P.braces (Ail.Print.pp_type ty)
+      | Kshift a e      -> pp_keyword "shift" ^^^ pp_symbol a ^^^ f e
+      | Kconv ty1 ty2 a -> pp_keyword "conv" ^^ P.braces (Ail.Print.pp_type ty1 ^^ !^"\\" ^^ Ail.Print.pp_type ty2) ^^^ pp_symbol a
+*)
+
+(*
+      | Kgoto l         -> pp_control "goto" ^^^ pp_symbol l
+      | Klabel l e      -> pp_symbol l ^^ P.colon ^^^ f e
+*)
+  end
+  
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (* TODO: here I'm annotating all actions instead (this may reduce the number of epsilon transitions) *)
 (* [annotate b e] add on each sb-minimal action of [e], an annotation meaning that
                   this action is sequenced-after [act]
@@ -331,9 +528,10 @@ let perform_action = function
   | Kalloc n      -> eval n  >>= fun (Kconst n) ->
                      alloc n >>= fun o          ->
                      E.return (Talloc n, Kaddr o)
-  | Kkill o       -> get_sym o   >>= fun (Kaddr o) ->
-                     kill o      >>
-                     E.return (Tkill o, Kskip)
+  | Kkill o       -> (* get_sym o   >>= fun (Kaddr o) ->
+                     kill o      >> *)
+                     (* TODO *)
+                     E.return (Tkill 0, Kskip)
   | Kstore ty o v -> eval ty      >>= fun (Kctype ty) ->
                      eval o       >>= fun (Kaddr o)   ->
                      eval v       >>= fun (Kconst v)  ->
@@ -354,7 +552,7 @@ val subst_syms: list (option Core.sym) -> expr -> expr -> expr
 let subst_syms _as v e =
   match (_as, v) with
     | ([]       , _        ) -> e
-    | ([Nothing], _        ) -> e
+    | ([None], _           ) -> e
     | ([Some _a], _        ) -> subst_sym _a v e
     | (_        , Kunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
   end
@@ -395,9 +593,9 @@ val red: expr -> E.t expr
  *)
 let rec red_pos e =
   match e with
-    | Kaction (Pos, (bs, a)) ->
-        perform_action a               >>= fun (a, v) ->
-        push_trace (Rule_Pos, bs, a)   >>
+    | Kaction (Core.Pos, (bs, a)) ->
+        perform_action a             >>= fun (a, v) ->
+        push_trace (Rule_Pos, bs, a) >>
         E.return v
     | _ -> E.mzero
   end
@@ -409,9 +607,9 @@ let rec red_pos e =
  *)
 and red_neg e =
   match e with
-    | Kaction (Neg, (bs, a)) ->
-        perform_action a               >>= fun (a, v) ->
-        push_trace (Rule_Neg, bs, a)   >>
+    | Kaction (Core.Neg, (bs, a)) ->
+        perform_action a             >>= fun (a, v) ->
+        push_trace (Rule_Neg, bs, a) >>
         E.return v
     | _ -> E.mzero
   end
@@ -431,7 +629,7 @@ and red_wseq_l e =
         red e1                 >>= fun e1'       ->
         get_trace              >>= fun (_, _, a) ->
         update_rule Rule_WseqL >>
-        E.return (if is_value e1' then annotate a (subst_syms _as e1 e2)
+        E.return (if is_value e1' then annotate a (subst_syms _as e1' e2)
                                   else Kwseq _as e1' (annotate a e2))
     | _ -> E.mzero
   end
@@ -443,11 +641,11 @@ and red_wseq_l e =
 *)
 and red_neg_wseq e =
   match e with
-    | Kwseq [Nothing] (Kaction (Neg, b)) e2 ->
+    | Kwseq [Nothing] (Kaction (Core.Neg, b)) e2 ->
         red e2    >>= fun e2' ->
         E.return match e2' with
-                   | Kunseq e2's -> Kunseq $ (Kaction (Neg, b)) :: e2's
-                   | _           -> Kunseq [Kaction (Neg, b); e2']
+                   | Kunseq e2's -> Kunseq $ (Kaction (Core.Neg, b)) :: e2's
+                   | _           -> Kunseq [Kaction (Core.Neg, b); e2']
                  end
     | _ -> E.mzero
   end
@@ -483,14 +681,42 @@ and red e = E.msum [
 ]
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (* Full execution of an expression *)
 let rec star_red e =
-  red e >>= function
-    | Kskip -> get_fulltrace
-    | e'    -> star_red e'
-  end
-
-
+  red e >>= fun e' ->
+  if is_value e' then get_fulltrace
+                 else star_red e'
 
 
 
