@@ -1,3 +1,4 @@
+(* Error messages for impossible situations *)
 val outOfHomeomorphism: forall 'a. string -> 'a
 let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism
 

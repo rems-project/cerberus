@@ -14,9 +14,9 @@ type trace_action =
   | Tload of Ail.ctype * mem_addr
 
 
-(* version of Core's syntax with annotated actions, preserving informations
-   about the sequence-before relation and allowing the generation of annotated
-   traces. *)
+(* (TEMPORARY) version of Core's syntax with annotated actions, preserving
+   informations about the sequence-before relation and allowing the generation
+   of annotated traces. *)
 type expr =
   | Kskip
   | Kconst of num
@@ -37,12 +37,9 @@ type expr =
   | Kwseq of list (option Core.sym) * expr * expr
   | Ksseq of list (option Core.sym) * expr * expr
   | Kaseq of option Core.sym * action * paction
-  
   | Kindet of num * expr
   | Kbound of num * expr
-  
   | Ksame of expr * expr
-  
   | Ksave of Core.label * expr
   | Krun of Core.label
 
@@ -56,43 +53,26 @@ and action_ =
 and action = set trace_action * action_
 and paction = Core.polarity * action
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-(* -- Pretty printing --------------------------------------------------------------------------- *)
+(* -- (TEMPORARY) Pretty printing ------------------------------------------- *)
 module Print = struct
   module P = Pprint
 
   open P.Operators
   
-  
   let precedence = function
-    | Kconst _ -> Some 0
-    | Ksym _   -> Some 0
-    | Ktrue    -> Some 0
-    | Kfalse   -> Some 0
-    | Kaddr _  -> Some 0
-    | Kctype _ -> Some 0
-    | Kundef   -> Some 0
-    | Kerror   -> Some 0
-    | Kskip    -> Some 0
-    
-    | Knot _   -> Some 1
-
-    | Kaction _    -> Some 2
-    | Ksame _ _    -> Some 2
-    | Kcall _ _    -> Some 2
-    
+    | Kconst _      -> Some 0
+    | Ksym _        -> Some 0
+    | Ktrue         -> Some 0
+    | Kfalse        -> Some 0
+    | Kaddr _       -> Some 0
+    | Kctype _      -> Some 0
+    | Kundef        -> Some 0
+    | Kerror        -> Some 0
+    | Kskip         -> Some 0
+    | Knot _        -> Some 1
+    | Kaction _     -> Some 2
+    | Ksame _ _     -> Some 2
+    | Kcall _ _     -> Some 2
     | Kop OpMul _ _ -> Some 3
     | Kop OpDiv _ _ -> Some 3
     | Kop OpMod _ _ -> Some 3
@@ -102,16 +82,14 @@ module Print = struct
     | Kop OpEq  _ _ -> Some 6
     | Kop OpAnd _ _ -> Some 7
     | Kop OpOr  _ _ -> Some 8
-    
-    | Kif _ _ _  -> Some 9
-    | Klet _ _ _ -> Some 10
-
-    | Kaseq _ _ _ -> Some 11
-    | Kwseq _ _ _ -> Some 12
-    | Ksseq _ _ _ -> Some 13
-    | Kunseq _    -> Some 14
+    | Kif _ _ _     -> Some 9
+    | Klet _ _ _    -> Some 10
+    | Kaseq _ _ _   -> Some 11
+    | Kwseq _ _ _   -> Some 12
+    | Ksseq _ _ _   -> Some 13
+    | Kunseq _      -> Some 14
   end
-
+  
   let lt_precedence p1 p2 =
     match (p1, p2) with
       | (Some n1, Some n2) -> n1 <= n2
@@ -125,12 +103,10 @@ module Print = struct
   let pp_symbol   a = !^ ("\x1b[34m" ^ (Symbol.to_string_pretty a) ^ "\x1b[0m")
   let pp_number   n = !^ ("\x1b[33m" ^ n ^ "\x1b[0m")
   
-  
   let optional pp = function
     | Some x -> pp x
     | None   -> P.empty
   end
-  
   
   let pp_trace_action = function
     | Tcreate ty    -> !^ ("create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
@@ -145,7 +121,6 @@ module Print = struct
     let f = P.group -| pp_expr p' in
     (if lt_precedence p' p then fun x -> x else P.parens) $
     match e with
-      
       | Kconst n        -> pp_number (string_of_num n)
       | Ksym a          -> pp_symbol a
       | Kaddr o         -> !^ ("addr[" ^ string_of_num o ^ "]")
@@ -164,11 +139,6 @@ module Print = struct
       | Kundef          -> pp_keyword "undef"
       | Kerror          -> pp_keyword "error"
       | Kskip           -> pp_keyword "skip"
-
-(*      | Kwhile a s1 e s2 -> pp_control "while" ^^^ pp_symbol a ^^^ !^ "<-" ^^^ f s1 ^^ P.semi ^^^ f e ^^^ pp_control "do" ^^
-                            P.nest 2 (P.break1 ^^ f s2) ^^ P.break1 ^^ pp_control "done"
-*)
-
       | Kaseq None act y     -> f (Kaction (Core.Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       | Kaseq (Some a) act y -> pp_symbol a ^^^ !^ "<-" ^^ f (Kaction (Core.Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       
@@ -183,7 +153,6 @@ module Print = struct
                                      end
                            in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
                                P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
-
       | Kwseq [] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
       | Kwseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
                                 P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi)
@@ -211,52 +180,16 @@ module Print = struct
             | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
             | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
            end)
-      
       | Ksame a1 a2     -> pp_keyword "same" ^^^ f a1 ^^^ f a2
-(*
-      | Kmax ty         -> pp_keyword "max" ^^ P.braces (Ail.Print.pp_type ty)
-      | Kmin ty         -> pp_keyword "min" ^^ P.braces (Ail.Print.pp_type ty)
-      | Ksizeof ty      -> pp_keyword "sizeof" ^^ P.braces (Ail.Print.pp_type ty)
-      | Kalignof ty     -> pp_keyword "alignof" ^^ P.braces (Ail.Print.pp_type ty)
-      | Koffsetof ty    -> pp_keyword "offset" ^^ P.braces (Ail.Print.pp_type ty)
-      | Kshift a e      -> pp_keyword "shift" ^^^ pp_symbol a ^^^ f e
-      | Kconv ty1 ty2 a -> pp_keyword "conv" ^^ P.braces (Ail.Print.pp_type ty1 ^^ !^"\\" ^^ Ail.Print.pp_type ty2) ^^^ pp_symbol a
-*)
-
-(*
-      | Kgoto l         -> pp_control "goto" ^^^ pp_symbol l
-      | Klabel l e      -> pp_symbol l ^^ P.colon ^^^ f e
-*)
   end
-  
 end
+(* -------------------------------------------------------------------------- *)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(* TODO: here I'm annotating all actions instead (this may reduce the number of epsilon transitions) *)
-(* [annotate b e] add on each sb-minimal action of [e], an annotation meaning that
-                  this action is sequenced-after [act]
+(* TODO: here I'm annotating all actions instead (this may reduce the number of
+         epsilon transitions) *)
+(* [annotate b e] add on each sb-minimal action of [e], an annotation meaning
+                  that this action is sequenced-after [act]
   
   in the rules comments, this function is noted: <b> e
  *)
@@ -305,9 +238,9 @@ module Effect = struct
   type trace = list (dyn_rule * set trace_action * trace_action)
   
   type state = <|
-      mem : mem_state;               (* the memory layout state    *)
-      store: Pmap.map Core.sym expr; (* the symbolic names store   *)
-      trace : trace                  (* the execution trace so for *)
+      mem : mem_state;               (* the memory layout state                         *)
+      store: Pmap.map Core.sym expr; (* the symbolic names store                        *)
+      trace : trace                  (* the execution trace so far (stored in reversed) *)
   |>
   
   type t 'a = state -> list ('a * state)
@@ -583,6 +516,8 @@ let rec is_value e =
 val red_pos: expr -> E.t expr
 val red_neg: expr -> E.t expr
 
+(* TODO: DOC, add others *)
+
 val red: expr -> E.t expr
 
 
@@ -673,42 +608,12 @@ and red_unseq e =
 
 
 
-
+(* ND merging of all the reduction rules *)
 and red e = E.msum [
   red_pos e; red_neg e;
   red_wseq_l e; red_neg_wseq e;
   red_unseq e
 ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -720,8 +625,7 @@ let rec star_red e =
 
 
 
-(* HACK *)
-
+(* TEMPERARY: convert Core.expr into Core_run.expr *)
 let rec convert_expr e =
   match e with
     | Core.Kskip -> Kskip
@@ -745,10 +649,10 @@ let rec convert_expr e =
     | Core.Kwseq _as e1 e2 -> Kwseq _as (convert_expr e1) (convert_expr e2)
     | Core.Ksseq _as e1 e2 -> Ksseq _as (convert_expr e1) (convert_expr e2)
     | Core.Kaseq a b u -> Kaseq a (convert_action b) (convert_paction u)
-
-(*    | Core.Kindet k e -> Kindet k (convert_expr e) *)
-(*    | Core.Kbound k e -> Kbound k (convert_expr e) *)
-
+(*
+    | Core.Kindet k e -> Kindet k (convert_expr e)
+    | Core.Kbound k e -> Kbound k (convert_expr e)
+*)
     | Core.Ksame e1 e2 -> Ksame (convert_expr e1) (convert_expr e2)
 (*
     | Core.Ksave l e -> Ksave l (convert_expr e)
@@ -766,38 +670,8 @@ and convert_action a =
     | Core.Kload ty o    -> Kload (convert_expr ty) (convert_expr o)
   end) 
 
-(*
-and action_ =
-  | Kcreate of expr
-  | Kalloc of expr
-  | Kkill of Core.sym
-  | Kstore of expr * expr * expr
-  | Kload of expr * expr
-
-and action = set trace_action * action_
-and paction = Core.polarity * action
- *)
-
-
 
 let run (f: Core.file) : Exception.t (list E.trace) Errors.cause =
   let trs = let (_, _, body) = Pmap.find f.Core.main f.Core.fun_map in
-                 List.map fst $ (star_red (convert_expr body) >> get_fulltrace) initial_state in
+                 List.map fst $ (star_red (convert_expr body) >> get_fulltrace >>= E.return -| List.rev) initial_state in
   Exception.return trs
-
-(*
-  let a = Tcreate (Ail.VOID {})      in
-  let b = Tstore (Ail.VOID {}) 42 10 in
-  let c = Tload (Ail.VOID {}) 42     in
-  Exception.return [[
-    (Rule_Pos, {}, a);
-    (Rule_Pos, {a}, b);
-    (Rule_Pos, {a; b}, c)
-  ];
-[
-    (Rule_Pos, {}, a);
-    (Rule_Pos, {a}, c);
-    (Rule_Pos, {a; c}, b)
-  ]
-]
-*)
