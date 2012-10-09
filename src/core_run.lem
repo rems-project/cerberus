@@ -498,7 +498,7 @@ and convert_action (_, a) =
   ({}, match a with
     | Kcreate ty    -> Kcreate (convert_expr ty)
     | Kalloc n      -> Kalloc (convert_expr n)
-    | Kkill a       -> Kkill a
+    | Kkill e       -> Kkill (convert_expr e)
     | Kstore ty o v -> Kstore (convert_expr ty) (convert_expr o) (convert_expr v)
     | Kload ty o    -> Kload (convert_expr ty) (convert_expr o)
   end)
