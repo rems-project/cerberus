@@ -25,13 +25,10 @@ terminals :: 'terminals_' ::=
 
 formula :: 'formula_' ::=
   | ty1 = ty2 :: M :: TyEq
-      {{ lem [[ty1]] = [[ty2]] }}
       {{ coq [[ty1]] = [[ty2]] }}
   | qualifier1 = qualifier2 :: M :: QualifierEq
-      {{ lem [[qualifier1]] = [[qualifier2]] }}
       {{ coq [[qualifier1]] = [[qualifier2]] }}
   | qualifier in qualifiers :: M :: InQualifiers
-      {{ lem [[qualifier]] IN [[qualifiers]] }}
       {{ coq (MSets.mem [[qualifier]] [[qualifiers]])}}
 
 storageDuration :: '' ::=
@@ -76,20 +73,16 @@ qualifiers, qs :: 'Qualifiers' ::=
   | qualifier1 .. qualifierk :: :: Def
   | [] :: M :: Empty
       {{ tex \emptyset }}
-      {{ lem Set.empty }}
       {{ coq empty }}
   | qualifiers1 @ qualifiers2 :: M :: App
       {{ tex [[qualifiers1]] \cup [[qualifiers2]] }}
-      {{ lem Set.union [[qualifiers1]] [[qualifiers2]] }}
       {{ coq union [[qualifiers1]] [[qualifiers2]] }}
   | ( qualifiers ) :: S :: Parens
-      {{ lem [[qualifiers]] }}
       {{ coq [[qualifiers]] }}
 
-ctype, ty {{ tex \tau }} :: '' ::=
+type, ty {{ tex \tau }} :: '' ::=
   {{ com $\texttt{Ail}_\tau$ types }}
   | ( ty ) :: S :: TyParens
-      {{ lem [[ty]] }} % TODO: lem is not in icho ?
       {{ icho [[ty]] }}
   | void :: :: Void
       {{ com \texttt{void} type (\S6.2.5\#19) }}

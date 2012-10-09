@@ -79,6 +79,7 @@ module Effect = struct
   
   type state = <|
       mem : mem_state;                         (* the memory layout state                         *)
+      store: Pmap.map sym (expr trace_action); (* the symbolic names store                        *)
       trace : trace                            (* the execution trace so far (stored in reversed) *)
   |>
   
@@ -120,10 +121,10 @@ open E.Operators
 (* TODO: dummy memory model (concrete with isolated objects, ignoring
    C types) *)
 val initial_state: E.state
-let initial_state = <| E.mem= (Pmap.empty, 0); E.trace= [] |>
+let initial_state = <| E.mem= (Pmap.empty, 0); E.store= Pmap.empty; E.trace= [] |>
 
 val init: E.t unit
-let init = fun _ -> [((), <| E.mem= (Pmap.empty, 0); E.trace= [] |>)]
+let init = fun _ -> [((), <| E.mem= (Pmap.empty, 0); E.store= Pmap.empty; E.trace= [] |>)]
 
 val create: Ail.ctype -> E.t mem_addr
 let create _ = fun (<| E.mem= (m, i) |> as s) -> [(i, <| s with E.mem= (Pmap.add i 0 m, i+1) |>)]
@@ -183,6 +184,14 @@ let update_rule f = fun (<| E.trace= t |> as s) ->
   end
 
 
+(* get the expression stored in a symbolic names *)
+val get_sym: sym -> E.t (expr trace_action)
+let get_sym a = fun (<| E.store= st |> as s ) -> [(Pmap.find a st, s)]
+
+(* set the expression stored in a symbolic names *)
+val set_sym: sym -> expr trace_action -> E.t unit
+let set_sym a e = fun (<| E.store= st |> as s ) -> [((), <| s with E.store= Pmap.add a e st |>)]
+
 (* check if a symbolic names is part of a pattern *)
 val in_pattern: sym -> list (option sym) -> bool
 let rec in_pattern a p =
@@ -232,6 +241,8 @@ let rec eval e =
   match e with
     | Kundef -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kundef"
     | Kerror -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kerror"
+
+    | Ksym a -> get_sym a
     | Kop binop e1 e2 -> match binop with
                            | OpAdd -> eval e1 >>= fun (Kconst v1) ->
                                       eval e2 >>= fun (Kconst v2) ->
