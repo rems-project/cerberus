@@ -296,19 +296,19 @@ let rec check expected_type e =
           +  -------------------------- (create)     ----------------------- (alloc)
           +  Γ ⊢ create{ty} ↑ [address]              Γ ⊢ alloc e ↑ [address]
           *)
-          | Kaction (Pos, Kcreate ty) -> check (TyBase ctype) ty   >> guard_expected (TyEffect address)
-          | Kaction (Neg, Kcreate ty) -> check (TyBase ctype) ty   >> guard_expected (TyEffect unit)
-          | Kaction (Pos, Kalloc n)   -> check (TyBase integer) n  >> guard_expected (TyEffect address)
-          | Kaction (Neg, Kalloc n)   -> check (TyBase integer) n  >> guard_expected (TyEffect unit)
+          | Kaction (Pos, (_, Kcreate ty)) -> check (TyBase ctype) ty   >> guard_expected (TyEffect address)
+          | Kaction (Neg, (_, Kcreate ty)) -> check (TyBase ctype) ty   >> guard_expected (TyEffect unit)
+          | Kaction (Pos, (_, Kalloc n))   -> check (TyBase integer) n  >> guard_expected (TyEffect address)
+          | Kaction (Neg, (_, Kalloc n))   -> check (TyBase integer) n  >> guard_expected (TyEffect unit)
           
          (*
           +    (α, address) ∈ Γ
           +  ------------------- (kill)
           +  Γ ⊢ kill α ↑ [unit]
           *)
-          | Kaction (_, Kkill a) -> E.get a >>= fun baseTy_sym ->
-                                    E.guard (baseTy_sym = address) (CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_sym) (TyBase address)) >>
-                                    guard_expected (TyEffect unit)
+          | Kaction (_, (_, Kkill a)) -> E.get a >>= fun baseTy_sym ->
+                                         E.guard (baseTy_sym = address) (CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_sym) (TyBase address)) >>
+                                         guard_expected (TyEffect unit)
           
           
          (*
@@ -321,12 +321,12 @@ let rec check expected_type e =
           +                 Γ ⊢ load{ty} e ↑ [integer]
 
           *)
-          | Kaction (_, Kstore ty e1 e2) -> check (TyBase ctype)     ty >>
-                                            check (TyBase address)   e1 >>
-                                            check (TyBase integer)   e2 >>
-                                            guard_expected (TyEffect unit)
-          | Kaction (Pos, Kload ty e)    -> check (TyBase address) e >> guard_expected (TyEffect integer)
-          | Kaction (Neg, Kload ty e)    -> check (TyBase address) e >> guard_expected (TyEffect unit)
+          | Kaction (_, (_, Kstore ty e1 e2)) -> check (TyBase ctype)     ty >>
+                                                 check (TyBase address)   e1 >>
+                                                 check (TyBase integer)   e2 >>
+                                                 guard_expected (TyEffect unit)
+          | Kaction (Pos, (_, Kload ty e))    -> check (TyBase address) e >> guard_expected (TyEffect integer)
+          | Kaction (Neg, (_, Kload ty e))    -> check (TyBase address) e >> guard_expected (TyEffect unit)
 
          (*
           +  Γ ⊢ a1 ↑ address     Γ ⊢ a2 ↑ address
@@ -572,9 +572,9 @@ and infer e =
     +  ------------------------ (create)
     +  Γ ⊢ create{τ} : address*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (Pos, Kcreate ty) -> E.return (TyEffect address)
+    | Kaction (Pos, (_, Kcreate ty)) -> E.return (TyEffect address)
     
-    | Kaction (Neg, Kcreate ty) -> E.return (TyEffect unit)
+    | Kaction (Neg, (_, Kcreate ty)) -> E.return (TyEffect unit)
     
     
    (*
@@ -582,11 +582,11 @@ and infer e =
     +  ---------------------- (alloc)
     +  Γ ⊢ alloc e : address*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (Pos, Kalloc e) ->
+    | Kaction (Pos, (_, Kalloc e)) ->
         check (TyBase integer) e >>
         E.return (TyEffect address)
     
-    | Kaction (Neg, Kalloc e) ->
+    | Kaction (Neg, (_, Kalloc e)) ->
         check (TyBase integer) e >>
         E.return (TyEffect unit)
     
@@ -596,7 +596,7 @@ and infer e =
     +  ------------------ (kill)
     +  Γ ⊢ kill e : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (_, Kkill a) ->
+    | Kaction (_, (_, Kkill a)) ->
         E.get a                      >>= fun baseTy_a ->
         E.guard (baseTy_a = address)
                 (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a) (TyBase address)) >>
@@ -608,7 +608,7 @@ and infer e =
     +  -------------------------------------- (store)
     +      Γ ⊢ store{τ} e1 e2 : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (_, Kstore ty e1 e2) ->
+    | Kaction (_, (_, Kstore ty e1 e2)) ->
         check (TyBase address)   e1 >>
         check (TyBase integer)   e2 >>
         E.return (TyEffect unit)
@@ -619,11 +619,11 @@ and infer e =
     +  ------------------------ (load)
     +  Γ ⊢ load{τ} e : integer*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (Pos, Kload ty e) ->
+    | Kaction (Pos, (_, Kload ty e)) ->
         check (TyBase address) e >>
         E.return (TyEffect integer)
     
-    | Kaction (Neg, Kload ty e) ->
+    | Kaction (Neg, (_, Kload ty e)) ->
         check (TyBase address) e >>
         E.return (TyEffect unit)
     
@@ -650,7 +650,7 @@ and infer e =
   end
 
 
-let typecheck (f: file) : Exception.t file Errors.cause =
+let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
   let functions = Ocaml.Pmap.bindings f.fun_map in
   (* collect the symbolic names of the functions for the initial function environment. *)
   let init_fenv =

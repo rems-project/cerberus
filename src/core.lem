@@ -1,5 +1,15 @@
 open Global
 
+(* TODO: this is here because of some stupid cyclic module dependency ...
+
+         Idealy we should have a memory.lem module which would be used by
+         core.lem (just for knowing mem_addr) and by core_run. But we can't
+         because the memory actions have to know about the monad used by
+         core_run.lem. If we had type families, StateT would do the trick *)
+type mem_addr = num
+
+
+(* -- Syntax ---------------------------------------------------------------- *)
 type core_base_type =
   | integer
   | boolean
@@ -15,13 +25,12 @@ type core_type =
   | TyBase   of core_base_type
   | TyEffect of core_base_type
 
-(* -- Syntax ------------------------------------------------------------------------------------ *)
 
 (* Symbolic names *)
 type sym = Symbol.t
 
-(* label names *)
-type label = Symbol.t
+(* continuation names *)
+type cont = Symbol.t
 
 
 (* Binary operators *)
@@ -39,14 +48,6 @@ type binop =
   | OpAnd
   | OpOr
 
-(* Sequencing operator *)
-(*type seqop =
-  (* Normal sequencing *)
-  | SOpSeq
-*)
-  (* "Strong sequencing" for incr/decr *)
-(*  | SOpSSeq *) (* WE DON'T HAVE THIS ANYMORE, MAYBE EVENT GET RID OF seqop *)
-
 
 (* Polarity for actions *)
 type polarity =
@@ -54,110 +55,91 @@ type polarity =
   | Neg
 
 
-(* Merged pure and effectful expressions *)
-type expr =
-  | COMMENT of string * expr
+type expr 'a =
+  (* TODO: removed these *)
+  | COMMENT of string * expr 'a
   | DEBUG of string
   
   (* pure expressions *)
+  | Kskip
   | Kconst of num
+  | Kaddr of mem_addr
   | Ksym of sym
-  | Kop of binop * expr * expr
+  | Kop of binop * expr 'a * expr 'a
   | Ktrue
   | Kfalse
-  | Knot of expr
+  | Knot of expr 'a
   | Kctype of Ail.ctype
-  | Klet of sym * expr * expr
-  | Kif of expr * expr * expr
-  | Kcall of sym * list expr (* TODO: do we want the same symbols for Core functions? probably not. *)
+  | Klet of sym * expr 'a * expr 'a
+  | Kif of expr 'a * expr 'a * expr 'a
+  | Kcall of sym * list (expr 'a) (* TODO: do we want the same symbol env for
+                                           Core functions? probably not. *)
+  (* K: I think this one is also pure *)
+  | Ksame of expr 'a * expr 'a
+
   
   (* undefined behaviour and late static error *)
   | Kundef
   | Kerror
   
-  (* sequence-before constructors *)
-    (* 
-       Kwhile a S E S' ==>
-       
-       a <- S;
-       while (E) do
-         S'
-       done
-       
-       S is effectful, S' may be effectful, E is pure
-     *)
-(*  | Kwhile of sym * expr * expr * expr *)
+  | Kaction of paction 'a
   
-  | Kskip
+  (* sequencing operators *)
+  | Kunseq of list (expr 'a)
+  | Kwseq of list (option sym) * expr 'a * expr 'a
+  | Ksseq of list (option sym) * expr 'a * expr 'a
+  | Kaseq of option sym * action 'a * paction 'a
   
-  | Kaction of paction
-  | Kunseq of list expr
-  | Kwseq of list (option sym) * expr * expr
-  | Ksseq of list (option sym) * expr * expr
-  | Kaseq of option sym * action * paction
+  (* indeterminately-sequenced expressions and boundary *)
+  | Kindet of expr 'a (* TODO: add unique indices *)
+  | Kbound of num * expr 'a
   
+  (* Continuation operators *)
+  | Ksave of cont * expr 'a
+  | Krun of cont
   
-| Kindet of expr (* TODO:  | Kindet of num * expr *)
-  | Kbound of num * expr (* boundary for indet expressions context *)
+  (* TODO: this should probably be added back to the syntax *)
+(* | Kshift of sym * expr 'a *)
   
-  | Ksame of expr * expr
-  
-(*
-  | Kgoto of label
-  | Klabel of label * expr
-*)
-  
-  (* TODO: these are not anymore constructors, but functions *)
-(*
-  | Kmax of Ail.ctype
-  | Kmin of Ail.ctype
-  | Ksizeof of Ail.ctype
-  | Kalignof of Ail.ctype
-  | Koffsetof of Ail.ctype
-  | Kshift of sym * expr
-  | Kconv of Ail.ctype * Ail.ctype * sym
+  (* TODO: these are not anymore constructors, but functions that need to be
+           exposed by the Std library
+
+     Kmax of Ail.ctype
+     Kmin of Ail.ctype
+     Ksizeof of Ail.ctype
+     Kalignof of Ail.ctype
+     Koffsetof of Ail.ctype
+     Kconv of Ail.ctype * Ail.ctype * sym
 *)
 
-and action =
-  | Kcreate of expr
-  | Kalloc of expr
+and action_ 'a =
+  | Kcreate of expr 'a
+  | Kalloc of expr 'a
   | Kkill of sym
-  | Kstore of expr * expr * expr
-  | Kload of expr * expr
-
-and paction = polarity * action
-
-
-let pcreate ty = Kaction (Pos, Kcreate ty)
-let palloc e = Kaction (Pos, Kalloc e)
-let pkill x = Kaction (Pos, Kkill x)
-let pstore ty x n = Kaction (Pos, Kstore ty x n)
-let pload ty x = Kaction (Pos, Kload ty x)
+  | Kstore of expr 'a * expr 'a * expr 'a
+  | Kload of expr 'a * expr 'a
+and action 'a  = set 'a * action_ 'a
+and paction 'a = polarity * action 'a
 
 
-(* a Core file is just a sequence of functions *)
-type file = <|
+(* some aliases for positive actions *)
+let pcreate ty    = Kaction (Pos, ({}, Kcreate ty   ))
+let palloc e      = Kaction (Pos, ({}, Kalloc e     ))
+let pkill x       = Kaction (Pos, ({}, Kkill x      ))
+let pstore ty x n = Kaction (Pos, ({}, Kstore ty x n))
+let pload ty x    = Kaction (Pos, ({}, Kload ty x   ))
+
+
+(* a Core file is just a set of named functions *)
+type file 'a = <|
   main    : sym;
-  fun_map : map sym (core_type * list (sym * core_base_type) * expr)
+  fun_map : map sym (core_type * list (sym * core_base_type) * expr 'a)
 |>
 
 
-(*
-let test: file =
-  let a_main    = (1, Some "main") in
-  let a_f       = (2, Some "f")    in
-  let main_body =
-    let signed_int = Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
-    Kseq [] (Kcreate signed_int)
-      (Kseq [] (Kunseq [Kindet (Kcall a_f []); Kindet (Kcall a_f [])])
-           (Kcreate signed_int)
-           )
-  in
-  <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) (Pmap.add a_f (TyEffect integer, [], Kskip) Pmap.empty) |>
-*)
-
+(* TODO: get rid of the tests once we have a Core parser. *)
 (* TODO: check if it is correct that only the call is indet *)
-let test: file =
+let test: file unit =
   let a_main    = (1, Some "main") in
   let a_f       = (2, Some "f")    in
   let a_n       = (3, Some "n")    in
@@ -189,10 +171,7 @@ let test: file =
   in
   <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) (Pmap.add a_f (TyBase integer, [(a_n, address); (a_m, address)], f_body) Pmap.empty) |>
 
-
-
-
-let test2: file =
+let test2: file unit =
   let a_main    = (1, Some "main") in
   let a_x       = (3, Some "x")    in
   let a_y       = (4, Some "y")    in
@@ -207,9 +186,7 @@ let test2: file =
   in
   <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) Pmap.empty |>
 
-
-
-let test3: file =
+let test3: file unit =
   let a_main = (1, Some "main") in
   let a_f    = (2, Some "f") in
   let x    = (1, Some "x") in
@@ -217,9 +194,7 @@ let test3: file =
   <| main= a_main; fun_map= Pmap.add a_f    (TyEffect integer, [(x, integer); (y, integer)], Kop OpAdd (Ksym x) (Ksym y))
                            (Pmap.add a_main (TyEffect integer, [], Kcall a_f [Kconst 10; Ktrue]) Pmap.empty) |>
 
-
-
-let test4: file =
+let test4: file unit =
   let a_main    = (1, Some "main") in
   let a_x       = (3, Some "x")    in
   let a_n       = (4, Some "n")    in
@@ -237,14 +212,9 @@ let test4: file =
 
 
 
-
-
-
-
-
-
-
 (* Symbolic names for the standard library functions *)
+(* TODO: this should be dynamically imported, doing it statically and manually
+         is just wrong *)
 let overflow = (51, Some "overflow")
 let conv_int = (52, Some "conv_int")
 let conv     = (53, Some "conv")
@@ -304,26 +274,19 @@ module Print = struct
   
   
   let precedence = function
-    | Kconst _ -> Some 0
-    | Ksym _   -> Some 0
-    | Ktrue    -> Some 0
-    | Kfalse   -> Some 0
-    | Kctype _ -> Some 0
-    | Kundef   -> Some 0
-    | Kerror   -> Some 0
-    | Kskip    -> Some 0
-    
-    | Knot _   -> Some 1
-    | Kindet _ -> Some 1
-
-    | Kaction (_, Kcreate _)    -> Some 2
-    | Kaction (_, Kalloc _)     -> Some 2
-    | Kaction (_, Kkill _)      -> Some 2
-    | Kaction (_, Kstore _ _ _) -> Some 2
-    | Kaction (_, Kload _ _)    -> Some 2
-    | Ksame _ _    -> Some 2
-    | Kcall _ _    -> Some 2
-    
+    | Kconst _      -> Some 0
+    | Ksym _        -> Some 0
+    | Ktrue         -> Some 0
+    | Kfalse        -> Some 0
+    | Kctype _      -> Some 0
+    | Kundef        -> Some 0
+    | Kerror        -> Some 0
+    | Kskip         -> Some 0
+    | Knot _        -> Some 1
+    | Kindet _      -> Some 1
+    | Kaction _     -> Some 2
+    | Ksame _ _     -> Some 2
+    | Kcall _ _     -> Some 2
     | Kop OpMul _ _ -> Some 3
     | Kop OpDiv _ _ -> Some 3
     | Kop OpMod _ _ -> Some 3
@@ -333,20 +296,16 @@ module Print = struct
     | Kop OpEq  _ _ -> Some 6
     | Kop OpAnd _ _ -> Some 7
     | Kop OpOr  _ _ -> Some 8
-    
-    | Kif _ _ _  -> Some 9
-    | Klet _ _ _ -> Some 10
-
-    | Kaseq _ _ _ -> Some 11
-    | Kwseq _ _ _ -> Some 12
-    | Ksseq _ _ _ -> Some 13
-    | Kunseq _    -> Some 14
-
-(*    | Kwhile _ _ _ _ -> None *)
-    | COMMENT _ _ ->    None
-    | DEBUG _ ->        None
+    | Kif _ _ _     -> Some 9
+    | Klet _ _ _    -> Some 10
+    | Kaseq _ _ _   -> Some 11
+    | Kwseq _ _ _   -> Some 12
+    | Ksseq _ _ _   -> Some 13
+    | Kunseq _      -> Some 14
+    | COMMENT _ _   -> None
+    | DEBUG _       -> None
   end
-
+  
   let lt_precedence p1 p2 =
     match (p1, p2) with
       | (Some n1, Some n2) -> n1 <= n2
@@ -455,17 +414,20 @@ module Print = struct
       | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
       | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
       | Kindet e        -> P.brackets (f e)
-      | Kaction (p, a)  -> (match p with
-                              | Pos -> P.empty
-                              | Neg -> P.tilde
-                            end) ^^
-                           (match a with
-                              | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
-                              | Kalloc e        -> pp_keyword "alloc" ^^^ f e
-                              | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
-                              | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
-                              | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
-                            end)
+      | Kaction (p, (bs, a)) ->
+          (* TODO: we need typeclasses to be able to print annotations *)
+          (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^ P.rangle ^^ P.space) ^^ *)
+          (match p with
+            | Pos -> P.empty
+            | Neg -> P.tilde
+           end) ^^
+          (match a with
+            | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
+            | Kalloc a        -> pp_keyword "alloc" ^^^ f e
+            | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
+            | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
+            | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
+           end)
       
       | Ksame a1 a2     -> pp_keyword "same" ^^^ f a1 ^^^ f a2
 (*

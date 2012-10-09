@@ -26,7 +26,7 @@ module Effect = struct
       (* the closest looping label *)
       option Symbol.t *
       (* map of functions generated while processing the current Ail function *)
-      map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr))
+      map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr unit)) (* TODO: the unit is ugly, rank2 polymorphism would be nice here *)
   
   val return: forall 'a. 'a -> t 'a
   let return = State.return
@@ -94,7 +94,7 @@ val fresh_fname: string -> E.t Symbol.t
 let fresh_fname name = E.map (fun x -> x) (fun (x,ret,loop,y) -> ((x, Some (name ^ "_" ^ string_of_num x)), (x+1, ret, loop, y)))
 
 (* create a new Core function *)
-val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr -> E.t unit
+val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr unit -> E.t unit
 let add_function fname typ args body =
   fun (a,b,c,d) ->
     ((), (a, b, c, Pmap.add fname (typ, args, body) d))
@@ -136,7 +136,7 @@ let is_function_id file e =
 
 (* (integer) promotion for values. (cf. §6.3.1.1#2) *)
 (* this should be a function from pure Core expr to pure Core expr (I think ...) *)
-let promote_value (e: C.expr) : C.expr = e (* TODO !!!! *)
+let promote_value (e: C.expr 'b ) : C.expr 'b = e (* TODO !!!! *)
 
 
 
@@ -148,7 +148,7 @@ let promote_value (e: C.expr) : C.expr = e (* TODO !!!! *)
 (* TODO: see if this right
      usual_arithmetic_conv e ty1 ty2 == performed the value conversion on the expression of type ty1 following the usual arith of ty1 and ty2
  *)
-let usual_arithmetic_conv (e: C.expr) (ty1: Ail.ctype) (ty2: Ail.ctype) : C.expr =
+let usual_arithmetic_conv (e: C.expr 'b) (ty1: Ail.ctype) (ty2: Ail.ctype) : C.expr 'b =
   C.Kcall C.conv [C.Kctype ty1; C.Kcall C.usual_arithmetic [C.Kctype ty1; C.Kctype ty2]; e]
 
 
@@ -275,13 +275,13 @@ and translate_exp file exp =
         translate_lvalue file e >>= fun core_e   ->
         E.return $
           C.Kwseq [Some a_lvalue] core_e
-            (C.Kaseq (Some a_load) (C.Kload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
-                                   (C.Neg, C.Kstore (C.Kctype (lvalue_type e))
+            (C.Kaseq (Some a_load) ({}, C.Kload (C.Kctype (lvalue_type e)) (C.Ksym a_lvalue))
+                                   (C.Neg, ({}, C.Kstore (C.Kctype (lvalue_type e))
                                       (C.Ksym a_lvalue)
                                       (C.Kcall C.conv_int
                                               [C.Kctype (exp_type e); (C.Kop C.OpAdd (C.Ksym a_load) (C.Kconst 1))]
                                       )
-                            )
+                                    ))
             )
 
 
@@ -1061,9 +1061,9 @@ C.seq [a_id] (C.create ty)
         translate_exp    file e2 >>= fun core_e2 ->
         E.return $
           C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Kaction (C.Neg, C.Kstore (C.Kctype (lvalue_type e1))
-                                        (C.Ksym a_e1)
-                                        (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2])
+            (C.Kaction (C.Neg, ({}, C.Kstore (C.Kctype (lvalue_type e1))
+                                             (C.Ksym a_e1)
+                                             (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2]))
                        )
             )
     
@@ -1095,7 +1095,7 @@ C.seq [a_id] (C.create ty)
 (* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
-and translate_stmt file current_function (_, stmt) : E.t C.expr =
+and translate_stmt file current_function (_, stmt) : E.t (C.expr unit) =
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   
@@ -1268,7 +1268,7 @@ and translate_block file current_function (_, stmt) : C.expr Symbol_state.t =
 
 
 (* Run the translator on different functions *)
-let translate_file (file: A.file _) : E.t C.file =
+let translate_file (file: A.file _) : E.t (C.file unit) =
   E.foldlM
     (fun (name, (args, body)) acc ->
        (* translate the body to Core *)
@@ -1283,7 +1283,7 @@ let translate_file (file: A.file _) : E.t C.file =
 
 
 (* This is the entry function (called from main.ml) *)
-let translate (file: A.file _) : C.file =
+let translate (file: A.file _) : C.file unit =
 let (cfile, (_, _, _, funs)) = (translate_file file) (Symbol.init, None, None, Pmap.empty) in
   <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
 
