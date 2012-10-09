@@ -1,25 +1,19 @@
 metavar n ::=
-  {{ lem num }}
   {{ coq nat }}
   {{ lex numeral }}
 indexvar i, j, k ::=
-  {{ lem num }}
   {{ coq nat }}
 
 grammar
-formula {{ tex \Psi }} :: 'formula_' ::=
+formula :: 'formula_' ::=
   | not formula :: M :: Not
-      {{ tex \neg [[formula]]  }}
-      {{ lem not ([[formula]]) }}
-      {{ coq ~ ([[formula]])   }}
+      {{ tex \neg [[formula]] }}
+      {{ coq ~ ([[formula]]) }}
   | formula1 \/ formula2 :: M :: Disj
-      {{ lem [[formula1]] || [[formula2]] }}
       {{ coq [[formula1]] \/ [[formula2]] }}
   | formula1 /\ formula2 :: M :: Conj
-      {{ lem [[formula1]] && [[formula2]] }}
       {{ coq [[formula1]] /\ [[formula2]] }}
   | ( formula ) :: S :: Parens
-      {{ lem [[formula]]  }} % TODO: lem not in icho?
       {{ icho [[formula]] }}
   | formula1 ... formulak :: :: dots
   | judgement :: :: judgement
@@ -33,8 +27,6 @@ terminals :: 'terminals_' ::=
 b :: bool ::=
   {{ phantom }}
   | true :: M :: True
-     {{ lem true }}
      {{ coq true }}
   | false :: M :: False
-     {{ lem false }}
      {{ coq false }}
