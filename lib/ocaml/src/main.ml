@@ -79,6 +79,48 @@ let rec numerote_ n = function
   | x::xs -> (n,x) :: numerote_ (n+1) xs
 let numerote = numerote_ 1
 
+
+
+
+
+
+
+
+
+
+let rec string_of_dyn_rule = function
+  | Core_run.Rule_Pos        -> "pos"
+  | Core_run.Rule_Neg        -> "neg"
+  | Core_run.Rule_WseqL r    -> "wseq_l[ " ^ string_of_dyn_rule r ^ " ]"
+  | Core_run.Rule_Neg_Wseq r -> "neg_wseq[ " ^ string_of_dyn_rule r ^ " ]"
+  | Core_run.Rule_Unseq r    -> "unseq[ " ^ string_of_dyn_rule r ^ " ]"
+
+
+let string_of_trace_action = function
+  | Core_run.Tcreate ty        -> "create {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "}"
+  | Core_run.Talloc n          -> "alloc " ^ string_of_int n
+  | Core_run.Tkill o           -> "kill @" ^ string_of_int o
+  | Core_run.Tstore (ty, o, n) -> "store {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " " ^ string_of_int n
+  | Core_run.Tload (ty, o)     -> "load {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o
+
+let rec string_of_trace (t: Core_run.E.trace) =
+  let rec f = function
+    | []      -> ""
+    | [b]     -> string_of_trace_action b
+    | b :: bs -> string_of_trace_action b ^ ", " ^ f bs
+  in match t with
+       | []               -> ""
+       | (r, bs, a) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
+                             "\x1b[0m ==> \x1b[32m<" ^ (f $ Pset.elements bs) ^
+                             ">\x1b[0m " ^ string_of_trace_action a ^ "\n" ^
+                             string_of_trace xs
+
+
+
+
+
+
+
 let () =
   let () = Arg.parse options add_file usage in
   let pipeline file_name =
@@ -88,14 +130,17 @@ let () =
     let pp_dot  = Meaning.Graph.to_file file_name in
     let pp_out  = Document.print -| Meaning.Print.pp in
     let pp_res  = Document.print -| Constraint.Print.pp in
+    let pp_sb   sb = List.map (fun (i, sb) -> print_endline $ "SB order #" ^ string_of_int i ^ "\n" ^ string_of_trace sb) $ numerote sb in
+
     
-    let run_core g =
-      print_endline (Hack.ansi_format [Hack.Blue] ("Core run: found " ^ string_of_int (List.length g) ^ " sb-order(s)."));
-      let chan = open_out "out.dot" in
-      output_string chan "digraph G{node[style=filled,color=white];";
-      List.iter (fun (n,g) -> output_string chan (Cmulator.toDot n g)) (numerote g);
-      output_string chan "}";
-      close_out chan in
+    
+    (* let run_core g = *)
+    (*   print_endline (Hack.ansi_format [Hack.Blue] ("Core run: found " ^ string_of_int (List.length g) ^ " sb-order(s).")); *)
+    (*   let chan = open_out "out.dot" in *)
+    (*   output_string chan "digraph G{node[style=filled,color=white];"; *)
+    (*   List.iter (fun (n,g) -> output_string chan (Cmulator.toDot n g)) (numerote g); *)
+    (*   output_string chan "}"; *)
+    (*   close_out chan in *)
     (file_name
     >|> Input.file
     >|> Lexer.make
@@ -127,7 +172,7 @@ let () =
           )
           (pass_message "5. Skipping Core's typechecking completed!")
         >|> Exception.rbind Core_run.run
-        >|> pass_through_test !core_run run_core
+        >|> pass_through pp_sb
         >|> return_unit
       )
       

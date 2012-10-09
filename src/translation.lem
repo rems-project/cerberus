@@ -1273,7 +1273,7 @@ let translate_file (file: A.file _) : E.t C.file =
     (fun (name, (args, body)) acc ->
        (* translate the body to Core *)
        translate_stmt file name body >>= fun core_body ->
-       E.return $ Pmap.add name (C.TyBase C.value (* TODO: address for pointer type? *),
+       E.return $ Pmap.add name (C.TyBase C.integer (* TODO: address for pointer type? *),
                                  List.map (fun arg -> (arg,C.address (* TODO: check *))) args,
                                  core_body) acc)
     (Pmap.bindings file.A.fn_map)
