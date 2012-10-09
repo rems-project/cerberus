@@ -47,7 +47,8 @@ let simplify_arith_rel op n1 n2 =
     | OpLt  -> f (n1 < n2)
   end 
 
-let rec subst_symbols (expr : expr) (sigma : Pmap.map sym expr) : E.t expr =
+val     subst_symbols: forall 'a. expr 'a -> Pmap.map sym (expr 'a) -> E.t (expr 'a)
+let rec subst_symbols expr sigma =
   let g a = if Pmap.mem a sigma then E.flagModify >> E.return (Pmap.find a sigma) else E.return $ Ksym a in
   match expr with
     | Ksym a -> g a
@@ -80,20 +81,19 @@ let rec subst_symbols (expr : expr) (sigma : Pmap.map sym expr) : E.t expr =
     | Kindet e ->
         subst_symbols e sigma >>= fun e' ->
         E.return $ Kindet e'
-    | Kaction (p, Kalloc e) ->
+    | Kaction (p, (bs, Kalloc e)) ->
         subst_symbols e sigma >>= fun e' ->
-        E.return $ Kaction (p, Kalloc e')
-    | Kaction (p, Kkill a) -> if Pmap.mem a sigma then
-                                Boot.debug "subst_symbols on a symbol used by  'kill'"
-                              else
-                                E.return $ Kaction (p, Kkill a)
-    | Kaction (p, Kstore ty e1 e2) ->
+        E.return $ Kaction (p, (bs, Kalloc e'))
+    | Kaction (p, (bs, Kkill a)) ->
+        if Pmap.mem a sigma then Boot.debug "subst_symbols on a symbol used by  'kill'"
+                            else E.return $ Kaction (p, (bs, Kkill a))
+    | Kaction (p, (bs, Kstore ty e1 e2)) ->
         subst_symbols e1 sigma >>= fun e1' ->
         subst_symbols e2 sigma >>= fun e2' ->
-        E.return $ Kaction (p, Kstore ty e1' e2')
-    | Kaction (p, Kload ty e) ->
+        E.return $ Kaction (p, (bs, Kstore ty e1' e2'))
+    | Kaction (p, (bs, Kload ty e)) ->
         subst_symbols e sigma >>= fun e' ->
-        E.return $ Kaction (p, Kload ty e')
+        E.return $ Kaction (p, (bs, Kload ty e'))
     | Ksame (Ksym a1) (Ksym a2) -> if Pmap.mem a1 sigma || Pmap.mem a2 sigma then
                                      Boot.debug "subst_symbol on a symbol used by a 'same'"
                                    else
@@ -102,10 +102,11 @@ let rec subst_symbols (expr : expr) (sigma : Pmap.map sym expr) : E.t expr =
   end
 
 
-let rec collapse_unseq (expr : expr) : list expr =
-  match expr with
+val     collapse_unseq: forall 'a. expr 'a -> list (expr 'a)
+let rec collapse_unseq e =
+  match e with
     | Kunseq es -> List.concat (List.map collapse_unseq es)
-    | _         -> [expr]
+    | _         -> [e]
   end
 
 
@@ -131,7 +132,7 @@ let rec trivialy_pure fun_map exp =
 
 
 
-let rec simplify_expr fun_map (exp: expr) : E.t expr =
+let rec simplify_expr fun_map (exp: expr 'a) : E.t (expr 'a) =
   let simplify_expr = simplify_expr fun_map in
   match exp with
     (* Perform trivial simplifications on binary operators with constant operands. *)
@@ -210,16 +211,16 @@ let rec simplify_expr fun_map (exp: expr) : E.t expr =
     | Kindet e ->
         simplify_expr e >>= fun e' ->
         E.return $ Kindet e'
-    | Kaction (p, Kalloc e) ->
+    | Kaction (p, (bs, Kalloc e)) ->
         simplify_expr e >>= fun e' ->
-        E.return $ Kaction (p, Kalloc e')
-    | Kaction (p, Kstore ty e1 e2) ->
+        E.return $ Kaction (p, (bs, Kalloc e'))
+    | Kaction (p, (bs, Kstore ty e1 e2)) ->
         simplify_expr e1 >>= fun e1' ->
         simplify_expr e2 >>= fun e2' ->
-        E.return $ Kaction (p, Kstore ty e1' e2')
-    | Kaction (p, Kload ty e) ->
+        E.return $ Kaction (p, (bs, Kstore ty e1' e2'))
+    | Kaction (p, (bs, Kload ty e)) ->
         simplify_expr e >>= fun e' ->
-        E.return $ Kaction (p, Kload ty e')
+        E.return $ Kaction (p, (bs, Kload ty e'))
     | _ -> E.return exp
   end 
 
@@ -289,16 +290,16 @@ let rec foo e =
     | Kindet e ->
         foo e >>= fun e' ->
         E.return $ Kindet e'
-    | Kaction (p, Kalloc e) ->
+    | Kaction (p, (bs, Kalloc e)) ->
         foo e >>= fun e' ->
-        E.return $ Kaction (p, Kalloc e')
-    | Kaction (p, Kstore ty e1 e2) ->
+        E.return $ Kaction (p, (bs, Kalloc e'))
+    | Kaction (p, (bs, Kstore ty e1 e2)) ->
         foo e1 >>= fun e1' ->
         foo e2 >>= fun e2' ->
-        E.return $ Kaction (p, Kstore ty e1' e2')
-    | Kaction (p, Kload ty e) ->
+        E.return $ Kaction (p, (bs, Kstore ty e1' e2'))
+    | Kaction (p, (bs, Kload ty e)) ->
         foo e >>= fun e' ->
-        E.return $ Kaction (p, Kload ty e')
+        E.return $ Kaction (p, (bs, Kload ty e'))
     | _ -> E.return e
   end
 
@@ -312,7 +313,7 @@ let rec simpl fun_map e =
 
 
 
-let simplify (f: file) : file =
+let simplify (f: file 'a) : file 'a =
   <|
       main= f.main;
       fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl f.fun_map fbody)) f.fun_map
