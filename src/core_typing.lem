@@ -302,12 +302,11 @@ let rec check expected_type e =
           | Kaction (Neg, (_, Kalloc n))   -> check (TyBase integer) n  >> guard_expected (TyEffect unit)
           
          (*
-          +    (α, address) ∈ Γ
+          +    Γ ⊢ e ↑ address
           +  ------------------- (kill)
-          +  Γ ⊢ kill α ↑ [unit]
+          +  Γ ⊢ kill e ↑ [unit]
           *)
-          | Kaction (_, (_, Kkill a)) -> E.get a >>= fun baseTy_sym ->
-                                         E.guard (baseTy_sym = address) (CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_sym) (TyBase address)) >>
+          | Kaction (_, (_, Kkill e)) -> check (TyBase address) e >>
                                          guard_expected (TyEffect unit)
           
           
@@ -596,10 +595,8 @@ and infer e =
     +  ------------------ (kill)
     +  Γ ⊢ kill e : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Kaction (_, (_, Kkill a)) ->
-        E.get a                      >>= fun baseTy_a ->
-        E.guard (baseTy_a = address)
-                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a) (TyBase address)) >>
+    | Kaction (_, (_, Kkill e)) ->
+        check (TyBase address) e >>
         E.return (TyEffect unit)
     
     

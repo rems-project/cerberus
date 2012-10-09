@@ -1125,7 +1125,7 @@ and translate_stmt file current_function (_, stmt) : E.t (C.expr unit) =
                         end in
       
       (* prepare the code killing the objects. *)
-      let kills_ctx = let xs = List.map (fun (a, _) -> C.pkill a) decls in
+      let kills_ctx = let xs = List.map (fun (a, _) -> C.pkill (C.Ksym a)) decls in
                       match n with
                         | 0 -> fun x -> x
                         | 1 -> C.Kwseq [] (List.hd xs)

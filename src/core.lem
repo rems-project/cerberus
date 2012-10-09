@@ -115,7 +115,7 @@ type expr 'a =
 and action_ 'a =
   | Kcreate of expr 'a
   | Kalloc of expr 'a
-  | Kkill of sym
+  | Kkill of expr 'a
   | Kstore of expr 'a * expr 'a * expr 'a
   | Kload of expr 'a * expr 'a
 and action 'a  = set 'a * action_ 'a
@@ -154,7 +154,7 @@ let test: file unit =
       Kwseq [Some a1; Some a2] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
         (Kwseq [] (Kunseq [pstore (Kctype signed_int) (Ksym a1) (Kconst 4); pstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
            (Kwseq [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kwseq [] (Kunseq [pkill a1; pkill a2])
+              (Kwseq [] (Kunseq [pkill (Ksym a1); pkill (Ksym a2)])
                  (Kconst 0)
               )
            )
@@ -162,7 +162,7 @@ let test: file unit =
       Kwseq [Some a1; Some a2] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
         (Kwseq [] (Kunseq [pstore (Kctype signed_int) (Ksym a1) (Kconst 4); pstore (Kctype signed_int) (Ksym a2) (Kconst 5)])
            (Kwseq  [] (Kindet (Kcall a_f [Ksym a1; Ksym a2])) 
-              (Kwseq [] (Kunseq [pkill a1; pkill a2])
+              (Kwseq [] (Kunseq [pkill (Ksym a1); pkill (Ksym a2)])
                  (Kconst 0)
               )
           )
@@ -181,7 +181,7 @@ let test2: file unit =
       Kwseq [Some a_x; Some a_y] (Kunseq [pcreate (Kctype signed_int); pcreate (Kctype signed_int)])
         (Kwseq [] (Kif (Ktrue) (pstore (Kctype signed_int) (Ksym a_x) (Kconst 1))
                                (pstore (Kctype signed_int) (Ksym a_y) (Kconst 2)))
-           (Kunseq [pkill a_x; pkill a_y]))
+           (Kunseq [pkill (Ksym a_x); pkill (Ksym a_y)]))
 
   in
   <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) Pmap.empty |>
@@ -424,7 +424,7 @@ module Print = struct
           (match a with
             | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
             | Kalloc a        -> pp_keyword "alloc" ^^^ f e
-            | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
+            | Kkill e         -> pp_keyword "kill" ^^^ f e
             | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
             | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e
            end)

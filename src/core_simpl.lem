@@ -84,9 +84,8 @@ let rec subst_symbols expr sigma =
     | Kaction (p, (bs, Kalloc e)) ->
         subst_symbols e sigma >>= fun e' ->
         E.return $ Kaction (p, (bs, Kalloc e'))
-    | Kaction (p, (bs, Kkill a)) ->
-        if Pmap.mem a sigma then Boot.debug "subst_symbols on a symbol used by  'kill'"
-                            else E.return $ Kaction (p, (bs, Kkill a))
+    | Kaction (p, (bs, Kkill e)) ->
+        E.return $ Kaction (p, (bs, Kkill e))
     | Kaction (p, (bs, Kstore ty e1 e2)) ->
         subst_symbols e1 sigma >>= fun e1' ->
         subst_symbols e2 sigma >>= fun e2' ->
