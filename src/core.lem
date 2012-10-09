@@ -485,7 +485,7 @@ module Print = struct
                             end) ^^
                            (match a with
                               | Kcreate ty      -> pp_keyword "create" ^^ P.braces (f ty)
-                              | Kalloc a        -> pp_keyword "alloc" ^^^ f e
+                              | Kalloc e        -> pp_keyword "alloc" ^^^ f e
                               | Kkill a         -> pp_keyword "kill" ^^^ pp_symbol a
                               | Kstore ty e1 e2 -> pp_keyword "store" ^^ P.braces (f ty) ^^^ f e1 ^^^ f e2
                               | Kload ty e      -> pp_keyword "load" ^^ P.braces (f ty) ^^^ f e

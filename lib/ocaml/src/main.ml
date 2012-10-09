@@ -171,6 +171,7 @@ let () =
             >|> pass_message "5. Core's typechecking completed!"
           )
           (pass_message "5. Skipping Core's typechecking completed!")
+        >|> pass_message "6. Now running:"
         >|> Exception.rbind Core_run.run
         >|> pass_through pp_sb
         >|> return_unit
