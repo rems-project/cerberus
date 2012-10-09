@@ -4,7 +4,7 @@ open Global
 
 (* Types *)
 type core_base_type =
-  | value
+  | integer
   | boolean
   | address
   | ctype
@@ -25,7 +25,7 @@ let rec string_of_core_base_type_aux l =
   end
 and string_of_core_base_type baseTy =
   match baseTy with
-    | value         -> "value"
+    | integer       -> "integer"
     | boolean       -> "boolean"
     | address       -> "address"
     | ctype         -> "ctype"
@@ -117,12 +117,12 @@ type expr =
   | Kaction of paction
   | Kunseq of list expr
   | Kwseq of list (option sym) * expr * expr
+  | Ksseq of list (option sym) * expr * expr
   | Kaseq of option sym * action * paction
-  | Ksp of list (option sym) * expr * expr
   
   
-  | Kindet of expr
-  
+| Kindet of expr (* TODO:  | Kindet of num * expr *)
+  | Kbound of num * expr (* boundary for indet expressions context *)
   
   | Ksame of expr * expr
   
@@ -177,7 +177,7 @@ let test: file =
            (Kcreate signed_int)
            )
   in
-  <| main= a_main; fun_map= Pmap.add a_main (TyEffect value, [], main_body) (Pmap.add a_f (TyEffect value, [], Kskip) Pmap.empty) |>
+  <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) (Pmap.add a_f (TyEffect integer, [], Kskip) Pmap.empty) |>
 *)
 
 (* TODO: check if it is correct that only the call is indet *)
@@ -211,7 +211,7 @@ let test: file =
        )
     ]
   in
-  <| main= a_main; fun_map= Pmap.add a_main (TyEffect value, [], main_body) (Pmap.add a_f (TyBase value, [(a_n, address); (a_m, address)], f_body) Pmap.empty) |>
+  <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) (Pmap.add a_f (TyBase integer, [(a_n, address); (a_m, address)], f_body) Pmap.empty) |>
 
 
 
@@ -229,7 +229,7 @@ let test2: file =
            (Kunseq [pkill a_x; pkill a_y]))
 
   in
-  <| main= a_main; fun_map= Pmap.add a_main (TyEffect value, [], main_body) Pmap.empty |>
+  <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) Pmap.empty |>
 
 
 
@@ -238,8 +238,8 @@ let test3: file =
   let a_f    = (2, Some "f") in
   let x    = (1, Some "x") in
   let y    = (2, Some "y") in
-  <| main= a_main; fun_map= Pmap.add a_f    (TyEffect value, [(x, value); (y, value)], Kop OpAdd (Ksym x) (Ksym y))
-                           (Pmap.add a_main (TyEffect value, [], Kcall a_f [Kconst 10; Ktrue]) Pmap.empty) |>
+  <| main= a_main; fun_map= Pmap.add a_f    (TyEffect integer, [(x, integer); (y, integer)], Kop OpAdd (Ksym x) (Ksym y))
+                           (Pmap.add a_main (TyEffect integer, [], Kcall a_f [Kconst 10; Ktrue]) Pmap.empty) |>
 
 
 
@@ -303,20 +303,20 @@ let shift    = (59, Some "shift")
 let core_stdlib =
   let f = List.fold_left (fun acc (fname, ftype) -> Pmap.add fname ftype acc) Pmap.empty in
   f [
-      (overflow,         ([ctype; value],        TyBase value));
-      (conv_int,         ([ctype; value],        TyBase value));
-      (conv,             ([ctype; ctype; value], TyBase value));
-      (guard_zero,       ([value],               TyBase value));
-      (usual_arithmetic, ([ctype; ctype],        TyBase ctype));
-      (ctype_width,      ([ctype],               TyBase value));
-      (exp,              ([value; value],        TyBase value));
-      (representable,    ([ctype; value],        TyBase boolean));
-      (max,              ([ctype],               TyBase value));
-      (min,              ([ctype],               TyBase value));
-      (sizeof,           ([ctype],               TyBase value));
-      (alignof,          ([ctype],               TyBase value));
-      (offsetof,         ([ctype],               TyBase value));
-      (shift,            ([address; value],      TyBase address))
+      (overflow,         ([ctype; integer],        TyBase integer));
+      (conv_int,         ([ctype; integer],        TyBase integer));
+      (conv,             ([ctype; ctype; integer], TyBase integer));
+      (guard_zero,       ([integer],               TyBase integer));
+      (usual_arithmetic, ([ctype; ctype],          TyBase ctype));
+      (ctype_width,      ([ctype],                 TyBase integer));
+      (exp,              ([integer; integer],      TyBase integer));
+      (representable,    ([ctype; integer],        TyBase boolean));
+      (max,              ([ctype],                 TyBase integer));
+      (min,              ([ctype],                 TyBase integer));
+      (sizeof,           ([ctype],                 TyBase integer));
+      (alignof,          ([ctype],                 TyBase integer));
+      (offsetof,         ([ctype],                 TyBase integer));
+      (shift,            ([address; integer],      TyBase address))
     ]
 
 
@@ -363,7 +363,7 @@ module Print = struct
 
     | Kaseq _ _ _ -> Some 11
     | Kwseq _ _ _ -> Some 12
-    | Ksp _ _ _   -> Some 13
+    | Ksseq _ _ _ -> Some 13
     | Kunseq _    -> Some 14
 
 (*    | Kwhile _ _ _ _ -> None *)
@@ -393,7 +393,7 @@ module Print = struct
   
   let rec pp_core_base_type baseTy =
     match baseTy with
-      | value         -> !^ "value"
+      | integer       -> !^ "integer"
       | boolean       -> !^ "boolean"
       | address       -> !^ "address"
       | ctype         -> !^ "ctype"
@@ -452,17 +452,17 @@ module Print = struct
       | Kaseq None act y     -> f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       | Kaseq (Some a) act y -> pp_symbol a ^^^ !^ "<-" ^^ f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       
-      | Ksp [] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
-      | Ksp [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
-                              P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>"))
-                              ^^ P.break1 ^^ f e2
-      | Ksp [None] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
-      | Ksp _as e1 e2 -> let g x = match x with
-                                     | Some x -> pp_symbol x
-                                     | None   -> P.underscore
-                                   end
-                         in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
-                             P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
+      | Ksseq [] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>"))
+                                ^^ P.break1 ^^ f e2
+      | Ksseq [None] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq _as e1 e2 -> let g x = match x with
+                                       | Some x -> pp_symbol x
+                                       | None   -> P.underscore
+                                     end
+                           in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
+                               P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
 
       | Kwseq [] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
       | Kwseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
