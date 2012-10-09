@@ -1,8 +1,5 @@
 open Global
 
-
-
-(* Types *)
 type core_base_type =
   | integer
   | boolean
@@ -12,32 +9,11 @@ type core_base_type =
   | tuple of list core_base_type
   | wildcard
 
+(* Types discriminate between pure (TyBase) and effectful
+   expressions (TyEffect) *)
 type core_type =
   | TyBase   of core_base_type
   | TyEffect of core_base_type
-
-
-let rec string_of_core_base_type_aux l =
-  match l with
-    | []    -> ")"
-    | [x]   -> string_of_core_base_type x
-    | x::xs -> string_of_core_base_type x ^ ", " ^ string_of_core_base_type_aux xs
-  end
-and string_of_core_base_type baseTy =
-  match baseTy with
-    | integer       -> "integer"
-    | boolean       -> "boolean"
-    | address       -> "address"
-    | ctype         -> "ctype"
-    | unit          -> "unit"
-    | tuple baseTys -> "(" ^ string_of_core_base_type_aux baseTys
-end
-
-let string_of_core_type = function
-  | TyBase   baseTy -> string_of_core_base_type baseTy
-  | TyEffect baseTy -> "[" ^ string_of_core_base_type baseTy ^ "]"
-end
-
 
 (* -- Syntax ------------------------------------------------------------------------------------ *)
 

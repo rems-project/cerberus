@@ -1,3 +1,4 @@
+open Global
 open Core
 
 type cause =
@@ -494,8 +495,8 @@ let to_string = function
   
   (* Core typechecking *)
   | CORE_TYPECHECK_INCORRECT_EXPECTED foundTy expectedTy ->
-      "[Core Typechecking] found type `" ^ (string_of_core_type foundTy) ^ "', while expecting `" ^
-       (string_of_core_type expectedTy) ^ "'."
+      "[Core Typechecking] found type `" ^ (Document.to_plain_string $ Core.Print.pp_core_type foundTy) ^ "', while expecting `" ^
+       (Document.to_plain_string $ Core.Print.pp_core_type expectedTy) ^ "'."
   | CORE_TYPECHECK_IF_BRANCHES ->
       "[Core Typechecking] the two branches of a [if] must have the same type."
   
