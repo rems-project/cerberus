@@ -1,0 +1,107 @@
+This note shows a way to modify the proposed small-step semantics for Core, so
+that generated traces are annotated to allow the reconstruction of the
+sequenced-before order.
+
+REMINDER:
+  the small-step sem occurs after the removal of indet
+  expressions so here expressions are only made of weak/strong
+
+
+A ; (B ; C || D)
+
+
+A
+(A)D
+(A)B
+(B)C
+
+
+
+-- A --> {A} [B ; C] || {A} D
+
+-- {A} D --> {A}
+
+
+These modified rules add annotations to the trace to allowed
+the reconstruction of the SB-order
+
+
+   e1 --A--> e1'
+------------------------- (1)
+e1; e2 --A--> e1'; {A} e2
+
+
+   e --B--> e'
+----------------- (2)
+{A}e --{A}B--> e'
+
+
+      e1 --A--> e1'
+-------------------------
+e1 || e2 --A--> e1' || e2
+
+
+      e2 --A--> e2'
+-------------------------
+e1 || e2 --A--> e1 || e2'
+
+
+-------------------------
+{A}(e1 || e2) --e--> {A}e1 || {A}e2
+
+
+TODO: need to handle negative actions
+
+hum there is problem because when negative actions are postponed, they are moved
+--> this may produce some loss of information ?
+
+
+A; B; C --A--> {A}(B; C) --{A}B-->{B}C --{B}C--> skip    A {A}B {B}C
+
+
+A; (B; C || D) --A-->    {A}(B; C || D)
+               --e-->    {A}(B;C) || {A}D
+               --{A}B--> {A}C || {A}D
+               --{A}D--> {A}C
+               --{A}C--> skip
+
+
+(A; ~B || C); D --C--> A; ~B; {C}D
+                --A--> {A}~B; {A}{C}D
+                --e--> {A}~B || D
+                --D--> {A}~B
+                --{A}B--> skip
+
+A --A--> skip
+----------------------
+A; B --A--> {A}skip; B
+-------------------------------
+A; B; C --A--> {A}skip; B; {A}C
+
+
+
+{A}skip; B; {A}C --e--> {A}B; {A}C
+
+Hum here we don't need annotate C about the A,
+because of the trans of sb.
+
+But the simpler rule seems to loose information when
+the first operand of ; has some unseq?
+
+
+
+A; (B; C || D)
+
+--A--> {A}skip; (B; C || D)
+--e--> {A}(B; C || D)
+--e--> {A}B ; {A}(C || D)
+--{A}B--> {B}skip ; {A}(C || D)
+--e--> {B, A}(C || D)
+--e--> {B, A}C || {B, A}D
+--{B, A}C--> {B, A}D
+--{B, A}D--> skip
+
+A
+{A}B
+{B, A}C
+{B, A}D
