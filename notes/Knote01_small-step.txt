@@ -111,11 +111,11 @@ A,B ::=
                              is n-ary for real)
 
 ? | leteffweak (α1, ..., αk) = A in
- | (α1, ..., αk) ← A ; B     Weak sequenced-before: only the positive actions of A are
-                             sequenced-before the actions of B. The
-                             negative actions of A are unsequenced wrt
-                             the actions of B. The value of the
-                             expression is the value of B.
+ | (α1, ..., αk) ← A >> B     Weak sequenced-before: only the positive actions of A are
+                              sequenced-before the actions of B. The
+                              negative actions of A are unsequenced wrt
+                              the actions of B. The value of the
+                              expression is the value of B.
 
 ? better concrete syntax?
  | α ← a ▷ x                 Atomic sequencing: a is sequence-before before x such that the two
@@ -128,7 +128,7 @@ standard text, but maybe we could prove that there's an equivalent
 semantics with just one action for an inc or dec?)
 
 ?? leteffstrong (α1, ..., αk) = A in B 
- | (α1, ..., αk) ← A ♦ B     sequence-point: all actions of A are sequenced-before anything in B.
+ | (α1, ..., αk) ← A ; B     sequence-point: all actions of A are sequenced-before anything in B.
 
 
 For the small-step semantics we define a relation of type
@@ -194,28 +194,28 @@ operator, we simply do some substitution (NOTE: the symbolic names are all diffe
 use "recursively", as we are not dealing with symbolic names for functions here, so there are no
 subtility regarding the substitutions.
 
--------------------------------------------------------------- (value_unseq_wseq)
-(s, (α1, α2) ← (v1 || v2) ; A) --ε--> (s, A[α1 \ v1, α2 \ v2])
+--------------------------------------------------------------- (value_unseq_wseq)
+(s, (α1, α2) ← (v1 || v2) >> A) --ε--> (s, A[α1 \ v1, α2 \ v2])
 
 -------------------------------------------------------------- (value_unseq_sp)
-(s, (α1, α2) ← (v1 || v2) ♦ A) --ε--> (s, A[α1 \ v1, α2 \ v2])
+(s, (α1, α2) ← (v1 || v2) ; A) --ε--> (s, A[α1 \ v1, α2 \ v2])
 
 
 Same thing for a single value (BS: with the n-ary version of unseq, the previous rules alreqdy take
 care of that ...):
 
------------------------------------ (value_wseq)
-(s, α ← v ; A) --ε--> (s', A[α \ v])
+------------------------------------- (value_wseq)
+(s, α ← v >> A) --ε--> (s', A[α \ v])
 
------------------------------------ (value_sp)
-(s, α ← v ♦ A) --ε--> (s', A[α \ v])
+------------------------------------ (value_sp)
+(s, α ← v ; A) --ε--> (s', A[α \ v])
 
 
 The rule of atomic sequencing operator looks morally wrong but I am not sure what else I can do:
 
          (s, a) --a--> (s', v)
---------------------------------------- (aseq)
-(s, α ← a ▷ y) --a--> (s', y[α \ v]; v)
+----------------------------------------- (aseq)
+(s, α ← a ▷ y) --a--> (s', y[α \ v] >> v)
 
 
 The positive actions are sequenced by the weak sequencing operator and
@@ -233,25 +233,27 @@ NEW: I modified, this rule. Instead of doing an epsilon reduction simply
      moving the negative action past the wseq operator, we can also do a
      reduction of A. This avoid duplicating normal forms.
 
-       (s, A) --a--> (s', A')
------------------------------------- (neg_wseq)
-(s, _ ← ~a; A) --ε--> (s', ~a || A')
+        (s, A) --a--> (s', A')
+-------------------------------------- (neg_wseq)
+(s, _ ← ~a >> A) --ε--> (s', ~a || A')
 
 
 In contrast, a sequence point forces an ordering on all actions. So
 we add rules for negative actions which make them positive (BS: would
 need only one with the n-ary unseq ...):
 
----------------------------------- (neg_sp)
-(s, _ ← ~a ♦ A) --ε--> (s', a ♦ A)
+
+   (s, ~a) --a--> (s', skip)
+------------------------------ (neg_sp)
+(s, _ ← ~a ; A) --a--> (s', A)
 
 ------------------------------------------------ (neg_lunseq_sp)
-(s, _ ← (~a || A) ♦ B) --ε--> (s', (a || A) ♦ B)
+(s, _ ← (~a || A) ; B) --ε--> (s', (a || A) ; B)
 
     (),alpha  <- 
 
 ------------------------------------------------ (neg_runseq_sp)
-(s, _ ← (A || ~a) ♦ B) --ε--> (s', (A || a) ♦ B)
+(s, _ ← (A || ~a) ; B) --ε--> (s', (A || a) ; B)
 
 
 
