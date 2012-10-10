@@ -118,10 +118,13 @@ let rec trivialy_pure fun_map exp =
     | Ksym _      -> true
     | Ktrue       -> true
     | Kfalse      -> true
-    | Kcall f _   -> match Pmap.find f fun_map with
+    | Kcall f _   -> Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None exp)
+(*
+match Pmap.find f fun_map with
                        | (TyBase _, _, _) -> true
                        | _                -> false
                      end
+*)
     | Kop _ e1 e2 -> trivialy_pure e1 && trivialy_pure e2
 
     (* TODO: asume the first operand is pure (which it should be to typecheck) *)
