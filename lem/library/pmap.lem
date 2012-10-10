@@ -26,6 +26,10 @@ let inline {ocaml} for_all = Ocaml.Pmap.for_all
 val map : forall 'key 'a 'b. ('a -> 'b) -> map 'key 'a -> map 'key 'b
 let inline {ocaml} map = Ocaml.Pmap.map
 
+val mapi : forall 'key 'a 'b. ('a -> 'b) -> map 'key 'a -> map 'key 'b
+let inline {ocaml} mapi = Ocaml.Pmap.mapi
+
+
 val bindings: forall 'key 'a. map 'key 'a -> list ('key * 'a)
 let inline {ocaml} bindings = Ocaml.Pmap.bindings
 

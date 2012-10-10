@@ -7,22 +7,24 @@ type mem_state = Pmap.map mem_addr num * mem_addr
 
 (* Fully evaluated description of an action *)
 type trace_action =
-  | Tcreate of Ail.ctype
-  | Talloc of num
+  | Tcreate of Ail.ctype * mem_addr (* the second argument is the created object *)
+  | Talloc of num * mem_addr (* the second argument is the created object *)
   | Tkill of mem_addr
   | Tstore of Ail.ctype * mem_addr * num
-  | Tload of Ail.ctype * mem_addr
+  | Tload of Ail.ctype * mem_addr * num (* the last argument is the read value *)
 
-(* 
-let pp_trace_action = function
-  | Tcreate ty    -> !^ ("create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
-  | Talloc n      -> !^ ("alloc " ^ string_of_num n)
-  | Tkill o       -> !^ ("kill @" ^ string_of_num o)
-  | Tstore ty o n -> !^ ("store {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " " ^ string_of_num n)
-  | Tload ty o    -> !^ ("load {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o)
-  end
-*)
-
+module Print = struct
+  module P = Pprint
+  open P.Operators
+  
+  let pp_trace_action = function
+    | Tcreate ty o  -> !^ ("@" ^ string_of_num o ^ " <= create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
+    | Talloc n o    -> !^ ("@" ^ string_of_num o ^ " <= alloc " ^ string_of_num n)
+    | Tkill o       -> !^ ("kill @" ^ string_of_num o)
+    | Tstore ty o n -> !^ ("store {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " " ^ string_of_num n)
+    | Tload ty o v  -> !^ ("load {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " = " ^ string_of_num v)
+    end
+end
 
 
 
@@ -287,10 +289,10 @@ val perform_action: action_ trace_action -> E.t (trace_action * expr trace_actio
 let perform_action = function
   | Kcreate ty    -> eval ty   >>= fun (Kctype ty) ->
                      create ty >>= fun o           ->
-                     E.return (Tcreate ty, Kaddr o)
+                     E.return (Tcreate ty o, Kaddr o)
   | Kalloc n      -> eval n  >>= fun (Kconst n) ->
                      alloc n >>= fun o          ->
-                     E.return (Talloc n, Kaddr o)
+                     E.return (Talloc n o, Kaddr o)
   | Kkill o       -> eval o >>= fun (Kaddr o) ->
                      kill o >>
                      E.return (Tkill o, Kskip)
@@ -302,7 +304,7 @@ let perform_action = function
   | Kload ty o    -> eval ty   >>= fun (Kctype ty) ->
                      eval o    >>= fun (Kaddr o)   ->
                      load ty o >>= fun v           ->
-                     E.return $ (Tload ty o, Kconst v)
+                     E.return $ (Tload ty o v, Kconst v)
 end
 
 
