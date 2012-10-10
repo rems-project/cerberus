@@ -275,6 +275,7 @@ module Print = struct
   
   let precedence = function
     | Kconst _      -> Some 0
+    | Kaddr _       -> Some 0
     | Ksym _        -> Some 0
     | Ktrue         -> Some 0
     | Kfalse        -> Some 0
@@ -363,6 +364,7 @@ module Print = struct
       | DEBUG str       -> !^ ("\x1b[1;7;31m[DEBUG]{" ^ str ^ "}\x1b[0m")
       
       | Kconst n        -> pp_number (string_of_num n)
+      | Kaddr o         -> !^ ("@" ^ string_of_num o) (* TODO: here we use the trivial mem_addr *)
       | Ksym a          -> pp_symbol a
       | Kop op e1 e2    -> f e1 ^^^ pp_binop op ^^^ f e2
       | Ktrue           -> pp_constant "true"
