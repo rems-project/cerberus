@@ -50,6 +50,7 @@ errors.lem \
 core_simpl.lem \
 core_typing.lem \
 core_run.lem \
+sb.lem \
 types.lem \
 annotate.lem \
 cabs_to_ail.lem \
