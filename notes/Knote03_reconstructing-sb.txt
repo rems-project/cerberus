@@ -77,29 +77,6 @@ We can then write the modified reduction semantics:
 
 
 
-   e1 --A--> e1'
-------------------------- (1)
-e1; e2 --A--> e1'; {A} e2
-
-
-   e --B--> e'
------------------ (2)
-{A}e --{A}B--> e'
-
-
-      e1 --A--> e1'
--------------------------
-e1 || e2 --A--> e1' || e2
-
-
-      e2 --A--> e2'
--------------------------
-e1 || e2 --A--> e1 || e2'
-
-
--------------------------
-{A}(e1 || e2) --e--> {A}e1 || {A}e2
-
 
 TODO: need to handle negative actions
 
