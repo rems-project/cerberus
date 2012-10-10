@@ -7,22 +7,24 @@ type mem_state = Pmap.map mem_addr num * mem_addr
 
 (* Fully evaluated description of an action *)
 type trace_action =
-  | Tcreate of Ail.ctype
-  | Talloc of num
+  | Tcreate of Ail.ctype * mem_addr (* the second argument is the created object *)
+  | Talloc of num * mem_addr (* the second argument is the created object *)
   | Tkill of mem_addr
   | Tstore of Ail.ctype * mem_addr * num
-  | Tload of Ail.ctype * mem_addr
+  | Tload of Ail.ctype * mem_addr * num (* the last argument is the read value *)
 
-(* 
-let pp_trace_action = function
-  | Tcreate ty    -> !^ ("create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
-  | Talloc n      -> !^ ("alloc " ^ string_of_num n)
-  | Tkill o       -> !^ ("kill @" ^ string_of_num o)
-  | Tstore ty o n -> !^ ("store {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " " ^ string_of_num n)
-  | Tload ty o    -> !^ ("load {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o)
-  end
-*)
-
+module Print = struct
+  module P = Pprint
+  open P.Operators
+  
+  let pp_trace_action = function
+    | Tcreate ty o  -> !^ ("@" ^ string_of_num o ^ " <= create {") ^^ Ail.Print.pp_type ty ^^ !^ "}"
+    | Talloc n o    -> !^ ("@" ^ string_of_num o ^ " <= alloc " ^ string_of_num n)
+    | Tkill o       -> !^ ("kill @" ^ string_of_num o)
+    | Tstore ty o n -> !^ ("store {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " " ^ string_of_num n)
+    | Tload ty o v  -> !^ ("load {") ^^ Ail.Print.pp_type ty ^^ !^ ("} @" ^ string_of_num o ^ " = " ^ string_of_num v)
+    end
+end
 
 
 
@@ -156,7 +158,7 @@ let rec _pick_one acc = function
   | []    -> []
   | x::xs -> (List.rev acc, x, xs) :: _pick_one (x::acc) xs
 end
-let pick_one l = E.msum $ List.map E.return (_pick_one l [])
+let pick_one l = E.msum $ List.map E.return (_pick_one [] l)
 
 
 (* push an element in the trace *)
@@ -217,6 +219,7 @@ and subst_sym_action_ a v act =
   match act with
     | Kcreate e_ty        -> Kcreate (subst_sym a v e_ty)
     | Kalloc e_n          -> Kalloc (subst_sym a v e_n)
+    | Kkill e_o           -> Kkill (subst_sym a v e_o)
     | Kstore e_ty e_o e_v -> Kstore (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v)
     | Kload e_ty e_o      -> Kload (subst_sym a v e_ty) (subst_sym a v e_o)
     | _                   -> act
@@ -286,14 +289,13 @@ val perform_action: action_ trace_action -> E.t (trace_action * expr trace_actio
 let perform_action = function
   | Kcreate ty    -> eval ty   >>= fun (Kctype ty) ->
                      create ty >>= fun o           ->
-                     E.return (Tcreate ty, Kaddr o)
+                     E.return (Tcreate ty o, Kaddr o)
   | Kalloc n      -> eval n  >>= fun (Kconst n) ->
                      alloc n >>= fun o          ->
-                     E.return (Talloc n, Kaddr o)
-  | Kkill o       -> (* get_sym o   >>= fun (Kaddr o) ->
-                     kill o      >> *)
-                     (* TODO *)
-                     E.return (Tkill 0, Kskip)
+                     E.return (Talloc n o, Kaddr o)
+  | Kkill o       -> eval o >>= fun (Kaddr o) ->
+                     kill o >>
+                     E.return (Tkill o, Kskip)
   | Kstore ty o v -> eval ty      >>= fun (Kctype ty) ->
                      eval o       >>= fun (Kaddr o)   ->
                      eval v       >>= fun (Kconst v)  ->
@@ -302,7 +304,7 @@ let perform_action = function
   | Kload ty o    -> eval ty   >>= fun (Kctype ty) ->
                      eval o    >>= fun (Kaddr o)   ->
                      load ty o >>= fun v           ->
-                     E.return $ (Tload ty o, Kconst v)
+                     E.return $ (Tload ty o v, Kconst v)
 end
 
 
@@ -329,7 +331,7 @@ let rec is_value e =
     | Kif _ e2 e3  -> is_value e2 && is_value e3
     | Kcall f args -> Boot.outOfHomeomorphism "[Core_run.is_value] Kcall"
     | Kaction _    -> false
-    | Kunseq _     -> false
+    | Kunseq es    -> List.for_all is_value es
     | Kwseq _ _ _  -> false
     | Ksseq _ _ _  -> false
     | Kaseq _ _ _  -> false
@@ -425,12 +427,7 @@ and red_unseq e =
         pick_one es            >>= fun (es1, ej, es2) ->
         red ej                 >>= fun ej'            ->
         update_rule Rule_Unseq >>
-        E.return (Kunseq (es1 @
-          match ej' with
-            | Kskip -> es2
-(*      Kunseq ej's -> filter (/= Kskip) $ ej's ++ es2 -- TODO check *)
-            | _     -> ej' :: es2
-          end))
+        E.return (Kunseq (es1 @ ej' :: es2))
     | _ -> E.mzero
   end
 

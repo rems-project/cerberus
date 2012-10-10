@@ -4,14 +4,22 @@ open Global
 let files = ref []
 let add_file n = files := n :: !files
 
+(* TODO: part of the old backend *)
 let bound = ref 5
 let set_bound n = bound := n
 
+(* TODO: part of the old backend *)
 let dot = ref false
 let set_dot () = dot := true
 
+(* TODO: part of the old backend *)
 let output = ref false
 let set_output () = output := true
+
+
+(* TODO: will be useless once we remove the old backend *)
+let core = ref true
+let unset_core () = core := false
 
 let debug = ref false
 let set_debug () = debug := true
@@ -25,15 +33,13 @@ let set_print_ail () = print_ail := true
 let print_core = ref false
 let set_print_core () = print_core := true
 
-let core = ref true
-let unset_core () = core := false
-
 let core_run = ref false
 let set_core_run () = core := true; core_run := true
 
 let core_graph = ref false
 let set_core_graph () = core_graph := true
 
+(* TODO: this is for debug purpose *)
 let core_skip_typecheck = ref false
 let set_core_skip_typecheck () = core_skip_typecheck := true
 
@@ -50,7 +56,7 @@ let options = Arg.align [
   (* core backend options *)
   ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
   ("--run",            Arg.Unit   set_core_run,            "       Execute the Core program");
-  ("--graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of the executions");
+  ("--graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of sb orders");
   ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
   
   (* printing options *)
@@ -81,13 +87,6 @@ let numerote = numerote_ 1
 
 
 
-
-
-
-
-
-
-
 let rec string_of_dyn_rule = function
   | Core_run.Rule_Pos        -> "pos"
   | Core_run.Rule_Neg        -> "neg"
@@ -97,11 +96,11 @@ let rec string_of_dyn_rule = function
 
 
 let string_of_trace_action = function
-  | Core_run.Tcreate ty        -> "create {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "}"
-  | Core_run.Talloc n          -> "alloc " ^ string_of_int n
+  | Core_run.Tcreate (ty, o)   -> "@" ^ string_of_int o ^ " <= create {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "}"
+  | Core_run.Talloc (n, o)     -> "@" ^ string_of_int o ^ " <= alloc " ^ string_of_int n
   | Core_run.Tkill o           -> "kill @" ^ string_of_int o
   | Core_run.Tstore (ty, o, n) -> "store {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " " ^ string_of_int n
-  | Core_run.Tload (ty, o)     -> "load {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o
+  | Core_run.Tload (ty, o, v)  -> "load {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " = " ^ string_of_int v
 
 let rec string_of_trace (t: Core_run.E.trace) =
   let rec f = function
@@ -130,31 +129,23 @@ let () =
     let pp_dot  = Meaning.Graph.to_file file_name in
     let pp_out  = Document.print -| Meaning.Print.pp in
     let pp_res  = Document.print -| Constraint.Print.pp in
-    let pp_sb   sb = List.map (fun (i, sb) -> print_endline $ "SB order #" ^ string_of_int i ^ "\n" ^ string_of_trace sb) $ numerote sb in
-
-    
-    
-    (* let run_core g = *)
-    (*   print_endline (Hack.ansi_format [Hack.Blue] ("Core run: found " ^ string_of_int (List.length g) ^ " sb-order(s).")); *)
-    (*   let chan = open_out "out.dot" in *)
-    (*   output_string chan "digraph G{node[style=filled,color=white];"; *)
-    (*   List.iter (fun (n,g) -> output_string chan (Cmulator.toDot n g)) (numerote g); *)
-    (*   output_string chan "}"; *)
-    (*   close_out chan in *)
+    let pp_sb ts =  Output.write (List.fold_left (fun acc (n, t) -> (Document.to_plain_string $ Sb.Print.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc)
+                                                 "" (numerote ts))
+                                 (Output.file $ file_name ^ ".dot") in
+    let pp_traces ts = List.map (fun (i, t) -> print_endline $ "Trace #" ^ string_of_int i ^ "\n" ^ string_of_trace t) $ numerote ts in
     (file_name
     >|> Input.file
     >|> Lexer.make
     >|> Parser.parse
     >|> pass_message "1. Parsing completed!"
     >|> pass_through_test !print_cabs pp_cabs
-       
+    
     >|> Exception.rbind (Cabs_to_ail.desugar "main")
     >|> pass_message "2. Cabs -> Ail completed!"
     >|> pass_through_test !print_ail pp_ail
-       
+    
     >|> Exception.rbind Typing.annotate
     >|> pass_message "3. Ail typechecking completed!"
-(*    >|> Exception.map (fun v -> print_endline (Hack.ansi_format [] (Translation.foo v)); v) (* TODO *) *)
     
     >?> !core)
       (* Core backend *)
@@ -173,7 +164,8 @@ let () =
           (pass_message "5. Skipping Core's typechecking completed!")
         >|> pass_message "6. Now running:"
         >|> Exception.rbind Core_run.run
-        >|> pass_through pp_sb
+        >|> pass_through_test !core_graph pp_sb
+        >|> pass_through pp_traces
         >|> return_unit
       )
       
