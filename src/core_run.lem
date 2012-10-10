@@ -156,7 +156,7 @@ let rec _pick_one acc = function
   | []    -> []
   | x::xs -> (List.rev acc, x, xs) :: _pick_one (x::acc) xs
 end
-let pick_one l = E.msum $ List.map E.return (_pick_one l [])
+let pick_one l = E.msum $ List.map E.return (_pick_one [] l)
 
 
 (* push an element in the trace *)
@@ -217,6 +217,7 @@ and subst_sym_action_ a v act =
   match act with
     | Kcreate e_ty        -> Kcreate (subst_sym a v e_ty)
     | Kalloc e_n          -> Kalloc (subst_sym a v e_n)
+    | Kkill e_o           -> Kkill (subst_sym a v e_o)
     | Kstore e_ty e_o e_v -> Kstore (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v)
     | Kload e_ty e_o      -> Kload (subst_sym a v e_ty) (subst_sym a v e_o)
     | _                   -> act
@@ -290,10 +291,9 @@ let perform_action = function
   | Kalloc n      -> eval n  >>= fun (Kconst n) ->
                      alloc n >>= fun o          ->
                      E.return (Talloc n, Kaddr o)
-  | Kkill o       -> (* get_sym o   >>= fun (Kaddr o) ->
-                     kill o      >> *)
-                     (* TODO *)
-                     E.return (Tkill 0, Kskip)
+  | Kkill o       -> eval o >>= fun (Kaddr o) ->
+                     kill o >>
+                     E.return (Tkill o, Kskip)
   | Kstore ty o v -> eval ty      >>= fun (Kctype ty) ->
                      eval o       >>= fun (Kaddr o)   ->
                      eval v       >>= fun (Kconst v)  ->
@@ -329,7 +329,7 @@ let rec is_value e =
     | Kif _ e2 e3  -> is_value e2 && is_value e3
     | Kcall f args -> Boot.outOfHomeomorphism "[Core_run.is_value] Kcall"
     | Kaction _    -> false
-    | Kunseq _     -> false
+    | Kunseq es    -> List.for_all is_value es
     | Kwseq _ _ _  -> false
     | Ksseq _ _ _  -> false
     | Kaseq _ _ _  -> false
@@ -425,12 +425,7 @@ and red_unseq e =
         pick_one es            >>= fun (es1, ej, es2) ->
         red ej                 >>= fun ej'            ->
         update_rule Rule_Unseq >>
-        E.return (Kunseq (es1 @
-          match ej' with
-            | Kskip -> es2
-(*      Kunseq ej's -> filter (/= Kskip) $ ej's ++ es2 -- TODO check *)
-            | _     -> ej' :: es2
-          end))
+        E.return (Kunseq (es1 @ ej' :: es2))
     | _ -> E.mzero
   end
 
