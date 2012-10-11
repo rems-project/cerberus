@@ -42,8 +42,8 @@ terminals :: 'terminals_' ::=
   | : :: :: Colon
   | . :: :: Dot
   | -> :: :: Arrow
-  | size_of :: :: Sizeof
-  | align_of :: :: Alignof
+  | sizeof :: :: Sizeof
+  | alignof :: :: Alignof
   | ; :: :: Semicolon
   | { :: :: RBRACE
   | } :: :: LBRACE
@@ -62,8 +62,9 @@ terminals :: 'terminals_' ::=
   | @ :: :: Union
       {{ tex \cup }}
 
+% FIXME: function argument indentifiers
 formula :: 'formula_' ::=
-  | id : qualifiers ty in G :: :: InGamma
+  | id : qs ty in G :: :: InGamma
   | id : ty = s_l in S :: :: InSigma
 
 gamma, G :: gamma ::=
@@ -72,7 +73,7 @@ gamma, G :: gamma ::=
   | empty :: M :: Empty
       {{ coq empty }}
   | G , id : qualifiers type :: M :: Ctor
-      {{ coq insert [[id]] ([[qualifiers]], [[type]]) [[G]] }}
+      {{ coq add [[id]] ([[qualifiers]], [[type]]) [[G]] }}
   | G1 @ G2 :: M :: App
       {{ coq update [[G1]] [[G2]] }}
   | ( G ) :: S :: Parens
@@ -174,8 +175,8 @@ expression, e :: Expression ::=
   | constant :: :: Constant
   | id :: :: Variable
 % TODO size_of e_l
-  | size_of ty :: :: Sizeof
-  | align_of ty :: :: Alignof
+  | sizeof qs ty :: :: Sizeof
+  | alignof qs ty :: :: Alignof
 
 expressionL, e_l :: ExpressionL ::=
   | ( e_l ) :: S :: Parens

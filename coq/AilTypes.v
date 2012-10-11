@@ -102,9 +102,9 @@ End OrderedQualifier.
 
 Module QualifierSet := MakeWithLeibniz OrderedQualifier.
 
-Definition qualifiers := QualifierSet.t.
+Definition qualifiers : Set := QualifierSet.t.
 
-Inductive type :=  (*r $\texttt{Ail}_\tau$ types *)
+Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
  | Void : qualifiers -> type (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic : qualifiers -> basicType -> type (*r basic types (\S6.2.5\#14) *)
  | Array : type -> nat -> type (*r array types (\S6.2.5\#20) *)

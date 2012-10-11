@@ -55,7 +55,7 @@ Inductive isUnsigned : P -> type -> Prop :=    (* defn isUnsigned *)
       ~ (isCharSigned P = true)  ->
      isUnsigned P (Basic qs Char).
 
-Inductive isInteger : type -> Prop :=    (* defn isInteger *)
+Inductive isInteger :=    (* defn isInteger *)
  | IsIntegerInteger : forall qs it,
      isInteger  (Basic qs (Integer it)) 
  | IsIntegerChar : forall qs,
@@ -68,8 +68,14 @@ Inductive eqRank : type -> type -> Prop :=    (* defn eqRank *)
      eqRank (Basic QualifierSet.empty Char) (Basic QualifierSet.empty (Integer (Unsigned IChar)))
  | EqRankSignedChar : 
      eqRank (Basic QualifierSet.empty Char) (Basic QualifierSet.empty (Integer (Signed IChar)))
+ | EqRankSym : forall ty1 ty2,
+     eqRank ty1 ty2 -> eqRank ty2 ty1
  | EqRankEq : forall ty,
-     eqRank ty ty.
+     isInteger ty -> eqRank ty ty.
+
+Inductive isBool : type -> Prop :=    (* defn isBool *)
+ | IsBoolDef : forall qs,
+     isBool (Basic qs (Integer Bool)).
 
 Inductive ltRank : P -> type -> type -> Prop :=    (* defn ltRank *)
  | LtRankPrecision : forall P ty1 ty2,
@@ -77,6 +83,7 @@ Inductive ltRank : P -> type -> type -> Prop :=    (* defn ltRank *)
      ltRank P ty1 ty2
  | LtRankBool : forall P ty,
      isInteger ty ->
+     not (isBool ty) ->
      ltRank P (Basic QualifierSet.empty (Integer Bool)) ty
  | LtRankLongLong : forall P,
      ltRank P (Basic QualifierSet.empty (Integer (Signed Long))) (Basic QualifierSet.empty (Integer (Signed LongLong)))
@@ -111,10 +118,6 @@ Inductive isPointer : type -> Prop :=    (* defn isPointer *)
  | IsPointerDef : forall qs ty,
      isPointer (Pointer qs ty).
 
-Inductive isBool : type -> Prop :=    (* defn isBool *)
- | IsBoolDef : forall qs,
-     isBool (Basic qs (Integer Bool)).
-
 Inductive isArithmetic : type -> Prop :=    (* defn isArithmetic *)
  | IsArithmeticInteger : forall ty, isInteger ty -> isArithmetic ty.
 
@@ -128,6 +131,7 @@ Inductive isArray : type -> Prop :=    (* defn isArray *)
 Inductive isFunction : type -> Prop :=    (* defn isFunction *)
  | IsFunctionDef : forall t_list t, isFunction  (Function t t_list).
 
+(* TODO signedness of char is dependent on P! *)
 Inductive isCorrespondingUnsigned : type -> type -> Prop :=    (* defn isCorrespondingUnsigned *)
  | IsCorrespondingUnsignedDef : forall ibt,
      isCorrespondingUnsigned
@@ -343,6 +347,193 @@ Proof.
   inversion L1; subst;
   inversion L2; subst;
   congruence.
+Qed.
+
+Ltac isInteger_False :=
+  match goal with
+  | [ H : isInteger (Void _)       |- _] => inversion H
+  | [ H : isInteger (Array _ _)    |- _] => inversion H
+  | [ H : isInteger (Function _ _) |- _] => inversion H
+  | [ H : isInteger (Pointer _ _)  |- _] => inversion H
+  end.
+
+Ltac isSigned_False :=
+  match goal with
+  | [ H : isSigned _ (Void _)               |- _] => inversion H
+  | [ H : isSigned _ (Array _ _)            |- _] => inversion H
+  | [ H : isSigned _ (Function _ _)         |- _] => inversion H
+  | [ H : isSigned _ (Pointer _ _)          |- _] => inversion H
+  | [ H : isSigned _ (Basic _ (Integer Bool)) |- _] => inversion H
+  | [ H : isSigned _ (Basic _ (Integer (Unsigned _))) |- _] => inversion H
+  end.
+
+Ltac isUnsigned_False :=
+  match goal with
+  | [ H : isUnsigned _ (Void _)               |- _] => inversion H
+  | [ H : isUnsigned _ (Array _ _)            |- _] => inversion H
+  | [ H : isUnsigned _ (Function _ _)         |- _] => inversion H
+  | [ H : isUnsigned _ (Pointer _ _)          |- _] => inversion H
+  | [ H : isUnsigned _ (Basic _ (Integer Bool)) |- _] => inversion H
+  | [ H : isUnsigned _ (Basic _ (Integer (Unsigned _))) |- _] => inversion H
+  end.
+
+Ltac isCorrespondingUnsigned_False :=
+  match goal with
+  | [ H : isCorrespondingUnsigned _ (Basic _ (Integer (Signed _))) |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned _ (Basic _ (Integer Bool)) |- _] =>
+      inversion H
+(*
+  | [ H : isCorrespondingUnsigned _ (Basic _ Char) |- _] =>
+      inversion H
+*)
+  | [ H : isCorrespondingUnsigned _ (Void _) |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned _ (Array _ _) |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned _ (Function _ _) |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned _ (Pointer _ _) |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned (Basic _ (Integer (Unsigned _))) _ |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned (Basic _ (Integer Bool)) _ |- _] =>
+      inversion H
+(*
+  | [ H : isCorrespondingUnsigned (Basic _ Char) _ |- _] =>
+      inversion H
+*)
+  | [ H : isCorrespondingUnsigned (Void _) _ |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned (Array _ _) _ |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned (Function _ _) _ |- _] =>
+      inversion H
+  | [ H : isCorrespondingUnsigned (Pointer _ _) _ |- _] =>
+      inversion H
+  end.
+
+Ltac isPromotion_simp :=
+  match goal with
+  | [ H1 : isPromotion ?P ?ty _
+    , H2 : isPromotion ?P ?ty _ |- _] =>
+      injection (isPromotion_inj P ty _ _ H1 H2) as ?; subst
+  end.
+
+Ltac isPromotion_False :=
+  match goal with
+  | [ H : isPromotion _ _ (Void _)               |- _] => inversion H
+  | [ H : isPromotion _ _ (Array _ _)            |- _] => inversion H
+  | [ H : isPromotion _ _ (Function _ _)         |- _] => inversion H
+  | [ H : isPromotion _ _ (Pointer _ _)          |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ Char)         |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ (Integer Bool)) |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ (Integer (Unsigned IChar))) |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ (Integer (Unsigned Short))) |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ (Integer (Signed IChar))) |- _] => inversion H
+  | [ H : isPromotion _ _ (Basic _ (Integer (Signed Short))) |- _] => inversion H
+  end.
+
+Ltac isPromotion_simp_ty ty :=
+  match goal with
+  | [ H1 : isPromotion ?P ty _
+    , H2 : isPromotion ?P ty _ |- _] =>
+      injection (isPromotion_inj P ty _ _ H1 H2) as ?; subst
+  end.
+
+Ltac isObject_function :=
+  match goal with
+      [H : isObject (Function _ _) |- _] => inversion H
+  end.
+
+Require Import Coq.Program.Equality.
+
+
+Lemma ltRank_asymmetric_aux P t1 t2 :
+  ~ ltRank P t1 t1 ->
+  ltRank P t1 t2 ->
+  ltRank P t2 t1 ->
+  False.
+Proof.
+  intros Hsym H12 H21.
+  set (LtRankTransitive _ _ _ _ H12 H21) as H.
+  apply Hsym in H.
+  exact H.
+Qed.
+
+Instance ltRank_irreflexive P : Irreflexive (ltRank P).
+  unfold Irreflexive.
+  unfold Reflexive.
+  unfold complement.
+  induction x.
+  intros Lt.
+  dependent induction Lt.
+    omega.
+    apply H0; now constructor.
+    revert ty1 Lt1 Lt2.
+    induction ty.
+    intros
+  dependent induction ltRank.
+Admitted.
+
+Lemma ltRank_asymmetric_aux P t1 t2 :
+  ltRank P t1 t2 ->
+  ltRank P t2 t1 ->
+  False.
+Proof.
+  intros H1 H2.
+  set (LtRankTransitive _ _ _ _ H1 H2) as H.
+  apply ltRank_irreflexive in H.
+  contradict H.
+Qed.
+
+Ltac ltRank_False :=
+  match goal with
+  | [ H1 : ltRank ?P ?t1 ?t2, H2 : ltRank ?P ?t2 ?t1 |- _] =>
+      destruct (ltRank_asymmetric P t1 t2 H1 H2)
+  end.
+
+Lemma isUsualArithmetic_inj P : forall ty1 ty2 ty ty',
+  isUsualArithmetic P ty ty' ty1 ->
+  isUsualArithmetic P ty ty' ty2 ->
+  ty1 = ty2.
+Proof.
+  induction ty1;
+  induction ty2;
+  intros ty ty' Ua1 Ua2;
+  inversion Ua1; subst;
+  try isPromotion_simp_ty ty;
+  try isPromotion_simp_ty ty';
+  try isInteger_False;
+  try isSigned_False;
+  try isUnsigned_False;
+  try isCorrespondingUnsigned_False;
+  try isPromotion_False;
+  try congruence;
+  inversion Ua2; subst;
+  try isPromotion_simp_ty ty;
+  try isPromotion_simp_ty ty';
+  try isInteger_False;
+  try isSigned_False;
+  try isUnsigned_False;
+  try isCorrespondingUnsigned_False;
+  try isPromotion_False;
+  try congruence;
+  destruct ty; subst;
+  destruct ty'; subst;
+  try isPromotion_simp_ty ty;
+  try isPromotion_simp_ty ty';
+  try isInteger_False;
+  try isSigned_False;
+  try isUnsigned_False;
+  try isCorrespondingUnsigned_False;
+  try isPromotion_False;
+  try ltRank_False;
+  try congruence.
+  inversion H14; subst.
+  inversion H15; subst;
+  try congruence.
+  inversion H6.
 Qed.
 
 Hint Rewrite isPromotion_inj isLvalueConversion_inj.

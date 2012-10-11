@@ -4,8 +4,6 @@ terminals :: 'terminals_' ::=
       {{ tex \vdash_e }}
   | |l- :: :: LTurnstile
       {{ tex \vdash_l }}
-  | in :: :: In
-      {{ tex \in }}
   | empty :: :: Empty
 
 defns
@@ -25,67 +23,70 @@ id : qs ty in G
 ----------------------------- :: Variable
 P; G; S |- id : lvalueT qs ty
 
+% FIXME:
+% - function argument identifier in S
+% - add identifiers to G
 id : ty = s_l in S
 ------------------------------ :: Function
 P; G; S |- id : expressionT ty
 
-P |= n in range signed int
+P |= n in tyRange signed int
 ------------------------------------- :: ConstantInt
 P; G; S |- n : expressionT signed int
 
-not (P |= n in range signed int)
-P |= n in range signed long
---------------------------------------- :: ConstantLong
+not (P |= n in tyRange signed int)
+P |= n in tyRange signed long
+-------------------------------------- :: ConstantLong
 P; G; S |- n : expressionT signed long
 
-not (P |= n in range signed long)
-P |= n in range signed long long
---------------------------------------- :: ConstantLongLong
+not (P |= n in tyRange signed long)
+P |= n in tyRange signed long long
+-------------------------------------- :: ConstantLongLong
 P; G; S |- n : expressionT signed long
 
-P |= n in range unsigned int
+P |= n in tyRange unsigned int
 ------------------------------------------------ :: ConstantUInt
 P; G; S |- n unsigned : expressionT unsigned int
 
-not (P |= n in range unsigned int)
-P |= n in range unsigned long
+not (P |= n in tyRange unsigned int)
+P |= n in tyRange unsigned long
 ------------------------------------------------- :: ConstantULong
 P; G; S |- n unsigned : expressionT unsigned long
 
-not (P |= n in range unsigned long)
-P |= n in range unsigned long long
+not (P |= n in tyRange unsigned long)
+P |= n in tyRange unsigned long long
 ------------------------------------------------------ :: ConstantULongLong
 P; G; S |- n unsigned : expressionT unsigned long long
 
-P |= n in range signed long
+P |= n in tyRange signed long
 ------------------------------------------- :: ConstantLLong
 P; G; S |- n long : expressionT signed long
 
-not (P |= n in range signed long)
-P |= n in range signed long long
+not (P |= n in tyRange signed long)
+P |= n in tyRange signed long long
 ------------------------------------------------ :: ConstantLLongLong
 P; G; S |- n long : expressionT signed long long
 
-P |= n in range unsigned long
+P |= n in tyRange unsigned long
 --------------------------------------------- :: ConstantULLong
 P; G; S |- n long : expressionT unsigned long
 
-not (P |= n in range unsigned long)
-P |= n in range unsigned long long
+not (P |= n in tyRange unsigned long)
+P |= n in tyRange unsigned long long
 -------------------------------------------------- :: ConstantULLongLong
 P; G; S |- n long : expressionT unsigned long long
 
-P |= n in range signed long long
------------------------------------------------- :: ConstantLL
-P; G; S |- n long : expressionT signed long long
+P |= n in tyRange signed long long
+----------------------------------------------------- :: ConstantLL
+P; G; S |- n long long : expressionT signed long long
 
-P |= n in range unsigned long long
--------------------------------------------------- :: ConstantULL
-P; G; S |- n long : expressionT unsigned long long
+P |= n in tyRange unsigned long long
+------------------------------------------------------- :: ConstantULL
+P; G; S |- n long long : expressionT unsigned long long
 
 P; G; S |e- e_l : ty (qs1 ty1, .., qsk tyk) *
-P |= isAssignable G S e_l1 ty1 .. P |= isAssignable G S e_lk tyk
----------------------------------------------------------------- :: Call
+P; G; S |- isAssignable e_l1 ty1 .. P; G; S |- isAssignable e_lk tyk
+-------------------------------------------------------------------- :: Call
 P; G; S |- e_l (e_l1, .., e_lk) : expressionT ty
 
 P; G; S |- e_l : expressionT ty (qs1 ty1, .., qsk tyk)
@@ -93,7 +94,7 @@ P; G; S |- e_l : expressionT ty (qs1 ty1, .., qsk tyk)
 P; G; S |- & e_l : expressionT ty (qs1 ty1, .., qsk tyk) *
 
 P; G; S |- e_l : lvalueT qs ty
-not (isRegister ty)
+% TODO not (isRegister ty)
 % TODO not (isBitfield ty) 
 -------------------------------------- :: AddressLvalue
 P; G; S |- & e_l : expressionT qs ty *
@@ -108,20 +109,35 @@ P; G; S |e- e_l : ty (qs1 ty1, .., qsk tyk) *
 --------------------------------------------------------- :: IndirectionFunction
 P; G; S |- * e_l : expressionT ty (qs1 ty1, .., qsk tyk)*
 
-%TODO expand theses definitions (c.f. Coq version)
-P; G; S |l- e_l : qs ty
-isReal ty \/ isPointer ty
-isModifiable qs ty
-P; G; S |- e_l + = (a 1) : typeCategory
---------------------------------------- :: PostfixIncrement
-P; G; S |- ++ e_l : typeCategory
+P; G; S |l- e_l : qs' ty'
+P; G; S |e- e_l : ty
+isPointer ty'
+isModifiable qs' ty'
+isComplete ty'
+---------------------------------- :: PostfixIncrementPointer
+P; G; S |- ++ e_l : expressionT ty
 
-P; G; S |l- e_l : qs ty
-isReal ty \/ isPointer ty
-isModifiable qs ty
-P; G; S |- e_l - = (a 1) : typeCategory
---------------------------------------- :: PostfixDecrement
-P; G; S |- -- e_l : typeCategory
+P; G; S |l- e_l : qs' ty'
+P; G; S |e- e_l : ty
+isReal ty'
+isModifiable qs' ty'
+---------------------------------- :: PostfixIncrementReal
+P; G; S |- ++ e_l : expressionT ty
+
+P; G; S |l- e_l : qs' ty'
+P; G; S |e- e_l : ty
+isPointer ty'
+isModifiable qs' ty'
+isComplete ty'
+---------------------------------- :: PostfixDecrementPointer
+P; G; S |- -- e_l : expressionT ty
+
+P; G; S |l- e_l : qs' ty'
+P; G; S |e- e_l : ty
+isReal ty'
+isModifiable qs' ty'
+---------------------------------- :: PostfixDecrementReal
+P; G; S |- -- e_l : expressionT ty
 
 P; G; S |e- e_l : ty'
 isArithmetic ty'
@@ -144,14 +160,14 @@ P; G; S |- ~ e_l : expressionT ty
 not (isFunction ty)
 not (isIncomplete ty)
 P |= size_t = ty'
----------------------------------------- :: SizeOf
-P; G; S |- size_of ty :  expressionT ty'
+------------------------------------------ :: SizeOf
+P; G; S |- sizeof qs ty :  expressionT ty'
 
 not (isFunction ty)
 not (isIncomplete ty)
 P |= size_t = ty'
------------------------------------------ :: AlignOf
-P; G; S |- align_of ty :  expressionT ty'
+------------------------------------------- :: AlignOf
+P; G; S |- alignof qs ty :  expressionT ty'
 
 P; G; S |e- e_l : ty'
 isScalar ty'
@@ -374,7 +390,7 @@ isObject ty1
 P; G; S |- e_l1 != e_l2 : expressionT (signed int)
 
 P; G; S |e- e_l1 : ty1
-P; G; S |e- e_l2 : ty2 *
+P; G; S |e- e_l2 : qs2 ty2 *
 isNullPointerConstant e_l1
 -------------------------------------------------- :: NeNull1
 P; G; S |- e_l1 != e_l2 : expressionT (signed int)
@@ -458,8 +474,8 @@ P; G; S |e- e_l3 : ty3
 isPointer ty3
 not (isCompatible ty2 ty3)
 isNullPointerConstant e_l2
------------------------------------------------ :: ConditionalNullPointer1
-P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty3
+----------------------------------------------------------- :: ConditionalNullPointer1
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT (qs2 @ qs3) ty3
 
 P; G; S |e- e_l1 : ty1
 isScalar ty1
@@ -468,8 +484,8 @@ P; G; S |e- e_l3 : ty3
 isPointer ty2
 not (isCompatible ty2 ty3)
 isNullPointerConstant e_l2
------------------------------------------------ :: ConditionalNullPointer2
-P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty2
+----------------------------------------------------------- :: ConditionalNullPointer2
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT (qs2 @ qs3) ty2
 
 P; G; S |e- e_l1 : ty1
 isScalar ty1
@@ -478,8 +494,8 @@ P; G; S |e- e_l3 : qs3 ty3 *
 isVoid ty2
 isObject ty3
 not (isCompatible ty2 ty3)
-------------------------------------------------- :: ConditionalPointerVoid1
-P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty2 *
+------------------------------------------------------------- :: ConditionalPointerVoid1
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT (qs2 @ qs3) ty2 *
 
 P; G; S |e- e_l1 : ty1
 isScalar ty1
@@ -488,8 +504,8 @@ P; G; S |e- e_l3 : qs3 ty3 *
 isObject ty2
 isVoid ty3
 not (isCompatible ty2 ty3)
-------------------------------------------------- :: ConditionalPointerVoid2
-P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT ty3 *
+------------------------------------------------------------- :: ConditionalPointerVoid2
+P; G; S |- e_l1 ? e_l2 : e_l3 : expressionT (qs2 @ qs3) ty3 *
 
 P; G; S |l- e_l1 : qs1' ty1'
 P; G; S |e- e_l1 : ty1
@@ -509,8 +525,8 @@ isModifiable qs ty
 isPointer ty
 isCompatible ty1 ty2
 qs2 sub qs1
------------------------------------------- :: AssignPointer
-P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+---------------------------------------------- :: AssignPointer
+P; G; S |- e_l1 = e_l2 : expressionT qs1 ty1 *
 
 P; G; S |l- e_l1 : qs ty
 P; G; S |e- e_l1 : qs1 ty1 *
@@ -520,8 +536,8 @@ isPointer ty
 isVoid ty1
 isObject ty2
 qs2 sub qs1
------------------------------------------- :: AssignVoidPointer1
-P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+---------------------------------------------- :: AssignVoidPointer1
+P; G; S |- e_l1 = e_l2 : expressionT qs1 ty1 *
 
 P; G; S |l- e_l1 : qs ty
 P; G; S |e- e_l1 : qs1 ty1 *
@@ -531,8 +547,8 @@ isPointer ty1'
 isObject ty1
 isVoid ty2
 qs2 sub qs1
------------------------------------------- :: AssignVoidPointer2
-P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+---------------------------------------------- :: AssignVoidPointer2
+P; G; S |- e_l1 = e_l2 : expressionT qs1 ty1 *
 
 P; G; S |l- e_l1 : qs ty
 P; G; S |e- e_l1 : qs1 ty1 *
@@ -540,8 +556,8 @@ P; G; S |e- e_l2 : ty2
 isModifiable qs ty
 isPointer ty
 isNullPointerConstant e_l2
-------------------------------------------- :: AssignNullPointerConstant
-P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+---------------------------------------------- :: AssignNullPointerConstant
+P; G; S |- e_l1 = e_l2 : expressionT qs1 ty1 *
 
 P; G; S |l- e_l1 : qs ty
 P; G; S |e- e_l1 : qs1 ty1 *
@@ -549,8 +565,8 @@ P; G; S |e- e_l2 : ty2
 isModifiable qs ty
 isBool ty
 isPointer ty2
------------------------------------------- :: AssignBool
-P; G; S |- e_l1 = e_l2 : expressionT ty1 *
+---------------------------------------------- :: AssignBool
+P; G; S |- e_l1 = e_l2 : expressionT qs1 ty1 *
 
 % lemma:
 %   P; G; S |- e_l1 arithmeticOperator = e_l2 : expressionT ty <->
@@ -688,25 +704,27 @@ P; G; S |- e_l : lvalueT qs ty
 ---------------------------------------- :: Def
 P; G; S |l- e_l : qs (pointerConvert ty)
 
-defn P |= typeable G S e :: :: typeable :: Typeable by
+defn
+P ; G ; S |- typeable e :: :: typeable :: Typeable by
 
 P; G; S |- e : typeCategory
 --------------------------- :: Def
-P |= typeable G S e
+P; G; S |- typeable e
 
-defn P |= typeable G S e_l :: :: typeableL :: TypeableL by
+defn
+P ; G ; S |- typeable e_l :: :: typeableL :: TypeableL by
 
 P; G; S |- e_l : typeCategory
 ----------------------------- :: Def
-P |= typeable G S e_l
+P; G; S |- typeable e_l
 
 defn
-P |= isAssignable G S e_l ty :: :: isAssignable :: IsAssignable by
+P ; G ; S |- isAssignable e_l ty :: :: isAssignable :: IsAssignable by
 
 not (id fv e_l)
-P |= typeable (G, id : ty) S (a id = e_l)
------------------------------------------ :: Def
-P |= isAssignable G S e_l ty
+P; (G, id : ty); S |- typeable (a id = e_l)
+------------------------------------------- :: Def
+P; G; S |- isAssignable e_l ty
 
 defn
 P ; G ; S |- s_l :: :: sTypeL :: STypeL by
@@ -723,7 +741,7 @@ P; G; S |- s_l
 P; G; S |- id : s_l
 
 P; G; S |- s_l
-P |= typeable G S integerConstant
+P; G; S |- typeable integerConstant
 ------------------------------------- :: Case
 P; G; S |- case integerConstant : s_l
 
@@ -738,8 +756,8 @@ P; G; S |- {G' | s_l1 .. s_lk}
 -------------- :: Skip
 P; G; S |- ;
 
-P |= typeable G S e_l
---------------------- :: Expression
+P; G; S |- typeable e_l
+----------------------- :: Expression
 P; G; S |- e_l ;
 
 P; G; S |e- e_l : ty
@@ -779,8 +797,8 @@ P; G; S |- break;
 ------------------ :: ReturnVoid
 P; G; S |- return;
 
-P |= typeable G S e_l
----------------------- :: Return
+P; G; S |- typeable e_l
+----------------------- :: Return
 P; G; S |- return e_l;
 
 P; G; S |- definition1 ... P; G; S |- definitionk
@@ -790,8 +808,9 @@ P; G; S |- definition1, ..., definitionk;
 defn
 P ; G ; S |- definition :: :: dType :: DType by
 
-P |= typeable G S (a id = e_l)
----------------------------- :: Def
+id : qs ty in G
+P; (G, id : [] ty); S |- typeable (a id = e_l)
+---------------------------------------------- :: Def
 P ; G ; S |- id = e_l
 
 defn
