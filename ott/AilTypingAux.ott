@@ -2,70 +2,30 @@ metavar P, Pi ::=
   {{ phantom }}
   {{ tex \Pi }}
 
-grammar
-
-value :: 'value' ::=
-  | ( range P ty ) . max :: M :: TyRangeMax
-      {{ coq ([[P]].range [[ty]]).max }}
-  | ( range P ty ) . min :: M :: TyRangeMin
-      {{ coq ([[P]].range [[ty]]).min }}
-  | true :: :: True
-  | n :: :: Integer
-
-formula :: 'formula_' ::=
-  | value1 <= value2 :: M :: Le
-      {{ tex [[value1]] \leqslant [[value2]] }}
-      {{ coq [[value1]] <= [[value2]] }}
-  | value1 = value2 :: M :: Eq
-      {{ coq [[value1]] = [[value2]] }}
-  | P |= isCharSigned :: :: IsCharSigned
-      {{ coq [[P]].isCharSigned = true }}
-  | P |= size_t = ty :: M :: SizeT
-      {{ coq [[P]].size_t = [[ty]] }}
-  | P |= ptrdiff_t = ty :: M :: PtrdiffT
-      {{ coq [[P]].ptrdiff_t = [[ty]] }}
-  | P |= ty1 <precision ty2 :: M :: LtPrecision
-      {{ coq [[P]].precision [[ty1]] < [[P]].precision [[ty2]] }}
-  | qualifiers1 sub qualifiers2 :: M :: QualifiersSubset
-      {{ coq sub [[qualifiers1]] [[qualifiers2]] }}
-
-terminals :: 'terminals_' ::=
-  | |- :: :: Turnstile
-      {{ tex \vdash }}
-  | |= :: :: Entails
-      {{ tex \vDash }}
-  | max :: :: Max
-  | min :: :: Min
-  | <=range :: :: LeRange
-      {{ tex \leqslant_{range} }}
-  | =rank :: :: EqRank
-      {{ tex =_{rank} }}
-  | <rank :: :: LtRank
-      {{ tex <_{rank} }}
-  | <=rank :: :: LeRank
-      {{ tex \leqslant_{rank} }}
-  | <= :: :: Leq
-      {{ tex \leqslant }}
-  | sub :: :: Subset
-      {{ tex \subset }}
-
 funs
 TypeTransformation ::=
 
 fun pointerConvert ty' :: ty :: PointerConvert by
 pointerConvert void === void
 pointerConvert basicType === basicType
-pointerConvert (qs ty *) === qualifiers ty *
-pointerConvert (qs ty [n]) === qs ty *
+pointerConvert (qs ty *) === qs ty *
+pointerConvert (ty [n]) === ty *
 pointerConvert (ty (qs1 ty1, .., qsk tyk)) === ty (qs1 ty1, .., qsk tyk) *
 
 defns
 Jtype :: '' ::=
 
-defn
-isRegister ty :: :: isRegister :: IsRegister
-  {{ com TODO }}
-by
+defn P |= n in tyRange ty :: :: tyRange :: InTyRange by
+
+Z n in tyRange P ty
+-------------------- :: Def
+P |= n in tyRange ty
+
+defn P |= ty1 <=range ty2 :: :: leTyRange :: LeTyRange by
+
+tyRange P ty1 <= tyRange P ty2
+------------------------------ :: Def
+P |= ty1 <=range ty2
 
 defn
 P |= isSigned ty :: :: isSigned :: IsSigned by
@@ -110,6 +70,9 @@ ty =rank ty
 defn
 P |= ty1 <rank ty2 :: :: ltRank :: LtRank by
 
+% redundant without extended integer types 
+P |= isSigned ty1
+P |= isSigned ty2
 P |= ty1 <precision ty2
 ----------------------- :: Precision
 P |= ty1 <rank ty2
@@ -163,9 +126,6 @@ isInteger ty :: :: isInteger :: 'IsInteger' by
 --------------------- :: Integer
 isInteger integerType
 
--------------- :: Char
-isInteger char
-
 defn
 isVoid ty :: :: isVoid :: IsVoid by
 
@@ -208,8 +168,8 @@ isScalar ty
 defn
 isArray ty :: :: isArray :: IsArray by
 
------------------ :: Def
-isArray qs ty [n]
+-------------- :: Def
+isArray ty [n]
 
 defn
 isFunction ty :: :: isFunction :: IsFunction by
@@ -403,8 +363,8 @@ isObject void
 ------------------ :: Pointer
 isObject (qs ty *)
 
--------------------- :: Array
-isObject (qs ty [n])
+----------------- :: Array
+isObject (ty [n])
 
 defn
 isComplete ty :: :: isComplete :: IsComplete
@@ -419,8 +379,8 @@ isComplete basicType
 -------------------- :: Pointer
 isComplete (qs ty *)
 
----------------------- :: Array
-isComplete (qs ty [n])
+------------------- :: Array
+isComplete (ty [n])
 
 defn
 isIncomplete ty :: :: isIncomplete :: IsIncomplete by
@@ -429,26 +389,11 @@ isIncomplete ty :: :: isIncomplete :: IsIncomplete by
 isIncomplete void
 
 defn
-P |= ty1 <=range ty2 :: :: leRange :: LeRange by
-
-(range P ty1).max <= (range P ty2).max
-(range P ty2).min <= (range P ty1).min
--------------------------------------- :: Def
-P |= ty1 <=range ty2
-
-defn
-P |= n in range ty :: :: inRange :: InRange by
-
-n <= (range P ty).max
-(range P ty).min <= n
---------------------- :: Def
-P |= n in range ty
-
-defn
 isModifiable qualifiers type :: :: isModifiable :: IsModifiable
 {{ com TODO struct/enum types }}
 by
 
+isObject ty
 not (isArray ty)
 not (isIncomplete ty)
 not (const in qs)
@@ -486,8 +431,8 @@ by
 isComposite ty ty ty
 
 isComposite ty1 ty2 ty
-------------------------------------------------- :: Array
-isComposite (qs ty1 [n]) (qs ty2 [n]) (qs ty [n])
+---------------------------------------- :: Array
+isComposite (ty1 [n]) (ty2 [n]) (ty [n])
 
 isComposite ty' ty'' ty
 isComposite ty'1 ty''1 ty1 .. isComposite ty'k ty''k tyk

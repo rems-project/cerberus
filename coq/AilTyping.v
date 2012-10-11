@@ -765,9 +765,41 @@ Proof.
     now inversion H1.
 Qed.
 
+Ltac find_if_inside :=
+  match goal with
+    | [ |- context[if ?X then _ else _] ] => destruct X
+  end.
+
+Ltac eType_False :=
+  match goal with
+  | [ He : eType ?P ?G ?S ?e (ExpressionT _)
+    , Hl : eType ?P ?G ?S ?e (LvalueT     _) |- _] =>
+      exfalso; now apply (eType_EL_False P G S e _ _ He Hl)
+  end.
+
+Ltac eTypeT_simp :=
+  match goal with
+  | [ Hty1 : eTypeT ?P ?G ?S (ExpLDef ?l ?e) _
+    , Hty2 : eTypeT ?P ?G ?S (ExpLDef ?l ?e) _
+    , Hinj : forall tc1 tc2,
+               eType ?P ?G ?S ?e tc1 ->
+               eType ?P ?G ?S ?e tc2 -> tc1 = tc2 |- _ ] =>
+      injection (eTypeT_inj P G S e l _ _ Hinj Hty1 Hty2) as ?; subst
+  end.
 
 Hint Rewrite eTypeL_def.
 Hint Resolve eType_EL_False eType_fun_False.
+
+
+Ltac eType_inj_ind :=
+  match goal with
+  | [ H1 : eType ?P ?G ?S ?e _
+    , H2 : eType ?P ?G ?S ?e _
+    , IH : forall tc1 tc2,
+             eType ?P ?G ?S ?e tc1 ->
+             eType ?P ?G ?S ?e tc2 -> tc1 = tc2 |- _] =>
+      injection (IH _ _ H1 H2); subst
+  end.
 
 Lemma eType_inj P G S (WfG : wfGamma G): forall e tc1 tc2,
   eType P G S e tc1 ->
@@ -789,43 +821,13 @@ Proof.
      intros.
        inversion Htc1; subst;
        inversion Htc2; subst;
-       congruence.
-
-       inversion Htc1; subst;
-       inversion Htc2; subst.
-       injection (eTypeT_inj _ _ _ _ _ _ _ H H8 H11).
-       congruence.
-
-       inversion Htc1; subst;
-       inversion Htc2; subst;
        try rewrite eTypeL_def in *;
-       try (injection (eTypeT_inj _ _ _ _ _ _ _ H H3 H4) as ?; subst; congruence);
-       try (set (H _ _ H4 H6); congruence);
-       try (exfalso; now eauto). 
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H1 H2).
-         congruence.
+       try eTypeT_simp;
+       try isPromotion_simp;
+       try eType_False;
+       try isObject_function;
+       try eType_inj_ind;
+       try congruence.
 
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H5 H2) as ?; subst.
-         exfalso; now eauto.
-
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H6 H1) as ?; subst.
-         exfalso; now eauto.
-
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H4 H6) as ?; subst.
-         congruence.
-
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H1 H2) as ?; subst.
-         set (isPromotion_inj _ _ _ _ H8 H9).
-         congruence.
-
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H1 H2) as ?; subst.
-         set (isPromotion_inj _ _ _ _ H8 H9).
-         congruence.
-
-         injection (eTypeT_inj _ _ _ _ _ _ _ H H1 H2) as ?; subst.
-         set (isPromotion_inj _ _ _ _ H8 H9).
-         congruence.
-
-       inversion Htc1; subst;
-       inversion Htc2; subst.
 Admitted.
+

@@ -33,6 +33,8 @@ formula :: 'formula_' ::=
   | qualifier in qualifiers :: M :: InQualifiers
       {{ lem [[qualifier]] IN [[qualifiers]] }}
       {{ coq (MSets.mem [[qualifier]] [[qualifiers]])}}
+  | qualifiers1 sub qualifiers2 :: M :: QualifiersSubset
+      {{ coq sub [[qualifiers1]] [[qualifiers2]] }}
 
 storageDuration :: '' ::=
   {{ com storage duration (\S6.2.4\#1) }}
@@ -55,6 +57,7 @@ integerBaseType, ibt :: '' ::=
 
 integerType, it :: '' ::=
   {{ com integer types (\S6.2.5\#17) }}
+  | char :: :: Char
   % TODO: add enumerated types
   | bool :: :: Bool
       {{ com corresponds to \textbf{\_Bool} }}
@@ -63,7 +66,6 @@ integerType, it :: '' ::=
 
 basicType, bt :: '' ::=
   {{ com basic types (\S6.2.5\#14) }}
-  | char :: :: Char
   | integerType :: :: Integer
 
 qualifier :: '' ::=
@@ -72,7 +74,7 @@ qualifier :: '' ::=
   | restrict :: :: Restrict
   | volatile :: :: Volatile
 
-qualifiers, qs :: 'Qualifiers' ::=
+qualifiers, qs :: Qualifiers ::=
   | qualifier1 .. qualifierk :: :: Def
   | [] :: M :: Empty
       {{ tex \emptyset }}
@@ -99,15 +101,15 @@ ctype, ty {{ tex \tau }} :: '' ::=
 %  | enum id                         ::   :: Enum
 %      {{ com enumerate types (\S6.2.5\#16) }}
      % TODO: add names to an env + MOVE TO INTEGER_TYPE
-  | qualifiers ty [ n ] ::   :: Array
+  | ty [ n ] ::   :: Array
       {{ com array types (\S6.2.5\#20) }}
 % TODO:
 %  | struct 
 % TODO:
 %  | union
-  | ty ( qualifiers1 ty1 , .. , qualifiersk tyk ) :: :: Function
+  | ty ( qs1 ty1 , .. , qsk tyk ) :: :: Function
       {{ com function types }}
-  | qualifiers ty *  :: :: Pointer
+  | qs ty *  :: :: Pointer
       {{ com pointer types }}
 % TODO:
 % atomic types 

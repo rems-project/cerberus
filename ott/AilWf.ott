@@ -25,12 +25,15 @@ wfLvalue qs void
 
 wfLvalue qs ty
 not (isIncomplete ty)
------------------------ :: Array
-wfLvalue [] (qs ty [n])
+not (isFunction ty)
+--------------------- :: Array
+wfLvalue qs (ty [n])
 
 wf ty
 wfLvalue qs1 ty1 .. wfLvalue qsk tyk
+% After "adjustment"
 not(isIncomplete ty1) .. not(isIncomplete tyk)
+not(isFunction ty1) .. not(isFunction tyk)
 ---------------------------------------------- :: Function
 wfLvalue [] (ty (qs1 ty1, .., qsk tyk))
 
@@ -82,6 +85,7 @@ G; S |- wf e_l
 --------------------- :: Cast
 G; S |- wf ((qs ty) e_l)
 
+G; S |- wf e_l
 G; S |- wf e_l1 .. G; S |- wf e_lk
 ---------------------------------- :: Call
 G; S |- wf (e_l (e_l1, .., e_lk))
@@ -89,23 +93,21 @@ G; S |- wf (e_l (e_l1, .., e_lk))
 ------------------- :: Constant
 G; S |- wf constant
 
-id : ty in G
-------------- :: Variable
+id : qs ty in G
+--------------- :: Variable
 G; S |- wf id
 
 id :ty = s_l in S
 ----------------- :: Function
 G; S |- wf id
 
-not (isIncomplete ty)
-not (isFunction ty)
------------------------ :: SizeOf
-G; S |- wf (size_of ty)
+wfLvalue qs ty
+------------------------- :: SizeOf
+G; S |- wf (sizeof qs ty)
 
-not (isIncomplete ty)
-not (isFunction ty)
------------------------- :: AlignOf
-G; S |- wf (align_of ty)
+wfLvalue qs ty
+-------------------------- :: AlignOf
+G; S |- wf (alignof qs ty)
 
 defn
 G ; S |- wf e_l :: :: wfEL :: WfEL by
@@ -180,7 +182,7 @@ G; S; ty; b |- wf (a s)
 defn
 G ; S |- wf definition :: :: wfDefinition :: WfDefinition by
 
-id : ty in G
+id : qs ty in G
 G; S |- wf e_l
 ------------------- :: Def
 G; S |- wf id = e_l
@@ -202,6 +204,9 @@ wf empty
 defn
 S |- wf S' :: :: wfSigma :: WfSigma by
 
+% FIXME:
+% - function argument identifiers
+% - indentifiers must be unique
 S |- wf S'
 wfLvalue [] ty
 isFunction ty
