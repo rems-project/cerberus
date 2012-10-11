@@ -81,9 +81,13 @@ module Effect = struct
      *)
   type trace = list (dyn_rule * set trace_action * trace_paction)
   
+  type fun_descr = core_type * list sym * expr trace_action
+  
   type state = <|
-      mem : mem_state;                         (* the memory layout state                         *)
-      trace : trace                            (* the execution trace so far (stored in reversed) *)
+      mem : mem_state;             (* the memory layout state                 *)
+      fun_map : map sym fun_descr; (* map of functions                        *)
+      trace : trace                (* the execution trace so far (stored in
+                                      reversed)                               *)
   |>
   
   type t 'a = state -> list ('a * state)
@@ -108,6 +112,14 @@ module Effect = struct
   val msum: forall 'a. list (t 'a) -> t 'a
   let msum xs = List.fold_right mplus xs mzero
   
+  
+  val     foldlM: forall 'a 'b. ('a -> 'b -> t 'b) -> list 'a -> 'b -> t 'b
+  let rec foldlM f l a =
+    match l with
+      | []    -> return a
+      | x::xs -> bind (f x a) (foldlM f xs)
+    end
+  
   module Operators = struct
     let (>>=) = bind
     let (>>) m f = bind m (fun _ -> f)
@@ -124,10 +136,10 @@ open E.Operators
 (* TODO: dummy memory model (concrete with isolated objects, ignoring
    C types) *)
 val initial_state: E.state
-let initial_state = <| E.mem= (Pmap.empty, 0); E.trace= [] |>
+let initial_state = <| E.mem= (Pmap.empty, 0); E.fun_map = Pmap.empty; E.trace= [] |>
 
 val init: E.t unit
-let init = fun _ -> [((), <| E.mem= (Pmap.empty, 0); E.trace= [] |>)]
+let init = fun _ -> [((), <| E.mem= (Pmap.empty, 0); E.fun_map = Pmap.empty; E.trace= [] |>)]
 
 val create: Ail.ctype -> E.t mem_addr
 let create _ = fun (<| E.mem= (m, i) |> as s) -> [(i, <| s with E.mem= (Pmap.add i 0 m, i+1) |>)]
@@ -176,6 +188,7 @@ end
 
 val get_fulltrace: E.t E.trace
 let get_fulltrace = fun (<| E.trace= t |> as s) -> [(t, s)]
+
 
 (* mutate the rule descriptor of the most recent trace element (used by
    inductive rule after application of their premises) *)
@@ -229,87 +242,10 @@ and subst_sym_action_ a v act =
 and subst_sym_action a  v (bs, act) = (bs, subst_sym_action_ a v act)
 and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
 
-
-(* evaluation of pure epxressions (will crash on ill-typed and/or non pure
-   expressions) *)
-val eval: expr trace_action -> expr trace_action
-let rec eval e =
-  match e with
-    | Kundef -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kundef"
-    | Kerror -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kerror"
-    | Kop binop e1 e2 -> match binop with
-                           | OpAdd -> let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      Kconst (v1 + v2)
-                           | OpSub -> let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      Kconst (v1 - v2)
-                           | OpMul -> let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      Kconst (v1 * v2)
-                           | OpDiv -> let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      Kconst (v1 / v2)
-                           | OpEq ->  let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      if v1 = v2 then Ktrue else Kfalse
-                           | OpLt  -> let (Kconst v1) = eval e1 in
-                                      let (Kconst v2) = eval e2 in
-                                      if v1 < v2 then Ktrue else Kfalse
-                           | OpAnd -> match (eval e1, eval e2) with
-                                        | (Ktrue, Ktrue) -> Ktrue
-                                        | _              -> Kfalse
-                                      end
-                           | OpOr  -> match (eval e1, eval e2) with
-                                        | (Kfalse, Kfalse) -> Kfalse
-                                        | _                -> Ktrue
-                                      end
-                         end
-    | Knot e -> match eval e with
-                  | Ktrue  -> Kfalse
-                  | Kfalse -> Ktrue
-                end
-    | Klet _a e1 e2 -> subst_sym _a (eval e1) e2
-    | Kif e1 e2 e3 -> match eval e1 with
-                        | Ktrue  -> eval e2
-                        | Kfalse -> eval e3
-                      end
-    | Kcall f es -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kcall"
-
-    | Ksame e1 e2 -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Ksame"
-    | _ -> e
-  end
-
-
-(* TODO: this function will call the implementation of a given action in a
-         particular memory model *)
-val perform_action: action_ trace_action -> E.t (trace_action * expr trace_action)
-let perform_action = function
-  | Kcreate ty    -> let (Kctype ty) = eval ty in
-                     create ty >>= fun o ->
-                     E.return (Tcreate ty o, Kaddr o)
-  | Kalloc n      -> let (Kconst n) = eval n in
-                     alloc n >>= fun o          ->
-                     E.return (Talloc n o, Kaddr o)
-  | Kkill o       -> let (Kaddr o) = eval o in
-                     kill o >>
-                     E.return (Tkill o, Kskip)
-  | Kstore ty o v -> let (Kctype ty) = eval ty in
-                     let (Kaddr o)   = eval o  in
-                     let (Kconst v)  = eval v  in
-                     store ty o v >>
-                     E.return (Tstore ty o v, Kskip)
-  | Kload ty o    -> let (Kctype ty) = eval ty in
-                     let (Kaddr o)   = eval o  in
-                     load ty o >>= fun v ->
-                     E.return $ (Tload ty o v, Kconst v)
-end
-
-
-(* TODO: [subst_syms _as v e]  substitute the symbols _as with the corresponding
-         of the value expression [v] in the expression [e]. This function
-         crashes if [v] is not a value or its type doesn't match the symbolic
-         pattern *)
+(* TODO: [subst_syms _as v e] substitute the symbols _as with the corresponding
+   of the value expression [v] in the expression [e]. This function leads
+   to a crash if [v] is not a value or its type doesn't match the symbolic
+   pattern *)
 val subst_syms: list (option sym) -> expr trace_action -> expr trace_action -> expr trace_action
 let subst_syms _as v e =
   match (_as, v) with
@@ -319,25 +255,121 @@ let subst_syms _as v e =
     | (_        , Kunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
   end
 
+
+(* takes the symbolic names of a function, some pure expressions and produce
+   the function body where the arguments have been substituted *)
+val call_function: sym -> list (expr trace_action) -> E.t (expr trace_action)
+let call_function f args = fun s -> 
+  let (_, _as, fbody) = Pmap.find f s.E.fun_map in
+  [(List.fold_left2 (fun acc _a arg -> subst_sym _a arg acc) fbody _as args, s)]
+
+
+
+
+(* evaluation of pure epxressions (will crash on ill-typed and/or non pure
+   expressions) *)
+val eval: expr trace_action -> E.t (expr trace_action)
+let rec eval e =
+  match e with
+    | Kundef -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kundef"
+    | Kerror -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kerror"
+    | Kop binop e1 e2 -> match binop with
+                           | OpAdd -> eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ Kconst (v1 + v2)
+                           | OpSub -> eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ Kconst (v1 - v2)
+                           | OpMul -> eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ Kconst (v1 * v2)
+                           | OpDiv -> eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ Kconst (v1 / v2)
+                           | OpEq ->  eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ if v1 = v2 then Ktrue else Kfalse
+                           | OpLt  -> eval e1 >>= fun (Kconst v1) ->
+                                      eval e2 >>= fun (Kconst v2) ->
+                                      E.return $ if v1 < v2 then Ktrue else Kfalse
+                           | OpAnd -> eval e1 >>= fun b1 ->
+                                      eval e2 >>= fun b2 ->
+                                      E.return $ match (b1, b2) with
+                                                   | (Ktrue, Ktrue) -> Ktrue
+                                                   | _              -> Kfalse
+                                                 end
+                           | OpOr  -> eval e1 >>= fun b1 ->
+                                      eval e2 >>= fun b2 ->
+                                      E.return $ match (b1, b2) with
+                                                   | (Kfalse, Kfalse) -> Kfalse
+                                                   | _                -> Ktrue
+                                                 end
+                         end
+    | Knot e -> eval e >>= function
+                  | Ktrue  -> E.return Kfalse
+                  | Kfalse -> E.return Ktrue
+                end
+    | Klet _a e1 e2 -> eval e1 >>= fun v -> E.return $ subst_sym _a v e2
+    | Kif e1 e2 e3 -> eval e1 >>= function
+                        | Ktrue  -> eval e2
+                        | Kfalse -> eval e3
+                      end
+    | Kcall f es -> call_function f es >>= eval
+    | Ksame e1 e2 -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Ksame"
+    | _ -> E.return e
+  end
+
+
+(* TODO: this function will call the implementation of a given action in a
+         particular memory model *)
+val perform_action: action_ trace_action -> E.t (trace_action * expr trace_action)
+let perform_action = function
+  | Kcreate ty    -> eval ty   >>= fun (Kctype ty) ->
+                     create ty >>= fun o           ->
+                     E.return (Tcreate ty o, Kaddr o)
+  | Kalloc n      -> eval n  >>= fun (Kconst n) ->
+                     alloc n >>= fun o          ->
+                     E.return (Talloc n o, Kaddr o)
+  | Kkill o       -> eval o >>= fun (Kaddr o) ->
+                     kill o >>
+                     E.return (Tkill o, Kskip)
+  | Kstore ty o v -> eval ty      >>= fun (Kctype ty) ->
+                     eval o       >>= fun (Kaddr o)   ->
+                     eval v       >>= fun (Kconst v)  ->
+                     store ty o v >>
+                     E.return (Tstore ty o v, Kskip)
+  | Kload ty o    -> eval ty   >>= fun (Kctype ty) ->
+                     eval o    >>= fun (Kaddr o)   ->
+                     load ty o >>= fun v           ->
+                     E.return (Tload ty o v, Kconst v)
+end
+
+
 (* TODO: This function should be in core.lem. It returns true iff the argument
          is a value expression *)
 (* NOTE: we assume that the expression is well typed *)
-val is_value: expr trace_action -> bool
+val is_value: expr trace_action -> E.t bool
 let rec is_value e =
   match e with
     | Klet _ _ e2  -> is_value e2
-    | Kif _ e2 e3  -> is_value e2 && is_value e3
-    | Kcall f args -> Boot.outOfHomeomorphism "[Core_run.is_value] Kcall"
-    | Kaction _    -> false
-    | Kunseq es    -> List.for_all is_value es
-    | Kwseq _ _ _  -> false
-    | Ksseq _ _ _  -> false
-    | Kaseq _ _ _  -> false
+    | Kif _ e2 e3  -> is_value e2 >>= fun b2 ->
+                      is_value e3 >>= fun b3 ->
+                      E.return (b2 && b3)
+    | Kcall f args -> fun s -> let (ty, _, _) = Pmap.find f s.E.fun_map in
+                               [(match ty with
+                                   | TyBase _   -> true
+                                   | TyEffect _ -> false
+                                 end, s)]
+    | Kaction _    -> E.return false
+    | Kunseq es    -> E.foldlM (fun e acc -> is_value e >>= fun b -> E.return (acc && b)) es true
+    | Kwseq _ _ _  -> E.return false
+    | Ksseq _ _ _  -> E.return false
+    | Kaseq _ _ _  -> E.return false
     | Kindet (* i *) e   -> Boot.outOfHomeomorphism "[Core_run.is_value] Kindet"
     | Kbound i e   -> Boot.outOfHomeomorphism "[Core_run.is_value] Kbound"
     | Ksave k e    -> Boot.outOfHomeomorphism "[Core_run.is_value] Ksave"
     | Krun k       -> Boot.outOfHomeomorphism "[Core_run.is_value] Krun"
-    | _ -> true
+    | _ -> E.return true
   end
 
 
@@ -394,8 +426,9 @@ and red_wseq_l e =
         get_trace              >>= fun (_, _, (p, a)) ->
         update_rule Rule_WseqL >>
         let f = match p with Pos -> annotate a | Neg -> fun x -> x end in
-        E.return (if is_value e1' then f (subst_syms _as e1' e2)
-                                  else Kwseq _as e1' (f e2))
+        is_value e1' >>= fun b1' ->
+        E.return (if b1' then f (subst_syms _as e1' e2)
+                         else Kwseq _as e1' (f e2))
     | _ -> E.mzero
   end
 
@@ -444,9 +477,12 @@ and red e = E.msum [
 
 (* Full execution of an expression *)
 let rec star_red e =
-  red e >>= fun e' ->
-  if is_value e' then get_fulltrace >>= fun t -> E.return (eval e', t)
-                 else star_red e'
+  is_value e >>= fun b ->
+  if b then get_fulltrace >>= fun t ->
+            eval e        >>= fun v ->
+            E.return (v, t)
+       else red e >>= fun e' ->
+            star_red e'
 
 
 (* Dummy function doing nothing, but required to typecheck *)
@@ -494,5 +530,6 @@ let run (f: file unit) : Exception.t (list (num * E.trace)) Errors.cause =
   let trs = let (_, _, body) = Pmap.find f.Core.main f.Core.fun_map in
                  (* TODO: here we assume that the main function returns a integer
                           (which is true for the elaboration of C programs) *)
-                 List.map fst $ (star_red (convert_expr body) >>= fun (Kconst v, t) -> E.return (v, List.rev t)) initial_state in
+                 List.map fst $ (star_red (convert_expr body) >>= fun (Kconst v, t) -> E.return (v, List.rev t))
+                                <| initial_state with E.fun_map= Pmap.map (fun (a,b,c) -> (a, List.map fst b, convert_expr c)) f.Core.fun_map |> in
   Exception.return trs
