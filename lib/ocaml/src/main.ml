@@ -129,10 +129,11 @@ let () =
     let pp_dot  = Meaning.Graph.to_file file_name in
     let pp_out  = Document.print -| Meaning.Print.pp in
     let pp_res  = Document.print -| Constraint.Print.pp in
-    let pp_sb ts =  Output.write (List.fold_left (fun acc (n, t) -> (Document.to_plain_string $ Sb.Print.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc)
+    let pp_sb ts =  Output.write (List.fold_left (fun acc (n, (_, t)) -> (Document.to_plain_string $ Sb.Print.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc)
                                                  "" (numerote ts))
                                  (Output.file $ file_name ^ ".dot") in
-    let pp_traces ts = List.map (fun (i, t) -> print_endline $ "Trace #" ^ string_of_int i ^ "\n" ^ string_of_trace t) $ numerote ts in
+    let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
+                                                                    "\n\nValue: " ^ string_of_int v) $ numerote ts in
     (file_name
     >|> Input.file
     >|> Lexer.make

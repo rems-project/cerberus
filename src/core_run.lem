@@ -232,56 +232,52 @@ and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
 
 (* evaluation of pure epxressions (will crash on ill-typed and/or non pure
    expressions) *)
-val eval: expr trace_action -> E.t (expr trace_action)
+val eval: expr trace_action -> expr trace_action
 let rec eval e =
   match e with
     | Kundef -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kundef"
     | Kerror -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kerror"
     | Kop binop e1 e2 -> match binop with
-                           | OpAdd -> eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ Kconst (v1 + v2)
-                           | OpSub -> eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ Kconst (v1 - v2)
-                           | OpMul -> eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ Kconst (v1 * v2)
-                           | OpDiv -> eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ Kconst (v1 / v2)
-                           | OpEq ->  eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ if v1 = v2 then Ktrue else Kfalse
-                           | OpLt  -> eval e1 >>= fun (Kconst v1) ->
-                                      eval e2 >>= fun (Kconst v2) ->
-                                      E.return $ if v1 < v2 then Ktrue else Kfalse
-                           | OpAnd -> eval e1 >>= fun b1 ->
-                                      eval e2 >>= fun b2 ->
-                                      E.return $ match (b1, b2) with
-                                                   | (Ktrue, Ktrue) -> Ktrue
-                                                   | _              -> Kfalse
-                                                 end
-                           | OpOr  -> eval e1 >>= fun b1 ->
-                                      eval e2 >>= fun b2 ->
-                                      E.return $ match (b1, b2) with
-                                                   | (Kfalse, Kfalse) -> Kfalse
-                                                   | _                -> Ktrue
-                                                 end
+                           | OpAdd -> let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      Kconst (v1 + v2)
+                           | OpSub -> let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      Kconst (v1 - v2)
+                           | OpMul -> let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      Kconst (v1 * v2)
+                           | OpDiv -> let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      Kconst (v1 / v2)
+                           | OpEq ->  let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      if v1 = v2 then Ktrue else Kfalse
+                           | OpLt  -> let (Kconst v1) = eval e1 in
+                                      let (Kconst v2) = eval e2 in
+                                      if v1 < v2 then Ktrue else Kfalse
+                           | OpAnd -> match (eval e1, eval e2) with
+                                        | (Ktrue, Ktrue) -> Ktrue
+                                        | _              -> Kfalse
+                                      end
+                           | OpOr  -> match (eval e1, eval e2) with
+                                        | (Kfalse, Kfalse) -> Kfalse
+                                        | _                -> Ktrue
+                                      end
                          end
-    | Knot e -> eval e >>= function
-                  | Ktrue  -> E.return Kfalse
-                  | Kfalse -> E.return Ktrue
+    | Knot e -> match eval e with
+                  | Ktrue  -> Kfalse
+                  | Kfalse -> Ktrue
                 end
-    | Klet _a e1 e2 -> eval e1 >>= fun v -> E.return $ subst_sym _a v e2
-    | Kif e1 e2 e3 -> eval e1 >>= function
+    | Klet _a e1 e2 -> subst_sym _a (eval e1) e2
+    | Kif e1 e2 e3 -> match eval e1 with
                         | Ktrue  -> eval e2
                         | Kfalse -> eval e3
                       end
     | Kcall f es -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Kcall"
 
     | Ksame e1 e2 -> Boot.outOfHomeomorphism "[Core_run.eval] TODO: Ksame"
-    | _ -> E.return e
+    | _ -> e
   end
 
 
@@ -289,23 +285,23 @@ let rec eval e =
          particular memory model *)
 val perform_action: action_ trace_action -> E.t (trace_action * expr trace_action)
 let perform_action = function
-  | Kcreate ty    -> eval ty   >>= fun (Kctype ty) ->
-                     create ty >>= fun o           ->
+  | Kcreate ty    -> let (Kctype ty) = eval ty in
+                     create ty >>= fun o ->
                      E.return (Tcreate ty o, Kaddr o)
-  | Kalloc n      -> eval n  >>= fun (Kconst n) ->
+  | Kalloc n      -> let (Kconst n) = eval n in
                      alloc n >>= fun o          ->
                      E.return (Talloc n o, Kaddr o)
-  | Kkill o       -> eval o >>= fun (Kaddr o) ->
+  | Kkill o       -> let (Kaddr o) = eval o in
                      kill o >>
                      E.return (Tkill o, Kskip)
-  | Kstore ty o v -> eval ty      >>= fun (Kctype ty) ->
-                     eval o       >>= fun (Kaddr o)   ->
-                     eval v       >>= fun (Kconst v)  ->
+  | Kstore ty o v -> let (Kctype ty) = eval ty in
+                     let (Kaddr o)   = eval o  in
+                     let (Kconst v)  = eval v  in
                      store ty o v >>
                      E.return (Tstore ty o v, Kskip)
-  | Kload ty o    -> eval ty   >>= fun (Kctype ty) ->
-                     eval o    >>= fun (Kaddr o)   ->
-                     load ty o >>= fun v           ->
+  | Kload ty o    -> let (Kctype ty) = eval ty in
+                     let (Kaddr o)   = eval o  in
+                     load ty o >>= fun v ->
                      E.return $ (Tload ty o v, Kconst v)
 end
 
@@ -449,7 +445,7 @@ and red e = E.msum [
 (* Full execution of an expression *)
 let rec star_red e =
   red e >>= fun e' ->
-  if is_value e' then get_fulltrace
+  if is_value e' then get_fulltrace >>= fun t -> E.return (eval e', t)
                  else star_red e'
 
 
@@ -494,7 +490,9 @@ and convert_action (_, a) =
 
 
 
-let run (f: file unit) : Exception.t (list E.trace) Errors.cause =
+let run (f: file unit) : Exception.t (list (num * E.trace)) Errors.cause =
   let trs = let (_, _, body) = Pmap.find f.Core.main f.Core.fun_map in
-                 List.map fst $ (star_red (convert_expr body) >> get_fulltrace >>= E.return -| List.rev) initial_state in
+                 (* TODO: here we assume that the main function returns a integer
+                          (which is true for the elaboration of C programs) *)
+                 List.map fst $ (star_red (convert_expr body) >>= fun (Kconst v, t) -> E.return (v, List.rev t)) initial_state in
   Exception.return trs
