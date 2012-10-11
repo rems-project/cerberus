@@ -1,2 +1,3 @@
 val outOfHomeomorphism: forall 'a. string -> 'a
 val debug: forall 'a. string -> 'a
+val print_debug: forall 'a. string -> 'a -> 'a
