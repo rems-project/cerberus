@@ -1,0 +1,9 @@
+(* Error messages for impossible situations *)
+val outOfHomeomorphism: forall 'a. string -> 'a
+let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism
+
+val debug: forall 'a. string -> 'a
+let inline {ocaml} debug = Ocaml.Boot.debug
+
+val print_debug: forall 'a. string -> 'a -> 'a
+let inline {ocaml} print_debug = Ocaml.Boot.print_debug

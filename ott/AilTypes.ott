@@ -1,0 +1,121 @@
+grammar
+terminals :: 'terminals_' ::=
+  | static :: :: Static
+  | thread :: :: Thread
+  | automatic :: :: Automatic
+  | allocated :: :: Allocated % TODO: look at (§7.22.3)
+  | char :: :: Char
+  | short :: :: Short
+  | int :: :: Int
+  | long :: :: Long
+  | bool :: :: Bool
+  | unsigned :: :: Unsigned
+  | signed :: :: Signed
+  | const :: :: Const
+  | restrict :: :: Restrict
+  | volatile :: :: Volatile
+  | [ :: :: Rbracket
+  | ] :: :: Lbracket
+  | ( :: :: Lparen
+  | ) :: :: Rparen
+  | promote :: :: Promote
+  | usualArithmetic
+  | lvalueT :: :: LvalueT
+  | expressionT :: :: ExpressionT
+
+formula :: 'formula_' ::=
+  | ty1 = ty2 :: M :: TyEq
+      {{ lem [[ty1]] = [[ty2]] }}
+      {{ coq [[ty1]] = [[ty2]] }}
+  | qualifier1 = qualifier2 :: M :: QualifierEq
+      {{ lem [[qualifier1]] = [[qualifier2]] }}
+      {{ coq [[qualifier1]] = [[qualifier2]] }}
+  | qualifier in qualifiers :: M :: InQualifiers
+      {{ lem [[qualifier]] IN [[qualifiers]] }}
+      {{ coq (MSets.mem [[qualifier]] [[qualifiers]])}}
+
+storageDuration :: '' ::=
+  {{ com storage duration (\S6.2.4\#1) }}
+  | static :: :: Static
+  | thread :: :: Thread
+  | automatic :: :: Automatic
+  | allocated :: :: Allocated % TODO: look at (§7.22.3)
+
+integerBaseType, ibt :: '' ::=
+  {{ com standard signed integer types (\S6.2.5\#4) }}
+  | char :: :: IChar
+      {{ com corresponds to \textbf{signed/unsigned char} }}
+  | short :: :: Short
+      {{ com corresponds to \textbf{short int}            }}
+  | int :: :: Int
+  | long :: :: Long
+      {{ com corresponds to \textbf{long int}             }}
+  | long long :: :: LongLong
+      {{ com corresponds to \textbf{long long int}        }}
+
+integerType, it :: '' ::=
+  {{ com integer types (\S6.2.5\#17) }}
+  % TODO: add enumerated types
+  | bool :: :: Bool
+      {{ com corresponds to \textbf{\_Bool} }}
+  | signed integerBaseType :: :: Signed
+  | unsigned integerBaseType :: :: Unsigned
+
+basicType, bt :: '' ::=
+  {{ com basic types (\S6.2.5\#14) }}
+  | char :: :: Char
+  | integerType :: :: Integer
+
+qualifier :: '' ::=
+  {{ com type qualifiers (\S6.7.3) }}
+  | const :: :: Const
+  | restrict :: :: Restrict
+  | volatile :: :: Volatile
+
+qualifiers, qs :: 'Qualifiers' ::=
+  | qualifier1 .. qualifierk :: :: Def
+  | [] :: M :: Empty
+      {{ tex \emptyset }}
+      {{ lem Set.empty }}
+      {{ coq empty }}
+  | qualifiers1 @ qualifiers2 :: M :: App
+      {{ tex [[qualifiers1]] \cup [[qualifiers2]] }}
+      {{ lem Set.union [[qualifiers1]] [[qualifiers2]] }}
+      {{ coq union [[qualifiers1]] [[qualifiers2]] }}
+  | ( qualifiers ) :: S :: Parens
+      {{ lem [[qualifiers]] }}
+      {{ coq [[qualifiers]] }}
+
+ctype, ty {{ tex \tau }} :: '' ::=
+  {{ com $\texttt{Ail}_\tau$ types }}
+  | ( ty ) :: S :: TyParens
+      {{ lem [[ty]] }} % TODO: lem is not in icho ?
+      {{ icho [[ty]] }}
+  | void :: :: Void
+      {{ com \texttt{void} type (\S6.2.5\#19) }}
+  | basicType :: :: Basic
+      {{ com basic types (\S6.2.5\#14) }}
+% TODO:
+%  | enum id                         ::   :: Enum
+%      {{ com enumerate types (\S6.2.5\#16) }}
+     % TODO: add names to an env + MOVE TO INTEGER_TYPE
+  | qualifiers ty [ n ] ::   :: Array
+      {{ com array types (\S6.2.5\#20) }}
+% TODO:
+%  | struct 
+% TODO:
+%  | union
+  | ty ( qualifiers1 ty1 , .. , qualifiersk tyk ) :: :: Function
+      {{ com function types }}
+  | qualifiers ty *  :: :: Pointer
+      {{ com pointer types }}
+% TODO:
+% atomic types 
+%  | promote ty :: :: Promote
+%      {{ com integer promotion }}
+%  | usualArithmetic ty1 ty2 :: :: UsualArithmetic
+%      {{ tex \texttt{usual\_arithmetic}([[ty1]],[[ty2]]) }}
+
+typeCategory, tyC :: '' ::=
+  | lvalueT qualifiers ty :: :: LvalueT
+  | expressionT ty :: :: ExpressionT

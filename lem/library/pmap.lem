@@ -1,0 +1,41 @@
+(* TODO: This is not the right type *)
+type map 'a 'b = Hol.Finite_map.fmap 'a 'b
+
+val empty : forall 'a 'b. map 'a 'b
+let inline {hol} empty = Hol.FEMPTY
+let inline {ocaml} empty = (Ocaml.Pmap.empty Ocaml.Pervasives.compare)
+
+val add : forall 'key 'a. 'key -> 'a -> map 'key 'a -> map 'key 'a
+let inline {hol} add k a m = Hol.FUPDATE m (k,a)
+let inline {ocaml} add = Ocaml.Pmap.add
+
+val mem : forall 'key 'a. 'key -> map 'key 'a -> bool
+let inline {hol} mem k m = k IN Hol.FDOM m
+let inline {ocaml} mem = Ocaml.Pmap.mem
+
+val find : forall 'key 'a. 'key -> map 'key 'a -> 'a
+let inline {hol} find k m = Hol.FAPPLY m k
+let inline {ocaml} find = Ocaml.Pmap.find
+
+val fold : forall 'key 'a 'b. ('key -> 'a -> 'b -> 'b) -> map 'key 'a -> 'b -> 'b
+let inline {ocaml} fold = Ocaml.Pmap.fold
+
+val for_all : forall 'key 'a. ('key -> 'a -> bool) -> map 'key 'a -> bool
+let inline {ocaml} for_all = Ocaml.Pmap.for_all
+
+val map : forall 'key 'a 'b. ('a -> 'b) -> map 'key 'a -> map 'key 'b
+let inline {ocaml} map = Ocaml.Pmap.map
+
+val mapi : forall 'key 'a 'b. ('key -> 'a -> 'b) -> map 'key 'a -> map 'key 'b
+let inline {ocaml} mapi = Ocaml.Pmap.mapi
+
+
+val bindings: forall 'key 'a. map 'key 'a -> list ('key * 'a)
+let inline {ocaml} bindings = Ocaml.Pmap.bindings
+
+val concat: forall 'key 'a. map 'key 'a -> map 'key 'a -> map 'key 'a
+let inline {ocaml} concat = Ocaml.Pmap.concat
+
+val remove: forall 'key 'a. 'key -> map 'key 'a -> map 'key 'a
+let inline {ocaml} remove = Ocaml.Pmap.remove
+
