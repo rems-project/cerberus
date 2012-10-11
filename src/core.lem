@@ -211,6 +211,75 @@ let test4: file unit =
   <| main= a_main; fun_map= Pmap.add a_main (TyEffect unit, [], main_body) Pmap.empty |>
 
 
+(*
+Elaboration of:
+
+int main(void) {
+  int x = 1, y = 2;
+  x = y++ + x;
+  
+  return 0;
+}
+
+-}
+
+fun main () :=
+  (x, y) <- create{signed int} || create{signed int} >>
+  store{signed int} x 1 || store{signed int} y 2 >>
+  
+  (a1, a2) <- (a3 <- load{signed int} y >> ~store{signed int} y (a3+1) >> a3) || load{signed int} x >>
+  store{signed int} x (a1 + a2) >>
+  0
+*)
+let test5: file unit =
+  let a_main    = (1, Some "main") in
+  let x         = (3, Some "x")    in
+  let y         = (4, Some "y")    in
+  let a1        = (5, Some "a1")   in
+  let a2        = (6, Some "a2")   in
+  let a3        = (7, Some "a3")   in
+  let main_body =
+    let signed_int = Kctype $ Ail.BASIC {} (Ail.INTEGER (Ail.SIGNED Ail.INT)) in
+      Kwseq [Some x; Some y] (Kunseq [pcreate signed_int; pcreate signed_int])
+        (Kwseq [] (Kunseq [pstore signed_int (Ksym x) (Kconst 1); pstore signed_int (Ksym y) (Kconst 2)])
+           (Kwseq [Some a1; Some a2] (Kunseq [Kwseq [Some a3] (pload signed_int (Ksym y))
+                                                 (Kwseq [] (Kaction (Neg, ({}, Kstore signed_int (Ksym y) (Kop OpAdd (Ksym a3) (Kconst 1)))))
+                                                    (Ksym a3));
+                                              pload signed_int (Ksym x)])
+              (Kwseq [] (pstore signed_int (Ksym x) (Kop OpAdd (Ksym a1) (Ksym a2)))
+                 (Kconst 0)
+              )
+           )
+        )
+  in
+  <| main= a_main; fun_map= Pmap.add a_main (TyEffect integer, [], main_body) Pmap.empty |>
+
+(*
+
+fun fact (n : integer) : integer :=
+  if n < 2 then 1
+           else n * fact(n-1)
+
+fun main : integer :=
+  fact(5)
+  
+*)
+let test_fact: file unit =
+  let a_main    = (1, Some "main") in
+  let a_fact    = (2, Some "fact") in
+  let a_n       = (3, Some "n")    in
+  let fact_body = 
+    Kif (Kop OpLt (Ksym a_n) (Kconst 2))
+        (Kconst 1)
+        (Kop OpMul (Ksym a_n) (Kcall a_fact [Kop OpSub (Ksym a_n) (Kconst 1)])) in
+  let main_body = Kcall a_fact [Kconst 5] in
+  <| main=    a_main;
+     fun_map= Pmap.add a_main (TyEffect integer, [], main_body)
+                (Pmap.add a_fact (TyBase integer, [(a_n, integer)], fact_body) Pmap.empty) |>
+
+
+
+
 
 (* Symbolic names for the standard library functions *)
 (* TODO: this should be dynamically imported, doing it statically and manually
@@ -246,12 +315,14 @@ let shift    = (59, Some "shift")
 
 
 (* types of the standard library functions *)
-let core_stdlib =
-  let f = List.fold_left (fun acc (fname, ftype) -> Pmap.add fname ftype acc) Pmap.empty in
+(* TODO: dummy bodies for now *)
+let core_stdlib : map sym (core_type * list (sym * core_base_type) * expr unit) =
+  let mk_sym i name = (i, Some name) in
+  let f = List.fold_left (fun acc (fname, fdef) -> Pmap.add fname fdef acc) Pmap.empty in
   f [
-      (overflow,         ([ctype; integer],        TyBase integer));
-      (conv_int,         ([ctype; integer],        TyBase integer));
-      (conv,             ([ctype; ctype; integer], TyBase integer));
+      (overflow,         (TyBase integer, [(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)], Ksym (mk_sym 2 "n")));
+      (conv,             (TyBase integer, [(mk_sym 1 "ty1", ctype); (mk_sym 2 "ty2", ctype); (mk_sym 3 "n", integer)], Ksym (mk_sym 3 "n")));
+(*      (conv_int,         ([(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)],        TyBase integer));
       (guard_zero,       ([integer],               TyBase integer));
       (usual_arithmetic, ([ctype; ctype],          TyBase ctype));
       (ctype_width,      ([ctype],                 TyBase integer));
@@ -263,6 +334,7 @@ let core_stdlib =
       (alignof,          ([ctype],                 TyBase integer));
       (offsetof,         ([ctype],                 TyBase integer));
       (shift,            ([address; integer],      TyBase address))
+*)
     ]
 
 

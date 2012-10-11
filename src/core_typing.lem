@@ -652,7 +652,7 @@ let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
   (* collect the symbolic names of the functions for the initial function environment. *)
   let init_fenv =
     List.fold_left (fun acc (fname, (ftype, args, _)) ->
-      Pmap.add fname (List.map snd args, ftype) acc) core_stdlib functions in
+      Pmap.add fname (List.map snd args, ftype) acc) (Pmap.map (fun (ty, tys, _) -> (List.map snd tys, ty)) core_stdlib) functions in
   Exception.bind
     (List.fold_right
        (fun (fname, (coreTy_return, baseTys_vars, fbody)) acc ->

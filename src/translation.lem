@@ -1061,12 +1061,12 @@ C.seq [a_id] (C.create ty)
         translate_exp    file e2 >>= fun core_e2 ->
         E.return $
           C.Kwseq [Some a_e1; Some a_e2] (C.Kunseq [core_e1; core_e2])
-            (C.Kaction (C.Neg, ({}, C.Kstore (C.Kctype (lvalue_type e1))
-                                             (C.Ksym a_e1)
-                                             (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2]))
-                       )
-            )
-    
+            (C.Kwseq [] (C.Kaction (C.Pos, ({}, C.Kstore (C.Kctype (lvalue_type e1))
+                                              (C.Ksym a_e1)
+                                              (C.Kcall C.conv [C.Kctype (exp_type e1); C.Kctype (exp_type e2); C.Ksym a_e2]))
+                                   )
+                        )
+                       (C.Ksym a_e2))
     
     
     | A.ASSIGN (Some _) e1 e2 -> E.return (C.DEBUG "TODO: A.ASSIGN (Some _) e1 e2")
@@ -1277,7 +1277,7 @@ let translate_file (file: A.file _) : E.t (C.file unit) =
                                  List.map (fun arg -> (arg,C.address (* TODO: check *))) args,
                                  core_body) acc)
     (Pmap.bindings file.A.fn_map)
-    Pmap.empty
+    C.core_stdlib (* Pmap.empty *)
   >>= fun core_funcs ->
   E.return <| C.main= file.A.main; C.fun_map= core_funcs |>
 

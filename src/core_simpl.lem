@@ -118,13 +118,11 @@ let rec trivialy_pure fun_map exp =
     | Ksym _      -> true
     | Ktrue       -> true
     | Kfalse      -> true
-    | Kcall f _   -> Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None exp)
-(*
-match Pmap.find f fun_map with
-                       | (TyBase _, _, _) -> true
-                       | _                -> false
-                     end
-*)
+    | Kcall f _   -> if Pmap.mem f fun_map then
+        match Pmap.find f fun_map with
+          | (TyBase _, _, _) -> true
+          | _                -> false
+        end else Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None exp)
     | Kop _ e1 e2 -> trivialy_pure e1 && trivialy_pure e2
 
     (* TODO: asume the first operand is pure (which it should be to typecheck) *)
@@ -310,14 +308,13 @@ let rec bar e =
   if modified then bar e' else e
 
 let rec simpl fun_map e =
-  let (e', modified) = simplify_expr fun_map e false in
+  let (e', modified) = simplify_expr fun_map (bar e) false in
   if modified then simpl fun_map e' else bar e
 
 
 
-let simplify (f: file 'a) : file 'a =
+let simplify (f: file unit) : file unit =
   <|
       main= f.main;
       fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl f.fun_map fbody)) f.fun_map
   |>
-
