@@ -198,7 +198,7 @@ let rec in_pattern a p =
 val     subst_sym: sym -> expr trace_action -> expr trace_action -> expr trace_action
 let rec subst_sym a v e =
   match e with
-    | Ksym a          -> v
+    | Ksym a'         -> if a = a' then v else e
     | Kop binop e1 e2 -> Kop binop (subst_sym a v e1) (subst_sym a v e2)
     | Knot e          -> Knot (subst_sym a v e)
     | Klet _a e1 e2   -> Klet _a (subst_sym a v e1) (if a = _a then e2 else subst_sym a v e2)
