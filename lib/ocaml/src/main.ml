@@ -108,11 +108,11 @@ let rec string_of_trace (t: Core_run.E.trace) =
     | [b]     -> string_of_trace_action b
     | b :: bs -> string_of_trace_action b ^ ", " ^ f bs
   in match t with
-       | []               -> ""
-       | (r, bs, a) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
-                             "\x1b[0m ==> \x1b[32m<" ^ (f $ Pset.elements bs) ^
-                             ">\x1b[0m " ^ string_of_trace_action a ^ "\n" ^
-                             string_of_trace xs
+       | []                    -> ""
+       | (r, bs, (_, a)) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
+                                  "\x1b[0m ==> \x1b[32m<" ^ (f $ Pset.elements bs) ^
+                                  ">\x1b[0m " ^ string_of_trace_action a ^ "\n" ^
+                                  string_of_trace xs
 
 
 

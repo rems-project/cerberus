@@ -19,7 +19,7 @@ type sb = <|
 val extract: Core_run.Effect.trace -> sb'
 let extract l =
   let (sb, _, _) =
-  List.fold_left (fun (_sb, i, is) (r, bs, a) ->
+  List.fold_left (fun (_sb, i, is) (r, bs, (_, a)) ->
     (<| _sb with actions'= Pmap.add i a _sb.actions';
                  edges'=   List.fold_left (fun es b ->
                              let ib = Pmap.find b is in

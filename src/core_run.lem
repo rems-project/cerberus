@@ -13,6 +13,8 @@ type trace_action =
   | Tstore of Ail.ctype * mem_addr * num
   | Tload of Ail.ctype * mem_addr * num (* the last argument is the read value *)
 
+type trace_paction = polarity * trace_action
+
 module Print = struct
   module P = Pprint
   open P.Operators
@@ -77,7 +79,7 @@ module Effect = struct
          that has just been performed
        - the third element is the action that as been performed during that step
      *)
-  type trace = list (dyn_rule * set trace_action * trace_action)
+  type trace = list (dyn_rule * set trace_action * trace_paction)
   
   type state = <|
       mem : mem_state;                         (* the memory layout state                         *)
@@ -162,11 +164,11 @@ let pick_one l = E.msum $ List.map E.return (_pick_one [] l)
 
 
 (* push an element in the trace *)
-val push_trace: (dyn_rule * set trace_action * trace_action) -> E.t unit
+val push_trace: (dyn_rule * set trace_action * trace_paction) -> E.t unit
 let push_trace a = fun (<| E.trace= t |> as s) -> [((), <| s with E.trace= a :: t |>)]
 
 (* get the last element of the trace (crash if none). *)
-val get_trace: E.t (dyn_rule * set trace_action * trace_action)
+val get_trace: E.t (dyn_rule * set trace_action * trace_paction)
 let get_trace = function
   | <| E.trace= []    |>        -> Boot.outOfHomeomorphism "[Core_run.get_trace] empty trace"
   | (<| E.trace= x::xs |> as s) -> [(x, s)]
@@ -360,8 +362,8 @@ val red: expr trace_action -> E.t (expr trace_action)
 let rec red_pos e =
   match e with
     | Kaction (Pos, (bs, a)) ->
-        perform_action a             >>= fun (a, v) ->
-        push_trace (Rule_Pos, bs, a) >>
+        perform_action a                    >>= fun (a, v) ->
+        push_trace (Rule_Pos, bs, (Pos, a)) >>
         E.return v
     | _ -> E.mzero
   end
@@ -374,8 +376,8 @@ let rec red_pos e =
 and red_neg e =
   match e with
     | Kaction (Neg, (bs, a)) ->
-        perform_action a             >>= fun (a, v) ->
-        push_trace (Rule_Neg, bs, a) >>
+        perform_action a                    >>= fun (a, v) ->
+        push_trace (Rule_Neg, bs, (Neg, a)) >>
         E.return v
     | _ -> E.mzero
   end
@@ -392,11 +394,12 @@ and red_neg e =
 and red_wseq_l e =
   match e with
     | Kwseq _as e1 e2 ->
-        red e1                 >>= fun e1'       ->
-        get_trace              >>= fun (_, _, a) ->
+        red e1                 >>= fun e1'            ->
+        get_trace              >>= fun (_, _, (p, a)) ->
         update_rule Rule_WseqL >>
-        E.return (if is_value e1' then annotate a (subst_syms _as e1' e2)
-                                  else Kwseq _as e1' (annotate a e2))
+        let f = match p with Pos -> annotate a | Neg -> fun x -> x end in
+        E.return (if is_value e1' then f (subst_syms _as e1' e2)
+                                  else Kwseq _as e1' (f e2))
     | _ -> E.mzero
   end
 
