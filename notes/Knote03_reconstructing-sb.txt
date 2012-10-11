@@ -7,10 +7,10 @@ REMINDER:
   expressions, so here we only deal with of weak/strong sequencing operators.
 
 
-The scheme is a bit violent but works well: we chance slightly the internal
+The scheme is a bit violent but works well: we change slightly the internal
 representation of Core's syntax before starting the reduction by adding
 "annotations" on the actions. These annotations are sets of "trace actions"
-which are fully evaluated analogues to the actions (ie. as arguments, they have
+which are fully evaluated analogues of the actions (ie. as arguments, they have
 values instead of expressions). Intuitively, at any point in the reduction of an
 expression, an action A is annotated with a set BS if we know at this point that
 the actions in BS are sequenced-before A. We use the following notation:
@@ -55,12 +55,12 @@ note for example in the first expression that even so B has been execution,
 it is not present in the annotation of C since we don't have B --sb--> C.
 
 
-When an action is performed, it with added to the execution trace with its
+When an action is performed, it is added to the execution trace with its
 annotation. With this the sequence-before order is trivially reconstructible
 by going through the trace.
 
 
-Let us defined the function [annotate B e] (noted <B> e) where B is a trace
+Let us define the function [annotate B e] (written <B> e) where B is a trace
 action and e is an expression, returning the expression e where B has been added
 to the annotations of all actions.
 We can then write the modified reduction semantics:
@@ -79,11 +79,11 @@ We can then write the modified reduction semantics:
 
 
 ================================================================================
-================================================================================
+================OLD STUFF=======================================================
 
 
 
-hum there is problem because when negative actions are postponed, they are moved
+hum there is a problem because when negative actions are postponed, they are moved
 --> this may produce some loss of information ?
 
 
