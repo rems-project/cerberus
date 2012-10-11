@@ -42,7 +42,7 @@ let rec annotate act e =
   match e with
   | Klet a e1 e2                         -> Klet a e1 (annotate act e2)
   | Kif e1 e2 e3                         -> Kif e1 (annotate act e2) (annotate act e3)
-  | Kcall f es                           -> Kcall f es
+  | Kcall f es                           -> Kcall f (List.map (annotate act) es)
   | Kaction (p, (bs, a))                 -> Kaction (p, ({act} union bs, a))
   | Kunseq es                            -> Kunseq (List.map (annotate act) es)
   | Kwseq _as e1 e2                      -> Kwseq _as (annotate act e1) (annotate act e2)

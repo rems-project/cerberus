@@ -74,11 +74,14 @@ We can then write the modified reduction semantics:
 ------------------------------------------------------ (wseq_l)
 (S, _as <- e1 >> e2) --a--> (S', _as <- e1' >> <a> e2)
 
+(where a is NOT a negative action)
 
 
 
+================================================================================
+================================================================================
 
-TODO: need to handle negative actions
+
 
 hum there is problem because when negative actions are postponed, they are moved
 --> this may produce some loss of information ?

@@ -211,9 +211,16 @@ The sequencing operators are the following:
   reflecting the fact sequencing operator only make sense when actions are
   involved. Using the unsequenced operator on pure subexpressions would simply
   correspond to having tuples, which doesn't seem to be useful (note that the
-  \textsf{let} constructor only binds a symbol, while the two binding sequencing
+  let constructor only binds a symbol, while the two binding sequencing
   operators, which may have a first argument containing an unsequenced
   expressions, binds a pattern).
+  
+  Example:
+    C                      Core
+    
+    e1 + e2;        -->    [[e1]] || [[e2]]
+    f(e1, ..., ek)  -->    (α1, ..., αk) ← [[e1]] || ... || [[ek]] ;
+                           f_elab(α1, ..., αk)
 
 [ Weak sequencing operator (>>) ]
 
@@ -230,15 +237,41 @@ The sequencing operators are the following:
   the first operand must be effectful since sequencing a pure expression doesn't
   mean anything. As the first operand may contain an unsequenced expression,
   this operator binds to a list of symbolic names.
+  
+  Example:
+    C                  Core
+    
+    x = y++            (α1, α2) ← (x || α ← load{τ} y ▷ store{τ} y (α+1)) >>
+                       store{τ} α1 α2
 
 [ Strong sequencing operator (;) ]
 
+  In addition to the weak sequencing operator, we have an operator corresponding
+  to C's "sequence-points" which orders everything (including
+  side-effects). Hence the strong sequencing operator ignore the polarity of
+  actions.
   
+  Example:
+    C                  Core
+    
+    (e1, e2)    -->    [[e1]] ; [[e2]
+    [see the second example for unseq]  
 
 [ Atomic sequencing operator (▷) ]
 
-  
+  C's postfix increment/decrement are composed of two memory actions. but
+  behaves as an atomic action during the ordering of indeterminately sequenced
+  expressions (C function calls). To support this, Core has a rather artificial
+  sequencing operator taking two actions (and not expressions) and ordering
+  them. The first action must be positive so it is never ordering, and these two
+  actions can never be separated by an indeterminately sequenced
+  expression. Additionaly, since this operator is only used for increment /
+  decrement, its value is that of the first action.
 
+
+
+================================================================================
+================================================================================
 
 
 
