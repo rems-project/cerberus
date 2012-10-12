@@ -1,5 +1,8 @@
 open Global
 
+(* TODO: just for testing *)
+(* open Core_parser *)
+
 (* command-line options *)
 let files = ref []
 let add_file n = files := n :: !files
