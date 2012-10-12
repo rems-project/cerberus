@@ -1,7 +1,46 @@
 %{
- open Core
 
- let syms = ref Pmap.empty
+
+type expr =
+  | Kskip
+  | Kconst of int
+(*  | Kaddr of Core.mem_addr *)
+  | Ksym of string
+  | Kop of Core.binop * expr * expr
+  | Ktrue
+  | Kfalse
+  | Knot of expr
+  | Kctype of Ail.ctype
+  | Klet of string * expr * expr
+  | Kif of expr * expr * expr
+  | Kcall of string * expr list
+  | Ksame of expr * expr
+  | Kundef
+  | Kerror
+  | Kaction of paction
+  | Kunseq of expr list
+  | Kwseq of (string option) list * expr * expr
+  | Ksseq of (string option) list * expr * expr
+  | Kaseq of string option * action * paction
+  | Kindet of expr (* TODO: add unique indices *)
+  | Kbound of int * expr
+  | Ksave of string * expr
+  | Krun of string
+
+and action =
+  | Kcreate of expr
+  | Kalloc of expr
+  | Kkill of expr
+  | Kstore of expr * expr * expr
+  | Kload of expr * expr
+and paction = Core.polarity * action
+
+
+(* TODO *)
+let convert e = Core.Kskip
+
+
+
 
 
 %}
@@ -51,8 +90,12 @@
 %token SIGNED INT
 
 
+%right GT_GT SEMICOLON
+%nonassoc PIPE_PIPE
+
+
 %start start
-%type <(sym * (core_type * (sym * core_base_type) list * unit expr)) list> start
+%type <(string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list> start
 
 %%
 
@@ -63,24 +106,24 @@ start:
 
 core_base_type:
 | INTEGER
-    { integer }
+    { Core.Integer }
 | BOOLEAN
-    { boolean }
+    { Core.Boolean }
 | ADDRESS
-    { address }
+    { Core.Address }
 | CTYPE
-    { ctype }
+    { Core.Ctype }
 | UNIT
-    { unit }
+    { Core.Unit }
 | baseTys = delimited (LPAREN, separated_nonempty_list(COMMA, core_base_type) , RPAREN)
-    { baseTys }
+    { Core.Tuple baseTys }
 
 
 core_type:
 | baseTy = core_base_type
-    { TyBase baseTy }
+    { Core.TyBase baseTy }
 | baseTy = delimited(LBRACKET, core_base_type, RBRACKET)
-    { TyEffect baseTy }
+    { Core.TyEffect baseTy }
 
 (* TODO: find how to use the defs in cparser.mly *)
 type_name:
@@ -91,15 +134,15 @@ type_name:
 
 
 binary_operator:
-| PLUS            { OpAdd }
-| MINUS           { OpSub }
-| STAR            { OpMul }
-| SLASH           { OpDiv }
-| PERCENT         { OpMod }
-| EQ              { OpEq  }
-| LT              { OpLt  }
-| SLASH_BACKSLASH { OpAnd }
-| BACKSLASH_SLASH { OpOr  }
+| PLUS            { Core.OpAdd }
+| MINUS           { Core.OpSub }
+| STAR            { Core.OpMul }
+| SLASH           { Core.OpDiv }
+| PERCENT         { Core.OpMod }
+| EQ              { Core.OpEq  }
+| LT              { Core.OpLt  }
+| SLASH_BACKSLASH { Core.OpAnd }
+| BACKSLASH_SLASH { Core.OpOr  }
 
 
 
@@ -109,8 +152,8 @@ action:
     { Kcreate ty }
 | ALLOC n = expression
     { Kalloc n }
-| KILL a = SYM
-    { Kkill a }
+| KILL e = expression
+    { Kkill e }
 | STORE ty = delimited(LBRACE, expression, RBRACE) x = expression n = expression
     { Kstore (ty, x, n) }
 | LOAD ty = delimited(LBRACE, expression, RBRACE) x = expression
@@ -119,9 +162,9 @@ action:
 
 paction:
 | act = action
-    { Kaction (Pos, act) }
+    { (Core.Pos, act) }
 | TILDE act = action
-    { Kaction (Neg, act) }
+    { (Core.Neg, act) }
 ;
 
 pattern_elem:
@@ -135,7 +178,17 @@ pattern:
 | _as = delimited(LPAREN, separated_nonempty_list(COMMA, pattern_elem), RPAREN) { _as }
 ;
 
+
+bexpression:
+| e = expression
+    { ([], e) }
+| _as = pattern LT_MINUS e = expression
+    { (_as, e) }
+
 expression:
+| LPAREN e = expression RPAREN
+    { e }
+
 | SKIP
     { Kskip }
 
@@ -180,26 +233,37 @@ expression:
 | p = paction
     { Kaction p }
 
-| es = separated_nonempty_list(PIPE_PIPE, expression)
+| LPAREN es = separated_nonempty_list(PIPE_PIPE, expression) RPAREN (* TODO: maybe temporary --> to get an ambigious grammar *)
     { Kunseq es }
 
+(*
 | e1 = expression GT_GT e2 = expression
     { Kwseq ([], e1, e2) }
 
 | _as = pattern LT_MINUS e1 = expression GT_GT e2 = expression
     { Kwseq (_as, e1, e2) }
+*)
 
+| _as_e1 = bexpression GT_GT e2 = expression
+    { let (_as, e1) = _as_e1 in Kwseq (_as, e1, e2) }
+
+(*
 | e1 = expression SEMICOLON e2 = expression
     { Ksseq ([], e1, e2) }
 
 | _as = pattern GT_GT e1 = expression SEMICOLON e2 = expression
     { Ksseq (_as, e1, e2) }
+*)
+
+| _as_e1 = bexpression SEMICOLON e2 = expression
+    { let (_as, e1) = _as_e1 in Ksseq (_as, e1, e2) }
+
 
 | a = action PIPE_GT p = paction
     { Kaseq (None, a, p) }
 
 | alpha = SYM LT_MINUS a = action PIPE_GT p = paction
-    { Kaseq (Just alpha, a, p) }
+    { Kaseq (Some alpha, a, p) }
 
 | e1 = expression SEMICOLON e2 = expression
     { Ksseq ([], e1, e2) }
@@ -221,6 +285,6 @@ fun_argument:
 
 fun_declaration:
 | FUN fname = FNAME args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = expression END
-  { (fname, (coreTy_ret, args, fbody)) }
+  { (fname, (coreTy_ret, args, convert fbody)) }
 
 %%

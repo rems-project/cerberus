@@ -17,8 +17,7 @@ end
 (* -------------------------------------------------------------------------- *)
 
 module Effect = struct
-  type t 'a = State.t
-      'a
+  type t 'a = State.t 'a
       (* symbol counter for Core's symbolic names (including function names) *)
       (Symbol.sset *
       (* the return label of the current function *)
