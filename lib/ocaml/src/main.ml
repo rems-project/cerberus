@@ -51,11 +51,13 @@ let set_core_skip_typecheck () = core_skip_typecheck := true
 let options = Arg.align [
   ("-i", Arg.String add_file,   "<file> Input file");
   
-  (* original backend options *)
+  (* original backend options
   ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
   ("-n", Arg.Int    set_bound,  "<nat>  Set call and iteration depth (original backend)");
   ("-d", Arg.Unit   set_dot,    "       Generate dot graphs          (original backend)");
-  ("-o", Arg.Unit   set_output, "       Print m-sets                 (original backend)");
+  ("-o", Arg.Unit   set_output, "       Print m-sets                 (original
+  backend)");
+  *)
   
   (* core backend options (default) *)
   ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
@@ -143,20 +145,34 @@ let () =
                                  (Output.file $ file_name ^ ".dot") in
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
                                                                     "\n\nValue: " ^ string_of_int v) $ numerote ts in
-
-(*
-  if      Filename.check_suffix file_name ".c"    then Exception.return $ print_endline "Cmulator mode"
-  else if Filename.check_suffix file_name ".core" then Exception.return $ print_endline "Core runtime mode"
-                                                  else Exception.return $ print_endline "The file extention is not supported"
-  in
-  *)
-
-    let core_backend m =
-      (Exception.map Translation.translate m (* TODO: map is bad *)
+    let c_frontend m =
+      m
+      >|> Lexer.Clexer.make
+      >|> Parser.Cparser.parse
+      >|> pass_message "1. Parsing completed!"
+      >|> pass_through_test !print_cabs pp_cabs
+      >|> Exception.rbind (Cabs_to_ail.desugar "main")
+      >|> pass_message "2. Cabs -> Ail completed!"
+      >|> pass_through_test !print_ail pp_ail
+      >|> Exception.rbind Typing.annotate
+      >|> pass_message "3. Ail typechecking completed!"
+      >|> Exception.map Translation.translate (* TODO: map is bad *)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core pp_core
       >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
-      >|> Exception.map (Core_simpl.simplify)
+      >|> Exception.map (Core_simpl.simplify) in
+    let core_frontend m =
+      m
+      >|> Lexer.CoreLexer.make
+      >|> Parser.CoreParser.parse
+      >|> pass_message "1-4. Parsing completed!"
+    in
+    let frontend m =
+      if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
+      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m; Boot.outOfHomeomorphism "Kayvan didn't get the types right!\n")
+                                                      else Exception.fail (Errors.UNSUPPORTED "The file extention is not supported") in
+    let core_backend m =
+      (m
       >|> pass_through_test !print_core pp_core
       >?> not !core_skip_typecheck)
         (fun m ->
@@ -169,6 +185,7 @@ let () =
       >|> pass_through_test !core_graph pp_sb
       >|> pass_through pp_traces
       >|> return_unit in
+(*
     let orig_backend m =
       Exception.map (Reduction.reduce !bound) m
       >|> pass_message "4. Opsem completed!"
@@ -177,19 +194,9 @@ let () =
       >|> Exception.map Meaning.Solve.simplify_all
       >|> Exception.map (Program.iter_list pp_res)
       >|> return_unit in
-    (file_name
+*)
+    file_name
     >|> Input.file
-    >|> Lexer.Clexer.make
-    >|> Parser.Cparser.parse
-    >|> pass_message "1. Parsing completed!"
-    >|> pass_through_test !print_cabs pp_cabs
-    >|> Exception.rbind (Cabs_to_ail.desugar "main")
-    >|> pass_message "2. Cabs -> Ail completed!"
-    >|> pass_through_test !print_ail pp_ail
-    >|> Exception.rbind Typing.annotate
-    >|> pass_message "3. Ail typechecking completed!"
-    >?> !core)
-      core_backend
-      orig_backend
-  in
+    >|> frontend
+    >|> core_backend in
   List.iter (catch -| pipeline) !files;
