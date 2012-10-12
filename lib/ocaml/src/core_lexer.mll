@@ -1,5 +1,5 @@
 {
-
+module P = Core_parser
 }
 
 rule main = parse
@@ -9,82 +9,82 @@ rule main = parse
   
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
-      { CONST (int_of_string integer) }
+      { P.CONST (int_of_string integer) }
   
   (* symbolic names *)
   | ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as s
-      { SYM s }
+      { P.SYM s }
   
   (* symbolic names *)
   | ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as f
-      { FNAME f }
+      { P.FNAME f }
   
-  | "skip" { SKIP }
+  | "skip" { P.SKIP }
   
-  | "not" { NOT }
+  | "not" { P.NOT }
   
-  | "true" { TRUE }
-  | "false" { FALSE }
+  | "true" { P.TRUE }
+  | "false" { P.FALSE }
   
-  | "let" { LET }
-  | "in" { IN }
+  | "let" { P.LET }
+  | "in" { P.IN }
   
-  | "fun" { FUN }
-  | "end" { END }
+  | "fun" { P.FUN }
+  | "end" { P.END }
   
   (* binary operators *)
-  | '+'   { PLUS }
-  | '-'   { MINUS }
-  | '*'   { STAR }
-  | '/'   { SLASH }
-  | '%'   { PERCENT }
-  | '='   { EQ }
-  | '<'   { LT }
-  | "/\\" { SLASH_BACKSLASH }
-  | "\/"  { BACKSLASH_SLASH }
+  | '+'   { P.PLUS }
+  | '-'   { P.MINUS }
+  | '*'   { P.STAR }
+  | '/'   { P.SLASH }
+  | '%'   { P.PERCENT }
+  | '='   { P.EQ }
+  | '<'   { P.LT }
+  | "/\\" { P.SLASH_BACKSLASH }
+  | "\\/"  { P.BACKSLASH_SLASH }
   
   (* negative action *)
-  | '~' { TILDE }
+  | '~' { P.TILDE }
   
   (* negative marker *)
-  | '!' { EXCLAM }
+  | '!' { P.EXCLAM }
   
   (* sequencing operators *)
-  | "||"  { PIPE_PIPE }
-  | ';'   { SEMICOLON }
-  | "|>"  { PIPE_GT }
-  | ">>"  { GT_GT }
+  | "||"  { P.PIPE_PIPE }
+  | ';'   { P.SEMICOLON }
+  | "|>"  { P.PIPE_GT }
+  | ">>"  { P.GT_GT }
   
   (* pattern symbols *)
-  | "()" { LPAREN_RPAREN }
-  | "_"  { UNDERSCORE }
+  | "()" { P.LPAREN_RPAREN }
+  | "_"  { P.UNDERSCORE }
   
-  | "<- " { LT_MINUS }
-  | '('   { LPAREN }
-  | ')'   { RPAREN }
-  | '{'   { LBRACE }
-  | '}'   { RBRACE }
-  | '['	  { LBRACKET }
-  | ']'	  { RBRACKET }
-  | ','   { COMMA }
-  | ':'   { COLON }
-  | ":="   { COLON_EQ }
+  | "<- " { P.LT_MINUS }
+  | '('   { P.LPAREN }
+  | ')'   { P.RPAREN }
+  | '{'   { P.LBRACE }
+  | '}'   { P.RBRACE }
+  | '['	  { P.LBRACKET }
+  | ']'	  { P.RBRACKET }
+  | ','   { P.COMMA }
+  | ':'   { P.COLON }
+  | ":="   { P.COLON_EQ }
   
-  | "create" { CREATE }
-  | "alloc" { ALLOC }
-  | "kill" { KILL }
-  | "store" { STORe }
-  | "load" { LOAD }
+  | "create" { P.CREATE }
+  | "alloc" { P.ALLOC }
+  | "kill" { P.KILL }
+  | "store" { P.STORE }
+  | "load" { P.LOAD }
 
-  | "same" { SAME }
+  | "same" { P.SAME }
 
-  | "undef" { UNDEF }
-  | "error" { ERROR }
+  | "undef" { P.UNDEF }
+  | "error" { P.ERROR }
 
-  | "if" { IF }
-  | "then" { THEN }
-  | "else" { ELSE }
+  | "if" { P.IF }
+  | "then" { P.THEN }
+  | "else" { P.ELSE }
   
   (* TODO: hack *)
-  | "signed" { SIGNED }
-  | "int" { INT }
+  | "signed" { P.SIGNED }
+  | "int" { P.INT }
