@@ -10,6 +10,12 @@ module ClexerBase = struct
   let init = Clexer.initial
 end
 
+module CoreLexerBase : (LEXER_BASE with type token = Core_parser.token) = struct
+  type token = Core_parser.token
+  let init = Core_lexer.main
+end
+
+
 module type LEXER = sig
   type token
   type token_stream = unit -> token
@@ -59,3 +65,4 @@ module MakeLexer (L : LEXER_BASE) : (LEXER with type token = L.token) = struct
 end
 
 module Clexer = MakeLexer (ClexerBase)
+module CoreLexer = MakeLexer (CoreLexerBase)

@@ -12,6 +12,10 @@ end
 module CparserBase : (PARSER_BASE with type token  = Cparser.token
                                   and  type result = Cabs.g_defn_l list)
 
+module CoreParserBase : (PARSER_BASE with type token  = Core_parser.token
+                                     and  type result = (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list)
+
+
 module type PARSER = functor (L : Lexer.LEXER) ->
 sig
   type result
@@ -29,3 +33,4 @@ module type MAKE_PARSER =
 module MakeParser : MAKE_PARSER
 
 module Cparser : module type of (MakeParser (CparserBase) (Lexer.Clexer))
+module CoreParser : module type of (MakeParser (CoreParserBase) (Lexer.CoreLexer))

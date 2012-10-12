@@ -3,6 +3,7 @@ module type LEXER_BASE = sig
   val init : Lexing.lexbuf -> token
 end
 module ClexerBase : (LEXER_BASE with type token = Cparser.token)
+module CoreLexerBase : (LEXER_BASE with type token = Core_parser.token)
 
 module type LEXER = sig
   type token
@@ -21,3 +22,4 @@ end
 
 module MakeLexer (L : LEXER_BASE) : (LEXER with type token = L.token)
 module Clexer : (LEXER with type token = ClexerBase.token)
+module CoreLexer : (LEXER with type token = CoreLexerBase.token)

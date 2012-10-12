@@ -17,6 +17,15 @@ module CparserBase = struct
   let init = Cparser.start
 end
 
+module CoreParserBase = struct
+  exception Error = Core_parser.Error
+  type token  = Core_parser.token
+  type result = (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list
+
+  let init = Core_parser.start
+end
+
+
 module type PARSER = functor (L : Lexer.LEXER) ->
 sig
   type result
@@ -52,3 +61,4 @@ struct
 end
 
 module Cparser = MakeParser (CparserBase) (Lexer.Clexer)
+module CoreParser = MakeParser (CoreParserBase) (Lexer.CoreLexer)
