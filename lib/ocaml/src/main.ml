@@ -1,7 +1,7 @@
 open Global
 
 (* TODO: just for testing *)
-(* open Core_parser *)
+open Core_parser
 
 (* command-line options *)
 let files = ref []
@@ -52,15 +52,15 @@ let options = Arg.align [
   ("-i", Arg.String add_file,   "<file> Input file");
   
   (* original backend options *)
+  ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
   ("-n", Arg.Int    set_bound,  "<nat>  Set call and iteration depth (original backend)");
   ("-d", Arg.Unit   set_dot,    "       Generate dot graphs          (original backend)");
   ("-o", Arg.Unit   set_output, "       Print m-sets                 (original backend)");
   
-  (* core backend options *)
-  ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
+  (* core backend options (default) *)
+  ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
   ("--run",            Arg.Unit   set_core_run,            "       Execute the Core program");
   ("--graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of sb orders");
-  ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
   
   (* printing options *)
   ("--print-cabs", Arg.Unit   set_print_cabs, "       Pretty-print the Cabs intermediate representation");
@@ -121,6 +121,12 @@ let rec string_of_trace (t: Core_run.E.trace) =
 
 
 
+(*
+let core_runtime file_name =
+  filename
+  >|> Input.file
+  >|>
+*)
 
 
 let () =
@@ -137,6 +143,14 @@ let () =
                                  (Output.file $ file_name ^ ".dot") in
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
                                                                     "\n\nValue: " ^ string_of_int v) $ numerote ts in
+(*
+  if      Filename.check_suffix file_name ".c"    then Exception.return $ print_endline "Cmulator mode"
+  else if Filename.check_suffix file_name ".core" then Exception.return $ print_endline "Core runtime mode"
+                                                  else Exception.return $ print_endline "The file extention is not supported"
+  in
+*)
+
+
     (file_name
     >|> Input.file
     >|> Lexer.make
