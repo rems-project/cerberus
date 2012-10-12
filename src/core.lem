@@ -320,21 +320,20 @@ let core_stdlib : map sym (core_type * list (sym * core_base_type) * expr unit) 
   let mk_sym i name = (i, Some name) in
   let f = List.fold_left (fun acc (fname, fdef) -> Pmap.add fname fdef acc) Pmap.empty in
   f [
-      (overflow,         (TyBase integer, [(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)], Ksym (mk_sym 2 "n")));
-      (conv,             (TyBase integer, [(mk_sym 1 "ty1", ctype); (mk_sym 2 "ty2", ctype); (mk_sym 3 "n", integer)], Ksym (mk_sym 3 "n")));
-(*      (conv_int,         ([(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)],        TyBase integer));
-      (guard_zero,       ([integer],               TyBase integer));
-      (usual_arithmetic, ([ctype; ctype],          TyBase ctype));
-      (ctype_width,      ([ctype],                 TyBase integer));
-      (exp,              ([integer; integer],      TyBase integer));
-      (representable,    ([ctype; integer],        TyBase boolean));
-      (max,              ([ctype],                 TyBase integer));
-      (min,              ([ctype],                 TyBase integer));
-      (sizeof,           ([ctype],                 TyBase integer));
-      (alignof,          ([ctype],                 TyBase integer));
-      (offsetof,         ([ctype],                 TyBase integer));
-      (shift,            ([address; integer],      TyBase address))
-*)
+      (overflow,         (TyBase integer, [(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)],                        Ksym (mk_sym 2 "n" )));
+      (conv,             (TyBase integer, [(mk_sym 1 "ty1", ctype); (mk_sym 2 "ty2", ctype); (mk_sym 3 "n", integer)], Ksym (mk_sym 3 "n" )));
+      (conv_int,         (TyBase integer, [(mk_sym 1 "ty",  ctype); (mk_sym 2 "n",   integer)],                        Ksym (mk_sym 2 "n" )));
+      (guard_zero,       (TyBase integer, [(mk_sym 1 "n", integer)],                                                   Ksym (mk_sym 1 "n" )));
+      (usual_arithmetic, (TyBase ctype,   [(mk_sym 1 "ty",  ctype); (mk_sym 2 "ty",  ctype)],                          Ksym (mk_sym 1 "ty")));
+      (ctype_width,      (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (exp,              (TyBase integer, [(mk_sym 1 "n", integer); (mk_sym 2 "m", integer)],                          Kconst 42           ));
+      (representable,    (TyBase boolean, [(mk_sym 1 "ty",  ctype); (mk_sym 2 "n", integer)],                          Ktrue               ));
+      (max,              (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (min,              (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (sizeof,           (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (alignof,          (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (offsetof,         (TyBase integer, [(mk_sym 1 "ty",  ctype)],                                                   Kconst 42           ));
+      (shift,            (TyBase address, [(mk_sym 1 "x", address); (mk_sym 2 "n", integer)],                          Ksym (mk_sym 1 "x" )))
     ]
 
 
