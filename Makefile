@@ -173,7 +173,7 @@ ocaml_native: ocaml
 
 ocaml_byte: ocaml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
-	-@[ ! -e "csem" ] || ln -s _build_ocaml/main.byte csem
+	-@[ -e "csem" ] || ln -s _build_ocaml/main.byte csem
 
 lem_ocaml:
 	mkdir -p $(OCAML_BUILD_DIR)

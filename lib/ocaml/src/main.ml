@@ -143,59 +143,53 @@ let () =
                                  (Output.file $ file_name ^ ".dot") in
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
                                                                     "\n\nValue: " ^ string_of_int v) $ numerote ts in
+
 (*
   if      Filename.check_suffix file_name ".c"    then Exception.return $ print_endline "Cmulator mode"
   else if Filename.check_suffix file_name ".core" then Exception.return $ print_endline "Core runtime mode"
                                                   else Exception.return $ print_endline "The file extention is not supported"
   in
-*)
+  *)
 
-
+    let core_backend m =
+      (Exception.map Translation.translate m (* TODO: map is bad *)
+      >|> pass_message "4. Translation to Core completed!"
+      >|> pass_through_test !print_core pp_core
+      >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
+      >|> Exception.map (Core_simpl.simplify)
+      >|> pass_through_test !print_core pp_core
+      >?> not !core_skip_typecheck)
+        (fun m ->
+          Exception.rbind Core_typing.typecheck m
+          >|> pass_message "5. Core's typechecking completed!"
+        )
+        (pass_message "5. Skipping Core's typechecking completed!")
+      >|> pass_message "6. Now running:"
+      >|> Exception.rbind Core_run.run
+      >|> pass_through_test !core_graph pp_sb
+      >|> pass_through pp_traces
+      >|> return_unit in
+    let orig_backend m =
+      Exception.map (Reduction.reduce !bound) m
+      >|> pass_message "4. Opsem completed!"
+      >|> pass_through_test !dot    pp_dot
+      >|> pass_through_test !output pp_out
+      >|> Exception.map Meaning.Solve.simplify_all
+      >|> Exception.map (Program.iter_list pp_res)
+      >|> return_unit in
     (file_name
     >|> Input.file
-    >|> Lexer.make
-    >|> Parser.parse
+    >|> Lexer.Clexer.make
+    >|> Parser.Cparser.parse
     >|> pass_message "1. Parsing completed!"
     >|> pass_through_test !print_cabs pp_cabs
-    
     >|> Exception.rbind (Cabs_to_ail.desugar "main")
     >|> pass_message "2. Cabs -> Ail completed!"
     >|> pass_through_test !print_ail pp_ail
-    
     >|> Exception.rbind Typing.annotate
     >|> pass_message "3. Ail typechecking completed!"
-    
     >?> !core)
-      (* Core backend *)
-      (fun m ->
-        (Exception.map Translation.translate m (* TODO: map is bad *)
-        >|> pass_message "4. Translation to Core completed!"
-        >|> pass_through_test !print_core pp_core
-        >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
-        >|> Exception.map (Core_simpl.simplify)
-        >|> pass_through_test !print_core pp_core
-        >?> not !core_skip_typecheck)
-          (fun m ->
-            Exception.rbind Core_typing.typecheck m
-            >|> pass_message "5. Core's typechecking completed!"
-          )
-          (pass_message "5. Skipping Core's typechecking completed!")
-        >|> pass_message "6. Now running:"
-        >|> Exception.rbind Core_run.run
-        >|> pass_through_test !core_graph pp_sb
-        >|> pass_through pp_traces
-        >|> return_unit
-      )
-      
-      (* Original backend *)
-      (fun m ->
-        Exception.map (Reduction.reduce !bound) m
-        >|> pass_message "4. Opsem completed!"
-        >|> pass_through_test !dot    pp_dot
-        >|> pass_through_test !output pp_out
-        >|> Exception.map Meaning.Solve.simplify_all
-        >|> Exception.map (Program.iter_list pp_res)
-        >|> return_unit
-      )
+      core_backend
+      orig_backend
   in
   List.iter (catch -| pipeline) !files;
