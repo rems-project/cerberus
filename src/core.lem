@@ -316,7 +316,7 @@ let shift    = (59, Some "shift")
 
 (* types of the standard library functions *)
 (* TODO: dummy bodies for now *)
-let core_stdlib : map sym (core_type * list (sym * core_base_type) * expr unit) =
+let core_stdlib : map sym (core_type * list (sym * core_base_type) * expr zero) =
   let mk_sym i name = (i, Some name) in
   let f = List.fold_left (fun acc (fname, fdef) -> Pmap.add fname fdef acc) Pmap.empty in
   f [

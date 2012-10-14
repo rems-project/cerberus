@@ -526,7 +526,7 @@ and convert_action (_, a) =
 
 
 
-let run (f: file unit) : Exception.t (list (num * E.trace)) Errors.cause =
+let run (f: file zero) : Exception.t (list (num * E.trace)) Errors.cause =
   let trs = let (_, _, body) = Pmap.find f.Core.main f.Core.fun_map in
                  (* TODO: here we assume that the main function returns a integer
                           (which is true for the elaboration of C programs) *)

@@ -25,7 +25,7 @@ module Effect = struct
       (* the closest looping label *)
       option Symbol.t *
       (* map of functions generated while processing the current Ail function *)
-      map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr unit)) (* TODO: the unit is ugly, rank2 polymorphism would be nice here *)
+      map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr zero)) (* TODO: the zero is ugly, rank2 polymorphism would be nice here *)
   
   val return: forall 'a. 'a -> t 'a
   let return = State.return
@@ -93,7 +93,7 @@ val fresh_fname: string -> E.t Symbol.t
 let fresh_fname name = E.map (fun x -> x) (fun (x,ret,loop,y) -> ((x, Some (name ^ "_" ^ string_of_num x)), (x+1, ret, loop, y)))
 
 (* create a new Core function *)
-val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr unit -> E.t unit
+val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr zero -> E.t unit
 let add_function fname typ args body =
   fun (a,b,c,d) ->
     ((), (a, b, c, Pmap.add fname (typ, args, body) d))
@@ -1094,7 +1094,7 @@ C.seq [a_id] (C.create ty)
 (* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
-and translate_stmt file current_function (_, stmt) : E.t (C.expr unit) =
+and translate_stmt file current_function (_, stmt) : E.t (C.expr zero) =
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
   
@@ -1267,7 +1267,7 @@ and translate_block file current_function (_, stmt) : C.expr Symbol_state.t =
 
 
 (* Run the translator on different functions *)
-let translate_file (file: A.file _) : E.t (C.file unit) =
+let translate_file (file: A.file _) : E.t (C.file zero) =
   E.foldlM
     (fun (name, (args, body)) acc ->
        (* translate the body to Core *)
@@ -1282,7 +1282,7 @@ let translate_file (file: A.file _) : E.t (C.file unit) =
 
 
 (* This is the entry function (called from main.ml) *)
-let translate (file: A.file _) : C.file unit =
+let translate (file: A.file _) : C.file zero =
 let (cfile, (_, _, _, funs)) = (translate_file file) (Symbol.init, None, None, Pmap.empty) in
   <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
 

@@ -1,8 +1,5 @@
 open Global
 
-(* TODO: just for testing *)
-open Core_parser
-
 (* command-line options *)
 let files = ref []
 let add_file n = files := n :: !files
@@ -169,7 +166,7 @@ let () =
     in
     let frontend m =
       if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
-      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m; Boot.outOfHomeomorphism "Kayvan didn't get the types right!\n")
+      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m (*; Boot.outOfHomeomorphism "Kayvan didn't get the types right!\n" *))
                                                       else Exception.fail (Errors.UNSUPPORTED "The file extention is not supported") in
     let core_backend m =
       (m

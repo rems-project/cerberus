@@ -313,7 +313,7 @@ let rec simpl fun_map e =
 
 
 
-let simplify (f: file unit) : file unit =
+let simplify (f: file zero) : file zero =
   <|
       main= f.main;
       fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl f.fun_map fbody)) f.fun_map
