@@ -37,7 +37,57 @@ and paction = Core.polarity * action
 
 
 (* TODO *)
-let convert e = Core.Kskip
+let convert e fsyms =
+  let rec f ((count, syms) as st) = function
+    | Kskip                     -> Core.Kskip
+    | Kconst n                  -> Core.Kconst n
+    | Ksym a                    -> Core.Ksym (Pmap.find a syms) (* Error handling *)
+    | Kop (binop, e1, e2)       -> Core.Kop (binop, f st e1, f st e2)
+    | Ktrue                     -> Core.Ktrue
+    | Kfalse                    -> Core.Kfalse
+    | Knot e                    -> Core.Knot (f st e)
+    | Kctype ty                 -> Core.Kctype ty
+    | Klet (a, e1, e2)          -> Core.Klet (a, f st e1, f (count+1, Pmap.add a count syms) e2)
+    | Kif (e1, e2, e3)          -> Core.Kif (f st e1, f st e2, f st e3)
+    | Kcall (f, args)           -> Core.Kcall (Pmap.find f fsyms)
+    | Ksame (e1, e2)            -> Core.Ksame (f st e1, f st e2)
+    | Kundef                    -> Core.Kundef
+    | Kerror                    -> Core.Kerror
+    | Kaction pact              -> Core.Kaction (g pact)
+    | Kunseq es                 -> Core.Kunseq (List.map f es)
+    | Kwseq (_as, e1, e2)       -> failwith "TODO"
+    | Ksseq (_as, e1, e2)       -> failwith "TODO"
+    | Kaseq (_a_opt, act, pact) -> failwith "TODO"
+    | Kindet e                  -> Core.Kindet (f e)
+    | Kbound (i, e)             -> failwith "TODO"
+    | Ksave (k, e)              -> failwith "TODO"
+    | Krun k                    -> failwith "TODO"
+  and g (p, act) =
+    match act with
+      | Kcreate e_ty            -> failwith "TODO"
+      | Kalloc e_n              -> failwith "TODO"
+      | Kkill e_o               -> failwith "TODO"
+      | Kstore (e_ty, e_o, e_n) -> failwith "TODO"
+      | Kload (e_ty, e_o)       -> failwith "TODO"
+  in f (0, Pmap.empty) e
+
+
+let mk_file funs =
+  failwith "TODO"
+(*
+  let (main, _, fsyms, fun_map) =
+    List.fold_left (fun (main, count, fsyms, fun_map) (fname, fdef) ->
+      (* TODO: better error *)
+      if Pmap.mem fname fun_map then failwith ("duplicate definition of `" ^ fname ^ "'")
+      else
+        (if fname == "main" then Some count else main, count+1, Pmap.add fname count fsyms, Pmap.add count fdef fun_map)
+    ) (None, 0, Pmap.empty, Pmap.empty) funs
+  in
+  match main with
+    | Some a_main -> { main= a_main;
+                       fun_map= Pmap.map (fun (coreTy_ret, args, fbody) -> (coreTy_ret, args, convert fbody fsyms)) fun_map }
+    | None        -> (* TODO: better error *) failwith "found no main function"
+*)
 
 
 
@@ -95,14 +145,15 @@ let convert e = Core.Kskip
 
 
 %start start
-%type <(string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list> start
+%type <(unit Core.file> start
 
 %%
 
 
 start:
 | funs = nonempty_list(fun_declaration)
-    { funs }
+    { mk_file funs }
+
 
 core_base_type:
 | INTEGER
@@ -285,6 +336,6 @@ fun_argument:
 
 fun_declaration:
 | FUN fname = FNAME args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = expression END
-  { (fname, (coreTy_ret, args, convert fbody)) }
+  { (fname, (coreTy_ret, args, fbody)) }
 
 %%

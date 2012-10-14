@@ -1,6 +1,10 @@
 type map 'a 'b = Pmap.map 'a 'b
 type multiset 'a = Multiset.t 'a
 
+(* empty type *)
+type zero
+
+
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
 (* TODO: ask change in lem to be able to have
