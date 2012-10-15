@@ -1,5 +1,5 @@
 open Global
-
+  
 (* command-line options *)
 let files = ref []
 let add_file n = files := n :: !files
@@ -162,8 +162,8 @@ let () =
       m
       >|> Lexer.CoreLexer.make
       >|> Parser.CoreParser.parse
-      >|> pass_message "1-4. Parsing completed!"
-    in
+      >|> Exception.map snd
+      >|> pass_message "1-4. Parsing completed!" in
     let frontend m =
       if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
       else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m (*; Boot.outOfHomeomorphism "Kayvan didn't get the types right!\n" *))
