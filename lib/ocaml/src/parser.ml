@@ -20,7 +20,7 @@ end
 module CoreParserBase = struct
   exception Error = Core_parser.Error
   type token  = Core_parser.token
-  type result = (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list
+  type result = Global.zero Core.file (* (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list *)
 
   let init = Core_parser.start
 end

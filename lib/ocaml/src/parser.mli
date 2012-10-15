@@ -13,7 +13,7 @@ module CparserBase : (PARSER_BASE with type token  = Cparser.token
                                   and  type result = Cabs.g_defn_l list)
 
 module CoreParserBase : (PARSER_BASE with type token  = Core_parser.token
-                                     and  type result = (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list)
+                                     and  type result = Global.zero Core.file)
 
 
 module type PARSER = functor (L : Lexer.LEXER) ->

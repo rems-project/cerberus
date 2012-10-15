@@ -1,6 +1,51 @@
 {
 module P = Core_parser
+
+
+
+let keywords =
+  List.fold_left
+    (fun m (k, e) -> Pmap.add k e m)
+    (Pmap.empty Pervasives.compare)
+    [
+      ("skip",   P.SKIP  );
+      ("not",    P.NOT   );
+      ("true",   P.TRUE  );
+      ("false",  P.FALSE );
+      ("let",    P.LET   );
+      ("in",     P.IN    );
+      ("fun",    P.FUN   );
+      ("end",    P.END   );
+      ("create", P.CREATE);
+      ("alloc",  P.ALLOC );
+      ("kill",   P.KILL  );
+      ("store",  P.STORE );
+      ("load",   P.LOAD  );
+      ("same",   P.SAME  );
+      ("undef",  P.UNDEF );
+      ("error",  P.ERROR );
+      ("if",     P.IF    );
+      ("then",   P.THEN  );
+      ("else",   P.ELSE  );
+      (* TODO: hack *)
+      ("signed", P.SIGNED);
+      ("int",    P.INT   );
+    ]
+
+let scan_sym lexbuf =
+  let id = Lexing.lexeme lexbuf in
+  try
+    Pmap.find id keywords
+  (* default to variable name, as opposed to type *)
+  with Not_found ->
+    (* Check if the token is an enumeration constant *)
+      P.SYM id
+
 }
+
+
+let symbolic_name = ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
+
 
 rule main = parse
   (* skip spaces *)
@@ -10,27 +55,6 @@ rule main = parse
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
       { P.CONST (int_of_string integer) }
-  
-  (* symbolic names *)
-  | ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as s
-      { P.SYM s }
-  
-  (* symbolic names *)
-  | ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']* as f
-      { P.FNAME f }
-  
-  | "skip" { P.SKIP }
-  
-  | "not" { P.NOT }
-  
-  | "true" { P.TRUE }
-  | "false" { P.FALSE }
-  
-  | "let" { P.LET }
-  | "in" { P.IN }
-  
-  | "fun" { P.FUN }
-  | "end" { P.END }
   
   (* binary operators *)
   | '+'   { P.PLUS }
@@ -70,21 +94,9 @@ rule main = parse
   | ':'   { P.COLON }
   | ":="   { P.COLON_EQ }
   
-  | "create" { P.CREATE }
-  | "alloc" { P.ALLOC }
-  | "kill" { P.KILL }
-  | "store" { P.STORE }
-  | "load" { P.LOAD }
-
-  | "same" { P.SAME }
-
-  | "undef" { P.UNDEF }
-  | "error" { P.ERROR }
-
-  | "if" { P.IF }
-  | "then" { P.THEN }
-  | "else" { P.ELSE }
+  | symbolic_name { scan_sym lexbuf }
   
-  (* TODO: hack *)
-  | "signed" { P.SIGNED }
-  | "int" { P.INT }
+and endline = parse 
+  '\n' {Lexing.new_line lexbuf; main lexbuf}
+| eof  {P.EOF}
+| _    {endline lexbuf}
