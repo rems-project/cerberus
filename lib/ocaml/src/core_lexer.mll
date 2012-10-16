@@ -83,8 +83,8 @@ rule main = parse
   (* sequencing operators *)
   | "||"  { P.PIPE_PIPE }
   | ';'   { P.SEMICOLON }
-  | "|>"  { P.PIPE_GT }
   | ">>"  { P.GT_GT }
+  | "|>"  { P.PIPE_GT }
   
   (* pattern symbols *)
   | "()" { P.LPAREN_RPAREN }

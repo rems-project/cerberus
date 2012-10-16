@@ -53,22 +53,32 @@ let convert e arg_syms fsyms =
     | Ksame (e1, e2)            -> Core.Ksame (f st e1, f st e2)
     | Kundef                    -> Core.Kundef
     | Kerror                    -> Core.Kerror
-    | Kaction pact              -> Core.Kaction (g pact)
+    | Kaction pact              -> Core.Kaction (g st pact)
     | Kunseq es                 -> Core.Kunseq (List.map (f st) es)
-    | Kwseq (_as, e1, e2)       -> failwith "TODO"
-    | Ksseq (_as, e1, e2)       -> failwith "TODO"
-    | Kaseq (_a_opt, act, pact) -> failwith "TODO"
+    | Kwseq (_as, e1, e2)      -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+                                     match sym_opt with
+                                       | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
+                                       | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
+                                   
+                                   Core.Kwseq (_as', f st e1, f (count', syms') e2)
+    | Ksseq (_as, e1, e2)       -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+                                     match sym_opt with
+                                       | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
+                                       | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
+                                   
+                                   Core.Ksseq (_as', f st e1, f (count', syms') e2)
+    | Kaseq (_a_opt, act, pact) -> failwith "TODO: aseq"
     | Kindet e                  -> Core.Kindet (f st e)
-    | Kbound (i, e)             -> failwith "TODO"
-    | Ksave (k, e)              -> failwith "TODO"
-    | Krun k                    -> failwith "TODO"
-  and g (p, act) =
+    | Kbound (i, e)             -> failwith "TODO: bound"
+    | Ksave (k, e)              -> failwith "TODO: save"
+    | Krun k                    -> failwith "TODO: run"
+  and g st (p, act) =(p,
     match act with
-      | Kcreate e_ty            -> failwith "TODO"
-      | Kalloc e_n              -> failwith "TODO"
-      | Kkill e_o               -> failwith "TODO"
-      | Kstore (e_ty, e_o, e_n) -> failwith "TODO"
-      | Kload (e_ty, e_o)       -> failwith "TODO"
+      | Kcreate e_ty            -> (Pset.empty compare, Core.Kcreate (f st e_ty))
+      | Kalloc e_n              -> (Pset.empty compare, Core.Kalloc (f st e_n))
+      | Kkill e_o               -> (Pset.empty compare, Core.Kkill (f st e_o))
+      | Kstore (e_ty, e_o, e_n) -> (Pset.empty compare, Core.Kstore (f st e_ty, f st e_o, f st e_n))
+      | Kload (e_ty, e_o)       -> (Pset.empty compare, Core.Kload (f st e_ty, f st e_o)))
   in f (0, arg_syms) e
 
 
@@ -202,15 +212,15 @@ binary_operator:
 
 
 action:
-| CREATE ty = delimited(LBRACE, expression, RBRACE)
+| CREATE ty = delimited(LBRACE, expr, RBRACE)
     { Kcreate ty }
-| ALLOC n = expression
+| ALLOC n = expr
     { Kalloc n }
-| KILL e = expression
+| KILL e = expr
     { Kkill e }
-| STORE ty = delimited(LBRACE, expression, RBRACE) x = expression n = expression
+| STORE ty = delimited(LBRACE, expr, RBRACE) x = expr n = expr
     { Kstore (ty, x, n) }
-| LOAD ty = delimited(LBRACE, expression, RBRACE) x = expression
+| LOAD ty = delimited(LBRACE, expr, RBRACE) x = expr
     { Kload (ty, x) }
 ;
 
@@ -233,14 +243,45 @@ pattern:
 ;
 
 
-bexpression:
-| e = expression
-    { ([], e) }
-| _as = pattern LT_MINUS e = expression
-    { (_as, e) }
 
-expression:
-| LPAREN e = expression RPAREN
+unseq_expr:
+| es = separated_nonempty_list(PIPE_PIPE, seq_expr)
+    { Kunseq es }
+
+| p = paction
+    { Kaction p }
+
+| e = expr
+    { e }
+;
+
+
+seq_expr:
+| e1 = unseq_expr GT_GT e2 = seq_expr
+    { Kwseq ([], e1, e2) }
+
+| _as = pattern LT_MINUS e1 = unseq_expr GT_GT e2 = seq_expr
+    { Kwseq (_as, e1, e2) }
+
+| e1 = unseq_expr SEMICOLON e2 = seq_expr
+    { Ksseq ([], e1, e2) }
+
+| _as = pattern LT_MINUS e1 = unseq_expr SEMICOLON e2 = seq_expr
+    { Ksseq (_as, e1, e2) }
+
+| alpha = SYM LT_MINUS a = action PIPE_GT p = paction
+    { Kaseq (Some alpha, a, p) }
+
+| p = paction
+    { Kaction p }
+
+| e = expr
+    { e }
+;
+
+
+expr:
+| e = delimited(LPAREN, expr, RPAREN)
     { e }
 
 | SKIP
@@ -252,7 +293,7 @@ expression:
 | a = SYM
     { Ksym a }
 
-| e1 = expression op = binary_operator e2 = expression
+| e1 = expr op = binary_operator e2 = expr
     { Kop (op, e1, e2) }
 
 | TRUE
@@ -261,22 +302,22 @@ expression:
 | FALSE
     { Kfalse }
 
-| NOT e = expression
+| NOT e = expr
     { Knot e }
 
 | ty = type_name
     { Kctype ty }
 
-| LET a = SYM EQ e1 = expression IN e2 = expression
+| LET a = SYM EQ e1 = expr IN e2 = seq_expr (* TODO: may need to also allow unseq_expr *)
     { Klet (a, e1, e2) }
 
-| IF b = expression THEN e1 = expression ELSE e2 = expression
+| IF b = expr THEN e1 = expr ELSE e2 = expr (* TODO: may need to also allow unseq_expr *)
     { Kif (b, e1, e2) }
 
-| f = SYM es = delimited(LPAREN, separated_list(COMMA, expression), RPAREN)
+| f = SYM es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Kcall (f, es) }
 
-| SAME e1 = expression e2 = expression
+| SAME e1 = expr e2 = expr
     { Ksame (e1, e2) }
 
 | UNDEF
@@ -284,52 +325,9 @@ expression:
 | ERROR
     { Kerror }
 
-| p = paction
-    { Kaction p }
-
-| LPAREN es = separated_nonempty_list(PIPE_PIPE, expression) RPAREN (* TODO: maybe temporary --> to get an ambigious grammar *)
-    { Kunseq es }
-
-(*
-| e1 = expression GT_GT e2 = expression
-    { Kwseq ([], e1, e2) }
-
-| _as = pattern LT_MINUS e1 = expression GT_GT e2 = expression
-    { Kwseq (_as, e1, e2) }
-*)
-
-| _as_e1 = bexpression GT_GT e2 = expression
-    { let (_as, e1) = _as_e1 in Kwseq (_as, e1, e2) }
-
-(*
-| e1 = expression SEMICOLON e2 = expression
-    { Ksseq ([], e1, e2) }
-
-| _as = pattern GT_GT e1 = expression SEMICOLON e2 = expression
-    { Ksseq (_as, e1, e2) }
-*)
-
-| _as_e1 = bexpression SEMICOLON e2 = expression
-    { let (_as, e1) = _as_e1 in Ksseq (_as, e1, e2) }
-
-
-| a = action PIPE_GT p = paction
-    { Kaseq (None, a, p) }
-
-| alpha = SYM LT_MINUS a = action PIPE_GT p = paction
-    { Kaseq (Some alpha, a, p) }
-
-| e1 = expression SEMICOLON e2 = expression
-    { Ksseq ([], e1, e2) }
-
-| _as = pattern LT_MINUS e1 = expression SEMICOLON e2 = expression
-    { Ksseq (_as, e1, e2) }
-
-| e = delimited(LBRACKET, expression, RBRACKET)
+| e = delimited(LBRACKET, seq_expr, RBRACKET) (* TODO: may need to also allow unseq_expr *)
     { Kindet e } (* TODO: the index *)
 
-| e = delimited(LPAREN, expression, RPAREN)
-    { e }
 
 
 
@@ -338,9 +336,9 @@ fun_argument:
     { (x, ty) }
 
 fun_declaration:
-| FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = expression END
-  { print_endline fname; (fname, (coreTy_ret, [], fbody)) }
-| FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = expression END
+(* | FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END (* and unseq_expr ? *)
+  { print_endline fname; (fname, (coreTy_ret, [], fbody)) } *)
+| FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END
   { (fname, (coreTy_ret, args, fbody)) }
 
 %%
