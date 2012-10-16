@@ -251,7 +251,7 @@ pattern:
 
 
 
-unseq_expr:
+%inline unseq_expr:
 | es = separated_nonempty_nonsingleton_list(PIPE_PIPE, seq_expr)
     { Kunseq es }
 
