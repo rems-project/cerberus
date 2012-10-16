@@ -288,6 +288,33 @@ let rec check expected_type e =
                                 end >> check expected_type e2
                               end
           
+          | Ksseq [] e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                              match coreTy_e1 with
+                                | TyBase _           -> E.fail CORE_TYPECHECK_SEQ_PURE
+                                | TyEffect baseTy_e1 -> check expected_type e2
+                              end
+          | Ksseq _as e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                              match coreTy_e1 with
+                                | TyBase _           -> E.fail CORE_TYPECHECK_SEQ_PURE
+                                | TyEffect baseTy_e1 -> 
+                                match baseTy_e1 with
+                                  | tuple baseTys -> if List.length _as <> List.length baseTys
+                                                       then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) (List.length baseTys)
+                                                       else E.mapM_ (fun (a, ty) -> match a with
+                                                                                      | Some a -> E.put a ty
+                                                                                      | None   -> E.return ()
+                                                                                    end) (List.combine _as baseTys)
+                                  | _             -> if List.length _as <> 1
+                                                       then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) 1
+                                                       else let [a] = _as in
+                                                            match a with
+                                                              | Some a -> E.put a baseTy_e1
+                                                              | None   -> E.return ()
+                                                            end
+                                end >> check expected_type e2
+                              end
+
+
           | Kunseq es          -> E.fail (Errors.CORE_TYPECHECK "TODO(check unseq)")
           | Kindet e           -> E.fail (Errors.CORE_TYPECHECK "TODO(check indet)")
           
