@@ -163,6 +163,12 @@ let mk_file funs =
 
 %%
 
+separated_nonempty_nonsingleton_list(separator, X):
+  x1 = X separator x2 = X
+    { [ x1; x2 ] }
+| x = X; separator; xs = separated_nonempty_nonsingleton_list(separator, X)
+    { x :: xs }
+
 
 start:
 | funs = nonempty_list(fun_declaration) EOF
@@ -239,30 +245,27 @@ pattern_elem:
 
 pattern:
 | UNDERSCORE { [None] }
-| _as = delimited(LPAREN, separated_nonempty_list(COMMA, pattern_elem), RPAREN) { _as }
+| a = SYM       { [Some a] }
+| _as = delimited(LPAREN, separated_nonempty_nonsingleton_list(COMMA, pattern_elem), RPAREN) { _as }
 ;
 
 
 
 unseq_expr:
-| es = separated_nonempty_list(PIPE_PIPE, seq_expr)
+| es = separated_nonempty_nonsingleton_list(PIPE_PIPE, seq_expr)
     { Kunseq es }
 
 | p = paction
     { Kaction p }
 
-| e = expr
-    { e }
 ;
 
 
 seq_expr:
-| e1 = unseq_expr GT_GT e2 = seq_expr
-    { Kwseq ([], e1, e2) }
-
 | _as = pattern LT_MINUS e1 = unseq_expr GT_GT e2 = seq_expr
     { Kwseq (_as, e1, e2) }
-
+| e1 = unseq_expr GT_GT e2 = seq_expr
+    { Kwseq ([], e1, e2) }
 | e1 = unseq_expr SEMICOLON e2 = seq_expr
     { Ksseq ([], e1, e2) }
 
@@ -336,8 +339,8 @@ fun_argument:
     { (x, ty) }
 
 fun_declaration:
-(* | FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END (* and unseq_expr ? *)
-  { print_endline fname; (fname, (coreTy_ret, [], fbody)) } *)
+| FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END (* and unseq_expr ? *)
+  { print_endline fname; (fname, (coreTy_ret, [], fbody)) }
 | FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END
   { (fname, (coreTy_ret, args, fbody)) }
 
