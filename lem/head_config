@@ -1,0 +1,3 @@
+  ".*\\.lem"       -> frame open:"(*" line:"=" close:"*)"
+| ".*\\.thy"       -> frame open:"(*" line:"=" close:"*)"
+| ".*\\.sty"       -> frame open:"%" line:"=" close:"%"
