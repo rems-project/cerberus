@@ -79,7 +79,7 @@ let mk_file funs =
       if Pmap.mem fname fsyms then failwith ("duplicate definition of `" ^ fname ^ "'")
       else
         let a_fun = (count, Some fname) in
-        ((if fname = "main" then Some a_fun else main), count+1,
+        ((if fname == "main" then Some a_fun else main), count+1,
          Pmap.add fname a_fun fsyms,
          Pmap.add a_fun fdef fun_map)
     ) (None, 0, Pmap.empty compare, Pmap.empty compare) funs
@@ -273,7 +273,7 @@ expression:
 | IF b = expression THEN e1 = expression ELSE e2 = expression
     { Kif (b, e1, e2) }
 
-| f = SYM es = delimited(LPAREN, separated_list(COMMA, expression), RPAREN)
+| f = SYM es = delimited(LBRACE, separated_list(COMMA, expression), RBRACE)
     { Kcall (f, es) }
 
 | SAME e1 = expression e2 = expression
@@ -339,7 +339,7 @@ fun_argument:
 
 fun_declaration:
 | FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = expression END
-  { print_endline fname; (fname, (coreTy_ret, [], fbody)) }
+  { (fname, (coreTy_ret, [], fbody)) }
 | FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = expression END
   { (fname, (coreTy_ret, args, fbody)) }
 

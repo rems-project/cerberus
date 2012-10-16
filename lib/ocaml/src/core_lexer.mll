@@ -1,6 +1,4 @@
 {
-open Pervasives_
-
 module P = Core_parser
 
 
@@ -10,33 +8,28 @@ let keywords =
     (fun m (k, e) -> Pmap.add k e m)
     (Pmap.empty Pervasives.compare)
     [
-      ("integer", P.INTEGER);
-      ("boolean", P.BOOLEAN);
-      ("address", P.ADDRESS);
-      ("ctype",   P.CTYPE  );
-      ("unit",   P.UNIT    );
-      ("skip",   P.SKIP    );
-      ("not",    P.NOT     );
-      ("true",   P.TRUE    );
-      ("false",  P.FALSE   );
-      ("let",    P.LET     );
-      ("in",     P.IN      );
-      ("fun",    P.FUN     );
-      ("end",    P.END     );
-      ("create", P.CREATE  );
-      ("alloc",  P.ALLOC   );
-      ("kill",   P.KILL    );
-      ("store",  P.STORE   );
-      ("load",   P.LOAD    );
-      ("same",   P.SAME    );
-      ("undef",  P.UNDEF   );
-      ("error",  P.ERROR   );
-      ("if",     P.IF      );
-      ("then",   P.THEN    );
-      ("else",   P.ELSE    );
+      ("skip",   P.SKIP  );
+      ("not",    P.NOT   );
+      ("true",   P.TRUE  );
+      ("false",  P.FALSE );
+      ("let",    P.LET   );
+      ("in",     P.IN    );
+      ("fun",    P.FUN   );
+      ("end",    P.END   );
+      ("create", P.CREATE);
+      ("alloc",  P.ALLOC );
+      ("kill",   P.KILL  );
+      ("store",  P.STORE );
+      ("load",   P.LOAD  );
+      ("same",   P.SAME  );
+      ("undef",  P.UNDEF );
+      ("error",  P.ERROR );
+      ("if",     P.IF    );
+      ("then",   P.THEN  );
+      ("else",   P.ELSE  );
       (* TODO: hack *)
-      ("signed", P.SIGNED  );
-      ("int",    P.INT     );
+      ("signed", P.SIGNED);
+      ("int",    P.INT   );
     ]
 
 let scan_sym lexbuf =
@@ -102,11 +95,8 @@ rule main = parse
   | ":="   { P.COLON_EQ }
   
   | symbolic_name { scan_sym lexbuf }
-  | '\n' {Lexing.new_line lexbuf; main lexbuf}
-  | eof  {P.EOF}
-  | _
-    { raise_error ("Unexpected symbol \""
-                   ^ Lexing.lexeme lexbuf ^ "\" in "
-                   ^ Position.lines_to_string (Position.from_lexbuf lexbuf)
-                   ^ ".\n")
-    }
+  
+and endline = parse 
+  '\n' {Lexing.new_line lexbuf; main lexbuf}
+| eof  {P.EOF}
+| _    {endline lexbuf}
