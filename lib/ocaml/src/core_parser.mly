@@ -1,6 +1,5 @@
 %{
 
-
 type expr =
   | Kskip
   | Kconst of int
@@ -108,67 +107,56 @@ let mk_file funs =
 %}
 
 %token CREATE ALLOC KILL STORE LOAD
-
 %token <int> CONST
-  
 %token <string> SYM
-
 %token SKIP
-
 %token NOT
-
 %token TRUE FALSE
-
 %token LET IN
-
 %token FUN END
-
 %token PLUS MINUS STAR SLASH PERCENT
 %token EQ LT
 %token SLASH_BACKSLASH BACKSLASH_SLASH
-
 %token TILDE
-
 %token EXCLAM
-
 %token PIPE_PIPE SEMICOLON PIPE_GT GT_GT
-
-%token LPAREN_RPAREN UNDERSCORE
-  
+%token UNDERSCORE
 %token LT_MINUS
-
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET COMMA COLON COLON_EQ
-
 %token SAME
-
 %token UNDEF ERROR
-
 %token IF THEN ELSE
-
 %token INTEGER BOOLEAN ADDRESS CTYPE UNIT
 
 (* TODO: hack *)
 %token SIGNED INT
 
-
 %token EOF
 
-
-%right GT_GT SEMICOLON
-%nonassoc PIPE_PIPE
-
+%left SLASH_BACKSLASH BACKSLASH_SLASH
+%left ELSE
+%left NOT
+%left PLUS MINUS
+%left STAR SLASH PERCENT
+%left EQ LT
 
 %start start
 %type <Global.zero Core.file> start
 
 %%
 
-separated_nonempty_nonsingleton_list(separator, X):
+n_ary_operator(separator, X):
   x1 = X separator x2 = X
     { [ x1; x2 ] }
-| x = X; separator; xs = separated_nonempty_nonsingleton_list(separator, X)
+| x = X; separator; xs = n_ary_operator(separator, X)
     { x :: xs }
 
+delimited_nonempty_list(opening, separator, X, closing):
+  x = X
+   { [x] }
+| xs = delimited(opening, n_ary_operator(separator, X),
+  closing)
+   { xs }
 
 start:
 | funs = nonempty_list(fun_declaration) EOF
@@ -185,14 +173,17 @@ core_base_type:
     { Core.Ctype }
 | UNIT
     { Core.Unit }
-| baseTys = delimited (LPAREN, separated_nonempty_list(COMMA, core_base_type) , RPAREN)
+
+core_derived_type:
+| baseTy = core_base_type
+    { baseTy }
+| baseTys = n_ary_operator(STAR, core_base_type)
     { Core.Tuple baseTys }
 
-
 core_type:
-| baseTy = core_base_type
+| baseTy = core_derived_type
     { Core.TyBase baseTy }
-| baseTy = delimited(LBRACKET, core_base_type, RBRACKET)
+| baseTy = delimited(LBRACKET, core_derived_type, RBRACKET)
     { Core.TyEffect baseTy }
 
 (* TODO: find how to use the defs in cparser.mly *)
@@ -200,10 +191,7 @@ type_name:
 | SIGNED INT
     { Ail.BASIC (Pset.empty Pervasives.compare, (Ail.INTEGER (Ail.SIGNED Ail.INT))) }
 
-
-
-
-binary_operator:
+%inline binary_operator:
 | PLUS            { Core.OpAdd }
 | MINUS           { Core.OpSub }
 | STAR            { Core.OpMul }
@@ -214,9 +202,6 @@ binary_operator:
 | SLASH_BACKSLASH { Core.OpAnd }
 | BACKSLASH_SLASH { Core.OpOr  }
 
-
-
-
 action:
 | CREATE ty = delimited(LBRACE, expr, RBRACE)
     { Kcreate ty }
@@ -224,64 +209,63 @@ action:
     { Kalloc n }
 | KILL e = expr
     { Kkill e }
-| STORE ty = delimited(LBRACE, expr, RBRACE) x = expr n = expr
+| STORE ty = delimited(LBRACE, expr, RBRACE) LPAREN x = expr COMMA n = expr RPAREN
     { Kstore (ty, x, n) }
 | LOAD ty = delimited(LBRACE, expr, RBRACE) x = expr
     { Kload (ty, x) }
-;
 
 paction:
 | act = action
     { (Core.Pos, act) }
 | TILDE act = action
     { (Core.Neg, act) }
-;
 
 pattern_elem:
 | UNDERSCORE    { None   }
-| LPAREN_RPAREN { None   } (* TODO: add a new constructor in the Ast for better type/syntax checking *)
+| LPAREN RPAREN { None   } (* TODO: add a new constructor in the Ast for better type/syntax checking *)
 | a = SYM       { Some a }
-;
 
 pattern:
-| UNDERSCORE { [None] }
-| a = SYM       { [Some a] }
-| _as = delimited(LPAREN, separated_nonempty_nonsingleton_list(COMMA, pattern_elem), RPAREN) { _as }
-;
+| _as = delimited_nonempty_list(LPAREN, COMMA, pattern_elem, RPAREN) { _as }
 
-
-
-%inline unseq_expr:
-| es = separated_nonempty_nonsingleton_list(PIPE_PIPE, seq_expr)
+unseq_expr:
+| es = delimited(LPAREN, n_ary_operator(PIPE_PIPE, seq_expr), RPAREN)
     { Kunseq es }
 
-| p = paction
-    { Kaction p }
-
-;
-
-
-seq_expr:
-| _as = pattern LT_MINUS e1 = unseq_expr GT_GT e2 = seq_expr
-    { Kwseq (_as, e1, e2) }
-| e1 = unseq_expr GT_GT e2 = seq_expr
-    { Kwseq ([], e1, e2) }
-| e1 = unseq_expr SEMICOLON e2 = seq_expr
-    { Ksseq ([], e1, e2) }
-
-| _as = pattern LT_MINUS e1 = unseq_expr SEMICOLON e2 = seq_expr
-    { Ksseq (_as, e1, e2) }
-
-| alpha = SYM LT_MINUS a = action PIPE_GT p = paction
-    { Kaseq (Some alpha, a, p) }
-
-| p = paction
-    { Kaction p }
-
+basic_expr:
 | e = expr
     { e }
-;
+| p = paction
+    { Kaction p }
 
+extended_expr:
+| e = basic_expr
+    { e }
+| e = unseq_expr
+    { e }
+
+seq_expr:
+| e = basic_expr
+    { e }
+| _as = pattern LT_MINUS e1 = extended_expr SEMICOLON e2 = impure_expr
+    { Ksseq (_as, e1, e2) }
+| e1 = extended_expr SEMICOLON e2 = impure_expr
+    { Ksseq ([], e1, e2) }
+| _as = pattern LT_MINUS e1 = extended_expr GT_GT e2 = impure_expr
+    { Kwseq (_as, e1, e2) }
+| e1 = extended_expr GT_GT e2 = impure_expr
+    { Kwseq ([], e1, e2) }
+| _as = pattern LT_MINUS a = action PIPE_GT p = paction
+    { match _as with
+      | [alpha] -> Kaseq (alpha, a, p)
+      | _       -> assert false }
+    (* TODO Really, we just want to parse a "SYM" an not a "pattern". *)
+
+impure_expr:
+| e = seq_expr
+    { e }
+| e = unseq_expr
+    { e }
 
 expr:
 | e = delimited(LPAREN, expr, RPAREN)
@@ -311,7 +295,7 @@ expr:
 | ty = type_name
     { Kctype ty }
 
-| LET a = SYM EQ e1 = expr IN e2 = seq_expr (* TODO: may need to also allow unseq_expr *)
+| LET a = SYM EQ e1 = expr IN e2 = impure_expr END (* TODO: END is tasteless. *)
     { Klet (a, e1, e2) }
 
 | IF b = expr THEN e1 = expr ELSE e2 = expr (* TODO: may need to also allow unseq_expr *)
@@ -319,10 +303,10 @@ expr:
 
 | f = SYM es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Kcall (f, es) }
-
+(*
 | SAME e1 = expr e2 = expr
     { Ksame (e1, e2) }
-
+*)
 | UNDEF
     { Kundef }
 | ERROR
@@ -331,17 +315,12 @@ expr:
 | e = delimited(LBRACKET, seq_expr, RBRACKET) (* TODO: may need to also allow unseq_expr *)
     { Kindet e } (* TODO: the index *)
 
-
-
-
 fun_argument:
 | x = SYM COLON ty = core_base_type
     { (x, ty) }
 
 fun_declaration:
-| FUN fname = SYM LPAREN_RPAREN COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END (* and unseq_expr ? *)
-  { print_endline fname; (fname, (coreTy_ret, [], fbody)) }
-| FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = seq_expr END
+| FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = impure_expr
   { (fname, (coreTy_ret, args, fbody)) }
 
 %%
