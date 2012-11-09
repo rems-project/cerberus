@@ -87,7 +87,6 @@ rule main = parse
   | "|>"  { P.PIPE_GT }
   
   (* pattern symbols *)
-  | "()" { P.LPAREN_RPAREN }
   | "_"  { P.UNDERSCORE }
   
   | "<- " { P.LT_MINUS }

@@ -460,29 +460,29 @@ module Print = struct
       | Kaseq None act y     -> f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       | Kaseq (Some a) act y -> pp_symbol a ^^^ !^ "<-" ^^ f (Kaction (Pos, act)) ^^^ (!^ "|>") ^^^ f (Kaction y)
       
-      | Ksseq [] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq [] e1 e2  -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
       | Ksseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
-                                P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>"))
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi)
                                 ^^ P.break1 ^^ f e2
-      | Ksseq [None] e1 e2  -> f e1 ^^^ (!^ "<>") ^^ P.break1 ^^ f e2
+      | Ksseq [None] e1 e2  -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
       | Ksseq _as e1 e2 -> let g x = match x with
                                        | Some x -> pp_symbol x
                                        | None   -> P.underscore
                                      end
                            in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
-                               P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ "<>")) ^^ P.break1 ^^ f e2
+                               P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi) ^^ P.break1 ^^ f e2
 
-      | Kwseq [] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq [] e1 e2       -> f e1 ^^^ (!^ ">>") ^^ P.break1 ^^ f e2
       | Kwseq [Some a] e1 e2 -> pp_symbol a ^^^ !^ "<-" ^^
-                                P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi)
+                                P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ ">>"))
                                 ^^ P.break1 ^^ f e2
-      | Kwseq [None] e1 e2       -> f e1 ^^^ P.semi ^^ P.break1 ^^ f e2
+      | Kwseq [None] e1 e2       -> f e1 ^^^ (!^ ">>") ^^ P.break1 ^^ f e2
       | Kwseq _as e1 e2      -> let g x = match x with
                                             | Some x -> pp_symbol x
                                             | None   -> P.underscore
                                           end
                                 in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
-                                   P.nest 2 (P.break1 ^^ f e1 ^^^ P.semi) ^^ P.break1 ^^ f e2
+                                   P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ ">>")) ^^ P.break1 ^^ f e2
       | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
       | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
       | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
