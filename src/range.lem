@@ -1,0 +1,25 @@
+type t = <|min : num; max : num|>
+
+let in_range r v = r.min <= v && v <= r.max
+let max_of r = r.max
+let min_of r = r.min
+
+let zero = <|min = 0; max = 0|>
+let bool = <|min = 0; max = 1|>
+
+(* (§5.2.4.2.1) Sizes of integer types <limits.h> *)
+let char_bit = 8
+let schar  = <|min =                0-127; max =                  127|> (* signed char *)
+let uchar  = <|min =                    0; max =                  255|> (* unsigned char *)
+let shrt   = <|min =              0-32767; max =                32767|> (* short int *)
+let ushrt  = <|min =                    0; max =                65535|> (* unsigned short int *)
+let int    = <|min =              0-32767; max =                32767|> (* int *)
+let uint   = <|min =                    0; max =                65535|> (* unsigned int *)
+let long   = <|min =          0-214748364; max =            214748364|> (* long int *)
+let ulong  = <|min =                    0; max =           4294967295|> (* unsigned long int *)
+(* TODO *)
+let llong  = zero (*<|min = ~9223372036854775807; max =  9223372036854775807|>*) (* long long int *)
+let ullong = zero (*<|min =                    0; max = 18446744073709551615|>*) (* unsigned long long int *)
+
+
+

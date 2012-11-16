@@ -1,0 +1,30 @@
+The execution of simple core programs (no indet exprs) seems to be working but
+the buggy hack with core_simpl makes things hard to play with for anything
+interesting (e.g. arithmetic operations: for some reason it doesn't understand
+that the overflow function is pure ...)
+(I'm working on a parser for Core)
+
+----
+
+For entertainment, the following (impressive) C program works:
+
+int main(void) {
+  int x = 42, y = 1;
+  return 0;
+}
+
+assuming it is in the file a.c
+
+run csem using:
+
+$ csem --print-core --graph a.c
+
+This prints in the stdout the generated core program (the crappy original
+version and then the simplified one)
+
+then prints the traces of the 4 possible executions
+
+and generates a file "a.c.dot" with the sb orders corresponding to each trace
+(here they all have the same order)
+
+(to get a pdf: dot -Tpdf a.c.dot > a_sb.pdf)
