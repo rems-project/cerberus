@@ -4,8 +4,10 @@ exception InternalError of string
 
 open Pervasives_
 
-module P = Cparser
+module P = C_parser
 module H = Hashtbl
+
+type token = P.token
 
 (* used by [matchingpars] *)
 let matchingParsOpen = ref 0
@@ -14,12 +16,6 @@ let matchingParsOpen = ref 0
 let skip_lexeme lexbuf =
   let _ = Lexing.lexeme lexbuf in
   ()
-
-
-
-(* Enumeration constant hash table *)
-let enum_tbl = H.create 52
-
 
 (* 6.4 [Lexical elements]
     
@@ -103,9 +99,6 @@ let scan_ident lexbuf =
   (* default to variable name, as opposed to type *)
   with Not_found ->
     (* Check if the token is an enumeration constant *)
-    if H.mem enum_tbl id then
-      P.CONST_ENUM id
-    else
       P.IDENTIFIER id
 
 
@@ -374,15 +367,15 @@ let blank = [' ' '\t' '\012' '\r']+
 (* ================================ BEGIN CLEAN ============================= *)
 
 (* Entry point to the lexer *)
-rule initial = parse
+rule main = parse
   (* Beginning of a comment *)
-  | "/*" {let _ = comment lexbuf in initial lexbuf}
+  | "/*" {let _ = comment lexbuf in main lexbuf}
   
   (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; initial lexbuf}
+  | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; main lexbuf}
   
   (* Skip blanks *)
-  | blank {initial lexbuf}
+  | blank {main lexbuf}
   
   (* §6.4.4.1 Integer constants, Syntax *)
   | decimal_constant
@@ -460,8 +453,8 @@ rule initial = parse
 
 
 
-| '\n'                  {Lexing.new_line lexbuf; initial lexbuf}
-| '\\' '\r' * '\n'      {Lexing.new_line lexbuf; initial lexbuf}
+| '\n'                  {Lexing.new_line lexbuf; main lexbuf}
+| '\\' '\r' * '\n'      {Lexing.new_line lexbuf; main lexbuf}
 | '\''			{P.CONST_CHAR (chr lexbuf)}
 | "L'"			{P.CONST_WCHAR (chr lexbuf)}
 | '"'			{skip_lexeme lexbuf; (* '"' *)
@@ -502,7 +495,7 @@ rule initial = parse
 | "\"" {P.DQUOTE}
 (* __extension__ is a black. The parser runs into some conflicts if we let it
  * pass *)
-| "__extension__"         {initial lexbuf}
+| "__extension__"         {main lexbuf}
 | identifier		  {scan_ident lexbuf}
 | eof		          {P.EOF}
 | _
@@ -593,7 +586,7 @@ and matchingpars = parse
 
 (* # <line number> <file name> ... *)
 and hash = parse
-  '\n'		{Lexing.new_line lexbuf; initial lexbuf}
+  '\n'		{Lexing.new_line lexbuf; main lexbuf}
 | blank		{hash lexbuf}
 (*
 | intnum	{(* We are seeing a line number. This is the number for the 
@@ -613,7 +606,7 @@ and hash = parse
 | _	        {endline lexbuf}
 
 and file =  parse 
-| '\n'		        {Lexing.new_line lexbuf; initial lexbuf}
+| '\n'		        {Lexing.new_line lexbuf; main lexbuf}
 | blank			{file lexbuf}
 | '"' [^ '\012' '\t' '"']* '"' { (* '"' *)
                                        let n = Lexing.lexeme lexbuf in
@@ -625,7 +618,7 @@ and file =  parse
 *)
 
 and endline = parse 
-        '\n' 			{Lexing.new_line lexbuf; initial lexbuf}
+        '\n' 			{Lexing.new_line lexbuf; main lexbuf}
 | eof                         {P.EOF}
 | _			{endline lexbuf}
 

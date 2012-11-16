@@ -2,8 +2,7 @@
 open Pervasives_
 
 module P = Core_parser
-
-
+type token = P.token
 
 let keywords =
   List.fold_left

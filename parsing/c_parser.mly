@@ -2,9 +2,6 @@
 module C = Cabs
 module L = Location
 
-let print = print_string (* TODO: not used? *)
-let currentFunctionName = ref "<outside any function>" (* TODO: not used? *)
-
 type struct_union =
   | STRUCT_
   | UNION_
@@ -478,7 +475,7 @@ declaration:
       match l with
         | [] -> [] (* failwith "TODO: need to extract struct tag" *)
                 
-        | l  -> print_endline "BBB"; List.map make_def (List.rev l)}
+        | l  -> List.map make_def (List.rev l)}
 (* TODO We don't support static assertions.
 | static_assert_declaration
 *)
@@ -1017,8 +1014,7 @@ translation_unit:
 
 external_declaration:
 | d = function_definition {d}
-| d = declaration         {Printf.printf "CCC> lines %d - %d\n" $startpos.Lexing.pos_lnum $endpos.Lexing.pos_lnum;
-C.EXTERNAL_DECLARATION d, L.make $startpos $endpos}
+| d = declaration         {C.EXTERNAL_DECLARATION d, L.make $startpos $endpos}
 ;
 
 
@@ -1032,8 +1028,6 @@ function_definition:
       C.FUNCTION_DEFINITION (defn_l, $3), L.make $startpos $endpos
     }
 ;
-
-
 
 
 %%

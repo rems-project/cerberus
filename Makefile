@@ -131,6 +131,8 @@ ocaml: lem_ocaml
 	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
 # Copy in Lem's OCaml library.
 	cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
+	cp boot/* $(OCAML_BUILD_DIR)
+	cp parsing/* $(OCAML_BUILD_DIR)
 # Copy in our own OCaml libraries.
 	cp $(LEM_DIR)/ocaml-lib/*.ml $(LEM_DIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
 # Compare in module Transitive_reduction.
@@ -146,11 +148,7 @@ ocaml: lem_ocaml
 # Working around the value restriction.
 	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
-	sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cparser.mly
-## Open batteries to for List.take, List.drop, list.split_at.
-#	sed -i"" -e 's/List\.take/BatList.take/' $(OCAML_BUILD_DIR)/braun.ml
-#	sed -i"" -e 's/List\.drop/BatList.drop/' $(OCAML_BUILD_DIR)/braun.ml
-#	sed -i"" -e 's/List\.split_at/BatList.split_at/' $(OCAML_BUILD_DIR)/braun.ml
+	sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/c_parser.mly
 # Fixing up OCaml syntax.
 	sed -i"" -e 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
 	sed -i"" -e 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
