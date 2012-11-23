@@ -98,7 +98,7 @@ type cause =
   | CORE_TYPECHECK_LET_TUPLE
   | CORE_TYPECHECK_SEQ_PURE
   | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY of num * num
-  | CORE_TYPECHECK_UNSEQ_PURE
+  | CORE_TYPECHECK_UNSEQ_PURE of string
   | CORE_TYPECHECK_UNDECLARED_FUNCTION of sym
   | CORE_TYPECHECK_UNDECLARED_SYMBOL of sym
 
@@ -523,8 +523,8 @@ let to_string = function
        string_of_num patternArity ^ ", while the type of the first argument has arity = " ^
        string_of_num exprArity ^ "."
   
-  | CORE_TYPECHECK_UNSEQ_PURE ->
-      "[Core Typechecking] the operands of an unseq must all be effectful."
+  | CORE_TYPECHECK_UNSEQ_PURE e ->
+      "[Core Typechecking] the operands of an unseq must all be effectful.\n\n" ^ e
   
   | CORE_TYPECHECK_UNDECLARED_FUNCTION fname ->
       "[Core Typechecking] the function `" ^ (Symbol.to_string_pretty fname) ^ "' was not declared."

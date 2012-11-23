@@ -342,6 +342,8 @@ let core_stdlib : map sym (core_type * list (sym * core_base_type) * expr zero) 
     ]
 
 
+
+
 (* -- Pretty printing --------------------------------------------------------------------------- *)
 module Print = struct
   module P = Pprint
@@ -536,3 +538,7 @@ module Print = struct
     List.fold_left f P.empty (Ocaml.Pmap.bindings (Ocaml.Pmap.remove file.main file.fun_map)) ^^
     pp_expr None main_body ^^ P.break1
   end
+
+
+let string_of_expr e = Document.to_plain_string $ Print.pp_expr None e
+

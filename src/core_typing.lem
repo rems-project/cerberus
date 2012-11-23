@@ -79,6 +79,12 @@ module Effect = struct
   let sequence_ ms = List.fold_right (>>) ms (return ())
   val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM_ f _as = sequence_ (List.map f _as)
+  
+  val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+  let rec foldM f a = function
+    | []    -> return a
+    | x::xs -> f a x >>= fun fax -> foldM f fax xs
+  end
 end
 
 let ($) f x = f x
@@ -565,10 +571,24 @@ and infer e =
     ----------------------------------------------------------------------------------------------*)
     | Kunseq es ->
       E.mapM infer es >>= fun coreTys ->
+      
+      E.mapM (function TyBase _   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.string_of_expr e)
+	             | TyEffect b -> E.return b
+	      end)
+	      coreTys
+      >>= fun Tys -> E.return $ TyEffect (tuple Tys)
+
+
+(* (E.return $ TyEffect (tuple (List.map (function TyEffect b -> b end) coreTys))) *)
+
+(*      
       if List.exist (function TyBase _ -> true | _ -> false end) coreTys then
-        E.fail Errors.CORE_TYPECHECK_UNSEQ_PURE
+	(* TODO: hack *)
+	KKK
+        E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ )
       else
-        E.return $ TyEffect (tuple (List.map (function TyEffect b -> b end) coreTys))
+*)  
+      
 (*
       E.return $
         List.fold_left
