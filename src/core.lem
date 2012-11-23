@@ -91,12 +91,17 @@ type expr 'a =
   | Kaseq of option sym * action 'a * paction 'a
   
   (* indeterminately-sequenced expressions and boundary *)
+  (* TODO: this doesn't exists after the first stage of dynamics *)
   | Kindet of expr 'a (* TODO: add unique indices *)
   | Kbound of num * expr 'a
   
   (* Continuation operators *)
   | Ksave of cont * expr 'a
   | Krun of cont
+  
+  (* Non deterministic choice (resulting from indet expressions) *)
+  (* TODO: this only exists for the second stage of dynamics *)
+  | Knd of list (expr 'a)
   
   (* TODO: this should probably be added back to the syntax *)
 (* | Kshift of sym * expr 'a *)
@@ -484,8 +489,9 @@ module Print = struct
                                 in (P.parens (P.sepmap P.comma g _as)) ^^^ !^ "<-" ^^
                                    P.nest 2 (P.break1 ^^ f e1 ^^^ (!^ ">>")) ^^ P.break1 ^^ f e2
       | Kunseq []       -> !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
-      | Kunseq [_]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)"
-      | Kunseq es       ->  P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
+      | Kunseq [e]      -> !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ f e ^^ (pp_control "]-]-]")
+
+      | Kunseq es       -> P.sepmap (P.space ^^ (pp_control "||") ^^ P.space) f es
       | Kindet e        -> P.brackets (f e)
       | Kaction (p, (bs, a)) ->
           (* TODO: we need typeclasses to be able to print annotations *)

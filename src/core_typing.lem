@@ -132,7 +132,7 @@ let core_type_eq coreTy1 coreTy2 =
 
 
 let rec check expected_type e =
-  let guard_expected ty = E.guard (expected_type = ty) (CORE_TYPECHECK_INCORRECT_EXPECTED ty expected_type) in
+  let guard_expected ty = E.guard (expected_type = ty) (CORE_TYPECHECK_INCORRECT_EXPECTED ty expected_type (Document.to_plain_string $ Core.Print.pp_expr None e)) in
   match expected_type with
     | TyBase wildcard -> E.return () (* TODO: remove wildcard *)
     | _               ->

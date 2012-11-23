@@ -5,6 +5,15 @@ type multiset 'a = Multiset.t 'a
 type zero
 
 
+let rec numerote_ n l =
+  match l with
+    | []    -> []
+    | x::xs -> (n,x) :: numerote_ (n+1) xs
+  end
+let numerote l = numerote_ 1 l
+
+
+
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
 (* TODO: ask change in lem to be able to have
@@ -42,3 +51,24 @@ let rec delete eq x = function
 end
 
 let list_diff eq = List.fold_left (fun x y -> delete eq y x)
+
+
+val zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
+let rec zip3 xs ys zs =
+  match (xs, ys, zs) with
+    | (x::xs, y::ys, z::zs) -> (x,y,z) :: zip3 xs ys zs
+    | _                     -> []
+  end
+
+val unzip: forall 'a 'b. list ('a * 'b) -> (list 'a * list 'b)
+let unzip xys = List.fold_right (fun (x,y) (xs,ys) -> (x :: xs, y :: ys)) xys ([],[])
+
+val unzip3: forall 'a 'b 'c. list ('a * 'b * 'c) -> (list 'a * list 'b * list 'c)
+let unzip3 xyzs = List.fold_right (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) xyzs ([],[],[])
+
+
+
+let rec all p = function
+  | []    -> true
+  | x::xs -> p x  && all p xs
+end
