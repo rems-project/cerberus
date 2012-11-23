@@ -808,6 +808,78 @@ and translate_exp file exp =
     | A.CALL e es ->
       match is_function_id file e with
       | Some (fid, ids, s) ->
+  	  match fst $ Pmap.find fid file.A.id_map with
+	    | A.FUNCTION retTy Tys -> (* creates temporary symbolic names for each function
+					 parameter and initialise them with the translated
+					 arguments *)
+				      E.mapM (fun (id, ty, e) ->
+					        fresh_symbol         >>= fun a      ->
+					        translate_exp file e >>= fun core_e ->
+					        fresh_symbol         >>= fun a_tmp  ->
+					        E.return
+                                                  (
+						    a,
+                                                    C.Kwseq [Some a] (C.pcreate $ C.Kctype ty)
+						      (C.Kwseq [Some a_tmp] core_e
+							 (C.pstore (C.Kctype ty) (C.Ksym a) (C.Ksym a_tmp))
+						      ),
+                                                    C.pkill $ C.Ksym a
+                                                  ))
+					     (zip3 ids Tys es) >>= fun params ->
+                                      
+                                      let (_as, creates_inits, _kills) = unzip3 params in
+                                      
+                                      (* Unsequence the [create]s *)
+                                      let creates_ctx = fun ctx -> C.Kwseq [] (match creates_inits with
+					                                         | [] -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+
+										 | [x] -> x
+										 | _ -> C.Kunseq creates_inits
+									       end) ctx in
+
+(*
+(*							                   (match _creates with
+									     | []  -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+									     | [x] -> x
+									     | _   -> C.Kunseq _creates
+									    end) 
+*) (C.Kunseq _creates) (* C.DEBUG "WTF?" *) ctx in *)
+                                      
+				      
+				      
+				      
+				      let kills = (match _kills with
+					             | [] -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+						     | [x] -> x
+						     | _ -> C.Kunseq _kills
+						   end) in
+
+(* 				      let _ = Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None kills) in *)
+				      
+				      fresh_symbol >>= fun a_ret ->
+				      E.return $ creates_ctx (C.Kwseq [Some a_ret] (C.Kindet $ C.Kcall fid (List.map (fun x -> C.Ksym x) _as))
+								(C.Kwseq [] kills (C.Ksym a_ret))
+				                             )
+				      
+				      
+(*	                              
+				      (* translate the function arguments *)
+	                              E.mapM (fun e -> translate_exp file e) es >>= fun core_es ->
+	                              
+	                              (* initialise the symbolic names with these translated arguments *)
+	                              E.mapM (fun ((a, _, _, _, ty), core_e) -> E.return $ C.pstore (C.Kctype ty) (C.Ksym a) core_e)
+					     (List.combine params core_es) >>= fun core_inits ->
+	                              
+*)
+	                              
+
+
+	    | _ -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
+	  end
+
+	  
+(*          E.return (C.Kindet (C.COMMENT "TODO: function call" C.Kerror)) *)
+
 (*
       (* add the block local variables to the environment (fresh symbolic names are assigned) *)
       update_env env ids >>= fun env' ->
@@ -885,7 +957,10 @@ C.seq [a_id] (C.create ty)
             E.return (a, m_create -&> m_body -&> m_kill)
         *)
 *)
-        E.return (C.Kindet (C.COMMENT "TODO: function call" C.Kerror))
+
+
+
+
       | None ->
         (* TODO: looks like we need a "null" constant of type address in Core *)
         E.return (C.DEBUG "A.CALL e es <function pointer>")
@@ -1112,8 +1187,8 @@ and translate_stmt file current_function (_, stmt) : E.t (C.expr zero) =
       update_env env ids >>= fun env' ->
 *)
       (* retrieve the declarations of these variables *)
-      let decls = [(id, lookup_type id)| forall (id MEM ids) | true] in
-      let n     = List.length decls                                  in
+      let decls = [(id, lookup_type id) | forall (id MEM ids) | true] in
+      let n     = List.length decls                                   in
       
       (* prepare the code creating the objects for the block local variables. *)
       let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (Some a, C.pcreate (C.Kctype ty))) (List.rev decls) in
@@ -1273,7 +1348,7 @@ let translate_file (file: A.file _) : E.t (C.file zero) =
        (* translate the body to Core *)
        translate_stmt file name body >>= fun core_body ->
        E.return $ Pmap.add name (C.TyBase C.integer (* TODO: address for pointer type? *),
-                                 List.map (fun arg -> (arg,C.address (* TODO: check *))) args,
+                                 List.map (fun arg -> (arg, C.address (* TODO: check *))) args,
                                  core_body) acc)
     (Pmap.bindings file.A.fn_map)
     C.core_stdlib (* Pmap.empty *)

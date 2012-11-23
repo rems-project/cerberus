@@ -82,10 +82,6 @@ let catch m =
   | None   -> ()
 
 
-let rec numerote_ n = function
-  | []    -> []
-  | x::xs -> (n,x) :: numerote_ (n+1) xs
-let numerote = numerote_ 1
 
 
 
@@ -177,11 +173,27 @@ let () =
           >|> pass_message "5. Core's typechecking completed!"
         )
         (pass_message "5. Skipping Core's typechecking completed!")
-      >|> pass_message "6. Now running:"
-      >|> Exception.rbind Core_run.run
-      >|> pass_through_test !core_graph pp_sb
-      >|> pass_through pp_traces
+      >|> pass_message "6. Enumerating indet orders:"
+      >|> Exception.rbind Core_indet.order
+      >|> pass_message "7. Now running:"
+      >|> Exception.rbind
+          (Exception.map_list
+             (fun (n,f) -> Core_run.run f
+                           >|> pass_message ("SB order #" ^ string_of_int n)
+                           >|> pass_through_test !core_graph pp_sb
+                           >|> pass_through pp_traces))
       >|> return_unit in
+
+(*
+
+
+forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+          (fun m -> m
+            >|> Exception.rbind Core_run.run
+            >|> pass_through_test !core_graph pp_sb
+            >|> pass_through pp_traces
+            >|> return_unit) in
+*)
 (*
     let orig_backend m =
       Exception.map (Reduction.reduce !bound) m

@@ -44,15 +44,22 @@ open Operators
 let map2 f mx my    = app (map f mx) my
 let map3 f mx my mz = app (map2 f mx my) mz
 
+val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
 let sequence ms =
   List.fold_right
-    (fun m m' ->
-      m  >>= fun x  ->
-      m' >>= fun xs ->
+    (fun m ms' ->
+      m   >>= fun x  ->
+      ms' >>= fun xs ->
       return (x::xs)
     ) ms (return [])
+
+val t_list: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
 let t_list t xs = sequence (t xs)
+
+val map_list: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
 let map_list f = t_list (List.map f)
+
+
 
 let sequence_map mmap =
   Ocaml.Pmap.fold (fun k m mm->

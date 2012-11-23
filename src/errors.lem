@@ -87,7 +87,7 @@ type cause =
   | UNSUPPORTED of string
   
 
-  | CORE_TYPECHECK_INCORRECT_EXPECTED of core_type * core_type
+  | CORE_TYPECHECK_INCORRECT_EXPECTED of core_type * core_type * string
   | CORE_TYPECHECK_IF_BRANCHES
 
 
@@ -494,9 +494,9 @@ let to_string = function
 
   
   (* Core typechecking *)
-  | CORE_TYPECHECK_INCORRECT_EXPECTED foundTy expectedTy ->
+  | CORE_TYPECHECK_INCORRECT_EXPECTED foundTy expectedTy e ->
       "[Core Typechecking] found type `" ^ (Document.to_plain_string $ Core.Print.pp_core_type foundTy) ^ "', while expecting `" ^
-       (Document.to_plain_string $ Core.Print.pp_core_type expectedTy) ^ "'."
+       (Document.to_plain_string $ Core.Print.pp_core_type expectedTy) ^ "'.\n\n" ^ e
   | CORE_TYPECHECK_IF_BRANCHES ->
       "[Core Typechecking] the two branches of a [if] must have the same type."
   
