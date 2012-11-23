@@ -333,8 +333,7 @@ module Print = struct
 Printf.printf "> %d\n" (List.length decls);
                                             P.fold ins_space (List.map pp_definition decls)
                                               
-  let pp_file (filename, defs) =
+  let pp_file defs =
     let pp d def = d ^^ pp_global_definition def ^^ P.break1 in
     List.fold_left pp P.empty defs
 end
-

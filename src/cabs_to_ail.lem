@@ -626,8 +626,7 @@ let desugar_program startup global_defns =
   E.option (Errors.OTHER msg) (E.resolve "main") >>= fun main ->
   E.to_program main
 
-
-let desugar startup (name, global_defns) =
+let desugar startup global_defns =
   E.init (desugar_program startup global_defns)
 (*
   | E_Undefined -> A.Undefined

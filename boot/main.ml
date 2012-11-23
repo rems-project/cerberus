@@ -139,9 +139,8 @@ let () =
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
                                                                     "\n\nValue: " ^ string_of_int v) $ numerote ts in
     let c_frontend m =
-      m
-      >|> Lexer.Clexer.make
-      >|> Parser.Cparser.parse
+      let module P = Parser.Make (C_parser_base) (Lexer.Make (C_lexer)) in
+      P.parse m
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs pp_cabs
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
@@ -155,10 +154,8 @@ let () =
 (*      >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
       >|> Exception.map (Core_simpl.simplify) *) in
     let core_frontend m =
-      m
-      >|> Lexer.CoreLexer.make
-      >|> Parser.CoreParser.parse
-      >|> Exception.map snd
+      let module P = Parser.Make (Core_parser_base) (Lexer.Make (Core_lexer)) in
+      P.parse m
       >|> pass_message "1-4. Parsing completed!" in
     let frontend m =
       if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
