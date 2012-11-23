@@ -1,0 +1,149 @@
+
+Scott and Kathy augment the previous source documentation attempt
+
+top-level directory structure:
+
+doc/       papers about Lem
+head*      file header automation 
+lem.ott    the definition of the source language (type system not up to date?)
+            (the Lem impl uses the OCaml AST generated from this)
+library/   the Lem standard library - all .lem code, including Lem
+             descriptions of stuff available in the backends, but no
+             backend code (that's in ocaml-lib/ and tex-lib/)
+Makefile   including targets for packaging a distro etc.
+manual/    the Lem user reference manual (pretty sketchy)
+notes/     various notes files
+ocaml-lib/ OCaml implementations of bits of the Lem standard library
+tex-lib/   lem.sty
+tests/     the test suites and plumbing for them
+src/       .ml and .mli files
+
+
+
+The processing of a bunch of .lem files goes like this:
+
+0) top-level driver, in main.ml and process_file.ml
+
+1) initial_env.ml, pulls in the library subdirectory and constructs an
+    initial environment 
+
+2) lexing and parsing of the .lem source, by lexer.mll and parser.mly,
+    which gives an untyped-AST value (a value of type Ast.defs, where
+    ast.ml is the Ott-generated AST).
+
+3) typechecking, by typecheck.ml (the main file) and types.ml (a major
+    helper), which gives a typed-AST value (a value of type
+    Typed_ast.defs, where typed_ast.ml is hand-written).
+
+4) running the backends. The target_trans.ml file is the driver of the
+    typed-ast-to-typed-ast translation process.   It does the
+    following for each backend:
+     
+    First it does something at the definition level (eg in HOL it
+    translates away value definitions; in OCaml it erases any inductive
+    relation definitions). These macros live in def_trans.ml and the
+    macro expander is in def_trans.ml.
+ 
+    Then it does a macro expansion pass on the expressions (eg in HOL
+    it translates away list comprehensions; in OCaml it translates
+    away all comprehensions).  It also inlines let-inline definitions.
+    All these macros live in trans.ml and the macro-expander code lives
+    in macro_expander.ml.
+
+    Then it does some extra processing that doesn't fit into the
+    macro-expansion setup, eg renaming to mess with the name
+    capitalisation.  (The macro expander tries to check that the
+    result of applying macros are typed; this doesn't).
+
+    (there's some model of how the backends understand lexing and
+    parsing, to add enough parens and deal with infix etc., but at
+    present we *don't* have a good model of the backend-specific
+    lexical structure, eg identifier capitalisation and binding
+    structure).
+
+5) Generate actual backend code, in backend.ml, using output.ml (which
+   puts in spaces whenever the target would have lexed things too
+   glommed up)
+
+
+Here are all the .ml source files and what they do, except where
+described above:
+
+ast.ml                  
+ast_util.ml             util over untyped AST (for comprehensions)
+backend.ml               
+def_trans.ml            
+finite_map.ml           finite map library
+ident.ml                source-file long identifiers
+initial_env.ml          
+isa_keywords.ml         list (rather short...) of Isabelle keywords
+macro_expander.ml       
+main.ml                 
+name.ml                 source-file and internal short identifiers
+output.ml               
+path.ml                 internal canonical long identifiers
+pp.ml                   pretty printing utilities
+precedence.ml           the precedence model for the backends
+process_file.ml         
+rename_top_level.ml     renaming and module flattening for some targets
+seplist.ml              general thing of lists with optional separators
+target_binding.ml       try to fix problems from target's different binding
+target_syntax.ml        try to fix problems from target's different precedence
+target_trans.ml         
+trans.ml                
+typecheck.ml            
+typed_ast.ml            
+types.ml                
+tyvar.ml                type of internal(?) type variables
+util.ml                 minor utilities 
+version.ml              auto-generated version number
+
+ulib/                   a library of lightweight unicode stuff
+
+Within the library directory,
+pervasives.lem 			Inline definitions for the targets of common operations, following OCaml's pervasives library
+pmap.lem					Inline definitions for the targets of finite maps, should be renamed. Finite maps should probably get concrete syntax anyway
+set.lem					Same except for sets
+int.lem					Same except for ints
+list.lem					Same except for lists
+hol/						Contain the type signatures for their libraries
+isabelle/ 				..
+ocaml/					..
+
+References to items in the standard library are hard-coded in implementation files in src
+An additional file lib_cache will be generated on running lem that caches the library for significantly improved performance. No attempt at regenerating this file is made.
+
+*****************
+
+Current status:
+
+- the code builds and we should be able to use the current version
+  (8334) for ppc-abstract-machine.  And for the C semantics, modulo
+  their patch to the ghastly equality hack.
+
+- the code has TODO where something really needs to be done, and Scott
+  has been maintaining those fairly carefully
+
+- lexing, parsing, typechecking mostly good (modulo a few TODOs)
+
+- the Ott version of the type system is slightly out of date (Scott
+  will have to fix to bring it into sync with the typechecking code)
+
+- the target binding model stuff is not robust and needs to be redone
+
+- the type system knows about type classes (modulo one TODO for
+  recursion) but the dictionary-passing transformation isn't
+  implemented yet  (if you're using equality at a statically
+  non-polymorphic type, you don't need that, and it should work).
+  But we've not switched over; we're still actually using the ghastly
+  hack (in ppc-abstract-machine and csem).
+
+  We could and should try to switch over quite soon.  Scott can try
+  comparing the generated OCaml for ppc-abstract-machine...
+
+- we're not sure what the status of the Isabelle backend was when PB
+  stopped working on it.  Somewhat there but not robust, we guess.
+
+- we're not sure what the status of the Coq backend is - there are
+  sundry Francesco+Scott notes about it
+

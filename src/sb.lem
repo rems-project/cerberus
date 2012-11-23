@@ -1,0 +1,73 @@
+open Global
+
+
+(* Temporary hack *)
+type sb' = <|
+  actions': Pmap.map num Core_run.trace_action;
+  edges': Pmap.map num (list num)
+|>
+
+type sb = <|
+  actions: Pmap.map num Core_run.trace_action;
+  edges: list (num * num)
+|>
+
+
+
+(* NOTE: will crash on ill-formed traces *)
+(* TODO: I don't like it *)
+val extract: Core_run.Effect.trace -> sb'
+let extract l =
+  let (sb, _, _) =
+  List.fold_left (fun (_sb, i, is) (r, bs, (_, a)) ->
+    (<| _sb with actions'= Pmap.add i a _sb.actions';
+                 edges'=   List.fold_left (fun es b ->
+                             let ib = Pmap.find b is in
+                             Pmap.add ib (i :: (if Pmap.mem ib es then Pmap.find ib es else [])) es
+                           ) _sb.edges' (Set.to_list bs)
+      |>, i+1, Pmap.add a i is)
+                 )
+                 (<| actions'= Pmap.empty; edges'= Pmap.empty |>, 0, Pmap.empty)
+                 l
+  in sb
+
+
+(* TODO: this should be in the stdlib *)
+val     assocs: forall 'a 'b. 'a -> list ('a * 'b) -> list 'b
+let rec assocs z l =
+  match l with
+    | []           -> []
+    | (x,y) :: xys -> if x = z then y :: assocs z xys else assocs z xys
+  end
+
+val     exists_path: num -> num -> list (num * num) -> bool
+let rec exists_path a b es =
+  List.exist (fun b' -> b = b' || exists_path b' b es) (assocs a es)
+
+
+(* remove the edges implied by transitivity *)
+val simplify: sb' -> sb
+let simplify sb =
+  let edges' = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings sb.edges') in
+  <| actions= sb.actions'; edges= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) edges')) edges' |>
+
+
+(* TODO: using Pprint because lem doesn't seem to support escape sequence in
+         string *)
+module Print = struct
+  module P = Pprint
+  open P.Operators
+  
+  let pp n sb =
+    !^ ("digraph G" ^ string_of_num n) ^^ P.braces
+    (P.sepmap (P.semi ^^ P.break1) (fun (i, a) ->
+      !^ (string_of_num i) ^^^ P.brackets (!^ "label=" ^^^ (P.dquotes $ Core_run.Print.pp_trace_action a)))
+      (Pmap.bindings sb.actions) ^^ P.break1 ^^
+    
+    P.sepmap (P.semi ^^ P.break1) (fun (i, i') ->
+      !^ (string_of_num i) ^^^ !^ "->" ^^^ !^ (string_of_num i'))
+      sb.edges)
+
+
+
+end

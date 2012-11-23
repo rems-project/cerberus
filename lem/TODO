@@ -1,0 +1,57 @@
+Lem:
+  A few type errors currently uncaught
+  Dictionary passing
+  OR patterns
+  Type homs
+  Match exhaustiveness checking
+  Improve type mismatch errors
+  Finish restricted quantifications with pattern bindings
+  Force prover dependencies to follow the LEM order of processing
+  Check that I'm doing the right thing for infix status identifiers in patterns
+  Deeper parsing of comments (including "special Tex comment" distinction)
+  Forbid duplicate top-level module names
+  
+
+Tex:
+  Add "following comments" to top-level definitions (and each function in a 
+    mutually recursive definition)
+  Delay Tex output until after the entire development is type checked
+
+Ocaml:
+  Value restriction
+  Name clashes when capitalizing/uncapitalizing
+  HOL-style recursive definitions
+  Parsing { field_name1 = fun x -> x; field_name2 = 1 }
+
+HOL and Isabelle:
+  Patterns in lets
+  As patterns
+  Record patterns
+  Library constants used in definition patterns (e.g., K)
+  Module system
+  Separate type abbreviation definitions from variants and records
+  Various semantic restrictions (on, e.g., type definitions and type variable
+       occurrences)
+  Make variables avoid user defined constants
+  Add full path to a constant when it is not referencing the current theory,
+       and the constant is defined in multiple theories
+
+HOL:
+  What happens if a HOL infix is used as a field name or type name etc.?
+  Idents with $ in them
+  Type parameter ordering
+  "Abbreviation can't be to a type variable"
+  Polymorphic datatypes
+  Parsing (fun x -> x, y)
+  Parsing (case x of a -> forall x. P x | b -> Q b)
+  Parsing (a = b ==> P a b) in Hol_relns
+
+Isabelle:
+  Record type definition in a datatype
+  Quoting outer syntax names when they conflict with outer syntax keywords
+  Use (op +) instead of (+)
+
+Testing:
+  Write definition and precedence tests
+  Write type mismatch tests
+
