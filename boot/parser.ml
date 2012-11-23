@@ -1,64 +1,38 @@
 open Pervasives_
 open Exception.Operators
 
-module type PARSER_BASE = sig
+module type BASE = sig
   exception Error
   type token
   type result
 
-  val init : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> result
+  val start : (Lexing.lexbuf -> token) -> Lexing.lexbuf -> result
 end
 
-module CparserBase = struct
-  exception Error = Cparser.Error
-  type result = Cabs.g_defn_l list
-  type token = Cparser.token
-
-  let init = Cparser.start
-end
-
-module CoreParserBase = struct
-  exception Error = Core_parser.Error
-  type token  = Core_parser.token
-  type result = Global.zero Core.file (* (string * (Core.core_type * (string * Core.core_base_type) list * unit Core.expr)) list *)
-
-  let init = Core_parser.start
-end
-
-
-module type PARSER = functor (L : Lexer.LEXER) ->
+module type PARSER =
 sig
   type result
-  val parse : L.t -> (result, Errors.cause) Exception.t
+  val parse : Input.t -> (result, Errors.cause) Exception.t
 end
 
+module type MAKE =
+  functor (B : BASE) ->
+  functor (L : Lexer.LEXER with type token = B.token) ->
+    PARSER with type result = B.result
 
-module type MAKE_PARSER =
-  functor (P : PARSER_BASE) ->
-  functor (L : Lexer.LEXER with type token = P.token) ->
-  sig
-    type result = string * P.result
-    val parse : L.t -> (result, Errors.cause) Exception.t
-  end
-
-module MakeParser
-  (P : PARSER_BASE)
-  (L : Lexer.LEXER with type token = P.token) =
+module Make
+  (B : BASE)
+  (L : Lexer.LEXER with type token = B.token) =
 struct
-  type result = string * P.result
+  type result = B.result
 
-  let parse_exn name lexbuf =
+  let parse_exn lexbuf =
     try
-      let result = P.init L.init lexbuf in
-      Exception.return (name, result)
-    with P.Error ->
+      let result = B.start L.main lexbuf in
+      Exception.return result
+    with B.Error ->
       let token = Lexing.lexeme lexbuf in
       Exception.throw (Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
-  let parse lexer =
-    let name = L.name lexer in
-    L.lexbuf (parse_exn name) lexer
+  let parse input = L.lexbuf parse_exn (L.make input)
 end
-
-module Cparser = MakeParser (CparserBase) (Lexer.Clexer)
-module CoreParser = MakeParser (CoreParserBase) (Lexer.CoreLexer)
