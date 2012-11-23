@@ -152,8 +152,8 @@ let () =
       >|> Exception.map Translation.translate (* TODO: map is bad *)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core pp_core
-      >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
-      >|> Exception.map (Core_simpl.simplify) in
+(*      >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
+      >|> Exception.map (Core_simpl.simplify) *) in
     let core_frontend m =
       m
       >|> Lexer.CoreLexer.make
