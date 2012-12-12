@@ -1,0 +1,18 @@
+  | \/ :: :: Disj
+      {{ tex \vee }}
+  | /\ :: :: Conj
+      {{ tex \wedge }}
+  | --> :: :: Impl
+      {{tex \implies }}
+  | <= :: :: Leq
+      {{ tex \leqslant }}
+  | forall :: :: Forall
+      {{ tex \forall }}
+  | in :: :: In
+      {{ tex \in }}
+  | |- :: :: Turnstile
+      {{ tex \vdash }}
+  | |= :: :: Entails
+      {{ tex \vDash }}
+  | sub :: :: Subset
+      {{ tex \subset }}

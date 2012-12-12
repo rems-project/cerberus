@@ -1,5 +1,5 @@
 defns
-Jwf :: '' ::=
+JwfLvalue :: '' ::=
 
 defn
 wfLvalue qualifiers type :: :: wfLvalueType :: WfLvalueType by
@@ -52,43 +52,46 @@ wf basicType
 ------- :: Void
 wf void
 
+defns
+JwfE :: '' ::=
+
 defn
 G ; S |- wf e :: :: wfE :: WfE by
 
-G; S |- wf e_l
+G; S |- wf e
 ------------------------------ :: Unary
-G; S |- wf (unaryOperator e_l)
+G; S |- wf (unaryOperator e)
 
-G; S |- wf e_l1
-G; S |- wf e_l2
+G; S |- wf e1
+G; S |- wf e2
 ------------------------------------- :: Binary
-G; S |- wf (e_l1 binaryOperator e_l2)
+G; S |- wf (e1 binaryOperator e2)
 
-G; S |- wf e_l1
-G; S |- wf e_l2
+G; S |- wf e1
+G; S |- wf e2
 ------------------------ :: Assign
-G; S |- wf (e_l1 = e_l2)
+G; S |- wf (e1 = e2)
 
-G; S |- wf e_l1
-G; S |- wf e_l2
+G; S |- wf e1
+G; S |- wf e2
 ------------------------------------------- :: CompoundAssign
-G; S |- wf (e_l1 arithmeticOperator = e_l2)
+G; S |- wf (e1 arithmeticOperator = e2)
 
-G; S |- wf e_l1
-G; S |- wf e_l2
-G; S |- wf e_l3
+G; S |- wf e1
+G; S |- wf e2
+G; S |- wf e3
 ------------------------------- :: Conditional
-G; S |- wf (e_l1 ? e_l2 : e_l3)
+G; S |- wf (e1 ? e2 : e3)
 
 wfLvalue qs ty
-G; S |- wf e_l
+G; S |- wf e
 --------------------- :: Cast
-G; S |- wf ((qs ty) e_l)
+G; S |- wf ((qs ty) e)
 
-G; S |- wf e_l
-G; S |- wf e_l1 .. G; S |- wf e_lk
+G; S |- wf e
+G; S |- wf e1 .. G; S |- wf ek
 ---------------------------------- :: Call
-G; S |- wf (e_l (e_l1, .., e_lk))
+G; S |- wf (e (e1, .., ek))
 
 ------------------- :: Constant
 G; S |- wf constant
@@ -97,7 +100,7 @@ id : qs ty in G
 --------------- :: Variable
 G; S |- wf id
 
-id :ty = s_l in S
+id : ty = s in S
 ----------------- :: Function
 G; S |- wf id
 
@@ -109,12 +112,9 @@ wfLvalue qs ty
 -------------------------- :: AlignOf
 G; S |- wf (alignof qs ty)
 
-defn
-G ; S |- wf e_l :: :: wfEL :: WfEL by
 
-G; S |- wf e
----------------- :: Def
-G; S |- wf (a e)
+defns
+JwfS :: '' ::=
 
 defn
 G ; S ; ty ; b |- wf s :: :: wfS :: WfS by
@@ -122,30 +122,30 @@ G ; S ; ty ; b |- wf s :: :: wfS :: WfS by
 ------------------- :: Skip
 G; S; ty; b |- wf ;
 
-G; S |- wf e_l
+G; S |- wf e
 --------------------- :: Expression
-G; S; ty; b |- wf (e_l;)
+G; S; ty; b |- wf (e;)
 
 wf G'
-(G' @ G); S; ty; b |- wf s_l1 .. (G' @ G); S; ty; b |- wf s_lk
+(G' @ G); S; ty; b |- wf s1 .. (G' @ G); S; ty; b |- wf sk
 -------------------------------------------------------------- :: Block
-G; S; ty; b |- wf ({ G' | s_l1 .. s_lk })
+G; S; ty; b |- wf ({ G' | s1 .. sk })
 
-G; S |- wf e_l
-G; S; ty; b |- wf s_l1
-G; S; ty; b |- wf s_l2
+G; S |- wf e
+G; S; ty; b |- wf s1
+G; S; ty; b |- wf s2
 ------------------------------------------- :: If
-G; S; ty; b |- wf (if (e_l) s_l1 else s_l2)
+G; S; ty; b |- wf (if (e) s1 else s2)
 
-G; S |- wf e_l
-G; S; ty; true |- wf s_l
+G; S |- wf e
+G; S; ty; true |- wf s
 ----------------------------------- :: While
-G; S; ty; b |- wf (while (e_l) s_l)
+G; S; ty; b |- wf (while (e) s)
 
-G; S |- wf e_l
-G; S; ty; true |- wf s_l
+G; S |- wf e
+G; S; ty; true |- wf s
 --------------------------------------- :: Do
-G; S; ty; b |- wf (do s_l while (e_l);)
+G; S; ty; b |- wf (do s while (e);)
 
 ----------------------------- :: Break
 G; S; ty; true |- wf (break;)
@@ -158,34 +158,33 @@ isVoid ty
 G; S; ty (ty1, .., tyk); b |- wf (return;)
 
 not (isVoid ty)
-G; S |- wf e_l
+G; S |- wf e
 ---------------------------------------------- :: Return
-G; S; ty (ty1, .., tyk); b |- wf (return e_l;)
+G; S; ty (ty1, .., tyk); b |- wf (return e;)
 
-% TODO (switch (e_l) s_l) :: Switch
-% TODO (case integerConstant : s_l) :: Case
-% TODO (default : s_l) :: Default
-% TODO (id : s_l) :: Label
+% TODO (switch (e) s) :: Switch
+% TODO (case integerConstant : s) :: Case
+% TODO (default : s) :: Default
+% TODO (id : s) :: Label
 % TODO (goto id;) :: Goto
 
 G; S |- wf definition1 .. G; S |- wf definitionk
 ------------------------------------------------- :: Declaration
 G; S; ty; b |- wf (definition1, .., definitionk;)
 
-defn
-G ; S ; ty ; b |- wf s_l :: :: wfSL :: WfSL by
-
-G; S; ty; b |- wf s
------------------------ :: Def
-G; S; ty; b |- wf (a s)
+defns
+JwfDefinition :: '' ::=
 
 defn
 G ; S |- wf definition :: :: wfDefinition :: WfDefinition by
 
 id : qs ty in G
-G; S |- wf e_l
+G; S |- wf e
 ------------------- :: Def
-G; S |- wf id = e_l
+G; S |- wf id = e
+
+defns
+JwfGamma :: '' ::=
 
 defn
 wf G :: :: wfGamma :: WfGamma by
@@ -201,6 +200,9 @@ wf (G, id : qs ty)
 -------- :: Empty
 wf empty
 
+defns
+JwfSigma :: '' ::=
+
 defn
 S |- wf S' :: :: wfSigma :: WfSigma by
 
@@ -210,17 +212,20 @@ S |- wf S' :: :: wfSigma :: WfSigma by
 S |- wf S'
 wfLvalue [] ty
 isFunction ty
-empty; S; ty; false |- wf s_l
+empty; S; ty; false |- wf s
 ----------------------------- :: Ctx
-S |- wf S', id : ty = s_l
+S |- wf S', id : ty = s
 
 ------------- :: Empty
 S |- wf empty
+
+defns
+JwfProgram :: '' ::=
 
 defn
 wf program :: :: wfProgram :: WfProgram by
 
 S |- wf S
-id : ty = s_l in S
------------------- :: Def
+id : ty = s in S
+---------------- :: Def
 wf id S
