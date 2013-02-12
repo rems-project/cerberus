@@ -112,3 +112,9 @@ val break1 : t
 let inline {ocaml} break1 = Ocaml.Pprint.break1
 val group2 : t -> t
 let inline {ocaml} group2 = Ocaml.Pprint.group2
+
+val align: t -> t
+let inline {ocaml} align = Ocaml.Pprint.align
+
+val dot: t
+let inline {ocaml} dot = Ocaml.Pprint.dot

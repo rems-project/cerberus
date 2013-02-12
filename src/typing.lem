@@ -32,7 +32,7 @@ let type_of e =
     | A.T_EXP    t -> E.return t
     | A.T_LVALUE t -> lvalue_convert t e
     end in
-  E.map T.pointer_convert t
+  E.fmap T.pointer_convert t
 
 let lvalue_type_of error e =
   match Annot.type_of e with
@@ -49,6 +49,7 @@ let lvalue_type_of error e =
    with a type. To avoid redundant type computation, we use open
    recursion. [annotate_exp] complements the process. *)
 
+(* val     check_exp: Ail.file Location.t -> Location.t -> A.expression (Location.t * Ail.type_class) -> E.t Ail.type_class Errors.cause *)
 let rec check_exp env l e_head =
   match e_head with
   | A.VARIABLE id ->
@@ -153,10 +154,28 @@ let rec check_exp env l e_head =
         else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
       else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
 
+  (* [§6.5.3.4#5] The [...] type (an unsigned integer type) is size_t, defined
+     in <stddef.h> (and other headers). *)
+  (* [§6.5.3.4#1] The sizeof operator shall not be applied to an expression that
+     has function type or an incomplete type, [...] or to an expression that
+     designates a bit-field member. [...] *)
+  (* TODO: the bit-field thing *)
+  | A.EXPR_SIZEOF e ->
+      type_of e >>= fun t ->
+      if not (T.is_function t) then
+        if not (T.is_incomplete t) then
+          E.return (A.T_EXP (A.SIZE_T))
+        else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
+      else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
+
+  (* [§6.5.3.4#1] The sizeof operator shall not be applied [...], to the
+     parenthesized name of such a type, or to an expression that designates a
+     bit-field member. *)
+  (* TODO: the bit-field thing *)
   | A.SIZEOF t ->
       if not (T.is_function t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.SIZE_T))
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
       else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
 
@@ -226,8 +245,12 @@ let rec check_exp env l e_head =
           if T.is_complete_object b1 then
             if T.is_complete_object b2 then
               if T.compatible_unqualified b1 b2 then
+                (*
                 E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED
 	          "Computing the difference of two pointers is not yet supported.")
+                *)
+                (* K: ugly hack *)
+                E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.UNSIGNED A.INT))))
               else E.fail Errors.AIL_TYPECHECK_SUB_COMPATIBLE_POINTERS
             else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
           else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
@@ -436,7 +459,7 @@ let rec check_exp env l e_head =
               if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
-            else if T.is_object b2 && T.is_void b1 then
+            else if T.is_object b1 && T.is_void b2 then
               if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
@@ -501,12 +524,32 @@ let rec check_exp env l e_head =
       type_of e1 >>= fun _ ->
       type_of e2 >>= fun t ->
       E.return (A.T_EXP t)
+
+
+  (* TODO: this a massive hack and is probably wrong, waiting for the new type checker *)
+  (* void *malloc(size_t size); *)
+  | A.MALLOC e ->
+(*    if E.to_bool (check_exp env l (A.ASSIGN None (one (Annot.a_type l (A.T_LVALUE A.SIZE_T))) e)) then *)
+      E.return (A.T_EXP (A.POINTER {} (A.VOID {})))
+(*    else
+      Boot.outOfHomeomorphism "[Typing.check_exp] found a A.MALLOC and failed to typecheck"
+*)
+
+  (* void free(void *ptr); *)
+  | A.FREE e -> E.return (A.T_EXP (A.VOID {}))
+  
+  (* int memcmp(const void *s1, const void *s2, size_t n); *)
+  | A.MEMCMP e1 e2 e3 -> E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+  
+  (* void *memcpy(void * restrict s1, const void * restrict s2, size_t n); *)
+  | A.MEMCPY e1 e2 e3 -> Boot.outOfHomeomorphism "check_exp, found a MEMCPY"
+
   end
 
 and annotate_exp env exp =
   let (l, e) = exp in
   let a_type e =
-    E.map (fun t -> Pair.make (Annot.a_type l t) e) (check_exp env l e) in
+    E.fmap (fun t -> Pair.make (Annot.a_type l t) e) (check_exp env l e) in
   match e with
   | A.VARIABLE v -> a_type (A.VARIABLE v)
   | A.CONSTANT c -> a_type (A.CONSTANT c)
@@ -515,18 +558,32 @@ and annotate_exp env exp =
   | _ ->
       let map_exp f exp =
         match exp with
-        | A.UNARY o e -> E.map (A.UNARY o) (f e)
+        | A.UNARY o e -> E.fmap (A.UNARY o) (f e)
         | A.BINARY o e1 e2 -> E.map2 (A.BINARY o) (f e1) (f e2)
         | A.ASSIGN o e1 e2 -> E.map2 (A.ASSIGN o) (f e1) (f e2)
         | A.CONDITIONAL e1 e2 e3 ->
             E.map3 A.CONDITIONAL (f e1) (f e2) (f e3)
-        | A.CAST t e -> E.map (A.CAST t) (f e)
+        | A.CAST t e -> E.fmap (A.CAST t) (f e)
         | A.CALL e es ->
             E.map2 (A.CALL) (f e) (E.map_list f es)
         | A.CONSTANT c -> E.return (A.CONSTANT c)
         | A.VARIABLE v -> E.return (A.VARIABLE v)
+        
+        (* TODO: here we get read of the EXPR_SIZEOF ctor (see comment before
+           Ail.EXPR_SIZEOF) *)
+        | A.EXPR_SIZEOF e ->
+            f e >>= function 
+              | ((_, A.T_EXP    t), _) -> E.return (A.SIZEOF t)
+              | ((_, A.T_LVALUE t), _) -> E.return (A.SIZEOF t)
+           end
+        
         | A.SIZEOF   t -> E.return (A.SIZEOF   t)
         | A.ALIGNOF  t -> E.return (A.ALIGNOF  t)
+        
+        | A.MALLOC e        -> E.fmap A.MALLOC (f e)
+        | A.FREE e          -> E.fmap A.FREE   (f e)
+        | A.MEMCMP e1 e2 e3 -> E.map3 A.MEMCMP (f e1) (f e2) (f e3)
+        | A.MEMCPY e1 e2 e3 -> E.map3 A.MEMCPY (f e1) (f e2) (f e3)
         end in
       let f exp = annotate_exp env exp in
       map_exp f e >>= a_type
@@ -535,7 +592,7 @@ and annotate_exp env exp =
 let rec annotate_stmt env (l, stmt) =
   let f_e = annotate_exp  env in
   let f_s = annotate_stmt env in
-  E.map (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
+  E.fmap (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
   
   (* (§6.8.4) Selection statements ****************************************** *)
   | A.IF e s1 s2 ->
@@ -554,7 +611,7 @@ let rec annotate_stmt env (l, stmt) =
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
       if T.is_integer t then
-        E.map (A.SWITCH e') (f_s s)
+        E.fmap (A.SWITCH e') (f_s s)
       else
         E.fail Errors.AIL_TYPECHECK_SWITCH_INTEGER
 
@@ -562,36 +619,36 @@ let rec annotate_stmt env (l, stmt) =
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
       if T.is_scalar t then
-        E.map (A.WHILE e') (f_s s)
+        E.fmap (A.WHILE e') (f_s s)
       else E.fail Errors.AIL_TYPECHECK_WHILE_SCALAR
   | A.DO e s ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
       if T.is_scalar t then
-        E.map (A.DO e') (f_s s)
+        E.fmap (A.DO e') (f_s s)
       else E.fail Errors.AIL_TYPECHECK_DO_SCALAR
   | _ ->
       let map_stmt fs fe stmt =
         match stmt with
-        | A.EXPRESSION e -> E.map A.EXPRESSION (fe e)
+        | A.EXPRESSION e -> E.fmap A.EXPRESSION (fe e)
         | A.BLOCK ids sl ->
-            E.map (A.BLOCK ids) (E.map_list fs sl)
+            E.fmap (A.BLOCK ids) (E.map_list fs sl)
         | A.IF e s1 s2 -> E.map3 A.IF (fe e) (fs s1) (fs s2)
         | A.WHILE e s -> E.map2 A.WHILE (fe e) (fs s)
         | A.DO    e s -> E.map2 A.DO    (fe e) (fs s)
-        | A.RETURN_EXPRESSION e -> E.map A.RETURN_EXPRESSION (fe e)
+        | A.RETURN_EXPRESSION e -> E.fmap A.RETURN_EXPRESSION (fe e)
         | A.SWITCH e s -> E.map2 A.SWITCH (fe e) (fs s)
-        | A.CASE  c s -> E.map (A.CASE c) (fs s)
-        | A.DEFAULT s -> E.map A.DEFAULT  (fs s)
-        | A.LABEL id s -> E.map (A.LABEL id) (fs s)
+        | A.CASE  c s -> E.fmap (A.CASE c) (fs s)
+        | A.DEFAULT s -> E.fmap A.DEFAULT  (fs s)
+        | A.LABEL id s -> E.fmap (A.LABEL id) (fs s)
         | A.DECLARATION dl ->
-            E.map A.DECLARATION (E.map_list (E.inj_right fe) dl)
+            E.fmap A.DECLARATION (E.map_list (E.inj_right fe) dl)
         | A.SKIP        -> E.return A.SKIP
         | A.BREAK       -> E.return A.BREAK
         | A.CONTINUE    -> E.return A.CONTINUE
         | A.RETURN_VOID -> E.return A.RETURN_VOID
         | A.GOTO id -> E.return (A.GOTO id)
-        | A.PAR ss -> E.map A.PAR (E.map_list fs ss)
+        | A.PAR ss -> E.fmap A.PAR (E.map_list fs ss)
         end in
       map_stmt f_s f_e stmt
   end)
@@ -604,6 +661,7 @@ let annotate_program p =
   E.return <|
     A.main = p.A.main;
     A.id_map = p.A.id_map;
+    A.member_map = p.A.member_map;
     A.globals = gs;
     A.fn_map = fs
   |>

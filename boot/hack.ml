@@ -56,6 +56,7 @@ let precedence = function
     
     | UNARY (_, _)
     | CAST (_, _)
+    | EXPR_SIZEOF _
     | TYPE_SIZEOF _
     | TYPE_ALIGNOF _ -> Some 2
     
@@ -196,6 +197,7 @@ module Print = struct
     | SIGNED   -> !^ (ansi_format [Green] "signed")
     | UNSIGNED -> !^ (ansi_format [Green] "unsigned")
     | BOOL     -> !^ (ansi_format [Green] "_Bool")
+(*
     | STRUCT (name_opt, decls) ->
         !^ (ansi_format [Green] "struct") ^^
           match decls with
@@ -203,7 +205,7 @@ module Print = struct
             | delcs -> P.lbrace ^^ P.nest 2 (P.break1 ^^
                                                let f ds d = ds ^^ d ^^ P.hardline in
                                                P.sepmap P.break0 pp_struct_union_declaration decls) ^/^ P.rbrace
-  
+*)
   
   and pp_type = function
     | BASE (qs, ss)     -> pp_qs qs ^^ pp_ss ss
@@ -231,6 +233,7 @@ module Print = struct
       | UNARY (POSTFIX_INCR as op, e) -> f e ^^ pp_unop op
       | UNARY (POSTFIX_DECR as op, e) -> f e ^^ pp_unop op
       | UNARY (op, e)                 -> pp_unop op ^^ f e
+      | EXPR_SIZEOF e                 -> !^ "sizeof"  ^^^ f e
       | TYPE_SIZEOF ty                -> !^ "sizeof"  ^^ P.parens (pp_type ty)
       | TYPE_ALIGNOF ty               -> !^ "alignof" ^^ P.parens (pp_type ty)
       | CAST (ty, e)                  -> P.parens (pp_type ty) ^^^ f e

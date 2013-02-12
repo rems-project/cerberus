@@ -107,26 +107,36 @@ type specifier =
   | SHORT
   | INT
   | LONG
-(*  | FLOAT *)
-(*  | DOUBLE *)
+  | FLOAT
+  | DOUBLE
   | SIGNED
   | UNSIGNED
   | BOOL
-(*  | COMPLEX *)
-  | STRUCT of option string * list struct_union_declaration (* TODO: STRUCT_HACK *)
-  | UNION of option string * list struct_union_declaration (* TODO: STRUCT_HACK *)
-(* TODO: enum-specifier *)
-(* TODO: typedef-name *)
+  | COMPLEX
+  | NAMED of string
+  | STRUCT_ of option string * option (list field_group) * list attribute
+  | UNION_ of option string * option (list field_group) * list attribute
+  | ENUM of option string * option (list (string * option exp_l)) * list attribute
+
+and attribute =
+  | ATTR of string * list exp_l
+
 
 and specifiers = multiset specifier
 and qualifiers = set qualifier
+
+and field_group =
+  | Field_group of (qualifiers * specifiers) * list (option name * option exp_l)
+
+and name =
+  | Name of string * c_type
+
 
 and c_type =
   | BASE of qualifiers * specifiers
   | ARRAY of qualifiers * c_type * option exp_l
   | POINTER of qualifiers * c_type
   | FUNCTION of c_type * list decl_l
-  | ENUM of string
 
 and expression =
   (* 6.5.1 Primary expressions *)
@@ -148,7 +158,8 @@ and expression =
   (* Unary operators from 6.5.2 and 6.5.3 *)
   | UNARY of unary_operator * exp_l
   (* 6.5.3.4 The sizeof and alignof operators *)
-  | TYPE_SIZEOF of c_type (* TODO: sizeof can have an 'unary-expression' as argument *)
+  | EXPR_SIZEOF of exp_l
+  | TYPE_SIZEOF of c_type
   | TYPE_ALIGNOF of c_type
   (* 6.5.4 Cast operators *)
   | CAST of c_type * exp_l
@@ -207,7 +218,6 @@ and stmt_l = statement * location
 type global_definition =
   | FUNCTION_DEFINITION of decl_l * stmt_l
   | EXTERNAL_DECLARATION of list defn_l
-  | STRUCT_ (* TODO: struct *)
 
 type g_defn_l = global_definition * location
 

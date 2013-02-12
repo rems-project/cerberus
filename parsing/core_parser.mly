@@ -1,83 +1,83 @@
 %{
 
 type expr =
-  | Kskip
-  | Kconst of int
-(*  | Kaddr of Core.mem_addr *)
-  | Ksym of string
-  | Kop of Core.binop * expr * expr
-  | Ktrue
-  | Kfalse
-  | Knot of expr
-  | Kctype of Ail.ctype
-  | Klet of string * expr * expr
-  | Kif of expr * expr * expr
-  | Kcall of string * expr list
-  | Ksame of expr * expr
-  | Kundef
-  | Kerror
-  | Kaction of paction
-  | Kunseq of expr list
-  | Kwseq of (string option) list * expr * expr
-  | Ksseq of (string option) list * expr * expr
-  | Kaseq of string option * action * paction
-  | Kindet of expr (* TODO: add unique indices *)
-  | Kbound of int * expr
-  | Ksave of string * expr
-  | Krun of string
+  | Eskip
+  | Econst of int
+(*  | Eaddr of Core.mem_addr *)
+  | Esym of string
+  | Eop of Core.binop * expr * expr
+  | Etrue
+  | Efalse
+  | Enot of expr
+  | Ectype of Ail.ctype
+  | Elet of string * expr * expr
+  | Eif of expr * expr * expr
+  | Ecall of string * expr list
+  | Esame of expr * expr
+  | Eundef
+  | Eerror
+  | Eaction of paction
+  | Eunseq of expr list
+  | Ewseq of (string option) list * expr * expr
+  | Esseq of (string option) list * expr * expr
+  | Easeq of string option * action * paction
+  | Eindet of expr (* TODO: add unique indices *)
+  | Ebound of int * expr
+  | Esave of string * expr
+  | Erun of string
 
 and action =
-  | Kcreate of expr
-  | Kalloc of expr
-  | Kkill of expr
-  | Kstore of expr * expr * expr
-  | Kload of expr * expr
+  | Create of expr
+  | Alloc of expr
+  | Kill of expr
+  | Store of expr * expr * expr
+  | Load of expr * expr
 and paction = Core.polarity * action
 
 
 (* TODO *)
 let convert e arg_syms fsyms =
   let rec f ((count, syms) as st) = function
-    | Kskip                     -> Core.Kskip
-    | Kconst n                  -> Core.Kconst n
-    | Ksym a                    -> Core.Ksym (Pmap.find a syms) (* Error handling *)
-    | Kop (binop, e1, e2)       -> Core.Kop (binop, f st e1, f st e2)
-    | Ktrue                     -> Core.Ktrue
-    | Kfalse                    -> Core.Kfalse
-    | Knot e                    -> Core.Knot (f st e)
-    | Kctype ty                 -> Core.Kctype ty
-    | Klet (a, e1, e2)          -> let _a = (count, Some a) in Core.Klet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
-    | Kif (e1, e2, e3)          -> Core.Kif (f st e1, f st e2, f st e3)
-    | Kcall (func, args)        -> Core.Kcall (Pmap.find func fsyms, List.map (f st) args)
-    | Ksame (e1, e2)            -> Core.Ksame (f st e1, f st e2)
-    | Kundef                    -> Core.Kundef
-    | Kerror                    -> Core.Kerror
-    | Kaction pact              -> Core.Kaction (g st pact)
-    | Kunseq es                 -> Core.Kunseq (List.map (f st) es)
-    | Kwseq (_as, e1, e2)      -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+    | Eskip                     -> Core.Eskip
+    | Econst n                  -> Core.Econst n
+    | Esym a                    -> Core.Esym (Pmap.find a syms) (* Error handling *)
+    | Eop (binop, e1, e2)       -> Core.Eop (binop, f st e1, f st e2)
+    | Etrue                     -> Core.Etrue
+    | Efalse                    -> Core.Efalse
+    | Enot e                    -> Core.Enot (f st e)
+    | Ectype ty                 -> Core.Ectype ty
+    | Elet (a, e1, e2)          -> let _a = (count, Some a) in Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
+    | Eif (e1, e2, e3)          -> Core.Eif (f st e1, f st e2, f st e3)
+    | Ecall (func, args)        -> Core.Ecall (Pmap.find func fsyms, List.map (f st) args)
+    | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
+    | Eundef                    -> Core.Eundef
+    | Eerror                    -> Core.Eerror
+    | Eaction pact              -> Core.Eaction (g st pact)
+    | Eunseq es                 -> Core.Eunseq (List.map (f st) es)
+    | Ewseq (_as, e1, e2)      -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
                                      match sym_opt with
                                        | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
                                        | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
                                    
-                                   Core.Kwseq (_as', f st e1, f (count', syms') e2)
-    | Ksseq (_as, e1, e2)       -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+                                   Core.Ewseq (_as', f st e1, f (count', syms') e2)
+    | Esseq (_as, e1, e2)       -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
                                      match sym_opt with
                                        | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
                                        | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
                                    
-                                   Core.Ksseq (_as', f st e1, f (count', syms') e2)
-    | Kaseq (_a_opt, act, pact) -> failwith "TODO: aseq"
-    | Kindet e                  -> Core.Kindet (f st e)
-    | Kbound (i, e)             -> failwith "TODO: bound"
-    | Ksave (k, e)              -> failwith "TODO: save"
-    | Krun k                    -> failwith "TODO: run"
+                                   Core.Esseq (_as', f st e1, f (count', syms') e2)
+    | Easeq (_a_opt, act, pact) -> failwith "TODO: aseq"
+    | Eindet e                  -> Core.Eindet (f st e)
+    | Ebound (i, e)             -> failwith "TODO: bound"
+    | Esave (k, e)              -> failwith "TODO: save"
+    | Erun k                    -> failwith "TODO: run"
   and g st (p, act) =(p,
     match act with
-      | Kcreate e_ty            -> (Pset.empty compare, Core.Kcreate (f st e_ty))
-      | Kalloc e_n              -> (Pset.empty compare, Core.Kalloc (f st e_n))
-      | Kkill e_o               -> (Pset.empty compare, Core.Kkill (f st e_o))
-      | Kstore (e_ty, e_o, e_n) -> (Pset.empty compare, Core.Kstore (f st e_ty, f st e_o, f st e_n))
-      | Kload (e_ty, e_o)       -> (Pset.empty compare, Core.Kload (f st e_ty, f st e_o)))
+      | Create e_ty            -> (Pset.empty compare, Core.Create (f st e_ty))
+      | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n))
+      | Kill e_o               -> (Pset.empty compare, Core.Kill (f st e_o))
+      | Store (e_ty, e_o, e_n) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n))
+      | Load (e_ty, e_o)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o)))
   in f (0, arg_syms) e
 
 
@@ -204,15 +204,15 @@ type_name:
 
 action:
 | CREATE ty = delimited(LBRACE, expr, RBRACE)
-    { Kcreate ty }
+    { Create ty }
 | ALLOC n = expr
-    { Kalloc n }
+    { Alloc n }
 | KILL e = expr
-    { Kkill e }
+    { Kill e }
 | STORE ty = delimited(LBRACE, expr, RBRACE) LPAREN x = expr COMMA n = expr RPAREN
-    { Kstore (ty, x, n) }
+    { Store (ty, x, n) }
 | LOAD ty = delimited(LBRACE, expr, RBRACE) x = expr
-    { Kload (ty, x) }
+    { Load (ty, x) }
 
 paction:
 | act = action
@@ -230,13 +230,13 @@ pattern:
 
 unseq_expr:
 | es = delimited(LPAREN, n_ary_operator(PIPE_PIPE, seq_expr), RPAREN)
-    { Kunseq es }
+    { Eunseq es }
 
 basic_expr:
 | e = expr
     { e }
 | p = paction
-    { Kaction p }
+    { Eaction p }
 
 extended_expr:
 | e = basic_expr
@@ -248,16 +248,16 @@ seq_expr:
 | e = basic_expr
     { e }
 | _as = pattern LT_MINUS e1 = extended_expr SEMICOLON e2 = impure_expr
-    { Ksseq (_as, e1, e2) }
+    { Esseq (_as, e1, e2) }
 | e1 = extended_expr SEMICOLON e2 = impure_expr
-    { Ksseq ([], e1, e2) }
+    { Esseq ([], e1, e2) }
 | _as = pattern LT_MINUS e1 = extended_expr GT_GT e2 = impure_expr
-    { Kwseq (_as, e1, e2) }
+    { Ewseq (_as, e1, e2) }
 | e1 = extended_expr GT_GT e2 = impure_expr
-    { Kwseq ([], e1, e2) }
+    { Ewseq ([], e1, e2) }
 | _as = pattern LT_MINUS a = action PIPE_GT p = paction
     { match _as with
-      | [alpha] -> Kaseq (alpha, a, p)
+      | [alpha] -> Easeq (alpha, a, p)
       | _       -> assert false }
     (* TODO Really, we just want to parse a "SYM" an not a "pattern". *)
 
@@ -272,48 +272,48 @@ expr:
     { e }
 
 | SKIP
-    { Kskip }
+    { Eskip }
 
 | n = CONST
-    { Kconst n }
+    { Econst n }
 
 | a = SYM
-    { Ksym a }
+    { Esym a }
 
 | e1 = expr op = binary_operator e2 = expr
-    { Kop (op, e1, e2) }
+    { Eop (op, e1, e2) }
 
 | TRUE
-    { Ktrue }
+    { Etrue }
 
 | FALSE
-    { Kfalse }
+    { Efalse }
 
 | NOT e = expr
-    { Knot e }
+    { Enot e }
 
 | ty = type_name
-    { Kctype ty }
+    { Ectype ty }
 
 | LET a = SYM EQ e1 = expr IN e2 = impure_expr END (* TODO: END is tasteless. *)
-    { Klet (a, e1, e2) }
+    { Elet (a, e1, e2) }
 
 | IF b = expr THEN e1 = expr ELSE e2 = expr (* TODO: may need to also allow unseq_expr *)
-    { Kif (b, e1, e2) }
+    { Eif (b, e1, e2) }
 
 | f = SYM es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Kcall (f, es) }
+    { Ecall (f, es) }
 (*
 | SAME e1 = expr e2 = expr
-    { Ksame (e1, e2) }
+    { Esame (e1, e2) }
 *)
 | UNDEF
-    { Kundef }
+    { Eundef }
 | ERROR
-    { Kerror }
+    { Eerror }
 
 | e = delimited(LBRACKET, seq_expr, RBRACKET) (* TODO: may need to also allow unseq_expr *)
-    { Kindet e } (* TODO: the index *)
+    { Eindet e } (* TODO: the index *)
 
 fun_argument:
 | x = SYM COLON ty = core_base_type

@@ -70,9 +70,9 @@ let options = Arg.align [
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
 
-let pass_through        f = Exception.map (fun v ->           f v        ; v)
-let pass_through_test b f = Exception.map (fun v -> if b then f v else (); v)
-let pass_message      m   = Exception.map (fun v -> print_endline (Hack.ansi_format [Hack.Green] m); v)
+let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
+let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
+let pass_message      m   = Exception.fmap (fun v -> print_endline (Hack.ansi_format [Hack.Green] m); v)
 
 let return_unit m = Exception.bind m (fun _ -> Exception.return ())
 
@@ -88,17 +88,37 @@ let catch m =
 let rec string_of_dyn_rule = function
   | Core_run.Rule_Pos        -> "pos"
   | Core_run.Rule_Neg        -> "neg"
+  | Core_run.Rule_Value_Hole -> "value_hole"
+  | Core_run.Rule_Value      -> "value"
+  | Core_run.Rule_If         -> "if"
+  | Core_run.Rule_Let        -> "let"
+  | Core_run.Rule_Ret        -> "ret"
+  | Core_run.Rule_Skip       -> "skip"
+  | Core_run.Rule_Wseq       -> "wseq"
+  | Core_run.Rule_Wseq_Neg   -> "wseq_neg"
+  | Core_run.Rule_Run        -> "run"
+  | Core_run.Rule_Save       -> "save"
+
+
+(*
   | Core_run.Rule_WseqL r    -> "wseq_l[ " ^ string_of_dyn_rule r ^ " ]"
   | Core_run.Rule_Neg_Wseq r -> "neg_wseq[ " ^ string_of_dyn_rule r ^ " ]"
-  | Core_run.Rule_Unseq r    -> "unseq[ " ^ string_of_dyn_rule r ^ " ]"
+*)
+  | Core_run.Rule_Unseq      -> "unseq"
 
+
+
+let pp_mem_value = function
+  | Core_run.Muninit -> "uninit"
+  | Core_run.Mnum n  -> string_of_int n
+  | Core_run.Mobj x  -> string_of_int x
 
 let string_of_trace_action = function
   | Core_run.Tcreate (ty, o)   -> "@" ^ string_of_int o ^ " <= create {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "}"
   | Core_run.Talloc (n, o)     -> "@" ^ string_of_int o ^ " <= alloc " ^ string_of_int n
   | Core_run.Tkill o           -> "kill @" ^ string_of_int o
-  | Core_run.Tstore (ty, o, n) -> "store {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " " ^ string_of_int n
-  | Core_run.Tload (ty, o, v)  -> "load {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " = " ^ string_of_int v
+  | Core_run.Tstore (ty, o, n) -> "store {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " " ^ pp_mem_value n
+  | Core_run.Tload (ty, o, v)  -> "load {" ^ (Document.to_plain_string $ Ail.Print.pp_type ty) ^ "} @" ^ string_of_int o ^ " = " ^ pp_mem_value v
 
 let rec string_of_trace (t: Core_run.E.trace) =
   let rec f = function
@@ -107,10 +127,13 @@ let rec string_of_trace (t: Core_run.E.trace) =
     | b :: bs -> string_of_trace_action b ^ ", " ^ f bs
   in match t with
        | []                    -> ""
-       | (r, bs, (_, a)) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
-                                  "\x1b[0m ==> \x1b[32m<" ^ (f $ Pset.elements bs) ^
-                                  ">\x1b[0m " ^ string_of_trace_action a ^ "\n" ^
-                                  string_of_trace xs
+       | (r, None) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
+                            "\x1b[0m\n" ^
+                            string_of_trace xs
+       | (r, Some (bs, (_, a))) :: xs -> "\x1b[34m" ^ string_of_dyn_rule r ^
+                                         "\x1b[0m ==> \x1b[32m<" ^ (f $ Pset.elements bs) ^
+                                         ">\x1b[0m " ^ string_of_trace_action a ^ "\n" ^
+                                         string_of_trace xs
 
 
 
@@ -137,7 +160,7 @@ let () =
                                                  "" (numerote ts))
                                  (Output.file $ file_name ^ ".dot") in
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
-                                                                    "\n\nValue: " ^ string_of_int v) $ numerote ts in
+                                                                    "\n\nValue: " ^ (Document.to_plain_string $ Core.Print.pp_expr None v)) $ numerote ts in
     let c_frontend m =
       let module P = Parser.Make (C_parser_base) (Lexer.Make (C_lexer)) in
       P.parse m
@@ -148,11 +171,11 @@ let () =
       >|> pass_through_test !print_ail pp_ail
       >|> Exception.rbind Typing.annotate
       >|> pass_message "3. Ail typechecking completed!"
-      >|> Exception.map Translation.translate (* TODO: map is bad *)
+      >|> Exception.fmap Translation.translate
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core pp_core
 (*      >|> pass_message "-------------------------- POST SIMPLIFICATION --------------------------"
-      >|> Exception.map (Core_simpl.simplify) *) in
+      >|> Exception.fmap (Core_simpl.simplify) *) in
     let core_frontend m =
       let module P = Parser.Make (Core_parser_base) (Lexer.Make (Core_lexer)) in
       P.parse m
@@ -163,7 +186,7 @@ let () =
                                                       else Exception.fail (Errors.UNSUPPORTED "The file extention is not supported") in
     let core_backend m =
       (m
-      >|> pass_through_test !print_core pp_core
+(*      >|> pass_through_test !print_core pp_core *)
       >?> not !core_skip_typecheck)
         (fun m ->
           Exception.rbind Core_typing.typecheck m
@@ -193,12 +216,12 @@ forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
 *)
 (*
     let orig_backend m =
-      Exception.map (Reduction.reduce !bound) m
+      Exception.fmap (Reduction.reduce !bound) m
       >|> pass_message "4. Opsem completed!"
       >|> pass_through_test !dot    pp_dot
       >|> pass_through_test !output pp_out
-      >|> Exception.map Meaning.Solve.simplify_all
-      >|> Exception.map (Program.iter_list pp_res)
+      >|> Exception.fmap Meaning.Solve.simplify_all
+      >|> Exception.fmap (Program.iter_list pp_res)
       >|> return_unit in
 *)
     file_name

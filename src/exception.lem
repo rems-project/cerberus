@@ -6,7 +6,7 @@ type t 'a 'msg =
 
 let bind m k =
   match m with
-    | Result a -> k a
+    | Result a    -> k a
     | Exception s -> Exception s
   end
 
@@ -17,8 +17,11 @@ let throw m = Exception m
 let fail = throw
 let join m = bind m (fun x -> x)
 
-let map f m = bind m (return -| f)
-let app mf m = bind mf (fun f -> map f m)
+val fmap: forall 'a 'b 'msg. ('a -> 'b) -> t 'a 'msg -> t 'b 'msg
+let fmap f m = bind m (return -| f)
+
+val app: forall 'a 'b 'msg. t ('a -> 'b) 'msg -> t 'a 'msg -> t 'b 'msg
+let app mf m = bind mf (fun f -> fmap f m)
 
 let catch = function
   | Result    _ -> None
@@ -41,7 +44,7 @@ end
 
 open Operators
 
-let map2 f mx my    = app (map f mx) my
+let map2 f mx my    = app (fmap f mx) my
 let map3 f mx my mz = app (map2 f mx my) mz
 
 val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
