@@ -43,6 +43,8 @@ type ctype =
   | POINTER of qualifiers * ctype
 (*  | ATOMIC of ctype *)
   | TYPEDEF of id
+  
+  | SIZE_T
 
 
 
@@ -54,7 +56,7 @@ type ctype =
 
 
 
-and member_declarator =
+and member_declaration =
   | MEMBER_DECL of id
 (*  | BITFIELD of id option * 'e (* TODO: need to decide what to do about the 'e *) *)
 
@@ -133,6 +135,7 @@ type constant =
 
 type declaration = ctype * option storage_duration
 
+
 type expression 'a =
   | UNARY of unary_operator * expression_l 'a
   | BINARY of binary_operator * expression_l 'a * expression_l 'a 
@@ -144,8 +147,25 @@ type expression 'a =
   | MEMBEROFPTR of expression 'a * id
   | CONSTANT of constant
   | VARIABLE of id
+
+  (* TODO: this ctor should probably disappear in the end, but to transform a
+           EXPR_SIZEOF into a SIZEOF, I need to know the type of the operand and
+           can't at the time of Cabs_to_ail (...).
+           Currently this ctor is only used between Cabs_to_ail and Typing, and
+           get transform into a SIZEOF in Typing *)
+  | EXPR_SIZEOF of expression_l 'a
+  
   | SIZEOF of ctype
   | ALIGNOF of ctype
+  
+  | MALLOC of expression_l 'a
+  | FREE of expression_l 'a
+  | MEMCMP of expression_l 'a * expression_l 'a * expression_l 'a
+  | MEMCPY of expression_l 'a * expression_l 'a * expression_l 'a
+  
+
+
+
 
 and expression_l 'a = 'a * expression 'a
 
@@ -176,15 +196,18 @@ and statement_l 'a = 'a * statement 'a
 type file 'a = <|
   main : id;
   id_map : map id declaration;
+  member_map : map id (map id member_declaration);
   globals : list (id * expression_l 'a);
   fn_map : map id (list id * statement_l 'a)
 |>
 
+(*
 type env 'a = <|
   symbol : id;
   symbol_map : map id string;
   file : file 'a
 |>
+*)
 
 
 (* HACK: equality over ctypes. *)
@@ -222,11 +245,17 @@ module Print = struct
     | MEMBEROFPTR _ _      -> Some 1
     | UNARY POSTFIX_INCR _ -> Some 1
     | UNARY POSTFIX_DECR _ -> Some 1
+    | MALLOC _             -> Some 1
+    | FREE _               -> Some 1
+    | MEMCMP _ _ _         -> Some 1
+    | MEMCPY _ _ _         -> Some 1
+
     
-    | UNARY _ _ -> Some 2
-    | CAST _ _  -> Some 2
-    | SIZEOF _  -> Some 2
-    | ALIGNOF _ -> Some 2
+    | UNARY _ _     -> Some 2
+    | CAST _ _      -> Some 2
+    | EXPR_SIZEOF _ -> Some 2
+    | SIZEOF _      -> Some 2
+    | ALIGNOF _     -> Some 2
     
     | BINARY (ARITHMETIC MUL) _ _ -> Some 3
     | BINARY (ARITHMETIC DIV) _ _ -> Some 3
@@ -354,11 +383,12 @@ module Print = struct
       let ins_space ds d = ds ^^ d ^^ P.space in
       P.fold ins_space (List.map pp_qualifier (Set.to_list qs)) in
     match t with
-      | VOID qs   -> pp_qs qs ^^ (!^ "void")
-      | BASIC qs b -> pp_qs qs ^^ pp_basic_type b
-      | ARRAY t s -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
-      | POINTER qs t -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
+      | VOID qs       -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b    -> pp_qs qs ^^ pp_basic_type b
+      | ARRAY t s     -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
+      | POINTER qs t  -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
       | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
+      | SIZE_T        -> !^ "size_t"
     end
 
   let pp_type_class = function
@@ -392,8 +422,14 @@ module Print = struct
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
       | CAST t e -> P.parens (pp_type t) ^^^ f e
       | CONSTANT (CONST_INT ic) -> pp_int_const ic
+      | EXPR_SIZEOF e -> !^ "sizeof"  ^^^ f e
       | SIZEOF  t -> !^ "sizeof"  ^^ P.parens (pp_type t)
       | ALIGNOF t -> !^ "alignof" ^^ P.parens (pp_type t)
+      
+      | MALLOC e        -> !^ "malloc" ^^ P.parens (f e)
+      | FREE e          -> !^ "free"   ^^ P.parens (f e)
+      | MEMCMP e1 e2 e3 -> !^ "memcmp" ^^ P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+      | MEMCPY e1 e2 e3 -> !^ "memcpy" ^^ P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
     end
 
   let pp_decl file id =

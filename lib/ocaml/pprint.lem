@@ -61,3 +61,7 @@ val fold : forall 'a. (t -> t -> t) -> list t -> t
 val break0 : t
 val break1 : t
 val group2 : t -> t
+
+val align : t -> t
+
+val dot : t

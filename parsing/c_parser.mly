@@ -24,6 +24,8 @@ type struct_union =
 %token SIGNED UNSIGNED LONG SHORT
 %token VOLATILE STATIC CONST AUTO
 
+
+
 %token SIZEOF ALIGNOF
 
 %token EQ PLUS_EQ MINUS_EQ STAR_EQ SLASH_EQ PERCENT_EQ
@@ -212,10 +214,9 @@ unary_expression:
 (* see 'unary operators' *)
 | op = unary_operator e = cast_expression
         {C.UNARY (op, e), L.make $startpos $endpos}
-(* TODO Not yet supported.
-| SIZEOF unary_expression
-    {C.EXPR_SIZEOF (fst $2), $1}
-*)
+(* sizeof e *)
+| SIZEOF e = unary_expression
+    {C.EXPR_SIZEOF e, L.make $startpos $endpos}
 (* sizeof(ty) *)
 | SIZEOF LPAREN ty = type_name RPAREN
     {C.TYPE_SIZEOF ty, L.make $startpos $endpos}
@@ -524,9 +525,9 @@ init_declarator:
     { let name, mk_type = decl in
       (name, mk_type, None), L.make $startpos $endpos
     }
-| declarator EQ initialiser
-    { let name, mk_type = $1 in
-      (name, mk_type, Some $3), L.make $startpos $endpos
+| decl = declarator EQ init = initialiser
+    { let name, mk_type = decl in
+      (name, mk_type, Some init), L.make $startpos $endpos
     }
 
 
@@ -555,7 +556,7 @@ type_specifier:
 | COMPLEX  {Debug.error "PARSING: '_Complex' type-specifier not yet supported." (* (* LATER *) C.COMPLEX *)}
 (* TODO
 | atomic_type_specifier     {failwith "type_specifier [atomic]: TODO" (* TODO *)} *)
-| spec = struct_or_union_specifier {spec}
+(*| spec = struct_or_union_specifier {spec} *)
 (*
 | enum_specifier            {failwith "type_specifier [enum]: TODO" (* TODO *)}
 | typedef_name              {failwith "type_specifier [typedef]: TODO" (* TODO *)}
@@ -563,6 +564,7 @@ type_specifier:
 ;
 
 (* 6.7.2.1#1 Structure and union specifiers, Syntax *)
+(*
 struct_or_union_specifier:
 | x = struct_or_union id_opt = IDENTIFIER? LBRACE decls = struct_declaration_list RBRACE
     {match x with
@@ -572,6 +574,7 @@ struct_or_union_specifier:
     {match x with
       | STRUCT_ -> Cabs.STRUCT (Some id, [])
       | UNION_  -> Cabs.UNION (Some id, [])}
+*)
 
 struct_or_union:
 | STRUCT {STRUCT_}
@@ -815,9 +818,9 @@ parameter_declaration:
 
 (* 6.7.7#1 Type names, Syntax *)
 type_name:
-| specifier_qualifier_list abstract_declarator_opt
-    { let specs, quals = $1 in
-      $2 (C.BASE (quals, specs))
+| ssqs = specifier_qualifier_list decl_opt = abstract_declarator_opt
+    { let specs, quals = ssqs in
+      decl_opt (C.BASE (quals, specs))
     }
 ;
 
@@ -859,38 +862,35 @@ direct_abstract_declarator:
 
 
 (* 6.7.8#1 Type definitions, Syntax *)
+(*
 typedef_name:
 | IDENTIFIER
     {$1}
+*)
 
 
 (* 6.7.9#1 Initalization, Syntax *)
 initialiser:
-| assignment_expression {$1}
+| e = assignment_expression
+    { e }
 (*
-| LBRACE initialiser_list RBRACE {}
-| LBRACE initialiser_list COMMA RBRACE {}
-*)
+| LBRACE is = initialiser_list RBRACE
+    { is }
+| LBRACE is = initialiser_list COMMA RBRACE
+    { is }
 ;
+*)
 
-(*
 initialiser_list:
-| designation_opt initialiser
-    {$2}
-*)
+| i = initialiser
+    { [([], i)] }
+| d = designation i = initialiser
+    { [(d, i)] }
 (* ATTENTION We store the list in reverse. *)
-(*
-| initialiser_list COMMA designation_opt initialiser
-    {$3 :: $1}
-;
-*)
-
-designation_opt:
-| (* empty *)
-    {}
-| designation
-    {}
-
+| is = initialiser_list COMMA i = initialiser
+    {([], i) :: is}
+| is = initialiser_list COMMA d = designation i = initialiser
+    {(d, i) :: is}
 ;
 
 designation:

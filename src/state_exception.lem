@@ -3,23 +3,26 @@ open Global
 type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
 
 let return a = fun s -> Exception.return (a, s)
-let map f m =
+let fmap f m =
   fun s -> Exception.bind (m s) (fun (a, s') -> Exception.return (f a, s'))
 let join mm = fun s -> Exception.bind (mm s) (fun (m, s') -> m s')
-let bind m f = join (map f m)
-let app  mf m = bind mf (fun f -> map f m)
+let bind m f = join (fmap f m)
+let app  mf m = bind mf (fun f -> fmap f m)
 let papp mf x = bind mf (fun f -> return (f x))
 
 let fail msg = fun _ -> Exception.fail msg
+
+val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
 let update f = fun s -> Exception.return ((), f s)
 let modify f = fun s -> Exception.return (f s)
 let read   f = fun s -> Exception.return (f s, s)
 
-let run m s = Exception.map fst (m s)
+
+let run m = fun s -> Exception.fmap fst (m s)
 
 module Operators = struct
   let (>>=) = bind
-  let (<$>) = map
+  let (<$>) = fmap
   let (<*>) = app
 end
 

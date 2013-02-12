@@ -89,4 +89,8 @@ let shift_r      = (48, Some "impl_shift_r")
 
 let return       = (49, Some "return")
 
+let malloc = (50, Some "malloc")
+let free   = (51, Some "free")
+
+
 let init = 100

@@ -1,3 +1,5 @@
+
+
 type error 'partial =
   | Undefined of 'partial
   | Bug of string
@@ -7,7 +9,7 @@ type t 'a 'partial = Exception.t 'a (error 'partial)
 let return = Exception.return
 let bind = Exception.bind
 let rbind f m = bind m f
-let map = Exception.map
+let fmap = Exception.fmap
 let app = Exception.app
 
 let undefined m = Exception.fail (Undefined m)
@@ -22,13 +24,13 @@ let of_exception = function
 
 let iter_set f s =
   let f' v () =
-    let (_ : t unit _) = map f v in
+    let (_ : t unit _) = fmap f v in
     () in
   Set.fold f' s ()
 
 let iter_list f ls =
   let f' v () =
-    let (_ : t unit _) = map f v in
+    let (_ : t unit _) = fmap f v in
     () in
   List.fold_right f' ls ()
 
