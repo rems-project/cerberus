@@ -1,46 +1,71 @@
-all: all.pdf
-core: core.pdf
+SHELL := /bin/bash
 
-all.tex: AilAux.ott AilTypes.ott AilTyping.ott Common.ott Ail.ott AilTypingAux.ott AilWf.ott
-	ott -merge true     \
-	-i Common.ott       \
-	-i AilAux.ott       \
-	-i Ail.ott          \
-	-i AilTypes.ott     \
-	-i AilTypingAux.ott \
-	-i AilTyping.ott    \
-	-i AilWf.ott        \
-	-o all.tex
+TARGETS :=\
+Common.v \
+MapsExt.v \
+AilTypes.v \
+AilSyntax.v \
+Range.v \
+Implementation.v \
+AilTypesAux.v \
+AilAux.v
 
-core.tex: AilTypes.ott Common.ott Ail.ott Core.ott
-	ott -merge true -tex_wrap false \
-	-i Common.ott                   \
-	-i AilTypes.ott                 \
-	-i Core.ott                     \
-	-o core.tex
 
-all.pdf: all.tex
-	pdflatex all.tex
+%_.ott:
+	rm -f $@
+	touch $@
+	$(eval DEP := $(shell cat $*.dep 2> /dev/null | tr "\n" " "))
+	$(eval GRM := $(shell cat $*.grm 2> /dev/null | tr "\n" " "))
+	for D in $(DEP); do                            \
+	  if [ -f "$$D.preamble" ]; then               \
+	    cat $$D.preamble |                         \
+	    sed 's/^% INC?.*$$/{{ phantom }}/g'        \
+	    >> $@ ;                                    \
+	  fi ;                                         \
+	done
+	if [ -f "$*.preamble" ]; then                  \
+	  cat $*.preamble |                            \
+	  sed 's/^% INC?//g'                           \
+	  >> $@ ;                                      \
+	fi
+	echo "grammar" >> $@
+	for G in terminals formula $(GRM); do          \
+	  cat $$G.pgrm >> $@ ;                         \
+	  if [ -f "$*.$$G" ]; then                     \
+	    cat $*.$$G >> $@ ;                         \
+	  fi ;                                         \
+	  for D in $(DEP); do                          \
+	    if [ -f "$$D.$$G" ]; then                  \
+	      cat $$D.$$G >> $@ ;                      \
+	    fi ;                                       \
+	  done ;                                       \
+	done
+	for D in $(DEP); do                            \
+	  if [ -f "$$D.grammar" ]; then                \
+	    cat $$D.grammar |                          \
+	    sed 's/^% INC?.*$$/{{ phantom }}/g'        \
+	    >> $@ ;                                    \
+	  fi ;                                         \
+	done
+	if [ -f "$*.grammar" ]; then                   \
+	  cat $*.grammar |                             \
+	  sed 's/^% INC?//g'                           \
+	  >> $@ ;                                      \
+	fi
+	for D in $(DEP); do                            \
+	  if [ -f "$$D.defns" ]; then                  \
+	    echo "embed {{coq %BEGIN_IMPORT}}" >> $@ ; \
+	    cat $$D.defns >> $@ ;                      \
+	    echo "embed {{coq %END_IMPORT}}" >> $@ ;   \
+	  fi ;                                         \
+	done
+	if [ -f "$*.defns" ]; then                     \
+	  cat $*.defns >> $@ ;                         \
+	fi
 
-core.pdf: core.tex top.tex
-	xelatex top.tex
+%.v: %_.ott
+	ott -coq_expand_list_types false -coq_avoid 0 -i $*_.ott -o coq/$@
+	perl -i -0pe 's/%BEGIN_IMPORT((\n|.)*?)%END_IMPORT//g' coq/$@
+	cd coq && coqtop -I ../../../ott/coq -compile $*
 
-core.lem: AilTypes.ott Common.ott Ail.ott Core.ott
-	ott -merge true \
-	-i Common.ott   \
-	-i AilTypes.ott \
-	-i Core.ott \
-	-o core.lem
-
-parser: AilTypes.ott Common.ott Ail.ott Core.ott
-	ott -merge true \
-	-i Common.ott   \
-	-i AilTypes.ott \
-	-i Core.ott \
-	-o core.mll
-
-clean:
-	rm -rf all.pdf all.tex all.aux all.log all.v
-	rm -rf top.pdf top.aux top.log
-	rm -rf core.pdf core.tex core.aux core.log
-	rm -rf core.lem
+coq : ${TARGETS}

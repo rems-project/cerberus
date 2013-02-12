@@ -1,47 +1,122 @@
-metavar P, Pi ::=
-  {{ phantom }}
-  {{ tex \Pi }}
-
 funs
 TypeTransformation ::=
 
-fun pointerConvert ty' :: ty :: PointerConvert by
+fun pointerConvert ty' :: ty :: pointerConvert by
 pointerConvert void === void
-pointerConvert basicType === basicType
+pointerConvert bt === bt
 pointerConvert (qs ty *) === qs ty *
 pointerConvert (ty [n]) === ty *
 pointerConvert (ty (qs1 ty1, .., qsk tyk)) === ty (qs1 ty1, .., qsk tyk) *
 
 defns
-Jtype :: '' ::=
+JisInteger :: '' ::=
+  {{ coq-universe Set }}
 
-defn P |= n in tyRange ty :: :: tyRange :: InTyRange by
+defn
+isInteger ty :: :: isInteger :: '' by
 
-Z n in tyRange P ty
--------------------- :: Def
-P |= n in tyRange ty
+------------ :: IsInteger
+isInteger it
 
-defn P |= ty1 <=range ty2 :: :: leTyRange :: LeTyRange by
+defns
+JisVoid :: '' ::=
 
-tyRange P ty1 <= tyRange P ty2
------------------------------- :: Def
-P |= ty1 <=range ty2
+defn
+isVoid ty :: :: isVoid :: '' by
+
+----------- :: IsVoid
+isVoid void
+
+defns
+JisPointer :: '' ::=
+
+defn
+isPointer ty :: :: isPointer :: '' by
+
+----------------- :: IsPointer
+isPointer qs ty *
+
+defns
+JisBool :: '' ::=
+
+defn
+isBool ty :: :: isBool :: '' by
+
+----------- :: IsBool
+isBool bool
+
+embed {{ coq
+Definition typeRange P it :=
+  let prec := Implementation.precision P it in
+  match it with
+  | Bool
+  | Unsigned _ => mkRange 0 (2^prec - 1)
+  | Char       => mkRange 0 (2^prec - 1)
+  | Signed _ =>
+      match Implementation.binMode P with
+      | Implementation.TwosComplement    => mkRange (-2^(prec - 1))     (2^(prec - 1) - 1)
+      | Implementation.OnesComplement    => mkRange (-2^(prec - 1) + 1) (2^(prec - 1) - 1)
+      | Implementation.SignPlusMagnitude => mkRange (-2^(prec - 1) + 1) (2^(prec - 1) - 1)
+      end
+  end.
+
+(*
+Section TypeRanges.
+Definition rangeSignedInt := {|min := -32767; max:= 32767|}.
+Definition rangeUnsignedInt := {|min := 0; max:= 65535|}.
+Definition rangeSignedLong := {|min := -2147483647; max:= 2147483647|}.
+Definition rangeUnsignedLong := {|min := 0; max:=  4294967295|}.
+Definition rangeSignedLongLong := {|min := -9223372036854775807; max:= 9223372036854775807|}.
+Definition rangeUnsignedLongLong := {|min := 0; max:= 18446744073709551615|}.
+End TypeRanges.
+
+Section Properties.
+Axiom precisionPos: forall P t (H : isInteger t), (precision P H > 0)%Z.
+Axiom sizeTUnsigned: forall P, isUnsigned P (size_t P).
+Axiom ptrdiffTInteger: forall P, isInteger (ptrdiff_t P).
+End Properties.
+*)
+}}
+
+defns
+JinTypeRange :: '' ::=
+
+defn P |= n in typeRange ty :: :: inTypeRange :: '' by
+
+(Z n) in typeRange P it
+----------------------- :: InTypeRange
+P |= n in typeRange it
+
+defns
+JleTypeRange :: '' ::=
+
+defn P |= ty1 <=range ty2 :: :: leTypeRange :: '' by
+
+typeRange P it1 <= typeRange P it2
+---------------------------------- :: LeTypeRange
+P |= it1 <=range it2
+
+defns
+JisSigned :: '' ::=
 
 defn
 P |= isSigned ty :: :: isSigned :: IsSigned by
 
--------------------------------------- :: Int
-P |= isSigned (signed integerBaseType)
+-------------------------- :: Int
+P |= isSigned (signed ibt)
 
 P |= isCharSigned
 ------------------ :: Char
 P |= isSigned char
 
+defns
+JisUnsigned :: '' ::=
+
 defn
 P |= isUnsigned ty :: :: isUnsigned :: IsUnsigned by
 
----------------------------------------- :: Int
-P |= isUnsigned unsigned integerBaseType
+---------------------------- :: Int
+P |= isUnsigned unsigned ibt
 
 -------------------- :: Bool
 P |= isUnsigned bool
@@ -50,12 +125,14 @@ not (P |= isCharSigned)
 ----------------------- :: Char
 P |= isUnsigned char
 
+defns
+JeqRank :: '' ::=
 
 defn
 ty1 =rank ty2 :: :: eqRank :: EqRank by
 
------------------------------------------------------- :: Unsigned
-signed integerBaseType =rank unsigned integerBaseType
+----------------------------- :: Unsigned
+signed ibt =rank unsigned ibt
 
 ------------------------ :: UnsignedChar
 char =rank unsigned char
@@ -67,15 +144,18 @@ isInteger ty
 ------------ :: Eq
 ty =rank ty
 
+defns
+JltRank :: '' ::=
+
 defn
 P |= ty1 <rank ty2 :: :: ltRank :: LtRank by
 
 % redundant without extended integer types 
-P |= isSigned ty1
-P |= isSigned ty2
-P |= ty1 <precision ty2
+P |= isSigned it1
+P |= isSigned it2
+P |= it1 <precision it2
 ----------------------- :: Precision
-P |= ty1 <rank ty2
+P |= it1 <rank it2
 
 isInteger ty
 not (isBool ty)
@@ -109,6 +189,9 @@ P |= ty1 <rank ty2'
 -------------------- :: Congruence2
 P |= ty1 <rank ty2
 
+defns
+JleRank :: '' ::=
+
 defn
 P |= ty1 <=rank ty2 :: :: leRank :: LeRank by
 
@@ -120,30 +203,8 @@ P |= ty1 <rank ty2
 ------------------- :: Lt
 P |= ty1 <=rank ty2
 
-defn
-isInteger ty :: :: isInteger :: 'IsInteger' by
-
---------------------- :: Integer
-isInteger integerType
-
-defn
-isVoid ty :: :: isVoid :: IsVoid by
-
------------ :: Def
-isVoid void
-
-defn
-isPointer ty :: :: isPointer :: IsPointer by
-
------------------ :: Def
-isPointer qs ty *
-
-defn
-isBool ty :: :: isBool :: IsBool by
-
------------ :: Def
-isBool bool
-
+defns
+JisArithmetic :: '' ::=
 
 defn
 isArithmetic ty :: :: isArithmetic :: IsArithmetic
@@ -153,6 +214,9 @@ by
 isInteger ty
 --------------- :: Integer
 isArithmetic ty
+
+defns
+JisScalar :: '' ::=
 
 defn
 isScalar ty :: :: isScalar :: IsScalar by
@@ -165,40 +229,52 @@ isArithmetic ty
 --------------- :: Arithmetic
 isScalar ty
 
-defn
-isArray ty :: :: isArray :: IsArray by
+defns
+JisArray :: '' ::=
 
--------------- :: Def
+defn
+isArray ty :: :: isArray :: '' by
+
+-------------- :: IsArray
 isArray ty [n]
 
-defn
-isFunction ty :: :: isFunction :: IsFunction by
+defns
+JisFunction :: '' ::=
 
--------------------------------------- :: Def
+defn
+isFunction ty :: :: isFunction :: '' by
+
+-------------------------------------- :: IsFunction
 isFunction (ty (qs1 ty1, .., qsk tyk))
 
-defn
-isUnsignedOf ty1 ty2 :: :: isCorrespondingUnsigned :: IsCorrespondingUnsigned by
+defns
+JisUnsignedOf :: '' ::=
 
----------------------------------------------------------------- :: Def
-isUnsignedOf (signed integerBaseType) (unsigned integerBaseType)
+defn
+isUnsignedOf ty1 ty2 :: :: isCorrespondingUnsigned :: '' by
+
+---------------------------------------- :: IsCorrespondingUnsigned
+isUnsignedOf (signed ibt) (unsigned ibt)
+
+defns
+JisPromotion :: '' ::=
 
 defn
 P |= isPromotion ty1 ty2 :: :: isPromotion :: IsPromotion by
 
-not (integerType = unsigned int)
-not (integerType = signed int)
-P |= integerType <=rank signed int
-P |= integerType <=range signed int
+not (it = unsigned int)
+not (it = signed int)
+P |= it <=rank signed int
+P |= it <=range signed int
 ----------------------------------------- :: ToSignedInt
-P |= isPromotion integerType (signed int)
+P |= isPromotion it (signed int)
 
-not (integerType = unsigned int)
-not (integerType = signed int)
-P |= integerType <=rank signed int
-not (P |= integerType <=range signed int)
-------------------------------------------- :: ToUnsignedInt
-P |= isPromotion integerType (unsigned int)
+not (it = unsigned int)
+not (it = signed int)
+P |= it <=rank signed int
+not (P |= it <=range signed int)
+---------------------------------- :: ToUnsignedInt
+P |= isPromotion it (unsigned int)
 
 ---------------------------------------------- :: UnsignedInt
 P |= isPromotion (unsigned int) (unsigned int)
@@ -206,9 +282,12 @@ P |= isPromotion (unsigned int) (unsigned int)
 ------------------------------------------ :: SignedInt
 P |= isPromotion (signed int) (signed int)
 
-not (P |= integerType <=rank signed int)
----------------------------------------- :: Rank
-P |= isPromotion integerType integerType
+not (P |= it <=rank signed int)
+------------------------------- :: Rank
+P |= isPromotion it it
+
+defns
+JisUsualArithmetic :: '' ::=
 
 defn
 P |= isUsualArithmetic ty1 ty2 ty :: :: isUsualArithmetic :: IsUsualArithmetic
@@ -338,24 +417,16 @@ isUnsignedOf ty1' ty1''
 ------------------------------------ :: GtSigned'
 P |= isUsualArithmetic ty1 ty2 ty1''
 
-
-defn
-isLvalueConvertable ty :: :: isLvalueConvertable :: IsLvalueConvertable
-{{ com TODO incomplete non-array type results in undefined behaviour }}by
-
-not (isArray ty)
-isComplete ty
----------------------- :: Def
-isLvalueConvertable ty
-
+defns
+JisObject :: '' ::=
 
 defn
 isObject ty :: :: isObject :: IsObject
 {{ com TODO struct/enum }}
 by
 
-------------------- :: BasicType
-isObject basicType
+----------- :: BasicType
+isObject bt
 
 ------------- :: Void
 isObject void
@@ -366,6 +437,9 @@ isObject (qs ty *)
 ----------------- :: Array
 isObject (ty [n])
 
+defns
+JisComplete :: '' ::=
+
 defn
 isComplete ty :: :: isComplete :: IsComplete
 % No VLA implies that arrays are always complete.
@@ -373,8 +447,8 @@ isComplete ty :: :: isComplete :: IsComplete
 %   isComplete ty -> isObject ty
 by
 
--------------------- :: BasicType
-isComplete basicType
+------------- :: BasicType
+isComplete bt
 
 -------------------- :: Pointer
 isComplete (qs ty *)
@@ -382,14 +456,20 @@ isComplete (qs ty *)
 ------------------- :: Array
 isComplete (ty [n])
 
+defns
+JisIncomplete :: '' ::=
+
 defn
 isIncomplete ty :: :: isIncomplete :: IsIncomplete by
 
 ----------------- :: Void
 isIncomplete void
 
+defns
+JisModifiable :: '' ::=
+
 defn
-isModifiable qualifiers type :: :: isModifiable :: IsModifiable
+isModifiable qualifiers type :: :: isModifiable :: ''
 {{ com TODO struct/enum types }}
 by
 
@@ -397,8 +477,11 @@ isObject ty
 not (isArray ty)
 not (isIncomplete ty)
 not (const in qs)
---------------------- :: Def
+--------------------- :: IsModifiable
 isModifiable qs ty
+
+defns
+JisReal :: '' ::=
 
 defn
 isReal ty :: :: isReal :: IsReal
@@ -408,6 +491,21 @@ by
 isInteger ty
 ------------:: Integer
 isReal ty
+
+defns
+JisLvalueConvertable :: '' ::=
+
+defn
+isLvalueConvertable ty :: :: isLvalueConvertable :: ''
+{{ com TODO incomplete non-array type results in undefined behaviour }}by
+
+not (isArray ty)
+isComplete ty
+---------------------- :: IsLvalueConvertable
+isLvalueConvertable ty
+
+defns
+JisCompatible :: '' ::=
 
 defn
 isCompatible ty1 ty2 :: :: isCompatible :: IsCompatible by
@@ -420,9 +518,12 @@ isCompatible ty1 ty'1 .. isCompatible tyk ty'k
 ------------------------------------------------------------------------- :: Function
 isCompatible (ty (qs1 ty1, .., qsk tyk)) (ty' (qs'1 ty'1, .., qs'k ty'k))
 
+defns
+JisComposite :: '' ::=
+
 defn
 isComposite ty1 ty2 ty :: :: isComposite :: IsComposite
-{{ com Currently, only first rule is relevant (missing function prototypes, VLAs, arrays of unknown size).}}
+  {{ com Currently, only first rule is relevant (missing function prototypes, VLAs, arrays of unknown size).}}
 by
 % lemma: isComposite ty1 ty2 ty ->
 %          isCompatible ty1 ty2 /\isCompatible ty1 ty /\ isCompatible ty2 ty
@@ -438,3 +539,35 @@ isComposite ty' ty'' ty
 isComposite ty'1 ty''1 ty1 .. isComposite ty'k ty''k tyk
 ------------------------------------------------------------------------------------------------------ :: Function
 isComposite (ty' (qs'1 ty'1, .., qs'k ty'k)) (ty'' (qs''1 ty''1, .., qs''k ty''k)) (ty (ty1, .., tyk))
+
+% embed {{ coq
+% (* defns JisCompatible *)
+% Inductive isCompatible : type -> type -> Prop :=    (* defn isCompatible *)
+%  | IsCompatibleEq : forall (ty:type),
+%      isCompatible ty ty
+%  | IsCompatibleFunction : forall (args1 args2 : list (qualifiers*type)) (res1 res2 : type),
+%      isCompatible res1 res2 ->
+%      List.Forall2 isCompatible (List.map (@snd _ type) args1) (List.map (@snd _ type) args2) ->
+%      isCompatible (Function res1 args1) (Function res2 args2).
+
+% Inductive Forall3 {A B C : Type} (R : A -> B -> C -> Type) : list A -> list B -> list C -> Type :=
+%   | Forall3_nil  : Forall3 R nil nil nil
+%   | Forall3_cons : forall {a : A} {b : B} {c : C} {lA : list A} {lB : list B} {lC : list C},
+%                    R a b c -> Forall3 R lA lB lC -> Forall3 R (a :: lA) (b :: lB) (c :: lC).
+
+% (* defns JisComposite *)
+% Inductive isComposite : type -> type -> type -> Prop :=    (* defn isComposite *)
+%  | IsCompositeEq : forall (ty:type),
+%      isComposite ty ty ty
+%  | IsCompositeArray : forall (ty1:type) (n:nat) (ty2 ty:type),
+%      isComposite ty1 ty2 ty ->
+%      isComposite  (Array ty1 n)   (Array ty2 n)   (Array ty n) 
+%  | IsCompositeFunction : forall (args1 args2 args : list (qualifiers*type)) (res1 res2 res : type),
+%      isComposite res1 res2 res ->
+%      List.Forall (fun qs => qs = nil) (List.map (@fst qualifiers _) args) ->
+%      Forall3 isComposite
+%              (List.map (@snd _ type) args1)
+%              (List.map (@snd _ type) args2)
+%              (List.map (@snd _ type) args ) ->
+%      isComposite (Function res1 args1) (Function res2 args2) (Function res args).
+% }}
