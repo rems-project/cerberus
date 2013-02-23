@@ -12,26 +12,16 @@ type semantic_options =
 *)
 
 
-(* Recap of the memory actions *)
-(*
-val pointer_plus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
-val pointer_minus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
-val pointer_member_access: pointer_value -> member_access -> MM.t pointer_value
-
-val pointer_cast: pointer_value -> Ail.ctype -> MM.t ??
-
-*)
-
-
-
-
-
-
 type action_id = num (* an abstract thing *)
 
 
-type sym = Symbol.t
-(* TODO fix this up wrt packing flags *)
+(* TODO fix this up *)
+type packing_flag = unit
+
+type sym = <|
+    sym_id: Symbol.t;
+    sym_pflags: packing_flag;
+|>
 
 
 
@@ -220,7 +210,7 @@ structure, so record layout for each type definition, not for each
 type in use.  Though the existence of different packing compilation
 flags makes this a bit finer than you might think.*)
 
-type struct_layout [name = "sl*"] = <|
+type struct_layout (* [name = "sl*"] *) = <|
   sl_offsets : Pmap.map member_id address;
   sl_size : address;
   sl_alignment : address ;
@@ -267,13 +257,6 @@ constraint w.r.t. the sizes of other types. *)
   unions : Pmap.map union_tag union_layout;
 |>
 
-(** type layout *)
-
-(* we lift the type definition layout information to functions giving
-layout data for arbitrary types *)
-
-val sizeof : layout_environment -> Ail.ctype -> address
-val alignof : layout_environment -> Ail.ctype -> address
 
 
 
@@ -314,6 +297,13 @@ type member_access =
                                  (including ones with index equal to 0) *)
 
    (* P: not sure why you want to distinguish between those three array cases in the constructors? *)
+(* K: * adding Array_one_past seems just convenient to avoid rechecking if we are in the
+      case (which involve fetching the type of the block pointed to)
+
+      * for Array_access, don't we want to make the difference between being a pointer
+        to the k element of an array (Array_access) and a pointer to an array made
+        of the elements of the original array except the first k-1 ones ?
+*)
 
 (* we thought about adding:
 
@@ -351,8 +341,8 @@ arith operation stuff *)
 
 
 type pointer_value =   <| 
-   address : lift_value pointer_address;
-   ftype :  fancy_type;
+   address: lift_value pointer_address;
+   ftype:  fancy_type;
 |>
 
 
@@ -415,9 +405,10 @@ type value =
 
 (** blocks and block environments *)
 
+(* K: if these are exactly the "objects" from the std, we should rename *)
 type block =  <|
   block_address: symbolic_address_id;
-  block_type:    Ail.ctype;
+  block_type:    Ail.ctype; (* K: if this is exactly the "effective type" (modulo for alloced objects) from the std, we should rename. *)
 |>
 (* does Ail.ctype tell me the size of all arrays? *)
 
@@ -449,7 +440,11 @@ them just like malloc'd regions.
 type write = 
   <| id : action_id;
      typ : Ail.ctype;
-     addr : pointer_value;  (* or symbolic_address_id ??? *)
+(*     addr : pointer_value;  (* or symbolic_address_id ??? *) *)
+     addr: pointer_address;
+     (* K: I think we want "pointer_address", ie. forget about fancy types in the memory state,
+           but have operations called by the execution Core actions to use "pointer_value". *)
+
      valu : value |>
 
 (* have a special action for the splatting of padding with unspecified-value bytes, of a byte-range with holes? *)
@@ -510,6 +505,23 @@ module MM = struct
       | Error msg       -> Error msg
       | Undef           -> Undef
     end
+    
+  (* state operations *)
+  val get: t memory_state
+  let get = fun s -> Success (s, s)
+  
+  val set: memory_state -> t unit
+  let set s' = fun s -> Success ((), s')
+  
+  val update: (memory_state -> memory_state) -> t unit
+  let update f = fun s -> Success ((), f s)
+  
+  val modify: forall 'a. (memory_state -> 'a * memory_state) -> t 'a
+  let modify f = fun s -> Success (f s)
+  
+  
+  (* Raise the `undefined behaviour' error in the Core execution state *)
+  let undef = fun _ -> Undef
   
   
   module Operators = struct
@@ -518,6 +530,8 @@ module MM = struct
   end
   open Operators
   (*P: why do we nest modules above? *)
+  (* K: not sure, I've just been following Justus' style. Most of these
+        will disappear anyway once we get type classes *)
   
   let sequence ms = List.fold_right
     (fun m acc -> m   >>= fun x  ->
@@ -527,49 +541,144 @@ module MM = struct
   
   val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
   let mapM f xs = sequence (List.map f xs)
-  
-  
-  
-  
-  (* Memory model state operators *)
-  val get_block: block_id -> t block
-  let get_block bid = fun s ->
-    if not (Pmap.mem bid s.block_id_environment) then
-      assert_false "[Memory.MM.get_block] unregistered block id"
-    else
-      Success (Pmap.find bid s.block_id_environment, s)
-  
-  
-  
-  
-  val foreach_block: forall 'a. (block_id -> t 'a) -> t (list 'a)
-  let foreach_block f =
-    todo "do a mapM over blocks"
-  
-  
-  
-  
-  (* Raise the `undefined behaviour' error in the Core execution state *)
-  let undef = fun _ -> Undef
-  
-  val fresh_block_id: t block_id
-  let fresh_block_id = todo ""
-  
-  val fresh_symbolic_address_id: t symbolic_address_id
-  let fresh_symbolic_address_id = todo ""
-  
-  
-  val new_constraint: symbolic_address_constraint -> t unit
-  let new_constraint c = fun s ->
-    Success ((), <| s with symbolic_address_constraint_environment=
-                             Set.add c s.symbolic_address_constraint_environment
-                  |>)
-  
 end
 open MM.Operators
 
 
 
+(* Memory model state operators *)
+val get_block: block_id -> MM.t block
+let get_block bid =
+  MM.get >>= fun s ->
+  if not (Pmap.mem bid s.block_id_environment) then
+    assert_false "[Memory.get_block] unregistered block id"
+  else
+    MM.return (Pmap.find bid s.block_id_environment)
+  
+val foreach_block: forall 'a. (block_id -> MM.t 'a) -> MM.t (list 'a)
+let foreach_block f = todo "do a mapM over blocks"
+
+val fresh_block_id: MM.t block_id
+let fresh_block_id =
+  MM.modify (fun s ->
+    let n = s.last_block_id in
+    (n, <| s with last_block_id= n+1 |>)
+  )
+
+
+val fresh_symbolic_address_id: MM.t symbolic_address_id
+let fresh_symbolic_address_id = todo ""
+
+val new_constraint: symbolic_address_constraint -> MM.t unit
+let new_constraint c =
+  MM.update (fun s -> <| s with symbolic_address_constraint_environment=
+                             Set.add c s.symbolic_address_constraint_environment
+                       |>)
+
+
+
+val fresh_action_id: MM.t action_id
+let fresh_action_id = todo ""
+
+
+
+
+(** type layout *)
+
+(* we lift the type definition layout information to functions giving
+layout data for arbitrary types *)
+val sizeof: Ail.ctype -> MM.t address
+let sizeof ty = todo ""
+
+val alignof: Ail.ctype -> MM.t address
+let alignof ty = todo ""
+
+
+
+
+
+
+
+(* ------------- *)
+
+
+(** Memory operations *)
+
+(* static allocation of an object *)
+val create: Ail.ctype -> MM.t block_id
+let create ty =
+  fresh_block_id            >>= fun bid ->
+  fresh_symbolic_address_id >>= fun sa  ->
+  MM.update (fun s ->
+    let block = <| block_address= sa; block_type= ty |> in
+    <| s with block_id_environment=
+           Pmap.add bid block s.block_id_environment |>
+  ) >> MM.return bid
+
+(* dynamic allocation of an object *)
+val alloc: unlifted_numeric_value -> MM.t block_id
+let alloc n =
+  fresh_block_id            >>= fun bid ->
+  fresh_symbolic_address_id >>= fun sa  ->
+  MM.update (fun s ->
+    (* we make up a pseudo effective type, following the choice B from Peter's
+       comment after the definition of the type `block' *)
+    let block = <| block_address= sa;
+                   block_type= Ail.ARRAY Ail.unsigned_char n |> in
+    <| s with block_id_environment=
+           Pmap.add bid block s.block_id_environment |>
+  ) >> MM.return bid
+
+
+
+
+
+
+
+
+(*
+type write = 
+  <| id : action_id;
+     typ : Ail.ctype;
+     addr : lift_value pointer_address;
+     valu : value |>
+
+*)
+
+(*
+val store: Ail.ctype -> pointer_value -> unlifted_numeric_value -> MM.t unit
+let store ty <| address= lvalue_addr; ftype= lvalue_fty |> n =
+  match lvalue_addr with
+    | Specified Null -> todo ""
+    | Spec
+
+
+
+
+
+  MM.get          >>= fun s    ->
+
+  fresh_action_id >>= fun a_id ->
+  
+
+
+
+  todo ""
+  
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+(* ------------- *)
 
 
 
@@ -600,6 +709,40 @@ let expr_query_constraint c =
 
 
 (** pointer actions *)
+(* Recap of the memory actions *)
+(*
+val pointer_plus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
+val pointer_minus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
+val pointer_member_access: pointer_value -> member_access -> MM.t pointer_value
+
+val pointer_deref: 
+val get_address: 
+
+val sizeof: (OK)
+val alignof: (OK)
+
+val pointer_lt_pointer: 
+val pointer_le_pointer: 
+val pointer_gt_pointer: 
+val pointer_ge_pointer: 
+
+val pointer_eq_pointer: 
+val pointer_ne_pointer: 
+
+val create: (OK) 
+val alloc:  (OK)
+val kill: 
+
+val load: 
+val store: 
+
+
+
+val pointer_cast: pointer_value -> Ail.ctype -> MM.t ??
+
+*)
+
+
 
 
 (* want to use Lem sections to feed in the flags and any required environment data here *)
@@ -627,7 +770,7 @@ let pointer_plus_number p n =
         (* K: from the std, it has to be the type stored in the block,
               am I missing something relating to non-std uses? *)
         (* P: what's the compiler going to do?  Use the static type, no? *)
-        MM.get_block block_id >>= fun block ->
+        get_block block_id >>= fun block ->
         
         let (array_elem_type, array_length) =
           match block.block_type with
@@ -677,8 +820,8 @@ let pointer_plus_number p n =
          state monad so that this "looks" just like an addition (and one
          could swap out the symbolic address machinery for concrete
          addresses at will *)
-      MM.fresh_symbolic_address_id >>= fun sa' ->
-      MM.new_constraint $ Equal (Symbolic sa')
+      fresh_symbolic_address_id >>= fun sa' ->
+      new_constraint $ Equal (Symbolic sa')
                                 (Binop SABplus (Symbolic sa) (Concrete n')) >>
       MM.return <| p with address= Specified (Address sa') |>
   
@@ -745,7 +888,7 @@ let get_pointer_array_position p =
         assert_false "[Memory.get_pointer_array_position] called on a null \ 
                       pointer."
     | Specified (Block_path bid mapath) ->
-        MM.get_block bid >>= fun block ->
+        get_block bid >>= fun block ->
         let (elem_ty, array_size) = process block in
         match mapath with
           | (Array_shift a_ty a_shift) :: _ ->
@@ -762,8 +905,8 @@ let get_pointer_array_position p =
           | _ -> MM.return [(bid, Shift_index 0)]
         end
     | Specified (Address sa) ->
-       MM.foreach_block (fun bid ->
-         MM.get_block bid >>= fun block ->
+       foreach_block (fun bid ->
+         get_block bid >>= fun block ->
          evaluate_symbolic_expr $
            Binop SABminus (Symbolic block.block_address) (Symbolic sa) >>= fun p_shift ->
          let (elem_ty, array_size) = process block in
