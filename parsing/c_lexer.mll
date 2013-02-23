@@ -1,290 +1,174 @@
+(* This file is from Jacques-Henri Jourdan's parser *)
 {
-exception Eof
-exception InternalError of string
 
-open Pervasives_
+(* TODO: hack *)
+let intern_string s = s
+let currentLoc _ = 0
 
-module P = C_parser
-module H = Hashtbl
+open Lexing
+open Pre_parser
+open Pre_parser_aux
+(* open Cabshelper *)
+(* open Camlcoq *)
 
-type token = P.token
+module SMap = Map.Make(String)
 
-(* used by [matchingpars] *)
-let matchingParsOpen = ref 0
+let contexts : string list list ref = ref []
+let lexicon : (string, Cabs_parser.cabsloc -> token) Hashtbl.t = Hashtbl.create 0
 
-(* TODO: document *)
-let skip_lexeme lexbuf =
-  let _ = Lexing.lexeme lexbuf in
-  ()
+let init filename channel : Lexing.lexbuf =
+  assert (!contexts = []);
+  Hashtbl.clear lexicon;
+  List.iter 
+    (fun (key, builder) -> Hashtbl.add lexicon key builder)
+    [ ("auto", fun loc -> AUTO loc);
+      ("break", fun loc -> BREAK loc);
+      ("case", fun loc -> CASE loc);
+      ("char", fun loc -> CHAR loc);
+      ("const", fun loc -> CONST loc);
+      ("continue", fun loc -> CONTINUE loc);
+      ("default", fun loc -> DEFAULT loc);
+      ("do", fun loc -> DO loc);
+      ("double", fun loc -> DOUBLE loc);
+      ("else", fun loc -> ELSE loc);
+      ("enum", fun loc -> ENUM loc);
+      ("extern", fun loc -> EXTERN loc);
+      ("float", fun loc -> FLOAT loc);
+      ("for", fun loc -> FOR loc);
+      ("goto", fun loc -> GOTO loc);
+      ("if", fun loc -> IF loc);
+      ("inline", fun loc -> INLINE loc);
+      ("int", fun loc -> INT loc);
+      ("long", fun loc -> LONG loc);
+      ("register", fun loc -> REGISTER loc);
+      ("restrict", fun loc -> RESTRICT loc);
+      ("return", fun loc -> RETURN loc);
+      ("short", fun loc -> SHORT loc);
+      ("signed", fun loc -> SIGNED loc);
+      ("sizeof", fun loc -> SIZEOF loc);
+      ("static", fun loc -> STATIC loc);
+      ("struct", fun loc -> STRUCT loc);
+      ("switch", fun loc -> SWITCH loc);
+      ("typedef", fun loc -> TYPEDEF loc);
+      ("union", fun loc -> UNION loc);
+      ("unsigned", fun loc -> UNSIGNED loc);
+      ("void", fun loc -> VOID loc);
+      ("volatile", fun loc -> VOLATILE loc);
+      ("while", fun loc -> WHILE loc);  
+      ("_Bool", fun loc -> BOOL loc);
+      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc)
+    ];
 
-(* 6.4 [Lexical elements]
-    
-    token:
-        keyword
-        identifier
-        constant
-        string-literal
-        punctuator
-    
-    preprocessing-token:
-        header-name
-        identifier
-        pp-number
-        character-constant
-        string-literal
-        punctuator
-        "each non-white-space character that cannot be one of the above"
-*)
+  push_context := begin fun () -> contexts := []::!contexts end;
+  pop_context := begin fun () ->
+    match !contexts with
+      | [] -> assert false
+      | t::q -> List.iter (Hashtbl.remove lexicon) t
+  end;
 
-(* 6.4.1 [Keywords] *)
-let keywords =
-  List.fold_left
-    (fun m (k, e) -> Pmap.add k e m)
-    (Pmap.empty Pervasives.compare)
-    [
-      ("auto",           P.AUTO);
-      ("break",          P.BREAK);
-      ("case",           P.CASE);
-      ("char",           P.CHAR);
-      ("const",          P.CONST);
-      ("continue",       P.CONTINUE);
-      ("default",        P.DEFAULT);
-      ("do",             P.DO);
-      ("double",         P.DOUBLE); (* LATER *)
-      ("else",           P.ELSE);
-      ("enum",           P.ENUM);
-      ("extern",         P.EXTERN);
-      ("float",          P.FLOAT); (* LATER *)
-      ("for",            P.FOR);
-      ("goto",           P.GOTO);
-      ("if",             P.IF);
-      ("inline",         P.INLINE);
-      ("int",            P.INT);
-      ("long",           P.LONG);
-      ("register",       P.REGISTER);
-      ("restrict",       P.RESTRICT);
-      ("return",         P.RETURN);
-      ("short",          P.SHORT);
-      ("signed",         P.SIGNED);
-      ("sizeof",         P.SIZEOF);
-      ("static",         P.STATIC);
-      ("struct",         P.STRUCT);
-      ("switch",         P.SWITCH);
-      ("typedef",        P.TYPEDEF);
-      ("union",          P.UNION);
-      ("unsigned",       P.UNSIGNED);
-      ("void",           P.VOID);
-      ("volatile",       P.VOLATILE);
-      ("while",          P.WHILE);
-      ("_Alignas",       P.ALIGNAS);
-      ("_Alignog",       P.ALIGNOF);
-      ("_Atomic",        P.ATOMIC);
-      ("_Bool",          P.BOOL);
-      ("_Complex",       P.COMPLEX); (* LATER *)
-      ("_Generic",       P.GENERIC);
-      ("_Imaginary",     P.IMAGINARY); (* LATER *)
-      ("_Noreturn",      P.NORETURN);
-      ("_Static_assert", P.STATIC_ASSERT);
-      ("_Thread_local",  P.THREAD_LOCAL);
-    ]
+ declare_varname := begin fun id ->
+    Hashtbl.add lexicon id (fun loc -> VAR_NAME (id, ref VarId, loc));
+    match !contexts with
+      | [] -> ()
+      | t::q -> contexts := (id::t)::q
+  end;
 
+  declare_typename := begin fun id ->
+    Hashtbl.add lexicon id (fun loc -> TYPEDEF_NAME (id, ref TypedefId, loc));
+    match !contexts with
+      | [] -> ()
+      | t::q -> contexts := (id::t)::q
+  end;
 
+  !declare_typename "__builtin_va_list";
 
-(* Return a keyword or a identifier (TODO: this is not using the proper regexp
-   for identifiers) *)
-let scan_ident lexbuf =
-  let id = Lexing.lexeme lexbuf in
-  try
-    Pmap.find id keywords
-  (* default to variable name, as opposed to type *)
-  with Not_found ->
-    (* Check if the token is an enumeration constant *)
-      P.IDENTIFIER id
-
-
-
-(* TODO: READ *)
-
-(*** escape character management ***)
-let scan_escape (char: char) : int64 =
-  let result = match char with
-    | 'n' -> '\n'
-    | 'r' -> '\r'
-    | 't' -> '\t'
-    | 'b' -> '\b'
-    | 'f' -> '\012'  (* ASCII code 12 *)
-    | 'v' -> '\011'  (* ASCII code 11 *)
-    | 'a' -> '\007'  (* ASCII code 7 *)
-    | 'e' | 'E' -> '\027'  (* ASCII code 27. This is a GCC extension *)
-    | '\'' -> '\''    
-    | '"'-> '"'     (* '"' *)
-    | '?' -> '?'
-    | '(' -> '('
-    | '{' -> '{'
-    | '[' -> '['
-    | '%' -> '%'
-    | '\\' -> '\\' 
-    | other -> raise_error ("Unrecognized escape sequence: \\" ^ (String.make 1 other)) in
-  Int64.of_int (Char.code result)
-
-let valueOfDigit chr =
-  let int_value = 
-    match chr with
-    | '0'..'9' -> (Char.code chr) - (Char.code '0')
-    | 'a'..'z' -> (Char.code chr) - (Char.code 'a') + 10
-    | 'A'..'Z' -> (Char.code chr) - (Char.code 'A') + 10
-    | _ -> raise_error ("Character \'" ^ String.make 1 chr ^ "\' not a digit.") in
-  Int64.of_int int_value
-
-let scan_hex_escape str =
-  let radix = Int64.of_int 16 in
-  let the_value = ref Int64.zero in
-  (* start at character 2 to skip the \x *)
-  for i = 2 to (String.length str) - 1 do
-    let thisDigit = valueOfDigit (String.get str i) in
-    (* the_value := !the_value * 16 + thisDigit *)
-    the_value := Int64.add (Int64.mul !the_value radix) thisDigit
-  done;
-  !the_value
-
-let scan_oct_escape str =
-  let radix = Int64.of_int 8 in
-  let the_value = ref Int64.zero in
-  (* start at character 1 to skip the \x *)
-  for i = 1 to (String.length str) - 1 do
-    let thisDigit = valueOfDigit (String.get str i) in
-    (* the_value := !the_value * 8 + thisDigit *)
-    the_value := Int64.add (Int64.mul !the_value radix) thisDigit
-  done;
-  !the_value
-
-let lex_hex_escape remainder lexbuf =
-  let prefix = scan_hex_escape (Lexing.lexeme lexbuf) in
-  prefix :: remainder lexbuf
-
-let lex_oct_escape remainder lexbuf =
-  let prefix = scan_oct_escape (Lexing.lexeme lexbuf) in
-  prefix :: remainder lexbuf
-
-let lex_simple_escape remainder lexbuf =
-  let lexchar = Lexing.lexeme_char lexbuf 1 in
-  let prefix = scan_escape lexchar in
-  prefix :: remainder lexbuf
-
-let lex_unescaped remainder lexbuf =
-  let prefix = Int64.of_int (Char.code (Lexing.lexeme_char lexbuf 0)) in
-  prefix :: remainder lexbuf
-
-
-let lex_comment remainder lexbuf =
-  let ch = Lexing.lexeme_char lexbuf 0 in
-  let prefix = Int64.of_int (Char.code ch) in
-  if ch = '\n' then Lexing.new_line lexbuf;
-  prefix :: remainder lexbuf
-
+  let lb = Lexing.from_channel channel in
+  lb.lex_curr_p <-
+    {lb.lex_curr_p with pos_fname = filename; pos_lnum = 1};
+  lb
 
 }
+(* Identifiers *)
+let digit = ['0'-'9']
+let hexadecimal_digit = ['0'-'9' 'A'-'F' 'a'-'f']
+let nondigit = ['_' 'a'-'z' 'A'-'Z']
 
+let hex_quad = hexadecimal_digit hexadecimal_digit
+                 hexadecimal_digit hexadecimal_digit
+let universal_character_name =
+    "\\u" hex_quad
+  | "\\U" hex_quad hex_quad
 
+let identifier_nondigit =
+    nondigit
+(*| universal_character_name*)
+  | '$'
 
+let identifier = identifier_nondigit (identifier_nondigit|digit)*
 
+(* Whitespaces *)
+let whitespace_char = [' ' '\t' '\n' '\012' '\r']
 
-
-
-
-
-
-
-
-
-
-(* TODO *)
-(* §5.2.1 *)
-
-let uppercase_letters  = ['A'-'Z']
-let lowercase_letters  = ['a'-'z']
-let digits             = ['0'-'9']
-let graphic_characters = ['!' '"' '#' '%' '&' '\'' '('  ')' '*' '+' ',' '-' '.' '/' ':'
-                          ';' '<' '=' '>' '?' '['  '\\' ']' '^' '_' '{' '|' '}' '~']
-
-let basic_character_set =
-    uppercase_letters
-  | lowercase_letters
-  | digits
-  | graphic_characters
-
-
-
-(* ================== BEGIN NEW LEXER ================== *)
-
-(* defined in §6.4.4.1#1 *)
+(* Integer constants *)
 let nonzero_digit = ['1'-'9']
-
-(* defined in §6.4.2.1#1 *)
-let digit = ['0' - '9']
-
-(* defined in §6.4.4.1#1 *)
 let decimal_constant = nonzero_digit digit*
+
 let octal_digit = ['0'-'7']
 let octal_constant = '0' octal_digit*
+
 let hexadecimal_prefix = "0x" | "0X"
-let hexadecimal_digit = ['0'-'9' 'a'-'f' 'A'-'F']
-let hexadecimal_constant = hexadecimal_prefix hexadecimal_digit+
+let hexadecimal_constant =
+  hexadecimal_prefix hexadecimal_digit+
+
 let unsigned_suffix = ['u' 'U']
 let long_suffix = ['l' 'L']
 let long_long_suffix = "ll" | "LL"
 let integer_suffix =
-    unsigned_suffix long_suffix?
-  | unsigned_suffix long_long_suffix
+    unsigned_suffix long_suffix? 
+  | unsigned_suffix long_long_suffix 
   | long_suffix unsigned_suffix?
   | long_long_suffix unsigned_suffix?
+
 let integer_constant =
     decimal_constant integer_suffix?
   | octal_constant integer_suffix?
   | hexadecimal_constant integer_suffix?
 
-(* defined in §6.4.3#1 *)
-let hex_quad = hexadecimal_digit hexadecimal_digit hexadecimal_digit hexadecimal_digit
-let universal_character_name =
-    "\\u" hex_quad
-  | "\\U" hex_quad hex_quad
-
-(* defined in §6.4.2.1#1 *)
-let nondigit = ['_' 'a' - 'z' 'A' - 'Z']
-let identifier_nondigit =
-    nondigit
-  | universal_character_name
-    (* TODO: "other implementation-defined characters" *)
-let identifier = identifier_nondigit (identifier_nondigit | digit)*
-
-(* defined in §6.4.4.2#1 *)
+(* Floating constants *)
+let sign = ['-' '+']
 let digit_sequence = digit+
+let floating_suffix = ['f' 'l' 'F' 'L']
+
 let fractional_constant =
     digit_sequence? '.' digit_sequence
   | digit_sequence '.'
-let sign = ['+' '-']
-let exponent_part = ['e' 'E'] sign? digit_sequence
-let floating_suffix = ['f' 'l' 'F' 'L']
+let exponent_part =
+    'e' sign? digit_sequence
+  | 'E' sign? digit_sequence
 let decimal_floating_constant =
     fractional_constant exponent_part? floating_suffix?
   | digit_sequence exponent_part floating_suffix?
+
 let hexadecimal_digit_sequence = hexadecimal_digit+
 let hexadecimal_fractional_constant =
     hexadecimal_digit_sequence? '.' hexadecimal_digit_sequence
   | hexadecimal_digit_sequence '.'
-let binary_exponent_part = ['p' 'P'] sign? digit_sequence
+let binary_exponent_part =
+    'p' sign? digit_sequence
+  | 'P' sign? digit_sequence
 let hexadecimal_floating_constant =
-    hexadecimal_prefix hexadecimal_fractional_constant binary_exponent_part floating_suffix?
-  | hexadecimal_prefix hexadecimal_digit_sequence binary_exponent_part floating_suffix?
+    hexadecimal_prefix hexadecimal_fractional_constant
+        binary_exponent_part floating_suffix?
+  | hexadecimal_prefix hexadecimal_digit_sequence
+        binary_exponent_part floating_suffix?
+
 let floating_constant =
-    decimal_floating_constant
-  | hexadecimal_floating_constant
-
-(* defined in §6.4.4.3#1 *)
-let enumeration_constant = identifier
-
-(* defined in §6.4.4.4#1 *)
-let simple_escape_sequence = ("\\'" | "\\\"" | "\\?" | "\\\\" | "\\a" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t" | "\\v")
+  decimal_floating_constant | hexadecimal_floating_constant
+                
+(* Charater constants *)
+let simple_escape_sequence =
+    "\\'" | "\\\"" | "\\?" | "\\\\" | "\\a" | "\\b" | "\\f" | "\\n"
+  | "\\r" | "\\t" | "\\v"
 let octal_escape_sequence =
     '\\' octal_digit
   | '\\' octal_digit octal_digit
@@ -296,351 +180,243 @@ let escape_sequence =
   | hexadecimal_escape_sequence
   | universal_character_name
 let c_char =
-    ['a'-'z' 'A'-'Z'] (* TODO: "any member of the source character set except the single-quote ', backslash \, or new-line character" *)
+    [^ '\'' '\\' '\n']
   | escape_sequence
 let c_char_sequence = c_char+
-let character_constant = ("'" | "L'" | "u'" | "U'") c_char_sequence '\''
+let character_constant =
+    "'" c_char_sequence "'"
+  | "L'" c_char_sequence "'"
 
-(* defined in §6.4.4#1 *)
-let constant =
-    integer_constant
-  | floating_constant
-  | enumeration_constant
-  | character_constant
-
-(* defined in §6.4.5#1 *)
-let encoding_prefix = ("u8" | "u" | "U" | "L")
+(* String literals *)
 let s_char =
-    ['a'-'z'] (* TODO: any member of the source character set except the double-quote , backslash \, or new-line character *)
+    [^ '"' '\\' '\n']
   | escape_sequence
 let s_char_sequence = s_char+
-let string_literal = encoding_prefix? '"' s_char_sequence? '"' (* USELESS *)
+let string_literal =
+    '"' s_char_sequence? '"'
+  | 'L' '"' s_char_sequence? '"'
 
-(* defined in §6.4.7#1 *)
-let h_char =
-  ['a'-'z'] (* TODO: any member of the source character set except the new-line character and > *)
-let h_char_sequence = h_char+
-let q_char = ['a'-'z'] (*TODO: any member of the source character set except the new-line character and  *)
-let q_char_sequence = q_char+
-let header_name =
-    '<' h_char_sequence '>'
-  | '"' q_char_sequence '"'
-
-(* defined in §6.4.8#1 *)
-let pp_number = (digit | '.' digit) (digit | identifier_nondigit | 'e' sign | 'E' sign | 'p' sign | 'P' sign | '.')*
-(* ================== END NEW LEXER ================== *)
-
-
-
-
-
-
-
-
-
-
-let escape = "" (* TODO *)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-let blank = [' ' '\t' '\012' '\r']+
-
-
-
-(* ================================ BEGIN CLEAN ============================= *)
-
-(* Entry point to the lexer *)
+(* We assume comments are removed by the preprocessor. *)
 rule main = parse
-  (* Beginning of a comment *)
-  | "/*" {let _ = comment lexbuf in main lexbuf}
-  
-  (* Single-line comment *)
-  | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; main lexbuf}
-  
-  (* Skip blanks *)
-  | blank {main lexbuf}
-  
-  (* §6.4.4.1 Integer constants, Syntax *)
-  | decimal_constant
-  | octal_constant
-  | hexadecimal_constant {let num = Lexing.lexeme lexbuf in
-                          integer_suffix lexbuf (Nat_num.num_of_string num)}
-  
-  (* (§6.4.6#1) Punctuators *)
-  | ']'	   {P.RBRACKET}
-  | '['	   {P.LBRACKET}
-  | '('	   {P.LPAREN}
-  | ')'	   {P.RPAREN}
-  | '{'    {P.LBRACE}
-  | '}'    {P.RBRACE}
-  | "{{{"  {P.LBRACES_3}
-  | "}}}"  {P.RBRACES_3}
-  | "|||"  {P.PIPES_3}
-  | '.'    {P.DOT}
-  | "->"   {P.ARROW}
-  | "++"   {P.PLUS_PLUS}
-  | "--"   {P.MINUS_MINUS}
-  | '&'    {P.AND}
-  | '*'    {P.STAR}
-  | '+'    {P.PLUS}
-  | '-'    {P.MINUS}
-  | '~'    {P.TILDE}	
-  | '!'    {P.EXCLAM}
-  | '/'    {P.SLASH}
-  | '%'    {P.PERCENT}
-  | "<<"   {P.INF_INF}
-  | ">>"   {P.SUP_SUP}
-  | "<"	   {P.INF}
-  | ">"    {P.SUP}
-  | "<="   {P.INF_EQ}
-  | ">="   {P.SUP_EQ}
-  | "=="   {P.EQ_EQ}
-  | "!="   {P.EXCLAM_EQ}
-  | '^'	   {P.CIRC}
-  | '|'	   {P.PIPE}
-  | "&&"   {P.AND_AND}
-  | "||"   {P.PIPE_PIPE}
-  | '?'	   {P.QUEST}
-  | ':'	   {P.COLON}
-  | ';'	   {P.SEMICOLON}
-  | "..."  {P.ELLIPSIS}
-  | "="	   {P.EQ}
-  | "*="   {P.STAR_EQ}
-  | "/="   {P.SLASH_EQ}
-  | "%="   {P.PERCENT_EQ}
-  | "+="   {P.PLUS_EQ}
-  | "-="   {P.MINUS_EQ}
-  | "<<="  {P.INF_INF_EQ}
-  | ">>="  {P.SUP_SUP_EQ}
-  | "&="   {P.AND_EQ}
-  | "^="   {P.CIRC_EQ}
-  | "|="   {P.PIPE_EQ}
-  | ','	   {P.COMMA}
-  | '#'    {hash lexbuf} (* TODO: CHECK *)
-  (* TODO: ## *)
-  (* See §64.6.6#3 for the following *)
-  | "<:"   {P.LBRACKET}
-  | ":>"   {P.RBRACKET}
-  | "<%"   {P.LBRACE}
-  | "%>"   {P.RBRACE}
-  | "%:"   {hash lexbuf} (* TODO: CHECK *)
-  (* TODO: "%:%:" *)
+  | '\n'                          { new_line lexbuf; main lexbuf }
+  | whitespace_char               { main lexbuf }
+|		'#'			{ hash lexbuf}
+  | integer_constant as s         { CONSTANT (Cabs_parser.CONST_INT (intern_string s),
+					      currentLoc lexbuf) }
+  | floating_constant as s        { CONSTANT (Cabs_parser.CONST_FLOAT (intern_string s),
+                                              currentLoc lexbuf) }
+  | character_constant as s       { CONSTANT (Cabs_parser.CONST_CHAR (intern_string s),
+                                              currentLoc lexbuf) }
+  | string_literal as s           { STRING_LITERAL (s, currentLoc lexbuf) }
+  | "..."                         { ELLIPSIS(currentLoc lexbuf) }
+  | "+="                          { ADD_ASSIGN(currentLoc lexbuf) }
+  | "-="                          { SUB_ASSIGN(currentLoc lexbuf) }
+  | "*="                          { MUL_ASSIGN(currentLoc lexbuf) }
+  | "/="                          { DIV_ASSIGN(currentLoc lexbuf) }
+  | "%="                          { MOD_ASSIGN(currentLoc lexbuf) }
+  | "|="                          { OR_ASSIGN(currentLoc lexbuf) }
+  | "&="                          { AND_ASSIGN(currentLoc lexbuf) }
+  | "^="                          { XOR_ASSIGN(currentLoc lexbuf) }
+  | "<<="                         { LEFT_ASSIGN(currentLoc lexbuf) }
+  | ">>="                         { RIGHT_ASSIGN(currentLoc lexbuf) }
+  | "<<"                          { LEFT(currentLoc lexbuf) }
+  | ">>"                          { RIGHT(currentLoc lexbuf) }
+  | "=="                          { EQEQ(currentLoc lexbuf) }
+  | "!="                          { NEQ(currentLoc lexbuf) }
+  | "<="                          { LEQ(currentLoc lexbuf) }
+  | ">="                          { GEQ(currentLoc lexbuf) }
+  | "="                           { EQ(currentLoc lexbuf) }
+  | "<"                           { LT(currentLoc lexbuf) }
+  | ">"                           { GT(currentLoc lexbuf) }
+  | "++"                          { INC(currentLoc lexbuf) }
+  | "--"                          { DEC(currentLoc lexbuf) }
+  | "->"                          { PTR(currentLoc lexbuf) }
+  | "+"                           { PLUS(currentLoc lexbuf) }
+  | "-"                           { MINUS(currentLoc lexbuf) }
+  | "*"                           { STAR(currentLoc lexbuf) }
+  | "/"                           { SLASH(currentLoc lexbuf) }
+  | "%"                           { PERCENT(currentLoc lexbuf) }
+  | "!"                           { BANG(currentLoc lexbuf) }
+  | "&&"                          { ANDAND(currentLoc lexbuf) }
+  | "||"                          { BARBAR(currentLoc lexbuf) }
+  | "&"                           { AND(currentLoc lexbuf) }
+  | "|"                           { BAR(currentLoc lexbuf) }
+  | "^"                           { HAT(currentLoc lexbuf) }
+  | "?"                           { QUESTION(currentLoc lexbuf) }
+  | ":"                           { COLON(currentLoc lexbuf) }
+  | "~"                           { TILDE(currentLoc lexbuf) }
+  | "{"|"<%"                      { LBRACE(currentLoc lexbuf) }
+  | "}"|"%>"                      { RBRACE(currentLoc lexbuf) }
+  | "["|"<:"                      { LBRACK(currentLoc lexbuf) }
+  | "]"|":>"                      { RBRACK(currentLoc lexbuf) }
+  | "("                           { LPAREN(currentLoc lexbuf) }
+  | ")"                           { RPAREN(currentLoc lexbuf) }
+  | ";"                           { SEMICOLON(currentLoc lexbuf) }
+  | ","                           { COMMA(currentLoc lexbuf) }
+  | "."                           { DOT(currentLoc lexbuf) }
+  | identifier as id              {
+        try Hashtbl.find lexicon id (currentLoc lexbuf)
+        with Not_found ->
+          let pref = "__builtin_" in
+          if String.length id > String.length pref &&
+            String.sub id 0 (String.length pref) = pref then
+              VAR_NAME (id, ref VarId, currentLoc lexbuf)
+          else
+            UNKNOWN_NAME(id, ref OtherId, currentLoc lexbuf) }
+|		eof			{EOF}
+  | _                             { 
+      Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
+        lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
 
-
-
-
-(* ================================ END CLEAN =============================== *)
-
-
-
-
-
-
-| '\n'                  {Lexing.new_line lexbuf; main lexbuf}
-| '\\' '\r' * '\n'      {Lexing.new_line lexbuf; main lexbuf}
-| '\''			{P.CONST_CHAR (chr lexbuf)}
-| "L'"			{P.CONST_WCHAR (chr lexbuf)}
-| '"'			{skip_lexeme lexbuf; (* '"' *)
-(* matth: BUG:  this could be either a regular string or a wide string.
- *  e.g. if it's the "world" in 
- *     L"Hello, " "world"
- *  then it should be treated as wide even though there's no L immediately
- *  preceding it.  See test/small1/wchar5.c for a failure case. *)
-                          try P.CONST_STRING (str lexbuf)
-                          with e -> 
-                            raise (InternalError 
-                                     ("str: " ^ 
-                                         Printexc.to_string e))}
-| "L\""			{ (* weimer: wchar_t string literal *)
-                                          try P.CONST_WSTRING(str lexbuf)
-                                          with e -> 
-                                             raise (InternalError 
-                                                     ("wide string: " ^ 
-                                                      Printexc.to_string e))}
-(* TODO Re-enabled exluded constants.
-| floatnum		{P.CONST_FLOAT (Lexing.lexeme lexbuf, currentLoc ())}
-| hexnum			{P.CONST_INT (Lexing.lexeme lexbuf, currentLoc ())}
-| octnum			{P.CONST_INT (Lexing.lexeme lexbuf, currentLoc ())}
-*)
-
-(* TODO Hack alert! We do not lex octal numbers but "0" is an octal number. :( *)
-| "0"
-    { let num = Lexing.lexeme lexbuf in
-      integer_suffix lexbuf (Nat_num.num_of_string num)
-    }
-
-
-
-
-
-
-(* | "sizeof" {P.SIZEOF} (* TODO: why was this here ? *) *)
-| "\"" {P.DQUOTE}
-(* __extension__ is a black. The parser runs into some conflicts if we let it
- * pass *)
-| "__extension__"         {main lexbuf}
-| identifier		  {scan_ident lexbuf}
-| eof		          {P.EOF}
-| _
-    { raise_error ("Unexpected symbol \""
-                   ^ Lexing.lexeme lexbuf ^ "\" in "
-                   ^ Position.lines_to_string (Position.from_lexbuf lexbuf)
-                   ^ ".\n")
-    }
-
-
-
-
-
-
-
-(* ================================ BEGIN CLEAN ============================= *)
-(* 6.4.4 Constants *)
-(*
-and constant = parse
-  | integer_constant
-  | floating_constant
-  | enumeration_constant
-  | character_constant 
-
-and integer_
-*)
-
-
-(* defined in 6.4.4.1#1 (Integer Constants, Syntax) *)
-and integer_suffix = parse
-  | unsigned_suffix                  {fun n -> P.CONST_INT (n, Some Cabs.SUFFIX_UNSIGNED)}
-  | unsigned_suffix long_suffix
-  | long_suffix unsigned_suffix      {fun n -> P.CONST_INT (n, Some Cabs.SUFFIX_UNSIGNED_LONG)}
-  | long_suffix                      {fun n -> P.CONST_INT (n, Some Cabs.SUFFIX_LONG)}
-  | unsigned_suffix long_long_suffix
-  | long_long_suffix unsigned_suffix {fun n -> P.CONST_INT (n, Some Cabs.SUFFIX_UNSIGNED_LONG_LONG)}
-  | long_long_suffix                 {fun n -> P.CONST_INT (n, Some Cabs.SUFFIX_LONG_LONG)}
-  | ""                               {fun n -> P.CONST_INT (n, None)}
-
-
-(* ================================ END CLEAN =============================== *)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(* Consume a comment: /* ... */ *)
-and comment = parse
-  (* End of the comment *)
-  | "*/" {[]}
-  | _    {lex_comment comment lexbuf}
-
-
-(* Consume a singleline comment: // ... *)
-and onelinecomment = parse
-  | '\n' | eof {[]}
-  | _          {lex_comment onelinecomment lexbuf}
-
-and matchingpars = parse
-  '\n'          {Lexing.new_line lexbuf; matchingpars lexbuf}
-| blank         {matchingpars lexbuf}
-| '('           {incr matchingParsOpen; matchingpars lexbuf}
-| ')'           {decr matchingParsOpen;
-                  if !matchingParsOpen = 0 then 
-                     ()
-                  else 
-                     matchingpars lexbuf
-                }
-| "/*"		{ let _ = comment lexbuf in matchingpars lexbuf}
-| '"'		{(* '"' *)
-                  let _ = str lexbuf in 
-                  matchingpars lexbuf
-                 }
-| _              {matchingpars lexbuf}
-
-(* # <line number> <file name> ... *)
+(* We assume gcc -E syntax. **)
 and hash = parse
-  '\n'		{Lexing.new_line lexbuf; main lexbuf}
-| blank		{hash lexbuf}
-(*
-| intnum	{(* We are seeing a line number. This is the number for the 
-                   * next line *)
-                 let s = Lexing.lexeme lexbuf in
-                 let lineno = try
-                   int_of_string s
-                 with Failure ("int_of_string") ->
-                   (* the int is too big. *)
-                   E.warn "Bad line number in preprocessed file: %s" s;
-                   (-1)
-                 in
-                  E.setCurrentLine (lineno - 1);
-                  (* A file name may follow *)
-		  file lexbuf}
-| "line"        {hash lexbuf} (* MSVC line number info *)
-| _	        {endline lexbuf}
-
-and file =  parse 
-| '\n'		        {Lexing.new_line lexbuf; main lexbuf}
-| blank			{file lexbuf}
-| '"' [^ '\012' '\t' '"']* '"' { (* '"' *)
-                                       let n = Lexing.lexeme lexbuf in
-                                       let n1 = String.sub n 1 ((String.length n) - 2) in
-                                       E.setCurrentFile n1;
-				       endline lexbuf}
-
-| _			{endline lexbuf}
-*)
-
-and endline = parse 
-        '\n' 			{Lexing.new_line lexbuf; main lexbuf}
-| eof                         {P.EOF}
-| _			{endline lexbuf}
-
-
-and str = parse
-        '"'             {[]} (* no nul terminiation in CST_STRING '"' *)
-(*
-| hex_escape	{skip_lexeme lexbuf; lex_hex_escape str lexbuf}
-| oct_escape	{skip_lexeme lexbuf; lex_oct_escape str lexbuf}
-*)
-| escape		{skip_lexeme lexbuf; lex_simple_escape str lexbuf}
-| _		{skip_lexeme lexbuf; lex_unescaped str lexbuf}
-
-and chr =  parse
-	'\''	        {[]}
-(*| hex_escape	{lex_hex_escape chr lexbuf}
-| oct_escape	{lex_oct_escape chr lexbuf}
-*)
-| escape		{lex_simple_escape chr lexbuf}
-| _		{lex_unescaped chr lexbuf}
-
+  | ' ' (decimal_constant as n) " \"" ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n'
+      { let n =
+	  try int_of_string n
+	  with Failure "int_of_string" -> 
+            Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
+              lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
+	in
+	lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = file; pos_lnum = n };
+        main lexbuf }
+  | "pragma" [^ '\n']* '\n'
+      { (* TODO *)
+	 main lexbuf }
+  | [^ '\n']* eof
+       { Parser_errors.fatal_error "%s:%d Error:@ unexpected end of file"
+           lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
+  | _ 
+      { Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
+          lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
 
 {
-}
 
+  open Streams
+  open Specif
+  open Parser
+  open Aut.GramDefs
+
+  let tokens_stream lexbuf : token coq_Stream =
+    let tokens = ref [] in
+    let lexer_wraper lexbuf : Pre_parser.token =
+      let res = main lexbuf in
+      tokens := res::!tokens;
+      res
+    in
+    Pre_parser.translation_unit_file lexer_wraper lexbuf;
+    let rec compute_token_stream accu = 
+      let loop q t v =
+        compute_token_stream
+          (lazy (Cons (Coq_existT (t, Obj.magic v), accu)))
+          q
+      in 
+      function
+      | [] -> accu
+      | t::q ->
+          match t with
+            | ADD_ASSIGN loc -> loop q ADD_ASSIGN_t loc
+            | AND loc -> loop q AND_t loc
+            | ANDAND loc -> loop q ANDAND_t loc
+            | AND_ASSIGN loc -> loop q AND_ASSIGN_t loc
+            | AUTO loc -> loop q AUTO_t loc
+            | BANG loc -> loop q BANG_t loc
+            | BAR loc -> loop q BAR_t loc
+            | BARBAR loc -> loop q BARBAR_t loc
+            | BOOL loc -> loop q BOOL_t loc
+            | BREAK loc -> loop q BREAK_t loc
+            | BUILTIN_VA_ARG loc -> loop q BUILTIN_VA_ARG_t loc
+            | CASE loc -> loop q CASE_t loc
+            | CHAR loc -> loop q CHAR_t loc
+            | COLON loc -> loop q COLON_t loc
+            | COMMA loc -> loop q COMMA_t loc
+            | CONST loc -> loop q CONST_t loc
+            | CONSTANT (cst, loc) -> loop q CONSTANT_t (cst, loc)
+            | CONTINUE loc -> loop q CONTINUE_t loc
+            | DEC loc -> loop q DEC_t loc
+            | DEFAULT loc -> loop q DEFAULT_t loc
+            | DIV_ASSIGN loc -> loop q DIV_ASSIGN_t loc
+            | DO loc -> loop q DO_t loc
+            | DOT loc -> loop q DOT_t loc
+            | DOUBLE loc -> loop q DOUBLE_t loc
+            | ELLIPSIS loc -> loop q ELLIPSIS_t loc
+            | ELSE loc -> loop q ELSE_t loc
+            | ENUM loc -> loop q ENUM_t loc
+            | EOF -> loop q EOF_t ()
+            | EQ loc -> loop q EQ_t loc
+            | EQEQ loc -> loop q EQEQ_t loc
+            | EXTERN loc -> loop q EXTERN_t loc
+            | FLOAT loc -> loop q FLOAT_t loc
+            | FOR loc -> loop q FOR_t loc
+            | GEQ loc -> loop q GEQ_t loc
+            | GOTO loc -> loop q GOTO_t loc
+            | GT loc -> loop q GT_t loc
+            | HAT loc -> loop q HAT_t loc
+            | IF loc -> loop q IF_t loc
+            | INC loc -> loop q INC_t loc
+            | INLINE loc -> loop q INLINE_t loc
+            | INT loc -> loop q INT_t loc
+            | LBRACE loc -> loop q LBRACE_t loc
+            | LBRACK loc -> loop q LBRACK_t loc
+            | LEFT loc -> loop q LEFT_t loc
+            | LEFT_ASSIGN loc -> loop q LEFT_ASSIGN_t loc
+            | LEQ loc -> loop q LEQ_t loc
+            | LONG loc -> loop q LONG_t loc
+            | LPAREN loc -> loop q LPAREN_t loc
+            | LT loc -> loop q LT_t loc
+            | MINUS loc -> loop q MINUS_t loc
+            | MOD_ASSIGN loc -> loop q MOD_ASSIGN_t loc
+            | MUL_ASSIGN loc -> loop q MUL_ASSIGN_t loc
+            | NEQ loc -> loop q NEQ_t loc
+            | OR_ASSIGN loc -> loop q OR_ASSIGN_t loc
+            | PERCENT loc -> loop q PERCENT_t loc
+            | PLUS loc -> loop q PLUS_t loc
+            | PTR loc -> loop q PTR_t loc
+            | QUESTION loc -> loop q QUESTION_t loc
+            | RBRACE loc -> loop q RBRACE_t loc
+            | RBRACK loc -> loop q RBRACK_t loc
+            | REGISTER loc -> loop q REGISTER_t loc
+            | RESTRICT loc -> loop q RESTRICT_t loc
+            | RETURN loc -> loop q RETURN_t loc
+            | RIGHT loc -> loop q RIGHT_t loc
+            | RIGHT_ASSIGN loc -> loop q RIGHT_ASSIGN_t loc
+            | RPAREN loc -> loop q RPAREN_t loc
+            | SEMICOLON loc -> loop q SEMICOLON_t loc
+            | SHORT loc -> loop q SHORT_t loc
+            | SIGNED loc -> loop q SIGNED_t loc
+            | SIZEOF loc -> loop q SIZEOF_t loc
+            | SLASH loc -> loop q SLASH_t loc
+            | STAR loc -> loop q STAR_t loc
+            | STATIC loc -> loop q STATIC_t loc
+            | STRING_LITERAL (str, loc) -> 
+                (* Merge consecutive string literals *)
+                let rec doConcat accu = function
+                  | STRING_LITERAL (str, loc)::q ->
+                      doConcat (str^accu) q
+                  | l -> 
+                      let atom = intern_string accu in
+                      loop l CONSTANT_t (Cabs_parser.CONST_STRING atom, loc)
+                in
+                doConcat "" (t::q)
+            | STRUCT loc -> loop q STRUCT_t loc
+            | SUB_ASSIGN loc -> loop q SUB_ASSIGN_t loc
+            | SWITCH loc -> loop q SWITCH_t loc
+            | TILDE loc -> loop q TILDE_t loc
+            | TYPEDEF loc -> loop q TYPEDEF_t loc
+            | TYPEDEF_NAME (id, typ, loc) 
+            | UNKNOWN_NAME (id, typ, loc)
+            | VAR_NAME (id, typ, loc) ->
+                let terminal = match !typ with
+                  | VarId -> VAR_NAME_t
+                  | TypedefId -> TYPEDEF_NAME_t
+                  | OtherId -> OTHER_NAME_t
+                in
+                loop q terminal (intern_string id, loc)
+            | UNION loc -> loop q UNION_t loc
+            | UNSIGNED loc -> loop q UNSIGNED_t loc
+            | VOID loc -> loop q VOID_t loc
+            | VOLATILE loc -> loop q VOLATILE_t loc
+            | WHILE loc -> loop q WHILE_t loc
+            | XOR_ASSIGN loc -> loop q XOR_ASSIGN_t loc
+    in
+    compute_token_stream (lazy (assert false)) !tokens
+}

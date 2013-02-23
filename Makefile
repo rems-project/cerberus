@@ -50,6 +50,7 @@ core.lem \
 errors.lem \
 core_typing.lem \
 core_indet.lem \
+memory.lem \
 core_run.lem \
 sb.lem \
 types.lem \

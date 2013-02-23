@@ -165,6 +165,8 @@ let () =
       let module P = Parser.Make (C_parser_base) (Lexer.Make (C_lexer)) in
       P.parse m
       >|> pass_message "1. Parsing completed!"
+      >|> Exception.rbind Cabs_transform.transform_file
+      >|> pass_message "1.5 Cabs AST transform completed!"
       >|> pass_through_test !print_cabs pp_cabs
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
       >|> pass_message "2. Cabs -> Ail completed!"

@@ -1,1033 +1,775 @@
+(* This file is from Jacques-Henri Jourdan's parser *)
 %{
-module C = Cabs
-module L = Location
 
-type struct_union =
-  | STRUCT_
-  | UNION_
+module C = Cabs_parser
+open List
+
 %}
 
-%token <string> IDENTIFIER
-%token <string> QUALIFIER
-%token <string> CONST_ENUM
-%token <int64 list> CONST_CHAR
-%token <int64 list> CONST_WCHAR
+%token<Cabs_parser.atom * Cabs_parser.cabsloc> VAR_NAME TYPEDEF_NAME OTHER_NAME
+%token<Cabs_parser.constant * Cabs_parser.cabsloc> CONSTANT
+%token<Cabs_parser.cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
+  ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
+  COLON AND
 
-(* Each character is its own list element, and the terminating nul is not
-   included in this list. *)
-%token <int64 list> CONST_STRING
-%token <int64 list> CONST_WSTRING
+%token<Cabs_parser.cabsloc> MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN
+  LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN
+
+%token<Cabs_parser.cabsloc> LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT COMMA
+  SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO REGISTER INLINE
+  CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID STRUCT
+  UNION ENUM BOOL
+
+%token<Cabs_parser.cabsloc> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK
+  RETURN BUILTIN_VA_ARG
 
 %token EOF
-%token CHAR INT BOOL VOID
-%token ENUM STRUCT UNION
-%token SIGNED UNSIGNED LONG SHORT
-%token VOLATILE STATIC CONST AUTO
 
+%type<C.expression * C.cabsloc> primary_expression postfix_expression
+  unary_expression cast_expression multiplicative_expression additive_expression
+  shift_expression relational_expression equality_expression and_expression
+  exclusive_OR_expression inclusive_OR_expression logical_AND_expression
+  logical_OR_expression conditional_expression assignment_expression
+  constant_expression expression
+%type<C.unary_operator * C.cabsloc> unary_operator
+%type<C.binary_operator> assignment_operator
+%type<C.expression list> argument_expression_list
+%type<C.definition> declaration
+%type<C.spec_elem list * C.cabsloc> declaration_specifiers
+%type<C.init_name list> init_declarator_list
+%type<C.init_name> init_declarator
+%type<C.storage * C.cabsloc> storage_class_specifier
+%type<C.typeSpecifier * C.cabsloc> type_specifier struct_or_union_specifier enum_specifier
+%type<(C.atom option -> (C.field_group list) option -> C.attribute list -> C.typeSpecifier) * C.cabsloc> struct_or_union
+%type<C.field_group list> struct_declaration_list
+%type<C.field_group> struct_declaration
+%type<C.spec_elem list * C.cabsloc> specifier_qualifier_list
+%type<(C.name option * C.expression option) list> struct_declarator_list
+%type<C.name option * C.expression option> struct_declarator
+%type<(C.atom * C.expression option * C.cabsloc) list> enumerator_list
+%type<C.atom * C.expression option * C.cabsloc> enumerator
+%type<C.atom * C.cabsloc> enumeration_constant
+%type<C.cvspec * C.cabsloc> type_qualifier
+%type<C.cabsloc> function_specifier
+%type<C.name> declarator direct_declarator
+%type<(C.decl_type -> C.decl_type) * C.cabsloc> pointer
+%type<C.cvspec list> type_qualifier_list
+%type<C.parameter list * bool> parameter_type_list
+%type<C.parameter list> parameter_list
+%type<C.parameter> parameter_declaration
+%type<C.spec_elem list * C.decl_type> type_name
+%type<C.decl_type> abstract_declarator direct_abstract_declarator
+%type<C.init_expression> c_initializer
+%type<(C.initwhat list * C.init_expression) list> initializer_list
+%type<C.initwhat list> designation
+%type<C.initwhat list> designator_list
+%type<C.initwhat> designator
+%type<C.statement> statement_dangerous statement_safe 
+  labeled_statement(statement_safe) labeled_statement(statement_dangerous)
+  iteration_statement(statement_safe) iteration_statement(statement_dangerous)
+  compound_statement
+%type<C.statement list> block_item_list
+%type<C.statement> block_item expression_statement selection_statement_dangerous
+  selection_statement_safe jump_statement
+%type<C.definition list> translation_unit
+%type<C.definition> external_declaration function_definition
 
-
-%token SIZEOF ALIGNOF
-
-%token EQ PLUS_EQ MINUS_EQ STAR_EQ SLASH_EQ PERCENT_EQ
-%token AND_EQ PIPE_EQ CIRC_EQ INF_INF_EQ SUP_SUP_EQ
-%token ARROW DOT
-
-%token EQ_EQ EXCLAM_EQ INF SUP INF_EQ SUP_EQ
-%token PLUS MINUS STAR
-%token SLASH PERCENT
-%token TILDE AND
-%token PIPE CIRC
-%token EXCLAM AND_AND
-%token PIPE_PIPE
-%token INF_INF SUP_SUP
-%token PLUS_PLUS MINUS_MINUS
-
-%token RPAREN 
-%token LPAREN RBRACE
-%token LBRACE
-%token LBRACKET RBRACKET
-%token COLON
-%token SEMICOLON
-%token ELLIPSIS
-%token COMMA QUEST
-%token DQUOTE
-
-%token BREAK CONTINUE GOTO RETURN
-%token SWITCH CASE DEFAULT
-%token WHILE DO FOR
-%token IF
-%token ELSE
-%token INLINE
-
-%token TYPEOF FUNCTION__ PRETTY_FUNCTION__
-%token LABEL__
-
-%token LBRACES_3 RBRACES_3 PIPES_3
-
-
-(* TODO: organize *)
-%token FLOAT DOUBLE
-%token EXTERN REGISTER RESTRICT
-%token TYPEDEF ALIGNAS ATOMIC
-%token COMPLEX GENERIC IMAGINARY NORETURN
-%token STATIC_ASSERT THREAD_LOCAL
-
-%token<Nat_num.num * Cabs.integer_suffix option> CONST_INT
-
-
-%token<Cabs.encoding_prefix option * string> STRING_LITERAL
-
-(* operator precedence *)
-%right ELSE
-%left  DOT ARROW
-
-(* Non-terminals informations *)
-%start start
-%type <Cabs.g_defn_l list> start
-
-%type <Cabs.stmt_l> statement
-%type <Cabs.exp_l> expression
-%type <Cabs.exp_l list> argument_expression_list_opt
-%type <Cabs.defn_l list> declaration
-
-
-
-(* KKK *)
-%type <((string * (Cabs.c_type -> Cabs.c_type)) * Cabs.location) option * Cabs.exp_l option> struct_declarator
-
-
-
+%start<Cabs_parser.definition list> translation_unit_file
 %%
 
+(* Actual grammar *)
 
-start:
-| translation_unit EOF
-    {List.rev $1}
-;
-
-
-
-declaration_list_opt:
-| (* empty *)
-    {[]}
-| l= declaration_list
-    {l}
-;
-
-declaration_list:
-| d= declaration
-    {[d]}
-(* ATTENTION We store the list in reverse.*)
-| ds= declaration_list d= declaration
-    {d :: ds}
-;
-
-(* TODO *)
-(* 6.4.5 String literals *)
-(*
-string_literal:
-| encoding_prefix? DQUOTE s_char_sequence? DQUOTE {(C.ENCODING_u8, ""), L.make $startpos $endpos}
-*)
-
-
-
-(* 6.5.1.1#1 Generic selection, Syntax *)
-generic_association:
-| ty = type_name SEMICOLON e = assignment_expression {C.TYNAME_ASSOC (ty, e), L.make $startpos $endpos}
-| DEFAULT SEMICOLON e = assignment_expression        {C.DEFAULT_ASSOC e, L.make $startpos $endpos}
-
-generic_selection:
-| GENERIC LPAREN e = assignment_expression COMMA l = separated_nonempty_list(COMMA, generic_association) RPAREN
-  {C.GENERIC_SELECTION (e, l), L.make $startpos $endpos}
-
-(* 6.5.1#1 Primary expressions, Syntax *)
+(* 6.5.1 *)
 primary_expression:
-| id = IDENTIFIER              {C.IDENTIFIER id, L.make $startpos $endpos}
-| c = constant                 {C.CONSTANT c, L.make $startpos $endpos}
-| l = STRING_LITERAL           {C.STRING_LITERAL l, L.make $startpos $endpos}
-| LPAREN e = expression RPAREN {e}
-| g = generic_selection        {g}
-;
+| var = VAR_NAME
+    { (C.VARIABLE (fst var), snd var) }
+| cst = CONSTANT
+    { (C.CONSTANT (fst cst), snd cst) }
+| loc = LPAREN expr = expression RPAREN
+    { (fst expr, loc)}
 
-(* 6.5.2#1 Postfix operators, Syntax *)
+(* 6.5.2 *)
 postfix_expression:
-(* see 'primary expressions' *)
-| e = primary_expression     
-    {e}
-(* e1[e2] *)
-| e1 = postfix_expression LBRACKET e2 = expression RBRACKET
-    {C.SUBSCRIPT (e1, e2), L.make $startpos $endpos}
-(* f(arg1, ..., argn) *)
-| f = postfix_expression LPAREN args = argument_expression_list_opt RPAREN
-    {C.CALL (f, args), L.make $startpos $endpos}
-(* e.id *)
-| e = postfix_expression DOT id = IDENTIFIER
-    {C.MEMBEROF (e, id), L.make $startpos $endpos}
-(* e->id *)
-| e = postfix_expression ARROW id = IDENTIFIER
-    {C.MEMBEROFPTR (e, id), L.make $startpos $endpos}
-(* e ++ *)
-| e = postfix_expression PLUS_PLUS
-    {C.UNARY (C.POSTFIX_INCR, e), L.make $startpos $endpos}
-(* e -- *)
-| e = postfix_expression MINUS_MINUS
-    {C.UNARY (C.POSTFIX_DECR, e), L.make $startpos $endpos}
-    
-(* TODO I am omitting compound literals for the moment. Adding them at a later stage shouldn't pose much of a challenge.
-| LPAREN type_name RPAREN LBRACE initialiser_list RBRACE
-    {C.COMPOUND_LITERAL ($2, C.COMPOUND_INIT $5), $1}
-| LPAREN type_name RPAREN LBRACE initialiser_list COMMA RBRACE
-    {C.COMPOUND_LITERAL ($2, C.COMPOUND_INIT $5), $1}
+| expr = primary_expression
+    { expr }
+| expr = postfix_expression LBRACK index = expression RBRACK
+    { (C.INDEX (fst expr, fst index), snd expr) }
+| expr = postfix_expression LPAREN args = argument_expression_list RPAREN
+    { (C.CALL (fst expr, rev args), snd expr) }
+| expr = postfix_expression LPAREN RPAREN
+    { (C.CALL (fst expr, []), snd expr) }
+(*
+| loc = BUILTIN_VA_ARG LPAREN expr = assignment_expression COMMA ty = type_name RPAREN
+    { (BUILTIN_VA_ARG (fst expr, ty), loc) }
 *)
-;
+| expr = postfix_expression DOT mem = OTHER_NAME
+    { (C.MEMBEROF (fst expr, fst mem), snd expr) }
+| expr = postfix_expression PTR mem = OTHER_NAME
+    { (C.MEMBEROFPTR (fst expr, fst mem), snd expr) }
+| expr = postfix_expression INC
+    { (C.UNARY (C.POSINCR, fst expr), snd expr) }
+| expr = postfix_expression DEC
+    { (C.UNARY (C.POSDECR, fst expr), snd expr) }
+| loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list RBRACE
+    { (C.CAST (typ, C.COMPOUND_INIT (rev init)), loc) }
+| loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list COMMA RBRACE
+    { (C.CAST (typ, C.COMPOUND_INIT (rev init)), loc) }
 
-argument_expression_list_opt:
-| (* empty *)
-    {[]}
-| es = argument_expression_list
-    {List.rev es}
-;
-
+(* Semantic value is in reverse order. *)
 argument_expression_list:
-| e = assignment_expression
-    {[e]}
-(* ATTENTION Storing list in reverse. Don't forget to reverse the list. *)
-| es = argument_expression_list COMMA e = assignment_expression
-    {e :: es}
-(* We don't need fancy error handling ;)
-| error COMMA argument_expression_list {$3}
-*)
-;
+| expr = assignment_expression
+    { [fst expr] }
+| exprq = argument_expression_list COMMA exprt = assignment_expression
+    { fst exprt::exprq }
 
-
-(* 6.5.3#1 Unary operators, Syntax *)
+(* 6.5.3 *)
 unary_expression:
-(* see 'postfix expressions' *)
-| e = postfix_expression
-    {e}
-(* ++ e *)
-| PLUS_PLUS e = unary_expression
-    {C.UNARY (C.PREFIX_INCR, e), L.make $startpos $endpos}
-(* -- e *)
-| MINUS_MINUS e = unary_expression
-    {C.UNARY (C.PREFIX_DECR, e), L.make $startpos $endpos}
-(* see 'unary operators' *)
-| op = unary_operator e = cast_expression
-        {C.UNARY (op, e), L.make $startpos $endpos}
-(* sizeof e *)
-| SIZEOF e = unary_expression
-    {C.EXPR_SIZEOF e, L.make $startpos $endpos}
-(* sizeof(ty) *)
-| SIZEOF LPAREN ty = type_name RPAREN
-    {C.TYPE_SIZEOF ty, L.make $startpos $endpos}
-(* alignof(ty) *)
-| ALIGNOF LPAREN ty = type_name RPAREN
-    {C.TYPE_ALIGNOF ty, L.make $startpos $endpos}
-;
+| expr = postfix_expression
+    { expr }
+| loc = INC expr = unary_expression
+    { (C.UNARY (C.PREINCR, fst expr), loc) }
+| loc = DEC expr = unary_expression
+    { (C.UNARY (C.PREDECR, fst expr), loc) }
+| op = unary_operator expr = cast_expression
+    { (C.UNARY (fst op, fst expr), snd op) }
+| loc = SIZEOF expr = unary_expression
+    { (C.EXPR_SIZEOF (fst expr), loc) }
+| loc = SIZEOF LPAREN typ = type_name RPAREN
+    { (C.TYPE_SIZEOF typ, loc) }
 
 unary_operator:
-| AND    {C.ADDRESS}
-| STAR   {C.INDIRECTION}
-| PLUS   {C.PLUS}
-| MINUS  {C.MINUS}
-| TILDE  {C.BNOT}
-| EXCLAM {C.NOT}
-;
+| loc = AND
+    { (C.ADDROF, loc) }
+| loc = STAR
+    { (C.MEMOF, loc) } 
+| loc = PLUS
+    { (C.PLUS, loc) }
+| loc = MINUS
+    { (C.MINUS, loc) }
+| loc = TILDE
+    { (C.BNOT, loc) }
+| loc = BANG
+    { (C.NOT, loc) }
 
-
-(* 6.5.4#1 Cast operators, Syntax *)
+(* 6.5.4 *)
 cast_expression:
-(* see 'unary expressions' *)
-| e = unary_expression
-    {e}
-(* (ty) e *)
-| LPAREN ty = type_name RPAREN e = cast_expression
-    {C.CAST (ty, e), L.make $startpos $endpos}
-;
+| expr = unary_expression
+    { expr }
+| loc = LPAREN typ = type_name RPAREN expr = cast_expression
+    { (C.CAST (typ, C.SINGLE_INIT (fst expr)), loc) }
 
-
-(* 6.5.5#1 Multiplicative operators, Syntax *)
+(* 6.5.5 *)
 multiplicative_expression:
-(* see 'cast expressions' *)
-| e = cast_expression
-    {e}
-(* e1 * e2 *)
-| e1 = multiplicative_expression STAR e2 = cast_expression
-    {C.BINARY (C.ARITHMETIC C.MUL, e1, e2), L.make $startpos $endpos}
-(* e1 / e2 *)
-| e1 = multiplicative_expression SLASH e2 = cast_expression
-    {C.BINARY (C.ARITHMETIC C.DIV, e1, e2), L.make $startpos $endpos}
-(* e1 % e2 *)
-| e1 = multiplicative_expression PERCENT e2 = cast_expression
-    {C.BINARY (C.ARITHMETIC C.MOD, e1, e2), L.make $startpos $endpos}
-;
+| expr = cast_expression
+    { expr }
+| expr1 = multiplicative_expression STAR expr2 = cast_expression
+    { (C.BINARY (C.MUL, fst expr1, fst expr2), snd expr1) }
+| expr1 = multiplicative_expression SLASH expr2 = cast_expression
+    { (C.BINARY (C.DIV, fst expr1, fst expr2), snd expr1) }
+| expr1 = multiplicative_expression PERCENT expr2 = cast_expression
+    { (C.BINARY (C.MOD, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.6#1 Additive operators, Syntax *)
+(* 6.5.6 *)
 additive_expression:
-(* see 'multiplicative expressions' *)
-| e = multiplicative_expression
-    {e}
-(* e1 + e2 *)
-| e1 = additive_expression PLUS e2 = multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.ADD, e1, e2), L.make $startpos $endpos}
-(* e1 - e2 *)
-| e1 = additive_expression MINUS e2 = multiplicative_expression
-    {C.BINARY (C.ARITHMETIC C.SUB, e1, e2), L.make $startpos $endpos}
-;
+| expr = multiplicative_expression
+    { expr }
+| expr1 = additive_expression PLUS expr2 = multiplicative_expression
+    { (C.BINARY (C.ADD, fst expr1, fst expr2), snd expr1) }
+| expr1 = additive_expression MINUS expr2 = multiplicative_expression
+    { (C.BINARY (C.SUB, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.7 Bitwise shift operators, Syntax *)
+(* 6.5.7 *)
 shift_expression:
-(* see 'additive expressions' *)
-| e = additive_expression
-    {e}
-(* e1 << e2 *)
-| e1 = shift_expression  INF_INF e2 = additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHL, e1, e2), L.make $startpos $endpos}
-(* e1 >> e2 *)
-| e1 = shift_expression  SUP_SUP e2 = additive_expression
-    {C.BINARY (C.ARITHMETIC C.SHR, e1, e2), L.make $startpos $endpos}
-;
+| expr = additive_expression
+    { expr }
+| expr1 = shift_expression LEFT expr2 = additive_expression
+    { (C.BINARY (C.SHL, fst expr1, fst expr2), snd expr1) }
+| expr1 = shift_expression RIGHT expr2 = additive_expression
+    { (C.BINARY (C.SHR, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.8#1 Relational operators, Syntax *)
+(* 6.5.8 *)
 relational_expression:
-(* see 'shift expressions' *)
-| e = shift_expression
-    {e}
-(* e1 < e2 *)
-| e1 = relational_expression INF e2 = shift_expression
-    {C.BINARY (C.LT, e1, e2), L.make $startpos $endpos}
-(* e1 > e2 *)
-| e1 = relational_expression SUP e2 = shift_expression
-    {C.BINARY (C.GT, e1, e2), L.make $startpos $endpos}
-(* e1 <= e2 *)
-| e1 = relational_expression INF_EQ e2 = shift_expression
-    {C.BINARY (C.LE, e1, e2), L.make $startpos $endpos}
-(* e1 >= e2 *)
-| e1 = relational_expression SUP_EQ e2 = shift_expression
-    {C.BINARY (C.GE, e1, e2), L.make $startpos $endpos}
-;
+| expr = shift_expression
+    { expr }
+| expr1 = relational_expression LT expr2 = shift_expression
+    { (C.BINARY (C.LT, fst expr1, fst expr2), snd expr1) }
+| expr1 = relational_expression GT expr2 = shift_expression
+    { (C.BINARY (C.GT, fst expr1, fst expr2), snd expr1) }
+| expr1 = relational_expression LEQ expr2 = shift_expression
+    { (C.BINARY (C.LE, fst expr1, fst expr2), snd expr1) }
+| expr1 = relational_expression GEQ expr2 = shift_expression
+    { (C.BINARY (C.GE, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.9#1 Equality operators, Syntax *)
+(* 6.5.9 *)
 equality_expression:
-(* see 'relational expressions' *)
-| e = relational_expression
-    {e}
-(* e1 == e2 *)
-| e1 = equality_expression EQ_EQ e2 = relational_expression
-    {C.BINARY (C.EQ, e1, e2), L.make $startpos $endpos}
-(* e1 != e2 *)
-| e1 = equality_expression EXCLAM_EQ e2 = relational_expression
-    {C.BINARY (C.NE, e1, e2), L.make $startpos $endpos}
-;
+| expr = relational_expression
+    { expr }
+| expr1 = equality_expression EQEQ expr2 = relational_expression
+    { (C.BINARY (C.EQ, fst expr1, fst expr2), snd expr1) }
+| expr1 = equality_expression NEQ expr2 = relational_expression
+    { (C.BINARY (C.NE, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.10#1 Bitwise AND operator, Syntax *)
+(* 6.5.10 *)
 and_expression:
-(* see 'equality expressions' *)
-| e = equality_expression
-    {e}
-(* e1 & e2 *)
-| e1 = and_expression AND e2 = equality_expression
-    {C.BINARY (C.ARITHMETIC C.BAND, e1, e2), L.make $startpos $endpos}
-;
+| expr = equality_expression
+    { expr }
+| expr1 = and_expression AND expr2 = equality_expression
+    { (C.BINARY (C.BAND, fst expr1, fst expr2), snd expr1) }
 
+(* 6.5.11 *)
+exclusive_OR_expression:
+| expr = and_expression
+    { expr }
+| expr1 = exclusive_OR_expression HAT expr2 = and_expression
+    { (C.BINARY (C.XOR, fst expr1, fst expr2), snd expr1) }
 
-(* 6.5.11#1 Bitwise exclusive OR operator *)
-exclusive_or_expression:
-(* see 'AND expressions' *)
-| e = and_expression
-    {e}
-(* e1 ^ e2 *)
-| e1 = exclusive_or_expression CIRC e2 = and_expression
-    {C.BINARY (C.ARITHMETIC C.XOR, e1, e2), L.make $startpos $endpos}
-;
+(* 6.5.12 *)
+inclusive_OR_expression:
+| expr = exclusive_OR_expression
+    { expr }
+| expr1 = inclusive_OR_expression BAR expr2 = exclusive_OR_expression
+    { (C.BINARY (C.BOR, fst expr1, fst expr2), snd expr1) }
 
+(* 6.5.13 *)
+logical_AND_expression:
+| expr = inclusive_OR_expression
+    { expr }
+| expr1 = logical_AND_expression ANDAND expr2 = inclusive_OR_expression
+    { (C.BINARY (C.AND, fst expr1, fst expr2), snd expr1) }
 
-(* 6.5.12#1 Bitwise inclusive OR operator *)
-inclusive_or_expression:
-(* see 'exclusive OR expressions' *)
-| e = exclusive_or_expression
-    {e}
-(* e1 | e2 *)
-| e1 = inclusive_or_expression PIPE e2 = exclusive_or_expression
-    {C.BINARY (C.ARITHMETIC C.BOR, e1, e2), L.make $startpos $endpos}
-;
+(* 6.5.14 *)
+logical_OR_expression:
+| expr = logical_AND_expression
+    { expr }
+| expr1 = logical_OR_expression BARBAR expr2 = logical_AND_expression
+    { (C.BINARY (C.OR, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.5.13#1 Logical AND operator, Syntax *)
-logical_and_expression:
-(* see 'inclusive OR expressions' *)
-| e = inclusive_or_expression
-    {e}
-(* e1 && e2 *)
-| e1 = logical_and_expression AND_AND e2 = inclusive_or_expression
-    {C.BINARY (C.AND, e1, e2), L.make $startpos $endpos}
-;
-
-
-(* 6.5.14#1 Logical OR operator, Syntax *)
-logical_or_expression:
-(* see 'logical AND expressions' *)
-| e = logical_and_expression
-    {e}
-(* e1 || e2 *)
-| e1 = logical_or_expression PIPE_PIPE e2 = logical_and_expression
-    {C.BINARY (C.OR, e1, e2), L.make $startpos $endpos}
-;
-
-
-(* 6.5.15#1 Conditional operator, Syntax *)
+(* 6.5.15 *)
 conditional_expression:
-(* see 'logical OR expressions' *)
-| e = logical_or_expression
-    {e}
-(* e1 ? e2 : e3 *)
-| e1 = logical_or_expression QUEST e2 = expression COLON e3 = conditional_expression
-    {C.CONDITIONAL (e1, e2, e3), L.make $startpos $endpos}
-;
+| expr = logical_OR_expression
+    { expr }
+| expr1 = logical_OR_expression QUESTION expr2 = expression COLON expr3 = conditional_expression
+    { (C.QUESTION (fst expr1, fst expr2, fst expr3), snd expr1) }
 
-
-(* 6.5.16#1 Assignment operators, Syntax *)
+(* 6.5.16 *)
 assignment_expression:
-(* see 'conditional expressions' *)
-| e = conditional_expression
-    {e}
-| e1 = unary_expression op = assignment_operator e2 = assignment_expression
-(* see 'assignment operators' *)
-    {C.ASSIGN (op, e1, e2), L.make $startpos $endpos}
+| expr = conditional_expression
+    { expr }
+| expr1 = unary_expression op = assignment_operator expr2 = assignment_expression
+    { (C.BINARY (op, fst expr1, fst expr2), snd expr1) }
 
 assignment_operator:
-| EQ         {None}
-| STAR_EQ    {Some C.MUL}
-| SLASH_EQ   {Some C.DIV}
-| PERCENT_EQ {Some C.MOD}
-| PLUS_EQ    {Some C.ADD}
-| MINUS_EQ   {Some C.SUB}
-| INF_INF_EQ {Some C.SHL}
-| SUP_SUP_EQ {Some C.SHR}
-| AND_EQ     {Some C.BAND}
-| CIRC_EQ    {Some C.XOR}
-| PIPE_EQ    {Some C.BOR}
-;
+| EQ
+    { C.ASSIGN  }
+| MUL_ASSIGN
+    { C.MUL_ASSIGN }
+| DIV_ASSIGN
+    { C.DIV_ASSIGN }
+| MOD_ASSIGN
+    { C.MOD_ASSIGN }
+| ADD_ASSIGN
+    { C.ADD_ASSIGN }
+| SUB_ASSIGN
+    { C.SUB_ASSIGN }
+| LEFT_ASSIGN
+    { C.SHL_ASSIGN }
+| RIGHT_ASSIGN
+    { C.SHR_ASSIGN }
+| XOR_ASSIGN
+    { C.XOR_ASSIGN }
+| OR_ASSIGN
+    { C.BOR_ASSIGN }
+| AND_ASSIGN
+    { C.BAND_ASSIGN }
 
-
-(* 6.5.17#1 Comma operator, Syntax *)
+(* 6.5.17 *)
 expression:
-(* see 'assignment expressions' *)
-| e = assignment_expression
-    {e}
-(* e1, e2 *)
-| e1 = expression COMMA e2 = assignment_expression
-    {C.BINARY (C.COMMA, e1, e2), L.make $startpos $endpos}
-;
+| expr = assignment_expression
+    { expr }
+| expr1 = expression COMMA expr2 = assignment_expression
+    { (C.BINARY (C.COMMA, fst expr1, fst expr2), snd expr1) }
 
-
-(* 6.6 Constant expressions *)
+(* 6.6 *)
 constant_expression:
-| e = conditional_expression {e}
-;
+| expr = conditional_expression
+    { expr }
 
-
-(* 6.4.4#1 Constants, Syntax *)
-constant:
-| c = integer_constant     {c}
-(* TODO: | c = floating_constant *)
-(* REMARK: this would be never used in the parser, instead enum constants
-           are collected as identifier in `expression' and later converted
-           back to enumeration constant in Cabs_to_ail.
-| c = enumeration_constant {c} *)
-
-(* TODO: | c = character_constant *)
-(* TODO Add in later.
-| CONST_CHAR				{C.CONST_CHAR (fst $1), snd $1}
-| CONST_WCHAR				{C.CONST_WCHAR (fst $1), snd $1}
-*)
-;
-
-integer_constant:
-| c = CONST_INT {C.CONST_INT c}
-(* QUESTION[K]: is this η-expansion needed ?
-    { let value, suffix = c in
-      C.CONST_INT (value, suffix)
-    }
-*)
-;
-
-(* 6.4.4.3#1 Enumeration constants, Syntax *)
-(* NOT USED: see REMARK in `constant' *)
-enumeration_constant:
-| x = CONST_ENUM {x}
-;
-
-(* 6.7 Declarations ********************************************************* *)
-
-(* 6.7#1 Declarations, Syntax *)
+(* 6.7 *)
 declaration:
-(* | declaration_specifiers init_declarator_list_opt SEMICOLON *)
-| s = declaration_specifiers l = loption(init_declarator_list) SEMICOLON (* TODO: check *)
-    { let store, specs, quals = s in
-      let make_def (((name, mk_type), li, exp), lo) =
-        (((name, mk_type (C.BASE (quals, specs)), store), li), exp), lo in
-      
-      match l with
-        | [] -> [] (* failwith "TODO: need to extract struct tag" *)
-                
-        | l  -> List.map make_def (List.rev l)}
-(* TODO We don't support static assertions.
-| static_assert_declaration
-*)
-;
-
-declaration_specifiers_opt:
-| (* empty *)
-    {([], Multiset.emp, Pset.empty compare)}
-| declaration_specifiers
-    {$1}
-;
+| decspec = declaration_specifiers decls = init_declarator_list SEMICOLON
+    { C.DECDEF ((fst decspec, rev decls), snd decspec) }
+| decspec = declaration_specifiers SEMICOLON
+    { C.DECDEF ((fst decspec, []), snd decspec) }
 
 declaration_specifiers:
-| s= storage_class_specifier decls_opt= declaration_specifiers_opt
-    { let store, specs, quals = decls_opt in (s :: store, specs, quals) }
-| s= type_specifier decls_opt= declaration_specifiers_opt
-    { let store, specs, quals = decls_opt in (store, Multiset.add s specs, quals) }
-| q= type_qualifier decls_opt= declaration_specifiers_opt
-    { let store, specs, quals = decls_opt in (store, specs, Pset.add q quals) }
-(* TODO Keyword inline should only be used for function declarations. *)
-| function_specifier declaration_specifiers_opt
-    {$2}
-(* TODO _Noreturn is not supported. *)
-(* TODO We are don't support alignment yet.
-| alignment_specifier declaration_specifiers_opt
-*)
-;
-
-init_declarator_list_opt:
-| (* empty *)
-    {[]}
-| init_declarator_list
-    {List.rev $1}
-;
+| storage = storage_class_specifier rest = declaration_specifiers
+    { (C.SpecStorage (fst storage)::fst rest, snd storage) }
+| storage = storage_class_specifier
+    { ([C.SpecStorage (fst storage)], snd storage) }
+| typ = type_specifier rest = declaration_specifiers
+    { (C.SpecType (fst typ)::fst rest, snd typ) }
+| typ = type_specifier
+    { ([C.SpecType (fst typ)], snd typ) }
+| qual = type_qualifier rest = declaration_specifiers
+    { (C.SpecCV (fst qual)::fst rest, snd qual) }
+| qual = type_qualifier
+    { ([C.SpecCV (fst qual)], snd qual) }
+| loc = function_specifier rest = declaration_specifiers
+    { (C.SpecInline::fst rest, loc) }
+| loc = function_specifier
+    { ([C.SpecInline], loc) }
 
 init_declarator_list:
-| init_declarator
-    {[$1]}
-(* ATTENTION We are storing the list in reverse. *)
-| init_declarator_list COMMA init_declarator
-    {$3 :: $1}
-;
+| init = init_declarator
+    { [init] }
+| initq = init_declarator_list COMMA initt = init_declarator
+    { initt::initq }
 
 init_declarator:
-| decl = declarator
-    { let name, mk_type = decl in
-      (name, mk_type, None), L.make $startpos $endpos
-    }
-| decl = declarator EQ init = initialiser
-    { let name, mk_type = decl in
-      (name, mk_type, Some init), L.make $startpos $endpos
-    }
+| name = declarator
+    { C.Init_name (name, C.NO_INIT) }
+| name = declarator EQ init = c_initializer
+    { C.Init_name (name, init) }
 
-
-(* 6.7.1#1 Storage-class specifier, Syntax *)
+(* 6.7.1 *)
 storage_class_specifier:
-| TYPEDEF      {C.TYPEDEF}
-| EXTERN       {C.EXTERN}
-| STATIC       {C.STATIC}
-| THREAD_LOCAL {C.THREAD_LOCAL}
-| AUTO         {C.AUTO}
-| REGISTER     {C.REGISTER}
-;
+| loc = TYPEDEF
+    { (C.TYPEDEF, loc) }
+| loc = EXTERN
+    { (C.EXTERN, loc) }
+| loc = STATIC
+    { (C.STATIC, loc) }
+| loc = AUTO
+    { (C.AUTO, loc) } 
+| loc = REGISTER
+    { (C.REGISTER, loc) }
 
-(* 6.7.2#1 Type specifiers, Syntax *)
+(* 6.7.2 *)
 type_specifier:
-| VOID     {C.VOID}
-| CHAR     {C.CHAR}    
-| SHORT    {C.SHORT}
-| INT      {C.INT}
-| LONG     {C.LONG}
-| FLOAT    {Debug.error "PARSING: 'float' type-specifier not yet supported." (* (* LATER *) C.FLOAT *)}
-| DOUBLE   {Debug.error "PARSING: 'double' type-specifier not yet supported." (* (* LATER *) C.DOUBLE *)}
-| SIGNED   {C.SIGNED}
-| UNSIGNED {C.UNSIGNED}
-| BOOL     {C.BOOL}
-| COMPLEX  {Debug.error "PARSING: '_Complex' type-specifier not yet supported." (* (* LATER *) C.COMPLEX *)}
-(* TODO
-| atomic_type_specifier     {failwith "type_specifier [atomic]: TODO" (* TODO *)} *)
-(*| spec = struct_or_union_specifier {spec} *)
-(*
-| enum_specifier            {failwith "type_specifier [enum]: TODO" (* TODO *)}
-| typedef_name              {failwith "type_specifier [typedef]: TODO" (* TODO *)}
-*)
-;
+| loc = VOID
+    { (C.Tvoid, loc) }
+| loc = CHAR
+    { (C.Tchar, loc) }
+| loc = SHORT
+    { (C.Tshort, loc) }
+| loc = INT
+    { (C.Tint, loc) }
+| loc = LONG
+    { (C.Tlong, loc) }
+| loc = FLOAT
+    { (C.Tfloat, loc) }
+| loc = DOUBLE
+    { (C.Tdouble, loc) }
+| loc = SIGNED
+    { (C.Tsigned, loc) }
+| loc = UNSIGNED
+    { (C.Tunsigned, loc) }
+| loc = BOOL
+    { (C.T_Bool, loc) }
+| spec = struct_or_union_specifier
+    { spec }
+| spec = enum_specifier
+    { spec }
+| id = TYPEDEF_NAME
+    { (C.Tnamed (fst id), snd id) }
 
-(* 6.7.2.1#1 Structure and union specifiers, Syntax *)
-(*
+(* 6.7.2.1 *)
 struct_or_union_specifier:
-| x = struct_or_union id_opt = IDENTIFIER? LBRACE decls = struct_declaration_list RBRACE
-    {match x with
-      | STRUCT_ -> Cabs.STRUCT (id_opt, List.rev decls)
-      | UNION_  -> Cabs.UNION (id_opt, List.rev decls)}
-| x = struct_or_union id = IDENTIFIER
-    {match x with
-      | STRUCT_ -> Cabs.STRUCT (Some id, [])
-      | UNION_  -> Cabs.UNION (Some id, [])}
-*)
+| str_uni = struct_or_union id = OTHER_NAME LBRACE decls = struct_declaration_list RBRACE
+    { ((fst str_uni) (Some (fst id)) (Some (rev decls)) [], snd str_uni) }
+| str_uni = struct_or_union LBRACE decls = struct_declaration_list RBRACE
+    { ((fst str_uni) None (Some (rev decls)) [],            snd str_uni) }
+| str_uni = struct_or_union id = OTHER_NAME
+    { ((fst str_uni) (Some (fst id)) None [],         snd str_uni) }
 
 struct_or_union:
-| STRUCT {STRUCT_}
-| UNION {UNION_}
+| loc = STRUCT
+    { ((fun x y z -> C.Tstruct (x, y, z)), loc) }
+| loc = UNION
+    { ((fun x y z -> C.Tunion (x, y, z)), loc) }
 
 struct_declaration_list:
 | decl = struct_declaration
-    {[decl]}
-(* ATTENTION We are storing the list in reverse. *)
-| decls = struct_declaration_list decl = struct_declaration
-    {decl :: decls}
+    { [decl] }
+| qdecls = struct_declaration_list tdecls = struct_declaration
+    { tdecls::qdecls }
 
-struct_declarator_list_opt:
-| (* empty *)
-    {[]}
-| l = struct_declarator_list
-    {List.rev l}
-
-(* KKK *)
 struct_declaration:
-| ss_qs = specifier_qualifier_list decls = struct_declarator_list_opt SEMICOLON
-     {let (ss, qs) = ss_qs in
-      (ss, qs,
-       List.map (fun (decl_opt, exp_opt) ->
-         match decl_opt, exp_opt with
-           | Some ((name, mk_type), _), Some e -> Cabs.BITFIELD (Some (name, mk_type), e)
-           | None                     , Some e -> Cabs.BITFIELD (None, e)
-           | Some ((name, mk_type), _), None   -> Cabs.STRUCT_DECL (name, mk_type)
-           | None                     , None   -> failwith "[CParser.struct_declaration] OutOfHomeomorphism exception.") decls
-(*
-           | Some ((name, mk_type), _), Some e -> Cabs.BITFIELD (Some (name, mk_type (C.BASE (qs, ss))), e)
-           | None                     , Some e -> Cabs.BITFIELD (None, e)
-           | Some ((name, mk_type), _), None   -> Cabs.STRUCT_DECL (name, mk_type (C.BASE (qs, ss)))
-           | None                     , None   -> failwith "[CParser.struct_declaration] OutOfHomeomorphism exception.") decls
-*)
-)}
-
-(*
-| static_assert_declaration
-    {Debug.error "PARSING: struct-declaration of the shape 'static_assert_declaration' not yet supported."}
-*)
-
-specifier_qualifier_list_opt:
-| (* empty *)
-    {(Multiset.emp, Pset.empty compare)}
-| l = specifier_qualifier_list
-    {l}
-;
+| decspec = specifier_qualifier_list decls = struct_declarator_list SEMICOLON
+    { C.Field_group (fst decspec, rev decls, snd decspec) }
+(* Extension to C99 grammar needed to parse some GNU header files. *)
+| decspec = specifier_qualifier_list SEMICOLON
+    { C.Field_group (fst decspec, [], snd decspec) }
 
 specifier_qualifier_list:
-| s = type_specifier x = specifier_qualifier_list_opt
-    { let specs, quals = x in
-      (Multiset.add s specs, quals)
-    }
-| q = type_qualifier l = specifier_qualifier_list_opt
-    { let specs, quals = l in
-      (specs, Pset.add q quals)
-    }
-;
+| typ = type_specifier rest = specifier_qualifier_list
+    { (C.SpecType (fst typ)::fst rest, snd typ) }
+| typ = type_specifier
+    { ([C.SpecType (fst typ)], snd typ) }
+| qual = type_qualifier rest = specifier_qualifier_list
+    { (C.SpecCV (fst qual)::fst rest, snd qual) }
+| qual = type_qualifier
+    { ([C.SpecCV (fst qual)], snd qual) }
 
 struct_declarator_list:
 | decl = struct_declarator
-    {[decl]}
-(* ATTENTION We are storing the list in reverse. *)
-| decls = struct_declarator_list COMMA decl = struct_declarator
-    {decl :: decls}
+    { [decl] }
+| declq = struct_declarator_list COMMA declt = struct_declarator
+    { declt::declq }
 
-(* KKK: output of type: ((string, ctype -> ctype), expression opt) *)
 struct_declarator:
 | decl = declarator
-    {(Some decl, None)}
-| decl_opt = declarator? COLON exp = constant_expression
-    {(decl_opt, Some exp)}
+    { (Some decl, None) }
+| decl = declarator COLON expr = constant_expression
+    { (Some decl, Some (fst expr)) }
+| COLON expr = constant_expression
+    { (None, Some (fst expr)) }
 
-
-(* 6.7.2.2#1 Enumeration specifiers, Syntax *)
+(* 6.7.2.2 *)
 enum_specifier:
-| ENUM IDENTIFIER? LBRACE enumerator_list RBRACE
-    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
-| ENUM IDENTIFIER? LBRACE enumerator_list COMMA RBRACE
-    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
-| ENUM IDENTIFIER
-    {Debug.error "PARSING: 'enum-specifier' not yet supported." (* TODO *)}
-;
+| loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list RBRACE
+    { (C.Tenum (Some (fst name), Some (rev enum_list), []), loc) }
+| loc = ENUM LBRACE enum_list = enumerator_list RBRACE
+    { (C.Tenum (None, Some (rev enum_list), []), loc) }
+| loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list COMMA RBRACE
+    { (C.Tenum (Some (fst name), Some (rev enum_list), []), loc) }
+| loc = ENUM LBRACE enum_list = enumerator_list COMMA RBRACE
+    { (C.Tenum (None, Some (rev enum_list), []), loc) }
+| loc = ENUM name = OTHER_NAME
+    { (C.Tenum (Some (fst name), None, []), loc) }
 
 enumerator_list:
-| enumerator
-    {Debug.error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
-| enumerator_list COMMA enumerator
-    {Debug.error "PARSING: 'enumerator-list' not yet supported." (* TODO *)}
+| enum = enumerator
+    { [enum] }
+| enumsq = enumerator_list COMMA enumst = enumerator
+    { enumst::enumsq }
 
 enumerator:
-| enumeration_constant
-    {Debug.error "PARSING: 'enumerator' not yet supported." (* TODO *)}
-| enumeration_constant EQ constant_expression
-    {Debug.error "PARSING: 'enumerator' not yet supported." (* TODO *)}
+| atom = enumeration_constant
+    { (fst atom, None, snd atom) }
+| atom = enumeration_constant EQ expr = constant_expression
+    { (fst atom, Some (fst expr), snd atom) }
 
+enumeration_constant:
+| loc = VAR_NAME
+    { loc }
 
-(* 6.7.2.4#1 Atomic type specifiers, Syntax *)
-atomic_type_specifier: 
-| ATOMIC LPAREN type_name RPAREN
-    {Debug.error "PARSING: atomic-type-specifier' not yet supported." (* TODO *)}
-
-
-(* 6.7.3#1 Type qualifiers, Syntax *)
+(* 6.7.3 *)
 type_qualifier:
-| CONST
-    {C.CONST}
-| RESTRICT
-    {C.RESTRICT}
-| VOLATILE
-    {C.VOLATILE}
-| ATOMIC
-    {C.ATOMIC}
+| loc = CONST
+    { (C.CV_CONST, loc) }
+| loc = RESTRICT
+    { (C.CV_RESTRICT, loc) }
+| loc = VOLATILE
+    { (C.CV_VOLATILE, loc) }
 
-
-(* 6.7.4#1 Function specifiers, Syntax *)
+(* 6.7.4 *)
 function_specifier:
-| INLINE
-    {()}
-| NORETURN
-    {Debug.error "PARSING: 'function-specifier' _NoReturn not yet supported." (* TODO *)}
+| loc = INLINE
+    { loc }
 
-
-(* 6.7.5#1 Alignment specifier, Syntax *)
-alignment_specifier:
-| ALIGNAS LPAREN type_name RPAREN
-    {Debug.error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
-| ALIGNAS LPAREN constant_expression RPAREN
-    {Debug.error "PARSING: 'alignment-specifier' not yet supported." (* TODO *)}
-;
-
-(* 6.7.6#1 Declarators, Syntax *)
+(* 6.7.5 *)
 declarator:
-| ptr_opt = pointer_opt decl = direct_declarator
-    { let mk_type1 : C.c_type -> C.c_type = ptr_opt in
-      let mk_type2 : C.c_type -> C.c_type = snd decl in
-      (fst decl, fun t -> mk_type2 (mk_type1 t)), L.make $startpos $endpos
-    }
-;
+| decl = direct_declarator
+    { decl }
+| pt = pointer decl = direct_declarator
+    { match decl with C.Name (name, typ, attr, _) -> 
+	C.Name (name, (fst pt) typ, attr, snd pt) }
 
 direct_declarator:
-| id = IDENTIFIER
-    {id, fun t -> t}
-| LPAREN declarator RPAREN
-        { let (name, (mk_type : C.c_type -> C.c_type)), _ = $2 in
-      name, fun t -> mk_type t
-    }
-| direct_declarator LBRACKET type_qualifier_list_opt assignment_expression? RBRACKET
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> mk_type (C.ARRAY ($3, t, $4))
-    }
-| direct_declarator LBRACKET STATIC type_qualifier_list_opt assignment_expression RBRACKET
-    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [static type-qualifier-list_opt assignment-expression]' not yet supported." (* LATER *)}
-| direct_declarator LBRACKET type_qualifier_list STATIC assignment_expression RBRACKET
-    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-list static assignment-expression]' not yet supported." (* LATER *)}
-| direct_declarator LBRACKET type_qualifier_list_opt STAR RBRACKET
-    {Debug.error "PARSING: direct-declarator of the shape 'direct-declarator [type-qualifier-listopt *]' not yet supported." (* LATER *)}
-| direct_declarator LPAREN parameter_type_list RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, $3)
-    }
-(* TODO Omitted case handles empty parameter lists. We need a special case. *)
-| direct_declarator LPAREN RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, [])
-    }
-| direct_declarator LPAREN VOID RPAREN
-    { let mk_type : C.c_type -> C.c_type = snd $1 in
-      fst $1, fun t -> C.FUNCTION (mk_type t, [])
-    }
-(* TODO We do not support function declarations of the following style.
-| direct_declarator LPAREN IDENTIFIER_list_opt RPAREN
-*)
-;
+| id = VAR_NAME
+    { C.Name (fst id, C.JUSTBASE, [], snd id) }
+| LPAREN decl = declarator RPAREN
+    { decl }
+| decl = direct_declarator LBRACK quallst = type_qualifier_list expr = assignment_expression RBRACK
+    { match decl with C.Name (name, typ, attr, loc) ->
+	C.Name (name, C.ARRAY (typ, rev quallst, [], Some (fst expr)), attr, loc) }
+| decl = direct_declarator LBRACK expr = assignment_expression RBRACK
+    { match decl with C.Name (name, typ, attr, loc) ->
+	C.Name (name, C.ARRAY (typ, [], [], Some (fst expr)), attr, loc) }
+| decl = direct_declarator LBRACK quallst = type_qualifier_list RBRACK
+    { match decl with C.Name (name, typ, attr, loc) ->
+	C.Name (name, C.ARRAY (typ, rev quallst, [], None), attr, loc) }
+| decl = direct_declarator LBRACK RBRACK
+    { match decl with C.Name (name, typ, attr, loc) ->
+	C.Name (name, C.ARRAY (typ, [], [], None), attr, loc) }
+(*| direct_declarator LBRACK ... STATIC ... RBRACK
+| direct_declarator LBRACK STAR RBRACK*)
+| decl = direct_declarator LPAREN params = parameter_type_list RPAREN
+    { match decl with C.Name (name, typ, attr, loc) ->
+	C.Name (name, C.PROTO (typ, params), attr, loc) }
+| decl = direct_declarator LPAREN RPAREN
+    { match decl with C.Name (name, typ, attr, loc) ->
+        C.Name (name, C.PROTO (typ, ([],false)), attr, loc) }
+(* TODO : K&R *)
+(*| direct_declarator LPAREN identifier_list RPAREN
+    {}*)
 
 pointer:
-| STAR type_qualifier_list_opt
-    {fun t -> C.POINTER ($2, t)}
-| STAR type_qualifier_list_opt pointer
-    { let mk_type : C.c_type -> C.c_type = $3 in
-      fun t -> mk_type (C.POINTER ($2, t))
-    }
-;
-
-pointer_opt:
-| (* empty *)
-    {fun t -> t}
-| pointer
-    {$1}
-;
-
-type_qualifier_list_opt:
-| (* empty *)
-    {Pset.empty compare}
-| type_qualifier_list
-    {$1}
-;
+| loc = STAR
+    { ((fun x -> C.PTR ([], [], x)), loc) }
+| loc = STAR quallst = type_qualifier_list
+    { ((fun x -> C.PTR (rev quallst, [], x)), loc) }
+| loc = STAR pt = pointer
+    { ((fun typ -> C.PTR ([], [], (fst pt) typ)), loc) }
+| loc = STAR quallst = type_qualifier_list pt = pointer
+    { ((fun typ -> C.PTR (rev quallst, [], (fst pt) typ)), loc) }
 
 type_qualifier_list:
-| type_qualifier
-    {Pset.add $1 (Pset.empty compare)}
-| type_qualifier_list type_qualifier
-    {Pset.add $2 $1}
-;
-
-
-
-(* 6.7.6#1 Declarators, Syntax *)
+| qual = type_qualifier
+    { [fst qual] }
+| qualq = type_qualifier_list qualt = type_qualifier
+    { fst qualt::qualq }
 
 parameter_type_list:
-| parameter_list
-    {List.rev $1}
-(* TODO No support for functions with a variable number of actuals
-| parameter_list COMMA ELLIPSES
-*)
-;
+| lst = parameter_list
+    { (rev lst, false) }
+| lst = parameter_list COMMA ELLIPSIS
+    { (rev lst, true) }
 
 parameter_list:
-| parameter_declaration
-    {[$1]}
-(* ATTENTION We are storing the list in reverse. *)
-| parameter_list COMMA parameter_declaration
-    {$3 :: $1}
-;
+| param = parameter_declaration
+    { [param] }
+| paramq = parameter_list COMMA paramt = parameter_declaration
+    { paramt::paramq }
 
 parameter_declaration:
-| declaration_specifiers declarator
-    { let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
-      let store, specs, quals = $1 in
-      (name, mk_type (C.BASE (quals, specs)), store), l
-    }
-(* TODO No support for type-only parameters yet. Important since we need main (void).
-| declaration_specifiers abstract_declarator_opt
-    { let mk_type : C.c_type -> C.c_type = $2 in
-      let store, quals, specs = $1 in
-      (name, mk_type (C.BASE (quals, specs)), store, None)
-    }
+| specs = declaration_specifiers decl = declarator
+    { match decl with C.Name (name, typ, attr, _) ->
+        C.PARAM (fst specs, Some name, typ, attr, snd specs) }
+| specs = declaration_specifiers decl = abstract_declarator
+    { C.PARAM (fst specs, None, decl, [], snd specs) }
+| specs = declaration_specifiers
+    { C.PARAM (fst specs, None, C.JUSTBASE, [], snd specs) }
+
+(* TODO : K&R *)
+(*
+identifier_list:
+| VAR_NAME
+| identifier_list COMMA idt = VAR_NAME
+    {}
 *)
-;
 
-(* 6.7.7#1 Type names, Syntax *)
+(* 6.7.6 *)
 type_name:
-| ssqs = specifier_qualifier_list decl_opt = abstract_declarator_opt
-    { let specs, quals = ssqs in
-      decl_opt (C.BASE (quals, specs))
-    }
-;
-
-abstract_declarator_opt:
-| (* empy *)
-    {fun t -> t}
-| abstract_declarator
-    {$1}
-;
+| specqual = specifier_qualifier_list
+    { (fst specqual, C.JUSTBASE) }
+| specqual = specifier_qualifier_list typ = abstract_declarator
+    { (fst specqual, typ) }
 
 abstract_declarator:
-| pointer
-    {$1}
-| pointer_opt direct_abstract_declarator
-    { let mk_type1 : C.c_type -> C.c_type = $1 in
-      let mk_type2 : C.c_type -> C.c_type = $2 in
-      fun t -> mk_type2 (mk_type1 t)
-    }
-;
-
-direct_abstract_declarator_opt:
-| (* empty *)
-    {fun t -> t}
-| direct_abstract_declarator
-    {$1}
-;
+| pt = pointer
+    { (fst pt) C.JUSTBASE }
+| pt = pointer typ = direct_abstract_declarator
+    { (fst pt) typ }
+| typ = direct_abstract_declarator
+    { typ }
 
 direct_abstract_declarator:
-| LPAREN abstract_declarator RPAREN
-    {  let mk_type : C.c_type -> C.c_type = $2 in
-       fun t -> mk_type t
-    }
-| direct_abstract_declarator_opt LBRACKET type_qualifier_list_opt assignment_expression? RBRACKET
-    { let mk_type : C.c_type -> C.c_type = $1 in
-      fun t -> mk_type (C.ARRAY ($3, t, $4))
-    }
-(* TODO Add the other constructs including function pointers. *)
-;
+| LPAREN typ = abstract_declarator RPAREN
+    { typ }
+| typ = direct_abstract_declarator LBRACK cvspec = type_qualifier_list expr = assignment_expression RBRACK
+    { C.ARRAY (typ, cvspec, [], Some (fst expr)) }
+| LBRACK cvspec = type_qualifier_list expr = assignment_expression RBRACK
+    { C.ARRAY (C.JUSTBASE, cvspec, [], Some (fst expr)) }
+| typ = direct_abstract_declarator LBRACK expr = assignment_expression RBRACK
+    { C.ARRAY (typ, [], [], Some (fst expr)) }
+| LBRACK expr = assignment_expression RBRACK
+    { C.ARRAY (C.JUSTBASE, [], [], Some (fst expr)) }
+| typ = direct_abstract_declarator LBRACK cvspec = type_qualifier_list RBRACK
+    { C.ARRAY (typ, cvspec, [], None) }
+| LBRACK cvspec = type_qualifier_list RBRACK
+    { C.ARRAY (C.JUSTBASE, cvspec, [], None) }
+| typ = direct_abstract_declarator LBRACK RBRACK
+    { C.ARRAY (typ, [], [], None) }
+| LBRACK RBRACK
+    { C.ARRAY (C.JUSTBASE, [], [], None) }
+(*| direct_abstract_declarator? LBRACK STAR RBRACK*)
+(*| direct_abstract_declarator? LBRACK ... STATIC ... RBRACK*)
+| typ = direct_abstract_declarator LPAREN params = parameter_type_list RPAREN
+    { C.PROTO (typ, params) }
+| LPAREN params = parameter_type_list RPAREN
+    { C.PROTO (C.JUSTBASE, params) }
+| typ = direct_abstract_declarator LPAREN RPAREN
+    { C.PROTO (typ, ([], false)) }
+| LPAREN RPAREN
+    { C.PROTO (C.JUSTBASE, ([], false)) }
 
+(* 6.7.8 *)
+c_initializer:
+| expr = assignment_expression
+    { C.SINGLE_INIT (fst expr) }
+| LBRACE init = initializer_list RBRACE
+    { C.COMPOUND_INIT (rev init) }
+| LBRACE init = initializer_list COMMA RBRACE
+    { C.COMPOUND_INIT (rev init) }
 
-(* 6.7.8#1 Type definitions, Syntax *)
-(*
-typedef_name:
-| IDENTIFIER
-    {$1}
-*)
-
-
-(* 6.7.9#1 Initalization, Syntax *)
-initialiser:
-| e = assignment_expression
-    { e }
-(*
-| LBRACE is = initialiser_list RBRACE
-    { is }
-| LBRACE is = initialiser_list COMMA RBRACE
-    { is }
-;
-*)
-
-initialiser_list:
-| i = initialiser
-    { [([], i)] }
-| d = designation i = initialiser
-    { [(d, i)] }
-(* ATTENTION We store the list in reverse. *)
-| is = initialiser_list COMMA i = initialiser
-    {([], i) :: is}
-| is = initialiser_list COMMA d = designation i = initialiser
-    {(d, i) :: is}
-;
+initializer_list:
+| design = designation init = c_initializer
+    { [(design, init)] }
+| init = c_initializer
+    { [([], init)] }
+| initq = initializer_list COMMA design = designation init = c_initializer
+    { (design, init)::initq }
+| initq = initializer_list COMMA init = c_initializer
+    { ([], init)::initq }
 
 designation:
-| designator_list EQ {}
-;
+| design = designator_list EQ
+    { rev design }
 
 designator_list:
-| designator {}
-| designator_list designator {}
-;
+| design = designator
+    { [design] }
+| designq = designator_list designt = designator
+    { designt::designq }
 
 designator:
-| LBRACKET constant_expression RBRACKET {}
-| DOT IDENTIFIER {}
-;
+| LBRACK expr = constant_expression RBRACK
+    { C.ATINDEX_INIT (fst expr) }
+| DOT id = OTHER_NAME
+    { C.INFIELD_INIT (fst id) }
 
-(* 6.7.10 Static assertions *)
-(*
-static_assert_declaration:
-| STATIC_ASSERT LPAREN constant_expression COMMA string_literal RPAREN SEMICOLON
-    {Debug.error "PARSING: 'static_assert-declaration' not yet supported."
-*)
+(* 6.8 *)
+statement_dangerous:
+| stmt = labeled_statement(statement_dangerous)
+| stmt = compound_statement
+| stmt = expression_statement
+| stmt = selection_statement_dangerous
+| stmt = iteration_statement(statement_dangerous)
+| stmt = jump_statement
+    { stmt }
 
-(* 6.8 Statements *********************************************************** *)
+statement_safe:
+| stmt = labeled_statement(statement_safe)
+| stmt = compound_statement
+| stmt = expression_statement
+| stmt = selection_statement_safe
+| stmt = iteration_statement(statement_safe)
+| stmt = jump_statement
+    { stmt }
 
-(* 6.8#1 Statements and blocks, Syntax *)
-statement:
-| s = labeled_statement
-| s = compound_statement
-| s = expression_statement
-| s = selection_statement
-| s = iteration_statement
-| s = jump_statement
-    {s}
-;
+(* 6.8.1 *)
+labeled_statement(last_statement):
+| lbl = OTHER_NAME COLON stmt = last_statement
+    { C.LABEL (fst lbl, stmt, snd lbl) }
+| loc = CASE expr = constant_expression COLON stmt = last_statement
+    { C.CASE (fst expr, stmt, loc) }
+| loc = DEFAULT COLON stmt = last_statement
+    { C.DEFAULT (stmt, loc) }
 
-(* 6.8.1#1 Labeled statements, Syntax *)
-labeled_statement:
-| id = IDENTIFIER COLON s = statement
-    {C.LABEL (id, s), L.make $startpos $endpos}
-| CASE e = constant_expression COLON s = statement
-    {C.CASE (e, s), L.make $startpos $endpos}
-| DEFAULT COLON s = statement
-    {C.DEFAULT s, L.make $startpos $endpos}
-;
-
-(* 6.8.2#1 Compound statement, Syntax *)
+(* 6.8.2 *)
 compound_statement:
-| LBRACE l = loption(block_item_list) RBRACE
-    {C.BLOCK (List.rev l), L.make $startpos $endpos}
-(* TODO: cppmem's parallel composition (this is not C11) *)
-| LBRACES_3 xs = separated_nonempty_list(PIPES_3, statement) RBRACES_3
-    {C.PAR xs, L.make $startpos $endpos}
-;
-
+| loc = LBRACE lst = block_item_list RBRACE
+    { C.BLOCK (rev lst, loc) }
+| loc = LBRACE RBRACE
+    { C.BLOCK ([], loc) }
 
 block_item_list:
-| x = block_item                      {[x]}
-(* ATTENTION We are storing the list in reverse. *)
-| xs = block_item_list x = block_item {x :: xs}
-;
+| stmt = block_item
+    { [stmt] }
+| stmtq = block_item_list stmtt = block_item
+    { stmtt::stmtq }
 
 block_item:
-| d = declaration {C.DECLARATION d, L.make $startpos $endpos}
-| s = statement   {s}
-;
+| decl = declaration
+    { C.DEFINITION decl }
+| stmt = statement_dangerous
+    { stmt }
 
-(* 6.8.3#1 Expression and null statement, Syntax *)
+(* 6.8.3 *)
 expression_statement:
-| e = expression? SEMICOLON
-    { let l = L.make $startpos $endpos in
-      match e with
-      | Some e -> C.EXPRESSION e, l
-      | None   -> C.SKIP, l
-    }
-;
+| expr = expression SEMICOLON
+    { C.COMPUTATION (fst expr, snd expr) }
+| loc = SEMICOLON
+    { C.NOP loc }
 
-(* 6.8.4#1 Selection statements, Syntax *)
-selection_statement:
-| IF LPAREN e = expression RPAREN s = statement
-    {C.IF (e, s, None), L.make $startpos $endpos} %prec ELSE
-| IF LPAREN e = expression RPAREN s1 = statement ELSE s2 = statement
-    {C.IF (e, s1, Some s2), L.make $startpos $endpos}
-| SWITCH LPAREN e = expression RPAREN s = statement
-    {C.SWITCH (e, s), L.make $startpos $endpos}
-;
+(* 6.8.4 *)
+selection_statement_dangerous:
+| loc = IF LPAREN expr = expression RPAREN stmt = statement_dangerous
+    { C.If (fst expr, stmt, None, loc) }
+| loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_dangerous
+    { C.If (fst expr, stmt1, Some stmt2, loc) }
+| loc = SWITCH LPAREN expr = expression RPAREN stmt = statement_dangerous
+    { C.SWITCH (fst expr, stmt, loc) }
 
-(* 6.8.5#1 Iteration statements, Syntax *)
-iteration_statement:
-(* while (e) s *)
-| WHILE LPAREN e = expression RPAREN s = statement
-    {C.WHILE (e, s), L.make $startpos $endpos}
-(* do s while (e) *)
-| DO s = statement WHILE LPAREN e = expression RPAREN
-    {C.DO (e, s), L.make $startpos $endpos}
-(* for (e1; e2; e3) s *)
-| FOR LPAREN e1 = expression? SEMICOLON e2 = expression? SEMICOLON e3 = expression? RPAREN s = statement
-    {C.FOR_EXP (e1, e2, e3, s), L.make $startpos $endpos}
-(* for (d e1; e2) s *)
-| FOR LPAREN d = declaration e1 = expression? SEMICOLON e2 = expression? RPAREN s = statement
-    {C.FOR_DECL (d, e1, e2, s), L.make $startpos $endpos}
-;
+selection_statement_safe:
+| loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_safe
+    { C.If (fst expr, stmt1, Some stmt2, loc) }
+| loc = SWITCH LPAREN expr = expression RPAREN stmt = statement_safe
+    { C.SWITCH (fst expr, stmt, loc) }
 
-(* 6.8.6#1 Jump statements, Syntax *)
+(* 6.8.5 *)
+iteration_statement(last_statement):
+| loc = WHILE LPAREN expr = expression RPAREN stmt = last_statement
+    { C.WHILE (fst expr, stmt, loc) }
+| loc = DO stmt = statement_dangerous WHILE LPAREN expr = expression RPAREN SEMICOLON
+    { C.DOWHILE (fst expr, stmt, loc) }
+| loc = FOR LPAREN expr1 = expression SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_EXP (fst expr1)), Some (fst expr2), Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN decl1 = declaration expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_DECL decl1), Some (fst expr2), Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (None, Some (fst expr2), Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN expr1 = expression SEMICOLON SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_EXP (fst expr1)), None, Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN decl1 = declaration SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_DECL decl1), None, Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN SEMICOLON SEMICOLON expr3 = expression RPAREN stmt = last_statement
+    { C.FOR (None, None, Some (fst expr3), stmt, loc) }
+| loc = FOR LPAREN expr1 = expression SEMICOLON expr2 = expression SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_EXP (fst expr1)),  Some (fst expr2), None, stmt, loc) }
+| loc = FOR LPAREN decl1 = declaration expr2 = expression SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_DECL decl1), Some (fst expr2), None, stmt, loc) }
+| loc = FOR LPAREN SEMICOLON expr2 = expression SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (None, Some (fst expr2), None, stmt, loc) }
+| loc = FOR LPAREN expr1 = expression SEMICOLON SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_EXP (fst expr1)), None, None, stmt, loc) }
+| loc = FOR LPAREN decl1 = declaration SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (Some (C.FC_DECL decl1), None, None, stmt, loc) }
+| loc = FOR LPAREN SEMICOLON SEMICOLON RPAREN stmt = last_statement
+    { C.FOR (None, None, None, stmt, loc) }
+
+(* 6.8.6 *)
 jump_statement:
-| GOTO id = IDENTIFIER             {C.GOTO id, L.make $startpos $endpos}
-| CONTINUE SEMICOLON               {C.CONTINUE, L.make $startpos $endpos}
-| BREAK SEMICOLON                  {C.BREAK, L.make $startpos $endpos}
-| RETURN e = expression? SEMICOLON {C.RETURN e, L.make $startpos $endpos}
-;
+| loc = GOTO id = OTHER_NAME SEMICOLON
+    { C.GOTO (fst id, loc) }
+| loc = CONTINUE SEMICOLON
+    { C.CONTINUE loc }
+| loc = BREAK SEMICOLON
+    { C.BREAK loc }
+| loc = RETURN expr = expression SEMICOLON
+    { C.RETURN (Some (fst expr), loc) }
+| loc = RETURN SEMICOLON
+    { C.RETURN (None, loc) }
 
+(* 6.9 *)
+translation_unit_file:
+| lst = translation_unit EOF
+    { rev lst }
 
-(* 6.9 External definitions ************************************************* *)
-(* 6.9#1 External definitions, Syntax *)
 translation_unit:
-| external_declaration
-    {[$1]}
-| translation_unit external_declaration (* ATTENTION We store the list in reverse. *)
-    {$2 :: $1}
-;
+| def = external_declaration
+    { [def] }
+| defq = translation_unit deft = external_declaration
+    { deft::defq }
 
 external_declaration:
-| d = function_definition {d}
-| d = declaration         {C.EXTERNAL_DECLARATION d, L.make $startpos $endpos}
-;
+| def = function_definition
+| def = declaration
+    { def }
 
-
-(* 6.9.1#1 Function definitions, Syntax *)
+(* 6.9.1 *)
 function_definition:
-(* TODO No support for old-style function definitions. *)
-| declaration_specifiers declarator (*declaration_list_opt*) compound_statement
-    { let store, specs, quals = $1 in
-      let (name, (mk_type : C.c_type -> C.c_type)), l = $2 in
-      let defn_l = (name, mk_type (C.BASE (quals, specs)), store), l in
-      C.FUNCTION_DEFINITION (defn_l, $3), L.make $startpos $endpos
-    }
-;
+(* TODO : K&R *)
+(*| declaration_specifiers declarator declaration_list compound_statement
+    {}*)
+| specs = declaration_specifiers decl = declarator stmt = compound_statement
+    { C.FUNDEF (fst specs, decl, stmt, snd specs) }
 
-
-%%
+(* TODO : K&R 
+declaration_list:
+| declaration
+| declaration_list declaration
+    {}
+*)

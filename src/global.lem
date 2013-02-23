@@ -72,3 +72,16 @@ let rec all p = function
   | []    -> true
   | x::xs -> p x  && all p xs
 end
+
+
+let is_Some = function
+  | Some _ -> true
+  | None   -> false
+end
+
+
+let rec filter_opt l = 
+  match l with
+    | (Some z) :: xs -> z :: filter_opt xs
+    | None     :: xs ->      filter_opt xs
+  end

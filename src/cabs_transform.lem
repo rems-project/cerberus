@@ -1,4 +1,5 @@
 (* TODO: the locations are all messed up !! *)
+open Global
 
 module C = Cabs_parser
 module C' = Cabs
@@ -11,12 +12,18 @@ let f_opt f = function
   | None   -> None
 end
 
+let f_opt_list f = function
+  | Some x -> f x
+  | None   -> []
+end
 
+(*
 val translate_typeSpecifier: C.typeSpecifier -> C'.specifier
 val translate_storage: C.storage -> C'.storage_class
 val translate_cvspec: C.cvspec -> C'.qualifier
 val translate_spec_elem_list: list C.spec_elem -> list C'.storage_class * list C'.attribute * C'.qualifiers * C'.specifiers
 val translate_definition: C.definition -> C'.g_defn_l
+val translate_field_group: C.field_group -> list C'.field
 
 let rec translate_typeSpecifier spec =
   match spec with
@@ -31,10 +38,12 @@ let rec translate_typeSpecifier spec =
     | C.Tunsigned -> C'.UNSIGNED
     | C.T_Bool    -> C'.BOOL
     | C.Tnamed a  -> C'.NAMED a
+    (* NOTE: for struct/union, our AST forgets "field groups" *)
     | C.Tstruct a_opt fields_opt attrs ->
-        C'.STRUCT_ a_opt (f_opt (List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
+        C'.STRUCT_ a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
     | C.Tunion a_opt fields_opt attrs ->
-        C'.UNION_ a_opt (f_opt (List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
+        C'.UNION_ a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
+
     | C.Tenum a_opt xs attrs ->
         let f (a, e_opt, l) = (a, f_opt (translate_expression l) e_opt) in
         C'.ENUM a_opt (f_opt (List.map f) xs) (List.map translate_attribute attrs)
@@ -78,18 +87,77 @@ and translate_attribute attr =
   end
 
 
-(* TODO: I don't like the Field_group and friends, have to change the type defs in Cabs.lem *)
-and translate_field_group fg = Boot.outOfHomeomorphism "WIP" 
+
+
+(* TODO: temporary getting rid of the attributes (to change soon) *)
+(* TODO: pretty sure I made a mistake somewhere *)
+and translate_decl decl =
+  match decl with
+      (* TODO: the assumption that the list of storage_class is empty is probably wrong (DEBUG purpose) *)
+    | C.JUSTBASE ->
+        fun ([], attrs, qs, ss) -> C'.BASE qs ss
+
+    | C.ARRAY decl cvspecs attrs e_opt ->
+        fun ([], attrs', qs, ss) ->
+          C'.ARRAY qs (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+                      (f_opt (translate_expression dummy_location) e_opt)
+
+    | C.PTR cvspecs attrs decl ->
+        fun ([], attrs', qs, ss) ->
+          C'.POINTER qs (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+
+    (* NOTE: ignoring the VLA flag (not supported for now) *)
+    | C.PROTO decl (params, is_vla) -> Boot.outOfHomeomorphism "TODO"
+(*
+        fun ([], attrs', qs, ss) ->
+          C'.FUNCTION (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+                      KKK
+*)
+  end
+
+
+(*
+PARAM of list spec_elem * option string * decl_type * list attribute * cabsloc
+*)
+
+(*
+val translate_cvspec: C.cvspec -> C'.qualifier
+*)
+
+(* 
+(*The bool is true for variable length parameters. *)
+ | PROTO of decl_type * (list parameter * bool)
+*)
+(*
+  | FUNCTION of c_type * list decl_l
+*)
+
+
+
+and mk_c_type specs decl = (* Boot.outOfHomeomorphism "TODO" *)
+    (translate_decl decl) (translate_spec_elem_list specs)
+
+
+and translate_field_group fg = Boot.outOfHomeomorphism "WIP"
 (*
   match fg with
     | Field_group specs n_es l ->
+        let (scs, attrs, qs, ss) = translate_spec_elem_list specs in
+        let f = function
+          | (Some (Name n decl attrs l), None) -> BasicField n 
   end
+*)
+
+(*
+
+Name of string * decl_type * list attribute * cabsloc
 
 and field_group =
   | Field_group of list spec_elem * list (option name * option expression) * cabsloc
 
-and field_group =
-  | Field_group of (qualifiers * specifiers) * list (option name * option exp_l)
+and field =
+  | BasicField of string * c_type
+  | BitField of option string * c_type * exp_l
 *)
 
 
@@ -142,7 +210,6 @@ and translate_constant c =
   end
 
 
-and translate_ctype _ = Boot.outOfHomeomorphism "TODO"
 
 
 and translate_init_expression _ = Boot.outOfHomeomorphism "TODO"
@@ -170,7 +237,7 @@ and translate_expression l e =
     | C.CAST (ty, C.COMPOUND_INIT inits) -> C'.COMPOUND_LITERAL 
 *)
 
-    | C.CAST (specs, decl) init_e   ->  C'.CAST (translate_ctype (specs, decl)) (translate_init_expression init_e)
+    | C.CAST (specs, decl) init_e   ->  C'.CAST (mk_c_type specs decl) (translate_init_expression init_e)
 
 
     | C.CALL e es                   -> C'.CALL (fe e) (List.map fe es)
@@ -178,7 +245,7 @@ and translate_expression l e =
     | C.CONSTANT c                     -> C'.CONSTANT (translate_constant c)
     | C.VARIABLE x                     -> C'.IDENTIFIER x
     | C.EXPR_SIZEOF e                  -> C'.EXPR_SIZEOF (fe e)
-    | C.TYPE_SIZEOF (specs, decl)      -> C'.TYPE_SIZEOF (translate_ctype (specs, decl))
+    | C.TYPE_SIZEOF (specs, decl)      -> C'.TYPE_SIZEOF (mk_c_type specs decl)
     | C.INDEX e1 e2                 -> C'.SUBSCRIPT (fe e1) (fe e2)
     | C.MEMBEROF e x                -> C'.MEMBEROF (fe e) x
     | C.MEMBEROFPTR e x             -> C'.MEMBEROFPTR (fe e) x
@@ -195,7 +262,7 @@ and translate_definition d = Boot.outOfHomeomorphism "TODO"
 (*
   match d with
     | C.FUNDEF specs (Name n decl attrs l) s l' ->
-        (C'.FUNCTION_DEFINITION (n, translate_ctype (translate_sepc_elem_list specs, decl), STORAGE_CLASSES, l) (translate_statement s), l')
+        (C'.FUNCTION_DEFINITION (n, mk_c_type (translate_sepc_elem_list specs, decl), STORAGE_CLASSES, l) (translate_statement s), l')
 
       translate_spec_elem_list specs (* C'.qualifiers * C'.specifiers *)
 
@@ -277,5 +344,10 @@ TODO: add cppmem's par to the parser
 
 
 
-val translate_file: C.file -> C'.file
-let translate_file (fname, defs) = (fname, List.map translate_definition defs)
+
+*)
+
+
+
+val transform_file: C.file -> C'.file
+let transform_file (* (fname, defs) *) = Boot.outOfHomeomorphism "TODO" (* (fname, List.map translate_definition defs) *)

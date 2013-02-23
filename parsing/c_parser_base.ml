@@ -1,5 +1,5 @@
 exception Error = C_parser.Error
-type token  = C_parser.token
-type result = Cabs.g_defn_l list
+type token  = Pre_parser.token
+type result = Cabs_parser.definition list
 
-let start = C_parser.start
+let start = Pre_parser.translation_unit_file
