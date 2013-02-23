@@ -1,2 +1,2 @@
-include (Parser.BASE with type token  = C_parser.token
-                     and  type result = Cabs.g_defn_l list)
+include (Parser.BASE with type token  = Pre_parser.token
+                     and  type result = Cabs_parser.definition list)

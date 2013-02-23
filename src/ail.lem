@@ -231,6 +231,28 @@ let rec ctype_eq ty1 ty2 =
 
 
 
+
+
+
+
+
+(* Some useful aliases *)
+val unsigned_char: ctype
+let unsigned_char = BASIC {} (INTEGER (UNSIGNED ICHAR))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 module Print = struct
   module P = Pprint
 

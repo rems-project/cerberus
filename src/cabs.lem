@@ -114,8 +114,8 @@ type specifier =
   | BOOL
   | COMPLEX
   | NAMED of string
-  | STRUCT_ of option string * option (list field_group) * list attribute
-  | UNION_ of option string * option (list field_group) * list attribute
+  | STRUCT_ of option string * list field * list attribute
+  | UNION_ of option string * list field * list attribute
   | ENUM of option string * option (list (string * option exp_l)) * list attribute
 
 and attribute =
@@ -125,8 +125,11 @@ and attribute =
 and specifiers = multiset specifier
 and qualifiers = set qualifier
 
-and field_group =
-  | Field_group of (qualifiers * specifiers) * list (option name * option exp_l)
+(* struct/union field member *)
+and field =
+  | BasicField of string * c_type
+  | BitField of option string * c_type * exp_l
+
 
 and name =
   | Name of string * c_type
