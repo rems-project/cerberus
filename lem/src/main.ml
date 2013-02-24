@@ -227,6 +227,3 @@ let _ =
     ignore(main ()) 
   with 
     | Exit -> exit 1
-    | Failure(s) ->
-        print_string (s ^ "\n");
-        exit 1
