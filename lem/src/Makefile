@@ -1,8 +1,8 @@
 all:
-	ocamlbuild -tag debug main.native
+	ocamlbuild main.native
 
 debug: 
-	ocamlbuild main.d.byte
+	ocamlbuild -package str main.d.byte
 
 clean:
 	-ocamlbuild -clean
