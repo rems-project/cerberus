@@ -2,7 +2,7 @@ all:
 	ocamlbuild main.native
 
 debug: 
-	ocamlbuild -package str main.d.byte
+	ocamlbuild main.d.byte
 
 clean:
 	-ocamlbuild -clean
