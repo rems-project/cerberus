@@ -16,7 +16,7 @@ let ushrt  = <|min =                    0; max =                65535|> (* unsig
 let int    = <|min =              0-32767; max =                32767|> (* int *)
 let uint   = <|min =                    0; max =                65535|> (* unsigned int *)
 let long   = <|min =          0-214748364; max =            214748364|> (* long int *)
-let ulong  = (* TODO: fix when Lem supports bignums *) zero (*<|min =                    0; max =           4294967295|> (* unsigned long int *)*) 
+let ulong  = <|min =                    0; max =           4294967295|> (* unsigned long int *)
 (* TODO *)
 let llong  = zero (*<|min = ~9223372036854775807; max =  9223372036854775807|>*) (* long long int *)
 let ullong = zero (*<|min =                    0; max = 18446744073709551615|>*) (* unsigned long long int *)
