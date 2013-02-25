@@ -261,17 +261,20 @@ constraint w.r.t. the sizes of other types. *)
 
 
 
+(** value lifting *)
+
+type lift_value 'a = 
+  | Specified of 'a
+  | Unspecified of Ail.ctype 
+  | Trap_representation of num (* don't need to remember the type as if you do anything with this you've already hit undefined behaviour, but you do need the size because you can read the representation of a trap representation *)
+  | Indeterminate_value of Ail.ctype
+
+
 
 (** numeric values *)
 
 (* we need these before defining member access paths as they appear in
 array deferencing *)
-
-type lift_value 'a = 
-  | Specified of 'a
-  | Unspecified of Ail.ctype 
-  | Trap_representation (* don't need to remember the type as if you do anything with this you've already hit undefined behaviour *)
-  | Indeterminate_value of Ail.ctype
 
 type unlifted_numeric_value = num  (*TODO better name, and not num *)
 
@@ -284,27 +287,15 @@ type numeric_value = lift_value num
 type member_access = 
   | Struct_access of struct_tag * member_id
   | Union_access of  union_tag	* member_id
-  | Array_shift of Ail.ctype * unlifted_numeric_value
+  | Array_access of Ail.ctype * unlifted_numeric_value
      (* the ctype is the type of array elements for this dereference, so that we can calculate an offset from a member_access_path *)
 
-  (* K: not completely sure if we need this, but will probably make easier
-        the check required by the last sentence in §6.5.6#8) *)
-  | Array_one_past of Ail.ctype (* K: do we need the type? *)
-  
-  (* K: I guess we need this ctor, since Array_shift just shifts inside
-        an array (??) *)
-  | Array_access of Ail.ctype (* K: we probably don't need the ctype, if we make
-                                 sure to always have an Array_shift first
-                                 (including ones with index equal to 0) *)
-
-   (* P: not sure why you want to distinguish between those three array cases in the constructors? *)
-(* K: * adding Array_one_past seems just convenient to avoid rechecking if we are in the
-      case (which involve fetching the type of the block pointed to)
-
-      * for Array_access, don't we want to make the difference between being a pointer
-        to the k element of an array (Array_access) and a pointer to an array made
-        of the elements of the original array except the first k-1 ones ?
-*)
+  (* we thought about also having an "| Array_shift of Ail.ctype" so
+  that we could represent subarrays, but in both standard and
+  kernel-programmer C we believe it's legit to subtract off a pointer
+  that you've been handed, as long as the underlying actual array is
+  big enough. There's nothing special about the start point of a
+  subarray. So we remove it.*)
 
 (* we thought about adding:
 
@@ -327,18 +318,25 @@ type fancy_type =
 type pointer_address =   (* "address" is not a great name, as it's likely to be confused with symbolic_address... *)
   | Null
   | Block_path of block_id * member_access_path
-(*  | Block_offset of block_id * symbolic_address_id   (* not at all sure this is worth it*) *)
+(*  | Block_offset of block_id * symbolic_address_id   (* not at all sure this is worth it. It would let you capture "we've done some address arithmetic but have never historically left the block". But that doesn't seem very useful. *) *)
   | Address of symbolic_address_id
- | Function_pointer (* TODO *)
+  | Function_pointer (* TODO *)
 
-(* it's a bit odd that a pointer_address (in the Block_path case) remembers the history of operations on the pointer *except* the casts, which live in the fancy_type.  *)
+(* it's a bit odd that a pointer_address (in the Block_path case)
+remembers the history of operations on the pointer *except* the casts,
+which live in the fancy_type.  We're not sure if we should be writing
+down a definition of a set of values or the free grammar of
+construction operations (plus some equational theory over them...)*)
 
-(* Kayvan argued that function pointers are so conceptually distinct
-that they should live at the top level type of values.  Maybe, though
-as you can (in gcc in practice) cast them to ints and back and call
-them, for now we'll leave them here and hope to reuse some of the
-arith operation stuff *)
-
+(* at any usage of a pointer value, there are two interesting types:
+the static one that captures what the compiler thinks is going on
+(which we need eg for the address arith on an array dereference) and
+the dynamic one which tracks the construction history of the pointer
+value (which we need e.g. when we check whether a cast requires
+stricter alignment constraints than the pointer had before).  The
+first is supplied by core to each operation, so we don't need to
+remember it.  The second, we have to store with the pointer value
+somehow. *)
 
 
 type pointer_value =   <| 
