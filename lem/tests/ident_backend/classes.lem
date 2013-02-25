@@ -1,0 +1,18 @@
+module X = struct
+  class (Eq 'a)
+    val (==) : 'a -> 'a -> bool
+  end
+end
+
+module Y = struct
+  open X
+  instance (Eq num)
+    let (==) = fun x y -> true 
+  end
+end
+
+module Z = struct
+  let f x = X.(==) 1 x
+end
+
+

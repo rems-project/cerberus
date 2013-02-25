@@ -1,0 +1,49 @@
+let cons x xs = x::xs
+
+let filter_map f xs =
+  let f' x ys =
+    match f x with
+      | Some y -> y::ys
+      | None   -> ys
+    end in
+  List.fold_right f' xs []
+
+let product_map f s1 s2 = [f e1 e2 | forall (e1 MEM s1) (e2 MEM s2) | true]
+let product s1 s2 = product_map (fun x y -> (x, y)) s1 s2
+
+let rec init_aux length f i =
+  if i = length then
+    []
+  else
+    f i::init_aux length f (i+1)
+
+let init length f = init_aux length f 0
+let make length v = init length (fun _ -> v)
+
+let rec zip_with3 f l1 l2 l3 =
+  match (l1, l2, l3) with
+    | (x::xs, y::ys, z::zs) -> f x y z :: zip_with3 f xs ys zs
+    | _                     -> []
+  end
+
+
+(* TODO: redo efficient *)
+let rec take n l =
+  if n <= 0 then
+    []
+  else match l with
+    | []    -> []
+    | x::xs -> x :: take (n-1) xs
+  end
+
+let rec drop n l =
+  if n <= 0 then
+    l
+  else match l with
+    | []    -> []
+    | _::xs -> drop (n-1) xs
+end
+
+(* AHEM *)
+let rec split_at k l =
+  (take k l, drop k l)

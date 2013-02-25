@@ -1,0 +1,49 @@
+(*[ NOECHO ]*)
+(*[ CON_LIST
+                 Add    
+                 And    
+                Padd    
+               Pandi    
+              SetCR0    
+]*)
+(*[ AUX_LIST
+              intToV    
+  sem_of_instruction    
+]*)
+(*[ VAR_PREFIX_LIST
+           coherence    
+          coherence'    
+                   i    
+                 ist    
+             op2regi    
+             op3regs    
+                  rA    
+                  rB    
+                  rD    
+                   s    
+                 set    
+                simm    
+                   w    
+              w_addr    
+              wother    
+ write_reaching_coherence_point_action    
+ writes_not_past_coherence    
+ writes_past_coherence_point    
+ writes_past_coherence_point'    
+]*)
+(*[ HOL_SYM_ALIST
+                   &&   "{\scriptstyle\wedge}"
+]*)
+(*[ HOL_ID_ALIST
+                  IN    "\in " 
+              forall    "\forall "
+                  in    " \textbf{in} "
+                 let    "\textbf{let} "
+               match    "\textbf{match} "
+                 not    "\neg "
+               union    "\cup "
+                with    "\textbf{with}"
+]*)
+
+
+(*[ ECHO ]*)

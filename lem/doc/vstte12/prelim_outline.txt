@@ -1,0 +1,77 @@
+%\begin{itemize}
+%  \item PAGE LIMIT: 15 PAGES
+%  \item Work in the citation to the ITP paper \cite{Lem-ITP11}
+%  \item Motivation pretty much as it is
+%    \begin{itemize}
+%      \item Maybe more detailed discussion about why just using one of the existing tools is bad
+%    \end{itemize}
+%  \item Introduction to Lem  TODO: extended
+%  \item CPP model
+%    \begin{itemize}
+%      \item Intro to CPP concurrency model
+%      \item Used to use Nitpik, HOL (proof, latex), Isabelle, ocaml
+%      \item Backend-specific definitions (evolved from the tc problem)
+%      \item Sets of sets, which messes up Ocaml, thus need for type classes to handle equality
+%      \item Proofs: Scott's HOL proofs are out-dated (pre-lem model) and Mark's
+%        HOL proofs are part of the POPL submission; can we still use Mark's
+%        proofs as the story is different?
+%    \end{itemize}
+%  \item Implementation incl. type classes and backend/transformation details
+%    \begin{itemize}
+%      \item Transformations: address the issue of transformations that might
+%        change the semantics of code?
+%      \item Discuss all the different naming/scoping rules of the different
+%        backends
+%    \end{itemize}
+%  \item Related Work
+%    \begin{item}
+%      \item Discussion: why is Isabelle latex generator inadequate (should/could be before CPP section?)
+%    \end{item}
+%  \item Future Work and Conclusion
+%  \item Bib
+%\end{itemize}
+%
+
+
+obsolete parts from paper:
+
+% The basic idea behind \Lem{} is similar to Ott~\cite{ott}, a tool for
+% expressing programming language definitions. Ott takes definitions of language
+% syntax and semantics, expressed in a readable domain-specific
+% metalanguage, and compiles them to Coq, HOL4, Isabelle/HOL, and LaTeX;
+% it was used for the Java Modules and OCaml semantics work cited above.
+% This also provides re-usability and prover-independence, but Ott is not
+% easily applicable outside the specific domain of programming language
+% definitions. 
+% 
+
+%-----------------
+Development of a Coq backend is in progress.  We are already
+using \Lem{} in our research: we developed a semantics for
+multiprocessor concurrency on the POWER architecture~\cite{pldi11} in \Lem{}, and our semantics
+for C++11~\cite{C++,ppdp11} concurrency has been ported from Isabelle/HOL to \Lem{}.
+%-----------------
+
+\section{Useful real-world contribution (title?)}
+
+In recent work~\cite{C++}, we analysed the prose specification of the C++11
+concurrency features and produced a model written in formal mathematics.  Major
+mistakes were discovered in the draft versions of the standard and by attending
+ISO standardisation 
+We noticed major mistakes in the
+standard and attended ISO standardisation meetings where we suggested
+fixes that have been incorporated in the recently released C++11
+standard. Our supporting tool-chain was originally implemented as a
+ramshackle collection of components and using \Lem{} has improved it
+greatly.
+
+  We talked with the standardisation committee to try to
+understand the model and to fix the problems. Most of our interaction
+involved trading in example programs and example executions that we
+checked against our formal model. When arguing for changes, it was
+compelling to be able to show a perverse example and to say with
+confidence ``this really is allowed'', but manual inspection of
+examples was both time consuming and error prone.
+
+
+

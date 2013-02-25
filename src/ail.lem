@@ -1,0 +1,504 @@
+open Global
+
+type id = Symbol.t
+
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+
+type qualifier =
+  | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC
+and qualifiers = set qualifier
+
+type integer_base_type =
+  | ICHAR
+  | SHORT
+  | INT
+  | LONG
+  | LONG_LONG
+
+type integer_type =
+  | BOOL
+  | SIGNED of integer_base_type
+  | UNSIGNED of integer_base_type
+
+type basic_type =
+  | CHAR
+  | INTEGER of integer_type
+
+type ctype =
+  | VOID  of qualifiers
+  | BASIC of qualifiers * basic_type
+  (* TODO Need to convert integer constant to an actual value! Otherwise, we
+     cannot compare types! *)
+  | ARRAY of ctype * num
+  | STRUCT of qualifiers * id
+  | UNION  of qualifiers * id
+  | FUNCTION of ctype * list ctype
+  | POINTER of qualifiers * ctype
+(*  | ATOMIC of ctype *)
+  | TYPEDEF of id
+  
+  | SIZE_T
+
+
+
+
+
+
+
+
+
+
+
+and member_declaration =
+  | MEMBER_DECL of id
+(*  | BITFIELD of id option * 'e (* TODO: need to decide what to do about the 'e *) *)
+
+and type_class =
+  | T_EXP of ctype
+  | T_LVALUE of ctype
+  (* TODO: we need to add a T_BITFIELD *)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+type arithmetic_operator =
+  | MUL | DIV | MOD
+  | ADD | SUB
+  | SHL | SHR
+  | BAND
+  | XOR
+  | BOR
+
+type binary_operator =
+  | ARITHMETIC of arithmetic_operator
+  | COMMA
+  | AND
+  | OR
+  | LT | GT | LE | GE
+  | EQ | NE
+
+type unary_operator =
+  | PLUS
+  | MINUS
+  | BNOT
+  | ADDRESS
+  | INDIRECTION
+  | POSTFIX_INCR
+  | POSTFIX_DECR
+
+type integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+and integer_constant = num * option integer_suffix
+
+type constant =
+  | CONST_INT of integer_constant
+(*  | CONST_FLOAT of string (* the textual representaton *) (* LATER *) *)
+  | CONST_ENUM of string
+(* 
+(* TODO *)
+  | CONST_CHAR of list int64
+  | CONST_WCHAR of list int64
+*)
+
+
+
+type declaration = ctype * option storage_duration
+
+
+type expression 'a =
+  | UNARY of unary_operator * expression_l 'a
+  | BINARY of binary_operator * expression_l 'a * expression_l 'a 
+  | ASSIGN of option arithmetic_operator * expression_l 'a * expression_l 'a
+  | CONDITIONAL of expression_l 'a * expression_l 'a * expression_l 'a
+  | CAST of ctype * expression_l 'a
+  | CALL of expression_l 'a * list (expression_l 'a)
+  | MEMBEROF of expression 'a * id
+  | MEMBEROFPTR of expression 'a * id
+  | CONSTANT of constant
+  | VARIABLE of id
+
+  (* TODO: this ctor should probably disappear in the end, but to transform a
+           EXPR_SIZEOF into a SIZEOF, I need to know the type of the operand and
+           can't at the time of Cabs_to_ail (...).
+           Currently this ctor is only used between Cabs_to_ail and Typing, and
+           get transform into a SIZEOF in Typing *)
+  | EXPR_SIZEOF of expression_l 'a
+  
+  | SIZEOF of ctype
+  | ALIGNOF of ctype
+  
+  | MALLOC of expression_l 'a
+  | FREE of expression_l 'a
+  | MEMCMP of expression_l 'a * expression_l 'a * expression_l 'a
+  | MEMCPY of expression_l 'a * expression_l 'a * expression_l 'a
+  
+
+
+
+
+and expression_l 'a = 'a * expression 'a
+
+type definition 'a = id * expression_l 'a
+
+(* Statements *)
+type statement 'a =
+  | SKIP
+  | EXPRESSION of expression_l 'a
+  | BLOCK of list id * list (statement_l 'a)
+  | IF of expression_l 'a * statement_l 'a * statement_l 'a
+  | WHILE of expression_l 'a * statement_l 'a
+  | DO of expression_l 'a * statement_l 'a
+  | BREAK
+  | CONTINUE
+  | RETURN_VOID
+  | RETURN_EXPRESSION of expression_l 'a
+  | SWITCH of expression_l 'a * statement_l 'a
+  | CASE of integer_constant * statement_l 'a
+  | DEFAULT of statement_l 'a
+  | LABEL of id * statement_l 'a
+  | GOTO of id
+  | DECLARATION of list (definition 'a)
+  | PAR of list (statement_l 'a)
+
+and statement_l 'a = 'a * statement 'a
+
+type file 'a = <|
+  main : id;
+  id_map : map id declaration;
+  member_map : map id (map id member_declaration);
+  globals : list (id * expression_l 'a);
+  fn_map : map id (list id * statement_l 'a)
+|>
+
+(*
+type env 'a = <|
+  symbol : id;
+  symbol_map : map id string;
+  file : file 'a
+|>
+*)
+
+
+(* HACK: equality over ctypes. *)
+let rec and2 f l1 l2 =
+  match (l1,l2) with
+    | ([]   ,[]    ) -> true
+    | (x::xs, y::ys) -> f x y && and2 f xs ys
+  end
+
+let rec ctype_eq ty1 ty2 =
+  match (ty1, ty2) with
+    | (VOID qs1          ,     VOID qs2     ) -> Set.equal qs1 qs2
+    | (BASIC qs1 b1      , BASIC qs2 b2     ) -> Set.equal qs1 qs2 && b1 = b2
+    | (ARRAY ty1 n1      , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1   , POINTER qs2 ty2  ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 tys1 , FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
+    | (STRUCT qs1 x1     , STRUCT qs2 x2    ) -> Set.equal qs1 qs2 && x1 = x2
+    | (UNION qs1 x1      , UNION qs2 x2     ) -> Set.equal qs1 qs2 && x1 = x2
+  end
+
+
+
+
+
+
+
+
+
+(* Some useful aliases *)
+val unsigned_char: ctype
+let unsigned_char = BASIC {} (INTEGER (UNSIGNED ICHAR))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+module Print = struct
+  module P = Pprint
+
+  open P.Operators
+  
+  let precedence = function
+    | VARIABLE _ -> Some 0
+    | CONSTANT _ -> Some 0
+    
+    | CALL _ _             -> Some 1
+    | MEMBEROF _ _         -> Some 1
+    | MEMBEROFPTR _ _      -> Some 1
+    | UNARY POSTFIX_INCR _ -> Some 1
+    | UNARY POSTFIX_DECR _ -> Some 1
+    | MALLOC _             -> Some 1
+    | FREE _               -> Some 1
+    | MEMCMP _ _ _         -> Some 1
+    | MEMCPY _ _ _         -> Some 1
+
+    
+    | UNARY _ _     -> Some 2
+    | CAST _ _      -> Some 2
+    | EXPR_SIZEOF _ -> Some 2
+    | SIZEOF _      -> Some 2
+    | ALIGNOF _     -> Some 2
+    
+    | BINARY (ARITHMETIC MUL) _ _ -> Some 3
+    | BINARY (ARITHMETIC DIV) _ _ -> Some 3
+    | BINARY (ARITHMETIC MOD) _ _ -> Some 3
+    
+    | BINARY (ARITHMETIC ADD) _ _ -> Some 4
+    | BINARY (ARITHMETIC SUB) _ _ -> Some 4
+    
+    | BINARY (ARITHMETIC SHL) _ _ -> Some 5
+    | BINARY (ARITHMETIC SHR) _ _ -> Some 5
+    
+    | BINARY LT _ _ -> Some 6
+    | BINARY GT _ _ -> Some 6
+    | BINARY LE _ _ -> Some 6
+    | BINARY GE _ _ -> Some 6
+    
+    | BINARY EQ _ _ -> Some 7
+    | BINARY NE _ _ -> Some 7
+    
+    | BINARY (ARITHMETIC BAND) _ _ -> Some 8
+    
+    | BINARY (ARITHMETIC XOR) _ _ -> Some 9
+    
+    | BINARY (ARITHMETIC BOR) _ _ -> Some 10
+    
+    | BINARY AND _ _ -> Some 11
+    
+    | BINARY OR _ _ -> Some 12
+    
+    | CONDITIONAL _ _ _ -> Some 13
+    
+    | ASSIGN _ _ _ -> Some 14
+    
+    | BINARY COMMA _ _ -> Some 15
+  end
+
+  let lt_precedence p1 p2 =
+    match (p1, p2) with
+      | (Some n1, Some n2) -> n1 < n2
+      | (Some _ , None   ) -> true
+      | (None   , _      ) -> false
+    end
+
+  let optional pp = function
+    | Some x -> pp x
+    | None   -> P.empty
+  end
+
+  let pp_unop = function
+    | MINUS        -> P.minus
+    | PLUS         -> P.plus
+    | ADDRESS      -> P.ampersand
+    | INDIRECTION  -> P.star
+    | BNOT         -> P.tilde
+    | POSTFIX_INCR -> P.plus ^^ P.plus
+    | POSTFIX_DECR -> P.minus ^^ P.minus
+  end
+
+  let pp_arithop = function
+    | ADD  -> P.plus
+    | SUB  -> P.minus
+    | MUL  -> P.star
+    | DIV  -> P.slash
+    | MOD  -> P.percent
+    | BAND -> P.ampersand
+    | BOR  -> P.bar
+    | XOR  -> P.caret
+    | SHL  -> P.langle ^^ P.langle
+    | SHR  -> P.rangle ^^ P.rangle
+  end
+
+  let pp_binop = function
+    | ARITHMETIC o -> pp_arithop o
+    | EQ -> P.equals ^^ P.equals
+    | NE -> P.bang   ^^ P.equals
+    | LT -> P.langle
+    | GT -> P.rangle
+    | LE -> P.langle ^^ P.equals
+    | GE -> P.rangle ^^ P.equals
+    | AND   -> P.ampersand ^^ P.ampersand
+    | OR    -> P.bar ^^ P.bar
+    | COMMA -> P.comma
+  end
+
+  let showParens = P.parens
+
+  let pp_qualifier = function
+    | CONST -> !^ "const"
+  end
+
+  let pp_integer_base_type = function
+    | ICHAR -> !^ "char"
+    | SHORT -> !^ "short"
+    | INT -> !^ "int"
+    | LONG -> !^ "long"
+    | LONG_LONG -> !^ "long" ^^^ !^ "long"
+  end
+
+  let pp_integer_type = function
+    | BOOL        -> !^ "_Bool"
+    | UNSIGNED ib -> !^ "unsigned" ^^^ pp_integer_base_type ib
+    | SIGNED   ib -> !^ "signed"   ^^^ pp_integer_base_type ib
+  end
+
+  let pp_basic_type = function
+    | CHAR -> !^ "char"
+    | INTEGER i -> pp_integer_type i
+  end
+
+  let pp_suffix s =
+    let to_string = function
+      | SUFFIX_UNSIGNED           -> "U"
+      | SUFFIX_UNSIGNED_LONG      -> "UL"
+      | SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
+      | SUFFIX_LONG               -> "L"
+      | SUFFIX_LONG_LONG          -> "LL"
+    end in
+    optional (P.text -| to_string) s
+
+  let pp_int_const (i, s) = !^ (string_of_num i) ^^ pp_suffix s
+
+  let rec pp_type t =
+    let f = pp_type in
+    let pp_qs qs =
+      let ins_space ds d = ds ^^ d ^^ P.space in
+      P.fold ins_space (List.map pp_qualifier (Set.to_list qs)) in
+    match t with
+      | VOID qs       -> pp_qs qs ^^ (!^ "void")
+      | BASIC qs b    -> pp_qs qs ^^ pp_basic_type b
+      | ARRAY t s     -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
+      | POINTER qs t  -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
+      | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
+      | SIZE_T        -> !^ "size_t"
+    end
+
+  let pp_type_class = function
+    | T_EXP    t -> P.brackets (pp_type t) ^^ !^ "exp"
+    | T_LVALUE t -> P.brackets (pp_type t) ^^ !^ "lvalue"
+  end
+
+  let pp_return_type = function
+    | FUNCTION t _ -> pp_type t
+    | _            -> P.empty
+  end
+
+  let pp_id id = !^ (Symbol.to_string_pretty id)
+
+  let rec pp_exp p (d, exp) =
+    let p' = precedence exp in
+    let f = P.group -| pp_exp p' in
+    (if lt_precedence p' p then fun x -> x else P.parens) $
+    match exp with
+      | VARIABLE id -> pp_id id
+      | UNARY (POSTFIX_INCR as o) e -> f e ^^ pp_unop o
+      | UNARY (POSTFIX_DECR as o) e -> f e ^^ pp_unop o
+      | UNARY o                   e -> pp_unop o ^^ f e
+      | BINARY (COMMA as o) e1 e2 ->
+          f e1 ^^ pp_binop o ^^ P.space ^^ f e2
+      | BINARY o e1 e2 -> f e1 ^^^ pp_binop o ^^^ f e2
+      | CALL e es -> f e ^^ P.parens (P.comma_list f es)
+      | ASSIGN o_opt e1 e2 ->
+          f e1 ^^^ (optional pp_arithop o_opt ^^ P.equals) ^^^ f e2
+      | CONDITIONAL e1 e2 e3 ->
+          P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
+      | CAST t e -> P.parens (pp_type t) ^^^ f e
+      | CONSTANT (CONST_INT ic) -> pp_int_const ic
+      | EXPR_SIZEOF e -> !^ "sizeof"  ^^^ f e
+      | SIZEOF  t -> !^ "sizeof"  ^^ P.parens (pp_type t)
+      | ALIGNOF t -> !^ "alignof" ^^ P.parens (pp_type t)
+      
+      | MALLOC e        -> !^ "malloc" ^^ P.parens (f e)
+      | FREE e          -> !^ "free"   ^^ P.parens (f e)
+      | MEMCMP e1 e2 e3 -> !^ "memcmp" ^^ P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+      | MEMCPY e1 e2 e3 -> !^ "memcpy" ^^ P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+    end
+
+  let pp_decl file id =
+    let (t, st) = Pmap.find id file.id_map in
+    pp_type t ^^^ pp_id id
+
+  let rec pp_stmt file (d, stmt) =
+    let f_e = pp_exp None in
+    let f_s = pp_stmt file in
+    match stmt with
+      | SKIP -> P.semi
+      | EXPRESSION e -> f_e e ^^ P.semi
+      | BLOCK _ ss ->
+          let block = P.sepmap P.break1 f_s ss in
+          P.lbrace ^^ P.nest 2 (P.break1 ^^ block) ^/^ P.rbrace
+      | IF e s1 s2 ->
+          !^ "if" ^^^ P.parens (f_e e) ^^^ f_s s1 ^^^ !^ "else" ^^^ f_s s2
+      | WHILE e s ->
+          !^ "while" ^^^ P.parens (f_e e) ^/^ f_s s
+      | DO e s ->
+          !^ "do" ^/^ f_s s ^/^ !^ "while" ^^^ P.parens (f_e e)
+      | BREAK -> !^ "break" ^^ P.semi
+      | CONTINUE -> !^ "continue" ^^ P.semi
+      | RETURN_VOID -> !^ "return" ^^ P.semi
+      | RETURN_EXPRESSION e -> !^ "return" ^^^ f_e e ^^ P.semi
+      | SWITCH e s -> !^ "switch" ^^^ P.parens (f_e e) ^/^ f_s s
+      | CASE ic s -> pp_int_const ic ^^ P.colon ^^^ f_s s
+      | DEFAULT s -> !^ "default" ^^ P.colon ^^^ f_s s
+      | GOTO id -> !^ "goto" ^^^ pp_id id ^^ P.semi
+      | LABEL id s -> pp_id id ^^ P.colon ^^^ f_s s
+      | DECLARATION ds ->
+          let f_d (id, e) =
+            let (t, st) = Pmap.find id file.id_map in
+            pp_type t ^^^ pp_id id ^^^ P.equals ^^^ f_e e in
+          P.comma_list f_d ds ^^ P.semi
+      | PAR ss -> let par = P.sepmap (P.bar ^^ P.bar ^^ P.bar) f_s ss in
+                  P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break1 ^^ par) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
+    end
+
+  let pp_function file (id, (args, s)) =
+    let (t, st) = Pmap.find id file.id_map in
+    pp_return_type t
+    ^^^ pp_id id
+    ^^^ P.parens (P.comma_list (pp_decl file) args)
+    ^^^ (pp_stmt file s)
+
+  let pp_file file =
+    let pp d f = d ^^ pp_function file f ^^ P.break1 in
+    List.fold_left pp P.empty (Ocaml.Pmap.bindings file.fn_map)
+end
