@@ -293,8 +293,9 @@ and hash = parse
 
   open Streams
   open Specif
+  open C_parser (* K added that *)
   open Parser
-  open Aut.GramDefs
+(*  open Aut.GramDefs *)
 
   let tokens_stream lexbuf : token coq_Stream =
     let tokens = ref [] in
