@@ -179,8 +179,8 @@ type address = symbolic_address_id
 
 (** type definitions *)
 
-type struct_tag = sym
-type union_tag = sym
+type struct_tag = Ail.id
+type union_tag = Ail.id
 
 (* I assume here that these struct_tag and union_tag values correctly
 identify the respective types reflecting the correct type
@@ -284,10 +284,13 @@ type numeric_value = lift_value num
 
 (** pointer values *)
 
+(*
 type member_access = 
   | Struct_access of struct_tag * member_id
   | Union_access of  union_tag	* member_id
   | Array_access of Ail.ctype * unlifted_numeric_value
+*)
+
      (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_access_path *)
 
   (* we thought about also having an "| Array_shift of Ail.ctype" so
@@ -305,22 +308,24 @@ that's supposed to actually be within the representation of wherever
 we are, not arbitrary address arith, but switched back to the
 block-top-level address stuff *)
 
-type member_access_path = list member_access
+(* type member_access_path = list member_access *)
      (* these will be normalised with adjacent Array_access's coalesced *)
 
-
+(*
 type fancy_type = 
   | Cast of Ail.ctype * fancy_type 
   | Member_access of member_access * fancy_type 
   | Type of Ail.ctype (* the type of the unprojected thing...*)
+*)
 
-  
+(*
 type pointer_address =   (* "address" is not a great name, as it's likely to be confused with symbolic_address... *)
   | Null
   | Block_path of block_id * member_access_path
 (*  | Block_offset of block_id * symbolic_address_id   (* not at all sure this is worth it. It would let you capture "we've done some address arithmetic but have never historically left the block". But that doesn't seem very useful. *) *)
   | Address of symbolic_address_id
   | Function_pointer (* TODO *)
+*)
 
 (* it's a bit odd that a pointer_address (in the Block_path case)
 remembers the history of operations on the pointer *except* the casts,
@@ -338,10 +343,12 @@ first is supplied by core to each operation, so we don't need to
 remember it.  The second, we have to store with the pointer value
 somehow. *)
 
+(*
 type pointer_value =   <| 
    address: lift_value pointer_address;
    ftype:  fancy_type;
 |>
+*)
 
 (* not completely happy with this - it seems counter to "C programmer
 intuition" to treat p.f different from (type_of_f) ( (char* )(&p) +
@@ -361,46 +368,73 @@ with the rest, what is the free type of pointer-constructing
 operations, exactly? This: *)
 
 type pointer_operation_nullary =
-  | Null of ctype
+  | Null of Ail.ctype
   | Address of symbolic_address_id
   | Function_pointer (* TODO *)
 
 type pointer_operation_unary = 
-  | Member_access of member_access
-  | Cast of ctype 
+  | Struct_access of struct_tag * member_id
+  | Union_access of  union_tag	* member_id
+  | Array_access of Ail.ctype * unlifted_numeric_value
+  | Cast of Ail.ctype
 
 type pointer_expression =
   | Nullary of pointer_operation_nullary
   | Unary of pointer_operation_unary * pointer_expression
 
-let rec type_of pe = match pe with
-  ... finds the outermost cast....
+val     type_of: pointer_expression -> Ail.ctype
+let rec type_of pe =
+  match pe with
+    | Nullary (Null ty) -> ty
+    | Nullary (Address sa) -> todo "??"
+    | Nullary (Function_pointer) -> todo "TODO"
+    | Unary (Struct_access tag m) pe ->
+        match type_of pe with
+          | Ail.STRUCT qs tag' ->
+              if tag <> tag' then
+                assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
+              else
+                todo "get from the memory state the type of the member `m' in the struct type `tag'"
+          | _ -> assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
+        end
+    | Unary (Union_access tag m) pe ->
+        match type_of pe with
+          | Ail.UNION qs tag' ->
+              if tag <> tag' then
+                assert_false "[Memory.type_of, Unary (Union_access _ _) _] ill-formed pointer_expression"
+              else
+                todo "get from the memory state the type of the member `m' in the struct type `tag'"
+          | _ -> assert_false "[Memory.type_of, Unary (Union_access _ _) _] ill-formed pointer_expression"
+        end
+    | Unary (Array_access ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
+    | Unary (Cast ty) _ -> ty (* NOTE: the same *)
+  end
 
 
 let wf_pointer_expression_nullary pop = match pop with
   | Null ty -> true
   | Address sai -> 
-      in some semantics: ...supposing we are in the SC world, go check that this is in a suitable allocated object... K remarks that naively you might think it's in several objects, and you need to take care
-  | Function_pointer ... ->
-      check it's a legal function pointer
+      todo "in some semantics: ...supposing we are in the SC world, go check that this is in a suitable allocated object... K remarks that naively you might think it's in several objects, and you need to take care"
+  | Function_pointer (* ... *) ->
+      todo "check it's a legal function pointer"
   end
 
 let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_expression) = 
   match pop with
-  | Member_access ma ->
-     match ma with
-     | Struct_access st mid -> 
-     ....
+  | Struct_access st mid -> todo "...."
+
+
       
-  | Cast ty ->
-     ....
+  | Cast ty -> todo "...."
   end
 
 val equal_pointer_expression : pointer_expression -> pointer_expression -> bool
 let equal_pointer_expression pe1 pe2 =
- ...the question is whether we can write this down nicely in an equational way
- ...and/or write a normalisation function that gives fairly canonical representatives 
+ todo "...the question is whether we can write this down nicely in an equational way"
+ todo "...and/or write a normalisation function that gives fairly canonical representatives "
 
+
+(*
 here's a conditional equation that could also be executed as part of a normalisation function:
 
 if ty=ty' && (if in some semantics) we stay in the array then
@@ -410,6 +444,39 @@ Unary(Member_access(Array_access(ty,n+n')))
 ....
 
 can't do much of this without nailing the semantic switches, but do first for aggressive C-standard semantics
+*)
+
+
+(* listing of these equations *)
+(*
+
+  Unary (Cast ty) (Unary (Cast ty') pe') when if ty = ty'  -->  Unary (Cast ty) pe'
+  
+  (K: ??) if we can decide that a symbolic_address points to some object following some member_access, do we want
+          normalise to that explicit pointer_expression ?
+  
+  
+
+
+
+
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* -------------------------------------------------- *)
+
+(*
 
 
 
@@ -1106,3 +1173,5 @@ let std_pointer_equality (p: pointer_value) (p': pointer_value) : bool =
     |  (Specified (Address sa), Specified (Address sa')) -> todo "... similar ..."
   end
 
+
+*)
