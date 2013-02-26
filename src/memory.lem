@@ -288,7 +288,7 @@ type member_access =
   | Struct_access of struct_tag * member_id
   | Union_access of  union_tag	* member_id
   | Array_access of Ail.ctype * unlifted_numeric_value
-     (* the ctype is the type of array elements for this dereference, so that we can calculate an offset from a member_access_path *)
+     (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_access_path *)
 
   (* we thought about also having an "| Array_shift of Ail.ctype" so
   that we could represent subarrays, but in both standard and
@@ -338,12 +338,10 @@ first is supplied by core to each operation, so we don't need to
 remember it.  The second, we have to store with the pointer value
 somehow. *)
 
-
 type pointer_value =   <| 
    address: lift_value pointer_address;
    ftype:  fancy_type;
 |>
-
 
 (* not completely happy with this - it seems counter to "C programmer
 intuition" to treat p.f different from (type_of_f) ( (char* )(&p) +
@@ -356,6 +354,63 @@ offsetof(f)) *)
  \texttt{symbolic_address_id} and add new constraints?  (for uniform
  treatment of symbolic addresses).  Or we could keep a symbolic
  address \emph{expression} in pointer values. *)
+
+
+(* On the path to integrating what we actually need about fancy_type
+with the rest, what is the free type of pointer-constructing
+operations, exactly? This: *)
+
+type pointer_operation_nullary =
+  | Null of ctype
+  | Address of symbolic_address_id
+  | Function_pointer (* TODO *)
+
+type pointer_operation_unary = 
+  | Member_access of member_access
+  | Cast of ctype 
+
+type pointer_expression =
+  | Nullary of pointer_operation_nullary
+  | Unary of pointer_operation_unary * pointer_expression
+
+let rec type_of pe = match pe with
+  ... finds the outermost cast....
+
+
+let wf_pointer_expression_nullary pop = match pop with
+  | Null ty -> true
+  | Address sai -> 
+      in some semantics: ...supposing we are in the SC world, go check that this is in a suitable allocated object... K remarks that naively you might think it's in several objects, and you need to take care
+  | Function_pointer ... ->
+      check it's a legal function pointer
+  end
+
+let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_expression) = 
+  match pop with
+  | Member_access ma ->
+     match ma with
+     | Struct_access st mid -> 
+     ....
+      
+  | Cast ty ->
+     ....
+  end
+
+val equal_pointer_expression : pointer_expression -> pointer_expression -> bool
+let equal_pointer_expression pe1 pe2 =
+ ...the question is whether we can write this down nicely in an equational way
+ ...and/or write a normalisation function that gives fairly canonical representatives 
+
+here's a conditional equation that could also be executed as part of a normalisation function:
+
+if ty=ty' && (if in some semantics) we stay in the array then
+Unary(Member_access(Array_access(ty,n)), Unary(Member_access(Array(access(ty',n'))))) = 
+Unary(Member_access(Array_access(ty,n+n')))
+
+....
+
+can't do much of this without nailing the semantic switches, but do first for aggressive C-standard semantics
+
 
 
 (** operations on pointers *)
