@@ -1,0 +1,134 @@
+Hi Scott
+
+more todos for Lem->Coq (the last email is below, so we have a complete reference).  As you are working on the typechecker you might want to look at point 5.
+
+4- polymorphic function application.  Imagine we have:
+
+ let test1 = fun x -> x
+ let apptest1 = test1 3
+
+test1 gets correctly compiled to:
+
+ Definition test1(a:Type):a->a := fun x => x.
+
+Now, for Coq this is a function that takes 2 arguments, and should be applied as:
+
+ Definition apptest1 = test1 nat 3.
+
+Luckily Coq is (often) clever enough to infer the type arguments, but we have to specify that this is the behaviour we want. This is done by adding "Implicit Arguments func_name." after function declaration, e.g.:
+
+ Definition test1(a:Type):a->a := fun x => x.
+ Implicit Arguments test1.
+
+ Definition apptest1 := test1 3.
+
+Alternatively type inference might be set for a whole buffer, by specifying 
+
+ Set Implicit Arguments.
+
+at the beginning of the .v file.  I suggest we try this, and then we check on some concrete examples if it always does the right thing or we need a finer control (when functions are partially applied Coq might not do the right thing).
+
+5- coercions.  Consider the following lem:
+
+ let test1 = fun x -> x
+ let test5 = (test1 : num -> num)
+
+In Coq  test1 has type  forall a : Type, a -> a  which is incompatible with num -> num, so the expression 
+
+ Definition test5 := test1 : num -> num
+
+is badly typed.  To properly define test5 we must apply test1 to the type argument num; since we have just defined type arguments "implicit" (see 4.) we must use the syntax:
+
+ Definition test5 := test1 (a:=num). 
+
+(or alternatively: @test1 num --- the @ disables the implicit arguments).   How can we go from 
+
+   let test5 = (test1 : num -> num)
+
+to 
+
+   Definition test5 := test1 (a:=num)
+
+???  This transformation requires some help from the type checker.
+
+6-  records.  Consider:
+
+ type t2 = <| f1 : num ; f2: bool |>
+ let test11 = <| f1 = 1; f2 = true |>
+
+This must be compiled into:
+
+ Record t2 := mk_t2 { f1 : num ; f2: bool }.
+ Definition test11 := mk_t2 1 true.
+
+The constructor name mk_t2 (an arbitrary string) can be left implicit, with    Record t2 := { f1 : num ; f2: bool }.  In this case it defaults to Build_t2.  However to build the record the must apply this constructor to the arguments.  How to do this properly (I implemented a hack, which is currently broken)?  (Compilation of projections is currently ok).
+
+If records are polymorphic, then the constructor function has a type abstraction, but the Implicit Argument mechanism seems to do the right thing, e.g.
+
+ Record t20 (A:Type) := { p1 : A ; p2 : nat }.
+ Definition test 24 := Build_t20 3 4.
+
+Observe that the constructor expects a type argument first:  Build_t20 : forall A : Type, A -> num -> t20 A
+
+If we have mutually recursive records, or records mutually recursive with another type declaration, then we cannot use the Record syntactic sugar and we must define the projection function by hand.  For instance
+
+ type t1 =
+  | C1 of bool
+  | C2 of bool * t1 * t2
+ and t2 = { fn1 : t1 ;  fn2 : bool }
+
+must be compiled into:
+
+ Inductive  t1:Set :=
+ | C1 : bool -> t1
+ | C2 : bool -> t1 -> t2 -> t1
+ with t2:Set :=
+  build_t2 (fn1 : t1)(fn2:bool) : t2.
+
+ Definition fn1 (x:t2):= match x with (build_t2 a b) => a end. 
+ Definition fn2 (x:t2):= match x with (build_t2 a b) => b end.
+
+(The Record keyword used above is syntactic sugar, and has the advantage of automatically definining the projection functions fn1 and fn2 and supporting the projection notation test11.(f1) -- otherwise for projections we must write "f1 test11").  Again, we need help from the typechecker to decide if we can use Record or we define the projection functions by hand   ---  we might also always never use the Record keyword and define the projection functions by hand, and loose the dot notation.  Maybe never using Record is a good idea).
+
+-francesco
+
+OLDER REMARKS
+
+1- spacing: we should fix the spacing.  Example:
+
+Definition t3 ab :=( a * b)%type. 
+
+should be
+
+Definition t3 a b := (a * b)%type. 
+
+(the space between the type variable abstractions is vital, correct spacing for parentheses is aesthetic).
+
+Scott says: Some of the problems will be because we don't have a Coq-specific 'unlexing' mode written yet, and others of them will be common to all of the back ends (the variable space should be the former, and the parens, the latter).
+
+2- when building inductive types, we must specify the target type of each constructor (required by Coq to deal with complicated dependent types).  That is:
+
+Inductive t := C1 | C2 :( num)%type | C3 :( bool -> num)%type.
+
+should be:
+
+Inductive t := C1 : t | C2 : (num -> t)%type | C3 : (bool -> num -> t)%type.
+
+(I implemented a long time ago, we need some regression test).
+
+Even better, whenever the type expression does not include the symbol "*" we should omit the %type scope annotation, getting:
+
+Inductive t := C1 : t | C2 : num -> t | C3 : bool -> num -> t.
+
+3- type annotations should be removed from patterns: 
+
+match x with ((n:int),m) =>
+
+should be
+
+match x with (n,m) =>
+
+(I believe all other Lem patterns are supported natively by Coq).
+
+Scott says: This will be easy.  I'll do it once I've gotten Lem working again (right now the type checker is in pieces as I work on it).
+

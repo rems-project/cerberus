@@ -1,0 +1,52 @@
+
+
+type error 'partial =
+  | Undefined of 'partial
+  | Bug of string
+
+type t 'a 'partial = Exception.t 'a (error 'partial)
+
+let return = Exception.return
+let bind = Exception.bind
+let rbind f m = bind m f
+let fmap = Exception.fmap
+let app = Exception.app
+
+let undefined m = Exception.fail (Undefined m)
+let bug       m = Exception.fail (Bug       m)
+
+let fail = bug
+
+let of_exception = function
+  | Exception.Result    a -> return a
+  | Exception.Exception m -> bug  m
+  end
+
+let iter_set f s =
+  let f' v () =
+    let (_ : t unit _) = fmap f v in
+    () in
+  Set.fold f' s ()
+
+let iter_list f ls =
+  let f' v () =
+    let (_ : t unit _) = fmap f v in
+    () in
+  List.fold_right f' ls ()
+
+let compare_partial compare_undef p1 p2 =
+  match (p1, p2) with
+  | (Undefined u1, Undefined u2) -> compare_undef u1 u2
+  | (Bug s1, Bug s2) -> String_.compare s1 s2
+  | (Undefined _, _) -> Ord.Lt
+  | (_, Undefined _) -> Ord.Gt
+  end
+
+let compare cmp cmp_undef = Exception.compare cmp (compare_partial cmp_undef)
+
+let map_undef f m =
+  let f' = function
+    | Undefined u -> return (f u)
+    | Bug m -> bug m
+    end in
+  Exception.bind_exception m f'

@@ -1,0 +1,2 @@
+  | typeRange P it :: M :: TypeRange
+      {{ coq (typeRange [[P]] [[it]]) }}
