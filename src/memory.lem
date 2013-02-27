@@ -393,6 +393,8 @@ let rec type_of pe =
           | Ail.STRUCT qs tag' ->
               if tag <> tag' then
                 assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
+                (* P: later the above check will have to be conditionally-on-flags more liberal, to support
+                interchangeability of structs with the same prefix *)
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
           | _ -> assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
@@ -426,6 +428,7 @@ let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_express
 
       
   | Cast ty -> todo "...."
+
   end
 
 val equal_pointer_expression : pointer_expression -> pointer_expression -> bool
@@ -450,11 +453,13 @@ can't do much of this without nailing the semantic switches, but do first for ag
 (* listing of these equations *)
 (*
 
-  Unary (Cast ty) (Unary (Cast ty') pe') when if ty = ty'  -->  Unary (Cast ty) pe'
+  Unary (Cast ty) (Unary (Cast ty') pe') when ty = ty'  -->  Unary (Cast ty) pe'
+
+  (P: the above will be true much more often - for pretty much all ty', if the applications are well-formed, no?)
   
   (K: ??) if we can decide that a symbolic_address points to some object following some member_access, do we want
           normalise to that explicit pointer_expression ?
-  
+
   
 
 
