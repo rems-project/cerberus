@@ -63,7 +63,7 @@ much is much.  Options:
   execution has to simply fail in cases where we can't).  I don't see
   a canonical choice for this, but one might emerge from study of a
   big corpus of C code.  At least if one does pointer arithmetic which is
-  obviously equivalent to normal legitimate member access, we'd hope to be
+  obviously equivalent to normal legitimate member offset, we'd hope to be
   able to decide it. 
 
 (c) a complete theory of arithmetic - fine for semantics, but no good
@@ -133,8 +133,8 @@ if we don't *)
 (* ...pointers can be subtracted, so probably integers *)
 
 (* does this need to be simply a type of symbolic integers, or do we
-also need to include the access-path stuff here?  For now I suppose
-the former, and that we'll build the access-path stuff into the
+also need to include the offset-path stuff here?  For now I suppose
+the former, and that we'll build the offset-path stuff into the
 definitions of pointer_value comparison etc.*)
 
 (* are symbolic_address_id's distinct from block_id's ?  I think so,
@@ -195,7 +195,7 @@ struct or union types.  All this may need rejigging to fit in with
 Justus's type system.  (Kayvan notes that the Cabs->Ail may have to do
 a b it more work to make up the right names for these things.)  *)
 
-type member_id = sym
+type member_id = Ail.id (*this used to be sym, but we don't want the packing flags here - they belong in the types in the type environment *)
 (* Similarly, I assume that member_id values give
 the appropriate equality.   Likewise for enum types? *)
 
@@ -273,7 +273,7 @@ type lift_value 'a =
 
 (** numeric values *)
 
-(* we need these before defining member access paths as they appear in
+(* we need these before defining member offset paths as they appear in
 array deferencing *)
 
 type unlifted_numeric_value = num  (*TODO better name, and not num *)
@@ -285,13 +285,13 @@ type numeric_value = lift_value num
 (** pointer values *)
 
 (*
-type member_access = 
-  | Struct_access of struct_tag * member_id
-  | Union_access of  union_tag	* member_id
-  | Array_access of Ail.ctype * unlifted_numeric_value
+type member_offset = 
+  | Struct_offset of struct_tag * member_id
+  | Union_offset of  union_tag	* member_id
+  | Array_offset of Ail.ctype * unlifted_numeric_value
 *)
 
-     (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_access_path *)
+     (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_offset_path *)
 
   (* we thought about also having an "| Array_shift of Ail.ctype" so
   that we could represent subarrays, but in both standard and
@@ -302,26 +302,26 @@ type member_access =
 
 (* we thought about adding:
 
-  | Representation_access of ...char offset... 
+  | Representation_offset of ...char offset... 
 
 that's supposed to actually be within the representation of wherever
 we are, not arbitrary address arith, but switched back to the
 block-top-level address stuff *)
 
-(* type member_access_path = list member_access *)
-     (* these will be normalised with adjacent Array_access's coalesced *)
+(* type member_offset_path = list member_offset *)
+     (* these will be normalised with adjacent Array_offset's coalesced *)
 
 (*
 type fancy_type = 
   | Cast of Ail.ctype * fancy_type 
-  | Member_access of member_access * fancy_type 
+  | Member_offset of member_offset * fancy_type 
   | Type of Ail.ctype (* the type of the unprojected thing...*)
 *)
 
 (*
 type pointer_address =   (* "address" is not a great name, as it's likely to be confused with symbolic_address... *)
   | Null
-  | Block_path of block_id * member_access_path
+  | Block_path of block_id * member_offset_path
 (*  | Block_offset of block_id * symbolic_address_id   (* not at all sure this is worth it. It would let you capture "we've done some address arithmetic but have never historically left the block". But that doesn't seem very useful. *) *)
   | Address of symbolic_address_id
   | Function_pointer (* TODO *)
@@ -369,46 +369,49 @@ operations, exactly? This: *)
 
 type pointer_operation_nullary =
   | Null of Ail.ctype
-  | Address of symbolic_address_id
+  | Block of block
+  | Address of symbolic_address_id * Ail.ctype  (* for consistency, make that a record type like block *)
   | Function_pointer (* TODO *)
 
 type pointer_operation_unary = 
-  | Struct_access of struct_tag * member_id
-  | Union_access of  union_tag	* member_id
-  | Array_access of Ail.ctype * unlifted_numeric_value
+  | Struct_or_union_offset of struct_or_union_tag * member_id
+  | Array_offset of Ail.ctype * unlifted_numeric_value
   | Cast of Ail.ctype
 
 type pointer_expression =
   | Nullary of pointer_operation_nullary
   | Unary of pointer_operation_unary * pointer_expression
 
-val     type_of: pointer_expression -> Ail.ctype
+
+
+val     type_of: pointer_expression -> Ail.ctype (* TODO: jazz this up to return the size and current position for arrays *)
+(* TYPEDEFs will have been substituted out before we ever get here, btw *)
 let rec type_of pe =
   match pe with
     | Nullary (Null ty) -> ty
     | Nullary (Address sa) -> todo "??"
     | Nullary (Function_pointer) -> todo "TODO"
-    | Unary (Struct_access tag m) pe ->
+    | Unary (Struct_offset tag m) pe ->
         match type_of pe with
           | Ail.STRUCT qs tag' ->
               if tag <> tag' then
-                assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
+                assert_false "[Memory.type_of, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
                 (* P: later the above check will have to be conditionally-on-flags more liberal, to support
                 interchangeability of structs with the same prefix *)
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
-          | _ -> assert_false "[Memory.type_of, Unary (Struct_access _ _) _] ill-formed pointer_expression"
+          | _ -> assert_false "[Memory.type_of, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
         end
-    | Unary (Union_access tag m) pe ->
+    | Unary (Union_offset tag m) pe ->
         match type_of pe with
           | Ail.UNION qs tag' ->
               if tag <> tag' then
-                assert_false "[Memory.type_of, Unary (Union_access _ _) _] ill-formed pointer_expression"
+                assert_false "[Memory.type_of, Unary (Union_offset _ _) _] ill-formed pointer_expression"
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
-          | _ -> assert_false "[Memory.type_of, Unary (Union_access _ _) _] ill-formed pointer_expression"
+          | _ -> assert_false "[Memory.type_of, Unary (Union_offset _ _) _] ill-formed pointer_expression"
         end
-    | Unary (Array_access ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
+    | Unary (Array_offset ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
     | Unary (Cast ty) _ -> ty (* NOTE: the same *)
   end
 
@@ -421,15 +424,37 @@ let wf_pointer_expression_nullary pop = match pop with
       todo "check it's a legal function pointer"
   end
 
-let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_expression) = 
+(* when is a pointer-forming operation dynamically legal? *)
+let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_expression) (* assuming wf_pointer_expression p) *) = 
   match pop with
-  | Struct_access st mid -> todo "...."
+  | Struct_or_union_offset tag mid 
+      let ty = ...lookup the type (the static type of the occurrence (in a particular compilation unit) of the member offset) in the environment associated with tag...
+      ...check mid is a member of that type...
+      match type_of p (the outermost dynamic type of the pointer value p) with ...
+      ...check it's a struct/union type
+      ...check it's similar enough (for structs: in strict-standard, "compatible"; in real-C, isomorphic up to mid. for unions: ...) to ty 
 
-
+  | Array_offset ty n-> todo "...."
+      match type_of p (the outermost dynamic type of the pointer value p) with ...
+      | if it's an array of elements of type ty' with size n' ->
+        ...walk over the p (using "typeof") to find the size of the array and where we are in it already, and the element type ty' ...              
+        ...check ty and ty' are more-or-less the same
+        ...check we're in bounds (or plus one)
+        ...think about whether we have to check the arrays have the same length (maybe we just check that at cast point)
+      | if it's not an array, we often pretend it's an array of length 1.
+      | if it's a function type, fail miserably
+      end
       
   | Cast ty -> todo "...."
+      ...simple case: if the two types are compatible and the alignment is ok, we can do it
 
   end
+
+let rec wf_pointer_expression (p:pointer_expression) = match p with
+| Nullary pon -> wf_pointer_expression_nullary pon
+| Unary pop p' -> wf_pointer_expression p' && wf_pointer_expression_unary pop p'
+
+
 
 val equal_pointer_expression : pointer_expression -> pointer_expression -> bool
 let equal_pointer_expression pe1 pe2 =
@@ -441,8 +466,8 @@ let equal_pointer_expression pe1 pe2 =
 here's a conditional equation that could also be executed as part of a normalisation function:
 
 if ty=ty' && (if in some semantics) we stay in the array then
-Unary(Member_access(Array_access(ty,n)), Unary(Member_access(Array(access(ty',n'))))) = 
-Unary(Member_access(Array_access(ty,n+n')))
+Unary(Member_offset(Array_offset(ty,n)), Unary(Member_offset(Array(offset(ty',n'))))) = 
+Unary(Member_offset(Array_offset(ty,n+n')))
 
 ....
 
@@ -457,7 +482,7 @@ can't do much of this without nailing the semantic switches, but do first for ag
 
   (P: the above will be true much more often - for pretty much all ty', if the applications are well-formed, no?)
   
-  (K: ??) if we can decide that a symbolic_address points to some object following some member_access, do we want
+  (K: ??) if we can decide that a symbolic_address points to some object following some member_offset, do we want
           normalise to that explicit pointer_expression ?
 
   
@@ -490,7 +515,7 @@ can't do much of this without nailing the semantic switches, but do first for ag
 (* val current_type : fancy_type -> ctype *)
 (* let rec current_type ft = match ft with *)
 (*   | Cast ct -> ct   *)
-(*   | Member_access (ma,ft) -> current_type ft *)
+(*   | Member_offset (ma,ft) -> current_type ft *)
 (*   | Type ct -> ct *)
 
 
@@ -503,7 +528,7 @@ val project_ft: fancy_type -> Ail.ctype
 let rec project_ft fty =
   match fty with
     | Cast ty fty -> ty
-    | Member_access maccess fty ->
+    | Member_offset moffset fty ->
         match project_ft fty with
           | Ail.STRUCT qs x ->
               todo "get from environment the type of the member x and return that"
@@ -530,6 +555,8 @@ type value =
 
 
 (** blocks and block environments *)
+]
+(* maybe one day we'll rename "block" by "object" *)
 
 (* K: if these are exactly the "objects" from the std, we should rename *)
 type block =  <|
@@ -545,7 +572,7 @@ A) make them be char arrays here, and make up new block ids for fresh
 or type-changing writes?
 
 B) make them be char arrays, and record somewhere what and where their
-subobjects are, but don't make up block ids for them (accessing them
+subobjects are, but don't make up block ids for them (offseting them
 with pointers that hold Address (or maybe Block_offset) - which fits
 programmer intuition)
 
@@ -839,7 +866,7 @@ let expr_query_constraint c =
 (*
 val pointer_plus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
 val pointer_minus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
-val pointer_member_access: pointer_value -> member_access -> MM.t pointer_value
+val pointer_member_offset: pointer_value -> member_offset -> MM.t pointer_value
 
 val pointer_deref: 
 val get_address: 
@@ -908,9 +935,9 @@ let pointer_plus_number p n =
           match mapath with
             | (Array_shift ma_ty ma_index) :: mas ->
                 if array_elem_type <> ma_ty then
-                  todo "block type and member_access type disagree (what to do?)"
+                  todo "block type and member_offset type disagree (what to do?)"
                 else if ma_index >= array_length then
-                  todo "member_access is out of range (what to do?)"
+                  todo "member_offset is out of range (what to do?)"
                 else
                   (ma_index, mas)
             | (Array_one_past ma_ty) :: mas -> (array_length, mas)
@@ -964,18 +991,18 @@ let pointer_plus_number p n =
 we have to find the writes that *overlap* the footprint that we want to
 read from.  But start with this, nonetheless *)
 
-let pointer_member_access (p : pointer_value) (ma: member_access) =
-  match todo "member_access" with
+let pointer_member_offset (p : pointer_value) (ma: member_offset) =
+  match todo "member_offset" with
   | Array_shift ty n -> todo "...use pointer_plus_number (is this identical to that?)..."
-  | Struct_access struct_tag member_id -> 
+  | Struct_offset struct_tag member_id -> 
       todo "...do the same stuff for Null etc...."
 (*
-      ...if this is a legit member access then
+      ...if this is a legit member offset then
         ...if the pointer is a block path, prepend this
         ...if the pointer is an address, add the appropriate offset
 *)
-  | Union_access union_tag member_id -> 
-      todo "...like struct access..."
+  | Union_offset union_tag member_id -> 
+      todo "...like struct offset..."
   end
 
 
@@ -1136,7 +1163,7 @@ let equal_pointer (p: pointer_value) (p': pointer_value) : bool =
     | (Specified (Block_path block_id mapath), Specified (Block_path block_id' mapath')) -> 
         (* ...unless we're not allowed to do this comparison at the language level... *)
         (block_id = block_id') && (mapath = mapath')
-        (* assuming that the paths are both legal and array-access-normalised *)
+        (* assuming that the paths are both legal and array-offset-normalised *)
   
       (* where do we deal with type isomorphisms?  I.e., have
       iso-casts been normalised away by the time we get to all the
