@@ -36,13 +36,14 @@ type ctype =
   | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
-  | ARRAY of ctype * num
+  | ARRAY of ctype * (* TODO: option*) num 
+(* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
   | STRUCT of qualifiers * id
   | UNION  of qualifiers * id
   | FUNCTION of ctype * list ctype
   | POINTER of qualifiers * ctype
 (*  | ATOMIC of ctype *)
-  | TYPEDEF of id
+  | TYPEDEF of id   
   
   | SIZE_T
 
