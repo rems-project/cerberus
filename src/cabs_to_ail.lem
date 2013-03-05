@@ -21,7 +21,7 @@ module Effect = struct
     label_map    : map string id;
     symbol_table : St.t string id;                     (* table (with stacked scopes) associating identifiers to symbols *)
     id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
-    member_map   : map id (map id A.member_declaration);
+(*    member_map   : map id (map id A.member_declaration); *)
     globals      : list (id * A.expression_l 'a);      (* global definitions (??) *)
     fn_map       : map id (list id * A.statement_l 'a) (* functions map           *)
   |>
@@ -81,7 +81,7 @@ module Effect = struct
       label_map    = Pmap.empty;
       symbol_table = St.create_scope St.empty;
       id_map       = Pmap.empty;
-      member_map   = Pmap.empty;
+(*      member_map   = Pmap.empty; *)
       globals      = [];
       fn_map       = Pmap.empty
     |>
@@ -92,7 +92,7 @@ module Effect = struct
     M.read (fun env ->
       <| A.main=    main;
          A.id_map=  env.id_map;
-         A.member_map=  env.member_map;
+(*         A.member_map=  env.member_map; *)
          A.globals= env.globals;
          A.fn_map=  env.fn_map |>
     )
@@ -348,7 +348,7 @@ let rec desugar_type t =
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
-        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return size
+        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return (Some size)
         | (_, l) ->
             let msg = "We don't support VLAs and moreover the size of an array \
                        must be an integer constant.\n" in

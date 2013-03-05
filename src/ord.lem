@@ -2,9 +2,11 @@ open Global
 
 type ordering = Lt | Eq | Gt
 
+(*
 class (ORD 'a)
   val compare : 'a -> 'a -> ordering
 end
+*)
 
 class (ord 'a)
   val lt : 'a -> 'a -> bool
@@ -68,3 +70,9 @@ let of_num n =
 
 let to_int o = int_of_num (to_num o)
 let of_int n = of_num (num_of_int n)
+
+
+(* HACK: until working type classes *)
+val compare: forall 'a. 'a -> 'a -> ordering
+let compare x y =
+  of_int (Ocaml.Pervasives.compare x y)

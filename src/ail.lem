@@ -12,7 +12,7 @@ type qualifier =
   | CONST
   | RESTRICT
   | VOLATILE
-  | ATOMIC
+  | ATOMIC_Q
 and qualifiers = set qualifier
 
 type integer_base_type =
@@ -31,35 +31,39 @@ type basic_type =
   | CHAR
   | INTEGER of integer_type
 
-type ctype =
+(* §6.7.5 Alignment specifier *)
+type alignment_specifier =
+  | _ALIGNAS_TYPE of ctype
+  | _ALIGNAS_CONST of num
+
+(* TODO: add [alignment_specifier] when needed to the ctors of ctype *)
+and ctype =
   | VOID  of qualifiers
   | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
-  | ARRAY of ctype * (* TODO: option*) num 
+  | ARRAY of ctype * option num 
 (* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
-  | STRUCT of qualifiers * id
-  | UNION  of qualifiers * id
+
+(* NOTE: will need to make up ids for some of the bitfields *)
+  | STRUCT of qualifiers * id * list (id * member)
+  | UNION  of qualifiers * id * list (id * member)
   | FUNCTION of ctype * list ctype
   | POINTER of qualifiers * ctype
-(*  | ATOMIC of ctype *)
-  | TYPEDEF of id   
+  | ATOMIC of ctype
+  | TYPEDEF of id
   
   | SIZE_T
 
 
+and member =
+  | MEMBER of alignment_specifier * ctype
+  | BITFIELD of ctype * num * (option bool) (* the boolean indicates whether or not
+                                               there is packing of the next member. *)
+(*  | NULL_BITFIELD (* see §6.7.2.1#12 *) *)
 
 
 
-
-
-
-
-
-
-and member_declaration =
-  | MEMBER_DECL of id
-(*  | BITFIELD of id option * 'e (* TODO: need to decide what to do about the 'e *) *)
 
 and type_class =
   | T_EXP of ctype
@@ -195,11 +199,10 @@ type statement 'a =
 and statement_l 'a = 'a * statement 'a
 
 type file 'a = <|
-  main : id;
-  id_map : map id declaration;
-  member_map : map id (map id member_declaration);
+  main : id; (* the main function name *)
+  id_map : map id declaration; (* declared identifiers *)
   globals : list (id * expression_l 'a);
-  fn_map : map id (list id * statement_l 'a)
+  fn_map : map id (list id * statement_l 'a) (* functions *)
 |>
 
 (*
@@ -220,13 +223,13 @@ let rec and2 f l1 l2 =
 
 let rec ctype_eq ty1 ty2 =
   match (ty1, ty2) with
-    | (VOID qs1          ,     VOID qs2     ) -> Set.equal qs1 qs2
-    | (BASIC qs1 b1      , BASIC qs2 b2     ) -> Set.equal qs1 qs2 && b1 = b2
-    | (ARRAY ty1 n1      , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
-    | (POINTER qs1 ty1   , POINTER qs2 ty2  ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
-    | (FUNCTION ty1 tys1 , FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
-    | (STRUCT qs1 x1     , STRUCT qs2 x2    ) -> Set.equal qs1 qs2 && x1 = x2
-    | (UNION qs1 x1      , UNION qs2 x2     ) -> Set.equal qs1 qs2 && x1 = x2
+    | (VOID qs1         , VOID qs2         ) -> Set.equal qs1 qs2
+    | (BASIC qs1 b1     , BASIC qs2 b2     ) -> Set.equal qs1 qs2 && b1 = b2
+    | (ARRAY ty1 n1     , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1  , POINTER qs2 ty2  ) -> Set.equal qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 tys1, FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
+    | (STRUCT qs1 x1 ms1, STRUCT qs2 x2 ms2) -> Set.equal qs1 qs2 && x1 = x2 && ms1 = ms2
+    | (UNION qs1 x1 ms1 , UNION qs2 x2 ms2 ) -> Set.equal qs1 qs2 && x1 = x2 && ms1 = ms2
   end
 
 
@@ -408,7 +411,7 @@ module Print = struct
     match t with
       | VOID qs       -> pp_qs qs ^^ (!^ "void")
       | BASIC qs b    -> pp_qs qs ^^ pp_basic_type b
-      | ARRAY t s     -> P.parens (f t) ^^^ P.brackets (!^ (string_of_num s))
+      | ARRAY t s     -> P.parens (f t) ^^^ P.brackets (optional (!^ -| string_of_num) s)
       | POINTER qs t  -> pp_qs qs ^^ P.parens (f t) ^^^ P.star
       | FUNCTION t ts -> f t ^^^ P.parens (P.comma_list f ts)
       | SIZE_T        -> !^ "size_t"

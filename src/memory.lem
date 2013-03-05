@@ -1,16 +1,17 @@
 open Global
 open Boot
-
+open Ail
 
 (* TEMPORARY *)
 let todo s = assert_false $ "[TODO] " ^ s
 
 
-(*
-type semantic_options = 
-  <| ..  : bool;
+(* May not be canonical for now *)
+type semantic_options = <|
+  isomorphic_stuct_are_compatible: bool;
+  isomorphic_union_are_compatible: bool;
 |> 
-*)
+
 
 
 type action_id = num (* an abstract thing *)
@@ -367,14 +368,23 @@ offsetof(f)) *)
 with the rest, what is the free type of pointer-constructing
 operations, exactly? This: *)
 
+type block = | HACK (* it is defined after *)
+
+
+type symbolic_address = <|
+  address_sid:   symbolic_address_id;
+  address_ctype: ctype;
+|>
+
 type pointer_operation_nullary =
   | Null of Ail.ctype
   | Block of block
-  | Address of symbolic_address_id * Ail.ctype  (* for consistency, make that a record type like block *)
+  | Address of symbolic_address
   | Function_pointer (* TODO *)
 
 type pointer_operation_unary = 
-  | Struct_or_union_offset of struct_or_union_tag * member_id
+(*  | Struct_or_union_offset of struct_or_union_tag * member_id *)
+  | Struct_or_union_offset of ctype * member_id (* the [ctype] must be a STRUCT or UNION *)
   | Array_offset of Ail.ctype * unlifted_numeric_value
   | Cast of Ail.ctype
 
@@ -384,32 +394,121 @@ type pointer_expression =
 
 
 
-val     type_of: pointer_expression -> Ail.ctype (* TODO: jazz this up to return the size and current position for arrays *)
+(* (always defined)
+   Change a non-array (nor function ptr) ctype into an ARRAY of size 1, or does nothing. *)
+val arrayify: Ail.ctype -> Ail.ctype
+let arrayify ty =
+  match ty with
+    | ARRAY _ _    -> ty
+    | FUNCTION _ _ -> ty
+    | ty           -> ARRAY ty (Some 1)
+  end
+
+
+
+
+
+(* Check whether the second argument is a member of the first one.
+   (only defined if the first argument is a STRUCT or UNION ctype) *)
+val is_member_of: ctype -> member_id -> bool
+let is_member_of ty m_id =
+  match ty with
+    | STRUCT _ _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
+    | UNION _ _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
+    | _                 -> assert_false "TODO: message"
+  end
+
+
+
+let rec check_prefixes xs ys m_id =
+  match (xs, ys) with
+    | ((idx, mx) :: xs, (idy, my) :: ys) ->
+        match (mx, my) with
+          | (MEMBER ty1, MEMBER ty2)                 -> Types.compatible ty1 ty2
+          | (BITFIELD ty1 n1 p1, BITFIELD ty2 n2 p2) -> Types.compatible ty1 ty2 && n1 = n2 && p1 = p2
+        end && (if idx = m_id && idy = m_id then true else check_prefixes xs ys m_id)
+    | _ -> assert_false "TODO message"
+  end
+
+(* Check whether the two first argument have isomorphic prefix up to the third argument.
+   (only defined if the two first arguments are both a STRUCT ctypes are both UNION ctypes, and
+    the third argument is a member of the both of them) *)
+val structs_unions_compatible_upto: ctype -> ctype -> member_id -> bool
+let structs_unions_compatible_upto ty1 ty2 m_id =
+  match (ty1, ty2) with
+    | (STRUCT _ _ membrs1, STRUCT _ _ membrs2) ->
+        check_prefixes membrs1 membrs2 m_id
+    | (UNION _ _ membrs1, UNION _ _ membrs2) ->
+        check_prefixes membrs1 membrs2 m_id
+    | _ -> assert_false "TODO message"
+  end 
+
+
+
+
+(* Check whether two lists of struct/union members have a one-to-one correspondence between them. *)
+val     members_one_to_one: list member -> list member -> bool
+let rec members_one_to_one membrs1 membrs2 =
+  match (membrs1, membrs2) with
+    | ((MEMBER ty1) :: xs, (MEMBER ty2) :: ys) -> Type.compatible ty1 ty2
+    (* TODO!!! currently not looking at the packing flag *)
+    | ((BITFIELD ty1 n1 _) :: xs, (BITFIELD ty2 n2 _) :: ys) ->
+        Type.compatible ty1 ty2 && 
+  end
+
+
+
+(* §6.2.7#1
+
+there shall be a one-to-one correspondence between their members such that each pair of corresponding members are declared with compatible types;
+
+if one member of the pair is declared with an alignment specifier, the other is declared with an equivalent alignment specifier; and if one member of the pair is declared with a name, the other is declared with the same name. For two structures, corresponding members shall be declared in the same order. For two structures or unions, corresponding bit-fields shall have the same widths. For two enumerations, corresponding members shall have the same values.
+
+ *)
+
+(* Moreover, two structure, union, [...] declared in separate translation units are compatible if
+   their tags and members satisfy the following requirements: *)
+val compatible_struct_union: ctype -> ctype -> bool
+let compatible_struct_union ty1 ty2 e =
+  let (qs1, tag1, membrs1, qs2, tag2, membrs2) =
+    match (ty1, ty2) with
+      | (STRUCT qs1 tag1 membrs1, STRUCT qs2 tag2 membrs2) -> (qs1, tag1, membrs1, qs2, tag2, membrs2)
+      | (UNION qs1 tag1 membrs1, UNION qs2 tag2 membrs2) -> (qs1, tag1, membrs1, qs2, tag2, membrs2)
+      | _ -> Boot.assert_false "TODO message"
+    end
+  (* If one is declared with a tag, the other shall be declared with the same tag. *)
+  in if tag1 <> tag2 then
+    false
+  else
+    (* If both are completed anywhere within their respective translation units, then the following
+       additional requirements apply: *)
+    if
+
+
+
+
+
+val     outermost_dynamic_type: pointer_expression -> Ail.ctype (* TODO: jazz this up to return the size and current position for arrays *)
 (* TYPEDEFs will have been substituted out before we ever get here, btw *)
-let rec type_of pe =
+let rec outermost_dynamic_type pe =
   match pe with
     | Nullary (Null ty) -> ty
-    | Nullary (Address sa) -> todo "??"
+    | Nullary (Address sym_addr) -> sym_addr.address_ctype
     | Nullary (Function_pointer) -> todo "TODO"
-    | Unary (Struct_offset tag m) pe ->
-        match type_of pe with
-          | Ail.STRUCT qs tag' ->
+    | Unary (Struct_or_union_offset s_ty m_id) pe ->
+        let (tag, membrs) = match s_ty with
+          | STRUCT _ tag membrs -> (tag, membrs)
+          | UNION  _ tag membrs -> (tag, membrs)
+          end
+        in match outermost_dynamic_type pe with
+          | Ail.STRUCT _ tag' membrs' ->
               if tag <> tag' then
-                assert_false "[Memory.type_of, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
+                assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
                 (* P: later the above check will have to be conditionally-on-flags more liberal, to support
                 interchangeability of structs with the same prefix *)
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
-          | _ -> assert_false "[Memory.type_of, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
-        end
-    | Unary (Union_offset tag m) pe ->
-        match type_of pe with
-          | Ail.UNION qs tag' ->
-              if tag <> tag' then
-                assert_false "[Memory.type_of, Unary (Union_offset _ _) _] ill-formed pointer_expression"
-              else
-                todo "get from the memory state the type of the member `m' in the struct type `tag'"
-          | _ -> assert_false "[Memory.type_of, Unary (Union_offset _ _) _] ill-formed pointer_expression"
+          | _ -> assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
         end
     | Unary (Array_offset ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
     | Unary (Cast ty) _ -> ty (* NOTE: the same *)
@@ -425,34 +524,67 @@ let wf_pointer_expression_nullary pop = match pop with
   end
 
 (* when is a pointer-forming operation dynamically legal? *)
-let wf_pointer_expression_unary (pop:pointer_operation_unary) (p:pointer_expression) (* assuming wf_pointer_expression p) *) = 
+(* assuming wf_pointer_expression p) *)
+val wf_pointer_expression_unary: pointer_operation_unary -> pointer_expression -> bool
+let wf_pointer_expression_unary pop p =
   match pop with
-  | Struct_or_union_offset tag mid 
-      let ty = ...lookup the type (the static type of the occurrence (in a particular compilation unit) of the member offset) in the environment associated with tag...
-      ...check mid is a member of that type...
-      match type_of p (the outermost dynamic type of the pointer value p) with ...
-      ...check it's a struct/union type
-      ...check it's similar enough (for structs: in strict-standard, "compatible"; in real-C, isomorphic up to mid. for unions: ...) to ty 
-
-  | Array_offset ty n-> todo "...."
-      match type_of p (the outermost dynamic type of the pointer value p) with ...
-      | if it's an array of elements of type ty' with size n' ->
-        ...walk over the p (using "typeof") to find the size of the array and where we are in it already, and the element type ty' ...              
-        ...check ty and ty' are more-or-less the same
-        ...check we're in bounds (or plus one)
-        ...think about whether we have to check the arrays have the same length (maybe we just check that at cast point)
-      | if it's not an array, we often pretend it's an array of length 1.
-      | if it's a function type, fail miserably
-      end
+    | Struct_or_union_offset s_ty m_id ->
+        (* lookup the type (the static type of the occurrence (in a particular compilation unit) of
+           the member offset) in the environment associated with tag *)
+        (* K: changed Ail.ctype, so lookup is not needed anymore *)
+        
+        (* If [m_id] is not a member of [s_ty] *)
+        if match s_ty with
+            | STRUCT qs tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            | UNION  qs tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            
+            | ATOMIC _ -> false (* is undefined according to §6.5.2.3#5 *)
+            
+            | _ -> assert_false "[Memory.wf_pointer_expression_unary] illformed `Struct_or_union' ctor"
+           end
+        then
+          false
+        
+        (* Otherwise, check whether [s_ty] is compatible with the outermost dynamic type of the
+           pointer value [p] (for flags other then the standard strict compliance, the notion of
+           "compatibility is relaxed"). *)
+        else
+          let p_ty = outermost_dynamic_type p in
+          match p_ty with
+            | STRUCT _ _ _ ->
+                if not semantics_options.isomorphic_stuct_are_compatible then
+                  Types.compatible s_ty p_ty
+                else
+                  Types.structs_are_isomorphic s_ty p_ty
+            | UNION _ _ _ ->
+                if not semantics_options.isomorphic_union_are_compatible then
+                  Types.compatible s_ty p_ty
+                else
+                  todo "Types.unions_are_isomorphic s_ty p_ty"
+            | _ -> false (* TODO: Or should that be an assert_false? *)
+           end
+    
+    | Array_offset ty n ->
+        match arrayify (outermost_dynamic_type p) with
+          | ARRAY elem_ty None -> todo "no array size in the type of p"
+          | ARRAY elem_ty (Some size) ->
+              todo "...walk over the p (using 'typeof') to find the size of the array and where we are in it already, and the element type ty' ..."
+              todo "...check ty and ty' are more-or-less the same"
+              todo "...check we're in bounds (or plus one)"
+              todo "...think about whether we have to check the arrays have the same length (maybe we just check that at cast point)"
+          
+(*          | FUNCTION _ _ -> assert_false "TODO CHECK: if it's a function type, fail miserably" *)
+          | _ -> assert_false "TODO CHECK"
+        end
       
-  | Cast ty -> todo "...."
-      ...simple case: if the two types are compatible and the alignment is ok, we can do it
-
+    | Cast p_ty -> Types.compatible s_ty p_ty && todo "and the alignment is ok"
   end
 
-let rec wf_pointer_expression (p:pointer_expression) = match p with
-| Nullary pon -> wf_pointer_expression_nullary pon
-| Unary pop p' -> wf_pointer_expression p' && wf_pointer_expression_unary pop p'
+let rec wf_pointer_expression (p:pointer_expression) =
+  match p with
+    | Nullary pon  -> wf_pointer_expression_nullary pon
+    | Unary pop p' -> wf_pointer_expression p' && wf_pointer_expression_unary pop p'
+  end
 
 
 

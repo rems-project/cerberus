@@ -131,6 +131,7 @@ let inline {ocaml} combine = Ocaml.List.combine
 let inline {isabelle} combine = Isabelle.List.zip
 
 val sort : forall 'a. ('a -> 'a -> num) -> list 'a -> list 'a
+let inline {ocaml} sort = Ocaml.List.sort
 
 val stable_sort : forall 'a. ('a -> 'a -> num) -> list 'a -> list 'a
 

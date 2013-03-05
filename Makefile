@@ -50,10 +50,10 @@ core.lem \
 errors.lem \
 core_typing.lem \
 core_indet.lem \
+types.lem \
 memory.lem \
 core_run.lem \
 sb.lem \
-types.lem \
 annotate.lem \
 cabs_transform.lem \
 cabs_to_ail.lem \
