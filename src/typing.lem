@@ -661,7 +661,7 @@ let annotate_program p =
   E.return <|
     A.main = p.A.main;
     A.id_map = p.A.id_map;
-    A.member_map = p.A.member_map;
+(*    A.member_map = p.A.member_map; *)
     A.globals = gs;
     A.fn_map = fs
   |>

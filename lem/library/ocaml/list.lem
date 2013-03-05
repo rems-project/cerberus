@@ -29,7 +29,7 @@ val mem_assoc : forall 'a 'b.  'a -> list ('a * 'b) -> bool
 val remove_assoc : forall 'a 'b.  'a -> list ('a * 'b) -> list ('a * 'b)
 val split : forall 'a 'b.  list ('a * 'b) -> list 'a * list 'b
 val combine : forall 'a 'b.  list 'a -> list 'b -> list ('a * 'b)
-val sort : forall 'a.  ('a -> 'a -> int) -> list 'a -> list 'a
+val sort : forall 'a.  ('a -> 'a -> num) -> list 'a -> list 'a
 val stable_sort : forall 'a.  ('a -> 'a -> int) -> list 'a -> list 'a
 val fast_sort : forall 'a.  ('a -> 'a -> int) -> list 'a -> list 'a
 val merge : forall 'a.  ('a -> 'a -> int) -> list 'a -> list 'a -> list 'a

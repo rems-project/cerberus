@@ -527,7 +527,7 @@ let base_of_array = function
   end
 
 let size_of_array = function
-  | ARRAY _ s -> s
+  | ARRAY _ (Some s) -> s (* HACK *)
   end
 
 let function_return = function
@@ -647,3 +647,5 @@ let usual_arithmetic (t1: Ail.ctype) (t2: Ail.ctype) : Ail.ctype =
   else
     Boot.debug "ERROR in usual_arith"
 *)
+
+
