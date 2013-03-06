@@ -1,3 +1,0 @@
-val FST : forall 'a 'b. 'a * 'b -> 'a
-val SND : forall 'a 'b. 'a * 'b -> 'b
-

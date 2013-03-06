@@ -1,5 +1,0 @@
-val \\/\ : bool -> bool -> bool
-val \\\/ : bool -> bool -> bool
-val \\==> : bool -> bool -> bool
-val (<>) : forall 'a. 'a -> 'a -> bool
-val ~ : bool -> bool

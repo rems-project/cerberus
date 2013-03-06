@@ -1,9 +1,0 @@
-all:
-	ocamlbuild main.native
-
-debug: 
-	ocamlbuild main.d.byte
-
-clean:
-	-ocamlbuild -clean
-	-rm -rf _build
