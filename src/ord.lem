@@ -62,7 +62,7 @@ let to_int = function
  end
 
 let of_int i =
-  if Int.(=) i (Int.int 0) then
+  if i = (Int.int 0) then
     Eq
   else if Int.(>=) i (Int.int 1)
     then Gt
