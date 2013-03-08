@@ -1,1 +1,0 @@
-val PARTITION : forall 'a. ('a -> bool) -> list 'a -> list 'a * list 'a
