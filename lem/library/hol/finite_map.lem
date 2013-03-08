@@ -1,0 +1,6 @@
+(* TODO: THIS IS NOT THE CORRECT TYPE *)
+type fmap 'a 'b
+val FEMPTY : forall 'a 'b. fmap 'a 'b
+val FUPDATE : forall 'a 'b. fmap 'a 'b -> ('a * 'b) -> fmap 'a 'b
+val FAPPLY : forall 'a 'b. fmap 'a 'b -> 'a -> 'b
+val FDOM : forall 'a 'b. fmap 'a 'b -> set 'a

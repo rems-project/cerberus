@@ -21,6 +21,12 @@ let (|-) g f x = f (g x)
 let (>|>) x f = f x
 let (>?>) x b f g = if b then f x else g x
 
+val int_of_num : num -> int
+val num_of_int : int -> num
+let inline {ocaml} int_of_num = Ocaml.Nat_num.int_of_num
+let inline {ocaml} num_of_int = Ocaml.Nat_num.num_of_int
+
+
 let ($) f x = f x
 let comp f g = fun x -> f (g x)
 

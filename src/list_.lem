@@ -47,7 +47,7 @@ end
 (* AHEM *)
 let rec split_at k l =
   (take k l, drop k l)
-(*
+
 val sort: forall 'a. ('a -> 'a -> Ord.ordering) -> list 'a -> list 'a
 let sort f l =
   let cmp x y =
@@ -57,4 +57,3 @@ let sort f l =
       | Ord.Gt -> 1
     end
   in List.sort cmp l
-*)
