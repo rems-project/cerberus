@@ -55,22 +55,18 @@ let compose o1 o2 =
   else
     o1
 
-let to_num = function
- | Lt -> 0 - 1
- | Eq -> 0
- | Gt -> 1
+let to_int = function
+ | Lt -> Int.neg (Int.int 1)
+ | Eq -> Int.int 0
+ | Gt -> Int.int 1
  end
 
-let of_num n =
-  if n = 0 then
+let of_int i =
+  if i = (Int.int 0) then
     Eq
-  else if n >= 1
+  else if Int.(>=) i (Int.int 1)
     then Gt
     else Lt
-
-let to_int o = int_of_num (to_num o)
-let of_int n = of_num (num_of_int n)
-
 
 (* HACK: until working type classes *)
 val compare: forall 'a. 'a -> 'a -> ordering
