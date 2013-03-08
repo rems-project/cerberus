@@ -1,0 +1,353 @@
+(* TODO: the locations are all messed up !! *)
+open Global
+
+module C = Cabs_parser
+module C' = Cabs
+
+let dummy_location = Boot.outOfHomeomorphism "TODO: need some dummy location"
+
+
+let f_opt f = function
+  | Some x -> Some (f x)
+  | None   -> None
+end
+
+let f_opt_list f = function
+  | Some x -> f x
+  | None   -> []
+end
+
+(*
+val translate_typeSpecifier: C.typeSpecifier -> C'.specifier
+val translate_storage: C.storage -> C'.storage_class
+val translate_cvspec: C.cvspec -> C'.qualifier
+val translate_spec_elem_list: list C.spec_elem -> list C'.storage_class * list C'.attribute * C'.qualifiers * C'.specifiers
+val translate_definition: C.definition -> C'.g_defn_l
+val translate_field_group: C.field_group -> list C'.field
+
+let rec translate_typeSpecifier spec =
+  match spec with
+    | C.Tvoid     -> C'.VOID
+    | C.Tchar     -> C'.CHAR
+    | C.Tshort    -> C'.SHORT
+    | C.Tint      -> C'.INT
+    | C.Tlong     -> C'.LONG
+    | C.Tfloat    -> C'.FLOAT
+    | C.Tdouble   -> C'.DOUBLE
+    | C.Tsigned   -> C'.SIGNED
+    | C.Tunsigned -> C'.UNSIGNED
+    | C.T_Bool    -> C'.BOOL
+    | C.Tnamed a  -> C'.NAMED a
+    (* NOTE: for struct/union, our AST forgets "field groups" *)
+    | C.Tstruct a_opt fields_opt attrs ->
+        C'.STRUCT_ a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
+    | C.Tunion a_opt fields_opt attrs ->
+        C'.UNION_ a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) (List.map translate_attribute attrs)
+
+    | C.Tenum a_opt xs attrs ->
+        let f (a, e_opt, l) = (a, f_opt (translate_expression l) e_opt) in
+        C'.ENUM a_opt (f_opt (List.map f) xs) (List.map translate_attribute attrs)
+  end
+
+
+and translate_storage s = 
+  match s with
+    | C.AUTO     -> C'.AUTO
+    | C.STATIC   -> C'.STATIC
+    | C.EXTERN   -> C'.EXTERN
+    | C.REGISTER -> C'.REGISTER
+    | C.TYPEDEF  -> C'.TYPEDEF
+  end
+(* TODO: add [THREAD_LOCAL] to the parser *)
+
+
+and translate_cvspec s =
+  match s with
+    | C.CV_CONST    -> C'.CONST
+    | C.CV_VOLATILE -> C'.VOLATILE
+    | C.CV_RESTRICT -> C'.RESTRICT
+  end
+(* TODO: add [ATOMIC] to the parser *)
+
+
+and translate_spec_elem_list specs =
+  let f (scs, attrs, qs, ss) = function
+    | C.SpecCV cv      -> (scs, attrs, Set.add (translate_cvspec cv) qs, ss)
+    | C.SpecAttr attr  -> (scs, (translate_attribute attr) :: attrs, qs, ss)
+    | C.SpecStorage st -> ((translate_storage st) :: scs, attrs, qs, ss)
+    | C.SpecInline     -> Boot.outOfHomeomorphism "TODO: not sure what to do with this one"
+    | C.SpecType spec  -> (scs, attrs, qs, Multiset.add (translate_typeSpecifier spec) ss)
+  end in
+  List.fold_left f ([], [], {}, Multiset.emp) specs
+
+
+and translate_attribute attr =
+  match attr with
+    | C.ATTR x es -> C'.ATTR x (List.map (translate_expression dummy_location) es)
+  end
+
+
+
+
+(* TODO: temporary getting rid of the attributes (to change soon) *)
+(* TODO: pretty sure I made a mistake somewhere *)
+and translate_decl decl =
+  match decl with
+      (* TODO: the assumption that the list of storage_class is empty is probably wrong (DEBUG purpose) *)
+    | C.JUSTBASE ->
+        fun ([], attrs, qs, ss) -> C'.BASE qs ss
+
+    | C.ARRAY decl cvspecs attrs e_opt ->
+        fun ([], attrs', qs, ss) ->
+          C'.ARRAY qs (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+                      (f_opt (translate_expression dummy_location) e_opt)
+
+    | C.PTR cvspecs attrs decl ->
+        fun ([], attrs', qs, ss) ->
+          C'.POINTER qs (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+
+    (* NOTE: ignoring the VLA flag (not supported for now) *)
+    | C.PROTO decl (params, is_vla) -> Boot.outOfHomeomorphism "TODO"
+(*
+        fun ([], attrs', qs, ss) ->
+          C'.FUNCTION (translate_decl decl ([], [], Set.from_list (List.map translate_cvspec cvspecs), ss))
+                      KKK
+*)
+  end
+
+
+(*
+PARAM of list spec_elem * option string * decl_type * list attribute * cabsloc
+*)
+
+(*
+val translate_cvspec: C.cvspec -> C'.qualifier
+*)
+
+(* 
+(*The bool is true for variable length parameters. *)
+ | PROTO of decl_type * (list parameter * bool)
+*)
+(*
+  | FUNCTION of c_type * list decl_l
+*)
+
+
+
+and mk_c_type specs decl = (* Boot.outOfHomeomorphism "TODO" *)
+    (translate_decl decl) (translate_spec_elem_list specs)
+
+
+and translate_field_group fg = Boot.outOfHomeomorphism "WIP"
+(*
+  match fg with
+    | Field_group specs n_es l ->
+        let (scs, attrs, qs, ss) = translate_spec_elem_list specs in
+        let f = function
+          | (Some (Name n decl attrs l), None) -> BasicField n 
+  end
+*)
+
+(*
+
+Name of string * decl_type * list attribute * cabsloc
+
+and field_group =
+  | Field_group of list spec_elem * list (option name * option expression) * cabsloc
+
+and field =
+  | BasicField of string * c_type
+  | BitField of option string * c_type * exp_l
+*)
+
+
+and translate_unary_operator uop =
+  match uop with
+    | C.MINUS   -> C'.MINUS
+    | C.PLUS    -> C'.PLUS
+    | C.NOT     -> C'.NOT
+    | C.BNOT    -> C'.BNOT
+    | C.MEMOF   -> C'.INDIRECTION
+    | C.ADDROF  -> C'.ADDRESS
+    | C.PREINCR -> C'.PREFIX_INCR
+    | C.PREDECR -> C'.PREFIX_DECR
+    | C.POSINCR -> C'.POSTFIX_INCR
+    | C.POSDECR -> C'.POSTFIX_DECR
+  end
+
+
+and translate_binary_operator binop =
+  match binop with
+    | C.ADD   -> C'.ARITHMETIC C'.ADD
+    | C.SUB   -> C'.ARITHMETIC C'.SUB
+    | C.MUL   -> C'.ARITHMETIC C'.MUL
+    | C.DIV   -> C'.ARITHMETIC C'.DIV
+    | C.MOD   -> C'.ARITHMETIC C'.MOD
+    | C.AND   -> C'.AND
+    | C.OR    -> C'.OR
+    | C.BAND  -> C'.ARITHMETIC C'.BAND
+    | C.BOR   -> C'.ARITHMETIC C'.BOR
+    | C.XOR   -> C'.ARITHMETIC C'.XOR
+    | C.SHL   -> C'.ARITHMETIC C'.SHL
+    | C.SHR   -> C'.ARITHMETIC C'.SHR
+    | C.EQ    -> C'.EQ
+    | C.NE    -> C'.NE
+    | C.LT    -> C'.LT
+    | C.GT    -> C'.GT
+    | C.LE    -> C'.LE
+    | C.GE    -> C'.GE
+    | C.COMMA -> C'.COMMA
+    | _       -> Boot.outOfHomeomorphism "[Cabs_transform] trying to convert an `assign binop' from the Parser to our Cabs"
+  end
+
+
+and translate_constant c =
+  match c with
+    | C.CONST_INT i      -> Boot.outOfHomeomorphism "TODO"
+    | C.CONST_FLOAT f    -> Boot.outOfHomeomorphism "TODO"
+    | C.CONST_CHAR c     -> Boot.outOfHomeomorphism "TODO"
+    | C.CONST_STRING str -> Boot.outOfHomeomorphism "TODO"
+  end
+
+
+
+
+and translate_init_expression _ = Boot.outOfHomeomorphism "TODO"
+
+
+and translate_expression l e =
+  let fe = translate_expression l in
+  (match e with
+    | C.UNARY uop e                -> C'.UNARY (translate_unary_operator uop) (fe e)
+    | C.BINARY C.ASSIGN e1 e2      -> C'.ASSIGN None (fe e1) (fe e2)
+    | C.BINARY C.ADD_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.ADD) (fe e1) (fe e2)
+    | C.BINARY C.SUB_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.SUB) (fe e1) (fe e2)
+    | C.BINARY C.MUL_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.MUL) (fe e1) (fe e2)
+    | C.BINARY C.DIV_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.DIV) (fe e1) (fe e2)
+    | C.BINARY C.MOD_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.MOD) (fe e1) (fe e2)
+    | C.BINARY C.BAND_ASSIGN e1 e2 -> C'.ASSIGN (Some C'.BAND) (fe e1) (fe e2)
+    | C.BINARY C.BOR_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.BOR) (fe e1) (fe e2)
+    | C.BINARY C.XOR_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.XOR) (fe e1) (fe e2)
+    | C.BINARY C.SHL_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.SHL) (fe e1) (fe e2)
+    | C.BINARY C.SHR_ASSIGN e1 e2  -> C'.ASSIGN (Some C'.SHR) (fe e1) (fe e2)
+    | C.BINARY binop e1 e2         -> C'.BINARY (translate_binary_operator binop) (fe e1) (fe e2)
+    | C.QUESTION e1 e2 e3          -> C'.CONDITIONAL (fe e1) (fe e2) (fe e3)
+
+(*
+    | C.CAST (ty, C.COMPOUND_INIT inits) -> C'.COMPOUND_LITERAL 
+*)
+
+    | C.CAST (specs, decl) init_e   ->  C'.CAST (mk_c_type specs decl) (translate_init_expression init_e)
+
+
+    | C.CALL e es                   -> C'.CALL (fe e) (List.map fe es)
+(*  | BUILTIN_VA_ARG of expression * spec_elem list * decl_type *)
+    | C.CONSTANT c                     -> C'.CONSTANT (translate_constant c)
+    | C.VARIABLE x                     -> C'.IDENTIFIER x
+    | C.EXPR_SIZEOF e                  -> C'.EXPR_SIZEOF (fe e)
+    | C.TYPE_SIZEOF (specs, decl)      -> C'.TYPE_SIZEOF (mk_c_type specs decl)
+    | C.INDEX e1 e2                 -> C'.SUBSCRIPT (fe e1) (fe e2)
+    | C.MEMBEROF e x                -> C'.MEMBEROF (fe e) x
+    | C.MEMBEROFPTR e x             -> C'.MEMBEROFPTR (fe e) x
+  end
+
+(* TODO: the parser AST doesn't have [TYPE_ALIGNOF of c_type], nor [GENERIC_SELECTION of exp_l * generic_association_l list] *)
+(* TODO: move [STRING_LITERAL of string_literal] from our AST to constant *)
+
+, l)
+
+
+
+and translate_definition d = Boot.outOfHomeomorphism "TODO"
+(*
+  match d with
+    | C.FUNDEF specs (Name n decl attrs l) s l' ->
+        (C'.FUNCTION_DEFINITION (n, mk_c_type (translate_sepc_elem_list specs, decl), STORAGE_CLASSES, l) (translate_statement s), l')
+
+      translate_spec_elem_list specs (* C'.qualifiers * C'.specifiers *)
+
+
+    | C.DECDEF (specs, ins) l                  -> (C'.EXTERNAL_DECLARATION, l)
+    | C.PRAGMA s l ->
+        Boot.outOfHomeomorphism "[Cabs_transform.translate_definition] PRAGMA: not supported for now"
+  end
+
+
+
+
+
+
+ | FUNDEF of list spec_elem * name * statement * cabsloc
+ | DECDEF of init_name_group * cabsloc  (* global variable(s), or function prototype *)
+ | PRAGMA of string * cabsloc
+
+and name =
+  | Name of string * decl_type * list attribute * cabsloc
+
+
+(* ========= *)
+
+type global_definition =
+  | FUNCTION_DEFINITION of (string * c_type * list storage_class * location) * stmt_l
+  | EXTERNAL_DECLARATION of list ((((string * c_type * list storage_class) * location) * option exp_l) * location)
+
+type g_defn_l = global_definition * location
+
+
+*)
+
+
+
+
+
+
+
+
+(* TODO: locations are likely to be messed up *)
+val     translate_statement: C.statement -> C'.stmt_l
+let rec translate_statement s =
+  let fe = translate_expression in
+  let fd = translate_definition in
+  let fs = translate_statement in
+  (* TODO(K) Not that we need it anymore, but why does uncommenting the next line makes this function
+             ill-typed. Looks like f_opt's polymorphism is restriction but I don't understand why. *)
+(*  let f_opt f = function Some x -> Some (f x) | None -> None end in *)
+  match s with
+    | C.NOP l                                      -> (C'.SKIP, l)
+    | C.COMPUTATION e l                            -> (C'.EXPRESSION (fe l e), l)
+    | C.BLOCK ss l                                 -> (C'.BLOCK (List.map fs ss), l)
+    | C.If e s1 s2_opt l                           -> (C'.IF (fe l e) (fs s1) (f_opt fs s2_opt), l)
+    | C.WHILE e s l                                -> (C'.WHILE (fe l e) (fs s), l)
+    | C.DOWHILE e s l                              -> (C'.DO (fe l e) (fs s), l)
+    | C.FOR None e2_opt e3_opt s l                 -> (C'.FOR_EXP None (f_opt (fe l) e2_opt) (f_opt (fe l) e3_opt) (fs s), l)
+    | C.FOR (Some (C.FC_EXP e1)) e2_opt e3_opt s l -> (C'.FOR_EXP (Some (fe l e1)) (f_opt (fe l) e2_opt) (f_opt (fe l) e3_opt) (fs s), l)
+(*
+C has a single definition but C' has a defn_l list
+
+    | C.FOR (C.FC_DECL d, e1_opt, e2_opt, e3_opt, s, l) -> (C'.FOR_DECL (List.map fd ), l)
+*)
+
+    | C.BREAK l        -> (C'.BREAK, l)
+    | C.CONTINUE l     -> (C'.CONTINUE, l)
+    | C.RETURN e_opt l -> (C'.RETURN (f_opt (fe l) e_opt), l)
+    | C.SWITCH e s l   -> (C'.SWITCH (fe l e) (fs s), l)
+    | C.CASE e s l     -> (C'.CASE (fe l e) (fs s), l)
+    | C.DEFAULT s l    -> (C'.DEFAULT (fs s), l)
+    | C.LABEL a s l    -> (C'.LABEL a (fs s), l)
+    | C.GOTO a l       -> (C'.GOTO a, l)
+    | C.DEFINITION def -> Boot.outOfHomeomorphism "TODO: [translate_statement] DEFINITION"
+(*
+TODO: add cppmem's par to the parser
+  | PAR of stmt_l list (* TODO: (temporary) adding cppmem's parallel composition *)
+*)
+  end
+
+
+
+
+*)
+
+
+
+val transform_file: C.file -> C'.file
+let transform_file (* (fname, defs) *) = Boot.outOfHomeomorphism "TODO" (* (fname, List.map translate_definition defs) *)

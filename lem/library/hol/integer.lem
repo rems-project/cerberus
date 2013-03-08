@@ -1,0 +1,11 @@
+type int
+val int_add : int -> int -> int
+val int_sub : int -> int -> int
+val int_mul : int -> int -> int
+val int_div : int -> int -> int
+val int_mod : int -> int -> int
+val int_lt : int -> int -> bool
+val int_le : int -> int -> bool
+val int_gt : int -> int -> bool
+val int_ge : int -> int -> bool
+val (&) : num -> int

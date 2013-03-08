@@ -1,0 +1,669 @@
+open Global
+
+module A = Ail
+module T = Types
+module Annot = Annotate
+
+module E = Exception
+open E.Operators
+
+let report msg exp = msg
+let invalid msg exp = E.fail (report msg exp)
+
+let lvalue_convert t e =
+  match T.lvalue_convert t with
+  | None -> E.fail Errors.AIL_TYPECHECK_LVALUE_UNDEFINED
+  | Some t' -> E.return t'
+  end
+
+let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
+let one l = Pair.make l (A.CONSTANT (A.CONST_INT (1, None)))
+
+let rec is_null_pointer_constant e =
+  match Annot.exp_of e with
+  | A.CONSTANT (A.CONST_INT (n, _)) -> n = 0
+  | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer_constant exp
+  | _ -> false
+  end
+
+let type_of e =
+  let t =
+    match Annot.type_of e with
+    | A.T_EXP    t -> E.return t
+    | A.T_LVALUE t -> lvalue_convert t e
+    end in
+  E.fmap T.pointer_convert t
+
+let lvalue_type_of error e =
+  match Annot.type_of e with
+  | A.T_EXP    _ -> E.fail error
+  | A.T_LVALUE t -> E.return (T.pointer_convert t)
+  end
+
+(* TODO Could improve specificity of error messages: Currently, we stop as soon
+   as a constraint is violated but do not check whether it is partially
+   satisfied. *)
+
+(* Implementation note: [check_exp] returns the type of a given expression but
+   we (eventually) want to annotate each expression in the abstract syntax tree
+   with a type. To avoid redundant type computation, we use open
+   recursion. [annotate_exp] complements the process. *)
+
+(* val     check_exp: Ail.file Location.t -> Location.t -> A.expression (Location.t * Ail.type_class) -> E.t Ail.type_class Errors.cause *)
+let rec check_exp env l e_head =
+  match e_head with
+  | A.VARIABLE id ->
+      let (t, _) = Pmap.find id env.A.id_map in
+      if Pmap.mem id env.A.fn_map then
+        E.return (A.T_EXP t)
+      else
+        E.return (A.T_LVALUE t)
+  | A.CONSTANT (A.CONST_INT (i, None)) ->
+      E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+  | A.CONSTANT (A.CONST_INT (_, Some suffix)) ->
+      (* (§6.4.4.1) Integer constants, with suffix *)
+      match suffix with
+      | SUFFIX_UNSIGNED           -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED")
+      | SUFFIX_UNSIGNED_LONG      -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG")
+      | SUFFIX_UNSIGNED_LONG_LONG -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG LONG")
+      | SUFFIX_LONG               -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG")
+      | SUFFIX_LONG_LONG          -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG LONG")
+      end
+
+
+
+(*
+      E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED
+        "Suffixes in integer constant expressions are not supported.")
+*)
+  | A.CALL e es ->
+      type_of e >>= fun t ->
+      if T.is_pointer_to_function t then
+        let t_base = T.base_of_pointer t in
+        let t_return = T.function_return t_base in
+        let t_args = T.function_parameters t_base in
+        if T.is_void t_return
+          || (T.is_complete_object t_return && not (T.is_array t_return)) then
+          if List.length t_args = List.length es then
+            let is_assignable t e =
+              (* TODO Hack! *)
+              let exp = A.ASSIGN None (one (Annot.a_type l (A.T_LVALUE t))) e in
+              E.to_bool (check_exp env l exp) in
+            if List.for_all2 is_assignable t_args es then
+              E.return (A.T_EXP t_return)
+            else E.fail Errors.AIL_TYPECHECK_CALL_ARGUMENTS_ASSIGNABLE
+          else E.fail Errors.AIL_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS
+        else E.fail Errors.AIL_TYPECHECK_CALL_RETURN
+      else E.fail Errors.AIL_TYPECHECK_CALL_FUNCTION_POINTER
+
+  | A.UNARY A.PLUS e ->
+      type_of e >>= fun t ->
+      if T.is_arithmetic t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Errors.AIL_TYPECHECK_PLUS_ARITHMETIC
+
+  | A.UNARY A.MINUS e ->
+      type_of e >>= fun t ->
+      if T.is_arithmetic t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Errors.AIL_TYPECHECK_MINUS_ARITHMETIC
+
+  | A.UNARY A.BNOT e ->
+      type_of e >>= fun t ->
+      if T.is_integer t then
+        E.return (A.T_EXP (T.promote t))
+      else E.fail Errors.AIL_TYPECHECK_BNOT_INTEGER
+
+  | A.UNARY A.ADDRESS e ->
+      match Annot.type_of e with
+      | A.T_EXP ((A.FUNCTION _ _) as t) -> E.return t
+      | A.T_EXP _                       -> E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
+      | A.T_LVALUE t                    ->
+          if T.is_object t then
+            E.return t
+          else E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
+      end >>= fun t ->
+      E.return (A.T_EXP (A.POINTER {} t))
+
+
+  | A.UNARY A.INDIRECTION e ->
+      type_of e >>= fun t ->
+      if T.is_pointer t then
+        if T.is_pointer_to_object t then
+          E.return (A.T_LVALUE (T.base_of_pointer t))
+        else E.return (A.T_EXP (T.base_of_pointer t))
+      else E.fail Errors.AIL_TYPECHECK_INDIRECTION_POINTER
+
+
+
+  | A.UNARY A.POSTFIX_INCR e ->
+      lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
+      if T.is_modifiable t then
+        if T.is_real t || T.is_pointer t then
+          annotate_exp env (one l) >>= fun a_one ->
+          check_exp env l (A.ASSIGN (Some A.ADD) e a_one)
+        else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
+      else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
+
+  | A.UNARY A.POSTFIX_DECR e ->
+      lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
+      if T.is_modifiable t then
+        if T.is_real t || T.is_pointer t then
+          annotate_exp env (one l) >>= fun a_one ->
+          check_exp env l (A.ASSIGN (Some A.SUB) e a_one)
+        else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
+      else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
+
+  (* [§6.5.3.4#5] The [...] type (an unsigned integer type) is size_t, defined
+     in <stddef.h> (and other headers). *)
+  (* [§6.5.3.4#1] The sizeof operator shall not be applied to an expression that
+     has function type or an incomplete type, [...] or to an expression that
+     designates a bit-field member. [...] *)
+  (* TODO: the bit-field thing *)
+  | A.EXPR_SIZEOF e ->
+      type_of e >>= fun t ->
+      if not (T.is_function t) then
+        if not (T.is_incomplete t) then
+          E.return (A.T_EXP (A.SIZE_T))
+        else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
+      else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
+
+  (* [§6.5.3.4#1] The sizeof operator shall not be applied [...], to the
+     parenthesized name of such a type, or to an expression that designates a
+     bit-field member. *)
+  (* TODO: the bit-field thing *)
+  | A.SIZEOF t ->
+      if not (T.is_function t) then
+        if not (T.is_incomplete t) then
+          E.return (A.T_EXP (A.SIZE_T))
+        else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
+      else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
+
+  | A.ALIGNOF t ->
+      if not (T.is_function t) then
+        if not (T.is_incomplete t) then
+          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+        else E.fail Errors.AIL_TYPECHECK_ALIGNOF_INCOMPLETE
+      else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
+
+  | A.CAST (A.VOID q) e ->
+      type_of e >>= fun _ ->
+      E.return (A.T_EXP (A.VOID q))
+
+  | A.CAST t' e ->
+      type_of e >>= fun t ->
+      if T.is_scalar t' then
+        if T.is_scalar t then
+          E.return (A.T_EXP t')
+        else E.fail Errors.AIL_TYPECHECK_CAST_OPERAND_SCALAR
+      else E.fail Errors.AIL_TYPECHECK_CAST_NAME_SCALAR
+
+  (* K: seriously? This hack is at the edge of decency  *)
+  | A.BINARY (A.ARITHMETIC A.MUL) e1 e2 ->
+      check_exp env l (A.BINARY (A.ARITHMETIC A.DIV) e1 e2)
+
+  | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_arithmetic t1 && T.is_arithmetic t2 then
+        E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+      else E.fail Errors.AIL_TYPECHECK_MUL_ARITHMETIC
+
+  | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_integer t1 && T.is_integer t2 then
+        E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+      else E.fail Errors.AIL_TYPECHECK_MOD_INTEGER
+
+  | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+
+      (* Case: ptr + int. *)
+      if T.is_pointer_to_complete_object t1 then
+        if T.is_integer t2 then
+          E.return (A.T_EXP t1)
+        else E.fail Errors.AIL_TYPECHECK_ADD_POINTER_INTEGER
+
+      (* Case: int + ptr. *)
+      else if T.is_pointer_to_object t2 then
+        if T.is_integer t1 then
+          E.return (A.T_EXP t2)
+        else E.fail Errors.AIL_TYPECHECK_ADD_INTEGER_POINTER
+
+      (* Case: arith + arith. *)
+      else if T.is_arithmetic t1 && T.is_arithmetic t2 then
+        E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+
+      else E.fail Errors.AIL_TYPECHECK_ADD_ALL
+  | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.is_complete_object b1 then
+            if T.is_complete_object b2 then
+              if T.compatible_unqualified b1 b2 then
+                (*
+                E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED
+	          "Computing the difference of two pointers is not yet supported.")
+                *)
+                (* K: ugly hack *)
+                E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.UNSIGNED A.INT))))
+              else E.fail Errors.AIL_TYPECHECK_SUB_COMPATIBLE_POINTERS
+            else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
+          else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
+      | (A.POINTER _ b1, _) ->
+          if T.is_complete_object b1 then
+            if T.is_integer t2 then
+              E.return (A.T_EXP t1)
+            else E.fail Errors.AIL_TYPECHECK_SUB_INTEGER_OR_POINTER
+          else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT
+      | _ ->
+          if T.is_arithmetic t1 && T.is_arithmetic t2 then
+            E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+          else E.fail Errors.AIL_TYPECHECK_SUB_ALL
+      end
+  (* TODO: this is looping, I guess A.SHL is meant to be A.SHR (ugly btw) *)
+  (* TODO: (K) did applied the correction SHL --> SHR.
+           J should check *)
+  | A.BINARY (A.ARITHMETIC A.SHL) e1 e2 ->
+      check_exp env l (A.BINARY (A.ARITHMETIC A.SHR) e1 e2)
+
+  | A.BINARY (A.ARITHMETIC A.SHR) e1 e2  ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_integer t1 then
+        if T.is_integer t2 then
+          E.return (A.T_EXP (T.promote t1))
+        else E.fail Errors.AIL_TYPECHECK_SHR_INTEGER_FIRST
+      else E.fail Errors.AIL_TYPECHECK_SHR_INTEGER_SECOND
+
+  (* TODO: beurk *)
+  | A.BINARY A.LT e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.GT e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.LE e1 e2 ->
+      check_exp env l (A.BINARY A.GE e1 e2)
+  | A.BINARY A.GE e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.is_object b1 then
+            if T.is_object b2 then
+              if T.compatible_unqualified b1 b2 then
+                E.return (A.T_EXP int)
+              else E.fail Errors.AIL_TYPECHECK_GE_COMPATIBLE
+            else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_SECOND
+          else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_FIRST
+      | _ ->
+          if T.is_real t1 then
+            if T.is_real t2 then
+              E.return (A.T_EXP int)
+            else E.fail Errors.AIL_TYPECHECK_GE_REAL
+          else E.fail Errors.AIL_TYPECHECK_GE_ALL
+      end
+  | A.BINARY A.EQ e1 e2 ->
+      check_exp env l (A.BINARY A.NE e1 e2)
+  | A.BINARY A.NE e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+
+      match (t1, t2) with
+      | (A.POINTER _ b1, A.POINTER _ b2) ->
+          if T.compatible_unqualified b1 b2 then
+            E.return (A.T_EXP int)
+
+          (* void pointer *)
+          else if T.is_void b1 && T.is_object b2 then
+            E.return (A.T_EXP int)
+          else if T.is_object b1 && T.is_void b2 then
+            E.return (A.T_EXP int)
+
+          (* null pointer constant of pointer type*)
+          else if is_null_pointer_constant e1 then
+            E.return (A.T_EXP int)
+          else if is_null_pointer_constant e2 then
+            E.return (A.T_EXP int)
+
+          else E.fail Errors.AIL_TYPECHECK_NE_POINTERS
+
+      (* null pointer constant of integer type *)
+      | (A.POINTER _ _, _) ->
+          if is_null_pointer_constant e2 then
+            E.return (A.T_EXP int)
+          else E.fail Errors.AIL_TYPECHECK_NE_NULL_POINTER_CONSTANT_SECOND
+      | (_, A.POINTER _ _) ->
+          if is_null_pointer_constant e1 then
+            E.return (A.T_EXP int)
+          else E.fail Errors.AIL_TYPECHECK_NE_NULL_POINTER_CONSTANT_FIRST
+
+      | _ ->
+          if T.is_arithmetic t1 then
+            if T.is_arithmetic t2 then
+              E.return (A.T_EXP int)
+            else E.fail Errors.AIL_TYPECHECK_NE_ARITHMETIC
+          else E.fail Errors.AIL_TYPECHECK_NE_ALL
+      end
+  | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_integer t1 && T.is_integer t2 then
+          E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+      else E.fail Errors.AIL_TYPECHECK_BAND_INTEGER
+
+  | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_integer t1 && T.is_integer t2 then
+        E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+      else E.fail Errors.AIL_TYPECHECK_XOR_INTEGER
+  | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_integer t1 && T.is_integer t2 then
+          E.return (A.T_EXP (T.usual_arithmetic t1 t2))
+      else E.fail Errors.AIL_TYPECHECK_BOR_INTEGER
+  | A.BINARY A.AND e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_scalar t1 && T.is_scalar t2 then
+        E.return (A.T_EXP int)
+      else E.fail Errors.AIL_TYPECHECK_AND_SCALAR
+  | A.BINARY A.OR e1 e2 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      if T.is_scalar t1 && T.is_scalar t2 then
+        E.return (A.T_EXP int)
+      else E.fail Errors.AIL_TYPECHECK_OR_SCALAR
+
+  | A.CONDITIONAL e1 e2 e3 ->
+      type_of e1 >>= fun t1 ->
+      type_of e2 >>= fun t2 ->
+      type_of e3 >>= fun t3 ->
+      (* First operand must be scalar. *)
+      if T.is_scalar t1 then
+
+        match (t2, t3) with
+        | (A.POINTER _ b2, A.POINTER _ b3) ->
+            if T.is_void b2 && T.is_object b3 then
+              let q = T.merge_qualifiers t2 t3 in
+              E.return (A.T_EXP (A.POINTER q (A.VOID {})))
+            else if T.is_object b2 && T.is_void b3 then
+              let q = T.merge_qualifiers t2 t3 in
+              E.return (A.T_EXP (A.POINTER q (A.VOID {})))
+
+            (* null pointer constant of pointer type *)
+            else if is_null_pointer_constant e2 then
+              E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
+            else if is_null_pointer_constant e3 then
+              E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
+            else if T.compatible_unqualified b2 b3 then
+              let q = T.merge_qualifiers t2 t3 in
+              E.of_option
+                Errors.AIL_TYPECHECK_CONDITIONAL_COMPATIBLE_POINTERS
+                (T.composite t2 t3) >>= fun t ->
+              E.return (A.T_EXP (T.include_qualifiers t q))
+            else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_POINTERS
+
+        (* null pointer constant of integer type *)
+        | (A.POINTER _ b2, _) ->
+            if is_null_pointer_constant e3 then
+              E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
+            else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
+        | (_, A.POINTER _ b3) ->
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
+            else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
+
+        | (A.VOID _, A.VOID _) ->
+            E.return (A.T_EXP (A.VOID {}))
+
+        | _ ->
+            if T.is_arithmetic t2 then
+              if T.is_arithmetic t3 then
+                E.return (A.T_EXP (T.common (T.promote t2) (T.promote t3)))
+              else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_ARITHMETIC_SECOND
+
+            else if T.is_structure t2 || T.is_union t2 then
+              if t2 = t3 then
+                E.return (A.T_EXP t2)
+              else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_STRUCTURE_OR_UNION
+
+            else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_ALL
+        end
+
+      else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_SCALAR_FIRST
+  | A.ASSIGN None e1 e2 ->
+      lvalue_type_of Errors.AIL_TYPECHECK_ASSIGN_LVALUE e1 >>= fun t1 ->
+      type_of e2                                 >>= fun t2 ->
+      lvalue_convert t1 e1                       >>= fun t  ->
+      let has_all_qualifiers t1 t2 =
+        (T.qualifiers t2) subset (T.qualifiers t1) in
+      if T.is_modifiable t1 then
+
+        match (t1, t2) with
+        | (A.BASIC _ (A.INTEGER A.BOOL), A.POINTER _ _) ->
+            E.return (A.T_EXP t)
+        | (A.POINTER _ b1, A.POINTER _ b2) ->
+            (* null pointer constant of pointer type *)
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP t)
+
+            (* void pointer *)
+            else if T.is_void b1 && T.is_object b2 then
+              if has_all_qualifiers b1 b2 then
+                E.return (A.T_EXP t)
+              else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
+            else if T.is_object b1 && T.is_void b2 then
+              if has_all_qualifiers b1 b2 then
+                E.return (A.T_EXP t)
+              else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
+
+            else if T.compatible_unqualified b1 b2 then
+              if has_all_qualifiers b1 b2 then
+                E.return (A.T_EXP t)
+              else E.fail Errors.AIL_TYPECHECK_ASSIGN_POINTER_QUALIFIERS
+            else E.fail Errors.AIL_TYPECHECK_ASSIGN_POINTERS
+
+        (* null pointer constant of integer type *)
+        | (A.POINTER _ _, _) ->
+            if is_null_pointer_constant e2 then
+              E.return (A.T_EXP t)
+            else E.fail Errors.AIL_TYPECHECK_ASSIGN_NULL_POINTER_CONSTANT
+
+        | _ ->
+            if T.is_arithmetic t1 && T.is_arithmetic t2 then
+              E.return (A.T_EXP t)
+    
+            else if T.is_structure t1 || T.is_enum t1 then
+              if T.compatible t1 t2 then
+                E.return (A.T_EXP t)
+              else E.fail Errors.AIL_TYPECHECK_ASSIGN_STRUCTURE_OR_UNION
+            else E.fail Errors.AIL_TYPECHECK_ASSIGN_ALL
+        end
+      else E.fail Errors.AIL_TYPECHECK_ASSIGN_LVALUE
+  | A.ASSIGN (Some A.ADD) e1 e2 ->
+      check_exp env l (A.ASSIGN (Some A.SUB) e1 e2)
+  | A.ASSIGN (Some A.SUB) e1 e2 ->
+      lvalue_type_of Errors.AIL_TYPECHECK_ASSIGN_LVALUE e1 >>= fun t1 ->
+      type_of e2                                           >>= fun t2 ->
+      lvalue_convert t1 e1                                 >>= fun t  ->
+      if T.is_modifiable t1 then
+
+        if T.is_pointer_to_complete_object t1 then
+          if T.is_integer t2 then
+            E.return (A.T_EXP t)
+          else E.fail Errors.AIL_TYPECHECK_ASSIGN_SUB_POINTER
+
+        else if T.is_arithmetic t1 then
+          if T.is_arithmetic t2 then
+            E.return (A.T_EXP t)
+          else E.fail Errors.AIL_TYPECHECK_ASSIGN_SUB_ARITHMETIC
+
+        else E.fail Errors.AIL_TYPECHECK_ASSIGN_SUB_ALL
+
+      else E.fail Errors.AIL_TYPECHECK_ASSIGN_LVALUE
+  | A.ASSIGN (Some o) e1 e2 ->
+      lvalue_type_of Errors.AIL_TYPECHECK_ASSIGN_LVALUE e1 >>= fun t1 ->
+      lvalue_convert t1 e1                                 >>= fun t  ->
+      if T.is_modifiable t1 then
+
+        if T.is_arithmetic t1 then
+          let bexp = A.BINARY (A.ARITHMETIC o) e1 e2 in
+          check_exp env l bexp >>= fun _ ->
+          E.return (A.T_EXP t)
+        else E.fail Errors.AIL_TYPECHECK_ASSIGN_OTHER_ARITHMETIC
+
+      else E.fail Errors.AIL_TYPECHECK_ASSIGN_LVALUE
+  | A.BINARY A.COMMA e1 e2 ->
+      type_of e1 >>= fun _ ->
+      type_of e2 >>= fun t ->
+      E.return (A.T_EXP t)
+
+
+  (* TODO: this a massive hack and is probably wrong, waiting for the new type checker *)
+  (* void *malloc(size_t size); *)
+  | A.MALLOC e ->
+(*    if E.to_bool (check_exp env l (A.ASSIGN None (one (Annot.a_type l (A.T_LVALUE A.SIZE_T))) e)) then *)
+      E.return (A.T_EXP (A.POINTER {} (A.VOID {})))
+(*    else
+      Boot.outOfHomeomorphism "[Typing.check_exp] found a A.MALLOC and failed to typecheck"
+*)
+
+  (* void free(void *ptr); *)
+  | A.FREE e -> E.return (A.T_EXP (A.VOID {}))
+  
+  (* int memcmp(const void *s1, const void *s2, size_t n); *)
+  | A.MEMCMP e1 e2 e3 -> E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+  
+  (* void *memcpy(void * restrict s1, const void * restrict s2, size_t n); *)
+  | A.MEMCPY e1 e2 e3 -> Boot.outOfHomeomorphism "check_exp, found a MEMCPY"
+
+  end
+
+and annotate_exp env exp =
+  let (l, e) = exp in
+  let a_type e =
+    E.fmap (fun t -> Pair.make (Annot.a_type l t) e) (check_exp env l e) in
+  match e with
+  | A.VARIABLE v -> a_type (A.VARIABLE v)
+  | A.CONSTANT c -> a_type (A.CONSTANT c)
+  | A.SIZEOF   t -> a_type (A.SIZEOF   t)
+  | A.ALIGNOF  t -> a_type (A.ALIGNOF  t)
+  | _ ->
+      let map_exp f exp =
+        match exp with
+        | A.UNARY o e -> E.fmap (A.UNARY o) (f e)
+        | A.BINARY o e1 e2 -> E.map2 (A.BINARY o) (f e1) (f e2)
+        | A.ASSIGN o e1 e2 -> E.map2 (A.ASSIGN o) (f e1) (f e2)
+        | A.CONDITIONAL e1 e2 e3 ->
+            E.map3 A.CONDITIONAL (f e1) (f e2) (f e3)
+        | A.CAST t e -> E.fmap (A.CAST t) (f e)
+        | A.CALL e es ->
+            E.map2 (A.CALL) (f e) (E.map_list f es)
+        | A.CONSTANT c -> E.return (A.CONSTANT c)
+        | A.VARIABLE v -> E.return (A.VARIABLE v)
+        
+        (* TODO: here we get read of the EXPR_SIZEOF ctor (see comment before
+           Ail.EXPR_SIZEOF) *)
+        | A.EXPR_SIZEOF e ->
+            f e >>= function 
+              | ((_, A.T_EXP    t), _) -> E.return (A.SIZEOF t)
+              | ((_, A.T_LVALUE t), _) -> E.return (A.SIZEOF t)
+           end
+        
+        | A.SIZEOF   t -> E.return (A.SIZEOF   t)
+        | A.ALIGNOF  t -> E.return (A.ALIGNOF  t)
+        
+        | A.MALLOC e        -> E.fmap A.MALLOC (f e)
+        | A.FREE e          -> E.fmap A.FREE   (f e)
+        | A.MEMCMP e1 e2 e3 -> E.map3 A.MEMCMP (f e1) (f e2) (f e3)
+        | A.MEMCPY e1 e2 e3 -> E.map3 A.MEMCPY (f e1) (f e2) (f e3)
+        end in
+      let f exp = annotate_exp env exp in
+      map_exp f e >>= a_type
+  end
+
+let rec annotate_stmt env (l, stmt) =
+  let f_e = annotate_exp  env in
+  let f_s = annotate_stmt env in
+  E.fmap (Pair.make (l, A.T_EXP (A.VOID {}))) (match stmt with
+  
+  (* (§6.8.4) Selection statements ****************************************** *)
+  | A.IF e s1 s2 ->
+      f_e e      >>= fun e' ->
+      type_of e' >>= fun t  ->
+      (* (§6.8.4.1#1) The controlling expression of an if statement shall have
+                      scalar type. *)
+      if not (T.is_scalar t) then
+        E.fail Errors.AIL_TYPECHECK_IF_SCALAR
+      else
+        E.map2 (A.IF e') (f_s s1) (f_s s2)
+
+  (* TODO: (6.8.4.2#2) (looks annoying) *)
+  (* TODO: (6.8.4.2#3) unicity of the cases, and of the default case *)
+  | A.SWITCH e s ->
+      f_e e      >>= fun e' ->
+      type_of e' >>= fun t  ->
+      if T.is_integer t then
+        E.fmap (A.SWITCH e') (f_s s)
+      else
+        E.fail Errors.AIL_TYPECHECK_SWITCH_INTEGER
+
+  | A.WHILE e s ->
+      f_e e      >>= fun e' ->
+      type_of e' >>= fun t  ->
+      if T.is_scalar t then
+        E.fmap (A.WHILE e') (f_s s)
+      else E.fail Errors.AIL_TYPECHECK_WHILE_SCALAR
+  | A.DO e s ->
+      f_e e      >>= fun e' ->
+      type_of e' >>= fun t  ->
+      if T.is_scalar t then
+        E.fmap (A.DO e') (f_s s)
+      else E.fail Errors.AIL_TYPECHECK_DO_SCALAR
+  | _ ->
+      let map_stmt fs fe stmt =
+        match stmt with
+        | A.EXPRESSION e -> E.fmap A.EXPRESSION (fe e)
+        | A.BLOCK ids sl ->
+            E.fmap (A.BLOCK ids) (E.map_list fs sl)
+        | A.IF e s1 s2 -> E.map3 A.IF (fe e) (fs s1) (fs s2)
+        | A.WHILE e s -> E.map2 A.WHILE (fe e) (fs s)
+        | A.DO    e s -> E.map2 A.DO    (fe e) (fs s)
+        | A.RETURN_EXPRESSION e -> E.fmap A.RETURN_EXPRESSION (fe e)
+        | A.SWITCH e s -> E.map2 A.SWITCH (fe e) (fs s)
+        | A.CASE  c s -> E.fmap (A.CASE c) (fs s)
+        | A.DEFAULT s -> E.fmap A.DEFAULT  (fs s)
+        | A.LABEL id s -> E.fmap (A.LABEL id) (fs s)
+        | A.DECLARATION dl ->
+            E.fmap A.DECLARATION (E.map_list (E.inj_right fe) dl)
+        | A.SKIP        -> E.return A.SKIP
+        | A.BREAK       -> E.return A.BREAK
+        | A.CONTINUE    -> E.return A.CONTINUE
+        | A.RETURN_VOID -> E.return A.RETURN_VOID
+        | A.GOTO id -> E.return (A.GOTO id)
+        | A.PAR ss -> E.fmap A.PAR (E.map_list fs ss)
+        end in
+      map_stmt f_s f_e stmt
+  end)
+
+let annotate_program p =
+  let () =
+    if not (Pmap.for_all (fun _ -> T.well_formed) p.A.id_map) then () else () in
+  E.map_list (E.inj_right (annotate_exp  p)) p.A.globals >>= fun gs ->
+  E.map_map  (E.inj_right (annotate_stmt p)) p.A.fn_map  >>= fun fs ->
+  E.return <|
+    A.main = p.A.main;
+    A.id_map = p.A.id_map;
+(*    A.member_map = p.A.member_map; *)
+    A.globals = gs;
+    A.fn_map = fs
+  |>
+
+let annotate file = annotate_program file
