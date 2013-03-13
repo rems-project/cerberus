@@ -126,14 +126,13 @@ module Raw =
      | OrderedType.GT -> bal l y d' (add x d r))
   
   (** val remove_min :
-      'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod **)
+      'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1) **)
   
   let rec remove_min l x d r =
     match l with
-    | Leaf -> Coq_pair (r, (Coq_pair (x, d)))
+    | Leaf -> r,(x,d)
     | Node (ll, lx, ld, lr, lh) ->
-      let Coq_pair (l', m) = remove_min ll lx ld lr in
-      Coq_pair ((bal l' x d r), m)
+      let l',m = remove_min ll lx ld lr in (bal l' x d r),m
   
   (** val merge : 'a1 tree -> 'a1 tree -> 'a1 tree **)
   
@@ -144,8 +143,7 @@ module Raw =
       (match s2 with
        | Leaf -> s1
        | Node (l2, x2, d2, r2, h2) ->
-         let Coq_pair (s2', p) = remove_min l2 x2 d2 r2 in
-         let Coq_pair (x, d) = p in bal s1 x d s2')
+         let s2',p = remove_min l2 x2 d2 r2 in let x,d = p in bal s1 x d s2')
   
   (** val remove : X.t -> 'a1 tree -> 'a1 tree **)
   
@@ -226,18 +224,15 @@ module Raw =
       (match m2 with
        | Leaf -> m1
        | Node (l2, x2, d2, r2, i0) ->
-         let Coq_pair (m2', xd) = remove_min l2 x2 d2 r2 in
-         join m1 (fst xd) (snd xd) m2')
+         let m2',xd = remove_min l2 x2 d2 r2 in join m1 (fst xd) (snd xd) m2')
   
-  (** val elements_aux :
-      (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list **)
+  (** val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list **)
   
   let rec elements_aux acc = function
   | Leaf -> acc
-  | Node (l, x, d, r, i) ->
-    elements_aux ((Coq_pair (x, d))::(elements_aux acc r)) l
+  | Node (l, x, d, r, i) -> elements_aux ((x,d)::(elements_aux acc r)) l
   
-  (** val elements : 'a1 tree -> (key, 'a1) prod list **)
+  (** val elements : 'a1 tree -> (key*'a1) list **)
   
   let elements m =
     elements_aux [] m
@@ -600,16 +595,15 @@ module Raw =
     type 'elt coq_R_remove_min =
     | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
     | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-       key * 'elt * 'elt tree * I.int * ('elt tree, (key, 'elt) prod) prod
-       * 'elt coq_R_remove_min * 'elt tree * (key, 'elt) prod
+       key * 'elt * 'elt tree * I.int * ('elt tree*(key*'elt))
+       * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
     
     (** val coq_R_remove_min_rect :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 **)
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 **)
     
     let rec coq_R_remove_min_rect f f0 l x d r p = function
     | R_remove_min_0 (l0, x0, d0, r1) -> f l0 x0 d0 r1 __
@@ -620,10 +614,9 @@ module Raw =
     (** val coq_R_remove_min_rec :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 **)
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 **)
     
     let rec coq_R_remove_min_rec f f0 l x d r p = function
     | R_remove_min_0 (l0, x0, d0, r1) -> f l0 x0 d0 r1 __
@@ -637,15 +630,15 @@ module Raw =
        * I.int
     | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt * 'elt tree
        * I.int * 'elt tree * key * 'elt * 'elt tree * I.int * 'elt tree
-       * (key, 'elt) prod * key * 'elt
+       * (key*'elt) * key * 'elt
     
     (** val coq_R_merge_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2 **)
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2 **)
     
     let coq_R_merge_rect f f0 f1 s1 s2 t0 = function
     | R_merge_0 (x, x0) -> f x x0 __
@@ -659,8 +652,8 @@ module Raw =
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2 **)
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2 **)
     
     let coq_R_merge_rec f f0 f1 s1 s2 t0 = function
     | R_merge_0 (x, x0) -> f x x0 __
@@ -721,15 +714,15 @@ module Raw =
        * 'elt tree * I.int
     | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
        * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-       * 'elt tree * (key, 'elt) prod
+       * 'elt tree * (key*'elt)
     
     (** val coq_R_concat_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2 **)
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2 **)
     
     let coq_R_concat_rect f f0 f1 m1 m2 t0 = function
     | R_concat_0 (x, x0) -> f x x0 __
@@ -743,8 +736,8 @@ module Raw =
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2 **)
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2 **)
     
     let coq_R_concat_rec f f0 f1 m1 m2 t0 = function
     | R_concat_0 (x, x0) -> f x x0 __
@@ -938,12 +931,11 @@ module Raw =
     let fold' f s =
       L.fold f (elements s)
     
-    (** val flatten_e : 'a1 enumeration -> (key, 'a1) prod list **)
+    (** val flatten_e : 'a1 enumeration -> (key*'a1) list **)
     
     let rec flatten_e = function
     | End -> []
-    | More (x, e0, t0, r) ->
-      (Coq_pair (x, e0))::(app (elements t0) (flatten_e r))
+    | More (x, e0, t0, r) -> (x,e0)::(app (elements t0) (flatten_e r))
    end
  end
 
@@ -1024,7 +1016,7 @@ module IntMake =
   let map2 f m m' =
     Raw.map2 f (this m) (this m')
   
-  (** val elements : 'a1 t -> (key, 'a1) prod list **)
+  (** val elements : 'a1 t -> (key*'a1) list **)
   
   let elements m =
     Raw.elements (this m)

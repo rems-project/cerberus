@@ -61,20 +61,17 @@ val sum_rect : ('a1 -> 'a3) -> ('a2 -> 'a3) -> ('a1, 'a2) sum -> 'a3
 
 val sum_rec : ('a1 -> 'a3) -> ('a2 -> 'a3) -> ('a1, 'a2) sum -> 'a3
 
-type ('a, 'b) prod =
-| Coq_pair of 'a * 'b
+val prod_rect : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3
 
-val prod_rect : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3
+val prod_rec : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3
 
-val prod_rec : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3
+val fst : ('a1*'a2) -> 'a1
 
-val fst : ('a1, 'a2) prod -> 'a1
+val snd : ('a1*'a2) -> 'a2
 
-val snd : ('a1, 'a2) prod -> 'a2
+val prod_uncurry : (('a1*'a2) -> 'a3) -> 'a1 -> 'a2 -> 'a3
 
-val prod_uncurry : (('a1, 'a2) prod -> 'a3) -> 'a1 -> 'a2 -> 'a3
-
-val prod_curry : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3
+val prod_curry : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3
 
 type comparison =
 | Eq

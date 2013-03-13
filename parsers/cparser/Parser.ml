@@ -5,7 +5,7 @@ open Cabs0
 open Datatypes
 open Int0
 open List0
-open Cparser_main
+open Validator_main
 open Peano
 open Specif
 open Streams
@@ -3822,1170 +3822,1125 @@ module Gram =
     coq_NumberedAlphabet productionNum
   
   (** val prod_contents :
-      production -> ((nonterminal, symbol list) prod, symbol_semantic_type
-      arrows) sigT **)
+      production -> (nonterminal*symbol list, symbol_semantic_type arrows)
+      sigT **)
   
   let prod_contents p =
     let box = fun x x0 -> Coq_existT (x, x0) in
     (match p with
      | Prod_263 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T BANG_t)::[])))
-         (fun loc -> Coq_pair (NOT, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T BANG_t)::[])) (fun loc ->
+         NOT,loc)
      | Prod_262 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T TILDE_t)::[])))
-         (fun loc -> Coq_pair (BNOT, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T TILDE_t)::[])) (fun loc ->
+         BNOT,loc)
      | Prod_261 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T MINUS_t)::[])))
-         (fun loc -> Coq_pair (MINUS, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T MINUS_t)::[])) (fun loc ->
+         MINUS,loc)
      | Prod_260 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T PLUS_t)::[])))
-         (fun loc -> Coq_pair (PLUS, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T PLUS_t)::[])) (fun loc ->
+         PLUS,loc)
      | Prod_259 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T STAR_t)::[])))
-         (fun loc -> Coq_pair (MEMOF, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T STAR_t)::[])) (fun loc ->
+         MEMOF,loc)
      | Prod_258 ->
-       Obj.magic box (Coq_pair (Coq_unary_operator_nt, ((T AND_t)::[])))
-         (fun loc -> Coq_pair (ADDROF, loc))
+       Obj.magic box (Coq_unary_operator_nt,((T AND_t)::[])) (fun loc ->
+         ADDROF,loc)
      | Prod_257 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((T SIZEOF_t)::((T
-         LPAREN_t)::((NT Coq_type_name_nt)::((T RPAREN_t)::[]))))))
-         (fun loc _2 typ _4 -> Coq_pair ((TYPE_SIZEOF typ), loc))
+       Obj.magic box (Coq_unary_expression_nt,((T SIZEOF_t)::((T
+         LPAREN_t)::((NT Coq_type_name_nt)::((T RPAREN_t)::[])))))
+         (fun loc _2 typ _4 -> (TYPE_SIZEOF typ),loc)
      | Prod_256 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((T SIZEOF_t)::((NT
-         Coq_unary_expression_nt)::[])))) (fun loc expr -> Coq_pair
-         ((EXPR_SIZEOF (fst expr)), loc))
+       Obj.magic box (Coq_unary_expression_nt,((T SIZEOF_t)::((NT
+         Coq_unary_expression_nt)::[]))) (fun loc expr -> (EXPR_SIZEOF
+         (fst expr)),loc)
      | Prod_255 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((NT
-         Coq_unary_operator_nt)::((NT Coq_cast_expression_nt)::[]))))
-         (fun op expr -> Coq_pair ((UNARY ((fst op), (fst expr))), (snd op)))
+       Obj.magic box (Coq_unary_expression_nt,((NT
+         Coq_unary_operator_nt)::((NT Coq_cast_expression_nt)::[])))
+         (fun op expr -> (UNARY ((fst op), (fst expr))),(snd op))
      | Prod_254 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((T DEC_t)::((NT
-         Coq_unary_expression_nt)::[])))) (fun loc expr -> Coq_pair ((UNARY
-         (PREDECR, (fst expr))), loc))
+       Obj.magic box (Coq_unary_expression_nt,((T DEC_t)::((NT
+         Coq_unary_expression_nt)::[]))) (fun loc expr -> (UNARY (PREDECR,
+         (fst expr))),loc)
      | Prod_253 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((T INC_t)::((NT
-         Coq_unary_expression_nt)::[])))) (fun loc expr -> Coq_pair ((UNARY
-         (PREINCR, (fst expr))), loc))
+       Obj.magic box (Coq_unary_expression_nt,((T INC_t)::((NT
+         Coq_unary_expression_nt)::[]))) (fun loc expr -> (UNARY (PREINCR,
+         (fst expr))),loc)
      | Prod_252 ->
-       Obj.magic box (Coq_pair (Coq_unary_expression_nt, ((NT
-         Coq_postfix_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_unary_expression_nt,((NT
+         Coq_postfix_expression_nt)::[])) (fun expr -> expr)
      | Prod_251 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T
-         TYPEDEF_NAME_t)::[]))) (fun id -> Coq_pair ((Tnamed (fst id)),
-         (snd id)))
+       Obj.magic box (Coq_type_specifier_nt,((T TYPEDEF_NAME_t)::[]))
+         (fun id -> (Tnamed (fst id)),(snd id))
      | Prod_250 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((NT
-         Coq_enum_specifier_nt)::[]))) (fun spec -> spec)
+       Obj.magic box (Coq_type_specifier_nt,((NT Coq_enum_specifier_nt)::[]))
+         (fun spec -> spec)
      | Prod_249 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((NT
-         Coq_struct_or_union_specifier_nt)::[]))) (fun spec -> spec)
+       Obj.magic box (Coq_type_specifier_nt,((NT
+         Coq_struct_or_union_specifier_nt)::[])) (fun spec -> spec)
      | Prod_248 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T BOOL_t)::[])))
-         (fun loc -> Coq_pair (T_Bool, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T BOOL_t)::[])) (fun loc ->
+         T_Bool,loc)
      | Prod_247 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T UNSIGNED_t)::[])))
-         (fun loc -> Coq_pair (Tunsigned, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T UNSIGNED_t)::[])) (fun loc ->
+         Tunsigned,loc)
      | Prod_246 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T SIGNED_t)::[])))
-         (fun loc -> Coq_pair (Tsigned, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T SIGNED_t)::[])) (fun loc ->
+         Tsigned,loc)
      | Prod_245 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T DOUBLE_t)::[])))
-         (fun loc -> Coq_pair (Tdouble, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T DOUBLE_t)::[])) (fun loc ->
+         Tdouble,loc)
      | Prod_244 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T FLOAT_t)::[])))
-         (fun loc -> Coq_pair (Tfloat, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T FLOAT_t)::[])) (fun loc ->
+         Tfloat,loc)
      | Prod_243 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T LONG_t)::[])))
-         (fun loc -> Coq_pair (Tlong, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T LONG_t)::[])) (fun loc ->
+         Tlong,loc)
      | Prod_242 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T INT_t)::[])))
-         (fun loc -> Coq_pair (Tint, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T INT_t)::[])) (fun loc ->
+         Tint,loc)
      | Prod_241 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T SHORT_t)::[])))
-         (fun loc -> Coq_pair (Tshort, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T SHORT_t)::[])) (fun loc ->
+         Tshort,loc)
      | Prod_240 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T CHAR_t)::[])))
-         (fun loc -> Coq_pair (Tchar, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T CHAR_t)::[])) (fun loc ->
+         Tchar,loc)
      | Prod_239 ->
-       Obj.magic box (Coq_pair (Coq_type_specifier_nt, ((T VOID_t)::[])))
-         (fun loc -> Coq_pair (Tvoid, loc))
+       Obj.magic box (Coq_type_specifier_nt,((T VOID_t)::[])) (fun loc ->
+         Tvoid,loc)
      | Prod_238 ->
-       Obj.magic box (Coq_pair (Coq_type_qualifier_list_nt, ((NT
-         Coq_type_qualifier_list_nt)::((NT Coq_type_qualifier_nt)::[]))))
+       Obj.magic box (Coq_type_qualifier_list_nt,((NT
+         Coq_type_qualifier_list_nt)::((NT Coq_type_qualifier_nt)::[])))
          (fun qualq qualt -> (fst qualt)::qualq)
      | Prod_237 ->
-       Obj.magic box (Coq_pair (Coq_type_qualifier_list_nt, ((NT
-         Coq_type_qualifier_nt)::[]))) (fun qual -> (fst qual)::[])
+       Obj.magic box (Coq_type_qualifier_list_nt,((NT
+         Coq_type_qualifier_nt)::[])) (fun qual -> (fst qual)::[])
      | Prod_236 ->
-       Obj.magic box (Coq_pair (Coq_type_qualifier_nt, ((T VOLATILE_t)::[])))
-         (fun loc -> Coq_pair (CV_VOLATILE, loc))
+       Obj.magic box (Coq_type_qualifier_nt,((T VOLATILE_t)::[])) (fun loc ->
+         CV_VOLATILE,loc)
      | Prod_235 ->
-       Obj.magic box (Coq_pair (Coq_type_qualifier_nt, ((T RESTRICT_t)::[])))
-         (fun loc -> Coq_pair (CV_RESTRICT, loc))
+       Obj.magic box (Coq_type_qualifier_nt,((T RESTRICT_t)::[])) (fun loc ->
+         CV_RESTRICT,loc)
      | Prod_234 ->
-       Obj.magic box (Coq_pair (Coq_type_qualifier_nt, ((T CONST_t)::[])))
-         (fun loc -> Coq_pair (CV_CONST, loc))
+       Obj.magic box (Coq_type_qualifier_nt,((T CONST_t)::[])) (fun loc ->
+         CV_CONST,loc)
      | Prod_233 ->
-       Obj.magic box (Coq_pair (Coq_type_name_nt, ((NT
+       Obj.magic box (Coq_type_name_nt,((NT
          Coq_specifier_qualifier_list_nt)::((NT
-         Coq_abstract_declarator_nt)::[])))) (fun specqual typ -> Coq_pair
-         ((fst specqual), typ))
+         Coq_abstract_declarator_nt)::[]))) (fun specqual typ ->
+         (fst specqual),typ)
      | Prod_232 ->
-       Obj.magic box (Coq_pair (Coq_type_name_nt, ((NT
-         Coq_specifier_qualifier_list_nt)::[]))) (fun specqual -> Coq_pair
-         ((fst specqual), JUSTBASE))
+       Obj.magic box (Coq_type_name_nt,((NT
+         Coq_specifier_qualifier_list_nt)::[])) (fun specqual ->
+         (fst specqual),JUSTBASE)
      | Prod_231 ->
-       Obj.magic box (Coq_pair (Coq_translation_unit_file_nt, ((NT
-         Coq_translation_unit_nt)::((T EOF_t)::[])))) (fun lst _2 -> 
-         rev lst)
+       Obj.magic box (Coq_translation_unit_file_nt,((NT
+         Coq_translation_unit_nt)::((T EOF_t)::[]))) (fun lst _2 -> rev lst)
      | Prod_230 ->
-       Obj.magic box (Coq_pair (Coq_translation_unit_nt, ((NT
-         Coq_translation_unit_nt)::((NT Coq_external_declaration_nt)::[]))))
+       Obj.magic box (Coq_translation_unit_nt,((NT
+         Coq_translation_unit_nt)::((NT Coq_external_declaration_nt)::[])))
          (fun defq deft -> deft::defq)
      | Prod_229 ->
-       Obj.magic box (Coq_pair (Coq_translation_unit_nt, ((NT
-         Coq_external_declaration_nt)::[]))) (fun def -> def::[])
+       Obj.magic box (Coq_translation_unit_nt,((NT
+         Coq_external_declaration_nt)::[])) (fun def -> def::[])
      | Prod_228 ->
-       Obj.magic box (Coq_pair (Coq_struct_or_union_specifier_nt, ((NT
-         Coq_struct_or_union_nt)::((T OTHER_NAME_t)::[]))))
-         (fun str_uni id -> Coq_pair ((fst str_uni (Some (fst id)) None []),
-         (snd str_uni)))
+       Obj.magic box (Coq_struct_or_union_specifier_nt,((NT
+         Coq_struct_or_union_nt)::((T OTHER_NAME_t)::[]))) (fun str_uni id ->
+         (fst str_uni (Some (fst id)) None []),(snd str_uni))
      | Prod_227 ->
-       Obj.magic box (Coq_pair (Coq_struct_or_union_specifier_nt, ((NT
+       Obj.magic box (Coq_struct_or_union_specifier_nt,((NT
          Coq_struct_or_union_nt)::((T LBRACE_t)::((NT
-         Coq_struct_declaration_list_nt)::((T RBRACE_t)::[]))))))
-         (fun str_uni _2 decls _4 -> Coq_pair
-         ((fst str_uni None (Some (rev decls)) []), (snd str_uni)))
+         Coq_struct_declaration_list_nt)::((T RBRACE_t)::[])))))
+         (fun str_uni _2 decls _4 ->
+         (fst str_uni None (Some (rev decls)) []),(snd str_uni))
      | Prod_226 ->
-       Obj.magic box (Coq_pair (Coq_struct_or_union_specifier_nt, ((NT
+       Obj.magic box (Coq_struct_or_union_specifier_nt,((NT
          Coq_struct_or_union_nt)::((T OTHER_NAME_t)::((T LBRACE_t)::((NT
-         Coq_struct_declaration_list_nt)::((T RBRACE_t)::[])))))))
-         (fun str_uni id _3 decls _5 -> Coq_pair
-         ((fst str_uni (Some (fst id)) (Some (rev decls)) []),
-         (snd str_uni)))
+         Coq_struct_declaration_list_nt)::((T RBRACE_t)::[]))))))
+         (fun str_uni id _3 decls _5 ->
+         (fst str_uni (Some (fst id)) (Some (rev decls)) []),(snd str_uni))
      | Prod_225 ->
-       Obj.magic box (Coq_pair (Coq_struct_or_union_nt, ((T UNION_t)::[])))
-         (fun loc -> Coq_pair ((fun x x0 x1 -> Tunion (x, x0, x1)), loc))
+       Obj.magic box (Coq_struct_or_union_nt,((T UNION_t)::[])) (fun loc ->
+         (fun x x0 x1 -> Tunion (x, x0, x1)),loc)
      | Prod_224 ->
-       Obj.magic box (Coq_pair (Coq_struct_or_union_nt, ((T STRUCT_t)::[])))
-         (fun loc -> Coq_pair ((fun x x0 x1 -> Tstruct (x, x0, x1)), loc))
+       Obj.magic box (Coq_struct_or_union_nt,((T STRUCT_t)::[])) (fun loc ->
+         (fun x x0 x1 -> Tstruct (x, x0, x1)),loc)
      | Prod_223 ->
-       Obj.magic box (Coq_pair (Coq_struct_declarator_list_nt, ((NT
+       Obj.magic box (Coq_struct_declarator_list_nt,((NT
          Coq_struct_declarator_list_nt)::((T COMMA_t)::((NT
-         Coq_struct_declarator_nt)::[]))))) (fun declq _2 declt ->
+         Coq_struct_declarator_nt)::[])))) (fun declq _2 declt ->
          declt::declq)
      | Prod_222 ->
-       Obj.magic box (Coq_pair (Coq_struct_declarator_list_nt, ((NT
-         Coq_struct_declarator_nt)::[]))) (fun decl -> decl::[])
+       Obj.magic box (Coq_struct_declarator_list_nt,((NT
+         Coq_struct_declarator_nt)::[])) (fun decl -> decl::[])
      | Prod_221 ->
-       Obj.magic box (Coq_pair (Coq_struct_declarator_nt, ((T COLON_t)::((NT
-         Coq_constant_expression_nt)::[])))) (fun _1 expr -> Coq_pair (None,
-         (Some (fst expr))))
+       Obj.magic box (Coq_struct_declarator_nt,((T COLON_t)::((NT
+         Coq_constant_expression_nt)::[]))) (fun _1 expr -> None,(Some
+         (fst expr)))
      | Prod_220 ->
-       Obj.magic box (Coq_pair (Coq_struct_declarator_nt, ((NT
-         Coq_declarator_nt)::((T COLON_t)::((NT
-         Coq_constant_expression_nt)::[]))))) (fun decl _2 expr -> Coq_pair
-         ((Some decl), (Some (fst expr))))
+       Obj.magic box (Coq_struct_declarator_nt,((NT Coq_declarator_nt)::((T
+         COLON_t)::((NT Coq_constant_expression_nt)::[]))))
+         (fun decl _2 expr -> (Some decl),(Some (fst expr)))
      | Prod_219 ->
-       Obj.magic box (Coq_pair (Coq_struct_declarator_nt, ((NT
-         Coq_declarator_nt)::[]))) (fun decl -> Coq_pair ((Some decl), None))
+       Obj.magic box (Coq_struct_declarator_nt,((NT Coq_declarator_nt)::[]))
+         (fun decl -> (Some decl),None)
      | Prod_218 ->
-       Obj.magic box (Coq_pair (Coq_struct_declaration_list_nt, ((NT
+       Obj.magic box (Coq_struct_declaration_list_nt,((NT
          Coq_struct_declaration_list_nt)::((NT
-         Coq_struct_declaration_nt)::[])))) (fun qdecls tdecls ->
+         Coq_struct_declaration_nt)::[]))) (fun qdecls tdecls ->
          tdecls::qdecls)
      | Prod_217 ->
-       Obj.magic box (Coq_pair (Coq_struct_declaration_list_nt, ((NT
-         Coq_struct_declaration_nt)::[]))) (fun decl -> decl::[])
+       Obj.magic box (Coq_struct_declaration_list_nt,((NT
+         Coq_struct_declaration_nt)::[])) (fun decl -> decl::[])
      | Prod_216 ->
-       Obj.magic box (Coq_pair (Coq_struct_declaration_nt, ((NT
-         Coq_specifier_qualifier_list_nt)::((T SEMICOLON_t)::[]))))
+       Obj.magic box (Coq_struct_declaration_nt,((NT
+         Coq_specifier_qualifier_list_nt)::((T SEMICOLON_t)::[])))
          (fun decspec _2 -> Field_group ((fst decspec), [], (snd decspec)))
      | Prod_215 ->
-       Obj.magic box (Coq_pair (Coq_struct_declaration_nt, ((NT
+       Obj.magic box (Coq_struct_declaration_nt,((NT
          Coq_specifier_qualifier_list_nt)::((NT
-         Coq_struct_declarator_list_nt)::((T SEMICOLON_t)::[])))))
+         Coq_struct_declarator_list_nt)::((T SEMICOLON_t)::[]))))
          (fun decspec decls _3 -> Field_group ((fst decspec), (rev decls),
          (snd decspec)))
      | Prod_214 ->
-       Obj.magic box (Coq_pair (Coq_storage_class_specifier_nt, ((T
-         REGISTER_t)::[]))) (fun loc -> Coq_pair (REGISTER, loc))
+       Obj.magic box (Coq_storage_class_specifier_nt,((T REGISTER_t)::[]))
+         (fun loc -> REGISTER,loc)
      | Prod_213 ->
-       Obj.magic box (Coq_pair (Coq_storage_class_specifier_nt, ((T
-         AUTO_t)::[]))) (fun loc -> Coq_pair (AUTO, loc))
+       Obj.magic box (Coq_storage_class_specifier_nt,((T AUTO_t)::[]))
+         (fun loc -> AUTO,loc)
      | Prod_212 ->
-       Obj.magic box (Coq_pair (Coq_storage_class_specifier_nt, ((T
-         STATIC_t)::[]))) (fun loc -> Coq_pair (STATIC, loc))
+       Obj.magic box (Coq_storage_class_specifier_nt,((T STATIC_t)::[]))
+         (fun loc -> STATIC,loc)
      | Prod_211 ->
-       Obj.magic box (Coq_pair (Coq_storage_class_specifier_nt, ((T
-         EXTERN_t)::[]))) (fun loc -> Coq_pair (EXTERN, loc))
+       Obj.magic box (Coq_storage_class_specifier_nt,((T EXTERN_t)::[]))
+         (fun loc -> EXTERN,loc)
      | Prod_210 ->
-       Obj.magic box (Coq_pair (Coq_storage_class_specifier_nt, ((T
-         TYPEDEF_t)::[]))) (fun loc -> Coq_pair (TYPEDEF, loc))
+       Obj.magic box (Coq_storage_class_specifier_nt,((T TYPEDEF_t)::[]))
+         (fun loc -> TYPEDEF,loc)
      | Prod_209 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_jump_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT Coq_jump_statement_nt)::[]))
+         (fun stmt -> stmt)
      | Prod_208 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_iteration_statement_statement_safe__nt)::[]))) (fun stmt ->
-         stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT
+         Coq_iteration_statement_statement_safe__nt)::[])) (fun stmt -> stmt)
      | Prod_207 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_selection_statement_safe_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT
+         Coq_selection_statement_safe_nt)::[])) (fun stmt -> stmt)
      | Prod_206 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_expression_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT
+         Coq_expression_statement_nt)::[])) (fun stmt -> stmt)
      | Prod_205 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_compound_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT
+         Coq_compound_statement_nt)::[])) (fun stmt -> stmt)
      | Prod_204 ->
-       Obj.magic box (Coq_pair (Coq_statement_safe_nt, ((NT
-         Coq_labeled_statement_statement_safe__nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_safe_nt,((NT
+         Coq_labeled_statement_statement_safe__nt)::[])) (fun stmt -> stmt)
      | Prod_203 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_jump_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_jump_statement_nt)::[])) (fun stmt -> stmt)
      | Prod_202 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_iteration_statement_statement_dangerous__nt)::[]))) (fun stmt ->
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_iteration_statement_statement_dangerous__nt)::[])) (fun stmt ->
          stmt)
      | Prod_201 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_selection_statement_dangerous_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_selection_statement_dangerous_nt)::[])) (fun stmt -> stmt)
      | Prod_200 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_expression_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_expression_statement_nt)::[])) (fun stmt -> stmt)
      | Prod_199 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_compound_statement_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_compound_statement_nt)::[])) (fun stmt -> stmt)
      | Prod_198 ->
-       Obj.magic box (Coq_pair (Coq_statement_dangerous_nt, ((NT
-         Coq_labeled_statement_statement_dangerous__nt)::[]))) (fun stmt ->
+       Obj.magic box (Coq_statement_dangerous_nt,((NT
+         Coq_labeled_statement_statement_dangerous__nt)::[])) (fun stmt ->
          stmt)
      | Prod_197 ->
-       Obj.magic box (Coq_pair (Coq_specifier_qualifier_list_nt, ((NT
-         Coq_type_qualifier_nt)::[]))) (fun qual -> Coq_pair (((SpecCV
-         (fst qual))::[]), (snd qual)))
+       Obj.magic box (Coq_specifier_qualifier_list_nt,((NT
+         Coq_type_qualifier_nt)::[])) (fun qual -> ((SpecCV
+         (fst qual))::[]),(snd qual))
      | Prod_196 ->
-       Obj.magic box (Coq_pair (Coq_specifier_qualifier_list_nt, ((NT
-         Coq_type_qualifier_nt)::((NT
-         Coq_specifier_qualifier_list_nt)::[])))) (fun qual rest -> Coq_pair
-         (((SpecCV (fst qual))::(fst rest)), (snd qual)))
+       Obj.magic box (Coq_specifier_qualifier_list_nt,((NT
+         Coq_type_qualifier_nt)::((NT Coq_specifier_qualifier_list_nt)::[])))
+         (fun qual rest -> ((SpecCV (fst qual))::(fst rest)),(snd qual))
      | Prod_195 ->
-       Obj.magic box (Coq_pair (Coq_specifier_qualifier_list_nt, ((NT
-         Coq_type_specifier_nt)::[]))) (fun typ -> Coq_pair (((SpecType
-         (fst typ))::[]), (snd typ)))
+       Obj.magic box (Coq_specifier_qualifier_list_nt,((NT
+         Coq_type_specifier_nt)::[])) (fun typ -> ((SpecType
+         (fst typ))::[]),(snd typ))
      | Prod_194 ->
-       Obj.magic box (Coq_pair (Coq_specifier_qualifier_list_nt, ((NT
-         Coq_type_specifier_nt)::((NT
-         Coq_specifier_qualifier_list_nt)::[])))) (fun typ rest -> Coq_pair
-         (((SpecType (fst typ))::(fst rest)), (snd typ)))
+       Obj.magic box (Coq_specifier_qualifier_list_nt,((NT
+         Coq_type_specifier_nt)::((NT Coq_specifier_qualifier_list_nt)::[])))
+         (fun typ rest -> ((SpecType (fst typ))::(fst rest)),(snd typ))
      | Prod_193 ->
-       Obj.magic box (Coq_pair (Coq_shift_expression_nt, ((NT
+       Obj.magic box (Coq_shift_expression_nt,((NT
          Coq_shift_expression_nt)::((T RIGHT_t)::((NT
-         Coq_additive_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (SHR, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_additive_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY
+         (SHR, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_192 ->
-       Obj.magic box (Coq_pair (Coq_shift_expression_nt, ((NT
+       Obj.magic box (Coq_shift_expression_nt,((NT
          Coq_shift_expression_nt)::((T LEFT_t)::((NT
-         Coq_additive_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (SHL, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_additive_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY
+         (SHL, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_191 ->
-       Obj.magic box (Coq_pair (Coq_shift_expression_nt, ((NT
-         Coq_additive_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_shift_expression_nt,((NT
+         Coq_additive_expression_nt)::[])) (fun expr -> expr)
      | Prod_190 ->
-       Obj.magic box (Coq_pair (Coq_selection_statement_safe_nt, ((T
-         SWITCH_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))
-         (fun loc _2 expr _4 stmt -> SWITCH ((fst expr), stmt, loc))
+       Obj.magic box (Coq_selection_statement_safe_nt,((T SWITCH_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+         Coq_statement_safe_nt)::[])))))) (fun loc _2 expr _4 stmt -> SWITCH
+         ((fst expr), stmt, loc))
      | Prod_189 ->
-       Obj.magic box (Coq_pair (Coq_selection_statement_safe_nt, ((T
-         IF_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+       Obj.magic box (Coq_selection_statement_safe_nt,((T IF_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
          Coq_statement_safe_nt)::((T ELSE_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 expr _4 stmt1 _6 stmt2 -> If ((fst expr), stmt1, (Some
          stmt2), loc))
      | Prod_188 ->
-       Obj.magic box (Coq_pair (Coq_selection_statement_dangerous_nt, ((T
-         SWITCH_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))
-         (fun loc _2 expr _4 stmt -> SWITCH ((fst expr), stmt, loc))
+       Obj.magic box (Coq_selection_statement_dangerous_nt,((T SWITCH_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[])))))) (fun loc _2 expr _4 stmt ->
+         SWITCH ((fst expr), stmt, loc))
      | Prod_187 ->
-       Obj.magic box (Coq_pair (Coq_selection_statement_dangerous_nt, ((T
-         IF_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+       Obj.magic box (Coq_selection_statement_dangerous_nt,((T IF_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
          Coq_statement_safe_nt)::((T ELSE_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 expr _4 stmt1 _6 stmt2 -> If ((fst expr), stmt1, (Some
          stmt2), loc))
      | Prod_186 ->
-       Obj.magic box (Coq_pair (Coq_selection_statement_dangerous_nt, ((T
-         IF_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))) (fun loc _2 expr _4 stmt ->
-         If ((fst expr), stmt, None, loc))
+       Obj.magic box (Coq_selection_statement_dangerous_nt,((T IF_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[])))))) (fun loc _2 expr _4 stmt -> If
+         ((fst expr), stmt, None, loc))
      | Prod_185 ->
-       Obj.magic box (Coq_pair (Coq_relational_expression_nt, ((NT
+       Obj.magic box (Coq_relational_expression_nt,((NT
          Coq_relational_expression_nt)::((T GEQ_t)::((NT
-         Coq_shift_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (GE, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_shift_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (GE,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_184 ->
-       Obj.magic box (Coq_pair (Coq_relational_expression_nt, ((NT
+       Obj.magic box (Coq_relational_expression_nt,((NT
          Coq_relational_expression_nt)::((T LEQ_t)::((NT
-         Coq_shift_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (LE, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_shift_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (LE,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_183 ->
-       Obj.magic box (Coq_pair (Coq_relational_expression_nt, ((NT
+       Obj.magic box (Coq_relational_expression_nt,((NT
          Coq_relational_expression_nt)::((T GT_t)::((NT
-         Coq_shift_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (GT, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_shift_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (GT,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_182 ->
-       Obj.magic box (Coq_pair (Coq_relational_expression_nt, ((NT
+       Obj.magic box (Coq_relational_expression_nt,((NT
          Coq_relational_expression_nt)::((T LT_t)::((NT
-         Coq_shift_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (LT, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_shift_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (LT,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_181 ->
-       Obj.magic box (Coq_pair (Coq_relational_expression_nt, ((NT
-         Coq_shift_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_relational_expression_nt,((NT
+         Coq_shift_expression_nt)::[])) (fun expr -> expr)
      | Prod_180 ->
-       Obj.magic box (Coq_pair (Coq_primary_expression_nt, ((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::[])))))
-         (fun loc expr _3 -> Coq_pair ((fst expr), loc))
+       Obj.magic box (Coq_primary_expression_nt,((T LPAREN_t)::((NT
+         Coq_expression_nt)::((T RPAREN_t)::[])))) (fun loc expr _3 ->
+         (fst expr),loc)
      | Prod_179 ->
-       Obj.magic box (Coq_pair (Coq_primary_expression_nt, ((T
-         CONSTANT_t)::[]))) (fun cst -> Coq_pair ((CONSTANT (fst cst)),
-         (snd cst)))
+       Obj.magic box (Coq_primary_expression_nt,((T CONSTANT_t)::[]))
+         (fun cst -> (CONSTANT (fst cst)),(snd cst))
      | Prod_178 ->
-       Obj.magic box (Coq_pair (Coq_primary_expression_nt, ((T
-         VAR_NAME_t)::[]))) (fun var -> Coq_pair ((VARIABLE (fst var)),
-         (snd var)))
+       Obj.magic box (Coq_primary_expression_nt,((T VAR_NAME_t)::[]))
+         (fun var -> (VARIABLE (fst var)),(snd var))
      | Prod_177 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((T
-         LPAREN_t)::((NT Coq_type_name_nt)::((T RPAREN_t)::((T
-         LBRACE_t)::((NT Coq_initializer_list_nt)::((T COMMA_t)::((T
-         RBRACE_t)::[]))))))))) (fun loc typ _3 _4 init _6 _7 -> Coq_pair
-         ((CAST (typ, (COMPOUND_INIT (rev init)))), loc))
+       Obj.magic box (Coq_postfix_expression_nt,((T LPAREN_t)::((NT
+         Coq_type_name_nt)::((T RPAREN_t)::((T LBRACE_t)::((NT
+         Coq_initializer_list_nt)::((T COMMA_t)::((T RBRACE_t)::[]))))))))
+         (fun loc typ _3 _4 init _6 _7 -> (CAST (typ, (COMPOUND_INIT
+         (rev init)))),loc)
      | Prod_176 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((T
-         LPAREN_t)::((NT Coq_type_name_nt)::((T RPAREN_t)::((T
-         LBRACE_t)::((NT Coq_initializer_list_nt)::((T RBRACE_t)::[]))))))))
-         (fun loc typ _3 _4 init _6 -> Coq_pair ((CAST (typ, (COMPOUND_INIT
-         (rev init)))), loc))
+       Obj.magic box (Coq_postfix_expression_nt,((T LPAREN_t)::((NT
+         Coq_type_name_nt)::((T RPAREN_t)::((T LBRACE_t)::((NT
+         Coq_initializer_list_nt)::((T RBRACE_t)::[])))))))
+         (fun loc typ _3 _4 init _6 -> (CAST (typ, (COMPOUND_INIT
+         (rev init)))),loc)
      | Prod_175 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_postfix_expression_nt)::((T DEC_t)::[])))) (fun expr _2 ->
-         Coq_pair ((UNARY (POSDECR, (fst expr))), (snd expr)))
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_postfix_expression_nt)::((T DEC_t)::[]))) (fun expr _2 -> (UNARY
+         (POSDECR, (fst expr))),(snd expr))
      | Prod_174 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_postfix_expression_nt)::((T INC_t)::[])))) (fun expr _2 ->
-         Coq_pair ((UNARY (POSINCR, (fst expr))), (snd expr)))
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_postfix_expression_nt)::((T INC_t)::[]))) (fun expr _2 -> (UNARY
+         (POSINCR, (fst expr))),(snd expr))
      | Prod_173 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_postfix_expression_nt)::((T PTR_t)::((T OTHER_NAME_t)::[])))))
-         (fun expr _2 mem0 -> Coq_pair ((MEMBEROFPTR ((fst expr),
-         (fst mem0))), (snd expr)))
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_postfix_expression_nt)::((T PTR_t)::((T OTHER_NAME_t)::[]))))
+         (fun expr _2 mem0 -> (MEMBEROFPTR ((fst expr),
+         (fst mem0))),(snd expr))
      | Prod_172 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_postfix_expression_nt)::((T DOT_t)::((T OTHER_NAME_t)::[])))))
-         (fun expr _2 mem0 -> Coq_pair ((MEMBEROF ((fst expr), (fst mem0))),
-         (snd expr)))
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_postfix_expression_nt)::((T DOT_t)::((T OTHER_NAME_t)::[]))))
+         (fun expr _2 mem0 -> (MEMBEROF ((fst expr), (fst mem0))),(snd expr))
      | Prod_171 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((T
-         BUILTIN_VA_ARG_t)::((T LPAREN_t)::((NT
-         Coq_assignment_expression_nt)::((T COMMA_t)::((NT
-         Coq_type_name_nt)::((T RPAREN_t)::[]))))))))
-         (fun loc _2 expr _4 ty _6 -> Coq_pair ((BUILTIN_VA_ARG ((fst expr),
-         ty)), loc))
+       Obj.magic box (Coq_postfix_expression_nt,((T BUILTIN_VA_ARG_t)::((T
+         LPAREN_t)::((NT Coq_assignment_expression_nt)::((T COMMA_t)::((NT
+         Coq_type_name_nt)::((T RPAREN_t)::[])))))))
+         (fun loc _2 expr _4 ty _6 -> (BUILTIN_VA_ARG ((fst expr), ty)),loc)
      | Prod_170 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_postfix_expression_nt)::((T LPAREN_t)::((T RPAREN_t)::[])))))
-         (fun expr _2 _3 -> Coq_pair ((CALL ((fst expr), [])), (snd expr)))
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_postfix_expression_nt)::((T LPAREN_t)::((T RPAREN_t)::[]))))
+         (fun expr _2 _3 -> (CALL ((fst expr), [])),(snd expr))
      | Prod_169 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
+       Obj.magic box (Coq_postfix_expression_nt,((NT
          Coq_postfix_expression_nt)::((T LPAREN_t)::((NT
-         Coq_argument_expression_list_nt)::((T RPAREN_t)::[]))))))
-         (fun expr _2 args _4 -> Coq_pair ((CALL ((fst expr), (rev args))),
-         (snd expr)))
+         Coq_argument_expression_list_nt)::((T RPAREN_t)::[])))))
+         (fun expr _2 args _4 -> (CALL ((fst expr), (rev args))),(snd expr))
      | Prod_168 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
+       Obj.magic box (Coq_postfix_expression_nt,((NT
          Coq_postfix_expression_nt)::((T LBRACK_t)::((NT
-         Coq_expression_nt)::((T RBRACK_t)::[])))))) (fun expr _2 index _4 ->
-         Coq_pair ((INDEX ((fst expr), (fst index))), (snd expr)))
+         Coq_expression_nt)::((T RBRACK_t)::[]))))) (fun expr _2 index _4 ->
+         (INDEX ((fst expr), (fst index))),(snd expr))
      | Prod_167 ->
-       Obj.magic box (Coq_pair (Coq_postfix_expression_nt, ((NT
-         Coq_primary_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_postfix_expression_nt,((NT
+         Coq_primary_expression_nt)::[])) (fun expr -> expr)
      | Prod_166 ->
-       Obj.magic box (Coq_pair (Coq_pointer_nt, ((T STAR_t)::((NT
-         Coq_type_qualifier_list_nt)::((NT Coq_pointer_nt)::[])))))
-         (fun loc quallst pt -> Coq_pair ((fun typ -> PTR ((rev quallst), [],
-         (fst pt typ))), loc))
+       Obj.magic box (Coq_pointer_nt,((T STAR_t)::((NT
+         Coq_type_qualifier_list_nt)::((NT Coq_pointer_nt)::[]))))
+         (fun loc quallst pt -> (fun typ -> PTR ((rev quallst), [],
+         (fst pt typ))),loc)
      | Prod_165 ->
-       Obj.magic box (Coq_pair (Coq_pointer_nt, ((T STAR_t)::((NT
-         Coq_pointer_nt)::[])))) (fun loc pt -> Coq_pair ((fun typ -> PTR
-         ([], [], (fst pt typ))), loc))
+       Obj.magic box (Coq_pointer_nt,((T STAR_t)::((NT Coq_pointer_nt)::[])))
+         (fun loc pt -> (fun typ -> PTR ([], [], (fst pt typ))),loc)
      | Prod_164 ->
-       Obj.magic box (Coq_pair (Coq_pointer_nt, ((T STAR_t)::((NT
-         Coq_type_qualifier_list_nt)::[])))) (fun loc quallst -> Coq_pair
-         ((fun x -> PTR ((rev quallst), [], x)), loc))
+       Obj.magic box (Coq_pointer_nt,((T STAR_t)::((NT
+         Coq_type_qualifier_list_nt)::[]))) (fun loc quallst -> (fun x -> PTR
+         ((rev quallst), [], x)),loc)
      | Prod_163 ->
-       Obj.magic box (Coq_pair (Coq_pointer_nt, ((T STAR_t)::[])))
-         (fun loc -> Coq_pair ((fun x -> PTR ([], [], x)), loc))
+       Obj.magic box (Coq_pointer_nt,((T STAR_t)::[])) (fun loc -> (fun x ->
+         PTR ([], [], x)),loc)
      | Prod_162 ->
-       Obj.magic box (Coq_pair (Coq_parameter_type_list_nt, ((NT
-         Coq_parameter_list_nt)::((T COMMA_t)::((T ELLIPSIS_t)::[])))))
-         (fun lst _2 _3 -> Coq_pair ((rev lst), true))
+       Obj.magic box (Coq_parameter_type_list_nt,((NT
+         Coq_parameter_list_nt)::((T COMMA_t)::((T ELLIPSIS_t)::[]))))
+         (fun lst _2 _3 -> (rev lst),true)
      | Prod_161 ->
-       Obj.magic box (Coq_pair (Coq_parameter_type_list_nt, ((NT
-         Coq_parameter_list_nt)::[]))) (fun lst -> Coq_pair ((rev lst),
-         false))
+       Obj.magic box (Coq_parameter_type_list_nt,((NT
+         Coq_parameter_list_nt)::[])) (fun lst -> (rev lst),false)
      | Prod_160 ->
-       Obj.magic box (Coq_pair (Coq_parameter_list_nt, ((NT
-         Coq_parameter_list_nt)::((T COMMA_t)::((NT
-         Coq_parameter_declaration_nt)::[]))))) (fun paramq _2 paramt ->
-         paramt::paramq)
+       Obj.magic box (Coq_parameter_list_nt,((NT Coq_parameter_list_nt)::((T
+         COMMA_t)::((NT Coq_parameter_declaration_nt)::[]))))
+         (fun paramq _2 paramt -> paramt::paramq)
      | Prod_159 ->
-       Obj.magic box (Coq_pair (Coq_parameter_list_nt, ((NT
-         Coq_parameter_declaration_nt)::[]))) (fun param -> param::[])
+       Obj.magic box (Coq_parameter_list_nt,((NT
+         Coq_parameter_declaration_nt)::[])) (fun param -> param::[])
      | Prod_158 ->
-       Obj.magic box (Coq_pair (Coq_parameter_declaration_nt, ((NT
-         Coq_declaration_specifiers_nt)::[]))) (fun specs -> PARAM
+       Obj.magic box (Coq_parameter_declaration_nt,((NT
+         Coq_declaration_specifiers_nt)::[])) (fun specs -> PARAM
          ((fst specs), None, JUSTBASE, [], (snd specs)))
      | Prod_157 ->
-       Obj.magic box (Coq_pair (Coq_parameter_declaration_nt, ((NT
+       Obj.magic box (Coq_parameter_declaration_nt,((NT
          Coq_declaration_specifiers_nt)::((NT
-         Coq_abstract_declarator_nt)::[])))) (fun specs decl -> PARAM
+         Coq_abstract_declarator_nt)::[]))) (fun specs decl -> PARAM
          ((fst specs), None, decl, [], (snd specs)))
      | Prod_156 ->
-       Obj.magic box (Coq_pair (Coq_parameter_declaration_nt, ((NT
-         Coq_declaration_specifiers_nt)::((NT Coq_declarator_nt)::[]))))
+       Obj.magic box (Coq_parameter_declaration_nt,((NT
+         Coq_declaration_specifiers_nt)::((NT Coq_declarator_nt)::[])))
          (fun specs decl ->
          let Name (name, typ, attr, c) = decl in
          PARAM ((fst specs), (Some name), typ, attr, (snd specs)))
      | Prod_155 ->
-       Obj.magic box (Coq_pair (Coq_multiplicative_expression_nt, ((NT
+       Obj.magic box (Coq_multiplicative_expression_nt,((NT
          Coq_multiplicative_expression_nt)::((T PERCENT_t)::((NT
-         Coq_cast_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (MOD, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_cast_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (MOD,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_154 ->
-       Obj.magic box (Coq_pair (Coq_multiplicative_expression_nt, ((NT
+       Obj.magic box (Coq_multiplicative_expression_nt,((NT
          Coq_multiplicative_expression_nt)::((T SLASH_t)::((NT
-         Coq_cast_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (DIV, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_cast_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (DIV,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_153 ->
-       Obj.magic box (Coq_pair (Coq_multiplicative_expression_nt, ((NT
+       Obj.magic box (Coq_multiplicative_expression_nt,((NT
          Coq_multiplicative_expression_nt)::((T STAR_t)::((NT
-         Coq_cast_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (MUL, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_cast_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (MUL,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_152 ->
-       Obj.magic box (Coq_pair (Coq_multiplicative_expression_nt, ((NT
-         Coq_cast_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_multiplicative_expression_nt,((NT
+         Coq_cast_expression_nt)::[])) (fun expr -> expr)
      | Prod_151 ->
-       Obj.magic box (Coq_pair (Coq_logical_OR_expression_nt, ((NT
+       Obj.magic box (Coq_logical_OR_expression_nt,((NT
          Coq_logical_OR_expression_nt)::((T BARBAR_t)::((NT
-         Coq_logical_AND_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (OR, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_logical_AND_expression_nt)::[])))) (fun expr1 _2 expr2 ->
+         (BINARY (OR, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_150 ->
-       Obj.magic box (Coq_pair (Coq_logical_OR_expression_nt, ((NT
-         Coq_logical_AND_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_logical_OR_expression_nt,((NT
+         Coq_logical_AND_expression_nt)::[])) (fun expr -> expr)
      | Prod_149 ->
-       Obj.magic box (Coq_pair (Coq_logical_AND_expression_nt, ((NT
+       Obj.magic box (Coq_logical_AND_expression_nt,((NT
          Coq_logical_AND_expression_nt)::((T ANDAND_t)::((NT
-         Coq_inclusive_OR_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (AND, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_inclusive_OR_expression_nt)::[])))) (fun expr1 _2 expr2 ->
+         (BINARY (AND, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_148 ->
-       Obj.magic box (Coq_pair (Coq_logical_AND_expression_nt, ((NT
-         Coq_inclusive_OR_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_logical_AND_expression_nt,((NT
+         Coq_inclusive_OR_expression_nt)::[])) (fun expr -> expr)
      | Prod_147 ->
-       Obj.magic box (Coq_pair (Coq_labeled_statement_statement_safe__nt, ((T
-         DEFAULT_t)::((T COLON_t)::((NT Coq_statement_safe_nt)::[])))))
+       Obj.magic box (Coq_labeled_statement_statement_safe__nt,((T
+         DEFAULT_t)::((T COLON_t)::((NT Coq_statement_safe_nt)::[]))))
          (fun loc _2 stmt -> DEFAULT (stmt, loc))
      | Prod_146 ->
-       Obj.magic box (Coq_pair (Coq_labeled_statement_statement_safe__nt, ((T
+       Obj.magic box (Coq_labeled_statement_statement_safe__nt,((T
          CASE_t)::((NT Coq_constant_expression_nt)::((T COLON_t)::((NT
-         Coq_statement_safe_nt)::[])))))) (fun loc expr _3 stmt -> CASE
+         Coq_statement_safe_nt)::[]))))) (fun loc expr _3 stmt -> CASE
          ((fst expr), stmt, loc))
      | Prod_145 ->
-       Obj.magic box (Coq_pair (Coq_labeled_statement_statement_safe__nt, ((T
-         OTHER_NAME_t)::((T COLON_t)::((NT Coq_statement_safe_nt)::[])))))
+       Obj.magic box (Coq_labeled_statement_statement_safe__nt,((T
+         OTHER_NAME_t)::((T COLON_t)::((NT Coq_statement_safe_nt)::[]))))
          (fun lbl _2 stmt -> LABEL ((fst lbl), stmt, (snd lbl)))
      | Prod_144 ->
-       Obj.magic box (Coq_pair
-         (Coq_labeled_statement_statement_dangerous__nt, ((T DEFAULT_t)::((T
-         COLON_t)::((NT Coq_statement_dangerous_nt)::[])))))
+       Obj.magic box (Coq_labeled_statement_statement_dangerous__nt,((T
+         DEFAULT_t)::((T COLON_t)::((NT Coq_statement_dangerous_nt)::[]))))
          (fun loc _2 stmt -> DEFAULT (stmt, loc))
      | Prod_143 ->
-       Obj.magic box (Coq_pair
-         (Coq_labeled_statement_statement_dangerous__nt, ((T CASE_t)::((NT
-         Coq_constant_expression_nt)::((T COLON_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))) (fun loc expr _3 stmt -> CASE
+       Obj.magic box (Coq_labeled_statement_statement_dangerous__nt,((T
+         CASE_t)::((NT Coq_constant_expression_nt)::((T COLON_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))) (fun loc expr _3 stmt -> CASE
          ((fst expr), stmt, loc))
      | Prod_142 ->
-       Obj.magic box (Coq_pair
-         (Coq_labeled_statement_statement_dangerous__nt, ((T
+       Obj.magic box (Coq_labeled_statement_statement_dangerous__nt,((T
          OTHER_NAME_t)::((T COLON_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))) (fun lbl _2 stmt -> LABEL
+         Coq_statement_dangerous_nt)::[])))) (fun lbl _2 stmt -> LABEL
          ((fst lbl), stmt, (snd lbl)))
      | Prod_141 ->
-       Obj.magic box (Coq_pair (Coq_jump_statement_nt, ((T RETURN_t)::((T
-         SEMICOLON_t)::[])))) (fun loc _2 -> RETURN (None, loc))
+       Obj.magic box (Coq_jump_statement_nt,((T RETURN_t)::((T
+         SEMICOLON_t)::[]))) (fun loc _2 -> RETURN (None, loc))
      | Prod_140 ->
-       Obj.magic box (Coq_pair (Coq_jump_statement_nt, ((T RETURN_t)::((NT
-         Coq_expression_nt)::((T SEMICOLON_t)::[]))))) (fun loc expr _3 ->
+       Obj.magic box (Coq_jump_statement_nt,((T RETURN_t)::((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::[])))) (fun loc expr _3 ->
          RETURN ((Some (fst expr)), loc))
      | Prod_139 ->
-       Obj.magic box (Coq_pair (Coq_jump_statement_nt, ((T BREAK_t)::((T
-         SEMICOLON_t)::[])))) (fun loc _2 -> BREAK loc)
+       Obj.magic box (Coq_jump_statement_nt,((T BREAK_t)::((T
+         SEMICOLON_t)::[]))) (fun loc _2 -> BREAK loc)
      | Prod_138 ->
-       Obj.magic box (Coq_pair (Coq_jump_statement_nt, ((T CONTINUE_t)::((T
-         SEMICOLON_t)::[])))) (fun loc _2 -> CONTINUE loc)
+       Obj.magic box (Coq_jump_statement_nt,((T CONTINUE_t)::((T
+         SEMICOLON_t)::[]))) (fun loc _2 -> CONTINUE loc)
      | Prod_137 ->
-       Obj.magic box (Coq_pair (Coq_jump_statement_nt, ((T GOTO_t)::((T
-         OTHER_NAME_t)::((T SEMICOLON_t)::[]))))) (fun loc id _3 -> GOTO
+       Obj.magic box (Coq_jump_statement_nt,((T GOTO_t)::((T
+         OTHER_NAME_t)::((T SEMICOLON_t)::[])))) (fun loc id _3 -> GOTO
          ((fst id), loc))
      | Prod_136 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((T
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))
          (fun loc _2 _3 _4 _5 stmt -> FOR (None, None, None, stmt, loc))
      | Prod_135 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
-         SEMICOLON_t)::((T RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
+         SEMICOLON_t)::((T RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))
          (fun loc _2 decl1 _4 _5 stmt -> FOR ((Some (FC_DECL decl1)), None,
          None, stmt, loc))
      | Prod_134 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
          SEMICOLON_t)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 expr1 _4 _5 _6 stmt -> FOR ((Some (FC_EXP (fst expr1))),
          None, None, stmt, loc))
      | Prod_133 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
          Coq_expression_nt)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 _3 expr2 _5 _6 stmt -> FOR (None, (Some (fst expr2)),
          None, stmt, loc))
      | Prod_132 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
          Coq_expression_nt)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 decl1 expr2 _5 _6 stmt -> FOR ((Some (FC_DECL decl1)),
          (Some (fst expr2)), None, stmt, loc))
      | Prod_131 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
          SEMICOLON_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))))
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))))
          (fun loc _2 expr1 _4 expr2 _6 _7 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), (Some (fst expr2)), None, stmt, loc))
      | Prod_130 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((NT
          Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 _3 _4 expr3 _6 stmt -> FOR (None, None, (Some
          (fst expr3)), stmt, loc))
      | Prod_129 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
          SEMICOLON_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))
+         Coq_statement_safe_nt)::[]))))))))
          (fun loc _2 decl1 _4 expr3 _6 stmt -> FOR ((Some (FC_DECL decl1)),
          None, (Some (fst expr3)), stmt, loc))
      | Prod_128 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
          SEMICOLON_t)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))))
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))))
          (fun loc _2 expr1 _4 _5 expr3 _7 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), None, (Some (fst expr3)), stmt, loc))
      | Prod_127 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
          Coq_expression_nt)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))))
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))))
          (fun loc _2 _3 expr2 _5 expr3 _7 stmt -> FOR (None, (Some
          (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_126 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
          Coq_expression_nt)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))))))
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))))
          (fun loc _2 decl1 expr2 _5 expr3 _7 stmt -> FOR ((Some (FC_DECL
          decl1)), (Some (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_125 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
          SEMICOLON_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((NT
          Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_safe_nt)::[])))))))))))
+         Coq_statement_safe_nt)::[]))))))))))
          (fun loc _2 expr1 _4 expr2 _6 expr3 _8 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), (Some (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_124 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T DO_t)::((NT Coq_statement_dangerous_nt)::((T WHILE_t)::((T
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         DO_t)::((NT Coq_statement_dangerous_nt)::((T WHILE_t)::((T
          LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((T
-         SEMICOLON_t)::[]))))))))) (fun loc stmt _3 _4 expr _6 _7 -> DOWHILE
+         SEMICOLON_t)::[])))))))) (fun loc stmt _3 _4 expr _6 _7 -> DOWHILE
          ((fst expr), stmt, loc))
      | Prod_123 ->
-       Obj.magic box (Coq_pair (Coq_iteration_statement_statement_safe__nt,
-         ((T WHILE_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_safe_nt)::[])))))))
+       Obj.magic box (Coq_iteration_statement_statement_safe__nt,((T
+         WHILE_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         RPAREN_t)::((NT Coq_statement_safe_nt)::[]))))))
          (fun loc _2 expr _4 stmt -> WHILE ((fst expr), stmt, loc))
      | Prod_122 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))) (fun loc _2 _3 _4 _5 stmt ->
-         FOR (None, None, None, stmt, loc))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))
+         (fun loc _2 _3 _4 _5 stmt -> FOR (None, None, None, stmt, loc))
      | Prod_121 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_declaration_nt)::((T SEMICOLON_t)::((T
-         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[]))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
+         SEMICOLON_t)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[])))))))
          (fun loc _2 decl1 _4 _5 stmt -> FOR ((Some (FC_DECL decl1)), None,
          None, stmt, loc))
      | Prod_120 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((T
-         SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         SEMICOLON_t)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 expr1 _4 _5 _6 stmt -> FOR ((Some (FC_EXP (fst expr1))),
          None, None, stmt, loc))
      | Prod_119 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 _3 expr2 _5 _6 stmt -> FOR (None, (Some (fst expr2)),
          None, stmt, loc))
      | Prod_118 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_declaration_nt)::((NT Coq_expression_nt)::((T
-         SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 decl1 expr2 _5 _6 stmt -> FOR ((Some (FC_DECL decl1)),
          (Some (fst expr2)), None, stmt, loc))
      | Prod_117 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((NT
-         Coq_expression_nt)::((T SEMICOLON_t)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         SEMICOLON_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))))
          (fun loc _2 expr1 _4 expr2 _6 _7 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), (Some (fst expr2)), None, stmt, loc))
      | Prod_116 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((NT
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((T SEMICOLON_t)::((NT
          Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 _3 _4 expr3 _6 stmt -> FOR (None, None, (Some
          (fst expr3)), stmt, loc))
      | Prod_115 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_declaration_nt)::((T SEMICOLON_t)::((NT
-         Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((T
+         SEMICOLON_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))))))
          (fun loc _2 decl1 _4 expr3 _6 stmt -> FOR ((Some (FC_DECL decl1)),
          None, (Some (fst expr3)), stmt, loc))
      | Prod_114 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((T
-         SEMICOLON_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         SEMICOLON_t)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))))
          (fun loc _2 expr1 _4 _5 expr3 _7 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), None, (Some (fst expr3)), stmt, loc))
      | Prod_113 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         SEMICOLON_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((T SEMICOLON_t)::((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))))
          (fun loc _2 _3 expr2 _5 expr3 _7 stmt -> FOR (None, (Some
          (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_112 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_declaration_nt)::((NT Coq_expression_nt)::((T
-         SEMICOLON_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_declaration_nt)::((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))))
          (fun loc _2 decl1 expr2 _5 expr3 _7 stmt -> FOR ((Some (FC_DECL
          decl1)), (Some (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_111 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T FOR_t)::((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((NT
-         Coq_expression_nt)::((T SEMICOLON_t)::((NT Coq_expression_nt)::((T
-         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[])))))))))))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         FOR_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         SEMICOLON_t)::((NT Coq_expression_nt)::((T SEMICOLON_t)::((NT
+         Coq_expression_nt)::((T RPAREN_t)::((NT
+         Coq_statement_dangerous_nt)::[]))))))))))
          (fun loc _2 expr1 _4 expr2 _6 expr3 _8 stmt -> FOR ((Some (FC_EXP
          (fst expr1))), (Some (fst expr2)), (Some (fst expr3)), stmt, loc))
      | Prod_110 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T DO_t)::((NT
-         Coq_statement_dangerous_nt)::((T WHILE_t)::((T LPAREN_t)::((NT
-         Coq_expression_nt)::((T RPAREN_t)::((T SEMICOLON_t)::[])))))))))
-         (fun loc stmt _3 _4 expr _6 _7 -> DOWHILE ((fst expr), stmt, loc))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         DO_t)::((NT Coq_statement_dangerous_nt)::((T WHILE_t)::((T
+         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((T
+         SEMICOLON_t)::[])))))))) (fun loc stmt _3 _4 expr _6 _7 -> DOWHILE
+         ((fst expr), stmt, loc))
      | Prod_109 ->
-       Obj.magic box (Coq_pair
-         (Coq_iteration_statement_statement_dangerous__nt, ((T WHILE_t)::((T
-         LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[]))))))) (fun loc _2 expr _4 stmt ->
-         WHILE ((fst expr), stmt, loc))
+       Obj.magic box (Coq_iteration_statement_statement_dangerous__nt,((T
+         WHILE_t)::((T LPAREN_t)::((NT Coq_expression_nt)::((T
+         RPAREN_t)::((NT Coq_statement_dangerous_nt)::[]))))))
+         (fun loc _2 expr _4 stmt -> WHILE ((fst expr), stmt, loc))
      | Prod_108 ->
-       Obj.magic box (Coq_pair (Coq_initializer_list_nt, ((NT
+       Obj.magic box (Coq_initializer_list_nt,((NT
          Coq_initializer_list_nt)::((T COMMA_t)::((NT
-         Coq_c_initializer_nt)::[]))))) (fun initq _2 init -> (Coq_pair ([],
-         init))::initq)
+         Coq_c_initializer_nt)::[])))) (fun initq _2 init ->
+         ([],init)::initq)
      | Prod_107 ->
-       Obj.magic box (Coq_pair (Coq_initializer_list_nt, ((NT
+       Obj.magic box (Coq_initializer_list_nt,((NT
          Coq_initializer_list_nt)::((T COMMA_t)::((NT
-         Coq_designation_nt)::((NT Coq_c_initializer_nt)::[]))))))
-         (fun initq _2 design init -> (Coq_pair (design, init))::initq)
+         Coq_designation_nt)::((NT Coq_c_initializer_nt)::[])))))
+         (fun initq _2 design init -> (design,init)::initq)
      | Prod_106 ->
-       Obj.magic box (Coq_pair (Coq_initializer_list_nt, ((NT
-         Coq_c_initializer_nt)::[]))) (fun init -> (Coq_pair ([], init))::[])
+       Obj.magic box (Coq_initializer_list_nt,((NT
+         Coq_c_initializer_nt)::[])) (fun init -> ([],init)::[])
      | Prod_105 ->
-       Obj.magic box (Coq_pair (Coq_initializer_list_nt, ((NT
-         Coq_designation_nt)::((NT Coq_c_initializer_nt)::[]))))
-         (fun design init -> (Coq_pair (design, init))::[])
+       Obj.magic box (Coq_initializer_list_nt,((NT Coq_designation_nt)::((NT
+         Coq_c_initializer_nt)::[]))) (fun design init -> (design,init)::[])
      | Prod_104 ->
-       Obj.magic box (Coq_pair (Coq_init_declarator_list_nt, ((NT
+       Obj.magic box (Coq_init_declarator_list_nt,((NT
          Coq_init_declarator_list_nt)::((T COMMA_t)::((NT
-         Coq_init_declarator_nt)::[]))))) (fun initq _2 initt ->
-         initt::initq)
+         Coq_init_declarator_nt)::[])))) (fun initq _2 initt -> initt::initq)
      | Prod_103 ->
-       Obj.magic box (Coq_pair (Coq_init_declarator_list_nt, ((NT
-         Coq_init_declarator_nt)::[]))) (fun init -> init::[])
+       Obj.magic box (Coq_init_declarator_list_nt,((NT
+         Coq_init_declarator_nt)::[])) (fun init -> init::[])
      | Prod_102 ->
-       Obj.magic box (Coq_pair (Coq_init_declarator_nt, ((NT
-         Coq_declarator_nt)::((T EQ_t)::((NT Coq_c_initializer_nt)::[])))))
-         (fun name _2 init -> Init_name (name, init))
+       Obj.magic box (Coq_init_declarator_nt,((NT Coq_declarator_nt)::((T
+         EQ_t)::((NT Coq_c_initializer_nt)::[])))) (fun name _2 init ->
+         Init_name (name, init))
      | Prod_101 ->
-       Obj.magic box (Coq_pair (Coq_init_declarator_nt, ((NT
-         Coq_declarator_nt)::[]))) (fun name -> Init_name (name, NO_INIT))
+       Obj.magic box (Coq_init_declarator_nt,((NT Coq_declarator_nt)::[]))
+         (fun name -> Init_name (name, NO_INIT))
      | Prod_100 ->
-       Obj.magic box (Coq_pair (Coq_inclusive_OR_expression_nt, ((NT
+       Obj.magic box (Coq_inclusive_OR_expression_nt,((NT
          Coq_inclusive_OR_expression_nt)::((T BAR_t)::((NT
-         Coq_exclusive_OR_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (BOR, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_exclusive_OR_expression_nt)::[])))) (fun expr1 _2 expr2 ->
+         (BINARY (BOR, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_99 ->
-       Obj.magic box (Coq_pair (Coq_inclusive_OR_expression_nt, ((NT
-         Coq_exclusive_OR_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_inclusive_OR_expression_nt,((NT
+         Coq_exclusive_OR_expression_nt)::[])) (fun expr -> expr)
      | Prod_98 ->
-       Obj.magic box (Coq_pair (Coq_function_specifier_nt, ((T
-         INLINE_t)::[]))) (fun loc -> loc)
+       Obj.magic box (Coq_function_specifier_nt,((T INLINE_t)::[]))
+         (fun loc -> loc)
      | Prod_97 ->
-       Obj.magic box (Coq_pair (Coq_function_definition_nt, ((NT
+       Obj.magic box (Coq_function_definition_nt,((NT
          Coq_declaration_specifiers_nt)::((NT Coq_declarator_nt)::((NT
-         Coq_compound_statement_nt)::[]))))) (fun specs decl stmt -> FUNDEF
+         Coq_compound_statement_nt)::[])))) (fun specs decl stmt -> FUNDEF
          ((fst specs), decl, stmt, (snd specs)))
      | Prod_96 ->
-       Obj.magic box (Coq_pair (Coq_external_declaration_nt, ((NT
-         Coq_declaration_nt)::[]))) (fun def -> def)
+       Obj.magic box (Coq_external_declaration_nt,((NT
+         Coq_declaration_nt)::[])) (fun def -> def)
      | Prod_95 ->
-       Obj.magic box (Coq_pair (Coq_external_declaration_nt, ((NT
-         Coq_function_definition_nt)::[]))) (fun def -> def)
+       Obj.magic box (Coq_external_declaration_nt,((NT
+         Coq_function_definition_nt)::[])) (fun def -> def)
      | Prod_94 ->
-       Obj.magic box (Coq_pair (Coq_expression_statement_nt, ((T
-         SEMICOLON_t)::[]))) (fun loc -> NOP loc)
+       Obj.magic box (Coq_expression_statement_nt,((T SEMICOLON_t)::[]))
+         (fun loc -> NOP loc)
      | Prod_93 ->
-       Obj.magic box (Coq_pair (Coq_expression_statement_nt, ((NT
-         Coq_expression_nt)::((T SEMICOLON_t)::[])))) (fun expr _2 ->
+       Obj.magic box (Coq_expression_statement_nt,((NT
+         Coq_expression_nt)::((T SEMICOLON_t)::[]))) (fun expr _2 ->
          COMPUTATION ((fst expr), (snd expr)))
      | Prod_92 ->
-       Obj.magic box (Coq_pair (Coq_expression_nt, ((NT
-         Coq_expression_nt)::((T COMMA_t)::((NT
-         Coq_assignment_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (COMMA, (fst expr1), (fst expr2))), (snd expr1)))
+       Obj.magic box (Coq_expression_nt,((NT Coq_expression_nt)::((T
+         COMMA_t)::((NT Coq_assignment_expression_nt)::[]))))
+         (fun expr1 _2 expr2 -> (BINARY (COMMA, (fst expr1),
+         (fst expr2))),(snd expr1))
      | Prod_91 ->
-       Obj.magic box (Coq_pair (Coq_expression_nt, ((NT
-         Coq_assignment_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_expression_nt,((NT
+         Coq_assignment_expression_nt)::[])) (fun expr -> expr)
      | Prod_90 ->
-       Obj.magic box (Coq_pair (Coq_exclusive_OR_expression_nt, ((NT
+       Obj.magic box (Coq_exclusive_OR_expression_nt,((NT
          Coq_exclusive_OR_expression_nt)::((T HAT_t)::((NT
-         AND_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair ((BINARY
-         (XOR, (fst expr1), (fst expr2))), (snd expr1)))
+         AND_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY (XOR,
+         (fst expr1), (fst expr2))),(snd expr1))
      | Prod_89 ->
-       Obj.magic box (Coq_pair (Coq_exclusive_OR_expression_nt, ((NT
-         AND_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_exclusive_OR_expression_nt,((NT
+         AND_expression_nt)::[])) (fun expr -> expr)
      | Prod_88 ->
-       Obj.magic box (Coq_pair (Coq_equality_expression_nt, ((NT
+       Obj.magic box (Coq_equality_expression_nt,((NT
          Coq_equality_expression_nt)::((T NEQ_t)::((NT
-         Coq_relational_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (NE, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_relational_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY
+         (NE, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_87 ->
-       Obj.magic box (Coq_pair (Coq_equality_expression_nt, ((NT
+       Obj.magic box (Coq_equality_expression_nt,((NT
          Coq_equality_expression_nt)::((T EQEQ_t)::((NT
-         Coq_relational_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (EQ, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_relational_expression_nt)::[])))) (fun expr1 _2 expr2 -> (BINARY
+         (EQ, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_86 ->
-       Obj.magic box (Coq_pair (Coq_equality_expression_nt, ((NT
-         Coq_relational_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_equality_expression_nt,((NT
+         Coq_relational_expression_nt)::[])) (fun expr -> expr)
      | Prod_85 ->
-       Obj.magic box (Coq_pair (Coq_enumerator_list_nt, ((NT
+       Obj.magic box (Coq_enumerator_list_nt,((NT
          Coq_enumerator_list_nt)::((T COMMA_t)::((NT
-         Coq_enumerator_nt)::[]))))) (fun enumsq _2 enumst -> enumst::enumsq)
+         Coq_enumerator_nt)::[])))) (fun enumsq _2 enumst -> enumst::enumsq)
      | Prod_84 ->
-       Obj.magic box (Coq_pair (Coq_enumerator_list_nt, ((NT
-         Coq_enumerator_nt)::[]))) (fun enum -> enum::[])
+       Obj.magic box (Coq_enumerator_list_nt,((NT Coq_enumerator_nt)::[]))
+         (fun enum -> enum::[])
      | Prod_83 ->
-       Obj.magic box (Coq_pair (Coq_enumerator_nt, ((NT
+       Obj.magic box (Coq_enumerator_nt,((NT
          Coq_enumeration_constant_nt)::((T EQ_t)::((NT
-         Coq_constant_expression_nt)::[]))))) (fun atom _2 expr -> Coq_pair
-         ((Coq_pair ((fst atom), (Some (fst expr)))), (snd atom)))
+         Coq_constant_expression_nt)::[])))) (fun atom _2 expr ->
+         ((fst atom),(Some (fst expr))),(snd atom))
      | Prod_82 ->
-       Obj.magic box (Coq_pair (Coq_enumerator_nt, ((NT
-         Coq_enumeration_constant_nt)::[]))) (fun atom -> Coq_pair ((Coq_pair
-         ((fst atom), None)), (snd atom)))
+       Obj.magic box (Coq_enumerator_nt,((NT
+         Coq_enumeration_constant_nt)::[])) (fun atom ->
+         ((fst atom),None),(snd atom))
      | Prod_81 ->
-       Obj.magic box (Coq_pair (Coq_enumeration_constant_nt, ((T
-         VAR_NAME_t)::[]))) (fun loc -> loc)
+       Obj.magic box (Coq_enumeration_constant_nt,((T VAR_NAME_t)::[]))
+         (fun loc -> loc)
      | Prod_80 ->
-       Obj.magic box (Coq_pair (Coq_enum_specifier_nt, ((T ENUM_t)::((T
-         OTHER_NAME_t)::[])))) (fun loc name -> Coq_pair ((Tenum ((Some
-         (fst name)), None, [])), loc))
+       Obj.magic box (Coq_enum_specifier_nt,((T ENUM_t)::((T
+         OTHER_NAME_t)::[]))) (fun loc name -> (Tenum ((Some (fst name)),
+         None, [])),loc)
      | Prod_79 ->
-       Obj.magic box (Coq_pair (Coq_enum_specifier_nt, ((T ENUM_t)::((T
-         LBRACE_t)::((NT Coq_enumerator_list_nt)::((T COMMA_t)::((T
-         RBRACE_t)::[]))))))) (fun loc _2 enum_list _4 _5 -> Coq_pair ((Tenum
-         (None, (Some (rev enum_list)), [])), loc))
+       Obj.magic box (Coq_enum_specifier_nt,((T ENUM_t)::((T LBRACE_t)::((NT
+         Coq_enumerator_list_nt)::((T COMMA_t)::((T RBRACE_t)::[]))))))
+         (fun loc _2 enum_list _4 _5 -> (Tenum (None, (Some (rev enum_list)),
+         [])),loc)
      | Prod_78 ->
-       Obj.magic box (Coq_pair (Coq_enum_specifier_nt, ((T ENUM_t)::((T
+       Obj.magic box (Coq_enum_specifier_nt,((T ENUM_t)::((T
          OTHER_NAME_t)::((T LBRACE_t)::((NT Coq_enumerator_list_nt)::((T
-         COMMA_t)::((T RBRACE_t)::[]))))))))
-         (fun loc name _3 enum_list _5 _6 -> Coq_pair ((Tenum ((Some
-         (fst name)), (Some (rev enum_list)), [])), loc))
+         COMMA_t)::((T RBRACE_t)::[])))))))
+         (fun loc name _3 enum_list _5 _6 -> (Tenum ((Some (fst name)), (Some
+         (rev enum_list)), [])),loc)
      | Prod_77 ->
-       Obj.magic box (Coq_pair (Coq_enum_specifier_nt, ((T ENUM_t)::((T
-         LBRACE_t)::((NT Coq_enumerator_list_nt)::((T RBRACE_t)::[]))))))
-         (fun loc _2 enum_list _4 -> Coq_pair ((Tenum (None, (Some
-         (rev enum_list)), [])), loc))
+       Obj.magic box (Coq_enum_specifier_nt,((T ENUM_t)::((T LBRACE_t)::((NT
+         Coq_enumerator_list_nt)::((T RBRACE_t)::[])))))
+         (fun loc _2 enum_list _4 -> (Tenum (None, (Some (rev enum_list)),
+         [])),loc)
      | Prod_76 ->
-       Obj.magic box (Coq_pair (Coq_enum_specifier_nt, ((T ENUM_t)::((T
+       Obj.magic box (Coq_enum_specifier_nt,((T ENUM_t)::((T
          OTHER_NAME_t)::((T LBRACE_t)::((NT Coq_enumerator_list_nt)::((T
-         RBRACE_t)::[]))))))) (fun loc name _3 enum_list _5 -> Coq_pair
-         ((Tenum ((Some (fst name)), (Some (rev enum_list)), [])), loc))
+         RBRACE_t)::[])))))) (fun loc name _3 enum_list _5 -> (Tenum ((Some
+         (fst name)), (Some (rev enum_list)), [])),loc)
      | Prod_75 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
-         Coq_direct_declarator_nt)::((T LPAREN_t)::((T RPAREN_t)::[])))))
+       Obj.magic box (Coq_direct_declarator_nt,((NT
+         Coq_direct_declarator_nt)::((T LPAREN_t)::((T RPAREN_t)::[]))))
          (fun decl _2 _3 ->
          let Name (name, typ, attr, loc) = decl in
-         Name (name, (PROTO (typ, (Coq_pair ([], false)))), attr, loc))
+         Name (name, (PROTO (typ, ([],false))), attr, loc))
      | Prod_74 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_declarator_nt,((NT
          Coq_direct_declarator_nt)::((T LPAREN_t)::((NT
-         Coq_parameter_type_list_nt)::((T RPAREN_t)::[]))))))
+         Coq_parameter_type_list_nt)::((T RPAREN_t)::[])))))
          (fun decl _2 params _4 ->
          let Name (name, typ, attr, loc) = decl in
          Name (name, (PROTO (typ, params)), attr, loc))
      | Prod_73 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
-         Coq_direct_declarator_nt)::((T LBRACK_t)::((T RBRACK_t)::[])))))
+       Obj.magic box (Coq_direct_declarator_nt,((NT
+         Coq_direct_declarator_nt)::((T LBRACK_t)::((T RBRACK_t)::[]))))
          (fun decl _2 _3 ->
          let Name (name, typ, attr, loc) = decl in
          Name (name, (ARRAY (typ, [], [], None)), attr, loc))
      | Prod_72 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_declarator_nt,((NT
          Coq_direct_declarator_nt)::((T LBRACK_t)::((NT
-         Coq_type_qualifier_list_nt)::((T RBRACK_t)::[]))))))
+         Coq_type_qualifier_list_nt)::((T RBRACK_t)::[])))))
          (fun decl _2 quallst _4 ->
          let Name (name, typ, attr, loc) = decl in
          Name (name, (ARRAY (typ, (rev quallst), [], None)), attr, loc))
      | Prod_71 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_declarator_nt,((NT
          Coq_direct_declarator_nt)::((T LBRACK_t)::((NT
-         Coq_assignment_expression_nt)::((T RBRACK_t)::[]))))))
+         Coq_assignment_expression_nt)::((T RBRACK_t)::[])))))
          (fun decl _2 expr _4 ->
          let Name (name, typ, attr, loc) = decl in
          Name (name, (ARRAY (typ, [], [], (Some (fst expr)))), attr, loc))
      | Prod_70 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_declarator_nt,((NT
          Coq_direct_declarator_nt)::((T LBRACK_t)::((NT
          Coq_type_qualifier_list_nt)::((NT Coq_assignment_expression_nt)::((T
-         RBRACK_t)::[]))))))) (fun decl _2 quallst expr _5 ->
+         RBRACK_t)::[])))))) (fun decl _2 quallst expr _5 ->
          let Name (name, typ, attr, loc) = decl in
          Name (name, (ARRAY (typ, (rev quallst), [], (Some (fst expr)))),
          attr, loc))
      | Prod_69 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((T LPAREN_t)::((NT
-         Coq_declarator_nt)::((T RPAREN_t)::[]))))) (fun _1 decl _3 -> decl)
+       Obj.magic box (Coq_direct_declarator_nt,((T LPAREN_t)::((NT
+         Coq_declarator_nt)::((T RPAREN_t)::[])))) (fun _1 decl _3 -> decl)
      | Prod_68 ->
-       Obj.magic box (Coq_pair (Coq_direct_declarator_nt, ((T
-         VAR_NAME_t)::[]))) (fun id -> Name ((fst id), JUSTBASE, [],
-         (snd id)))
+       Obj.magic box (Coq_direct_declarator_nt,((T VAR_NAME_t)::[]))
+         (fun id -> Name ((fst id), JUSTBASE, [], (snd id)))
      | Prod_67 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LPAREN_t)::((T RPAREN_t)::[])))) (fun _1 _2 -> PROTO (JUSTBASE,
-         (Coq_pair ([], false))))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LPAREN_t)::((T
+         RPAREN_t)::[]))) (fun _1 _2 -> PROTO (JUSTBASE, ([],false)))
      | Prod_66 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LPAREN_t)::((T
-         RPAREN_t)::[]))))) (fun typ _2 _3 -> PROTO (typ, (Coq_pair ([],
-         false))))
+         RPAREN_t)::[])))) (fun typ _2 _3 -> PROTO (typ, ([],false)))
      | Prod_65 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LPAREN_t)::((NT Coq_parameter_type_list_nt)::((T RPAREN_t)::[])))))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LPAREN_t)::((NT
+         Coq_parameter_type_list_nt)::((T RPAREN_t)::[]))))
          (fun _1 params _3 -> PROTO (JUSTBASE, params))
      | Prod_64 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LPAREN_t)::((NT
-         Coq_parameter_type_list_nt)::((T RPAREN_t)::[]))))))
+         Coq_parameter_type_list_nt)::((T RPAREN_t)::[])))))
          (fun typ _2 params _4 -> PROTO (typ, params))
      | Prod_63 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LBRACK_t)::((T RBRACK_t)::[])))) (fun _1 _2 -> ARRAY (JUSTBASE, [],
-         [], None))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LBRACK_t)::((T
+         RBRACK_t)::[]))) (fun _1 _2 -> ARRAY (JUSTBASE, [], [], None))
      | Prod_62 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LBRACK_t)::((T
-         RBRACK_t)::[]))))) (fun typ _2 _3 -> ARRAY (typ, [], [], None))
+         RBRACK_t)::[])))) (fun typ _2 _3 -> ARRAY (typ, [], [], None))
      | Prod_61 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LBRACK_t)::((NT Coq_type_qualifier_list_nt)::((T RBRACK_t)::[])))))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LBRACK_t)::((NT
+         Coq_type_qualifier_list_nt)::((T RBRACK_t)::[]))))
          (fun _1 cvspec _3 -> ARRAY (JUSTBASE, cvspec, [], None))
      | Prod_60 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LBRACK_t)::((NT
-         Coq_type_qualifier_list_nt)::((T RBRACK_t)::[]))))))
+         Coq_type_qualifier_list_nt)::((T RBRACK_t)::[])))))
          (fun typ _2 cvspec _4 -> ARRAY (typ, cvspec, [], None))
      | Prod_59 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LBRACK_t)::((NT Coq_assignment_expression_nt)::((T
-         RBRACK_t)::[]))))) (fun _1 expr _3 -> ARRAY (JUSTBASE, [], [], (Some
-         (fst expr))))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LBRACK_t)::((NT
+         Coq_assignment_expression_nt)::((T RBRACK_t)::[]))))
+         (fun _1 expr _3 -> ARRAY (JUSTBASE, [], [], (Some (fst expr))))
      | Prod_58 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LBRACK_t)::((NT
-         Coq_assignment_expression_nt)::((T RBRACK_t)::[]))))))
+         Coq_assignment_expression_nt)::((T RBRACK_t)::[])))))
          (fun typ _2 expr _4 -> ARRAY (typ, [], [], (Some (fst expr))))
      | Prod_57 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LBRACK_t)::((NT Coq_type_qualifier_list_nt)::((NT
-         Coq_assignment_expression_nt)::((T RBRACK_t)::[]))))))
-         (fun _1 cvspec expr _4 -> ARRAY (JUSTBASE, cvspec, [], (Some
-         (fst expr))))
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LBRACK_t)::((NT
+         Coq_type_qualifier_list_nt)::((NT Coq_assignment_expression_nt)::((T
+         RBRACK_t)::[]))))) (fun _1 cvspec expr _4 -> ARRAY (JUSTBASE,
+         cvspec, [], (Some (fst expr))))
      | Prod_56 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((NT
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((NT
          Coq_direct_abstract_declarator_nt)::((T LBRACK_t)::((NT
          Coq_type_qualifier_list_nt)::((NT Coq_assignment_expression_nt)::((T
-         RBRACK_t)::[]))))))) (fun typ _2 cvspec expr _5 -> ARRAY (typ,
+         RBRACK_t)::[])))))) (fun typ _2 cvspec expr _5 -> ARRAY (typ,
          cvspec, [], (Some (fst expr))))
      | Prod_55 ->
-       Obj.magic box (Coq_pair (Coq_direct_abstract_declarator_nt, ((T
-         LPAREN_t)::((NT Coq_abstract_declarator_nt)::((T RPAREN_t)::[])))))
-         (fun _1 typ _3 -> typ)
+       Obj.magic box (Coq_direct_abstract_declarator_nt,((T LPAREN_t)::((NT
+         Coq_abstract_declarator_nt)::((T RPAREN_t)::[])))) (fun _1 typ _3 ->
+         typ)
      | Prod_54 ->
-       Obj.magic box (Coq_pair (Coq_designator_list_nt, ((NT
-         Coq_designator_list_nt)::((NT Coq_designator_nt)::[]))))
+       Obj.magic box (Coq_designator_list_nt,((NT
+         Coq_designator_list_nt)::((NT Coq_designator_nt)::[])))
          (fun designq designt -> designt::designq)
      | Prod_53 ->
-       Obj.magic box (Coq_pair (Coq_designator_list_nt, ((NT
-         Coq_designator_nt)::[]))) (fun design -> design::[])
+       Obj.magic box (Coq_designator_list_nt,((NT Coq_designator_nt)::[]))
+         (fun design -> design::[])
      | Prod_52 ->
-       Obj.magic box (Coq_pair (Coq_designator_nt, ((T DOT_t)::((T
-         OTHER_NAME_t)::[])))) (fun _1 id -> INFIELD_INIT (fst id))
+       Obj.magic box (Coq_designator_nt,((T DOT_t)::((T OTHER_NAME_t)::[])))
+         (fun _1 id -> INFIELD_INIT (fst id))
      | Prod_51 ->
-       Obj.magic box (Coq_pair (Coq_designator_nt, ((T LBRACK_t)::((NT
-         Coq_constant_expression_nt)::((T RBRACK_t)::[])))))
+       Obj.magic box (Coq_designator_nt,((T LBRACK_t)::((NT
+         Coq_constant_expression_nt)::((T RBRACK_t)::[]))))
          (fun _1 expr _3 -> ATINDEX_INIT (fst expr))
      | Prod_50 ->
-       Obj.magic box (Coq_pair (Coq_designation_nt, ((NT
-         Coq_designator_list_nt)::((T EQ_t)::[])))) (fun design _2 ->
-         rev design)
+       Obj.magic box (Coq_designation_nt,((NT Coq_designator_list_nt)::((T
+         EQ_t)::[]))) (fun design _2 -> rev design)
      | Prod_49 ->
-       Obj.magic box (Coq_pair (Coq_declarator_nt, ((NT Coq_pointer_nt)::((NT
-         Coq_direct_declarator_nt)::[])))) (fun pt decl ->
+       Obj.magic box (Coq_declarator_nt,((NT Coq_pointer_nt)::((NT
+         Coq_direct_declarator_nt)::[]))) (fun pt decl ->
          let Name (name, typ, attr, c) = decl in
          Name (name, (fst pt typ), attr, (snd pt)))
      | Prod_48 ->
-       Obj.magic box (Coq_pair (Coq_declarator_nt, ((NT
-         Coq_direct_declarator_nt)::[]))) (fun decl -> decl)
+       Obj.magic box (Coq_declarator_nt,((NT Coq_direct_declarator_nt)::[]))
+         (fun decl -> decl)
      | Prod_47 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_function_specifier_nt)::[]))) (fun loc -> Coq_pair
-         ((SpecInline::[]), loc))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_function_specifier_nt)::[])) (fun loc -> (SpecInline::[]),loc)
      | Prod_46 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
          Coq_function_specifier_nt)::((NT
-         Coq_declaration_specifiers_nt)::[])))) (fun loc rest -> Coq_pair
-         ((SpecInline::(fst rest)), loc))
+         Coq_declaration_specifiers_nt)::[]))) (fun loc rest ->
+         (SpecInline::(fst rest)),loc)
      | Prod_45 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_type_qualifier_nt)::[]))) (fun qual -> Coq_pair (((SpecCV
-         (fst qual))::[]), (snd qual)))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_type_qualifier_nt)::[])) (fun qual -> ((SpecCV
+         (fst qual))::[]),(snd qual))
      | Prod_44 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_type_qualifier_nt)::((NT Coq_declaration_specifiers_nt)::[]))))
-         (fun qual rest -> Coq_pair (((SpecCV (fst qual))::(fst rest)),
-         (snd qual)))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_type_qualifier_nt)::((NT Coq_declaration_specifiers_nt)::[])))
+         (fun qual rest -> ((SpecCV (fst qual))::(fst rest)),(snd qual))
      | Prod_43 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_type_specifier_nt)::[]))) (fun typ -> Coq_pair (((SpecType
-         (fst typ))::[]), (snd typ)))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_type_specifier_nt)::[])) (fun typ -> ((SpecType
+         (fst typ))::[]),(snd typ))
      | Prod_42 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_type_specifier_nt)::((NT Coq_declaration_specifiers_nt)::[]))))
-         (fun typ rest -> Coq_pair (((SpecType (fst typ))::(fst rest)),
-         (snd typ)))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_type_specifier_nt)::((NT Coq_declaration_specifiers_nt)::[])))
+         (fun typ rest -> ((SpecType (fst typ))::(fst rest)),(snd typ))
      | Prod_41 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
-         Coq_storage_class_specifier_nt)::[]))) (fun storage -> Coq_pair
-         (((SpecStorage (fst storage))::[]), (snd storage)))
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
+         Coq_storage_class_specifier_nt)::[])) (fun storage -> ((SpecStorage
+         (fst storage))::[]),(snd storage))
      | Prod_40 ->
-       Obj.magic box (Coq_pair (Coq_declaration_specifiers_nt, ((NT
+       Obj.magic box (Coq_declaration_specifiers_nt,((NT
          Coq_storage_class_specifier_nt)::((NT
-         Coq_declaration_specifiers_nt)::[])))) (fun storage rest -> Coq_pair
-         (((SpecStorage (fst storage))::(fst rest)), (snd storage)))
+         Coq_declaration_specifiers_nt)::[]))) (fun storage rest ->
+         ((SpecStorage (fst storage))::(fst rest)),(snd storage))
      | Prod_39 ->
-       Obj.magic box (Coq_pair (Coq_declaration_nt, ((NT
-         Coq_declaration_specifiers_nt)::((T SEMICOLON_t)::[]))))
-         (fun decspec _2 -> DECDEF ((Coq_pair ((fst decspec), [])),
-         (snd decspec)))
+       Obj.magic box (Coq_declaration_nt,((NT
+         Coq_declaration_specifiers_nt)::((T SEMICOLON_t)::[])))
+         (fun decspec _2 -> DECDEF (((fst decspec),[]), (snd decspec)))
      | Prod_38 ->
-       Obj.magic box (Coq_pair (Coq_declaration_nt, ((NT
+       Obj.magic box (Coq_declaration_nt,((NT
          Coq_declaration_specifiers_nt)::((NT
-         Coq_init_declarator_list_nt)::((T SEMICOLON_t)::[])))))
-         (fun decspec decls _3 -> DECDEF ((Coq_pair ((fst decspec),
-         (rev decls))), (snd decspec)))
+         Coq_init_declarator_list_nt)::((T SEMICOLON_t)::[]))))
+         (fun decspec decls _3 -> DECDEF (((fst decspec),(rev decls)),
+         (snd decspec)))
      | Prod_37 ->
-       Obj.magic box (Coq_pair (Coq_constant_expression_nt, ((NT
-         Coq_conditional_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_constant_expression_nt,((NT
+         Coq_conditional_expression_nt)::[])) (fun expr -> expr)
      | Prod_36 ->
-       Obj.magic box (Coq_pair (Coq_conditional_expression_nt, ((NT
+       Obj.magic box (Coq_conditional_expression_nt,((NT
          Coq_logical_OR_expression_nt)::((T QUESTION_t)::((NT
          Coq_expression_nt)::((T COLON_t)::((NT
-         Coq_conditional_expression_nt)::[])))))))
-         (fun expr1 _2 expr2 _4 expr3 -> Coq_pair ((QUESTION ((fst expr1),
-         (fst expr2), (fst expr3))), (snd expr1)))
+         Coq_conditional_expression_nt)::[]))))))
+         (fun expr1 _2 expr2 _4 expr3 -> (QUESTION ((fst expr1), (fst expr2),
+         (fst expr3))),(snd expr1))
      | Prod_35 ->
-       Obj.magic box (Coq_pair (Coq_conditional_expression_nt, ((NT
-         Coq_logical_OR_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_conditional_expression_nt,((NT
+         Coq_logical_OR_expression_nt)::[])) (fun expr -> expr)
      | Prod_34 ->
-       Obj.magic box (Coq_pair (Coq_compound_statement_nt, ((T LBRACE_t)::((T
-         RBRACE_t)::[])))) (fun loc _2 -> BLOCK ([], loc))
+       Obj.magic box (Coq_compound_statement_nt,((T LBRACE_t)::((T
+         RBRACE_t)::[]))) (fun loc _2 -> BLOCK ([], loc))
      | Prod_33 ->
-       Obj.magic box (Coq_pair (Coq_compound_statement_nt, ((T
-         LBRACE_t)::((NT Coq_block_item_list_nt)::((T RBRACE_t)::[])))))
-         (fun loc lst _3 -> BLOCK ((rev lst), loc))
+       Obj.magic box (Coq_compound_statement_nt,((T LBRACE_t)::((NT
+         Coq_block_item_list_nt)::((T RBRACE_t)::[])))) (fun loc lst _3 ->
+         BLOCK ((rev lst), loc))
      | Prod_32 ->
-       Obj.magic box (Coq_pair (Coq_cast_expression_nt, ((T LPAREN_t)::((NT
+       Obj.magic box (Coq_cast_expression_nt,((T LPAREN_t)::((NT
          Coq_type_name_nt)::((T RPAREN_t)::((NT
-         Coq_cast_expression_nt)::[])))))) (fun loc typ _3 expr -> Coq_pair
-         ((CAST (typ, (SINGLE_INIT (fst expr)))), loc))
+         Coq_cast_expression_nt)::[]))))) (fun loc typ _3 expr -> (CAST (typ,
+         (SINGLE_INIT (fst expr)))),loc)
      | Prod_31 ->
-       Obj.magic box (Coq_pair (Coq_cast_expression_nt, ((NT
-         Coq_unary_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_cast_expression_nt,((NT
+         Coq_unary_expression_nt)::[])) (fun expr -> expr)
      | Prod_30 ->
-       Obj.magic box (Coq_pair (Coq_c_initializer_nt, ((T LBRACE_t)::((NT
-         Coq_initializer_list_nt)::((T COMMA_t)::((T RBRACE_t)::[]))))))
+       Obj.magic box (Coq_c_initializer_nt,((T LBRACE_t)::((NT
+         Coq_initializer_list_nt)::((T COMMA_t)::((T RBRACE_t)::[])))))
          (fun _1 init _3 _4 -> COMPOUND_INIT (rev init))
      | Prod_29 ->
-       Obj.magic box (Coq_pair (Coq_c_initializer_nt, ((T LBRACE_t)::((NT
-         Coq_initializer_list_nt)::((T RBRACE_t)::[]))))) (fun _1 init _3 ->
+       Obj.magic box (Coq_c_initializer_nt,((T LBRACE_t)::((NT
+         Coq_initializer_list_nt)::((T RBRACE_t)::[])))) (fun _1 init _3 ->
          COMPOUND_INIT (rev init))
      | Prod_28 ->
-       Obj.magic box (Coq_pair (Coq_c_initializer_nt, ((NT
-         Coq_assignment_expression_nt)::[]))) (fun expr -> SINGLE_INIT
+       Obj.magic box (Coq_c_initializer_nt,((NT
+         Coq_assignment_expression_nt)::[])) (fun expr -> SINGLE_INIT
          (fst expr))
      | Prod_27 ->
-       Obj.magic box (Coq_pair (Coq_block_item_list_nt, ((NT
-         Coq_block_item_list_nt)::((NT Coq_block_item_nt)::[]))))
+       Obj.magic box (Coq_block_item_list_nt,((NT
+         Coq_block_item_list_nt)::((NT Coq_block_item_nt)::[])))
          (fun stmtq stmtt -> stmtt::stmtq)
      | Prod_26 ->
-       Obj.magic box (Coq_pair (Coq_block_item_list_nt, ((NT
-         Coq_block_item_nt)::[]))) (fun stmt -> stmt::[])
+       Obj.magic box (Coq_block_item_list_nt,((NT Coq_block_item_nt)::[]))
+         (fun stmt -> stmt::[])
      | Prod_25 ->
-       Obj.magic box (Coq_pair (Coq_block_item_nt, ((NT
-         Coq_statement_dangerous_nt)::[]))) (fun stmt -> stmt)
+       Obj.magic box (Coq_block_item_nt,((NT
+         Coq_statement_dangerous_nt)::[])) (fun stmt -> stmt)
      | Prod_24 ->
-       Obj.magic box (Coq_pair (Coq_block_item_nt, ((NT
-         Coq_declaration_nt)::[]))) (fun decl -> DEFINITION decl)
+       Obj.magic box (Coq_block_item_nt,((NT Coq_declaration_nt)::[]))
+         (fun decl -> DEFINITION decl)
      | Prod_23 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         AND_ASSIGN_t)::[]))) (fun _1 -> BAND_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T AND_ASSIGN_t)::[]))
+         (fun _1 -> BAND_ASSIGN)
      | Prod_22 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         OR_ASSIGN_t)::[]))) (fun _1 -> BOR_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T OR_ASSIGN_t)::[]))
+         (fun _1 -> BOR_ASSIGN)
      | Prod_21 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         XOR_ASSIGN_t)::[]))) (fun _1 -> XOR_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T XOR_ASSIGN_t)::[]))
+         (fun _1 -> XOR_ASSIGN)
      | Prod_20 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         RIGHT_ASSIGN_t)::[]))) (fun _1 -> SHR_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T RIGHT_ASSIGN_t)::[]))
+         (fun _1 -> SHR_ASSIGN)
      | Prod_19 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         LEFT_ASSIGN_t)::[]))) (fun _1 -> SHL_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T LEFT_ASSIGN_t)::[]))
+         (fun _1 -> SHL_ASSIGN)
      | Prod_18 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         SUB_ASSIGN_t)::[]))) (fun _1 -> SUB_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T SUB_ASSIGN_t)::[]))
+         (fun _1 -> SUB_ASSIGN)
      | Prod_17 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         ADD_ASSIGN_t)::[]))) (fun _1 -> ADD_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T ADD_ASSIGN_t)::[]))
+         (fun _1 -> ADD_ASSIGN)
      | Prod_16 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         MOD_ASSIGN_t)::[]))) (fun _1 -> MOD_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T MOD_ASSIGN_t)::[]))
+         (fun _1 -> MOD_ASSIGN)
      | Prod_15 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         DIV_ASSIGN_t)::[]))) (fun _1 -> DIV_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T DIV_ASSIGN_t)::[]))
+         (fun _1 -> DIV_ASSIGN)
      | Prod_14 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T
-         MUL_ASSIGN_t)::[]))) (fun _1 -> MUL_ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T MUL_ASSIGN_t)::[]))
+         (fun _1 -> MUL_ASSIGN)
      | Prod_13 ->
-       Obj.magic box (Coq_pair (Coq_assignment_operator_nt, ((T EQ_t)::[])))
-         (fun _1 -> ASSIGN)
+       Obj.magic box (Coq_assignment_operator_nt,((T EQ_t)::[])) (fun _1 ->
+         ASSIGN)
      | Prod_12 ->
-       Obj.magic box (Coq_pair (Coq_assignment_expression_nt, ((NT
+       Obj.magic box (Coq_assignment_expression_nt,((NT
          Coq_unary_expression_nt)::((NT Coq_assignment_operator_nt)::((NT
-         Coq_assignment_expression_nt)::[]))))) (fun expr1 op expr2 ->
-         Coq_pair ((BINARY (op, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_assignment_expression_nt)::[])))) (fun expr1 op expr2 -> (BINARY
+         (op, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_11 ->
-       Obj.magic box (Coq_pair (Coq_assignment_expression_nt, ((NT
-         Coq_conditional_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_assignment_expression_nt,((NT
+         Coq_conditional_expression_nt)::[])) (fun expr -> expr)
      | Prod_10 ->
-       Obj.magic box (Coq_pair (Coq_argument_expression_list_nt, ((NT
+       Obj.magic box (Coq_argument_expression_list_nt,((NT
          Coq_argument_expression_list_nt)::((T COMMA_t)::((NT
-         Coq_assignment_expression_nt)::[]))))) (fun exprq _2 exprt ->
+         Coq_assignment_expression_nt)::[])))) (fun exprq _2 exprt ->
          (fst exprt)::exprq)
      | Prod_9 ->
-       Obj.magic box (Coq_pair (Coq_argument_expression_list_nt, ((NT
-         Coq_assignment_expression_nt)::[]))) (fun expr -> (fst expr)::[])
+       Obj.magic box (Coq_argument_expression_list_nt,((NT
+         Coq_assignment_expression_nt)::[])) (fun expr -> (fst expr)::[])
      | Prod_8 ->
-       Obj.magic box (Coq_pair (Coq_additive_expression_nt, ((NT
+       Obj.magic box (Coq_additive_expression_nt,((NT
          Coq_additive_expression_nt)::((T MINUS_t)::((NT
-         Coq_multiplicative_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (SUB, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_multiplicative_expression_nt)::[])))) (fun expr1 _2 expr2 ->
+         (BINARY (SUB, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_7 ->
-       Obj.magic box (Coq_pair (Coq_additive_expression_nt, ((NT
+       Obj.magic box (Coq_additive_expression_nt,((NT
          Coq_additive_expression_nt)::((T PLUS_t)::((NT
-         Coq_multiplicative_expression_nt)::[]))))) (fun expr1 _2 expr2 ->
-         Coq_pair ((BINARY (ADD, (fst expr1), (fst expr2))), (snd expr1)))
+         Coq_multiplicative_expression_nt)::[])))) (fun expr1 _2 expr2 ->
+         (BINARY (ADD, (fst expr1), (fst expr2))),(snd expr1))
      | Prod_6 ->
-       Obj.magic box (Coq_pair (Coq_additive_expression_nt, ((NT
-         Coq_multiplicative_expression_nt)::[]))) (fun expr -> expr)
+       Obj.magic box (Coq_additive_expression_nt,((NT
+         Coq_multiplicative_expression_nt)::[])) (fun expr -> expr)
      | Prod_5 ->
-       Obj.magic box (Coq_pair (Coq_abstract_declarator_nt, ((NT
-         Coq_direct_abstract_declarator_nt)::[]))) (fun typ -> typ)
+       Obj.magic box (Coq_abstract_declarator_nt,((NT
+         Coq_direct_abstract_declarator_nt)::[])) (fun typ -> typ)
      | Prod_4 ->
-       Obj.magic box (Coq_pair (Coq_abstract_declarator_nt, ((NT
-         Coq_pointer_nt)::((NT Coq_direct_abstract_declarator_nt)::[]))))
-         (fun pt typ -> fst pt typ)
+       Obj.magic box (Coq_abstract_declarator_nt,((NT Coq_pointer_nt)::((NT
+         Coq_direct_abstract_declarator_nt)::[]))) (fun pt typ -> fst pt typ)
      | Prod_3 ->
-       Obj.magic box (Coq_pair (Coq_abstract_declarator_nt, ((NT
-         Coq_pointer_nt)::[]))) (fun pt -> fst pt JUSTBASE)
+       Obj.magic box (Coq_abstract_declarator_nt,((NT Coq_pointer_nt)::[]))
+         (fun pt -> fst pt JUSTBASE)
      | Prod_2 ->
-       Obj.magic box (Coq_pair (AND_expression_nt, ((NT
-         AND_expression_nt)::((T AND_t)::((NT
-         Coq_equality_expression_nt)::[]))))) (fun expr1 _2 expr2 -> Coq_pair
-         ((BINARY (BAND, (fst expr1), (fst expr2))), (snd expr1)))
+       Obj.magic box (AND_expression_nt,((NT AND_expression_nt)::((T
+         AND_t)::((NT Coq_equality_expression_nt)::[]))))
+         (fun expr1 _2 expr2 -> (BINARY (BAND, (fst expr1),
+         (fst expr2))),(snd expr1))
      | Prod_1 ->
-       Obj.magic box (Coq_pair (AND_expression_nt, ((NT
-         Coq_equality_expression_nt)::[]))) (fun expr -> expr))
+       Obj.magic box (AND_expression_nt,((NT
+         Coq_equality_expression_nt)::[])) (fun expr -> expr))
   
   (** val prod_lhs : production -> nonterminal **)
   

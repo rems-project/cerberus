@@ -118,14 +118,13 @@ module Ops =
              else create l x r
       in join_aux)
   
-  (** val remove_min : tree -> elt -> t -> (t, elt) prod **)
+  (** val remove_min : tree -> elt -> t -> t*elt **)
   
   let rec remove_min l x r =
     match l with
-    | Leaf -> Coq_pair (r, x)
+    | Leaf -> r,x
     | Node (ll, lx, lr, lh) ->
-      let Coq_pair (l', m) = remove_min ll lx lr in
-      Coq_pair ((bal l' x r), m)
+      let l',m = remove_min ll lx lr in (bal l' x r),m
   
   (** val merge : tree -> tree -> tree **)
   
@@ -136,7 +135,7 @@ module Ops =
       (match s2 with
        | Leaf -> s1
        | Node (l2, x2, r2, h2) ->
-         let Coq_pair (s2', m) = remove_min l2 x2 r2 in bal s1 m s2')
+         let s2',m = remove_min l2 x2 r2 in bal s1 m s2')
   
   (** val remove : X.t -> tree -> tree **)
   
@@ -180,7 +179,7 @@ module Ops =
       (match s2 with
        | Leaf -> s1
        | Node (l2, x2, r2, i0) ->
-         let Coq_pair (s2', m) = remove_min l2 x2 r2 in join s1 m s2')
+         let s2',m = remove_min l2 x2 r2 in join s1 m s2')
   
   type triple = { t_left : t; t_in : bool; t_right : t }
   
@@ -276,23 +275,20 @@ module Ops =
   let filter f =
     filter_acc f Leaf
   
-  (** val partition_acc :
-      (elt -> bool) -> (t, t) prod -> t -> (t, t) prod **)
+  (** val partition_acc : (elt -> bool) -> (t*t) -> t -> t*t **)
   
   let rec partition_acc f acc = function
   | Leaf -> acc
   | Node (l, x, r, i) ->
-    let Coq_pair (acct, accf) = acc in
+    let acct,accf = acc in
     partition_acc f
-      (partition_acc f
-        (if f x
-         then Coq_pair ((add x acct), accf)
-         else Coq_pair (acct, (add x accf))) l) r
+      (partition_acc f (if f x then (add x acct),accf else acct,(add x accf))
+        l) r
   
-  (** val partition : (elt -> bool) -> t -> (t, t) prod **)
+  (** val partition : (elt -> bool) -> t -> t*t **)
   
   let partition f =
-    partition_acc f (Coq_pair (Leaf, Leaf))
+    partition_acc f (Leaf,Leaf)
   
   (** val for_all : (elt -> bool) -> tree -> bool **)
   
@@ -511,14 +507,13 @@ module MakeRaw =
              else create l x r
       in join_aux)
   
-  (** val remove_min : tree -> elt -> t -> (t, elt) prod **)
+  (** val remove_min : tree -> elt -> t -> t*elt **)
   
   let rec remove_min l x r =
     match l with
-    | Leaf -> Coq_pair (r, x)
+    | Leaf -> r,x
     | Node (ll, lx, lr, lh) ->
-      let Coq_pair (l', m) = remove_min ll lx lr in
-      Coq_pair ((bal l' x r), m)
+      let l',m = remove_min ll lx lr in (bal l' x r),m
   
   (** val merge : tree -> tree -> tree **)
   
@@ -529,7 +524,7 @@ module MakeRaw =
       (match s2 with
        | Leaf -> s1
        | Node (l2, x2, r2, h2) ->
-         let Coq_pair (s2', m) = remove_min l2 x2 r2 in bal s1 m s2')
+         let s2',m = remove_min l2 x2 r2 in bal s1 m s2')
   
   (** val remove : X.t -> tree -> tree **)
   
@@ -573,7 +568,7 @@ module MakeRaw =
       (match s2 with
        | Leaf -> s1
        | Node (l2, x2, r2, i0) ->
-         let Coq_pair (s2', m) = remove_min l2 x2 r2 in join s1 m s2')
+         let s2',m = remove_min l2 x2 r2 in join s1 m s2')
   
   type triple = { t_left : t; t_in : bool; t_right : t }
   
@@ -669,23 +664,20 @@ module MakeRaw =
   let filter f =
     filter_acc f Leaf
   
-  (** val partition_acc :
-      (elt -> bool) -> (t, t) prod -> t -> (t, t) prod **)
+  (** val partition_acc : (elt -> bool) -> (t*t) -> t -> t*t **)
   
   let rec partition_acc f acc = function
   | Leaf -> acc
   | Node (l, x, r, i) ->
-    let Coq_pair (acct, accf) = acc in
+    let acct,accf = acc in
     partition_acc f
-      (partition_acc f
-        (if f x
-         then Coq_pair ((add x acct), accf)
-         else Coq_pair (acct, (add x accf))) l) r
+      (partition_acc f (if f x then (add x acct),accf else acct,(add x accf))
+        l) r
   
-  (** val partition : (elt -> bool) -> t -> (t, t) prod **)
+  (** val partition : (elt -> bool) -> t -> t*t **)
   
   let partition f =
-    partition_acc f (Coq_pair (Leaf, Leaf))
+    partition_acc f (Leaf,Leaf)
   
   (** val for_all : (elt -> bool) -> tree -> bool **)
   
@@ -834,8 +826,8 @@ module MakeRaw =
   
   type coq_R_remove_min =
   | R_remove_min_0 of tree * elt * t
-  | R_remove_min_1 of tree * elt * t * tree * X.t * tree * I.int
-     * (t, elt) prod * coq_R_remove_min * t * elt
+  | R_remove_min_1 of tree * elt * t * tree * X.t * tree * I.int * (t*elt)
+     * coq_R_remove_min * t * elt
   
   type coq_R_merge =
   | R_merge_0 of tree * tree
@@ -1016,10 +1008,10 @@ module IntMake =
   let exists_ f s =
     Raw.exists_ f (this s)
   
-  (** val partition : (elt -> bool) -> t -> (t, t) prod **)
+  (** val partition : (elt -> bool) -> t -> t*t **)
   
   let partition f s =
-    let p = Raw.partition f (this s) in Coq_pair ((fst p), (snd p))
+    let p = Raw.partition f (this s) in (fst p),(snd p)
   
   (** val eq_dec : t -> t -> bool **)
   

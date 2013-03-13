@@ -1,5 +1,3 @@
-open Datatypes
-
 type __ = Obj.t
 
 type tuple = __

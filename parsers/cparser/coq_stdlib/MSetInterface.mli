@@ -43,7 +43,7 @@ module type HasWOps =
   
   val filter : (T.elt -> bool) -> T.t -> T.t
   
-  val partition : (T.elt -> bool) -> T.t -> (T.t, T.t) prod
+  val partition : (T.elt -> bool) -> T.t -> T.t*T.t
   
   val cardinal : T.t -> nat
   
@@ -89,7 +89,7 @@ module type WOps =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -135,7 +135,7 @@ module type WSetsOn =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -185,7 +185,7 @@ module type WSets =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -243,7 +243,7 @@ module type Ops =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -295,7 +295,7 @@ module type SetsOn =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -351,7 +351,7 @@ module type Sets =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -408,7 +408,7 @@ module type WRawSets =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -456,7 +456,7 @@ module WRaw2SetsOn :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -513,7 +513,7 @@ module WRaw2SetsOn :
   
   val exists_ : (elt -> bool) -> t -> bool
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val eq_dec : t -> t -> bool
  end
@@ -555,7 +555,7 @@ module WRaw2Sets :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -619,7 +619,7 @@ module WRaw2Sets :
   
   val exists_ : (elt -> bool) -> t -> bool
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val eq_dec : t -> t -> bool
  end
@@ -661,7 +661,7 @@ module type RawSets =
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -715,7 +715,7 @@ module Raw2SetsOn :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -778,7 +778,7 @@ module Raw2SetsOn :
   
   val exists_ : (elt -> bool) -> t -> bool
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val eq_dec : t -> t -> bool
   
@@ -826,7 +826,7 @@ module Raw2Sets :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -898,7 +898,7 @@ module Raw2Sets :
   
   val exists_ : (elt -> bool) -> t -> bool
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val eq_dec : t -> t -> bool
   

@@ -22,7 +22,7 @@ val compare : 'a1 coq_Comparable -> 'a1 -> 'a1 -> comparison
 val natComparable : nat coq_Comparable
 
 val coq_PairComparable :
-  'a1 coq_Comparable -> 'a2 coq_Comparable -> ('a1, 'a2) prod coq_Comparable
+  'a1 coq_Comparable -> 'a2 coq_Comparable -> ('a1*'a2) coq_Comparable
 
 val compare_eqb : 'a1 coq_Comparable -> 'a1 -> 'a1 -> bool
 

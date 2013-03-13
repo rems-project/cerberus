@@ -16,8 +16,7 @@ module Make =
   
   val bind : 'a1 result -> ('a1 -> 'a2 result) -> 'a2 result
   
-  val bind2 :
-    ('a1, 'a2) prod result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
+  val bind2 : ('a1*'a2) result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
   
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
@@ -36,8 +35,8 @@ module Make =
   val state_of_stack : stack -> A.state
   
   val pop :
-    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple -> (stack,
-    tuple) prod result
+    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple ->
+    (stack*tuple) result
   
   val reduce : stack -> A.Gram.production -> stack result
   

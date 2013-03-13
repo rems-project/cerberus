@@ -1,5 +1,4 @@
 open BinPos
-open Datatypes
 open String
 
 type atom = string
@@ -20,8 +19,7 @@ type typeSpecifier =
 | Tnamed of atom
 | Tstruct of atom option * field_group list option * attribute list
 | Tunion of atom option * field_group list option * attribute list
-| Tenum of atom option
-   * ((atom, expression option) prod, cabsloc) prod list option
+| Tenum of atom option * ((atom*expression option)*cabsloc) list option
    * attribute list
 and storage =
 | AUTO
@@ -43,12 +41,12 @@ and decl_type =
 | JUSTBASE
 | ARRAY of decl_type * cvspec list * attribute list * expression option
 | PTR of cvspec list * attribute list * decl_type
-| PROTO of decl_type * (parameter list, bool) prod
+| PROTO of decl_type * (parameter list*bool)
 and parameter =
 | PARAM of spec_elem list * atom option * decl_type * attribute list
    * cabsloc
 and field_group =
-| Field_group of spec_elem list * (name option, expression option) prod list
+| Field_group of spec_elem list * (name option*expression option) list
    * cabsloc
 and name =
 | Name of atom * decl_type * attribute list * cabsloc
@@ -100,13 +98,13 @@ and expression =
 | UNARY of unary_operator * expression
 | BINARY of binary_operator * expression * expression
 | QUESTION of expression * expression * expression
-| CAST of (spec_elem list, decl_type) prod * init_expression
+| CAST of (spec_elem list*decl_type) * init_expression
 | CALL of expression * expression list
-| BUILTIN_VA_ARG of expression * (spec_elem list, decl_type) prod
+| BUILTIN_VA_ARG of expression * (spec_elem list*decl_type)
 | CONSTANT of constant
 | VARIABLE of atom
 | EXPR_SIZEOF of expression
-| TYPE_SIZEOF of (spec_elem list, decl_type) prod
+| TYPE_SIZEOF of (spec_elem list*decl_type)
 | INDEX of expression * expression
 | MEMBEROF of expression * atom
 | MEMBEROFPTR of expression * atom
@@ -118,7 +116,7 @@ and constant =
 and init_expression =
 | NO_INIT
 | SINGLE_INIT of expression
-| COMPOUND_INIT of (initwhat list, init_expression) prod list
+| COMPOUND_INIT of (initwhat list*init_expression) list
 and initwhat =
 | INFIELD_INIT of atom
 | ATINDEX_INIT of expression
@@ -129,8 +127,8 @@ and attribute =
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     (atom -> 'a1) -> (atom option -> field_group list option -> attribute
     list -> 'a1) -> (atom option -> field_group list option -> attribute list
-    -> 'a1) -> (atom option -> ((atom, expression option) prod, cabsloc) prod
-    list option -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
+    -> 'a1) -> (atom option -> ((atom*expression option)*cabsloc) list option
+    -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
 
 let typeSpecifier_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
 | Tvoid -> f
@@ -152,8 +150,8 @@ let typeSpecifier_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     (atom -> 'a1) -> (atom option -> field_group list option -> attribute
     list -> 'a1) -> (atom option -> field_group list option -> attribute list
-    -> 'a1) -> (atom option -> ((atom, expression option) prod, cabsloc) prod
-    list option -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
+    -> 'a1) -> (atom option -> ((atom*expression option)*cabsloc) list option
+    -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
 
 let typeSpecifier_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
 | Tvoid -> f
@@ -228,8 +226,8 @@ let spec_elem_rec f f0 f1 f2 f3 = function
 (** val decl_type_rect :
     'a1 -> (decl_type -> 'a1 -> cvspec list -> attribute list -> expression
     option -> 'a1) -> (cvspec list -> attribute list -> decl_type -> 'a1 ->
-    'a1) -> (decl_type -> 'a1 -> (parameter list, bool) prod -> 'a1) ->
-    decl_type -> 'a1 **)
+    'a1) -> (decl_type -> 'a1 -> (parameter list*bool) -> 'a1) -> decl_type
+    -> 'a1 **)
 
 let rec decl_type_rect f f0 f1 f2 = function
 | JUSTBASE -> f
@@ -240,8 +238,8 @@ let rec decl_type_rect f f0 f1 f2 = function
 (** val decl_type_rec :
     'a1 -> (decl_type -> 'a1 -> cvspec list -> attribute list -> expression
     option -> 'a1) -> (cvspec list -> attribute list -> decl_type -> 'a1 ->
-    'a1) -> (decl_type -> 'a1 -> (parameter list, bool) prod -> 'a1) ->
-    decl_type -> 'a1 **)
+    'a1) -> (decl_type -> 'a1 -> (parameter list*bool) -> 'a1) -> decl_type
+    -> 'a1 **)
 
 let rec decl_type_rec f f0 f1 f2 = function
 | JUSTBASE -> f
@@ -264,15 +262,15 @@ let parameter_rec f = function
 | PARAM (x, x0, x1, x2, x3) -> f x x0 x1 x2 x3
 
 (** val field_group_rect :
-    (spec_elem list -> (name option, expression option) prod list -> cabsloc
-    -> 'a1) -> field_group -> 'a1 **)
+    (spec_elem list -> (name option*expression option) list -> cabsloc ->
+    'a1) -> field_group -> 'a1 **)
 
 let field_group_rect f = function
 | Field_group (x, x0, x1) -> f x x0 x1
 
 (** val field_group_rec :
-    (spec_elem list -> (name option, expression option) prod list -> cabsloc
-    -> 'a1) -> field_group -> 'a1 **)
+    (spec_elem list -> (name option*expression option) list -> cabsloc ->
+    'a1) -> field_group -> 'a1 **)
 
 let field_group_rec f = function
 | Field_group (x, x0, x1) -> f x x0 x1
@@ -412,14 +410,13 @@ let unary_operator_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 = function
 (** val expression_rect :
     (unary_operator -> expression -> 'a1 -> 'a1) -> (binary_operator ->
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
-    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem list,
-    decl_type) prod -> init_expression -> 'a1) -> (expression -> 'a1 ->
-    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list,
-    decl_type) prod -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
-    (expression -> 'a1 -> 'a1) -> ((spec_elem list, decl_type) prod -> 'a1)
-    -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1
-    -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> expression ->
-    'a1 **)
+    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
+    list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
+    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem
+    list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
+    (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
+    (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> expression -> 'a1 **)
 
 let rec expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 = function
 | UNARY (u, e0) ->
@@ -452,14 +449,13 @@ let rec expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 = function
 (** val expression_rec :
     (unary_operator -> expression -> 'a1 -> 'a1) -> (binary_operator ->
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
-    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem list,
-    decl_type) prod -> init_expression -> 'a1) -> (expression -> 'a1 ->
-    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list,
-    decl_type) prod -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
-    (expression -> 'a1 -> 'a1) -> ((spec_elem list, decl_type) prod -> 'a1)
-    -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1
-    -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> expression ->
-    'a1 **)
+    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
+    list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
+    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem
+    list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
+    (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
+    (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> expression -> 'a1 **)
 
 let rec expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 = function
 | UNARY (u, e0) ->
@@ -510,8 +506,8 @@ let constant_rec f f0 f1 f2 = function
 | CONST_STRING x -> f2 x
 
 (** val init_expression_rect :
-    'a1 -> (expression -> 'a1) -> ((initwhat list, init_expression) prod list
-    -> 'a1) -> init_expression -> 'a1 **)
+    'a1 -> (expression -> 'a1) -> ((initwhat list*init_expression) list ->
+    'a1) -> init_expression -> 'a1 **)
 
 let init_expression_rect f f0 f1 = function
 | NO_INIT -> f
@@ -519,8 +515,8 @@ let init_expression_rect f f0 f1 = function
 | COMPOUND_INIT x -> f1 x
 
 (** val init_expression_rec :
-    'a1 -> (expression -> 'a1) -> ((initwhat list, init_expression) prod list
-    -> 'a1) -> init_expression -> 'a1 **)
+    'a1 -> (expression -> 'a1) -> ((initwhat list*init_expression) list ->
+    'a1) -> init_expression -> 'a1 **)
 
 let init_expression_rec f f0 f1 = function
 | NO_INIT -> f
@@ -553,9 +549,9 @@ let attribute_rect f = function
 let attribute_rec f = function
 | ATTR (x, x0) -> f x x0
 
-type init_name_group = (spec_elem list, init_name list) prod
+type init_name_group = spec_elem list*init_name list
 
-type name_group = (spec_elem list, name list) prod
+type name_group = spec_elem list*name list
 
 type definition =
 | FUNDEF of spec_elem list * name * statement * cabsloc
