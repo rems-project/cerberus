@@ -1,0 +1,1836 @@
+open Global
+
+module A = Ail
+module C = Core
+module T = Ail_typing_aux
+
+
+
+
+let rec mapWithLast f g = function
+  | []      -> []
+  | [x]     -> [g x]
+  | (x::xs) -> f x :: mapWithLast f g xs
+end
+
+
+(* -------------------------------------------------------------------------- *)
+
+module Effect = struct
+  type env = <|
+    (* symbol counter for Core's symbolic names (including functions and labels) *)
+    symbol_set: Symbol.sset;
+    (* stack of enclosing loop labels *)
+    loop_labels: list Symbol.t;
+    (* HACK? environment remembering if atomic names "should be" pure or effectful *)
+    purity_map: map Symbol.t bool;
+    (* map of functions generated while processing the current Ail function *)
+    fun_map: map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr zero)
+  |>
+  
+  type t 'a = State.t 'a env
+  
+  
+  val return: forall 'a. 'a -> t 'a
+  let return = State.return
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind = State.bind
+  
+  val map: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+  let map = State.map
+  
+  module Operators = struct
+    let (>>=) = bind
+    val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let (>>) m f = m >>= fun _ -> f
+  end
+  
+  val init: env
+  let init = <|
+    symbol_set=  Symbol.init;
+    loop_labels= [];
+    purity_map=  Pmap.empty;
+    fun_map=     Pmap.empty
+  |>
+  
+  
+  val     foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+  let rec foldlM f z0 xs =
+    match xs with
+      | []    -> return z0
+      | x::xs' -> bind (f z0 x) (fun z -> foldlM f z xs')
+    end
+  
+  val foldl1M: forall 'a. ('a -> 'a -> t 'a) -> list 'a -> t 'a
+  let foldl1M f = function
+     | []    -> Boot.outOfHomeomorphism "[Translation.E.foldl1M] called on an empty list"
+    | x::xs -> foldlM f x xs
+    end
+
+  
+  open Operators
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  let mapWithLastM f g xs = sequence (mapWithLast f g xs)
+  
+(*  (C.sym, C.core_type * (C.sym * C.core_base_type) list * C.expr) *)
+
+(*
+  val fresh: Symbol.t t
+  let fresh (s, funcs) = ((s, None), (s + 1, funcs))
+*)
+  
+  
+  
+  
+  val fresh_symbol: t Symbol.t
+  let fresh_symbol =
+    fun (<| symbol_set= x |> as env) -> ((x, None), <| env with symbol_set= x+1 |>)
+  
+  val fresh_fname: string -> t Symbol.t
+  let fresh_fname name =
+    fun (<| symbol_set= x |> as env) -> ((x, Some $ name ^ "_" ^ string_of_num x), <| env with symbol_set= x+1 |>)
+  
+  (* create a new Core function *)
+  val add_function: Symbol.t -> C.core_type -> list (Symbol.t * C.core_base_type) -> C.expr zero -> t unit
+  let add_function fname typ args body =
+    fun (<| fun_map= fun_map |> as env) -> ((), <| env with fun_map= Pmap.add fname (typ, args, body) fun_map |>)
+
+
+(* Fancy Core expressions builders (dealing nicelly with pure expressions) *)
+
+(* TODO: crappy names *)
+
+val get_purity: Symbol.t -> t bool
+let get_purity x = fun (<| purity_map= m |> as env) -> (Pmap.find x m, env)
+
+val put_purity: Symbol.t -> bool -> t unit
+let put_purity x y = fun (<| purity_map= m |> as env) -> ((), <| env with purity_map= Pmap.add x y m |>)
+
+
+end
+
+(* -------------------------------------------------------------------------- *)
+module E = Effect
+open E.Operators
+
+let exp_type    = Annotate.exp_type_of
+let lvalue_type = Annotate.lvalue_type_of
+
+
+
+
+
+
+(* 'optimised' implementation of [\f -> unzip . map f] *)
+val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
+let rec mapUnzip_ f (xs, ys) = function
+  | []      -> (xs, ys)
+  | (l::ls) -> let (x,y) = f l in mapUnzip_ f (x::xs, y::ys) ls
+end
+let mapUnzip f l =
+  let (xs, ys) = mapUnzip_ f ([],[]) l in
+  (List.rev xs, List.rev ys)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+val     reduce_pure: Core.expr zero -> Core.expr zero
+let rec reduce_pure e =
+  let reduce_op e1 e2 = function
+    | OpAdd -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> C.Econst (n1 + n2)
+                 | _                          -> C.Eop op e1 e2
+               end
+    | OpSub -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> C.Econst (n1 - n2)
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpSub] found an ill-typed subexpression"
+               end
+    | OpMul -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> C.Econst (n1 * n2)
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpMul] found an ill-typed subexpression"
+               end
+    | OpDiv -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> C.Econst (n1 / n2)
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpDiv] found an ill-typed subexpression"
+               end
+    | OpMod -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> C.Econst (n1 % n2)
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpMod] found an ill-typed subexpression"
+               end
+    | OpEq -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> if n1 = n2 then C.Etrue else C.Efalse
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpEq] found an ill-typed subexpression"
+               end
+    | OpLt -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Econst n1, C.Econst n2) -> if n1 < n2 then C.Etrue else C.Efalse
+                 | _                          -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpLt] found an ill-typed subexpression"
+               end
+    | OpAnd -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Etrue,  C.Etrue ) -> C.Etrue
+                 | (C.Etrue,  C.Efalse) -> C.Efalse
+                 | (C.Efalse, C.Etrue ) -> C.Efalse
+                 | (C.Efalse, C.Efalse) -> C.Efalse
+                 | _                    -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpAnd] found an ill-typed subexpression"
+               end
+    | OpOr -> match (reduce_pure e1, reduce_pure e2) with 
+                 | (C.Etrue,  C.Etrue ) -> C.Etrue
+                 | (C.Etrue,  C.Efalse) -> C.Etrue
+                 | (C.Efalse, C.Etrue ) -> C.Etrue
+                 | (C.Efalse, C.Efalse) -> C.Efalse
+                 | _                    -> Boot.outOfHomeomorphism "[Translation.reduce_pure, OpOr] found an ill-typed subexpression"
+               end
+  end
+
+  match e with
+  | C.Eskip     -> C.Eskip
+  | C.Econst n  -> C.Econst n
+  | C.Eaddr x   -> C.Eaddr x
+  | C.Esym a    -> C.Esym a (* K: we don't want to reduce, because a pure
+                                  symbolic name must come from a let, which
+                                  exists because we don't want to reduce (?) *)
+  | C.Eop op e1 e2 -> reduce_op op e1 e2
+  | C.Etrue     -> C.Etrue
+  | C.Efalse    -> C.Efalse
+  | C.Enot e    -> match reduce_pure e with
+                     | C.Etrue  -> C.Efalse
+                     | C.Efalse -> C.Etrue
+                     | _                    -> Boot.outOfHomeomorphism "[Translation.reduce_pure, Knot] found an ill-typed subexpression"
+                   end
+  | C.Ectype ty  -> C.Ectype ty
+  | C.Elet a e1 e2 -> 
+  | C.Eif e1 e2 e3  -> match reduce_pure e1 with
+                         | C.Etrue  -> reduce_pure e2
+                         | C.Efalse -> reduce_pure e3
+                         | _                    -> Boot.outOfHomeomorphism "[Translation.reduce_pure, Kif] found an ill-typed subexpression"
+  | C.Ecall _ _ -> E.return true
+  | C.Esame _ _ -> E.return true
+  | C.Eundef -> E.return true
+  | C.Eerror -> E.return true
+  
+  | C.Eaction _ -> E.return false
+  
+  | C.Eunseq _    -> E.return false
+  | C.Ewseq _ _ _ -> E.return false
+  | C.Esseq _ _ _ -> E.return false
+  | C.Easeq _ _ _ -> E.return false
+  
+  | C.Eindet _ -> E.return false (* TODO: maybe not *)
+  | C.Ebound _ _ -> E.return false
+*)
+
+
+
+(* [seems_pure tenv e] tells wether e is pure, assuming it is well-typed *)
+val     seems_pure: Core.expr zero -> E.t bool
+let rec seems_pure e =
+  match e with
+    | C.Eskip     -> E.return true
+    | C.Econst _  -> E.return true
+    | C.Eaddr _   -> E.return true
+    | C.Esym _    -> E.return true
+    | C.Eop _ _ _ -> E.return true
+    | C.Etrue     -> E.return true
+    | C.Efalse    -> E.return true
+    | C.Enot _    -> E.return true
+    | C.Ectype _  -> E.return true
+  
+    | C.Elet a _ e2 -> E.put_purity a true >> seems_pure e2
+    | C.Eif _ e2 _  -> seems_pure e2
+    | C.Ecall _ _ -> E.return true    (* TODO !!!!!!!!!!!!!!!! *)
+    | C.Esame _ _ -> E.return true
+    | C.Eundef -> E.return true
+    | C.Eerror -> E.return true
+  
+    | C.Eaction _ -> E.return false
+  
+    | C.Eunseq _    -> E.return false
+    | C.Ewseq _ _ _ -> E.return false
+    | C.Esseq _ _ _ -> E.return false
+    | C.Easeq _ _ _ -> E.return false
+  
+    | C.Eindet _ -> E.return false (* TODO: maybe not *)
+    | C.Ebound _ _ -> E.return false
+  
+  (* Continuation operators (TODO: check these) *)
+  | C.Esave _ e -> seems_pure e
+  | C.Erun _ -> E.return false
+  | _ -> Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None e)
+(*  | Krun _ -> 
+*)
+  
+(*
+  | Knd of list (expr 'a)
+*)
+end
+
+
+let rec _mkUnseq core_es (xs, ys) =
+  match core_es with
+    | []    -> E.return (List.rev xs, List.rev ys)
+    | e::es -> seems_pure e >>= fun b ->
+               _mkUnseq es (if b then (e :: xs, ys) else (xs, e :: ys))
+  end
+
+
+val     mkUnseq: list (Core.expr zero) -> E.t (Core.expr zero * list (Core.expr zero))
+let rec mkUnseq core_es =
+  match core_es with
+    | [] -> Boot.outOfHomeomorphism "[Translation.mkUnseq] given an empty list of expressions"
+    | es -> _mkUnseq es ([],[]) >>= fun (xs, ys) ->
+            E.return (C.Eunseq ys, xs)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let conv ty1 ty2 exp =
+  if Ail_typing_aux.eq ty1 ty2 then exp
+                      else E.fresh_symbol    >>= fun a_exp  ->
+                           exp               >>= fun core_e ->
+                           seems_pure core_e >>= function
+                             | true  -> E.return $ C.Ecall C.conv [C.Ectype ty1; C.Ectype ty2; core_e]
+                             | false -> E.return $ C.Ewseq [Some a_exp] core_e (C.Ecall C.conv [C.Ectype ty1; C.Ectype ty2; C.Esym a_exp])
+                           end
+(*
+    | true  -> E.return $ C.Elet a_conv (C.Ecall C.conv [C.Ectype ty1; C.Ectype ty2; core_e]) (C.Esym a_conv)
+    | false -> E.return $ C.Ewseq [Some a_exp] core_e (C.Elet a_conv (C.Ecall C.conv [C.Ectype ty1; C.Ectype ty2; C.Esym a_exp]) (C.Esym a_conv))
+*)
+
+
+let is_function_id file e =
+  match Annotate.exp_of e with
+  | A.VARIABLE fid ->
+      let (ids, body) = Pmap.find fid file.A.fn_map in
+      Some (fid, ids , body)
+  | _ -> None
+  end
+
+
+
+
+
+
+(* (integer) promotion for values. (cf. §6.3.1.1#2) *)
+(* this should be a function from pure Core expr to pure Core expr (I think ...) *)
+let promote_value (e: C.expr 'b ) : C.expr 'b = e (* TODO !!!! *)
+
+
+
+
+
+
+
+
+(* TODO: see if this right
+     usual_arithmetic_conv e ty1 ty2 == performed the value conversion on the expression of type ty1 following the usual arith of ty1 and ty2
+ *)
+let usual_arithmetic_conv (e: C.expr 'b) (ty1: Ail.ctype) (ty2: Ail.ctype) : C.expr 'b =
+  C.Ecall C.conv [C.Ectype ty1; C.Ecall C.usual_arithmetic [C.Ectype ty1; C.Ectype ty2]; e]
+
+
+
+
+
+
+
+
+
+
+
+(*
+let conv_int_lifted t (a, m) =
+  Tc.conv_int t a >>= fun (v, c) ->
+  E.return (v, m +& c)
+*)
+
+(* -------------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+let rec translate_lvalue file exp =
+  let f = translate_exp file in
+  match Annotate.exp_of exp with
+    | A.VARIABLE id -> E.return (C.Esym id)
+    
+    | A.UNARY A.INDIRECTION e ->
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        (* TODO: the checks *)
+        E.return core_e
+(*
+    | A.UNARY A.INDIRECTION e ->
+        f e >>= fun (a, m) ->
+        let t = T.base_of_pointer (T.pointer_convert (exp_type e)) in
+        let ill_aligned = C.neg (Tc.is_aligned t a) in
+        let null = C.eq a C.null in
+        let c = C.implies (C.disj null ill_aligned) C.undef in
+        E.return (a, m +& c)
+
+
+    | _ ->
+        C.fresh >>= fun a ->
+        E.return (a, Me.null)
+*)
+
+   (* ------------------------------------------------------------------------------------------- *)
+    | _ -> E.return (C.DEBUG "Translation.translate_lvalue, _ case")
+  end
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+and translate_exp file exp =
+  let ty = Annotate.ctype_of exp in
+  match Annotate.exp_of exp with
+    (* (6.5.3.3#2) The result of the unary + operator is the value of its (promoted) operand. The
+                   integer promotions are performed on the operand, and the result has the promoted
+                   type. *)
+    | A.UNARY A.PLUS e ->
+        translate_exp file e >>= fun core_e ->
+        E.return (promote_value core_e)
+    
+    
+    (* (6.5.3.3#3) The result of the unary - operator is the negative of its (promoted) operand. The
+                   integer promotions are performed on the operand, and the result has the promoted
+                   type. *)
+    | A.UNARY A.MINUS e ->
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        E.return $ C.Ewseq [Some a_e] (promote_value core_e)
+                     (C.Eop C.OpSub (C.Econst 0) (C.Esym a_e))
+    
+    
+    (* (6.5.3.3#4) The result of the ~ operator is the bitwise complement of its (promoted) operand
+                   (that is, each bit in the result is set if and only if the corresponding bit in
+                   the converted operand is not set). The integer promotions are performed on the
+                   operand, and the result has the promoted type. If the promoted type is an
+                   unsigned type, the expression ~E is equivalent to the maximum value representable
+                   in that type minus E. *)
+    | A.UNARY A.BNOT e ->
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+          if Ail_typing_aux.is_unsigned_integer ty then
+            E.return $ C.Ewseq [Some a_e] (promote_value core_e)
+                         (C.Eop C.OpSub (C.Ecall C.max [C.Ectype ty]) (C.Esym a_e))
+          else
+            Boot.debug "TODO: the bitwise complement is implementation-defined (sort of) when the promoted type is signed."
+    
+    
+    (* (6.5.3.2#3) The unary & operator yields the address of its operand. [...] If the operand is
+                   the result of a unary * operator, neither that operator nor the & operator is
+                   evaluated and the result is as if both were omitted, [...] Similarly, if the
+                   operand is the result of a [] operator, neither the & operator nor the unary *
+                   that is implied by the [] is evaluated and the result is as if the & operator
+                   were removed and the [] operator were changed to a + operator. *)
+    | A.UNARY A.ADDRESS (_, (A.UNARY A.INDIRECTION e)) ->
+        
+        translate_exp file e (* DONE *)
+    
+    
+    (* (6.5.3.2#3) Otherwise, the result is a pointer to the object or function designated by its
+                   operand. *)
+    | A.UNARY A.ADDRESS e ->
+        translate_lvalue file e (* TODO *)
+    
+    
+    (* (6.5.3.2#4) The unary * operator denotes indirection. If the operand points to a function,
+                   the result is a function designator; if it points to an object, the result is an
+                   lvalue designating the object. If the operand has type ‘‘pointer to type’’, the
+                   result has type ‘‘type’’. If an invalid value has been assigned to the pointer,
+                   the behavior of the unary * operator is undefined. *)
+    | A.UNARY A.INDIRECTION e ->
+        (* TODO: temporary hack  *)
+
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        (* shouldn't be a real load ? *)
+        E.return $ C.Ewseq [Some a_e] core_e
+                     (C.pload (C.Ectype ty) (C.Esym a_e))
+    
+    
+    (* (6.5.2.4#2) The result of the postfix ++ operator is the value of the operand. As a
+                   side effect, the value of the operand object is incremented (that is, the value 1
+                   of the appropriate type is added to it). See the discussions of additive
+                   operators and compound assignment for information on constraints, types, and
+                   conversions and the effects of operations on pointers. The value computation of
+                   the result is sequenced before the side effect of updating the stored value of
+                   the operand. With respect to an indeterminately-sequenced function call, the
+                   operation of postfix ++ is a single evaluation. Postfix ++ on an object with
+                   atomic type is a read-modify-write operation with memory_order_seq_cst memory
+                   order semantics. *)
+    (* TODO: "atomicity" of the load-store pair *)
+    (* CHECK *)
+    | A.UNARY A.POSTFIX_INCR e ->
+        E.fresh_symbol          >>= fun a_lvalue ->
+        E.fresh_symbol          >>= fun a_load   ->
+        translate_lvalue file e >>= fun core_e   ->
+        E.return $
+          C.Ewseq [Some a_lvalue] core_e
+            (C.Easeq (Some a_load) ({}, C.Load (C.Ectype (lvalue_type e)) (C.Esym a_lvalue))
+                                   (C.Neg, ({}, C.Store (C.Ectype (lvalue_type e))
+                                      (C.Esym a_lvalue)
+                                      (C.Ecall C.conv_int
+                                              [C.Ectype (exp_type e); (C.Eop C.OpAdd (C.Esym a_load) (C.Econst 1))]
+                                      )
+                                    ))
+            )
+
+
+
+
+
+
+
+
+
+(*
+          C.Ewseq [Some a_lvalue] core_e
+            (C.Ewseq [Some a_load] (C.pload (C.Ectype (lvalue_type e)) (C.Esym a_lvalue))
+               (C.Ewseq [] (C.store (C.Ectype (lvalue_type e))
+                                   (C.Esym a_lvalue)
+                                   (C.Ecall C.conv_int
+                                            [C.Ectype (exp_type e);
+                                            (C.Eop C.OpAdd (C.Esym a_load) (C.Econst 1))]))
+                  (C.Esym a_load)
+               )
+            )
+*)
+    
+    
+   (* (6.5.2.4#3) The postfix -- operator is analogous to the postfix ++ operator, except that the
+                  value of the operand is decremented (that is, the value 1 of the appropriate type
+                  is subtracted from it). *)
+    (* TODO: "atomicity" of the load-store pair *)
+    | A.UNARY A.POSTFIX_DECR e ->
+        E.fresh_symbol          >>= fun a_lvalue ->
+        E.fresh_symbol          >>= fun a_load   ->
+        translate_lvalue file e >>= fun core_e   ->
+        E.return $
+          C.Ewseq [Some a_lvalue] core_e
+            (C.Ewseq [Some a_load] (C.pload (C.Ectype (lvalue_type e)) (C.Esym a_lvalue))
+               (C.Ewseq [] (C.pstore (C.Ectype (lvalue_type e))
+                                     (C.Esym a_lvalue)
+                                     (C.Ecall C.conv_int
+                                             [C.Ectype (exp_type e);
+                                             (C.Eop C.OpSub (C.Esym a_load) (C.Econst 1))]))
+                  (C.Esym a_load)
+               )
+            )
+    
+    
+    (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
+       (6.5.5#4) The result of the binary * operator is the product of the operands. *)
+    (* TODO: check *)
+    | A.BINARY (A.ARITHMETIC A.MUL) e1 e2 ->
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        E.fresh_symbol        >>= fun a_mul   ->
+        let mul_ctx x =
+          C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+            (C.Elet a_mul (C.Eop C.OpMul (C.Esym a_e1) (C.Esym a_e2))
+               x) in
+        if T.is_signed_integer(exp_type exp) then
+          E.return $ mul_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_mul])
+        else
+          E.return $ mul_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_mul])
+    
+    
+    (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
+       (6.5.5#5) The result of the / operator is the quotient from the division of the first operand
+                 by the second; the result of the % operator is the remainder. In both operations,
+                 if the value of the second operand is zero, the behavior is undefined. *)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
+        E.return (C.DEBUG "TODO: [translate] for `A.BINARY (A.ARITHMETIC A.DIV) e1 e2'")
+    
+    
+    (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
+       (6.5.5#5) [...] the result of the % operator is the remainder [from the division of the first
+                 operand by the second]. [...], if the value of the second operand is zero, the
+                 behavior is undefined. *)
+    (* (6.5.5#6) When integers are divided, the result of the / operator is the algebraic quotient
+                 with any fractional part discarded. If the quotient a/b is representable, the
+                 expression (a/b)*b + a%b shall equal a; otherwise, the behavior of both a/b and a%b
+                 is undefined. *)
+    (* TODO: check *)
+    | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
+      E.return (C.Econst 42) (* TODO *)
+(*
+        fresh_symbol          >>= fun a_e1    ->
+        fresh_symbol          >>= fun a_e2    ->
+        fresh_symbol          >>= fun a_e1'   ->
+        fresh_symbol          >>= fun a_e2'   ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        fresh_symbol          >>= fun a_mod   ->
+        C.Eseq C.SOpSeq [a_e1; a_e2] (C.Eunseq [core_e1; core_e2])
+          (C.Elet a_res_ty (C.Ecall C.usual_arithmetic [C.Ectype exp_type e1; C.Ectype exp_type e2])
+             (C.Elet a_e1' (usual_arithmetic_conv (C.Esym a_e1))
+                (C.Elet a_e2' (usual_arithmetic_conv (C.Esym a_e2))
+                   (C.Eif (C.Eop C.OpEq (C.Esym a_e2') (C.Econst 0))
+                      (C.Eundef)
+                      ((C.Elet a_mod (C.Eop C.OpMod (C.Esym a_e1') (C.Esym a_e2')))
+                          (C.Eif (C.Enot (C.Ecall C.representable []))
+        
+        
+        let mod_ctx x =
+          C.Eseq C.SOpSeq [a_e1; a_e2] (C.Eunseq [core_e1; core_e2])
+            (C.Elet a_mod (C.Eop C.OpMod (C.Esym a_e1)
+                                           (C.Ecall C.guard_zero [C.Esym a_e2]))
+               x) in
+        if T.is_signed_integer(exp_type exp) then
+          E.return $ mod_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_mod])
+        else
+          E.return $ mod_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_mod])
+*)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (* 
+       (6.5.6#5) The result of the binary + operator is the sum of the operands.
+       (6.5.6#7) For the purposes of these operators, a pointer to an object that is not an element
+                 of an array behaves the same as a pointer to the first element of an array of
+                 length one with the type of the object as its element type.
+       (6.5.6#8) When an expression that has integer type is added to [...] a pointer, the result
+                 has the type of the pointer operand. If the pointer operand points to an element of
+                 an array object, and the array is large enough, the result points to an element
+                 offset from the original element such that the difference of the subscripts of the
+                 resulting and original array elements equals the integer expression. In other
+                 words, if the expression P points to the i-th element of an array object, the
+                 expressions (P)+N (equivalently, N+(P)) [...] (where N has the value n) point to,
+                 respectively, the i+n-th and i−n-th elements of the array object, provided they
+                 exist.
+                 Moreover, if the expression P points to the last element of an array object, the
+                 expression (P)+1 points one past the last element of the array object [...].
+                 If both the pointer operand and the result point to elements of the same array
+                 object, or one past the last element of the array object, the evaluation shall not
+                 produce an overflow; otherwise, the behavior is undefined.
+                 If the result points one past the last element of the array object, it shall not be
+                 used as the operand of a unary * operator that is evaluated.
+*)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
+        let ctype_e1 = exp_type e1 in
+        let ctype_e2 = exp_type e2 in
+        if T.is_arithmetic ctype_e1 && T.is_arithmetic ctype_e2 then
+          (* (6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
+                       performed on them. *)
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          
+          seems_pure core_e1 >>= fun b1 ->
+          seems_pure core_e2 >>= fun b2 ->
+          
+          if b1 && b2 then E.return (if T.is_signed_integer (exp_type exp) then
+                                       C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 core_e2]
+                                     else
+                                       C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 core_e2])
+          else if b1 then E.return
+            (C.Ewseq [Some a_e2] core_e2
+               (if T.is_signed_integer (exp_type exp) then
+                  C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 (C.Esym a_e2)]
+                else
+                  C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 (C.Esym a_e2)]))
+          else if b2 then E.return
+            (C.Ewseq [Some a_e1] core_e1
+               (if T.is_signed_integer (exp_type exp) then
+                  C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) core_e2]
+                else
+                  C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) core_e2]))
+          else E.return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (* The 'usual arithmetic conversion' *)
+            (if T.is_signed_integer (exp_type exp) then
+                  (* if the return type is signed, then there is an undefined behaviour
+                     in the presence of an arithmetic overflow *)
+                  C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2)]
+               else
+                 (* otherwise, TODO: doc *)
+                 C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2)]
+              )
+
+
+
+
+(*
+          E.return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (* The 'usual arithmetic conversion' *)
+              (if T.is_signed_integer (exp_type exp) then
+                  (* if the return type is signed, then there is an undefined behaviour
+                     in the presence of an arithmetic overflow *)
+                  C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2)]
+               else
+                 (* otherwise, TODO: doc *)
+                 C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2)]
+              )
+*)
+
+
+
+
+(*
+
+(*
+          C.Eseq C.SOpSeq [a_e1; a_e2] (C.Eunseq [core_e1; core_e2])
+            (usual_arithmetic_conv (C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2))
+                                   () () KKK
+            )
+
+ (ty1: Ail.ctype) (ty2: Ail.ctype) : C.expr
+
+*)
+
+          (* Prepare the expression composing the evaluation of the operands which
+             are unsequenced with respect to each other *)
+          (* If we are ok with passing "complexe" expressions of type 'value' to
+             functions, then we can get rid of the Klet *)
+          let add_ctx x =
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Elet a_add (C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2))
+                 x) in
+          
+          (* The 'usual arithmetic conversion' *)
+          if T.is_signed_integer (exp_type exp) then
+            (* if the return type is signed, then there is an undefined behaviour
+               in the presence of an arithmetic overflow *)
+            E.return $ add_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_add])
+          else
+            (* otherwise, TODO: doc *)
+            E.return $ add_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_add])
+            
+*)
+        else
+          (* otherwise, we have some pointer arithmetic *)
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          E.fresh_symbol        >>= fun a_shift ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          if T.is_pointer (exp_type e1) then
+            E.return $ C.DEBUG "A.ARITHMETIC A.ADD e1 e2 <pointer case>"
+
+(*
+            C.Eseq C.SOpSeq [a_e1; a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Elet a_offset (C.Eshift a_e1 a_e2 (C.Esizeof (exp_type e1)))
+                (C.Eseq C.SOpSeq [] (C.Esame a_e1 a_shift)
+                  (C.Esym a_shift)))
+*)
+          else
+            E.return $ C.DEBUG "A.ARITHMETIC A.ADD e1 e2 <pointer case>"
+(*        
+      else
+        (* Pointer arithmetic. *)
+        f e1 >>= fun (a1, m1) ->
+        f e2 >>= fun (a2, m2) ->
+        if T.is_pointer (exp_type e1) then
+          let size = Tc.size (T.base_of_pointer (exp_type e1)) in
+          let a = C.offset a1 a2 size in
+          Action.same a1 a >>= fun same ->
+          E.return (a, (m1 -&- m2) -@> same)
+        else
+          let size = Tc.size (T.base_of_pointer (exp_type e2)) in
+          let a = C.offset a2 a1 size in
+          Action.same a a1 >>= fun same ->
+          E.return (a, (m1 -&- m2) -@> same)
+*)
+    
+    
+     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+   
+    
+    (* TODO: e1 - e2 *)
+    
+    
+    
+    
+   (* (6.5.7#3) The integer promotions are performed on each of the operands. [...] If the value of
+                the right operand is negative or is greater than or equal to the width of the
+                promoted left operand, the behavior is undefined.
+      (6.5.7#4) The result of E1 << E2 is E1 left-shifted E2 bit positions; vacated bits are filled
+                with zeros. If E1 has an unsigned type, the value of the result is E1 × 2^E2,
+                reduced modulo one more than the maximum value representable in the result type. If
+                E1 has a signed type and nonnegative value, and E1 × 2^E2 is representable in the
+                result type, then that is the resulting value; otherwise, the behavior is undefined. *)
+    | A.BINARY (A.ARITHMETIC A.SHL) e1 e2 -> (* DONE (check) *)
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        E.fresh_symbol        >>= fun a_res   ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        E.return $
+          C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+          (* if a_e2 < 0 || width{ty} < a_e2 || width{ty} = a_e2 then undef *)
+          (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e2) (C.Econst 0))
+                              (C.Eop C.OpOr (C.Eop C.OpLt (C.Ecall C.ctype_width [C.Ectype ty]) (C.Esym a_e2))
+                                            (C.Eop C.OpEq (C.Ecall C.ctype_width [C.Ectype ty]) (C.Esym a_e2)))) (* TODO: check the test about the width *)
+                C.Eundef
+                (* else [...] *)
+                (if Ail_typing_aux.is_unsigned_integer (Annotate.ctype_of e1) then
+                   (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
+                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (C.Ecall C.exp [C.Econst 2; C.Esym a_e2]))
+                                 (C.Eop C.OpAdd (C.Ecall C.max [C.Ectype ty]) (C.Econst 1))
+                 else (* e1 has a signed type *)
+                   (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
+                   C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (C.Ecall C.exp [C.Econst 2; C.Esym a_e2]))
+                                                 (C.Eop C.OpAdd (C.Ecall C.max [C.Ectype ty]) (C.Econst 1)))
+                                  (* if a_e2 < 0 && not representable(ty, a_res) then undef [...] *)
+                                  (C.Eif (C.Eop C.OpAnd (C.Eop C.OpLt (C.Esym a_e1) (C.Econst 0))
+                                                        (C.Enot (C.Ecall C.representable [C.Ectype ty; C.Esym a_res])))
+                                         C.Eundef
+                                         (* else  *)
+                                         (C.Esym a_res)
+                                  )
+                ))
+
+
+   (* (6.5.7#3) The integer promotions are performed on each of the operands. [...] If the value of
+                the right operand is negative or is greater than or equal to the width of the
+                promoted left operand, the behavior is undefined.
+      (6.5.7#5) The result of E1 >> E2 is E1 right-shifted E2 bit positions. If E1 has an unsigned
+                type or if E1 has a signed type and a nonnegative value, the value of the result is
+                the integral part of the quotient of E1 / 2E2. If E1 has a signed type and a
+                negative value, the resulting value is implementation-defined. *)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.SHR) e1 e2 -> 
+        E.return $ C.DEBUG "A.ARITHMETIC A.SHR e1 e2 <TODO (has an implementation defined case)>"
+    
+    
+   (* (6.5.10#3) The usual arithmetic conversions are performed on the operands.
+      (6.5.10#4) The result of the binary & operator is the bitwise AND of the operands (that is,
+                 each bit in the result is set if and only if each of the corresponding bits in the
+                 converted operands is set). *)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.BAND) e1 e2  <implementation defined>")
+    
+    
+   (* (6.5.11#3) The usual arithmetic conversions are performed on the operands.
+      (6.5.11#4) The result of the ^ operator is the bitwise exclusive OR of the operands (that is,
+                 each bit in the result is set if and only if exactly one of the corresponding bits
+                 in the converted operands is set). *)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.XOR) e1 e2  <implementation defined>")
+    
+    
+   (* (6.5.12#3) The usual arithmetic conversions are performed on the operands.
+      (6.5.12#4) The result of the | operator is the bitwise inclusive OR of the operands (that is,
+                 each bit in the result is set if and only if at least one of the corresponding bits
+                 in the converted operands is set). *)
+    (* TODO *)
+    | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
+        E.return (C.DEBUG "A.BINARY (A.ARITHMETIC A.BOR) e1 e2  <implementation defined>")
+    
+    
+    (* (6.5.17#2) The left operand of a comma operator is evaluated as a void expression; there is
+                  a sequence point between its evaluation and that of the right operand. Then the
+                  right operand is evaluated; the result has its type and value. *)
+    | A.BINARY A.COMMA e1 e2 -> (* DONE (maybe not, be careful when mixing with assignments) *)
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        E.return $ C.Ewseq [] core_e1 core_e2
+    
+    
+    (* (6.5.13#3) The && operator shall yield 1 if both of its operands compare unequal to 0;
+                  otherwise, it yields 0. The result has type int.
+       (6.5.13#4) Unlike the bitwise binary & operator, the && operator guarantees left-to-right
+                  evaluation; if the second operand is evaluated, there is a sequence point between
+                  the evaluations of the first and second operands. If the first operand compares
+                  equal to 0, the second operand is not evaluated. *)
+    | A.BINARY A.AND e1 e2 -> (* DONE *)
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        E.return $
+          C.Ewseq [Some a_e1] core_e1
+            (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0))
+                   (C.Econst 0)
+                   (C.Ewseq [Some a_e2] core_e2
+                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst 0))
+                            (C.Econst 0)
+                            (C.Econst 1)
+                     )
+                   )
+            )
+    
+    
+    (* (6.5.14#3) The || operator shall yield 1 if either of its operands compare unequal to 0;
+                  otherwise, it yields 0. The result has type int.
+       (6.5.14#4) Unlike the bitwise | operator, the || operator guarantees left-to-right
+                  evaluation; if the second operand is evaluated, there is a sequence point between
+                  the evaluations of the first and second operands. If the first operand compares
+                  unequal to 0, the second operand is not evaluated. *)
+    | A.BINARY A.OR e1 e2 -> (* DONE *)
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        E.return $
+          C.Ewseq [Some a_e1] core_e1
+            (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0)))
+                   (C.Econst 1)
+                   (C.Ewseq [Some a_e2] core_e2
+                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst 0))
+                            (C.Econst 0)
+                            (C.Econst 1)
+                     )
+                   )
+            )
+    
+    
+    (* (6.5.8#3) If both of the operands have arithmetic type, the usual arithmetic conversions are
+                 performed.
+       (6.5.8#4) For the purposes of these operators, a pointer to an object that is not an element
+                 of an array behaves the same as a pointer to the first element of an array of
+                 length one with the type of the object as its element type.
+       (6.5.8#5) When two pointers are compared, the result depends on the relative locations in the
+                 address space of the objects pointed to. If two pointers to object types both point
+                 to the same object, or both point one past the last element of the same array
+                 object, they compare equal. If the objects pointed to are members of the same
+                 aggregate object, pointers to structure members declared later compare greater than
+                 pointers to members declared earlier in the structure, and pointers to array
+                 elements with larger subscript values compare greater than pointers to elements of
+                 the same array with lower subscript values. All pointers to members of the same
+                 union object compare equal. If the expression P points to an element of an array
+                 object and the expression Q points to the last element of the same array object,
+                 the pointer expression Q+1 compares greater than P. In all other cases, the
+                 behavior is undefined.
+       (6.5.8#6) Each of the operators < (less than), > (greater than), <= (less than or equal to),
+                 and >= (greater than or equal to) shall yield 1 if the specified relation is true
+                 and 0 if it is false. The result has type int. *)
+    (* TODO *)
+    | A.BINARY A.LT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.LT e1 e2")
+    
+    
+    (* TODO *)
+    | A.BINARY A.GT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GT e1 e2")
+    
+    
+    (* TODO *)
+    | A.BINARY A.LE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.LE e1 e2")
+    
+    
+    (* TODO *)
+    | A.BINARY A.GE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GE e1 e2")
+    
+    
+   (* (6.5.9#3) The == (equal to) and != (not equal to) operators are analogous to the relational
+                operators [...]. Each of the operators yields 1 if the specified relation is true
+                and 0 if it is false. [...] For any pair of operands, exactly one of the relations
+                is true.
+      (6.5.9#4) If both of the operands have arithmetic type, the usual arithmetic conversions are
+                performed.
+                Values of complex types are equal if and only if both their real parts are equal and
+                also their imaginary parts are equal.
+                Any two values of arithmetic types from different type domains are equal if and only
+                if the results of their conversions to the (complex) result type determined by the
+                usual arithmetic conversions are equal.
+      (6.5.9#5) Otherwise, at least one operand is a pointer. If one operand is a pointer and the
+                other is a null pointer constant, the null pointer constant is converted to the type
+                of the pointer. If one operand is a pointer to an object type and the other is a
+                pointer to a qualified or unqualified version of void, the former is converted to
+                the type of the latter.
+      (6.5.9#6) Two pointers compare equal if and only if both are null pointers, both are pointers
+                to the same object (including a pointer to an object and a subobject at its
+                beginning) or function, both are pointers to one past the last element of the same
+                array object, or one is a pointer to one past the end of one array object and the
+                other is a pointer to the start of a different array object that happens to
+                immediately follow the first array object in the address space.
+      (6.5.9#7) For the purposes of these operators, a pointer to an object that is not an element
+                of an array behaves the same as a pointer to the first element of an array of length
+                one with the type of the object as its element type. *)
+    | A.BINARY A.EQ e1 e2 ->
+        if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
+                     (C.Econst 1)
+                     (C.Econst 0)
+              )
+        else if T.is_pointer (exp_type e1) && T.is_pointer (exp_type e2) then
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers>")
+        else if Ail_typing.is_null_pointer_constant e1 then
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers, and e1 is a \
+                             null constant")
+        else
+          E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers, and e1 is NOT \
+                             a null constant")
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+    | A.BINARY A.NE e1 e2 -> E.return (C.DEBUG "A.BINARY A.NE e1 e2")
+    
+    
+    
+    (* *** ASSIGN operators *** *)
+    
+    
+    
+   (* (6.5.15#4) The first operand is evaluated; there is a sequence point between its evaluation
+                 and the evaluation of the second or third operand (whichever is evaluated). The
+                 second operand is evaluated only if the first compares unequal to 0; the third
+                 operand is evaluated only if the first compares equal to 0; the result is the value
+                 of the second or third operand (whichever is evaluated), converted to the type
+                 described below.
+      (6.5.15#6) If both the second and third operands are pointers or one is a null pointer constant and the other is a pointer, the result type is a pointer to a type qualified with all the type qualifiers of the types referenced by both operands. Furthermore, if both operands are pointers to compatible types or to differently qualified versions of compatible types, the result type is a pointer to an appropriately qualified version of the composite type; if one operand is a null pointer constant, the result has the type of the other operand; otherwise, one operand is a pointer to void or a qualified version of void, in which case the result type is a pointer to an appropriately qualified version of void.
+
+ *)
+    (* TODO: conv_int on e2 and e2 !!!!!!! *)
+    | A.CONDITIONAL e1 e2 e3 ->
+        if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          E.fresh_symbol        >>= fun a_e3    ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          translate_exp file e3 >>= fun core_e3 ->
+          E.return $
+            C.Ewseq [Some a_e1] core_e1
+              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0))
+                     core_e2
+                     core_e3)
+        else
+          E.return (C.DEBUG "A.CONDITIONAL e1 e2 e3 <pointer>")
+    
+    
+    (* ------------------------------------------------------------------------------------------ *)
+    | A.CAST ty e ->
+          E.fresh_symbol        >>= fun a_e ->
+        translate_exp file e >>= fun core_e ->
+        E.return $
+          C.Ewseq [Some a_e] core_e
+            (C.Ecall C.conv [C.Ectype ty; C.Ectype (exp_type e); C.Esym a_e])
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+    | A.CALL e es ->
+      match is_function_id file e with
+        | Some ((fid, Some "malloc"), ids, s) -> Boot.outOfHomeomorphism "Found a malloc"
+
+        | Some (fid, ids, s) ->
+            
+(*            KKK *)
+
+
+(*
+
+  (* We make some C stdlib functions, Ail primitives *)
+  | MALLOC of expression_l 'a
+  | FREE of expression_l 'a
+  | MEMCPY of expression_l 'a * expression_l 'a * expression_l 'a
+  | MEMCMP of expression_l 'a * expression_l 'a * expression_l 'a
+*)
+
+
+
+  	  match fst $ Pmap.find fid file.A.id_map with
+	    | A.FUNCTION retTy Tys -> (* creates temporary symbolic names for each function
+					 parameter and initialise them with the translated
+					 arguments *)
+				      E.mapM (fun (id, ty, e) ->
+					        E.fresh_symbol       >>= fun a      ->
+					        translate_exp file e >>= fun core_e ->
+					        E.fresh_symbol       >>= fun a_tmp  ->
+					        E.return
+                                                  (
+						    a,
+                                                    C.Ewseq [Some a] (C.pcreate $ C.Ectype ty)
+						      (C.Ewseq [Some a_tmp] core_e
+							 (C.pstore (C.Ectype ty) (C.Esym a) (C.Esym a_tmp))
+						      ),
+                                                    C.pkill $ C.Esym a
+                                                  ))
+					     (zip3 ids Tys es) >>= fun params ->
+                                      
+                                      let (_as, creates_inits, _kills) = unzip3 params in
+                                      
+                                      (* Unsequence the [create]s *)
+                                      let creates_ctx = fun ctx -> C.Ewseq [] (match creates_inits with
+					                                         | [] -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+
+										 | [x] -> x
+										 | _ -> C.Eunseq creates_inits
+									       end) ctx in
+
+(*
+(*							                   (match _creates with
+									     | []  -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+									     | [x] -> x
+									     | _   -> C.Eunseq _creates
+									    end) 
+*) (C.Eunseq _creates) (* C.DEBUG "WTF?" *) ctx in *)
+                                      
+				      
+				      
+				      
+				      let kills = (match _kills with
+					             | [] -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] trying to create an empty Kunseq"
+						     | [x] -> x
+						     | _ -> C.Eunseq _kills
+						   end) in
+
+(* 				      let _ = Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None kills) in *)
+				      
+				      E.fresh_symbol >>= fun a_ret ->
+				      E.return $ creates_ctx (C.Ewseq [Some a_ret] (C.Eindet $ C.Ecall fid (List.map (fun x -> C.Esym x) _as))
+								(C.Ewseq [] kills (C.Esym a_ret))
+				                             )
+				      
+				      
+(*	                              
+				      (* translate the function arguments *)
+	                              E.mapM (fun e -> translate_exp file e) es >>= fun core_es ->
+	                              
+	                              (* initialise the symbolic names with these translated arguments *)
+	                              E.mapM (fun ((a, _, _, _, ty), core_e) -> E.return $ C.pstore (C.Ectype ty) (C.Esym a) core_e)
+					     (List.combine params core_es) >>= fun core_inits ->
+	                              
+*)
+	                              
+
+
+	    | _ -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
+	  end
+
+	  
+(*          E.return (C.Eindet (C.COMMENT "TODO: function call" C.Eerror)) *)
+
+(*
+      (* add the block local variables to the environment (fresh symbolic names are assigned) *)
+      update_env env ids >>= fun env' ->
+      (* retrieve the declarations of these variables *)
+      let decls = [(Pmap.find id env', lookup_type id)| forall (id MEM ids) | true] in
+      let n     = List.length decls                                                 in
+      
+      (* prepare the code creating the objects for the block local variables. *)
+      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (a, C.create ty)) (List.rev decls) in
+                        match n with
+                          | 0 -> fun x -> x
+                          | 1 -> C.Eseq C.SOpSeq syms (List.hd xs)
+                          | _ -> C.Eseq C.SOpSeq syms (C.Eunseq xs)
+                        end in
+
+
+translate_exp env file e >>= fun core_e ->
+C.seq [a_id] (C.create ty)
+  (C.store ty a_id (C.Ecall C.conv [C.Ectype (Ail_typing_aux.unqualify ty); C.Ectype (exp_type e); core_e]))
+
+(*
+            let f_create (l, t, e) m' =
+              conv (T.unqualify t) (exp_type e) (f e) >>= fun (a, m) ->
+              Action.create   t l                     >>= fun create ->
+              Action.fn_store t l a                   >>= fun store  ->
+              E.return ((m' -&- m) +@ create -@> store) in
+*)
+      
+
+      (* prepare the code killing the objects. *)
+      let kills = let xs = List.map (fun (a, _) -> C.Kill a) decls in
+                        match n with
+                          | 0 -> C.Eskip
+                          | 1 -> List.hd xs
+                          | _ -> C.Eunseq xs
+                        end in
+      
+      (* translate the statements with a symbolic name bound to the result of the last statement *)
+      fresh_symbol >>= fun a_last ->
+      E.mapWithLastM (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
+                               E.return ([], core_s))
+                     (fun s -> translate_stmt env' file current_function s >>= fun core_s ->
+                               E.return ([a_last], core_s))
+                     ss >>= fun core_ss ->
+      
+      (* connecting everything an returning that symbolic name bounded to the result of last statement *)
+      E.return $ creates_ctx
+                 (List.fold_left (fun acc (_as, stmt) -> C.Eseq C.SOpSeq _as stmt acc)
+                    (C.Eseq C.SOpSeq [] kills (C.Esym a_last))
+                    (List.rev core_ss))
+
+        (*
+            update_env env ids >>= fun env' ->
+
+            let args =
+              let f id e = (Pmap.find id env', lookup_type id, e) in
+              List.map2 f ids es in
+
+            let f_create (l, t, e) m' =
+              conv (T.unqualify t) (exp_type e) (f e) >>= fun (a, m) ->
+              Action.create   t l                     >>= fun create ->
+              Action.fn_store t l a                   >>= fun store  ->
+              E.return ((m' -&- m) +@ create -@> store) in
+
+            let f_kill (l, _, _) m =
+              Action.kill l >>= fun kill ->
+              E.return (m +@ kill) in
+
+            E.foldlM f_create args Me.unit     >>= fun m_create ->
+            E.foldlM f_kill   args Me.unit     >>= fun m_kill   ->
+            C.fresh                            >>= fun a        ->
+	    reduce_stmt n b env' file fid a s >>= fun ml       ->
+            Action.call                        >>= fun call     ->
+            let m_body = Ms.exit_function call ml in
+            E.return (a, m_create -&> m_body -&> m_kill)
+        *)
+*)
+
+
+
+
+      | None ->
+        (* TODO: looks like we need a "null" constant of type address in Core *)
+        E.return (C.DEBUG "A.CALL e es <function pointer>")
+      end
+    
+    
+    
+    (* *** MEMBEROF *** *)
+    | A.MEMBEROF e x -> E.return (C.DEBUG "TODO: A.MEMBEROF e x")
+    
+    
+    
+    (* *** MEMBEROFPTR *** *)
+    | A.MEMBEROFPTR e x -> E.return (C.DEBUG "TODO: A.MEMBEROFPTR e x")
+    
+    
+    
+    (* ------------------------------------------------------------------------------------------ *)
+    | A.CONSTANT (A.CONST_INT (i, _)) -> (* DONE *)
+          E.return (C.Econst i)
+    
+    
+    | A.CONSTANT _ -> E.return (C.DEBUG "TODO: A.CONSTANT _")
+    
+    
+    (* WARNING: this is not enought (DEBUG FOR NOW) *)
+    | A.VARIABLE id ->
+        E.return $ C.pload (C.Ectype (lvalue_type exp)) (C.Esym id)
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+    (* [§6.5.3.4#4] When sizeof is applied to an operand that has type char, unsigned char, or
+                    signed char, (or a qualified version thereof) the result is 1. *)
+    | A.SIZEOF (A.BASIC _ A.CHAR)                           -> E.return (C.Econst 1)
+    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.SIGNED A.ICHAR)))   -> E.return (C.Econst 1)
+    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.UNSIGNED A.ICHAR))) -> E.return (C.Econst 1)
+    
+    | A.SIZEOF  ty -> E.return $ C.Ecall C.sizeof [C.Ectype ty]
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+    | A.ALIGNOF ty -> E.return $ C.Ecall C.alignof [C.Ectype ty]
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (* ------------------------------------------------------------------------------------------ *)
+(*
+      if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+        conv_exp e1 >>= fun (a1, m1) ->
+        conv_exp e2 >>= fun (a2, m2) ->
+        let diff = C.minus a1 a2 in
+        if T.is_signed_integer (exp_type exp) then
+          let c = overflow (exp_type exp) diff in
+          E.return (diff, (m1 -&- m2) +& c)
+        else
+          Tc.conv_int (exp_type exp) (C.minus a1 a2) >>= fun (a, c) ->
+          E.return (a, m1 -&- m2 +& c)
+      else (*if T.is_integer (exp_type e2) then*)
+        (* Pointer arithmetic. *)
+        f e1 >>= fun (a1, m1) ->
+        f e2 >>= fun (a2, m2) ->
+        let size = Tc.size (T.base_of_pointer (exp_type e1)) in
+        let a = C.offset a1 (C.minus C.zero a2) size in
+        Action.same a1 a >>= fun same ->
+        E.return (a, (m1 -&- m2) -@> same)
+*)
+      | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
+          if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+            E.fresh_symbol        >>= fun a_e1    ->
+            E.fresh_symbol        >>= fun a_e2    ->
+            translate_exp file e1 >>= fun core_e1 ->
+            translate_exp file e2 >>= fun core_e2 ->
+            E.fresh_symbol        >>= fun a_sub   ->
+            let sub_ctx x =
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Elet a_sub (C.Eop C.OpSub (C.Esym a_e1) (C.Esym a_e2))
+                   x) in
+            if T.is_signed_integer (exp_type exp) then
+              E.return $ sub_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_sub])
+            else
+              E.return $ sub_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_sub])
+          
+          else (*if T.is_integer (exp_type e2) then*)
+            (* Pointer arithmetic. *)
+            (* TODO: pointer arith *)
+            E.return $ C.DEBUG "A.ARITHMETIC A.SUB e1 e2 <pointer case>"
+      
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+    | A.ASSIGN None e1 e2 ->
+        E.fresh_symbol           >>= fun a_e1    ->
+        E.fresh_symbol           >>= fun a_e2    ->
+        translate_lvalue file e1 >>= fun core_e1 ->
+        translate_exp    file e2 >>= fun core_e2 ->
+        E.return $
+          C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+            (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store (C.Ectype (lvalue_type e1))
+                                              (C.Esym a_e1)
+                                              (C.Ecall C.conv [C.Ectype (exp_type e1); C.Ectype (exp_type e2); C.Esym a_e2]))
+                                   )
+                        )
+                       (C.Esym a_e2))
+    
+    
+    | A.ASSIGN (Some _) e1 e2 -> E.return (C.DEBUG "TODO: A.ASSIGN (Some _) e1 e2")
+    
+    
+    
+    
+    
+    | A.MALLOC e ->
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        E.return $ C.Ewseq [Some a_e] core_e (C.palloc (C.Esym a_e))
+    
+    
+    | A.FREE e ->
+        E.fresh_symbol       >>= fun a_e    ->
+        translate_exp file e >>= fun core_e ->
+        E.return $ C.Ewseq [Some a_e] core_e (C.pkill (C.Esym a_e))
+    
+    | A.MEMCMP e1 e2 e3 -> E.return (C.DEBUG "TODO: A.MEMCMP e1 e2 e3")
+    
+    
+    
+    
+    
+    
+   (* ------------------------------------------------------------------------------------------- *)
+(*    | _ -> E.return (C.DEBUG "translate_exp, _ case") *)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* -------------------------------------------------------------------------- *)
+
+(* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
+and translate_stmt file current_function (_, stmt) : E.t (C.expr zero) =
+  (* return the type of a given identifier. (TODO: why is this a local function?) *)
+  let lookup_type id = fst (Pmap.find id file.A.id_map) in
+  
+  match stmt with
+  | A.SKIP -> E.return C.Eskip
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.EXPRESSION e -> translate_exp file e
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.BLOCK ids ss ->
+(*      (* add the block local variables to the environment (fresh symbolic names are assigned) *)
+      update_env env ids >>= fun env' ->
+*)
+      (* retrieve the declarations of these variables *)
+      let decls = [(id, lookup_type id) | forall (id MEM ids) | true] in
+      let n     = List.length decls                                   in
+      
+      (* prepare the code creating the objects for the block local variables. *)
+      let creates_ctx = let (syms, xs) = mapUnzip (fun (a, ty) -> (Some a, C.pcreate (C.Ectype ty))) (List.rev decls) in
+                        match n with
+                          | 0 -> fun x -> x
+                          | 1 -> C.Ewseq syms (List.hd xs)
+                          | _ -> C.Ewseq syms (C.Eunseq xs)
+                        end in
+      
+      (* prepare the code killing the objects. *)
+      let kills_ctx = let xs = List.map (fun (a, _) -> C.pkill (C.Esym a)) decls in
+                      match n with
+                        | 0 -> fun x -> x
+                        | 1 -> C.Ewseq [] (List.hd xs)
+                        | _ -> C.Ewseq [] (C.Eunseq xs)
+                      end in
+      
+      (* translate the statements with a symbolic name bound to the result of the last statement *)
+      E.fresh_symbol >>= fun a_last ->
+      E.mapWithLastM (fun s -> translate_stmt file current_function s >>= fun core_s ->
+                               seems_pure core_s >>= fun b ->
+                               E.return ([], b, core_s))
+                     (fun s -> translate_stmt file current_function s >>= fun core_s ->
+                               seems_pure core_s >>= fun b ->
+                               E.return ([Some a_last], b, core_s))
+                     ss >>= fun core_ss ->
+      
+      (* connecting everything an returning that symbolic name bounded to the result of last statement *)
+      E.return $ creates_ctx
+                 (List.fold_left (fun acc (_as, b, stmt) ->
+                   if b then (match _as with
+                                | [Some a] -> C.Elet a stmt acc
+                                | []       -> acc
+                                | _  -> Boot.outOfHomeomorphism "BOOM" end)
+                        else C.Ewseq _as stmt acc)
+                    (kills_ctx (if List.length ss = 0 then C.Eskip else C.Esym a_last))
+                    (List.rev core_ss))
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.IF e s1 s2 ->
+      E.fresh_symbol                          >>= fun a_test  ->
+      translate_exp file e                    >>= fun core_e  ->
+      translate_stmt file current_function s1 >>= fun core_s1 ->
+      translate_stmt file current_function s2 >>= fun core_s2 ->
+      E.return $ C.Ewseq [Some a_test] core_e
+                   (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) (C.Econst 0))) core_s1 core_s2)
+
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+    (* TODO:   pass the visible variables as argument to the Core function
+             + give a proper return type to the function *)
+  | A.WHILE e s ->
+      E.fresh_symbol                         >>= fun a      ->
+      translate_exp file e                   >>= fun core_e ->
+      translate_stmt file current_function s >>= fun core_s ->
+      E.fresh_fname "while_body"             >>= fun fname  ->
+      let fbody = C.Ewseq [Some a] core_e
+                    (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a) (C.Econst 0)))
+                           (C.Ewseq [] core_s (C.Ecall fname []))
+                           C.Eskip
+                    ) in
+      E.add_function fname (C.TyEffect C.unit) [] fbody >>= fun () ->
+      E.return (C.Ecall fname [])
+
+
+
+(*
+  
+  while (e) { S } --->
+  
+  fun while_body_k (some args) =
+    [| S |]
+  
+  let a_test = [| e |] in
+  if not (a_test = 0) then
+    call while_body_k (values of visible variables as arguments)
+  else
+    skip
+  
+*)
+  
+  
+  (* TODO *)
+  | A.DO e s -> Boot.outOfHomeomorphism "[translation] TODO: DO"
+  
+  
+  (* TODO *)
+  | A.BREAK -> Boot.outOfHomeomorphism "[translation] TODO: BREAK"
+  
+  
+  (* TODO *)
+  | A.CONTINUE -> Boot.outOfHomeomorphism "[translation] TODO: CONTINUE"
+  
+  
+  | A.RETURN_VOID -> E.return C.Eskip
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.RETURN_EXPRESSION e ->
+      conv (exp_type e) (T.function_return $ lookup_type current_function)
+           ((* mark_cexpr *) (translate_exp file e))
+  
+  
+  (* TODO *)
+  | A.SWITCH e s ->
+(*      translate_exp file e                   >>= fun core_e ->
+      translate_stmt file current_function s >>= fun core_s -> *)
+      Boot.outOfHomeomorphism "[translation] TODO: SWITCH"
+  
+  
+  (* TODO *)
+  | A.CASE n s -> Boot.outOfHomeomorphism "[translation] TODO: CASE"
+  
+  
+  (* TODO *)
+  | A.DEFAULT s -> Boot.outOfHomeomorphism "[translation] TODO: DEFAULT"
+  
+  
+  (* TODO *)
+  | A.LABEL l s ->
+      translate_stmt file current_function s >>= fun core_s ->
+      E.return (C.Esave l core_s)
+  
+  
+  (* TODO: visible variables as argument of the call + proper type for the call *)
+  | A.GOTO l -> E.return (C.Erun l)
+  
+  
+  (* ------------------------------------------------------------------------------------------------------ *)
+  | A.DECLARATION []    -> E.return C.Eskip
+  | A.DECLARATION defns ->
+      (* This pass translate the declarations *)
+      E.mapM (fun (id, e) ->
+        E.fresh_symbol                                            >>= fun a      ->
+        conv (exp_type e) (lookup_type id) (translate_exp file e) >>= fun core_e ->
+        E.return $ C.Ewseq [Some a] core_e
+                     (C.pstore (C.Ectype (lookup_type id)) (C.Esym id) (C.Esym a)) (* TODO: the id is probably wrong *)
+      ) defns >>=
+      
+      (* This pass combine the translated declerations *)
+      E.foldl1M (fun x y -> E.return  $ C.concat_wseq x y)
+  
+  
+  | A.PAR ss ->
+      E.mapM (translate_stmt file current_function) ss >>= fun core_ss ->
+      E.return $ C.Eunseq core_ss
+  end
+
+
+
+
+
+
+
+
+
+(* Run the translator on different functions *)
+let translate_file (file: A.file _) : E.t (C.file zero) =
+  E.foldlM
+    (fun acc (name, (args, body)) ->
+       (* translate the body to Core *)
+       translate_stmt file name body >>= fun core_body ->
+       E.return $ Pmap.add name (C.TyBase C.integer (* TODO: address for pointer type? *),
+                                 List.map (fun arg -> (arg, C.address (* TODO: check *))) args,
+                                 core_body) acc)
+    C.core_stdlib (* Pmap.empty *)
+    (Pmap.bindings file.A.fn_map)
+  >>= fun core_funcs ->
+  E.return <| C.main= file.A.main; C.fun_map= core_funcs |>
+
+
+(* This is the entry function (called from main.ml) *)
+let translate (file: A.file _) : C.file zero =
+let (cfile, <| E.fun_map= funs |>) = (translate_file file) E.init in
+  <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
+
+
+(* E.init (translate_file file) *)
+(* C.test2 *)
+
+
+
+
+
+
+
+
+
+(* ********** HACK ********** *)
+
+
+let rec str_concat l =
+  match l with
+    | []      -> ""
+    | (x::xs) -> x ^ str_concat xs
+  end
+
+
+
+
+let rec bar (l: list (option A.integer_constant * A.statement_l _)) : list (option A.integer_constant * A.statement_l _) =
+  match l with
+    | [] -> []
+    | (c, (d, x)) :: xs -> (c, (d, A.BLOCK [] ((d,x) :: List.map snd xs))) :: bar xs
+  end
+
+
+let rec bar2 l =
+  match l with
+    | [] -> []
+    | x::xs -> x::xs (* List.map (fun (c,z) -> (c,z @ List.map (fun z -> snd (List.head z)))) x *)
+  end
+
+
+let rec _suffixes l acc =
+  match l with
+    | []    -> []
+    | x::xs -> _suffixes xs ((x::xs) :: acc)
+  end
+let suffixes l = _suffixes l []
+
+
+
+
+(* the argument of decode_switch is the body of a switch *)
+let rec decode_switch (d, stmt) =
+(*
+  match stmt with
+  | A.SKIP -> []
+  | A.EXPRESSION e -> []
+  | A.BLOCK _ ss -> List.concat (List.map decode_switch file ss)
+  | A.IF e s1 s2 -> []
+  | A.WHILE e s -> []
+  | A.DO e s -> decode_switch file s
+  | A.BREAK -> []
+  | A.CONTINUE -> []
+  | A.RETURN_VOID -> []
+  | A.RETURN_EXPRESSION e -> []
+  | A.SWITCH e s -> []
+  | A.CASE n s -> (Some n, s) :: decode_switch file s
+  | A.DEFAULT s -> (None, s) :: decode_switch file s
+  | A.LABEL label s -> decode_switch file s
+  | A.GOTO label -> []
+  | A.DECLARATION defs -> []
+  end
+*)
+(*
+  match stmt with
+  | A.SKIP -> ""
+  | A.EXPRESSION e -> ""
+  | A.BLOCK _ ss -> str_concat (List.map (decode_switch file) ss)
+  | A.IF e s1 s2 -> decode_switch file s1 ^ decode_switch file s2
+  | A.WHILE e s -> decode_switch file s
+  | A.DO e s -> decode_switch file s
+  | A.BREAK -> ""
+  | A.CONTINUE -> ""
+  | A.RETURN_VOID -> ""
+  | A.RETURN_EXPRESSION e -> ""
+  | A.SWITCH e s -> decode_switch file s
+  | A.CASE n s -> (Document.to_plain_string (A.Print.pp_int_const n)) ^ " ==> " ^ (Document.to_plain_string (A.Print.pp_stmt file s)) ^ "\n" ^
+                  decode_switch file s
+  | A.DEFAULT s -> "default ==> " ^ (Document.to_plain_string (A.Print.pp_stmt file s)) ^ "\n" ^ decode_switch file s
+  | A.LABEL label s -> decode_switch file s
+  | A.GOTO label -> ""
+  | A.DECLARATION defs -> ""
+  end
+*)
+
+  match stmt with
+  | A.SKIP -> []
+  | A.EXPRESSION e -> []
+  | A.BLOCK _ _ -> []
+(*  | A.BLOCK _ ss -> List.map (fun x -> A.BLOCK [] x) $ suffixes (List.concat (bar2 (List.map decode_switch ss))) *)
+  | A.IF e s1 s2 -> decode_switch s1 @ decode_switch s2
+  | A.WHILE e s -> decode_switch s
+  | A.DO e s -> decode_switch s
+  | A.BREAK -> []
+  | A.CONTINUE -> []
+  | A.RETURN_VOID -> []
+  | A.RETURN_EXPRESSION e -> []
+  | A.SWITCH e s -> decode_switch s
+  | A.CASE n s -> (Some n, s) :: decode_switch s
+  | A.DEFAULT s -> (None, s) :: decode_switch s
+  | A.LABEL label s -> decode_switch s
+  | A.GOTO label -> []
+  | A.DECLARATION defs -> []
+  end
+
+
+let pp_decode file (x, s) =
+  match x with
+    | Some n -> Document.to_plain_string (A.Print.pp_int_const n) ^ " ==> " ^ Document.to_plain_string (A.Print.pp_stmt file s)
+    | None   -> "default ==> " ^ Document.to_plain_string (A.Print.pp_stmt file s)
+  end
+
+let rec string_concat z l =
+  match l with
+    | []    -> ""
+    | x::xs -> x ^ z ^ string_concat z xs
+  end
+
+let foo (file: A.file _) =
+  let [a;_] =
+    List.map(fun (_, (args, body)) ->
+      string_concat "\n" (List.map (pp_decode file) (decode_switch body))
+(*      Document.to_plain_string (Ail.Print.pp_stmt file body) *)
+    ) (Pmap.bindings file.A.fn_map)
+  in
+  a
+(*
+  E.foldlM
+    (fun (name, (args, body)) acc ->
+       (* translate the body to Core *)
+       translate_stmt file name body >>= fun core_body ->
+       E.return $ Pmap.add name (C.TyBase C.value (* TODO: address for pointer type? *),
+                                 List.map (fun arg -> (arg,C.address (* TODO: check *))) args,
+                                 core_body) acc)
+    (Pmap.bindings file.A.fn_map)
+    Pmap.empty
+  >>= fun core_funcs ->
+  E.return <| C.main= file.A.main; C.fun_map= core_funcs |>
+*)

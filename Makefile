@@ -1,131 +1,169 @@
-LEM_DIR=../lem
-LEM=$(LEM_DIR)/lem
-LEM_LIB=$(LEM_DIR)/library
+# Looking for Lem
+ifneq ($(wildcard ../lem/lem),)
+  LEMDIR=../lem
+  LEMLIB_DIR=../lem/library
+else ifdef LEM_PATH
+  LEMDIR=$(LEM_PATH)
+  LEMLIB_DIR=$(LEM_PATH)/library
+else
+  $(error could not find lem (please set the variable LEM_PATH))
+endif
+
+LEM=$(LEMDIR)/lem -wl ign -lib $(LEMLIB_DIR)
+
+
+# Source directories
+LEMDIRS=lib/ocaml model
+MLDIRS=\
+  lib/ocaml/src \
+  parsers/cparser parsers/cparser/coq_stdlib parsers/cparser/validator \
+  parsers/coreparser \
+  src
+
+VPATH=$(LEMDIRS) $(MLDIRS)
+
+
+# Where and how ocamlbuild will be called
+OCAML_BUILD_DIR=_ocaml_generated
+OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text
+
+
+MODEL_FILES=\
+  boot.lem \
+  ail_typing_errors.lem \
+  multiset.lem \
+  global.lem \
+  ord.lem \
+  string_.lem \
+  pair.lem \
+  map_.lem \
+  list_.lem \
+  lexing.lem \
+  output.lem \
+  location.lem \
+  symbol.lem \
+  option.lem \
+  exception.lem \
+  state.lem \
+  symbol_state.lem \
+  state_exception.lem \
+  pprint.lem \
+  document.lem \
+  symbol_table.lem \
+  cabs0.lem \
+  cabs.lem \
+  ail.lem \
+  ail_aux.lem \
+  ail_rewrite.lem \
+  core.lem \
+  errors.lem \
+  core_typing.lem \
+  core_indet.lem \
+  ail_typing_aux.lem \
+  memory.lem \
+  core_run.lem \
+  sb.lem \
+  annotate.lem \
+  cabs_transform.lem \
+  cabs_to_ail.lem \
+  ail_typing.lem \
+  range.lem \
+  translation.lem
 
 OCAML_LIB=lib/ocaml
 
-OCAML_BUILD_DIR=_build_ocaml
-TEX_BUILD_DIR=_build_tex
-HOL_BUILD_DIR=_build_hol
-COQ_BUILD_DIR=_build_coq
-
-OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text
-
-FILES=\
-boot.lem \
-type_error.lem \
-multiset.lem \
-global.lem \
-ord.lem \
-string_.lem \
-pair.lem \
-map_.lem \
-list_.lem \
-lexing.lem \
-output.lem \
-location.lem \
-symbol.lem \
-option.lem \
-exception.lem \
-state.lem \
-symbol_state.lem \
-state_exception.lem \
-pprint.lem \
-document.lem \
-symbol_table.lem \
-cabs_parser.lem \
-cabs.lem \
-ail.lem \
-ail_aux.lem \
-ail_rewrite.lem \
-core.lem \
-errors.lem \
-core_typing.lem \
-core_indet.lem \
-types.lem \
-memory.lem \
-core_run.lem \
-sb.lem \
-annotate.lem \
-cabs_transform.lem \
-cabs_to_ail.lem \
-typing.lem \
-range.lem \
-translation.lem
-
-COQ_FILES=
-
 OCAML_LIB_FILES=\
-boot.lem \
-pprint.lem \
-output.lem \
-document.lem
+  boot.lem \
+  pprint.lem \
+  output.lem \
+  document.lem
 
+# TODO: would be nice to have a way to tell Lem when a module is spurious
 SPURIOUS_FILES=\
-pprint.ml \
-lexing.ml \
-document.ml
+  pprint.ml \
+  lexing.ml \
+  document.ml \
+  cabs0.ml
+
+CORE_PARSER_FILES=\
+  core_parser.mly core_lexer.mll \
+  core_parser_base.ml core_parser_base.mli
+
+CPARSER_FILES=\
+  Lexer.mll \
+  $(notdir $(wildcard parsers/cparser/*.ml parsers/cparser/*.mli)) \
+  $(notdir $(wildcard parsers/cparser/coq_stdlib/*.ml parsers/cparser/coq_stdlib/*.mli))
+
+
+FILES=$(MODEL_FILES) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES)
 
 default: ocaml_byte
 
-all: ocaml tex
 
-tex: lem_tex
-	cp $(LEM_DIR)/tex-lib/lem.sty $(TEX_BUILD_DIR)
-
-hol: lem_hol
-
-coq: lem_coq
-
-ocaml: lem_ocaml
+ocaml_byte: lem_ocaml
 	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
-# Copy in Lem's OCaml library.
 	cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
-	cp boot/* $(OCAML_BUILD_DIR)
-	cp parsing/* $(OCAML_BUILD_DIR)
-# Copy in our own OCaml libraries.
-	cp $(LEM_DIR)/ocaml-lib/*.ml $(LEM_DIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
-# Working around the value restriction.
+# YUCK
+	sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs_transform.ml
+	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	-@[ -e "csem" ] || ln -s $(OCAML_BUILD_DIR)/main.byte csem
+
+
+lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES)) \
+           $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES))
+# (FUTURE) see comment below
+#          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)
+	 cd $(OCAML_BUILD_DIR) && $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix ../model/, $(MODEL_FILES))
 	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
-	sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/c_parser.mly
-# Fixing up OCaml syntax.
-#	sed -i"" -e 's/(if i1 <= i2 then True else False, p)/((if i1 <= i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
-#	sed -i"" -e 's/(if i1 <  i2 then True else False, p)/((if i1 <  i2 then True else False), p)/' $(OCAML_BUILD_DIR)/constraint.ml
-#	sed -i"" -e 's/let sb = Set_.product/(let sb = Set_.product/' $(OCAML_BUILD_DIR)/meaning.ml
-#	sed -i"" -e 's/let sb = action_set_/(let sb = action_set_/' $(OCAML_BUILD_DIR)/meaning.ml
-#	sed -i"" -e 's/d2.seq_before);/d2.seq_before));/' $(OCAML_BUILD_DIR)/meaning.ml
-#	sed -i"" -e 's/let null/let null ()/' $(OCAML_BUILD_DIR)/meaning.ml
-#	sed -i"" -e 's/M.null/M.null ()/' $(OCAML_BUILD_DIR)/reduction.ml
-# Write _tags
-	echo "true: annot, debug" > $(OCAML_BUILD_DIR)/_tags
 
-ocaml_native: ocaml
-	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.native
-	-@[ ! -e "csem" ] || ln -s _build_ocaml/main.native csem
+# (FUTURE) this would be the way to go if there was a way to not have Lem recompiled
+#          all the dependencies of a module
+# Generates OCaml code from the Lem source files
+# $(OCAML_BUILD_DIR)/%.ml : %.lem | $(OCAML_BUILD_DIR)
+# 	@echo LEM-ocaml $<
+# 	@cp FOO/_build/$*.ml $(OCAML_BUILD_DIR)
+# ifeq ($<,src/multiset.ml)
+#	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
+#	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
+# endif
 
-ocaml_byte: ocaml
-	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
-	-@[ -e "csem" ] || ln -s _build_ocaml/main.byte csem
+# TODO: find if there is way to factor
+# Move handwritten .ml .mli files
+$(OCAML_BUILD_DIR)/%.ml : %.ml | $(OCAML_BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(OCAML_BUILD_DIR)
 
-lem_ocaml:
-	mkdir -p $(OCAML_BUILD_DIR)
-	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(foreach F, $(FILES), ../src/$(F)) && cd ..
+$(OCAML_BUILD_DIR)/%.mli : %.mli | $(OCAML_BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(OCAML_BUILD_DIR)
 
-lem_tex:
-	mkdir -p $(TEX_BUILD_DIR)
-	cd $(TEX_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -tex $(foreach F, $(FILES), ../src/$(F)) && cd ..
+$(OCAML_BUILD_DIR)/%.mll : %.mll | $(OCAML_BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(OCAML_BUILD_DIR)
 
-lem_hol:
-	mkdir -p $(HOL_BUILD_DIR)
-	cd $(HOL_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -hol $(foreach F, $(FILES), ../src/$(F)) && cd ..
+$(OCAML_BUILD_DIR)/%.mly : %.mly | $(OCAML_BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(OCAML_BUILD_DIR)
 
-lem_coq:
-	mkdir -p $(COQ_BUILD_DIR)
-	cd $(COQ_BUILD_DIR) && OCAMLRUNPARAM=b ../$(LEM) -lib ../$(LEM_LIB) -coq $(foreach F, $(COQ_FILES), ../src/$(F)) && cd ..
+
+$(OCAML_BUILD_DIR)/cparser/% : % | $(OCAML_BUILD_DIR)
+	-@[ -d $(OCAML_BUILD_DIR)/cparser ] || mkdir $(OCAML_BUILD_DIR)/cparser
+	@echo COPYING $<
+	@cp $< $(OCAML_BUILD_DIR)/cparser/
+	-@(grep -s -e ^$(basename $*)$$ $(OCAML_BUILD_DIR)/cparser.mlpack || echo $(basename $*) >> $(OCAML_BUILD_DIR)/cparser.mlpack)
+
+
+
+# Create the directory where ocamlbuild will be called, and copy the OCaml library files from Lem.
+$(OCAML_BUILD_DIR):
+	mkdir $(OCAML_BUILD_DIR)
+	cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
+
 
 clean:
-	rm -f csem
-	rm -fR $(OCAML_BUILD_DIR)
-	rm -fR $(TEX_BUILD_DIR)
-	rm -fR $(HOL_BUILD_DIR)
+	rm -rf $(OCAML_BUILD_DIR)
+
+clear:
+	$(MAKE) clean
+	rm -rf csem
