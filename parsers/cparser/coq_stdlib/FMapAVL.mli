@@ -43,8 +43,7 @@ module Raw :
   
   val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
   
-  val remove_min :
-    'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod
+  val remove_min : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
   
   val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
   
@@ -71,9 +70,9 @@ module Raw :
   
   val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
   
-  val elements_aux : (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+  val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
   
-  val elements : 'a1 tree -> (key, 'a1) prod list
+  val elements : 'a1 tree -> (key*'a1) list
   
   val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
   
@@ -205,7 +204,7 @@ module Raw :
       
       type key = X.t
       
-      type 'elt t = (X.t, 'elt) prod list
+      type 'elt t = (X.t*'elt) list
       
       val empty : 'a1 t
       
@@ -215,36 +214,36 @@ module Raw :
       
       type 'elt coq_R_mem =
       | R_mem_0 of 'elt t
-      | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+      | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
          * 'elt coq_R_mem
       
       val coq_R_mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val coq_R_mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
       
@@ -252,38 +251,36 @@ module Raw :
       
       type 'elt coq_R_find =
       | R_find_0 of 'elt t
-      | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt option
+      | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
          * 'elt coq_R_find
       
       val coq_R_find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val coq_R_find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
       
@@ -291,38 +288,36 @@ module Raw :
       
       type 'elt coq_R_add =
       | R_add_0 of 'elt t
-      | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_add
       
       val coq_R_add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val coq_R_add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
       
@@ -330,36 +325,36 @@ module Raw :
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt t
-      | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_remove
       
       val coq_R_remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val coq_R_remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
       
@@ -370,33 +365,33 @@ module Raw :
       type ('elt, 'a) coq_R_fold =
       | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
       | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 'elt
-         * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+         * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
       
       val coq_R_fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val coq_R_fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val coq_R_fold_correct :
         (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1, 'a2)
@@ -406,49 +401,47 @@ module Raw :
       
       type 'elt coq_R_equal =
       | R_equal_0 of 'elt t * 'elt t
-      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
       | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
       
       val coq_R_equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val coq_R_equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val coq_R_equal_correct :
         ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -457,8 +450,7 @@ module Raw :
       
       val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
       
-      val option_cons :
-        key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+      val option_cons : key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
       
       val map2_l : ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
       
@@ -467,17 +459,17 @@ module Raw :
       val map2 :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
       
-      val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+      val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
       
       val fold_right_pair :
-        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
       
       val map2_alt :
-        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-        'a3) prod list
+        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+        (key*'a3) list
       
       val at_least_one :
-        'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+        'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
       
       val at_least_one_then_f :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2 option
@@ -618,24 +610,22 @@ module Raw :
     type 'elt coq_R_remove_min =
     | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
     | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-       key * 'elt * 'elt tree * I.int * ('elt tree, (key, 'elt) prod) prod
-       * 'elt coq_R_remove_min * 'elt tree * (key, 'elt) prod
+       key * 'elt * 'elt tree * I.int * ('elt tree*(key*'elt))
+       * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
     
     val coq_R_remove_min_rect :
       ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
       -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
-      -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2 ->
-      'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 ->
-      'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min ->
-      'a2
+      -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree ->
+      (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1
+      tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
     
     val coq_R_remove_min_rec :
       ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
       -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
-      -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2 ->
-      'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 ->
-      'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min ->
-      'a2
+      -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree ->
+      (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1
+      tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
     
     type 'elt coq_R_merge =
     | R_merge_0 of 'elt tree * 'elt tree
@@ -643,23 +633,23 @@ module Raw :
        * I.int
     | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt * 'elt tree
        * I.int * 'elt tree * key * 'elt * 'elt tree * I.int * 'elt tree
-       * (key, 'elt) prod * key * 'elt
+       * (key*'elt) * key * 'elt
     
     val coq_R_merge_rect :
       ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
       tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
       tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
       -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-      (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-      tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+      (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree ->
+      'a1 tree -> 'a1 coq_R_merge -> 'a2
     
     val coq_R_merge_rec :
       ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
       tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
       tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
       -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-      (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-      tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+      (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree ->
+      'a1 tree -> 'a1 coq_R_merge -> 'a2
     
     type 'elt coq_R_remove =
     | R_remove_0 of 'elt tree
@@ -691,23 +681,23 @@ module Raw :
        * 'elt tree * I.int
     | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
        * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-       * 'elt tree * (key, 'elt) prod
+       * 'elt tree * (key*'elt)
     
     val coq_R_concat_rect :
       ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
       tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
       tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
       -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-      (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-      'a1 coq_R_concat -> 'a2
+      (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+      coq_R_concat -> 'a2
     
     val coq_R_concat_rec :
       ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
       tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
       tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
       -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-      (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-      'a1 coq_R_concat -> 'a2
+      (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+      coq_R_concat -> 'a2
     
     type 'elt coq_R_split =
     | R_split_0 of 'elt tree
@@ -813,7 +803,7 @@ module Raw :
     
     val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
     
-    val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+    val flatten_e : 'a1 enumeration -> (key*'a1) list
    end
  end
 
@@ -866,8 +856,7 @@ module IntMake :
     
     val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
     
-    val remove_min :
-      'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod
+    val remove_min : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
     
     val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
     
@@ -894,10 +883,9 @@ module IntMake :
     
     val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
     
-    val elements_aux :
-      (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+    val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
     
-    val elements : 'a1 tree -> (key, 'a1) prod list
+    val elements : 'a1 tree -> (key*'a1) list
     
     val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
     
@@ -1029,7 +1017,7 @@ module IntMake :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -1039,38 +1027,36 @@ module IntMake :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -1078,40 +1064,36 @@ module IntMake :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -1119,38 +1101,36 @@ module IntMake :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -1158,40 +1138,36 @@ module IntMake :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -1202,32 +1178,32 @@ module IntMake :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -1238,49 +1214,49 @@ module IntMake :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -1290,7 +1266,7 @@ module IntMake :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -1301,17 +1277,17 @@ module IntMake :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -1456,25 +1432,22 @@ module IntMake :
       type 'elt coq_R_remove_min =
       | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
       | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-         * key * 'elt * 'elt tree * I.int
-         * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-         * 'elt tree * (key, 'elt) prod
+         * key * 'elt * 'elt tree * I.int * ('elt tree*(key*'elt))
+         * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
       
       val coq_R_remove_min_rect :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       val coq_R_remove_min_rec :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       type 'elt coq_R_merge =
       | R_merge_0 of 'elt tree * 'elt tree
@@ -1482,23 +1455,23 @@ module IntMake :
          * 'elt tree * I.int
       | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-         * 'elt tree * (key, 'elt) prod * key * 'elt
+         * 'elt tree * (key*'elt) * key * 'elt
       
       val coq_R_merge_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       val coq_R_merge_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt tree
@@ -1532,23 +1505,23 @@ module IntMake :
          * 'elt tree * I.int
       | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-         * 'elt tree * (key, 'elt) prod
+         * 'elt tree * (key*'elt)
       
       val coq_R_concat_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2
       
       val coq_R_concat_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2
       
       type 'elt coq_R_split =
       | R_split_0 of 'elt tree
@@ -1658,7 +1631,7 @@ module IntMake :
       
       val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
-      val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+      val flatten_e : 'a1 enumeration -> (key*'a1) list
      end
    end
   
@@ -1695,7 +1668,7 @@ module IntMake :
   val map2 :
     ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
   
-  val elements : 'a1 t -> (key, 'a1) prod list
+  val elements : 'a1 t -> (key*'a1) list
   
   val cardinal : 'a1 t -> nat
   
@@ -1766,8 +1739,7 @@ module IntMake_ord :
       val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
       
       val remove_min :
-        'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod
+        'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
       
       val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
       
@@ -1794,10 +1766,9 @@ module IntMake_ord :
       
       val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
       
-      val elements_aux :
-        (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+      val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
       
-      val elements : 'a1 tree -> (key, 'a1) prod list
+      val elements : 'a1 tree -> (key*'a1) list
       
       val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
@@ -1929,7 +1900,7 @@ module IntMake_ord :
           
           type key = X.t
           
-          type 'elt t = (X.t, 'elt) prod list
+          type 'elt t = (X.t*'elt) list
           
           val empty : 'a1 t
           
@@ -1939,38 +1910,38 @@ module IntMake_ord :
           
           type 'elt coq_R_mem =
           | R_mem_0 of 'elt t
-          | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-             bool * 'elt coq_R_mem
+          | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
+             * 'elt coq_R_mem
           
           val coq_R_mem_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-            coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
+            'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
           
           val coq_R_mem_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-            coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
+            'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
           
           val mem_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val mem_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
           
@@ -1978,40 +1949,40 @@ module IntMake_ord :
           
           type 'elt coq_R_find =
           | R_find_0 of 'elt t
-          | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * 'elt option * 'elt coq_R_find
+          | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+             * 'elt coq_R_find
           
           val coq_R_find_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option ->
-            'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 option -> 'a1
+            coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
             coq_R_find -> 'a2
           
           val coq_R_find_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option ->
-            'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 option -> 'a1
+            coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
             coq_R_find -> 'a2
           
           val find_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val find_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_find_correct :
             key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
@@ -2020,40 +1991,38 @@ module IntMake_ord :
           
           type 'elt coq_R_add =
           | R_add_0 of 'elt t
-          | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-             'elt t * 'elt coq_R_add
+          | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+             * 'elt coq_R_add
           
           val coq_R_add_rect :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1
-            t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1
-            coq_R_add -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
           
           val coq_R_add_rec :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1
-            t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1
-            coq_R_add -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
           
           val add_rect :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2
-            -> 'a2) -> 'a1 t -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
+            -> 'a2
           
           val add_rec :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2
-            -> 'a2) -> 'a1 t -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
+            -> 'a2
           
           val coq_R_add_correct :
             key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
@@ -2062,40 +2031,38 @@ module IntMake_ord :
           
           type 'elt coq_R_remove =
           | R_remove_0 of 'elt t
-          | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * 'elt t * 'elt coq_R_remove
+          | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+             * 'elt coq_R_remove
           
           val coq_R_remove_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-            coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-            -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
           
           val coq_R_remove_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-            coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-            -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
           
           val remove_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val remove_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_remove_correct :
             key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
@@ -2107,33 +2074,33 @@ module IntMake_ord :
           type ('elt, 'a) coq_R_fold =
           | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
           | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-             'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+             'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
           
           val coq_R_fold_rect :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2
-            -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 ->
-            ('a1, 'a3) coq_R_fold -> 'a2
+            (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+            -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1,
+            'a3) coq_R_fold -> 'a2
           
           val coq_R_fold_rec :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2
-            -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 ->
-            ('a1, 'a3) coq_R_fold -> 'a2
+            (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+            -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1,
+            'a3) coq_R_fold -> 'a2
           
           val fold_rect :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3
-            -> 'a3) -> 'a1 t -> 'a3 -> 'a2
+            (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+            -> 'a1 t -> 'a3 -> 'a2
           
           val fold_rec :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3
-            -> 'a3) -> 'a1 t -> 'a3 -> 'a2
+            (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+            -> 'a1 t -> 'a3 -> 'a2
           
           val coq_R_fold_correct :
             (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1, 'a2)
@@ -2143,50 +2110,49 @@ module IntMake_ord :
           
           type 'elt coq_R_equal =
           | R_equal_0 of 'elt t * 'elt t
-          | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-          | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t OrderedType.coq_Compare
+          | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+             X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+          | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+             X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
           | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
           
           val coq_R_equal_rect :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool ->
-            'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1
-            -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod
-            list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) ->
-            'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1
+            coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
+            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t ->
+            bool -> 'a1 coq_R_equal -> 'a2
           
           val coq_R_equal_rec :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool ->
-            'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1
-            -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod
-            list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) ->
-            'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1
+            coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
+            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t ->
+            bool -> 'a1 coq_R_equal -> 'a2
           
           val equal_rect :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 ->
-            'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-            __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
-            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t
+            -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
+            -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
+            'a2) -> 'a1 t -> 'a1 t -> 'a2
           
           val equal_rec :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 ->
-            'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-            __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
-            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t
+            -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
+            -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
+            'a2) -> 'a1 t -> 'a1 t -> 'a2
           
           val coq_R_equal_correct :
             ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -2196,7 +2162,7 @@ module IntMake_ord :
           val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
           
           val option_cons :
-            key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+            key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
           
           val map2_l :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -2208,17 +2174,17 @@ module IntMake_ord :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3
             t
           
-          val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+          val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
           
           val fold_right_pair :
-            ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+            ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
           
           val map2_alt :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
-            (key, 'a3) prod list
+            (key*'a3) list
           
           val at_least_one :
-            'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+            'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
           
           val at_least_one_then_f :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -2365,25 +2331,22 @@ module IntMake_ord :
         type 'elt coq_R_remove_min =
         | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
         | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-           * key * 'elt * 'elt tree * I.int
-           * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-           * 'elt tree * (key, 'elt) prod
+           * key * 'elt * 'elt tree * I.int * ('elt tree*(key*'elt))
+           * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
         
         val coq_R_remove_min_rect :
           ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree ->
           key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          I.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-          coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ ->
-          'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1)
-          prod) prod -> 'a1 coq_R_remove_min -> 'a2
+          I.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
+          -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 ->
+          'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
         
         val coq_R_remove_min_rec :
           ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree ->
           key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          I.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-          coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ ->
-          'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1)
-          prod) prod -> 'a1 coq_R_remove_min -> 'a2
+          I.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
+          -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 ->
+          'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
         
         type 'elt coq_R_merge =
         | R_merge_0 of 'elt tree * 'elt tree
@@ -2391,23 +2354,23 @@ module IntMake_ord :
            * 'elt tree * I.int
         | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
            * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * 
-           I.int * 'elt tree * (key, 'elt) prod * key * 'elt
+           I.int * 'elt tree * (key*'elt) * key * 'elt
         
         val coq_R_merge_rect :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
           tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
           __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree
-          -> (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree ->
-          'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+          -> (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
+          tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
         
         val coq_R_merge_rec :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
           tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
           __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree
-          -> (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree ->
-          'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+          -> (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
+          tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt tree
@@ -2442,23 +2405,23 @@ module IntMake_ord :
            * 'elt tree * I.int
         | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
            * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * 
-           I.int * 'elt tree * (key, 'elt) prod
+           I.int * 'elt tree * (key*'elt)
         
         val coq_R_concat_rect :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
           tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
           __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree
-          -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1
-          tree -> 'a1 coq_R_concat -> 'a2
+          -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
+          'a1 coq_R_concat -> 'a2
         
         val coq_R_concat_rec :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
           tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
           __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree
-          -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1
-          tree -> 'a1 coq_R_concat -> 'a2
+          -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
+          'a1 coq_R_concat -> 'a2
         
         type 'elt coq_R_split =
         | R_split_0 of 'elt tree
@@ -2568,7 +2531,7 @@ module IntMake_ord :
         
         val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
         
-        val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+        val flatten_e : 'a1 enumeration -> (key*'a1) list
        end
      end
     
@@ -2605,7 +2568,7 @@ module IntMake_ord :
     val map2 :
       ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
     
-    val elements : 'a1 t -> (key, 'a1) prod list
+    val elements : 'a1 t -> (key*'a1) list
     
     val cardinal : 'a1 t -> nat
     
@@ -2672,7 +2635,7 @@ module IntMake_ord :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -2682,38 +2645,36 @@ module IntMake_ord :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -2721,40 +2682,36 @@ module IntMake_ord :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -2762,38 +2719,36 @@ module IntMake_ord :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -2801,40 +2756,36 @@ module IntMake_ord :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -2845,32 +2796,32 @@ module IntMake_ord :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -2881,49 +2832,49 @@ module IntMake_ord :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -2933,7 +2884,7 @@ module IntMake_ord :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -2944,17 +2895,17 @@ module IntMake_ord :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -3003,7 +2954,7 @@ module IntMake_ord :
       val map2 :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
       
-      val elements : 'a1 t -> (key, 'a1) prod list
+      val elements : 'a1 t -> (key*'a1) list
       
       val cardinal : 'a1 t -> nat
       
@@ -3076,8 +3027,7 @@ module IntMake_ord :
     
     val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
     
-    val remove_min :
-      'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod
+    val remove_min : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
     
     val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
     
@@ -3104,10 +3054,9 @@ module IntMake_ord :
     
     val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
     
-    val elements_aux :
-      (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+    val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
     
-    val elements : 'a1 tree -> (key, 'a1) prod list
+    val elements : 'a1 tree -> (key*'a1) list
     
     val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
     
@@ -3239,7 +3188,7 @@ module IntMake_ord :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -3249,38 +3198,36 @@ module IntMake_ord :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -3288,40 +3235,36 @@ module IntMake_ord :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -3329,38 +3272,36 @@ module IntMake_ord :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -3368,40 +3309,36 @@ module IntMake_ord :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -3412,32 +3349,32 @@ module IntMake_ord :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -3448,49 +3385,49 @@ module IntMake_ord :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -3500,7 +3437,7 @@ module IntMake_ord :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -3511,17 +3448,17 @@ module IntMake_ord :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -3666,25 +3603,22 @@ module IntMake_ord :
       type 'elt coq_R_remove_min =
       | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
       | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-         * key * 'elt * 'elt tree * I.int
-         * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-         * 'elt tree * (key, 'elt) prod
+         * key * 'elt * 'elt tree * I.int * ('elt tree*(key*'elt))
+         * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
       
       val coq_R_remove_min_rect :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       val coq_R_remove_min_rec :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int ->
-        __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
-        -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> key ->
-        'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2
+        __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 tree
+        -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+        ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       type 'elt coq_R_merge =
       | R_merge_0 of 'elt tree * 'elt tree
@@ -3692,23 +3626,23 @@ module IntMake_ord :
          * 'elt tree * I.int
       | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-         * 'elt tree * (key, 'elt) prod * key * 'elt
+         * 'elt tree * (key*'elt) * key * 'elt
       
       val coq_R_merge_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       val coq_R_merge_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1
-        tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
+        (key*'a1) -> __ -> key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree
+        -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt tree
@@ -3742,23 +3676,23 @@ module IntMake_ord :
          * 'elt tree * I.int
       | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * I.int * 'elt tree * key * 'elt * 'elt tree * I.int
-         * 'elt tree * (key, 'elt) prod
+         * 'elt tree * (key*'elt)
       
       val coq_R_concat_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2
       
       val coq_R_concat_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> __ -> 'a2) -> ('a1
         tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __
         -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> I.int -> __ -> 'a1 tree ->
-        (key, 'a1) prod -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
-        'a1 coq_R_concat -> 'a2
+        (key*'a1) -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
+        coq_R_concat -> 'a2
       
       type 'elt coq_R_split =
       | R_split_0 of 'elt tree
@@ -3868,7 +3802,7 @@ module IntMake_ord :
       
       val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
-      val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+      val flatten_e : 'a1 enumeration -> (key*'a1) list
      end
    end
   
@@ -3960,7 +3894,7 @@ module IntMake_ord :
       
       type key = X.t
       
-      type 'elt t = (X.t, 'elt) prod list
+      type 'elt t = (X.t*'elt) list
       
       val empty : 'a1 t
       
@@ -3970,36 +3904,36 @@ module IntMake_ord :
       
       type 'elt coq_R_mem =
       | R_mem_0 of 'elt t
-      | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+      | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
          * 'elt coq_R_mem
       
       val coq_R_mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val coq_R_mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
       
@@ -4007,38 +3941,36 @@ module IntMake_ord :
       
       type 'elt coq_R_find =
       | R_find_0 of 'elt t
-      | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt option
+      | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
          * 'elt coq_R_find
       
       val coq_R_find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val coq_R_find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
       
@@ -4046,38 +3978,36 @@ module IntMake_ord :
       
       type 'elt coq_R_add =
       | R_add_0 of 'elt t
-      | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_add
       
       val coq_R_add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val coq_R_add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
       
@@ -4085,36 +4015,36 @@ module IntMake_ord :
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt t
-      | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_remove
       
       val coq_R_remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val coq_R_remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
       
@@ -4125,33 +4055,33 @@ module IntMake_ord :
       type ('elt, 'a) coq_R_fold =
       | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
       | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 'elt
-         * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+         * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
       
       val coq_R_fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val coq_R_fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val coq_R_fold_correct :
         (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1, 'a2)
@@ -4161,49 +4091,47 @@ module IntMake_ord :
       
       type 'elt coq_R_equal =
       | R_equal_0 of 'elt t * 'elt t
-      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
       | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
       
       val coq_R_equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val coq_R_equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val coq_R_equal_correct :
         ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -4212,8 +4140,7 @@ module IntMake_ord :
       
       val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
       
-      val option_cons :
-        key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+      val option_cons : key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
       
       val map2_l : ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
       
@@ -4222,17 +4149,17 @@ module IntMake_ord :
       val map2 :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
       
-      val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+      val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
       
       val fold_right_pair :
-        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
       
       val map2_alt :
-        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-        'a3) prod list
+        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+        (key*'a3) list
       
       val at_least_one :
-        'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+        'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
       
       val at_least_one_then_f :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2 option
@@ -4418,29 +4345,28 @@ module IntMake_ord :
     | R_remove_min_1 of 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * I.int
-       * ('elt MapS.Raw.tree, (MapS.Raw.key, 'elt) prod) prod
-       * 'elt coq_R_remove_min * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod
+       * ('elt MapS.Raw.tree*(MapS.Raw.key*'elt)) * 'elt coq_R_remove_min
+       * 'elt MapS.Raw.tree * (MapS.Raw.key*'elt)
     
     val coq_R_remove_min_rect :
       ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> __ ->
       'a2) -> ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree
       -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree ->
-      I.int -> __ -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod) prod ->
-      'a1 coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1)
-      prod -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
-      MapS.Raw.tree -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod) prod ->
-      'a1 coq_R_remove_min -> 'a2
+      I.int -> __ -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
+      MapS.Raw.tree -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2
     
     val coq_R_remove_min_rec :
       ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> __ ->
       'a2) -> ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree
       -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree ->
-      I.int -> __ -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod) prod ->
-      'a1 coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1)
-      prod -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
-      MapS.Raw.tree -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod) prod ->
-      'a1 coq_R_remove_min -> 'a2
+      I.int -> __ -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
+      MapS.Raw.tree -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2
     
     type 'elt coq_R_merge =
     | R_merge_0 of 'elt MapS.Raw.tree * 'elt MapS.Raw.tree
@@ -4451,7 +4377,7 @@ module IntMake_ord :
        * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt * 'elt MapS.Raw.tree
        * I.int * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * I.int * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod * MapS.Raw.key * 'elt
+       * (MapS.Raw.key*'elt) * MapS.Raw.key * 'elt
     
     val coq_R_merge_rect :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -4460,9 +4386,9 @@ module IntMake_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1 MapS.Raw.tree ->
       MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1
-      MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> MapS.Raw.key -> 'a1
-      -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
-      MapS.Raw.tree -> 'a1 coq_R_merge -> 'a2
+      MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> MapS.Raw.key -> 'a1 -> __
+      -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree
+      -> 'a1 coq_R_merge -> 'a2
     
     val coq_R_merge_rec :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -4471,9 +4397,9 @@ module IntMake_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1 MapS.Raw.tree ->
       MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1
-      MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> MapS.Raw.key -> 'a1
-      -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
-      MapS.Raw.tree -> 'a1 coq_R_merge -> 'a2
+      MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> MapS.Raw.key -> 'a1 -> __
+      -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree
+      -> 'a1 coq_R_merge -> 'a2
     
     type 'elt coq_R_remove =
     | R_remove_0 of 'elt MapS.Raw.tree
@@ -4517,7 +4443,7 @@ module IntMake_ord :
        * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt * 'elt MapS.Raw.tree
        * I.int * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * I.int * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod
+       * (MapS.Raw.key*'elt)
     
     val coq_R_concat_rect :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -4526,9 +4452,8 @@ module IntMake_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1 MapS.Raw.tree ->
       MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1
-      MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1
-      MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
-      coq_R_concat -> 'a2
+      MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> 'a2) -> 'a1 MapS.Raw.tree
+      -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 coq_R_concat -> 'a2
     
     val coq_R_concat_rec :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -4537,9 +4462,8 @@ module IntMake_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1 MapS.Raw.tree ->
       MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> I.int -> __ -> 'a1
-      MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1
-      MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
-      coq_R_concat -> 'a2
+      MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> 'a2) -> 'a1 MapS.Raw.tree
+      -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 coq_R_concat -> 'a2
     
     type 'elt coq_R_split =
     | R_split_0 of 'elt MapS.Raw.tree
@@ -4680,7 +4604,7 @@ module IntMake_ord :
     val fold' :
       (MapS.Raw.key -> 'a1 -> 'a2 -> 'a2) -> 'a1 MapS.Raw.tree -> 'a2 -> 'a2
     
-    val flatten_e : 'a1 MapS.Raw.enumeration -> (MapS.Raw.key, 'a1) prod list
+    val flatten_e : 'a1 MapS.Raw.enumeration -> (MapS.Raw.key*'a1) list
    end
   
   type t = D.t MapS.t
@@ -4752,8 +4676,7 @@ module Make :
     
     val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
     
-    val remove_min :
-      'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod
+    val remove_min : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
     
     val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
     
@@ -4780,10 +4703,9 @@ module Make :
     
     val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
     
-    val elements_aux :
-      (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+    val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
     
-    val elements : 'a1 tree -> (key, 'a1) prod list
+    val elements : 'a1 tree -> (key*'a1) list
     
     val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
     
@@ -4915,7 +4837,7 @@ module Make :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -4925,38 +4847,36 @@ module Make :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -4964,40 +4884,36 @@ module Make :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -5005,38 +4921,36 @@ module Make :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -5044,40 +4958,36 @@ module Make :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -5088,32 +4998,32 @@ module Make :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -5124,49 +5034,49 @@ module Make :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -5176,7 +5086,7 @@ module Make :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -5187,17 +5097,17 @@ module Make :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -5349,25 +5259,22 @@ module Make :
       type 'elt coq_R_remove_min =
       | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
       | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-         * key * 'elt * 'elt tree * Z_as_Int.int
-         * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-         * 'elt tree * (key, 'elt) prod
+         * key * 'elt * 'elt tree * Z_as_Int.int * ('elt tree*(key*'elt))
+         * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
       
       val coq_R_remove_min_rect :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2)
-        -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod -> 'a1 coq_R_remove_min -> 'a2
+        Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+        'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1
+        -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       val coq_R_remove_min_rec :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2)
-        -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod -> 'a1 coq_R_remove_min -> 'a2
+        Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+        'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1
+        -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       type 'elt coq_R_merge =
       | R_merge_0 of 'elt tree * 'elt tree
@@ -5375,25 +5282,23 @@ module Make :
          * 'elt tree * Z_as_Int.int
       | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-         * Z_as_Int.int * 'elt tree * (key, 'elt) prod * key * 'elt
+         * Z_as_Int.int * 'elt tree * (key*'elt) * key * 'elt
       
       val coq_R_merge_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key -> 'a1
-        -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
-        -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 -> __
+        -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       val coq_R_merge_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key -> 'a1
-        -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
-        -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 -> __
+        -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt tree
@@ -5428,23 +5333,23 @@ module Make :
          * 'elt tree * Z_as_Int.int
       | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-         * Z_as_Int.int * 'elt tree * (key, 'elt) prod
+         * Z_as_Int.int * 'elt tree * (key*'elt)
       
       val coq_R_concat_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-        'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree
+        -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
       
       val coq_R_concat_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-        'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree
+        -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
       
       type 'elt coq_R_split =
       | R_split_0 of 'elt tree
@@ -5557,7 +5462,7 @@ module Make :
       
       val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
-      val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+      val flatten_e : 'a1 enumeration -> (key*'a1) list
      end
    end
   
@@ -5594,7 +5499,7 @@ module Make :
   val map2 :
     ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
   
-  val elements : 'a1 t -> (key, 'a1) prod list
+  val elements : 'a1 t -> (key*'a1) list
   
   val cardinal : 'a1 t -> nat
   
@@ -5664,8 +5569,7 @@ module Make_ord :
       val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
       
       val remove_min :
-        'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod
+        'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
       
       val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
       
@@ -5692,10 +5596,9 @@ module Make_ord :
       
       val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
       
-      val elements_aux :
-        (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+      val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
       
-      val elements : 'a1 tree -> (key, 'a1) prod list
+      val elements : 'a1 tree -> (key*'a1) list
       
       val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
@@ -5827,7 +5730,7 @@ module Make_ord :
           
           type key = X.t
           
-          type 'elt t = (X.t, 'elt) prod list
+          type 'elt t = (X.t*'elt) list
           
           val empty : 'a1 t
           
@@ -5837,38 +5740,38 @@ module Make_ord :
           
           type 'elt coq_R_mem =
           | R_mem_0 of 'elt t
-          | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-             bool * 'elt coq_R_mem
+          | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
+             * 'elt coq_R_mem
           
           val coq_R_mem_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-            coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
+            'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
           
           val coq_R_mem_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-            coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
+            'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
           
           val mem_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val mem_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
           
@@ -5876,40 +5779,40 @@ module Make_ord :
           
           type 'elt coq_R_find =
           | R_find_0 of 'elt t
-          | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * 'elt option * 'elt coq_R_find
+          | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+             * 'elt coq_R_find
           
           val coq_R_find_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option ->
-            'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 option -> 'a1
+            coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
             coq_R_find -> 'a2
           
           val coq_R_find_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option ->
-            'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 option -> 'a1
+            coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1
             coq_R_find -> 'a2
           
           val find_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val find_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_find_correct :
             key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
@@ -5918,40 +5821,38 @@ module Make_ord :
           
           type 'elt coq_R_add =
           | R_add_0 of 'elt t
-          | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-             'elt t * 'elt coq_R_add
+          | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+             * 'elt coq_R_add
           
           val coq_R_add_rect :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1
-            t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1
-            coq_R_add -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
           
           val coq_R_add_rec :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1
-            t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1
-            coq_R_add -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
           
           val add_rect :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2
-            -> 'a2) -> 'a1 t -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
+            -> 'a2
           
           val add_rec :
             key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1
-            t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2
-            -> 'a2) -> 'a1 t -> 'a2
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
+            -> 'a2
           
           val coq_R_add_correct :
             key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
@@ -5960,40 +5861,38 @@ module Make_ord :
           
           type 'elt coq_R_remove =
           | R_remove_0 of 'elt t
-          | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-          | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * 'elt t * 'elt coq_R_remove
+          | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+          | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+             * 'elt coq_R_remove
           
           val coq_R_remove_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-            coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-            -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
           
           val coq_R_remove_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-            coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-            -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
+            -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
           
           val remove_rect :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val remove_rec :
-            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-            prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t
-            -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2)
-            -> 'a1 t -> 'a2
+            key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+            list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1
+            -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t ->
+            'a2
           
           val coq_R_remove_correct :
             key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
@@ -6005,33 +5904,33 @@ module Make_ord :
           type ('elt, 'a) coq_R_fold =
           | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
           | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-             'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+             'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
           
           val coq_R_fold_rect :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2
-            -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 ->
-            ('a1, 'a3) coq_R_fold -> 'a2
+            (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+            -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1,
+            'a3) coq_R_fold -> 'a2
           
           val coq_R_fold_rec :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2
-            -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 ->
-            ('a1, 'a3) coq_R_fold -> 'a2
+            (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+            -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1,
+            'a3) coq_R_fold -> 'a2
           
           val fold_rect :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3
-            -> 'a3) -> 'a1 t -> 'a3 -> 'a2
+            (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+            -> 'a1 t -> 'a3 -> 'a2
           
           val fold_rec :
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
             (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
-            (X.t, 'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3
-            -> 'a3) -> 'a1 t -> 'a3 -> 'a2
+            (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+            -> 'a1 t -> 'a3 -> 'a2
           
           val coq_R_fold_correct :
             (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1, 'a2)
@@ -6041,50 +5940,49 @@ module Make_ord :
           
           type 'elt coq_R_equal =
           | R_equal_0 of 'elt t * 'elt t
-          | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-          | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t * 'elt * (X.t, 'elt) prod list
-             * X.t OrderedType.coq_Compare
+          | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+             X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+          | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+             X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
           | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
           
           val coq_R_equal_rect :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool ->
-            'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1
-            -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod
-            list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) ->
-            'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1
+            coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
+            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t ->
+            bool -> 'a1 coq_R_equal -> 'a2
           
           val coq_R_equal_rec :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool ->
-            'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1
-            -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod
-            list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) ->
-            'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1
+            coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
+            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t ->
+            bool -> 'a1 coq_R_equal -> 'a2
           
           val equal_rect :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 ->
-            'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-            __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
-            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t
+            -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
+            -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
+            'a2) -> 'a1 t -> 'a1 t -> 'a2
           
           val equal_rec :
             ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
-            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ ->
-            X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 ->
-            'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-            __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-            OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t ->
-            'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+            ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t ->
+            'a1 -> (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t
+            -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+            (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
+            -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
+            'a2) -> 'a1 t -> 'a1 t -> 'a2
           
           val coq_R_equal_correct :
             ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -6094,7 +5992,7 @@ module Make_ord :
           val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
           
           val option_cons :
-            key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+            key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
           
           val map2_l :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -6106,17 +6004,17 @@ module Make_ord :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3
             t
           
-          val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+          val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
           
           val fold_right_pair :
-            ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+            ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
           
           val map2_alt :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
-            (key, 'a3) prod list
+            (key*'a3) list
           
           val at_least_one :
-            'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+            'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
           
           val at_least_one_then_f :
             ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -6268,25 +6166,24 @@ module Make_ord :
         type 'elt coq_R_remove_min =
         | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
         | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-           * key * 'elt * 'elt tree * Z_as_Int.int
-           * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-           * 'elt tree * (key, 'elt) prod
+           * key * 'elt * 'elt tree * Z_as_Int.int * ('elt tree*(key*'elt))
+           * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
         
         val coq_R_remove_min_rect :
           ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree ->
           key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-          coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ ->
-          'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1)
-          prod) prod -> 'a1 coq_R_remove_min -> 'a2
+          Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min
+          -> 'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key ->
+          'a1 -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+          'a2
         
         val coq_R_remove_min_rec :
           ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree ->
           key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-          coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ ->
-          'a2) -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1)
-          prod) prod -> 'a1 coq_R_remove_min -> 'a2
+          Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min
+          -> 'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key ->
+          'a1 -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+          'a2
         
         type 'elt coq_R_merge =
         | R_merge_0 of 'elt tree * 'elt tree
@@ -6294,25 +6191,25 @@ module Make_ord :
            * 'elt tree * Z_as_Int.int
         | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
            * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-           * Z_as_Int.int * 'elt tree * (key, 'elt) prod * key * 'elt
+           * Z_as_Int.int * 'elt tree * (key*'elt) * key * 'elt
         
         val coq_R_merge_rect :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2)
           -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
           Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key ->
-          'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
-          coq_R_merge -> 'a2
+          Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 ->
+          __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
+          -> 'a2
         
         val coq_R_merge_rec :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2)
           -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
           Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key ->
-          'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1
-          coq_R_merge -> 'a2
+          Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 ->
+          __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
+          -> 'a2
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt tree
@@ -6347,23 +6244,23 @@ module Make_ord :
            * 'elt tree * Z_as_Int.int
         | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
            * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-           * Z_as_Int.int * 'elt tree * (key, 'elt) prod
+           * Z_as_Int.int * 'elt tree * (key*'elt)
         
         val coq_R_concat_rect :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2)
           -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
           Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-          'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+          Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1
+          tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
         
         val coq_R_concat_rec :
           ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
           tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2)
           -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
           Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-          Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-          'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+          Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1
+          tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
         
         type 'elt coq_R_split =
         | R_split_0 of 'elt tree
@@ -6480,7 +6377,7 @@ module Make_ord :
         
         val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
         
-        val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+        val flatten_e : 'a1 enumeration -> (key*'a1) list
        end
      end
     
@@ -6517,7 +6414,7 @@ module Make_ord :
     val map2 :
       ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
     
-    val elements : 'a1 t -> (key, 'a1) prod list
+    val elements : 'a1 t -> (key*'a1) list
     
     val cardinal : 'a1 t -> nat
     
@@ -6584,7 +6481,7 @@ module Make_ord :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -6594,38 +6491,36 @@ module Make_ord :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -6633,40 +6528,36 @@ module Make_ord :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -6674,38 +6565,36 @@ module Make_ord :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -6713,40 +6602,36 @@ module Make_ord :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -6757,32 +6642,32 @@ module Make_ord :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -6793,49 +6678,49 @@ module Make_ord :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -6845,7 +6730,7 @@ module Make_ord :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -6856,17 +6741,17 @@ module Make_ord :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -6915,7 +6800,7 @@ module Make_ord :
       val map2 :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
       
-      val elements : 'a1 t -> (key, 'a1) prod list
+      val elements : 'a1 t -> (key*'a1) list
       
       val cardinal : 'a1 t -> nat
       
@@ -6988,8 +6873,7 @@ module Make_ord :
     
     val add : key -> 'a1 -> 'a1 tree -> 'a1 tree
     
-    val remove_min :
-      'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod) prod
+    val remove_min : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree*(key*'a1)
     
     val merge : 'a1 tree -> 'a1 tree -> 'a1 tree
     
@@ -7016,10 +6900,9 @@ module Make_ord :
     
     val concat : 'a1 tree -> 'a1 tree -> 'a1 tree
     
-    val elements_aux :
-      (key, 'a1) prod list -> 'a1 tree -> (key, 'a1) prod list
+    val elements_aux : (key*'a1) list -> 'a1 tree -> (key*'a1) list
     
-    val elements : 'a1 tree -> (key, 'a1) prod list
+    val elements : 'a1 tree -> (key*'a1) list
     
     val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
     
@@ -7151,7 +7034,7 @@ module Make_ord :
         
         type key = X.t
         
-        type 'elt t = (X.t, 'elt) prod list
+        type 'elt t = (X.t*'elt) list
         
         val empty : 'a1 t
         
@@ -7161,38 +7044,36 @@ module Make_ord :
         
         type 'elt coq_R_mem =
         | R_mem_0 of 'elt t
-        | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+        | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
            * 'elt coq_R_mem
         
         val coq_R_mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val coq_R_mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) ->
+          'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
         
         val mem_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val mem_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
         
@@ -7200,40 +7081,36 @@ module Make_ord :
         
         type 'elt coq_R_find =
         | R_find_0 of 'elt t
-        | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * 'elt option * 'elt coq_R_find
+        | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
+           * 'elt coq_R_find
         
         val coq_R_find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val coq_R_find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-          coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 ->
+          'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
         
         val find_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val find_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
         
@@ -7241,38 +7118,36 @@ module Make_ord :
         
         type 'elt coq_R_add =
         | R_add_0 of 'elt t
-        | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+        | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
            * 'elt coq_R_add
         
         val coq_R_add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val coq_R_add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2
+          -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
         
         val add_rect :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val add_rec :
-          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
         
@@ -7280,40 +7155,36 @@ module Make_ord :
         
         type 'elt coq_R_remove =
         | R_remove_0 of 'elt t
-        | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-        | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 
-           'elt t * 'elt coq_R_remove
+        | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+        | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
+           * 'elt coq_R_remove
         
         val coq_R_remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val coq_R_remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-          coq_R_remove -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
-          -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2)
+          -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
         
         val remove_rect :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val remove_rec :
-          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-          prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1
-          t -> 'a2
+          key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
         
         val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
         
@@ -7324,32 +7195,32 @@ module Make_ord :
         type ('elt, 'a) coq_R_fold =
         | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
         | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 
-           'elt * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+           'elt * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
         
         val coq_R_fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val coq_R_fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2)
           -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
           coq_R_fold -> 'a2
         
         val fold_rect :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val fold_rec :
           (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-          'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
+          -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3)
           -> 'a1 t -> 'a3 -> 'a2
         
         val coq_R_fold_correct :
@@ -7360,49 +7231,49 @@ module Make_ord :
         
         type 'elt coq_R_equal =
         | R_equal_0 of 'elt t * 'elt t
-        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-           * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+        | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+        | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+           X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
         | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
         
         val coq_R_equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val coq_R_equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1
-          coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 ->
-          (X.t, 'a1) prod list -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list ->
-          __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
-          'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
-          -> bool -> 'a1 coq_R_equal -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2
+          -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ ->
+          X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare
+          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
+          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal ->
+          'a2
         
         val equal_rect :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val equal_rec :
           ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1
-          t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t ->
-          'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) ->
-          ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-          -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare
-          -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t ->
-          __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
+          t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+          (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t
+          -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1)
+          list -> __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) ->
+          ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1
+          t -> 'a1 t -> 'a2
         
         val coq_R_equal_correct :
           ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -7412,7 +7283,7 @@ module Make_ord :
         val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val option_cons :
-          key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+          key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
         
         val map2_l :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
@@ -7423,17 +7294,17 @@ module Make_ord :
         val map2 :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+        val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
         
         val fold_right_pair :
-          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+          ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
         
         val map2_alt :
-          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-          'a3) prod list
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+          (key*'a3) list
         
         val at_least_one :
-          'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+          'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
         
         val at_least_one_then_f :
           ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
@@ -7585,25 +7456,22 @@ module Make_ord :
       type 'elt coq_R_remove_min =
       | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
       | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-         * key * 'elt * 'elt tree * Z_as_Int.int
-         * ('elt tree, (key, 'elt) prod) prod * 'elt coq_R_remove_min
-         * 'elt tree * (key, 'elt) prod
+         * key * 'elt * 'elt tree * Z_as_Int.int * ('elt tree*(key*'elt))
+         * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
       
       val coq_R_remove_min_rect :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2)
-        -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod -> 'a1 coq_R_remove_min -> 'a2
+        Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+        'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1
+        -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       val coq_R_remove_min_rec :
         ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> key
         -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> ('a1 tree, (key, 'a1) prod) prod -> 'a1
-        coq_R_remove_min -> 'a2 -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2)
-        -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree, (key, 'a1) prod)
-        prod -> 'a1 coq_R_remove_min -> 'a2
+        Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min ->
+        'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree -> key -> 'a1
+        -> 'a1 tree -> ('a1 tree*(key*'a1)) -> 'a1 coq_R_remove_min -> 'a2
       
       type 'elt coq_R_merge =
       | R_merge_0 of 'elt tree * 'elt tree
@@ -7611,25 +7479,23 @@ module Make_ord :
          * 'elt tree * Z_as_Int.int
       | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-         * Z_as_Int.int * 'elt tree * (key, 'elt) prod * key * 'elt
+         * Z_as_Int.int * 'elt tree * (key*'elt) * key * 'elt
       
       val coq_R_merge_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key -> 'a1
-        -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
-        -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 -> __
+        -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       val coq_R_merge_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> key -> 'a1
-        -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge
-        -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> key -> 'a1 -> __
+        -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_merge -> 'a2
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt tree
@@ -7664,23 +7530,23 @@ module Make_ord :
          * 'elt tree * Z_as_Int.int
       | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
          * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-         * Z_as_Int.int * 'elt tree * (key, 'elt) prod
+         * Z_as_Int.int * 'elt tree * (key*'elt)
       
       val coq_R_concat_rect :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-        'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree
+        -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
       
       val coq_R_concat_rec :
         ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1
         tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a2) ->
         ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
         Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
-        Z_as_Int.int -> __ -> 'a1 tree -> (key, 'a1) prod -> __ -> 'a2) ->
-        'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
+        Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ -> 'a2) -> 'a1 tree
+        -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
       
       type 'elt coq_R_split =
       | R_split_0 of 'elt tree
@@ -7793,7 +7659,7 @@ module Make_ord :
       
       val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
       
-      val flatten_e : 'a1 enumeration -> (key, 'a1) prod list
+      val flatten_e : 'a1 enumeration -> (key*'a1) list
      end
    end
   
@@ -7885,7 +7751,7 @@ module Make_ord :
       
       type key = X.t
       
-      type 'elt t = (X.t, 'elt) prod list
+      type 'elt t = (X.t*'elt) list
       
       val empty : 'a1 t
       
@@ -7895,36 +7761,36 @@ module Make_ord :
       
       type 'elt coq_R_mem =
       | R_mem_0 of 'elt t
-      | R_mem_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_mem_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * bool
+      | R_mem_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_mem_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * bool
          * 'elt coq_R_mem
       
       val coq_R_mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val coq_R_mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem ->
-        'a2 -> 'a2) -> 'a1 t -> bool -> 'a1 coq_R_mem -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t ->
+        bool -> 'a1 coq_R_mem -> 'a2
       
       val mem_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val mem_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
       
@@ -7932,38 +7798,36 @@ module Make_ord :
       
       type 'elt coq_R_find =
       | R_find_0 of 'elt t
-      | R_find_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_find_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt option
+      | R_find_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_find_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt option
          * 'elt coq_R_find
       
       val coq_R_find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val coq_R_find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 option -> 'a1
-        coq_R_find -> 'a2 -> 'a2) -> 'a1 t -> 'a1 option -> 'a1 coq_R_find ->
-        'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) ->
+        'a1 t -> 'a1 option -> 'a1 coq_R_find -> 'a2
       
       val find_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val find_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_find_correct : key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
       
@@ -7971,38 +7835,36 @@ module Make_ord :
       
       type 'elt coq_R_add =
       | R_add_0 of 'elt t
-      | R_add_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_add_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_add_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_add_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_add
       
       val coq_R_add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val coq_R_add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1
-        coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 ->
+        'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_add -> 'a2
       
       val add_rect :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val add_rec :
-        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t ->
-        'a1 -> (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t
-        -> 'a2
+        key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_add_correct : key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
       
@@ -8010,36 +7872,36 @@ module Make_ord :
       
       type 'elt coq_R_remove =
       | R_remove_0 of 'elt t
-      | R_remove_1 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_2 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-      | R_remove_3 of 'elt t * X.t * 'elt * (X.t, 'elt) prod list * 'elt t
+      | R_remove_1 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_2 of 'elt t * X.t * 'elt * (X.t*'elt) list
+      | R_remove_3 of 'elt t * X.t * 'elt * (X.t*'elt) list * 'elt t
          * 'elt coq_R_remove
       
       val coq_R_remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val coq_R_remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove
-        -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+        t -> 'a1 t -> 'a1 coq_R_remove -> 'a2
       
       val remove_rect :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val remove_rec :
-        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t, 'a1)
-        prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
+        key -> ('a1 t -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2) -> ('a1 t -> X.t -> 'a1 -> (X.t*'a1) list
+        -> __ -> __ -> __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
       
       val coq_R_remove_correct : key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
       
@@ -8050,33 +7912,33 @@ module Make_ord :
       type ('elt, 'a) coq_R_fold =
       | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
       | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a * X.t * 'elt
-         * (X.t, 'elt) prod list * 'a * ('elt, 'a) coq_R_fold
+         * (X.t*'elt) list * 'a * ('elt, 'a) coq_R_fold
       
       val coq_R_fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val coq_R_fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) ->
-        (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3)
-        coq_R_fold -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> __ -> ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key ->
+        'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold ->
+        'a2
       
       val fold_rect :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val fold_rec :
         (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) -> (__
-        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t,
-        'a1) prod list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) ->
-        'a1 t -> 'a3 -> 'a2
+        -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> X.t -> 'a1 -> (X.t*'a1)
+        list -> __ -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t ->
+        'a3 -> 'a2
       
       val coq_R_fold_correct :
         (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1, 'a2)
@@ -8086,49 +7948,47 @@ module Make_ord :
       
       type 'elt coq_R_equal =
       | R_equal_0 of 'elt t * 'elt t
-      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * bool * 'elt coq_R_equal
-      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t, 'elt) prod list
-         * X.t * 'elt * (X.t, 'elt) prod list * X.t OrderedType.coq_Compare
+      | R_equal_1 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * bool * 'elt coq_R_equal
+      | R_equal_2 of 'elt t * 'elt t * X.t * 'elt * (X.t*'elt) list * 
+         X.t * 'elt * (X.t*'elt) list * X.t OrderedType.coq_Compare
       | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
       
       val coq_R_equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val coq_R_equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal ->
-        'a2 -> 'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list
-        -> __ -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t
-        OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1
-        t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
-        coq_R_equal -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> bool -> 'a1 coq_R_equal -> 'a2 ->
+        'a2) -> ('a1 t -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t
+        -> 'a1 -> (X.t*'a1) list -> __ -> X.t OrderedType.coq_Compare -> __
+        -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __
+        -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal -> 'a2
       
       val equal_rect :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val equal_rec :
         ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) -> ('a1 t
-        -> 'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t ->
-        'a1 t -> X.t -> 'a1 -> (X.t, 'a1) prod list -> __ -> X.t -> 'a1 ->
-        (X.t, 'a1) prod list -> __ -> X.t OrderedType.coq_Compare -> __ -> __
-        -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ ->
-        'a2) -> 'a1 t -> 'a1 t -> 'a2
+        -> 'a1 t -> X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 ->
+        (X.t*'a1) list -> __ -> __ -> __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+        X.t -> 'a1 -> (X.t*'a1) list -> __ -> X.t -> 'a1 -> (X.t*'a1) list ->
+        __ -> X.t OrderedType.coq_Compare -> __ -> __ -> 'a2) -> ('a1 t ->
+        'a1 t -> 'a1 t -> __ -> 'a1 t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t
+        -> 'a2
       
       val coq_R_equal_correct :
         ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1 coq_R_equal
@@ -8137,8 +7997,7 @@ module Make_ord :
       
       val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
       
-      val option_cons :
-        key -> 'a1 option -> (key, 'a1) prod list -> (key, 'a1) prod list
+      val option_cons : key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
       
       val map2_l : ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
       
@@ -8147,17 +8006,17 @@ module Make_ord :
       val map2 :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
       
-      val combine : 'a1 t -> 'a2 t -> ('a1 option, 'a2 option) prod t
+      val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
       
       val fold_right_pair :
-        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1, 'a2) prod list -> 'a3 -> 'a3
+        ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
       
       val map2_alt :
-        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> (key,
-        'a3) prod list
+        ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+        (key*'a3) list
       
       val at_least_one :
-        'a1 option -> 'a2 option -> ('a1 option, 'a2 option) prod option
+        'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
       
       val at_least_one_then_f :
         ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2 option
@@ -8351,29 +8210,28 @@ module Make_ord :
     | R_remove_min_1 of 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * Z_as_Int.int
-       * ('elt MapS.Raw.tree, (MapS.Raw.key, 'elt) prod) prod
-       * 'elt coq_R_remove_min * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod
+       * ('elt MapS.Raw.tree*(MapS.Raw.key*'elt)) * 'elt coq_R_remove_min
+       * 'elt MapS.Raw.tree * (MapS.Raw.key*'elt)
     
     val coq_R_remove_min_rect :
       ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> __ ->
       'a2) -> ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree
       -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree ->
-      Z_as_Int.int -> __ -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod)
-      prod -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree ->
-      (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1 MapS.Raw.tree ->
-      MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> ('a1 MapS.Raw.tree,
-      (MapS.Raw.key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
+      Z_as_Int.int -> __ -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
+      MapS.Raw.tree -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2
     
     val coq_R_remove_min_rec :
       ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> __ ->
       'a2) -> ('a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree
       -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree ->
-      Z_as_Int.int -> __ -> ('a1 MapS.Raw.tree, (MapS.Raw.key, 'a1) prod)
-      prod -> 'a1 coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree ->
-      (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1 MapS.Raw.tree ->
-      MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> ('a1 MapS.Raw.tree,
-      (MapS.Raw.key, 'a1) prod) prod -> 'a1 coq_R_remove_min -> 'a2
+      Z_as_Int.int -> __ -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2 -> 'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> MapS.Raw.key -> 'a1 -> 'a1
+      MapS.Raw.tree -> ('a1 MapS.Raw.tree*(MapS.Raw.key*'a1)) -> 'a1
+      coq_R_remove_min -> 'a2
     
     type 'elt coq_R_merge =
     | R_merge_0 of 'elt MapS.Raw.tree * 'elt MapS.Raw.tree
@@ -8384,7 +8242,7 @@ module Make_ord :
        * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt * 'elt MapS.Raw.tree
        * Z_as_Int.int * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * Z_as_Int.int * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod * MapS.Raw.key * 'elt
+       * (MapS.Raw.key*'elt) * MapS.Raw.key * 'elt
     
     val coq_R_merge_rect :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -8393,8 +8251,8 @@ module Make_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ -> 'a1 MapS.Raw.tree
       -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ ->
-      'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> MapS.Raw.key ->
-      'a1 -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
+      'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> MapS.Raw.key -> 'a1 ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
       MapS.Raw.tree -> 'a1 coq_R_merge -> 'a2
     
     val coq_R_merge_rec :
@@ -8404,8 +8262,8 @@ module Make_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ -> 'a1 MapS.Raw.tree
       -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ ->
-      'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> MapS.Raw.key ->
-      'a1 -> __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
+      'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> MapS.Raw.key -> 'a1 ->
+      __ -> 'a2) -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
       MapS.Raw.tree -> 'a1 coq_R_merge -> 'a2
     
     type 'elt coq_R_remove =
@@ -8450,7 +8308,7 @@ module Make_ord :
        * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt * 'elt MapS.Raw.tree
        * Z_as_Int.int * 'elt MapS.Raw.tree * MapS.Raw.key * 'elt
        * 'elt MapS.Raw.tree * Z_as_Int.int * 'elt MapS.Raw.tree
-       * (MapS.Raw.key, 'elt) prod
+       * (MapS.Raw.key*'elt)
     
     val coq_R_concat_rect :
       ('a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> __ -> 'a2) -> ('a1
@@ -8459,7 +8317,7 @@ module Make_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ -> 'a1 MapS.Raw.tree
       -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ ->
-      'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1
+      'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> 'a2) -> 'a1
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
       coq_R_concat -> 'a2
     
@@ -8470,7 +8328,7 @@ module Make_ord :
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> MapS.Raw.key
       -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ -> 'a1 MapS.Raw.tree
       -> MapS.Raw.key -> 'a1 -> 'a1 MapS.Raw.tree -> Z_as_Int.int -> __ ->
-      'a1 MapS.Raw.tree -> (MapS.Raw.key, 'a1) prod -> __ -> 'a2) -> 'a1
+      'a1 MapS.Raw.tree -> (MapS.Raw.key*'a1) -> __ -> 'a2) -> 'a1
       MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1 MapS.Raw.tree -> 'a1
       coq_R_concat -> 'a2
     
@@ -8613,7 +8471,7 @@ module Make_ord :
     val fold' :
       (MapS.Raw.key -> 'a1 -> 'a2 -> 'a2) -> 'a1 MapS.Raw.tree -> 'a2 -> 'a2
     
-    val flatten_e : 'a1 MapS.Raw.enumeration -> (MapS.Raw.key, 'a1) prod list
+    val flatten_e : 'a1 MapS.Raw.enumeration -> (MapS.Raw.key*'a1) list
    end
   
   type t = D.t MapS.t

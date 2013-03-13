@@ -144,38 +144,35 @@ let sum_rec f f0 = function
 | Coq_inl x -> f x
 | Coq_inr x -> f0 x
 
-type ('a, 'b) prod =
-| Coq_pair of 'a * 'b
-
-(** val prod_rect : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3 **)
+(** val prod_rect : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3 **)
 
 let prod_rect f = function
-| Coq_pair (x, x0) -> f x x0
+| x,x0 -> f x x0
 
-(** val prod_rec : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3 **)
+(** val prod_rec : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3 **)
 
 let prod_rec f = function
-| Coq_pair (x, x0) -> f x x0
+| x,x0 -> f x x0
 
-(** val fst : ('a1, 'a2) prod -> 'a1 **)
+(** val fst : ('a1*'a2) -> 'a1 **)
 
 let fst = function
-| Coq_pair (x, y) -> x
+| x,y -> x
 
-(** val snd : ('a1, 'a2) prod -> 'a2 **)
+(** val snd : ('a1*'a2) -> 'a2 **)
 
 let snd = function
-| Coq_pair (x, y) -> y
+| x,y -> y
 
-(** val prod_uncurry : (('a1, 'a2) prod -> 'a3) -> 'a1 -> 'a2 -> 'a3 **)
+(** val prod_uncurry : (('a1*'a2) -> 'a3) -> 'a1 -> 'a2 -> 'a3 **)
 
 let prod_uncurry f x y =
-  f (Coq_pair (x, y))
+  f (x,y)
 
-(** val prod_curry : ('a1 -> 'a2 -> 'a3) -> ('a1, 'a2) prod -> 'a3 **)
+(** val prod_curry : ('a1 -> 'a2 -> 'a3) -> ('a1*'a2) -> 'a3 **)
 
 let prod_curry f = function
-| Coq_pair (x, y) -> f x y
+| x,y -> f x y
 
 type comparison =
 | Eq

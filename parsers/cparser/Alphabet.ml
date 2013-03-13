@@ -35,12 +35,11 @@ let natComparable =
   nat_compare
 
 (** val coq_PairComparable :
-    'a1 coq_Comparable -> 'a2 coq_Comparable -> ('a1, 'a2) prod
-    coq_Comparable **)
+    'a1 coq_Comparable -> 'a2 coq_Comparable -> ('a1*'a2) coq_Comparable **)
 
 let coq_PairComparable cA cB x y =
-  let Coq_pair (xa, xb) = x in
-  let Coq_pair (ya, yb) = y in
+  let xa,xb = x in
+  let ya,yb = y in
   (match compare cA xa ya with
    | Eq -> compare cB xb yb
    | _ -> compare cA xa ya)

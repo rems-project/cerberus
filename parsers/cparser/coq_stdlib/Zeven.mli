@@ -16,5 +16,5 @@ val coq_Zdiv2 : coq_Z -> coq_Z
 
 val coq_Z_modulo_2 : coq_Z -> (coq_Z, coq_Z) sum
 
-val coq_Zsplit2 : coq_Z -> (coq_Z, coq_Z) prod
+val coq_Zsplit2 : coq_Z -> (coq_Z*coq_Z)
 

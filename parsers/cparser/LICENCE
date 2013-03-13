@@ -22,7 +22,7 @@ version 3, or any later version:
   cparser/validator/Tuples.v
   cparser/validator/Validator_complete.v
   cparser/validator/Validator_safe.v
-  cparser/validator/Main
+  cparser/validator/Validator_main.v
 
 
 The following files are not marked for any licence, but are assumed to be

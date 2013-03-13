@@ -190,14 +190,12 @@ let rec fold_right f a0 = function
 | [] -> a0
 | b::t -> f b (fold_right f a0 t)
 
-(** val list_power : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list list **)
+(** val list_power : 'a1 list -> 'a2 list -> ('a1*'a2) list list **)
 
 let rec list_power l l' =
   match l with
   | [] -> []::[]
-  | x::t ->
-    flat_map (fun f -> map (fun y -> (Coq_pair (x, y))::f) l')
-      (list_power t l')
+  | x::t -> flat_map (fun f -> map (fun y -> (x,y)::f) l') (list_power t l')
 
 (** val existsb : ('a1 -> bool) -> 'a1 list -> bool **)
 
@@ -223,24 +221,19 @@ let rec find f = function
 | [] -> None
 | x::tl0 -> if f x then Some x else find f tl0
 
-(** val partition :
-    ('a1 -> bool) -> 'a1 list -> ('a1 list, 'a1 list) prod **)
+(** val partition : ('a1 -> bool) -> 'a1 list -> 'a1 list*'a1 list **)
 
 let rec partition f = function
-| [] -> Coq_pair ([], [])
-| x::tl0 ->
-  let Coq_pair (g, d) = partition f tl0 in
-  if f x then Coq_pair ((x::g), d) else Coq_pair (g, (x::d))
+| [] -> [],[]
+| x::tl0 -> let g,d = partition f tl0 in if f x then (x::g),d else g,(x::d)
 
-(** val split : ('a1, 'a2) prod list -> ('a1 list, 'a2 list) prod **)
+(** val split : ('a1*'a2) list -> 'a1 list*'a2 list **)
 
 let rec split = function
-| [] -> Coq_pair ([], [])
-| p::tl0 ->
-  let Coq_pair (x, y) = p in
-  let Coq_pair (g, d) = split tl0 in Coq_pair ((x::g), (y::d))
+| [] -> [],[]
+| p::tl0 -> let x,y = p in let g,d = split tl0 in (x::g),(y::d)
 
-(** val combine : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list **)
+(** val combine : 'a1 list -> 'a2 list -> ('a1*'a2) list **)
 
 let rec combine l l' =
   match l with
@@ -248,14 +241,14 @@ let rec combine l l' =
   | x::tl0 ->
     (match l' with
      | [] -> []
-     | y::tl' -> (Coq_pair (x, y))::(combine tl0 tl'))
+     | y::tl' -> (x,y)::(combine tl0 tl'))
 
-(** val list_prod : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list **)
+(** val list_prod : 'a1 list -> 'a2 list -> ('a1*'a2) list **)
 
 let rec list_prod l l' =
   match l with
   | [] -> []
-  | x::t -> app (map (fun y -> Coq_pair (x, y)) l') (list_prod t l')
+  | x::t -> app (map (fun y -> x,y) l') (list_prod t l')
 
 (** val firstn : nat -> 'a1 list -> 'a1 list **)
 

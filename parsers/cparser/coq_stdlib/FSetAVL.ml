@@ -95,7 +95,7 @@ module IntMake =
   let filter =
     MSet.filter
   
-  (** val partition : (elt -> bool) -> t -> (t, t) prod **)
+  (** val partition : (elt -> bool) -> t -> t*t **)
   
   let partition =
     MSet.partition

@@ -91,10 +91,10 @@ let coq_Z_modulo_2 x =
           | Zpos p -> coq_Zdiv2 (Zpos p)
           | Zneg p -> coq_Zdiv2 (coq_Zpred (Zneg p)))
 
-(** val coq_Zsplit2 : coq_Z -> (coq_Z, coq_Z) prod **)
+(** val coq_Zsplit2 : coq_Z -> (coq_Z*coq_Z) **)
 
 let coq_Zsplit2 x =
   match coq_Z_modulo_2 x with
-  | Coq_inl x0 -> Coq_pair (x0, x0)
-  | Coq_inr x0 -> Coq_pair (x0, (coq_Zplus x0 (Zpos Coq_xH)))
+  | Coq_inl x0 -> x0,x0
+  | Coq_inr x0 -> x0,(coq_Zplus x0 (Zpos Coq_xH))
 

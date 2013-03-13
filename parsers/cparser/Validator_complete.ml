@@ -25,7 +25,7 @@ module Make =
   
   module StatePseudoprodPosComparableM = 
    struct 
-    type t = ((A.state, A.pseudoprod) prod, nat) prod
+    type t = (A.state*A.pseudoprod)*nat
     
     (** val tComparable : t coq_Comparable **)
     
@@ -45,7 +45,7 @@ module Make =
   (** val pseudoprod_rhs : A.Gram.production option -> A.Gram.symbol list **)
   
   let pseudoprod_rhs = function
-  | Some prod0 -> A.Gram.prod_rhs prod0
+  | Some prod -> A.Gram.prod_rhs prod
   | None -> A.Gram.start_symbol::[]
   
   (** val nullable_symb : A.Gram.symbol -> bool **)
@@ -98,9 +98,7 @@ module Make =
   let items_map =
     fold_left (fun acc state0 ->
       fold_left (fun acc0 item ->
-        let key0 = Coq_pair ((Coq_pair (state0, (A.pseudoprod_item item))),
-          (A.dot_pos_item item))
-        in
+        let key0 = (state0,(A.pseudoprod_item item)),(A.dot_pos_item item) in
         let data =
           fold_left (fun acc1 t0 -> TerminalSet.add t0 acc1)
             (A.lookaheads_item item) TerminalSet.empty
@@ -119,8 +117,7 @@ module Make =
       A.state -> A.pseudoprod -> nat -> TerminalSet.t **)
   
   let find_items_map state0 pseudoprod0 dot_pos =
-    match StatePseudoprodPosMap.find (Coq_pair ((Coq_pair (state0,
-            pseudoprod0)), dot_pos)) items_map with
+    match StatePseudoprodPosMap.find ((state0,pseudoprod0),dot_pos) items_map with
     | Some x -> x
     | None -> TerminalSet.empty
   
@@ -129,9 +126,9 @@ module Make =
   
   let forallb_items p =
     StatePseudoprodPosMap.fold (fun key0 set acc ->
-      let Coq_pair (p0, pos) = key0 in
-      let Coq_pair (st, mp) = p0 in if acc then p st mp pos set else false)
-      items_map true
+      let p0,pos = key0 in
+      let st,mp = p0 in if acc then p st mp pos set else false) items_map
+      true
   
   (** val is_nullable_stable : bool **)
   

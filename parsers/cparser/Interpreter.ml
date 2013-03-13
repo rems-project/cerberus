@@ -35,12 +35,12 @@ module Make =
     | OK x -> g x
   
   (** val bind2 :
-      ('a1, 'a2) prod result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result **)
+      ('a1*'a2) result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result **)
   
   let bind2 f g =
     match f with
     | Err -> Err
-    | OK p -> let Coq_pair (x, y) = p in g x y
+    | OK p -> let x,y = p in g x y
   
   (** val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream **)
   
@@ -76,12 +76,12 @@ module Make =
   | Cons_stack (s, s0, s1) -> A.Ninit s
   
   (** val pop :
-      A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple -> (stack,
-      tuple) prod result **)
+      A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple ->
+      (stack*tuple) result **)
   
   let rec pop symbols_to_pop stack_cur symbols_popped sem_popped =
     match symbols_to_pop with
-    | [] -> OK (Coq_pair (stack_cur, sem_popped))
+    | [] -> OK (stack_cur,sem_popped)
     | t::q ->
       (match stack_cur with
        | Nil_stack -> Err
@@ -89,7 +89,7 @@ module Make =
          if compare_eqdec A.Gram.coq_SymbolAlph.coq_AlphabetComparable
               (A.last_symb_of_non_init_state state_cur) t
          then pop q stack_rec0 (t::symbols_popped)
-                (Obj.magic (Coq_pair (sem, sem_popped)))
+                (Obj.magic (sem,sem_popped))
          else Err)
   
   (** val reduce : stack -> A.Gram.production -> stack result **)
@@ -219,8 +219,7 @@ module type T =
   
   val bind : 'a1 result -> ('a1 -> 'a2 result) -> 'a2 result
   
-  val bind2 :
-    ('a1, 'a2) prod result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
+  val bind2 : ('a1*'a2) result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
   
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
@@ -239,8 +238,8 @@ module type T =
   val state_of_stack : stack -> A.state
   
   val pop :
-    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple -> (stack,
-    tuple) prod result
+    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple ->
+    (stack*tuple) result
   
   val reduce : stack -> A.Gram.production -> stack result
   

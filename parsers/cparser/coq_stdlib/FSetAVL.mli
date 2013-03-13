@@ -50,7 +50,7 @@ module IntMake :
       
       val join : tree -> elt -> t -> t
       
-      val remove_min : tree -> elt -> t -> (t, elt) prod
+      val remove_min : tree -> elt -> t -> t*elt
       
       val merge : tree -> tree -> tree
       
@@ -88,9 +88,9 @@ module IntMake :
       
       val filter : (elt -> bool) -> tree -> tree
       
-      val partition_acc : (elt -> bool) -> (t, t) prod -> t -> (t, t) prod
+      val partition_acc : (elt -> bool) -> (t*t) -> t -> t*t
       
-      val partition : (elt -> bool) -> t -> (t, t) prod
+      val partition : (elt -> bool) -> t -> t*t
       
       val for_all : (elt -> bool) -> tree -> bool
       
@@ -174,7 +174,7 @@ module IntMake :
       type coq_R_remove_min =
       | R_remove_min_0 of tree * elt * t
       | R_remove_min_1 of tree * elt * t * tree * X.t * tree * I.int
-         * (t, elt) prod * coq_R_remove_min * t * elt
+         * (t*elt) * coq_R_remove_min * t * elt
       
       type coq_R_merge =
       | R_merge_0 of tree * tree
@@ -318,7 +318,7 @@ module IntMake :
     
     val exists_ : (elt -> bool) -> t -> bool
     
-    val partition : (elt -> bool) -> t -> (t, t) prod
+    val partition : (elt -> bool) -> t -> t*t
     
     val eq_dec : t -> t -> bool
     
@@ -365,7 +365,7 @@ module IntMake :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   
@@ -440,7 +440,7 @@ module Make :
       
       val join : tree -> elt -> t -> t
       
-      val remove_min : tree -> elt -> t -> (t, elt) prod
+      val remove_min : tree -> elt -> t -> t*elt
       
       val merge : tree -> tree -> tree
       
@@ -478,9 +478,9 @@ module Make :
       
       val filter : (elt -> bool) -> tree -> tree
       
-      val partition_acc : (elt -> bool) -> (t, t) prod -> t -> (t, t) prod
+      val partition_acc : (elt -> bool) -> (t*t) -> t -> t*t
       
-      val partition : (elt -> bool) -> t -> (t, t) prod
+      val partition : (elt -> bool) -> t -> t*t
       
       val for_all : (elt -> bool) -> tree -> bool
       
@@ -564,7 +564,7 @@ module Make :
       type coq_R_remove_min =
       | R_remove_min_0 of tree * elt * t
       | R_remove_min_1 of tree * elt * t * tree * X.t * tree * Z_as_Int.int
-         * (t, elt) prod * coq_R_remove_min * t * elt
+         * (t*elt) * coq_R_remove_min * t * elt
       
       type coq_R_merge =
       | R_merge_0 of tree * tree
@@ -708,7 +708,7 @@ module Make :
     
     val exists_ : (elt -> bool) -> t -> bool
     
-    val partition : (elt -> bool) -> t -> (t, t) prod
+    val partition : (elt -> bool) -> t -> t*t
     
     val eq_dec : t -> t -> bool
     
@@ -755,7 +755,7 @@ module Make :
   
   val filter : (elt -> bool) -> t -> t
   
-  val partition : (elt -> bool) -> t -> (t, t) prod
+  val partition : (elt -> bool) -> t -> t*t
   
   val cardinal : t -> nat
   

@@ -49,7 +49,7 @@ val fold_left : ('a1 -> 'a2 -> 'a1) -> 'a2 list -> 'a1 -> 'a1
 
 val fold_right : ('a2 -> 'a1 -> 'a1) -> 'a1 -> 'a2 list -> 'a1
 
-val list_power : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list list
+val list_power : 'a1 list -> 'a2 list -> ('a1*'a2) list list
 
 val existsb : ('a1 -> bool) -> 'a1 list -> bool
 
@@ -59,13 +59,13 @@ val filter : ('a1 -> bool) -> 'a1 list -> 'a1 list
 
 val find : ('a1 -> bool) -> 'a1 list -> 'a1 option
 
-val partition : ('a1 -> bool) -> 'a1 list -> ('a1 list, 'a1 list) prod
+val partition : ('a1 -> bool) -> 'a1 list -> 'a1 list*'a1 list
 
-val split : ('a1, 'a2) prod list -> ('a1 list, 'a2 list) prod
+val split : ('a1*'a2) list -> 'a1 list*'a2 list
 
-val combine : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list
+val combine : 'a1 list -> 'a2 list -> ('a1*'a2) list
 
-val list_prod : 'a1 list -> 'a2 list -> ('a1, 'a2) prod list
+val list_prod : 'a1 list -> 'a2 list -> ('a1*'a2) list
 
 val firstn : nat -> 'a1 list -> 'a1 list
 

@@ -24,8 +24,7 @@ module Make =
   
   val bind : 'a1 result -> ('a1 -> 'a2 result) -> 'a2 result
   
-  val bind2 :
-    ('a1, 'a2) prod result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
+  val bind2 : ('a1*'a2) result -> ('a1 -> 'a2 -> 'a3 result) -> 'a3 result
   
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
@@ -44,8 +43,8 @@ module Make =
   val state_of_stack : stack -> A.state
   
   val pop :
-    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple -> (stack,
-    tuple) prod result
+    A.Gram.symbol list -> stack -> A.Gram.symbol list -> tuple ->
+    (stack*tuple) result
   
   val reduce : stack -> A.Gram.production -> stack result
   
@@ -102,7 +101,7 @@ module Make =
     match states with
     | [] -> stack_cur
     | t0::q ->
-      let Coq_pair (semt, semq) = Obj.magic x in
+      let semt,semq = Obj.magic x in
       Inter.Cons_stack (t0, semt, (extend_stack stack_cur q semq))
   
   type past_invariant = { states_pi : A.noninitstate list; sem_pi : tuple }
@@ -215,10 +214,11 @@ module Make =
   let sem_hfi normalized h =
     match hole_hfi normalized h with
     | Some i ->
-      Obj.magic (Coq_pair
+      Obj.magic
         ((uncurry (List0.map (Obj.magic __) (A.Gram.prod_rhs (projT1 i)))
-           (A.Gram.prod_action (projT1 i)) (projT2 i)),
-        (projT2 (future_hfi normalized h))))
+           (A.Gram.prod_action (projT1 i)) (projT2 i)),(projT2
+                                                         (future_hfi
+                                                           normalized h)))
     | None -> projT2 (future_hfi normalized h)
   
   (** val coq_JMeq_rew_r : 'a1 -> 'a2 -> 'a3 -> 'a3 **)
