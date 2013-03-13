@@ -1,6 +1,0 @@
-let make x y = (x, y)
-let app_right f (x, y) = (  x, f y)
-let app_left  f (x, y) = (f x,   y)
-
-let compare compare_left compare_right (x1, y1) (x2, y2) =
-  Ord.compose (compare_left x1 x2) (compare_right y1 y2)

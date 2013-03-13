@@ -1,6 +1,0 @@
-type position = <|
-  pos_fname : string;
-  pos_lnum : num;
-  pos_bol : num;
-  pos_cnum : num
-|>
