@@ -596,10 +596,9 @@ Definition inIntegerTypeRange_fun P n it : bool :=
 
 Lemma inIntegerTypeRange_fun_correct P n it : boolSpec (inIntegerTypeRange_fun P n it) (inIntegerTypeRange P n it).
 Proof.
-  do 3 unfold_goal; my_auto; intros Heq;
-  [ set (boolSpec_elim1 (memNat_fun_correct _ _) Heq)
-  | set (boolSpec_elim2 (memNat_fun_correct _ _) Heq)];
-  my_auto.
+  do 2 unfold_goal.
+  set (memNat_fun_correct n (integerTypeRange P it)).
+  repeat (my_auto; boolSpec_simpl).
 Qed.
 
 (* defns JleTypeRange *)
@@ -617,7 +616,6 @@ leIntegerTypeRange_dec P it1 it2 with le_dec (integerTypeRange P it1) (integerTy
 leIntegerTypeRange_dec _ _ _ := inr _.
 *)
 
-(* Be more clever! *)
 Definition leIntegerTypeRange_fun P it1 it2 : bool :=
   match it1, it2 with
   | Char             , Char              => true
@@ -1438,11 +1436,7 @@ Proof.
   do 2 unfold_goal.
   set (eqIntegerRank_fun_correct   it1 it2).
   set (ltIntegerRank_fun_correct P it1 it2).
-  repeat boolSpec_destruct;
-  solve [ constructor 1; assumption
-        | constructor 2; assumption
-        | inversion 1; my_auto
-  ].
+  my_auto' ltac:(constructor 2; assumption) ltac:(idtac; boolSpec_destruct).
 Qed.
 
 Instance leIntegerRank_decR P : DecidableRelation (leIntegerRank P) := {
@@ -1510,8 +1504,7 @@ Proof.
   do 2 unfold_goal.
   set (isPointer_fun_correct    t).
   set (isArithmetic_fun_correct t).
-  boolSpec_destruct;
-  destruct t; solve [constructor 1; assumption | constructor 2; assumption | my_auto].
+  my_auto' ltac:(constructor 2; assumption) ltac:(idtac; boolSpec_destruct).
 Qed.
 
 Instance isScalar_dec t : Decision (isScalar t) := boolSpec_Decision (isScalar_fun_correct t).
@@ -1791,18 +1784,18 @@ Proof.
     set (isUnsignedType_fun_correct it2) as Hunsigned2_correct.
     destruct it1; destruct it2;
     boolSpec_simpl;
-    abstract (
+    try abstract (
     match goal with
     | [_ : isSignedType   ?it1, _ : isSignedType   ?it2 |- context[isUsualArithmeticInteger ?P ?it1 ?it2 _]] =>
-        set (ltIntegerRank_fun_correct P it2 it1) as Hgt_correct;
-        set (ltIntegerRank_fun_correct P it1 it2) as Hlt_correct;
+        set (ltIntegerRank_fun_correct P it2 it1);
+        set (ltIntegerRank_fun_correct P it1 it2);
         destruct_integerBaseType;
         boolSpec_simpl;
         destruct_decide;
         now my_auto
     | [_ : isUnsignedType ?it1, _ : isUnsignedType ?it2 |- context[isUsualArithmeticInteger ?P ?it1 ?it2 _]] =>
-        set (ltIntegerRank_fun_correct P it2 it1) as Hgt_correct;
-        set (ltIntegerRank_fun_correct P it1 it2) as Hlt_correct;
+        set (ltIntegerRank_fun_correct P it2 it1);
+        set (ltIntegerRank_fun_correct P it1 it2);
         (try destruct_integerBaseType);
         boolSpec_simpl;
         my_auto;
@@ -1816,23 +1809,7 @@ Proof.
         destruct_integerType;
         boolSpec_simpl;
         my_auto;
-        match goal with
-        | [_ : context [leIntegerRank_fun _ _] |- _] =>
-            unfold leIntegerRank_fun in Hle_correct;
-            unfold ltIntegerRank_fun in Hle_correct;
-            unfold eqIntegerRank_fun in Hle_correct;
-            unfold leIntegerRank_fun in Hge_correct;
-            unfold ltIntegerRank_fun in Hge_correct;
-            unfold eqIntegerRank_fun in Hge_correct;
-            boolSpec_simpl
-        | _ => idtac
-        end;
-        match goal with
-        | [_ : boolSpec (Z.ltb ?x ?y) (leIntegerTypeRange _ _ _) |- (Z.ltb ?x ?y) = _ -> _] =>
-            let Heq := fresh in            
-            intros Heq; rewrite Heq in HleRange_correct; boolSpec_simpl
-        | _ => idtac
-        end;
+        boolSpec_simpl;
         my_auto;
         solve [ apply IsUsualArithmeticIntegerLtUnsigned; my_auto
               | apply IsUsualArithmeticIntegerGtSigned  ; my_auto
@@ -1847,21 +1824,16 @@ Proof.
         my_auto;
         match goal with
         | [_ : context [leIntegerRank_fun _ _] |- _] =>
+            (* TODO Not sure why Coq fails to simplify here. *)
             unfold leIntegerRank_fun in Hle_correct;
             unfold ltIntegerRank_fun in Hle_correct;
             unfold eqIntegerRank_fun in Hle_correct;
             unfold leIntegerRank_fun in Hge_correct;
             unfold ltIntegerRank_fun in Hge_correct;
-            unfold eqIntegerRank_fun in Hge_correct;
-            boolSpec_simpl
+            unfold eqIntegerRank_fun in Hge_correct
         | _ => idtac
         end;
-        match goal with
-        | [_ : boolSpec (Z.ltb ?x ?y) (leIntegerTypeRange _ _ _) |- (Z.ltb ?x ?y) = _ -> _] =>
-            let Heq := fresh in            
-            intros Heq; rewrite Heq in HleRange_correct; boolSpec_simpl
-        | _ => idtac
-        end;
+        boolSpec_simpl;
         my_auto;
         solve [ apply IsUsualArithmeticIntegerLtSigned  ; my_auto
               | apply IsUsualArithmeticIntegerGtUnsigned; my_auto ]
@@ -1955,34 +1927,14 @@ Proof.
   set (leIntegerRank_fun_correct P it2 it1).
   set (leIntegerTypeRange_fun_correct P it2 it1).
   set (leIntegerTypeRange_fun_correct P it1 it2).
-  unfold isUsualArithmeticInteger_find.
   inversion 1;
+  unfold isUsualArithmeticInteger_find;
   my_auto;
-  (repeat match goal with
+  repeat match goal with
   | [it : integerType|- _] => destruct it
-  end);
+  end;
   my_auto;
-  abstract (
-    destruct_integerType; boolSpec_simpl;
-    simpl; repeat match goal with
-    | [H : context [leIntegerRank_fun _ _] |- _] =>
-        unfold leIntegerRank_fun in H;
-        unfold ltIntegerRank_fun in H;
-        unfold eqIntegerRank_fun in H;
-        unfold leIntegerRank_fun;
-        unfold ltIntegerRank_fun;
-        unfold eqIntegerRank_fun;
-        boolSpec_simpl
-    | _ => idtac
-    end;
-    match goal with
-    | [H : boolSpec (Z.ltb ?x ?y) (leIntegerTypeRange _ _ _) |- (Z.ltb ?x ?y) = _ -> _] =>
-        let Heq := fresh in            
-        intros Heq; rewrite Heq in H; boolSpec_simpl
-    | _ => idtac
-    end;
-    my_auto
-  ).
+  abstract (destruct_integerType; boolSpec_simpl; my_auto).
 Qed.
 
 (*
@@ -2116,7 +2068,7 @@ Proof.
       (try rewrite <- Heq2);
       (try rewrite    Heq3);
       simpl;
-      solve [econstructor; eassumption
+      solve [ econstructor; eassumption
             | inversion 1; my_auto; intuition
             | destruct t3; inversion 1; my_auto;
               match goal with
@@ -2166,8 +2118,7 @@ Proof.
   do 2 unfold_goal.
   set (isUsualArithmetic_find_correct P t1 t2) as Hcorrect.
   set (isUsualArithmetic_find_unique P t1 t2 t3) as Hunique.
-  set (isUsualArithmetic_find P t1 t2) as H in *.
-  destruct_decide.
+  my_auto.
   + match goal with | [Heq : _ = Some _|- _] => rewrite Heq in Hcorrect; assumption end.
   + intros Husual; set (Hunique Husual); contradiction.
 Qed.
@@ -2245,7 +2196,7 @@ Inductive isModifiable : qualifiers -> type -> Prop :=    (* defn isModifiable *
 Fixpoint list_in_fun {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
   match ls with
   | nil   => false
-  | x::xs => orb (eq a x) (list_in_fun eq a xs)
+  | x::xs => orb (eq x a) (list_in_fun eq a xs)
   end.
 
 Fixpoint list_in_fun_correct {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) :
@@ -2253,21 +2204,20 @@ Fixpoint list_in_fun_correct {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A
   boolSpec (list_in_fun eq a ls) (List.In a ls).
 Proof.
   intros eq_correct.
-  destruct ls.
-  + inversion 1.
-  + simpl.
-    match goal with
-    | [|- context[eq a ?x]] =>
-      let Heq := fresh in
-      set (eq_correct a x);
-      case_eq (eq a x); intros Heq; rewrite Heq in *; clear Heq
-    end.
-    - left; my_auto.
-    - set (list_in_fun_correct A eq a ls eq_correct).
-      let Heq := fresh in
-      case_eq (list_in_fun eq a ls); intros Heq; rewrite Heq in *; clear Heq.
-      * right; my_auto.
-      * inversion 1; my_auto.
+  do 2 unfold_goal.
+  destruct ls;
+  my_auto;
+  fold (@list_in_fun A);
+  bool_simpl;
+  repeat (match goal with
+  | [|- context[eq ?x a]] =>
+      notHyp (x = a); notHyp (neg (x = a));
+      set (eq_correct x a)
+  | [|- context[list_in_fun eq a ls]] =>
+      notHyp (In a ls); notHyp (neg (In a ls));
+      set (list_in_fun_correct A eq a ls eq_correct)      
+  end; boolSpec_simpl);
+  my_auto.
 Qed.
 
 Definition isModifiable_fun qs t : bool :=
@@ -2288,11 +2238,7 @@ Proof.
   set (isArray_fun_correct t).
   set (isIncomplete_fun_correct t).
   set (list_in_fun_correct (fun x y => bool_of_decision (decide x y)) Const qs (fun x y => Decision_boolSpec ((decide x y)))).
-  unfold andb.
-  unfold negb.
-  destruct t; my_auto;
-  intros Heq; rewrite Heq in *; clear Heq;
-  boolSpec_simpl; my_auto.
+  my_auto; bool_simpl; boolSpec_simpl; my_auto.
 Qed.
 
 (* defns JisReal *)
@@ -2324,11 +2270,9 @@ Definition isLvalueConvertable_fun t : bool := andb (negb (isArray_fun t)) (isCo
 Lemma isLvalueConvertable_correct t : boolSpec (isLvalueConvertable_fun t) (isLvalueConvertable t).
 Proof.
   do 2 unfold_goal.
-  generalize (isArray_fun_correct t).
-  generalize (isComplete_fun_correct t).
-  destruct (isArray_fun t);
-  destruct (isComplete_fun t);
-  my_auto.
+  set (isArray_fun_correct t).
+  set (isComplete_fun_correct t).
+  my_auto; bool_simpl; boolSpec_simpl; my_auto.
 Qed.
 
 (* defns JisCompatible *)
@@ -2381,31 +2325,28 @@ Proof.
     my_auto;
     fold isCompatible_fun;
     fold isCompatible_args_fun;
+    bool_simpl;
     match goal with
     | [Heq : ?x = ?y |- isCompatible ?x ?y] =>
         rewrite Heq; constructor
-    | [_ : neg (Function ?t1 ?l1 = Function ?t2 ?l2) |- _] =>
-        let Heq := fresh in
-        generalize (isCompatible_fun_correct t1 t2);
-        destruct (isCompatible_fun t1 t2); my_auto; intros ? Heq;
-        generalize (isCompatible_args_fun_correct l1 l2);
-        rewrite Heq; intros;
-        solve [constructor 2; my_auto | inversion 1; my_auto ] 
-    end.
+    | [|- context[isCompatible (Function ?t1 ?l1) (Function ?t2 ?l2)]] =>
+        set (isCompatible_fun_correct t1 t2);
+        set (isCompatible_args_fun_correct l1 l2)
+    end;
+    boolSpec_simpl; my_auto.
   + do 2 unfold_goal.
     my_auto;
     destruct l1; destruct l2;
     my_auto;
     fold isCompatible_fun;
     fold isCompatible_args_fun;
+    bool_simpl;
     match goal with
     | [t1 : type, t2 : type |- _] =>
-        let Heq := fresh in
-        generalize (isCompatible_fun_correct t1 t2);
-        destruct (isCompatible_fun t1 t2); my_auto; intros ? Heq;
-        generalize (isCompatible_args_fun_correct l1 l2);
-        rewrite Heq; intros; my_auto
-    end.
+        set (isCompatible_fun_correct t1 t2);
+        set (isCompatible_args_fun_correct l1 l2)
+    end;
+    boolSpec_simpl; my_auto.
 Defined.
 
 (* defns JisComposite *)
@@ -2465,23 +2406,17 @@ Proof.
     my_auto;
     fold isComposite_fun;
     fold isComposite_args_fun;
+    bool_simpl;
     match goal with
     | [ Heq1 : ?t1 = ?it2, Heq2 : ?t1 = ?it3 |- isComposite ?t1 ?t2 ?it3 ] =>
         rewrite <- Heq1; rewrite <- Heq2; constructor
-    | [|- isComposite_fun ?t1 ?t2 ?t3 = _ -> _] =>
-        let Heq := fresh in
-        intros Heq;
-        generalize (isComposite_fun_correct t1 t2 t3);
-        rewrite Heq; intros ?
-    | [|- isComposite_fun ?t1 ?t2 ?t3 && isComposite_args_fun ?l1 ?l2 ?l3 = _ -> _] =>
-        let Heq := fresh in
-        generalize (isComposite_fun_correct t1 t2 t3);
-        destruct (isComposite_fun t1 t2 t3); my_auto;
-        intros ? Heq;
-        generalize (isComposite_args_fun_correct l1 l2 l3);
-        rewrite Heq; intros ?
+    | [|- context[isComposite (Array ?t1 _) (Array ?t2 _) (Array ?t3 _)] ] =>
+        set (isComposite_fun_correct t1 t2 t3)
+    | [|- context[isComposite (Function ?t1 ?l1) (Function ?t2 ?l2) (Function ?t3 ?l3)]] =>
+        set (isComposite_fun_correct t1 t2 t3);
+        set (isComposite_args_fun_correct l1 l2 l3)
     end;
-    my_auto.
+    boolSpec_simpl; my_auto.
   + do 2 unfold_goal.
     destruct l1;
     destruct l2;
@@ -2489,13 +2424,11 @@ Proof.
     my_auto;
     fold isComposite_fun;
     fold isComposite_args_fun;
+    bool_simpl;
     match goal with
-    | [|- isComposite_fun ?t1 ?t2 ?t3 && isComposite_args_fun ?l1 ?l2 ?l3 = _ -> _] =>
-        generalize (isComposite_fun_correct t1 t2 t3);
-        destruct (isComposite_fun t1 t2 t3); my_auto;
-        intros ? Heq;
-        generalize (isComposite_args_fun_correct l1 l2 l3);
-        rewrite Heq; intros ?
+    | [|- context[isComposite_args (Argument_cons _ ?t1 ?l1) (Argument_cons _ ?t2 ?l2) (Argument_cons _ ?t3 ?l3)]] =>
+        set (isComposite_fun_correct t1 t2 t3);
+        set (isComposite_args_fun_correct l1 l2 l3)
     end;
-    my_auto.
+    boolSpec_simpl; my_auto.
 Qed.
