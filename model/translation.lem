@@ -441,7 +441,7 @@ and translate_exp file exp =
     | A.UNARY A.BNOT e ->
         E.fresh_symbol       >>= fun a_e    ->
         translate_exp file e >>= fun core_e ->
-          if Ail_typing_aux.is_unsigned_integer ty then
+          if Ail_typing_aux.is_unsigned_integer_type ty then
             E.return $ C.Ewseq [Some a_e] (promote_value core_e)
                          (C.Eop C.OpSub (C.Ecall C.max [C.Ectype ty]) (C.Esym a_e))
           else
@@ -563,7 +563,7 @@ and translate_exp file exp =
           C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
             (C.Elet a_mul (C.Eop C.OpMul (C.Esym a_e1) (C.Esym a_e2))
                x) in
-        if T.is_signed_integer(exp_type exp) then
+        if T.is_signed_integer_type (exp_type exp) then
           E.return $ mul_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_mul])
         else
           E.return $ mul_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_mul])
@@ -660,7 +660,7 @@ and translate_exp file exp =
     | A.BINARY (A.ARITHMETIC A.ADD) e1 e2 ->
         let ctype_e1 = exp_type e1 in
         let ctype_e2 = exp_type e2 in
-        if T.is_arithmetic ctype_e1 && T.is_arithmetic ctype_e2 then
+        if T.is_arithmetic_type ctype_e1 && T.is_arithmetic_type ctype_e2 then
           (* (6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
                        performed on them. *)
           E.fresh_symbol        >>= fun a_e1    ->
@@ -671,26 +671,26 @@ and translate_exp file exp =
           seems_pure core_e1 >>= fun b1 ->
           seems_pure core_e2 >>= fun b2 ->
           
-          if b1 && b2 then E.return (if T.is_signed_integer (exp_type exp) then
+          if b1 && b2 then E.return (if T.is_signed_integer_type (exp_type exp) then
                                        C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 core_e2]
                                      else
                                        C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 core_e2])
           else if b1 then E.return
             (C.Ewseq [Some a_e2] core_e2
-               (if T.is_signed_integer (exp_type exp) then
+               (if T.is_signed_integer_type (exp_type exp) then
                   C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 (C.Esym a_e2)]
                 else
                   C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd core_e1 (C.Esym a_e2)]))
           else if b2 then E.return
             (C.Ewseq [Some a_e1] core_e1
-               (if T.is_signed_integer (exp_type exp) then
+               (if T.is_signed_integer_type (exp_type exp) then
                   C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) core_e2]
                 else
                   C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) core_e2]))
           else E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (* The 'usual arithmetic conversion' *)
-            (if T.is_signed_integer (exp_type exp) then
+            (if T.is_signed_integer_type (exp_type exp) then
                   (* if the return type is signed, then there is an undefined behaviour
                      in the presence of an arithmetic overflow *)
                   C.Ecall C.overflow [C.Ectype (exp_type exp); C.Eop C.OpAdd (C.Esym a_e1) (C.Esym a_e2)]
@@ -741,7 +741,7 @@ and translate_exp file exp =
                  x) in
           
           (* The 'usual arithmetic conversion' *)
-          if T.is_signed_integer (exp_type exp) then
+          if T.is_signed_integer_type (exp_type exp) then
             (* if the return type is signed, then there is an undefined behaviour
                in the presence of an arithmetic overflow *)
             E.return $ add_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_add])
@@ -757,7 +757,7 @@ and translate_exp file exp =
           E.fresh_symbol        >>= fun a_shift ->
           translate_exp file e1 >>= fun core_e1 ->
           translate_exp file e2 >>= fun core_e2 ->
-          if T.is_pointer (exp_type e1) then
+          if T.is_pointer_type (exp_type e1) then
             E.return $ C.DEBUG "A.ARITHMETIC A.ADD e1 e2 <pointer case>"
 
 (*
@@ -773,7 +773,7 @@ and translate_exp file exp =
         (* Pointer arithmetic. *)
         f e1 >>= fun (a1, m1) ->
         f e2 >>= fun (a2, m2) ->
-        if T.is_pointer (exp_type e1) then
+        if T.is_pointer_type (exp_type e1) then
           let size = Tc.size (T.base_of_pointer (exp_type e1)) in
           let a = C.offset a1 a2 size in
           Action.same a1 a >>= fun same ->
@@ -841,7 +841,7 @@ and translate_exp file exp =
                                             (C.Eop C.OpEq (C.Ecall C.ctype_width [C.Ectype ty]) (C.Esym a_e2)))) (* TODO: check the test about the width *)
                 C.Eundef
                 (* else [...] *)
-                (if Ail_typing_aux.is_unsigned_integer (Annotate.ctype_of e1) then
+                (if Ail_typing_aux.is_unsigned_integer_type (Annotate.ctype_of e1) then
                    (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
                    C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (C.Ecall C.exp [C.Econst 2; C.Esym a_e2]))
                                  (C.Eop C.OpAdd (C.Ecall C.max [C.Ectype ty]) (C.Econst 1))
@@ -1017,7 +1017,7 @@ and translate_exp file exp =
                 of an array behaves the same as a pointer to the first element of an array of length
                 one with the type of the object as its element type. *)
     | A.BINARY A.EQ e1 e2 ->
-        if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+        if T.is_arithmetic_type (exp_type e1) && T.is_arithmetic_type (exp_type e2) then
           E.fresh_symbol        >>= fun a_e1    ->
           E.fresh_symbol        >>= fun a_e2    ->
           translate_exp file e1 >>= fun core_e1 ->
@@ -1028,7 +1028,7 @@ and translate_exp file exp =
                      (C.Econst 1)
                      (C.Econst 0)
               )
-        else if T.is_pointer (exp_type e1) && T.is_pointer (exp_type e2) then
+        else if T.is_pointer_type (exp_type e1) && T.is_pointer_type (exp_type e2) then
           E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers>")
         else if Ail_typing.is_null_pointer_constant e1 then
           E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers, and e1 is a \
@@ -1058,7 +1058,7 @@ and translate_exp file exp =
  *)
     (* TODO: conv_int on e2 and e2 !!!!!!! *)
     | A.CONDITIONAL e1 e2 e3 ->
-        if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+        if T.is_arithmetic_type (exp_type e1) && T.is_arithmetic_type (exp_type e2) then
           E.fresh_symbol        >>= fun a_e1    ->
           E.fresh_symbol        >>= fun a_e2    ->
           E.fresh_symbol        >>= fun a_e3    ->
@@ -1395,7 +1395,7 @@ C.seq [a_id] (C.create ty)
         E.return (a, (m1 -&- m2) -@> same)
 *)
       | A.BINARY (A.ARITHMETIC A.SUB) e1 e2 ->
-          if T.is_arithmetic (exp_type e1) && T.is_arithmetic (exp_type e2) then
+          if T.is_arithmetic_type (exp_type e1) && T.is_arithmetic_type (exp_type e2) then
             E.fresh_symbol        >>= fun a_e1    ->
             E.fresh_symbol        >>= fun a_e2    ->
             translate_exp file e1 >>= fun core_e1 ->
@@ -1405,12 +1405,12 @@ C.seq [a_id] (C.create ty)
               C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
                 (C.Elet a_sub (C.Eop C.OpSub (C.Esym a_e1) (C.Esym a_e2))
                    x) in
-            if T.is_signed_integer (exp_type exp) then
+            if T.is_signed_integer_type (exp_type exp) then
               E.return $ sub_ctx (C.Ecall C.overflow [C.Ectype (exp_type exp); C.Esym a_sub])
             else
               E.return $ sub_ctx (C.Ecall C.conv_int [C.Ectype (exp_type exp); C.Esym a_sub])
           
-          else (*if T.is_integer (exp_type e2) then*)
+          else (*if T.is_integer_type (exp_type e2) then*)
             (* Pointer arithmetic. *)
             (* TODO: pointer arith *)
             E.return $ C.DEBUG "A.ARITHMETIC A.SUB e1 e2 <pointer case>"

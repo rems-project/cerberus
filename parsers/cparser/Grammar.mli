@@ -20,8 +20,8 @@ module Symbol :
  functor (A:Alphs) ->
  sig 
   type symbol =
-  | T of A.terminal
-  | NT of A.nonterminal
+    | T of A.terminal
+    | NT of A.nonterminal
   
   val symbol_rect :
     (A.terminal -> 'a1) -> (A.nonterminal -> 'a1) -> symbol -> 'a1
@@ -43,8 +43,8 @@ module type T =
   val coq_NonTerminalAlph : nonterminal coq_Alphabet
   
   type symbol =
-  | T of terminal
-  | NT of nonterminal
+    | T of terminal
+    | NT of nonterminal
   
   val symbol_rect :
     (terminal -> 'a1) -> (nonterminal -> 'a1) -> symbol -> 'a1
@@ -74,12 +74,13 @@ module Defs :
   type token = (G.terminal, G.symbol_semantic_type) sigT
   
   type parse_tree =
-  | Terminal_pt of G.terminal * G.symbol_semantic_type
-  | Non_terminal_pt of G.production * token list * tuple * parse_tree_list
+    | Terminal_pt of G.terminal * G.symbol_semantic_type
+    | Non_terminal_pt of G.production * token list * tuple * parse_tree_list
   and parse_tree_list =
-  | Nil_ptl
-  | Cons_ptl of token list * G.symbol * G.symbol_semantic_type * parse_tree
-     * token list * G.symbol list * tuple * parse_tree_list
+    | Nil_ptl
+    | Cons_ptl of token list * G.symbol * G.symbol_semantic_type * 
+       parse_tree * token list * G.symbol list * tuple * 
+       parse_tree_list
   
   val parse_tree_rect :
     (G.terminal -> G.symbol_semantic_type -> 'a1) -> (G.production -> token

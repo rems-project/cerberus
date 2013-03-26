@@ -1,71 +1,32 @@
 open Global
   
 (* command-line options *)
-let files = ref []
+let files            = ref []
+let debug            = ref false
+let print_cabs       = ref false
+let print_ail        = ref false
+let print_core       = ref false
+let execute          = ref false
+let sb_graph         = ref false
+let skip_core_tcheck = ref false (* TODO: this is for debug purpose *)
+
 let add_file n = files := n :: !files
-
-(* TODO: part of the old backend *)
-let bound = ref 5
-let set_bound n = bound := n
-
-(* TODO: part of the old backend *)
-let dot = ref false
-let set_dot () = dot := true
-
-(* TODO: part of the old backend *)
-let output = ref false
-let set_output () = output := true
-
-
-(* TODO: will be useless once we remove the old backend *)
-let core = ref true
-let unset_core () = core := false
-
-let debug = ref false
-let set_debug () = debug := true
-
-let print_cabs = ref false
-let set_print_cabs () = print_cabs := true
-
-let print_ail = ref false
-let set_print_ail () = print_ail := true
-
-let print_core = ref false
-let set_print_core () = print_core := true
-
-let core_run = ref false
-let set_core_run () = core := true; core_run := true
-
-let core_graph = ref false
-let set_core_graph () = core_graph := true
-
-(* TODO: this is for debug purpose *)
-let core_skip_typecheck = ref false
-let set_core_skip_typecheck () = core_skip_typecheck := true
-
 
 (* command-line handler *)
 let options = Arg.align [
   ("-i", Arg.String add_file,   "<file> Input file");
   
-  (* original backend options
-  ("--old",            Arg.Unit   unset_core,              "       Use the Old backend");
-  ("-n", Arg.Int    set_bound,  "<nat>  Set call and iteration depth (original backend)");
-  ("-d", Arg.Unit   set_dot,    "       Generate dot graphs          (original backend)");
-  ("-o", Arg.Unit   set_output, "       Print m-sets                 (original
-  backend)");
-  *)
+  (* Core backend options *)
+  ("--skip-core-tcheck", Arg.Unit (fun () -> skip_core_tcheck := true), "       Do not run the Core typechecker");
+  ("--execute",          Arg.Unit (fun () -> execute          := true), "       Execute the Core program");
+  ("--sb-graph",         Arg.Unit (fun () -> sb_graph         := true), "       Generate dot graphs of the sb orders");
   
-  (* core backend options (default) *)
-  ("--no-core-tcheck", Arg.Unit   set_core_skip_typecheck, "       Do not run the Core typechecker");
-  ("--run",            Arg.Unit   set_core_run,            "       Execute the Core program");
-  ("--graph",          Arg.Unit   set_core_graph,          "       Generate dot graphs of sb orders");
+  ("--debug",      Arg.Unit (fun () -> debug      := true), "       Display some debug noise");
   
   (* printing options *)
-  ("--print-cabs", Arg.Unit   set_print_cabs, "       Pretty-print the Cabs intermediate representation");
-  ("--print-ail",  Arg.Unit   set_print_ail,  "       Pretty-print the Ail intermediate representation");
-  ("--print-core", Arg.Unit   set_print_core,  "       Pretty-print the Code generated program");
-  ("--debug",      Arg.Unit   set_debug,      "       Display some debug noise")
+  ("--print-cabs", Arg.Unit (fun () -> print_cabs := true), "       Pretty-print the Cabs intermediate representation");
+  ("--print-ail",  Arg.Unit (fun () -> print_ail  := true), "       Pretty-print the Ail intermediate representation");
+  ("--print-core", Arg.Unit (fun () -> print_core := true), "       Pretty-print the Code generated program")
 ]
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
@@ -139,37 +100,31 @@ let rec string_of_trace (t: Core_run.E.trace) =
 
 
 
-(*
-let core_runtime file_name =
-  filename
-  >|> Input.file
-  >|>
-*)
+
+
+
+
+
+
 
 
 let () =
-  print_endline "Csem (dev version: 284:9140d85ffd28 tip)";
+  print_endline "Csem (hg version: <<HG-IDENTITY>>)";
   let () = Arg.parse options add_file usage in
   let pipeline file_name =
     let pp_cabs = Document.print -| Hack.Print.pp_file in
     let pp_ail  = Document.print -| Ail.Print.pp_file in
     let pp_core = Document.print -| Core.Print.pp_file in
-(*    let pp_dot  = Meaning.Graph.to_file file_name in *)
-(*    let pp_out  = Document.print -| Meaning.Print.pp in *)
-(*    let pp_res  = Document.print -| Constraint.Print.pp in *)
+    
     let pp_sb ts =  Output.write (List.fold_left (fun acc (n, (_, t)) -> (Document.to_plain_string $ Sb.Print.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc)
                                                  "" (numerote ts))
                                  (Output.file $ file_name ^ ".dot") in
     let pp_traces ts = List.map (fun (i, (v, t)) -> print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^ string_of_trace t ^
                                                                     "\n\nValue: " ^ (Document.to_plain_string $ Core.Print.pp_expr None v)) $ numerote ts in
     let c_frontend m =
-(*      let module P = Parser.Make (C_parser_base) (Lexer.Make (C_lexer)) in
-        P.parse m
-*)
-      Cparser.Driver.parse m >|>
-      failwith "42"
+          Exception.return (Cparser.Driver.parse m)
       >|> pass_message "1. Parsing completed!"
-      >|> Exception.rbind Cabs_transform.transform_file
+      >|> Exception.fmap Cabs_transform.transform_file
       >|> pass_message "1.5 Cabs AST transform completed!"
       >|> pass_through_test !print_cabs pp_cabs
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
@@ -187,49 +142,30 @@ let () =
       P.parse m
       >|> pass_message "1-4. Parsing completed!" in
     let frontend m =
-      if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    "" (* TODO: m *))
-      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m (*; Boot.outOfHomeomorphism "Kayvan didn't get the types right!\n" *))
+      if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
+      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m)
                                                       else Exception.fail (Errors.UNSUPPORTED "The file extention is not supported") in
     let core_backend m =
-      (m
-(*      >|> pass_through_test !print_core pp_core *)
-      >?> not !core_skip_typecheck)
-        (fun m ->
-          Exception.rbind Core_typing.typecheck m
-          >|> pass_message "5. Core's typechecking completed!"
-        )
+      ((m
+      >?> !skip_core_tcheck)
         (pass_message "5. Skipping Core's typechecking completed!")
-      >|> pass_message "6. Enumerating indet orders:"
-      >|> Exception.rbind Core_indet.order
-      >|> pass_message "7. Now running:"
-      >|> Exception.rbind
-          (Exception.map_list
-             (fun (n,f) -> Core_run.run f
-                           >|> pass_message ("SB order #" ^ string_of_int n)
-                           >|> pass_through_test !core_graph pp_sb
-                           >|> pass_through pp_traces))
-      >|> return_unit in
+        (fun m ->
+              Exception.rbind Core_typing.typecheck m
+          >|> pass_message "5. Core's typechecking completed!")
+      >?> !execute)
+        (fun m ->
+          pass_message "6. Enumerating indet orders:" m
+          >|> Exception.rbind Core_indet.order
+          >|> pass_message "7. Now running:"
+          >|> Exception.rbind
+              (Exception.map_list
+                 (fun (n,f) -> Core_run.run f
+                               >|> pass_message ("SB order #" ^ string_of_int n)
+                               >|> pass_through_test !sb_graph pp_sb
+                               >|> pass_through pp_traces))
+          >|> return_unit)
+        return_unit in
 
-(*
-
-
-forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
-          (fun m -> m
-            >|> Exception.rbind Core_run.run
-            >|> pass_through_test !core_graph pp_sb
-            >|> pass_through pp_traces
-            >|> return_unit) in
-*)
-(*
-    let orig_backend m =
-      Exception.fmap (Reduction.reduce !bound) m
-      >|> pass_message "4. Opsem completed!"
-      >|> pass_through_test !dot    pp_dot
-      >|> pass_through_test !output pp_out
-      >|> Exception.fmap Meaning.Solve.simplify_all
-      >|> Exception.fmap (Program.iter_list pp_res)
-      >|> return_unit in
-*)
     file_name
     >|> Input.file
     >|> frontend

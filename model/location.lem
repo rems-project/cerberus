@@ -5,6 +5,11 @@ type t = <|
   stop  : L.position
 |>
 
+val dummy: t
+let dummy =
+  let pos = <| L.pos_fname= ""; L.pos_lnum= 0; L.pos_bol= 0; L.pos_cnum= 0 |> in
+  <| start= pos; stop= pos |>
+
 let make s e = <|start = s; stop = e|>
 
 let name              <|start = s; stop = _|> = s.L.pos_fname

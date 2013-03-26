@@ -6,122 +6,124 @@ type atom = string
 type cabsloc = positive
 
 type typeSpecifier =
-| Tvoid
-| Tchar
-| Tshort
-| Tint
-| Tlong
-| Tfloat
-| Tdouble
-| Tsigned
-| Tunsigned
-| T_Bool
-| Tnamed of atom
-| Tstruct of atom option * field_group list option * attribute list
-| Tunion of atom option * field_group list option * attribute list
-| Tenum of atom option * ((atom*expression option)*cabsloc) list option
-   * attribute list
+  | Tvoid
+  | Tchar
+  | Tshort
+  | Tint
+  | Tlong
+  | Tfloat
+  | Tdouble
+  | Tsigned
+  | Tunsigned
+  | T_Bool
+  | Tnamed of atom
+  | Tstruct of atom option * field_group list option * attribute list
+  | Tunion of atom option * field_group list option * attribute list
+  | Tenum of atom option * ((atom*expression option)*cabsloc) list option
+     * attribute list
 and storage =
-| AUTO
-| STATIC
-| EXTERN
-| REGISTER
-| TYPEDEF
+  | AUTO
+  | STATIC
+  | EXTERN
+  | REGISTER
+  | TYPEDEF
 and cvspec =
-| CV_CONST
-| CV_VOLATILE
-| CV_RESTRICT
+  | CV_CONST
+  | CV_VOLATILE
+  | CV_RESTRICT
 and spec_elem =
-| SpecCV of cvspec
-| SpecAttr of attribute
-| SpecStorage of storage
-| SpecInline
-| SpecType of typeSpecifier
+  | SpecCV of cvspec
+  | SpecAttr of attribute
+  | SpecStorage of storage
+  | SpecInline
+  | SpecType of typeSpecifier
 and decl_type =
-| JUSTBASE
-| ARRAY of decl_type * cvspec list * attribute list * expression option
-| PTR of cvspec list * attribute list * decl_type
-| PROTO of decl_type * (parameter list*bool)
+  | JUSTBASE
+  | ARRAY of decl_type * cvspec list * attribute list * expression option
+  | PTR of cvspec list * attribute list * decl_type
+  | PROTO of decl_type * (parameter list*bool)
 and parameter =
-| PARAM of spec_elem list * atom option * decl_type * attribute list
-   * cabsloc
+  | PARAM of spec_elem list * atom option * decl_type * 
+     attribute list * cabsloc
 and field_group =
-| Field_group of spec_elem list * (name option*expression option) list
-   * cabsloc
+  | Field_group of spec_elem list * (name option*expression option) list
+     * cabsloc
 and name =
-| Name of atom * decl_type * attribute list * cabsloc
+  | Name of atom * decl_type * attribute list * cabsloc
 and init_name =
-| Init_name of name * init_expression
+  | Init_name of name * init_expression
 and binary_operator =
-| ADD
-| SUB
-| MUL
-| DIV
-| MOD
-| AND
-| OR
-| BAND
-| BOR
-| XOR
-| SHL
-| SHR
-| EQ
-| NE
-| LT
-| GT
-| LE
-| GE
-| ASSIGN
-| ADD_ASSIGN
-| SUB_ASSIGN
-| MUL_ASSIGN
-| DIV_ASSIGN
-| MOD_ASSIGN
-| BAND_ASSIGN
-| BOR_ASSIGN
-| XOR_ASSIGN
-| SHL_ASSIGN
-| SHR_ASSIGN
-| COMMA
+  | ADD
+  | SUB
+  | MUL
+  | DIV
+  | MOD
+  | AND
+  | OR
+  | BAND
+  | BOR
+  | XOR
+  | SHL
+  | SHR
+  | EQ
+  | NE
+  | LT
+  | GT
+  | LE
+  | GE
+  | ASSIGN
+  | ADD_ASSIGN
+  | SUB_ASSIGN
+  | MUL_ASSIGN
+  | DIV_ASSIGN
+  | MOD_ASSIGN
+  | BAND_ASSIGN
+  | BOR_ASSIGN
+  | XOR_ASSIGN
+  | SHL_ASSIGN
+  | SHR_ASSIGN
+  | COMMA
 and unary_operator =
-| MINUS
-| PLUS
-| NOT
-| BNOT
-| MEMOF
-| ADDROF
-| PREINCR
-| PREDECR
-| POSINCR
-| POSDECR
+  | MINUS
+  | PLUS
+  | NOT
+  | BNOT
+  | MEMOF
+  | ADDROF
+  | PREINCR
+  | PREDECR
+  | POSINCR
+  | POSDECR
 and expression =
-| UNARY of unary_operator * expression
-| BINARY of binary_operator * expression * expression
-| QUESTION of expression * expression * expression
-| CAST of (spec_elem list*decl_type) * init_expression
-| CALL of expression * expression list
-| BUILTIN_VA_ARG of expression * (spec_elem list*decl_type)
-| CONSTANT of constant
-| VARIABLE of atom
-| EXPR_SIZEOF of expression
-| TYPE_SIZEOF of (spec_elem list*decl_type)
-| INDEX of expression * expression
-| MEMBEROF of expression * atom
-| MEMBEROFPTR of expression * atom
+  | UNARY of unary_operator * expression
+  | BINARY of binary_operator * expression * expression
+  | QUESTION of expression * expression * expression
+  | CAST of (spec_elem list*decl_type) * init_expression
+  | CALL of expression * expression list
+  | BUILTIN_VA_ARG of expression * (spec_elem list*decl_type)
+  | CONSTANT of constant
+  | VARIABLE of atom
+  | EXPR_SIZEOF of expression
+  | TYPE_SIZEOF of (spec_elem list*decl_type)
+  | ALIGNOF of (spec_elem list*decl_type)
+  | INDEX of expression * expression
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (spec_elem list*decl_type) * atom
 and constant =
-| CONST_INT of atom
-| CONST_FLOAT of atom
-| CONST_CHAR of atom
-| CONST_STRING of atom
+  | CONST_INT of atom
+  | CONST_FLOAT of atom
+  | CONST_CHAR of atom
+  | CONST_STRING of atom
 and init_expression =
-| NO_INIT
-| SINGLE_INIT of expression
-| COMPOUND_INIT of (initwhat list*init_expression) list
+  | NO_INIT
+  | SINGLE_INIT of expression
+  | COMPOUND_INIT of (initwhat list*init_expression) list
 and initwhat =
-| INFIELD_INIT of atom
-| ATINDEX_INIT of expression
+  | INFIELD_INIT of atom
+  | ATINDEX_INIT of expression
 and attribute =
-| ATTR of atom * expression list
+  | ATTR of atom * expression list
 
 val typeSpecifier_rect :
   'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> (atom
@@ -218,9 +220,10 @@ val expression_rect :
   list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
   expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list*decl_type)
   -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1)
-  -> ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 -> expression
-  -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> (expression -> 'a1
-  -> atom -> 'a1) -> expression -> 'a1
+  -> ((spec_elem list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression ->
+  'a1 -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
+  list*decl_type) -> atom -> 'a1) -> expression -> 'a1
 
 val expression_rec :
   (unary_operator -> expression -> 'a1 -> 'a1) -> (binary_operator ->
@@ -229,9 +232,10 @@ val expression_rec :
   list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
   expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list*decl_type)
   -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1)
-  -> ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 -> expression
-  -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> (expression -> 'a1
-  -> atom -> 'a1) -> expression -> 'a1
+  -> ((spec_elem list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression ->
+  'a1 -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
+  list*decl_type) -> atom -> 'a1) -> expression -> 'a1
 
 val constant_rect :
   (atom -> 'a1) -> (atom -> 'a1) -> (atom -> 'a1) -> (atom -> 'a1) ->
@@ -262,30 +266,30 @@ type init_name_group = spec_elem list*init_name list
 type name_group = spec_elem list*name list
 
 type definition =
-| FUNDEF of spec_elem list * name * statement * cabsloc
-| DECDEF of init_name_group * cabsloc
-| PRAGMA of atom * cabsloc
+  | FUNDEF of spec_elem list * name * statement * cabsloc
+  | DECDEF of init_name_group * cabsloc
+  | PRAGMA of atom * cabsloc
 and statement =
-| NOP of cabsloc
-| COMPUTATION of expression * cabsloc
-| BLOCK of statement list * cabsloc
-| If of expression * statement * statement option * cabsloc
-| WHILE of expression * statement * cabsloc
-| DOWHILE of expression * statement * cabsloc
-| FOR of for_clause option * expression option * expression option
-   * statement * cabsloc
-| BREAK of cabsloc
-| CONTINUE of cabsloc
-| RETURN of expression option * cabsloc
-| SWITCH of expression * statement * cabsloc
-| CASE of expression * statement * cabsloc
-| DEFAULT of statement * cabsloc
-| LABEL of atom * statement * cabsloc
-| GOTO of atom * cabsloc
-| DEFINITION of definition
+  | NOP of cabsloc
+  | COMPUTATION of expression * cabsloc
+  | BLOCK of statement list * cabsloc
+  | If of expression * statement * statement option * cabsloc
+  | WHILE of expression * statement * cabsloc
+  | DOWHILE of expression * statement * cabsloc
+  | FOR of for_clause option * expression option * 
+     expression option * statement * cabsloc
+  | BREAK of cabsloc
+  | CONTINUE of cabsloc
+  | RETURN of expression option * cabsloc
+  | SWITCH of expression * statement * cabsloc
+  | CASE of expression * statement * cabsloc
+  | DEFAULT of statement * cabsloc
+  | LABEL of atom * statement * cabsloc
+  | GOTO of atom * cabsloc
+  | DEFINITION of definition
 and for_clause =
-| FC_EXP of expression
-| FC_DECL of definition
+  | FC_EXP of expression
+  | FC_DECL of definition
 
 val definition_rect :
   (spec_elem list -> name -> statement -> cabsloc -> 'a1) -> (init_name_group

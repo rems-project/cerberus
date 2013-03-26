@@ -41,23 +41,22 @@ let coq_PairComparable cA cB x y =
   let xa,xb = x in
   let ya,yb = y in
   (match compare cA xa ya with
-   | Eq -> compare cB xb yb
-   | _ -> compare cA xa ya)
+     | Eq -> compare cB xb yb
+     | _ -> compare cA xa ya)
 
 (** val compare_eqb : 'a1 coq_Comparable -> 'a1 -> 'a1 -> bool **)
 
 let compare_eqb c x y =
   match compare c x y with
-  | Eq -> true
-  | _ -> false
+    | Eq -> true
+    | _ -> false
 
 (** val compare_eqdec : 'a1 coq_Comparable -> 'a1 -> 'a1 -> bool **)
 
 let compare_eqdec c x y =
-  let c0 = compare c x y in
-  (match c0 with
-   | Eq -> true
-   | _ -> false)
+  let c0 = compare c x y in (match c0 with
+                               | Eq -> true
+                               | _ -> false)
 
 type 'a coq_Finite =
   'a list
@@ -106,8 +105,9 @@ let coq_AlphabetComparable x = x.coq_AlphabetComparable
 
 let coq_AlphabetFinite x = x.coq_AlphabetFinite
 
-type 'a coq_Numbered = { injN : ('a -> coq_N); surjN : (coq_N -> 'a);
-                         injN_bound : coq_N }
+type 'a coq_Numbered = { injN : ('a -> coq_N); surjN : 
+                         (coq_N -> 'a); injN_bound : 
+                         coq_N }
 
 (** val coq_Numbered_rect :
     (('a1 -> coq_N) -> (coq_N -> 'a1) -> __ -> coq_N -> __ -> 'a2) -> 'a1
@@ -147,14 +147,12 @@ let coq_NumberedAlphabet n =
 
 let coq_OptionComparable c x y =
   match x with
-  | Some x0 ->
-    (match y with
-     | Some y0 -> compare c x0 y0
-     | None -> Gt)
-  | None ->
-    (match y with
-     | Some a -> Lt
-     | None -> Eq)
+    | Some x0 -> (match y with
+                    | Some y0 -> compare c x0 y0
+                    | None -> Gt)
+    | None -> (match y with
+                 | Some a -> Lt
+                 | None -> Eq)
 
 (** val coq_OptionFinite : 'a1 coq_Finite -> 'a1 option coq_Finite **)
 
@@ -190,15 +188,15 @@ module OrderedType_from_ComparableM =
   
   let compare x y =
     match Alt.compare x y with
-    | Eq -> OrderedType.EQ
-    | Lt -> OrderedType.LT
-    | Gt -> OrderedType.GT
+      | Eq -> OrderedType.EQ
+      | Lt -> OrderedType.LT
+      | Gt -> OrderedType.GT
   
   (** val eq_dec : Alt.t -> Alt.t -> bool **)
   
   let eq_dec x y =
     match Alt.compare x y with
-    | Eq -> true
-    | _ -> false
+      | Eq -> true
+      | _ -> false
  end
 

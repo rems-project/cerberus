@@ -1,169 +1,272 @@
 open Ail
 open Ail_aux (* lift_int *)
 
+
 (* *************************************************************************
    * Predicates over types, corresponding to the name conventions and type *
    * correspondences defined in 6.2.5.                                     *
-   *************************************************************************
+   ************************************************************************* *)
+val is_object_type: ctype -> bool
+let is_object_type = function
+  | FUNCTION _ _ -> false
+  | _            -> true (* TODO: I'm pretty sure we can't typedef a function type *)
+end
 
-   [signed integer types] (6.2.5#4)
-   
-   "(...) The standard (...) integer types are collectively called signed
-    integer types."
-*)
-let is_signed_integer = lift_int
-  function
-    | SIGNED   _ -> true
-    | UNSIGNED _ -> false
-    | BOOL       -> false
-  end false
-
-
-(* [unsigned integer types] (6.2.5#6)
-   
-   "The type *_Bool* and the unsigned integer types that correspond to the
-    standard signed integer types are the `standard unsigned integer types`.
-    (...) The standard (...) integer types are collectively called
-    `unsigned integer types`"
-   
-   NOT_SUPPORTED: extended unsigned integer types
-*)
-(* TODO: don't seems to be used outside from Types.lem *)
-(* TODO: this function doesn't catch SIZE_T, given its current use, this should be ok *)
-let is_unsigned_integer = lift_int
-  function
-    | BOOL       -> true
-    | UNSIGNED _ -> true
-    | SIGNED   _ -> false
-  end false
-
-
-(* [real floating types] (6.2.5#10)
-   
-   "(...)"
-   
-   NOT_SUPPORTED
-*)
-(* TODO: don't seems to be used outside from Types.lem *)
-let is_real_floating t = false
-
-
-(* [complex types, floating types] (6.2.5#11)
-   
-   "(...) The real floating and complex types are collectively called the
-    `floating types`."
-   
-   NOT_SUPPORTED
-*)
-(* TODO: not used outside from Types.lem *)
-let is_complex t = false
-let is_floating t = is_real_floating t || is_complex t
-
-
-(* [basic types] (6.2.5#14)
-   
-   "The type *char*, the signed and unsigned integer types, and the floating
-    types are collectively called the `basic types`."
-*)
-(* let is_basic = function *)
-(*   | BASIC _ CHAR -> true *)
-(*   | t            -> is_unsigned_integer t || is_signed_integer t || *)
-(*                     is_floating t *)
-(*   end *)
-
-
-(* [character types] (6.2.5#15)
-   
-   "The three types *char*, *signed char*, and *unsigned char* are collectively
-    called the `character types`. (...)"
-*)
-(* let is_character = function *)
-(*   | BASIC _ CHAR                       -> true *)
-(*   | BASIC _ (INTEGER (SIGNED   ICHAR)) -> true *)
-(*   | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true *)
-(*   | _                                  -> false *)
-(*   end *)
-
-
-(* [enumerated types] (6.2.5#16)
-   
-   "(...)"
-   
-   TODO
-*)
-let is_enumerated t = false
-
-
-(* [integer types, real types] (6.2.5#17)
-   
-   "The type *char*, the signed and unsigned integer types, and the enumerated
-    types are collectively called `integer types`. The integer and real floating
-    types are collectively called `real types`."
-*)
-let is_integer = function
-  | BASIC _ CHAR -> true
-  | SIZE_T       -> true
-  | t            -> is_signed_integer t || is_unsigned_integer t ||
-                    is_enumerated t
-  end
-let is_real t = is_integer t || is_real_floating t
-
-
-(* [arithmetic types] (6.2.5#18)
-   
-   "Integer and floating types are collectively called `arithmetic types`.
-    (...)"
-*)
-let is_arithmetic t = is_integer t || is_floating t
-
-
-(* TODO: would be nice to get rid of this *)
-let is_void = function
-  | VOID _ -> true
-  | _      -> false
-  end
-
-
-
-
-
-
-
-
-
-
-(* TODO *)
-let is_structure t = false
-let is_union t = false
-let is_enum t = false
-let is_atomic t = false
-
-let is_pointer = function
-  | POINTER _ _ -> true
-  | _           -> false
-  end
-
-let is_function = function
+val is_function_type: ctype -> bool
+let is_function_type = function
   | FUNCTION _ _ -> true
   | _            -> false
   end
 
-let is_array = function
+
+(* 6.2.5#4 *)
+val is_standard_signed_integer_type: ctype -> bool
+val is_extended_signed_integer_type: ctype -> bool
+val is_signed_integer_type: ctype -> bool
+let is_standard_signed_integer_type = function
+  | BASIC _ (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> false
+  | BASIC _ (INTEGER (SIGNED _))                    -> true
+  | _                                               -> false
+end
+
+let is_extended_signed_integer_type = function
+  | BASIC _ (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> true
+  | _                                               -> false
+end
+
+let is_signed_integer_type ty =
+  is_standard_signed_integer_type ty || is_extended_signed_integer_type ty
+
+
+(* 6.2.5#6 *)
+(* val corresponding_unsigned_integer_type: ctype -> ctype *)
+val is_standard_unsigned_integer_type: ctype -> bool
+val is_extended_unsigned_integer_type: ctype -> bool
+val is_unsigned_integer_type: ctype -> bool
+let is_standard_unsigned_integer_type = function
+  | BASIC _ (INTEGER BOOL)                            -> true
+  | BASIC _ (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> false
+  | BASIC _ (INTEGER (UNSIGNED _))                    -> true
+  | SIZE_T                                            -> true
+  | _                                                 -> false
+end
+
+let is_extended_unsigned_integer_type = function
+  | BASIC _ (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> true
+  | _                                               -> false
+end
+
+let is_unsigned_integer_type ty =
+  is_standard_unsigned_integer_type ty || is_extended_unsigned_integer_type ty
+
+
+(* §6.2.5#7 *)
+val is_standard_integer_type: ctype -> bool
+val is_extended_integer_type: ctype -> bool
+let is_standard_integer_type ty =
+  is_standard_signed_integer_type ty || is_standard_unsigned_integer_type ty
+
+let is_extended_integer_type ty =
+  is_extended_signed_integer_type ty || is_extended_unsigned_integer_type ty
+
+
+(* §6.2.5#10 *)
+val is_real_floating_type: ctype -> bool
+let is_real_floating_type = function
+  | BASIC _ (REAL_FLOATING _) -> true
+  | _                         -> false
+end
+
+
+(* §6.2.5#11 *)
+val is_complex_type: ctype -> bool
+val is_floating_type: ctype -> bool
+let is_complex_type = function
+  | BASIC _ (COMPLEX _) -> true
+  | _                   -> false
+end
+let is_floating_type ty =
+  is_real_floating_type ty || is_complex_type ty
+
+
+(* §6.2.5#12 *)
+(* corresponding real type *)
+
+
+(* §6.2.5#14 *)
+val is_basic_type: ctype -> bool
+let is_basic_type = function
+  | BASIC _ _ -> true
+  | _         -> false
+end 
+
+(* §6.2.5#15 *)
+val is_character_type: ctype -> bool
+let is_character_type = function
+  | BASIC _ CHAR                       -> true
+  | BASIC _ (INTEGER (SIGNED ICHAR))   -> true
+  | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true
+  | _                                  -> false
+end
+
+
+(* §6.2.5#16 *)
+val is_enumeration_type: ctype -> bool
+let is_enumeration_type = function
+  | ENUM _ -> true
+  | _      -> false
+end
+
+
+(* §6.2.5#17 *)
+val is_integer_type: ctype -> bool
+val is_real_type: ctype -> bool
+let is_integer_type = function
+  | BASIC _ (INTEGER _) -> true
+  | _                   -> false
+end
+
+let is_real_type ty =
+  is_integer_type ty || is_real_floating_type ty
+
+
+(* §6.2.5#18 *)
+val is_arithmetic_type: ctype -> bool
+(* type_domain *)
+let is_arithmetic_type ty =
+  is_integer_type ty || is_floating_type ty
+
+
+(* §6.2.5#20 *)
+val is_derived_type: ctype -> bool
+val is_array_type: ctype -> bool
+val is_structure_type: ctype -> bool
+val is_union_type: ctype -> bool
+val is_pointer_type: ctype -> bool
+val is_atomic_type: ctype -> bool
+let is_array_type = function
   | ARRAY _ _ -> true
   | _         -> false
-  end
+end
 
-let is_derived t =
-  is_array t
-  || is_structure t
-  || is_union t
-  || is_function t
-  || is_pointer t
-  || is_atomic t
+let is_structure_type = function
+  | STRUCT _ _ _ -> true
+  | _            -> false
+end
 
-let is_scalar t = is_arithmetic t || is_pointer t
+let is_union_type = function
+  | UNION _ _ _ -> true
+  | _           -> false
+end
 
-let is_aggregate t = is_array t || is_structure t
+let is_pointer_type = function
+  | POINTER _ _ -> true
+  | _           -> false
+end
+
+let is_atomic_type = function
+  | ATOMIC _ -> true
+  | _        -> false
+end
+
+let is_derived_type ty =
+  is_array_type ty || is_structure_type ty || is_union_type ty || is_pointer_type ty || is_atomic_type ty
+
+
+(* §6.2.5#21 *)
+val is_scalar_type: ctype -> bool
+val is_aggregate_type: ctype -> bool
+let is_scalar_type ty =
+  is_arithmetic_type ty || is_pointer_type ty
+
+let is_aggregate_type ty =
+  is_array_type ty || is_structure_type ty
+
+
+(* §6.2.5#23 *)
+(* has_known_constant_size *)
+
+
+(* §6.2.5#24 *)
+val is_derived_declarator_type: ctype -> bool
+let is_derived_declarator_type ty =
+  is_array_type ty || is_function_type ty || is_pointer_type ty
+
+
+(* §6.2.5#25 *)
+(* type_category *)
+
+
+(* §6.2.5#26 *)
+(* unqualified_type *)
+(* qualified_version *)
+
+(*
+
+
+(* void *)
+ 
+
+
+  *)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+let extended_signed_integer_type = false
+
+
+let is_standard_signed_integer_type ty =
+  is_
+*)
+
+
+(*
+let is_unsigned_integer_type
+
+let is_standard_unsigned_integer_type = 
+
+
+let extended_unsigned_integer_type =
+*)
+
+
+
+
+
+
+
+
+
+
+
+(* CLEAN UP TO HERE ***************************************************************************** *)
+
+
+
+let is_void_type = function
+  | VOID _ -> true
+  | _      -> false
+end
+
+
+
 
 let is_unqualified = function
   | BASIC    q _ -> q = {}
@@ -171,29 +274,25 @@ let is_unqualified = function
   | _            -> true
   end
 
-let is_object = function
-  | FUNCTION _ _ -> false
-  | _            -> true
-  end
 
 let is_complete_object t =
   match t with
   | VOID _ -> false
-  | _      -> is_object t
+  | _      -> is_object_type t
   end
 
 let is_pointer_to_object = function
-  | POINTER _ t -> is_object t
+  | POINTER _ t -> is_object_type t
   | _           -> false
   end
 
 let is_pointer_to_void = function
-  | POINTER _ t -> is_void t
+  | POINTER _ t -> is_void_type t
   | _           -> false
   end
 
 let is_pointer_to_function = function
-  | POINTER _ t -> is_function t
+  | POINTER _ t -> is_function_type t
   | _           -> false
   end
 
@@ -509,7 +608,7 @@ let is_const = function
   end
 
 let is_modifiable t =
-  not (is_array t)
+  not (is_array_type t)
   && not (is_incomplete t)
   && not (is_const t)
 
@@ -550,7 +649,7 @@ let pointer_convert (t: Ail.ctype) : Ail.ctype =
   end
 
 let lvalue_convert (t: Ail.ctype) : option Ail.ctype =
-  if is_incomplete t && not (is_array t) then
+  if is_incomplete t && not (is_array_type t) then
     None
   else
     Some (unqualify t)
@@ -647,5 +746,4 @@ let usual_arithmetic (t1: Ail.ctype) (t2: Ail.ctype) : Ail.ctype =
   else
     Boot.debug "ERROR in usual_arith"
 *)
-
 

@@ -264,6 +264,10 @@ val desugar_expr:      forall 'b. C.exp_l              -> E.t (A.expression Loca
 (* val desugar_stmt:      forall 'b. desugar_state -> C.stmt_l             -> E.t (A.statement Location.t) 'b *)
 
 (* TODO: polish *)
+
+(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
+   instead) *)
+(* TODO: we should do something about `char' here (implementation-defined choice) *)
 let desugar_specifier specifiers =
   let mk_mset = Multiset.from_list in
   let desugar_map =
@@ -311,8 +315,13 @@ let desugar_specifier specifiers =
           [ [C.UNSIGNED; C.LONG; C.LONG];
             [C.UNSIGNED; C.LONG; C.LONG; C.INT]
           ]
+        @ [(mk_mset [C.FLOAT], A.REAL_FLOATING A.FLOAT)]
+        @ [(mk_mset [C.DOUBLE], A.REAL_FLOATING A.DOUBLE)]
+        @ [(mk_mset [C.LONG; C.DOUBLE], A.REAL_FLOATING A.LONG_DOUBLE)]
         @ [(mk_mset [C.BOOL], A.INTEGER A.BOOL)]
-        
+        @ [(mk_mset [C.FLOAT; C.COMPLEX], A.COMPLEX A.FLOAT)]
+        @ [(mk_mset [C.DOUBLE; C.COMPLEX], A.COMPLEX A.DOUBLE)]
+        @ [(mk_mset [C.LONG; C.DOUBLE; C.COMPLEX], A.COMPLEX A.LONG_DOUBLE)]
       ) in
   E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.") (Map_.find specifiers desugar_map)
 
@@ -333,7 +342,7 @@ let desugar_storage = function
   | [C.EXTERN]       -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
   | [C.THREAD_LOCAL] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class _Thread_local")
   
-  | [C.TYPEDEF]  -> Boot.outOfHomeomorphism "[Cabs_to_ail.desugar_storage, C.TYPEDEF] reached an impossible case"
+  | [C.TYPEDEF]  -> E.return None  (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
   
   | _::_::_      -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
 end
@@ -342,9 +351,18 @@ end
 let rec desugar_type t =
   let ft = desugar_type in
   match t with
-  | C.BASE qs ss -> if Ocaml.Pmap.equal Ocaml.Pervasives.(=) (Multiset.from_list [C.VOID]) ss
-                      then E.return (A.VOID (desugar_qualifiers qs))
-                      else A.BASIC (desugar_qualifiers qs) <$> desugar_specifier ss
+  | C.BASE qs ss ->
+      if Ocaml.Pmap.equal Ocaml.Pervasives.(=) (Multiset.from_list [C.VOID]) ss then
+        E.return (A.VOID (desugar_qualifiers qs))
+        
+       (* TODO: this should theoricaly also make sure that there is nothing else in the multiset *)
+      else if Pmap.exist (fun spec n ->
+        match (spec, n) with
+          | (C.STRUCT _ _ _, 1) -> true
+          | _                 -> false
+        end) ss then
+(*        E.return (A.STRUCT *) Boot.assert_false "TODO"
+                else A.BASIC (desugar_qualifiers qs) <$> desugar_specifier ss
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
@@ -670,11 +688,11 @@ and desugar_function_decl ((name, t, sts), l) =
   E.push_table fn_scope   >>= fun () ->
   E.return (id, formals)
 
-and desugar_defn ((d, e_opt), l) =
+and desugar_defn ((d, i_opt), l) =
   desugar_decl d >>= fun id ->
-  match e_opt with
+  match i_opt with
   | None   -> E.return (id, None, l)
-  | Some e ->
+  | Some (C.SINGLE_INIT e) ->
       desugar_exp e >>= fun d_e ->
       E.return (id, Some d_e, l)
   end

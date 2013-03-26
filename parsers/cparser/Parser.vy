@@ -7,7 +7,7 @@ Require Import List.
 
 %token<atom * cabsloc> VAR_NAME TYPEDEF_NAME OTHER_NAME
 %token<constant * cabsloc> CONSTANT
-%token<cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
+%token<cabsloc> SIZEOF ALIGNOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
   COLON AND
 
@@ -20,7 +20,7 @@ Require Import List.
   UNION ENUM BOOL
 
 %token<cabsloc> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK
-  RETURN BUILTIN_VA_ARG
+  RETURN BUILTIN_VA_ARG OFFSETOF
 
 %token EOF
 
@@ -133,6 +133,12 @@ unary_expression:
     { (EXPR_SIZEOF (fst expr), loc) }
 | loc = SIZEOF LPAREN typ = type_name RPAREN
     { (TYPE_SIZEOF typ, loc) }
+| loc = ALIGNOF LPAREN typ = type_name RPAREN
+    { (ALIGNOF typ, loc) }
+(* K: in truth this is a macro, but we fake it *)
+| loc = OFFSETOF LPAREN ty = type_name COMMA member = OTHER_NAME RPAREN
+    { (OFFSETOF ty (fst member), loc) }
+
 
 unary_operator:
 | loc = AND
@@ -286,6 +292,7 @@ expression:
 | expr1 = expression COMMA expr2 = assignment_expression
     { (BINARY COMMA (fst expr1) (fst expr2), snd expr1) }
 
+
 (* 6.6 *)
 constant_expression:
 | expr = conditional_expression
@@ -297,6 +304,11 @@ declaration:
     { DECDEF (fst decspec, rev decls) (snd decspec) }
 | decspec = declaration_specifiers SEMICOLON
     { DECDEF (fst decspec, []) (snd decspec) }
+(* TODO
+| static_assert_declaration
+    {}
+*)
+
 
 declaration_specifiers:
 | storage = storage_class_specifier rest = declaration_specifiers
@@ -397,6 +409,10 @@ struct_declaration:
 (* Extension to C99 grammar needed to parse some GNU header files. *)
 | decspec = specifier_qualifier_list SEMICOLON
     { Field_group (fst decspec) [] (snd decspec) }
+(* TODO
+| static_assert_declaration
+    {}
+*)
 
 specifier_qualifier_list:
 | typ = type_specifier rest = specifier_qualifier_list

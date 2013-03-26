@@ -194,9 +194,26 @@ module Print = struct
     | SHORT    -> !^ (ansi_format [Green] "short")
     | INT      -> !^ (ansi_format [Green] "int")
     | LONG     -> !^ (ansi_format [Green] "long")
+    | FLOAT    -> !^ (ansi_format [Green] "float")
+    | DOUBLE   -> !^ (ansi_format [Green] "double")
     | SIGNED   -> !^ (ansi_format [Green] "signed")
     | UNSIGNED -> !^ (ansi_format [Green] "unsigned")
     | BOOL     -> !^ (ansi_format [Green] "_Bool")
+    | COMPLEX  -> !^ (ansi_format [Green] "_Complex")
+    | NAMED ty -> !^ (ansi_format [Green] ty)
+    (* TODO: attributes *)
+    | STRUCT (tag_opt, fs, attrs) ->
+        !^ (ansi_format [Cyan; Bold] "struct") ^^
+        (P.optional (fun z -> P.space ^^ !^ (ansi_format [Green] z)) tag_opt) ^^^
+        P.braces (P.sepmap (P.comma ^^ P.space) pp_field fs)
+
+    | UNION (tag_opt, fs, attrs) ->
+        !^ (ansi_format [Cyan; Bold] "union") ^^
+        (P.optional (fun z -> P.space ^^  !^ (ansi_format [Green] z)) tag_opt)
+(*    | ENUM of option string * option (list (string * option exp_l)) * list attribute *)
+    | _ -> !^ "TODO_pp_specifier"
+
+
 (*
     | STRUCT (name_opt, decls) ->
         !^ (ansi_format [Green] "struct") ^^
@@ -207,13 +224,18 @@ module Print = struct
                                                P.sepmap P.break0 pp_struct_union_declaration decls) ^/^ P.rbrace
 *)
   
+  and pp_field = function
+    | BasicField (n, ty)      -> pp_type ty ^^^ (!^ n)
+    | BitField (n_opt, ty, e) -> pp_type ty ^^^ (P.optional (!^) n_opt) ^^^ P.colon ^^ (pp_exp None e)
+
+  
   and pp_type = function
     | BASE (qs, ss)     -> pp_qs qs ^^ pp_ss ss
     | ARRAY (qs, ty, e) -> (* pp_qs qs ^^ pp_type ty ^^^ P.brackets (match e with
                                                                        | Some e -> pp_exp None e
                                                                        | None   -> P.empty) *)
                            !^ "BOOM"
-    | POINTER (qs, ty)  -> pp_qs qs ^^ P.parens (pp_type ty) ^^^ P.star
+    | POINTER (qs, ty)  -> pp_qs qs ^^^ P.parens (pp_type ty) ^^^ P.star
     | FUNCTION (ty, ds) -> pp_type ty ^^ P.parens (!^ "TODO") (* (P.comma_list f ts) *) (* TODO *)
   
   
@@ -223,9 +245,10 @@ module Print = struct
     (if lt_precedence p' p then fun x -> x else P.parens) $
     match exp with
       | IDENTIFIER id                 -> !^ id
-(* TODO: incomplete pattern *)
       | CONSTANT (CONST_INT ic)       -> pp_integer_constant ic
-      | STRING_LITERAL s              -> P.dquotes (pp_string_literal s)
+      | CONSTANT (CONST_FLOAT fc)     -> !^ fc
+      | CONSTANT (CONST_CHAR cc)      -> P.dquotes (!^ cc)
+      | STRING_LITERAL s              -> pp_string_literal s (* TODO: should put braces when cabs_transform does an actual translation of the string *)
       | SUBSCRIPT (e1, e2)            -> f e1 ^^ P.brackets (f e2)
       | CALL (e, es)                  -> f e ^^ P.parens (P.comma_list f es)
       | MEMBEROF (e, x)               -> f e ^^ P.dot ^^ (!^ x)
@@ -253,14 +276,6 @@ module Print = struct
       P.fold ins_space (List.map (fun (x,n) -> replicate x n) (Pmap.bindings ss))
   
   
-  and pp_struct_union_declarator ss qs = function
-    | STRUCT_DECL (id, mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] id)
-    | BITFIELD (x_opt, e)  -> P.optional (fun (s,mk_type) -> pp_type (mk_type (Cabs.BASE (qs, ss))) ^^ !^ (ansi_format [Yellow] s)) x_opt ^^^
-                              P.colon ^^ pp_exp None e
-  
-  and pp_struct_union_declaration (ss, qs, decls) =
-    pp_qs qs ^^ pp_ss ss ^^ P.sepmap (P.comma ^^ P.space) (pp_struct_union_declarator ss qs) decls ^^ P.semi
-
 
 
 
@@ -325,9 +340,15 @@ module Print = struct
       | ty                   -> pp_type ty ^^ !^ (ansi_format [Yellow] s))
     
   
-  and pp_definition ((dec, exp_opt), _) =
+  and pp_init_exp = function
+    | SINGLE_INIT exp  -> pp_exp None exp
+    | ARRAY_INIT inits -> P.braces $ (P.sepmap (P.comma ^^ P.space) pp_init_exp) inits
+  
+  and pp_definition ((dec, init_opt), _) =
     pp_declaration dec ^^^
-    (match exp_opt with Some exp -> P.equals ^^^ pp_exp None exp | None -> P.empty)
+    (match init_opt with
+      | Some init -> P.equals ^^^ pp_init_exp init
+      | None      -> P.empty)
   
   let pp_global_definition (def, _) =
     match def with

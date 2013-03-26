@@ -8,5 +8,5 @@ let parse input : Cabs0.definition list =
       (match Parser.parse inf (Lexer.tokens_stream (Lexer.init (Input.name input) ic)) with
         | Parser.Inter.Fail_pr            -> failwith "Internal error while parsing"
         | Parser.Inter.Timeout_pr         -> assert false
-        | Parser.Inter.Parsed_pr (ast, _) -> Exception.return ast)
+        | Parser.Inter.Parsed_pr (ast, _) -> ast)
   ) input

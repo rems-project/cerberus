@@ -33,6 +33,7 @@ let init filename channel : Lexing.lexbuf =
       ("inline", fun loc -> INLINE loc);
       ("int", fun loc -> INT loc);
       ("long", fun loc -> LONG loc);
+      ("offsetof", fun loc -> OFFSETOF loc);
       ("register", fun loc -> REGISTER loc);
       ("restrict", fun loc -> RESTRICT loc);
       ("return", fun loc -> RETURN loc);
@@ -47,9 +48,11 @@ let init filename channel : Lexing.lexbuf =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
-      ("while", fun loc -> WHILE loc);  
+      ("while", fun loc -> WHILE loc);
+      ("_Alignof", fun loc -> ALIGNOF loc);
       ("_Bool", fun loc -> BOOL loc);
-      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc)
+      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
+(*      ("_Static_assert", fun loc -> STATIC_ASSERT) *)
     ];
 
   push_context := begin fun () -> contexts := []::!contexts end;
@@ -74,11 +77,27 @@ let init filename channel : Lexing.lexbuf =
   end;
 
   !declare_typename "__builtin_va_list";
-
+  
+  !declare_typename "size_t";
+  !declare_typename "intptr_t";
+  
+  !declare_varname "assert";
+  !declare_varname "NULL";
+  !declare_varname "ULONG_MAX";
+  
+  
+  
   let lb = Lexing.from_channel channel in
   lb.lex_curr_p <-
     {lb.lex_curr_p with pos_fname = filename; pos_lnum = 1};
   lb
+
+
+let lex_comment remainder lexbuf =
+  let ch = Lexing.lexeme_char lexbuf 0 in
+  let prefix = Int64.of_int (Char.code ch) in
+  if ch = '\n' then Lexing.new_line lexbuf;
+  prefix :: remainder lexbuf
 
 }
 (* Identifiers *)
@@ -189,8 +208,14 @@ let string_literal =
     '"' s_char_sequence? '"'
   | 'L' '"' s_char_sequence? '"'
 
-(* We assume comments are removed by the preprocessor. *)
 rule initial = parse
+  (* Beginning of a comment *)
+  | "/*" {let _ = comment lexbuf in initial lexbuf}
+  
+  (* Single-line comment *)
+  | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; initial lexbuf}
+  
+  
   | '\n'                          { new_line lexbuf; initial lexbuf }
   | whitespace_char               { initial lexbuf }
 |		'#'			{ hash lexbuf}
@@ -282,6 +307,20 @@ and hash = parse
       { Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
           lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum }
 
+
+(* Consume a comment: /* ... */ *)
+and comment = parse
+  (* End of the comment *)
+  | "*/" {[]}
+  | _    {lex_comment comment lexbuf}
+
+
+(* Consume a singleline comment: // ... *)
+and onelinecomment = parse
+  | '\n' | eof {[]}
+  | _          {lex_comment onelinecomment lexbuf}
+
+
 {
   open Streams
   open Specif
@@ -307,6 +346,7 @@ and hash = parse
       | t::q ->
           match t with
             | ADD_ASSIGN loc -> loop q ADD_ASSIGN_t loc
+            | ALIGNOF loc -> loop q ALIGNOF_t loc
             | AND loc -> loop q AND_t loc
             | ANDAND loc -> loop q ANDAND_t loc
             | AND_ASSIGN loc -> loop q AND_ASSIGN_t loc
@@ -364,6 +404,7 @@ and hash = parse
             | PLUS loc -> loop q PLUS_t loc
             | PTR loc -> loop q PTR_t loc
             | QUESTION loc -> loop q QUESTION_t loc
+            | OFFSETOF loc -> loop q OFFSETOF_t loc
             | RBRACE loc -> loop q RBRACE_t loc
             | RBRACK loc -> loop q RBRACK_t loc
             | REGISTER loc -> loop q REGISTER_t loc
@@ -379,6 +420,7 @@ and hash = parse
             | SLASH loc -> loop q SLASH_t loc
             | STAR loc -> loop q STAR_t loc
             | STATIC loc -> loop q STATIC_t loc
+(*            | STATIC_ASSERT loc -> loop q STATIC_ASSERT_t loc *)
             | STRING_LITERAL (str, loc) -> 
                 (* Merge consecutive string literals *)
                 let rec doConcat accu = function
