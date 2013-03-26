@@ -3,9 +3,11 @@ FILES= Alphabet.v Tuples.v Grammar.v Automaton.v Validator_complete.v \
        Validator_safe.v Interpreter_safe.v \
        Validator_main.v
 
+default: $(FILES:.v=.vo)
 
-coq:
-	coqc -noglob $(FILES)
+%.vo : %.v
+	@echo COQC $<
+	@coqc -noglob $<
 
 clean:
 	rm -rf *.vo

@@ -99,14 +99,17 @@ and expression =
   | CAST of (list spec_elem * decl_type) * init_expression
 
   | CALL of expression * list expression
-  | BUILTIN_VA_ARG of expression * list spec_elem * decl_type
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
   | CONSTANT of constant
   | VARIABLE of atom
   | EXPR_SIZEOF of expression
   | TYPE_SIZEOF of (list spec_elem * decl_type)
+  | ALIGNOF of (list spec_elem * decl_type)
   | INDEX of expression * expression
   | MEMBEROF of expression * atom
   | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
+
 
 and constant =
   (* The atom is the textual representation of the constant in

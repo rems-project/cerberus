@@ -1,20 +1,24 @@
 VALIDATOR_EXTRACTED := $(foreach f, $(foreach f, $(shell find validator/ -name '*.v'), $(shell basename $f .v)), $f.ml $f.mli)
 EXTRACTED := $(VALIDATOR_EXTRACTED) Cabs0.ml Cabs0.mli Parser.ml Parser.mli
 
-extraction:
+default: pre_parser.ml Parser.v Cabs0.vo
 	make -C validator/
-	menhir --coq Parser.vy
-	coqc -noglob Cabs0
 	coqc -noglob -I validator Parser extraction
-	make -C coq_stdlib/
+#	make -C coq_stdlib/
+
+pre_parser.ml : pre_parser.mly
+	menhir pre_parser.mly
+
+Parser.v : Parser.vy
+	menhir --coq Parser.vy
+	@sed -i"" -e 's/Main/Validator_main/' Parser.v
+
+Cabs0.vo : Cabs0.v
+	coqc -noglob Cabs0
 
 clean:
-	make -C validator/ clean
-	make -C coq_stdlib/ clean
 	rm -rf *.vo
 
 clear:
-	make -C validator/ clean
-	make -C coq_stdlib/ clear
 	rm -rf *.vo $(EXTRACTED)
 	rm -rf _build Parser.v pre_parser.ml pre_parser.mli

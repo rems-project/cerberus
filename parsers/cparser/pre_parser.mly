@@ -16,14 +16,14 @@
 %token<Cabs0.constant * Cabs0.cabsloc> CONSTANT
 %token<string * Cabs0.cabsloc> STRING_LITERAL
 
-%token<Cabs0.cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
+%token<Cabs0.cabsloc> SIZEOF ALIGNOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
   COLON AND MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN LEFT_ASSIGN
   RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN LPAREN RPAREN LBRACK RBRACK 
   LBRACE RBRACE DOT COMMA SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT
   AUTO REGISTER INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE BOOL
   CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE SWITCH WHILE DO 
-  FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG
+  FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG OFFSETOF STATIC_ASSERT
 
 %token EOF
 
@@ -116,7 +116,12 @@ unary_expression:
 | unary_operator cast_expression
 | SIZEOF unary_expression
 | SIZEOF LPAREN type_name RPAREN
+| ALIGNOF LPAREN type_name RPAREN
     {}
+(* TODO: in GCC the second argument may be more complexe than what we allow for now *)
+| OFFSETOF LPAREN type_name COMMA i = general_identifier RPAREN
+    { set_id_type i OtherId }
+
 
 unary_operator:
 | AND
@@ -225,8 +230,10 @@ constant_expression:
 
 declaration:
 | declaration_specifiers init_declarator_list? SEMICOLON
-    {}
 | declaration_specifiers_typedef typedef_declarator_list? SEMICOLON
+(*
+| static_assert_declaration
+*)
     {}
 
 declaration_specifiers_no_type:
@@ -315,6 +322,9 @@ struct_declaration_list:
 
 struct_declaration:
 | specifier_qualifier_list struct_declarator_list? SEMICOLON
+(*
+| static_assert_declaration
+*)
     {}
 
 specifier_qualifier_list:
@@ -472,6 +482,13 @@ designator:
     {}
 | DOT i = general_identifier
     { set_id_type i OtherId }
+
+(*
+static_assert_declaration:
+| STATIC_ASSERT LPAREN constant_expression COMMA string_literal RPAREN SEMICOLON
+    {}
+*)
+
 
 statement_dangerous:
 | labeled_statement(statement_dangerous)

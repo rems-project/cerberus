@@ -101,10 +101,12 @@ default: ocaml_byte
 
 
 ocaml_byte: lem_ocaml
-	rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
-	cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
+	@rm -f $(foreach F, $(SPURIOUS_FILES), $(OCAML_BUILD_DIR)/$(F))
+	@cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
 # YUCK
-	sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs_transform.ml
+	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs_transform.ml
+# Sort of YUCK
+	@sed -i"" -e 's/<<HG-IDENTITY>>/$(shell hg id)/' $(OCAML_BUILD_DIR)/main.ml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
 	-@[ -e "csem" ] || ln -s $(OCAML_BUILD_DIR)/main.byte csem
 
@@ -113,9 +115,10 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
            $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES))
 # (FUTURE) see comment below
 #          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)
-	 cd $(OCAML_BUILD_DIR) && $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix ../model/, $(MODEL_FILES))
-	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
-	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
+	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix ../model/, $(MODEL_FILES))
+	@sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
+	@sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
+	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_transform.ml
 
 # (FUTURE) this would be the way to go if there was a way to not have Lem recompiled
 #          all the dependencies of a module

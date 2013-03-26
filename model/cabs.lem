@@ -23,7 +23,8 @@ type integer_constant = num * option integer_suffix
 (* 6.4.4 Constants *)
 type constant =
   | CONST_INT of integer_constant
-(*  | CONST_FLOAT of string (* the textual representaton *) (* LATER *) *)
+  | CONST_FLOAT of string (* the textual representaton *) (* LATER *)
+  | CONST_CHAR of string (* TODO: check *)
 (* NOT USED, see REMARK in Cparser.constant  | CONST_ENUM of string (* 6.4.4.3 Enumeration constants *) *)
 (*
 (* TODO *)
@@ -114,8 +115,8 @@ type specifier =
   | BOOL
   | COMPLEX
   | NAMED of string
-  | STRUCT_ of option string * list field * list attribute
-  | UNION_ of option string * list field * list attribute
+  | STRUCT of option string * list field * list attribute
+  | UNION of option string * list field * list attribute
   | ENUM of option string * option (list (string * option exp_l)) * list attribute
 
 and attribute =
@@ -172,6 +173,7 @@ and expression =
   | CONDITIONAL of exp_l * exp_l * exp_l
   (* 6.5.16 Assignment operators *)
   | ASSIGN of option arithmetic_operator * exp_l * exp_l
+  | OFFSETOF of c_type * string
 
 and generic_association =
   | TYNAME_ASSOC of c_type * exp_l
@@ -181,20 +183,25 @@ and generic_association_l = generic_association * location
 
 and exp_l = expression * location
 
-(* TODO: STRUCT_HACK *)
-and struct_union_declarator =
-  | STRUCT_DECL of string * (c_type -> c_type)
-  | BITFIELD of option (string * (c_type -> c_type)) * exp_l
-and struct_union_declaration = specifiers * qualifiers * list struct_union_declarator
 
 and enum_specifier =
   | ENUM_SPEC of option string * list (option expression)
 
 
+and init =
+  | SINGLE_INIT of exp_l
+  | ARRAY_INIT of list init
+  | STRUCT_INIT of string * list field
+  | UNION_INIT of string * list field
+
+
+
 and declaration = string * c_type * list storage_class
 and decl_l = declaration * location
-and definition = decl_l * option exp_l
+and definition = decl_l * option init
 and defn_l = definition * location
+
+
 
 type statement =
   | SKIP

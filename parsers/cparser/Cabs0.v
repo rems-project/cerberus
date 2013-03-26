@@ -107,9 +107,11 @@ with expression :=
   | VARIABLE : atom -> expression
   | EXPR_SIZEOF : expression -> expression
   | TYPE_SIZEOF : (list spec_elem * decl_type) -> expression
+  | ALIGNOF : (list spec_elem * decl_type) -> expression
   | INDEX : expression -> expression -> expression
   | MEMBEROF : expression -> atom -> expression
   | MEMBEROFPTR : expression -> atom -> expression
+  | OFFSETOF : (list spec_elem * decl_type) -> atom -> expression
 
 with constant :=
   (* The atom is the textual representation of the constant in
@@ -144,9 +146,9 @@ Definition name_group := (list spec_elem * list name)%type.
 ** Declaration definition (at toplevel)
 *)
 Inductive definition :=
- | FUNDEF : list spec_elem -> name -> statement -> cabsloc -> definition
- | DECDEF : init_name_group -> cabsloc -> definition  (* global variable(s), or function prototype *)
- | PRAGMA : atom -> cabsloc -> definition
+ | FUNDEF           : list spec_elem -> name -> statement -> cabsloc -> definition
+ | DECDEF           : init_name_group -> cabsloc -> definition  (* global variable(s), or function prototype *)
+ | PRAGMA           : atom -> cabsloc -> definition
 
 (*
 ** statements

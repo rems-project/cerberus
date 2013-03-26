@@ -82,8 +82,8 @@ let rec check_exp env l e_head =
         let t_base = T.base_of_pointer t in
         let t_return = T.function_return t_base in
         let t_args = T.function_parameters t_base in
-        if T.is_void t_return
-          || (T.is_complete_object t_return && not (T.is_array t_return)) then
+        if T.is_void_type t_return
+          || (T.is_complete_object t_return && not (T.is_array_type t_return)) then
           if List.length t_args = List.length es then
             let is_assignable t e =
               (* TODO Hack! *)
@@ -98,19 +98,19 @@ let rec check_exp env l e_head =
 
   | A.UNARY A.PLUS e ->
       type_of e >>= fun t ->
-      if T.is_arithmetic t then
+      if T.is_arithmetic_type t then
         E.return (A.T_EXP (T.promote t))
       else E.fail Errors.AIL_TYPECHECK_PLUS_ARITHMETIC
 
   | A.UNARY A.MINUS e ->
       type_of e >>= fun t ->
-      if T.is_arithmetic t then
+      if T.is_arithmetic_type t then
         E.return (A.T_EXP (T.promote t))
       else E.fail Errors.AIL_TYPECHECK_MINUS_ARITHMETIC
 
   | A.UNARY A.BNOT e ->
       type_of e >>= fun t ->
-      if T.is_integer t then
+      if T.is_integer_type t then
         E.return (A.T_EXP (T.promote t))
       else E.fail Errors.AIL_TYPECHECK_BNOT_INTEGER
 
@@ -119,7 +119,7 @@ let rec check_exp env l e_head =
       | A.T_EXP ((A.FUNCTION _ _) as t) -> E.return t
       | A.T_EXP _                       -> E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
       | A.T_LVALUE t                    ->
-          if T.is_object t then
+          if T.is_object_type t then
             E.return t
           else E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
       end >>= fun t ->
@@ -128,7 +128,7 @@ let rec check_exp env l e_head =
 
   | A.UNARY A.INDIRECTION e ->
       type_of e >>= fun t ->
-      if T.is_pointer t then
+      if T.is_pointer_type t then
         if T.is_pointer_to_object t then
           E.return (A.T_LVALUE (T.base_of_pointer t))
         else E.return (A.T_EXP (T.base_of_pointer t))
@@ -139,7 +139,7 @@ let rec check_exp env l e_head =
   | A.UNARY A.POSTFIX_INCR e ->
       lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
       if T.is_modifiable t then
-        if T.is_real t || T.is_pointer t then
+        if T.is_real_floating_type t || T.is_pointer_type t then
           annotate_exp env (one l) >>= fun a_one ->
           check_exp env l (A.ASSIGN (Some A.ADD) e a_one)
         else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
@@ -148,7 +148,7 @@ let rec check_exp env l e_head =
   | A.UNARY A.POSTFIX_DECR e ->
       lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
       if T.is_modifiable t then
-        if T.is_real t || T.is_pointer t then
+        if T.is_real_floating_type t || T.is_pointer_type t then
           annotate_exp env (one l) >>= fun a_one ->
           check_exp env l (A.ASSIGN (Some A.SUB) e a_one)
         else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
@@ -162,7 +162,7 @@ let rec check_exp env l e_head =
   (* TODO: the bit-field thing *)
   | A.EXPR_SIZEOF e ->
       type_of e >>= fun t ->
-      if not (T.is_function t) then
+      if not (T.is_function_type t) then
         if not (T.is_incomplete t) then
           E.return (A.T_EXP (A.SIZE_T))
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
@@ -173,14 +173,14 @@ let rec check_exp env l e_head =
      bit-field member. *)
   (* TODO: the bit-field thing *)
   | A.SIZEOF t ->
-      if not (T.is_function t) then
+      if not (T.is_function_type t) then
         if not (T.is_incomplete t) then
           E.return (A.T_EXP (A.SIZE_T))
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
       else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
 
   | A.ALIGNOF t ->
-      if not (T.is_function t) then
+      if not (T.is_function_type t) then
         if not (T.is_incomplete t) then
           E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
         else E.fail Errors.AIL_TYPECHECK_ALIGNOF_INCOMPLETE
@@ -192,8 +192,8 @@ let rec check_exp env l e_head =
 
   | A.CAST t' e ->
       type_of e >>= fun t ->
-      if T.is_scalar t' then
-        if T.is_scalar t then
+      if T.is_scalar_type t' then
+        if T.is_scalar_type t then
           E.return (A.T_EXP t')
         else E.fail Errors.AIL_TYPECHECK_CAST_OPERAND_SCALAR
       else E.fail Errors.AIL_TYPECHECK_CAST_NAME_SCALAR
@@ -205,14 +205,14 @@ let rec check_exp env l e_head =
   | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_arithmetic t1 && T.is_arithmetic t2 then
+      if T.is_arithmetic_type t1 && T.is_arithmetic_type t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_MUL_ARITHMETIC
 
   | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_integer t1 && T.is_integer t2 then
+      if T.is_integer_type t1 && T.is_integer_type t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_MOD_INTEGER
 
@@ -222,18 +222,18 @@ let rec check_exp env l e_head =
 
       (* Case: ptr + int. *)
       if T.is_pointer_to_complete_object t1 then
-        if T.is_integer t2 then
+        if T.is_integer_type t2 then
           E.return (A.T_EXP t1)
         else E.fail Errors.AIL_TYPECHECK_ADD_POINTER_INTEGER
 
       (* Case: int + ptr. *)
       else if T.is_pointer_to_object t2 then
-        if T.is_integer t1 then
+        if T.is_integer_type t1 then
           E.return (A.T_EXP t2)
         else E.fail Errors.AIL_TYPECHECK_ADD_INTEGER_POINTER
 
       (* Case: arith + arith. *)
-      else if T.is_arithmetic t1 && T.is_arithmetic t2 then
+      else if T.is_arithmetic_type t1 && T.is_arithmetic_type t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
 
       else E.fail Errors.AIL_TYPECHECK_ADD_ALL
@@ -256,12 +256,12 @@ let rec check_exp env l e_head =
           else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
       | (A.POINTER _ b1, _) ->
           if T.is_complete_object b1 then
-            if T.is_integer t2 then
+            if T.is_integer_type t2 then
               E.return (A.T_EXP t1)
             else E.fail Errors.AIL_TYPECHECK_SUB_INTEGER_OR_POINTER
           else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT
       | _ ->
-          if T.is_arithmetic t1 && T.is_arithmetic t2 then
+          if T.is_arithmetic_type t1 && T.is_arithmetic_type t2 then
             E.return (A.T_EXP (T.usual_arithmetic t1 t2))
           else E.fail Errors.AIL_TYPECHECK_SUB_ALL
       end
@@ -274,8 +274,8 @@ let rec check_exp env l e_head =
   | A.BINARY (A.ARITHMETIC A.SHR) e1 e2  ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_integer t1 then
-        if T.is_integer t2 then
+      if T.is_integer_type t1 then
+        if T.is_integer_type t2 then
           E.return (A.T_EXP (T.promote t1))
         else E.fail Errors.AIL_TYPECHECK_SHR_INTEGER_FIRST
       else E.fail Errors.AIL_TYPECHECK_SHR_INTEGER_SECOND
@@ -293,16 +293,16 @@ let rec check_exp env l e_head =
 
       match (t1, t2) with
       | (A.POINTER _ b1, A.POINTER _ b2) ->
-          if T.is_object b1 then
-            if T.is_object b2 then
+          if T.is_object_type b1 then
+            if T.is_object_type b2 then
               if T.compatible_unqualified b1 b2 then
                 E.return (A.T_EXP int)
               else E.fail Errors.AIL_TYPECHECK_GE_COMPATIBLE
             else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_SECOND
           else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_FIRST
       | _ ->
-          if T.is_real t1 then
-            if T.is_real t2 then
+          if T.is_real_floating_type t1 then
+            if T.is_real_floating_type t2 then
               E.return (A.T_EXP int)
             else E.fail Errors.AIL_TYPECHECK_GE_REAL
           else E.fail Errors.AIL_TYPECHECK_GE_ALL
@@ -319,9 +319,9 @@ let rec check_exp env l e_head =
             E.return (A.T_EXP int)
 
           (* void pointer *)
-          else if T.is_void b1 && T.is_object b2 then
+          else if T.is_void_type b1 && T.is_object_type b2 then
             E.return (A.T_EXP int)
-          else if T.is_object b1 && T.is_void b2 then
+          else if T.is_object_type b1 && T.is_void_type b2 then
             E.return (A.T_EXP int)
 
           (* null pointer constant of pointer type*)
@@ -343,8 +343,8 @@ let rec check_exp env l e_head =
           else E.fail Errors.AIL_TYPECHECK_NE_NULL_POINTER_CONSTANT_FIRST
 
       | _ ->
-          if T.is_arithmetic t1 then
-            if T.is_arithmetic t2 then
+          if T.is_arithmetic_type t1 then
+            if T.is_arithmetic_type t2 then
               E.return (A.T_EXP int)
             else E.fail Errors.AIL_TYPECHECK_NE_ARITHMETIC
           else E.fail Errors.AIL_TYPECHECK_NE_ALL
@@ -352,32 +352,32 @@ let rec check_exp env l e_head =
   | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_integer t1 && T.is_integer t2 then
+      if T.is_integer_type t1 && T.is_integer_type t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_BAND_INTEGER
 
   | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_integer t1 && T.is_integer t2 then
+      if T.is_integer_type t1 && T.is_integer_type t2 then
         E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_XOR_INTEGER
   | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_integer t1 && T.is_integer t2 then
+      if T.is_integer_type t1 && T.is_integer_type t2 then
           E.return (A.T_EXP (T.usual_arithmetic t1 t2))
       else E.fail Errors.AIL_TYPECHECK_BOR_INTEGER
   | A.BINARY A.AND e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_scalar t1 && T.is_scalar t2 then
+      if T.is_scalar_type t1 && T.is_scalar_type t2 then
         E.return (A.T_EXP int)
       else E.fail Errors.AIL_TYPECHECK_AND_SCALAR
   | A.BINARY A.OR e1 e2 ->
       type_of e1 >>= fun t1 ->
       type_of e2 >>= fun t2 ->
-      if T.is_scalar t1 && T.is_scalar t2 then
+      if T.is_scalar_type t1 && T.is_scalar_type t2 then
         E.return (A.T_EXP int)
       else E.fail Errors.AIL_TYPECHECK_OR_SCALAR
 
@@ -386,14 +386,14 @@ let rec check_exp env l e_head =
       type_of e2 >>= fun t2 ->
       type_of e3 >>= fun t3 ->
       (* First operand must be scalar. *)
-      if T.is_scalar t1 then
+      if T.is_scalar_type t1 then
 
         match (t2, t3) with
         | (A.POINTER _ b2, A.POINTER _ b3) ->
-            if T.is_void b2 && T.is_object b3 then
+            if T.is_void_type b2 && T.is_object_type b3 then
               let q = T.merge_qualifiers t2 t3 in
               E.return (A.T_EXP (A.POINTER q (A.VOID {})))
-            else if T.is_object b2 && T.is_void b3 then
+            else if T.is_object_type b2 && T.is_void_type b3 then
               let q = T.merge_qualifiers t2 t3 in
               E.return (A.T_EXP (A.POINTER q (A.VOID {})))
 
@@ -424,12 +424,12 @@ let rec check_exp env l e_head =
             E.return (A.T_EXP (A.VOID {}))
 
         | _ ->
-            if T.is_arithmetic t2 then
-              if T.is_arithmetic t3 then
+            if T.is_arithmetic_type t2 then
+              if T.is_arithmetic_type t3 then
                 E.return (A.T_EXP (T.common (T.promote t2) (T.promote t3)))
               else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_ARITHMETIC_SECOND
 
-            else if T.is_structure t2 || T.is_union t2 then
+            else if T.is_structure_type t2 || T.is_union_type t2 then
               if t2 = t3 then
                 E.return (A.T_EXP t2)
               else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_STRUCTURE_OR_UNION
@@ -455,11 +455,11 @@ let rec check_exp env l e_head =
               E.return (A.T_EXP t)
 
             (* void pointer *)
-            else if T.is_void b1 && T.is_object b2 then
+            else if T.is_void_type b1 && T.is_object_type b2 then
               if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
-            else if T.is_object b1 && T.is_void b2 then
+            else if T.is_object_type b1 && T.is_void_type b2 then
               if has_all_qualifiers b1 b2 then
                 E.return (A.T_EXP t)
               else E.fail Errors.AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
@@ -477,10 +477,10 @@ let rec check_exp env l e_head =
             else E.fail Errors.AIL_TYPECHECK_ASSIGN_NULL_POINTER_CONSTANT
 
         | _ ->
-            if T.is_arithmetic t1 && T.is_arithmetic t2 then
+            if T.is_arithmetic_type t1 && T.is_arithmetic_type t2 then
               E.return (A.T_EXP t)
     
-            else if T.is_structure t1 || T.is_enum t1 then
+            else if T.is_structure_type t1 || T.is_enumeration_type t1 then
               if T.compatible t1 t2 then
                 E.return (A.T_EXP t)
               else E.fail Errors.AIL_TYPECHECK_ASSIGN_STRUCTURE_OR_UNION
@@ -496,12 +496,12 @@ let rec check_exp env l e_head =
       if T.is_modifiable t1 then
 
         if T.is_pointer_to_complete_object t1 then
-          if T.is_integer t2 then
+          if T.is_integer_type t2 then
             E.return (A.T_EXP t)
           else E.fail Errors.AIL_TYPECHECK_ASSIGN_SUB_POINTER
 
-        else if T.is_arithmetic t1 then
-          if T.is_arithmetic t2 then
+        else if T.is_arithmetic_type t1 then
+          if T.is_arithmetic_type t2 then
             E.return (A.T_EXP t)
           else E.fail Errors.AIL_TYPECHECK_ASSIGN_SUB_ARITHMETIC
 
@@ -513,7 +513,7 @@ let rec check_exp env l e_head =
       lvalue_convert t1 e1                                 >>= fun t  ->
       if T.is_modifiable t1 then
 
-        if T.is_arithmetic t1 then
+        if T.is_arithmetic_type t1 then
           let bexp = A.BINARY (A.ARITHMETIC o) e1 e2 in
           check_exp env l bexp >>= fun _ ->
           E.return (A.T_EXP t)
@@ -600,7 +600,7 @@ let rec annotate_stmt env (l, stmt) =
       type_of e' >>= fun t  ->
       (* (§6.8.4.1#1) The controlling expression of an if statement shall have
                       scalar type. *)
-      if not (T.is_scalar t) then
+      if not (T.is_scalar_type t) then
         E.fail Errors.AIL_TYPECHECK_IF_SCALAR
       else
         E.map2 (A.IF e') (f_s s1) (f_s s2)
@@ -610,7 +610,7 @@ let rec annotate_stmt env (l, stmt) =
   | A.SWITCH e s ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
-      if T.is_integer t then
+      if T.is_integer_type t then
         E.fmap (A.SWITCH e') (f_s s)
       else
         E.fail Errors.AIL_TYPECHECK_SWITCH_INTEGER
@@ -618,13 +618,13 @@ let rec annotate_stmt env (l, stmt) =
   | A.WHILE e s ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
-      if T.is_scalar t then
+      if T.is_scalar_type t then
         E.fmap (A.WHILE e') (f_s s)
       else E.fail Errors.AIL_TYPECHECK_WHILE_SCALAR
   | A.DO e s ->
       f_e e      >>= fun e' ->
       type_of e' >>= fun t  ->
-      if T.is_scalar t then
+      if T.is_scalar_type t then
         E.fmap (A.DO e') (f_s s)
       else E.fail Errors.AIL_TYPECHECK_DO_SCALAR
   | _ ->

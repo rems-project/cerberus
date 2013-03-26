@@ -16,6 +16,7 @@ type token =
   | SUB_ASSIGN of (Cabs0.cabsloc)
   | STRUCT of (Cabs0.cabsloc)
   | STRING_LITERAL of (string * Cabs0.cabsloc)
+  | STATIC_ASSERT of (Cabs0.cabsloc)
   | STATIC of (Cabs0.cabsloc)
   | STAR of (Cabs0.cabsloc)
   | SLASH of (Cabs0.cabsloc)
@@ -36,6 +37,7 @@ type token =
   | PLUS of (Cabs0.cabsloc)
   | PERCENT of (Cabs0.cabsloc)
   | OR_ASSIGN of (Cabs0.cabsloc)
+  | OFFSETOF of (Cabs0.cabsloc)
   | NEQ of (Cabs0.cabsloc)
   | MUL_ASSIGN of (Cabs0.cabsloc)
   | MOD_ASSIGN of (Cabs0.cabsloc)
@@ -88,6 +90,7 @@ type token =
   | AND_ASSIGN of (Cabs0.cabsloc)
   | ANDAND of (Cabs0.cabsloc)
   | AND of (Cabs0.cabsloc)
+  | ALIGNOF of (Cabs0.cabsloc)
   | ADD_ASSIGN of (Cabs0.cabsloc)
 
 

@@ -21,15 +21,23 @@ type integer_base_type =
   | INT
   | LONG
   | LONG_LONG
+  | EXTENDED_INTEGER of string
 
 type integer_type =
   | BOOL
   | SIGNED of integer_base_type
   | UNSIGNED of integer_base_type
 
+type real_floating_type =
+  | FLOAT
+  | DOUBLE
+  | LONG_DOUBLE
+
 type basic_type =
   | CHAR
   | INTEGER of integer_type
+  | REAL_FLOATING of real_floating_type
+  | COMPLEX of real_floating_type
 
 (* §6.7.5 Alignment specifier *)
 (*
@@ -50,6 +58,7 @@ type ctype =
 (* NOTE: will need to make up ids for some of the bitfields *)
   | STRUCT of qualifiers * id * list (id * member)
   | UNION  of qualifiers * id * list (id * member)
+  | ENUM of id
   | FUNCTION of ctype * list ctype
   | POINTER of qualifiers * ctype
   | ATOMIC of ctype
@@ -139,7 +148,6 @@ type constant =
 *)
 
 
-
 type declaration = ctype * option storage_duration
 
 
@@ -150,8 +158,8 @@ type expression 'a =
   | CONDITIONAL of expression_l 'a * expression_l 'a * expression_l 'a
   | CAST of ctype * expression_l 'a
   | CALL of expression_l 'a * list (expression_l 'a)
-  | MEMBEROF of expression 'a * id
-  | MEMBEROFPTR of expression 'a * id
+  | MEMBEROF of expression_l 'a * id
+  | MEMBEROFPTR of expression_l 'a * id
   | CONSTANT of constant
   | VARIABLE of id
 
@@ -169,9 +177,11 @@ type expression 'a =
   | FREE of expression_l 'a
   | MEMCMP of expression_l 'a * expression_l 'a * expression_l 'a
   | MEMCPY of expression_l 'a * expression_l 'a * expression_l 'a
-  
 
-
+  (* TODO: could be move as a ctor of [constant] if we decide to evaluate the expressions
+           during [cabs_to_ail] *)
+  | CONST_ARRAY of list (expression_l 'a)
+  | CONST_STRUCT_UNION of list (id * expression_l 'a)
 
 
 and expression_l 'a = 'a * expression 'a

@@ -14,8 +14,8 @@ module Make :
  functor (A:T) ->
  functor (Inter:sig 
   type 'a result =
-  | Err
-  | OK of 'a
+    | Err
+    | OK of 'a
   
   val result_rect : 'a2 -> ('a1 -> 'a2) -> 'a1 result -> 'a2
   
@@ -28,8 +28,8 @@ module Make :
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
   type stack =
-  | Nil_stack
-  | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
+    | Nil_stack
+    | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
   
   val stack_rect :
     'a1 -> (A.noninitstate -> A.Gram.symbol_semantic_type -> stack -> 'a1 ->
@@ -48,9 +48,9 @@ module Make :
   val reduce : stack -> A.Gram.production -> stack result
   
   type step_result =
-  | Fail_sr
-  | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
-  | Progress_sr of stack * A.GramDefs.token coq_Stream
+    | Fail_sr
+    | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+    | Progress_sr of stack * A.GramDefs.token coq_Stream
   
   val step_result_rect :
     'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream ->
@@ -65,9 +65,9 @@ module Make :
   val step : stack -> A.GramDefs.token coq_Stream -> step_result result
   
   type parse_result =
-  | Fail_pr
-  | Timeout_pr
-  | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+    | Fail_pr
+    | Timeout_pr
+    | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
   
   val parse_result_rect :
     'a1 -> 'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream
@@ -152,8 +152,8 @@ module Make :
           type elt = TerminalOrderedType.Alt.t
           
           type tree =
-          | Leaf
-          | Node of tree * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
+            | Leaf
+            | Node of tree * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
           
           type t = tree
           
@@ -239,8 +239,8 @@ module Make :
           val subset : tree -> tree -> bool
           
           type enumeration =
-          | End
-          | More of elt * t * enumeration
+            | End
+            | More of elt * t * enumeration
           
           val cons : tree -> enumeration -> enumeration
           
@@ -305,98 +305,105 @@ module Make :
            end
           
           type coq_R_bal =
-          | R_bal_0 of t * TerminalOrderedType.Alt.t * t
-          | R_bal_1 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_2 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_3 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_4 of t * TerminalOrderedType.Alt.t * t
-          | R_bal_5 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_6 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_7 of t * TerminalOrderedType.Alt.t * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int
-          | R_bal_8 of t * TerminalOrderedType.Alt.t * t
+            | R_bal_0 of t * TerminalOrderedType.Alt.t * t
+            | R_bal_1 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_2 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_3 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_4 of t * TerminalOrderedType.Alt.t * t
+            | R_bal_5 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_6 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_7 of t * TerminalOrderedType.Alt.t * 
+               t * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_bal_8 of t * TerminalOrderedType.Alt.t * t
           
           type coq_R_remove_min =
-          | R_remove_min_0 of tree * elt * t
-          | R_remove_min_1 of tree * elt * t * tree
-             * TerminalOrderedType.Alt.t * tree * Z_as_Int.int * (t*elt)
-             * coq_R_remove_min * t * elt
+            | R_remove_min_0 of tree * elt * t
+            | R_remove_min_1 of tree * elt * t * tree
+               * TerminalOrderedType.Alt.t * tree * 
+               Z_as_Int.int * (t*elt) * coq_R_remove_min * 
+               t * elt
           
           type coq_R_merge =
-          | R_merge_0 of tree * tree
-          | R_merge_1 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int
-          | R_merge_2 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * elt
+            | R_merge_0 of tree * tree
+            | R_merge_1 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int
+            | R_merge_2 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * elt
           
           type coq_R_min_elt =
-          | R_min_elt_0 of tree
-          | R_min_elt_1 of tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int
-          | R_min_elt_2 of tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * TerminalOrderedType.Alt.t option
-             * coq_R_min_elt
+            | R_min_elt_0 of tree
+            | R_min_elt_1 of tree * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_min_elt_2 of tree * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * TerminalOrderedType.Alt.t option
+               * coq_R_min_elt
           
           type coq_R_max_elt =
-          | R_max_elt_0 of tree
-          | R_max_elt_1 of tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int
-          | R_max_elt_2 of tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * TerminalOrderedType.Alt.t option
-             * coq_R_max_elt
+            | R_max_elt_0 of tree
+            | R_max_elt_1 of tree * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int
+            | R_max_elt_2 of tree * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
+               tree * Z_as_Int.int * TerminalOrderedType.Alt.t option
+               * coq_R_max_elt
           
           type coq_R_concat =
-          | R_concat_0 of tree * tree
-          | R_concat_1 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int
-          | R_concat_2 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * elt
+            | R_concat_0 of tree * tree
+            | R_concat_1 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int
+            | R_concat_2 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * elt
           
           type coq_R_inter =
-          | R_inter_0 of tree * tree
-          | R_inter_1 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int
-          | R_inter_2 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * bool * t * tree * coq_R_inter * 
-             tree * coq_R_inter
-          | R_inter_3 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * bool * t * tree * coq_R_inter * 
-             tree * coq_R_inter
+            | R_inter_0 of tree * tree
+            | R_inter_1 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int
+            | R_inter_2 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * bool * t * 
+               tree * coq_R_inter * tree * coq_R_inter
+            | R_inter_3 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * bool * t * 
+               tree * coq_R_inter * tree * coq_R_inter
           
           type coq_R_diff =
-          | R_diff_0 of tree * tree
-          | R_diff_1 of tree * tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int
-          | R_diff_2 of tree * tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * bool * t * tree * coq_R_diff * 
-             tree * coq_R_diff
-          | R_diff_3 of tree * tree * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * bool * t * tree * coq_R_diff * 
-             tree * coq_R_diff
+            | R_diff_0 of tree * tree
+            | R_diff_1 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int
+            | R_diff_2 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * bool * t * 
+               tree * coq_R_diff * tree * coq_R_diff
+            | R_diff_3 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * bool * t * 
+               tree * coq_R_diff * tree * coq_R_diff
           
           type coq_R_union =
-          | R_union_0 of tree * tree
-          | R_union_1 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int
-          | R_union_2 of tree * tree * tree * TerminalOrderedType.Alt.t
-             * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t * 
-             tree * Z_as_Int.int * t * bool * t * tree * coq_R_union * 
-             tree * coq_R_union
+            | R_union_0 of tree * tree
+            | R_union_1 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int
+            | R_union_2 of tree * tree * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * tree * TerminalOrderedType.Alt.t
+               * tree * Z_as_Int.int * t * bool * t * 
+               tree * coq_R_union * tree * coq_R_union
           
           module L : 
            sig 
@@ -462,8 +469,7 @@ module Make :
         
         type elt = TerminalOrderedType.Alt.t
         
-        type t_ =
-          Raw.t
+        type t_ = Raw.t
           (* singleton inductive, whose constructor was Mkt *)
         
         val this : t_ -> Raw.t
@@ -607,8 +613,8 @@ module Make :
         type key = StatePseudoprodPosOrderedType.Alt.t
         
         type 'elt tree =
-        | Leaf
-        | Node of 'elt tree * key * 'elt * 'elt tree * Z_as_Int.int
+          | Leaf
+          | Node of 'elt tree * key * 'elt * 'elt tree * Z_as_Int.int
         
         val tree_rect :
           'a2 -> ('a1 tree -> 'a2 -> key -> 'a1 -> 'a1 tree -> 'a2 ->
@@ -649,8 +655,9 @@ module Make :
         
         val join : 'a1 tree -> key -> 'a1 -> 'a1 tree -> 'a1 tree
         
-        type 'elt triple = { t_left : 'elt tree; t_opt : 'elt option;
-                             t_right : 'elt tree }
+        type 'elt triple = { t_left : 'elt tree; t_opt : 
+                             'elt option; t_right : 
+                             'elt tree }
         
         val triple_rect :
           ('a1 tree -> 'a1 option -> 'a1 tree -> 'a2) -> 'a1 triple -> 'a2
@@ -676,8 +683,8 @@ module Make :
         val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
         
         type 'elt enumeration =
-        | End
-        | More of key * 'elt * 'elt tree * 'elt enumeration
+          | End
+          | More of key * 'elt * 'elt tree * 'elt enumeration
         
         val enumeration_rect :
           'a2 -> (key -> 'a1 -> 'a1 tree -> 'a1 enumeration -> 'a2 -> 'a2) ->
@@ -836,14 +843,14 @@ module Make :
             val mem : key -> 'a1 t -> bool
             
             type 'elt coq_R_mem =
-            | R_mem_0 of 'elt t
-            | R_mem_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_mem_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_mem_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * 
-               bool * 'elt coq_R_mem
+              | R_mem_0 of 'elt t
+              | R_mem_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_mem_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_mem_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * bool * 'elt coq_R_mem
             
             val coq_R_mem_rect :
               key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
@@ -896,14 +903,14 @@ module Make :
             val find : key -> 'a1 t -> 'a1 option
             
             type 'elt coq_R_find =
-            | R_find_0 of 'elt t
-            | R_find_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_find_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_find_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * 'elt option * 'elt coq_R_find
+              | R_find_0 of 'elt t
+              | R_find_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_find_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_find_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt option * 'elt coq_R_find
             
             val coq_R_find_rect :
               key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
@@ -957,14 +964,14 @@ module Make :
             val add : key -> 'a1 -> 'a1 t -> 'a1 t
             
             type 'elt coq_R_add =
-            | R_add_0 of 'elt t
-            | R_add_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_add_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_add_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t * 
-               'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * 'elt t * 'elt coq_R_add
+              | R_add_0 of 'elt t
+              | R_add_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_add_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_add_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt t * 'elt coq_R_add
             
             val coq_R_add_rect :
               key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
@@ -1018,14 +1025,14 @@ module Make :
             val remove : key -> 'a1 t -> 'a1 t
             
             type 'elt coq_R_remove =
-            | R_remove_0 of 'elt t
-            | R_remove_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
-               * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_remove_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
-               * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-            | R_remove_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
-               * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * 'elt t * 'elt coq_R_remove
+              | R_remove_0 of 'elt t
+              | R_remove_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_remove_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_remove_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt t * 'elt coq_R_remove
             
             val coq_R_remove_rect :
               key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
@@ -1081,11 +1088,11 @@ module Make :
             val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2
             
             type ('elt, 'a) coq_R_fold =
-            | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
-            | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
-               * StatePseudoprodPosOrderedType.Alt.t * 'elt
-               * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * 'a
-               * ('elt, 'a) coq_R_fold
+              | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
+              | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 
+                 'elt t * 'a * StatePseudoprodPosOrderedType.Alt.t * 
+                 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * 
+                 'a * ('elt, 'a) coq_R_fold
             
             val coq_R_fold_rect :
               (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2) ->
@@ -1124,20 +1131,21 @@ module Make :
             val equal : ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool
             
             type 'elt coq_R_equal =
-            | R_equal_0 of 'elt t * 'elt t
-            | R_equal_1 of 'elt t * 'elt t
-               * StatePseudoprodPosOrderedType.Alt.t * 'elt
-               * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * StatePseudoprodPosOrderedType.Alt.t * 'elt
-               * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * bool
-               * 'elt coq_R_equal
-            | R_equal_2 of 'elt t * 'elt t
-               * StatePseudoprodPosOrderedType.Alt.t * 'elt
-               * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * StatePseudoprodPosOrderedType.Alt.t * 'elt
-               * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
-               * StatePseudoprodPosOrderedType.Alt.t OrderedType.coq_Compare
-            | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
+              | R_equal_0 of 'elt t * 'elt t
+              | R_equal_1 of 'elt t * 'elt t
+                 * StatePseudoprodPosOrderedType.Alt.t * 
+                 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * StatePseudoprodPosOrderedType.Alt.t * 
+                 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * bool * 'elt coq_R_equal
+              | R_equal_2 of 'elt t * 'elt t
+                 * StatePseudoprodPosOrderedType.Alt.t * 
+                 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * StatePseudoprodPosOrderedType.Alt.t * 
+                 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * StatePseudoprodPosOrderedType.Alt.t
+                   OrderedType.coq_Compare
+              | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
             
             val coq_R_equal_rect :
               ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2) ->
@@ -1240,13 +1248,15 @@ module Make :
            end
           
           type 'elt coq_R_mem =
-          | R_mem_0 of 'elt tree
-          | R_mem_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * bool * 'elt coq_R_mem
-          | R_mem_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int
-          | R_mem_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * bool * 'elt coq_R_mem
+            | R_mem_0 of 'elt tree
+            | R_mem_1 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * bool * 
+               'elt coq_R_mem
+            | R_mem_2 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_mem_3 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * bool * 
+               'elt coq_R_mem
           
           val coq_R_mem_rect :
             StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2) ->
@@ -1267,13 +1277,15 @@ module Make :
             -> 'a2 -> 'a2) -> 'a1 tree -> bool -> 'a1 coq_R_mem -> 'a2
           
           type 'elt coq_R_find =
-          | R_find_0 of 'elt tree
-          | R_find_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt option * 'elt coq_R_find
-          | R_find_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int
-          | R_find_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt option * 'elt coq_R_find
+            | R_find_0 of 'elt tree
+            | R_find_1 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt option
+               * 'elt coq_R_find
+            | R_find_2 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_find_3 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt option
+               * 'elt coq_R_find
           
           val coq_R_find_rect :
             StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2) ->
@@ -1296,23 +1308,29 @@ module Make :
             option -> 'a1 coq_R_find -> 'a2
           
           type 'elt coq_R_bal =
-          | R_bal_0 of 'elt tree * key * 'elt * 'elt tree
-          | R_bal_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int
-          | R_bal_2 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int
-          | R_bal_3 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 
-             'elt * 'elt tree * Z_as_Int.int
-          | R_bal_4 of 'elt tree * key * 'elt * 'elt tree
-          | R_bal_5 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int
-          | R_bal_6 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int
-          | R_bal_7 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
-             key * 'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 
-             'elt * 'elt tree * Z_as_Int.int
-          | R_bal_8 of 'elt tree * key * 'elt * 'elt tree
+            | R_bal_0 of 'elt tree * key * 'elt * 'elt tree
+            | R_bal_1 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_bal_2 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_bal_3 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt tree * key * 'elt * 
+               'elt tree * Z_as_Int.int
+            | R_bal_4 of 'elt tree * key * 'elt * 'elt tree
+            | R_bal_5 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_bal_6 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_bal_7 of 'elt tree * key * 'elt * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt tree * key * 'elt * 
+               'elt tree * Z_as_Int.int
+            | R_bal_8 of 'elt tree * key * 'elt * 'elt tree
           
           val coq_R_bal_rect :
             ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> 'a2) ->
@@ -1359,13 +1377,15 @@ module Make :
             'a1 coq_R_bal -> 'a2
           
           type 'elt coq_R_add =
-          | R_add_0 of 'elt tree
-          | R_add_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * 'elt coq_R_add
-          | R_add_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int
-          | R_add_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * 'elt coq_R_add
+            | R_add_0 of 'elt tree
+            | R_add_1 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt tree * 
+               'elt coq_R_add
+            | R_add_2 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_add_3 of 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt tree * 
+               'elt coq_R_add
           
           val coq_R_add_rect :
             key -> 'a1 -> ('a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
@@ -1386,10 +1406,12 @@ module Make :
             'a2 -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_add -> 'a2
           
           type 'elt coq_R_remove_min =
-          | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
-          | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree
-             * key * 'elt * 'elt tree * Z_as_Int.int * ('elt tree*(key*'elt))
-             * 'elt coq_R_remove_min * 'elt tree * (key*'elt)
+            | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
+            | R_remove_min_1 of 'elt tree * key * 'elt * 
+               'elt tree * 'elt tree * key * 'elt * 
+               'elt tree * Z_as_Int.int * ('elt tree*(key*'elt))
+               * 'elt coq_R_remove_min * 'elt tree * 
+               (key*'elt)
           
           val coq_R_remove_min_rect :
             ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree ->
@@ -1408,12 +1430,15 @@ module Make :
             coq_R_remove_min -> 'a2
           
           type 'elt coq_R_merge =
-          | R_merge_0 of 'elt tree * 'elt tree
-          | R_merge_1 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
-             * 'elt tree * Z_as_Int.int
-          | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
-             * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * (key*'elt) * key * 'elt
+            | R_merge_0 of 'elt tree * 'elt tree
+            | R_merge_1 of 'elt tree * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_merge_2 of 'elt tree * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt tree * key * 'elt * 
+               'elt tree * Z_as_Int.int * 'elt tree * 
+               (key*'elt) * key * 'elt
           
           val coq_R_merge_rect :
             ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
@@ -1434,13 +1459,15 @@ module Make :
             coq_R_merge -> 'a2
           
           type 'elt coq_R_remove =
-          | R_remove_0 of 'elt tree
-          | R_remove_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * 'elt coq_R_remove
-          | R_remove_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int
-          | R_remove_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * 'elt coq_R_remove
+            | R_remove_0 of 'elt tree
+            | R_remove_1 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt tree * 'elt coq_R_remove
+            | R_remove_2 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_remove_3 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt tree * 'elt coq_R_remove
           
           val coq_R_remove_rect :
             StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2) ->
@@ -1463,12 +1490,15 @@ module Make :
             tree -> 'a1 coq_R_remove -> 'a2
           
           type 'elt coq_R_concat =
-          | R_concat_0 of 'elt tree * 'elt tree
-          | R_concat_1 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
-             * 'elt tree * Z_as_Int.int
-          | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 'elt
-             * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt tree * (key*'elt)
+            | R_concat_0 of 'elt tree * 'elt tree
+            | R_concat_1 of 'elt tree * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_concat_2 of 'elt tree * 'elt tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt tree * key * 'elt * 
+               'elt tree * Z_as_Int.int * 'elt tree * 
+               (key*'elt)
           
           val coq_R_concat_rect :
             ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
@@ -1487,15 +1517,17 @@ module Make :
             'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat -> 'a2
           
           type 'elt coq_R_split =
-          | R_split_0 of 'elt tree
-          | R_split_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt triple * 'elt coq_R_split * 'elt tree
-             * 'elt option * 'elt tree
-          | R_split_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int
-          | R_split_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt triple * 'elt coq_R_split * 'elt tree
-             * 'elt option * 'elt tree
+            | R_split_0 of 'elt tree
+            | R_split_1 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt triple * 'elt coq_R_split * 'elt tree * 
+               'elt option * 'elt tree
+            | R_split_2 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_split_3 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt triple * 'elt coq_R_split * 'elt tree * 
+               'elt option * 'elt tree
           
           val coq_R_split_rect :
             StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2) ->
@@ -1520,14 +1552,15 @@ module Make :
             tree -> 'a1 triple -> 'a1 coq_R_split -> 'a2
           
           type ('elt, 'elt') coq_R_map_option =
-          | R_map_option_0 of 'elt tree
-          | R_map_option_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt' * 'elt' tree
-             * ('elt, 'elt') coq_R_map_option * 'elt' tree
-             * ('elt, 'elt') coq_R_map_option
-          | R_map_option_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
-             * Z_as_Int.int * 'elt' tree * ('elt, 'elt') coq_R_map_option
-             * 'elt' tree * ('elt, 'elt') coq_R_map_option
+            | R_map_option_0 of 'elt tree
+            | R_map_option_1 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt' * 'elt' tree * ('elt, 'elt') coq_R_map_option
+               * 'elt' tree * ('elt, 'elt') coq_R_map_option
+            | R_map_option_2 of 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 
+               'elt' tree * ('elt, 'elt') coq_R_map_option * 
+               'elt' tree * ('elt, 'elt') coq_R_map_option
           
           val coq_R_map_option_rect :
             (key -> 'a1 -> 'a2 option) -> ('a1 tree -> __ -> 'a3) -> ('a1
@@ -1550,21 +1583,24 @@ module Make :
             'a2 tree -> ('a1, 'a2) coq_R_map_option -> 'a3
           
           type ('elt, 'elt', 'elt'') coq_R_map2_opt =
-          | R_map2_opt_0 of 'elt tree * 'elt' tree
-          | R_map2_opt_1 of 'elt tree * 'elt' tree * 'elt tree * key * 
-             'elt * 'elt tree * Z_as_Int.int
-          | R_map2_opt_2 of 'elt tree * 'elt' tree * 'elt tree * key * 
-             'elt * 'elt tree * Z_as_Int.int * 'elt' tree * key * 'elt'
-             * 'elt' tree * Z_as_Int.int * 'elt' tree * 'elt' option
-             * 'elt' tree * 'elt'' * 'elt'' tree
-             * ('elt, 'elt', 'elt'') coq_R_map2_opt * 'elt'' tree
-             * ('elt, 'elt', 'elt'') coq_R_map2_opt
-          | R_map2_opt_3 of 'elt tree * 'elt' tree * 'elt tree * key * 
-             'elt * 'elt tree * Z_as_Int.int * 'elt' tree * key * 'elt'
-             * 'elt' tree * Z_as_Int.int * 'elt' tree * 'elt' option
-             * 'elt' tree * 'elt'' tree
-             * ('elt, 'elt', 'elt'') coq_R_map2_opt * 'elt'' tree
-             * ('elt, 'elt', 'elt'') coq_R_map2_opt
+            | R_map2_opt_0 of 'elt tree * 'elt' tree
+            | R_map2_opt_1 of 'elt tree * 'elt' tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int
+            | R_map2_opt_2 of 'elt tree * 'elt' tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt' tree * key * 'elt' * 
+               'elt' tree * Z_as_Int.int * 'elt' tree * 
+               'elt' option * 'elt' tree * 'elt'' * 
+               'elt'' tree * ('elt, 'elt', 'elt'') coq_R_map2_opt
+               * 'elt'' tree * ('elt, 'elt', 'elt'') coq_R_map2_opt
+            | R_map2_opt_3 of 'elt tree * 'elt' tree * 
+               'elt tree * key * 'elt * 'elt tree * 
+               Z_as_Int.int * 'elt' tree * key * 'elt' * 
+               'elt' tree * Z_as_Int.int * 'elt' tree * 
+               'elt' option * 'elt' tree * 'elt'' tree
+               * ('elt, 'elt', 'elt'') coq_R_map2_opt * 
+               'elt'' tree * ('elt, 'elt', 'elt'') coq_R_map2_opt
           
           val coq_R_map2_opt_rect :
             (key -> 'a1 -> 'a2 option -> 'a3 option) -> ('a1 tree -> 'a3
@@ -1712,8 +1748,10 @@ module Make :
   
   type hole_future_invariant = { future_hfi : (A.Gram.symbol list, tuple)
                                               sigT;
-                                 word_future_hfi : A.GramDefs.token list;
-                                 future_sem_proof_hfi : A.GramDefs.parse_tree_list;
+                                 word_future_hfi : 
+                                 A.GramDefs.token list;
+                                 future_sem_proof_hfi : 
+                                 A.GramDefs.parse_tree_list;
                                  hole_hfi : (A.Gram.production, tuple) sigT
                                             option }
   
