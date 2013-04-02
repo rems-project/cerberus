@@ -39,9 +39,9 @@ Inductive isPointer : type -> Prop :=    (* defn isPointer *)
 (** definitions *)
 
 (* defns JisBool *)
-Inductive isBool : integerType -> Prop :=    (* defn isBool *)
+Inductive isBool : type -> Prop :=    (* defn isBool *)
  | IsBool : 
-     isBool Bool.
+     isBool (Basic (Integer Bool)).
 
 (* defns JisSigned *)
 Inductive isSigned : impl -> integerType -> Prop :=    (* defn isSigned *)
@@ -108,7 +108,7 @@ Inductive ltIntegerRankBase : impl -> integerType -> integerType -> Prop :=    (
       (precision  P   (Signed ibt1)  < precision  P   (Signed ibt2) )%Z  ->
      ltIntegerRankBase P (Signed ibt1) (Signed ibt2)
  | LtIntegerRankBaseBool : forall (P:impl) (it:integerType),
-      ~ (  isBool it  )  ->
+      Bool <> it  ->
      ltIntegerRankBase P Bool it
  | LtIntegerRankBaseLongLong : forall (P:impl),
      ltIntegerRankBase P (Signed Long) (Signed LongLong)
@@ -169,8 +169,8 @@ Inductive isArray : type -> Prop :=    (* defn isArray *)
 
 (* defns JisFunction *)
 Inductive isFunction : type -> Prop :=    (* defn isFunction *)
- | IsFunction : forall (ls : args) (ty:type),
-     isFunction  (Function ty ls) .
+ | IsFunction : forall (ps : params) (ty:type),
+     isFunction  (Function ty ps) .
 (** definitions *)
 
 (* defns JisUnsignedOf *)
@@ -326,29 +326,29 @@ Inductive isReal : type -> Prop :=    (* defn isReal *)
      isReal ty.
 (** definitions *)
 
-(* defns JisLvalueConvertable *)
-Inductive isLvalueConvertable : type -> Prop :=    (* defn isLvalueConvertable *)
- | IsLvalueConvertable : forall (ty:type),
+(* defns JisLvalueConvertible *)
+Inductive isLvalueConvertible : type -> Prop :=    (* defn isLvalueConvertible *)
+ | IsLvalueConvertible : forall (ty:type),
       ~ (  isArray ty  )  ->
      isComplete ty ->
-     isLvalueConvertable ty.
+     isLvalueConvertible ty.
 (** definitions *)
 
 (* defns JisCompatible *)
 Inductive isCompatible : type -> type -> Prop :=    (* defn isCompatible *)
  | IsCompatibleEq : forall (ty:type),
      isCompatible ty ty
- | IsCompatibleFunction : forall (args1 args2 : args) (res1 res2 : type),
-     isCompatible res1 res2 ->
-     isCompatible_args args1 args2 ->
-     isCompatible (Function res1 args1) (Function res2 args2)
-with isCompatible_args : args -> args -> Prop :=
- | IsCompatible_nil  :
-     isCompatible_args Argument_nil Argument_nil
- | IsCompatible_cons : forall qs1 t1 args1 qs2 t2 args2, 
+ | IsCompatibleFunction : forall (p1 p2 : params) (t1 t2 : type),
      isCompatible t1 t2 ->
-     isCompatible_args args1 args2 ->
-     isCompatible_args (Argument_cons qs1 t1 args1) (Argument_cons qs2 t2 args2).
+     isCompatible_params p1 p2 ->
+     isCompatible (Function t1 p1) (Function t2 p2)
+with isCompatible_params : params -> params -> Prop :=
+ | IsCompatible_nil  :
+     isCompatible_params ParamsNil ParamsNil
+ | IsCompatible_cons : forall qs1 t1 p1 qs2 t2 p2, 
+     isCompatible t1 t2 ->
+     isCompatible_params p1 p2 ->
+     isCompatible_params (ParamsCons qs1 t1 p1) (ParamsCons qs2 t2 p2).
 
 (* defns JisComposite *)
 Inductive isComposite : type -> type -> type -> Prop :=    (* defn isComposite *)
@@ -357,18 +357,18 @@ Inductive isComposite : type -> type -> type -> Prop :=    (* defn isComposite *
  | IsCompositeArray : forall (ty1:type) (n:nat) (ty2 ty:type),
      isComposite ty1 ty2 ty ->
      isComposite  (Array ty1 n)   (Array ty2 n)   (Array ty n)
- | IsCompositeFunction : forall (l1 l2 l : args) (t1 t2 t : type),
+ | IsCompositeFunction : forall (p1 p2 p : params) (t1 t2 t : type),
      isComposite t1 t2 t ->
-     isComposite_args l1 l2 l ->
-     isComposite (Function t1 l1) (Function t2 l2) (Function t l)
-with isComposite_args : args -> args -> args -> Prop :=
+     isComposite_params p1 p2 p ->
+     isComposite (Function t1 p1) (Function t2 p2) (Function t p)
+with isComposite_params : params -> params -> params -> Prop :=
  | IsComposite_nil :
-     isComposite_args Argument_nil
-                      Argument_nil
-                      Argument_nil
- | IsComposite_cons : forall t1 l1 qs1 t2 l2 qs2 t3 l3,
-     isComposite      t1 t2 t3 ->
-     isComposite_args l1 l2 l3 ->
-     isComposite_args (Argument_cons qs1 t1 l1)
-                      (Argument_cons qs2 t2 l2)
-                      (Argument_cons nil t3 l3).
+     isComposite_params ParamsNil
+                        ParamsNil
+                        ParamsNil
+ | IsComposite_cons : forall t1 p1 qs1 t2 p2 qs2 t3 p3,
+     isComposite        t1 t2 t3 ->
+     isComposite_params p1 p2 p3 ->
+     isComposite_params (ParamsCons qs1 t1 p1)
+                        (ParamsCons qs2 t2 p2)
+                        (ParamsCons nil t3 p3).
