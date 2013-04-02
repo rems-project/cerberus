@@ -54,8 +54,8 @@ isBool_dec Bool := inl IsBool;
 isBool_dec _    := inr _.
 *)
 
-Lemma isBool_fun_correct it : boolSpec (isBool_fun it) (isBool it).
-Proof. destruct it; my_auto. Qed.
+Lemma isBool_fun_correct t : boolSpec (isBool_fun t) (isBool t).
+Proof. destruct t; my_auto. Qed.
 
 Instance isBool_dec t : Decision (isBool t) := boolSpec_Decision (isBool_fun_correct t).
 
@@ -263,7 +263,7 @@ Proof.
   end;
   match goal with
   | [ H : min (integerTypeRange P _) <= min (integerTypeRange P _) |- _] =>
-      try destruct_integerBaseType;
+      repeat destruct_integerBaseType;
       unfold integerTypeRange in H;
       match goal with 
       | [ R : isCharSigned _  = true |- _] => unfold isUnsigned_fun in H; rewrite_all R
@@ -421,7 +421,6 @@ Proof.
       case_eq (Z.eqb x y); intros Heq; rewrite Heq in *; clear Heq
   | _ => idtac
   end; boolSpec_simpl; simpl;
-  try
   match goal with
   | [|- leIntegerTypeRange _ ?it ?it ] =>
       constructor; constructor; apply Z.le_refl
@@ -645,7 +644,8 @@ Ltac ltIntegerRankBase_tac :=
 Lemma ltIntegerRankBase_fun_correct P it1 it2 : boolSpec (ltIntegerRankBase_fun P it1 it2) (ltIntegerRankBase P it1 it2).
 Proof.
   do 2 unfold_goal; my_auto; intros;
-  try match goal with
+  match goal with
+(*
   | [ H : negb (isBool_fun ?it) = ?b |- _] =>
       let Hcorrect := fresh in
       match b with
@@ -654,6 +654,7 @@ Proof.
       end;
       set (isBool_fun_correct it2) as Hcorrect;
       rewrite H in Hcorrect
+*)
   | [ H : Z.ltb ?z ?z = true  |- _ ] => rewrite Z.ltb_irrefl in H
   | [ H : Z.ltb ?x ?y = true  |- _ ] => set (proj1 (Z.ltb_lt  x y) H)
   | [ H : Z.ltb ?x ?y = false |- _ ] => set (proj1 (Z.ltb_nlt x y) H)
@@ -997,7 +998,7 @@ Proof.
   do 2 unfold_goal.
   set (eqIntegerRank_fun_correct   it1 it2).
   set (ltIntegerRank_fun_correct P it1 it2).
-  my_auto' ltac:(constructor 2; assumption) ltac:(idtac; boolSpec_destruct).
+  my_auto' fail ltac:(idtac; boolSpec_destruct).
 Qed.
 
 Instance leIntegerRank_decR P : DecidableRelation (leIntegerRank P) := {
@@ -1350,7 +1351,7 @@ Proof.
   set (isObject_fun_correct t).
   set (isArray_fun_correct t).
   set (isIncomplete_fun_correct t).
-  set (list_in_fun_correct (fun x y => bool_of_decision (decide x y)) Const qs (fun x y => Decision_boolSpec ((decide x y)))).
+  set (list_in_fun_correct Const qs (fun x y => Decision_boolSpec ((decide x y)))).
   my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
 Qed.
 
@@ -1362,7 +1363,7 @@ Proof.
   my_auto.
 Qed.
 
-Lemma isLvalueConvertable_correct t : boolSpec (isLvalueConvertable_fun t) (isLvalueConvertable t).
+Lemma isLvalueConvertible_fun_correct t : boolSpec (isLvalueConvertible_fun t) (isLvalueConvertible t).
 Proof.
   do 2 unfold_goal.
   set (isArray_fun_correct t).
@@ -1370,41 +1371,41 @@ Proof.
   my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
 Qed.
 
-Fixpoint isCompatible_fun_correct      t1 t2 : boolSpec (isCompatible_fun      t1 t2) (isCompatible      t1 t2)
-with     isCompatible_args_fun_correct l1 l2 : boolSpec (isCompatible_args_fun l1 l2) (isCompatible_args l1 l2).
+Fixpoint isCompatible_fun_correct        t1 t2 : boolSpec (isCompatible_fun        t1 t2) (isCompatible       t1 t2)
+with     isCompatible_params_fun_correct p1 p2 : boolSpec (isCompatible_params_fun p1 p2) (isCompatible_params p1 p2).
 Proof.
   + do 2 unfold_goal.
     my_auto;
     destruct t1; destruct t2;
     my_auto;
     fold isCompatible_fun;
-    fold isCompatible_args_fun;
+    fold isCompatible_params_fun;
     bool_simpl;
     match goal with
     | [Heq : ?x = ?y |- isCompatible ?x ?y] =>
         rewrite Heq; constructor
-    | [|- context[isCompatible (Function ?t1 ?l1) (Function ?t2 ?l2)]] =>
-        set (isCompatible_fun_correct t1 t2);
-        set (isCompatible_args_fun_correct l1 l2)
+    | [|- context[isCompatible (Function ?t1 ?p1) (Function ?t2 ?p2)]] =>
+        set (isCompatible_fun_correct        t1 t2);
+        set (isCompatible_params_fun_correct p1 p2)
     end;
     boolSpec_simpl; my_auto.
   + do 2 unfold_goal.
     my_auto;
-    destruct l1; destruct l2;
+    destruct p1; destruct p2;
     my_auto;
     fold isCompatible_fun;
-    fold isCompatible_args_fun;
+    fold isCompatible_params_fun;
     bool_simpl;
     match goal with
     | [t1 : type, t2 : type |- _] =>
-        set (isCompatible_fun_correct t1 t2);
-        set (isCompatible_args_fun_correct l1 l2)
+        set (isCompatible_fun_correct        t1 t2);
+        set (isCompatible_params_fun_correct p1 p2)
     end;
     boolSpec_simpl; my_auto.
 Defined.
 
-Fixpoint isComposite_fun_correct      t1 t2 t3 : boolSpec (isComposite_fun      t1 t2 t3) (isComposite      t1 t2 t3)
-with     isComposite_args_fun_correct l1 l2 l3 : boolSpec (isComposite_args_fun l1 l2 l3) (isComposite_args l1 l2 l3).
+Fixpoint isComposite_fun_correct        t1 t2 t3 : boolSpec (isComposite_fun        t1 t2 t3) (isComposite        t1 t2 t3)
+with     isComposite_params_fun_correct p1 p2 p3 : boolSpec (isComposite_params_fun p1 p2 p3) (isComposite_params p1 p2 p3).
 Proof.
   + do 2 unfold_goal.
     destruct t1;
@@ -1412,30 +1413,30 @@ Proof.
     destruct t3;
     my_auto;
     fold isComposite_fun;
-    fold isComposite_args_fun;
+    fold isComposite_params_fun;
     bool_simpl;
     match goal with
     | [ Heq1 : ?t1 = ?it2, Heq2 : ?t1 = ?it3 |- isComposite ?t1 ?t2 ?it3 ] =>
         rewrite <- Heq1; rewrite <- Heq2; constructor
     | [|- context[isComposite (Array ?t1 _) (Array ?t2 _) (Array ?t3 _)] ] =>
         set (isComposite_fun_correct t1 t2 t3)
-    | [|- context[isComposite (Function ?t1 ?l1) (Function ?t2 ?l2) (Function ?t3 ?l3)]] =>
-        set (isComposite_fun_correct t1 t2 t3);
-        set (isComposite_args_fun_correct l1 l2 l3)
+    | [|- context[isComposite (Function ?t1 ?p1) (Function ?t2 ?p2) (Function ?t3 ?p3)]] =>
+        set (isComposite_fun_correct        t1 t2 t3);
+        set (isComposite_params_fun_correct p1 p2 p3)
     end;
     boolSpec_simpl; my_auto.
   + do 2 unfold_goal.
-    destruct l1;
-    destruct l2;
-    destruct l3;
+    destruct p1;
+    destruct p2;
+    destruct p3;
     my_auto;
     fold isComposite_fun;
-    fold isComposite_args_fun;
+    fold isComposite_params_fun;
     bool_simpl;
     match goal with
-    | [|- context[isComposite_args (Argument_cons _ ?t1 ?l1) (Argument_cons _ ?t2 ?l2) (Argument_cons _ ?t3 ?l3)]] =>
-        set (isComposite_fun_correct t1 t2 t3);
-        set (isComposite_args_fun_correct l1 l2 l3)
+    | [|- context[isComposite_params (ParamsCons _ ?t1 ?p1) (ParamsCons _ ?t2 ?p2) (ParamsCons _ ?t3 ?p3)]] =>
+        set (isComposite_fun_correct        t1 t2 t3);
+        set (isComposite_params_fun_correct p1 p2 p3)
     end;
     boolSpec_simpl; my_auto.
 Qed.

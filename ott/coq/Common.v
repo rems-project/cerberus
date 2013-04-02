@@ -3,6 +3,7 @@ Require Relations.
 Require Import List.
 Require Import Bool.
 Require Import ZArith.
+Require Import Program.
 
 Open Scope type.
 
@@ -85,6 +86,12 @@ Definition boolSpec_elim1 {b : bool} {P : Type} : boolSpec b P -> b = true -> P.
 Proof. intros; subst; assumption. Defined.
 Definition boolSpec_elim2 {b : bool} {P : Type} : boolSpec b P -> b = false -> neg P.
 Proof. intros; subst; assumption. Defined.
+Definition boolSpec_elim1_inv {b : bool} {P : Type} : boolSpec b P -> P -> b = true.
+Proof. destruct b; solve [reflexivity | contradiction]. Defined.
+Definition boolSpec_elim2_inv {b : bool} {P : Type} : boolSpec b P -> neg P -> b = false.
+Proof. destruct b; solve [reflexivity | contradiction]. Defined.
+Lemma boolSpec_elim {b : bool} {P : Prop} : boolSpec b P -> (P <-> b = true).
+Proof. intros B; generalize (boolSpec_elim1 B), (boolSpec_elim1_inv B); tauto. Defined.
 
 Definition bool_of_decision {P} : Decision P -> bool :=
   fun d => match d with
@@ -106,11 +113,11 @@ Class DecidableRelation {A} (R : Relation_Definitions.relation A) :=
 Class DecidableEq (A : Type) :=
   Decidable_Equality :> DecidableRelation (@eq A).
 
-Ltac finish t := solve [intros; inversion 1; solve [contradiction | congruence]
-                       | inversion 1; solve [contradiction | congruence]
-                       | congruence
-                       | constructor
-                       | t].
+Ltac finish t := solve [ congruence | discriminate | reflexivity | t
+                       | econstructor (solve [eauto])
+                       | intros; inversion 1; solve [contradiction | congruence | discriminate]
+                       | inversion 1; solve [contradiction | congruence | discriminate] 
+                       ].
 Ltac decide_destruct :=
   match goal with
   | [ |- context[match ?d with _ => _ end] ] =>
@@ -176,20 +183,40 @@ Ltac decision_eq :=
     end end
   end.
 
-Ltac decision_eq_aux :=
-  let IH := fresh in fix IH 1;
+Ltac decision_eq_destruct :=
   match goal with [ |- forall x y, _] =>
     destruct x; destruct y; try solve [left; reflexivity | right; inversion 1]
   end.
 
+Ltac notHyp P :=
+  match goal with
+  | [ _ : P |- _ ] => fail 1
+  | _ => idtac
+  end.
+
+Ltac decision_eq_fix :=
+  match goal with
+  | [|- forall x y :?A, _] =>
+      notHyp (forall x y : A, Decision (x = y));
+      let IH := fresh in
+      fix IH 1
+  | _ => idtac
+  end.
+
 Ltac decidable_eq :=
-  match goal with [ |- DecidableEq ?A] =>
+  match goal with
+  | [ |- DecidableEq ?A] =>
     cut (forall x y : A, Decision (x = y)); [now trivial|]
+  | [ |- Decision (?x = ?y)] =>
+    revert x y
+  | [ |- forall x y : ?A, Decision (x = y)] =>
+    idtac
   end.
 
 Ltac dec_eq :=
   decidable_eq;
-  decision_eq_aux;
+  decision_eq_fix;
+  decision_eq_destruct;
   repeat decision_eq;
   left; reflexivity.
 
@@ -228,12 +255,6 @@ Ltac unfold_goal :=
       unfold d
   end.
 
-Ltac notHyp P :=
-  match goal with
-  | [ _ : P |- _ ] => fail 1
-  | _ => idtac
-  end.
-
 Ltac destruct_sum :=
   repeat match goal with
   | [ H : sum _ _ |- _          ] => destruct H
@@ -251,7 +272,7 @@ Fixpoint list_in_fun {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool
   | x::xs => orb (eq x a) (list_in_fun eq a xs)
   end.
 
-Fixpoint list_in_fun_correct {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) :
+Fixpoint list_in_fun_correct {A:Type} {eq : A -> A -> bool} (a : A) (ls : list A) :
   (forall x y, boolSpec (eq x y) (x = y)) ->
   boolSpec (list_in_fun eq a ls) (List.In a ls).
 Proof.
@@ -265,12 +286,54 @@ Proof.
   | [|- context[eq ?x a]] =>
       notHyp (x = a); notHyp (neg (x = a));
       set (eq_correct x a)
-  | [|- context[list_in_fun eq a ls]] =>
+  | [|- context[list_in_fun eq a ?ls]] =>
       notHyp (In a ls); notHyp (neg (In a ls));
       set (list_in_fun_correct A eq a ls eq_correct)      
   end; boolSpec_simpl);
   my_auto.
 Qed.
+
+Fixpoint list_forall_fun {A:Type} (dec : A -> bool) (ls : list A) : bool :=
+  match ls with
+  | []    => true
+  | x::xs => andb (dec x) (list_forall_fun dec xs)
+  end.
+
+Fixpoint list_forall_fun_correct {A} {P : A -> Prop} {dec} ls :
+  (forall a, boolSpec (dec a) (P a)) ->
+  boolSpec (list_forall_fun dec ls) (Forall P ls).
+Proof.
+  intros dec_correct.
+  do 2 unfold_goal.
+  destruct ls;
+  my_auto;
+  fold (@list_forall_fun A);
+  bool_simpl;
+  repeat (match goal with
+  | [|- context[dec ?a]] =>
+      notHyp (P a); notHyp (neg (P a));
+      set (dec_correct a)
+  | [|- context[list_forall_fun dec ?ls]] =>
+      notHyp (Forall P ls); notHyp (neg (Forall P ls));
+      set (list_forall_fun_correct A P dec ls dec_correct)      
+  end; boolSpec_simpl);
+  my_auto.
+Defined.
+
+Definition sub {A} (l1 l2 : list A) :=
+  List.Forall (fun x => List.In x l1) l2.
+
+Definition list_sub_fun {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
+  list_forall_fun (fun x => list_in_fun eq x l1) l2.
+
+Lemma list_sub_fun_correct  {A} {eq : A -> A -> bool} (l1 l2 : list A) :
+  (forall x y, boolSpec (eq x y) (x = y)) ->
+  boolSpec (list_sub_fun eq l1 l2) (sub l1 l2).
+Proof.
+  intros eq_correct.
+  set (fun x => list_in_fun_correct x l1 eq_correct) as in_correct.
+  exact (list_forall_fun_correct l2 in_correct).
+Defined.
 
 Lemma Zeqb_correct x y : boolSpec (Z.eqb x y) (x = y).
 Proof.
@@ -288,3 +351,21 @@ Qed.
 
 Lemma Decision_boolSpec {P} (D : Decision P) : boolSpec (bool_of_decision D) P.
 Proof. destruct D; assumption. Qed.
+
+Ltac var_destruct_inner c :=
+  match c with
+  | _ => is_var c; destruct c; try finish fail
+  | match ?c with _ => _ end => var_destruct_inner c
+  end.
+
+Ltac var_destruct :=
+  match goal with
+  | [|- match ?c with _ => _ end] =>
+      var_destruct_inner c
+  end.
+
+Ltac not_var H :=
+  match goal with
+  | _ => is_var H; fail 1
+  | _ => idtac
+  end.

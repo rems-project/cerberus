@@ -25,12 +25,11 @@ Definition isPointer_fun t :=
   | _ => false
   end.
 
-Definition isBool_fun it :=
-  match it with
-  | Bool => true
+Definition isBool_fun t :=
+  match t with
+  | Basic (Integer Bool) => true
   | _ => false
   end.
-
 
 Definition isSigned_fun P it : bool :=
   match it with
@@ -154,7 +153,7 @@ Definition eqIntegerRank_fun it1 it2 : bool :=
 
 Definition ltIntegerRankBase_fun P it1 it2 : bool :=
   match it1, it2 with
-  | Bool        , it              => negb (isBool_fun it)
+  | Bool        , it              => negb (bool_of_decision (decide Bool it : Decision (_ = _)))
   | Signed  Long, Signed LongLong => true
   | Signed   Int, Signed     Long => true
   | Signed Short, Signed      Int => true
@@ -393,23 +392,24 @@ Definition isModifiable_fun qs t : bool :=
 
 Definition isReal_fun t : bool := isInteger_fun t.
 
-Definition isLvalueConvertable_fun t : bool := andb (negb (isArray_fun t)) (isComplete_fun t).
+Definition isLvalueConvertible_fun t : bool := andb (negb (isArray_fun t)) (isComplete_fun t).
 
 Fixpoint isCompatible_fun t1 t2 {struct t1} : bool :=
   if bool_of_decision(decide t1 t2 : Decision (t1 = t2)) then
     true
   else
     match t1, t2 with
-    | Function res1 args1, Function res2 args2 =>
-        andb (isCompatible_fun res1 res2) (isCompatible_args_fun args1 args2)
+    | Function t1 p1, Function t2 p2 =>
+        andb (isCompatible_fun t1 t2) (isCompatible_params_fun p1 p2)
     | _, _ => false
     end
-with isCompatible_args_fun args1 args2 : bool :=
-  match args1, args2 with
-  | Argument_nil          , Argument_nil           => true
-  | Argument_nil          , _                      => false
-  | _                     , Argument_nil           => false
-  | Argument_cons _ t1 ls1, Argument_cons _ t2 ls2 => andb (isCompatible_fun t1 t2) (isCompatible_args_fun ls1 ls2)
+with isCompatible_params_fun p1 p2 : bool :=
+  match p1, p2 with
+  | ParamsNil         , ParamsNil          => true
+  | ParamsNil         , _                  => false
+  | _                 , ParamsNil          => false
+  | ParamsCons _ t1 p1, ParamsCons _ t2 p2 => andb (isCompatible_fun        t1 t2)
+                                                   (isCompatible_params_fun p1 p2)
   end.
 
 Fixpoint isComposite_fun t1 t2 t3 : bool :=
@@ -422,16 +422,15 @@ Fixpoint isComposite_fun t1 t2 t3 : bool :=
         andb (andb (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
                    (bool_of_decision (decide n1 n3 : Decision (n1 = n3))))
              (isComposite_fun t1 t2 t3)
-    | Function t1 l1, Function t2 l2, Function t3 l3 =>
-        andb (isComposite_fun      t1 t2 t3)
-             (isComposite_args_fun l1 l2 l3)
+    | Function t1 p1, Function t2 p2, Function t3 p3 =>
+        andb (isComposite_fun        t1 t2 t3)
+             (isComposite_params_fun p1 p2 p3)
     | _, _, _ => false
     end
-with isComposite_args_fun l1 l2 l3 : bool :=
-  match l1, l2, l3 with
-  | Argument_nil         , Argument_nil         , Argument_nil            => true
-  | Argument_cons _ t1 l1, Argument_cons _ t2 l2, Argument_cons nil t3 l3 =>
-      andb (isComposite_fun      t1 t2 t3)
-           (isComposite_args_fun l1 l2 l3) 
-  | _                    , _                    , _                       => false
+with isComposite_params_fun p1 p2 p3 : bool :=
+  match p1, p2, p3 with
+  | ParamsNil         , ParamsNil         , ParamsNil            => true
+  | ParamsCons _ t1 p1, ParamsCons _ t2 p2, ParamsCons nil t3 p3 => andb (isComposite_fun        t1 t2 t3)
+                                                                         (isComposite_params_fun p1 p2 p3)
+  | _                 , _                 , _                    => false
   end.

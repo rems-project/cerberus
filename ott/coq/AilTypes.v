@@ -70,48 +70,23 @@ Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
  | Void : type (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic (bt:basicType) (*r basic types (\S6.2.5\#14) *)
  | Array (ty:type) (n:nat) (*r array types (\S6.2.5\#20) *)
- | Function (ty:type) (ls:args) (*r function types *)
+ | Function (ty:type) (p:params) (*r function types *)
  | Pointer (qs:qualifiers) (ty:type) (*r pointer types *)
-with args : Set :=
- | Argument_nil  
- | Argument_cons (qs:qualifiers) (ty:type) (ls : args).
+with params : Set :=
+ | ParamsNil  
+ | ParamsCons (qs:qualifiers) (ty:type) (p:params).
 
-Fixpoint type_eq_dec (t1 t2 : type) : Decision (t1 = t2)
-with args_eq_dec (ls1 ls2:args) : Decision (ls1 = ls2).
+Require Import Program.
+
+Fixpoint type_eq_dec   (t1 t2 :   type) : Decision (t1 = t2)
+with     params_eq_dec (p1 p2 : params) : Decision (p1 = p2).
 Proof.
-  + set (makeDecidableEq : DecidableEq type).
-    set (makeDecidableEq : DecidableEq args).
-    destruct t1; destruct t2;
-    match goal with
-    | [|- Decision (Basic ?bt1 = Basic ?bt2)] =>
-        destruct (decide bt1 bt2 : Decision (bt1 = bt2))
-    | [|- Decision (Array ?t1 ?n1 = Array ?t2 ?n2)] =>
-        destruct (decide n1 n2 : Decision (n1 = n2));
-        destruct (decide t1 t2 : Decision (t1 = t2))
-    | [|- Decision (Pointer ?qs1 ?t1 = Pointer ?qs2 ?t2)] =>
-        destruct (decide qs1 qs2 : Decision (qs1 = qs2));
-        destruct (decide t1 t2 : Decision (t1 = t2))
-    | [|- Decision (Function ?t1 ?ls1 = Function ?t2 ?ls2)] =>
-        destruct (decide ls1 ls2 : Decision (ls1 = ls2));
-        destruct (decide t1 t2 : Decision (t1 = t2))
-    | _ => idtac
-    end;
-    solve [left; congruence | right; congruence].
-  + set (makeDecidableEq : DecidableEq type).
-    set (makeDecidableEq : DecidableEq args).
-    destruct ls1; destruct ls2;
-    match goal with
-    | [|- Decision (Argument_cons ?qs1 ?t1 ?ls1 = Argument_cons ?qs2 ?t2 ?ls2)] =>
-        destruct (decide ls1 ls2 : Decision (ls1 = ls2));
-        destruct (decide t1 t2 : Decision (t1 = t2));
-        destruct (decide qs1 qs2 : Decision (qs1 = qs2))
-    | _ => idtac
-    end;
-    try solve [left; congruence | right; congruence].
+  + dec_eq.
+  + dec_eq.
 Defined.
 
-Instance type_DecEq : DecidableEq type := type_eq_dec.
-Instance args_DecEq : DecidableEq args := args_eq_dec.
+Instance type_DecEq : DecidableEq type   := type_eq_dec.
+Instance args_DecEq : DecidableEq params := params_eq_dec.
 
 Inductive typeCategory : Set := 
  | LvalueType (qs:qualifiers) (ty:type)
