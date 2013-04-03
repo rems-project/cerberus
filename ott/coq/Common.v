@@ -369,3 +369,69 @@ Ltac not_var H :=
   | _ => is_var H; fail 1
   | _ => idtac
   end.
+
+Ltac pull_out T c :=
+  ( let H   := fresh in
+    let t   := fresh in
+    let Heq := fresh in
+    assert {t : T & c = t} as H by (exists c; reflexivity);
+    destruct H as [t Heq];
+    replace c with t;
+    revert Heq
+  ) || fail 1.
+
+Ltac context_destruct_inner c :=
+  match c with
+  | _                        =>
+      is_var c; destruct c; try finish fail
+  | match ?c with _ => _ end =>
+      context_destruct_inner c
+  | _ =>
+      match type of c with
+      | bool      => pull_out bool c
+      | option ?A => pull_out (option A) c
+      end
+  end.
+
+Ltac context_destruct :=
+  match goal with
+  | [|- match ?c with _ => _ end] =>
+      context_destruct_inner c
+  | [|- ((match ?c with _ => _ end) = _) -> _] =>
+      context_destruct_inner c
+  | [|- (match ?c with _ => _ end) -> _] =>
+      context_destruct_inner c
+  end.
+
+Ltac case_fun G :=
+  match goal with
+  | [|- _ = ?o -> _] =>
+      let Heq := fresh in
+      is_var o; destruct o;
+      intros Heq;
+      generalize G;
+      rewrite Heq;
+      intros ?
+  end.
+
+Ltac case_fun_hyp G :=
+  match goal with
+  | [|- _ = ?o -> _] =>
+      let Heq := fresh in
+      is_var o;
+      destruct o;
+      intros Heq;
+      revert G;
+      rewrite Heq;
+      intros G
+  end.
+
+Ltac case_fun_destruct :=
+  match goal with
+  | [|- ?t = ?o -> _] =>
+      let Heq := fresh in
+      is_var o; destruct t; intros Heq; rewrite <- Heq; clear Heq
+  end.
+
+Ltac context_destruct_all :=
+  repeat (context_destruct; try case_fun_destruct).
