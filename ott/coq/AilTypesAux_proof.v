@@ -1078,6 +1078,23 @@ Lemma isCorrespondingUnsigned_find_unique it1 it2 :
   isCorrespondingUnsigned_find it1 = Some it2.
 Proof. destruct 1; reflexivity. Qed.
 
+Lemma isIntegerPromotion_Signed_Unsigned {P} {it1} {it2} :
+  isIntegerPromotion P it1 it2 ->
+  (isSignedType it2 + isUnsignedType it2).
+Proof.
+  inversion 1;
+  solve
+    [ econstructor (constructor)
+    | destruct it2;
+      solve
+        [ econstructor (constructor)
+        | exfalso; unfold not in *; apply_ctx;
+          set (ltIntegerRank_fun_correct P Char (Signed Int));
+          my_auto
+        ]
+    ].
+Qed.
+
 Lemma isIntegerPromotion_fun_correct P it1 it2 : boolSpec (isIntegerPromotion_fun P it1 it2) (isIntegerPromotion P it1 it2).
 Proof.
   do 2 unfold_goal.
@@ -1302,7 +1319,7 @@ Proof.
   end.
 Qed.
 
-Definition isUsualArithmetic_find_unique P t1 t2 t3 :
+Definition isUsualArithmetic_find_unique {P} {t1 t2 t3} :
   isUsualArithmetic P t1 t2 t3 ->
   isUsualArithmetic_find P t1 t2 = Some t3.
 Proof.
@@ -1325,12 +1342,60 @@ Proof.
   congruence.
 Qed.
 
+Lemma isUsualArithmetic_Integer P it1 it2 :
+  {t : type & isUsualArithmetic P (Basic (Integer it1)) (Basic (Integer it2)) t}.
+Proof.
+  set (isIntegerPromotion_find_correct P it1) as H1.
+  set (isIntegerPromotion_find_correct P it2) as H2.
+  set (isIntegerPromotion_find P it1) as pit1 in *.
+  set (isIntegerPromotion_find P it2) as pit2 in *.
+  set (isUsualArithmeticInteger_find_correct P pit1 pit2) as Husual.
+  unfold isUsualArithmeticInteger_find in Husual.
+  case_eq pit1; first [intros ibt1 Heq1 | intros Heq1];
+  case_eq pit2; first [intros ibt2 Heq2 | intros Heq2];
+  rewrite Heq1 in *; rewrite Heq2 in *;
+  destruct (isIntegerPromotion_Signed_Unsigned H1);
+  destruct (isIntegerPromotion_Signed_Unsigned H2);
+  match goal with
+  | [H : isSignedType   _ |- _] => now inversion H
+  | [H : isUnsignedType _ |- _] => now inversion H
+  | [H : isIntegerPromotion P ?it1 Bool |- _] => 
+      inversion H; exfalso; unfold not in *; apply_ctx;
+      set (ltIntegerRank_fun_correct P Bool (Signed Int));
+      constructor 2; assumption
+  | _ =>
+      match type of Husual with
+      | context [if ?d then _ else _] =>
+          let Heq := fresh in
+          case_eq d; intros Heq; rewrite Heq in Husual; simpl in Husual;
+          revert Husual; context_destruct_all;
+          eexists; econstructor (eassumption)
+      end
+  end.
+Qed.
+
+Lemma isUsualArithmetic_find_Integer_Some {P} {it1 it2} :
+  {t : type & isUsualArithmetic_find P (Basic (Integer it1)) (Basic (Integer it2)) = Some t}.
+Proof.
+  destruct (isUsualArithmetic_Integer P it1 it2) as [t H].
+  exists t.
+  exact (isUsualArithmetic_find_unique H).
+Qed.
+
+Lemma isUsualArithmetic_find_Integer_None {P} {it1 it2} :
+  neg (isUsualArithmetic_find P (Basic (Integer it1)) (Basic (Integer it2)) = None).
+Proof.
+  destruct (isUsualArithmetic_Integer P it1 it2) as [t H].
+  set (isUsualArithmetic_find_unique H).
+  intros ?; congruence.
+Qed.
+
 Lemma isUsualArithmetic_fun_correct P t1 t2 t3 :
   boolSpec (isUsualArithmetic_fun P t1 t2 t3) (isUsualArithmetic P t1 t2 t3).
 Proof.
   do 2 unfold_goal.
   set (isUsualArithmetic_find_correct P t1 t2) as Hcorrect.
-  set (isUsualArithmetic_find_unique P t1 t2 t3) as Hunique.
+  set (@isUsualArithmetic_find_unique P t1 t2 t3) as Hunique.
   my_auto.
   + match goal with | [Heq : _ = Some _|- _] => rewrite Heq in Hcorrect; assumption end.
   + intros Husual; set (Hunique Husual); contradiction.

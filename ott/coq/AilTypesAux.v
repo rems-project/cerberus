@@ -51,7 +51,7 @@ Inductive isSigned : impl -> integerType -> Prop :=    (* defn isSigned *)
       Implementation.isCharSigned  P  = true  ->
      isSigned P Char.
 
-Inductive isSignedType : integerType -> Prop :=    (* defn isSigned *)
+Inductive isSignedType : integerType -> Set :=    (* defn isSigned *)
  | IsSignedType : forall (ibt:integerBaseType),
      isSignedType (Signed ibt).
 
@@ -66,7 +66,7 @@ Inductive isUnsigned : impl -> integerType -> Prop :=    (* defn isUnsigned *)
      isUnsigned P Char.
 (** definitions *)
 
-Inductive isUnsignedType : integerType -> Prop :=    (* defn isUnsigned *)
+Inductive isUnsignedType : integerType -> Set :=    (* defn isUnsigned *)
  | IsUnsignedTypeInt : forall (ibt:integerBaseType),
      isUnsignedType (Unsigned ibt)
  | IsUnsignedTypeBool : isUnsignedType Bool.
@@ -180,7 +180,7 @@ Inductive isCorrespondingUnsigned : integerType -> integerType -> Prop :=    (* 
 (** definitions *)
 
 (* defns JisPromotion *)
-Inductive isIntegerPromotion : impl -> integerType -> integerType -> Prop :=    (* defn isPromotion *)
+Inductive isIntegerPromotion : impl -> integerType -> integerType -> Set :=    (* defn isPromotion *)
  | IsPromotionToSignedInt : forall (P:impl) (it:integerType),
       ~ it = Unsigned Int ->
       ~ it = Signed   Int ->
