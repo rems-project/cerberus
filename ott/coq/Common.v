@@ -397,6 +397,8 @@ Ltac context_destruct :=
   match goal with
   | [|- match ?c with _ => _ end] =>
       context_destruct_inner c
+  | [|- ((match ?c with _ => _ end) = _)] =>
+      context_destruct_inner c
   | [|- ((match ?c with _ => _ end) = _) -> _] =>
       context_destruct_inner c
   | [|- (match ?c with _ => _ end) -> _] =>
