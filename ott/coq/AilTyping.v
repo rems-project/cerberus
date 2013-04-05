@@ -769,12 +769,6 @@ Definition env_sub {A B} (P : A -> Type) (E1 E2 : list (A * B)) :=
 Definition env_equiv {A B} (P : A -> Type) (E1 E2 : list (A * B)) :=
   env_sub P E1 E2 * env_sub P E2 E1.
 
-Lemma eType_ExpressionType_Array P G S e ty :
-  eType P G S e (ExpressionType ty) ->
-  neg (isArray ty).
-Proof.
-Admitted.
-
 Fixpoint eType_env_sub P (G1 G2:gamma) (S:sigma) e {struct e} :
   env_sub (fun id => fv id e) G1 G2 ->
   forall tc,
@@ -856,38 +850,6 @@ Proof.
         | eassumption ]).
 Qed.
       
-(*
-Definition eType_function_id {P} {G} {S} {e} {t} {ps} :
-  (forall id ty s, Lookup S id (ty, s) -> isFunction ty) ->
-  eType P G S e (ExpressionType (Function t ps)) ->
-  exists id, e = Var id.
-Proof.
-*)
-
-(*  
-Definition eType_expression_lvalue_distinct {P} {G} {S} {e} {ty1} {qs2} {ty2}:
-  Disjoint G S ->
-  eType P G S e (ExpressionType     ty1) ->
-  eType P G S e (LvalueType     qs2 ty2) ->
-  False.
-Proof.
-*)
-
-(*
-Fixpoint eType_unique_lvalue {P} {G : gamma} {S : sigma} e qs1 ty1 qs2 ty2
-  (Hdisjoint : Disjoint G S)
-  (He1 : eType P G S e (LvalueType qs1 ty1))
-  (He2 : eType P G S e (LvalueType qs2 ty2)) {struct e} : ty1 = ty2.
-Proof.
-  destruct e;
-  simple inversion He1; try congruence;
-  simple inversion He2; try congruence.
-  solve
-    [ dependent destruction He1; subst; apply (eType_unique P G S _ _ _ Hdisjoint He1 He2)
-    | eapply eType_expression_lvalue_distinct; eassumption].
-Qed.
-*)
-
 (* Coq's insanely stupid termination checker won't allow me to write a
 mutually recursive function so I am resorting to open recursion + tying the
 knot manually. *)
@@ -901,10 +863,8 @@ Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
 Definition expressionType_find_aux o : option type :=
   option_bind o (fun tc =>
     match tc with
-    | ExpressionType   ty => Some ty
-    | LvalueType     _ ty => if isLvalueConvertable_fun ty
-                               then Some ty
-                               else None
+    | ExpressionType   ty => Some (pointerConvert ty)
+    | LvalueType     _ ty => lvalueConversion_find ty
     end).
 
 Lemma expressionType_find_aux_correct_pos {P} {G} {S} {e} {tc} {ty} :
@@ -914,16 +874,17 @@ Lemma expressionType_find_aux_correct_pos {P} {G} {S} {e} {tc} {ty} :
 Proof.
   intros ?.
   do 2 unfold_goal.
-  destruct tc;
-  repeat match goal with
-  | [|- context[isLvalueConvertable_fun ?ty]] =>
-      context_destruct;
-      case_fun (isLvalueConvertable_correct ty)
+  context_destruct;
+  match goal with
+  | [|- context[lvalueConversion_find ?ty]] =>
+      let Heq := fresh in
+      set (lvalueConversion_find_correct ty);
+      intros Heq; rewrite Heq in *;
+      econstructor 2; eassumption
   | [|- Some _ = Some _ -> _] =>
-      injection 1; intros ?; subst
-  end;
-  my_auto.
-Qed.  
+      injection 1; intros ?; my_auto
+  end.
+Qed.
 
 Lemma expressionType_find_aux_correct_neg {P} {G} {S} {e} {tc} :
   Disjoint G S ->
@@ -932,31 +893,22 @@ Lemma expressionType_find_aux_correct_neg {P} {G} {S} {e} {tc} :
   expressionType_find_aux (Some tc) = None ->
   forall ty, neg (expressionType P G S e ty).
 Proof.
-  intros Hdisjoint H Hunique.
+  intros Hdisjoint ? Hunique.
   do 2 unfold_goal.
-  destruct tc;
-  repeat match goal with
-  | [|- context[isLvalueConvertable_fun ?ty]] =>
-      context_destruct;
-      case_fun (isLvalueConvertable_correct ty)
-  | [|- Some _ = Some _ -> _] =>
-      injection 1; intros ?; subst
-  end; my_auto.
-  inversion 1; subst.
-  + inversion H; inversion H2; subst;
-    match goal with
-    | _ => discriminate
-    | [Heq : Var _ = Var _ |- _] => injection Heq; intros ?; subst; eapply Hdisjoint; eassumption
-    | [Heq : Unary Indirection _ = Unary Indirection ?e2, H : eType P G S (Unary Indirection ?e2) _ |-_] => discriminate (Hunique _ H)
-    end.
-    (* eapply (eType_expression_lvalue_distinct Hdisjoint); eassumption. *)
-  + match goal with
-    | [ Hunique : forall _ : typeCategory, eType P G S ?e _ -> _ = ?tc
-      , H       : eType P G S ?e ?tc
-      , H'      : eType P G S ?e ?tc' |- _ ] =>
-        injection (Hunique tc' H')
-    end.
-    congruence.
+  context_destruct;
+  match goal with
+  | [|- context[lvalueConversion_find ?ty]] =>
+      let Heq := fresh in
+      set (lvalueConversion_find_correct ty);
+      intros Heq; rewrite Heq in *
+  end;
+  inversion 1; subst;
+  match goal with
+  | [ Hunique : forall _ : typeCategory, eType P G S ?e _ -> _ = ?tc
+    , H       : eType P G S ?e ?tc
+    , H'      : eType P G S ?e ?tc' |- _ ] =>
+      discriminate (Hunique tc' H') || injection (Hunique tc' H'); intros; subst; now firstorder
+  end.
 Qed.
 
 Lemma expressionType_unique_lvalue_inj {P} {G} {S} {e} {qs} {ty} :
@@ -964,41 +916,43 @@ Lemma expressionType_unique_lvalue_inj {P} {G} {S} {e} {qs} {ty} :
   (forall tc', eType P G S e tc' -> tc' = (LvalueType qs ty)) ->
   forall ty', expressionType P G S e ty' -> ty' = ty.
 Proof.
-  intros H Hunique.
-  inversion_clear 1;
+  intros ? Hunique; inversion 1;
   match goal with
-  | [H' : eType P G S e ?tc |- _] =>
-      set (Hunique tc H'); congruence
-  end.
+  | [H : eType P G S e ?tc |- _] => set (Hunique tc H); try congruence
+  end;
+  repeat match goal with
+  | [H : lvalueConversion _ _      |- _] => inversion_clear H
+  | [H : isLvalueConvertible _     |- _] => inversion_clear H
+  | [_ : pointerConvert ?t = _     |- _] => is_var t; destruct t
+  | [H : isComplete (Function _ _) |- _] => inversion H
+  | [H : ~ isArray (Array _ _)     |- _] => exfalso; apply H; constructor
+  end; my_auto.
 Qed.
 
 Lemma expressionType_unique_expression_inj {P} {G} {S} {e} {ty} :
   expressionType P G S e ty ->
   (forall tc', eType P G S e tc' -> tc' = (ExpressionType ty)) ->
-  forall ty', expressionType P G S e ty' -> ty' = ty.
+  forall ty', expressionType P G S e ty' -> ty' = pointerConvert ty.
 Proof.
-  intros H Hunique.
-  inversion_clear 1;
+  intros ? Hunique.
+  inversion 1; subst;
   match goal with
-  | [H' : eType P G S e ?tc |- _] =>
-      set (Hunique tc H'); congruence
+  | [H : eType P G S e ?tc |- _] => set (Hunique tc H); congruence
   end.
 Qed.
 
 Hint Extern 1 (ExpressionType _ = ExpressionType _) =>
   apply f_equal;
-    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption
-          | eapply expressionType_unique_expression_inj; eassumption].
+    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption].
 
 Hint Extern 1 (LvalueType _ = LvalueType _) =>
   apply f_equal;
-    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption
-          | eapply expressionType_unique_expression_inj; eassumption].
+    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption].
 
 Lemma expressionType_find_aux_eq_lvalue {qs1} {ty1 ty2} :
   expressionType_find_aux (Some (LvalueType qs1 ty1)) = Some ty2 ->
   ty1 = ty2.
-Proof. simpl; destruct (isLvalueConvertable_fun ty1); congruence. Qed.
+Proof. do 4 unfold_goal; destruct ty1; my_auto. Qed.
 
 Lemma expressionType_find_aux_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
   eType P G S e (LvalueType qs1 ty1) ->
@@ -1007,8 +961,13 @@ Lemma expressionType_find_aux_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
 Proof.
   intros ? Heq.
   rewrite <- (expressionType_find_aux_eq_lvalue Heq) in Heq.
-  revert Heq; simpl; context_destruct.
-  case_fun (isLvalueConvertable_correct ty1); my_auto.
+  revert Heq; simpl; unfold_goal; context_destruct.
+  case_fun (isLvalueConvertible_fun_correct ty1).
+  + intros.
+    econstructor 2.
+    * eassumption.
+    * econstructor; [eassumption | injection Heq; trivial].
+  + discriminate.
 Qed.
 
 Lemma expressionType_neg P G S e :
