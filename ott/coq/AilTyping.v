@@ -860,7 +860,7 @@ Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
     | None   => None
     end.
 
-Infix ">>=" := option_bind (at level 74, no associativity).
+Infix ">>=" := option_bind (at level 42, left associativity).
 
 Definition option_bool {A} : option A -> (A -> bool) -> bool :=
   fun o f =>
@@ -896,7 +896,7 @@ Qed.
 
 Lemma expressionType_find_correct_neg {P} {G} {S} {e} {tc} :
   eType P G S e tc ->
-  (forall tc', eType P G S e tc' -> tc' = tc) ->
+  (forall tc', eType P G S e tc' -> tc = tc') ->
   expressionType_find tc = None ->
   forall ty, neg (expressionType P G S e ty).
 Proof.
@@ -911,7 +911,7 @@ Proof.
   end;
   inversion 1; subst;
   match goal with
-  | [ Hunique : forall _ : typeCategory, eType P G S ?e _ -> _ = ?tc
+  | [ Hunique : forall _ : typeCategory, eType P G S ?e _ -> ?tc = _
     , H       : eType P G S ?e ?tc
     , H'      : eType P G S ?e ?tc' |- _ ] =>
       discriminate (Hunique tc' H') || injection (Hunique tc' H'); intros; subst; now firstorder
@@ -920,7 +920,7 @@ Qed.
 
 Lemma expressionType_unique_lvalue_inj {P} {G} {S} {e} {qs} {ty} :
   expressionType P G S e ty ->
-  (forall tc', eType P G S e tc' -> tc' = LvalueType qs ty) ->
+  (forall tc', eType P G S e tc' -> LvalueType qs ty = tc') ->
   forall ty', expressionType P G S e ty' -> ty' = ty.
 Proof.
   intros ? Hunique; inversion 1;
@@ -954,11 +954,13 @@ Qed.
 
 Hint Extern 1 (ExpressionType _ = ExpressionType _) =>
   apply f_equal;
-    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption].
+    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption
+          | eapply expressionType_unique_expression_inj; eauto       ].
 
 Hint Extern 1 (LvalueType _ = LvalueType _) =>
   apply f_equal;
-    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption].
+    solve [ eapply expressionType_unique_lvalue_inj    ; eassumption
+          | eapply expressionType_unique_expression_inj; eauto       ].
 
 Lemma expressionType_find_eq_lvalue {qs1} {ty1 ty2} :
   expressionType_find (LvalueType qs1 ty1) = Some ty2 ->
@@ -1027,6 +1029,8 @@ Proof.
   assert (tc = tc2) by (apply Hunique; assumption).
   congruence.
 Qed.
+
+Hint Resolve eType_unique_instance.
 
 Ltac isAssignable_neg_tac :=
   repeat match goal with
@@ -1124,47 +1128,46 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
 Fixpoint eType_find_correct P G S e {struct e}:
   Disjoint G S ->
   match eType_find P G S e with
-  | Some tc => eType P G S e tc * (forall tc', eType P G S e tc' -> tc' = tc)
+  | Some tc => eType P G S e tc * (forall tc', eType P G S e tc' -> tc = tc')
   | None    => forall tc, neg (eType P G S e tc)
   end.
 Proof.
   intros Hdisjoint.
-  unfold eType_find;
-  destruct e;
-  fold eType_find.
+  destruct e; simpl.
+  Focus 2.
   repeat
   match goal with
   | [|- lookup_id ?E ?id = ?o -> _] =>
       case_fun (lookup_id_correct E id)
   | [|- eType_find P G S ?e = ?o -> _] =>
-      case_fun (eType_find_correct P G S e Hdisjoint);
+      is_var o; case_fun (eType_find_correct P G S e Hdisjoint);
       match goal with
       | [H : _ * _ |- _] => destruct H
       | _ => idtac
       end
   | [|- context[option_map] ] =>
       unfold option_map
-  | [|- expressionType_find (eType_find P G S ?e) = _ -> _] =>
+  | [|- (eType_find P G S ?e >>= expressionType_find) = _ -> _] =>
       pull_out (option typeCategory) (eType_find P G S e)
-  | [|- expressionType_find (Some ?tc) = _ -> _] =>
-      is_var tc; destruct tc
-  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (Some (ExpressionType ?t)) = ?o -> _] =>
-      let Heq := fresh in
-      is_var o; intros Heq; subst o;
-      assert (expressionType_find (Some (ExpressionType t)) = Some t) as Heq by reflexivity; rewrite Heq;
+  | [|- (Some _ >>= _) = _ -> _ ] =>
+      unfold option_bind at 1
+  | [|- (None >>= _) = ?o -> _] =>
+      is_var o; unfold option_bind at 1; intros ?; subst o
+  | [|- expressionType_find ?t = _ -> _] =>
+      is_var t; destruct t
+  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (ExpressionType ?t) = ?o -> _] =>
+      is_var o; let Heq := fresh in
+      intros Heq; subst o;
+      assert (expressionType_find (ExpressionType t) = Some (pointerConvert t)) as Heq by reflexivity; rewrite Heq;
       set (expressionType_find_correct_pos H Heq)
-  | [|- expressionType_find None = ?o -> _] =>
-      let Heq := fresh in
-      is_var o; intros Heq; subst o;
-      assert (expressionType_find None = None) as Heq by reflexivity; rewrite Heq
-  | [|- expressionType_find (Some (LvalueType ?q ?t)) = ?o -> _] =>
+  | [|- expressionType_find (LvalueType ?q ?t) = ?o -> _] =>
       is_var o; destruct o
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (Some (LvalueType ?q ?t)) = Some _ -> _] =>
+  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = Some _ -> _] =>
       let Heq := fresh in
       intros Heq;
       set     (expressionType_find_eq_lvalue_lift H Heq);
       rewrite (expressionType_find_eq_lvalue        Heq) in *
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (Some (LvalueType ?q ?t)) = None -> _] =>
+  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = None -> _] =>
       let Heq := fresh in
       intros Heq;
       inversion_clear 1;
@@ -1172,30 +1175,21 @@ Proof.
       eassumption
   | _ => context_destruct
   | [|- _ * _] => split
-  | [|- eType P G S _ (ExpressionType _)] => econstructor; eassumption
+  | [|- eType P G S _ (ExpressionType _)] => econstructor (eassumption)
   | [|- forall _, eType P G S (Binary _ Comma _) _ -> _ = _] => inversion_clear 1; now auto
   | [|- forall _, neg (eType P G S (Binary ?e1 Comma ?e2) _)] =>
       set (expressionType_neg P G S e1);
       set (expressionType_neg P G S e2);
       inversion_clear 1; now firstorder
+(*
   | [|- forall _, eType P G S (Unary Address _) _ -> _ = _] => inversion_clear 1
   | [Hunique : forall _, eType P G S _ _ -> _ = LvalueType ?qs2 ?ty2 |- ExpressionType (Pointer ?qs1 ?ty1) = ExpressionType (Pointer ?qs2 ?ty2)] =>
       einjection (Hunique (LvalueType qs1 ty1) _); congruence
   | [|- forall _, neg (eType P G S (Unary Address _) _)] => inversion 1
   | [Hunique : forall _, eType P G S ?e _ -> _ = ExpressionType _, H : eType P G S ?e (LvalueType _ _) |- False] => discriminate (Hunique _ H)
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
+*)
   end.
-  Focus 5.
-  subst.
-  tauto.
-  discriminate (e1 _ H1).
-  inversion_clear 1.
-
-  congruence.
-  auto.
-  apply f_equal.
-  firstorder.
-  constructor; assumption.
 
   match goal with
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] =>
