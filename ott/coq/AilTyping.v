@@ -151,50 +151,50 @@ Proof.
   assumption.
 Qed.
 
-Inductive checkBinaryArithmetic : type -> arithmeticOperator -> type -> Prop :=    (* defn eType *)
- | CheckBinaryArithmeticMult : forall (ty1 ty2:type),
+Inductive isBinaryArithmetic : type -> arithmeticOperator -> type -> Prop :=    (* defn eType *)
+ | IsBinaryArithmeticMult : forall (ty1 ty2:type),
      isArithmetic ty1 ->
      isArithmetic ty2 ->
-     checkBinaryArithmetic ty1 Mul ty2
- | CheckBinaryArithmeticDiv : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Mul ty2
+ | IsBinaryArithmeticDiv : forall (ty1 ty2:type),
      isArithmetic ty1 ->
      isArithmetic ty2 ->
-     checkBinaryArithmetic ty1 Div ty2
- | CheckBinaryArithmeticMod : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Div ty2
+ | IsBinaryArithmeticMod : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Mod ty2
- | CheckBinaryArithmeticAddArithmetic : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Mod ty2
+ | IsBinaryArithmeticAddArithmetic : forall (ty1 ty2:type),
      isArithmetic ty1 ->
      isArithmetic ty2 ->
-     checkBinaryArithmetic ty1 Add ty2
- | CheckBinaryArithmeticSubArithmetic : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Add ty2
+ | IsBinaryArithmeticSubArithmetic : forall (ty1 ty2:type),
      isArithmetic ty1 ->
      isArithmetic ty2 ->
-     checkBinaryArithmetic ty1 Sub ty2
- | CheckBinaryArithmeticShiftL : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Sub ty2
+ | IsBinaryArithmeticShiftL : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Shl ty2
- | CheckBinaryArithmeticShiftR : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Shl ty2
+ | IsBinaryArithmeticShiftR : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Shr ty2
- | CheckBinaryArithmeticBand : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Shr ty2
+ | IsBinaryArithmeticBand : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Band ty2
- | CheckBinaryArithmeticXor : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Band ty2
+ | IsBinaryArithmeticXor : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Xor ty2
- | CheckBinaryArithmeticBor : forall (ty1 ty2:type),
+     isBinaryArithmetic ty1 Xor ty2
+ | IsBinaryArithmeticBor : forall (ty1 ty2:type),
      isInteger ty1 ->
      isInteger ty2 ->
-     checkBinaryArithmetic ty1 Bor ty2.
+     isBinaryArithmetic ty1 Bor ty2.
 
-Lemma checkBinaryArithmetic_Arithmetic {aop} {ty1 ty2} :
-  checkBinaryArithmetic ty1 aop ty2 ->
+Lemma isBinaryArithmetic_Arithmetic {aop} {ty1 ty2} :
+  isBinaryArithmetic ty1 aop ty2 ->
   isArithmetic ty1 * isArithmetic ty2.
 Proof.
   inversion 1;
@@ -402,25 +402,25 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeMult : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Mul ty2 ->
+     isBinaryArithmetic ty1 Mul ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Mul) e2) (ExpressionType ty)
  | ETypeDiv : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Div ty2 ->
+     isBinaryArithmetic ty1 Div ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Div) e2) (ExpressionType ty)
  | ETypeMod : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Mod ty2 ->
+     isBinaryArithmetic ty1 Mod ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Mod) e2) (ExpressionType ty)
  | ETypeAddArithmetic : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Add ty2 ->
+     isBinaryArithmetic ty1 Add ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Add) e2) (ExpressionType ty)
  | ETypeAddPointer1 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (qs1:qualifiers) (ty1 ty2:type),
@@ -438,7 +438,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeSubArithmetic : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Sub ty2 ->
+     isBinaryArithmetic ty1 Sub ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Sub) e2) (ExpressionType ty)
  | ETypeSubPointer : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (qs1:qualifiers) (ty1 ty2:type),
@@ -458,13 +458,13 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeShiftL : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty1' ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Shl ty2 ->
+     isBinaryArithmetic ty1 Shl ty2 ->
      isPromotion P ty1 ty1' ->
      eType P G S (Binary e1 (Arithmetic Shl) e2) (ExpressionType ty1')
  | ETypeShiftR : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty1' ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Shr ty2 ->
+     isBinaryArithmetic ty1 Shr ty2 ->
      isPromotion P ty1 ty1' ->
      eType P G S (Binary e1 (Arithmetic Shr) e2) (ExpressionType ty1')
  | ETypeLtReal : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty1 ty2:type),
@@ -584,19 +584,19 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeBand : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Band ty2 ->
+     isBinaryArithmetic ty1 Band ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Band) e2) (ExpressionType ty)
  | ETypeXor : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Xor ty2 ->
+     isBinaryArithmetic ty1 Xor ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Xor) e2) (ExpressionType ty)
  | ETypeBor : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
-     checkBinaryArithmetic ty1 Bor ty2 ->
+     isBinaryArithmetic ty1 Bor ty2 ->
      isUsualArithmetic P ty1 ty2 ty ->
      eType P G S (Binary e1 (Arithmetic Bor) e2) (ExpressionType ty)
  | ETypeAnd : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty1 ty2:type),
@@ -674,7 +674,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      eType P G S e1 (LvalueType qs1 ty1) ->
      isModifiable qs1 ty1 ->
      pointerConvert ty1 = ty ->
-     checkAssignable P G S ty e2 ->
+     isAssignable P G S ty e2 ->
      eType P G S (Assign e1 e2) (ExpressionType ty)
  | ETypeCompoundAssignPlusMinusArithmetic : forall (P:impl) (G:gamma) (S:sigma) aop (e1 e2:expression) (ty1:type) (qs:qualifiers) (ty ty2 :type),
      (aop = Add) + (aop = Mul) ->
@@ -700,7 +700,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      lvalueConversion ty ty1 ->
      expressionType P G S e2 ty2 ->
      isModifiable qs ty ->
-     checkBinaryArithmetic ty1 aop ty2 ->
+     isBinaryArithmetic ty1 aop ty2 ->
      eType P G S (CompoundAssign e1 aop e2) (ExpressionType ty1)
  | ETypeComma : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty2 ty1:type),
      expressionType P G S e1 ty1 ->
@@ -723,42 +723,42 @@ with eType_arguments : impl -> gamma -> sigma -> arguments -> params -> Prop := 
  | ETypeNil P G S : eType_arguments P G S ArgumentsNil ParamsNil
  | ETypeCons P G S ls ps : forall e qs ty ty',
      pointerConvert ty = ty' ->
-     checkAssignable P G S ty' e ->
+     isAssignable P G S ty' e ->
      eType_arguments P G S ls ps ->
      eType_arguments P G S (ArgumentsCons e ls) (ParamsCons qs ty ps)
-with checkAssignable : impl -> gamma -> sigma -> type -> expression -> Prop :=
- | CheckAssignableArithmetic : forall P G S e2 ty1 ty2,
+with isAssignable : impl -> gamma -> sigma -> type -> expression -> Prop :=
+ | IsAssignableArithmetic : forall P G S e2 ty1 ty2,
      expressionType P G S e2 ty2 ->
      isArithmetic ty1 ->
      isArithmetic ty2 ->
-     checkAssignable P G S ty1 e2
- | CheckAssignablePointer : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
+     isAssignable P G S ty1 e2
+ | IsAssignablePointer : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isCompatible ty1 ty2 ->
      sub qs2 qs1 ->
-     checkAssignable P G S (Pointer qs1 ty1) e2
- | CheckAssignableVoidPointer1 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
+     isAssignable P G S (Pointer qs1 ty1) e2
+ | IsAssignableVoidPointer1 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      isVoid ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isObject ty2 ->
      sub qs2 qs1  ->
-     checkAssignable P G S (Pointer qs1 ty1) e2
- | CheckAssignableVoidPointer2 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
+     isAssignable P G S (Pointer qs1 ty1) e2
+ | IsAssignableVoidPointer2 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      isObject ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isVoid ty2 ->
      sub qs2 qs1  ->
-     checkAssignable P G S (Pointer qs1 ty1) e2
- | CheckAssignableNullPointerConstant : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (ty1 ty2:type),
+     isAssignable P G S (Pointer qs1 ty1) e2
+ | IsAssignableNullPointerConstant : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (ty1 ty2:type),
      isPointer ty1 ->
      expressionType P G S e2 ty2 ->
      isNullPointerConstant e2 ->
-     checkAssignable P G S ty1 e2
- | CheckAssignableBool : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (ty1 ty2:type),
+     isAssignable P G S ty1 e2
+ | IsAssignableBool : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (ty1 ty2:type),
      isBool ty1 ->
      expressionType P G S e2 ty2 ->
      isPointer ty2 ->
-     checkAssignable P G S ty1 e2.
+     isAssignable P G S ty1 e2.
 
 Definition Disjoint {A B1 B2} E1 E2 : Type :=
   forall (a : A) (b1 : B1) (b2 : B2), Lookup E1 a b1 -> Lookup E2 a b2 -> False.
@@ -787,7 +787,7 @@ Proof.
     | [ H1 : expressionType  P G1 S _  _
       , H2 : expressionType  P G1 S _  _      |- _] => inversion H1; inversion H2; subst
     | [ H  : expressionType  P G1 S _  _      |- _] => inversion H; subst
-    | [ H  : checkAssignable P G1 S ?e _      |- _] => inversion H; subst;
+    | [ H  : isAssignable P G1 S ?e _      |- _] => inversion H; subst;
                                                        match goal with | [H : expressionType  P G1 S ?e _ |- _] => inversion H; subst end
     | [ H  : eType           P G1 S (Var _) _ |- _] => inversion H; subst
     | _ => idtac
@@ -813,7 +813,7 @@ Proof.
       solve [ econstructor (eassumption)
             | finish eassumption
             | match goal with
-              | [|- checkAssignable _ _ _  _ _] =>
+              | [|- isAssignable _ _ _  _ _] =>
                   econstructor (
                     solve [ econstructor (solve [ econstructor (eassumption) | finish eassumption ])
                           | eassumption]
@@ -825,7 +825,7 @@ Proof.
   + destruct l; intros Hfree; inversion 1; subst.
     - constructor.
     - match goal with
-      | [ H  : checkAssignable P G1 S ?e _ |- _] => inversion H; subst;
+      | [ H  : isAssignable P G1 S ?e _ |- _] => inversion H; subst;
           match goal with
           | [H : expressionType  P G1 S ?e _ |- _] => inversion H; subst
           end
@@ -860,16 +860,24 @@ Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
     | None   => None
     end.
 
-Definition expressionType_find_aux o : option type :=
-  option_bind o (fun tc =>
-    match tc with
-    | ExpressionType   ty => Some (pointerConvert ty)
-    | LvalueType     _ ty => lvalueConversion_find ty
-    end).
+Infix ">>=" := option_bind (at level 74, no associativity).
 
-Lemma expressionType_find_aux_correct_pos {P} {G} {S} {e} {tc} {ty} :
+Definition option_bool {A} : option A -> (A -> bool) -> bool :=
+  fun o f =>
+    match o with
+    | Some a => f a
+    | None   => false
+    end.
+
+Definition expressionType_find tc : option type :=
+  match tc with
+  | ExpressionType   ty => Some (pointerConvert ty)
+  | LvalueType     _ ty => lvalueConversion_find ty
+  end.
+
+Lemma expressionType_find_correct_pos {P} {G} {S} {e} {tc} {ty} :
   eType P G S e tc ->
-  expressionType_find_aux (Some tc) = Some ty ->
+  expressionType_find tc = Some ty ->
   expressionType P G S e ty.
 Proof.
   intros ?.
@@ -886,14 +894,13 @@ Proof.
   end.
 Qed.
 
-Lemma expressionType_find_aux_correct_neg {P} {G} {S} {e} {tc} :
-  Disjoint G S ->
+Lemma expressionType_find_correct_neg {P} {G} {S} {e} {tc} :
   eType P G S e tc ->
   (forall tc', eType P G S e tc' -> tc' = tc) ->
-  expressionType_find_aux (Some tc) = None ->
+  expressionType_find tc = None ->
   forall ty, neg (expressionType P G S e ty).
 Proof.
-  intros Hdisjoint ? Hunique.
+  intros ? Hunique.
   do 2 unfold_goal.
   context_destruct;
   match goal with
@@ -913,7 +920,7 @@ Qed.
 
 Lemma expressionType_unique_lvalue_inj {P} {G} {S} {e} {qs} {ty} :
   expressionType P G S e ty ->
-  (forall tc', eType P G S e tc' -> tc' = (LvalueType qs ty)) ->
+  (forall tc', eType P G S e tc' -> tc' = LvalueType qs ty) ->
   forall ty', expressionType P G S e ty' -> ty' = ty.
 Proof.
   intros ? Hunique; inversion 1;
@@ -930,15 +937,19 @@ Proof.
 Qed.
 
 Lemma expressionType_unique_expression_inj {P} {G} {S} {e} {ty} :
+  (forall tc1 tc2, eType P G S e tc1 -> eType P G S e tc2 -> tc1 = tc2) ->
   expressionType P G S e ty ->
-  (forall tc', eType P G S e tc' -> tc' = (ExpressionType ty)) ->
-  forall ty', expressionType P G S e ty' -> ty' = pointerConvert ty.
+  forall ty', expressionType P G S e ty' -> ty = ty'.
 Proof.
-  intros ? Hunique.
-  inversion 1; subst;
+  intros Hunique H.
+  inversion H; inversion 1; subst;
   match goal with
-  | [H : eType P G S e ?tc |- _] => set (Hunique tc H); congruence
-  end.
+  | [ H1 : eType P G S e _ , H2 : eType P G S e _ |- _] => set (Hunique _ _ H1 H2)
+  end;
+  repeat match goal with
+  | [H : lvalueConversion _ _ |- _] => inversion_clear H
+  end;
+  congruence.
 Qed.
 
 Hint Extern 1 (ExpressionType _ = ExpressionType _) =>
@@ -949,18 +960,18 @@ Hint Extern 1 (LvalueType _ = LvalueType _) =>
   apply f_equal;
     solve [ eapply expressionType_unique_lvalue_inj    ; eassumption].
 
-Lemma expressionType_find_aux_eq_lvalue {qs1} {ty1 ty2} :
-  expressionType_find_aux (Some (LvalueType qs1 ty1)) = Some ty2 ->
+Lemma expressionType_find_eq_lvalue {qs1} {ty1 ty2} :
+  expressionType_find (LvalueType qs1 ty1) = Some ty2 ->
   ty1 = ty2.
 Proof. do 4 unfold_goal; destruct ty1; my_auto. Qed.
 
-Lemma expressionType_find_aux_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
+Lemma expressionType_find_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
   eType P G S e (LvalueType qs1 ty1) ->
-  expressionType_find_aux (Some (LvalueType qs1 ty1)) = Some ty2 ->
+  expressionType_find (LvalueType qs1 ty1) = Some ty2 ->
   expressionType P G S e ty1.
 Proof.
   intros ? Heq.
-  rewrite <- (expressionType_find_aux_eq_lvalue Heq) in Heq.
+  rewrite <- (expressionType_find_eq_lvalue Heq) in Heq.
   revert Heq; simpl; unfold_goal; context_destruct.
   case_fun (isLvalueConvertible_fun_correct ty1).
   + intros.
@@ -975,6 +986,102 @@ Lemma expressionType_neg P G S e :
   forall  ty, neg (expressionType P G S e ty).
 Proof. inversion 2; firstorder. Qed.
 
+Definition isAssignable_fun ty1 ty2 is_null2 : bool :=
+  match ty1, ty2 with
+  | Pointer qs1 t1, Pointer qs2 t2 => orb is_null2
+                                          (andb (list_sub_fun (fun q1 q2 => bool_of_decision (qualifier_DecEq q1 q2)) qs2 qs1)
+                                                (orb (isCompatible_fun t1 t2)
+                                                     (orb (andb (isVoid_fun t1) (isObject_fun t2))
+                                                          (andb (isVoid_fun t2) (isObject_fun t1)))))
+  | Pointer qs1 t1, _              => is_null2
+  | _             , Pointer _   _  => isBool_fun ty1
+  | _             , _              => andb (isArithmetic_fun ty1)
+                                           (isArithmetic_fun ty2)
+  end.
+
+Lemma isAssignable_fun_correct_pos P G S ty1 e2 ty2 :
+  expressionType P G S e2 ty2 ->
+  isAssignable_fun ty1 ty2 (isNullPointerConstant_fun e2) = true ->
+  isAssignable P G S ty1 e2.
+Proof.
+  unfold_goal; intros ?.
+  do 2 context_destruct; bool_simpl;
+  repeat (match goal with
+  | [|- isArithmetic_fun ?t           = _ -> _] => set (isArithmetic_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e2 = _ -> _] => set (isNullPointerConstant_fun_correct e2)
+  | [|- isCompatible_fun ?ty1 ?ty2    = _ -> _] => set (isCompatible_fun_correct ty1 ty2)
+  | [|- isBool_fun ?t                 = _ -> _] => set (isBool_fun_correct t)
+  | [|- isVoid_fun ?t                 = _ -> _] => set (isVoid_fun_correct t)
+  | [|- isObject_fun ?t               = _ -> _] => set (isObject_fun_correct t)
+  | [|- list_sub_fun ?f ?qs1 ?qs2     = _ -> _] => set (list_sub_fun_correct qs1 qs2 (fun q1 q2 => Decision_boolSpec (qualifier_DecEq q1 q2)))
+  end; boolSpec_simpl);
+  econstructor (solve [eassumption|constructor]).
+Qed.
+
+Lemma eType_unique_instance {P} {G} {S} {e} {tc} :
+  (forall tc', eType P G S e tc' -> tc = tc') ->
+  (forall tc1 tc2, eType P G S e tc1 -> eType P G S e tc2 -> tc1 = tc2).
+Proof.
+  intros Hunique tc1 tc2 Htc1 Htc2.
+  assert (tc = tc1) by (apply Hunique; assumption).
+  assert (tc = tc2) by (apply Hunique; assumption).
+  congruence.
+Qed.
+
+Ltac isAssignable_neg_tac :=
+  repeat match goal with
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic Void           |- _ ] => inversion_clear H
+  | [H : neg (isArithmetic (Basic ?bt)) |- _ ] => is_var bt; destruct bt
+  | [H : neg (isInteger    (Basic ?bt)) |- _ ] => is_var bt; destruct bt
+  | [H : neg (isArithmetic (Basic (Integer _))) |- _ ] => exfalso; apply H; do 2 constructor
+  | [H : neg (isInteger    (Basic (Integer _))) |- _ ] => exfalso; apply H; constructor
+  | [H : isBool       ?t             |- _ ] =>
+      match t with
+      | _ => is_var t; inversion H; subst; clear H
+      | Basic ?bt => is_var bt; destruct bt
+      end
+  | [H : isVoid       ?t             |- _ ] => is_var t; inversion H; subst; clear H
+  | [H : isPointer    ?t             |- _ ] => 
+      match t with
+      | Pointer _ _ => fail 1
+      | _ => is_var t; inversion H; subst; clear H
+      end
+  | _ => finish fail
+  end.
+
+Lemma isAssignable_fun_correct_neg {P} {G} {S} {ty1 ty2} {e2}:
+  expressionType P G S e2 ty2 ->
+  (forall tc1 tc2, eType P G S e2 tc1 -> eType P G S e2 tc2 -> tc1 = tc2) ->
+  isAssignable_fun ty1 ty2 (isNullPointerConstant_fun e2) = false ->
+  neg (isAssignable P G S ty1 e2).
+Proof.
+  intros ? Hunique.
+  unfold_goal; do 2 context_destruct; bool_simpl;
+  repeat (match goal with
+  | [|- isArithmetic_fun ?t           = _ -> _] => set (isArithmetic_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e2 = _ -> _] => set (isNullPointerConstant_fun_correct e2)
+  | [|- isCompatible_fun ?ty1 ?ty2    = _ -> _] => set (isCompatible_fun_correct ty1 ty2)
+  | [|- isBool_fun ?t                 = _ -> _] => set (isBool_fun_correct t)
+  | [|- isVoid_fun ?t                 = _ -> _] => set (isVoid_fun_correct t)
+  | [|- isObject_fun ?t               = _ -> _] => set (isObject_fun_correct t)
+  | [|- list_sub_fun ?f ?qs1 ?qs2     = _ -> _] => set (list_sub_fun_correct qs1 qs2 (fun q1 q2 => Decision_boolSpec (qualifier_DecEq q1 q2)))
+  end; boolSpec_simpl);
+  (try now (inversion 1; my_auto));
+  inversion 1; subst;
+  isAssignable_neg_tac;
+  match goal with
+  | [ H1 : expressionType P G S e2 _
+    , H2 : expressionType P G S e2 _ |- _] =>
+      generalize (expressionType_unique_expression_inj Hunique H1 _ H2);
+      discriminate || (try injection; intros; subst; finish ltac:(now isAssignable_neg_tac))
+  end.
+Qed.
+
 Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCategory :=
   match e with
   | Var id =>
@@ -984,7 +1091,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | _            , _            => None
       end
   | Binary e1 Comma e2 => 
-     match expressionType_find_aux (eType_find P G S e1), expressionType_find_aux (eType_find P G S e2) with
+     match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
      | Some _, Some ty2 => Some (ExpressionType ty2)
      | _     , _        => None
      end
@@ -993,17 +1100,25 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | Some (LvalueType qs ty) => Some (ExpressionType (Pointer qs ty))
       | _                       => None
       end
+  | Call e ls =>
+      match eType_find P G S e >>= expressionType_find with
+      | Some (Pointer nil (Function ty ps)) => if eType_arguments_find P G S ls ps
+                                                 then Some (ExpressionType ty)
+                                                 else None
+      | _                                   => None
+      end
   | _ => None 
   end
-with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (ls:arguments) (ps:args) {struct ls} : bool :=
-  match ls, ps with
-  | Arguments_nil      , Argument_nil         => true
-  | Arguments_cons e ls, Argument_cons _ t ps =>
-      match eType_find P (add G 0 (nil, t)) S e with
-      | Some _ => eType_arguments_find P G S ls ps
-      | None   => false
+with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
+  match l, p with
+  | ArgumentsNil     , ParamsNil          => true
+  | ArgumentsCons e l, ParamsCons _ ty1 p =>
+      match eType_find P G S e >>= expressionType_find with
+      | Some ty2 => andb (isAssignable_fun (pointerConvert ty1) ty2 (isNullPointerConstant_fun e))
+                         (eType_arguments_find P G S l p)
+      | None     => false
       end
-  | _                  ,  _                   => false
+  | _                 , _               => false
   end.
 
 Fixpoint eType_find_correct P G S e {struct e}:
@@ -1029,31 +1144,31 @@ Proof.
       end
   | [|- context[option_map] ] =>
       unfold option_map
-  | [|- expressionType_find_aux (eType_find P G S ?e) = _ -> _] =>
+  | [|- expressionType_find (eType_find P G S ?e) = _ -> _] =>
       pull_out (option typeCategory) (eType_find P G S e)
-  | [|- expressionType_find_aux (Some ?tc) = _ -> _] =>
+  | [|- expressionType_find (Some ?tc) = _ -> _] =>
       is_var tc; destruct tc
-  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find_aux (Some (ExpressionType ?t)) = ?o -> _] =>
+  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (Some (ExpressionType ?t)) = ?o -> _] =>
       let Heq := fresh in
       is_var o; intros Heq; subst o;
-      assert (expressionType_find_aux (Some (ExpressionType t)) = Some t) as Heq by reflexivity; rewrite Heq;
-      set (expressionType_find_aux_correct_pos H Heq)
-  | [|- expressionType_find_aux None = ?o -> _] =>
+      assert (expressionType_find (Some (ExpressionType t)) = Some t) as Heq by reflexivity; rewrite Heq;
+      set (expressionType_find_correct_pos H Heq)
+  | [|- expressionType_find None = ?o -> _] =>
       let Heq := fresh in
       is_var o; intros Heq; subst o;
-      assert (expressionType_find_aux None = None) as Heq by reflexivity; rewrite Heq
-  | [|- expressionType_find_aux (Some (LvalueType ?q ?t)) = ?o -> _] =>
+      assert (expressionType_find None = None) as Heq by reflexivity; rewrite Heq
+  | [|- expressionType_find (Some (LvalueType ?q ?t)) = ?o -> _] =>
       is_var o; destruct o
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find_aux (Some (LvalueType ?q ?t)) = Some _ -> _] =>
+  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (Some (LvalueType ?q ?t)) = Some _ -> _] =>
       let Heq := fresh in
       intros Heq;
-      set     (expressionType_find_aux_eq_lvalue_lift H Heq);
-      rewrite (expressionType_find_aux_eq_lvalue        Heq) in *
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find_aux (Some (LvalueType ?q ?t)) = None -> _] =>
+      set     (expressionType_find_eq_lvalue_lift H Heq);
+      rewrite (expressionType_find_eq_lvalue        Heq) in *
+  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (Some (LvalueType ?q ?t)) = None -> _] =>
       let Heq := fresh in
       intros Heq;
       inversion_clear 1;
-      eapply (expressionType_find_aux_correct_neg Hdisjoint H _ Heq);
+      eapply (expressionType_find_correct_neg H _ Heq);
       eassumption
   | _ => context_destruct
   | [|- _ * _] => split
