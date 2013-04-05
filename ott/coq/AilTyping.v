@@ -1134,7 +1134,7 @@ Fixpoint eType_find_correct P G S e {struct e}:
 Proof.
   intros Hdisjoint.
   destruct e; simpl.
-  Focus 2.
+  Focus 1.
   repeat
   match goal with
   | [|- lookup_id ?E ?id = ?o -> _] =>
@@ -1181,15 +1181,18 @@ Proof.
       set (expressionType_neg P G S e1);
       set (expressionType_neg P G S e2);
       inversion_clear 1; now firstorder
-(*
   | [|- forall _, eType P G S (Unary Address _) _ -> _ = _] => inversion_clear 1
-  | [Hunique : forall _, eType P G S _ _ -> _ = LvalueType ?qs2 ?ty2 |- ExpressionType (Pointer ?qs1 ?ty1) = ExpressionType (Pointer ?qs2 ?ty2)] =>
-      einjection (Hunique (LvalueType qs1 ty1) _); congruence
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _   = _, H : eType P G S ?e (ExpressionType _) |- _] => discriminate (Hunique _ H)
+  | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (LvalueType   _ _) |- _] => discriminate (Hunique _ H)
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _ = _, H : eType P G S ?e (LvalueType _ ?t)  |- context[?t]] =>
+      einjection (Hunique _ H); congruence
   | [|- forall _, neg (eType P G S (Unary Address _) _)] => inversion 1
-  | [Hunique : forall _, eType P G S ?e _ -> _ = ExpressionType _, H : eType P G S ?e (LvalueType _ _) |- False] => discriminate (Hunique _ H)
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
-*)
   end.
+  Focus 5.
+  subst.
+  inversion 1; subst.
+
 
   match goal with
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] =>
