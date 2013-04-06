@@ -152,7 +152,7 @@ Proof.
 Qed.
 
 Inductive isBinaryArithmetic : type -> arithmeticOperator -> type -> Prop :=    (* defn eType *)
- | IsBinaryArithmeticMult : forall (ty1 ty2:type),
+ | IsBinaryArithmeticMul : forall (ty1 ty2:type),
      isArithmetic ty1 ->
      isArithmetic ty2 ->
      isBinaryArithmetic ty1 Mul ty2
@@ -397,7 +397,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeCastVoid : forall (P:impl) (G:gamma) (S:sigma) (qualifiers:qualifiers) (e:expression) (ty:type),
      expressionType P G S e ty ->
      eType P G S (Cast qualifiers Void e) (ExpressionType Void)
- | ETypeMult : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
+ | ETypeMul : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
      isBinaryArithmetic ty1 Mul ty2 ->
@@ -919,7 +919,7 @@ Qed.
 Lemma expressionType_unique_lvalue_inj {P} {G} {S} {e} {qs} {ty} :
   expressionType P G S e ty ->
   (forall tc', eType P G S e tc' -> LvalueType qs ty = tc') ->
-  forall ty', expressionType P G S e ty' -> ty' = ty.
+  forall ty', expressionType P G S e ty' -> ty = ty'.
 Proof.
   intros ? Hunique; inversion 1;
   match goal with
@@ -1084,6 +1084,33 @@ Proof.
   end.
 Qed.
 
+Definition isBinaryArithmetic_fun ty1 aop ty2 : bool :=
+  match aop with
+  | Mul  => andb (isArithmetic_fun ty1) (isArithmetic_fun ty2)
+  | Div  => andb (isArithmetic_fun ty1) (isArithmetic_fun ty2)
+  | Mod  => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  | Add  => andb (isArithmetic_fun ty1) (isArithmetic_fun ty2)
+  | Sub  => andb (isArithmetic_fun ty1) (isArithmetic_fun ty2)
+  | Shl  => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  | Shr  => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  | Band => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  | Xor  => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  | Bor  => andb (isInteger_fun    ty1) (isInteger_fun    ty2)
+  end.
+
+Lemma isBinaryArithmetic_fun_correct ty1 aop ty2 : boolSpec (isBinaryArithmetic_fun ty1 aop ty2)
+                                                            (isBinaryArithmetic     ty1 aop ty2).
+Proof.
+  do 3 unfold_goal.
+  repeat match goal with
+  | [|- isArithmetic_fun ?t = ?o -> _] => is_var o; case_fun (isArithmetic_fun_correct t)
+  | [|- isInteger_fun    ?t = ?o -> _] => is_var o; case_fun (isInteger_fun_correct    t)
+  | _ => context_destruct
+  end;
+  solve [ constructor; assumption
+        | inversion 1; isAssignable_neg_tac].
+Qed.
+
 Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCategory :=
   match e with
   | Var id =>
@@ -1162,6 +1189,13 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
             else None
       | _, _ => None
       end
+  | Binary e1 (Arithmetic Mul) e2 =>
+      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      | Some ty1, Some ty2 => if isBinaryArithmetic_fun ty1 Mul ty2
+                                then option_map ExpressionType (isUsualArithmetic_find P ty1 ty2)
+                                else None
+      | _       , _        => None
+      end
   | _ => None 
   end
 with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
@@ -1176,6 +1210,9 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
   | _                , _                  => false
   end.
 
+Ltac notSame x y :=
+  try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
+
 Fixpoint eType_find_correct P G S e {struct e}:
   Disjoint G S ->
   match eType_find P G S e with
@@ -1187,10 +1224,9 @@ with eType_arguments_find_correct P G S l p {struct l}:
   boolSpec (eType_arguments_find P G S l p) (eType_arguments P G S l p).
 Proof.
   intros Hdisjoint.
-  destruct e; simpl.
-  Focus 3.
-  repeat
-  match goal with
+  destruct e; unfold eType_find; fold eType_find.
+  Focus 2.
+  repeat match goal with
   | [|- lookup_id ?E ?id = ?o -> _] =>
       case_fun (lookup_id_correct E id)
   | [|- eType_find P G S ?e = ?o -> _] =>
@@ -1261,11 +1297,18 @@ Proof.
   | [|- isReal_fun ?t           = ?o -> _] => is_var o; case_fun (isReal_fun_correct t)
   | [|- isPointer_fun ?t           = ?o -> _] => is_var o; case_fun (isPointer_fun_correct t)
   | [|- isModifiable_fun ?qs ?ty           = ?o -> _] => is_var o; case_fun (isModifiable_fun_correct qs ty)
+  | [|- isBinaryArithmetic_fun ?ty1 ?aop ?ty2 = ?o -> _] => is_var o; case_fun (isBinaryArithmetic_fun_correct ty1 aop ty2)
   | [|- isPromotion_find P ?t         = ?o -> _] =>
       is_var o;
       let Heq := fresh in
       let H := fresh in
       set (isPromotion_find_correct P t) as H;
+      intros Heq; rewrite Heq in H; destruct o
+  | [|- isUsualArithmetic_find P ?t1 ?t2 = ?o -> _] =>
+      is_var o;
+      let Heq := fresh in
+      let H := fresh in
+      set (isUsualArithmetic_find_correct P t1 t2) as H;
       intros Heq; rewrite Heq in H; destruct o
   | [|- lvalueConversion_find ?t         = ?o -> _] =>
       is_var o;
@@ -1278,14 +1321,29 @@ Proof.
   | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
   | [|- eType P G S _ _] => econstructor (solve [eassumption|reflexivity])
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ ?t1 = _
+    , H1  : expressionType P G S ?e ?t1
+    , H2  : expressionType P G S ?e ?t2         |- _ ] =>
+      notSame t1 t2;
+      let Heq := fresh in
+      assert (t1 = t2) as Heq by (eapply expressionType_unique_lvalue_inj; eauto);
+      try (congruence || (try injection Heq; intros); subst)
+  | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType ?t1 = _
+    , H1 : expressionType P G S ?e (pointerConvert ?t1)
+    , H2 : expressionType P G S ?e ?t2         |- _ ] =>
+      is_var t2;
+      let Heq := fresh in
+      assert (pointerConvert t1 = t2) as Heq by (eapply (expressionType_unique_expression_inj (eType_unique_instance Hunique)); eauto);
+      try (congruence || (try injection Heq; intros); subst)
   | [ _  : expressionType P G S ?e ?t1
     , _  : expressionType P G S ?e ?t2         |- _ ] =>
-      notHyp (t1 = t2); notHyp (t2 = t1);
+      notSame t1 t2;
       let Heq := fresh in
       assert (t1 = t2) as Heq by (eapply expressionType_unique_expression_inj; eauto);
-      try (congruence || injection Heq; intros; subst)
+      try (congruence || (try injection Heq; intros); subst)
   | [H : isPromotion P ?t1 ?t2 |- _ ] => notHyp (isPromotion_find P t1 = Some t2); set (isPromotion_find_unique P t1 t2 H); try congruence
   | [H : lvalueConversion ?t1 ?t2 |- _ ] => notHyp (lvalueConversion_find t1 = Some t2); set (lvalueConversion_find_unique t1 t2 H); try congruence
+  | [H : isUsualArithmetic P ?t1 ?t2 ?t3 |- _ ] => notHyp (isUsualArithmetic_find P t1 t2 = Some t3); set (isUsualArithmetic_find_unique H); try congruence
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _   = _, H : eType P G S ?e (ExpressionType _) |- _] => discriminate (Hunique _ H)
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (LvalueType   _ _) |- _] => discriminate (Hunique _ H)
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _ = _, H : eType P G S ?e (LvalueType _ ?t)  |- _] =>
@@ -1293,10 +1351,9 @@ Proof.
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (ExpressionType ?t) |- _] =>
       discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
   | [|- forall _, eType P G S (Binary _ Comma _) _ -> _ = _] => inversion_clear 1; now auto
-  | [|- forall _, neg (eType P G S (Binary ?e1 Comma ?e2) _)] =>
-      set (expressionType_neg P G S e1);
-      set (expressionType_neg P G S e2);
-      inversion_clear 1; now firstorder
+  | [|- forall _, eType P G S (Binary _ (Arithmetic Mul) _) _ -> _ = _] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (Binary _ Comma _) _)] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (Binary _ (Arithmetic Mul) _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
@@ -1326,9 +1383,26 @@ Proof.
   | [H : isAssignable P G S (pointerConvert _) _ |- False] => inversion_clear H
   | _ => boolSpec_simpl
   end.
-  inversion H12.
-  subst.
-  Focus 2.
+  Focus 4.
+
+  match goal with
+  end.
+
+
+
+      
+
+
+  match goal with
+
+  end.
+
+      assert (t1 = t2) as Heq by (eapply expressionType_unique_expression_inj; eauto);
+  match goal with
+  | _ => 
+  | _ => idtac
+  end.
+  
 Qed.
 
 (* defns JsType *)
