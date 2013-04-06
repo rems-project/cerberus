@@ -999,7 +999,7 @@ Definition isAssignable_fun ty1 ty2 is_null2 : bool :=
                                            (isArithmetic_fun ty2)
   end.
 
-Lemma isAssignable_fun_correct_pos P G S ty1 e2 ty2 :
+Lemma isAssignable_fun_correct_pos {P} {G} {S} {ty1} {e2} {ty2} :
   expressionType P G S e2 ty2 ->
   isAssignable_fun ty1 ty2 (isNullPointerConstant_fun e2) = true ->
   isAssignable P G S ty1 e2.
@@ -1153,6 +1153,15 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
                                                  else None
       | _                                   => None
       end
+  | Assign e1 e2 =>
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      | Some (LvalueType qs1 ty1), Some ty2 =>
+          let ty := pointerConvert ty1 in
+          if andb (isModifiable_fun qs1 ty1) (isAssignable_fun ty ty2 (isNullPointerConstant_fun e2))
+            then Some (ExpressionType ty)
+            else None
+      | _, _ => None
+      end
   | _ => None 
   end
 with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
@@ -1179,7 +1188,7 @@ with eType_arguments_find_correct P G S l p {struct l}:
 Proof.
   intros Hdisjoint.
   destruct e; simpl.
-  Focus 7.
+  Focus 3.
   repeat
   match goal with
   | [|- lookup_id ?E ?id = ?o -> _] =>
@@ -1216,6 +1225,15 @@ Proof.
       match type of e with ?t => pull_out t e end
   | [|- (?e || _) = _ -> _] =>
       match type of e with ?t => pull_out t e end
+  | [|- isAssignable_fun _ _ _ = ?o -> _] =>
+      is_var o; destruct o
+  | [H : expressionType P G S _ ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = true -> _] =>
+      let Heq := fresh in
+      intros Heq; set (isAssignable_fun_correct_pos H Heq)
+  | [ Hunique : forall _, eType P G S ?e2 _ -> _ = _
+    , H : expressionType P G S ?e2 ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = false -> _] =>
+      let Heq := fresh in
+      intros Heq; set (isAssignable_fun_correct_neg H (eType_unique_instance Hunique) Heq)
   | [|- expressionType_find ?t = _ -> _] =>
       is_var t; destruct t
   | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (ExpressionType ?t) = ?o -> _] =>
@@ -1259,7 +1277,7 @@ Proof.
   | _ => context_destruct
   | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
-  | [|- eType P G S _ _] => econstructor (eassumption)
+  | [|- eType P G S _ _] => econstructor (solve [eassumption|reflexivity])
   | [ _  : expressionType P G S ?e ?t1
     , _  : expressionType P G S ?e ?t2         |- _ ] =>
       notHyp (t1 = t2); notHyp (t2 = t1);
@@ -1281,6 +1299,7 @@ Proof.
       inversion_clear 1; now firstorder
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [Hfalse : forall _, neg (expressionType P G S ?e _), H : expressionType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [ Hfalse : forall _ : type, neg (isPromotion P ?t _)
@@ -1289,6 +1308,7 @@ Proof.
   | [|- forall _, eType P G S (Unary _ _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Var _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Call _ _) _ -> _ = _] => inversion_clear 1
+  | [|- forall _, eType P G S (Assign _ _) _ -> _ = _] => inversion_clear 1
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] =>
       now my_auto
   | [ L1 : Lookup ?G ?id _
@@ -1303,14 +1323,12 @@ Proof.
   | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
   | [H : isComplete Void |- _ ] => inversion H
   | [H : isObject (Function _ _) |- _ ] => inversion H
+  | [H : isAssignable P G S (pointerConvert _) _ |- False] => inversion_clear H
   | _ => boolSpec_simpl
   end.
-
-  Focus 8.
-  match goal with
-  | [H : lvalueConversion ?t1 ?t2 |- _ ] => notHyp (lvalueConversion_find t1 = Some t2); set (lvalueConversion_find_unique t1 t2 H); try congruence
-  end.
-  discriminate.
+  inversion H12.
+  subst.
+  Focus 2.
 Qed.
 
 (* defns JsType *)
