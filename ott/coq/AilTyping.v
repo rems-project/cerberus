@@ -1172,11 +1172,14 @@ Fixpoint eType_find_correct P G S e {struct e}:
   match eType_find P G S e with
   | Some tc => eType P G S e tc * (forall tc', eType P G S e tc' -> tc = tc')
   | None    => forall tc, neg (eType P G S e tc)
-  end.
+  end
+with eType_arguments_find_correct P G S l p {struct l}:
+  Disjoint G S ->
+  boolSpec (eType_arguments_find P G S l p) (eType_arguments P G S l p).
 Proof.
   intros Hdisjoint.
   destruct e; simpl.
-  Focus 1.
+  Focus 7.
   repeat
   match goal with
   | [|- lookup_id ?E ?id = ?o -> _] =>
@@ -1222,6 +1225,8 @@ Proof.
       set (expressionType_find_correct_pos H Heq)
   | [|- expressionType_find (LvalueType ?q ?t) = ?o -> _] =>
       is_var o; destruct o
+  | [|- eType_arguments_find P G S ?l ?p = ?o -> _] =>
+      is_var o; case_fun (eType_arguments_find_correct P G S l p Hdisjoint)
   | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = Some _ -> _] =>
       let Heq := fresh in
       intros Heq;
@@ -1275,6 +1280,7 @@ Proof.
       set (expressionType_neg P G S e2);
       inversion_clear 1; now firstorder
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [Hfalse : forall _, neg (expressionType P G S ?e _), H : expressionType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [ Hfalse : forall _ : type, neg (isPromotion P ?t _)
@@ -1282,6 +1288,7 @@ Proof.
     , H : isPromotion P ?t1 ?t2 |- _ ] => exfalso; eapply Hfalse; congruence
   | [|- forall _, eType P G S (Unary _ _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Var _) _ -> _ = _] => inversion_clear 1
+  | [|- forall _, eType P G S (Call _ _) _ -> _ = _] => inversion_clear 1
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] =>
       now my_auto
   | [ L1 : Lookup ?G ?id _
@@ -1299,6 +1306,7 @@ Proof.
   | _ => boolSpec_simpl
   end.
 
+  Focus 8.
   match goal with
   | [H : lvalueConversion ?t1 ?t2 |- _ ] => notHyp (lvalueConversion_find t1 = Some t2); set (lvalueConversion_find_unique t1 t2 H); try congruence
   end.
