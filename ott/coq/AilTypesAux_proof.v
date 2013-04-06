@@ -1121,7 +1121,7 @@ Proof.
   end.
 Qed.
 
-Lemma isIntegerPromotion_find_unique P it1 it2 : isIntegerPromotion P it1 it2 -> it2 = isIntegerPromotion_find P it1.
+Lemma isIntegerPromotion_find_unique P it1 it2 : isIntegerPromotion P it1 it2 -> isIntegerPromotion_find P it1 = it2.
 Proof.
   unfold_goal.
   set (leIntegerRank_fun_correct      P it1 (Signed Int)).
@@ -1333,9 +1333,9 @@ Proof.
       let Heq2 := fresh in
       let Heq3 := fresh in
       set (isIntegerPromotion_find_unique P it1 it1' H1) as Heq1;
-      rewrite <- Heq1;
+      rewrite Heq1;
       set (isIntegerPromotion_find_unique P it2 it2' H2) as Heq2;
-      rewrite <- Heq2;
+      rewrite Heq2;
       set (isUsualArithmeticInteger_find_unique P it1' it2' it3 H3) as Heq3;
       rewrite Heq3
   end.
@@ -1420,7 +1420,7 @@ Proof.
   my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
 Qed.
 
-Lemma isReal_correct t : boolSpec (isReal_fun t) (isReal t).
+Lemma isReal_fun_correct t : boolSpec (isReal_fun t) (isReal t).
 Proof.
   do 2 unfold_goal.
   generalize (isInteger_fun_correct t).

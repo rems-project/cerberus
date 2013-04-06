@@ -142,7 +142,7 @@ Proof.
   constructor; apply isIntegerPromotion_find_correct.
 Qed.
 
-Lemma isPromotion_find_unique P t1 t2 : isPromotion P t1 t2 -> Some t2 = isPromotion_find P t1.
+Lemma isPromotion_find_unique P t1 t2 : isPromotion P t1 t2 -> isPromotion_find P t1 = Some t2.
 Proof.
   unfold_goal.
   inversion 1.
@@ -345,7 +345,6 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      lvalueConversion ty' ty ->
      isPointer ty' ->
      isModifiable qs' ty' ->
-     isComplete ty' ->
      eType P G S (Unary PostfixIncr e) (ExpressionType ty)
  | ETypePostfixIncrementReal : forall (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type) (qs':qualifiers) (ty':type),
      eType P G S e (LvalueType qs' ty') ->
@@ -358,7 +357,6 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      lvalueConversion ty' ty ->
      isPointer ty' ->
      isModifiable qs' ty' ->
-     isComplete ty' ->
      eType P G S (Unary PostfixDecr e) (ExpressionType ty)
  | ETypePostfixDecrementReal : forall (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type) (qs':qualifiers) (ty':type),
      eType P G S e (LvalueType qs' ty') ->
@@ -1101,8 +1099,52 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
      end
   | Unary Address e =>
       match eType_find P G S e with
-      | Some (LvalueType qs ty) => Some (ExpressionType (Pointer qs ty))
-      | _                       => None
+      | Some (LvalueType qs ty)                => Some (ExpressionType (Pointer qs ty))
+      | Some (ExpressionType (Function ty ps)) => Some (ExpressionType (Pointer nil (Function ty ps)))
+      | _                                      => None
+      end
+  | Unary Plus e
+  | Unary Minus e =>
+      eType_find P G S e  >>=
+      expressionType_find >>= (fun ty =>
+        if isArithmetic_fun ty then
+          option_map ExpressionType (isPromotion_find P ty)
+        else
+          None
+      )
+  | Unary Bnot e =>
+      eType_find P G S e  >>=
+      expressionType_find >>= (fun ty =>
+        if isInteger_fun ty then
+          option_map ExpressionType (isPromotion_find P ty)
+        else
+          None
+      )
+  | Unary Indirection e =>
+      eType_find P G S e >>=
+      expressionType_find >>= (fun ty =>
+        match ty with
+        | Pointer nil (Function t p) => Some (ExpressionType (Pointer nil (Function t p)))
+        | Pointer qs  ty             => if andb (isComplete_fun ty) (isObject_fun ty)
+                                          then Some (LvalueType qs ty)
+                                          else None
+        | _                          => None
+        end
+      )
+  | Unary PostfixIncr e
+  | Unary PostfixDecr e =>
+      match eType_find P G S e with
+      | Some (LvalueType qs' ty') =>
+          match lvalueConversion_find ty' with
+          | Some ty =>
+              if andb (isModifiable_fun qs' ty')
+                      (orb (isReal_fun ty') (isPointer_fun ty'))
+                then Some (ExpressionType ty)
+                else None
+          | None    => None
+          end
+      | Some _                    => None
+      | None                      => None
       end
   | Call e ls =>
       match eType_find P G S e >>= expressionType_find with
@@ -1122,7 +1164,7 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
                          (eType_arguments_find P G S l p)
       | None     => false
       end
-  | _                 , _               => false
+  | _                , _                  => false
   end.
 
 Fixpoint eType_find_correct P G S e {struct e}:
@@ -1147,12 +1189,30 @@ Proof.
       end
   | [|- context[option_map] ] =>
       unfold option_map
-  | [|- (eType_find P G S ?e >>= expressionType_find) = _ -> _] =>
-      pull_out (option typeCategory) (eType_find P G S e)
   | [|- (Some _ >>= _) = _ -> _ ] =>
       unfold option_bind at 1
+  | [|- Some _ = ?o -> _ ] =>
+      is_var o; intros ?; subst o
+  | [|- None = ?o -> _ ] =>
+      is_var o; intros ?; subst o
+  | [|- true = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_true_l); (try rewrite orb_true_l)
+  | [|- false = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_false_l); (try rewrite orb_false_l)
   | [|- (None >>= _) = ?o -> _] =>
       is_var o; unfold option_bind at 1; intros ?; subst o
+  | [|- (None >>= _) = ?o -> _] =>
+      unfold option_bind at 1
+  | [|- ?e >>= _ = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- (true && _) = _ -> _] => rewrite andb_true_l
+  | [|- (false && _) = _ -> _] => unfold andb at 1
+  | [|- (true || _) = _ -> _] => unfold orb at 1
+  | [|- (false || _) = _ -> _] => rewrite orb_false_l
+  | [|- (?e && _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- (?e || _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
   | [|- expressionType_find ?t = _ -> _] =>
       is_var t; destruct t
   | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (ExpressionType ?t) = ?o -> _] =>
@@ -1167,43 +1227,82 @@ Proof.
       intros Heq;
       set     (expressionType_find_eq_lvalue_lift H Heq);
       rewrite (expressionType_find_eq_lvalue        Heq) in *
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = None -> _] =>
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType ?q ?t = _
+    , H : eType P G S ?e (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = None -> _] =>
       let Heq := fresh in
-      intros Heq;
-      inversion_clear 1;
-      eapply (expressionType_find_correct_neg H _ Heq);
-      eassumption
+      intros Heq; set (expressionType_find_correct_neg H Hunique Heq)
+  | [|- isArithmetic_fun ?t           = ?o -> _] => is_var o; case_fun (isArithmetic_fun_correct t)
+  | [|- isComplete_fun ?t           = ?o -> _] => is_var o; case_fun (isComplete_fun_correct t)
+  | [|- isObject_fun ?t           = ?o -> _] => is_var o; case_fun (isObject_fun_correct t)
+  | [|- isInteger_fun ?t           = ?o -> _] => is_var o; case_fun (isInteger_fun_correct t)
+  | [|- isReal_fun ?t           = ?o -> _] => is_var o; case_fun (isReal_fun_correct t)
+  | [|- isPointer_fun ?t           = ?o -> _] => is_var o; case_fun (isPointer_fun_correct t)
+  | [|- isModifiable_fun ?qs ?ty           = ?o -> _] => is_var o; case_fun (isModifiable_fun_correct qs ty)
+  | [|- isPromotion_find P ?t         = ?o -> _] =>
+      is_var o;
+      let Heq := fresh in
+      let H := fresh in
+      set (isPromotion_find_correct P t) as H;
+      intros Heq; rewrite Heq in H; destruct o
+  | [|- lvalueConversion_find ?t         = ?o -> _] =>
+      is_var o;
+      let Heq := fresh in
+      let H := fresh in
+      set (lvalueConversion_find_correct t) as H;
+      unfold optionSpec in H;
+      intros Heq; rewrite Heq in H; destruct o
   | _ => context_destruct
+  | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
-  | [|- eType P G S _ (ExpressionType _)] => econstructor (eassumption)
+  | [|- eType P G S _ _] => econstructor (eassumption)
+  | [ _  : expressionType P G S ?e ?t1
+    , _  : expressionType P G S ?e ?t2         |- _ ] =>
+      notHyp (t1 = t2); notHyp (t2 = t1);
+      let Heq := fresh in
+      assert (t1 = t2) as Heq by (eapply expressionType_unique_expression_inj; eauto);
+      try (congruence || injection Heq; intros; subst)
+  | [H : isPromotion P ?t1 ?t2 |- _ ] => notHyp (isPromotion_find P t1 = Some t2); set (isPromotion_find_unique P t1 t2 H); try congruence
+  | [H : lvalueConversion ?t1 ?t2 |- _ ] => notHyp (lvalueConversion_find t1 = Some t2); set (lvalueConversion_find_unique t1 t2 H); try congruence
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _   = _, H : eType P G S ?e (ExpressionType _) |- _] => discriminate (Hunique _ H)
+  | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (LvalueType   _ _) |- _] => discriminate (Hunique _ H)
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _ = _, H : eType P G S ?e (LvalueType _ ?t)  |- _] =>
+      discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
+  | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (ExpressionType ?t) |- _] =>
+      discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
   | [|- forall _, eType P G S (Binary _ Comma _) _ -> _ = _] => inversion_clear 1; now auto
   | [|- forall _, neg (eType P G S (Binary ?e1 Comma ?e2) _)] =>
       set (expressionType_neg P G S e1);
       set (expressionType_neg P G S e2);
       inversion_clear 1; now firstorder
-  | [|- forall _, eType P G S (Unary Address _) _ -> _ = _] => inversion_clear 1
-  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _   = _, H : eType P G S ?e (ExpressionType _) |- _] => discriminate (Hunique _ H)
-  | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (LvalueType   _ _) |- _] => discriminate (Hunique _ H)
-  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ _ = _, H : eType P G S ?e (LvalueType _ ?t)  |- context[?t]] =>
-      einjection (Hunique _ H); congruence
-  | [|- forall _, neg (eType P G S (Unary Address _) _)] => inversion 1
+  | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
-  end.
-  Focus 5.
-  subst.
-  inversion 1; subst.
-
-
-  match goal with
+  | [Hfalse : forall _, neg (expressionType P G S ?e _), H : expressionType P G S ?e _ |- False] => exact (Hfalse _ H)
+  | [ Hfalse : forall _ : type, neg (isPromotion P ?t _)
+    , _ : expressionType P G S ?e ?t1
+    , H : isPromotion P ?t1 ?t2 |- _ ] => exfalso; eapply Hfalse; congruence
+  | [|- forall _, eType P G S (Unary _ _) _ -> _ = _] => inversion_clear 1
+  | [|- forall _, eType P G S (Var _) _ -> _ = _] => inversion_clear 1
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] =>
       now my_auto
   | [ L1 : Lookup ?G ?id _
-    , L2 : Lookup ?S ?id _ |- forall _, neg (eType _ ?G ?S (Var ?id) _)] =>
+    , L2 : Lookup ?S ?id _ |- _ ] =>
       destruct (Hdisjoint id _ _ L1 L2)
+  | [ H  : lookup_id ?E ?id = Some ?b1
+    , L1 : Lookup ?E ?id ?b1
+    , L2 : Lookup ?E ?id _ |- _ = _] => set (lookup_id_unique L2); congruence
   | [_ : forall _, neg (Lookup ?G ?id _) 
     ,_ : forall _, neg (Lookup ?S ?id _) |- forall _, neg (eType _ ?G ?S (Var ?id) _)] =>
       inversion 1; now firstorder
+  | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
+  | [H : isComplete Void |- _ ] => inversion H
+  | [H : isObject (Function _ _) |- _ ] => inversion H
+  | _ => boolSpec_simpl
   end.
+
+  match goal with
+  | [H : lvalueConversion ?t1 ?t2 |- _ ] => notHyp (lvalueConversion_find t1 = Some t2); set (lvalueConversion_find_unique t1 t2 H); try congruence
+  end.
+  discriminate.
 Qed.
 
 (* defns JsType *)

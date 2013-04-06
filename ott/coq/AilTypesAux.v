@@ -9,13 +9,13 @@ Require Import Implementation.
 (** definitions *)
 
 (** funs TypeTransformation *)
-Fixpoint pointerConvert (x1:type) : type:=
+Definition pointerConvert (x1:type) : type:=
   match x1 with
   | Void => Void
   | (Basic bt) => (Basic bt)
   |  (Pointer qs ty)  => (Pointer qs ty)
   |  (Array ty n)  => (Pointer  nil  ty)
-  |  (Function ty qs_ty_list)  => (Pointer  nil  (Function ty qs_ty_list))
+  |  (Function ty qs)  => (Pointer  nil  (Function ty qs))
 end.
 
 (** definitions *)
