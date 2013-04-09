@@ -1125,7 +1125,6 @@ Proof.
   do 2 unfold_goal;
   repeat match goal with
   | [|- isComplete_fun ?t = _ -> _] => case_fun (isComplete_fun_correct t)
-  | [|- neg _] => intros [? [? [? ?]]]
   | [|- _ * _] => split
   | [|- {_ : _ & _}] => eexists; eexists; split; [reflexivity | assumption]
   | [|- neg (isPointer ?t) + _] =>
@@ -1133,12 +1132,11 @@ Proof.
       | Pointer _ _ => right
       | _           => left; inversion 1
       end
-  | [|- neg (isPointer (Pointer _ _)) + _] => right
   | _ => context_destruct
   end; congruence.
 Qed.
 
-Definition arePointersToCompleteAndCompatibleObjects_fun t1 t2 : bool :=
+Definition arePointersToCompatibleCompleteObjects_fun t1 t2 : bool :=
   match t1, t2 with
   | Pointer _ ty1, Pointer _ ty2 =>
       andb (andb (isComplete_fun ty1)
@@ -1147,8 +1145,8 @@ Definition arePointersToCompleteAndCompatibleObjects_fun t1 t2 : bool :=
   | _, _ => false
   end.  
 
-Lemma arePointersToCompleteAndCompatibleObjects_fun_correct t1 t2 :
-  if arePointersToCompleteAndCompatibleObjects_fun t1 t2
+Lemma arePointersToCompatibleCompleteObjects_fun_correct t1 t2 :
+  if arePointersToCompatibleCompleteObjects_fun t1 t2
     then {qs1 : qualifiers & {ty1 : type &
          {qs2 : qualifiers & {ty2 : type &
            (t1 = Pointer qs1 ty1) * (t2 = Pointer qs2 ty2) *
@@ -1165,7 +1163,6 @@ Proof.
   repeat match goal with
   | [|- isComplete_fun ?t = _ -> _] => case_fun (isComplete_fun_correct t)
   | [|- isCompatible_fun ?t1 ?t2 = _ -> _] => case_fun (isCompatible_fun_correct t1 t2)
-  | [|- neg _] => intros [? [? [? [? [[[? ?] ?] ?]]]]]
   | [|- _ * _] => split
   | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists;
                         split; [split; [split; [split; reflexivity
@@ -1182,7 +1179,6 @@ Proof.
       | Pointer _ _ => fail 1
       | _           => left; left; left; right; inversion 1
       end
-  | [|- neg (isPointer (Pointer _ _)) + _] => right
   | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
   | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
   | [|- true = ?o -> _ ] =>
@@ -1196,7 +1192,165 @@ Proof.
   | [_ : neg (isComplete t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
   | [_ : neg (isComplete t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
   | [_ : neg (isCompatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | _ => context_destruct
+  end.
+Qed.
+
+Definition arePointersToCompatibleObjects_fun t1 t2 : bool :=
+  match t1, t2 with
+  | Pointer _ ty1, Pointer _ ty2 =>
+      andb (andb (isObject_fun ty1) (isObject_fun ty2))
+           (isCompatible_fun ty1 ty2)
+  | _, _ => false
+  end.  
+
+Lemma arePointersToCompatibleObjects_fun_correct t1 t2 :
+  if arePointersToCompatibleObjects_fun t1 t2
+    then {qs1 : qualifiers & {ty1 : type &
+         {qs2 : qualifiers & {ty2 : type &
+           (t1 = Pointer qs1 ty1) * (t2 = Pointer qs2 ty2) *
+           isObject ty1           * isObject ty2           *
+           isCompatible ty1 ty2}}}}
+    else neg (isPointer t1) + neg (isPointer t2)
+         + (forall qs1 ty1, t1 = Pointer qs1 ty1 -> neg (isObject ty1))
+         + (forall qs2 ty2, t2 = Pointer qs2 ty2 -> neg (isObject ty2))
+         + (forall qs1 qs2 ty1 ty2,
+              t1 = Pointer qs1 ty1 ->
+              t2 = Pointer qs2 ty2 -> neg (isCompatible ty1 ty2)).
+Proof.
+  do 2 unfold_goal;
+  repeat match goal with
+  | [|- isObject_fun ?t = _ -> _] => case_fun (isObject_fun_correct t)
+  | [|- isCompatible_fun ?t1 ?t2 = _ -> _] => case_fun (isCompatible_fun_correct t1 t2)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists;
+                        split; [split; [split; [split; reflexivity
+                                               | eassumption]
+                                       | eassumption]
+                               | eassumption]
+  | [|- neg (isPointer ?t) + _ + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; left; inversion 1
+      end
+  | [|- _ + neg (isPointer ?t) + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; right; inversion 1
+      end
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [|- true = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_true_l); (try rewrite orb_true_l)
+  | [|- false = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_false_l); (try rewrite orb_false_l)
+  | [|- (true && _) = _ -> _] => rewrite andb_true_l
+  | [|- (false && _) = _ -> _] => unfold andb at 1
+  | [|- (?e && _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [_ : neg (isObject t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
+  | [_ : neg (isObject t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
   | [_ : neg (isCompatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | _ => context_destruct
+  end.
+Qed.
+
+Definition isPointerToObject_fun t : bool :=
+  match t with
+  | Pointer _ ty => isObject_fun ty
+  | _ => false
+  end.
+
+Lemma isPointerToObject_fun_correct t :
+  if isPointerToObject_fun t
+    then {qs : qualifiers & {ty : type & (t = Pointer qs ty) * isObject ty}}
+    else neg (isPointer t) + forall qs ty, t = Pointer qs ty -> neg (isObject ty).
+Proof.
+  do 2 unfold_goal;
+  repeat match goal with
+  | [|- isObject_fun ?t = _ -> _] => case_fun (isObject_fun_correct t)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; split; [reflexivity | assumption]
+  | [|- neg (isPointer ?t) + _] =>
+      match t with
+      | Pointer _ _ => right
+      | _           => left; inversion 1
+      end
+  | _ => context_destruct
+  end; congruence.
+Qed.
+
+Definition isPointerToVoid_fun t : bool :=
+  match t with
+  | Pointer _ Void => true
+  | _ => false
+  end.
+
+Lemma isPointerToVoid_fun_correct t :
+  if isPointerToVoid_fun t
+    then {qs : qualifiers & {ty : type & (t = Pointer qs ty) * isVoid ty}}
+    else neg (isPointer t) + forall qs ty, t = Pointer qs ty -> neg (isVoid ty).
+Proof.
+  do 2 unfold_goal;
+  repeat match goal with
+  | [|- isVoid_fun ?t = _ -> _] => case_fun (isVoid_fun_correct t)
+  | [|- neg _] => intros [? [? [? ?]]]
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; split; [reflexivity | constructor]
+  | [|- neg (isPointer ?t) + _] =>
+      match t with
+      | Pointer _ _ => right; intros; inversion 1
+      | _           => left; inversion 1
+      end
+  | _ => context_destruct
+  end; congruence.
+Qed.
+
+Definition arePointersToCompatibleTypes_fun t1 t2 : bool :=
+  match t1, t2 with
+  | Pointer _ ty1, Pointer _ ty2 => isCompatible_fun ty1 ty2
+  | _, _ => false
+  end.  
+
+Lemma arePointersToCompatibleTypes_fun_correct t1 t2 :
+  if arePointersToCompatibleTypes_fun t1 t2
+    then {qs1 : qualifiers & {ty1 : type &
+         {qs2 : qualifiers & {ty2 : type &
+           (t1 = Pointer qs1 ty1) * (t2 = Pointer qs2 ty2) *
+           isCompatible ty1 ty2}}}}
+    else neg (isPointer t1) + neg (isPointer t2)
+         + (forall qs1 qs2 ty1 ty2,
+              t1 = Pointer qs1 ty1 ->
+              t2 = Pointer qs2 ty2 -> neg (isCompatible ty1 ty2)).
+Proof.
+  do 2 unfold_goal;
+  repeat match goal with
+  | [|- isCompatible_fun ?t1 ?t2 = _ -> _] => case_fun (isCompatible_fun_correct t1 t2)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists;
+                        split; [split; reflexivity
+                               | eassumption]
+  | [|- neg (isPointer ?t) + _ + _ ] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; inversion 1
+      end
+  | [|- _ + neg (isPointer ?t) + _ ] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; right; inversion 1
+      end
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [|- true = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_true_l); (try rewrite orb_true_l)
+  | [|- false = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_false_l); (try rewrite orb_false_l)
+  | [|- (true && _) = _ -> _] => rewrite andb_true_l
+  | [|- (false && _) = _ -> _] => unfold andb at 1
+  | [|- (?e && _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [_ : neg (isCompatible t1 t2) |- _ + _ + _ ] => right; intros; congruence
   | _ => context_destruct
   end.
 Qed.
@@ -1312,7 +1466,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       end
   | Binary e1 (Arithmetic (Sub  as aop)) e2 =>
       match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
-      | Some ty1, Some ty2 => if arePointersToCompleteAndCompatibleObjects_fun ty1 ty2 then
+      | Some ty1, Some ty2 => if arePointersToCompatibleCompleteObjects_fun ty1 ty2 then
                                 Some (ExpressionType (ptrdiff_t P))
                               else if andb (isPointerToCompleteObject_fun ty1) (isInteger_fun ty2) then
                                 Some (ExpressionType ty1)
@@ -1327,6 +1481,36 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | Some ty1, Some ty2 => if andb (isScalar_fun ty1) (isScalar_fun ty2)
                                 then Some (ExpressionType (Basic (Integer (Signed Int))))
                                 else None
+      | _       , _        => None
+      end
+  | Binary e1 Lt e2
+  | Binary e1 Gt e2
+  | Binary e1 Le e2
+  | Binary e1 Ge e2 =>
+      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      | Some ty1, Some ty2 => if arePointersToCompatibleObjects_fun ty1 ty2 then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if andb (isReal_fun ty1) (isReal_fun ty2) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else None
+      | _       , _        => None
+      end
+  | Binary e1 Eq e2
+  | Binary e1 Ne e2 =>
+      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      | Some ty1, Some ty2 => if andb (isPointer_fun ty1) (isNullPointerConstant_fun e2) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if andb (isPointer_fun ty2) (isNullPointerConstant_fun e1) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if andb (isPointerToVoid_fun ty1) (isPointerToObject_fun ty2) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if andb (isPointerToVoid_fun ty2) (isPointerToObject_fun ty1) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if arePointersToCompatibleTypes_fun ty1 ty2 then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else if andb (isArithmetic_fun ty1) (isArithmetic_fun ty2) then
+                                Some (ExpressionType (Basic (Integer (Signed Int))))
+                              else None
       | _       , _        => None
       end
   | _ => None 
@@ -1359,8 +1543,12 @@ Proof.
   intros Hdisjoint.
   destruct e; unfold eType_find; fold eType_find.
   Focus 2.
+  destruct bop.
+  Focus 9.
   repeat match goal with
-  | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite Heq in *
+  | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
+  | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
+  | [Heq : Pointer _ Void = Pointer _ ?t |- _] => is_var t; injection Heq; intros; subst
   | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
   | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
   | [H : isBinaryArithmetic Void Add _ |- _] => inversion_clear H
@@ -1460,16 +1648,41 @@ Proof.
   | [|- isInteger_fun ?t           = ?o -> _] => is_var o; case_fun (isInteger_fun_correct t)
   | [|- isReal_fun ?t           = ?o -> _] => is_var o; case_fun (isReal_fun_correct t)
   | [|- isPointer_fun ?t           = ?o -> _] => is_var o; case_fun (isPointer_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e = ?o -> _] => is_var o; case_fun (isNullPointerConstant_fun_correct e)
   | [|- isPointerToCompleteObject_fun ?t           = ?o -> _] =>
       is_var o; case_fun (isPointerToCompleteObject_fun_correct t);
       match goal with
       | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
       | _ => idtac
       end
-  | [|- arePointersToCompleteAndCompatibleObjects_fun ?t1 ?t2           = ?o -> _] =>
-      is_var o; case_fun (arePointersToCompleteAndCompatibleObjects_fun_correct t1 t2);
+  | [|- isPointerToVoid_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToVoid_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => let Hvoid := fresh in destruct H as [? [? [? Hvoid]]]; inversion Hvoid; subst
+      | _ => idtac
+      end
+  | [|- isPointerToObject_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToObject_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleCompleteObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleCompleteObjects_fun_correct t1 t2);
       match goal with
       | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleObjects_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleTypes_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleTypes_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[? ?] ?] ]]]]; subst
       | _ => idtac
       end
   | [|- isModifiable_fun ?qs ?ty           = ?o -> _] => is_var o; case_fun (isModifiable_fun_correct qs ty)
@@ -1530,15 +1743,13 @@ Proof.
       discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (ExpressionType ?t) |- _] =>
       discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
+  | [H : isPointer ?t, _ : expressionType P G S _ ?t |- eType P G S (Binary _ Eq _) _ ] => is_var t; inversion H; subst
+  | [H : isPointer ?t, _ : expressionType P G S _ ?t |- eType P G S (Binary _ Ne _) _ ] => is_var t; inversion H; subst
+  | [H : isPointer (pointerConvert ?t), _ : expressionType P G S _ (pointerConvert ?t) |- eType P G S (Binary _ Eq _) _ ] => is_var t; inversion H; subst
+  | [H : isPointer (pointerConvert ?t), _ : expressionType P G S _ (pointerConvert ?t) |- eType P G S (Binary _ Ne _) _ ] => is_var t; inversion H; subst
   | [|- forall _, eType P G S (Binary _ Comma _) _ -> _ = _] => inversion_clear 1; now auto
-  | [|- forall _, eType P G S (Binary _ (Arithmetic _) _) _ -> _ = _] => inversion 1; subst
-  | [|- forall _, eType P G S (Binary _ And _) _ -> _ = _] => inversion 1; subst
-  | [|- forall _, eType P G S (Binary _ Or _) _ -> _ = _] => inversion 1; subst
-  | [|- forall _, neg (eType P G S (Binary _ Comma _) _)] => inversion 1; subst
-  | [|- forall _, neg (eType P G S (Binary _ (Arithmetic Add) _) _)] => inversion 1; subst
-  | [|- forall _, neg (eType P G S (Binary _ (Arithmetic _) _) _)] => inversion 1; subst
-  | [|- forall _, neg (eType P G S (Binary _ And _) _)] => inversion 1; subst
-  | [|- forall _, neg (eType P G S (Binary _ Or _) _)] => inversion 1; subst
+  | [|- forall _, eType P G S (Binary _ _ _) _ -> _ = _] => inversion 1; subst; try congruence
+  | [|- forall _, neg (eType P G S (Binary _ _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
@@ -1547,8 +1758,9 @@ Proof.
   | [H : _ + _ |- _] => destruct H
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [Hfalse : forall _, neg (expressionType P G S ?e _), H : expressionType P G S ?e _ |- False] => exact (Hfalse _ H)
-  | [ Heq : pointerConvert ?ty = Pointer _ _ , H : forall _ _, pointerConvert ?ty = Pointer _ _ -> neg (isComplete _) |- _ ] => rewrite Heq in H
   | [ H : isComplete ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isComplete _) |- False ] => now eapply (Hfalse qs1 ty1 _ H)
+  | [ H : isObject   ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isObject   _) |- False ] => now eapply (Hfalse qs1 ty1 _ H)
+  | [                       Hfalse : forall _ _, Pointer ?qs1 Void = Pointer _ _ -> neg (isVoid _)     |- False ] => now eapply (Hfalse qs1 Void _ IsVoid)
   | [ Hfalse : forall _ : type, neg (isPromotion P ?t _)
     , _ : expressionType P G S ?e ?t1
     , H : isPromotion P ?t1 ?t2 |- _ ] => exfalso; eapply Hfalse; congruence
@@ -1572,7 +1784,6 @@ Proof.
       inversion 1; now firstorder
   | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
   end.
-
 
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType ?t1 = _
     , H1 : expressionType P G S ?e ?t1
