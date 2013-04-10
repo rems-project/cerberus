@@ -1702,19 +1702,9 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   | Binary e1 Eq e2
   | Binary e1 Ne e2 =>
       match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
-      | Some ty1, Some ty2 => if andb (isPointer_fun ty1) (isNullPointerConstant_fun e2) then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else if andb (isPointer_fun ty2) (isNullPointerConstant_fun e1) then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else if andb (isPointerToVoid_fun ty1) (isPointerToObject_fun ty2) then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else if andb (isPointerToVoid_fun ty2) (isPointerToObject_fun ty1) then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else if arePointersToCompatibleTypes_fun ty1 ty2 then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else if andb (isArithmetic_fun ty1) (isArithmetic_fun ty2) then
-                                Some (ExpressionType (Basic (Integer (Signed Int))))
-                              else None
+      | Some ty1, Some ty2 => if isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2)
+                                then Some (ExpressionType (Basic (Integer (Signed Int))))
+                                else None
       | _       , _        => None
       end
   | _ => None 
@@ -1744,12 +1734,9 @@ Proof.
   intros Hdisjoint.
   destruct e; unfold eType_find; fold eType_find.
   Focus 2.
-
-abstract(
   repeat match goal with
   | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
   | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
-  | [Heq : Pointer _ Void = Pointer _ ?t |- _] => is_var t; injection Heq; intros; subst
   | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
   | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
   | [H : isBinaryArithmetic Void Add _ |- _] => inversion_clear H
@@ -1822,6 +1809,28 @@ abstract(
     , H : expressionType P G S ?e2 ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = false -> _] =>
       let Heq := fresh in
       intros Heq; set (isAssignable_fun_correct_neg H (eType_unique_instance Hunique) Heq)
+  | [|- isEquality_fun _ _ _ _ = ?o -> _ ] => is_var o; destruct o
+  | [ H1 : expressionType P G S ?e1 _
+    , H2 : expressionType P G S ?e2 _
+      |- isEquality_fun _ _ (isNullPointerConstant_fun ?e1) (isNullPointerConstant_fun ?e2) = true -> _] =>
+      let Heq := fresh in
+      let H := fresh in
+      intros Heq;
+      match goal with
+      | [|- context[Eq]] => set (isEquality_fun_correct_pos (inl (eq_refl Eq)) H1 H2 Heq)
+      | [|- context[Ne]] => set (isEquality_fun_correct_pos (inr (eq_refl Ne)) H1 H2 Heq)
+      end
+  | [ Hunique1 : forall _, eType P G S ?e1 _ -> _ = _
+    , Hunique2 : forall _, eType P G S ?e2 _ -> _ = _
+    , H1 : expressionType P G S ?e1 _
+    , H2 : expressionType P G S ?e2 _
+      |- isEquality_fun _ _ (isNullPointerConstant_fun ?e1) (isNullPointerConstant_fun ?e2) = false -> _] =>
+      let Heq := fresh in
+      intros Heq;
+      match goal with
+      | [|- context[Eq]] => set (isEquality_fun_correct_neg (inl (eq_refl Eq)) H1 H2 (eType_unique_instance Hunique1) (eType_unique_instance Hunique2) Heq)
+      | [|- context[Ne]] => set (isEquality_fun_correct_neg (inr (eq_refl Ne)) H1 H2 (eType_unique_instance Hunique1) (eType_unique_instance Hunique2) Heq)
+      end       
   | [|- expressionType_find ?t = _ -> _] =>
       is_var t; destruct t
   | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (ExpressionType ?t) = ?o -> _] =>
@@ -1852,18 +1861,6 @@ abstract(
   | [|- isNullPointerConstant_fun ?e = ?o -> _] => is_var o; case_fun (isNullPointerConstant_fun_correct e)
   | [|- isPointerToCompleteObject_fun ?t           = ?o -> _] =>
       is_var o; case_fun (isPointerToCompleteObject_fun_correct t);
-      match goal with
-      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
-      | _ => idtac
-      end
-  | [|- isPointerToVoid_fun ?t           = ?o -> _] =>
-      is_var o; case_fun (isPointerToVoid_fun_correct t);
-      match goal with
-      | [H : {_ : _ & _} |- _] => let Hvoid := fresh in destruct H as [? [? [? Hvoid]]]; inversion Hvoid; subst
-      | _ => idtac
-      end
-  | [|- isPointerToObject_fun ?t           = ?o -> _] =>
-      is_var o; case_fun (isPointerToObject_fun_correct t);
       match goal with
       | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
       | _ => idtac
@@ -1911,7 +1908,7 @@ abstract(
   | _ => context_destruct
   | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
-  | [|- eType P G S _ _] => econstructor (solve [eassumption|reflexivity])
+  | [|- eType P G S _ _] => assumption || econstructor (solve [eassumption|reflexivity])
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ ?t1 = _
     , H1  : expressionType P G S ?e ?t1
     , H2  : expressionType P G S ?e ?t2         |- _ ] =>
@@ -1984,7 +1981,7 @@ abstract(
     ,_ : forall _, neg (Lookup ?S ?id _) |- forall _, neg (eType _ ?G ?S (Var ?id) _)] =>
       inversion 1; now firstorder
   | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
-  end).
+  end.
 
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType ?t1 = _
     , H1 : expressionType P G S ?e ?t1
