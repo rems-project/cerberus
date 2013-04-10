@@ -1713,6 +1713,18 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
               (negb (isIncomplete_fun ty))
         then Some (ExpressionType (size_t P))
         else None
+  | Cast _ Void e =>
+      match eType_find P G S e >>= expressionType_find with
+      | Some _ => Some (ExpressionType Void)
+      | None   => None
+      end
+  | Cast _ ty e =>
+      match eType_find P G S e >>= expressionType_find with
+      | Some ty' => if andb (isScalar_fun ty') (isScalar_fun ty)
+                      then Some (ExpressionType ty)
+                      else None
+      | None     => None
+      end
   | _ => None
   end
 with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
@@ -1739,7 +1751,8 @@ with eType_arguments_find_correct P G S l p {struct l}:
 Proof.
   intros Hdisjoint.
   destruct e; unfold eType_find; fold eType_find.
-  Focus 10.
+  Focus 6.
+
   repeat match goal with
   | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
   | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
@@ -1959,12 +1972,14 @@ Proof.
   | [|- forall _, eType P G S (Binary _ _ _) _ -> _ = _] => inversion 1; subst; try congruence
   | [|- forall _, eType P G S (SizeOf _ _) _ -> _ = _] => inversion 1; subst; try congruence
   | [|- forall _, eType P G S (AlignOf _ _) _ -> _ = _] => inversion 1; subst; try congruence
+  | [|- forall _, eType P G S (Cast _ _ _) _ -> _ = _] => inversion 1; subst; try congruence
   | [|- forall _, neg (eType P G S (Binary _ _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (AlignOf _ _) _)] => inversion 1; subst; contradiction
   | [|- forall _, neg (eType P G S (SizeOf _ _) _)] => inversion 1; subst; contradiction
+  | [|- forall _, neg (eType P G S (Cast _ _ _) _)] => inversion 1; subst; try contradiction
   | [Heq : pointerConvert ?t = Pointer _ _, H : neg (isPointer (pointerConvert ?t)) |- _ ] => rewrite Heq in H; exfalso; apply H; now constructor
   | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
   | [H : _ + _ |- _] => destruct H
