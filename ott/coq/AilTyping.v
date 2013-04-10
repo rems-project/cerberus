@@ -1707,7 +1707,13 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
                                 else None
       | _       , _        => None
       end
-  | _ => None 
+  | SizeOf  qs ty
+  | AlignOf qs ty =>
+      if andb (negb (isFunction_fun   ty))
+              (negb (isIncomplete_fun ty))
+        then Some (ExpressionType (size_t P))
+        else None
+  | _ => None
   end
 with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
   match l, p with
@@ -1733,7 +1739,7 @@ with eType_arguments_find_correct P G S l p {struct l}:
 Proof.
   intros Hdisjoint.
   destruct e; unfold eType_find; fold eType_find.
-  Focus 2.
+  Focus 10.
   repeat match goal with
   | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
   | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
@@ -1776,6 +1782,8 @@ Proof.
       end
   | [|- context[option_map] ] =>
       unfold option_map
+  | [|- context[negb] ] =>
+      unfold negb
   | [|- (Some _ >>= _) = _ -> _ ] =>
       unfold option_bind at 1
   | [|- Some _ = ?o -> _ ] =>
@@ -1853,7 +1861,9 @@ Proof.
       intros Heq; set (expressionType_find_correct_neg H Hunique Heq)
   | [|- isArithmetic_fun ?t           = ?o -> _] => is_var o; case_fun (isArithmetic_fun_correct t)
   | [|- isComplete_fun ?t           = ?o -> _] => is_var o; case_fun (isComplete_fun_correct t)
+  | [|- isIncomplete_fun ?t           = ?o -> _] => is_var o; case_fun (isIncomplete_fun_correct t)
   | [|- isObject_fun ?t           = ?o -> _] => is_var o; case_fun (isObject_fun_correct t)
+  | [|- isFunction_fun ?t           = ?o -> _] => is_var o; case_fun (isFunction_fun_correct t)
   | [|- isScalar_fun ?t           = ?o -> _] => is_var o; case_fun (isScalar_fun_correct t)
   | [|- isInteger_fun ?t           = ?o -> _] => is_var o; case_fun (isInteger_fun_correct t)
   | [|- isReal_fun ?t           = ?o -> _] => is_var o; case_fun (isReal_fun_correct t)
@@ -1947,10 +1957,14 @@ Proof.
   | [H : isPointer (pointerConvert ?t), _ : expressionType P G S _ (pointerConvert ?t) |- eType P G S (Binary _ Ne _) _ ] => is_var t; inversion H; subst
   | [|- forall _, eType P G S (Binary _ Comma _) _ -> _ = _] => inversion_clear 1; now auto
   | [|- forall _, eType P G S (Binary _ _ _) _ -> _ = _] => inversion 1; subst; try congruence
+  | [|- forall _, eType P G S (SizeOf _ _) _ -> _ = _] => inversion 1; subst; try congruence
+  | [|- forall _, eType P G S (AlignOf _ _) _ -> _ = _] => inversion 1; subst; try congruence
   | [|- forall _, neg (eType P G S (Binary _ _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (AlignOf _ _) _)] => inversion 1; subst; contradiction
+  | [|- forall _, neg (eType P G S (SizeOf _ _) _)] => inversion 1; subst; contradiction
   | [Heq : pointerConvert ?t = Pointer _ _, H : neg (isPointer (pointerConvert ?t)) |- _ ] => rewrite Heq in H; exfalso; apply H; now constructor
   | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
   | [H : _ + _ |- _] => destruct H
