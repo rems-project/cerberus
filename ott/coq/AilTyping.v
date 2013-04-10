@@ -1355,6 +1355,210 @@ Proof.
   end.
 Qed.
 
+Definition isEquality_fun ty1 ty2 is_null1 is_null2 : bool :=
+     andb (isPointer_fun ty1) is_null2
+  || andb (isPointer_fun ty2) is_null1
+  || andb (isPointerToVoid_fun ty1) (isPointerToObject_fun ty2)
+  || andb (isPointerToVoid_fun ty2) (isPointerToObject_fun ty1)
+  || arePointersToCompatibleTypes_fun ty1 ty2
+  || andb (isArithmetic_fun ty1) (isArithmetic_fun ty2).
+
+Lemma isEquality_fun_correct_pos {aop} {P} {G} {S} {e1 e2} {ty1 ty2} :
+  (aop = Eq) + (aop = Ne) ->
+  expressionType P G S e1 ty1 ->
+  expressionType P G S e2 ty2 ->
+  isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2) = true ->
+  eType P G S (Binary e1 aop e2) (ExpressionType (Basic (Integer (Signed Int)))).
+Proof.
+  intros Haop ? ?.
+  pull_out bool (isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2)).
+  unfold_goal.
+  repeat match goal with
+  | [H : isArithmetic Void           |- _ ] => inversion_clear H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion_clear H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [|- true = true -> _] => intros _
+  | [|- false = false -> _] => intros _
+  | [|- false = true -> _] => congruence
+  | [|- true = false -> _] => congruence
+  | [|- true = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_true_l); (try rewrite orb_true_l)
+  | [|- false = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_false_l); (try rewrite orb_false_l)
+  | [|- (true && _) = _ -> _] => rewrite andb_true_l
+  | [|- (false && _) = _ -> _] => unfold andb at 1
+  | [|- (true || _) = _ -> _] => unfold orb at 1
+  | [|- (false || _) = _ -> _] => rewrite orb_false_l
+  | [|- (?e && _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- (?e || _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- isArithmetic_fun ?t           = ?o -> _] => is_var o; case_fun (isArithmetic_fun_correct t)
+  | [|- isPointer_fun ?t           = ?o -> _] => is_var o; case_fun (isPointer_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e = ?o -> _] => is_var o; case_fun (isNullPointerConstant_fun_correct e)
+  | [|- isPointerToCompleteObject_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToCompleteObject_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
+      | _ => idtac
+      end
+  | [|- isPointerToVoid_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToVoid_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => let Hvoid := fresh in destruct H as [? [? [? Hvoid]]]; inversion Hvoid; subst
+      | _ => idtac
+      end
+  | [|- isPointerToObject_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToObject_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleCompleteObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleCompleteObjects_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleObjects_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleTypes_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleTypes_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[? ?] ?] ]]]]; subst
+      | _ => idtac
+      end
+  | [|- isCompatible_fun ?t1 ?t2           = ?o -> _] => is_var o; case_fun (isCompatible_fun_correct t1 t2)
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | [Heq : Pointer _ Void = Pointer _ ?t |- _ ] => is_var t; injection Heq; intros; subst
+  | _ => context_destruct
+  end; try (destruct Haop; subst; econstructor (solve [eassumption|reflexivity])).
+Qed.
+
+Ltac notSame x y :=
+  try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
+
+Lemma isEquality_fun_correct_neg {aop} {P} {G} {S} {e1 e2} {ty1 ty2} :
+  (aop = Eq) + (aop = Ne) ->
+  expressionType P G S e1 ty1 ->
+  expressionType P G S e2 ty2 ->
+  (forall tc1 tc2, eType P G S e1 tc1 -> eType P G S e1 tc2 -> tc1 = tc2) ->
+  (forall tc1 tc2, eType P G S e2 tc1 -> eType P G S e2 tc2 -> tc1 = tc2) ->
+  isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2) = false ->
+  forall tc, neg (eType P G S (Binary e1 aop e2) tc).
+Proof.
+  intros Haop Hexp1 Hexp2 Hunique1 Hunique2.
+  pull_out bool (isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2)).
+  inversion Hexp1; inversion Hexp2;
+  match goal with
+  | [H : lvalueConversion _ _ |- _] => inversion H
+  | _ => idtac
+  end; subst;
+  unfold_goal;
+  abstract (
+  repeat match goal with
+  | [H : isArithmetic Void           |- _ ] => inversion_clear H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion_clear H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion_clear H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [|- true = true -> _] => intros _
+  | [|- false = false -> _] => intros _
+  | [|- false = true -> _] => congruence
+  | [|- true = false -> _] => congruence
+  | [|- true = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_true_l); (try rewrite orb_true_l)
+  | [|- false = ?o -> _ ] =>
+      is_var o; intros ?; subst o; (try rewrite andb_false_l); (try rewrite orb_false_l)
+  | [|- (true && _) = _ -> _] => rewrite andb_true_l
+  | [|- (false && _) = _ -> _] => unfold andb at 1
+  | [|- (true || _) = _ -> _] => unfold orb at 1
+  | [|- (false || _) = _ -> _] => rewrite orb_false_l
+  | [|- (?e && _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- (?e || _) = _ -> _] =>
+      match type of e with ?t => pull_out t e end
+  | [|- isArithmetic_fun ?t           = ?o -> _] => is_var o; case_fun (isArithmetic_fun_correct t)
+  | [|- isPointer_fun ?t           = ?o -> _] => is_var o; case_fun (isPointer_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e = ?o -> _] => is_var o; case_fun (isNullPointerConstant_fun_correct e)
+  | [|- isPointerToCompleteObject_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToCompleteObject_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
+      | _ => idtac
+      end
+  | [|- isPointerToVoid_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToVoid_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => let Hvoid := fresh in destruct H as [? [? [? Hvoid]]]; inversion Hvoid; subst
+      | _ => idtac
+      end
+  | [|- isPointerToObject_fun ?t           = ?o -> _] =>
+      is_var o; case_fun (isPointerToObject_fun_correct t);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? ?]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleCompleteObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleCompleteObjects_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleObjects_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleObjects_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[[[? ?] ?] ?] ?]]]]]; subst
+      | _ => idtac
+      end
+  | [|- arePointersToCompatibleTypes_fun ?t1 ?t2           = ?o -> _] =>
+      is_var o; case_fun (arePointersToCompatibleTypes_fun_correct t1 t2);
+      match goal with
+      | [H : {_ : _ & _} |- _] => destruct H as [? [? [? [? [[? ?] ?] ]]]]; subst
+      | _ => idtac
+      end
+  | [|- isCompatible_fun ?t1 ?t2           = ?o -> _] => is_var o; case_fun (isCompatible_fun_correct t1 t2)
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | _ => context_destruct
+  | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
+  | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
+  | [Heq : Pointer _ Void = Pointer _ ?t |- _] => is_var t; injection Heq; intros; subst
+  | [|- forall _, neg _] => destruct Haop; subst; inversion 1; subst
+  | [ H : isComplete ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isComplete _) |- False ] => now eapply (Hfalse qs1 ty1 eq_refl H)
+  | [ H : isObject   ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isObject   _) |- False ] => now eapply (Hfalse qs1 ty1 eq_refl H)
+  | [                       Hfalse : forall _ _, Pointer ?qs1 Void = Pointer _ _ -> neg (isVoid _)     |- False ] => now eapply (Hfalse qs1 Void eq_refl IsVoid)
+  | [ Hfalse : forall _ _ _ _, Pointer ?qs1 ?ty1 = _ ->
+                               Pointer ?qs2 ?ty2 = _ ->
+                               neg (isCompatible _ _)
+    , H : isCompatible ?ty1 ?ty2 |- False] => now eapply (Hfalse qs1 qs2 ty1 ty2 eq_refl eq_refl H)
+  | [ Hunique : forall _ _, eType P G S ?e _ -> eType   P G S ?e _ -> _ =  _
+    , H1 : expressionType P G S ?e ?t1
+    , H2 : expressionType P G S ?e ?t2         |- _ ] =>
+      notSame t1 t2;
+      let Heq := fresh in
+      assert (t1 = t2) as Heq by (eapply (expressionType_unique_expression_inj Hunique); eauto);
+      try (congruence || (try injection Heq; intros); subst)
+  | [H : _ + _ |- _] => destruct H
+  end).
+Qed.
+
 Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCategory :=
   match e with
   | Var id =>
@@ -1527,9 +1731,6 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
   | _                , _                  => false
   end.
 
-Ltac notSame x y :=
-  try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
-
 Fixpoint eType_find_correct P G S e {struct e}:
   Disjoint G S ->
   match eType_find P G S e with
@@ -1543,8 +1744,8 @@ Proof.
   intros Hdisjoint.
   destruct e; unfold eType_find; fold eType_find.
   Focus 2.
-  destruct bop.
-  Focus 9.
+
+abstract(
   repeat match goal with
   | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
   | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
@@ -1783,7 +1984,7 @@ Proof.
     ,_ : forall _, neg (Lookup ?S ?id _) |- forall _, neg (eType _ ?G ?S (Var ?id) _)] =>
       inversion 1; now firstorder
   | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
-  end.
+  end).
 
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType ?t1 = _
     , H1 : expressionType P G S ?e ?t1
