@@ -3,7 +3,7 @@ Require Relations.
 Require Import List.
 Require Import Bool.
 Require Import ZArith.
-Require Import Program.
+Require Import Classes.SetoidClass.
 
 Open Scope type.
 
@@ -92,6 +92,16 @@ Definition boolSpec_elim2_inv {b : bool} {P : Type} : boolSpec b P -> neg P -> b
 Proof. destruct b; solve [reflexivity | contradiction]. Defined.
 Lemma boolSpec_elim {b : bool} {P : Prop} : boolSpec b P -> (P <-> b = true).
 Proof. intros B; generalize (boolSpec_elim1 B), (boolSpec_elim1_inv B); tauto. Defined.
+
+
+Definition optionSpec {A} (o : option A) (P : A -> Type) : Type :=
+  match o with
+  | Some a => P a
+  | None   => forall a, neg (P a)
+  end.
+
+Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
+  forall a, P a -> o = Some a.
 
 Definition bool_of_decision {P} : Decision P -> bool :=
   fun d => match d with
@@ -295,7 +305,7 @@ Qed.
 
 Fixpoint list_forall_fun {A:Type} (dec : A -> bool) (ls : list A) : bool :=
   match ls with
-  | []    => true
+  | nil   => true
   | x::xs => andb (dec x) (list_forall_fun dec xs)
   end.
 
@@ -321,19 +331,116 @@ Proof.
 Defined.
 
 Definition sub {A} (l1 l2 : list A) :=
-  List.Forall (fun x => List.In x l1) l2.
+  List.Forall (fun x => List.In x l2) l1.
 
 Definition list_sub_fun {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
-  list_forall_fun (fun x => list_in_fun eq x l1) l2.
+  list_forall_fun (fun x => list_in_fun eq x l2) l1.
 
 Lemma list_sub_fun_correct  {A} {eq : A -> A -> bool} (l1 l2 : list A) :
   (forall x y, boolSpec (eq x y) (x = y)) ->
   boolSpec (list_sub_fun eq l1 l2) (sub l1 l2).
 Proof.
   intros eq_correct.
-  set (fun x => list_in_fun_correct x l1 eq_correct) as in_correct.
-  exact (list_forall_fun_correct l2 in_correct).
+  set (fun x => list_in_fun_correct x l2 eq_correct) as in_correct.
+  exact (list_forall_fun_correct l1 in_correct).
 Defined.
+
+Definition equiv {A} (l1 l2 : list A) :=
+  sub l1 l2 * sub l2 l1.
+
+Definition list_equiv_fun {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
+  andb (list_sub_fun eq l1 l2) (list_sub_fun eq l2 l1).
+
+Lemma list_equiv_fun_correct  {A} {eq : A -> A -> bool} (l1 l2 : list A) :
+  (forall x y, boolSpec (eq x y) (x = y)) ->
+  boolSpec (list_equiv_fun eq l1 l2) (equiv l1 l2).
+Proof.
+  intros eq_correct.
+  do 2 unfold_goal.
+  set (list_sub_fun_correct l1 l2 eq_correct).
+  set (list_sub_fun_correct l2 l1 eq_correct).
+  repeat boolSpec_destruct;
+  solve [constructor; assumption
+        |inversion 1; contradiction].
+Qed.
+
+Definition sub_weaken1 {A} {a} {xs ys : list A} : sub (a :: xs) ys -> sub xs ys.
+Proof.
+  destruct ys; inversion 1.
+  + match goal with
+    | [H : In _ nil |- _] => now inversion H
+    end.
+  + assumption.
+Qed.
+
+Fixpoint sub_weaken2 {A} {a} {xs ys : list A} : sub xs ys -> sub xs (a :: ys).
+  destruct xs; intros H.
+  + constructor.
+  + inversion H.
+    constructor.
+    * apply in_cons; assumption.
+    * apply (sub_weaken2 A a xs ys H3).
+Qed.
+
+Lemma sub_In {A} {xs ys : list A} {x} : In x xs -> sub xs ys -> In x ys.
+Proof.
+  revert xs.
+  fix IH 1.
+  destruct xs.
+  - inversion 1.
+  - destruct 1.
+    + inversion 1; subst.
+      assumption.
+    + inversion 1; subst.
+      apply (IH xs).
+      * assumption.
+      * eapply sub_weaken1; eassumption.
+Qed.
+
+Fixpoint sub_trans {A} {xs ys zs : list A} : sub xs ys -> sub ys zs -> sub xs zs.
+Proof.
+  destruct xs; intros H1 H2.
+  + constructor.
+  + inversion H1; subst.
+    constructor.
+    * eapply sub_In; eassumption.
+    * eapply sub_trans; eassumption.
+Qed.
+
+Definition equiv_cons {A} {xs ys : list A} {a}  : equiv xs ys -> equiv (a :: xs) (a :: ys).
+Proof.
+  destruct xs; intros [H1 H2].
+  - split.
+    + repeat constructor.
+    + inversion H2.
+      * repeat constructor.
+      * match goal with
+        | [H : In _ nil |- _] => now inversion H
+        end.
+  - split.
+    + constructor.
+      * repeat constructor.
+      * apply sub_weaken2.
+        exact H1.
+    + constructor.
+      * repeat constructor.
+      * apply (sub_weaken2 H2).
+Qed.
+
+Instance equiv_Equivalence {A} : Equivalence (@equiv A).
+Proof.
+  split.
+  - unfold Reflexive.
+    fix IH 1. 
+    intros [|].
+    + repeat constructor.
+    + intros.
+      apply equiv_cons.
+      apply IH.
+  - inversion 1; constructor; assumption.
+  - inversion 1; inversion 1; constructor;
+    eapply sub_trans; eassumption.
+Qed.
 
 Lemma Zeqb_correct x y : boolSpec (Z.eqb x y) (x = y).
 Proof.
@@ -404,6 +511,7 @@ Ltac context_destruct :=
   | [|- (match ?c with _ => _ end) -> _] =>
       context_destruct_inner c
   end.
+
 
 Ltac case_fun G :=
   match goal with
