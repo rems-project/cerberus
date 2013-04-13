@@ -4,8 +4,8 @@ Require Import Bool.
 
 Require Import Common.
 Require Import AilTypes.
+Require Import AilTypesAux.
 Require Import AilSyntax. 
-
 
 (** definitions *)
 
@@ -62,9 +62,11 @@ with fv_arguments : identifier -> arguments -> Prop :=
 (** definitions *)
 
 (* defns JisNullPointerConstant *)
-Inductive isNullPointerConstant : expression -> Prop :=    (* defn isNullPointerConstant *)
+Inductive isNullPointerConstant : expression -> Set :=    (* defn isNullPointerConstant *)
  | IsNullPointerConstantZero : 
      isNullPointerConstant (Constant (ConstantInteger  ( 0 , None) ))
- | IsNullPointerConstantPointer : forall (e:expression),
+ | IsNullPointerConstantPointer : forall qs qs' (e:expression),
      isNullPointerConstant e ->
-     isNullPointerConstant (Cast  nil  (Pointer  nil  Void) e).
+     isUnqualified qs ->
+     isUnqualified qs' ->
+     isNullPointerConstant (Cast qs (Pointer qs' Void) e).

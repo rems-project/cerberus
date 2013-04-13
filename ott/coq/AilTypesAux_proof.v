@@ -11,6 +11,49 @@ Require Import Implementation.
 
 Local Open Scope Z.
 
+Lemma isUnqualified_fun_correct qs :
+  boolSpec (isUnqualified_fun qs) (isUnqualified qs).
+Proof. do 2 unfold_goal. repeat context_destruct. Qed.
+
+(*
+Fixpoint typeEquiv_fun_correct t1 t2 :
+  boolSpec (typeEquiv_fun t1 t2) (typeEquiv t1 t2)
+with typeEquiv_params_fun_correct p1 p2 :
+  boolSpec (typeEquiv_params_fun p1 p2) (typeEquiv_params p1 p2).
+Proof.
+- do 2 unfold_goal.
+  destruct t1;
+  destruct t2;
+  fold typeEquiv_params_fun;
+  fold typeEquiv_fun;
+  unfold andb;
+  repeat match goal with
+  | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+  | [|- list_equiv_fun _ ?qs1 ?qs2 = ?o -> _] => is_var o; case_fun (list_equiv_fun_correct qs1 qs2 (fun x y => Decision_boolSpec (decide x y)))
+  | [|- typeEquiv_fun ?t1 ?t2 = ?o -> _] => is_var o; case_fun (typeEquiv_fun_correct t1 t2)
+  | [|- typeEquiv_params_fun ?p1 ?p2 = ?o -> _] => is_var o; case_fun (typeEquiv_params_fun_correct p1 p2)
+  | [|- typeEquiv _ _] => constructor; assumption
+  | [|- neg (typeEquiv _ _)] => now inversion 1
+  |_ => context_destruct
+  end.
+-do 2 unfold_goal.
+  destruct p1;
+  destruct p2;
+  fold typeEquiv_fun;
+  fold typeEquiv_params_fun;
+  unfold andb;
+  repeat match goal with
+  | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+  | [|- list_equiv_fun _ ?qs1 ?qs2 = ?o -> _] => is_var o; case_fun (list_equiv_fun_correct qs1 qs2 (fun x y => Decision_boolSpec (decide x y)))
+  | [|- typeEquiv_fun ?t1 ?t2 = ?o -> _] => is_var o; case_fun (typeEquiv_fun_correct t1 t2)
+  | [|- typeEquiv_params_fun ?p1 ?p2 = ?o -> _] => is_var o; case_fun (typeEquiv_params_fun_correct p1 p2)
+  | [|- typeEquiv_params _ _] => constructor; assumption
+  | [|- neg (typeEquiv_params _ _)] => now inversion 1
+  |_ => context_destruct
+  end.
+Qed.
+*)
+
 (* Equations
 Require Import Equations.
 *)
@@ -1416,7 +1459,7 @@ Proof.
   set (isObject_fun_correct t).
   set (isArray_fun_correct t).
   set (isIncomplete_fun_correct t).
-  set (list_in_fun_correct Const qs (fun x y => Decision_boolSpec ((decide x y)))).
+  set (Decision_boolSpec (decide (isConstQualified qs) true : Decision (_ = _))).
   my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
 Qed.
 
@@ -1439,69 +1482,110 @@ Qed.
 Fixpoint isCompatible_fun_correct        t1 t2 : boolSpec (isCompatible_fun        t1 t2) (isCompatible       t1 t2)
 with     isCompatible_params_fun_correct p1 p2 : boolSpec (isCompatible_params_fun p1 p2) (isCompatible_params p1 p2).
 Proof.
-  + do 2 unfold_goal.
-    my_auto;
-    destruct t1; destruct t2;
-    my_auto;
-    fold isCompatible_fun;
-    fold isCompatible_params_fun;
-    bool_simpl;
-    match goal with
-    | [Heq : ?x = ?y |- isCompatible ?x ?y] =>
-        rewrite Heq; constructor
-    | [|- context[isCompatible (Function ?t1 ?p1) (Function ?t2 ?p2)]] =>
-        set (isCompatible_fun_correct        t1 t2);
-        set (isCompatible_params_fun_correct p1 p2)
-    end;
-    boolSpec_simpl; my_auto.
-  + do 2 unfold_goal.
-    my_auto;
-    destruct p1; destruct p2;
-    my_auto;
-    fold isCompatible_fun;
-    fold isCompatible_params_fun;
-    bool_simpl;
-    match goal with
-    | [t1 : type, t2 : type |- _] =>
-        set (isCompatible_fun_correct        t1 t2);
-        set (isCompatible_params_fun_correct p1 p2)
-    end;
-    boolSpec_simpl; my_auto.
+  + unfold_goal; destruct t1, t2; simpl; unfold andb;
+    repeat match goal with
+    | [|- bool_of_decision ?e = ?o -> _] => destruct e; simpl; intros ?; subst o; subst
+    | [|- isCompatible_fun ?t1 ?t2 = ?o -> _] => case_fun (isCompatible_fun_correct t1 t2)
+    | [|- isCompatible_params_fun ?t1 ?t2 = ?o -> _] => case_fun (isCompatible_params_fun_correct t1 t2)
+    | _ => context_destruct
+    end; boolSpec_simpl; finish fail.
+  + unfold_goal.
+    destruct p1; destruct p2; simpl; unfold andb;
+    repeat match goal with
+    | [|- isCompatible_fun ?t1 ?t2 = ?o -> _] => case_fun (isCompatible_fun_correct t1 t2)
+    | [|- isCompatible_params_fun ?t1 ?t2 = ?o -> _] => case_fun (isCompatible_params_fun_correct t1 t2)
+    | _ => context_destruct
+    end; boolSpec_simpl; finish fail.
 Defined.
 
 Fixpoint isComposite_fun_correct        t1 t2 t3 : boolSpec (isComposite_fun        t1 t2 t3) (isComposite        t1 t2 t3)
 with     isComposite_params_fun_correct p1 p2 p3 : boolSpec (isComposite_params_fun p1 p2 p3) (isComposite_params p1 p2 p3).
 Proof.
-  + do 2 unfold_goal.
-    destruct t1;
-    destruct t2;
-    destruct t3;
-    my_auto;
-    fold isComposite_fun;
-    fold isComposite_params_fun;
-    bool_simpl;
-    match goal with
-    | [ Heq1 : ?t1 = ?it2, Heq2 : ?t1 = ?it3 |- isComposite ?t1 ?t2 ?it3 ] =>
-        rewrite <- Heq1; rewrite <- Heq2; constructor
-    | [|- context[isComposite (Array ?t1 _) (Array ?t2 _) (Array ?t3 _)] ] =>
-        set (isComposite_fun_correct t1 t2 t3)
-    | [|- context[isComposite (Function ?t1 ?p1) (Function ?t2 ?p2) (Function ?t3 ?p3)]] =>
-        set (isComposite_fun_correct        t1 t2 t3);
-        set (isComposite_params_fun_correct p1 p2 p3)
-    end;
-    boolSpec_simpl; my_auto.
-  + do 2 unfold_goal.
-    destruct p1;
-    destruct p2;
-    destruct p3;
-    my_auto;
-    fold isComposite_fun;
-    fold isComposite_params_fun;
-    bool_simpl;
-    match goal with
-    | [|- context[isComposite_params (ParamsCons _ ?t1 ?p1) (ParamsCons _ ?t2 ?p2) (ParamsCons _ ?t3 ?p3)]] =>
-        set (isComposite_fun_correct        t1 t2 t3);
-        set (isComposite_params_fun_correct p1 p2 p3)
-    end;
-    boolSpec_simpl; my_auto.
+  + unfold_goal.
+    destruct t1, t2, t3; simpl;
+    unfold andb;
+    repeat match goal with
+    | [|- bool_of_decision ?e = ?o                -> _] => destruct e; simpl; intros ?; subst o; subst
+    | [|- isComposite_fun        ?t1 ?t2 ?t3 = ?o -> _] => case_fun (isComposite_fun_correct t1 t2 t3)
+    | [|- isComposite_params_fun ?p1 ?p2 ?p3 = ?o -> _] => case_fun (isComposite_params_fun_correct p1 p2 p3)
+    | _ => context_destruct
+    end; boolSpec_simpl; finish fail.
+  + unfold_goal.
+    destruct p1, p2, p3; simpl;
+    unfold andb;
+    repeat match goal with
+    | [|- isUnqualified_fun ?qs = ?o              -> _] => case_fun (isUnqualified_fun_correct qs)
+    | [|- isComposite_fun        ?t1 ?t2 ?t3 = ?o -> _] => case_fun (isComposite_fun_correct t1 t2 t3)
+    | [|- isComposite_params_fun ?p1 ?p2 ?p3 = ?o -> _] => is_var o; case_fun (isComposite_params_fun_correct p1 p2 p3)
+    | _ => context_destruct
+    end; boolSpec_simpl; finish fail.
 Qed.
+
+Fixpoint isComposite_find_correct t1 t2 :
+  optionSpec (isComposite_find t1 t2) (isComposite t1 t2)
+with isComposite_params_find_correct p1 p2 :
+  optionSpec (isComposite_params_find p1 p2) (isComposite_params p1 p2).
+Proof.
+  + unfold_goal.
+    destruct t1, t2; simpl;
+    unfold option_map;
+    repeat match goal with
+    | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+    | [|- isComposite_find        ?t1 ?t2 = ?o -> _] => case_fun (isComposite_find_correct t1 t2); unfold optionSpec in *
+    | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => case_fun (isComposite_params_find_correct p1 p2); unfold optionSpec in *
+    | [|- isComposite _ _ _] => econstructor (solve [eassumption|reflexivity])
+    | [|- forall _, neg (isComposite _ _ _)] => inversion 1; subst
+    | _ => context_destruct
+    end; solve [congruence | firstorder].
+  + unfold_goal.
+    destruct p1, p2; simpl.
+    - constructor.
+    - inversion 1.
+    - inversion 1.
+    - repeat match goal with
+      | [|- isComposite_find ?t1 ?t2 = ?o -> _] => is_var o; case_fun (isComposite_find_correct t1 t2); unfold optionSpec in *
+      | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => is_var o; case_fun (isComposite_params_find_correct p1 p2); unfold optionSpec in *
+      | [|- isComposite_params _ _ _] => econstructor (solve [eassumption|reflexivity])
+      | [|- forall _, neg (isComposite_params _ _ _)] => inversion 1; subst
+      | _ => context_destruct
+      end; firstorder.
+Qed.
+
+Fixpoint isComposite_find_unique t1 t2 :
+  optionUnique (isComposite_find t1 t2) (isComposite t1 t2)
+with isComposite_params_find_unique p1 p2 :
+  optionUnique (isComposite_params_find p1 p2) (isComposite_params p1 p2).
+Proof.
+  + unfold_goal.
+    intros ? H.
+    destruct t1, t2; simpl;
+    unfold option_map;
+    inversion H; subst;
+    repeat match goal with
+    | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+    | [|- isComposite_find        ?t1 ?t2 = ?o -> _] => case_fun (isComposite_find_unique t1 t2); unfold optionUnique in *
+    | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => case_fun (isComposite_params_find_unique p1 p2); unfold optionUnique in *
+    | _ => context_destruct
+    | [Heq : forall _, isComposite ?ty1 ?ty2 _ -> Some ?t = Some _ , H : isComposite ?ty1 ?ty2 ?ty3 |- _] => notSame t ty3; injection (Heq _ H); intros; subst
+    | [Heq : forall _, isComposite ?ty1 ?ty2 _ -> None = Some _ , H : isComposite ?ty1 ?ty2 _ |- _] => discriminate (Heq _ H)
+    | [Heq : forall _, isComposite_params ?p1 ?p2 _ -> Some ?p = Some _ , H : isComposite_params ?p1 ?p2 ?p' |- _] => notSame p p'; injection (Heq _ H); intros; subst
+    | [Heq : forall _, isComposite_params ?p1 ?p2 _ -> None = Some _ , H : isComposite_params ?p1 ?p2 _ |- _] => discriminate (Heq _ H)
+    end; congruence.
+  + unfold_goal.
+    destruct p1, p2; simpl;
+    inversion 1; subst.
+    - reflexivity.
+    - repeat match goal with
+      | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+      | [|- isComposite_find        ?t1 ?t2 = ?o -> _] => case_fun (isComposite_find_unique t1 t2); unfold optionUnique in *
+      | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => case_fun (isComposite_params_find_unique p1 p2); unfold optionUnique in *
+      | _ => context_destruct
+      | [Heq : forall _, isComposite ?ty1 ?ty2 _ -> Some ?t = Some _ , H : isComposite ?ty1 ?ty2 ?ty3 |- _] => notSame t ty3; injection (Heq _ H); intros; subst
+      | [Heq : forall _, isComposite ?ty1 ?ty2 _ -> None = Some _ , H : isComposite ?ty1 ?ty2 _ |- _] => discriminate (Heq _ H)
+      | [Heq : forall _, isComposite_params ?p1 ?p2 _ -> Some ?p = Some _ , H : isComposite_params ?p1 ?p2 ?p' |- _] => notSame p p'; injection (Heq _ H); intros; subst
+      | [Heq : forall _, isComposite_params ?p1 ?p2 _ -> None = Some _ , H : isComposite_params ?p1 ?p2 _ |- _] => discriminate (Heq _ H)
+      | [H : isUnqualified ?qs |- _] => inversion_clear H
+      end; congruence.
+Qed.
+
+

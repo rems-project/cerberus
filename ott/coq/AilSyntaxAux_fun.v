@@ -1,14 +1,16 @@
 Require Import Common.
 Require Import AilTypes.
+Require Import AilTypesAux_fun.
 Require Import AilSyntax. 
 
 Fixpoint isNullPointerConstant_fun e : bool :=
   match e with
   | Constant (ConstantInteger (0 , None)) => true
-  | Cast nil (Pointer nil Void) e         => isNullPointerConstant_fun e
+  | Cast qs (Pointer qs' Void) e          => andb (isNullPointerConstant_fun e)
+                                                  (andb (isUnqualified_fun qs)
+                                                        (isUnqualified_fun qs'))
   | _                                     => false
   end.
-
 
 Fixpoint fv_fun id e : bool :=
   match e with

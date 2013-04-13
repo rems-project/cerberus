@@ -7,6 +7,44 @@ Require Import Implementation.
 
 Local Open Scope Z.
 
+
+Definition unqualified := {|
+  isConstQualified    := false;
+  isRestrictQualified := false;
+  isVolatileQualified := false 
+|}.
+
+Definition isUnqualified_fun qs :=
+  match qs with
+  | {| isConstQualified    := false;
+       isRestrictQualified := false;
+       isVolatileQualified := false |} => true
+  | _                                  => false
+  end.
+
+(*
+Fixpoint typeEquiv_fun t1 t2 : bool :=
+  match t1, t2 with
+  | Void          , Void           => true
+  | Basic bt1     , Basic bt2      => bool_of_decision (decide bt1 bt2 : Decision (_ = _))
+  | Array t1 n1   , Array t2 n2    => andb (bool_of_decision (decide n1 n2 : Decision (_ = _)))
+                                           (typeEquiv_fun t1 t2)
+  | Function t1 p1, Function t2 p2 => andb (typeEquiv_fun t1 t2)
+                                           (typeEquiv_params_fun p1 p2)
+  | Pointer qs1 t1, Pointer qs2 t2 => andb (list_equiv_fun (fun x y => bool_of_decision(decide x y:Decision (x = y))) qs1 qs2)
+                                           (typeEquiv_fun t1 t2)
+  | _             , _              => false
+  end
+with typeEquiv_params_fun p1 p2 : bool :=
+  match p1, p2 with
+  | ParamsNil           , ParamsNil            => true
+  | ParamsCons qs1 t1 p1, ParamsCons qs2 t2 p2 => andb (list_equiv_fun (fun x y => bool_of_decision(decide x y:Decision (x = y))) qs1 qs2)
+                                                       (andb (typeEquiv_fun t1 t2)
+                                                             (typeEquiv_params_fun p1 p2))
+  | _                   , _                    => false
+  end.
+*)
+
 Definition isInteger_fun t :=
   match t with
   | Basic (Integer _) => true
@@ -386,7 +424,7 @@ Definition isModifiable_fun qs t : bool :=
   andb (isObject_fun t)
        (andb (negb (isArray_fun t)) 
              (andb (negb (isIncomplete_fun t))
-                   (negb (list_in_fun (fun x y => bool_of_decision (decide x y : Decision (x = y))) Const qs))
+                   (negb (bool_of_decision (decide (isConstQualified qs) true : Decision (_ = _))))
              )
        ).
 
@@ -395,14 +433,14 @@ Definition isReal_fun t : bool := isInteger_fun t.
 Definition isLvalueConvertible_fun t : bool := andb (negb (isArray_fun t)) (isComplete_fun t).
 
 Fixpoint isCompatible_fun t1 t2 {struct t1} : bool :=
-  if bool_of_decision(decide t1 t2 : Decision (t1 = t2)) then
-    true
-  else
-    match t1, t2 with
-    | Function t1 p1, Function t2 p2 =>
-        andb (isCompatible_fun t1 t2) (isCompatible_params_fun p1 p2)
-    | _, _ => false
-    end
+  match t1, t2 with
+  | Void          , Void           => true
+  | Basic bt1     , Basic bt2      => bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2))
+  | Array    t1 n1, Array    t2 n2 => andb (isCompatible_fun t1 t2) (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
+  | Function t1 p1, Function t2 p2 => andb (isCompatible_fun t1 t2) (isCompatible_params_fun p1 p2)
+  | Pointer qs1 t1, Pointer qs2 t2 => andb (bool_of_decision (decide qs1 qs2 : Decision (_ = _))) (isCompatible_fun t1 t2)
+  | _             , _              => false
+  end
 with isCompatible_params_fun p1 p2 : bool :=
   match p1, p2 with
   | ParamsNil         , ParamsNil          => true
@@ -413,24 +451,54 @@ with isCompatible_params_fun p1 p2 : bool :=
   end.
 
 Fixpoint isComposite_fun t1 t2 t3 : bool :=
-  if andb (bool_of_decision (decide t1 t2 : Decision (t1 = t2)))
-          (bool_of_decision (decide t1 t3 : Decision (t1 = t3))) then
-    true
-  else
-    match t1, t2, t3 with
-    | Array t1 n1, Array t2 n2, Array t3 n3 =>
-        andb (andb (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
-                   (bool_of_decision (decide n1 n3 : Decision (n1 = n3))))
-             (isComposite_fun t1 t2 t3)
-    | Function t1 p1, Function t2 p2, Function t3 p3 =>
-        andb (isComposite_fun        t1 t2 t3)
-             (isComposite_params_fun p1 p2 p3)
-    | _, _, _ => false
-    end
+  match t1, t2, t3 with
+  | Void          , Void          , Void           => true
+  | Basic bt1     , Basic bt2     , Basic bt3      => andb (bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2)))
+                                                           (bool_of_decision (decide bt1 bt3 : Decision (bt1 = bt3)))
+  | Array t1 n1   , Array t2 n2   , Array t3 n3    => andb (andb (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
+                                                                 (bool_of_decision (decide n1 n3 : Decision (n1 = n3))))
+                                                           (isComposite_fun t1 t2 t3)
+  | Function t1 p1, Function t2 p2, Function t3 p3 => andb (isComposite_fun        t1 t2 t3)
+                                                           (isComposite_params_fun p1 p2 p3)
+  | Pointer qs1 t1, Pointer qs2 t2, Pointer qs3 t3 => andb (andb (bool_of_decision(decide qs1 qs2:Decision (_ = _)))
+                                                                 (bool_of_decision(decide qs1 qs3:Decision (_ = _))))
+                                                           (isComposite_fun t1 t2 t3)
+  | _             , _             , _              => false
+  end
 with isComposite_params_fun p1 p2 p3 : bool :=
   match p1, p2, p3 with
   | ParamsNil         , ParamsNil         , ParamsNil            => true
-  | ParamsCons _ t1 p1, ParamsCons _ t2 p2, ParamsCons nil t3 p3 => andb (isComposite_fun        t1 t2 t3)
-                                                                         (isComposite_params_fun p1 p2 p3)
+  | ParamsCons _ t1 p1, ParamsCons _ t2 p2, ParamsCons qs3 t3 p3 => andb (isUnqualified_fun qs3)
+                                                                         (andb (isComposite_fun        t1 t2 t3)
+                                                                               (isComposite_params_fun p1 p2 p3))
   | _                 , _                 , _                    => false
+  end.
+
+Fixpoint isComposite_find t1 t2 : option type :=
+  match t1, t2 with
+  | Void          , Void           => Some Void
+  | Basic bt1     , Basic bt2      => if bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2))
+                                        then Some (Basic bt1)
+                                        else None
+  | Array t1 n1   , Array t2 n2    => if bool_of_decision (decide n1 n2 : Decision (n1 = n2))
+                                        then option_map (fun t => Array t n1) (isComposite_find t1 t2)
+                                        else None
+  | Function t1 p1, Function t2 p2 => match isComposite_find t1 t2, isComposite_params_find p1 p2 with
+                                      | Some t, Some p => Some (Function t p)
+                                      | _     , _      => None
+                                      end
+  | Pointer qs1 t1, Pointer qs2 t2 => if bool_of_decision (decide qs1 qs2 :Decision (_ = _))
+                                        then option_map (Pointer qs1) (isComposite_find t1 t2)
+                                        else None
+  | _             , _              => None
+  end
+with isComposite_params_find p1 p2 : option params :=
+  match p1, p2 with
+  | ParamsNil         , ParamsNil          => Some (ParamsNil)
+  | ParamsCons _ t1 p1, ParamsCons _ t2 p2 =>
+      match isComposite_find t1 t2, isComposite_params_find p1 p2 with
+      | Some t, Some p => Some (ParamsCons unqualified t p)
+      | _     , _      => None
+      end
+  | _                 , _                  => None
   end.
