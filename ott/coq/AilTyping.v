@@ -16,6 +16,7 @@ Require Import AilSyntaxAux_fun.
 Require Import AilSyntaxAux_proof.
 Require Import Implementation.
 
+
 (** definitions *)
 
 Inductive Lookup {A B : Type} : list (A * B) -> A -> B -> Type :=
@@ -215,15 +216,6 @@ Definition lvalueConversion_find t : option type :=
   else
     None.
 
-Definition optionSpec {A} (o : option A) (P : A -> Type) : Type :=
-  match o with
-  | Some a => P a
-  | None   => forall a, neg (P a)
-  end.
-
-Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
-  forall a, P a -> o = Some a.
-
 Lemma lvalueConversion_find_correct t1 : optionSpec (lvalueConversion_find t1) (lvalueConversion t1).
 Proof. do 2 unfold_goal; context_destruct; case_fun (isLvalueConvertible_fun_correct t1); my_auto. Qed.
 
@@ -271,6 +263,17 @@ Proof. inversion 1; constructor; apply pointerConvert_Integer; assumption. Qed.
 (* Pointer conversion leaves pointers untouched. *)
 Lemma pointerConvert_Integer_Pointer {t} : isPointer t -> pointerConvert t = t.
 Proof. inversion 1; reflexivity. Qed.
+
+Definition combineQualifiers qs1 qs2 := {|
+  isConstQualified    := isConstQualified    qs1 || isConstQualified    qs2;
+  isRestrictQualified := isRestrictQualified qs1 || isRestrictQualified qs2;
+  isVolatileQualified := isVolatileQualified qs1 || isVolatileQualified qs2
+|}.
+
+Definition subQualifiers qs1 qs2 :=
+     implb (isConstQualified    qs1) (isConstQualified    qs2)
+  && implb (isRestrictQualified qs1) (isRestrictQualified qs2)
+  && implb (isVolatileQualified qs1) (isVolatileQualified qs2).
 
 (* defns JeType *)
 Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :=    (* defn eType *)
@@ -322,13 +325,15 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeConstantULL : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
      inIntegerTypeRange P n (Unsigned LongLong) ->
      eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedLongLong ) )) (ExpressionType (Basic (Integer (Unsigned LongLong))))
- | ETypeCall : forall (ls:arguments) (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type),
-     expressionType P G S e (Pointer  nil  (Function ty ps)) ->
+ | ETypeCall : forall (ls:arguments) (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) qs (ty:type),
+     isUnqualified qs ->
+     expressionType P G S e (Pointer qs (Function ty ps)) ->
      eType_arguments P G S ls ps ->
      eType P G S (Call e ls) (ExpressionType ty)
- | ETypeAddressFunction : forall (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type),
+ | ETypeAddressFunction : forall (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) qs (ty:type),
      eType P G S e (ExpressionType (Function ty ps)) ->
-     eType P G S (Unary Address e) (ExpressionType (Pointer  nil  (Function ty ps)))
+     isUnqualified qs ->
+     eType P G S (Unary Address e) (ExpressionType (Pointer qs (Function ty ps)))
  | ETypeAddressLvalue : forall (P:impl) (G:gamma) (S:sigma) (e:expression) (qs:qualifiers) (ty:type),
      eType P G S e (LvalueType qs ty) ->
      eType P G S (Unary Address e) (ExpressionType (Pointer qs ty))
@@ -337,9 +342,10 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      isComplete ty ->
      isObject ty ->
      eType P G S (Unary Indirection e) (LvalueType qs ty)
- | ETypeIndirectionFunction : forall (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type),
-     expressionType P G S e (Pointer  nil  (Function ty ps)) ->
-     eType P G S (Unary Indirection e) (ExpressionType (Pointer  nil  (Function ty ps)))
+ | ETypeIndirectionFunction : forall (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) qs (ty:type),
+     isUnqualified qs ->
+     expressionType P G S e (Pointer qs (Function ty ps)) ->
+     eType P G S (Unary Indirection e) (ExpressionType (Pointer qs (Function ty ps)))
  | ETypePostfixIncrementPointer : forall (P:impl) (G:gamma) (S:sigma) (e:expression) (ty:type) (qs':qualifiers) (ty':type),
      eType P G S e (LvalueType qs' ty') ->
      lvalueConversion ty' ty ->
@@ -389,11 +395,11 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
       ~ (  isIncomplete ty  )  ->
       Implementation.size_t  P  =  ty'  ->
      eType P G S (AlignOf qs ty) (ExpressionType ty')
- | ETypeCastScalar : forall (P:impl) (G:gamma) (S:sigma) (qualifiers:qualifiers) (ty:type) (e:expression) (ty':type),
+ | ETypeCastScalar : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty:type) (e:expression) (ty':type),
      expressionType P G S e ty' ->
      isScalar ty' ->
      isScalar ty ->
-     eType P G S (Cast qualifiers ty e) (ExpressionType ty)
+     eType P G S (Cast qs ty e) (ExpressionType ty)
  | ETypeCastVoid : forall (P:impl) (G:gamma) (S:sigma) (qualifiers:qualifiers) (e:expression) (ty:type),
      expressionType P G S e ty ->
      eType P G S (Cast qualifiers Void e) (ExpressionType Void)
@@ -624,50 +630,71 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      expressionType P G S e2 Void ->
      expressionType P G S e3 Void ->
      eType P G S (Conditional e1 e2 e3) (ExpressionType Void)
- | ETypeConditionalPointer : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3:qualifiers) (ty ty1 ty2 ty3:type),
+ | ETypeConditionalPointer : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3 qs:qualifiers) (ty ty1 ty2 ty3:type),
      expressionType P G S e1 ty1 ->
      isScalar ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      expressionType P G S e3 (Pointer qs3 ty3) ->
      isCompatible ty2 ty3 ->
      isComposite ty2 ty3 ty ->
-     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer   (List.app  qs2   qs3 )   ty))
- | ETypeConditionalNullPointer1 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty3 ty1 ty2:type),
+     combineQualifiers qs2 qs3 = qs ->
+     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer qs ty))
+ | ETypeConditionalNullPointer1_Pointer : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty3 ty1 ty2:type) qs2 qs3 qs,
+     expressionType P G S e1 ty1 ->
+     isScalar ty1 ->
+     expressionType P G S e2 (Pointer qs2 ty2) ->
+     expressionType P G S e3 (Pointer qs3 ty3) ->
+     isNullPointerConstant e2 ->
+     combineQualifiers qs2 qs3 = qs ->
+     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer qs ty3))
+ | ETypeConditionalNullPointer1_Other : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty3 ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      isScalar ty1 ->
      expressionType P G S e2 ty2 ->
      expressionType P G S e3 ty3 ->
+     ~ isPointer ty2 ->
      isPointer ty3 ->
-      ~ (  isCompatible ty2 ty3  )  ->
      isNullPointerConstant e2 ->
      eType P G S (Conditional e1 e2 e3) (ExpressionType ty3)
- | ETypeConditionalNullPointer2 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty2 ty1 ty3:type),
+ | ETypeConditionalNullPointer2_Pointer : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty2 ty1 ty3:type) qs2 qs3 qs,
+     expressionType P G S e1 ty1 ->
+     isScalar ty1 ->
+     expressionType P G S e2 (Pointer qs2 ty2) ->
+     expressionType P G S e3 (Pointer qs3 ty3) ->
+     isNullPointerConstant e3 ->
+     combineQualifiers qs2 qs3 = qs ->
+     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer qs ty2))
+ | ETypeConditionalNullPointer2_Other : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (ty2 ty1 ty3:type),
      expressionType P G S e1 ty1 ->
      isScalar ty1 ->
      expressionType P G S e2 ty2 ->
      expressionType P G S e3 ty3 ->
      isPointer ty2 ->
-      ~ (  isCompatible ty2 ty3  )  ->
-     isNullPointerConstant e2 ->
+     ~ isPointer ty3 ->
+     isNullPointerConstant e3 ->
      eType P G S (Conditional e1 e2 e3) (ExpressionType ty2)
- | ETypeConditionalPointerVoid1 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3:qualifiers) (ty2 ty1 ty3:type),
+ | ETypeConditionalPointerVoid1 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3 qs:qualifiers) (ty2 ty1 ty3:type),
      expressionType P G S e1 ty1 ->
      isScalar ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      expressionType P G S e3 (Pointer qs3 ty3) ->
+     neg (isCompatible ty2 ty3) ->
+     neg (isNullPointerConstant e2) ->
      isVoid ty2 ->
      isObject ty3 ->
-      ~ (  isCompatible ty2 ty3  )  ->
-     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer   (List.app  qs2   qs3 )   ty2))
- | ETypeConditionalPointerVoid2 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3:qualifiers) (ty3 ty1 ty2:type),
+     combineQualifiers qs2 qs3 = qs ->
+     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer qs ty2))
+ | ETypeConditionalPointerVoid2 : forall (P:impl) (G:gamma) (S:sigma) (e1 e2 e3:expression) (qs2 qs3 qs:qualifiers) (ty3 ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      isScalar ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      expressionType P G S e3 (Pointer qs3 ty3) ->
+     neg (isCompatible ty2 ty3) ->
+     neg (isNullPointerConstant e3) ->
      isObject ty2 ->
      isVoid ty3 ->
-      ~ (  isCompatible ty2 ty3  )  ->
-     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer   (List.app  qs2   qs3 )   ty3))
+     combineQualifiers qs2 qs3 = qs ->
+     eType P G S (Conditional e1 e2 e3) (ExpressionType (Pointer qs ty3))
  | ETypeAssign : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (qs1:qualifiers) (ty1 ty:type),
      eType P G S e1 (LvalueType qs1 ty1) ->
      isModifiable qs1 ty1 ->
@@ -733,19 +760,19 @@ with isAssignable : impl -> gamma -> sigma -> type -> expression -> Prop :=
  | IsAssignablePointer : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isCompatible ty1 ty2 ->
-     sub qs2 qs1 ->
+     subQualifiers qs2 qs1 = true ->
      isAssignable P G S (Pointer qs1 ty1) e2
  | IsAssignableVoidPointer1 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      isVoid ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isObject ty2 ->
-     sub qs2 qs1  ->
+     subQualifiers qs2 qs1 = true ->
      isAssignable P G S (Pointer qs1 ty1) e2
  | IsAssignableVoidPointer2 : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (qs1 qs2:qualifiers) (ty1 ty2:type),
      isObject ty1 ->
      expressionType P G S e2 (Pointer qs2 ty2) ->
      isVoid ty2 ->
-     sub qs2 qs1  ->
+     subQualifiers qs2 qs1 = true ->
      isAssignable P G S (Pointer qs1 ty1) e2
  | IsAssignableNullPointerConstant : forall (P:impl) (G:gamma) (S:sigma) (e2:expression) (ty1 ty2:type),
      isPointer ty1 ->
@@ -808,17 +835,17 @@ Proof.
         assert (Lookup G2 id p) by (apply (Hfree id (FvVariable id)); assumption)
     end;
     econstructor (
-      solve [ econstructor (eassumption)
+      solve [ eassumption
+            | econstructor (eassumption)
             | finish eassumption
             | match goal with
-              | [|- isAssignable _ _ _  _ _] =>
+              | [|- isAssignable _ _ _ _ _] =>
                   econstructor (
                     solve [ econstructor (solve [ econstructor (eassumption) | finish eassumption ])
                           | eassumption]
                   )
               end
-          | finish eassumption
-          | apply eq_sym; eassumption ]
+            | apply eq_sym; eassumption ]
     ).
   + destruct l; intros Hfree; inversion 1; subst.
     - constructor.
@@ -847,10 +874,8 @@ Proof.
         | econstructor (solve [econstructor (eassumption) | finish eassumption])
         | eassumption ]).
 Qed.
-      
-(* Coq's insanely stupid termination checker won't allow me to write a
-mutually recursive function so I am resorting to open recursion + tying the
-knot manually. *)
+
+(* TODO remove *)
 Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
   fun o f =>
     match o with
@@ -866,7 +891,10 @@ Definition option_bool {A} : option A -> (A -> bool) -> bool :=
     | Some a => f a
     | None   => false
     end.
-
+      
+(* Coq's insanely stupid termination checker won't allow me to write a
+mutually recursive function so I am resorting to open recursion + tying the
+knot manually. *)
 Definition expressionType_find tc : option type :=
   match tc with
   | ExpressionType   ty => Some (pointerConvert ty)
@@ -879,16 +907,16 @@ Lemma expressionType_find_correct_pos {P} {G} {S} {e} {tc} {ty} :
   expressionType P G S e ty.
 Proof.
   intros ?.
-  do 2 unfold_goal.
-  context_destruct;
-  match goal with
-  | [|- context[lvalueConversion_find ?ty]] =>
+  unfold_goal.
+  repeat match goal with
+  | [|- lvalueConversion_find ?ty = _ -> _] =>
       let Heq := fresh in
       set (lvalueConversion_find_correct ty);
       intros Heq; rewrite Heq in *;
       econstructor 2; eassumption
   | [|- Some _ = Some _ -> _] =>
       injection 1; intros ?; my_auto
+  | _ => context_destruct
   end.
 Qed.
 
@@ -899,7 +927,7 @@ Lemma expressionType_find_correct_neg {P} {G} {S} {e} {tc} :
   forall ty, neg (expressionType P G S e ty).
 Proof.
   intros ? Hunique.
-  do 2 unfold_goal.
+  unfold_goal.
   context_destruct;
   match goal with
   | [|- context[lvalueConversion_find ?ty]] =>
@@ -989,7 +1017,7 @@ Proof. inversion 2; firstorder. Qed.
 Definition isAssignable_fun ty1 ty2 is_null2 : bool :=
   match ty1, ty2 with
   | Pointer qs1 t1, Pointer qs2 t2 => orb is_null2
-                                          (andb (list_sub_fun (fun q1 q2 => bool_of_decision (qualifier_DecEq q1 q2)) qs2 qs1)
+                                          (andb (subQualifiers qs2 qs1)
                                                 (orb (isCompatible_fun t1 t2)
                                                      (orb (andb (isVoid_fun t1) (isObject_fun t2))
                                                           (andb (isVoid_fun t2) (isObject_fun t1)))))
@@ -1007,13 +1035,13 @@ Proof.
   unfold_goal; intros ?.
   do 2 context_destruct; bool_simpl;
   repeat (match goal with
-  | [|- isArithmetic_fun ?t           = _ -> _] => set (isArithmetic_fun_correct t)
-  | [|- isNullPointerConstant_fun ?e2 = _ -> _] => set (isNullPointerConstant_fun_correct e2)
-  | [|- isCompatible_fun ?ty1 ?ty2    = _ -> _] => set (isCompatible_fun_correct ty1 ty2)
-  | [|- isBool_fun ?t                 = _ -> _] => set (isBool_fun_correct t)
-  | [|- isVoid_fun ?t                 = _ -> _] => set (isVoid_fun_correct t)
-  | [|- isObject_fun ?t               = _ -> _] => set (isObject_fun_correct t)
-  | [|- list_sub_fun ?f ?qs1 ?qs2     = _ -> _] => set (list_sub_fun_correct qs1 qs2 (fun q1 q2 => Decision_boolSpec (qualifier_DecEq q1 q2)))
+  | [|- isArithmetic_fun ?t           = _  -> _] => set (isArithmetic_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e2 = _  -> _] => set (isNullPointerConstant_fun_correct e2)
+  | [|- isCompatible_fun ?ty1 ?ty2    = _  -> _] => set (isCompatible_fun_correct ty1 ty2)
+  | [|- isBool_fun ?t                 = _  -> _] => set (isBool_fun_correct t)
+  | [|- isVoid_fun ?t                 = _  -> _] => set (isVoid_fun_correct t)
+  | [|- isObject_fun ?t               = _  -> _] => set (isObject_fun_correct t)
+  | [|- subQualifiers ?qs1 ?qs2       = ?o -> _] => not_var o; intros ?
   end; boolSpec_simpl);
   econstructor (solve [eassumption|constructor]).
 Qed.
@@ -1071,7 +1099,7 @@ Proof.
   | [|- isBool_fun ?t                 = _ -> _] => set (isBool_fun_correct t)
   | [|- isVoid_fun ?t                 = _ -> _] => set (isVoid_fun_correct t)
   | [|- isObject_fun ?t               = _ -> _] => set (isObject_fun_correct t)
-  | [|- list_sub_fun ?f ?qs1 ?qs2     = _ -> _] => set (list_sub_fun_correct qs1 qs2 (fun q1 q2 => Decision_boolSpec (qualifier_DecEq q1 q2)))
+  | [|- subQualifiers ?qs1 ?qs2       = ?o -> _] => not_var o; intros ?
   end; boolSpec_simpl);
   (try now (inversion 1; my_auto));
   inversion 1; subst;
@@ -1122,7 +1150,7 @@ Lemma isPointerToCompleteObject_fun_correct t :
     then {qs : qualifiers & {ty : type & (t = Pointer qs ty) * isComplete ty}}
     else neg (isPointer t) + forall qs ty, t = Pointer qs ty -> neg (isComplete ty).
 Proof.
-  do 2 unfold_goal;
+  unfold_goal;
   repeat match goal with
   | [|- isComplete_fun ?t = _ -> _] => case_fun (isComplete_fun_correct t)
   | [|- _ * _] => split
@@ -1266,7 +1294,7 @@ Lemma isPointerToObject_fun_correct t :
     then {qs : qualifiers & {ty : type & (t = Pointer qs ty) * isObject ty}}
     else neg (isPointer t) + forall qs ty, t = Pointer qs ty -> neg (isObject ty).
 Proof.
-  do 2 unfold_goal;
+  unfold_goal;
   repeat match goal with
   | [|- isObject_fun ?t = _ -> _] => case_fun (isObject_fun_correct t)
   | [|- _ * _] => split
@@ -1291,7 +1319,7 @@ Lemma isPointerToVoid_fun_correct t :
     then {qs : qualifiers & {ty : type & (t = Pointer qs ty) * isVoid ty}}
     else neg (isPointer t) + forall qs ty, t = Pointer qs ty -> neg (isVoid ty).
 Proof.
-  do 2 unfold_goal;
+  unfold_goal;
   repeat match goal with
   | [|- isVoid_fun ?t = _ -> _] => case_fun (isVoid_fun_correct t)
   | [|- neg _] => intros [? [? [? ?]]]
@@ -1323,7 +1351,7 @@ Lemma arePointersToCompatibleTypes_fun_correct t1 t2 :
               t1 = Pointer qs1 ty1 ->
               t2 = Pointer qs2 ty2 -> neg (isCompatible ty1 ty2)).
 Proof.
-  do 2 unfold_goal;
+  unfold_goal;
   repeat match goal with
   | [|- isCompatible_fun ?t1 ?t2 = _ -> _] => case_fun (isCompatible_fun_correct t1 t2)
   | [|- _ * _] => split
@@ -1445,9 +1473,6 @@ Proof.
   | _ => context_destruct
   end; try (destruct Haop; subst; econstructor (solve [eassumption|reflexivity])).
 Qed.
-
-Ltac notSame x y :=
-  try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
 
 Lemma isEquality_fun_correct_neg {aop} {P} {G} {S} {e1 e2} {ty1 ty2} :
   (aop = Eq) + (aop = Ne) ->
@@ -1597,6 +1622,524 @@ Definition inIntegerTypeRange_Unsigned_Long_LongLong {P} {n} :=
     LeIntegerTypeRange _ _ _
       (integerTypeRange_precision_Unsigned P _ _ (IsUnsignedInt P _) (IsUnsignedInt P _) (lePrecision_Unsigned_Long_LongLong P))
   ).
+
+Definition combineQualifiers_left t1 t2 : type :=
+    match t1, t2 with
+    | Pointer qs1 ty1, Pointer qs2 _ => Pointer (combineQualifiers qs1 qs2) ty1
+    | Pointer _   _  , _             => t1
+    | _              , _             => t1
+    end.
+
+Definition combineQualifiers_right t1 t2 : type :=
+    match t1, t2 with
+    | Pointer qs1 _, Pointer qs2 ty2 => Pointer (combineQualifiers qs1 qs2) ty2
+    | _            , Pointer _   _   => t2
+    | _              , _             => t2
+    end.
+
+Lemma combineQualifiers_left_not_pointer {t1 t2} :
+  neg (isPointer t2) -> combineQualifiers_left t1 t2 = t1.
+Proof.
+  intros Hnpointer;
+  destruct t1; destruct t2;
+  solve [ reflexivity
+        | exfalso; apply Hnpointer; constructor].
+Qed.
+
+Lemma combineQualifiers_right_not_pointer {t1 t2} :
+  neg (isPointer t1) -> combineQualifiers_right t1 t2 = t2.
+Proof.
+  intros Hnpointer;
+  destruct t1; destruct t2;
+  solve [ reflexivity
+        | exfalso; apply Hnpointer; constructor].
+Qed.
+
+Definition compositePointer_find t1 t2 : option type :=
+  match t1, t2 with
+  | Pointer qs1 ty1, Pointer qs2 ty2 => if isCompatible_fun ty1 ty2
+                                          then option_map (Pointer (combineQualifiers qs1 qs2)) (isComposite_find ty1 ty2)
+                                          else None
+  | _              , _               => None
+  end.
+
+Fixpoint isCompatible_isComposite {t1} {t2} :
+  isCompatible t1 t2 ->
+  neg (isComposite_find t1 t2 = None)
+with isCompatible_params_isComposite_params  {p1} {p2} :
+  isCompatible_params p1 p2 ->
+  neg (isComposite_params_find p1 p2 = None).
+Proof.
+- intros Hcompat.
+  unfold_goal.
+  destruct t1, t2; simpl;
+  unfold option_map;
+  inversion Hcompat; subst;
+  repeat match goal with
+  | [|- bool_of_decision ?e = ?o -> _] => is_var o; destruct e; subst; intros ?; subst o; simpl
+  | [|- isComposite_find ?t1 ?t2 = ?o -> _] => is_var o; destruct o; intros ?
+  | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => is_var o; destruct o; intros ?
+  | _ => context_destruct
+  | [Hfind : isComposite_find ?t1 ?t2 = None , H : isCompatible ?t1 ?t2 |- _] => destruct (isCompatible_isComposite _ _ H Hfind)
+  | [Hfind : isComposite_params_find ?p1 ?p2 = None , H : isCompatible_params ?p1 ?p2 |- _] => destruct (isCompatible_params_isComposite_params _ _ H Hfind)
+  end; try solve [inversion 1|congruence].
+- intros Hcompat.
+  unfold_goal.
+  destruct p1, p2; simpl;
+  unfold option_map;
+  inversion Hcompat; subst;
+  repeat match goal with
+  | [|- isComposite_find ?t1 ?t2 = ?o -> _] => is_var o; destruct o; intros ?
+  | [|- isComposite_params_find ?p1 ?p2 = ?o -> _] => is_var o; destruct o; intros ?
+  | _ => context_destruct
+  | [Hfind : isComposite_find ?t1 ?t2 = None , H : isCompatible ?t1 ?t2 |- _] => destruct (isCompatible_isComposite _ _ H Hfind)
+  | [Hfind : isComposite_params_find ?p1 ?p2 = None , H : isCompatible_params ?p1 ?p2 |- _] => destruct (isCompatible_params_isComposite_params _ _ H Hfind)
+  end; solve [inversion 1|congruence].
+Qed.
+
+Lemma compositePointer_find_correct t1 t2 :
+  match compositePointer_find t1 t2 with
+  | Some t =>
+      {qs1 : qualifiers & {ty1 : type &
+      {qs2 : qualifiers & {ty2 : type & {
+        ty : type &
+            (t1 = Pointer  qs1         ty1)
+          * (t2 = Pointer         qs2  ty2)
+          * (t  = Pointer (combineQualifiers qs1 qs2) ty)
+          * isCompatible ty1 ty2
+          * isComposite  ty1 ty2 ty
+      }}}}}
+  | None   => neg (isPointer t1) +
+              neg (isPointer t2) +
+              {qs1 : qualifiers & {ty1 : type &
+              {qs2 : qualifiers & {ty2 : type &
+                  (t1 = Pointer  qs1         ty1)
+                * (t2 = Pointer         qs2  ty2)
+                * neg (isCompatible ty1 ty2)
+              }}}}
+  end.
+Proof.
+  unfold_goal;
+  unfold option_map;
+  repeat match goal with
+  | [|- isComposite_find ?t1 ?t2 = _ -> _] => case_fun (isComposite_find_correct t1 t2); unfold optionSpec in *
+  | [|- isCompatible_fun ?t1 ?t2 = _ -> _] => case_fun (isCompatible_fun_correct t1 t2); unfold boolSpec   in *
+  | [|- neg _ + _ + _] => solve [left; left ; inversion 1
+                                |left; right; inversion 1
+                                |repeat first [right | eexists | assumption]]
+  | _ => context_destruct
+  | [|- {_ : _ & _}] => repeat first [eexists | split | reflexivity | assumption]
+  | [H : isCompatible ?t1 ?t2, Hfind : isComposite_find t1 t2 = None |- _] => destruct (isCompatible_isComposite H Hfind)
+  end.
+Qed.
+
+Definition isConditional_fun P ty1 ty2 ty3 is_null2 is_null3 : option typeCategory :=
+  if isScalar_fun ty1 then
+    if andb (isArithmetic_fun ty2) (isArithmetic_fun ty3) then
+      option_map ExpressionType (isUsualArithmetic_find P ty2 ty3)
+    else
+      match compositePointer_find ty2 ty3 with
+      | Some ty => Some (ExpressionType ty)
+      | None    => if andb (isVoid_fun ty2) (isVoid_fun ty3) then
+                     Some (ExpressionType Void)
+                   else if andb (isPointer_fun ty2) is_null3 then
+                     Some (ExpressionType (combineQualifiers_left ty2 ty3))
+                   else if andb (isPointer_fun ty3) is_null2 then
+                     Some (ExpressionType (combineQualifiers_right ty2 ty3))
+                   else if andb (isPointerToObject_fun ty2) (isPointerToVoid_fun ty3) then
+                     Some (ExpressionType (combineQualifiers_right ty2 ty3))
+                   else if andb (isPointerToObject_fun ty3) (isPointerToVoid_fun ty2) then
+                     Some (ExpressionType (combineQualifiers_left ty2 ty3))
+                   else None
+      end
+  else
+    None.
+
+Lemma isConditional_fun_correct_pos {P G S} {ty1 ty2 ty3} {e1 e2 e3} {tc} :
+  expressionType P G S e1 ty1 ->
+  expressionType P G S e2 ty2 ->
+  expressionType P G S e3 ty3 ->
+  isConditional_fun P ty1 ty2 ty3 (isNullPointerConstant_fun e2) (isNullPointerConstant_fun e3)= Some tc ->
+  eType P G S (Conditional e1 e2 e3) tc.
+Proof.
+  intros ? ? ?.
+  unfold_goal.
+  destruct ty1, ty2, ty3;
+  unfold andb;
+  unfold option_map;
+  unfold combineQualifiers_left;
+  unfold combineQualifiers_right;
+  repeat match goal with
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | [H : isVoid ?t |- _] => is_var t; inversion H; subst
+  | [H : isPointer (Basic _) |- _] => inversion H
+  | [H : isPointer (Array _ _) |- _] => inversion H
+  | [H : isPointer (Function _ _) |- _] => inversion H
+  | [H : isPointer Void |- _] => inversion H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : neg (isVoid Void) |- _ ] => exfalso; apply H; now constructor
+  | [H : isVoid (Basic _) |- _] => inversion H
+  | [H : isVoid (Array _ _) |- _] => inversion H
+  | [H : isVoid (Function _ _) |- _] => inversion H
+  | [H : isVoid (Pointer _ _) |- _] => inversion H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : isArithmetic Void           |- _ ] => inversion H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion H
+  | [H : isScalar Void           |- _ ] => inversion H
+  | [H : isScalar (Array _ _) |- _ ] => inversion H
+  | [H : isScalar (Function _ _) |- _ ] => inversion H
+  | [|- isScalar_fun ?t = _ -> _] => case_fun (isScalar_fun_correct t)
+  | [|- isArithmetic_fun ?t = _ -> _] => case_fun (isArithmetic_fun_correct t)
+  | [|- isUsualArithmetic_find P ?t1 ?t2 = _ -> _] => case_fun (isUsualArithmetic_find_correct P t1 t2)
+  | [|- isVoid_fun ?t = _ -> _] => case_fun (isVoid_fun_correct t)
+  | [|- isPointer_fun ?t = _ -> _] => case_fun (isPointer_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e = _ -> _] => case_fun (isNullPointerConstant_fun_correct e)
+  | [|- isPointerToObject_fun ?t = _ -> _] =>
+      case_fun (isPointerToObject_fun_correct t); [
+      match goal with
+      | [H : {_ : _ &  _} |- _ ] => let Heq := fresh in
+                                    destruct H as [? [? [Heq ?]]];
+                                    try discriminate Heq;
+                                    inversion Heq; subst
+      end|]
+  | [|- isPointerToVoid_fun ?t = _ -> _] =>
+      case_fun (isPointerToVoid_fun_correct t); [
+      match goal with
+      | [H : {_ : _ &  _} |- _ ] => let Heq := fresh in
+                                    destruct H as [? [? [Heq ?]]];
+                                    try discriminate Heq;
+                                    inversion Heq; subst
+      end|]
+  | [|- compositePointer_find ?t1 ?t2 = _ -> _] =>
+      case_fun (compositePointer_find_correct t1 t2); [
+      match goal with
+      | [H : {_ : _ & _} |- _] =>   let Heq1 := fresh in
+                                    let Heq2 := fresh in
+                                    destruct H as [? [? [? [? [? [[[[Heq1 Heq2] ?] ?] ?]]]]]];
+                                    (try discriminate Heq1);
+                                    (try discriminate Heq2);
+                                    inversion Heq1;
+                                    inversion Heq2; subst
+      end|]
+  | _ => context_destruct
+  | [|- None = Some _ -> _] => now inversion 1
+  | [|- Some _ = Some _ -> _] => let Heq := fresh in intros Heq; injection Heq; intros; subst
+  | [H : neg _ + neg _ + {_ : _ & {_ : _ & {_ : _ & {_ : _ & (_ = _) * (_ = _) * neg _}}}} |- eType P G S _ _] =>
+      destruct H as [[H | H] | H];
+      [ exfalso; apply H; constructor
+      | exfalso; apply H; constructor
+      | let Heq1 := fresh in
+        let Heq2 := fresh in
+        destruct H as [? [? [? [? [[Heq1 Heq2] ?]]]]];
+        inversion Heq1; inversion Heq2; subst; try congruence]
+  | [|- eType P G S _ _] =>  econstructor (solve [eassumption | finish fail | econstructor (eassumption)])
+  end; congruence.
+Qed.
+
+Lemma isUsualArithmetic_unique {P} {ty1 ty2} {t t'} :
+  isUsualArithmetic P ty1 ty2 t  ->
+  isUsualArithmetic P ty1 ty2 t' ->
+  t = t'.
+Proof.
+  intros H1 H2.
+  set (isUsualArithmetic_find_unique H1).
+  set (isUsualArithmetic_find_unique H2).
+  congruence.
+Qed.
+
+Lemma isComposite_unique {ty1 ty2} {t t'} :
+  isComposite ty1 ty2 t  ->
+  isComposite ty1 ty2 t' ->
+  t = t'.
+Proof.
+  intros H1 H2.
+  set (isComposite_find_unique _ _ _ H1).
+  set (isComposite_find_unique _ _ _ H2).
+  congruence.
+Qed.
+
+Fixpoint isNullPointerConstant_eType P G S e {struct e} :
+  isNullPointerConstant e ->
+    eType P G S e (ExpressionType (Basic (Integer (Signed Int))))
+  + eType P G S e (ExpressionType (Pointer unqualified Void))
+  + forall tc, neg (eType P G S e tc).
+Proof.
+  destruct e; inversion 1; subst.
+  - repeat match goal with
+    | [H : isUnqualified ?qs |- _] => is_var qs; inversion H; subst
+    end.
+    match goal with
+    | [H : isNullPointerConstant e |- _] => destruct (isNullPointerConstant_eType P G S e H)  as [[? | ?] |?]
+    end.
+    + left; right; econstructor (econstructor (solve [ eassumption
+                                                     | reflexivity
+                                                     | econstructor (constructor; constructor)])).
+    + left; right; econstructor (econstructor (solve [ eassumption
+                                                     | reflexivity
+                                                     | econstructor (constructor; constructor)])).
+    + right; inversion 1; subst.
+      repeat match goal with
+      | [Hfalse : forall _, neg (eType P G S e _), H : eType P G S e _ |- _] => exact (Hfalse _ H)
+      | [H : expressionType P G S _ _ |- _] => inversion_clear H
+      end.
+  - left; left;
+    repeat constructor.
+    + unfold integerTypeRange.
+      destruct (binMode P); simpl;
+      rewrite max_mkRange;
+      eapply integerTypeRange_signed_upper;
+      eapply precision_ge_one.
+    + unfold integerTypeRange.
+      destruct (binMode P); simpl;
+      rewrite min_mkRange; solve [eapply integerTypeRange_signed_lower1; eapply precision_ge_one
+                                 |eapply integerTypeRange_signed_lower2; eapply precision_ge_one].
+Qed.
+
+Fixpoint isNullPointerConstant_expressionType P G S e {struct e} :
+  isNullPointerConstant e ->
+    expressionType P G S e (Basic (Integer (Signed Int)))
+  + expressionType P G S e (Pointer unqualified Void)
+  + forall ty, neg (expressionType P G S e ty).
+Proof.
+  intros Hnull.
+  destruct (isNullPointerConstant_eType P G S e Hnull) as [[? | ?] | ?].
+  + left; left ; econstructor (solve [eassumption | reflexivity]).
+  + left; right; econstructor (solve [eassumption | reflexivity]).
+  + right; inversion 1; firstorder.
+Qed.  
+
+Lemma combineQualifiers_unqualified_left {qs} :
+  combineQualifiers unqualified qs = qs.
+Proof.
+  unfold unqualified.
+  unfold combineQualifiers.
+  destruct qs.
+  reflexivity.
+Qed.
+
+Lemma combineQualifiers_unqualified_right {qs} :
+  combineQualifiers qs unqualified = qs.
+Proof.
+  unfold unqualified.
+  unfold combineQualifiers.
+  destruct qs.
+  rewrite_all orb_false_r.
+  reflexivity.
+Qed.
+
+Lemma conditional_uniqueness {P G S} {e1 e2 e3} :
+  (forall ty1 ty1', expressionType P G S e1 ty1 -> expressionType P G S e1 ty1' -> ty1 = ty1') ->
+  (forall ty2 ty2', expressionType P G S e2 ty2 -> expressionType P G S e2 ty2' -> ty2 = ty2') ->
+  (forall ty3 ty3', expressionType P G S e3 ty3 -> expressionType P G S e3 ty3' -> ty3 = ty3') ->
+  forall tc tc', eType P G S (Conditional e1 e2 e3) tc  ->
+                 eType P G S (Conditional e1 e2 e3) tc' ->
+                 tc = tc'.
+Proof.
+  intros Hunique1 Hunique2 Hunique3.
+  inversion 1; inversion 1; subst;
+  repeat match goal with
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | [H : isVoid ?t |- _] => is_var t; inversion H; subst
+  | [H : isPointer (Basic _) |- _] => inversion H
+  | [H : isPointer (Array _ _) |- _] => inversion H
+  | [H : isPointer (Function _ _) |- _] => inversion H
+  | [H : isPointer Void |- _] => inversion H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : ~ (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : neg (isVoid Void) |- _ ] => exfalso; apply H; now constructor
+  | [H : isVoid (Basic _) |- _] => inversion H
+  | [H : isVoid (Array _ _) |- _] => inversion H
+  | [H : isVoid (Function _ _) |- _] => inversion H
+  | [H : isVoid (Pointer _ _) |- _] => inversion H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : isArithmetic Void           |- _ ] => inversion H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion H
+  | [H : isScalar Void           |- _ ] => inversion H
+  | [H : isScalar (Array _ _) |- _ ] => inversion H
+  | [H : isScalar (Function _ _) |- _ ] => inversion H
+  | [ Hunique : forall _ _, expressionType P G S ?e _ -> expressionType P G S ?e _ -> _ = _
+    , H1 : expressionType P G S ?e ?t1, H2 : expressionType P G S ?e ?t2 |- _] =>
+      notSame t1 t2;
+      let Heq := fresh in set (Hunique _ _ H1 H2) as Heq; inversion Heq; clear Heq; subst
+  | [ H1 : isUsualArithmetic P ?ty1 ?ty2 ?t, H2 : isUsualArithmetic P ?ty1 ?ty2 ?t' |- _] =>
+      notSame t t'; set (isUsualArithmetic_unique H1 H2)
+  | [ H1 : isComposite ?ty1 ?ty2 ?t, H2 : isComposite ?ty1 ?ty2 ?t' |- _] =>
+      notSame t t'; set (isComposite_unique H1 H2)
+  | [ Hunique : forall _ _, expressionType P G S ?e _ -> expressionType P G S ?e _ -> _ = _
+    , Hnull : isNullPointerConstant ?e
+    , H : expressionType P G S ?e (Pointer _ ?ty) |- _] =>
+      notSame ty Void;
+      let H' := fresh in
+      destruct (isNullPointerConstant_expressionType P G S e Hnull) as [[H' | H']| H'];
+      [ discriminate (Hunique _ _ H H')
+      | let Heq := fresh in set (Hunique _ _ H H') as Heq; inversion Heq; clear Heq; subst
+      | destruct (H' _ H)]
+  | [H : isCompatible Void ?t |- _] => is_var t; inversion H; subst
+  | [H : isCompatible ?t Void |- _] => is_var t; inversion H; subst
+  | [H : isComposite Void Void ?t |- _] => is_var t; inversion H; subst
+  end; congruence.
+Qed.
+
+Lemma conditional_inj_neg1 {P} {G} {S} {e1 e2 e3} : 
+  (forall ty, neg (expressionType P G S e1 ty)) ->
+  forall tc, neg (eType P G S (Conditional e1 e2 e3) tc).
+Proof. intros ?; inversion 1; firstorder. Qed.
+
+Lemma conditional_inj_neg2 {P} {G} {S} {e1 e2 e3} : 
+  (forall ty, neg (expressionType P G S e2 ty)) ->
+  forall tc, neg (eType P G S (Conditional e1 e2 e3) tc).
+Proof. intros ?; inversion 1; firstorder. Qed.
+
+Lemma conditional_inj_neg3 {P} {G} {S} {e1 e2 e3} : 
+  (forall ty, neg (expressionType P G S e3 ty)) ->
+  forall tc, neg (eType P G S (Conditional e1 e2 e3) tc).
+Proof. intros ?; inversion 1; firstorder. Qed.
+
+Lemma isConditional_fun_correct_neg {P G S} {ty1 ty2 ty3} {e1 e2 e3} :
+  (forall ty1 ty1', expressionType P G S e1 ty1 -> expressionType P G S e1 ty1' -> ty1 = ty1') ->
+  (forall ty2 ty2', expressionType P G S e2 ty2 -> expressionType P G S e2 ty2' -> ty2 = ty2') ->
+  (forall ty3 ty3', expressionType P G S e3 ty3 -> expressionType P G S e3 ty3' -> ty3 = ty3') ->
+  expressionType P G S e1 ty1 ->
+  expressionType P G S e2 ty2 ->
+  expressionType P G S e3 ty3 ->
+  isConditional_fun P ty1 ty2 ty3 (isNullPointerConstant_fun e2) (isNullPointerConstant_fun e3) = None ->
+  forall tc, neg (eType P G S (Conditional e1 e2 e3) tc).
+Proof.
+  intros ? ? ? ? ? ?.
+  unfold_goal.
+  destruct ty1, ty2, ty3;
+  unfold andb;
+  unfold option_map;
+  unfold combineQualifiers_left;
+  unfold combineQualifiers_right;
+  abstract (
+  repeat match goal with
+  | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
+  | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | [H : isVoid ?t |- _] => is_var t; inversion H; subst
+  | [H : isPointer (Basic _) |- _] => inversion H
+  | [H : isPointer (Array _ _) |- _] => inversion H
+  | [H : isPointer (Function _ _) |- _] => inversion H
+  | [H : isPointer Void |- _] => inversion H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : neg (isVoid Void) |- _ ] => exfalso; apply H; now constructor
+  | [H : isVoid (Basic _) |- _] => inversion H
+  | [H : isVoid (Array _ _) |- _] => inversion H
+  | [H : isVoid (Function _ _) |- _] => inversion H
+  | [H : isVoid (Pointer _ _) |- _] => inversion H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : isArithmetic Void           |- _ ] => inversion H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion H
+  | [H : isScalar Void           |- _ ] => inversion H
+  | [H : isScalar (Array _ _) |- _ ] => inversion H
+  | [H : isScalar (Function _ _) |- _ ] => inversion H
+  | [|- isScalar_fun ?t = _ -> _] => case_fun (isScalar_fun_correct t)
+  | [|- isArithmetic_fun ?t = _ -> _] => case_fun (isArithmetic_fun_correct t)
+  | [|- isUsualArithmetic_find P ?t1 ?t2 = _ -> _] => case_fun (isUsualArithmetic_find_correct P t1 t2)
+  | [|- isVoid_fun ?t = _ -> _] => case_fun (isVoid_fun_correct t)
+  | [|- isPointer_fun ?t = _ -> _] => case_fun (isPointer_fun_correct t)
+  | [|- isNullPointerConstant_fun ?e = _ -> _] => case_fun (isNullPointerConstant_fun_correct e)
+  | [|- isPointerToObject_fun ?t = _ -> _] =>
+      case_fun (isPointerToObject_fun_correct t); [
+      match goal with
+      | [H : {_ : _ &  _} |- _ ] => let Heq := fresh in
+                                    destruct H as [? [? [Heq ?]]];
+                                    try discriminate Heq;
+                                    inversion Heq; subst
+      end|]
+  | [|- isPointerToVoid_fun ?t = _ -> _] =>
+      case_fun (isPointerToVoid_fun_correct t); [
+      match goal with
+      | [H : {_ : _ &  _} |- _ ] => let Heq := fresh in
+                                    destruct H as [? [? [Heq ?]]];
+                                    try discriminate Heq;
+                                    inversion Heq; subst
+      end|]
+  | [|- compositePointer_find ?t1 ?t2 = _ -> _] =>
+      case_fun (compositePointer_find_correct t1 t2); [
+      match goal with
+      | [H : {_ : _ & _} |- _] =>   let Heq1 := fresh in
+                                    let Heq2 := fresh in
+                                    destruct H as [? [? [? [? [? [[[[Heq1 Heq2] ?] ?] ?]]]]]];
+                                    (try discriminate Heq1);
+                                    (try discriminate Heq2);
+                                    inversion Heq1;
+                                    inversion Heq2; subst
+      end|]
+  | _ => context_destruct
+  | [|- None = Some _ -> _] => now inversion 1
+  | [|- Some _ = Some _ -> _] => let Heq :=fresh in intros Heq; injection Heq; intros; subst
+  | [|- eType P G S _ _] =>  econstructor (solve [eassumption | finish fail | econstructor (eassumption)])
+  end;
+  abstract (
+  intros ?; inversion 1; subst;
+  repeat match goal with
+  | [H : isPointer ?t |- _] => is_var t; inversion H; subst
+  | [H : isVoid ?t |- _] => is_var t; inversion H; subst
+  | [H : isPointer (Basic _) |- _] => inversion H
+  | [H : isPointer (Array _ _) |- _] => inversion H
+  | [H : isPointer (Function _ _) |- _] => inversion H
+  | [H : isPointer Void |- _] => inversion H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : neg (isVoid Void) |- _ ] => exfalso; apply H; now constructor
+  | [H : isVoid (Basic _) |- _] => inversion H
+  | [H : isVoid (Array _ _) |- _] => inversion H
+  | [H : isVoid (Function _ _) |- _] => inversion H
+  | [H : isVoid (Pointer _ _) |- _] => inversion H
+  | [H : isInteger    Void           |- _ ] => inversion H
+  | [H : isInteger    (Array _ _) |- _ ] => inversion H
+  | [H : isInteger    (Function _ _) |- _ ] => inversion H
+  | [H : isInteger    (Pointer  _ _) |- _ ] => inversion H
+  | [H : isArithmetic Void           |- _ ] => inversion H
+  | [H : isArithmetic (Array _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Function _ _) |- _ ] => inversion H
+  | [H : isArithmetic (Pointer  _ _) |- _ ] => inversion H
+  | [H : isScalar Void           |- _ ] => inversion H
+  | [H : isScalar (Array _ _) |- _ ] => inversion H
+  | [H : isScalar (Function _ _) |- _ ] => inversion H
+  | [ Hfalse : forall _ _, Pointer _ ?ty = Pointer _ _ -> neg (isObject _)
+    , H : isObject ?ty |- _] =>
+      destruct (Hfalse _ _ eq_refl H)
+  | [Hfalse : forall _ _, Pointer _ Void = Pointer _ _ -> neg (isVoid _) |- _ ] =>
+      exfalso; apply (Hfalse _ _ eq_refl); constructor
+  | [ H : isUsualArithmetic P ?t1 ?t2 _ 
+    , Hfalse : forall _, neg (isUsualArithmetic P ?t1 ?t2 _) |- _ ] => destruct (Hfalse _ H)
+  | [ H1 : isUsualArithmetic P ?ty1 ?ty2 ?t, H2 : isUsualArithmetic P ?ty1 ?ty2 ?t' |- _] =>
+      notSame t t'; set (isUsualArithmetic_unique H1 H2)
+  | [ Hunique : forall _ _, expressionType P G S ?e _ -> expressionType P G S ?e _ -> _ = _
+    , H1 : expressionType P G S ?e ?ty1
+    , H2 : expressionType P G S ?e ?ty2 |- _] =>
+      notSame ty1 ty2;
+      let Heq := fresh in
+      set (Hunique _ _ H1 H2) as Heq;
+      inversion Heq; clear Heq; subst; try congruence
+  | [H : _ * _ |- _] => destruct H
+  | [H : {_ : _ & {_ : _ & {_ : _ & {_ : _ & (_ = _) * (_ = _) * neg _}}}} |- _] =>
+      let Heq1 := fresh in
+      let Heq2 := fresh in
+      destruct H as [? [? [? [? [[Heq1 Heq2] ?]]]]];
+      injection Heq1; injection Heq2; intros; clear Heq1; clear Heq2; subst; try congruence
+  | [H : _ + _ |- _] => destruct H
+  end; congruence)).
+Qed.
 
 Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCategory :=
   match e with

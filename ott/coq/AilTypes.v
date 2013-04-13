@@ -48,12 +48,13 @@ Ltac clear_integerType :=
   | [ ibt : integerBaseType |- _] => clear dependent ibt
 end.
 
-Inductive qualifier : Set :=  (*r type qualifiers (\S6.7.3) *)
- | Const : qualifier
- | Restrict : qualifier
- | Volatile : qualifier.
+Record qualifiers := mkQualifiers {
+  isConstQualified : bool;
+  isRestrictQualified : bool;
+  isVolatileQualified : bool
+}.
 
-Instance qualifier_DecEq : DecidableEq qualifier.
+Instance qualifiers_DecEq : DecidableEq qualifiers.
 Proof. dec_eq. Defined.
 
 Inductive basicType : Set :=  (*r basic types (\S6.2.5\#14) *)
@@ -61,10 +62,6 @@ Inductive basicType : Set :=  (*r basic types (\S6.2.5\#14) *)
 
 Instance basicType_DecEq : DecidableEq basicType.
 Proof. dec_eq. Defined.
-
-Definition qualifiers : Set := list qualifier.
-
-Instance qualifiers_DecEq : DecidableEq qualifiers := list_DecEq.
 
 Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
  | Void : type (*r \texttt{void} type (\S6.2.5\#19) *)
@@ -75,8 +72,6 @@ Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
 with params : Set :=
  | ParamsNil  
  | ParamsCons (qs:qualifiers) (ty:type) (p:params).
-
-Require Import Program.
 
 Fixpoint type_eq_dec   (t1 t2 :   type) : Decision (t1 = t2)
 with     params_eq_dec (p1 p2 : params) : Decision (p1 = p2).

@@ -6,7 +6,8 @@ Require Import AilTypes.
 Require Import AilTypesAux_fun.
 Require Import Implementation.
 
-(** definitions *)
+Inductive isUnqualified : qualifiers -> Set :=
+  | IsUnqualified  : isUnqualified unqualified.
 
 (** funs TypeTransformation *)
 Definition pointerConvert (x1:type) : type:=
@@ -14,8 +15,8 @@ Definition pointerConvert (x1:type) : type:=
   | Void => Void
   | (Basic bt) => (Basic bt)
   |  (Pointer qs ty)  => (Pointer qs ty)
-  |  (Array ty n)  => (Pointer  nil  ty)
-  |  (Function ty qs)  => (Pointer  nil  (Function ty qs))
+  |  (Array ty n)  => (Pointer unqualified  ty)
+  |  (Function ty qs)  => (Pointer  unqualified  (Function ty qs))
 end.
 
 (** definitions *)
@@ -201,7 +202,7 @@ Inductive isIntegerPromotion : impl -> integerType -> integerType -> Set :=    (
       ~ leIntegerRank P it (Signed Int) ->
      isIntegerPromotion P it it.
 
-(* defns JisUsualArith-metic *)
+(* defns JisUsualArithmetic *)
 Inductive isUsualArithmeticInteger : impl -> integerType -> integerType -> integerType -> Prop :=    (* defn isUsualArithmetic *)
  | IsUsualArithmeticIntegerEq : forall (P:impl) (it:integerType),
      isUsualArithmeticInteger P it it it
@@ -315,7 +316,7 @@ Inductive isModifiable : qualifiers -> type -> Prop :=    (* defn isModifiable *
      isObject ty ->
       ~ (  isArray ty  )  ->
       ~ (  isIncomplete ty  )  ->
-      ~ (   (List.In  Const   qs )   )  ->
+      ~ (isConstQualified qs = true)  ->
      isModifiable qs ty.
 (** definitions *)
 
@@ -336,8 +337,17 @@ Inductive isLvalueConvertible : type -> Prop :=    (* defn isLvalueConvertible *
 
 (* defns JisCompatible *)
 Inductive isCompatible : type -> type -> Prop :=    (* defn isCompatible *)
- | IsCompatibleEq : forall (ty:type),
-     isCompatible ty ty
+ | IsCompatibleVoid :
+     isCompatible Void Void
+ | IsCompatibleEqBasic : forall (bt:basicType),
+     isCompatible (Basic bt) (Basic bt)
+ | IsCompatibleEqPointer : forall (qs1 qs2 : qualifiers) (ty1 ty2:type),
+     qs1 = qs2 ->
+     isCompatible ty1 ty2 ->
+     isCompatible (Pointer qs1 ty1) (Pointer qs2 ty2)
+ | IsCompatibleArray : forall (n:nat) (ty1 ty2:type),
+     isCompatible ty1 ty2 ->
+     isCompatible (Array ty1 n) (Array ty2 n)
  | IsCompatibleFunction : forall (p1 p2 : params) (t1 t2 : type),
      isCompatible t1 t2 ->
      isCompatible_params p1 p2 ->
@@ -345,15 +355,34 @@ Inductive isCompatible : type -> type -> Prop :=    (* defn isCompatible *)
 with isCompatible_params : params -> params -> Prop :=
  | IsCompatible_nil  :
      isCompatible_params ParamsNil ParamsNil
- | IsCompatible_cons : forall qs1 t1 p1 qs2 t2 p2, 
+ | IsCompatible_cons : forall qs1 t1 p1 qs2 t2 p2,
      isCompatible t1 t2 ->
      isCompatible_params p1 p2 ->
      isCompatible_params (ParamsCons qs1 t1 p1) (ParamsCons qs2 t2 p2).
 
+(*
+Qualifiers of paramaters are ignored, c.f 6.7.6.3 #15:
+
+In the determination of type compatibility and of a composite type, each
+parameter declared with function or array type is taken as having the adjusted
+type and each parameter declared with qualified type is taken as having the
+unqualified version of its declared type.)
+
+*)
+
+(* Not that the adjustment (c.f. 6.7.6.3 # 15) of parameter types has already happened*)
+
 (* defns JisComposite *)
 Inductive isComposite : type -> type -> type -> Prop :=    (* defn isComposite *)
- | IsCompositeEq : forall (ty:type),
-     isComposite ty ty ty
+ | IsCompositeEqVoid :
+     isComposite Void Void Void
+ | IsCompositeEqBasic : forall (bt:basicType),
+     isComposite (Basic bt) (Basic bt) (Basic bt)
+ | IsCompositeEqPointer : forall (qs1 qs2 qs : qualifiers) (ty1 ty2 ty : type),
+     qs1 = qs ->
+     qs2 = qs ->
+     isComposite ty1 ty2 ty ->
+     isComposite (Pointer qs1 ty1) (Pointer qs2 ty2) (Pointer qs ty)
  | IsCompositeArray : forall (ty1:type) (n:nat) (ty2 ty:type),
      isComposite ty1 ty2 ty ->
      isComposite  (Array ty1 n)   (Array ty2 n)   (Array ty n)
@@ -366,9 +395,10 @@ with isComposite_params : params -> params -> params -> Prop :=
      isComposite_params ParamsNil
                         ParamsNil
                         ParamsNil
- | IsComposite_cons : forall t1 p1 qs1 t2 p2 qs2 t3 p3,
+ | IsComposite_cons : forall qs1 qs2 qs3 t1 t2 t3 p1 p2 p3,
      isComposite        t1 t2 t3 ->
      isComposite_params p1 p2 p3 ->
+     isUnqualified qs3 ->
      isComposite_params (ParamsCons qs1 t1 p1)
                         (ParamsCons qs2 t2 p2)
-                        (ParamsCons nil t3 p3).
+                        (ParamsCons qs3 t3 p3).

@@ -1,5 +1,8 @@
 Require Import Common.
 Require Import AilTypes.
+Require Import AilTypesAux.
+Require Import AilTypesAux_fun.
+Require Import AilTypesAux_proof.
 Require Import AilSyntax.
 Require Import AilSyntaxAux. 
 Require Import AilSyntaxAux_fun.
@@ -31,7 +34,11 @@ Ltac isNullPointerConstant_fun_tac :=
 Fixpoint isNullPointerConstant_fun_correct e : boolSpec (isNullPointerConstant_fun e) (isNullPointerConstant e).
 Proof.
   unfold_goal.
-  destruct e; my_auto;
-  set (isNullPointerConstant_fun_correct e);
-  boolSpec_simpl; my_auto.
+  destruct e; simpl;
+  unfold andb;
+  repeat match goal with
+  | [|- isNullPointerConstant_fun ?e = _ -> _] => case_fun (isNullPointerConstant_fun_correct e)
+  | [|- isUnqualified_fun ?qs        = _ -> _] => case_fun (isUnqualified_fun_correct qs)
+  | _ => context_destruct
+  end; try finish fail.
 Defined.

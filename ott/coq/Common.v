@@ -516,8 +516,9 @@ Ltac context_destruct :=
 Ltac case_fun G :=
   match goal with
   | [|- _ = ?o -> _] =>
+      is_var o;
       let Heq := fresh in
-      is_var o; destruct o;
+      destruct o;
       intros Heq;
       generalize G;
       rewrite Heq;
@@ -539,9 +540,13 @@ Ltac case_fun_hyp G :=
 Ltac case_fun_destruct :=
   match goal with
   | [|- ?t = ?o -> _] =>
+      is_var o;
       let Heq := fresh in
-      is_var o; destruct t; intros Heq; rewrite <- Heq; clear Heq
+      destruct t; intros Heq; rewrite <- Heq; clear Heq
   end.
 
 Ltac context_destruct_all :=
   repeat (context_destruct; try case_fun_destruct).
+
+Ltac notSame x y :=
+  try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
