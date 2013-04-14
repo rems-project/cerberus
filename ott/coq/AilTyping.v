@@ -702,7 +702,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      isAssignable P G S ty e2 ->
      eType P G S (Assign e1 e2) (ExpressionType ty)
  | ETypeCompoundAssignPlusMinusArithmetic : forall (P:impl) (G:gamma) (S:sigma) aop (e1 e2:expression) (ty1:type) (qs:qualifiers) (ty ty2 :type),
-     (aop = Add) + (aop = Mul) ->
+     (aop = Add) + (aop = Sub) ->
      eType P G S e1 (LvalueType qs ty) ->
      lvalueConversion ty ty1 ->
      expressionType P G S e2 ty2 ->
@@ -711,16 +711,16 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      isArithmetic ty2 ->
      eType P G S (CompoundAssign e1 aop e2) (ExpressionType ty1)
  | ETypeCompoundAssignPlusMinusPointer : forall (P:impl) (G:gamma) (S:sigma) aop (e1 e2:expression) (ty1:type) (qs' qs:qualifiers) (ty ty2:type),
-     (aop = Add) + (aop = Mul) ->
+     (aop = Add) + (aop = Sub) ->
      eType P G S e1 (LvalueType qs' (Pointer qs ty)) ->
      lvalueConversion (Pointer qs ty) ty1 ->
      expressionType P G S e2 ty2 ->
-     isModifiable qs (Pointer qs ty)  ->
+     isModifiable qs' (Pointer qs ty)  ->
      isComplete ty ->
      isInteger ty2 ->
      eType P G S (CompoundAssign e1 aop e2) (ExpressionType ty1)
  | ETypeCompoundAssign : forall (P:impl) (G:gamma) (S:sigma) aop (e1 e2:expression) (ty1:type) (qs:qualifiers) (ty ty2:type),
-     neg ((aop = Add) + (aop = Mul)) ->
+     neg ((aop = Add) + (aop = Sub)) ->
      eType P G S e1 (LvalueType qs ty) ->
      lvalueConversion ty ty1 ->
      expressionType P G S e2 ty2 ->
@@ -2358,7 +2358,33 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | Some ty1, Some ty2, Some ty3 => isConditional_fun P ty1 ty2 ty3 (isNullPointerConstant_fun e2) (isNullPointerConstant_fun e3)
       | _       , _       , _        => None
       end
-  | CompoundAssign _ _ _ => None
+  | CompoundAssign e1 Add e2
+  | CompoundAssign e1 Sub e2 =>
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      | Some (LvalueType qs ty), Some ty2 => 
+          match lvalueConversion_find ty with
+          | Some ty1 => if andb (isModifiable_fun qs ty)
+                                (orb (andb (isArithmetic_fun ty1)
+                                           (isArithmetic_fun ty2))
+                                     (andb (isPointerToCompleteObject_fun ty)
+                                           (isInteger_fun ty2)))
+                          then Some (ExpressionType ty1)
+                          else None
+          | None    => None
+          end
+      | _                                    , _  => None
+      end
+  | CompoundAssign e1 aop e2 =>
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      | Some (LvalueType qs ty), Some ty2 => 
+          match lvalueConversion_find ty with
+          | Some ty1 => if andb (isModifiable_fun qs ty) (isBinaryArithmetic_fun ty1 aop ty2) 
+                          then Some (ExpressionType ty1)
+                          else None
+          | None    => None
+          end
+      | _                                    , _  => None
+      end
   end
 with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) {struct l} : bool :=
   match l, p with
@@ -2372,24 +2398,19 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
   | _                , _                  => false
   end.
 
-Require Import Coq.Program.Basics.
-
-Fixpoint eType_find_correct P G S e {struct e}:
+Definition eType_find_spec P G S e :=
   Disjoint G S ->
   match eType_find P G S e with
   | Some tc => eType P G S e tc * (forall tc', eType P G S e tc' -> tc = tc')
   | None    => forall tc, neg (eType P G S e tc)
-  end
-with eType_arguments_find_correct P G S l p {struct l}:
+  end.
+
+Definition eType_arguments_find_spec P G S l p :=
   Disjoint G S ->
   boolSpec (eType_arguments_find P G S l p) (eType_arguments P G S l p).
-Proof.
-  intros Hdisjoint.
-  destruct e; unfold eType_find; fold eType_arguments_find; fold eType_find.
-  Focus 5.
+
+Ltac eType_find_tac Hdisjoint P G S :=
   repeat match goal with
-  | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
-  | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
   | [H : boolSpec true  _ |- _] => rewrite boolSpec_true  in H
   | [H : boolSpec false _ |- _] => rewrite boolSpec_false in H
   | [H : isComplete Void |- _ ] => inversion H
@@ -2418,15 +2439,15 @@ Proof.
   | [H : isBinaryArithmetic _ Sub (Pointer _ _) |- _] => inversion H; subst
   | [H : isBinaryArithmetic (Function _ _) Sub _ |- _] => inversion H; subst
   | [H : isBinaryArithmetic _ Sub (Function _ _) |- _] => inversion H; subst
+  | [H : (?aop = Add) + (?aop = Sub) |- _] => notSame aop Add; notSame aop Sub; destruct H as [H|H]; discriminate H
+  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
+  | [H : neg ((Add = Add) + _) |- _ ] => exfalso; apply H; left ; reflexivity
+  | [H : neg (_ + (Sub = Sub)) |- _ ] => exfalso; apply H; right; reflexivity
+  | [Heq : pointerConvert ?t = Pointer _ _, H : context [pointerConvert ?t] |- _ ] => rewrite    Heq in *
+  | [Heq : Pointer _ _ = pointerConvert ?t, H : context [pointerConvert ?t] |- _ ] => rewrite <- Heq in *
   | [H : isUnqualified ?qs |- _] => is_var qs; inversion H; subst
   | [|- lookup_id ?E ?id = ?o -> _] =>
       case_fun (lookup_id_correct E id)
-  | [|- eType_find P G S ?e = ?o -> _] =>
-      case_fun (eType_find_correct P G S e Hdisjoint);
-      match goal with
-      | [H : _ * _ |- _] => destruct H
-      | _ => idtac
-      end
   | [|- context[option_map] ] =>
       unfold option_map
   | [|- context[negb] ] =>
@@ -2455,6 +2476,14 @@ Proof.
       match type of e with ?t => pull_out t e end
   | [|- (?e || _) = _ -> _] =>
       match type of e with ?t => pull_out t e end
+  | [H : forall _, eType_arguments_find_spec P G S ?l _ |- eType_arguments_find P G S ?l ?p = ?o -> _] =>
+      case_fun (H p Hdisjoint)
+  | [H : eType_find_spec P G S ?e |- eType_find P G S ?e = ?o -> _] =>
+      case_fun (H Hdisjoint);
+      match goal with
+      | [H : _ * _ |- _] => destruct H
+      | _ => idtac
+      end
   | [|- isAssignable_fun _ _ _ = ?o -> _] =>
       is_var o; destruct o
   | [H : expressionType P G S _ ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = true -> _] =>
@@ -2495,8 +2524,6 @@ Proof.
       set (expressionType_find_correct_pos H Heq)
   | [|- expressionType_find (LvalueType ?q ?t) = ?o -> _] =>
       is_var o; destruct o
-  | [|- eType_arguments_find P G S ?l ?p = ?o -> _] =>
-      case_fun (eType_arguments_find_correct P G S l p Hdisjoint)
   | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = Some _ -> _] =>
       let Heq := fresh in
       intros Heq;
@@ -2602,7 +2629,8 @@ Proof.
                                            (fun ty ty' E => expressionType_unique_expression_inj (eType_unique_instance Hunique3) E ty') H1 H2 H3 Heq)
   | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
-  | [|- eType P G S _ _] => assumption || econstructor (solve [eassumption|reflexivity])
+  | [|- eType P G S _ _] => assumption || econstructor (solve [eassumption|reflexivity|inversion 1; congruence|left; reflexivity|right; reflexivity])
+  | [|- eType_arguments P G S _ _] => econstructor (solve [reflexivity |assumption])
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ ?t1 = _
     , H1  : expressionType P G S ?e ?t1
     , H2  : expressionType P G S ?e ?t2         |- _ ] =>
@@ -2635,6 +2663,10 @@ Proof.
       discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType _ = _, H : eType P G S ?e (ExpressionType ?t) |- _] =>
       discriminate (Hunique _ H) || (einjection (Hunique _ H); congruence)
+  | [ Hunique : forall _, eType P G S ?e _ -> LvalueType ?qs ?ty = _
+    , H1 : eType P G S ?e (LvalueType ?qs ?ty)
+    , H2 : eType P G S ?e (LvalueType _  (Pointer _ _)) |- False] =>
+        is_var ty; injection (Hunique _ H2); intros; subst
   | [H : isPointer ?t, _ : expressionType P G S _ ?t |- eType P G S (Binary _ Eq _) _ ] => is_var t; inversion H; subst
   | [H : isPointer ?t, _ : expressionType P G S _ ?t |- eType P G S (Binary _ Ne _) _ ] => is_var t; inversion H; subst
   | [H : isPointer (pointerConvert ?t), _ : expressionType P G S _ (pointerConvert ?t) |- eType P G S (Binary _ Eq _) _ ] => is_var t; inversion H; subst
@@ -2650,40 +2682,42 @@ Proof.
   | [|- forall _, eType P G S (Var _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Call _ _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Assign _ _) _ -> _ = _] => inversion_clear 1
+  | [|- forall _, eType P G S (CompoundAssign _ _ _) _ -> _ = _] => inversion_clear 1
   | [|- forall _, eType P G S (Constant _) _ -> _ = _] => inversion_clear 1; try congruence
   | [|- forall _, neg (eType P G S (Binary _ _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Unary _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Constant _) _)] => inversion 1; subst; try contradiction
   | [|- forall _, neg (eType P G S (Call _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (Assign _ _) _)] => inversion 1; subst
+  | [|- forall _, neg (eType P G S (CompoundAssign _ _ _) _)] => inversion 1; subst
   | [|- forall _, neg (eType P G S (AlignOf _ _) _)] => inversion 1; subst; contradiction
   | [|- forall _, neg (eType P G S (SizeOf _ _) _)] => inversion 1; subst; contradiction
   | [|- forall _, neg (eType P G S (Cast _ _ _) _)] => inversion 1; subst; try contradiction
+  | [|- neg (eType_arguments P G S _ _)] => inversion 1; subst; try congruence
   | [H : ~ inIntegerTypeRange P ?n (Signed Long) |- _] =>
       notHyp (inIntegerTypeRange P n (Signed Int) -> False);
       unfold not in H;
-      set (compose H1 inIntegerTypeRange_Signed_Int_Long) ;
+      set (Program.Basics.compose H inIntegerTypeRange_Signed_Int_Long) ;
       contradiction
   | [H : ~ inIntegerTypeRange P ?n (Unsigned Long) |- _] =>
       notHyp (inIntegerTypeRange P n (Unsigned Int) -> False);
       unfold not in H;
-      set (compose H1 inIntegerTypeRange_Unsigned_Int_Long) ;
+      set (Program.Basics.compose H inIntegerTypeRange_Unsigned_Int_Long) ;
       contradiction
   | [Heq : pointerConvert ?t = Pointer _ _, H : neg (isPointer (pointerConvert ?t)) |- _ ] => rewrite Heq in H; exfalso; apply H; now constructor
-  | [H : neg (isPointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
-  | [H : _ + _ |- _] => destruct H
+  | [H : _ + _ |- _] => destruct H; try congruence
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
   | [Hfalse : forall _, neg (expressionType P G S ?e _), H : expressionType P G S ?e _ |- False] => exact (Hfalse _ H)
-  | [ H : isComplete ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isComplete _) |- False ] => now eapply (Hfalse qs1 ty1 _ H)
-  | [ H : isObject   ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isObject   _) |- False ] => now eapply (Hfalse qs1 ty1 _ H)
-  | [                       Hfalse : forall _ _, Pointer ?qs1 Void = Pointer _ _ -> neg (isVoid _)     |- False ] => now eapply (Hfalse qs1 Void _ IsVoid)
+  | [ H : isComplete ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isComplete _) |- False ] => now eapply (Hfalse qs1 ty1 eq_refl H)
+  | [ H : isObject   ?ty1 , Hfalse : forall _ _, Pointer ?qs1 ?ty1 = Pointer _ _ -> neg (isObject   _) |- False ] => now eapply (Hfalse qs1 ty1 eq_refl H)
+  | [                       Hfalse : forall _ _, Pointer ?qs1 Void = Pointer _ _ -> neg (isVoid _)     |- False ] => now eapply (Hfalse qs1 Void eq_refl IsVoid)
   | [ Hfalse : forall _ : type, neg (isPromotion P ?t _)
     , _ : expressionType P G S ?e ?t1
     , H : isPromotion P ?t1 ?t2 |- _ ] => exfalso; eapply Hfalse; congruence
   | [ Hfalse : forall _ _ _ _, Pointer ?qs1 ?ty1 = _ ->
                                Pointer ?qs2 ?ty2 = _ ->
                                neg (isCompatible _ _)
-    , H : isCompatible ?ty1 ?ty2 |- False] => now eapply (Hfalse qs1 qs2 ty1 ty2 _ _ H)
+    , H : isCompatible ?ty1 ?ty2 |- False] => now eapply (Hfalse qs1 qs2 ty1 ty2 eq_refl eq_refl H)
   | [|- eType _ _ _ (Var _) (LvalueType _ _) ] => now my_auto
   | [ L1 : Lookup ?G ?id _
     , L2 : Lookup ?S ?id _ |- _ ] =>
@@ -2697,10 +2731,286 @@ Proof.
   | [ _ : forall _, neg (eType P G S ?e _) , H : expressionType P G S ?e _ |- _] => inversion H
   end.
 
+Ltac eType_find_tac_finish P G S :=
+  intros; intros Hdisjoint;
+  unfold eType_find; fold eType_arguments_find; fold eType_find;
+  eType_find_tac Hdisjoint P G S.
 
+Definition eType_find_correct_Unary {P} {G} {S} {aop} {e} :
+  eType_find_spec P G S e ->
+  eType_find_spec P G S (Unary aop e).
+Proof. eType_find_tac_finish P G S. Qed.
+  
+Definition eType_find_correct_Binary_Arithmetic_Mul {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Mul) e2).
+Proof. eType_find_tac_finish P G S. Qed.
 
+Definition eType_find_correct_Binary_Arithmetic_Div {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Div) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Mod {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Mod) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Add {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Add) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Sub {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Sub) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Shl {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Shl) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Shr {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Shr) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Band {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Band) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Bor {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Bor) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Arithmetic_Xor {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 (Arithmetic Xor) e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Comma {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Comma e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_And {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 And e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Or {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Or e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Lt {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Lt e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Gt {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Gt e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Le {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Le e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Ge {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Ge e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Eq {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Eq e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Binary_Ne {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Binary e1 Ne e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Assign {P} {G} {S} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (Assign e1 e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_CompoundAssign {P} {G} {S} {aop} {e1 e2} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S (CompoundAssign e1 aop e2).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Conditional {P} {G} {S} {e1 e2 e3} :
+  eType_find_spec P G S e1 ->
+  eType_find_spec P G S e2 ->
+  eType_find_spec P G S e3 ->
+  eType_find_spec P G S (Conditional e1 e2 e3).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Cast {P} {G} {S} {qs} {ty} {e} :
+  eType_find_spec P G S e ->
+  eType_find_spec P G S (Cast qs ty e).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Call {P} {G} {S} {e} {l} :
+  (forall p, eType_arguments_find_spec P G S l p)->
+  eType_find_spec P G S e ->
+  eType_find_spec P G S (Call e l).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Constant {P} {G} {S} {c} :
+  eType_find_spec P G S (Constant c).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_Var {P} {G} {S} {id} :
+  eType_find_spec P G S (Var id).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_SizeOf {P} {G} {S} {qs} {ty} :
+  eType_find_spec P G S (SizeOf qs ty).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Definition eType_find_correct_AlignOf {P} {G} {S} {qs} {ty} :
+  eType_find_spec P G S (AlignOf qs ty).
+Proof. eType_find_tac_finish P G S. Qed.
+
+Fixpoint eType_find_correct P G S e {struct e}:
+  eType_find_spec P G S e
+with eType_arguments_find_correct P G S l p {struct l}:
+  eType_arguments_find_spec P G S l p.
+Proof.
+- destruct e;
+  match goal with
+  | [|- eType_find_spec P G S (Unary _ ?e) ] =>
+      exact (eType_find_correct_Unary (eType_find_correct P G S e))
+  | [|- eType_find_spec P G S (Binary ?e1 ?bop ?e2) ] =>
+      destruct bop;
+      match goal with
+      | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic ?aop) ?e2)] =>
+          destruct aop;
+          match goal with
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Mul) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Mul (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Div) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Div (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Mod) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Mod (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Add) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Add (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Sub) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Sub (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Shl) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Shl (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Shr) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Shr (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Band) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Band (eType_find_correct P G S e1)
+                                                               (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Bor) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Bor (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          | [|- eType_find_spec P G S (Binary ?e1 (Arithmetic Xor) ?e2)] =>
+              exact (eType_find_correct_Binary_Arithmetic_Xor (eType_find_correct P G S e1)
+                                                              (eType_find_correct P G S e2))
+          end
+      | [|- eType_find_spec P G S (Binary ?e1 Comma ?e2)] =>
+          exact (eType_find_correct_Binary_Comma (eType_find_correct P G S e1)
+                                                 (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 And ?e2)] =>
+          exact (eType_find_correct_Binary_And (eType_find_correct P G S e1)
+                                               (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Or ?e2)] =>
+          exact (eType_find_correct_Binary_Or (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Lt ?e2)] =>
+          exact (eType_find_correct_Binary_Lt (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Gt ?e2)] =>
+          exact (eType_find_correct_Binary_Gt (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Le ?e2)] =>
+          exact (eType_find_correct_Binary_Le (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Ge ?e2)] =>
+          exact (eType_find_correct_Binary_Ge (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Eq ?e2)] =>
+          exact (eType_find_correct_Binary_Eq (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      | [|- eType_find_spec P G S (Binary ?e1 Ne ?e2)] =>
+          exact (eType_find_correct_Binary_Ne (eType_find_correct P G S e1)
+                                              (eType_find_correct P G S e2))
+      end
+  | [|- eType_find_spec P G S (Assign ?e1 ?e2) ] =>
+      exact (eType_find_correct_Assign (eType_find_correct P G S e1)
+                                       (eType_find_correct P G S e2))
+  | [|- eType_find_spec P G S (CompoundAssign ?e1 _ ?e2) ] =>
+      exact (eType_find_correct_CompoundAssign (eType_find_correct P G S e1)
+                                               (eType_find_correct P G S e2))
+  | [|- eType_find_spec P G S (Conditional ?e1 ?e2 ?e3) ] =>
+      exact (eType_find_correct_Conditional (eType_find_correct P G S e1)
+                                            (eType_find_correct P G S e2)
+                                            (eType_find_correct P G S e3))
+  | [|- eType_find_spec P G S (Cast _ _ ?e) ] =>
+      exact (eType_find_correct_Cast (eType_find_correct P G S e))
+  | [|- eType_find_spec P G S (Call ?e ?l) ] =>
+      exact (eType_find_correct_Call (eType_arguments_find_correct P G S l)
+                                     (eType_find_correct P G S e))
+  | [|- eType_find_spec P G S (Constant _) ] =>
+      exact (eType_find_correct_Constant)
+  | [|- eType_find_spec P G S (Var _) ] =>
+      exact (eType_find_correct_Var)
+  | [|- eType_find_spec P G S (SizeOf _ _) ] =>
+      exact (eType_find_correct_SizeOf)
+  | [|- eType_find_spec P G S (AlignOf _ _) ] =>
+      exact (eType_find_correct_AlignOf)
+  end.
+- destruct l, p.
+  + constructor.
+  + intros ?; inversion 1.
+  + intros ?; inversion 1.
+  + intros Hdisjoint.
+    simpl; unfold_goal.
+    set (eType_find_correct P G S e).
+    set (eType_arguments_find_correct P G S l).
+    eType_find_tac Hdisjoint P G S.
 Qed.
 
+(*
 (* defns JsType *)
 Inductive sType : impl -> gamma -> sigma -> statement -> Prop :=    (* defn sType *)
  | STypeLabel : forall (P:impl) (G:gamma) (S:sigma) (id:identifier) (s:statement),
@@ -2780,4 +3090,4 @@ Inductive pType : impl -> program -> Prop :=    (* defn pType *)
       ( S  [  id  ] = Some (  (Function (Basic (Integer (Signed Int))) nil)  ,  s ))%sigma  ->
      pType P  ( id ,  S ) .
 
-
+*)
