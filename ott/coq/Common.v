@@ -550,3 +550,19 @@ Ltac context_destruct_all :=
 
 Ltac notSame x y :=
   try (unify x y; fail 1); notHyp (x = y); notHyp (y = x).
+
+Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
+  fun o f =>
+    match o with
+    | Some a => f a
+    | None   => None
+    end.
+
+Infix ">>=" := option_bind (at level 42, left associativity).
+
+Definition option_bool {A} : option A -> (A -> bool) -> bool :=
+  fun o f =>
+    match o with
+    | Some a => f a
+    | None   => false
+    end.
