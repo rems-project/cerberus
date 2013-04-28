@@ -16,7 +16,6 @@ Require Import AilSyntaxAux_fun.
 Require Import AilSyntaxAux_proof.
 Require Import Implementation.
 
-
 (** definitions *)
 
 Inductive Lookup {A B : Type} : list (A * B) -> A -> B -> Type :=
@@ -280,8 +279,9 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
  | ETypeVariable : forall (P:impl) (G:gamma) (S:sigma) (id:identifier) (qs:qualifiers) (ty:type),
      Lookup G id (qs, ty)  ->
      eType P G S (Var id) (LvalueType qs ty)
- | ETypeFunction : forall (P:impl) (G:gamma) (S:sigma) (id:identifier) (ty:type) (s:statement),
-     Lookup S id (ty, s)  ->
+ | ETypeFunction : forall (P:impl) (G:gamma) (S:sigma) (id:identifier) (ty:type) p,
+     Lookup S id p ->
+     typeOfSigma p = ty ->
      eType P G S (Var id) (ExpressionType ty)
  | ETypeConstantInt : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
      inIntegerTypeRange P n (Signed Int) ->
@@ -2145,9 +2145,9 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   match e with
   | Var id =>
       match lookup_id G id, lookup_id S id with
-      | Some (qs, ty), None         => Some (LvalueType     qs ty)
-      | None         , Some (ty, _) => Some (ExpressionType    ty)
-      | _            , _            => None
+      | Some (qs, ty), None   => Some (LvalueType     qs ty)
+      | None         , Some p => Some (ExpressionType (typeOfSigma p))
+      | _            , _      => None
       end
   | Binary e1 Comma e2 => 
      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with

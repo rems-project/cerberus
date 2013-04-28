@@ -112,7 +112,7 @@ Definition gamma : Set := list (identifier * (AilTypes.qualifiers * AilTypes.typ
 Inductive statement : Set := 
  | Skip
  | Expression (e:expression)
- | Block (G:gamma) (block:list statement)
+ | Block (G:gamma) (b:block)
  | If (e:expression) (s1:statement) (s2:statement)
  | While (e:expression) (s:statement)
  | Do (s:statement) (e:expression)
@@ -121,15 +121,32 @@ Inductive statement : Set :=
  | ReturnVoid
  | Return (e:expression)
  | Switch (e:expression) (s:statement)
- | Case (int_const:integerConstant) (s:statement)
+ | Case (ic:integerConstant) (s:statement)
  | Default (s:statement)
  | Label (id:identifier) (s:statement)
  | Goto (id:identifier)
- | Declaration (ds:list definition).
+ | Declaration (d:definitions)
+with definitions : Set :=
+ | DefinitionNil
+ | DefinitionCons (id:identifier) (e:expression) (d:definitions)
+with block : Set :=
+ | BlockNil
+ | BlockCons (s:statement) (b:block).
 
-Definition declaration : Set := nat * option AilTypes.storageDuration.
+Definition declaration : Set := identifier * option storageDuration.
 
-Definition sigma : Set := list (identifier * (AilTypes.type * statement)).
+Definition sigma : Set := list (identifier * (type * list (identifier * (qualifiers * type)) * statement)).
+
+Fixpoint paramsOfSigma (ls : list (identifier * (qualifiers * type))) :=
+  match ls with
+  | nil               => ParamsNil
+  | (_, (qs, ty))::ls => ParamsCons qs ty (paramsOfSigma ls)
+  end.
+
+Definition typeOfSigma (p : type * list (identifier * (qualifiers * type)) * statement) :=
+  match p with
+  | (ty, ls, _) => Function ty (paramsOfSigma ls)
+  end.
 
 Definition program : Set := identifier * sigma.
 (** induction principles *)
