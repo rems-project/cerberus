@@ -7,13 +7,10 @@ Require Export ZArith.
 
 Require Import Common.
 Require Import AilTypes.
-Require Import AilTypesAux.
-Require Import AilTypesAux_fun.
-Require Import AilTypesAux_proof.
 Require Import AilSyntax.
-Require Import AilSyntaxAux.
-Require Import AilSyntaxAux_fun.
-Require Import AilSyntaxAux_proof.
+Require Import AilTypesAux AilTypesAux_fun AilTypesAux_proof.
+Require Import AilSyntaxAux AilSyntaxAux_fun AilSyntaxAux_proof.
+Require Import AilWf.
 Require Import Implementation.
 
 (** definitions *)
@@ -519,23 +516,27 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      isPromotion P ty' ty ->
      eType P G S (Unary Bnot e) (ExpressionType ty)
  | ETypeSizeOf : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty ty':type),
+     wfLvalueType qs ty ->
       ~ (  isFunction ty  )  ->
       ~ (  isIncomplete ty  )  ->
       Implementation.size_t  P  =  ty'  ->
      eType P G S (SizeOf qs ty) (ExpressionType ty')
  | ETypeAlignOf : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty ty':type),
+     wfLvalueType qs ty ->
       ~ (  isFunction ty  )  ->
       ~ (  isIncomplete ty  )  ->
       Implementation.size_t  P  =  ty'  ->
      eType P G S (AlignOf qs ty) (ExpressionType ty')
  | ETypeCastScalar : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty:type) (e:expression) (ty':type),
+     wfLvalueType qs ty ->
      expressionType P G S e ty' ->
      isScalar ty' ->
      isScalar ty ->
      eType P G S (Cast qs ty e) (ExpressionType ty)
- | ETypeCastVoid : forall (P:impl) (G:gamma) (S:sigma) (qualifiers:qualifiers) (e:expression) (ty:type),
+ | ETypeCastVoid : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (e:expression) (ty:type),
+     wfLvalueType qs Void ->
      expressionType P G S e ty ->
-     eType P G S (Cast qualifiers Void e) (ExpressionType Void)
+     eType P G S (Cast qs Void e) (ExpressionType Void)
  | ETypeMul : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty ty1 ty2:type),
      expressionType P G S e1 ty1 ->
      expressionType P G S e2 ty2 ->
@@ -1957,10 +1958,12 @@ Proof.
     end.
     + left; right; econstructor (econstructor (solve [ eassumption
                                                      | reflexivity
-                                                     | econstructor (constructor; constructor)])).
+                                                     | econstructor (constructor; constructor)
+                                                     | econstructor (now repeat first [inversion 1 | constructor])])).
     + left; right; econstructor (econstructor (solve [ eassumption
                                                      | reflexivity
-                                                     | econstructor (constructor; constructor)])).
+                                                     | econstructor (constructor; constructor)
+                                                     | econstructor (now repeat first [inversion 1 | constructor])])).
     + right; inversion 1; subst.
       repeat match goal with
       | [Hfalse : forall _, neg (eType P G S e _), H : eType P G S e _ |- _] => exact (Hfalse _ H)
@@ -2370,22 +2373,29 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       end
   | SizeOf  qs ty
   | AlignOf qs ty =>
-      if andb (negb (isFunction_fun   ty))
-              (negb (isIncomplete_fun ty))
+      if andb (wfLvalueType_fun qs ty)
+              (andb (negb (isFunction_fun   ty))
+                    (negb (isIncomplete_fun ty)))
         then Some (ExpressionType (size_t P))
         else None
-  | Cast _ Void e =>
-      match eType_find P G S e >>= expressionType_aux_find with
-      | Some _ => Some (ExpressionType Void)
-      | None   => None
-      end
-  | Cast _ ty e =>
-      match eType_find P G S e >>= expressionType_aux_find with
-      | Some ty' => if andb (isScalar_fun ty') (isScalar_fun ty)
-                      then Some (ExpressionType ty)
-                      else None
-      | None     => None
-      end
+  | Cast qs Void e =>
+      if wfLvalueType_fun qs Void then
+        match eType_find P G S e >>= expressionType_aux_find with
+        | Some _ => Some (ExpressionType Void)
+        | None   => None
+        end
+      else
+        None
+  | Cast qs ty e =>
+      if wfLvalueType_fun qs ty then
+        match eType_find P G S e >>= expressionType_aux_find with
+        | Some ty' => if andb (isScalar_fun ty') (isScalar_fun ty)
+                        then Some (ExpressionType ty)
+                        else None
+        | None     => None
+        end
+      else
+        None
   | Constant (ConstantInteger ic) =>
       match cType_fun P ic with
       | Some it => Some (ExpressionType (Basic (Integer it)))
@@ -2611,6 +2621,7 @@ Ltac eType_find_tac Hdisjoint P G S :=
   | [|- isUnqualified_fun ?qs           =  _ -> _] => case_fun (isUnqualified_fun_correct qs)
   | [|- isCompatible_fun ?t1 ?t2           = ?o -> _] => case_fun (isCompatible_fun_correct t1 t2)
   | [|- isBinaryArithmetic_fun ?ty1 ?aop ?ty2 = ?o -> _] => case_fun (isBinaryArithmetic_fun_correct ty1 aop ty2)
+  | [|- wfLvalueType_fun ?qs ?ty = _ -> _] => case_fun (wfLvalueType_fun_correct qs ty)
   | [|- isPromotion_find P ?t         = ?o -> _] =>
       is_var o;
       let Heq := fresh in
@@ -3044,6 +3055,76 @@ Proof.
     set (eType_find_correct P G S e).
     set (eType_arguments_find_correct P G S l).
     eType_find_tac Hdisjoint P G S.
+Qed.
+
+Lemma eType_unique {P} {G} {S} {e} {tc1 tc2} :
+  Disjoint G S ->
+  eType P G S e tc1 ->
+  eType P G S e tc2 ->
+  tc1 = tc2.
+Proof.
+  intros Hdisjoint; generalize (eType_find_correct P G S e); unfold_goal.
+  destruct (eType_find P G S e).
+  - intros [? Hunique] H1 H2.
+    + exact Hdisjoint.
+    + set (Hunique _ H1).
+      set (Hunique _ H2).
+      congruence.
+  - firstorder.
+Qed.
+
+Definition typeable_fun P G S e : bool :=
+  match eType_find P G S e with
+  | Some _ => true
+  | None   => false
+  end.
+
+Lemma typeable_fun_correct P G S e :
+  Disjoint G S ->
+  boolSpec (typeable_fun P G S e) (typeable P G S e).
+Proof.
+  intros Hdisjoint.
+  do 2 unfold_goal.
+  generalize (eType_find_correct P G S e Hdisjoint).
+  destruct (eType_find P G S e).
+  - intros [? _]; econstructor; eassumption.
+  - inversion 2; firstorder.
+Qed.
+
+Definition expressionType_find P G S e : option type :=
+  eType_find P G S e >>= expressionType_aux_find.
+
+Definition expressionType_find_correct P G S e :
+  Disjoint G S ->
+  optionSpec (expressionType_find P G S e) (expressionType P G S e).
+Proof.
+  intros Hdisjoint.
+  do 2 unfold_goal; unfold option_bind.
+  generalize (eType_find_correct P G S e Hdisjoint).
+  destruct (eType_find P G S e).
+  - intros [? ?].
+    + repeat match goal with
+      | [|- expressionType_aux_find ?t = _ -> _] =>
+          is_var t; destruct t
+      | [H : eType P G S _ (ExpressionType ?t) |- expressionType_aux_find (ExpressionType ?t) = ?o -> _] =>
+          is_var o; let Heq := fresh in
+          intros Heq; subst o;
+          assert (expressionType_aux_find (ExpressionType t) = Some (pointerConvert t)) as Heq by reflexivity; rewrite Heq;
+          set (expressionType_aux_find_correct_pos H Heq)
+      | [|- expressionType_aux_find (LvalueType ?q ?t) = ?o -> _] =>
+          is_var o; destruct o
+      | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_aux_find (LvalueType ?q ?t) = Some _ -> _] =>
+          let Heq := fresh in
+          intros Heq;
+          set     (expressionType_aux_find_eq_lvalue_lift H Heq);
+          rewrite (expressionType_aux_find_eq_lvalue        Heq) in *
+      | [ Hunique : forall _, eType P G S ?e _ -> LvalueType ?q ?t = _
+        , H : eType P G S ?e (LvalueType ?q ?t) |- expressionType_aux_find (LvalueType ?q ?t) = None -> _] =>
+          let Heq := fresh in
+          intros Heq; set (expressionType_aux_find_correct_neg H Hunique Heq)
+      | _ => context_destruct
+      end; assumption.
+  - inversion 2; firstorder.
 Qed.
 
 (*
