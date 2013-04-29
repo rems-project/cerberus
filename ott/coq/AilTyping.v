@@ -274,6 +274,178 @@ Definition subQualifiers qs1 qs2 :=
   && implb (isRestrictQualified qs1) (isRestrictQualified qs2)
   && implb (isVolatileQualified qs1) (isVolatileQualified qs2).
 
+
+Lemma inIntegerTypeRange_leIntegerTypeRange {P} {it1 it2} {n} :
+  leIntegerTypeRange P it1 it2 ->
+  inIntegerTypeRange P n it1 ->
+  inIntegerTypeRange P n it2.
+Proof.
+  inversion_clear 1; inversion_clear 1; subst.
+  match goal with
+  | [H : le _ _ |- _ ] => inversion_clear H
+  end.
+  match goal with
+  | [H : memNat _ _ |- _ ] => inversion_clear H
+  end.
+  constructor; constructor; eapply Z.le_trans; eassumption.
+Qed.
+
+Definition inIntegerTypeRange_Signed_Int_Long {P} {n} :=
+  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
+    LeIntegerTypeRange _ _ _
+      (integerTypeRange_precision_Signed P _ _ (IsSignedInt P _) (IsSignedInt P _) (lePrecision_Signed_Int_Long P))
+  ).
+
+Definition inIntegerTypeRange_Signed_Long_LongLong {P} {n} :=
+  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
+    LeIntegerTypeRange _ _ _
+      (integerTypeRange_precision_Signed P _ _ (IsSignedInt P _) (IsSignedInt P _) (lePrecision_Signed_Long_LongLong P))
+  ).
+
+Definition inIntegerTypeRange_Unsigned_Int_Long {P} {n} :=
+  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
+    LeIntegerTypeRange _ _ _
+      (integerTypeRange_precision_Unsigned P _ _ (IsUnsignedInt P _) (IsUnsignedInt P _) (lePrecision_Unsigned_Int_Long P))
+  ).
+
+Definition inIntegerTypeRange_Unsigned_Long_LongLong {P} {n} :=
+  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
+    LeIntegerTypeRange _ _ _
+      (integerTypeRange_precision_Unsigned P _ _ (IsUnsignedInt P _) (IsUnsignedInt P _) (lePrecision_Unsigned_Long_LongLong P))
+  ).
+
+Inductive cType : impl -> integerConstant -> integerType -> Prop :=    (* defn eType *)
+ | CTypeInt P : forall (n:nat),
+     inIntegerTypeRange P n (Signed Int) ->
+     cType P (n , None) (Signed Int)
+ | CTypeLong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Signed Int)  ->
+     inIntegerTypeRange P n (Signed Long) ->
+     cType P (n , None) (Signed Long)
+ | CTypeLongLong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Signed Long)  ->
+     inIntegerTypeRange P n (Signed LongLong) ->
+     cType P (n , None) (Signed LongLong)
+ | CTypeUInt P : forall (n:nat),
+     inIntegerTypeRange P n (Unsigned Int) ->
+     cType P (n , Some UnsignedInt) (Unsigned Int)
+ | CTypeULong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Unsigned Int)  ->
+     inIntegerTypeRange P n (Unsigned Long) ->
+     cType P (n , Some UnsignedInt) (Unsigned Long)
+ | CTypeULongLong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Unsigned Long)  ->
+     inIntegerTypeRange P n (Unsigned LongLong) ->
+     cType P (n , Some UnsignedInt) (Unsigned LongLong)
+ | CTypeLLong P : forall (n:nat),
+     inIntegerTypeRange P n (Signed Long) ->
+     cType P (n , Some SignedLong) (Signed Long)
+ | CTypeLLongLong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Signed Long)  ->
+     inIntegerTypeRange P n (Signed LongLong) ->
+     cType P (n , Some SignedLong) (Signed LongLong)
+ | CTypeULLong P : forall (n:nat),
+     inIntegerTypeRange P n (Unsigned Long) ->
+     cType P (n , Some UnsignedLong) (Unsigned Long)
+ | CTypeULLongLong P : forall (n:nat),
+      ~ inIntegerTypeRange P n (Unsigned Long)  ->
+     inIntegerTypeRange P n (Unsigned LongLong) ->
+     cType P (n , Some UnsignedLong) (Unsigned LongLong)
+ | CTypeLL P : forall (n:nat),
+     inIntegerTypeRange P n (Signed LongLong) ->
+     cType P (n , Some SignedLongLong) (Signed LongLong)
+ | CTypeULL P : forall (n:nat),
+     inIntegerTypeRange P n (Unsigned LongLong) ->
+     cType P (n , Some UnsignedLongLong) (Unsigned LongLong).
+
+Definition cType_fun P ic : option integerType :=
+  match ic with
+  | (n, None) =>
+      if inIntegerTypeRange_fun P n (Signed Int) then
+        Some (Signed Int)
+      else if inIntegerTypeRange_fun P n (Signed Long) then
+        Some (Signed Long)
+      else if inIntegerTypeRange_fun P n (Signed LongLong) then
+        Some (Signed LongLong)
+      else
+        None
+  | (n, Some UnsignedInt) =>
+      if inIntegerTypeRange_fun P n (Unsigned Int) then
+        Some (Unsigned Int)
+      else if inIntegerTypeRange_fun P n (Unsigned Long) then
+        Some (Unsigned Long)
+      else if inIntegerTypeRange_fun P n (Unsigned LongLong) then
+        Some (Unsigned LongLong)
+      else
+        None
+  | (n, Some SignedLong) =>
+      if inIntegerTypeRange_fun P n (Signed Long) then
+        Some (Signed Long)
+      else if inIntegerTypeRange_fun P n (Signed LongLong) then
+        Some (Signed LongLong)
+      else
+        None
+  | (n, Some UnsignedLong) =>
+      if inIntegerTypeRange_fun P n (Unsigned Long) then
+        Some (Unsigned Long)
+      else if inIntegerTypeRange_fun P n (Unsigned LongLong) then
+        Some (Unsigned LongLong)
+      else
+        None
+  | (n, Some SignedLongLong) =>
+      if inIntegerTypeRange_fun P n (Signed LongLong) then
+        Some (Signed LongLong)
+      else
+        None
+  | (n, Some UnsignedLongLong) =>
+      if inIntegerTypeRange_fun P n (Unsigned LongLong) then
+        Some (Unsigned LongLong)
+      else
+        None
+  end.
+
+Lemma cType_fun_correct P ic :
+  match cType_fun P ic with
+  | Some it => cType P ic it * forall it', cType P ic it' -> it = it'
+  | None    => forall it, neg (cType P ic it)
+  end.
+Proof.
+  unfold_goal.
+  destruct ic; simpl;
+  repeat match goal with
+  | [|- inIntegerTypeRange_fun P ?n ?it = ?o -> _] => case_fun (inIntegerTypeRange_fun_correct P n it)
+  | [H : ~ inIntegerTypeRange P ?n (Signed Long) |- _] =>
+      notHyp (inIntegerTypeRange P n (Signed Int) -> False);
+      unfold not in H;
+      set (Program.Basics.compose H inIntegerTypeRange_Signed_Int_Long) ;
+      contradiction
+  | [H : ~ inIntegerTypeRange P ?n (Unsigned Long) |- _] =>
+      notHyp (inIntegerTypeRange P n (Unsigned Int) -> False);
+      unfold not in H;
+      set (Program.Basics.compose H inIntegerTypeRange_Unsigned_Int_Long) ;
+      contradiction
+  | [|- cType _ _ _] => econstructor (eassumption)
+  | [|- forall _, neg (cType _ _ _)] => inversion 1; subst
+  | [|- forall _, cType _ _ _ -> _ = _] => inversion 1; subst
+  | [|-  _ * _] => split
+  | _ => context_destruct
+  end; solve [congruence | contradiction].
+Qed.
+
+Lemma cType_unique {P} {ic} {it1 it2} :
+  cType P ic it1 ->
+  cType P ic it2 ->
+  it1 = it2.
+Proof.
+  generalize (cType_fun_correct P ic).
+  destruct (cType_fun P ic).
+  + intros [? Hunique] H1 H2.
+    set (Hunique _ H1).
+    set (Hunique _ H2).
+    congruence.
+  + firstorder.
+Qed.
+
 (* defns JeType *)
 Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :=    (* defn eType *)
  | ETypeVariable : forall (P:impl) (G:gamma) (S:sigma) (id:identifier) (qs:qualifiers) (ty:type),
@@ -283,48 +455,9 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      Lookup S id p ->
      typeOfSigma p = ty ->
      eType P G S (Var id) (ExpressionType ty)
- | ETypeConstantInt : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Signed Int) ->
-     eType P G S (Constant (ConstantInteger  ( n , None) )) (ExpressionType (Basic (Integer (Signed Int))))
- | ETypeConstantLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Signed Int)  ->
-     inIntegerTypeRange P n (Signed Long) ->
-     eType P G S (Constant (ConstantInteger  ( n , None) )) (ExpressionType (Basic (Integer (Signed Long))))
- | ETypeConstantLongLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Signed Long)  ->
-     inIntegerTypeRange P n (Signed LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , None) )) (ExpressionType (Basic (Integer (Signed LongLong))))
- | ETypeConstantUInt : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Unsigned Int) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedInt ) )) (ExpressionType (Basic (Integer (Unsigned Int))))
- | ETypeConstantULong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Unsigned Int)  ->
-     inIntegerTypeRange P n (Unsigned Long) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedInt ) )) (ExpressionType (Basic (Integer (Unsigned Long))))
- | ETypeConstantULongLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Unsigned Long)  ->
-     inIntegerTypeRange P n (Unsigned LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedInt ) )) (ExpressionType (Basic (Integer (Unsigned LongLong))))
- | ETypeConstantLLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Signed Long) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  SignedLong ) )) (ExpressionType (Basic (Integer (Signed Long))))
- | ETypeConstantLLongLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Signed Long)  ->
-     inIntegerTypeRange P n (Signed LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  SignedLong ) )) (ExpressionType (Basic (Integer (Signed LongLong))))
- | ETypeConstantULLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Unsigned Long) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedLong ) )) (ExpressionType (Basic (Integer (Unsigned Long))))
- | ETypeConstantULLongLong : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-      ~ inIntegerTypeRange P n (Unsigned Long)  ->
-     inIntegerTypeRange P n (Unsigned LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedLong ) )) (ExpressionType (Basic (Integer (Unsigned LongLong))))
- | ETypeConstantLL : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Signed LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  SignedLongLong ) )) (ExpressionType (Basic (Integer (Signed LongLong))))
- | ETypeConstantULL : forall (P:impl) (G:gamma) (S:sigma) (n:nat),
-     inIntegerTypeRange P n (Unsigned LongLong) ->
-     eType P G S (Constant (ConstantInteger  ( n , Some  UnsignedLongLong ) )) (ExpressionType (Basic (Integer (Unsigned LongLong))))
+ | ETypeConstant : forall (P:impl) (G:gamma) (S:sigma) ic it,
+     cType P ic it ->
+     eType P G S (Constant (ConstantInteger ic)) (ExpressionType (Basic (Integer it)))
  | ETypeCall : forall (ls:arguments) (ps:params) (P:impl) (G:gamma) (S:sigma) (e:expression) qs (ty:type),
      isUnqualified qs ->
      expressionType P G S e (Pointer qs (Function ty ps)) ->
@@ -874,36 +1007,19 @@ Proof.
         | econstructor (solve [econstructor (eassumption) | finish eassumption])
         | eassumption ]).
 Qed.
-
-(* TODO remove *)
-Definition option_bind {A B} : option A -> (A -> option B) -> option B :=
-  fun o f =>
-    match o with
-    | Some a => f a
-    | None   => None
-    end.
-
-Infix ">>=" := option_bind (at level 42, left associativity).
-
-Definition option_bool {A} : option A -> (A -> bool) -> bool :=
-  fun o f =>
-    match o with
-    | Some a => f a
-    | None   => false
-    end.
       
 (* Coq's insanely stupid termination checker won't allow me to write a
 mutually recursive function so I am resorting to open recursion + tying the
 knot manually. *)
-Definition expressionType_find tc : option type :=
+Definition expressionType_aux_find tc : option type :=
   match tc with
   | ExpressionType   ty => Some (pointerConvert ty)
   | LvalueType     _ ty => lvalueConversion_find ty
   end.
 
-Lemma expressionType_find_correct_pos {P} {G} {S} {e} {tc} {ty} :
+Lemma expressionType_aux_find_correct_pos {P} {G} {S} {e} {tc} {ty} :
   eType P G S e tc ->
-  expressionType_find tc = Some ty ->
+  expressionType_aux_find tc = Some ty ->
   expressionType P G S e ty.
 Proof.
   intros ?.
@@ -920,10 +1036,10 @@ Proof.
   end.
 Qed.
 
-Lemma expressionType_find_correct_neg {P} {G} {S} {e} {tc} :
+Lemma expressionType_aux_find_correct_neg {P} {G} {S} {e} {tc} :
   eType P G S e tc ->
   (forall tc', eType P G S e tc' -> tc = tc') ->
-  expressionType_find tc = None ->
+  expressionType_aux_find tc = None ->
   forall ty, neg (expressionType P G S e ty).
 Proof.
   intros ? Hunique.
@@ -988,18 +1104,18 @@ Hint Extern 1 (LvalueType _ = LvalueType _) =>
     solve [ eapply expressionType_unique_lvalue_inj    ; eassumption
           | eapply expressionType_unique_expression_inj; eauto       ].
 
-Lemma expressionType_find_eq_lvalue {qs1} {ty1 ty2} :
-  expressionType_find (LvalueType qs1 ty1) = Some ty2 ->
+Lemma expressionType_aux_find_eq_lvalue {qs1} {ty1 ty2} :
+  expressionType_aux_find (LvalueType qs1 ty1) = Some ty2 ->
   ty1 = ty2.
 Proof. do 4 unfold_goal; destruct ty1; my_auto. Qed.
 
-Lemma expressionType_find_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
+Lemma expressionType_aux_find_eq_lvalue_lift {P} {G} {S} {e} {qs1} {ty1 ty2}:
   eType P G S e (LvalueType qs1 ty1) ->
-  expressionType_find (LvalueType qs1 ty1) = Some ty2 ->
+  expressionType_aux_find (LvalueType qs1 ty1) = Some ty2 ->
   expressionType P G S e ty1.
 Proof.
   intros ? Heq.
-  rewrite <- (expressionType_find_eq_lvalue Heq) in Heq.
+  rewrite <- (expressionType_aux_find_eq_lvalue Heq) in Heq.
   revert Heq; simpl; unfold_goal; context_destruct.
   case_fun (isLvalueConvertible_fun_correct ty1).
   + intros.
@@ -1584,45 +1700,6 @@ Proof.
   end).
 Qed.
 
-Lemma inIntegerTypeRange_leIntegerTypeRange {P} {it1 it2} {n} :
-  leIntegerTypeRange P it1 it2 ->
-  inIntegerTypeRange P n it1 ->
-  inIntegerTypeRange P n it2.
-Proof.
-  inversion_clear 1; inversion_clear 1; subst.
-  match goal with
-  | [H : le _ _ |- _ ] => inversion_clear H
-  end.
-  match goal with
-  | [H : memNat _ _ |- _ ] => inversion_clear H
-  end.
-  constructor; constructor; eapply Z.le_trans; eassumption.
-Qed.
-
-Definition inIntegerTypeRange_Signed_Int_Long {P} {n} :=
-  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
-    LeIntegerTypeRange _ _ _
-      (integerTypeRange_precision_Signed P _ _ (IsSignedInt P _) (IsSignedInt P _) (lePrecision_Signed_Int_Long P))
-  ).
-
-Definition inIntegerTypeRange_Signed_Long_LongLong {P} {n} :=
-  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
-    LeIntegerTypeRange _ _ _
-      (integerTypeRange_precision_Signed P _ _ (IsSignedInt P _) (IsSignedInt P _) (lePrecision_Signed_Long_LongLong P))
-  ).
-
-Definition inIntegerTypeRange_Unsigned_Int_Long {P} {n} :=
-  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
-    LeIntegerTypeRange _ _ _
-      (integerTypeRange_precision_Unsigned P _ _ (IsUnsignedInt P _) (IsUnsignedInt P _) (lePrecision_Unsigned_Int_Long P))
-  ).
-
-Definition inIntegerTypeRange_Unsigned_Long_LongLong {P} {n} :=
-  inIntegerTypeRange_leIntegerTypeRange (n:=n) (
-    LeIntegerTypeRange _ _ _
-      (integerTypeRange_precision_Unsigned P _ _ (IsUnsignedInt P _) (IsUnsignedInt P _) (lePrecision_Unsigned_Long_LongLong P))
-  ).
-
 Definition combineQualifiers_left t1 t2 : type :=
     match t1, t2 with
     | Pointer qs1 ty1, Pointer qs2 _ => Pointer (combineQualifiers qs1 qs2) ty1
@@ -2150,7 +2227,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | _            , _      => None
       end
   | Binary e1 Comma e2 => 
-     match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+     match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
      | Some _, Some ty2 => Some (ExpressionType ty2)
      | _     , _        => None
      end
@@ -2163,7 +2240,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   | Unary Plus e
   | Unary Minus e =>
       eType_find P G S e  >>=
-      expressionType_find >>= (fun ty =>
+      expressionType_aux_find >>= (fun ty =>
         if isArithmetic_fun ty then
           option_map ExpressionType (isPromotion_find P ty)
         else
@@ -2171,7 +2248,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       )
   | Unary Bnot e =>
       eType_find P G S e  >>=
-      expressionType_find >>= (fun ty =>
+      expressionType_aux_find >>= (fun ty =>
         if isInteger_fun ty then
           option_map ExpressionType (isPromotion_find P ty)
         else
@@ -2179,7 +2256,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       )
   | Unary Indirection e =>
       eType_find P G S e >>=
-      expressionType_find >>= (fun ty =>
+      expressionType_aux_find >>= (fun ty =>
         match ty with
         | Pointer qs (Function t p)  => if isUnqualified_fun qs
                                           then Some (ExpressionType (Pointer qs (Function t p)))
@@ -2206,14 +2283,14 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | None                      => None
       end
   | Call e ls =>
-      match eType_find P G S e >>= expressionType_find with
+      match eType_find P G S e >>= expressionType_aux_find with
       | Some (Pointer qs (Function ty ps)) => if andb (isUnqualified_fun qs) (eType_arguments_find P G S ls ps)
                                                 then Some (ExpressionType ty)
                                                 else None
       | _                                  => None
       end
   | Assign e1 e2 =>
-      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_aux_find with
       | Some (LvalueType qs1 ty1), Some ty2 =>
           let ty := pointerConvert ty1 in
           if andb (isModifiable_fun qs1 ty1) (isAssignable_fun ty ty2 (isNullPointerConstant_fun e2))
@@ -2227,7 +2304,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   | Binary e1 (Arithmetic (Band as aop)) e2
   | Binary e1 (Arithmetic (Xor  as aop)) e2
   | Binary e1 (Arithmetic (Bor  as aop)) e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if isBinaryArithmetic_fun ty1 aop ty2
                                 then option_map ExpressionType (isUsualArithmetic_find P ty1 ty2)
                                 else None
@@ -2235,14 +2312,14 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       end
   | Binary e1 (Arithmetic (Shl  as aop)) e2
   | Binary e1 (Arithmetic (Shr  as aop)) e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if isBinaryArithmetic_fun ty1 aop ty2
                                 then option_map ExpressionType (isPromotion_find P ty1)
                                 else None
       | _       , _        => None
       end
   | Binary e1 (Arithmetic (Add  as aop)) e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if andb (isPointerToCompleteObject_fun ty1) (isInteger_fun ty2) then
                                 Some (ExpressionType ty1)
                               else if andb (isPointerToCompleteObject_fun ty2) (isInteger_fun ty1) then
@@ -2253,7 +2330,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | _       , _        => None
       end
   | Binary e1 (Arithmetic (Sub  as aop)) e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if arePointersToCompatibleCompleteObjects_fun ty1 ty2 then
                                 Some (ExpressionType (ptrdiff_t P))
                               else if andb (isPointerToCompleteObject_fun ty1) (isInteger_fun ty2) then
@@ -2265,7 +2342,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       end
   | Binary e1 And e2
   | Binary e1 Or  e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if andb (isScalar_fun ty1) (isScalar_fun ty2)
                                 then Some (ExpressionType (Basic (Integer (Signed Int))))
                                 else None
@@ -2275,7 +2352,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   | Binary e1 Gt e2
   | Binary e1 Le e2
   | Binary e1 Ge e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if arePointersToCompatibleObjects_fun ty1 ty2 then
                                 Some (ExpressionType (Basic (Integer (Signed Int))))
                               else if andb (isReal_fun ty1) (isReal_fun ty2) then
@@ -2285,7 +2362,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       end
   | Binary e1 Eq e2
   | Binary e1 Ne e2 =>
-      match eType_find P G S e1 >>= expressionType_find, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if isEquality_fun ty1 ty2 (isNullPointerConstant_fun e1) (isNullPointerConstant_fun e2)
                                 then Some (ExpressionType (Basic (Integer (Signed Int))))
                                 else None
@@ -2298,69 +2375,32 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
         then Some (ExpressionType (size_t P))
         else None
   | Cast _ Void e =>
-      match eType_find P G S e >>= expressionType_find with
+      match eType_find P G S e >>= expressionType_aux_find with
       | Some _ => Some (ExpressionType Void)
       | None   => None
       end
   | Cast _ ty e =>
-      match eType_find P G S e >>= expressionType_find with
+      match eType_find P G S e >>= expressionType_aux_find with
       | Some ty' => if andb (isScalar_fun ty') (isScalar_fun ty)
                       then Some (ExpressionType ty)
                       else None
       | None     => None
       end
-  | Constant (ConstantInteger (n, None)) =>
-      if inIntegerTypeRange_fun P n (Signed Int) then
-        Some (ExpressionType (Basic (Integer (Signed Int))))
-      else if inIntegerTypeRange_fun P n (Signed Long) then
-        Some (ExpressionType (Basic (Integer (Signed Long))))
-      else if inIntegerTypeRange_fun P n (Signed LongLong) then
-        Some (ExpressionType (Basic (Integer (Signed LongLong))))
-      else
-        None
-  | Constant (ConstantInteger (n, Some UnsignedInt)) =>
-      if inIntegerTypeRange_fun P n (Unsigned Int) then
-        Some (ExpressionType (Basic (Integer (Unsigned Int))))
-      else if inIntegerTypeRange_fun P n (Unsigned Long) then
-        Some (ExpressionType (Basic (Integer (Unsigned Long))))
-      else if inIntegerTypeRange_fun P n (Unsigned LongLong) then
-        Some (ExpressionType (Basic (Integer (Unsigned LongLong))))
-      else
-        None
-  | Constant (ConstantInteger (n, Some SignedLong)) =>
-      if inIntegerTypeRange_fun P n (Signed Long) then
-        Some (ExpressionType (Basic (Integer (Signed Long))))
-      else if inIntegerTypeRange_fun P n (Signed LongLong) then
-        Some (ExpressionType (Basic (Integer (Signed LongLong))))
-      else
-        None
-  | Constant (ConstantInteger (n, Some UnsignedLong)) =>
-      if inIntegerTypeRange_fun P n (Unsigned Long) then
-        Some (ExpressionType (Basic (Integer (Unsigned Long))))
-      else if inIntegerTypeRange_fun P n (Unsigned LongLong) then
-        Some (ExpressionType (Basic (Integer (Unsigned LongLong))))
-      else
-        None
-  | Constant (ConstantInteger (n, Some SignedLongLong)) =>
-      if inIntegerTypeRange_fun P n (Signed LongLong) then
-        Some (ExpressionType (Basic (Integer (Signed LongLong))))
-      else
-        None
-  | Constant (ConstantInteger (n, Some UnsignedLongLong)) =>
-      if inIntegerTypeRange_fun P n (Unsigned LongLong) then
-        Some (ExpressionType (Basic (Integer (Unsigned LongLong))))
-      else
-        None
+  | Constant (ConstantInteger ic) =>
+      match cType_fun P ic with
+      | Some it => Some (ExpressionType (Basic (Integer it)))
+      | None    => None
+      end
   | Conditional e1 e2 e3 =>
-      match eType_find P G S e1 >>= expressionType_find,
-            eType_find P G S e2 >>= expressionType_find,
-            eType_find P G S e3 >>= expressionType_find  with
+      match eType_find P G S e1 >>= expressionType_aux_find,
+            eType_find P G S e2 >>= expressionType_aux_find,
+            eType_find P G S e3 >>= expressionType_aux_find  with
       | Some ty1, Some ty2, Some ty3 => isConditional_fun P ty1 ty2 ty3 (isNullPointerConstant_fun e2) (isNullPointerConstant_fun e3)
       | _       , _       , _        => None
       end
   | CompoundAssign e1 Add e2
   | CompoundAssign e1 Sub e2 =>
-      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_aux_find with
       | Some (LvalueType qs ty), Some ty2 => 
           match lvalueConversion_find ty with
           | Some ty1 => if andb (isModifiable_fun qs ty)
@@ -2375,7 +2415,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       | _                                    , _  => None
       end
   | CompoundAssign e1 aop e2 =>
-      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_find with
+      match eType_find P G S e1, eType_find P G S e2 >>= expressionType_aux_find with
       | Some (LvalueType qs ty), Some ty2 => 
           match lvalueConversion_find ty with
           | Some ty1 => if andb (isModifiable_fun qs ty) (isBinaryArithmetic_fun ty1 aop ty2) 
@@ -2390,7 +2430,7 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
   match l, p with
   | ArgumentsNil     , ParamsNil          => true
   | ArgumentsCons e l, ParamsCons _ ty1 p =>
-      match eType_find P G S e >>= expressionType_find with
+      match eType_find P G S e >>= expressionType_aux_find with
       | Some ty2 => andb (isAssignable_fun (pointerConvert ty1) ty2 (isNullPointerConstant_fun e))
                          (eType_arguments_find P G S l p)
       | None     => false
@@ -2515,24 +2555,24 @@ Ltac eType_find_tac Hdisjoint P G S :=
       | [|- context[Eq]] => set (isEquality_fun_correct_neg (inl (eq_refl Eq)) H1 H2 (eType_unique_instance Hunique1) (eType_unique_instance Hunique2) Heq)
       | [|- context[Ne]] => set (isEquality_fun_correct_neg (inr (eq_refl Ne)) H1 H2 (eType_unique_instance Hunique1) (eType_unique_instance Hunique2) Heq)
       end       
-  | [|- expressionType_find ?t = _ -> _] =>
+  | [|- expressionType_aux_find ?t = _ -> _] =>
       is_var t; destruct t
-  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_find (ExpressionType ?t) = ?o -> _] =>
+  | [H : eType P G S _ (ExpressionType ?t) |- expressionType_aux_find (ExpressionType ?t) = ?o -> _] =>
       is_var o; let Heq := fresh in
       intros Heq; subst o;
-      assert (expressionType_find (ExpressionType t) = Some (pointerConvert t)) as Heq by reflexivity; rewrite Heq;
-      set (expressionType_find_correct_pos H Heq)
-  | [|- expressionType_find (LvalueType ?q ?t) = ?o -> _] =>
+      assert (expressionType_aux_find (ExpressionType t) = Some (pointerConvert t)) as Heq by reflexivity; rewrite Heq;
+      set (expressionType_aux_find_correct_pos H Heq)
+  | [|- expressionType_aux_find (LvalueType ?q ?t) = ?o -> _] =>
       is_var o; destruct o
-  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = Some _ -> _] =>
+  | [H : eType P G S _ (LvalueType ?q ?t) |- expressionType_aux_find (LvalueType ?q ?t) = Some _ -> _] =>
       let Heq := fresh in
       intros Heq;
-      set     (expressionType_find_eq_lvalue_lift H Heq);
-      rewrite (expressionType_find_eq_lvalue        Heq) in *
+      set     (expressionType_aux_find_eq_lvalue_lift H Heq);
+      rewrite (expressionType_aux_find_eq_lvalue        Heq) in *
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType ?q ?t = _
-    , H : eType P G S ?e (LvalueType ?q ?t) |- expressionType_find (LvalueType ?q ?t) = None -> _] =>
+    , H : eType P G S ?e (LvalueType ?q ?t) |- expressionType_aux_find (LvalueType ?q ?t) = None -> _] =>
       let Heq := fresh in
-      intros Heq; set (expressionType_find_correct_neg H Hunique Heq)
+      intros Heq; set (expressionType_aux_find_correct_neg H Hunique Heq)
   | [|- isArithmetic_fun ?t           = ?o -> _] => case_fun (isArithmetic_fun_correct t)
   | [|- isComplete_fun ?t           = ?o -> _] => case_fun (isComplete_fun_correct t)
   | [|- isIncomplete_fun ?t           = ?o -> _] => case_fun (isIncomplete_fun_correct t)
@@ -2543,7 +2583,6 @@ Ltac eType_find_tac Hdisjoint P G S :=
   | [|- isReal_fun ?t           = ?o -> _] => case_fun (isReal_fun_correct t)
   | [|- isPointer_fun ?t           = ?o -> _] => case_fun (isPointer_fun_correct t)
   | [|- isNullPointerConstant_fun ?e = ?o -> _] => case_fun (isNullPointerConstant_fun_correct e)
-  | [|- inIntegerTypeRange_fun P ?n ?it = ?o -> _] => case_fun (inIntegerTypeRange_fun_correct P n it)
   | [|- isPointerToCompleteObject_fun ?t           = ?o -> _] =>
       case_fun (isPointerToCompleteObject_fun_correct t);
       match goal with
@@ -2591,6 +2630,11 @@ Ltac eType_find_tac Hdisjoint P G S :=
       set (lvalueConversion_find_correct t) as H;
       unfold optionSpec in H;
       intros Heq; rewrite Heq in H; destruct o
+  | [|- cType_fun P ?ic = _ -> _] => case_fun (cType_fun_correct P ic);
+      match goal with
+      | [H : _ * _ |- _] => destruct H
+      | _ => idtac
+      end
   | _ => context_destruct
   | [Hfalse : forall _, neg (eType P G S ?e1 _) |- forall _, neg (eType P G S (Conditional ?e1 _ _) _)] => exact (conditional_inj_neg1 (expressionType_neg Hfalse))
   | [Hfalse : forall _, neg (eType P G S ?e2 _) |- forall _, neg (eType P G S (Conditional _ ?e2 _) _)] => exact (conditional_inj_neg2 (expressionType_neg Hfalse))
@@ -2629,6 +2673,8 @@ Ltac eType_find_tac Hdisjoint P G S :=
                                            (fun ty ty' E => expressionType_unique_expression_inj (eType_unique_instance Hunique3) E ty') H1 H2 H3 Heq)
   | [|- (match pointerConvert ?ty with _ => _ end) = _ -> _] => destruct ty; unfold pointerConvert in *
   | [|- _ * _] => split
+  | [H1 : cType P ?ic ?it1, H2 : cType P ?ic ?it2 |- _] => notSame it1 it2; set (cType_unique H1 H2); try congruence
+  | [Hfalse : forall _, neg (cType P ?ic _), H : cType P ?ic _ |- _] => destruct (Hfalse _ H)
   | [|- eType P G S _ _] => assumption || econstructor (solve [eassumption|reflexivity|inversion 1; congruence|left; reflexivity|right; reflexivity])
   | [|- eType_arguments P G S _ _] => econstructor (solve [reflexivity |assumption])
   | [ Hunique : forall _, eType P G S ?e _ -> LvalueType _ ?t1 = _
@@ -2639,7 +2685,7 @@ Ltac eType_find_tac Hdisjoint P G S :=
       assert (t1 = t2) as Heq by (eapply expressionType_unique_lvalue_inj; eauto);
       try (congruence || (try injection Heq; intros); subst)
   | [ Hunique : forall _, eType P G S ?e _ -> ExpressionType ?t = _
-    , _   : expressionType_find (ExpressionType ?t) = Some ?t1
+    , _   : expressionType_aux_find (ExpressionType ?t) = Some ?t1
     , H1 : expressionType P G S ?e ?t1
     , H2 : expressionType P G S ?e ?t2         |- _ ] =>
       notSame t1 t2;
@@ -2694,16 +2740,6 @@ Ltac eType_find_tac Hdisjoint P G S :=
   | [|- forall _, neg (eType P G S (SizeOf _ _) _)] => inversion 1; subst; contradiction
   | [|- forall _, neg (eType P G S (Cast _ _ _) _)] => inversion 1; subst; try contradiction
   | [|- neg (eType_arguments P G S _ _)] => inversion 1; subst; try congruence
-  | [H : ~ inIntegerTypeRange P ?n (Signed Long) |- _] =>
-      notHyp (inIntegerTypeRange P n (Signed Int) -> False);
-      unfold not in H;
-      set (Program.Basics.compose H inIntegerTypeRange_Signed_Int_Long) ;
-      contradiction
-  | [H : ~ inIntegerTypeRange P ?n (Unsigned Long) |- _] =>
-      notHyp (inIntegerTypeRange P n (Unsigned Int) -> False);
-      unfold not in H;
-      set (Program.Basics.compose H inIntegerTypeRange_Unsigned_Int_Long) ;
-      contradiction
   | [Heq : pointerConvert ?t = Pointer _ _, H : neg (isPointer (pointerConvert ?t)) |- _ ] => rewrite Heq in H; exfalso; apply H; now constructor
   | [H : _ + _ |- _] => destruct H; try congruence
   | [Hfalse : forall _, neg (eType P G S ?e _), H : eType P G S ?e _ |- False] => exact (Hfalse _ H)
@@ -2740,7 +2776,7 @@ Definition eType_find_correct_Unary {P} {G} {S} {aop} {e} :
   eType_find_spec P G S e ->
   eType_find_spec P G S (Unary aop e).
 Proof. eType_find_tac_finish P G S. Qed.
-  
+
 Definition eType_find_correct_Binary_Arithmetic_Mul {P} {G} {S} {e1 e2} :
   eType_find_spec P G S e1 ->
   eType_find_spec P G S e2 ->
