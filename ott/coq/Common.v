@@ -512,17 +512,18 @@ Ltac context_destruct :=
       context_destruct_inner c
   end.
 
-
 Ltac case_fun G :=
   match goal with
   | [|- _ = ?o -> _] =>
       is_var o;
       let Heq := fresh in
+      let H := fresh in
       destruct o;
       intros Heq;
       generalize G;
       rewrite Heq;
-      intros ?
+      intros H;
+      simpl in H
   end.
 
 Ltac case_fun_hyp G :=

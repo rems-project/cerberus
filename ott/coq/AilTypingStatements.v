@@ -4,12 +4,47 @@ Require Import Arith.
 Require Export ZArith.
 
 Require Import Common.
+Require Import Context.
 Require Import AilTypes.
 Require Import AilTypesAux AilTypesAux_fun AilTypesAux_proof.
 Require Import AilSyntax.
 Require Import AilSyntaxAux AilSyntaxAux_fun AilSyntaxAux_proof.
 Require Import Implementation.
 Require Import AilTyping.
+
+Fixpoint isDisjoint_fun {B1 B2} (E1 : list (identifier * B1)) (E2 : list (identifier * B2)) : bool :=
+  match E1 with
+  | nil           => true
+  | (id, _) :: E1 => match lookup_id E2 id with
+                     | Some _ => false
+                     | None   => isDisjoint_fun E1 E2
+                     end
+  end.
+
+Fixpoint isDisjoint_fun_correct {B1 B2} (E1 : list (identifier * B1)) (E2 : list (identifier * B2)) {struct E1} :
+  boolSpec (isDisjoint_fun E1 E2) (Disjoint E1 E2).
+Proof.
+  unfold_goal.
+  destruct E1; simpl.
+  - inversion 1.
+  - do 2 context_destruct.
+    match goal with
+    | [|- lookup_id E2 ?id = _ -> _] => case_fun (lookup_id_correct E2 id)
+    end.
+    + intros Hfalse; eapply Hfalse; finish eassumption.
+    + context_destruct; case_fun (isDisjoint_fun_correct _ _ E1 E2); unfold boolSpec in *.
+      * inversion 1; subst; firstorder.
+      * match goal with
+        | [H : neg (Disjoint _ _)|- neg (Disjoint ((?id, _) :: _) E2)] =>
+            intros Hfalse;
+            eapply H;
+            intros id' ? ? ?;
+            destruct (decide id id' : Decision (_ = _)); [
+                subst; firstorder
+              | eapply Hfalse; finish eassumption
+            ]
+        end.
+Qed.
 
 Inductive sType : impl -> gamma -> sigma -> type -> statement -> Prop :=    (* defn sType *)
  | STypeLabel : forall (P:impl) (G:gamma) (S:sigma) t (id:identifier) (s:statement),
@@ -82,40 +117,6 @@ with bType : impl -> gamma -> sigma -> type -> block -> Prop :=
      bType P G S t b ->
      bType P G S t (BlockCons s b).
 
-Fixpoint isDisjoint_fun {B1 B2} (E1 : list (identifier * B1)) (E2 : list (identifier * B2)) : bool :=
-  match E1 with
-  | nil           => true
-  | (id, _) :: E1 => match lookup_id E2 id with
-                     | Some _ => false
-                     | None   => isDisjoint_fun E1 E2
-                     end
-  end.
-
-Fixpoint isDisjoint_fun_correct {B1 B2} (E1 : list (identifier * B1)) (E2 : list (identifier * B2)) {struct E1} :
-  boolSpec (isDisjoint_fun E1 E2) (Disjoint E1 E2).
-Proof.
-  unfold_goal.
-  destruct E1; simpl.
-  - inversion 1.
-  - do 2 context_destruct.
-    match goal with
-    | [|- lookup_id E2 ?id = _ -> _] => case_fun (lookup_id_correct E2 id)
-    end.
-    + intros Hfalse; eapply Hfalse; finish eassumption.
-    + context_destruct; case_fun (isDisjoint_fun_correct _ _ E1 E2); unfold boolSpec in *.
-      * inversion 1; subst; firstorder.
-      * match goal with
-        | [H : neg (Disjoint _ _)|- neg (Disjoint ((?id, _) :: _) E2)] =>
-            intros Hfalse;
-            eapply H;
-            intros id' ? ? ?;
-            destruct (decide id id' : Decision (_ = _)); [
-                subst; firstorder
-              | eapply Hfalse; finish eassumption
-            ]
-        end.
-Qed.
-
 Fixpoint sType_fun P G S t s {struct s} : bool :=
   match s with
   | Label _ s => sType_fun P G S t s
@@ -164,77 +165,6 @@ with dType_fun P G S d {struct d} : bool :=
                              | _             => false
                              end
   end.
-
-Ltac case_fun G :=
-  match goal with
-  | [|- _ = ?o -> _] =>
-      is_var o;
-      let Heq := fresh in
-      let H := fresh in
-      destruct o;
-      intros Heq;
-      generalize G;
-      rewrite Heq;
-      intros H;
-      simpl in H
-  end.
-
-Lemma Disjoint_cons_left_Lookup {A B C} {a} {b} {E1 : list (A * B)} {E : list (A * C)} :
-  Disjoint ((a,b) :: E1) E -> forall c, neg (Lookup E a c).
-Proof.
-  intros Hdisjoint.
-  assert (Lookup ((a,b) :: E1) a b) as Hlookup by constructor.
-  exact (fun c => Hdisjoint a b c Hlookup).
-Qed.
-
-Lemma Disjoint_cons_left_Lookup_inv {A B C} {a} {b} {E1 : list (A * B)} {E : list (A * C)} :
-  Disjoint E1 E -> (forall c, neg (Lookup E a c)) -> Disjoint ((a,b) :: E1) E.
-Proof.
-  intros Hdisjoint Hnlookup.
-  intros a' b' c'.
-  inversion 1; subst.
-  - apply Hnlookup.
-  - eapply Hdisjoint.
-    eassumption.
-Qed.
-
-Lemma Disjoint_cons_left {A B C} p {E1 E2 : list (A * B)} {E : list (A * C)} :
-  Disjoint (p :: E1) E -> Disjoint E2 E -> Disjoint (p :: E2) E.
-Proof.
-  intros; destruct p.
-  eapply Disjoint_cons_left_Lookup_inv.
-  - assumption.
-  - eapply Disjoint_cons_left_Lookup; eassumption.
-Qed.
-
-Lemma Disjoint_weaken {A B C} {eq_dec : DecidableEq A} {p} {E1 : list (A * B)} {E : list (A * C)}:
-  Disjoint (p :: E1) E ->
-  Disjoint E1 E.
-Proof.
-  destruct p.
-  intros Hdisjoint a' b' c' Hlookup.
-  destruct (decide a a' : Decision (a = a')).
-  + subst.
-    eapply (Hdisjoint a').
-    constructor 1.
-  + eapply (Hdisjoint a').
-    constructor 2; eassumption.
-Qed.
-
-Lemma Disjoint_app {A B C} {eq_dec : DecidableEq A} {E1 E2 : list (A * B)} {E : list (A * C)}:
-  Disjoint E1 E ->
-  Disjoint E2 E ->
-  Disjoint (E1++E2) E.
-Proof.
-  induction E1.
-  - intros; assumption.
-  - intros H1 H2.
-    assert (Disjoint E1 E) as H
-      by (eapply Disjoint_weaken; eassumption).
-    eapply Disjoint_cons_left.
-    + eassumption.
-    + exact (IHE1 H H2).
-Qed.
 
 Fixpoint sType_fun_correct P G S t s {struct s} :
   Disjoint G S ->
