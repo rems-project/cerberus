@@ -6,6 +6,7 @@ Require Import Arith.
 Require Export ZArith.
 
 Require Import Common.
+Require Import Context.
 Require Import AilTypes.
 Require Import AilSyntax.
 Require Import AilTypesAux AilTypesAux_fun AilTypesAux_proof.
@@ -14,66 +15,6 @@ Require Import AilWf.
 Require Import Implementation.
 
 (** definitions *)
-
-Inductive Lookup {A B : Type} : list (A * B) -> A -> B -> Type :=
-  | Lookup_hd     a b E :                           Lookup (cons (a,b) E) a b
-  | Lookup_tl x y a b E : x <> a -> Lookup E a b -> Lookup (cons (x,y) E) a b.
-
-Fixpoint Lookup_unique {A B : Type} E (a : A) (b1 b2 : B) (L1 : Lookup E a b1) (L2 : Lookup E a b2) {struct E} : b1 = b2.
-Proof.
-  destruct E; simple inversion L1; simple inversion L2; try congruence; intros.
-  + match goal with
-    | [L1 : Lookup ?E1 _ _, L2 : Lookup ?E2 _ _ |- _] =>
-        is_var E1; is_var E2;
-        assert (E1 = E) by congruence;
-        assert (E2 = E) by congruence
-    end.
-    eapply (Lookup_unique A B E a b1 b2); subst; eassumption.
-Qed.
-
-Fixpoint lookup_find {A B} (eq : A -> A -> bool) (E : list (A * B)) (a : A) : option B :=
-  match E with
-  | nil          => None
-  | cons (x,b) E => if eq x a then Some b
-                              else lookup_find eq E a
-  end.
-
-Fixpoint lookup_find_correct {A B} {eq : A -> A -> bool} (E : list (A * B)) (a : A) {struct E} :
-  (forall x y, boolSpec (eq x y) (x = y)) ->
-  match lookup_find eq E a with
-  | Some b => Lookup E a b
-  | None   => forall b, neg (Lookup E a b)
-  end.
-Proof.
-  intros eq_correct.
-  unfold_goal.
-  destruct E; simpl.
-  + intros ?; inversion 1.
-  + destruct p as [x b]; simpl.
-    set (eq_correct x a).
-    case_eq (eq x a); boolSpec_simpl; simpl.
-    - my_auto.
-    - fold (lookup_find eq E a).
-      set (lookup_find_correct A B eq E a eq_correct).
-      case_eq (lookup_find eq E a).
-      * intros ? Heq.
-        rewrite Heq in *; my_auto.
-      * intros Heq.
-        rewrite Heq in *.
-        intros ?; inversion 1; firstorder.
-Defined.
-
-Fixpoint lookup_find_unique {A B} {eq : A -> A -> bool} (E : list (A * B)) (a : A) (b : B) {struct E} :
-  (forall x y, boolSpec (eq x y) (x = y)) ->
-  Lookup E a b ->
-  lookup_find eq E a = Some b.
-Proof.
-  intros eq_correct.
-  destruct E.
-  + my_auto.
-  + inversion 1; simpl; set (eq_correct a a); boolSpec_destruct; my_auto.
-    set (eq_correct x a); boolSpec_simpl; my_auto.
-Defined.
 
 Instance identifier_DecEq : DecidableEq identifier.
 Proof. dec_eq. Defined.
@@ -918,15 +859,6 @@ with isAssignable : impl -> gamma -> sigma -> type -> expression -> Prop :=
      expressionType P G S e2 ty2 ->
      isPointer ty2 ->
      isAssignable P G S ty1 e2.
-
-Definition Disjoint {A B1 B2} E1 E2 : Type :=
-  forall (a : A) (b1 : B1) (b2 : B2), Lookup E1 a b1 -> Lookup E2 a b2 -> False.
-
-Definition env_sub {A B} (P : A -> Type) (E1 E2 : list (A * B)) :=
-  forall id, P id -> forall b, Lookup E1 id b -> Lookup E2 id b.
-
-Definition env_equiv {A B} (P : A -> Type) (E1 E2 : list (A * B)) :=
-  env_sub P E1 E2 * env_sub P E2 E1.
 
 Fixpoint eType_env_sub P (G1 G2:gamma) (S:sigma) e {struct e} :
   env_sub (fun id => fv id e) G1 G2 ->
