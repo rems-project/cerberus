@@ -355,7 +355,7 @@ Inductive cType : impl -> integerConstant -> integerType -> Prop :=    (* defn e
      inIntegerTypeRange P n (Unsigned LongLong) ->
      cType P (n , Some UnsignedLongLong) (Unsigned LongLong).
 
-Definition cType_fun P ic : option integerType :=
+Definition cType_find P ic : option integerType :=
   match ic with
   | (n, None) =>
       if inIntegerTypeRange_fun P n (Signed Int) then
@@ -401,8 +401,8 @@ Definition cType_fun P ic : option integerType :=
         None
   end.
 
-Lemma cType_fun_correct P ic :
-  match cType_fun P ic with
+Lemma cType_find_correct P ic :
+  match cType_find P ic with
   | Some it => cType P ic it * forall it', cType P ic it' -> it = it'
   | None    => forall it, neg (cType P ic it)
   end.
@@ -434,8 +434,8 @@ Lemma cType_unique {P} {ic} {it1 it2} :
   cType P ic it2 ->
   it1 = it2.
 Proof.
-  generalize (cType_fun_correct P ic).
-  destruct (cType_fun P ic).
+  generalize (cType_find_correct P ic).
+  destruct (cType_find P ic).
   + intros [? Hunique] H1 H2.
     set (Hunique _ H1).
     set (Hunique _ H2).
@@ -1131,7 +1131,7 @@ Lemma expressionType_neg {P} {G} {S} {e} :
   forall  ty, neg (expressionType P G S e ty).
 Proof. inversion 2; firstorder. Qed.
 
-Definition isAssignable_fun ty1 ty2 is_null2 : bool :=
+Definition isAssignable_aux_fun ty1 ty2 is_null2 : bool :=
   match ty1, ty2 with
   | Pointer qs1 t1, Pointer qs2 t2 => orb is_null2
                                           (andb (subQualifiers qs2 qs1)
@@ -1144,9 +1144,9 @@ Definition isAssignable_fun ty1 ty2 is_null2 : bool :=
                                            (isArithmetic_fun ty2)
   end.
 
-Lemma isAssignable_fun_correct_pos {P} {G} {S} {ty1} {e2} {ty2} :
+Lemma isAssignable_aux_fun_correct_pos {P} {G} {S} {ty1} {e2} {ty2} :
   expressionType P G S e2 ty2 ->
-  isAssignable_fun ty1 ty2 (isNullPointerConstant_fun e2) = true ->
+  isAssignable_aux_fun ty1 ty2 (isNullPointerConstant_fun e2) = true ->
   isAssignable P G S ty1 e2.
 Proof.
   unfold_goal; intros ?.
@@ -1201,10 +1201,10 @@ Ltac isAssignable_neg_tac :=
   | _ => finish fail
   end.
 
-Lemma isAssignable_fun_correct_neg {P} {G} {S} {ty1 ty2} {e2}:
+Lemma isAssignable_aux_fun_correct_neg {P} {G} {S} {ty1 ty2} {e2}:
   expressionType P G S e2 ty2 ->
   (forall tc1 tc2, eType P G S e2 tc1 -> eType P G S e2 tc2 -> tc1 = tc2) ->
-  isAssignable_fun ty1 ty2 (isNullPointerConstant_fun e2) = false ->
+  isAssignable_aux_fun ty1 ty2 (isNullPointerConstant_fun e2) = false ->
   neg (isAssignable P G S ty1 e2).
 Proof.
   intros ? Hunique.
@@ -2296,7 +2296,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       match eType_find P G S e1, eType_find P G S e2 >>= expressionType_aux_find with
       | Some (LvalueType qs1 ty1), Some ty2 =>
           let ty := pointerConvert ty1 in
-          if andb (isModifiable_fun qs1 ty1) (isAssignable_fun ty ty2 (isNullPointerConstant_fun e2))
+          if andb (isModifiable_fun qs1 ty1) (isAssignable_aux_fun ty ty2 (isNullPointerConstant_fun e2))
             then Some (ExpressionType ty)
             else None
       | _, _ => None
@@ -2397,7 +2397,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       else
         None
   | Constant (ConstantInteger ic) =>
-      match cType_fun P ic with
+      match cType_find P ic with
       | Some it => Some (ExpressionType (Basic (Integer it)))
       | None    => None
       end
@@ -2441,7 +2441,7 @@ with eType_arguments_find (P:impl) (G:gamma) (S:sigma) (l:arguments) (p:params) 
   | ArgumentsNil     , ParamsNil          => true
   | ArgumentsCons e l, ParamsCons _ ty1 p =>
       match eType_find P G S e >>= expressionType_aux_find with
-      | Some ty2 => andb (isAssignable_fun (pointerConvert ty1) ty2 (isNullPointerConstant_fun e))
+      | Some ty2 => andb (isAssignable_aux_fun (pointerConvert ty1) ty2 (isNullPointerConstant_fun e))
                          (eType_arguments_find P G S l p)
       | None     => false
       end
@@ -2534,15 +2534,15 @@ Ltac eType_find_tac Hdisjoint P G S :=
       | [H : _ * _ |- _] => destruct H
       | _ => idtac
       end
-  | [|- isAssignable_fun _ _ _ = ?o -> _] =>
+  | [|- isAssignable_aux_fun _ _ _ = ?o -> _] =>
       is_var o; destruct o
-  | [H : expressionType P G S _ ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = true -> _] =>
+  | [H : expressionType P G S _ ?ty2 |- isAssignable_aux_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = true -> _] =>
       let Heq := fresh in
-      intros Heq; set (isAssignable_fun_correct_pos H Heq)
+      intros Heq; set (isAssignable_aux_fun_correct_pos H Heq)
   | [ Hunique : forall _, eType P G S ?e2 _ -> _ = _
-    , H : expressionType P G S ?e2 ?ty2 |- isAssignable_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = false -> _] =>
+    , H : expressionType P G S ?e2 ?ty2 |- isAssignable_aux_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = false -> _] =>
       let Heq := fresh in
-      intros Heq; set (isAssignable_fun_correct_neg H (eType_unique_instance Hunique) Heq)
+      intros Heq; set (isAssignable_aux_fun_correct_neg H (eType_unique_instance Hunique) Heq)
   | [|- isEquality_fun _ _ _ _ = ?o -> _ ] => is_var o; destruct o
   | [ H1 : expressionType P G S ?e1 _
     , H2 : expressionType P G S ?e2 _
@@ -2641,7 +2641,7 @@ Ltac eType_find_tac Hdisjoint P G S :=
       set (lvalueConversion_find_correct t) as H;
       unfold optionSpec in H;
       intros Heq; rewrite Heq in H; destruct o
-  | [|- cType_fun P ?ic = _ -> _] => case_fun (cType_fun_correct P ic);
+  | [|- cType_find P ?ic = _ -> _] => case_fun (cType_find_correct P ic);
       match goal with
       | [H : _ * _ |- _] => destruct H
       | _ => idtac
@@ -3057,13 +3057,12 @@ Proof.
     eType_find_tac Hdisjoint P G S.
 Qed.
 
-Lemma eType_unique {P} {G} {S} {e} {tc1 tc2} :
-  Disjoint G S ->
+Lemma eType_unique {P} {G} {S} {e} (Hdisjoint : Disjoint G S) tc1 tc2 :
   eType P G S e tc1 ->
   eType P G S e tc2 ->
   tc1 = tc2.
 Proof.
-  intros Hdisjoint; generalize (eType_find_correct P G S e); unfold_goal.
+  generalize (eType_find_correct P G S e); unfold_goal.
   destruct (eType_find P G S e).
   - intros [? Hunique] H1 H2.
     + exact Hdisjoint.
@@ -3072,6 +3071,7 @@ Proof.
       congruence.
   - firstorder.
 Qed.
+Arguments eType_unique [_ _ _ _] _ [_ _] _ _.
 
 Definition typeable_fun P G S e : bool :=
   match eType_find P G S e with
@@ -3126,6 +3126,73 @@ Proof.
       end; assumption.
   - inversion 2; firstorder.
 Qed.
+
+Definition isAssignable_fun P G S ty1 e2 : bool :=
+  match expressionType_find P G S e2 with
+  | Some ty2 => isAssignable_aux_fun ty1 ty2 (isNullPointerConstant_fun e2)
+  | None     => false
+  end.
+ 
+Lemma isAssignable_fun_correct  P G S t1 e2 :
+  Disjoint G S ->
+  boolSpec (isAssignable_fun P G S t1 e2) (isAssignable P G S t1 e2).
+Proof.
+  intros Hdisjoint.
+  do 2 unfold_goal.
+  generalize (expressionType_find_correct P G S e2 Hdisjoint).
+  destruct (expressionType_find P G S e2).
+  - intros H; simpl in H.
+    repeat match goal with
+    | [|- isAssignable_aux_fun _ _ _ = ?o -> _] =>
+        is_var o; destruct o
+    | [H : expressionType P G S _ ?ty2 |- isAssignable_aux_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = true -> _] =>
+        let Heq := fresh in
+        intros Heq; set (isAssignable_aux_fun_correct_pos H Heq)
+    | [ H : expressionType P G S ?e2 ?ty2 |- isAssignable_aux_fun ?ty1 ?ty2 (isNullPointerConstant_fun ?e) = false -> _] =>
+        let Heq := fresh in
+        intros Heq; set (isAssignable_aux_fun_correct_neg H (eType_unique Hdisjoint) Heq)
+    | _ => context_destruct
+    end; assumption.
+  - inversion 2; now firstorder.
+Qed.
+
+
+Lemma lvalueConversion_unique {t t1 t2} :
+  lvalueConversion t t1 ->
+  lvalueConversion t t2 ->
+  t1 = t2.
+Proof.
+  generalize (lvalueConversion_find_unique t).
+  destruct (lvalueConversion_find t); intros Hunique.
+  + intros H1 H2.
+    set (Hunique _ H1).
+    set (Hunique _ H2).
+    congruence.
+  + intros H.
+    discriminate (Hunique _ H).
+Qed.
+
+Lemma expressionType_unique {P} {G} {S} {e} (Hdisjoint : Disjoint G S) t1 t2 :
+  expressionType P G S e t1 ->
+  expressionType P G S e t2 ->
+  t1 = t2.
+Proof.
+  inversion 1; inversion 1; subst;
+  match goal with
+  | [H1 : eType P G S e ?t1, H2 : eType P G S e ?t2 |- _] =>
+      notSame t1 t2;
+      generalize (eType_unique Hdisjoint H1 H2);
+      first [congruence | injection 1; intros; subst]
+  end;
+  match goal with
+  | [H1 : lvalueConversion ?t ?t1, H2 : lvalueConversion ?t ?t2 |- _] =>
+      notSame t1 t2;
+      set (lvalueConversion_unique H1 H2);
+      congruence
+  end.
+Qed.
+Arguments expressionType_unique [_ _ _ _] _ [_ _] _ _.
+
 
 (*
 (* defns JsType *)
