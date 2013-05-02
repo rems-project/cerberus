@@ -224,3 +224,95 @@ Proof.
     | [|- neg _] => inversion 1; congruence
     end.
 Qed.
+
+Definition sigmaType_aux_fun P S t G s :=
+ andb (isDisjoint_fun G S) (sType_fun P G S t s).
+
+Definition sigmaType_aux_fun_spec P S :=
+  fun t G s => Disjoint G S * sType P G S t s.
+
+Lemma sigmaType_aux_fun_correct P S t G s :
+ boolSpec (sigmaType_aux_fun P S t G s) (sigmaType_aux_fun_spec P S t G s).
+Proof.
+  do 2 unfold_goal.
+  unfold andb.
+  unfold sigmaType_aux_fun_spec.
+  repeat match goal with
+  | [|- isDisjoint_fun G S = _ -> _] => case_fun (isDisjoint_fun_correct G S)
+  | [H : Disjoint G S |- sType_fun P G S t s = _ -> _] => case_fun (sType_fun_correct P G S t s H)
+  | _ => context_destruct
+  | [|- _ * _] => split; assumption
+  | [|- neg _] => inversion 1; subst; contradiction
+  end.
+Qed.
+
+Definition uncurry {A B C} (f : A -> B -> C) : (A * B) -> C :=
+  fun p =>
+    let (a, b) := p in
+    f a b.
+
+Definition sigmaType_aux_uncurried_fun P S :=
+  uncurry (uncurry (sigmaType_aux_fun P S)).
+
+Lemma sigmaType_aux_uncurried_fun_correct P S t :
+ boolSpec (sigmaType_aux_uncurried_fun P S t) (uncurry (uncurry (sigmaType_aux_fun_spec P S)) t).
+Proof.
+  destruct t as [[? ?] ?]; simpl.
+  apply sigmaType_aux_fun_correct.
+Qed.
+
+Inductive sigmaType : impl -> sigma -> Prop :=
+ | SigmaType P S :
+     (forall id t G s, Lookup S id (t, G, s) -> Disjoint G S * sType P G S t s) ->
+     sigmaType P S.
+
+Definition sigmaType_fun P S : bool :=
+  context_all_fun (fun x y => bool_of_decision (identifier_DecEq x y))
+                  (fun _   => sigmaType_aux_uncurried_fun P S) S.
+
+Definition sigmaType_fun_correct P S :
+  boolSpec (sigmaType_fun P S) (sigmaType P S).
+Proof.
+  do 2 unfold_goal.
+  generalize (context_all_fun_correct S (fun x y => Decision_boolSpec (identifier_DecEq x y))
+                                        (fun _ => sigmaType_aux_uncurried_fun_correct P S)).
+  destruct (context_all_fun (fun x y : identifier => bool_of_decision (identifier_DecEq x y))
+                            (fun _ : identifier => sigmaType_aux_uncurried_fun P S) S);
+  simpl; intros H1.
+  + constructor.
+    intros ? t G s.
+    eapply (H1 _ (t, G, s)); eassumption.
+  + inversion 1 as [? ? H2]; subst.
+    apply H1.
+    intros ? [[? ?] ?] ?.
+    eapply H2; eassumption.
+Qed.    
+
+Inductive pType : impl -> program -> Prop :=    (* defn pType *)
+ | PType P id S:
+     forall s,
+       Lookup S id (Basic (Integer (Signed Int)), nil, s) ->
+       sigmaType P S ->
+       pType P  (id, S).
+
+Definition pType_fun P (p:program) : bool :=
+  let (id, S) := p in
+  match lookup_id S id with
+  | Some (Basic (Integer (Signed Int)), nil, _) => sigmaType_fun P S
+  | Some _                                      => false
+  | None                                        => false
+  end.
+
+Lemma pType_fun_correct P p :
+  boolSpec (pType_fun P p) (pType P p).
+Proof.
+  do 2 unfold_goal.
+  repeat match goal with
+  | [|- lookup_id ?S ?id = _ -> _] => case_fun (lookup_id_correct S id)
+  | [|- sigmaType_fun ?P ?S = _ -> _] => case_fun (sigmaType_fun_correct P S)
+  | _ => context_destruct
+  | [|- pType _ _] => econstructor; eassumption
+  | [|- neg _] => inversion 1; subst
+  | [H1 : Lookup ?S ?id ?t1, H2 : Lookup ?S ?id ?t2 |- _] => set (Lookup_unique _ _ _ _ H1 H2); congruence
+  end; firstorder.
+Qed.
