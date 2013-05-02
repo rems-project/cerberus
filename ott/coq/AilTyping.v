@@ -41,9 +41,6 @@ Qed.
 Definition lookup_id_unique {B} {E} {id} {b:B} : Lookup E id b -> lookup_id E id = Some b :=
   lookup_find_unique E id b id_eq_correct.
 
-Definition add {A:Type} (E : list (identifier * A)) (v : identifier) (a : A) :=
-  (v, a) :: E.
-
 Inductive isPromotion (P : impl) : type -> type -> Prop :=
  | IsPromotion :
      forall it1 it2,
