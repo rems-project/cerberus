@@ -12,13 +12,13 @@ Local Open Scope Z_scope.
 
 Require Import Nat.
 
-Definition range :=  {p : Z * Z | fst p <= snd p}.
-Definition min (r : range) := fst (projT1 r).
-Definition max (r : range) := snd (projT1 r).
-Definition leq (r : range) : min r <= max r := projT2 r.
+Definition range := {p : Z * Z | fst p <= snd p}.
+Definition min (r : range) := fst (proj1_sig r).
+Definition max (r : range) := snd (proj1_sig r).
+Definition leq (r : range) : min r <= max r := proj2_sig r.
 
 Definition mkRange {x y} : x <= y -> range :=
-  fun p => existT _ (x, y) p.
+  fun p => exist _ (x, y) p.
 
 Lemma max_mkRange {x y} {p : x <= y} : max (mkRange p) = y.
 Proof. reflexivity. Defined.  
