@@ -29,8 +29,8 @@ Record impl := mkImpl {
   binMode : binaryMode;
   isCharSigned : bool;
   precision : integerType -> Z;
-  size_t : type;
-  ptrdiff_t : type;
+  size_t : integerType;
+  ptrdiff_t : integerType;
 
   precision_Char               :  precision Char = if isCharSigned
                                                      then precision (Signed   Ichar)

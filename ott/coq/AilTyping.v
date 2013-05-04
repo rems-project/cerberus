@@ -457,13 +457,13 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      wfLvalueType qs ty ->
       ~ (  isFunction ty  )  ->
       ~ (  isIncomplete ty  )  ->
-      Implementation.size_t  P  =  ty'  ->
+     Basic (Integer (Implementation.size_t P)) = ty' ->
      eType P G S (SizeOf qs ty) (ExpressionType ty')
  | ETypeAlignOf : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty ty':type),
      wfLvalueType qs ty ->
       ~ (  isFunction ty  )  ->
       ~ (  isIncomplete ty  )  ->
-      Implementation.size_t  P  =  ty'  ->
+      Basic (Integer (Implementation.size_t P)) = ty' ->
      eType P G S (AlignOf qs ty) (ExpressionType ty')
  | ETypeCastScalar : forall (P:impl) (G:gamma) (S:sigma) (qs:qualifiers) (ty:type) (e:expression) (ty':type),
      wfLvalueType qs ty ->
@@ -529,7 +529,7 @@ Inductive eType : impl -> gamma -> sigma -> expression -> typeCategory -> Prop :
      isComplete ty1 ->
      isComplete ty2 ->
      isCompatible ty1 ty2 ->
-      Implementation.ptrdiff_t  P  =  ty  ->
+     Basic (Integer (Implementation.ptrdiff_t P)) = ty ->
      eType P G S (Binary e1 (Arithmetic Sub) e2) (ExpressionType ty)
  | ETypeShiftL : forall (P:impl) (G:gamma) (S:sigma) (e1 e2:expression) (ty1' ty1 ty2:type),
      expressionType P G S e1 ty1 ->
@@ -2264,7 +2264,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
   | Binary e1 (Arithmetic (Sub  as aop)) e2 =>
       match eType_find P G S e1 >>= expressionType_aux_find, eType_find P G S e2 >>= expressionType_aux_find with
       | Some ty1, Some ty2 => if arePointersToCompatibleCompleteObjects_fun ty1 ty2 then
-                                Some (ExpressionType (ptrdiff_t P))
+                                Some (ExpressionType (Basic (Integer (ptrdiff_t P))))
                               else if andb (isPointerToCompleteObject_fun ty1) (isInteger_fun ty2) then
                                 Some (ExpressionType ty1)
                               else if (isBinaryArithmetic_fun ty1 Sub ty2) then
@@ -2305,7 +2305,7 @@ Fixpoint eType_find (P:impl) (G:gamma) (S:sigma) e {struct e} : option typeCateg
       if andb (wfLvalueType_fun qs ty)
               (andb (negb (isFunction_fun   ty))
                     (negb (isIncomplete_fun ty)))
-        then Some (ExpressionType (size_t P))
+        then Some (ExpressionType (Basic (Integer (size_t P))))
         else None
   | Cast qs Void e =>
       if wfLvalueType_fun qs Void then
