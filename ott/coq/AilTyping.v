@@ -1901,11 +1901,17 @@ Proof.
   - left; left;
     repeat constructor.
     + unfold integerTypeRange.
+      unfold isUnsigned_fun.
+      repeat rewrite (isSigned_Signed   P);
+      repeat rewrite (isSigned_Unsigned P);
       destruct (binMode P); simpl;
       rewrite max_mkRange;
       eapply integerTypeRange_signed_upper;
       eapply precision_ge_one.
     + unfold integerTypeRange.
+      unfold isUnsigned_fun.
+      repeat rewrite (isSigned_Signed   P);
+      repeat rewrite (isSigned_Unsigned P);
       destruct (binMode P); simpl;
       rewrite min_mkRange; solve [eapply integerTypeRange_signed_lower1; eapply precision_ge_one
                                  |eapply integerTypeRange_signed_lower2; eapply precision_ge_one].

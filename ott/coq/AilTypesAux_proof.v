@@ -113,7 +113,13 @@ Next Obligation. destruct it; my_auto. Qed.
 *)
 
 Lemma isSigned_fun_correct P it : boolSpec (isSigned_fun P it) (isSigned P it).
-Proof. destruct it; unfold_goal; my_auto. Qed.
+Proof.
+  unfold_goal.
+  set (isSigned_Bool P).
+  set (isSigned_Signed P).
+  set (isSigned_Unsigned P).
+  destruct it; my_auto.
+Qed.
 
 Instance isSigned_dec P it : Decision (isSigned P it) := boolSpec_Decision (isSigned_fun_correct P it).
 
@@ -144,7 +150,13 @@ Next Obligation. destruct it; my_auto. Qed.
 *)
 
 Lemma isUnsigned_fun_correct P it : boolSpec (isUnsigned_fun P it) (isUnsigned P it).
-Proof. do 3 unfold_goal. my_auto. Qed.
+Proof.
+  do 3 unfold_goal.
+  set (isSigned_Bool P).
+  set (isSigned_Signed P).
+  set (isSigned_Unsigned P).
+  destruct it; my_auto.
+Qed.
 
 Instance isUnsigned_dec P it : Decision (isUnsigned P it) := boolSpec_Decision (isUnsigned_fun_correct P it).
 
@@ -170,29 +182,31 @@ Lemma integerTypeRange_precision_Signed P it1 it2 :
   le (integerTypeRange P it1) (integerTypeRange P it2).
 Proof.
   inversion 1;
-  inversion 1;
-  subst; intros;
-  constructor;
-  destruct_integerBaseType;
-  unfold integerTypeRange;
-  abstract (
-  destruct (binMode P);
-  match goal with 
-  | [ H : isCharSigned _ = true |- _] => unfold isUnsigned_fun; rewrite_all H; simpl
-  | _ => idtac
-  end;
-  repeat rewrite max_mkRange;
-  repeat rewrite min_mkRange;
-  solve
-        [ apply Z.sub_le_mono  ; [|omega];
-          apply Z.pow_le_mono_r;   omega ;
-          apply Z.pow_le_mono_r;   omega
+  inversion 1; subst;
+  match goal with
+  | [|- le (integerTypeRange P Char) (integerTypeRange P Char)] =>
+      constructor; omega
+  | _ =>
+      constructor;
+      unfold integerTypeRange;
+      unfold isUnsigned_fun;
+      rewrite_all isSigned_Signed;
+      match goal with 
+      | [ H : isSigned_fun P Char = true |- _] => unfold isUnsigned_fun; rewrite H
+      | _ => idtac
+      end;
+      destruct (binMode P); simpl;
+      repeat rewrite max_mkRange; 
+      repeat rewrite min_mkRange; 
+      solve
+        [ apply Z.sub_le_mono;
+          [apply Z.pow_le_mono_r|]; omega
         | apply (proj1 (Z.opp_le_mono _ _));
-          apply Z.pow_le_mono_r;  omega
-        | apply Z.add_le_mono;[|omega];
-          apply (proj1 (Z.opp_le_mono _ _));
           apply Z.pow_le_mono_r; omega
-        | omega]).
+        | apply Z.add_le_mono; [|omega];
+          apply (proj1 (Z.opp_le_mono _ _));
+          apply Z.pow_le_mono_r; omega]
+  end.
 Qed.
 
 Lemma integerTypeRange_precision_Signed_inv P it1 it2 :
@@ -211,11 +225,12 @@ Proof.
   | [ H : max (_ _ ?it1) <= max (_ _ ?it2) |- _] =>
       unfold integerTypeRange    in H;
       unfold isUnsigned_fun      in H;
-      destruct (binMode P);
+      repeat rewrite (isSigned_Signed P) in H;
       match goal with 
-      | [ R : isCharSigned _ = true |- _] => repeat rewrite R in H; simpl in H
+      | [ R : isSigned_fun P Char = true |- _] => repeat rewrite R in H; simpl in H
       | _ => idtac
       end;
+      destruct (binMode P); simpl in H;
       repeat rewrite max_mkRange in H;
       apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1)) in H;
       apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1));
@@ -230,12 +245,14 @@ Lemma integerTypeRange_precision_Unsigned P it1 it2 :
   le (integerTypeRange P it1) (integerTypeRange P it2).
 Proof.
   inversion 1;
-  inversion 1;
-  subst; intros;
+  inversion 1; subst;
   constructor;
   unfold integerTypeRange;
+  unfold isUnsigned_fun;
+  repeat rewrite (isSigned_Unsigned P);
+  repeat rewrite (isSigned_Bool     P);
   match goal with 
-  | [ H : isCharSigned _ <> true |- _] => unfold isUnsigned_fun; rewrite_all (not_true_is_false _ H)
+  | [ H : isSigned_fun P Char <> true |- _] => unfold isUnsigned_fun; rewrite_all (not_true_is_false _ H)
   | _ => idtac
   end;
   simpl;
@@ -257,16 +274,18 @@ Proof.
   set (precision_ge_one P it2).
   inversion 1;
   inversion 1;
-  inversion 1;
-  subst;
+  inversion 1; subst;
   match goal with
   | [ H : max (_ _ ?it1) <= max (_ _ ?it2) |- _] =>
       unfold integerTypeRange    in H;
       unfold isUnsigned_fun      in H;
+      repeat rewrite (isSigned_Unsigned P) in H;
+      repeat rewrite (isSigned_Bool     P) in H;
       match goal with 
-      | [ R : isCharSigned _ <> true |- _] => repeat rewrite (not_true_is_false _ R) in H; simpl in H
+      | [ R : isSigned_fun P Char <> true |- _] => repeat rewrite (not_true_is_false _ R) in H; simpl in H
       | _ => idtac
       end;
+      simpl in H;
       repeat rewrite max_mkRange in H;
       apply (Z.pow_le_mono_r_iff 2); omega
   end.
@@ -276,19 +295,15 @@ Lemma precision_signed_ge_two {P} {it} : isSigned P it -> 2 <= precision P it.
 Proof.
   destruct 1;
   match goal with
-  | [H : isCharSigned ?P = true |- _] =>
+  | [H : isSigned_fun ?P Char = true |- _] =>
       let Hprec := fresh in
+      let Hmin := fresh in
       set (precision_Char P) as Hprec; rewrite H in Hprec; simpl in Hprec;
-      set (minPrecision_Signed_Ichar    P)
+      set (minPrecision_Signed P Ichar) as Hmin; simpl in Hmin
   | [|- _ <= precision ?P _] =>
-    destruct_integerBaseType;
-    set (minPrecision_Signed_Ichar    P);
-    set (minPrecision_Signed_Short    P);
-    set (minPrecision_Signed_Int      P);
-    set (minPrecision_Signed_Long     P);
-    set (minPrecision_Signed_LongLong P)
-  end;
-  omega.
+      let Hmin := fresh in
+      set (minPrecision_Signed P ibt) as Hmin; destruct ibt; simpl in Hmin
+  end; omega.
 Qed.
 
 Lemma integerTypeRange_precision_Signed_Unsigned P it1 it2 :
@@ -298,8 +313,7 @@ Lemma integerTypeRange_precision_Signed_Unsigned P it1 it2 :
 Proof.
   inversion 1;
   inversion 1;
-  inversion 1;
-  subst;
+  inversion 1; subst;
   match goal with
   | [ H : isSigned _ _ |- _] =>
       set (precision_signed_ge_two H)
@@ -308,9 +322,13 @@ Proof.
   | [ H : min (integerTypeRange P _) <= min (integerTypeRange P _) |- _] =>
       repeat destruct_integerBaseType;
       unfold integerTypeRange in H;
+      unfold isUnsigned_fun in H;
+      repeat rewrite (isSigned_Signed   P) in H;
+      repeat rewrite (isSigned_Unsigned P) in H;
+      repeat rewrite (isSigned_Bool     P) in H;      
       match goal with 
-      | [ R : isCharSigned _  = true |- _] => unfold isUnsigned_fun in H; rewrite_all R
-      | [ R : isCharSigned _ <> true |- _] => unfold isUnsigned_fun in H; rewrite_all (not_true_is_false _ R)
+      | [ R : isSigned_fun P Char  = true |- _] => rewrite_all R
+      | [ R : isSigned_fun P Char <> true |- _] => rewrite_all (not_true_is_false _ R)
       | _ => idtac
       end;
       destruct (binMode P);
@@ -344,25 +362,28 @@ Lemma integerTypeRange_precision_Unsigned_Signed P it1 it2 :
   le (integerTypeRange P it1) (integerTypeRange P it2).
 Proof.
   inversion 1;
-  inversion 1;
-  subst; intros;
+  inversion 1; subst;
   constructor;
   unfold integerTypeRange;
   unfold isUnsigned_fun;
+  repeat rewrite (isSigned_Signed   P);
+  repeat rewrite (isSigned_Unsigned P);
+  repeat rewrite (isSigned_Bool     P);
   match goal with 
-  | [ R    : isCharSigned ?P =  true
-    , notR : isCharSigned ?P <> true |- _] => destruct (notR R)
-  | [ R : isCharSigned _  = true |- _] => rewrite_all R                      ; simpl
-  | [ R : isCharSigned _ <> true |- _] => rewrite_all (not_true_is_false _ R); simpl
+  | [ R    : isSigned_fun ?P =  true
+    , notR : isSigned_fun ?P <> true |- _] => destruct (notR R)
+  | [ R : isSigned_fun P Char  = true |- _] => rewrite_all R                      ; simpl
+  | [ R : isSigned_fun P Char <> true |- _] => rewrite_all (not_true_is_false _ R); simpl
   | _ => idtac
   end;
-  destruct (binMode P);
+  destruct (binMode P); simpl;
   match goal with
   | [|- min _ <= min _ ] =>
       repeat rewrite min_mkRange;
       solve [
           apply integerTypeRange_signed_lower1; apply precision_ge_one
-        | apply integerTypeRange_signed_lower2; apply precision_ge_one]
+        | apply integerTypeRange_signed_lower2; apply precision_ge_one
+        | omega ]
   | [|- max _ <= max _ ] =>
       repeat rewrite max_mkRange;
       apply Z.sub_le_mono_r;
@@ -379,20 +400,22 @@ Proof.
   set (precision_ge_one P it2).
   inversion 1;
   inversion 1;
-  inversion 1;
-  subst;
+  inversion 1; subst;
   match goal with
   | [H : max _ <= max _|- _] =>
     unfold integerTypeRange in H;
     unfold isUnsigned_fun   in H;
+    repeat rewrite (isSigned_Signed   P) in H;
+    repeat rewrite (isSigned_Unsigned P) in H;
+    repeat rewrite (isSigned_Bool     P) in H;
     match goal with 
-    | [ R    : isCharSigned _ =  true
-      , notR : isCharSigned _ <> true |- _] => destruct (notR R)
-    | [ R    : isCharSigned _  = true |- _] => rewrite R                       in H; simpl in H
-    | [ R    : isCharSigned _ <> true |- _] => rewrite (not_true_is_false _ R) in H; simpl in H
+    | [ R    : isSigned_fun P Char =  true
+      , notR : isSigned_fun P Char <> true |- _] => destruct (notR R)
+    | [ R    : isSigned_fun P Char  = true |- _] => rewrite R                       in H; simpl in H
+    | [ R    : isSigned_fun P Char <> true |- _] => rewrite (not_true_is_false _ R) in H; simpl in H
     | _ => idtac
     end;
-    destruct (binMode P);
+    destruct (binMode P); simpl in H;
     repeat rewrite max_mkRange in H;
     apply (proj2 (Z.sub_le_mono_r _ _ 1)) in H;
     apply Z.lt_le_pred;
@@ -436,23 +459,24 @@ leIntegerTypeRange_dec _ _ _ := inr _.
 
 Lemma leIntegerTypeRange_fun_correct P it1 it2 : boolSpec (leIntegerTypeRange_fun P it1 it2) (leIntegerTypeRange P it1 it2).
 Proof.
+  do 2 unfold_goal.
   set (isUnsigned_fun_correct P it1) as Hunsigned1.
   set (isUnsigned_fun_correct P it2) as Hunsigned2.
   set (isSigned_fun_correct   P it1) as Hsigned1.
   set (isSigned_fun_correct   P it2) as Hsigned2.
   destruct_integerType;
   unfold isUnsigned_fun in *;
-  unfold isSigned_fun   in *;
-  unfold leIntegerTypeRange_fun;
+  rewrite_all (isSigned_Signed   P);
+  rewrite_all (isSigned_Unsigned P);
+  rewrite_all (isSigned_Bool     P);
   match goal with
-  | [ _ : context [isCharSigned ?P] |- _] =>
+  | [|- context [Char]] =>
       let Heq := fresh in
       set (precision_Char P);
-      set (lePrecision_Signed_Unsigned_Ichar P);
-      case_eq (isCharSigned P); intros Heq; rewrite Heq in *
+      case_eq (isSigned_fun P Char);
+      intros Heq; repeat rewrite Heq in *
   | _ => idtac
-  end;
-  boolSpec_simpl; simpl;
+  end; simpl;
   match goal with
   | [|- context[Z.ltb ?x ?y] ] =>
       let Heq := fresh in
@@ -1587,5 +1611,3 @@ Proof.
       | [H : isUnqualified ?qs |- _] => inversion_clear H
       end; congruence.
 Qed.
-
-
