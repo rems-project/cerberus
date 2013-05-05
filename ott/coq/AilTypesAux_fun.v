@@ -69,20 +69,17 @@ Definition isBool_fun t :=
   | _ => false
   end.
 
+(*
 Definition isSigned_fun P it : bool :=
   match it with
   | Signed _ => true
-  | Char => isCharSigned P
+  | Char => isSigned_fun P Char
   | _ => false
   end.
+*)
 
 Definition isUnsigned_fun P it : bool :=
-  match it with
-  | Unsigned _ => true
-  | Bool => true
-  | Char => negb (isCharSigned P)
-  | _ => false
-  end.
+  negb (isSigned_fun P it).
 
 Definition integerTypeRange P it :=
   let prec := precision P it in
@@ -114,19 +111,19 @@ Definition inIntegerTypeRange_fun P n it : bool :=
 Definition leIntegerTypeRange_fun P it1 it2 : bool :=
   match it1, it2 with
   | Char             , Char              => true
-  | Char             , Signed   Ichar    => isCharSigned P
-  | Char             , Signed   ibt      => orb (isCharSigned P)
+  | Char             , Signed   Ichar    => isSigned_fun P Char
+  | Char             , Signed   ibt      => orb (isSigned_fun P Char)
                                                 (Z.ltb (precision P Char) (precision P (Signed ibt)))
-  | Signed Ichar     , Char              => isCharSigned P
-  | Signed ibt       , Char              => andb (isCharSigned P)
+  | Signed Ichar     , Char              => isSigned_fun P Char
+  | Signed ibt       , Char              => andb (isSigned_fun P Char)
                                                  (Z.eqb (precision P (Signed ibt)) (precision P Char))
-  | Unsigned Ichar   , Char              => negb (isCharSigned P)
-  | Unsigned ibt     , Char              => andb (negb (isCharSigned P))
+  | Unsigned Ichar   , Char              => negb (isSigned_fun P Char)
+  | Unsigned ibt     , Char              => andb (negb (isSigned_fun P Char))
                                                  (Z.eqb (precision P (Unsigned ibt)) (precision P Char))
-  | Char             , Unsigned _        => negb (isCharSigned P)
-  | Char             , Bool              => andb (negb (isCharSigned P))
+  | Char             , Unsigned _        => negb (isSigned_fun P Char)
+  | Char             , Bool              => andb (negb (isSigned_fun P Char))
                                                  (Z.eqb (precision P Char) (precision P Bool))
-  | Bool             , Char              => orb (negb (isCharSigned P))
+  | Bool             , Char              => orb (negb (isSigned_fun P Char))
                                                 (Z.ltb (precision P Bool) (precision P Char))
 
   | Signed   Ichar   , Signed   _        => true
