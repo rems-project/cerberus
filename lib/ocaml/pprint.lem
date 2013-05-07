@@ -1,0 +1,67 @@
+type t
+
+module Unicode = struct
+  val null : t
+  val le : t
+  val ge : t
+  val disj : t
+  val conj : t
+  val compl : t
+  val implies : t
+  val mapsto : t
+end
+
+module Operators = struct
+  val (^^) : t -> t -> t
+  val (^^^) : t -> t -> t
+  val (^/^) : t -> t -> t
+  val !^ : string -> t
+end
+
+val lbrace : t
+val rbrace : t
+val comma : t
+val star : t
+val plus : t
+val minus : t
+val percent : t
+val slash : t
+val caret : t
+val equals : t
+val langle : t
+val rangle : t
+val ampersand : t
+val tilde : t
+val bar : t
+val bang : t
+val space : t
+val qmark : t
+val colon : t
+val semi : t
+val underscore : t
+val empty : t
+
+val text : string -> t
+
+val nest : num -> t -> t
+val group : t -> t
+
+
+val parens : t -> t
+val brackets : t -> t
+val braces : t -> t
+val dquotes : t -> t
+
+(*val optional : forall 'a. ('a -> t) -> option 'a -> t*)
+val comma_list : forall 'a. ('a -> t) -> list 'a -> t
+val sepmap : forall 'a. t -> ('a -> t) -> list 'a -> t
+val sep0map: forall 'a. t -> ('a -> t) -> list 'a -> t
+val fold : forall 'a. (t -> t -> t) -> list t -> t
+
+val break0 : t
+val break1 : t
+val group2 : t -> t
+
+val align : t -> t
+
+val dot : t

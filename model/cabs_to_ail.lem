@@ -1,0 +1,954 @@
+open Global
+
+module C = Cabs
+module A = Ail
+
+
+module Effect = struct
+  module M  = State_exception
+  module St = Symbol_table
+
+  type id = Symbol.t
+  type id_set = Symbol.sset
+
+  type env 'a = <|
+    symbol_set   : id_set;                             (* the set of existing symbols                                    *)
+    label_map    : map string id;
+    symbol_table : St.t string id;                     (* table (with stacked scopes) associating identifiers to symbols *)
+    
+    (* TODO disgusting hack for now: identical field names are given the same symbol. I don't see any other way without
+                                     typing information. The proper way will be to postpone the symbolization until after
+                                     the type checking *)
+    fields_symbol_table : map string id;
+    
+    
+    id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
+    globals      : list (id * A.expression_l 'a);      (* global definitions (??) *)
+    fields_map   : map id (list (id * A.member));      (* struct/union members    *)
+    fn_map       : map id (list id * A.statement_l 'a) (* functions map           *)
+  |>
+  
+  (* Exception monad in the State monad (st = env 'b) *)
+  type t 'a 'b = M.t 'a (env 'b) Errors.cause
+  
+  
+  (* BEGIN TEMPORARY: (TODO) these will disappear with the fixed module system. *)
+  let return    = M.return
+  let fail      = M.fail
+  let option    = M.option
+  let of_option = M.of_option
+  let mapM      = M.mapM
+  let foldrM    = M.foldrM
+  let iter      = M.iter
+  (* END TEMPORARY *)
+  
+  
+  (* Liftings of the operations on the `symbol_table' *)
+  let create_scope  = M.update (fun env -> 
+    <| env with symbol_table=         St.create_scope env.symbol_table |>)
+  let destroy_scope = M.update (fun env ->
+    <| env with symbol_table=         St.destroy_scope env.symbol_table |>)
+  let push_table t  = M.update (fun env ->
+    <| env with symbol_table=         St.push_table t env.symbol_table;
+(*                fields_symbol_tables= Pmap.map (St.push_table env.fields_symbol_tables *)
+
+     |>)
+  
+  let symbols       = M.read (fun env -> St.symbols env.symbol_table)
+  let resolve name  = M.read (fun env -> St.find name env.symbol_table)
+  let return_scope  = M.read (fun env -> St.return_scope env.symbol_table)
+  
+  (* TODO: separate the increment of symbol_set in a shared function *)
+  let fresh_name name_opt =
+    M.modify (fun env ->
+      let ((symbol, symbol_set'), symbol_table') =
+        match name_opt with
+          | None      -> (Symbol.fresh env.symbol_set, env.symbol_table)
+          | Some name -> let (x,y) = Symbol.fresh_pretty name env.symbol_set in ((x,y), St.add name x env.symbol_table)
+        end in
+      (symbol, <|env with  symbol_set= symbol_set'; symbol_table= symbol_table' |>)
+    )
+
+  (* disgusting HACK *)
+  let register_fieldname name_opt =
+    M.modify (fun env ->
+      match name_opt with
+        | None -> let (sym, sset') = Symbol.fresh env.symbol_set in
+                  (sym, <| env with symbol_set= sset' |>)
+        
+        | Some name ->
+            if Pmap.mem name env.fields_symbol_table then
+              (* use the same symbol if a same field name has already been registered *)
+              (Pmap.find name env.fields_symbol_table, env)
+            else
+              let (sym, sset') = Symbol.fresh_pretty name env.symbol_set in
+              (sym, <|env with  symbol_set= sset'; symbol_table= St.add name sym env.symbol_table |>)
+        end
+  )
+
+  
+  
+  let add_id id decl         = M.update (fun env -> <| env with id_map=  Pmap.add id decl env.id_map |>)
+  let add_fn id formals body = M.update (fun env -> <| env with fn_map=  Pmap.add id (formals, body) env.fn_map |>)
+  let add_globals defns      = M.update (fun env -> <| env with globals= env.globals @ defns |>)
+  
+  
+  let return_label_map = fun env -> Exception.return (env.label_map, env)
+  
+  let fresh_label name =
+    M.modify (fun env ->
+      let (symbol, symbol_set') = Symbol.fresh_pretty name env.symbol_set in
+      (symbol, <|env with  symbol_set= symbol_set';
+                           label_map=  Pmap.add name symbol env.label_map |>)
+    )
+  
+  
+  val init: forall 'a 'b. t 'a 'b -> Exception.t 'a Errors.cause
+  let init m =
+    M.run m
+    <|
+      symbol_set          = Symbol.init;
+      label_map           = Pmap.empty;
+      symbol_table        = St.create_scope St.empty;
+      fields_symbol_table = Pmap.empty;
+      id_map              = Pmap.empty;
+      globals             = [];
+      fields_map          = Pmap.empty;
+      fn_map              = Pmap.empty
+    |>
+  
+  
+  val to_program: forall 'a. id -> t (A.file 'a) 'a
+  let to_program main =
+    M.read (fun env ->
+      <|
+        A.main=    main;
+        A.id_map=  env.id_map;
+        A.globals= env.globals;
+        A.fn_map=  env.fn_map
+     |>
+    )
+  
+
+(* val register_fields: id -> list (id * A.member) -> t unit *)
+let register_fields tag fields =
+  M.update (fun env ->
+    <| env with fields_map= Pmap.add tag fields env.fields_map |>
+  )
+
+let resolve_fields tag =
+  M.read (fun env ->
+    Pmap.find tag env.fields_map
+  )
+
+  
+  module Operators = struct
+    let (>>=)    = M.bind
+    let (>>) m f = m >>= fun _ -> f
+    let (<$>)    = M.fmap
+    let (<*>)    = M.app
+    let (<@>)    = M.papp
+  end
+end
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+module E = Effect
+open E.Operators
+
+(* TODO: temporary hack, may want to hide this in a monad *)
+type desugar_state = <|
+  inside_switch: bool; (* Are we inside the body of switch statement? (needed to
+                          check if 'case' statements are allowed) *)
+|>
+let initial_desugar_state = <|
+    inside_switch= false
+|>
+
+
+(* Substitute an already registered name for its corresponding symbol *)
+val subst: forall 'b. string -> E.t Symbol.t 'b
+let subst name =
+  E.option (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER) (E.resolve name)
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+val register_name:   string   -> E.t Symbol.t Location.t
+val register_labels: C.stmt_l -> E.t unit Location.t
+val fetch_label_id:  string   -> E.t Symbol.t Location.t
+
+
+let register_name name =
+  E.return_scope >>= fun scope ->
+  if Symbol_table.mem name scope then E.fail Errors.CABS_TO_AIL_MULTIPLE_REGISTRATION
+                                 else E.fresh_name (Some name)
+
+let rec register_labels (s, _) =
+  let f name =
+    E.return_label_map >>= fun label_map ->
+    if Pmap.mem name label_map then E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
+                               else E.fresh_label name
+  in match s with
+    | C.SKIP             -> E.return ()
+    | C.EXPRESSION _     -> E.return ()
+    | C.BLOCK ss         -> E.iter register_labels ss
+    | C.IF _ s1 s2_opt   -> register_labels s1 >>
+                            match s2_opt with
+                              | Some s2 -> register_labels s2
+                              | None    -> E.return ()
+                            end
+    | C.WHILE _ s        -> register_labels s
+    | C.DO _ s           -> register_labels s
+    | C.FOR_EXP _ _ _ s  -> register_labels s
+    | C.FOR_DECL _ _ _ s -> register_labels s
+    | C.BREAK            -> E.return ()
+    | C.CONTINUE         -> E.return ()
+    | C.RETURN _         -> E.return ()
+    | C.SWITCH _ s       -> register_labels s
+(* TODO: case with labels *)
+    | C.CASE _ s         -> register_labels s
+    | C.DEFAULT s        -> register_labels s
+    | C.LABEL l s        -> f l >> register_labels s
+    | C.GOTO _           -> E.return ()
+    | C.DECLARATION _    -> E.return ()
+    | C.PAR _            -> E.return ()
+  end
+
+let fetch_label_id name =
+  E.return_label_map >>= fun label_map ->
+  if Pmap.mem name label_map then E.return (Pmap.find name label_map)
+                             else E.fail Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER
+
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+val desugar_unop:             C.unary_operator      -> A.unary_operator
+val desugar_qualifiers:       C.qualifiers          -> A.qualifiers
+val desugar_arithop:          C.arithmetic_operator -> A.arithmetic_operator
+val desugar_binop:            C.binary_operator     -> A.binary_operator
+val desugar_integer_constant: C.integer_constant    -> A.integer_constant
+val desugar_constant:         C.constant            -> A.constant
+
+let desugar_unop = function
+  | C.MINUS        -> A.MINUS
+  | C.PLUS         -> A.PLUS
+  | C.BNOT         -> A.BNOT
+  | C.POSTFIX_INCR -> A.POSTFIX_INCR
+  | C.POSTFIX_DECR -> A.POSTFIX_DECR
+  | C.ADDRESS      -> A.ADDRESS
+  | C.INDIRECTION  -> A.INDIRECTION
+  
+  (* These cases cannot occurs since these constructors are translated away. *)
+  | C.PREFIX_INCR -> Boot.outOfHomeomorphism "[Cabs_to_ail.desugar_unop, C.PREFIX_INCR] reached an impossible case"
+  | C.PREFIX_DECR -> Boot.outOfHomeomorphism "[Cabs_to_ail.desugar_unop, C.PREFIX_INCR] reached an impossible case"
+  | C.NOT         -> Boot.outOfHomeomorphism "[Cabs_to_ail.desugar_unop, C.PREFIX_INCR] reached an impossible case"
+end
+
+
+let desugar_qualifiers =
+  Set.map function
+    | C.CONST    -> A.CONST
+    | C.RESTRICT -> A.RESTRICT
+    | C.VOLATILE -> A.VOLATILE
+    | C.ATOMIC   -> A.ATOMIC_Q
+  end
+
+
+let desugar_arithop = function
+  | C.MUL  -> A.MUL
+  | C.DIV  -> A.DIV
+  | C.MOD  -> A.MOD
+  | C.ADD  -> A.ADD
+  | C.SUB  -> A.SUB
+  | C.SHL  -> A.SHL
+  | C.SHR  -> A.SHR
+  | C.BAND -> A.BAND
+  | C.XOR  -> A.XOR
+  | C.BOR  -> A.BOR
+end
+
+
+let desugar_binop = function
+  | C.ARITHMETIC o -> A.ARITHMETIC (desugar_arithop o)
+  | C.EQ           -> A.EQ
+  | C.NE           -> A.NE
+  | C.LT           -> A.LT
+  | C.GT           -> A.GT
+  | C.LE           -> A.LE
+  | C.GE           -> A.GE
+  | C.AND          -> A.AND
+  | C.OR           -> A.OR
+  | C.COMMA        -> A.COMMA
+end
+
+
+let desugar_integer_constant (n, suff_opt) =
+  let desugar_integer_suffix = function
+    | C.SUFFIX_UNSIGNED           -> A.SUFFIX_UNSIGNED
+    | C.SUFFIX_UNSIGNED_LONG      -> A.SUFFIX_UNSIGNED_LONG
+    | C.SUFFIX_UNSIGNED_LONG_LONG -> A.SUFFIX_UNSIGNED_LONG_LONG
+    | C.SUFFIX_LONG               -> A.SUFFIX_LONG
+    | C.SUFFIX_LONG_LONG          -> A.SUFFIX_LONG_LONG
+  end in
+  match suff_opt with
+    | Some suff -> (n, Some (desugar_integer_suffix suff))
+    | None      -> (n, None)
+  end
+
+let desugar_character_constant c =
+  let (preff, c') = Boot.span_string (not -| Boot.is_quote) c in
+  (match preff with
+    | ""  -> None
+    | "L" -> Some A.PREFIX_L
+    | "u" -> Some A.PREFIX_u
+    | "U" -> Some A.PREFIX_U
+   end, Boot.unquote_string c')
+
+let desugar_constant = function
+  | C.CONST_INT c   -> A.CONST_INT (desugar_integer_constant c)
+  | C.CONST_FLOAT c -> A.CONST_FLOAT c
+  | C.CONST_CHAR c  -> A.CONST_CHAR (desugar_character_constant c)
+end
+
+let desugar_string_literal (pref_opt, str) =
+  let desugar_encoding_prefix = function
+    | C.ENCODING_u8 -> A.ENCODING_u8
+    | C.ENCODING_u  -> A.ENCODING_u
+    | C.ENCODING_U  -> A.ENCODING_U
+    | C.ENCODING_L  -> A.ENCODING_L
+  end in
+  match pref_opt with
+    | Some pref -> (Some (desugar_encoding_prefix pref), str)
+    | None      -> (None, str)
+  end
+
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+val desugar_specifier: forall 'b. C.specifiers         -> E.t (A.basic_type) 'b
+val desugar_storage:   forall 'b. list C.storage_class -> E.t (option A.storage_duration) 'b
+val desugar_type:      C.c_type             -> E.t (A.ctype) Location.t
+val desugar_expr:      forall 'b. C.exp_l              -> E.t (A.expression Location.t) 'b
+(* val desugar_stmt:      forall 'b. desugar_state -> C.stmt_l             -> E.t (A.statement Location.t) 'b *)
+
+(* TODO: polish *)
+
+(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
+   instead) *)
+(* TODO: we should do something about `char' here (implementation-defined choice) *)
+let desugar_specifier specifiers =
+  let mk_mset = Multiset.from_list in
+  let desugar_map =
+    List.fold_left
+      (fun m (x, y) -> Pmap.add x y m)
+      (Ocaml.Pmap.empty Multiset.compare_int)
+      (
+        (* TODO: maybe move that somewhere else *)
+          [(mk_mset [C.CHAR], A.CHAR)]
+
+        @ [(mk_mset [C.SIGNED; C.CHAR], A.INTEGER (A.SIGNED A.ICHAR))]
+        @ [(mk_mset [C.UNSIGNED; C.CHAR], A.INTEGER (A.UNSIGNED A.ICHAR))]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.SHORT)))
+          [ [C.SHORT];
+            [C.SIGNED; C.SHORT];
+            [C.SHORT; C.INT];
+            [C.SIGNED; C.SHORT; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.SHORT)))
+          [ [C.UNSIGNED; C.SHORT];
+            [C.UNSIGNED; C.SHORT; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.INT)))
+          [ [C.INT];
+            [C.SIGNED];
+            [C.SIGNED; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.INT)))
+          [ [C.UNSIGNED];
+            [C.UNSIGNED; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG)))
+          [ [C.LONG];
+            [C.SIGNED; C.LONG];
+            [C.LONG; C.INT];
+            [C.SIGNED; C.LONG; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG)))
+          [ [C.UNSIGNED; C.LONG];
+            [C.UNSIGNED; C.LONG; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG_LONG)))
+          [ [C.LONG; C.LONG];
+            [C.SIGNED; C.LONG; C.LONG];
+            [C.LONG; C.LONG; C.INT];
+            [C.SIGNED; C.LONG; C.LONG; C.INT]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
+          [ [C.UNSIGNED; C.LONG; C.LONG];
+            [C.UNSIGNED; C.LONG; C.LONG; C.INT]
+          ]
+        @ [(mk_mset [C.FLOAT], A.REAL_FLOATING A.FLOAT)]
+        @ [(mk_mset [C.DOUBLE], A.REAL_FLOATING A.DOUBLE)]
+        @ [(mk_mset [C.LONG; C.DOUBLE], A.REAL_FLOATING A.LONG_DOUBLE)]
+        @ [(mk_mset [C.BOOL], A.INTEGER A.BOOL)]
+        @ [(mk_mset [C.FLOAT; C.COMPLEX], A.COMPLEX A.FLOAT)]
+        @ [(mk_mset [C.DOUBLE; C.COMPLEX], A.COMPLEX A.DOUBLE)]
+        @ [(mk_mset [C.LONG; C.DOUBLE; C.COMPLEX], A.COMPLEX A.LONG_DOUBLE)]
+      ) in
+  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.") (Map_.find specifiers desugar_map)
+
+
+(* DOCUMENT: 6.2.4 *)
+(* TODO:
+
+(6.2.4#3) (NOT _Thread_local) AND (external linkage OR internal linkage OR static) --> A.STATIC
+(6.2.4#4) _Thread_local --> A.THREAD
+(6.2.4#5) no linkage AND (NOT static) --> A.AUTOMATIC
+*)
+let desugar_storage = function
+  | []           -> E.return None
+  | [C.AUTO]     -> E.return (Some A.AUTOMATIC)
+  | [C.STATIC]   -> E.return (Some A.STATIC)
+  
+  | [C.REGISTER]     -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
+  | [C.EXTERN]       -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
+  | [C.THREAD_LOCAL] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class _Thread_local")
+  
+  | [C.TYPEDEF]  -> E.return None  (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+  
+  | _::_::_      -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
+end
+
+
+(* val desugar_type: forall 'b. C.c_type -> E.t A.ctype 'b *)
+let rec desugar_type t =
+  let ft = desugar_type in
+  match t with
+  | C.BASE qs ss ->
+      if Ocaml.Pmap.equal Ocaml.Pervasives.(=) (Multiset.from_list [C.VOID]) ss then
+        E.return (A.VOID (desugar_qualifiers qs))
+        
+      else
+        match Pmap.bindings ss with
+          (* TODO: getting rid of attributes here (for now) *)
+          (* TODO: very likely to be wrong for some cases *)
+          | [(C.STRUCT None [] attrs, 1)] ->
+              Boot.assert_false "desugar_type: found a `struct {}', not sure what to do for now"
+          
+          | [(C.STRUCT (Some tag) [] attrs, 1)] ->
+              subst tag           >>= fun id       ->
+              E.resolve_fields id >>= fun d_fields ->
+              E.return (A.STRUCT (desugar_qualifiers qs) id d_fields)
+          
+          | [(C.STRUCT None fields attrs, 1)] ->
+              E.fresh_name None             >>= fun id       ->
+              E.mapM desugar_field fields   >>= fun d_fields ->
+              E.return (A.STRUCT (desugar_qualifiers qs) id d_fields)
+
+
+
+          | [(C.NAMED "size_t", 1)]   -> E.return A.SIZE_T
+          | [(C.NAMED "intptr_t", 1)] -> E.return A.INTPTR_T
+
+
+
+(*
+
+  | C.STRUCT of option string * list field * list attribute
+
+and field =
+  | BasicField of string * c_type
+  | BitField of option string * c_type * exp_l
+
+  | A.STRUCT of qualifiers * id * list (id * member)
+*)
+          | _ -> A.BASIC (desugar_qualifiers qs) <$> desugar_specifier ss
+end
+
+
+
+
+
+
+
+  | C.ARRAY _ t (Some e) ->
+      let size =
+        match e with
+        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return (Some size)
+        | (_, l) ->
+            let msg = "We don't support VLAs and moreover the size of an array \
+                       must be an integer constant.\n" in
+            E.fail (Errors.OTHER msg)
+        end in
+      A.ARRAY <$> ft t <*> size
+  | C.ARRAY s t None -> E.fail (Errors.CSEM_NOT_SUPPORTED "arrays")
+  | C.FUNCTION t decls ->
+      let f ((_, t, sts), l) =
+        desugar_storage sts >>= function
+(* 
+          | Some A.REGISTER ->
+              raise_error "No support for storage class register."
+*)
+          | Some _ ->
+              let msg = "Violation of constraint 6.7.6.3#2 Function declarators \
+                         (including prototypes), Constraints: ..The only \
+                         storage-class that shall occur in a parameter \
+                         declaration is register... in\n" in
+              E.fail (Errors.OTHER msg)
+(*
+              CpLogger.info (CpPrint.pp_program msg) l;
+              raise E_Invalid
+*)
+          | None -> ft t
+          end in
+      let d_decls = E.mapM f decls in
+      A.FUNCTION <$> ft t <*> d_decls
+  | C.POINTER qs t -> A.POINTER (desugar_qualifiers qs) <$> ft t
+  end
+
+(* TODO: if we add VLA then for EXPR_SIZEOF, we need to check whether
+   the expr has VLA type because in this the expr is evaluated ... *)
+and eval_constant_exp (e, _) =
+  match e with
+    | C.UNARY C.POSTFIX_INCR _ -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    | C.UNARY C.POSTFIX_DECR _ -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    | C.UNARY C.PREFIX_INCR _  -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    | C.UNARY C.PREFIX_DECR _  -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    | C.BINARY C.COMMA _ _     -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    (* TODO: the std doesn't forbid identifiers, but I guess it should? *)
+    | C.IDENTIFIER _           -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+
+    (* HACK !!!!! *)
+    | C.CONSTANT (C.CONST_INT (n, _)) -> E.return n
+
+    (* TODO the rest later *)
+(*    
+    | CONSTANT of constant
+    | STRING_LITERAL of string_literal
+    | GENERIC_SELECTION of exp_l * list generic_association_l
+    | SUBSCRIPT of exp_l * exp_l
+    | MEMBEROF of exp_l * string
+    | MEMBEROFPTR of exp_l * string
+    | UNARY of unary_operator * exp_l
+    | EXPR_SIZEOF of exp_l
+    | TYPE_SIZEOF of c_type
+    | TYPE_ALIGNOF of c_type
+    | CAST of c_type * exp_l
+    | BINARY of binary_operator * exp_l * exp_l 
+    | CONDITIONAL of exp_l * exp_l * exp_l
+    | OFFSETOF of c_type * string
+*)
+  end
+
+
+
+
+and desugar_field f =
+  match f with
+  | C.BasicField n ty     -> desugar_type ty               >>= fun d_ty ->
+                             E.register_fieldname (Some n) >>= fun id   ->
+                             E.return (id, A.MEMBER d_ty)
+  
+  | C.BitField n_opt ty e -> desugar_type ty             >>= fun d_ty  ->
+                             eval_constant_exp e         >>= fun width ->
+                             E.register_fieldname n_opt  >>= fun id    ->
+                             E.return (id, A.BITFIELD d_ty width None)
+  end
+
+
+
+
+
+
+let rec desugar_exp (e, l) =
+  let f  = desugar_exp in
+  let ft = desugar_type in
+  Pair.make l <$> (match e with
+  | C.CONSTANT c   -> E.return (A.CONSTANT (desugar_constant c))
+
+  (* HACKISH *)
+  | C.IDENTIFIER "NULL" -> E.return A.NULL
+
+  | C.IDENTIFIER x -> A.VARIABLE <$> subst x
+  
+  
+  | C.STRING_LITERAL str      -> E.return (A.STRING_LITERAL $ desugar_string_literal str)
+  | C.GENERIC_SELECTION _ _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "general selection")
+  
+  
+  (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
+     subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
+     ( *((E1)+(E2))) ]]". *)
+  | C.SUBSCRIPT e1 e2 ->
+      A.UNARY A.INDIRECTION <$> (
+        Pair.make l <$> (A.BINARY (A.ARITHMETIC A.ADD) <$> f e1 <*> f e2)
+      )
+  
+  (* TODO: this is obviously a partial hack *)
+  | C.CALL (C.IDENTIFIER "malloc", _) [e]          -> A.MALLOC <$> f e
+  | C.CALL (C.IDENTIFIER "free"  , _) [e]          -> A.FREE   <$> f e
+  | C.CALL (C.IDENTIFIER "memcmp", _) [e1; e2; e3] -> A.MEMCMP <$> f e1 <*> f e2 <*> f e3
+  | C.CALL (C.IDENTIFIER "memcpy", _) [e1; e2; e3] -> A.MEMCPY <$> f e1 <*> f e2 <*> f e3
+  | C.CALL (C.IDENTIFIER "assert", _) [e]          -> A.ASSERT <$> f e
+
+  
+  | C.CALL e es            -> A.CALL <$> f e <*> E.mapM f es
+
+  | C.MEMBEROF e x         -> E.fail (Errors.CSEM_NOT_SUPPORTED "memberof operator")
+  | C.MEMBEROFPTR e x      -> E.fail (Errors.CSEM_NOT_SUPPORTED "memberofptr operator")
+
+(* KKK
+  | MEMBEROF of expression_l 'a * id
+  | MEMBEROFPTR of expression_l 'a * id
+*)
+
+
+
+  (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
+     equivalent to [[ (E+=1) ]]". *)
+  | C.UNARY C.PREFIX_INCR e ->
+      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.const_int 1)
+  
+  (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+     analogous to the prefix [[ ++ ]] operator". *)
+  | C.UNARY C.PREFIX_DECR e ->
+      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.const_int 1)
+  
+  (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
+     equivalent to [[ (E==0) ]]". *)
+  | C.UNARY C.NOT e        -> A.BINARY A.EQ (l, Ail_aux.const_int 0)    <$> f e
+  | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
+
+  (* TODO: this may be temporary hack (see comment before Ail.EXPR_SIZEOF *)
+  | C.EXPR_SIZEOF e        -> A.EXPR_SIZEOF               <$> f e
+
+
+  | C.TYPE_SIZEOF  t       -> A.SIZEOF                    <$> ft t
+  | C.TYPE_ALIGNOF t       -> A.ALIGNOF                   <$> ft t
+  | C.CAST t e             -> A.CAST                      <$> ft t <*> f e
+  | C.BINARY o e1 e2       -> A.BINARY (desugar_binop o)  <$> f e1 <*> f e2
+  | C.CONDITIONAL e1 e2 e3 -> A.CONDITIONAL <$> f e1 <*> f e2 <*> f e3
+  | C.ASSIGN o_opt e1 e2   -> A.ASSIGN match o_opt with
+                                         | Some o -> Some (desugar_arithop o)
+                                         | None   -> None
+                                       end
+                              <$> f e1 <*> f e2
+  | C.OFFSETOF ty x -> Boot.assert_false "TODO: desugar_exp, C.OFFSETOF"
+  end)
+
+
+let rec desugar_stmt st (s, l) =
+  let fs = desugar_stmt st in
+  let fe = desugar_exp  in
+  Pair.make l <$> match s with
+  
+  (* (§6.8.1) Labeled statements ******************************************** *)
+  | C.LABEL n s ->
+      A.LABEL <$> fetch_label_id n <*> fs s
+  
+  | C.CASE (e, l) s ->
+      (* (§6.8.1#2) "A case label shall appear only in a switch statement." *)
+      if not st.inside_switch then
+        E.fail Errors.CASE_OUTSIDE_SWITCH
+      else
+        let integer_constant =
+          match e with
+            | C.CONSTANT (C.CONST_INT i) -> E.return (desugar_integer_constant i)
+            | _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "anything other than integer \
+                       constants as [[ case ]] labels.")
+        end in
+        A.CASE <$> integer_constant <*> fs s
+  
+  | C.DEFAULT s ->
+      (* (§6.8.1#2) "A default label shall appear only in a switch statement." *)
+      if not st.inside_switch then
+        E.fail Errors.DEFAULT_OUTSIDE_SWITCH
+      else
+        A.DEFAULT <$> fs s
+  
+  (* (§6.8.2) Compound statement ******************************************** *)
+  | C.BLOCK ss ->
+      (* Open up a new scope, transform each statement/declaration in the
+         block and tear down the scope again. *)
+      E.create_scope  >>= fun ()   ->
+      E.mapM fs ss    >>= fun d_ss ->
+      E.symbols       >>= fun ids  ->
+      E.destroy_scope >>= fun ()   ->
+      E.return (A.BLOCK (List.rev ids) d_ss)
+  
+  (* (§6.8.3) Expression and null statements ******************************** *)
+  
+  (* (§6.8.4) Selection statements ****************************************** *)
+  | C.IF e s1 s2_opt ->
+      let d_s2 = desugar_stmt_opt st l s2_opt in
+      A.IF <$> fe e <*> fs s1 <*> d_s2
+  
+  | C.SWITCH e s -> A.SWITCH <$> fe e <*>
+                    (desugar_stmt <| st with inside_switch= true |>) s
+  
+  (* (§6.8.5) Iteration statements ****************************************** *)
+  | C.WHILE  e s -> A.WHILE  <$> fe e <*> fs s
+  
+  | C.DO     e s -> A.DO     <$> fe e <*> fs s
+(*      fs s >>= fun s ->
+      fe e >>= fun e ->
+      E.return (A.BLOCK [] [s; Pair.make l (A.WHILE e s)]) *) (* NOTE: this translation is wrong because is duplicates potential labels *)
+  
+  (* We transform all for statements into while statements. *)
+  | C.FOR_EXP e1_opt e2_opt e3_opt s ->
+      let s1 =
+        match e1_opt with
+        | Some e1 -> (C.EXPRESSION e1, l)
+        | None    -> (C.SKIP, l)
+        end in
+      let e2 =
+        match e2_opt with
+        | Some e2 -> e2
+        (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+           statement) an omitted controlling expression is replace by an
+           unspecified non-zero integer constant. We believe that the choice, as
+           long as representable, does not matter with respect to the
+           semantics. Hence, we arbitrarily choose "1" (which can always be
+           represented as an object of type int). *)
+        | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
+        end in
+      let s3 =
+        match e3_opt with
+        | Some e3 -> (C.EXPRESSION e3, l)
+        | None    -> (C.SKIP, l)
+        end in
+      let body = (C.BLOCK [s; s3], l) in
+      let loop = (C.WHILE e2 body, l) in    
+      let s' = (C.BLOCK [s1; loop], l) in
+      fs s' >>= function (_, d_s) ->
+      E.return d_s end
+  | C.FOR_DECL defns e2_opt e3_opt s ->
+      let is_auto_or_register (C.OTHER_DEF ((_, _, storage), l) _, _) =
+        if List.exist (fun s -> s <> C.AUTO && s <> C.REGISTER) storage then
+          false
+(*
+          CpLogger.info (CpPrint.pp_program msg) l;
+          raise E_Invalid in
+ *)
+        else true in
+      if not (List.for_all is_auto_or_register defns) then
+        let msg = "Violation of constraint 6.8.5#3 Iteration statements, \
+                   Constraints: ..The declaration part of a for statement \
+                   shall only declare identifiers for objects having storage \
+                   class auto or register.. in\n" in
+        E.fail (Errors.OTHER msg)
+      else
+        let s1 = (C.DECLARATION defns, l) in
+        let e2 =
+          match e2_opt with
+          | Some e2 -> e2
+          (* See comment above. *)
+          | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
+          end in
+        let s3 =
+          match e3_opt with
+          | Some e3 -> (C.EXPRESSION e3, l)
+          | None    -> (C.SKIP, l)
+          end in
+        let body = (C.BLOCK [s; s3], l) in
+        let loop = (C.WHILE e2 body, l) in
+        let s' = (C.BLOCK [s1; loop], l) in
+        fs s' >>= function (_, d_s) ->
+        E.return d_s end
+  
+  (* (§6.8.6) Jump statements *********************************************** *)
+  | C.GOTO n ->
+      A.GOTO <$> fetch_label_id n
+
+  | C.CONTINUE -> E.return A.CONTINUE
+  | C.BREAK -> E.return A.BREAK
+  | C.RETURN (Some e) -> A.RETURN_EXPRESSION <$> fe e
+  | C.RETURN None -> E.return A.RETURN_VOID
+
+
+
+
+
+
+
+
+
+
+  | C.DECLARATION defns ->
+      let d_defns = E.mapM desugar_defn defns in
+      (* We remove all declarations that don't contain an initialiser. *)
+      let f = function
+        | (id, Some d_e, _) -> Some (id, d_e)
+        | (_,  None,     _) -> None
+        end in
+      A.DECLARATION <$> (List_.filter_map f -| filter_opt <$> d_defns)
+  | C.EXPRESSION e -> A.EXPRESSION <$> fe e
+
+
+
+  | C.PAR ss -> E.mapM fs ss>>= fun d_ss ->
+                E.return (A.PAR d_ss)
+
+
+
+
+
+
+
+  | C.SKIP -> E.return A.SKIP
+  end
+
+
+
+
+
+
+
+and desugar_stmt_opt st l = function
+  | Some stmt -> desugar_stmt st stmt
+  (* Adding or removing a (finite number of) null operation is semantically
+     sound since "a null statement [...] performs no operations" (6.8.3#3,
+     Expression and null statements, Semantics). *)
+  | None -> E.return (Pair.make l A.SKIP)
+  end
+
+
+
+
+and desugar_decl ((name, t, sts), l) =
+  register_name name      >>= fun id   ->
+  desugar_storage sts     >>= fun d_st ->
+  desugar_type t          >>= fun d_t  ->
+  E.add_id id (d_t, d_st) >>= fun ()   ->
+  E.return id
+
+and desugar_function_decl ((name, t, sts), l) =
+  let desugar_function_type t =
+    match t with
+    | C.FUNCTION t decls ->
+        let f ((name, t, sts), l) (ids, ds) =
+          register_name name  >>= fun id  ->
+          desugar_type t      >>= fun d_t ->
+          desugar_storage sts >>= function
+            (*
+            | Some A.REGISTER ->
+                E.fail (Errors.OTHER "No support for storage class register.")
+            *)
+            | Some _ ->
+                let msg = "Violation of constraint 6.7.6.3#2 Function \
+                           declarators (including prototypes), Constraints: \
+                           ..The only storage-class that shall occur in a \
+                           parameter declaration is register... in\n" in
+                E.fail (Errors.OTHER msg)
+(*
+                CpLogger.info (CpPrint.pp_program msg) l;
+                raise E_Invalid
+*)
+            | None -> E.return None
+          end >>= fun d_st ->
+          E.add_id id (d_t, d_st) >>= fun () ->
+          E.return (id::ids, d_t::ds) in
+        desugar_type t >>= fun d_t ->
+        E.foldrM f decls ([], []) >>= fun (formals, d_decls) ->
+        E.return (A.FUNCTION d_t d_decls, formals)
+    | _ -> E.fail (Errors.OTHER "Not a function type.")
+    end in
+  register_name name      >>= fun id             ->
+  desugar_storage sts     >>= fun d_st           ->
+  E.create_scope          >>= fun ()             ->
+  desugar_function_type t >>= fun (d_t, formals) ->
+  E.return_scope          >>= fun fn_scope       ->
+  E.destroy_scope         >>= fun ()             ->
+  E.add_id id (d_t, d_st) >>= fun ()             ->
+  E.push_table fn_scope   >>= fun ()             ->
+  E.return (id, formals)
+
+
+
+
+
+
+
+and desugar_init i =
+  match i with
+    | C.SINGLE_INIT e         -> desugar_exp e
+    | C.ARRAY_INIT is         -> E.mapM desugar_init is >>= fun d_is ->
+                                 E.return (Location.dummy, A.CONST_ARRAY d_is)
+    | C.STRUCT_INIT id fields -> Boot.assert_false "TODO: desugar_init, STRUCT_INIT"
+    | C.UNION_INIT id  fields -> Boot.assert_false "TODO: desugar_init, UNION_INIT"
+  end
+
+
+and desugar_defn (def, l) =
+  match def with
+    | C.TYPE_DEF (C.BASE qs struct_union) ->
+        match Pmap.bindings struct_union with
+          (* TODO (!!!!!!) this doesn't do the right thing for incomplete types *)
+          (* TODO: getting rid of attributes here (for now) *)
+          | [(C.STRUCT tag_opt fields attrs, 1)] ->
+              E.fresh_name tag_opt          >>= fun id       ->
+              E.mapM desugar_field fields   >>= fun d_fields ->
+              E.register_fields id d_fields >>
+              E.return None (* TODO KKK: may have to come back to this later  *)
+              (* Boot.assert_false "WIP" *)
+        end
+(*
+
+C.STRUCT of option string * list field * list attribute
+
+and field =
+  | BasicField of string * c_type
+  | BitField of option string * c_type * exp_l
+
+
+
+  | STRUCT of qualifiers * id * list (id * member)
+
+
+and member =
+  | MEMBER of (* alignment_specifier * *) ctype
+  | BITFIELD of ctype * num * (option bool) (* the boolean indicates whether or not *)
+
+
+
+*)
+
+    | C.OTHER_DEF d i_opt ->
+        desugar_decl d >>= fun id ->
+        match i_opt with
+          | None   -> E.return $ Some (id, None, l)
+          | Some i -> desugar_init i >>= fun d_i ->
+                      E.return $ Some (id, Some d_i, l)
+        end
+end
+
+
+val desugar_global_defn: desugar_state -> C.g_defn_l -> E.t unit Location.t
+let desugar_global_defn st (defn, l) =
+  match defn with
+  | C.FUNCTION_DEFINITION decl s ->
+      desugar_function_decl decl             >>= fun (id, formals) ->
+      register_labels s >> desugar_stmt st s >>= fun d_s           ->
+      E.destroy_scope                        >>= fun ()            ->
+      E.add_fn id formals d_s
+  
+  | C.EXTERNAL_DECLARATION defns ->
+      let f = function
+        | (id, Some e, l) -> (id, e)
+        | (id, None,   l) -> (id, (l, Ail_aux.const_int 0))
+      end in
+      List.map f -| filter_opt <$> E.mapM desugar_defn defns >>= fun d_defns ->
+      E.add_globals d_defns
+   end
+
+
+val desugar_program: string -> list C.g_defn_l -> E.t (Ail.file Location.t) Location.t
+let desugar_program startup global_defns =
+  E.iter (desugar_global_defn initial_desugar_state) global_defns      >>= fun ()   ->
+  E.option (Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve startup) >>= fun main ->
+  E.to_program main
+
+
+val desugar: string -> list C.g_defn_l -> Exception.t (Ail.file Location.t) Errors.cause
+let desugar startup global_defns =
+  E.init (desugar_program startup global_defns)

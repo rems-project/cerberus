@@ -1,0 +1,74 @@
+open Global
+
+type ordering = Lt | Eq | Gt
+
+(*
+class (ORD 'a)
+  val compare : 'a -> 'a -> ordering
+end
+*)
+
+class (ord 'a)
+  val lt : 'a -> 'a -> bool
+  val eq : 'a -> 'a -> bool
+  val ne : 'a -> 'a -> bool
+  val gt : 'a -> 'a -> bool
+
+  val le : 'a -> 'a -> bool
+  val ge : 'a -> 'a -> bool
+
+  val min : 'a -> 'a -> 'a
+  val max : 'a -> 'a -> 'a
+end
+
+(*
+instance forall 'a. (ORD 'a) => (ord 'a)
+  let lt a b =
+    match compare a b with
+      | LT -> true
+      | _  -> false
+    end
+
+  let eq a b =
+    match compare a b with
+      | EQ -> true
+      | _  -> false
+    end
+
+  let gt a b =
+    match compare a b with
+      | GT -> true
+      | _  -> false
+    end
+
+  let le a b = lt a b || eq a b
+  let ge a b = gt a b || eq a b
+
+  let min a b = if lt a b then a else b
+  let max a b = if gt a b then a else b
+end
+*)
+
+let compose o1 o2 =
+  if o1 = Eq then
+    o2
+  else
+    o1
+
+let to_int = function
+ | Lt -> Int.neg (Int.int 1)
+ | Eq -> Int.int 0
+ | Gt -> Int.int 1
+ end
+
+let of_int i =
+  if i = (Int.int 0) then
+    Eq
+  else if Int.(>=) i (Int.int 1)
+    then Gt
+    else Lt
+
+(* HACK: until working type classes *)
+val compare: forall 'a. 'a -> 'a -> ordering
+let compare x y =
+  of_int (Ocaml.Pervasives.compare x y)

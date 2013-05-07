@@ -1,0 +1,313 @@
+[Reference description of Core]
+
+Core is a typed language design to be the target of an elaboration of Ailτ. When
+elaborating a Ailτ program into a Core program, a Ailτ expression which may
+produce side effects [§5.1.2.3#2] are explicitely decomposed into:
+  
+  - its memory accesses
+  - its pure arithmetic computations
+  - pure tests deciding at runtime if an undefined behaviour occurs
+  - pure tests catching static errors that need to be postpone to runtime
+    because of their dependence on implementation defined behaviours.
+
+Effectful expressions (those using or modifying the memory state) and pure
+computations are segregated through typing:
+
+  Θ ::= θ      a type for a pure computation
+      | [θ]    a type for an effectful expression producing a value of
+               base-type θ
+
+where the base-types are the following:
+
+  θ ::= integer          the set of mathematical integers (ℤ)
+     |  boolean          
+     |  address          locations of memory objects
+     |  ctype            Ailτ types
+     |  unit             
+     |  (θ1, ..., θk)    
+
+
+To these base types, corresponds base constructors for pure expressions:
+
+  e ::= n
+     |  true
+     |  false
+     |  τ
+     |  skip
+     |  …
+
+Additionally we need to be able to refer to the result of effectful expressions,
+like the value read by a memory load access. For this purpose Core has symbolic
+names on which the value of effectful expression can be saved (using operators
+detailled later):
+
+  e ::= …
+     |  α
+     |  …
+
+These symbolic names are not references but simply read-only aliases. The type
+of a symbolic name is the pure type corresponding to the type of the associated
+expression.
+
+Next are the usual binary operators over integers and booleans:
+
+  • ::= + | -              e ::= …
+     |  * | / | %             |  e1 • e2
+     |  = | <                 |  ¬ e
+     |  ∧ | ∨                 |  let α = e1 in e2         [binds α in e2]
+                              |  if e1 then e2 else e3
+                              |  …
+
+For the binary and unary operators, the operand must be pure. The same is true
+for the first operand of the let and if construstors. The let constructor is one
+of the binders for symbolic names but it differs from the upcommig ones in that
+is binds the value of a pure expression. The second and third operands of the if
+constructor may be effectful, but must have the same base type.
+
+The language also have functions:
+  
+  fun f ( arg1 : θ1, ..., argk : θk) : Θ := e    [binds f, arg1, ..., argk in e]
+  
+  e ::= …
+     |  f ( e1, ..., ek)
+     |  …
+
+which are explicitely types and may be recursive. Unlike the ones we find in
+Ailτ, Core functions are not inherently effectful: temporary memory objects are
+not created for passing the arguments. The arguments passed to a function must
+be pure expressions and a call is therefore only performing a substitution of
+these expressions into the function’s body. However the body expression of a
+function may very well be effectful, in which case function calls to that
+function will have an effectful type. When used to elaborate Ailτ functions,
+Core functions are used but before any call, memory objects are created,
+initialised to the value of the arguments and their locations are passed to the
+Core function elaborating the body of the Ailτ function. At the end of the
+executation of the body, these are then destroyed.
+
+When elaborating a Ailτ program in Core, we try to make explicit as much of the
+occuring undefined-behaviours as possible. For this, we have a special
+constructor which can have any type and halt the execution of the Core program
+when evaluated:
+
+  e ::= …
+     |  undef
+     |  error
+     |  …
+
+For example, we translate the Ailτ expression 1 / x; (possibly undefined if x
+equals 0), into:
+
+  α ← load{τ} x >> if α = 0 then undef else 1 / α
+
+This is a bit tasteless because it sort of implies that a C program with an
+undefined behaviour (that is, having one execution reaching a situation the
+standard declares undefined) “temporarely exists” on the valid prefix of that
+execution and on the other (non malicious) execution. As a result, for a given C
+program, its semantics is the elaborated Core program but only assuming this
+program doesn’t have undef as a normal form. In the previous code there is also
+the problem of what to do regarding the division at the Core level when 𝛼
+evaluates to zero. If we make a Core division by zero produce an error, then we
+have to further quotient the elaborative semantics of C and this time this is
+not in term of a property of the input C program (ie. presence of a
+undefined-behaviour) but in term of something internal to Core. For now I assume
+that the division by zero in Core evaluates to zero.
+The second constructor error is similar, but is used to signal the occurence of
+a static errors that can only be (portably) detected at runtime because it
+depends on implementation defined constants. An example of such error (the
+only?) is when dealing with integer constants: when trying to type a constant,
+the implementation starts from the smallest integer type and see if the value is
+small enought (using implementation-defined kowledge) and then try with the next
+smallest type. If no type is large enough, there is a typing error.
+
+The next constructs are explicit memory actions for the elaboration of Ailτ
+accesses:
+
+  a ::= create{e}
+     |  alloc e
+     |  kill e
+     |  store{e1} e2 e3
+     |  load{e1} e2
+
+they are the only way to interact with the memory state, and a Core can be
+summarize as a trace of these actions.
+
+  * create{e} (resp. alloc e)  corresponds to the beginning of the lifetime
+    [§6.2.4#2] of an object automatically (resp. dynamically, through the use of
+    functions like malloc()) allocated. For create, the argument is a pure
+    expression evaluating to a Ailτ type (which are values in Core as discussed
+    later) and is used to set the effective type [§6.5#6] of the object being
+    created. For alloc, the argument is the amount of memory to allocate for the
+    object (a pure expression evaluating to a integer). The value of these two
+    memory actions is the location of the created memory object.
+  
+  * kill e  represents the end of the lifetime of an object, and therefore
+    appears at the end of the elaboration of a Ailτ statements block. The
+    argument is the memory object to kill (a pure expression evaluating to a
+    memory location). The value of this action is unit.
+ 
+  * store{e1} e2 e3  is the only way in Core to modify the value stored in a
+    memory object. The first argument is the type of value being stored and is
+    used at runtime to verify that this memory access is compatible with the
+    effective type of the object. An undefined behaviour occurs otherwise. The
+    second argument is the memory location of the object being accesses. The
+    third argument is the value to be stored. The three arguments are pure
+    expressions. The value of this action is unit.
+
+  * load{e1}e2  is the counterpart of store for reading the value of memory
+    object. The argument are similar to the two first argument of store, and are
+    again pure expressions. The value of this action is the value being read.
+
+[NOTE: think are changing here, J&K have been looking into enriching the type
+       the actions, in particular by making the type "address" parametric on a
+       Ailτ type (effective type), and have some inference of that parameter
+       when typing actions.]
+
+[NOTE2: as discussed in Knote3, in the implementation of Core, actions are now
+        annotated with sets of "trace actions" to allow the reconstruction of
+        C's sequence-before relation from execution traces. But this is not
+        visible from the language itself]
+
+
+We need to (un)sequence these actions and Core provides operators for this
+purpose, allowing the C ``sequenced-before'' relation to be made explicit in the
+syntax of the elaborated programs. But first we extend the actions with a
+polarity that will affect the semantics of one of these operators:
+
+  e ::= …          u ::= a     positive
+     |  u             |  ~a    negative
+     |  …          
+
+Intuitively, a negative action will be an action that elaborates a Ailτ memory
+access that is not part of the value computation of the expression it is part of
+(e.g. the incrementing store of a postfix increment, or the store of a
+assignment). It may be sufficient to only have negative stores and not the other
+kind of actions, but I keep the possibility for now. However, to reflect this,
+all negative actions have base type unit (e.g. a negative load has type
+[unit]). If this pose problem to write the elaboration function then I'll see
+that we need non-store negative actions (I won't get any information from the
+other direction however).
+
+The sequencing operators are the following:
+
+  e ::= …
+     |  e1 || ... || ek
+     |  P ← e1 >> e2       [binds the symbols of P in e2]
+     |  P ← e1 ; e2        [binds the symbols of P in e2]
+     |  α ← a ▷ u          [binds α in u]
+     |  …
+  
+  _P ::= _           P ::= _P
+      |  ()             |  (_P1, ..., _Pk)
+      |  α
+
+[ Unsequencing operator (||) ]
+  
+  This operator does not introduce any sequenced-before edges between the
+  actions of its subexpressions. It is used for combining the subexpressions of
+  most Ailτ arithmetic and logical operators. The type of an unsequenced
+  expression is the product of the types of the subexpressions. We require all
+  the subexpressions to be effectful and therefore an unsequenced expression is
+  always effectful. This restriction is somehow artificial, but aim at
+  reflecting the fact sequencing operator only make sense when actions are
+  involved. Using the unsequenced operator on pure subexpressions would simply
+  correspond to having tuples, which doesn't seem to be useful (note that the
+  let constructor only binds a symbol, while the two binding sequencing
+  operators, which may have a first argument containing an unsequenced
+  expressions, binds a pattern).
+  
+  Example:
+    C                      Core
+    
+    e1 + e2;        -->    [[e1]] || [[e2]]
+    f(e1, ..., ek)  -->    (α1, ..., αk) ← [[e1]] || ... || [[ek]] ;
+                           f_elab(α1, ..., αk)
+
+[ Weak sequencing operator (>>) ]
+
+  Most operator (arithmetic, logical) in C induce an ordering between parts of
+  the execution of some operand (their value computations) and the execution of
+  other operand. The weak sequencing operator allows to elaborate this ordering,
+  assuming the actions corresponding to C value computations are marked as
+  negative by the elaboration function. This operator sequence the positive
+  actions of its first operand before all the actions of its second operand, but
+  no the negative ones (however since a negative action can at any time be
+  rewritten into a positive one, for each negative action of the first operand
+  of a weak sequencing operator, there exists an execution where that action is
+  sequence-before the second operand). Similarly to the unsequencing operator,
+  the first operand must be effectful since sequencing a pure expression doesn't
+  mean anything. As the first operand may contain an unsequenced expression,
+  this operator binds to a list of symbolic names.
+  
+  Example:
+    C                  Core
+    
+    x = y++            (α1, α2) ← (x || α ← load{τ} y ▷ store{τ} y (α+1)) >>
+                       store{τ} α1 α2
+
+[ Strong sequencing operator (;) ]
+
+  In addition to the weak sequencing operator, we have an operator corresponding
+  to C's "sequence-points" which orders everything (including
+  side-effects). Hence the strong sequencing operator ignore the polarity of
+  actions.
+  
+  Example:
+    C                  Core
+    
+    (e1, e2)    -->    [[e1]] ; [[e2]
+    [see the second example for unseq]  
+
+[ Atomic sequencing operator (▷) ]
+
+  C's postfix increment/decrement are composed of two memory actions. but
+  behaves as an atomic action during the ordering of indeterminately sequenced
+  expressions (C function calls). To support this, Core has a rather artificial
+  sequencing operator taking two actions (and not expressions) and ordering
+  them. The first action must be positive so it is never ordering, and these two
+  actions can never be separated by an indeterminately sequenced
+  expression. Additionaly, since this operator is only used for increment /
+  decrement, its value is that of the first action.
+
+
+
+================================================================================
+================================================================================
+
+
+
+e ::= …
+   |  [e]      indeterminately sequenced (indet) expression
+   |  ▶ e ◀    boundary for the scope of indet expressions
+   |  …
+
+
+
+e ::= …
+   |  same e1 e2
+   |  …
+
+
+
+
+
+
+
+
+
+
+
+
+Coming back to the difference between Ailτ and Core function calls, consider the
+following Ailτ expression: f(1 - x, 2);. Here the two subexpressions are
+evaluated unsequenced (doesn't matter here since only one is effectful), then
+two temporary memory objects are created and initialised to the value of the
+subexpressions. The function f() is then passed these two objects as arguments
+and run. Once the execution of the function is completed, the temporary objects
+are destroyed. Translating these in Core, we get:
+
+  (α1, α2) ← (α ← load{τ} x >> 1 - α) || 2      >>
+  (α3, α4) ← create{τ1} || create{τ2}           >>
+             store{τ1} α1 α3 || store{τ1} α2 α4 ;
+  α5       ← f(α3, α4)                          >>
+             kill α3 || kill α4                 >>
+             α5
