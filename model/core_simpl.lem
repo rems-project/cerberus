@@ -1,6 +1,8 @@
 open Global
 open Core
 
+
+(*
 module Effect = struct
   type st = bool
   type t 'a = State.t 'a st
@@ -310,11 +312,23 @@ let rec bar e =
 let rec simpl fun_map e =
   let (e', modified) = simplify_expr fun_map (bar e) false in
   if modified then simpl fun_map e' else bar e
+*)
 
+
+(*
+let simpl_pure = function
+  | Ewseq _as e1 e2 ->
+      if is_pure e1 then
+        subst_syms _as (eval e1)
+      else
+        
+*)
+
+let simpl e = e
 
 
 let simplify (f: file zero) : file zero =
   <|
       main= f.main;
-      fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl f.fun_map fbody)) f.fun_map
+      fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.fun_map
   |>

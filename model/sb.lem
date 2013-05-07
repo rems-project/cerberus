@@ -53,24 +53,3 @@ val simplify: sb' -> sb
 let simplify sb =
   let edges' = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings sb.edges') in
   <| actions= sb.actions'; edges= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) edges')) edges' |>
-
-
-(* TODO: using Pprint because lem doesn't seem to support escape sequence in
-         string *)
-module Print = struct
-  module P = Pprint
-  open P.Operators
-  
-  let pp n sb =
-    !^ ("digraph G" ^ string_of_num n) ^^ P.braces
-    (P.sepmap (P.semi ^^ P.break1) (fun (i, a) ->
-      !^ (string_of_num i) ^^^ P.brackets (!^ "label=" ^^^ (P.dquotes $ Core_run.Print.pp_trace_action a)))
-      (Pmap.bindings sb.actions) ^^ P.break1 ^^
-    
-    P.sepmap (P.semi ^^ P.break1) (fun (i, i') ->
-      !^ (string_of_num i) ^^^ !^ "->" ^^^ !^ (string_of_num i'))
-      sb.edges)
-
-
-
-end

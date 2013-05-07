@@ -12,7 +12,7 @@ let invalid msg exp = E.fail (report msg exp)
 
 let lvalue_convert t e =
   match T.lvalue_convert t with
-  | None -> E.fail Errors.AIL_TYPECHECK_LVALUE_UNDEFINED
+  | None -> (* E.fail Errors.AIL_TYPECHECK_LVALUE_UNDEFINED *) Boot.assert_false "BOOM"
   | Some t' -> E.return t'
   end
 
@@ -52,30 +52,47 @@ let lvalue_type_of error e =
 (* val     check_exp: Ail.file Location.t -> Location.t -> A.expression (Location.t * Ail.type_class) -> E.t Ail.type_class Errors.cause *)
 let rec check_exp env l e_head =
   match e_head with
-  | A.VARIABLE id ->
-      let (t, _) = Pmap.find id env.A.id_map in
-      if Pmap.mem id env.A.fn_map then
-        E.return (A.T_EXP t)
-      else
-        E.return (A.T_LVALUE t)
-  | A.CONSTANT (A.CONST_INT (i, None)) ->
-      E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
-  | A.CONSTANT (A.CONST_INT (_, Some suffix)) ->
-      (* (§6.4.4.1) Integer constants, with suffix *)
-      match suffix with
-      | SUFFIX_UNSIGNED           -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED")
-      | SUFFIX_UNSIGNED_LONG      -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG")
-      | SUFFIX_UNSIGNED_LONG_LONG -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG LONG")
-      | SUFFIX_LONG               -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG")
-      | SUFFIX_LONG_LONG          -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG LONG")
-      end
+    | A.NULL -> E.return (A.T_EXP (A.POINTER {} (A.VOID {})))
+    
+    (* TODO: the size of the array may be wrong, because we don't handle multibyte stuff properly *)
+    | A.STRING_LITERAL (enc, s) ->
+        let n = Boot.length_string s + 1 in
+        E.return $ A.T_EXP match enc with
+          | None             -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)
+          | Some ENCODING_u8 -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)
+          | Some ENCODING_u  -> A.ARRAY A.CHAR16_T (Some n)
+          | Some ENCODING_U  -> A.ARRAY A.CHAR32_T (Some n)
+          | Some ENCODING_L  -> A.ARRAY A.WCHAR_T (Some n)
+        end
+    
+    | A.VARIABLE id ->
+        let (t, _) = Pmap.find id env.A.id_map in
+        if Pmap.mem id env.A.fn_map then
+          E.return (A.T_EXP t)
+        else
+          E.return (A.T_LVALUE t)
+    
+    | A.CONSTANT (A.CONST_INT (i, None)) ->
+        E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+    | A.CONSTANT (A.CONST_INT (_, Some suffix)) ->
+        (* (§6.4.4.1) Integer constants, with suffix *)
+        match suffix with
+          | SUFFIX_UNSIGNED           -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED")
+          | SUFFIX_UNSIGNED_LONG      -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG")
+          | SUFFIX_UNSIGNED_LONG_LONG -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "UNSIGNED LONG LONG")
+          | SUFFIX_LONG               -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG")
+          | SUFFIX_LONG_LONG          -> E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED "LONG LONG")
+        end
+    
+    (* TODO: HACK FOR NOW *)
+    | A.CONSTANT (A.CONST_FLOAT _) -> E.return (A.T_EXP (A.BASIC {} (A.REAL_FLOATING A.FLOAT)))
+    (* TODO: HACK FOR NOW *)
+    | A.CONSTANT (A.CONST_CHAR _) -> E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
 
 
 
-(*
-      E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED
-        "Suffixes in integer constant expressions are not supported.")
-*)
+
+
   | A.CALL e es ->
       type_of e >>= fun t ->
       if T.is_pointer_to_function t then
@@ -138,21 +155,23 @@ let rec check_exp env l e_head =
 
   | A.UNARY A.POSTFIX_INCR e ->
       lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
-      if T.is_modifiable t then
-        if T.is_real_floating_type t || T.is_pointer_type t then
-          annotate_exp env (one l) >>= fun a_one ->
-          check_exp env l (A.ASSIGN (Some A.ADD) e a_one)
-        else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
-      else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
-
+      if not (T.is_modifiable t) then
+        E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
+      else if not (T.is_real_type t || T.is_pointer_type t) then
+        E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
+      else
+        annotate_exp env (one l) >>= fun a_one ->
+        check_exp env l (A.ASSIGN (Some A.ADD) e a_one)
+  
   | A.UNARY A.POSTFIX_DECR e ->
       lvalue_type_of Errors.AIL_TYPECHECK_INCR_LVALUE e >>= fun t ->
-      if T.is_modifiable t then
-        if T.is_real_floating_type t || T.is_pointer_type t then
-          annotate_exp env (one l) >>= fun a_one ->
-          check_exp env l (A.ASSIGN (Some A.SUB) e a_one)
-        else E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
-      else E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
+      if not (T.is_modifiable t) then
+        E.fail Errors.AIL_TYPECHECK_INCR_LVALUE
+      else if not (T.is_real_type t || T.is_pointer_type t) then
+        E.fail Errors.AIL_TYPECHECK_INCR_REAL_OR_POINTER
+      else
+        annotate_exp env (one l) >>= fun a_one ->
+        check_exp env l (A.ASSIGN (Some A.SUB) e a_one)
 
   (* [§6.5.3.4#5] The [...] type (an unsigned integer type) is size_t, defined
      in <stddef.h> (and other headers). *)
@@ -182,7 +201,7 @@ let rec check_exp env l e_head =
   | A.ALIGNOF t ->
       if not (T.is_function_type t) then
         if not (T.is_incomplete t) then
-          E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+          E.return (A.T_EXP (A.SIZE_T))
         else E.fail Errors.AIL_TYPECHECK_ALIGNOF_INCOMPLETE
       else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
 
@@ -301,8 +320,8 @@ let rec check_exp env l e_head =
             else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_SECOND
           else E.fail Errors.AIL_TYPECHECK_GE_POINTER_TO_OBJECT_FIRST
       | _ ->
-          if T.is_real_floating_type t1 then
-            if T.is_real_floating_type t2 then
+          if T.is_real_type t1 then
+            if T.is_real_type t2 then
               E.return (A.T_EXP int)
             else E.fail Errors.AIL_TYPECHECK_GE_REAL
           else E.fail Errors.AIL_TYPECHECK_GE_ALL
@@ -544,6 +563,15 @@ let rec check_exp env l e_head =
   (* void *memcpy(void * restrict s1, const void * restrict s2, size_t n); *)
   | A.MEMCPY e1 e2 e3 -> Boot.outOfHomeomorphism "check_exp, found a MEMCPY"
 
+  (* void assert(scalar expression); *)
+  | A.ASSERT e ->
+      type_of e >>= fun ty ->
+      if not (T.is_scalar_type ty) then
+        E.fail (Errors.OTHER "assert() expect something of scalar type")
+      else
+        E.return (A.T_EXP (A.VOID {}))
+
+
   end
 
 and annotate_exp env exp =
@@ -551,42 +579,52 @@ and annotate_exp env exp =
   let a_type e =
     E.fmap (fun t -> Pair.make (Annot.a_type l t) e) (check_exp env l e) in
   match e with
-  | A.VARIABLE v -> a_type (A.VARIABLE v)
-  | A.CONSTANT c -> a_type (A.CONSTANT c)
-  | A.SIZEOF   t -> a_type (A.SIZEOF   t)
-  | A.ALIGNOF  t -> a_type (A.ALIGNOF  t)
-  | _ ->
-      let map_exp f exp =
-        match exp with
-        | A.UNARY o e -> E.fmap (A.UNARY o) (f e)
-        | A.BINARY o e1 e2 -> E.map2 (A.BINARY o) (f e1) (f e2)
-        | A.ASSIGN o e1 e2 -> E.map2 (A.ASSIGN o) (f e1) (f e2)
-        | A.CONDITIONAL e1 e2 e3 ->
-            E.map3 A.CONDITIONAL (f e1) (f e2) (f e3)
-        | A.CAST t e -> E.fmap (A.CAST t) (f e)
-        | A.CALL e es ->
-            E.map2 (A.CALL) (f e) (E.map_list f es)
-        | A.CONSTANT c -> E.return (A.CONSTANT c)
-        | A.VARIABLE v -> E.return (A.VARIABLE v)
-        
-        (* TODO: here we get read of the EXPR_SIZEOF ctor (see comment before
-           Ail.EXPR_SIZEOF) *)
-        | A.EXPR_SIZEOF e ->
-            f e >>= function 
-              | ((_, A.T_EXP    t), _) -> E.return (A.SIZEOF t)
-              | ((_, A.T_LVALUE t), _) -> E.return (A.SIZEOF t)
-           end
-        
-        | A.SIZEOF   t -> E.return (A.SIZEOF   t)
-        | A.ALIGNOF  t -> E.return (A.ALIGNOF  t)
-        
-        | A.MALLOC e        -> E.fmap A.MALLOC (f e)
-        | A.FREE e          -> E.fmap A.FREE   (f e)
-        | A.MEMCMP e1 e2 e3 -> E.map3 A.MEMCMP (f e1) (f e2) (f e3)
-        | A.MEMCPY e1 e2 e3 -> E.map3 A.MEMCPY (f e1) (f e2) (f e3)
-        end in
-      let f exp = annotate_exp env exp in
-      map_exp f e >>= a_type
+    | A.NULL             -> a_type A.NULL
+    | A.STRING_LITERAL l -> a_type (A.STRING_LITERAL l)
+    | A.VARIABLE v       -> a_type (A.VARIABLE v)
+    | A.CONSTANT c       -> a_type (A.CONSTANT c)
+    | A.SIZEOF   t       -> a_type (A.SIZEOF   t)
+    | A.ALIGNOF  t       -> a_type (A.ALIGNOF  t)
+    | A.OFFSETOF ty x    -> a_type (A.OFFSETOF ty x)
+    | _ -> let map_exp f exp =
+             match exp with
+               | A.UNARY o e            -> E.fmap (A.UNARY o) (f e)
+               | A.BINARY o e1 e2       -> E.map2 (A.BINARY o) (f e1) (f e2)
+               | A.ASSIGN o e1 e2       -> E.map2 (A.ASSIGN o) (f e1) (f e2)
+               | A.CONDITIONAL e1 e2 e3 -> E.map3 A.CONDITIONAL (f e1) (f e2) (f e3)
+               | A.CAST t e             -> E.fmap (A.CAST t) (f e)
+               | A.CALL e es            -> E.map2 (A.CALL) (f e) (E.map_list f es)
+(*               | A.CONSTANT c           -> E.return (A.CONSTANT c)
+               | A.VARIABLE v           -> E.return (A.VARIABLE v) *)
+               
+               (* TODO: here we get read of the EXPR_SIZEOF ctor (see comment before
+                  Ail.EXPR_SIZEOF) *)
+               | A.EXPR_SIZEOF e ->
+                 f e >>= function 
+                   | ((_, A.T_EXP    t), _) -> E.return (A.SIZEOF t)
+                   | ((_, A.T_LVALUE t), _) -> E.return (A.SIZEOF t)
+                 end
+               
+(*
+               | A.SIZEOF   t -> E.return (A.SIZEOF   t)
+               | A.ALIGNOF  t -> E.return (A.ALIGNOF  t)
+*)
+
+(*
+               | A.MEMBEROF e tf    -> E.fmap (A.MEMBEROF
+               | A.MEMBEROFPTR e tf ->
+*)
+               
+               | A.MALLOC e        -> E.fmap A.MALLOC (f e)
+               | A.FREE e          -> E.fmap A.FREE   (f e)
+               | A.MEMCMP e1 e2 e3 -> E.map3 A.MEMCMP (f e1) (f e2) (f e3)
+               | A.MEMCPY e1 e2 e3 -> E.map3 A.MEMCPY (f e1) (f e2) (f e3)
+               | A.ASSERT e        -> E.fmap A.ASSERT (f e)
+               | A.CONST_ARRAY es  -> E.fmap A.CONST_ARRAY (E.map_list f es)
+(*               | A.CONST_STRUCT_UNION of list (id * expression_l 'a) *)
+             end in
+           let f exp = annotate_exp env exp in
+           map_exp f e >>= a_type
   end
 
 let rec annotate_stmt env (l, stmt) =

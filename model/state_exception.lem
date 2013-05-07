@@ -2,43 +2,30 @@ open Global
 
 type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
 
+val return: forall 'a 's 'msg. 'a -> t 'a 's 'msg
 let return a = fun s -> Exception.return (a, s)
-let fmap f m =
-  fun s -> Exception.bind (m s) (fun (a, s') -> Exception.return (f a, s'))
-let join mm = fun s -> Exception.bind (mm s) (fun (m, s') -> m s')
-let bind m f = join (fmap f m)
+
+val bind: forall 'a 'b 's 'msg. t 'a 's 'msg -> ('a -> t 'b 's 'msg) -> t 'b 's 'msg
+let bind m f = fun s ->
+  Exception.bind (m s) (fun (a, s') -> (f a) s')
+
+
+(* Reinventing the wheel *)
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+val join: forall 'a 's 'msg. t (t 'a 's 'msg) 's 'msg -> t 'a 's 'msg
+let fmap f m = bind m (fun z -> return $ f z)
+let join mm  = bind mm (fun z -> z)
+
+val app: forall 'a 'b 's 'msg. t ('a -> 'b) 's 'msg -> t 'a 's 'msg -> t 'b 's 'msg
+val papp: forall 'a 'b 's 'msg. t ('a -> 'b) 's 'msg -> 'a -> t 'b 's 'msg
 let app  mf m = bind mf (fun f -> fmap f m)
 let papp mf x = bind mf (fun f -> return (f x))
-
-let fail msg = fun _ -> Exception.fail msg
-
-val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
-let update f = fun s -> Exception.return ((), f s)
-let modify f = fun s -> Exception.return (f s)
-let read   f = fun s -> Exception.return (f s, s)
-
-
-let run m = fun s -> Exception.fmap fst (m s)
 
 module Operators = struct
   let (>>=) = bind
   let (<$>) = fmap
   let (<*>) = app
 end
-
-let of_option msg = function
-  | Some a -> return a
-  | None   -> fail msg
-end
-
-let option msg m =
-  let f o =
-    match o with
-      | Some a -> return a
-      | None   -> fail msg
-    end in
-  bind m f
-
 open Operators
 
 let app2 mf mx my = mf <*> mx <*> my
@@ -71,3 +58,31 @@ let rec foldrM f l a =
   end
 
 let iter f l = foldlM (fun a () -> f a) l ()
+
+
+(* Exception stuff *)
+let fail msg = fun _ -> Exception.fail msg
+
+let of_option msg = function
+  | Some a -> return a
+  | None   -> fail msg
+end
+
+let option msg m =
+  let f o =
+    match o with
+      | Some a -> return a
+      | None   -> fail msg
+    end in
+  bind m f
+
+
+(* The state actions *)
+val read:   forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
+val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
+val modify: forall 'a 's 'msg. ('s -> 'a * 's) -> t 'a 's 'msg
+val run:    forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.t 'a 'msg
+let read   f = fun s -> Exception.return (f s, s)
+let update f = fun s -> Exception.return ((), f s)
+let modify f = fun s -> Exception.return (f s)
+let run    m = fun s -> Exception.fmap fst (m s)

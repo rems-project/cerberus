@@ -5,6 +5,10 @@ type multiset 'a = Multiset.t 'a
 type zero
 
 
+type either 'a 'b =
+  | Left of 'a
+  | Right of 'b
+
 let rec numerote_ n l =
   match l with
     | []    -> []
@@ -47,12 +51,20 @@ end
 let list_diff eq = List.fold_left (fun x y -> delete eq y x)
 
 
-val zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
+val     zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
 let rec zip3 xs ys zs =
   match (xs, ys, zs) with
-    | (x::xs, y::ys, z::zs) -> (x,y,z) :: zip3 xs ys zs
-    | _                     -> []
+    | (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
+    | _                        -> []
   end
+
+val     zip4: forall 'a 'b 'c 'd. list 'a -> list 'b -> list 'c -> list 'd -> list ('a * 'b * 'c * 'd)
+let rec zip4 xs ys zs us =
+  match (xs, ys, zs, us) with
+    | (x::xs', y::ys', z::zs', u::us') -> (x,y,z,u) :: zip4 xs' ys' zs' us'
+    | _                                -> []
+  end
+
 
 val unzip: forall 'a 'b. list ('a * 'b) -> (list 'a * list 'b)
 let unzip xys = List.fold_right (fun (x,y) (xs,ys) -> (x :: xs, y :: ys)) xys ([],[])
@@ -68,6 +80,11 @@ let rec all p = function
 end
 
 
+let from_Some = function
+  | Some x -> x
+(*  | None   -> Boot.assert_false "[Global.from_Some] found a None" *)
+end
+
 let is_Some = function
   | Some _ -> true
   | None   -> false
@@ -77,6 +94,42 @@ end
 
 let rec filter_opt l = 
   match l with
+    | [] -> []
     | (Some z) :: xs -> z :: filter_opt xs
     | None     :: xs ->      filter_opt xs
   end
+
+let rec set_from_options xs =
+  match xs with
+    | []            -> {}
+    | Some x :: xs' -> {x} union set_from_options xs'
+    | None   :: xs' -> set_from_options xs'
+end
+
+let rec replicate n x =
+  match n with
+    | 0 -> []
+    | n -> x :: replicate (n-1) x
+  end
+
+(* TODO: redo efficient *)
+let rec take n l =
+  if n <= 0 then
+    []
+  else match l with
+    | []    -> []
+    | x::xs -> x :: take (n-1) xs
+  end
+
+let rec drop n l =
+  if n <= 0 then
+    l
+  else match l with
+    | []    -> []
+    | _::xs -> drop (n-1) xs
+  end
+
+
+(* AHEM *)
+let rec splitAt k l =
+  (take k l, drop k l)

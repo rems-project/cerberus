@@ -1,4 +1,5 @@
 %{
+open Global
 
 type expr =
   | Eskip
@@ -12,6 +13,7 @@ type expr =
   | Ectype of Ail.ctype
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
+  | Eproc of string * expr list
   | Ecall of string * expr list
   | Esame of expr * expr
   | Eundef
@@ -25,6 +27,7 @@ type expr =
   | Ebound of int * expr
   | Esave of string * expr
   | Erun of string
+  | Eret of expr
 
 and action =
   | Create of expr
@@ -40,41 +43,61 @@ let convert e arg_syms fsyms =
   let rec f ((count, syms) as st) = function
     | Eskip                     -> Core.Eskip
     | Econst n                  -> Core.Econst n
-    | Esym a                    -> Core.Esym (Pmap.find a syms) (* Error handling *)
+    | Esym a                    -> Boot.print_debug ("LOOKING FOR> " ^ a) $ Core.Esym (Pmap.find a syms) (* Error handling *)
     | Eop (binop, e1, e2)       -> Core.Eop (binop, f st e1, f st e2)
     | Etrue                     -> Core.Etrue
     | Efalse                    -> Core.Efalse
     | Enot e                    -> Core.Enot (f st e)
     | Ectype ty                 -> Core.Ectype ty
-    | Elet (a, e1, e2)          -> let _a = (count, Some a) in Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
+    | Elet (a, e1, e2) ->
+        let _a = (count, Some a) in
+        Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
+
     | Eif (e1, e2, e3)          -> Core.Eif (f st e1, f st e2, f st e3)
+    | Eproc (func, args)        -> Core.Eproc (Pset.empty compare, Pmap.find func fsyms, List.map (f st) args)
     | Ecall (func, args)        -> Core.Ecall (Pmap.find func fsyms, List.map (f st) args)
     | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
     | Eundef                    -> Core.Eundef
     | Eerror                    -> Core.Eerror
     | Eaction pact              -> Core.Eaction (g st pact)
     | Eunseq es                 -> Core.Eunseq (List.map (f st) es)
-    | Ewseq (_as, e1, e2)      -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
-                                     match sym_opt with
-                                       | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
-                                       | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
-                                   
-                                   Core.Ewseq (_as', f st e1, f (count', syms') e2)
+    | Ewseq (_as, e1, e2) ->
+        let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+          match sym_opt with
+            | Some sym -> let _a = (c, Some sym) in
+                          Boot.print_debug ("ADDING> " ^ sym) (c+1, Some _a :: _as, Pmap.add sym _a syms)
+            | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
+        
+        Core.Ewseq (List.rev _as', f st e1, f (count', syms') e2)
+
+
+
     | Esseq (_as, e1, e2)       -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
                                      match sym_opt with
                                        | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
                                        | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
                                    
-                                   Core.Esseq (_as', f st e1, f (count', syms') e2)
-    | Easeq (_a_opt, act, pact) -> failwith "TODO: aseq"
+                                   Core.Esseq (List.rev _as', f st e1, f (count', syms') e2)
+    | Easeq (_a_opt, act, pact) ->
+(
+        match _a_opt with
+          | Some _a -> let _a' = (count, Some _a) in
+                       print_endline ("ADDING> " ^ _a);
+                       Core.Easeq (Some _a', snd (g st (Core.Pos, act)), g (count+1, Pmap.add _a _a' syms) pact)
+          | None    -> Core.Easeq (None, snd (g st (Core.Pos, act)), g st pact)
+            
+)            
+            
+
     | Eindet e                  -> Core.Eindet (f st e)
     | Ebound (i, e)             -> failwith "TODO: bound"
     | Esave (k, e)              -> failwith "TODO: save"
     | Erun k                    -> failwith "TODO: run"
+    | Eret e -> Core.Eret (f st e)
   and g st (p, act) =(p,
     match act with
-      | Create e_ty            -> (Pset.empty compare, Core.Create (f st e_ty))
-      | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n))
+      | Create e_ty            -> (Pset.empty compare, Core.Create (f st e_ty, []))
+      | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n, []))
       | Kill e_o               -> (Pset.empty compare, Core.Kill (f st e_o))
       | Store (e_ty, e_o, e_n) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n))
       | Load (e_ty, e_o)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o)))
@@ -93,27 +116,43 @@ let mk_file funs =
          Pmap.add a_fun fdef fun_map)
     ) (None, 0, Pmap.empty compare, Pmap.empty compare) funs
   in
+  let fun_map' =
+    Pmap.map (fun (coreTy_ret, args, fbody) ->
+      let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
+        let _a = (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
+        (0, Pmap.empty compare, []) args in
+      (coreTy_ret, args', convert fbody arg_syms fsyms)) fun_map in
   match main with
-    | Some a_main -> { Core.main=    a_main;
-                       Core.fun_map= Pmap.map (fun (coreTy_ret, args, fbody) ->
-                                       let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
-                                          let _a = (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
-                                          (0, Pmap.empty compare, []) args in
-                                       (coreTy_ret, args', convert fbody arg_syms fsyms)) fun_map }
-    | None        -> (* TODO: better error *) failwith "found no main function"
+    | Some a_main -> Left { Core.main=    a_main;
+                            Core.fun_map= fun_map' }
+    | None        -> Right fun_map'
 
 
+
+(* HACK for now (maybe we should just get back to concrete names for ctypes) *)
+let ctypes_names = ref (0, Pmap.empty Pervasives.compare)
+
+(*val subst: string -> Symbol.t *)
+let subst name =
+  let (z, ns) = !ctypes_names in
+  if Pmap.mem name ns then
+    Pmap.find name ns
+  else
+    let n = (z, Some name) in
+    ctypes_names := (z+1, Pmap.add name n ns);
+    n
 
 %}
 
 %token CREATE ALLOC KILL STORE LOAD
-%token <int> CONST
+%token <int> INT_CONST
 %token <string> SYM
-%token SKIP
+%token SKIP RET
 %token NOT
 %token TRUE FALSE
 %token LET IN
-%token FUN END
+%token FUN PROC END
+%token SAVE RUN
 %token PLUS MINUS STAR SLASH PERCENT
 %token EQ LT
 %token SLASH_BACKSLASH BACKSLASH_SLASH
@@ -122,14 +161,18 @@ let mk_file funs =
 %token PIPE_PIPE SEMICOLON PIPE_GT GT_GT
 %token UNDERSCORE
 %token LT_MINUS
-%token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET COMMA COLON COLON_EQ
+%token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET DOT COMMA COLON COLON_EQ
 %token SAME
 %token UNDEF ERROR
 %token IF THEN ELSE
 %token INTEGER BOOLEAN ADDRESS CTYPE UNIT
 
-(* TODO: hack *)
-%token SIGNED INT
+
+(* ctype tokens *)
+%token CONST RESTRICT VOLATILE ATOMIC SHORT INT LONG
+%token BOOL SIGNED UNSIGNED FLOAT DOUBLE COMPLEX CHAR VOID STRUCT UNION ENUM
+%token SIZE_T INTPTR_T WCHAR_T CHAR16_T CHAR32_T
+
 
 %token EOF
 
@@ -141,7 +184,7 @@ let mk_file funs =
 %left EQ LT
 
 %start start
-%type <Global.zero Core.file> start
+%type <(Global.zero Core.file, Global.zero Core.fun_map) Global.either> start
 
 %%
 
@@ -186,10 +229,99 @@ core_type:
 | baseTy = delimited(LBRACKET, core_derived_type, RBRACKET)
     { Core.TyEffect baseTy }
 
-(* TODO: find how to use the defs in cparser.mly *)
-type_name:
-| SIGNED INT
-    { Ail.BASIC (Pset.empty Pervasives.compare, (Ail.INTEGER (Ail.SIGNED Ail.INT))) }
+(* BEGIN Ail types *)
+qualifier:
+| CONST
+    { Ail.CONST }
+| RESTRICT
+    { Ail.RESTRICT }
+| VOLATILE
+    { Ail.VOLATILE }
+(*
+| ATOMIC
+    { Ail.ATOMIC_Q }
+*)
+
+qualifiers:
+| qs= list(qualifier)
+    { Pset.from_list Pervasives.compare qs }
+
+integer_base_type:
+| CHAR
+    { Ail.ICHAR }
+| SHORT
+    { Ail.SHORT }
+| INT
+    { Ail.INT }
+| LONG
+    { Ail.LONG }
+| LONG LONG
+    { Ail.LONG_LONG }
+(*| EXTENDED_INTEGER of string *)
+
+integer_type:
+| BOOL
+    { Ail.BOOL }
+| SIGNED ibt= integer_base_type
+    { Ail.SIGNED ibt }
+| UNSIGNED ibt= integer_base_type
+    { Ail.UNSIGNED ibt }
+
+real_floating_type:
+| FLOAT
+    { Ail.FLOAT }
+| DOUBLE
+    { Ail.DOUBLE }
+| LONG DOUBLE
+    { Ail.LONG_DOUBLE }
+
+basic_type:
+| CHAR
+    { Ail.CHAR }
+| it= integer_type
+    { Ail.INTEGER it }
+| rft= real_floating_type
+    { Ail.REAL_FLOATING rft }
+| rft= real_floating_type COMPLEX
+    { Ail.COMPLEX rft }
+
+member_def:
+| ty= ctype name= SYM 
+    { (subst name, Ail.MEMBER ty) }
+| ty= ctype name= SYM COLON n= INT_CONST
+    { (subst name, Ail.BITFIELD (ty, n, None)) }
+
+ctype:
+| qs= qualifiers VOID
+    { Ail.VOID qs }
+| qs= qualifiers bty= basic_type
+    { Ail.BASIC (qs, bty) }
+| ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
+    { Ail.ARRAY (ty, n_opt) }
+| qs= qualifiers STRUCT tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
+    { Ail.STRUCT (qs, subst tag, mems) }
+| qs= qualifiers UNION tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
+    { Ail.UNION (qs, subst tag, mems) }
+| ENUM name= SYM
+    { Ail.ENUM (subst name)}
+| ty_ret= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
+    { Ail.FUNCTION (ty_ret, tys) }
+| qs= qualifiers ty= ctype STAR
+    { Ail.POINTER (qs, ty) }
+| ATOMIC ty= ctype
+    { Ail.ATOMIC ty }
+| SIZE_T
+    { Ail.SIZE_T }
+| INTPTR_T
+    { Ail.INTPTR_T }
+| WCHAR_T
+    { Ail.WCHAR_T }
+| CHAR16_T
+    { Ail.CHAR16_T }
+| CHAR32_T
+    { Ail.CHAR32_T }
+
+(* END Ail types *)
 
 %inline binary_operator:
 | PLUS            { Core.OpAdd }
@@ -203,15 +335,15 @@ type_name:
 | BACKSLASH_SLASH { Core.OpOr  }
 
 action:
-| CREATE ty = delimited(LBRACE, expr, RBRACE)
+| CREATE ty = delimited(LPAREN, expr, RPAREN)
     { Create ty }
 | ALLOC n = expr
     { Alloc n }
 | KILL e = expr
     { Kill e }
-| STORE ty = delimited(LBRACE, expr, RBRACE) LPAREN x = expr COMMA n = expr RPAREN
+| STORE LPAREN ty = expr COMMA x = expr COMMA n = expr RPAREN
     { Store (ty, x, n) }
-| LOAD ty = delimited(LBRACE, expr, RBRACE) x = expr
+| LOAD LPAREN ty = expr COMMA x = expr RPAREN
     { Load (ty, x) }
 
 paction:
@@ -229,7 +361,7 @@ pattern:
 | _as = delimited_nonempty_list(LPAREN, COMMA, pattern_elem, RPAREN) { _as }
 
 unseq_expr:
-| es = delimited(LPAREN, n_ary_operator(PIPE_PIPE, seq_expr), RPAREN)
+| es = delimited(LBRACKET, n_ary_operator(PIPE_PIPE, seq_expr), RBRACKET)
     { Eunseq es }
 
 basic_expr:
@@ -260,12 +392,19 @@ seq_expr:
       | [alpha] -> Easeq (alpha, a, p)
       | _       -> assert false }
     (* TODO Really, we just want to parse a "SYM" an not a "pattern". *)
+| SAVE d = SYM DOT e = impure_expr
+    { Esave (d, e) }
+| RUN d = SYM
+    { Erun d }
+
 
 impure_expr:
 | e = seq_expr
     { e }
 | e = unseq_expr
     { e }
+
+
 
 expr:
 | e = delimited(LPAREN, expr, RPAREN)
@@ -274,7 +413,7 @@ expr:
 | SKIP
     { Eskip }
 
-| n = CONST
+| n = INT_CONST
     { Econst n }
 
 | a = SYM
@@ -292,19 +431,23 @@ expr:
 | NOT e = expr
     { Enot e }
 
-| ty = type_name
+| ty = ctype
     { Ectype ty }
 
 | LET a = SYM EQ e1 = expr IN e2 = impure_expr END (* TODO: END is tasteless. *)
     { Elet (a, e1, e2) }
 
-| IF b = expr THEN e1 = expr ELSE e2 = expr (* TODO: may need to also allow unseq_expr *)
+| IF b = expr THEN e1 = impure_expr ELSE e2 = impure_expr (* TODO: may need to also allow unseq_expr *)
     { Eif (b, e1, e2) }
+
+(* HACK: shouldn't be in the parser, but insted impure Ecall should be converted to Eproc by the typechecker *)
+| f = SYM es = delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
+    { Eproc (f, es) }
 
 | f = SYM es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Ecall (f, es) }
 (*
-| SAME e1 = expr e2 = expr
+| SAME LPAREN e1 = expr e2 = expr RPAREN
     { Esame (e1, e2) }
 *)
 | UNDEF
@@ -315,12 +458,17 @@ expr:
 | e = delimited(LBRACKET, seq_expr, RBRACKET) (* TODO: may need to also allow unseq_expr *)
     { Eindet e } (* TODO: the index *)
 
+
+| RET e = expr
+    { Eret e }
+
+
 fun_argument:
 | x = SYM COLON ty = core_base_type
     { (x, ty) }
 
 fun_declaration:
 | FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = impure_expr
-  { (fname, (coreTy_ret, args, fbody)) }
+  { (fname, (coreTy_ret, List.rev args, fbody)) }
 
 %%

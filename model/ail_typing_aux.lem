@@ -122,8 +122,8 @@ end
 val is_integer_type: ctype -> bool
 val is_real_type: ctype -> bool
 let is_integer_type = function
-  | BASIC _ (INTEGER _) -> true
-  | _                   -> false
+  | BASIC _ CHAR -> true
+  | ty           -> is_signed_integer_type ty || is_unsigned_integer_type ty || is_enumeration_type ty
 end
 
 let is_real_type ty =
@@ -464,8 +464,11 @@ let rec common_int i1 i2 =
 
 let rec common t1 t2 =
   match (t1, t2) with
-  | (BASIC _ (INTEGER i1), BASIC _ (INTEGER i2)) ->
-      BASIC {} (INTEGER (common_int i1 i2))
+    | (BASIC _ (INTEGER i1), BASIC _ (INTEGER i2)) -> BASIC {} (INTEGER (common_int i1 i2))
+    
+    (* UBER HACK *)
+    | (SIZE_T, _) -> SIZE_T
+    | (_, SIZE_T) -> SIZE_T
   end
 
 

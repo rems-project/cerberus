@@ -18,6 +18,7 @@ MLDIRS=\
   lib/ocaml/src \
   parsers/cparser parsers/cparser/coq_stdlib parsers/cparser/validator \
   parsers/coreparser \
+  pprinters \
   src
 
 VPATH=$(LEMDIRS) $(MLDIRS)
@@ -25,7 +26,7 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 
 # Where and how ocamlbuild will be called
 OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text
+OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text -package pprint
 
 
 MODEL_FILES=\
@@ -47,7 +48,7 @@ MODEL_FILES=\
   state.lem \
   symbol_state.lem \
   state_exception.lem \
-  pprint.lem \
+  pprint_.lem \
   document.lem \
   symbol_table.lem \
   cabs0.lem \
@@ -56,7 +57,10 @@ MODEL_FILES=\
   ail_aux.lem \
   ail_rewrite.lem \
   core.lem \
+  core_aux.lem \
   errors.lem \
+  implementation.lem \
+  core_simpl.lem \
   core_typing.lem \
   core_indet.lem \
   ail_typing_aux.lem \
@@ -74,13 +78,13 @@ OCAML_LIB=lib/ocaml
 
 OCAML_LIB_FILES=\
   boot.lem \
-  pprint.lem \
+  pprint_.lem \
   output.lem \
   document.lem
 
 # TODO: would be nice to have a way to tell Lem when a module is spurious
 SPURIOUS_FILES=\
-  pprint.ml \
+  pprint_.ml \
   lexing.ml \
   document.ml \
   cabs0.ml
@@ -94,8 +98,12 @@ CPARSER_FILES=\
   $(notdir $(wildcard parsers/cparser/*.ml parsers/cparser/*.mli)) \
   $(notdir $(wildcard parsers/cparser/coq_stdlib/*.ml parsers/cparser/coq_stdlib/*.mli))
 
+PPRINTERS_FILES=\
+  colour.ml \
+  pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
-FILES=$(MODEL_FILES) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES)
+
+FILES=$(MODEL_FILES) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES) $(PPRINTERS_FILES)
 
 default: ocaml_byte
 
@@ -111,7 +119,7 @@ ocaml_byte: lem_ocaml
 	-@[ -e "csem" ] || ln -s $(OCAML_BUILD_DIR)/main.byte csem
 
 
-lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES)) \
+lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
            $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES))
 # (FUTURE) see comment below
 #          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)

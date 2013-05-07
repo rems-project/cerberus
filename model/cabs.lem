@@ -197,8 +197,11 @@ and init =
 
 
 and declaration = string * c_type * list storage_class
+
 and decl_l = declaration * location
-and definition = decl_l * option init
+and definition =
+  | TYPE_DEF of c_type (* HACKISH *)
+  | OTHER_DEF of decl_l * option init
 and defn_l = definition * location
 
 

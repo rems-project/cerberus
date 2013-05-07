@@ -4,6 +4,8 @@ open Core
 type cause =
   | CSEM_NOT_SUPPORTED of string
   
+  | CABS_TO_AIL_NO_STARTUP of string
+  | CABS_TO_AIL_NOT_CONSTANT_EXRESSION
   | CABS_TO_AIL_MULTIPLE_REGISTRATION
   | CABS_TO_AIL_DUPLICATED_LABEL
   | CABS_TO_AIL_UNDECLARED_IDENTIFIER
@@ -119,6 +121,11 @@ type cause =
 let to_string = function
   | CSEM_NOT_SUPPORTED msg ->
       "Csem doesn't yet support `" ^ msg ^"'"
+  | CABS_TO_AIL_NO_STARTUP startup ->
+      "Could not find startup function: `" ^ startup ^ "'\n"
+  | CABS_TO_AIL_NOT_CONSTANT_EXRESSION ->
+      "Found a non contant expression in place of a constant one.\n"
+
   | CABS_TO_AIL_MULTIPLE_REGISTRATION ->
       "Violation of constraint 6.7#3 Declarations, Constraints: ``..If \
        an identifier has no linkage, there shall be no more than one \
@@ -517,8 +524,8 @@ let to_string = function
   
   (* Core typechecking *)
   | CORE_TYPECHECK_INCORRECT_EXPECTED foundTy expectedTy e ->
-      "[Core Typechecking] found type `" ^ (Document.to_plain_string $ Core.Print.pp_core_type foundTy) ^ "', while expecting `" ^
-       (Document.to_plain_string $ Core.Print.pp_core_type expectedTy) ^ "'.\n\n" ^ e
+      "[Core Typechecking] found type `" ^ (* (Document.to_plain_string $ Core.Print.pp_core_type foundTy) ^ *) "', while expecting `" (* ^
+       (Document.to_plain_string $ Core.Print.pp_core_type expectedTy) ^ "'.\n\n" *) ^ e 
   | CORE_TYPECHECK_IF_BRANCHES ->
       "[Core Typechecking] the two branches of a [if] must have the same type."
   

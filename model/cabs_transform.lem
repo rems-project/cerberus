@@ -116,18 +116,31 @@ and translate_decl decl =
 
     (* NOTE: ignoring the VLA flag (not supported for now) *)
     | C0.PROTO decl (params, is_vla) ->
+        let params' = List.map (fun (C0.PARAM specs n_opt decl attrs _) ->
+          let n = match n_opt with Some n -> n | None -> "" end in (* HACK!!! to get void params (which are unnamed) (not not) working *)
+          let (ty, scs) = mk_c_type specs decl in
+          ((n, ty, scs), Location.dummy)
+        ) params in
+        
         fun (attrs', qs, ss) ->
           C.FUNCTION (translate_decl decl ([], {}, ss))
-                      [] (* TODO *)
+                      params'
 
 (*
-  | FUNCTION of c_type * list decl_l
-
-
- | PROTO of decl_type * (list parameter * bool)
+ | C0.PROTO of decl_type * (list parameter * bool)
 
 and parameter =
-  | PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
+  | C0.PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
+
+
+
+  | FUNCTION of c_type * list decl_l
+
+and declaration = string * c_type * list storage_class
+
+and decl_l = declaration * location
+
+
 *)
 
   end
@@ -253,10 +266,14 @@ and translate_definition_to_declarations d =
   match d with
     | C0.FUNDEF _ _ _ _ ->
         Boot.assert_false "[Cabs_transform.translate_definition_to_declarations] found a nested function"
+
+    | C0.DECDEF (specs, []) _ ->
+        [(C.TYPE_DEF (fst $ mk_c_type specs C0.JUSTBASE), Location.dummy)]
+    
     | C0.DECDEF (specs, ins) _ ->
         List.map (fun (C0.Init_name (C0.Name x decl attrs _) ie) ->
           let (ty, scs) = mk_c_type (specs @ List.map (C0.SpecAttr) attrs) decl in
-          ((((x, ty, scs), Location.dummy), translate_init_expression ie), Location.dummy)
+          ((C.OTHER_DEF ((x, ty, scs), Location.dummy) (translate_init_expression ie)), Location.dummy)
         ) ins
     | C0.PRAGMA s l ->
         Boot.assert_false "[Cabs_transform.translate_definition_to_declarations] PRAGMA: not supported for now"
@@ -296,15 +313,32 @@ and translate_definition_to_declarations d =
 
 
 
-
-
-
-
-
+(* only supporting decimal for now *)
+and decode_integer_constant ic =
+  let (n, suff) = Boot.span_string Boot.is_digit ic in
+  (Ocaml.Nat_num.num_of_string n,
+   match suff with
+     | ""    -> None
+     | "u"   -> Some C.SUFFIX_UNSIGNED
+     | "U"   -> Some C.SUFFIX_UNSIGNED
+     | "l"   -> Some C.SUFFIX_LONG
+     | "L"   -> Some C.SUFFIX_LONG
+     | "ul"  -> Some C.SUFFIX_UNSIGNED_LONG
+     | "uL"  -> Some C.SUFFIX_UNSIGNED_LONG
+     | "Ul"  -> Some C.SUFFIX_UNSIGNED_LONG
+     | "UL"  -> Some C.SUFFIX_UNSIGNED_LONG
+     | "ll"  -> Some C.SUFFIX_LONG_LONG
+     | "LL"  -> Some C.SUFFIX_LONG_LONG
+     | "ull" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
+     | "uLL" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
+     | "Ull" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
+     | "ULL" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
+     | _     -> Boot.assert_false "TODO msg: impossible case"
+   end)
 
 and translate_constant c =
   match c with
-    | C0.CONST_INT i      -> C.CONST_INT (Ocaml.Nat_num.num_of_string i, None) (* TODO: not dealing with suffixes *)
+    | C0.CONST_INT i      -> C.CONST_INT (decode_integer_constant i)
     | C0.CONST_FLOAT f    -> C.CONST_FLOAT f
     | C0.CONST_CHAR c     -> C.CONST_CHAR c
   end
@@ -451,15 +485,22 @@ and translate_init_expression ie =
 and translate_definition d =
   match d with
     | C0.FUNDEF specs (C0.Name fname decl attrs _) s _ ->
-(* TODO: should be doing something with [attrs] *)
+        (* TODO: should be doing something with [attrs] *)
         let (ftype, scs) = mk_c_type specs decl in
         (C.FUNCTION_DEFINITION ((fname, ftype, scs), Location.dummy) (translate_statement s), Location.dummy)
+    
+    (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
+    | C0.DECDEF (specs, []) l ->
+        (C.EXTERNAL_DECLARATION
+          [(C.TYPE_DEF (fst $ mk_c_type specs C0.JUSTBASE), Location.dummy)], Location.dummy)
+    
     | C0.DECDEF (specs, ins) l ->
         (C.EXTERNAL_DECLARATION $
           List.map (fun (C0.Init_name (C0.Name x decl attrs _) ie) ->
             let (ty, scs) = mk_c_type (specs @ List.map (C0.SpecAttr) attrs) decl in
-            ((((x, ty, scs), Location.dummy), translate_init_expression ie), Location.dummy)
+            (C.OTHER_DEF ((x, ty, scs), Location.dummy) (translate_init_expression ie), Location.dummy)
           ) ins, Location.dummy)
+    
     | C0.PRAGMA s l ->
         Boot.outOfHomeomorphism "[Cabs_transform.translate_definition] PRAGMA: not supported for now"
  end

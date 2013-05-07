@@ -23,4 +23,12 @@ let run_impl t s = t s
 
 module Operators = struct
   let (>>=) = bind
+  val (>>): forall 'a 'b 's. t 'a 's -> t 'b 's -> t 'b 's
+  let (>>) m f = m >>= fun _ -> f
 end
+
+open Operators
+
+let sequence_ ms = List.fold_right (>>) ms (return ())
+val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
+let mapM_ f _as = sequence_ (List.map f _as)

@@ -66,8 +66,8 @@ type expr =
   | Kaseq of option Core.sym * action * paction
   | Kindet of expr
   | Kbound of num * expr
-  | Ksave of Core.ksym * expr
-  | Krun of Core.ksym
+  | Ksave of Core.ksym * list Core.sym * list Core.sym * expr
+  | Krun of Core.ksym * list expr * list (either Ail.ctype num)
   
   | Kbefore of expr
   | Kafter of expr
@@ -77,8 +77,8 @@ type expr =
 
 
 and action =
-  | Kcreate of expr
-  | Kalloc of expr
+  | Kcreate of expr * list Symbol.t
+  | Kalloc of expr * list Symbol.t
   | Kkill of expr
   | Kstore of expr * expr * expr
   | Kload of expr * expr
@@ -93,36 +93,36 @@ and paction = Core.polarity * action
 val     import_expr: Core.expr zero -> expr
 let rec import_expr e =
   match e with
-  | Core.Eskip            -> Kskip
-  | Core.Econst n         -> Kconst n
-  | Core.Eaddr o          -> Kaddr o
-  | Core.Esym a           -> Ksym a
-  | Core.Eop binop e1 e2  -> Kop binop (import_expr e1) (import_expr e2)
-  | Core.Etrue            -> Ktrue
-  | Core.Efalse           -> Kfalse
-  | Core.Enot e           -> Knot (import_expr e)
-  | Core.Ectype ty        -> Kctype ty
-  | Core.Elet a e1 e2     -> Klet a (import_expr e1) (import_expr e2)
-  | Core.Eif e1 e2 e3     -> Kif (import_expr e1) (import_expr e2) (import_expr e3)
-  | Core.Ecall f args     -> Kcall f (List.map import_expr args)
-  | Core.Esame e1 e2      -> Ksame (import_expr e1) (import_expr e2)
-  | Core.Eundef           -> Kundef
-  | Core.Eerror           -> Kerror
-  | Core.Eaction pact     -> Kaction (import_paction pact)
-  | Core.Eunseq es        -> Kunseq (List.map import_expr es)
-  | Core.Ewseq _as e1 e2  -> Kwseq _as (import_expr e1) (import_expr e2)
-  | Core.Esseq _as e1 e2  -> Ksseq _as (import_expr e1) (import_expr e2)
-  | Core.Easeq a act pact -> Kaseq a (import_action act) (import_paction pact)
-  | Core.Eindet e         -> Kindet (import_expr e)
-  | Core.Ebound i e       -> Kbound i (import_expr e)
-  | Core.Esave k e        -> Ksave k (import_expr e)
-  | Core.Erun k           -> Krun k
+  | Core.Eskip               -> Kskip
+  | Core.Econst n            -> Kconst n
+  | Core.Eaddr o             -> Kaddr o
+  | Core.Esym a              -> Ksym a
+  | Core.Eop binop e1 e2     -> Kop binop (import_expr e1) (import_expr e2)
+  | Core.Etrue               -> Ktrue
+  | Core.Efalse              -> Kfalse
+  | Core.Enot e              -> Knot (import_expr e)
+  | Core.Ectype ty           -> Kctype ty
+  | Core.Elet a e1 e2        -> Klet a (import_expr e1) (import_expr e2)
+  | Core.Eif e1 e2 e3        -> Kif (import_expr e1) (import_expr e2) (import_expr e3)
+  | Core.Ecall f args        -> Kcall f (List.map import_expr args)
+  | Core.Esame e1 e2         -> Ksame (import_expr e1) (import_expr e2)
+  | Core.Eundef              -> Kundef
+  | Core.Eerror              -> Kerror
+  | Core.Eaction pact        -> Kaction (import_paction pact)
+  | Core.Eunseq es           -> Kunseq (List.map import_expr es)
+  | Core.Ewseq _as e1 e2     -> Kwseq _as (import_expr e1) (import_expr e2)
+  | Core.Esseq _as e1 e2     -> Ksseq _as (import_expr e1) (import_expr e2)
+  | Core.Easeq a act pact    -> Kaseq a (import_action act) (import_paction pact)
+  | Core.Eindet e            -> Kindet (import_expr e)
+  | Core.Ebound i e          -> Kbound i (import_expr e)
+  | Core.Esave k _as1 _as2 e -> Ksave k _as1 _as2 (import_expr e)
+  | Core.Erun k xs ys        -> Krun k (List.map import_expr xs) ys
   end
 
 and import_action (_, act) =
   match act with
-    | Core.Create e_ty        -> Kcreate (import_expr e_ty)
-    | Core.Alloc e_n          -> Kalloc (import_expr e_n)
+    | Core.Create e_ty pref        -> Kcreate (import_expr e_ty) pref
+    | Core.Alloc e_n pref          -> Kalloc (import_expr e_n) pref
     | Core.Kill e_o           -> Kkill (import_expr e_o)
     | Core.Store e_ty e_o e_n -> Kstore (import_expr e_ty) (import_expr e_o) (import_expr e_n)
     | Core.Load e_ty e_o      -> Kload (import_expr e_ty) (import_expr e_o)
@@ -133,37 +133,37 @@ and import_paction (p, act) = (p, import_action act)
 val     export_expr: expr -> Core.expr zero
 let rec export_expr e =
   match e with
-  | Kskip            -> Core.Eskip
-  | Kconst n         -> Core.Econst n
-  | Kaddr o          -> Core.Eaddr o
-  | Ksym a           -> Core.Esym a
-  | Kop binop e1 e2  -> Core.Eop binop (export_expr e1) (export_expr e)
-  | Ktrue            -> Core.Etrue
-  | Kfalse           -> Core.Efalse
-  | Knot e           -> Core.Enot (export_expr e)
-  | Kctype ty        -> Core.Ectype ty
-  | Klet a e1 e2     -> Core.Elet a (export_expr e1) (export_expr e2)
-  | Kif e1 e2 e3     -> Core.Eif (export_expr e1) (export_expr e2) (export_expr e3)
-  | Kcall f args     -> Core.Ecall f (List.map export_expr args)
-  | Ksame e1 e2      -> Core.Esame (export_expr e1) (export_expr e2)
-  | Kundef           -> Core.Eundef
-  | Kerror           -> Core.Eerror
-  | Kaction pact     -> Core.Eaction (export_paction pact)
-  | Kunseq es        -> Core.Eunseq (List.map export_expr es)
-  | Kwseq _as e1 e2  -> Core.Ewseq _as (export_expr e1) (export_expr e2)
-  | Ksseq _as e1 e2  -> Core.Esseq _as (export_expr e1) (export_expr e2)
-  | Kaseq a act pact -> Core.Easeq a (export_action act) (export_paction pact)
-  | Kindet e         -> Core.Eindet (export_expr e)
-  | Kbound i e       -> Core.Ebound i (export_expr e)
-  | Ksave k e        -> Core.Esave k (export_expr e)
-  | Krun k           -> Core.Erun k
+  | Kskip               -> Core.Eskip
+  | Kconst n            -> Core.Econst n
+  | Kaddr o             -> Core.Eaddr o
+  | Ksym a              -> Core.Esym a
+  | Kop binop e1 e2     -> Core.Eop binop (export_expr e1) (export_expr e)
+  | Ktrue               -> Core.Etrue
+  | Kfalse              -> Core.Efalse
+  | Knot e              -> Core.Enot (export_expr e)
+  | Kctype ty           -> Core.Ectype ty
+  | Klet a e1 e2        -> Core.Elet a (export_expr e1) (export_expr e2)
+  | Kif e1 e2 e3        -> Core.Eif (export_expr e1) (export_expr e2) (export_expr e3)
+  | Kcall f args        -> Core.Ecall f (List.map export_expr args)
+  | Ksame e1 e2         -> Core.Esame (export_expr e1) (export_expr e2)
+  | Kundef              -> Core.Eundef
+  | Kerror              -> Core.Eerror
+  | Kaction pact        -> Core.Eaction (export_paction pact)
+  | Kunseq es           -> Core.Eunseq (List.map export_expr es)
+  | Kwseq _as e1 e2     -> Core.Ewseq _as (export_expr e1) (export_expr e2)
+  | Ksseq _as e1 e2     -> Core.Esseq _as (export_expr e1) (export_expr e2)
+  | Kaseq a act pact    -> Core.Easeq a (export_action act) (export_paction pact)
+  | Kindet e            -> Core.Eindet (export_expr e)
+  | Kbound i e          -> Core.Ebound i (export_expr e)
+  | Ksave k _as1 _as2 e -> Core.Esave k _as1 _as2 (export_expr e)
+  | Krun k xs ys        -> Core.Erun k (List.map export_expr xs) ys
   end
 
 and export_action act =
   ({},
   match act with
-    | Kcreate e_ty        -> Core.Create (export_expr e_ty)
-    | Kalloc e_n          -> Core.Alloc (export_expr e_n)
+    | Kcreate e_ty pref   -> Core.Create (export_expr e_ty) pref
+    | Kalloc e_n pref     -> Core.Alloc (export_expr e_n) pref
     | Kkill e_o           -> Core.Kill (export_expr e_o)
     | Kstore e_ty e_o e_n -> Core.Store (export_expr e_ty) (export_expr e_o) (export_expr e_n)
     | Kload e_ty e_o      -> Core.Load (export_expr e_ty) (export_expr e_o)
@@ -342,11 +342,17 @@ let rec hack x =
   | Core.Ewseq _as e1 e2       -> Core.Ewseq _as (hack e1) (hack e2)
   | Core.Esseq _as e1 e2       -> Core.Esseq _as (hack e1) (hack e2)
   (* HACKKKKKKKK *)
-  | Core.Easeq _a_opt act pact -> Core.Ewseq [_a_opt] (Core.Eaction (Core.Pos, act)) (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Some x -> x end))
+  | Core.Easeq _a_opt act pact ->
+
+      Core.Ewseq [_a_opt] (Core.Eaction (Core.Pos, act))
+                          (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Some x -> x end))
+
+
+
   | Core.Eindet e              -> hack e
   | Core.Ebound i e            -> hack e
-  | Core.Esave d e             -> Core.Esave d (hack e)
-  | Core.Erun d                -> Core.Erun d
+  | Core.Esave d _as1 _as2 e   -> Core.Esave d _as1 _as2 (hack e)
+  | Core.Erun d xs ys          -> Core.Erun d xs ys
   | Core.Eret e                -> Core.Eret (hack e)
   | Core.End es                -> Core.End es
   | _ -> x

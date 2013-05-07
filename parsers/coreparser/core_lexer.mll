@@ -9,6 +9,32 @@ let keywords =
     (fun m (k, e) -> Pmap.add k e m)
     (Pmap.empty Pervasives.compare)
     [
+      (* ctype tokens *)
+      ("const",    P.CONST);
+      ("restrict", P.RESTRICT);
+      ("volatile", P.VOLATILE);
+      ("_Atomic",  P.ATOMIC);
+      ("short",    P.SHORT);
+      ("int",      P.INT);
+      ("long",     P.LONG);
+      ("bool",     P.BOOL);
+      ("signed",   P.SIGNED);
+      ("unsigned", P.UNSIGNED);
+      ("float",    P.FLOAT);
+      ("double",   P.DOUBLE);
+      ("_Complex", P.COMPLEX);
+      ("char",     P.CHAR);
+      ("void",     P.VOID);
+      ("struct",   P.STRUCT);
+      ("union",    P.UNION);
+      ("enum",     P.ENUM);
+      ("size_t",   P.SIZE_T);
+      ("intptr_t", P.INTPTR_T);
+      ("wchar_t",  P.WCHAR_T);
+      ("char16_t", P.CHAR16_T);
+      ("char32_t", P.CHAR32_T);
+      ("enum",     P.ENUM);
+      
       ("integer", P.INTEGER);
       ("boolean", P.BOOLEAN);
       ("address", P.ADDRESS);
@@ -21,6 +47,7 @@ let keywords =
       ("let",    P.LET     );
       ("in",     P.IN      );
       ("fun",    P.FUN     );
+      ("proc",    P.FUN     );
       ("end",    P.END     );
       ("create", P.CREATE  );
       ("alloc",  P.ALLOC   );
@@ -33,9 +60,9 @@ let keywords =
       ("if",     P.IF      );
       ("then",   P.THEN    );
       ("else",   P.ELSE    );
-      (* TODO: hack *)
-      ("signed", P.SIGNED  );
-      ("int",    P.INT     );
+      ("ret",    P.RET     );
+      ("save",   P.SAVE    );
+      ("run",    P.RUN     );
     ]
 
 let scan_sym lexbuf =
@@ -47,6 +74,13 @@ let scan_sym lexbuf =
     (* Check if the token is an enumeration constant *)
       P.SYM id
 
+
+let lex_comment remainder lexbuf =
+  let ch = Lexing.lexeme_char lexbuf 0 in
+  let prefix = Int64.of_int (Char.code ch) in
+  if ch = '\n' then Lexing.new_line lexbuf;
+  prefix :: remainder lexbuf
+
 }
 
 
@@ -54,13 +88,21 @@ let symbolic_name = ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
 
 rule main = parse
+  (* beginning of a comment *)
+  | "{-"
+      { let _ = comment lexbuf in main lexbuf }
+  
+  (* single-line comment *)
+  | "--"
+      { let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; main lexbuf }
+  
   (* skip spaces *)
   | [' ' '\t']+
       { main lexbuf }
   
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
-      { P.CONST (int_of_string integer) }
+      { P.INT_CONST (int_of_string integer) }
   
   (* binary operators *)
   | '+'   { P.PLUS }
@@ -71,7 +113,7 @@ rule main = parse
   | '='   { P.EQ }
   | '<'   { P.LT }
   | "/\\" { P.SLASH_BACKSLASH }
-  | "\\/"  { P.BACKSLASH_SLASH }
+  | "\\/" { P.BACKSLASH_SLASH }
   
   (* negative action *)
   | '~' { P.TILDE }
@@ -95,10 +137,11 @@ rule main = parse
   | '}'   { P.RBRACE }
   | '['	  { P.LBRACKET }
   | ']'	  { P.RBRACKET }
+  | '.'   { P.DOT }
   | ','   { P.COMMA }
   | ':'   { P.COLON }
-  | ":="   { P.COLON_EQ }
-  
+  | ":="  { P.COLON_EQ }
+
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {P.EOF}
@@ -108,3 +151,17 @@ rule main = parse
                    ^ Position.lines_to_string (Position.from_lexbuf lexbuf)
                    ^ ".\n")
     }
+
+
+and comment = parse
+  | "-}"
+      { [] }
+  | _
+      {lex_comment comment lexbuf}
+
+
+and onelinecomment = parse
+  | '\n' | eof
+      { [] }
+  | _
+      { lex_comment onelinecomment lexbuf }
