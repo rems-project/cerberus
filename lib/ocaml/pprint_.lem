@@ -50,6 +50,7 @@ val group : t -> t
 val parens : t -> t
 val brackets : t -> t
 val braces : t -> t
+val squotes : t -> t
 val dquotes : t -> t
 
 (*val optional : forall 'a. ('a -> t) -> option 'a -> t*)
