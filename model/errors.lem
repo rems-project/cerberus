@@ -113,6 +113,9 @@ type cause =
 
   | CORE_TYPECHECK of string
 
+  | CORE_UNDEF
+
+
   | PARSER of string
   | OTHER of string
 
@@ -563,5 +566,7 @@ let to_string = function
 
 
   | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg
+
+  | CORE_UNDEF -> "Core: found an undefined behaviour"
   
   end

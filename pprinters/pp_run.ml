@@ -13,6 +13,7 @@ let rec string_of_dyn_rule = function
   | Core_run.Rule_Proc      -> "== PROC =="
   | Core_run.Rule_Wseq      -> "WSEQ"
   | Core_run.Rule_Wseq_Neg  -> "WSEQ_NEG"
+  | Core_run.Rule_Sseq      -> "SSEQ"
   | Core_run.Rule_Run       -> "RUN"
   | Core_run.Rule_Save      -> "SAVE"
   | Core_run.Rule_Unseq     -> "unseq"
@@ -39,27 +40,36 @@ let string_of_trace_action = function
       string_of_int (snd o) ^ " = " ^ string_of_mem_value v
 
 
-let rec string_of_trace t =
+let rec string_of_trace tact_map t =
+(*
   let rec f = function
     | []      -> ""
-    | [b]     -> string_of_trace_action b
-    | b :: bs -> string_of_trace_action b ^ ", " ^ f bs
-  in match t with
+    | [b]     -> string_of_trace_action (Pmap.find b tact_map)
+    | b :: bs -> string_of_trace_action (Pmap.find b tact_map) ^ ", " ^ f bs
+  in *) match t with
        | [] -> ""
        | (r, None) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
-           string_of_trace xs
-       | (r, Some (bs, (_, a))) :: xs ->
+           string_of_trace tact_map xs
+       | (r, Some (bs, a)) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
            (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
-           string_of_trace_action a ^ "\n" ^ string_of_trace xs
+           (string_of_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
+
+(*
+int, 'a) Exception.t -> (int, 'a) Exception.t
+
+       but an expression was expected of type
+(Core_run.taction_id Core.expr * ((Core_run.taction_id, Core_run.trace_action) Pmap.map * Core_run.E.trace)) list
+
+*)
 
 let pp_traces ts =
-  List.map (fun (i, (v, t)) ->
+  List.map (fun (i, (v, (tact_map, t))) ->
     print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^
-    string_of_trace t ^
+    string_of_trace tact_map t ^
     "\n\nValue: " ^ (Boot.to_plain_string $ Pp_core.pp_expr v)) $ numerote ts;
-  List.map (fun (i, (v, t)) ->
+  List.map (fun (i, (v, _)) ->
     print_endline $ "Trace #" ^ string_of_int i ^ " = " ^
     (Boot.to_plain_string $ Pp_core.pp_expr v)) $ numerote ts

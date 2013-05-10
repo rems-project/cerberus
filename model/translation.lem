@@ -24,10 +24,15 @@ module Effect = struct
     (* stack of enclosing loop labels *)
     loop_labels: list Symbol.t;
     (* HACK? environment remembering if atomic names "should be" pure or effectful *)
-    purity_map: map Symbol.t bool;
+(*    purity_map: map Symbol.t bool; *)
     (* map of functions generated while processing the current Ail function *)
     fun_map: map Symbol.t (C.core_type * list (Symbol.t * C.core_base_type) * C.expr zero);
-    stdlib: C.fun_map zero
+    stdlib: C.fun_map zero;
+    
+    (* visible C objects with scoping *)
+    visible_objects: list (list Symbol.t);
+    
+    cont_freevars_map: map Symbol.t (list Symbol.t)
   |>
   
   type t 'a = State.t 'a env
@@ -50,11 +55,12 @@ module Effect = struct
   
   val init: C.fun_map zero -> env
   let init stdlib = <|
-    symbol_set=  Symbol.init;
-    loop_labels= [];
-    purity_map=  Pmap.empty;
-    fun_map=     Pmap.empty;
-    stdlib=      stdlib
+    symbol_set=        Symbol.init;
+    loop_labels=       [];
+    fun_map=           Pmap.empty;
+    stdlib=            stdlib;
+    visible_objects=   [[]];
+    cont_freevars_map= Pmap.empty;
   |>
   
   
@@ -79,6 +85,11 @@ module Effect = struct
                                     ms (return [])
   let mapM f xs = sequence (List.map f xs)
   let mapWithLastM f g xs = sequence (mapWithLast f g xs)
+
+  let sequence_ ms = List.fold_right (>>) ms (return ())
+  val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+  let mapM_ f _as = sequence_ (List.map f _as)
+  
   
   val replicateM: forall 'a. num -> t 'a -> t (list 'a)
   let replicateM n x = sequence (replicate n x)
@@ -97,6 +108,10 @@ module Effect = struct
   val fresh_symbol: t Symbol.t
   let fresh_symbol =
     fun (<| symbol_set= x |> as env) -> ((x, None), <| env with symbol_set= x+1 |>)
+
+  val fresh_named_symbol: string -> t Symbol.t
+  let fresh_named_symbol name =
+    fun (<| symbol_set= x |> as env) -> ((x, Some $ name ^ "_" ^ string_of_num x), <| env with symbol_set= x+1 |>)
   
   val fresh_fname: string -> t Symbol.t
   let fresh_fname name =
@@ -112,12 +127,40 @@ module Effect = struct
 
 (* TODO: crappy names *)
 
+(*
 val get_purity: Symbol.t -> t bool
 let get_purity x = fun (<| purity_map= m |> as env) -> (Pmap.find x m, env)
 
 val put_purity: Symbol.t -> bool -> t unit
 let put_purity x y = fun (<| purity_map= m |> as env) -> ((), <| env with purity_map= Pmap.add x y m |>)
+*)
 
+
+  val register_objects: list Symbol.t -> t unit
+  let register_objects _as =
+    fun env -> ((), <| env with visible_objects= _as :: env.visible_objects |>)
+  
+  val get_current_block_objects: t (list Symbol.t)
+  let get_current_block_objects =
+    fun env -> (match env.visible_objects with x :: _ -> x end, env)
+  
+  val pop_current_block_objects: t unit
+  let pop_current_block_objects =
+    fun env -> ((), <| env with visible_objects= match env.visible_objects with _ :: xs -> xs end |>)
+  
+  
+  val register_cont_freevars: Symbol.t -> list Symbol.t -> t unit
+  let register_cont_freevars l ids =
+    fun env -> ((), <| env with cont_freevars_map= Pmap.add l ids env.cont_freevars_map |>)
+  
+  (* give the free symbol for a continuation corresponding to a C label *)
+  val get_cont_freevars: Symbol.t -> t (list Symbol.t)
+  let get_cont_freevars l =
+    fun env -> (Pmap.find l env.cont_freevars_map, env)
+  
+  val clear_cont_freevars: t unit
+  let clear_cont_freevars =
+    fun env -> ((), <| env with cont_freevars_map= Pmap.empty |>)
 
 end
 
@@ -1038,7 +1081,20 @@ and translate_exp file exp =
     
     
     (* TODO *)
-    | A.BINARY A.GT e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GT e1 e2")
+    | A.BINARY A.GT e1 e2 ->
+        if T.is_arithmetic_type (exp_type e1) && T.is_arithmetic_type (exp_type e2) then
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Eif (C.Enot (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))))
+                 (C.Econst 1)
+                 (C.Econst 0)
+              )
+        else
+          E.return (C.DEBUG "TODO: A.BINARY A.GT e1 e2")
     
     
     (* TODO *)
@@ -1058,8 +1114,21 @@ and translate_exp file exp =
           E.return (C.DEBUG "A.BINARY A.LE e1 e2 <when e1 and e2 are pointers>")
     
     
-    (* TODO *)
-    | A.BINARY A.GE e1 e2 -> E.return (C.DEBUG "TODO: A.BINARY A.GE e1 e2")
+    (* TODO: not doing the typing stuff for now *)
+    | A.BINARY A.GE e1 e2 ->
+        if T.is_arithmetic_type (exp_type e1) && T.is_arithmetic_type (exp_type e2) then
+          E.fresh_symbol        >>= fun a_e1    ->
+          E.fresh_symbol        >>= fun a_e2    ->
+          translate_exp file e1 >>= fun core_e1 ->
+          translate_exp file e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Esym a_e1))
+                     (C.Econst 1)
+                     (C.Econst 0)
+              )
+        else
+          E.return (C.DEBUG "TODO: A.BINARY A.GE e1 e2")
     
     
    (* (6.5.9#3) The == (equal to) and != (not equal to) operators are analogous to the relational
@@ -1492,7 +1561,14 @@ C.seq [a_id] (C.create ty)
                        (C.Esym a_e2))
     
     
-    | A.ASSIGN (Some _) e1 e2 -> E.return (C.DEBUG "TODO: A.ASSIGN (Some _) e1 e2")
+    (* TODO: yes this is morally reprehensible.
+
+(std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
+      expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
+       to an indeterminately-sequenced function call, the operation of a compound) *)
+    | A.ASSIGN (Some op) e1 e2 ->
+      translate_exp file ((Annotate.loc_of exp, Annotate.type_of exp), A.ASSIGN None e1 ((Location.dummy, Annotate.type_of e2), A.BINARY (A.ARITHMETIC op) e1 e2))
+      (* E.return (C.DEBUG "TODO: A.ASSIGN (Some _) e1 e2") *)
     
     
     
@@ -1545,8 +1621,20 @@ C.seq [a_id] (C.create ty)
 (* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty file file.A.main C.Constants.return s *)
-and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
-  let translate_stmt_ s = translate_stmt file f d_loop d_break s in
+
+(* TODO[über HACK] `lasts' is the last of symbolic names saving the last statement for each block we are in
+                   we need to remember them to annotate Erun/Esave coming from a C label/goto because these symbols
+                   MAY (the fact it is a may is pretty disgusting) be in the continuations of the generated Esave (...)
+
+RAAAAAAAAHHH: this doesn't work when the label is in a block the goto doesn't belong to ......
+
+
+
+
+*)
+
+and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
+  let translate_stmt_ s = translate_stmt file f d_loop d_break lasts s in
   
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
@@ -1566,22 +1654,30 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
       let (a_ids, core_creates) =
         mapUnzip (fun (a, ty) -> (Some a, Caux.pcreate (C.Ectype ty) [])) decls in
       
+      E.register_objects $ filter_opt a_ids >>
+      
+      (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
+               but it may be nasty to the check.
+               For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
       (* the kill actions for the local variables *)
       let (core_kills) =
         List.map (Caux.pkill -| C.Esym -| fst) decls in
       
       E.fresh_symbol >>= fun a_last ->
-      E.mapWithLastM (fun s -> translate_stmt_ s >>= fun core_s ->
+      E.mapWithLastM (fun s -> translate_stmt file f d_loop d_break (a_last :: lasts) s >>= fun core_s ->
                                E.return ([], core_s))
-                     (fun s -> translate_stmt_ s >>= fun core_s ->
+                     (* TODO: adding the a_last here is pretty disgusting *)
+                     (fun s -> translate_stmt file f d_loop d_break (a_last :: lasts) s >>= fun core_s ->
                                E.return ([Some a_last], core_s))
                      ss >>= fun a_opts_core_ss ->
       
-      E.return $
-        C.Ewseq a_ids (Caux.mk_unseq core_creates)
-          (List.fold_right (fun (a_opt, core_s) acc ->
-            C.Ewseq a_opt core_s acc
-           ) (a_opts_core_ss  @ [([], Caux.mk_unseq core_kills)]) (C.Esym a_last))
+      E.pop_current_block_objects >>
+      
+      E.return
+        (C.Ewseq a_ids (Caux.mk_unseq core_creates)
+           (List.fold_right (fun (a_opt, core_s) acc ->
+             C.Ewseq a_opt core_s acc
+            ) (a_opts_core_ss  @ [([], Caux.mk_unseq core_kills)]) (C.Esym a_last)))
 
 (*
 
@@ -1637,56 +1733,69 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
                    (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) (C.Econst 0))) core_s1 core_s2)
   
   | A.WHILE e s ->
-      E.fresh_symbol                                       >>= fun a_e     ->
-      E.fresh_symbol                                       >>= fun d_loop  ->
-      E.fresh_symbol                                       >>= fun d_break ->
-      translate_exp file e                                 >>= fun core_e  ->
-      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
+      E.fresh_symbol                                             >>= fun a_e     ->
+      E.fresh_named_symbol "loop"                                >>= fun d_loop  ->
+      E.fresh_named_symbol "break"                               >>= fun d_break ->
+      translate_exp file e                                       >>= fun core_e  ->
+      translate_stmt file f (Some d_loop) (Some d_break) lasts s >>= fun core_s  ->
+      
+      let free_as = Set.to_list $ Caux.free_syms core_s in
+      E.get_current_block_objects >>= fun _as ->
       E.return $
-        C.Esave d_loop [(* TODO *)] [(* TODO *)]
+        C.Esave d_loop free_as [(* TODO *)]
           (C.Ewseq [Some a_e] core_e
              (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e) (C.Econst 0)))
-                core_s
-                (C.Esave d_break [(* TODO *)] [(* TODO *)] C.Eskip)
+                (C.Ewseq [] core_s (C.Erun d_loop (List.map C.Esym free_as) []))
+                (C.Esave d_break _as [(* TODO *)] C.Eskip)
              )
           )
   
   | A.DO e s ->
-      E.fresh_symbol                                       >>= fun d_loop  ->
-      E.fresh_symbol                                       >>= fun d_break ->
-      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
-      translate_exp file e                                 >>= fun core_e  ->
-      E.fresh_symbol                                       >>= fun a       ->
+      E.fresh_symbol                                             >>= fun d_loop  ->
+      E.fresh_symbol                                             >>= fun d_break ->
+      translate_stmt file f (Some d_loop) (Some d_break) lasts s >>= fun core_s  ->
+      translate_exp file e                                       >>= fun core_e  ->
+      E.fresh_symbol                                             >>= fun a       ->
       E.return $
         C.Esave d_loop [(* TODO *)] [(* TODO *)]
           (C.Ewseq [] core_s
              (C.Ewseq [Some a] core_e
                 (C.Eif (C.Eop C.OpEq (C.Esym a) (C.Econst 0))
                    C.Eskip
-                   (C.Erun d_break [(* TODO *)] [(* TODO *)])
+                   (C.Erun d_loop [(* TODO *)] [(* TODO *)])
                 )
              )
           )
   
   | A.BREAK ->
-      E.return (C.Erun (from_Some d_break) [(* TODO *)] [(* TODO *)])
+      E.get_current_block_objects >>= fun _as ->
+      E.return (C.Erun (from_Some d_break) (List.map C.Esym _as) [(* TODO *)])
   
   | A.CONTINUE ->
       E.return (C.Erun (from_Some d_loop) [(* TODO *)] [(* TODO *)])
   
   
-  | A.RETURN_VOID -> E.return C.Eskip
+  | A.RETURN_VOID ->
+      E.get_current_block_objects >>= fun _as ->
+      let (core_kills) =
+        List.map (Caux.pkill -| C.Esym) _as in
+      E.return $
+        C.Esseq [] (Caux.mk_unseq core_kills) (C.Eret C.Eskip)
   
   
   (* ------------------------------------------------------------------------------------------------------ *)
   | A.RETURN_EXPRESSION e ->
       conv (exp_type e) (T.function_return $ lookup_type f)
-           ((* mark_cexpr *) (translate_exp file e))
-
-        >>= fun core_e ->
-
-    E.fresh_symbol       >>= fun a_e    ->
-        E.return $ C.Ewseq [Some a_e] core_e (C.Eret (C.Esym a_e))
+           ((translate_exp file e)) >>= fun core_e ->
+      E.fresh_symbol                >>= fun a_e    ->
+      E.get_current_block_objects   >>= fun _as ->
+      let (core_kills) =
+        List.map (Caux.pkill -| C.Esym) _as in
+      E.return $
+        C.Esseq [Some a_e] core_e
+          (C.Esseq [] (Caux.mk_unseq core_kills)
+             (C.Eret (C.Esym a_e))
+          )
   
   
   (* TODO *)
@@ -1707,11 +1816,14 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
   (* TODO *)
   | A.LABEL l s ->
       translate_stmt_ s >>= fun core_s ->
-      E.return (C.Esave l [] [] core_s)
+      E.get_cont_freevars l >>= fun _as ->
+      E.return (C.Esave l lasts _as core_s)
   
   
-  (* TODO: visible variables as argument of the call + proper type for the call *)
-  | A.GOTO l -> E.return (C.Erun l [] [])
+  (* TODO *)
+  | A.GOTO l ->
+      E.get_cont_freevars l >>= fun _as ->
+      E.return (C.Erun l [] [ Left (lookup_type a) | forall (a MEM _as) | true ])
   
   
   (* ------------------------------------------------------------------------------------------------------ *)
@@ -1735,11 +1847,103 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
   end
 
 
+(* TODO: this a temporary hack *)
+(* [hack1] collect a map associating ksyms to their list of free syms *)
+let rec hack1 e =
+  match e with
+    | C.Etuple _ -> Pmap.empty
+    | C.Enull -> Pmap.empty
+    | C.Eskip -> Pmap.empty
+    | C.Econst _ -> Pmap.empty
+    | C.Eaddr _ -> Pmap.empty
+    | C.Esym _ -> Pmap.empty
+    | C.Eop _ _ _ -> Pmap.empty
+    | C.Etrue -> Pmap.empty
+    | C.Efalse -> Pmap.empty
+    | C.Enot _ -> Pmap.empty
+    | C.Ectype _ -> Pmap.empty
+    | C.Elet _ _ e2 -> hack1 e2
+    | C.Eif _ e2 e3 -> Pmap.concat (hack1 e2) (hack1 e3)
+    | C.Eproc _ _ _ -> Pmap.empty
+    | C.Ecall _ _ -> Pmap.empty
+    | C.Esame _ _ -> Pmap.empty
+    | C.Eundef -> Pmap.empty
+    | C.Eerror -> Pmap.empty
+    | C.Eaction _ -> Pmap.empty
+    | C.Eunseq es -> List.fold_left (Pmap.concat) Pmap.empty (List.map hack1 es)
+    | C.Ewseq _ e1 e2 -> Pmap.concat (hack1 e1) (hack1 e2)
+    | C.Esseq _ e1 e2 -> Pmap.concat (hack1 e1) (hack1 e2)
+    | C.Easeq _ _ _ -> Pmap.empty
+    | C.Eindet e -> hack1 e
+    | C.Ebound _ e -> hack1 e
+    | C.Esave d _as _ e -> Pmap.add d _as (hack1 e)
+    | C.Erun _ _ _ -> Pmap.empty
+    | C.Eret _ -> Pmap.empty
+(*    | End of list (expr 'a) *)
+    | _ -> Pmap.empty
+  end
+
+(* [hack2] updates the free syms annotation of the Eruns using a map (that we get from hack1)  *)
+let rec hack2 m e =
+  let hack2 e = hack2 m e in
+  match e with
+    | C.Elet a pe1 e2 -> C.Elet a pe1 (hack2 e2)
+    | C.Eif pe1 e2 e3 -> C.Eif pe1 (hack2 e2) (hack2 e3)
+    | C.Eunseq es -> C.Eunseq (List.map hack2 es)
+    | C.Ewseq _as_opt e1 e2 -> C.Ewseq _as_opt (hack2 e1) (hack2 e2)
+    | C.Esseq _as_opt e1 e2 -> C.Esseq _as_opt (hack2 e1) (hack2 e2)
+    | C.Eindet e -> C.Eindet (hack2 e)
+    | C.Ebound j e -> C.Ebound j (hack2 e)
+    | C.Esave d _as1 _as2 e -> C.Esave d _as1 _as2 (hack2 e)
+    | C.Erun d _ tyns -> C.Erun d (List.map C.Esym $ Pmap.find d m) tyns
+(*    | End of list (expr 'a) *)
+    | e -> e
+  end
 
 
-
-
-
+let rec _register_freevars ids (_, stmt) : E.t unit =
+  match stmt with
+    | A.SKIP ->
+        E.return ()
+    | A.EXPRESSION _ ->
+        E.return ()
+    | A.BLOCK ids' stmts ->
+        E.mapM_ (_register_freevars (ids @ ids')) stmts
+    | A.IF _ stmt1 stmt2 ->
+        _register_freevars ids stmt1 >>
+        _register_freevars ids stmt2
+    | A.WHILE _ stmt ->
+        _register_freevars ids stmt
+    | A.DO _ stmt ->
+        _register_freevars ids stmt
+    | A.BREAK ->
+        E.return ()
+    | A.CONTINUE ->
+        E.return ()
+    | A.RETURN_VOID ->
+        E.return ()
+    | A.RETURN_EXPRESSION _ ->
+        E.return ()
+    | A.SWITCH _ stmt ->
+        _register_freevars ids stmt
+    | A.CASE _ stmt ->
+        _register_freevars ids stmt
+    | A.DEFAULT stmt ->
+       _register_freevars ids stmt
+    | A.LABEL l stmt ->
+        E.register_cont_freevars l ids >>
+        _register_freevars ids stmt
+    | A.GOTO _ ->
+        E.return ()
+    | A.DECLARATION defs ->
+        (* TODO: this is a HACK for now, because we don't have anything in these that isn't in the inclosing BLOCK *)
+        E.return ()
+    | A.PAR stmts ->
+        Boot.assert_false "[Translation._register_freevars] #PAR: TODO"
+  end
+let register_freevars body : E.t unit =
+  _register_freevars [] body >>
+  E.return ()
 
 
 (* Run the translator on different functions *)
@@ -1747,10 +1951,17 @@ let translate_file stdlib (file: A.file _) : E.t (C.file zero) =
   E.foldlM
     (fun acc (name, (args, body)) ->
        (* translate the body to Core *)
-       translate_stmt file name None None body >>= fun core_body ->
-       E.return $ Pmap.add name (C.TyEffect C.Integer (* TODO: address for pointer type? *),
+       register_freevars body >>
+       translate_stmt file name None None [] body >>= fun core_body ->
+      
+      (* HACK !!!!!!! *)
+      let core_body = hack2 (hack1 core_body) core_body in
+      
+      
+       E.clear_cont_freevars >>
+       (E.return $ Pmap.add name (C.TyEffect C.Integer (* TODO: address for pointer type? *),
                                  List.map (fun arg -> (arg, C.Address (* TODO: check *))) args,
-                                 core_body) acc)
+                                 core_body) acc))
     stdlib (* Pmap.empty *)
     (Pmap.bindings file.A.fn_map)
   >>= fun core_funcs ->

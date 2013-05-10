@@ -62,6 +62,8 @@ type mem_value =
 type mem_state = Pmap.map mem_addr mem_value * num
 
 
+type taction_id = num
+
 (* Fully evaluated description of an action *)
 type trace_action =
   | Tcreate of Ail.ctype * mem_addr (* the second argument is the created object *)
@@ -81,31 +83,32 @@ type trace_paction = polarity * trace_action
   
   in the rules comments, this function is noted: <b> e
  *)
-val annotate_expr: trace_action -> expr trace_action -> expr trace_action
-let rec annotate_expr act e =
+val annotate_expr: polarity * taction_id -> expr taction_id -> expr taction_id
+let rec annotate_expr p_aid e =
   match e with
-  | Elet a e1 e2                         -> Elet a e1 (annotate_expr act e2)
-  | Eif e1 e2 e3                         -> Eif e1 (annotate_expr act e2) (annotate_expr act e3)
-  | Eaction (p, (bs, a))                 -> Eaction (p, ({act} union bs, a))
-  | Eunseq es                            -> Eunseq (List.map (annotate_expr act) es)
-  | Ewseq _as e1 e2                      -> Ewseq _as (annotate_expr act e1) (annotate_expr act e2)
-  | Esseq _as e1 e2                      -> Esseq _as (annotate_expr act e1) (annotate_expr act e2)
-  | Esave k _as1 _as2 e                  -> Esave k _as1 _as2 (annotate_expr act e)
-  | End es                               -> End (List.map (annotate_expr act) es)
-  | Eproc bs f pes                       -> Eproc ({act} union bs) f pes
-  | _                                    -> e
+  | Elet a e1 e2         -> Elet a e1 (annotate_expr p_aid e2)
+  | Eif e1 e2 e3         -> Eif e1 (annotate_expr p_aid e2) (annotate_expr p_aid e3)
+  | Eaction (p, (bs, a)) -> Eaction (p, ({snd p_aid} union bs, a))
+  | Eunseq es            -> Eunseq (List.map (annotate_expr p_aid) es)
+  | Ewseq _as e1 e2      -> Ewseq _as (annotate_expr p_aid e1) (match fst p_aid with Pos -> annotate_expr p_aid e2 | Neg -> e2 end)
+  | Esseq _as e1 e2      -> Esseq _as (annotate_expr p_aid e1) (annotate_expr p_aid e2)
+  | Esave k as1 as2 e    -> Esave k as1 as2 (annotate_expr p_aid e)
+  | End es               -> End (List.map (annotate_expr p_aid) es)
+  | Eproc bs f pes       -> Eproc ({snd p_aid} union bs) f pes
+  | _                    -> e
 end
 
-(* TODO: should I instead restrict the SB relations to actions from within a same function body ? *)
-val annotate: trace_action -> list (cont trace_action) -> list (cont trace_action)
-let rec _annotate a k =
+
+(* TODO: doesn't do what it should *)
+val annotate: polarity * taction_id -> list (cont taction_id) -> list (cont taction_id)
+let rec _annotate (p, aid) k =
   match k with
     | []                   -> []
-    | Kunseq es1 es2 :: k' -> Kunseq es1 es2 :: _annotate a k'
-    | Kwseq _as e2   :: k' -> Kwseq _as (annotate_expr a e2) :: k'
-    | Ksseq _as e2   :: k' -> Ksseq _as (annotate_expr a e2) :: k'
+    | Kunseq es1 es2 :: k' -> Kunseq es1 es2 :: _annotate (p, aid) k'
+    | Kwseq _as e2   :: k' -> Kwseq _as (match p with Pos -> annotate_expr (p, aid) e2 | Neg -> e2 end) :: _annotate (p, aid) k'
+    | Ksseq _as e2   :: k' -> Ksseq _as (annotate_expr (p, aid) e2) :: _annotate (p, aid) k'
   end
-let annotate a ks = List.map (_annotate a) ks
+let annotate aid ks = List.map (_annotate aid) ks
 (*
 let annotate a ks =
   match ks with
@@ -130,10 +133,12 @@ type dyn_rule =
   | Rule_Proc
   | Rule_Wseq
   | Rule_Wseq_Neg
+  | Rule_Sseq
   | Rule_Run
   | Rule_Save
   | Rule_Unseq
 
+(* BEGIN: DEBUG *)
 let string_of_rule = function
   | Rule_Pos        -> "pos"
   | Rule_Neg        -> "neg"
@@ -146,10 +151,13 @@ let string_of_rule = function
   | Rule_Proc       -> "proc"
   | Rule_Wseq       -> "wseq"
   | Rule_Wseq_Neg   -> "wseq_neg"
+  | Rule_Sseq       -> "sseq"
   | Rule_Run        -> "run"
   | Rule_Save       -> "save"
   | Rule_Unseq      -> "unseq"
 end
+(* END: DEBUG *)
+
 
 
 (* list monad *)
@@ -170,38 +178,65 @@ module Effect = struct
          that has just been performed
        - the third element is the action that as been performed during that step
      *)
-  type trace = (Pmap.map num trace_action) * list (dyn_rule * option (set num * num))
+  type trace = list (dyn_rule * option (set taction_id * taction_id))
   
   type execution_mode =
     | Exhaustive
     | Random
   
   type state = <|
-    execution_mode: execution_mode; (* TODO: it's a bit silly that this is here, since the setting won't change *)
-    mem:          mem_state;                                                    (* the memory layout state                            *)
-    current_proc: option sym;                                                   (* the C function whose body we are reducing (if any) *)
-    fun_map:      fun_map trace_action;                                         (* map of functions                                   *)
-    cont_map:     map sym (map ksym (list sym * list sym * expr trace_action)); (* maps of labeled continuations (per function)       *)
-    tact_counter: num;                                                          (* counter for the trace actions map                  *)
-    trace:        trace;                                                        (* the execution trace so far (stored in reversed)    *)
+    execution_mode: execution_mode;                                             (* TODO: it's a bit silly that this is here, since the setting won't change *)
+    mem:            mem_state;                                                  (* the memory layout state                            *)
+    current_proc:   option sym;                                                 (* the C function whose body we are reducing (if any) *)
+    fun_map:        fun_map taction_id;                                         (* map of functions                                   *)
+    cont_map:       map sym (map ksym (list sym * list sym * expr taction_id)); (* maps of labeled continuations (per function)       *)
+    tact_counter:   num;                                                        (* counter for the trace actions map                  *)
+    tact_map:       Pmap.map taction_id trace_action;
+    trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
   |>
   
-  type t 'a = state -> list ('a * state)
+  type result 'a =
+    | Defined of 'a
+    | Undef
+    | Error
+  
+  type t 'a = state -> result (list ('a * state))
   
   
   (* monadic operations *)
   val return: forall 'a. 'a -> t 'a
-  let return x = fun s -> [(x, s)]
+  let return x = fun s -> Defined [(x, s)]
   
+  (* TODO: looks fishy *)
   val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-  let bind m f = fun s -> L.bind (m s) (fun (a, s') -> f a s')
+  let bind m f = fun s ->
+    match m s with
+      | Defined zs -> List.fold_right (fun (a, s') acc ->
+                        match acc with
+                          | Defined y -> match f a s' with Defined z' -> Defined (z' @ y) | Undef -> Undef | Error -> Error end
+                          | Undef     -> Undef
+                          | Error     -> Error
+                        end) zs (Defined [])
+      | Undef  -> Undef
+      | Error  -> Error
+    end
+
+
+
   
   (* MonadPlus operations *)
   val mzero: forall 'a. t 'a
-  let mzero = fun s -> []
+  let mzero = fun s -> Defined []
   
   val mplus: forall 'a. t 'a -> t 'a -> t 'a
-  let mplus a b = fun s -> (a s) @ (b s)
+  let mplus a b = fun s ->
+    match (a s, b s) with
+      | (Defined x, Defined y) -> Defined (x @ y)
+      (* TODO: ahem, now this isn't very associative *)
+      | (Undef, _) -> Undef
+      | (_, Undef) -> Undef
+      | _          -> Error
+    end
   
   
   (* generic functions (that should be moved out once we have type-classes) *)
@@ -215,10 +250,10 @@ module Effect = struct
   let rec dmsum ms =
     fun s ->
       match ms with
-        | []     -> []
+        | []     -> Defined []
         | m::ms' -> match m s with
-                      | [] -> (dmsum ms') s
-                      | v  -> v
+                      | Defined [] -> (dmsum ms') s
+                      | v          -> v
                     end
       end
   
@@ -249,31 +284,31 @@ module Effect = struct
   
   val set_current_proc: sym -> t unit
   let set_current_proc pname = fun s ->
-    [((), <| s with current_proc= Some pname |>)]
+    Defined [((), <| s with current_proc= Some pname |>)]
   
   
-  val register_funs: fun_map trace_action -> t unit
+  val register_funs: fun_map taction_id -> t unit
   let register_funs funs = fun s ->
-    [((), <| s with fun_map= funs |>)]
+    Defined [((), <| s with fun_map= funs |>)]
   
-  val get_fun_map: t (fun_map trace_action)
+  val get_fun_map: t (fun_map taction_id)
   let get_fun_map = fun s ->
-    [(s.fun_map, s)]
+    Defined [(s.fun_map, s)]
   
-  val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr trace_action)
+  val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_id)
   let get_proc fname = fun s ->
-    [(Pmap.find fname s.fun_map, s)]
+    Defined [(Pmap.find fname s.fun_map, s)]
   
-  val register_conts: map sym (map ksym (list sym * list sym * expr trace_action)) -> t unit
+  val register_conts: map sym (map ksym (list sym * list sym * expr taction_id)) -> t unit
   let register_conts ks = fun s ->
-    [((), <| s with cont_map= ks |>)]
+    Defined [((), <| s with cont_map= ks |>)]
   
-  val get_cont: ksym -> t (list sym * list sym * expr trace_action)
+  val get_cont: ksym -> t (list sym * list sym * expr taction_id)
   let get_cont d = fun s ->
-    [(Pmap.find d $ Pmap.find (from_Some s.current_proc) s.cont_map, s)]
+    Defined [(Pmap.find d $ Pmap.find (from_Some s.current_proc) s.cont_map, s)]
 
 (*
-  val get_sym: sym -> t (expr trace_action)
+  val get_sym: sym -> t (expr taction_id)
   let get_sym _a =
     fun s ->
       if Pmap.mem _a s.sym_map then
@@ -281,7 +316,7 @@ module Effect = struct
       else
         Boot.assert_false "BUG: Core_run.get_sym"
   
-  val put_sym: sym -> expr trace_action -> t unit
+  val put_sym: sym -> expr taction_id -> t unit
   let put_sym _a e =
     fun s -> 
       [((), <| s with sym_map= Pmap.add _a e s.sym_map |>)]
@@ -302,11 +337,11 @@ module Effect = struct
 
 val set_execution_mode: execution_mode -> t unit
 let set_execution_mode mode = fun s ->
-  [((), <| s with execution_mode= mode |>)]
+  Defined [((), <| s with execution_mode= mode |>)]
 
 val get_execution_mode: t execution_mode
 let get_execution_mode = fun s ->
-  [(s.execution_mode, s)]
+  Defined [(s.execution_mode, s)]
 
 
 end
@@ -326,11 +361,12 @@ let initial_state = <|
   E.fun_map=        Pmap.empty;
   E.cont_map=       Pmap.empty;
   E.tact_counter=   0;
-  E.trace=          (Pmap.empty, [])
+  E.tact_map=       Pmap.empty;
+  E.trace=          []
 |>
 
 val init: E.t unit
-let init = fun _ -> [((), initial_state)]
+let init = fun _ -> E.Defined [((), initial_state)]
 
 (* static object allocation *)
 val create: list Symbol.t -> Ail.ctype -> E.t mem_addr
@@ -339,37 +375,38 @@ let create pref _ = fun (<| E.mem= (m, i) |> as s) ->
   Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $
   
   let o = (pref, i) in
-  [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
+  E.Defined [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
 val alloc: list Symbol.t -> num -> E.t mem_addr
 let alloc pref _ = fun (<| E.mem= (m, i) |> as s) ->
   let o = (pref, i) in
-  [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
+  E.Defined [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
 
 (* static/dynamic object deallocation *)
 val kill: mem_addr -> E.t unit
 let kill o = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.kill] @" ^ (string_of_num $ snd o))
-  [((), s (* <| s with E.mem= (Pmap.remove o m, i) |>*) )]
+  E.Defined [((), <| s with E.mem= (Pmap.remove o m, i) |> )]
 
 val store: Ail.ctype -> mem_addr -> mem_value -> E.t unit
 let store _ o v = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o))
-  [((), <| s with E.mem= (Pmap.add o v m, i) |>)]
+  E.Defined [((), <| s with E.mem= (Pmap.add o v m, i) |>)]
 
 val load: Ail.ctype -> mem_addr -> E.t mem_value
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
   (* DEBUG *)
   if not (Pmap.mem o m) then
-    Boot.assert_false $ "[Core_run.load] Not_found: @" ^ (string_of_num $ snd o)
+    Boot.print_debug ("[Core_run.load] Not_found: @" ^ (string_of_num $ snd o))
+    E.Undef
   else
     (* DEBUG *)
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o))
-    [(Pmap.find o m, s)]
+    E.Defined [(Pmap.find o m, s)]
 
 
 
@@ -408,8 +445,8 @@ let rec _pick_one_random pred = function
 end
 let pick_one_random pred l = fun s ->
   match _pick_one_random pred l with
-    | Some x -> [(x, s)]
-    | None   -> []
+    | Some x -> E.Defined [(x, s)]
+    | None   -> E.Defined []
   end
 
 val pick_one: forall 'a. ('a -> bool) -> list 'a -> E.t (list 'a * 'a * list 'a)
@@ -423,37 +460,42 @@ let pick_one pred l =
 
 
 (* push an element in the trace *)
-val push_trace: (dyn_rule * option (set trace_action * trace_paction)) -> E.t (option num)
+val push_trace: (dyn_rule * option (set taction_id * trace_action)) -> E.t (option taction_id)
 let push_trace (r, tact_opt) =
   Boot.print_debug ("RULE ==> " ^ string_of_rule r) $
-    fun (<| E.tact_counter= n; E.trace= (tact_map, t) |> as s) ->
+    fun (<| E.tact_counter= n; E.tact_map= tact_map; E.trace= t |> as s) ->
       match tact_opt with
-        | None            -> [(None,   <| s with E.trace= (tact_map, (r, None) :: t) |>)]
-        | Some (bs, tact) -> [(Some n, <| s with E.tact_counter= n+1; E.trace= (Pmap.add n tact tact_map, (r, Some (bs, n)) :: t) |>)]
+        | None            -> E.Defined [(None,   <| s with E.trace= (r, None) :: t |>)]
+        | Some (bs, tact) -> E.Defined [(Some n, <| s with E.tact_counter= n+1; E.tact_map= Pmap.add n tact tact_map; E.trace= (r, Some (bs, n)) :: t |>)]
      end
 
 (* get the last element of the trace (crash if none). *)
-val get_trace: E.t (dyn_rule * option (set trace_action * trace_paction))
+val get_trace: E.t (dyn_rule * option (set taction_id * trace_action))
 let get_trace = function
   | <| E.trace= [] |> ->
-      Boot.outOfHomeomorphism "[Core_run.get_trace] empty trace"
-  | (<| E.trace= (tact_map, tact_opt :: _) |> as s) ->
-      [(match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end, s)]
+      Boot.assert_false "[Core_run.get_trace] empty trace"
+  | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as s) ->
+      E.Defined [((r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), s)]
 end
 
-val get_fulltrace: E.t E.trace
-let get_fulltrace = fun (<| E.trace= t |> as s) -> [(t, s)]
+val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
+let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as s) ->
+  E.Defined [((tact_map, t), s)]
+
+
+
 
 
 (* mutate the rule descriptor of the most recent trace element (used by
    inductive rule after application of their premises) *)
+(*
 val update_rule: (dyn_rule -> dyn_rule) -> E.t unit
 let update_rule f = fun (<| E.trace= t |> as s) ->
   match t with
     | []               -> Boot.outOfHomeomorphism "[Core_run.update_rule] empty trace"
     | (r, bs_a) :: ts  -> [((), <| s with E.trace= (f r, bs_a) :: ts |>)]
   end
-
+*)
 
 
 
@@ -462,7 +504,7 @@ let update_rule f = fun (<| E.trace= t |> as s) ->
 
 
 (*
-val put_syms: list (option sym) -> expr trace_action -> E.t unit
+val put_syms: list (option sym) -> expr taction_id -> E.t unit
 let put_syms _as v =
   match (_as, v) with
     | ([]       , _        ) -> E.return ()
@@ -485,7 +527,7 @@ let call_function fun_map fname args =
     (List.fold_left2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
 
 
-val call_proc: sym -> list (expr trace_action) -> E.t (expr trace_action)
+val call_proc: sym -> list (expr taction_id) -> E.t (expr taction_id)
 let call_proc fname args =
   E.get_proc fname >>= fun (_, params, fbody) ->
   if List.length params <> List.length args then
@@ -566,7 +608,7 @@ let rec eval fun_map pe =
 
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
-val perform_action: action_ trace_action -> E.t (trace_action * expr trace_action)
+val perform_action: action_ taction_id -> E.t (trace_action * expr taction_id)
 let perform_action act =
   E.get_fun_map >>= fun fun_map ->
   let eval = eval fun_map in
@@ -607,250 +649,25 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-(* The reduction rules *)
-val red_pos: expr trace_action -> E.t (expr trace_action)
-val red_neg: expr trace_action -> E.t (expr trace_action)
-
-(* TODO: DOC, add others *)
-
-
-
-(*
-val red: expr trace_action -> E.t (expr trace_action)
-
-
-(*
-     S --perform a--> S'
-   ---------------------
-   (S, a) --a--> (S', v)
- *)
-let rec red_pos e =
-  match e with
-    | Eaction (Pos, (bs, a)) ->
-        perform_action a                    >>= fun (a, v) ->
-        push_trace (Rule_Pos, Some (bs, (Pos, a))) >>
-        E.return v
-    | _ -> E.mzero
-  end
-
-(*
-      S --perform a--> S'
-   -------------------------
-   (S, ~a) --a--> (S', skip)
- *)
-and red_neg e =
-  match e with
-    | Eaction (Neg, (bs, a)) ->
-        perform_action a                    >>= fun (a, v) ->
-        push_trace (Rule_Neg, bs, (Neg, a)) >>
-        E.return v
-    | _ -> E.mzero
-  end
-
-(*
-                (S, e1) --a--> (S', v)
-    -----------------------------------------------
-    (S, as <- e1 >> e2) --a--> (S', <a> e2[as \ v])
-
-             (S, e1) --a--> (S', e1')
-  -----------------------------------------------
-  (S, as <- e1; e2) --a--> (S', as<- e1'; <a> e2)
-*)
-and red_wseq_l e =
-  match e with
-    | Ewseq _as e1 e2 ->
-(*
-        Boot.outOfHomeomorphism $ "[red_wseq_l] " ^ (Document.to_plain_string $ Boot.pp_core_expr None e)
-*)
-        is_value e1 >>= function
-          | true  -> put_syms _as e1 >>
-                     E.return e2
-          | false -> red e1                 >>= fun e1'            ->
-                     get_trace              >>= fun (_, _, (p, a)) ->
-                     update_rule Rule_WseqL >>
-                     let f = match p with Pos -> annotate a | Neg -> fun x -> x end in
-                     is_value e1' >>= function
-                       | true  -> put_syms _as e1' >> E.return (f e2)
-                       | false -> E.return (Ewseq _as e1' (f e2))
-                     end
-        end
-
-(*
-         fun b1' ->
-          
-          E.return (if b1' then f (subst_syms _as e1' e2)
-                           else Kwseq _as e1' (f e2))
-        else
-(*           update_rule Rule_WseqL >> *) (* TODO: I need that (?) *)
-(*          let f = match p with Pos -> annotate a | Neg -> fun x -> x end in *)
-          E.return $ subst_syms _as e1 e2 (* TODO: the (lack of) annotation may be wrong *)
-
-*)
-  
-    | _ -> E.mzero
-  end
-
-(*
-          (S, e2) --a--> (S', e2')
-  ----------------------------------------
-  (S, () <- ~b; e2) --a--> (S', ~b || e2')
-*)
-and red_neg_wseq e =
-  match e with
-    | Ewseq [Nothing] (Eaction (Neg, b)) e2 ->
-        red e2    >>= fun e2' ->
-        E.return match e2' with
-                   | Eunseq e2's -> Eunseq $ (Eaction (Neg, b)) :: e2's
-                   | _           -> Eunseq [Eaction (Neg, b); e2']
-                 end
-    | _ -> E.mzero
-  end
-
-(*
-                     (S, ej) --a--> (S, ej')
-  ------------------------------------------------------------
-  (S, e1 || .. ej .. || ek) --a--> (S', e1 || .. ej' .. || ek)
-*)
-and red_unseq e =
-  match e with
-    | Eunseq es ->
-        pick_one es            >>= fun (es1, ej, es2) ->
-        red ej                 >>= fun ej'            ->
-        update_rule Rule_Unseq >>
-        E.return (Eunseq (es1 @ ej' :: es2))
-    | _ -> E.mzero
-  end
-
-and red_let e =
-  match e with
-    | Elet _a e1 e2 ->
-        eval e1 >>= fun v ->
-        E.put_sym _a v >> E.return e2
-(* This way doesn't work now that we have Ksave/Krun *)
-(*
-        E.return (subst_sym _a v e2)
-*)
-    | _ -> E.mzero
-  end
-
-and red_cont e =
-  match e with
-    | Erun k    -> E.get_sym k >>= fun e' ->
-                   red e'
-    | Esave _ e -> red e
-    | _         -> E.mzero
-end
-
-
-(* ND merging of all the reduction rules *)
-and red e = 
-    let foo = E.msum [
-  red_pos e; red_neg e;
-  red_wseq_l e; red_neg_wseq e;
-  red_unseq e;
-  red_let e;
-  red_cont e
-] in
-
-(* TODO: DEBUG *)
-is_value e >>= fun b ->
-fun s ->
-match foo s with
-  | [] -> if not b then Boot.outOfHomeomorphism $ "False normal-form (in [red]): " ^ (Document.to_plain_string $ Boot.pp_core_expr None e)
-                   else []
-  | xs -> xs
-end
-
-*)
-
-
-(*
-(* TODO: may be a (reasonable) hack *)
-val     size: expr trace_action -> num
-let rec size e =
-  match e with
-    | Etuple es -> List.fold_left (fun acc e -> size e + acc) 0 es
-    | Enull     -> 1
-    | Eskip     -> 1 (* TODO: maybe 0 *)
-    | Econst _
-    | Eaddr _
-    | Esym _
-  | Eop of binop * expr 'a * expr 'a
-  | Etrue
-  | Efalse
-  | Enot of expr 'a
-
-(*
-
-
-  | Ectype of Ail.ctype
-  | Elet of sym * expr 'a * expr 'a
-  | Eif of expr 'a * expr 'a * expr 'a
-  
-  | Eproc of sym * list (expr 'a)
-  | Ecall of sym * list (expr 'a)
-
-  | Esame of expr 'a * expr 'a
-
-  
-  | Eundef
-  | Eerror
-  
-  | Eaction of paction 'a
-  
-  | Eunseq of list (expr 'a)
-
-  | Ewseq of list (option sym) * expr 'a * expr 'a
-
-  | Esseq of list (option sym) * expr 'a * expr 'a
-  | Easeq of option sym * action 'a * paction 'a
-  
-  | Eindet of expr 'a
-  | Ebound of num * expr 'a
-  
-  | Esave of ksym * expr 'a
-  | Erun of ksym
-  | Eret of expr 'a
-  
-  | End of list (expr 'a)
-  
-*)
-end
-*)
-
-
-
-
-
 (* NOTE: the assumption is made that an Eunseq cannot directly be the
          subexpression of an another Eunseq *)
-val red2: expr trace_action * list (cont trace_action) -> E.t (expr trace_action * list (cont trace_action))
+val red2: expr taction_id * list (cont taction_id) -> E.t (expr taction_id * list (cont taction_id))
 
 let rec red2_pos x =
   match x with
     | (Eaction (Pos, (bs, a)), _KS) ->
-        perform_action a                           >>= fun (a, v) ->
-        push_trace (Rule_Pos, Some (bs, (Pos, a))) >>
-        E.return (v, annotate a _KS)
+        perform_action a                    >>= fun (a, v)   ->
+        push_trace (Rule_Pos, Some (bs, a)) >>= fun (Some aid) ->
+        E.return (v, annotate (Pos, aid) _KS)
     | _ -> E.mzero
   end
 
 and red2_neg x =
   match x with
     | (Eaction (Neg, (bs, a)), _KS) ->
-        perform_action a                           >>= fun (a, v) ->
-        push_trace (Rule_Neg, Some (bs, (Neg, a))) >>
-        E.return (v, annotate a _KS)
+        perform_action a                    >>= fun (a, v)   ->
+        push_trace (Rule_Neg, Some (bs, a)) >>= fun (Some aid) ->
+        E.return (v, annotate (Neg, aid) _KS)
     | _ -> E.mzero
   end 
 
@@ -920,6 +737,14 @@ and red2_skip x =
     | (Eskip, (Kwseq _ e2 :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
         E.return (e2, _KS1 :: _KS2)
+
+    | (Eskip, [Ksseq _ e2] :: _KS) ->
+        push_trace (Rule_Skip, None) >>
+        E.return (e2, [] :: _KS)
+    | (Eskip, (Ksseq _ e2 :: _KS1) :: _KS2) ->
+        push_trace (Rule_Skip, None) >>
+        E.return (e2, _KS1 :: _KS2)
+
     | (Eskip, ((Kunseq es1 es2) :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
         E.return
@@ -945,7 +770,9 @@ and red2_proc x =
 Boot.print_debug (Boot.pp_core_expr (Core.Etuple es)) $
 Boot.print_debug (Boot.pp_core_expr f_body) $
 *)
-        E.return (Set.fold (fun b e -> annotate_expr b e) bs f_body, [] :: _KS)
+
+(* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, [] :: _KS)
     | _ -> E.mzero
   end
 
@@ -962,7 +789,7 @@ and red2_wseq x =
             E.return (subst_syms _as (eval fun_map e1) e2, _KS)
           else match _KS with
             | _K :: _KS -> E.return (e1, (Kwseq _as e2 :: _K) :: _KS)
-            | []         -> E.return (e1, [[Kwseq _as e2]])
+            | []        -> E.return (e1, [[Kwseq _as e2]])
           end
     | _ -> E.mzero
   end 
@@ -989,6 +816,22 @@ and red2_neg_wseq x =
     | _ -> E.mzero
 end
 
+
+and red2_sseq x =
+  match x with
+    | (Esseq _as e1 e2, _KS) ->
+        push_trace (Rule_Sseq, None) >>
+          if is_pure e1 then
+            E.get_fun_map >>= fun fun_map ->
+            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
+            E.return (subst_syms _as (eval fun_map e1) e2, _KS)
+          else match _KS with
+            | _K :: _KS -> E.return (e1, (Ksseq _as e2 :: _K) :: _KS)
+            | []        -> E.return (e1, [[Ksseq _as e2]])
+          end
+    | _ -> E.mzero
+  end
+
 (* TODO: check that rule, nothing fancy should be needed, since we don't allow
          save/run inside unseq expressions *)
 and red2_unseq x =
@@ -1003,13 +846,14 @@ and red2_unseq x =
 
 and red2_run x =
   match x with
-    | (Erun d vs ty_opts, _K :: _KS) ->
-        E.get_cont d >>= fun (_as1, _as2, e_cont) ->
+    | (Erun d vs tyns, _K :: _KS) ->
+        E.get_cont d >>= fun (as1, as2, e_cont) ->
         push_trace (Rule_Run, None) >>
-        E.return (Ewseq (List.map (Some) _as2)
-                    (Eunseq $ List.map (function Left ty -> pcreate (Ectype ty) [] | Right n -> palloc (Econst n) [] end) ty_opts)
-                    (List.fold_left (fun acc (_a, v) -> subst_sym _a v acc) e_cont $ List.combine _as1 vs),
-                  [] :: _KS)
+        E.return
+          (Ewseq (List.map (Some) as2) (mk_unseq $ List.map (function Left ty -> pcreate (Ectype ty) [] | Right n -> palloc (Econst n) [] end) tyns)
+             (List.fold_left (fun acc (a, v) -> subst_sym a v acc) e_cont $ List.combine as1 vs),
+           [] :: _KS)
+
     | _ -> E.mzero
   end
 
@@ -1029,52 +873,30 @@ and red2 e =
       red2_if e; red2_let e; red2_ret e;
       red2_proc e;
       red2_wseq e; red2_neg_wseq e;
+      red2_sseq e;
       red2_run e; red2_save e
     ]
   ]
 
 
-
-
-
-(* Full execution of an expression *)
-(*
-val     star_red: expr trace_action -> E.t (expr trace_action * E.trace)
-let rec star_red e =
-  is_value e >>= function
-      true ->  get_fulltrace >>= fun t ->
-               eval e        >>= fun v ->
-               E.return (v, t)
-    | false -> red e >>= star_red
-  end
-*)
-
-
-
-val     star_red2: expr trace_action * list (cont trace_action) -> E.t ((expr trace_action * list (cont trace_action)) * E.trace)
+val     star_red2: expr taction_id * list (cont taction_id) -> E.t ((expr taction_id * list (cont taction_id)) * (Pmap.map taction_id trace_action * E.trace))
 let rec star_red2 x =
-  let continue = 
-red2 x >>= fun z ->
+  let continue =
+    red2 x >>= fun z ->
+(* BEGIN: DEBUG *)
     get_trace >>= fun (r, _) ->
     Boot.print_debug (string_of_rule r ^ " ==>\nE= " ^
                      (Boot.pp_core_expr (fst z)) ^ "\nKS= " ^
                      (List.fold_left (fun acc k -> acc ^ string_of_cont k ^ "\n\n") "" $ snd z) ^ "\n----------------------------------\n\n")
+(* END: DEBUG *)
    star_red2 z
-(*
-red2 x >>= star_red2
-*)
-(*
-
-
-Boot.outOfHomeomorphism (Document.to_plain_string $ Boot.pp_core_expr None (fst x)) (* star_red2 *) 
-*)
 in
   match x with
     | (e, []) ->
         if is_pure e then
-          get_fulltrace >>= fun t ->
+          get_fulltrace >>= fun (tact_map, t) ->
           E.get_fun_map >>= fun fun_map ->
-          E.return ((eval fun_map e, []), t)
+          E.return ((eval fun_map e, []), (tact_map, t))
         else
           continue
     
@@ -1090,33 +912,33 @@ in
 (* Dummy function doing nothing, but required to typecheck *)
 let rec convert_expr e =
   match e with
-    | Eskip           -> Eskip
-    | Etuple es       -> Etuple (List.map convert_expr es)
-    | Econst n        -> Econst n
-    | Eaddr o         -> Eaddr o
-    | Esym a          -> Esym a
-    | Etrue           -> Etrue
-    | Efalse          -> Efalse
-    | Ectype ty       -> Ectype ty
-    | Eundef          -> Eundef
-    | Eerror          -> Eerror
-    | Eop op e1 e2    -> Eop op (convert_expr e1) (convert_expr e2)
-    | Enot e          -> Enot (convert_expr e)
-    | Elet a e1 e2    -> Elet a (convert_expr e1) (convert_expr e2)
-    | Eif e1 e2 e3    -> Eif (convert_expr e1) (convert_expr e2) (convert_expr e3)
-    | Ecall f args    -> Ecall f (List.map convert_expr args)
-    | Eproc bs f args -> Eproc {} f (List.map convert_expr args)
-    | Eaction a       -> Eaction (convert_paction a)
-    | Eunseq es       -> Eunseq (List.map convert_expr es)
-    | Ewseq _as e1 e2 -> Ewseq _as (convert_expr e1) (convert_expr e2)
-    | Esseq _as e1 e2 -> Esseq _as (convert_expr e1) (convert_expr e2)
-    | Easeq a b u     -> Easeq a (convert_action b) (convert_paction u)
-    | Eindet e        -> Eindet (convert_expr e)
-    | Ebound i e      -> Ebound i (convert_expr e)
-    | Esame e1 e2     -> Esame (convert_expr e1) (convert_expr e2)
-    | Esave k _as1 _as2 e       -> Esave k _as1 _as2 (convert_expr e)
-    | Erun k xs ys    -> Erun k (List.map convert_expr xs) ys
-    | Eret e          -> Eret (convert_expr e)
+    | Eskip               -> Eskip
+    | Etuple es           -> Etuple (List.map convert_expr es)
+    | Econst n            -> Econst n
+    | Eaddr o             -> Eaddr o
+    | Esym a              -> Esym a
+    | Etrue               -> Etrue
+    | Efalse              -> Efalse
+    | Ectype ty           -> Ectype ty
+    | Eundef              -> Eundef
+    | Eerror              -> Eerror
+    | Eop op e1 e2        -> Eop op (convert_expr e1) (convert_expr e2)
+    | Enot e              -> Enot (convert_expr e)
+    | Elet a e1 e2        -> Elet a (convert_expr e1) (convert_expr e2)
+    | Eif e1 e2 e3        -> Eif (convert_expr e1) (convert_expr e2) (convert_expr e3)
+    | Ecall f args        -> Ecall f (List.map convert_expr args)
+    | Eproc bs f args     -> Eproc {} f (List.map convert_expr args)
+    | Eaction a           -> Eaction (convert_paction a)
+    | Eunseq es           -> Eunseq (List.map convert_expr es)
+    | Ewseq _as e1 e2     -> Ewseq _as (convert_expr e1) (convert_expr e2)
+    | Esseq _as e1 e2     -> Esseq _as (convert_expr e1) (convert_expr e2)
+    | Easeq a b u         -> Easeq a (convert_action b) (convert_paction u)
+    | Eindet e            -> Eindet (convert_expr e)
+    | Ebound i e          -> Ebound i (convert_expr e)
+    | Esame e1 e2         -> Esame (convert_expr e1) (convert_expr e2)
+    | Esave k as1 as2 e   -> Esave k as1 as2 (convert_expr e)
+    | Erun k xs ys        -> Erun k (List.map convert_expr xs) ys
+    | Eret e              -> Eret (convert_expr e)
   end
 
 
@@ -1137,19 +959,19 @@ and convert_action (_, a) =
 
 (* TODO: make sure that labels symbolic names are unique over a whole program, otherwise
          we may jump outside of functions ... *)
-(* val     populate_cont_map: sym -> expr trace_action -> E.t unit *)
+(* val     populate_cont_map: sym -> expr taction_id -> E.t unit *)
 
 module St = State
 open St.Operators
 
 type collect_conts_state = <|
   bound_syms: set sym;
-  conts: map ksym (list sym * list sym * expr trace_action)
+  conts: map ksym (list sym * list sym * expr taction_id)
 |>
 
-(* val     collect_cont: expr trace_action -> St.t (Pmap.map ksym (expr trace_action * list sym)) (Pmap.map ksym (expr trace_action * list sym)) *)
+(* val     collect_cont: expr taction_id -> St.t (Pmap.map ksym (expr taction_id * list sym)) (Pmap.map ksym (expr taction_id * list sym)) *)
 
-val     collect_conts: expr trace_action -> St.t unit collect_conts_state
+val     collect_conts: expr taction_id -> St.t unit collect_conts_state
 let rec collect_conts e =
   let save_cont d k =
     St.update (fun s ->
@@ -1163,8 +985,8 @@ let rec collect_conts e =
 *)
   match e with
     (* this is the only place where something actually happens *)
-    | Esave d _as1 _as2 e ->
-        save_cont d (_as1, _as2, e) >>
+    | Esave d as1 as2 e ->
+        save_cont d (as1, as2, e) >>
         collect_conts e
     | Elet a _ e2 ->
 (*        save_syms {a} >> *)
@@ -1236,27 +1058,123 @@ let rec collect_conts e =
   end
 
 
+
+
+
+
+
+
+
+
+
+val     collect_conts': expr taction_id -> map ksym (list sym * list sym * expr taction_id)
+let rec collect_conts' e =
+  match e with
+    | Esave d as1 as2 e ->
+        Pmap.add d (as1, as2, e) (collect_conts' e)
+    | Elet _ _ e2 ->
+        collect_conts' e2
+    | Eif _ e2 e3 ->
+        Pmap.concat (collect_conts' e2) (collect_conts' e3)
+    | Ewseq _as e1 e2 ->
+        let ks1 = collect_conts' e1 in
+        Pmap.concat (Pmap.map (fun (as1, as2, k) -> (as1, as2, Ewseq _as k e2)) ks1) (collect_conts' e2)
+    | Esseq _as e1 e2 ->
+        let ks1 = collect_conts' e1 in
+        Pmap.concat (Pmap.map (fun (as1, as2, k) -> (as1, as2, Esseq _as k e2)) ks1) (collect_conts' e2)
+    | End es ->
+        List.fold_left (fun acc e -> Pmap.concat (collect_conts' e) acc) Pmap.empty es
+    
+    (* by syntactic constraints, we know that under these ctors there can be no labeled
+       continuations *)
+    | Etuple _ ->
+        Pmap.empty
+    | Enull ->
+        Pmap.empty
+    | Eskip ->
+        Pmap.empty
+    | Econst _ ->
+        Pmap.empty
+    | Eaddr _ ->
+        Pmap.empty
+    | Esym _ ->
+        Pmap.empty
+    | Eop _ _ _ ->
+        Pmap.empty
+    | Etrue ->
+        Pmap.empty
+    | Efalse ->
+        Pmap.empty
+    | Enot _ ->
+        Pmap.empty
+    | Ectype _ ->
+        Pmap.empty
+    | Ecall _ _ ->
+        Pmap.empty
+    | Eproc _ _ _ ->
+        Pmap.empty
+    | Esame _ _ ->
+        Pmap.empty
+    | Eundef ->
+        Pmap.empty
+    | Eerror ->
+        Pmap.empty
+    | Eaction _ ->
+        Pmap.empty
+    | Easeq _ _ _ ->
+        Pmap.empty
+    | Erun _ _ _ ->
+        Pmap.empty
+    | Eunseq _ ->
+        Pmap.empty
+    | Eret _ ->
+        Pmap.empty
+
+    (* these ctors should have been removed by Core_indet *)
+    | Eindet _ ->
+        Boot.assert_false "Core_run.collect_conts': the ctor `Eindet' should exists at this stage."
+    | Ebound _ _ ->
+        Boot.assert_false "Core_run.collect_conts': the ctor `Ebound' should exists at this stage."
+  end
+
+
+
+
+
+
+
+
+
+
+
 open E.Operators
 
-val runE: E.execution_mode -> sym -> fun_map trace_action -> E.t (Core.expr trace_action * E.trace)
+val runE: E.execution_mode -> sym -> fun_map taction_id -> E.t (Core.expr taction_id * (Pmap.map taction_id trace_action * E.trace))
 let runE execution_mode main funs =
   (* collect the continuations in all functions *)
-  let cont_map: map sym (map ksym (list sym * list sym * expr trace_action)) =
+  let cont_map: map sym (map ksym (list sym * list sym * expr taction_id)) =
     List.fold_left (fun acc (fname, (_, _, fbody)) ->
-      Pmap.add fname (let (_, s) = St.run_impl (collect_conts fbody) <| bound_syms= {}; conts= Pmap.empty |> in s.conts) acc
+(*      Pmap.add fname (let (_, s) = St.run_impl (collect_conts fbody) <| bound_syms= {}; conts= Pmap.empty |> in s.conts) acc *)
+      Pmap.add fname (collect_conts' fbody) acc
     ) Pmap.empty $ Pmap.bindings funs in
   let (_, _, main_body) = Pmap.find main funs in
   E.set_execution_mode execution_mode    >>
   E.set_current_proc main                >>
   E.register_funs funs                   >>
   E.register_conts cont_map              >>
-  star_red2 (main_body, [(* Khole *)[]]) >>= fun ((value, _), trace) ->
-  E.return (value, List.rev trace)
+  star_red2 (main_body, [(* Khole *)[]]) >>= fun ((value, _), (tact_map, trace)) ->
+  E.return (value, (tact_map, List.rev trace))
 
 
-val run: E.execution_mode -> file zero -> Exception.t (list ((Core.expr trace_action) * E.trace)) Errors.cause
+val run: E.execution_mode -> file zero -> Exception.t (list ((Core.expr taction_id) * (Pmap.map taction_id trace_action * E.trace))) Errors.cause
 let run execution_mode f =
   let (main, funs) = (f.main, Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) f.fun_map) in
-  let traces = List.map fst $ (runE execution_mode main funs) initial_state in
-  Boot.print_debug ("NUMBER OF TRACES= " ^ (string_of_num $ List.length traces))
-  Exception.return traces
+    match (runE execution_mode main funs) initial_state with
+      | E.Defined zs ->
+          let traces = List.map fst zs in
+          Boot.print_debug ("NUMBER OF TRACES= " ^ (string_of_num $ List.length traces))
+          Exception.return traces
+          
+      | E.Undef -> Exception.fail Errors.CORE_UNDEF
+(*      | E.Error -> E.Error *)
+    end
