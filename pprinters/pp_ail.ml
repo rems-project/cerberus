@@ -113,7 +113,7 @@ let pp_integer_type = function
 
 
 let pp_real_floating_type = function
-  | FLOAT       -> !^ "_Bool"
+  | FLOAT       -> !^ "float"
   | DOUBLE      -> !^ "double"
   | LONG_DOUBLE -> !^ "long" ^^^ !^ "double"
 
@@ -319,8 +319,9 @@ let rec pp_statement_l file (_, stmt) =
         P.semi
     | EXPRESSION e ->
         pp_expression_l e ^^ P.semi
-    | BLOCK (_, ss) -> (* TODO: decls *)
+    | BLOCK (ids, ss) -> (* TODO: decls *)
         let block = P.separate_map (P.break 1) pp_statement_l ss in
+        !^ "BLOCK_VARS" ^^^ comma_list pp_id ids ^^^
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | IF (e, s1, s2) ->
         !^ "if" ^^^ P.parens (pp_expression_l e) ^/^

@@ -124,8 +124,8 @@ let rec pp_expr e =
                         | None   -> P.underscore
                       in (P.parens $ P.separate_map P.comma g _as) ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
     in
-(*    (if lt_precedence p' p then fun x -> x else P.parens) $ *)
-      P.parens $
+    (if lt_precedence p' p then fun x -> x else P.parens) $
+(*      P.parens $ *)
       match e with
         | COMMENT (str, e) ->
             !^ (ansi_format [Bold; Red] $ "--" ^ str) ^^ P.break 1 ^^ pp e
@@ -209,10 +209,12 @@ let rec pp_expr e =
             pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Eindet e ->
             P.brackets (pp e)
-        | Esave (l, _, _, e) ->
-            pp_keyword "save" ^^^ pp_symbol l ^^ P.dot ^^^ pp e
-        | Erun (l, _, _) ->
-            pp_keyword "run" ^^^ pp_symbol l
+        | Esave (l, _as1, _as2, e) ->
+            pp_keyword "save" ^^^ pp_symbol l ^^
+              P.parens (comma_list pp_symbol _as1 ^^^ !^ "|" ^^^ comma_list pp_symbol _as2) ^^ P.dot ^^^ pp e
+        | Erun (l, es, tyns) ->
+            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens
+              (comma_list pp es  ^^^ !^ "|" ^^^ comma_list (function Left ty -> pp (Ectype ty) | Right n -> pp (Econst n)) tyns)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
         | End es ->

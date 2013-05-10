@@ -114,7 +114,7 @@ let () =
     let core_backend m =
       ((m
       >?> !skip_core_tcheck)
-        (pass_message "5. Skipping Core's typechecking completed!")
+        (pass_message "5. Skipping Core's typechecking")
         (fun m ->
               Exception.rbind Core_typing.typecheck m
           >|> pass_message "5. Core's typechecking completed!")

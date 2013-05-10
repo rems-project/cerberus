@@ -81,7 +81,7 @@ type expr 'a =
   
   | Eproc of set 'a * sym * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
   | Ecall of sym * list (expr 'a)
-  (* K: I think this one is also pure *)
+  (* K: I think this one is also pure | I don't anymore *)
   | Esame of expr 'a * expr 'a
 
   
