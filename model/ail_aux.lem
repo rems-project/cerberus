@@ -2,7 +2,7 @@
 open Ail
 
 
-val const_int: forall 'a. num -> expression 'a
+val const_int: forall 'a. int -> expression 'a
 let const_int n = CONSTANT (CONST_INT (n, None))
 
 

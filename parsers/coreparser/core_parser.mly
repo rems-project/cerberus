@@ -57,7 +57,7 @@ let convert e arg_syms fsyms =
     | Eproc (func, args)        -> Core.Eproc (Pset.empty compare, Pmap.find func fsyms, List.map (f st) args)
     | Ecall (func, args)        -> Core.Ecall (Pmap.find func fsyms, List.map (f st) args)
     | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
-    | Eundef                    -> Core.Eundef
+    | Eundef                    -> Core.Eundef Undefined.DUMMY
     | Eerror                    -> Core.Eerror
     | Eaction pact              -> Core.Eaction (g st pact)
     | Eunseq es                 -> Core.Eunseq (List.map (f st) es)

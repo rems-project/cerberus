@@ -607,16 +607,16 @@ let rec desugar_exp (e, l) =
   (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
      equivalent to [[ (E+=1) ]]". *)
   | C.UNARY C.PREFIX_INCR e ->
-      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.const_int 1)
+      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.const_int (Int.int 1))
   
   (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
      analogous to the prefix [[ ++ ]] operator". *)
   | C.UNARY C.PREFIX_DECR e ->
-      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.const_int 1)
+      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.const_int (Int.int 1))
   
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
-  | C.UNARY C.NOT e        -> A.BINARY A.EQ (l, Ail_aux.const_int 0)    <$> f e
+  | C.UNARY C.NOT e        -> A.BINARY A.EQ (l, Ail_aux.const_int (Int.int 0))    <$> f e
   | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
 
   (* TODO: this may be temporary hack (see comment before Ail.EXPR_SIZEOF *)
@@ -710,7 +710,7 @@ let rec desugar_stmt st (s, l) =
            long as representable, does not matter with respect to the
            semantics. Hence, we arbitrarily choose "1" (which can always be
            represented as an object of type int). *)
-        | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
+        | None -> (C.CONSTANT (C.CONST_INT (Int.int 1, None)), l)
         end in
       let s3 =
         match e3_opt with
@@ -743,7 +743,7 @@ let rec desugar_stmt st (s, l) =
           match e2_opt with
           | Some e2 -> e2
           (* See comment above. *)
-          | None -> (C.CONSTANT (C.CONST_INT (1, None)), l)
+          | None -> (C.CONSTANT (C.CONST_INT (Int.int 1, None)), l)
           end in
         let s3 =
           match e3_opt with
@@ -935,7 +935,7 @@ let desugar_global_defn st (defn, l) =
   | C.EXTERNAL_DECLARATION defns ->
       let f = function
         | (id, Some e, l) -> (id, e)
-        | (id, None,   l) -> (id, (l, Ail_aux.const_int 0))
+        | (id, None,   l) -> (id, (l, Ail_aux.const_int (Int.int 0)))
       end in
       List.map f -| filter_opt <$> E.mapM desugar_defn defns >>= fun d_defns ->
       E.add_globals d_defns

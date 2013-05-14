@@ -113,7 +113,7 @@ type cause =
 
   | CORE_TYPECHECK of string
 
-  | CORE_UNDEF
+  | CORE_UNDEF of list Undefined.undefined_behaviour
 
 
   | PARSER of string
@@ -567,6 +567,11 @@ let to_string = function
 
   | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg
 
-  | CORE_UNDEF -> "Core: found an undefined behaviour"
+  | CORE_UNDEF us ->
+      let plural = List.length us > 1 in
+      "[Core runtime] found " ^ (if plural then "some" else "an") ^ " undefined behaviour" ^ (if plural then "s" else "") ^ ":\n" ^
+        List.fold_left (fun acc u ->
+          acc ^ "  --> " ^ Undefined.pretty_string_of_undefined_behaviour u ^ "\n"
+        ) "" us
   
   end

@@ -22,7 +22,7 @@ let precedence = function
   | Etrue             -> Some 0
   | Efalse            -> Some 0
   | Ectype _          -> Some 0
-  | Eundef            -> Some 0
+  | Eundef _          -> Some 0
   | Eerror            -> Some 0
   | Eskip             -> Some 0
   | Erun _            -> Some 0
@@ -166,8 +166,8 @@ let rec pp_expr e =
             pp_symbol fname ^^ P.parens (comma_list pp es)
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
-        | Eundef ->
-            pp_keyword "undef"
+        | Eundef u ->
+            pp_keyword "undef" ^^ P.brackets (!^ (ansi_format [Magenta] $ Undefined.string_of_undefined_behaviour u))
         | Eerror ->
             pp_keyword "error"
         | Eaction (p, (bs, a)) ->
@@ -209,12 +209,11 @@ let rec pp_expr e =
             pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Eindet e ->
             P.brackets (pp e)
-        | Esave (l, _as1, _as2, e) ->
+        | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
-              P.parens (comma_list pp_symbol _as1 ^^^ !^ "|" ^^^ comma_list pp_symbol _as2) ^^ P.dot ^^^ pp e
-        | Erun (l, es, tyns) ->
-            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens
-              (comma_list pp es  ^^^ !^ "|" ^^^ comma_list (function Left ty -> pp (Ectype ty) | Right n -> pp (Econst n)) tyns)
+              P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ Pp_ail.pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
+        | Erun (l, es) ->
+            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^ pp e) es)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
         | End es ->

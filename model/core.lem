@@ -68,7 +68,7 @@ type expr 'a =
 
 
   | Eskip
-  | Econst of num
+  | Econst of int
   | Eaddr of mem_addr
   | Esym of sym
   | Eop of binop * expr 'a * expr 'a
@@ -86,7 +86,7 @@ type expr 'a =
 
   
   (* undefined behaviour and late static error / failed assert *)
-  | Eundef
+  | Eundef of Undefined.undefined_behaviour
   | Eerror
   
   | Eaction of paction 'a
@@ -106,8 +106,8 @@ type expr 'a =
   | Ebound of num * expr 'a
   
   (* Continuation operators *)
-  | Esave of ksym * list sym * list sym * expr 'a
-  | Erun of ksym * list (expr 'a) * list (either Ail.ctype num)
+  | Esave of ksym * (* list sym * *) list (sym * Ail.ctype) * expr 'a (* TODO: may have to add the possibility of storing a number instead of a ctype (for allocated objects) *)
+  | Erun of ksym * list (sym * expr 'a) (* * list (expr 'a) * list (either Ail.ctype num) *)
     (* In the first list are expressions to substs free-symbols (not coming from C variables local
        to a block we are jumping into) in the continuation. The second list gives the effective
        types (or none for dynamically allocated objects) for C variables local to the block we are
@@ -193,7 +193,7 @@ let rec is_value e =
         true
     | Esame _ _ ->
         false (* TODO: think about it *)
-    | Eundef ->
+    | Eundef _ ->
         true
     | Eerror ->
         true
@@ -211,9 +211,9 @@ let rec is_value e =
     | Eindet _    ->
     | Ebound _ _  ->
 *)
-    | Esave _ _ _ _ ->
+    | Esave _ _ _ ->
         is_value e
-    | Erun _ _ _ ->
+    | Erun _ _ ->
         false
     | Eret e ->
         false
