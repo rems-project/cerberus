@@ -1,0 +1,52 @@
+fun overflow (ty: ctype, n: integer) : integer :=
+  n
+
+fun conv_int (ty: ctype, n: integer): integer :=
+  n
+
+fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
+  n
+
+fun div_zero (n: integer): integer :=
+  n
+
+fun usual_arithmetic (ty: ctype, ty: ctype): ctype :=
+  ty
+
+fun ctype_width (ty: ctype): integer :=
+  if ty = signed int then
+    32
+  else
+    42
+
+fun exp (n: integer, m: integer): integer :=
+  if m = 0 then
+    1
+  else
+    n * exp(n, m - 1)
+
+fun representable (ty: ctype, n: integer): boolean :=
+  true
+
+fun alignof (ty: ctype): integer :=
+  42
+
+fun max (ty: ctype): integer :=
+  2147483647
+
+fun min (ty: ctype): integer :=
+  42
+
+fun offsetof (ty: ctype): integer :=
+  42
+
+fun shift (x: address, n: integer): address :=
+  x
+
+fun sizeof (ty: ctype): integer :=
+  if ty = char then
+    1
+  else
+    42
+
+-- comment
