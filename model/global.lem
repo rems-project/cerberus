@@ -133,3 +133,9 @@ let rec drop n l =
 (* AHEM *)
 let rec splitAt k l =
   (take k l, drop k l)
+
+let rec list_update a v xs =
+  match xs with
+    | []         -> []
+    | (x,xv)::xs' -> (if x = a then (a,v) :: xs' else (x,xv) :: list_update a v xs' )
+  end

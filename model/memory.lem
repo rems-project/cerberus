@@ -401,7 +401,7 @@ let arrayify ty =
   match ty with
     | ARRAY _ _    -> ty
     | FUNCTION _ _ -> ty
-    | ty           -> ARRAY ty (Some 1)
+    | ty           -> ARRAY ty (Some (Int.int 1))
   end
 
 

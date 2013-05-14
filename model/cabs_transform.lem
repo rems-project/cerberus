@@ -316,7 +316,7 @@ and translate_definition_to_declarations d =
 (* only supporting decimal for now *)
 and decode_integer_constant ic =
   let (n, suff) = Boot.span_string Boot.is_digit ic in
-  (Ocaml.Nat_num.num_of_string n,
+  (Int.int (Ocaml.Nat_num.num_of_string n),
    match suff with
      | ""    -> None
      | "u"   -> Some C.SUFFIX_UNSIGNED

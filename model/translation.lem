@@ -31,8 +31,7 @@ module Effect = struct
     
     (* visible C objects with scoping *)
     visible_objects: list (list Symbol.t);
-    
-    cont_freevars_map: map Symbol.t (list Symbol.t)
+(*    cont_freevars_map: map Symbol.t (list Symbol.t) *)
   |>
   
   type t 'a = State.t 'a env
@@ -60,7 +59,6 @@ module Effect = struct
     fun_map=           Pmap.empty;
     stdlib=            stdlib;
     visible_objects=   [[]];
-    cont_freevars_map= Pmap.empty;
   |>
   
   
@@ -136,19 +134,20 @@ let put_purity x y = fun (<| purity_map= m |> as env) -> ((), <| env with purity
 *)
 
 
-  val register_objects: list Symbol.t -> t unit
-  let register_objects _as =
+  val push_block_objects: list Symbol.t -> t unit
+  let push_block_objects _as =
     fun env -> ((), <| env with visible_objects= _as :: env.visible_objects |>)
   
-  val get_current_block_objects: t (list Symbol.t)
-  let get_current_block_objects =
-    fun env -> (match env.visible_objects with x :: _ -> x end, env)
-  
-  val pop_current_block_objects: t unit
-  let pop_current_block_objects =
+  val pop_block_objects: t unit
+  let pop_block_objects =
     fun env -> ((), <| env with visible_objects= match env.visible_objects with _ :: xs -> xs end |>)
   
+  val get_visible_objects: t (list Symbol.t)
+  let get_visible_objects =
+    fun env -> (List.fold_left (@) [] env.visible_objects, env)
   
+  
+(*
   val register_cont_freevars: Symbol.t -> list Symbol.t -> t unit
   let register_cont_freevars l ids =
     fun env -> ((), <| env with cont_freevars_map= Pmap.add l ids env.cont_freevars_map |>)
@@ -161,6 +160,7 @@ let put_purity x y = fun (<| purity_map= m |> as env) -> ((), <| env with purity
   val clear_cont_freevars: t unit
   let clear_cont_freevars =
     fun env -> ((), <| env with cont_freevars_map= Pmap.empty |>)
+*)
 
 end
 
@@ -514,8 +514,8 @@ and translate_exp file exp =
     | A.UNARY A.MINUS e ->
         E.fresh_symbol       >>= fun a_e    ->
         translate_exp file e >>= fun core_e ->
-        E.return $ C.Ewseq [Some a_e] (promote_value core_e)
-                     (C.Eop C.OpSub (C.Econst 0) (C.Esym a_e))
+        E.return $ C.Ewseq [Some a_e] core_e
+                     (C.Eop C.OpSub (C.Econst (Int.int 0)) (promote_value $ C.Esym a_e))
     
     
     (* (6.5.3.3#4) The result of the ~ operator is the bitwise complement of its (promoted) operand
@@ -529,15 +529,15 @@ and translate_exp file exp =
         translate_exp file e >>= fun core_e ->
         mk_stdcall "max"     >>= fun max    ->
           if Ail_typing_aux.is_unsigned_integer_type ty then
-            E.return $ C.Ewseq [Some a_e] (promote_value core_e)
-                         (C.Eop C.OpSub (max [C.Ectype ty]) (C.Esym a_e))
+            E.return $ C.Ewseq [Some a_e] core_e
+                         (C.Eop C.OpSub (max [C.Ectype ty]) (promote_value $ C.Esym a_e))
           else
             Boot.debug "TODO: the bitwise complement is implementation-defined (sort of) when the promoted type is signed."
     
     
     (* (6.5.3.2#3) The unary & operator yields the address of its operand. [...] If the operand is
                    the result of a unary * operator, neither that operator nor the & operator is
-                   evaluated and the result is as if both were omitted, [...] Similarly, if the
+       evaluated and the result is as if both were omitted, [...] Similarly, if the
                    operand is the result of a [] operator, neither the & operator nor the unary *
                    that is implied by the [] is evaluated and the result is as if the & operator
                    were removed and the [] operator were changed to a + operator. *)
@@ -589,7 +589,7 @@ and translate_exp file exp =
             (C.Easeq (Some a_load) ({}, C.Load (C.Ectype (lvalue_type e)) (C.Esym a_lvalue))
                                    (C.Neg, ({}, C.Store (C.Ectype (lvalue_type e))
                                       (C.Esym a_lvalue)
-                                      (conv_int [C.Ectype (exp_type e); (C.Eop C.OpAdd (C.Esym a_load) (C.Econst 1))])
+                                      (conv_int [C.Ectype (exp_type e); (C.Eop C.OpAdd (C.Esym a_load) (C.Econst (Int.int 1)))])
                                     ))
             )
 
@@ -629,7 +629,7 @@ and translate_exp file exp =
             (C.Ewseq [Some a_load] (Caux.pload (C.Ectype (lvalue_type e)) (C.Esym a_lvalue))
                (C.Ewseq [] (Caux.pstore (C.Ectype (lvalue_type e))
                                         (C.Esym a_lvalue)
-                                        (conv_int [C.Ectype (exp_type e); (C.Eop C.OpSub (C.Esym a_load) (C.Econst 1))]))
+                                        (conv_int [C.Ectype (exp_type e); (C.Eop C.OpSub (C.Esym a_load) (C.Econst (Int.int 1)))]))
                   (C.Esym a_load)
                )
             )
@@ -662,7 +662,25 @@ and translate_exp file exp =
                  if the value of the second operand is zero, the behavior is undefined. *)
     (* TODO *)
     | A.BINARY (A.ARITHMETIC A.DIV) e1 e2 ->
-        E.return (C.DEBUG "TODO: [translate] for `A.BINARY (A.ARITHMETIC A.DIV) e1 e2'")
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        (* TODO[check] usual arithmetic conversions *)
+        usual_arithmetic_conv (C.Esym a_e1) (exp_type e1) (exp_type e2) >>= fun core_e1' ->
+        usual_arithmetic_conv (C.Esym a_e2) (exp_type e1) (exp_type e2) >>= fun core_e2' ->
+        
+        (* TODO[check]: When integers are divided, the result of the / operator is the algebraic
+                        quotient with any fractional part discarded.105) If the quotient a/b is
+                        representable, the expression (a/b)*b + a%b shall equal a; otherwise, the
+                        behavior of both a/b and a%b is undefined. *)
+        E.return $
+          C.Ewseq [Some a_e1; Some a_e2] (Caux.mk_unseq [core_e1; core_e2])
+            (* if the value of the second operand is zero, the behavior is undefined. *)
+            (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst (Int.int 0)))
+               (C.Eundef Undefined.Division_by_zero)
+               (C.Eop C.OpDiv core_e1' core_e2')
+            )
     
     
     (* (6.5.5#3) The usual arithmetic conversions are performed on the operands.
@@ -675,7 +693,26 @@ and translate_exp file exp =
                  is undefined. *)
     (* TODO: check *)
     | A.BINARY (A.ARITHMETIC A.MOD) e1 e2 ->
-      E.return (C.Econst 42) (* TODO *)
+        E.fresh_symbol        >>= fun a_e1    ->
+        E.fresh_symbol        >>= fun a_e2    ->
+        translate_exp file e1 >>= fun core_e1 ->
+        translate_exp file e2 >>= fun core_e2 ->
+        (* TODO[check] usual arithmetic conversions *)
+        usual_arithmetic_conv (C.Esym a_e1) (exp_type e1) (exp_type e2) >>= fun core_e1' ->
+        usual_arithmetic_conv (C.Esym a_e2) (exp_type e1) (exp_type e2) >>= fun core_e2' ->
+        
+        (* TODO[check]: When integers are divided, the result of the / operator is the algebraic
+                        quotient with any fractional part discarded.105) If the quotient a/b is
+                        representable, the expression (a/b)*b + a%b shall equal a; otherwise, the
+                        behavior of both a/b and a%b is undefined. *)
+        E.return $
+          C.Ewseq [Some a_e1; Some a_e2] (Caux.mk_unseq [core_e1; core_e2])
+            (* if the value of the second operand is zero, the behavior is undefined. *)
+            (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst (Int.int 0)))
+               (C.Eundef Undefined.Modulo_by_zero)
+               (C.Eop C.OpMod core_e1' core_e2')
+            )
+
 (*
         fresh_symbol          >>= fun a_e1    ->
         fresh_symbol          >>= fun a_e2    ->
@@ -933,31 +970,42 @@ and translate_exp file exp =
         mk_stdcall "exp"           >>= fun exp           ->
         mk_stdcall "max"           >>= fun max           ->
         mk_stdcall "representable" >>= fun representable ->
-
+        
         E.return $
           C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-          (* if a_e2 < 0 || width{ty} < a_e2 || width{ty} = a_e2 then undef *)
-          (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e2) (C.Econst 0))
-                              (C.Eop C.OpOr (C.Eop C.OpLt (ctype_width [C.Ectype ty]) (C.Esym a_e2))
-                                            (C.Eop C.OpEq (ctype_width [C.Ectype ty]) (C.Esym a_e2)))) (* TODO: check the test about the width *)
-                C.Eundef
-                (* else [...] *)
-                (if Ail_typing_aux.is_unsigned_integer_type (Annotate.ctype_of e1) then
-                   (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst 2; C.Esym a_e2]))
-                                 (C.Eop C.OpAdd (max [C.Ectype ty]) (C.Econst 1))
-                 else (* e1 has a signed type *)
+          (* if a_e2 < 0 then undef *)
+          (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Econst (Int.int 0)))
+             (C.Eundef Undefined.Negative_shift)
+          
+          (* if width{ty} <= a_e2 then undef *)
+          (* TODO: [ty] should be the promoted type of [e1] *)
+          (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (ctype_width [C.Ectype ty]) (C.Esym a_e2))
+                               (C.Eop C.OpEq (ctype_width [C.Ectype ty]) (C.Esym a_e2))) (* TODO: check the test about the width *)
+             (C.Eundef Undefined.Shift_too_large)
+          
+          (* else [...] *)
+             (if Ail_typing_aux.is_unsigned_integer_type (Annotate.ctype_of e1) then
+                (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
+                 C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Int.int 2); C.Esym a_e2]))
+                               (C.Eop C.OpAdd (max [C.Ectype ty]) (C.Econst (Int.int 1)))
+              else (* e1 has a signed type *)
+                (* if a_e2 < 0 then undef *)
+                (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Econst (Int.int 0)))
+                   (C.Eundef Undefined.Negative_left_shift)
                    (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                   C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst 2; C.Esym a_e2]))
-                                                 (C.Eop C.OpAdd (max [C.Ectype ty]) (C.Econst 1)))
-                                  (* if a_e2 < 0 && not representable(ty, a_res) then undef [...] *)
-                                  (C.Eif (C.Eop C.OpAnd (C.Eop C.OpLt (C.Esym a_e1) (C.Econst 0))
-                                                        (C.Enot (representable [C.Ectype ty; C.Esym a_res])))
-                                         C.Eundef
-                                         (* else  *)
-                                         (C.Esym a_res)
-                                  )
-                ))
+                   (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Int.int 2); C.Esym a_e2]))
+                                                (C.Eop C.OpAdd (max [C.Ectype ty]) (C.Econst (Int.int 1))))
+                      (* not representable(ty, a_res) then undef *)
+                      (C.Eif (C.Enot (representable [C.Ectype ty; C.Esym a_res]))
+                         (C.Eundef Undefined.Negative_left_shift)
+                      (* else  *)
+                         (C.Esym a_res)
+                      )
+                   )
+                )
+             )
+          )
+          )
 
 
    (* (6.5.7#3) The integer promotions are performed on each of the operands. [...] If the value of
@@ -1021,12 +1069,12 @@ and translate_exp file exp =
         translate_exp file e2 >>= fun core_e2 ->
         E.return $
           C.Ewseq [Some a_e1] core_e1
-            (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0))
-                   (C.Econst 0)
+            (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst (Int.int 0)))
+                   (C.Econst (Int.int 0))
                    (C.Ewseq [Some a_e2] core_e2
-                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst 0))
-                            (C.Econst 0)
-                            (C.Econst 1)
+                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst (Int.int 0)))
+                            (C.Econst (Int.int 0))
+                            (C.Econst (Int.int 1))
                      )
                    )
             )
@@ -1045,12 +1093,12 @@ and translate_exp file exp =
         translate_exp file e2 >>= fun core_e2 ->
         E.return $
           C.Ewseq [Some a_e1] core_e1
-            (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0)))
-                   (C.Econst 1)
+            (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) (C.Econst (Int.int 0))))
+                   (C.Econst (Int.int 1))
                    (C.Ewseq [Some a_e2] core_e2
-                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst 0))
-                            (C.Econst 0)
-                            (C.Econst 1)
+                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) (C.Econst (Int.int 0)))
+                            (C.Econst (Int.int 0))
+                            (C.Econst (Int.int 1))
                      )
                    )
             )
@@ -1090,8 +1138,8 @@ and translate_exp file exp =
           E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Eif (C.Enot (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))))
-                 (C.Econst 1)
-                 (C.Econst 0)
+                 (C.Econst (Int.int 1))
+                 (C.Econst (Int.int 0))
               )
         else
           E.return (C.DEBUG "TODO: A.BINARY A.GT e1 e2")
@@ -1107,8 +1155,8 @@ and translate_exp file exp =
           E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)))
-                     (C.Econst 1)
-                     (C.Econst 0)
+                     (C.Econst (Int.int 1))
+                     (C.Econst (Int.int 0))
               )
         else (* MUST BE: both operands are pointers to qualified or unqualified versions of compatible object types. *)
           E.return (C.DEBUG "A.BINARY A.LE e1 e2 <when e1 and e2 are pointers>")
@@ -1124,8 +1172,8 @@ and translate_exp file exp =
           E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Esym a_e1))
-                     (C.Econst 1)
-                     (C.Econst 0)
+                     (C.Econst (Int.int 1))
+                     (C.Econst (Int.int 0))
               )
         else
           E.return (C.DEBUG "TODO: A.BINARY A.GE e1 e2")
@@ -1165,8 +1213,8 @@ and translate_exp file exp =
           E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
-                     (C.Econst 1)
-                     (C.Econst 0)
+                     (C.Econst (Int.int 1))
+                     (C.Econst (Int.int 0))
               )
         else if T.is_pointer_type (exp_type e1) && T.is_pointer_type (exp_type e2) then
           E.return (C.DEBUG "A.BINARY A.EQ e1 e2 <when e1 and e2 are pointers>")
@@ -1188,8 +1236,8 @@ and translate_exp file exp =
           E.return $
             C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
-                     (C.Econst 0)
-                     (C.Econst 1)
+                     (C.Econst (Int.int 0))
+                     (C.Econst (Int.int 1))
               )
         else
           E.return (C.DEBUG "A.BINARY A.NE e1 e2 <when e1 and e2 not both of arithmetic type>")
@@ -1219,7 +1267,7 @@ and translate_exp file exp =
           translate_exp file e3 >>= fun core_e3 ->
           E.return $
             C.Ewseq [Some a_e1] core_e1
-              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst 0))
+              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Econst (Int.int 0)))
                      core_e2
                      core_e3)
         else
@@ -1253,7 +1301,7 @@ and translate_exp file exp =
                           (* symbolic names for the temporary objects and init value *)
                           E.replicateM n E.fresh_symbol >>= fun as_tmp  ->
                           
-                          (* create actions for the temoporary objects *)
+                          (* create actions for the temporary objects *)
                           let core_creates =
                             List.map (fun ty -> Caux.pcreate (C.Ectype ty) []) Tys in
                           
@@ -1403,9 +1451,9 @@ C.seq [a_id] (C.create ty)
    (* ------------------------------------------------------------------------------------------- *)
     (* [§6.5.3.4#4] When sizeof is applied to an operand that has type char, unsigned char, or
                     signed char, (or a qualified version thereof) the result is 1. *)
-    | A.SIZEOF (A.BASIC _ A.CHAR)                           -> E.return (C.Econst 1)
-    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.SIGNED A.ICHAR)))   -> E.return (C.Econst 1)
-    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.UNSIGNED A.ICHAR))) -> E.return (C.Econst 1)
+    | A.SIZEOF (A.BASIC _ A.CHAR)                           -> E.return (C.Econst (Int.int 1))
+    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.SIGNED A.ICHAR)))   -> E.return (C.Econst (Int.int 1))
+    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.UNSIGNED A.ICHAR))) -> E.return (C.Econst (Int.int 1))
     
     | A.SIZEOF  ty -> mk_stdcall "sizeof" >>= fun sizeof -> E.return $ sizeof [C.Ectype ty]
     
@@ -1594,7 +1642,7 @@ C.seq [a_id] (C.create ty)
         E.fresh_symbol       >>= fun a_e    ->
         translate_exp file e >>= fun core_e ->
         E.return $ C.Ewseq [Some a_e] core_e
-          (C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst 0))
+          (C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst (Int.int 0)))
                  C.Eerror
                  C.Eskip
           )
@@ -1633,8 +1681,8 @@ RAAAAAAAAHHH: this doesn't work when the label is in a block the goto doesn't be
 
 *)
 
-and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
-  let translate_stmt_ s = translate_stmt file f d_loop d_break lasts s in
+and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
+  let translate_stmt_ s = translate_stmt file f d_loop d_break s in
   
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
@@ -1652,9 +1700,9 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
       
       (* the symbolic names and create actions for the local variables *)
       let (a_ids, core_creates) =
-        mapUnzip (fun (a, ty) -> (Some a, Caux.pcreate (C.Ectype ty) [])) decls in
+        mapUnzip (fun (a, ty) -> (Some a, Caux.pcreate (C.Ectype ty) [f; a])) decls in
       
-      E.register_objects $ filter_opt a_ids >>
+      E.push_block_objects ids >>
       
       (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
                but it may be nasty to the check.
@@ -1663,6 +1711,7 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
       let (core_kills) =
         List.map (Caux.pkill -| C.Esym -| fst) decls in
       
+(*
       E.fresh_symbol >>= fun a_last ->
       E.mapWithLastM (fun s -> translate_stmt file f d_loop d_break (a_last :: lasts) s >>= fun core_s ->
                                E.return ([], core_s))
@@ -1670,14 +1719,15 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
                      (fun s -> translate_stmt file f d_loop d_break (a_last :: lasts) s >>= fun core_s ->
                                E.return ([Some a_last], core_s))
                      ss >>= fun a_opts_core_ss ->
+*)
+      E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> E.return core_s) ss >>= fun core_ss ->
       
-      E.pop_current_block_objects >>
+      E.pop_block_objects >>
       
       E.return
         (C.Ewseq a_ids (Caux.mk_unseq core_creates)
-           (List.fold_right (fun (a_opt, core_s) acc ->
-             C.Ewseq a_opt core_s acc
-            ) (a_opts_core_ss  @ [([], Caux.mk_unseq core_kills)]) (C.Esym a_last)))
+           (List.fold_right (fun core_s acc -> C.Ewseq [] core_s acc) core_ss (Caux.mk_unseq core_kills))
+        )
 
 (*
 
@@ -1730,15 +1780,26 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
       translate_stmt_ s1   >>= fun core_s1 ->
       translate_stmt_ s2   >>= fun core_s2 ->
       E.return $ C.Ewseq [Some a_test] core_e
-                   (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) (C.Econst 0))) core_s1 core_s2)
+                   (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) (C.Econst (Int.int 0)))) core_s1 core_s2)
   
   | A.WHILE e s ->
-      E.fresh_symbol                                             >>= fun a_e     ->
-      E.fresh_named_symbol "loop"                                >>= fun d_loop  ->
-      E.fresh_named_symbol "break"                               >>= fun d_break ->
-      translate_exp file e                                       >>= fun core_e  ->
-      translate_stmt file f (Some d_loop) (Some d_break) lasts s >>= fun core_s  ->
+      E.fresh_symbol                                       >>= fun a_e     ->
+      E.fresh_named_symbol "loop"                          >>= fun d_loop  ->
+      E.fresh_named_symbol "break"                         >>= fun d_break ->
+      translate_exp file e                                 >>= fun core_e  ->
+      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
       
+      E.get_visible_objects >>= fun _as ->
+      E.return $
+        C.Esave d_loop [(* TODO *)]
+          (C.Ewseq [Some a_e] core_e
+             (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e) (C.Econst (Int.int 0))))
+                (C.Ewseq [] core_s (C.Erun d_loop [(* TODO *)]))
+                (C.Esave d_break [(* TODO *)] C.Eskip)
+             )
+          )
+
+(*
       let free_as = Set.to_list $ Caux.free_syms core_s in
       E.get_current_block_objects >>= fun _as ->
       E.return $
@@ -1749,34 +1810,35 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
                 (C.Esave d_break _as [(* TODO *)] C.Eskip)
              )
           )
+*)
   
   | A.DO e s ->
-      E.fresh_symbol                                             >>= fun d_loop  ->
-      E.fresh_symbol                                             >>= fun d_break ->
-      translate_stmt file f (Some d_loop) (Some d_break) lasts s >>= fun core_s  ->
-      translate_exp file e                                       >>= fun core_e  ->
-      E.fresh_symbol                                             >>= fun a       ->
+      E.fresh_symbol                                       >>= fun d_loop  ->
+      E.fresh_symbol                                       >>= fun d_break ->
+      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
+      translate_exp file e                                 >>= fun core_e  ->
+      E.fresh_symbol                                       >>= fun a       ->
       E.return $
-        C.Esave d_loop [(* TODO *)] [(* TODO *)]
+        C.Esave d_loop [(* TODO *)]
           (C.Ewseq [] core_s
              (C.Ewseq [Some a] core_e
-                (C.Eif (C.Eop C.OpEq (C.Esym a) (C.Econst 0))
+                (C.Eif (C.Eop C.OpEq (C.Esym a) (C.Econst (Int.int 0)))
                    C.Eskip
-                   (C.Erun d_loop [(* TODO *)] [(* TODO *)])
+                   (C.Erun d_loop [(* TODO *)])
                 )
              )
           )
   
   | A.BREAK ->
-      E.get_current_block_objects >>= fun _as ->
-      E.return (C.Erun (from_Some d_break) (List.map C.Esym _as) [(* TODO *)])
+      E.get_visible_objects >>= fun _as ->
+      E.return (C.Erun (from_Some d_break) (* (List.map C.Esym _as) *) [(* TODO *)])
   
   | A.CONTINUE ->
-      E.return (C.Erun (from_Some d_loop) [(* TODO *)] [(* TODO *)])
+      E.return (C.Erun (from_Some d_loop) [(* TODO *)])
   
   
   | A.RETURN_VOID ->
-      E.get_current_block_objects >>= fun _as ->
+      E.get_visible_objects >>= fun _as ->
       let (core_kills) =
         List.map (Caux.pkill -| C.Esym) _as in
       E.return $
@@ -1788,7 +1850,7 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
       conv (exp_type e) (T.function_return $ lookup_type f)
            ((translate_exp file e)) >>= fun core_e ->
       E.fresh_symbol                >>= fun a_e    ->
-      E.get_current_block_objects   >>= fun _as ->
+      E.get_visible_objects         >>= fun _as ->
       let (core_kills) =
         List.map (Caux.pkill -| C.Esym) _as in
       E.return $
@@ -1815,15 +1877,15 @@ and translate_stmt file f d_loop d_break lasts (_, stmt) : E.t (C.expr zero) =
   
   (* TODO *)
   | A.LABEL l s ->
-      translate_stmt_ s >>= fun core_s ->
-      E.get_cont_freevars l >>= fun _as ->
-      E.return (C.Esave l lasts _as core_s)
+      translate_stmt_ s     >>= fun core_s ->
+      E.get_visible_objects >>= fun _as    ->
+      E.return (C.Esave l ([ (a, lookup_type a) | forall (a MEM _as) | true ]) core_s)
   
   
   (* TODO *)
   | A.GOTO l ->
-      E.get_cont_freevars l >>= fun _as ->
-      E.return (C.Erun l [] [ Left (lookup_type a) | forall (a MEM _as) | true ])
+      E.get_visible_objects >>= fun _as ->
+      E.return (C.Erun l [ (a, C.Esym a) | forall (a MEM _as) | true ])
   
   
   (* ------------------------------------------------------------------------------------------------------ *)
@@ -1867,7 +1929,7 @@ let rec hack1 e =
     | C.Eproc _ _ _ -> Pmap.empty
     | C.Ecall _ _ -> Pmap.empty
     | C.Esame _ _ -> Pmap.empty
-    | C.Eundef -> Pmap.empty
+    | C.Eundef _ -> Pmap.empty
     | C.Eerror -> Pmap.empty
     | C.Eaction _ -> Pmap.empty
     | C.Eunseq es -> List.fold_left (Pmap.concat) Pmap.empty (List.map hack1 es)
@@ -1876,13 +1938,14 @@ let rec hack1 e =
     | C.Easeq _ _ _ -> Pmap.empty
     | C.Eindet e -> hack1 e
     | C.Ebound _ e -> hack1 e
-    | C.Esave d _as _ e -> Pmap.add d _as (hack1 e)
-    | C.Erun _ _ _ -> Pmap.empty
+    | C.Esave d _as e -> Pmap.add d _as (hack1 e)
+    | C.Erun _ _ -> Pmap.empty
     | C.Eret _ -> Pmap.empty
 (*    | End of list (expr 'a) *)
     | _ -> Pmap.empty
   end
 
+(*
 (* [hack2] updates the free syms annotation of the Eruns using a map (that we get from hack1)  *)
 let rec hack2 m e =
   let hack2 e = hack2 m e in
@@ -1894,13 +1957,14 @@ let rec hack2 m e =
     | C.Esseq _as_opt e1 e2 -> C.Esseq _as_opt (hack2 e1) (hack2 e2)
     | C.Eindet e -> C.Eindet (hack2 e)
     | C.Ebound j e -> C.Ebound j (hack2 e)
-    | C.Esave d _as1 _as2 e -> C.Esave d _as1 _as2 (hack2 e)
-    | C.Erun d _ tyns -> C.Erun d (List.map C.Esym $ Pmap.find d m) tyns
+    | C.Esave d _atys e -> C.Esave d _atys (hack2 e)
+    | C.Erun d _ -> C.Erun d (List.map C.Esym $ Pmap.find d m)
 (*    | End of list (expr 'a) *)
     | e -> e
   end
+*)
 
-
+(*
 let rec _register_freevars ids (_, stmt) : E.t unit =
   match stmt with
     | A.SKIP ->
@@ -1944,6 +2008,7 @@ let rec _register_freevars ids (_, stmt) : E.t unit =
 let register_freevars body : E.t unit =
   _register_freevars [] body >>
   E.return ()
+*)
 
 
 (* Run the translator on different functions *)
@@ -1951,14 +2016,14 @@ let translate_file stdlib (file: A.file _) : E.t (C.file zero) =
   E.foldlM
     (fun acc (name, (args, body)) ->
        (* translate the body to Core *)
-       register_freevars body >>
-       translate_stmt file name None None [] body >>= fun core_body ->
+(*       register_freevars body >> *)
+       translate_stmt file name None None body >>= fun core_body ->
       
       (* HACK !!!!!!! *)
-      let core_body = hack2 (hack1 core_body) core_body in
+(*      let core_body = hack2 (hack1 core_body) core_body in *)
       
       
-       E.clear_cont_freevars >>
+(*       E.clear_cont_freevars >> *)
        (E.return $ Pmap.add name (C.TyEffect C.Integer (* TODO: address for pointer type? *),
                                  List.map (fun arg -> (arg, C.Address (* TODO: check *))) args,
                                  core_body) acc))

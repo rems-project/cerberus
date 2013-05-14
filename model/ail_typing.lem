@@ -17,11 +17,11 @@ let lvalue_convert t e =
   end
 
 let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
-let one l = Pair.make l (A.CONSTANT (A.CONST_INT (1, None)))
+let one l = Pair.make l (A.CONSTANT (A.CONST_INT (Int.int 1, None)))
 
 let rec is_null_pointer_constant e =
   match Annot.exp_of e with
-  | A.CONSTANT (A.CONST_INT (n, _)) -> n = 0
+  | A.CONSTANT (A.CONST_INT (n, _)) -> n = (Int.int 0)
   | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer_constant exp
   | _ -> false
   end
@@ -56,7 +56,7 @@ let rec check_exp env l e_head =
     
     (* TODO: the size of the array may be wrong, because we don't handle multibyte stuff properly *)
     | A.STRING_LITERAL (enc, s) ->
-        let n = Boot.length_string s + 1 in
+        let n = Int.(+) (Int.int $ Boot.length_string s) (Int.int 1) in
         E.return $ A.T_EXP match enc with
           | None             -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)
           | Some ENCODING_u8 -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)

@@ -17,7 +17,7 @@ type integer_suffix =
   | SUFFIX_UNSIGNED_LONG_LONG
   | SUFFIX_LONG
   | SUFFIX_LONG_LONG
-type integer_constant = num * option integer_suffix
+type integer_constant = int * option integer_suffix
 
 
 (* 6.4.4 Constants *)

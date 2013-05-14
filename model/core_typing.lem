@@ -254,7 +254,7 @@ let rec check expected_type e =
           +  ------------- ∀τ (undef)     ------------- ∀τ (error)
           +  Γ ⊢ undef ↑ τ                Γ ⊢ error ↑ τ
           *)
-          | Eundef -> E.return () (* TODO: check *)
+          | Eundef _ -> E.return () (* TODO: check *)
           | Eerror -> E.return () (* TODO: check *)
           
          (*
@@ -519,7 +519,7 @@ and infer e =
     +  ------------- (undef)    ------------- (error)
     +  Γ ⊢ undef : _            Γ ⊢ error : _
     ----------------------------------------------------------------------------------------------*)
-    | Eundef -> E.return (TyBase Wildcard)
+    | Eundef _ -> E.return (TyBase Wildcard)
     | Eerror -> E.return (TyBase Wildcard)
     
     
@@ -703,7 +703,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     | _ -> E.fail (Errors.CORE_TYPECHECK "TODO")
 *)
     (* TODO: checking label in the environment *)
-    | Esave _ _ _ e -> infer e >>= function
+    | Esave _ _ e -> infer e >>= function
                      | TyBase   baseTy -> E.return (TyEffect baseTy)
                      | TyEffect baseTy -> E.return (TyEffect baseTy)
                    end 

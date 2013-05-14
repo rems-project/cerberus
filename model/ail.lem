@@ -52,7 +52,7 @@ type ctype =
   | BASIC of qualifiers * basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
-  | ARRAY of ctype * option num 
+  | ARRAY of ctype * option int
 (* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
 
 (* NOTE: will need to make up ids for some of the bitfields *)
@@ -73,7 +73,7 @@ type ctype =
 
 and member =
   | MEMBER of (* alignment_specifier * *) ctype
-  | BITFIELD of ctype * num * (option bool) (* the boolean indicates whether or not
+  | BITFIELD of ctype * int * (option bool) (* the boolean indicates whether or not
                                                there is packing of the next member. *)
 (*  | NULL_BITFIELD (* see §6.7.2.1#12 *) *)
 
@@ -139,7 +139,7 @@ type integer_suffix =
   | SUFFIX_UNSIGNED_LONG_LONG
   | SUFFIX_LONG
   | SUFFIX_LONG_LONG
-and integer_constant = num * option integer_suffix
+and integer_constant = int * option integer_suffix
 
 
 type character_prefix =

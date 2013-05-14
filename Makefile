@@ -56,6 +56,7 @@ MODEL_FILES=\
   ail.lem \
   ail_aux.lem \
   ail_rewrite.lem \
+  undefined.lem \
   core.lem \
   core_aux.lem \
   errors.lem \
