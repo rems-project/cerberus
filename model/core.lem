@@ -1,0 +1,222 @@
+open Global
+
+(* TODO: this is here because of some stupid cyclic module dependency ...
+
+         Idealy we should have a memory.lem module which would be used by
+         core.lem (just for knowing mem_addr) and by core_run. But we can't
+         because the memory actions have to know about the monad used by
+         core_run.lem. If we had type families, StateT would do the trick *)
+type mem_addr = list Symbol.t * num
+
+
+(* -- Syntax ---------------------------------------------------------------- *)
+type core_base_type =
+  | Integer
+  | Boolean
+  | Address
+  | Ctype
+  | Unit
+  | Tuple of list core_base_type
+  | Wildcard
+
+(* Types discriminate between pure (TyBase) and effectful
+   expressions (TyEffect) *)
+type core_type =
+  | TyBase   of core_base_type
+  | TyEffect of core_base_type
+
+
+(* Symbolic names *)
+type sym = Symbol.t
+
+(* Continuation names *)
+type ksym = Symbol.t
+
+
+(* Binary operators *)
+type binop =
+  (* arithmetic operators *)
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpMod
+  (* relational operators *)
+  | OpEq
+  | OpLt
+  (* logical connectives *)
+  | OpAnd
+  | OpOr
+
+
+(* Polarity for actions *)
+type polarity =
+  | Pos
+  | Neg
+
+
+type expr 'a =
+  (* TODO: removed these *)
+  | COMMENT of string * expr 'a
+  | DEBUG of string
+  
+  (* pure expressions *)
+
+  | Etuple of list (expr 'a) (* TODO: may be temporary *)
+
+  | Enull
+
+
+  | Eskip
+  | Econst of int
+  | Eaddr of mem_addr
+  | Esym of sym
+  | Eop of binop * expr 'a * expr 'a
+  | Etrue
+  | Efalse
+  | Enot of expr 'a
+  | Ectype of Ail.ctype
+  | Elet of sym * expr 'a * expr 'a
+  | Eif of expr 'a * expr 'a * expr 'a
+  
+  | Eproc of set 'a * sym * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Ecall of sym * list (expr 'a)
+  (* K: I think this one is also pure | I don't anymore *)
+  | Esame of expr 'a * expr 'a
+
+  
+  (* undefined behaviour and late static error / failed assert *)
+  | Eundef of Undefined.undefined_behaviour
+  | Eerror
+  
+  | Eaction of paction 'a
+  
+  (* sequencing operators *)
+  | Eunseq of list (expr 'a)
+
+  | Ewseq of list (option sym) * expr 'a * expr 'a
+
+(*  | Ewseq of list (list (option sym) * expr 'a) * expr 'a *)
+  | Esseq of list (option sym) * expr 'a * expr 'a
+  | Easeq of option sym * action 'a * paction 'a
+  
+  (* indeterminately-sequenced expressions and boundary *)
+  (* TODO: this doesn't exists after the first stage of dynamics *)
+  | Eindet of expr 'a (* TODO: add unique indices *)
+  | Ebound of num * expr 'a
+  
+  (* Continuation operators *)
+  | Esave of ksym * (* list sym * *) list (sym * Ail.ctype) * expr 'a (* TODO: may have to add the possibility of storing a number instead of a ctype (for allocated objects) *)
+  | Erun of set 'a * ksym * list (sym * expr 'a) (* * list (expr 'a) * list (either Ail.ctype num) *)
+    (* In the first list are expressions to substs free-symbols (not coming from C variables local
+       to a block we are jumping into) in the continuation. The second list gives the effective
+       types (or none for dynamically allocated objects) for C variables local to the block we are
+       jumping into but whose declaration we miss *)
+    (* TODO: need more for VLAs *)
+  
+  | Eret of expr 'a
+  
+  (* Non deterministic choice (resulting from indet expressions) *)
+  (* TODO: this only exists for the second stage of dynamics *)
+  | End of list (expr 'a)
+  
+  (* TODO: this should probably be added back to the syntax *)
+(* | Kshift of sym * expr 'a *)
+  
+  (* TODO: these are not anymore constructors, but functions that need to be
+           exposed by the Std library
+
+     Kmax of Ail.ctype
+     Kmin of Ail.ctype
+     Ksizeof of Ail.ctype
+     Kalignof of Ail.ctype
+     Koffsetof of Ail.ctype
+     Kconv of Ail.ctype * Ail.ctype * sym
+*)
+
+(* the qualification prefixes are for pprint *)
+and action_ 'a =
+  | Create of expr 'a * list Symbol.t
+  | Alloc of expr 'a * list Symbol.t
+  | Kill of expr 'a
+  | Store of expr 'a * expr 'a * expr 'a
+  | Load of expr 'a * expr 'a
+and action 'a  = set 'a * action_ 'a
+and paction 'a = polarity * action 'a
+
+
+type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
+
+(* a Core file is just a set of named functions *)
+type file 'a = <|
+  main    : sym;
+  fun_map : fun_map 'a;
+|>
+
+
+
+
+
+(* NOTE: we assume that the expression is well typed *)
+val is_value: forall 'a. expr 'a -> bool
+let rec is_value e =
+  match e with
+    | Etuple es ->
+        true
+    | Enull ->
+        true
+    | Eskip ->
+        false
+    | Econst _ ->
+        true
+    | Eaddr _ ->
+        true
+    | Esym _ ->
+        true
+    | Eop _ _ _ ->
+        true
+    | Etrue ->
+        true
+    | Efalse ->
+        true
+    | Enot _ ->
+        true
+    | Ectype _ ->
+        true
+    | Elet _ _ e2 ->
+        is_value e2
+    | Eif _ e2 e3 ->
+        is_value e2 && is_value e3
+    | Eproc _ _ _ ->
+        false
+    | Ecall _ _ ->
+        true
+    | Esame _ _ ->
+        false (* TODO: think about it *)
+    | Eundef _ ->
+        true
+    | Eerror ->
+        true
+    | Eaction _ ->
+        false
+    | Eunseq es ->
+        List.for_all (is_value) es
+    | Ewseq _ e1 e2 ->
+        is_value e1 && is_value e2
+    | Esseq _ e1 e2 ->
+        is_value e1 && is_value e2
+    (* TODO: this is assuming that we never use this function before Core_indet *)
+(*
+    | Easeq _ _ _ ->
+    | Eindet _    ->
+    | Ebound _ _  ->
+*)
+    | Esave _ _ _ ->
+        is_value e
+    | Erun _ _ _ ->
+        false
+    | Eret e ->
+        false
+    | End es ->
+        false (* TODO: think about it *)
+  end

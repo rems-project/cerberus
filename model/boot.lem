@@ -1,0 +1,50 @@
+(* Error messages for impossible situations *)
+val outOfHomeomorphism: forall 'a. string -> 'a
+let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism
+
+val assert_false: forall 'a. string -> 'a
+let inline {ocaml} assert_false = Ocaml.Boot.assert_false
+
+
+val debug_level: num
+let inline {ocaml} debug_level = Ocaml.Boot.debug_level
+
+val debug: forall 'a. string -> 'a
+let inline {ocaml} debug = Ocaml.Boot.debug
+
+val print_debug: forall 'a. string -> 'a -> 'a
+let inline {ocaml} print_debug = Ocaml.Boot.print_debug
+
+type char = Ocaml.Boot.char
+
+val is_digit: char -> bool
+let inline {ocaml} is_digit = Ocaml.Boot.is_digit
+
+val is_quote: char -> bool
+let inline {ocaml} is_quote = Ocaml.Boot.is_quote
+
+val span_string: (char -> bool) -> string -> string * string
+let inline {ocaml} span_string = Ocaml.Boot.span_string
+
+val unquote_string: string -> string
+let inline {ocaml} unquote_string = Ocaml.Boot.unquote_string
+
+val splitAt_string: num -> string -> string * string
+let inline {ocaml} splitAt_string = Ocaml.Boot.splitAt_string
+
+val length_string: string -> num
+let inline {ocaml} length_string = Ocaml.Boot.length_string
+
+(* HACK for testing *)
+val pickList: forall 'a. list 'a -> list 'a * 'a * list 'a
+let inline {ocaml} pickList = Ocaml.Boot.pickList
+
+
+
+
+(* Pretty printing (HACK: mind your mind) *)
+val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
+let inline {ocaml} pp_ail_ctype = Ocaml.Boot.pp_ail_ctype
+
+val pp_core_expr: forall 'a. 'a (* Core.expr *) -> string
+let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr

@@ -1,0 +1,14 @@
+(* Auxillary functions for the Ail IR *)
+open Ail
+
+
+val const_int: forall 'a. int -> expression 'a
+let const_int n = CONSTANT (CONST_INT (n, None))
+
+
+
+
+let lift_int f_int otherwise = function
+  | BASIC _ (INTEGER i) -> f_int i
+  | _                   -> otherwise
+  end

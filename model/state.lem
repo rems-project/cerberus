@@ -1,0 +1,34 @@
+open Global
+
+type t 'a 's = 's -> ('a * 's)
+
+let return a = fun s -> (a, s)
+let bind m f =
+  fun s ->
+    let (a, s') = m s in
+    f a s'
+
+let join m = bind m (fun x -> x)
+let map f m = bind m (return -| f)
+
+let app mf m = bind mf (fun f -> map f m)
+
+let update f = fun s -> ((), f s)
+let modify f = fun s -> f s
+let read   f = fun s -> (f s, s)
+
+let run m st = fst (m st)
+
+let run_impl t s = t s
+
+module Operators = struct
+  let (>>=) = bind
+  val (>>): forall 'a 'b 's. t 'a 's -> t 'b 's -> t 'b 's
+  let (>>) m f = m >>= fun _ -> f
+end
+
+open Operators
+
+let sequence_ ms = List.fold_right (>>) ms (return ())
+val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
+let mapM_ f _as = sequence_ (List.map f _as)

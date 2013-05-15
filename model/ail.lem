@@ -1,0 +1,286 @@
+open Global
+
+type id = Symbol.t
+
+type storage_duration =
+  | STATIC
+  | THREAD
+  | AUTOMATIC
+  | ALLOCATED (*TODO: see 7.22.3 *)
+
+type qualifier =
+  | CONST
+  | RESTRICT
+  | VOLATILE
+  | ATOMIC_Q
+and qualifiers = set qualifier
+
+type integer_base_type =
+  | ICHAR
+  | SHORT
+  | INT
+  | LONG
+  | LONG_LONG
+  | EXTENDED_INTEGER of string
+
+type integer_type =
+  | BOOL
+  | SIGNED of integer_base_type
+  | UNSIGNED of integer_base_type
+
+type real_floating_type =
+  | FLOAT
+  | DOUBLE
+  | LONG_DOUBLE
+
+type basic_type =
+  | CHAR
+  | INTEGER of integer_type
+  | REAL_FLOATING of real_floating_type
+  | COMPLEX of real_floating_type
+
+(* §6.7.5 Alignment specifier *)
+(*
+type alignment_specifier =
+  | _ALIGNAS_TYPE of ctype
+  | _ALIGNAS_CONST of num
+*)
+
+(* TODO: add [alignment_specifier] when needed to the ctors of ctype *)
+type ctype =
+  | VOID  of qualifiers
+  | BASIC of qualifiers * basic_type
+  (* TODO Need to convert integer constant to an actual value! Otherwise, we
+     cannot compare types! *)
+  | ARRAY of ctype * option int
+(* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
+
+(* NOTE: will need to make up ids for some of the bitfields *)
+  | STRUCT of qualifiers * id * list (id * member)
+  | UNION  of qualifiers * id * list (id * member)
+  | ENUM of id
+  | FUNCTION of ctype * list ctype
+  | POINTER of qualifiers * ctype
+  | ATOMIC of ctype
+  | TYPEDEF of id
+  
+  | SIZE_T
+  | INTPTR_T
+  | WCHAR_T
+  | CHAR16_T
+  | CHAR32_T
+
+
+and member =
+  | MEMBER of (* alignment_specifier * *) ctype
+  | BITFIELD of ctype * int * (option bool) (* the boolean indicates whether or not
+                                               there is packing of the next member. *)
+(*  | NULL_BITFIELD (* see §6.7.2.1#12 *) *)
+
+
+
+
+and type_class =
+  | T_EXP of ctype
+  | T_LVALUE of ctype
+  (* TODO: we need to add a T_BITFIELD *)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+type arithmetic_operator =
+  | MUL | DIV | MOD
+  | ADD | SUB
+  | SHL | SHR
+  | BAND
+  | XOR
+  | BOR
+
+type binary_operator =
+  | ARITHMETIC of arithmetic_operator
+  | COMMA
+  | AND
+  | OR
+  | LT | GT | LE | GE
+  | EQ | NE
+
+type unary_operator =
+  | PLUS
+  | MINUS
+  | BNOT
+  | ADDRESS
+  | INDIRECTION
+  | POSTFIX_INCR
+  | POSTFIX_DECR
+
+type integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+and integer_constant = int * option integer_suffix
+
+
+type character_prefix =
+  | PREFIX_L
+  | PREFIX_u
+  | PREFIX_U
+and character_constant = option character_prefix * string (* the textual representaton *)
+
+type constant =
+  | CONST_INT of integer_constant
+  | CONST_FLOAT of string (* the textual representaton *)
+  | CONST_CHAR of character_constant
+  | CONST_ENUM of string
+(* 
+(* TODO *)
+  | CONST_CHAR of list int64
+  | CONST_WCHAR of list int64
+*)
+
+type encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+  
+type string_literal = option encoding_prefix * string (* textual representation *)
+
+
+type declaration = ctype * option storage_duration
+
+
+type expression 'a =
+  | NULL (* TODO: move inside constant ? *)
+  | STRING_LITERAL of string_literal
+  | UNARY of unary_operator * expression_l 'a
+  | BINARY of binary_operator * expression_l 'a * expression_l 'a 
+  | ASSIGN of option arithmetic_operator * expression_l 'a * expression_l 'a
+  | CONDITIONAL of expression_l 'a * expression_l 'a * expression_l 'a
+  | CAST of ctype * expression_l 'a
+  | CALL of expression_l 'a * list (expression_l 'a)
+  | MEMBEROF of expression_l 'a * (id * id)    (* struct/union name and field name *)
+  | MEMBEROFPTR of expression_l 'a * (id * id) (* struct/union name and field name *)
+  | CONSTANT of constant
+  | VARIABLE of id
+
+  (* TODO: this ctor should probably disappear in the end, but to transform a
+           EXPR_SIZEOF into a SIZEOF, I need to know the type of the operand and
+           can't at the time of Cabs_to_ail (...).
+           Currently this ctor is only used between Cabs_to_ail and Typing, and
+           get transform into a SIZEOF in Typing *)
+  | EXPR_SIZEOF of expression_l 'a
+  
+  | SIZEOF of ctype
+  | ALIGNOF of ctype
+  
+  | MALLOC of expression_l 'a
+  | FREE of expression_l 'a
+  | MEMCMP of expression_l 'a * expression_l 'a * expression_l 'a
+  | MEMCPY of expression_l 'a * expression_l 'a * expression_l 'a
+
+
+  (* HACKISH: making it a special case because its type is "polymorphic" *)
+  | ASSERT of expression_l 'a
+
+  (* TODO: could be move as a ctor of [constant] if we decide to evaluate the expressions
+           during [cabs_to_ail] *)
+  | CONST_ARRAY of list (expression_l 'a)
+  | CONST_STRUCT_UNION of list (id * expression_l 'a)
+
+  | OFFSETOF of ctype * id
+
+
+
+and expression_l 'a = 'a * expression 'a
+
+type definition 'a = id * expression_l 'a
+
+(* Statements *)
+type statement 'a =
+  | SKIP
+  | EXPRESSION of expression_l 'a
+  | BLOCK of list id * list (statement_l 'a)
+  | IF of expression_l 'a * statement_l 'a * statement_l 'a
+  | WHILE of expression_l 'a * statement_l 'a
+  | DO of expression_l 'a * statement_l 'a
+  | BREAK
+  | CONTINUE
+  | RETURN_VOID
+  | RETURN_EXPRESSION of expression_l 'a
+  | SWITCH of expression_l 'a * statement_l 'a
+  | CASE of integer_constant * statement_l 'a
+  | DEFAULT of statement_l 'a
+  | LABEL of id * statement_l 'a
+  | GOTO of id
+  | DECLARATION of list (definition 'a)
+  | PAR of list (statement_l 'a)
+
+and statement_l 'a = 'a * statement 'a
+
+type file 'a = <|
+  main:    id; (* the main function name *)
+  id_map:  map id declaration; (* declared identifiers *)
+  globals: list (id * expression_l 'a);
+  fn_map:  map id (list id * statement_l 'a) (* functions *)
+|>
+
+(*
+type env 'a = <|
+  symbol : id;
+  symbol_map : map id string;
+  file : file 'a
+|>
+*)
+
+
+(* HACK: equality over ctypes. *)
+let rec and2 f l1 l2 =
+  match (l1,l2) with
+    | ([]   ,[]    ) -> true
+    | (x::xs, y::ys) -> f x y && and2 f xs ys
+  end
+
+let rec ctype_eq ty1 ty2 =
+  match (ty1, ty2) with
+    | (VOID qs1         , VOID qs2         ) -> Set.(=) qs1 qs2
+    | (BASIC qs1 b1     , BASIC qs2 b2     ) -> Set.(=) qs1 qs2 && b1 = b2
+    | (ARRAY ty1 n1     , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1  , POINTER qs2 ty2  ) -> Set.(=) qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 tys1, FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
+    | (STRUCT qs1 x1 ms1, STRUCT qs2 x2 ms2) -> Set.(=) qs1 qs2 && x1 = x2 && ms1 = ms2
+    | (UNION qs1 x1 ms1 , UNION qs2 x2 ms2 ) -> Set.(=) qs1 qs2 && x1 = x2 && ms1 = ms2
+  end
+
+
+
+
+
+
+
+
+
+(* Some useful aliases *)
+val unsigned_char: ctype
+let unsigned_char = BASIC {} (INTEGER (UNSIGNED ICHAR))
