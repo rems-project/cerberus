@@ -1,5 +1,6 @@
 val outOfHomeomorphism: forall 'a. string -> 'a
 val assert_false: forall 'a. string -> 'a
+val debug_level: num
 val debug: forall 'a. string -> 'a
 val print_debug: forall 'a. string -> 'a -> 'a
 

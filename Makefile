@@ -54,10 +54,11 @@ MODEL_FILES=\
   cabs0.lem \
   cabs.lem \
   ail.lem \
-  ail_aux.lem \
-  ail_rewrite.lem \
   undefined.lem \
   core.lem \
+  debug.lem \
+  ail_aux.lem \
+  ail_rewrite.lem \
   core_aux.lem \
   errors.lem \
   implementation.lem \

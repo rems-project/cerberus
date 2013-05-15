@@ -2,14 +2,17 @@ open Global
 
 let outOfHomeomorphism msg = Pervasives.failwith ("[OutOfHomeomorphism exception>\n" ^ msg)
 
-let assert_false msg = Pervasives.failwith ("[Impossible error>\n" ^ msg)
+let assert_false msg = Pervasives.print_endline ("[Impossible error>\n" ^ msg); Pervasives.exit 1
 
 let debug str = Pervasives.failwith ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m")
 
+let debug_level = !Settings.debug
+
 let print_debug str k =
-  if !Settings.debug then
-    Pervasives.print_endline ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m");
-  k
+  if !Settings.debug > 0 then
+    let _ = Pervasives.print_endline ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m") in k
+  else
+    k
 
 (* HACK *)
 (*type char = char *)

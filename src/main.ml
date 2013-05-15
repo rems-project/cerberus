@@ -23,18 +23,18 @@ let options = Arg.align [
   ("--std", Arg.String set_stdlib_file, "<file> Core standard library");
   
   (* Core backend options *)
-  ("--skip-core-tcheck", Arg.Unit (fun () -> skip_core_tcheck := true              ), "       Do not run the Core typechecker");
-  ("--execute",          Arg.Unit (fun () -> execute          := true              ), "       Execute the Core program");
-  ("-r",                 Arg.Unit (fun () -> random_mode      := Core_run.E.Random ), "       Random choose a single execution path"); 
+  ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                               "       Do not run the Core typechecker");
+  ("--execute",          Arg.Set execute,                                        "       Execute the Core program");
+  ("-r",                 Arg.Unit (fun () -> random_mode := Core_run.E.Random ), "       Randomly choose a single execution path"); 
   
-  ("--sb-graph",         Arg.Unit (fun () -> sb_graph         := true              ), "       Generate dot graphs of the sb orders");
+  ("--sb-graph",         Arg.Set sb_graph, "       Generate dot graphs of the sb orders");
   
-  ("--debug",            Arg.Unit (fun () -> Settings.debug   := true              ), "       Display some debug noise");
+  ("--debug",            Arg.Set_int Settings.debug, "       Set the debug noise level (default: 0 = nothing)");
   
   (* printing options *)
-  ("--pcabs", Arg.Unit (fun () -> print_cabs := true), "       Pretty-print the Cabs intermediate representation");
-  ("--pail",  Arg.Unit (fun () -> print_ail  := true), "       Pretty-print the Ail intermediate representation");
-  ("--pcore", Arg.Unit (fun () -> print_core := true), "       Pretty-print the Code generated program")
+  ("--pcabs", Arg.Set print_cabs, "       Pretty-print the Cabs intermediate representation");
+  ("--pail",  Arg.Set print_ail,  "       Pretty-print the Ail intermediate representation");
+  ("--pcore", Arg.Set print_core, "       Pretty-print the Code generated program")
 ]
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 

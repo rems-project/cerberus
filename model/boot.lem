@@ -6,6 +6,9 @@ val assert_false: forall 'a. string -> 'a
 let inline {ocaml} assert_false = Ocaml.Boot.assert_false
 
 
+val debug_level: num
+let inline {ocaml} debug_level = Ocaml.Boot.debug_level
+
 val debug: forall 'a. string -> 'a
 let inline {ocaml} debug = Ocaml.Boot.debug
 
