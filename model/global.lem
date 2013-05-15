@@ -139,3 +139,14 @@ let rec list_update a v xs =
     | []         -> []
     | (x,xv)::xs' -> (if x = a then (a,v) :: xs' else (x,xv) :: list_update a v xs' )
   end
+
+
+(* 'optimised' implementation of [\f -> unzip . map f] *)
+val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
+let rec mapUnzip_ f (xs, ys) = function
+  | []      -> (xs, ys)
+  | (l::ls) -> let (x,y) = f l in mapUnzip_ f (x::xs, y::ys) ls
+end
+let mapUnzip f l =
+  let (xs, ys) = mapUnzip_ f ([],[]) l in
+  (List.rev xs, List.rev ys)
