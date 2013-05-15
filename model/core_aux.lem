@@ -87,7 +87,7 @@ let rec free_syms e =
       free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Some a -> {a} | None -> {} end))
   | Esave _ _ e ->
       free_syms e
-  | Erun _ _ ->
+  | Erun _ _ _ ->
       {}
   | Eret e ->
       free_syms e
@@ -180,8 +180,8 @@ let rec subst_sym a v e =
         Boot.assert_false "[Core_aux.subst_sym] #Eindet"
     | Ebound i e -> (* Ebound i (subst_sym a v e) *)
         Boot.assert_false "[Core_aux.subst_sym] #Ebound"
-    | Erun k a_vs ->
-        Erun k (* ((a,v) :: a_vs) *) $ list_update a v a_vs
+    | Erun bs k a_vs ->
+        Erun bs k (* ((a,v) :: a_vs) *) $ list_update a v a_vs
     | Esave k a_tys e ->
         Esave k a_tys (subst_sym a v e)
     | Eret e ->
@@ -271,7 +271,7 @@ let rec is_pure e =
        is_pure e1 && is_pure e2
    | Esave _ _ _ ->
        false
-   | Erun _ _ ->
+   | Erun _ _ _ ->
        false
    | Eret _ ->
        false

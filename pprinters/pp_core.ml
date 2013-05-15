@@ -212,7 +212,7 @@ let rec pp_expr e =
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
               P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ Pp_ail.pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
-        | Erun (l, es) ->
+        | Erun (_, l, es) ->
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^ pp e) es)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
