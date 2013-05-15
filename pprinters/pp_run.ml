@@ -23,11 +23,15 @@ let string_of_mem_value = function
   | Core_run.Muninit     -> "uninit"
   | Core_run.Mint n      -> string_of_int n
   | Core_run.Mobj (_, x) -> string_of_int x
+  | Core_run.Mnull       -> "NULL"
 
+let string_of_sym = function
+  | (_, Some str) -> str
+  | (n, None)     -> "a_" ^ string_of_int n
 
 let string_of_trace_action = function
   | Core_run.Tcreate (ty, o) ->
-      "[" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot Pp_core.pp_symbol (fst o)) ^ ": @" ^ string_of_int (snd o) ^ "]" ^
+      "[" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o)) ^ ": @" ^ string_of_int (snd o) ^ "]" ^
         " <= create {" ^ (Boot.to_plain_string $ Pp_ail.pp_ctype ty) ^ "}"
   | Core_run.Talloc (n, o) ->
       "@" ^ string_of_int (snd o) ^ " <= alloc " ^ string_of_int n

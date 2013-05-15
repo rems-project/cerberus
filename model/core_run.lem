@@ -2,6 +2,8 @@ open Global
 open Core
 open Core_aux
 
+open Debug
+
 (* BEGIN: Core continuation ********************************************************************* *)
 type _cont 'a =
   | Kunseq of list (expr 'a) * list (expr 'a)
@@ -56,6 +58,7 @@ type mem_value =
   | Muninit
   | Mint of int
   | Mobj of (list Symbol.t * num)
+  | Mnull
 
 
 type mem_state = Pmap.map mem_addr mem_value * num
@@ -341,9 +344,17 @@ module Effect = struct
   let register_conts ks = fun s ->
     U.return [((), <| s with cont_map= ks |>)]
   
+  
+  let rec map_from_list xs =
+    match xs with
+      | [] -> Pmap.empty
+      | (a,b) :: xs' -> Pmap.add a b (map_from_list xs')
+    end
+  
   val get_cont: ksym -> t (list (sym * Ail.ctype) * expr taction_id)
   let get_cont d = fun s ->
-    U.return [(Pmap.find d $ Pmap.find (from_Some s.current_proc) s.cont_map, s)]
+    U.return [(Pmap.find d (Pmap.find (from_Some s.current_proc) s.cont_map), s)]
+
 
 (*
   val get_sym: sym -> t (expr taction_id)
@@ -690,16 +701,19 @@ let perform_action act =
         E.runU (eval pe3) >>= function
           | Econst n -> store ty o (Mint n)  >> E.return (Tstore ty o (Mint n), Eskip)
           | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o'), Eskip)
+          | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull), Eskip)
           | v        -> Boot.assert_false $ "[perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
         end
     | Load pe1 pe2 ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
-        E.runU (eval pe2) >>= fun (Eaddr o)   ->
-        load ty o >>= function
-          | Mint v -> E.return (Tload ty o (Mint v), Econst v)
-          | Mobj v -> E.return (Tload ty o (Mobj v), Eaddr v)
-          | Munint -> Boot.print_debug "READ AN UNINIT" $
-                        E.return (Tload ty o Munint, Econst (Int.neg (Int.int 10)))
+        E.runU (eval pe2) >>= function
+          | Eaddr o -> load ty o >>= function
+                         | Mint v -> E.return (Tload ty o (Mint v), Econst v)
+                         | Mobj v -> E.return (Tload ty o (Mobj v), Eaddr v)
+                         | Munint -> Boot.print_debug "READ AN UNINIT" $
+                                       E.return (Tload ty o Munint, Econst (Int.neg (Int.int 10)))
+                       end
+          | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
 end
 
@@ -986,6 +1000,7 @@ let rec convert_expr e =
   match e with
     | Eskip               -> Eskip
     | Etuple es           -> Etuple (List.map convert_expr es)
+    | Enull               -> Enull
     | Econst n            -> Econst n
     | Eaddr o             -> Eaddr o
     | Esym a              -> Esym a
@@ -1147,15 +1162,15 @@ let rec collect_conts' e =
     | Elet _ _ e2 ->
         collect_conts' e2
     | Eif _ e2 e3 ->
-        Pmap.concat (collect_conts' e2) (collect_conts' e3)
+        Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (collect_conts' e2) (collect_conts' e3)
     | Ewseq _as e1 e2 ->
         let ks1 = collect_conts' e1 in
-        Pmap.concat (Pmap.map (fun (a_tys, k) -> (a_tys, Ewseq _as k e2)) ks1) (collect_conts' e2)
+        Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (Pmap.map (fun (a_tys, k) -> (a_tys, Ewseq _as k e2)) ks1) (collect_conts' e2)
     | Esseq _as e1 e2 ->
         let ks1 = collect_conts' e1 in
-        Pmap.concat (Pmap.map (fun (a_tys, k) -> (a_tys, Esseq _as k e2)) ks1) (collect_conts' e2)
+        Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (Pmap.map (fun (a_tys, k) -> (a_tys, Esseq _as k e2)) ks1) (collect_conts' e2)
     | End es ->
-        List.fold_left (fun acc e -> Pmap.concat (collect_conts' e) acc) Pmap.empty es
+        List.fold_left (fun acc e -> Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (collect_conts' e) acc) Pmap.empty es
     
     (* by syntactic constraints, we know that under these ctors there can be no labeled
        continuations *)
@@ -1212,13 +1227,6 @@ let rec collect_conts' e =
 
 
 
-
-
-
-
-
-
-
 open E.Operators
 
 val runE: E.execution_mode -> sym -> fun_map taction_id -> E.t (Core.expr taction_id * (Pmap.map taction_id trace_action * E.trace))
@@ -1230,6 +1238,9 @@ let runE execution_mode main funs =
       Pmap.add fname (collect_conts' fbody) acc
     ) Pmap.empty $ Pmap.bindings funs in
   let (_, _, main_body) = Pmap.find main funs in
+  
+  (_DEBUG 2 (print_cont_map cont_map))
+  
   E.set_execution_mode execution_mode    >>
   E.set_current_proc main                >>
   E.register_funs funs                   >>

@@ -10,10 +10,18 @@ A classification of the undefs:
 (* (interesting) SEMANTIC ones ****************************************************************** *)
 
 (* Conversion to or from an integer type produces a value outside the range that can be represented (6.3.1.4). *)
-(* An lvalue designating an object of automatic storage duration that could have been declared with the register storage class is used in a context that requires the value of the designated object, but the object is uninitialized. (6.3.2.1). *)
-(* Conversion of a pointer to an integer type produces a value outside the range that can be represented (6.3.2.3). *)
+
+(* An lvalue designating an object of automatic storage duration that could have been declared with
+   the register storage class is used in a context that requires the value of the designated object,
+   but the object is uninitialized. (6.3.2.1). *)
+
+(* Conversion of a pointer to an integer type produces a value outside the range that can be
+   represented (6.3.2.3). *)
+
 (* Conversion between two pointer types produces a result that is incorrectly aligned (6.3.2.3). *)
+
 (* A pointer is used to call a function whose type is not compatible with the referenced type (6.3.2.3). *)
+
 (* The program attempts to modify a string literal (6.4.5). *)
 
 

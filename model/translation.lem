@@ -500,6 +500,8 @@ let rec translate_lvalue file exp =
 and translate_exp file exp =
   let ty = Annotate.ctype_of exp in
   match Annotate.exp_of exp with
+    | A.NULL -> E.return C.Enull
+    
     (* (6.5.3.3#2) The result of the unary + operator is the value of its (promoted) operand. The
                    integer promotions are performed on the operand, and the result has the promoted
                    type. *)
@@ -1675,14 +1677,63 @@ C.seq [a_id] (C.create ty)
                    MAY (the fact it is a may is pretty disgusting) be in the continuations of the generated Esave (...)
 
 RAAAAAAAAHHH: this doesn't work when the label is in a block the goto doesn't belong to ......
-
-
-
-
 *)
 
-and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
-  let translate_stmt_ s = translate_stmt file f d_loop d_break s in
+module St = State
+open St.Operators
+
+type collect_cases_state = <|
+  found_default: bool;
+  cases: list Ail.integer_constant
+|>
+
+let rec collect_cases_ (_, stmt) : St.t unit collect_cases_state =
+  let register_case n =
+    St.update (fun s -> <| s with cases= n :: s.cases |>) in
+  let register_default =
+    St.update (fun s -> <| s with found_default= true |>) in
+  match stmt with
+    | A.SKIP ->
+        St.return ()
+    | A.EXPRESSION _ ->
+        St.return ()
+    | A.BLOCK _ ss ->
+        St.mapM_ collect_cases_ ss
+    | A.IF _ s1 s2 ->
+        collect_cases_ s1 >> collect_cases_ s2
+    | A.WHILE _ s ->
+        collect_cases_ s
+    | A.DO _ s ->
+        collect_cases_ s
+    | A.BREAK ->
+        St.return ()
+    | A.CONTINUE ->
+        St.return ()
+    | A.RETURN_VOID ->
+        St.return ()
+    | A.RETURN_EXPRESSION _ ->
+        St.return ()
+    | A.SWITCH _ _ ->
+        St.return ()
+    | A.CASE n s ->
+        register_case n >> collect_cases_ s
+    | A.DEFAULT s ->
+        register_default >> collect_cases_ s
+    | A.LABEL _ s ->
+        collect_cases_ s
+    | A.GOTO _ ->
+        St.return ()
+    | A.DECLARATION _ ->
+        St.return ()
+(*    | PAR of list (statement_l 'a) *)
+  end
+
+
+let collect_cases s =
+  snd $ St.run_impl (collect_cases_ s) <| found_default= false; cases= [] |>
+
+let rec translate_stmt file f d_default d_cases d_loop d_break (_, stmt) : E.t (C.expr zero) =
+  let translate_stmt_ s = translate_stmt file f d_default d_cases d_loop d_break s in
   
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
   let lookup_type id = fst (Pmap.find id file.A.id_map) in
@@ -1783,13 +1834,12 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
                    (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) (C.Econst (Int.int 0)))) core_s1 core_s2)
   
   | A.WHILE e s ->
-      E.fresh_symbol                                       >>= fun a_e     ->
-      E.fresh_named_symbol "loop"                          >>= fun d_loop  ->
-      E.fresh_named_symbol "break"                         >>= fun d_break ->
-      translate_exp file e                                 >>= fun core_e  ->
-      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
-      
-      E.get_visible_objects >>= fun _as ->
+      E.fresh_symbol                                                         >>= fun a_e     ->
+      E.fresh_named_symbol "loop"                                            >>= fun d_loop  ->
+      E.fresh_named_symbol "break"                                           >>= fun d_break ->
+      translate_exp file e                                                   >>= fun core_e  ->
+      translate_stmt file f d_default d_cases (Some d_loop) (Some d_break) s >>= fun core_s  ->
+      E.get_visible_objects                                                  >>= fun _as     ->
       E.return $
         C.Esave d_loop [(* TODO *)]
           (C.Ewseq [Some a_e] core_e
@@ -1813,11 +1863,11 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
 *)
   
   | A.DO e s ->
-      E.fresh_symbol                                       >>= fun d_loop  ->
-      E.fresh_symbol                                       >>= fun d_break ->
-      translate_stmt file f (Some d_loop) (Some d_break) s >>= fun core_s  ->
-      translate_exp file e                                 >>= fun core_e  ->
-      E.fresh_symbol                                       >>= fun a       ->
+      E.fresh_symbol                                                         >>= fun d_loop  ->
+      E.fresh_symbol                                                         >>= fun d_break ->
+      translate_stmt file f d_default d_cases (Some d_loop) (Some d_break) s >>= fun core_s  ->
+      translate_exp file e                                                   >>= fun core_e  ->
+      E.fresh_symbol                                                         >>= fun a       ->
       E.return $
         C.Esave d_loop [(* TODO *)]
           (C.Ewseq [] core_s
@@ -1831,7 +1881,7 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
   
   | A.BREAK ->
       E.get_visible_objects >>= fun _as ->
-      E.return (C.Erun (from_Some d_break) (* (List.map C.Esym _as) *) [(* TODO *)])
+      E.return (C.Erun (from_Some d_break) [ (a, C.Esym a) | forall (a MEM _as) | true ])
   
   | A.CONTINUE ->
       E.return (C.Erun (from_Some d_loop) [(* TODO *)])
@@ -1860,26 +1910,61 @@ and translate_stmt file f d_loop d_break (_, stmt) : E.t (C.expr zero) =
           )
   
   
-  (* TODO *)
+  (* TODO: the promotions *)
   | A.SWITCH e s ->
-(*      translate_exp file e                   >>= fun core_e ->
-      translate_stmt file f s >>= fun core_s -> *)
-      Boot.outOfHomeomorphism "[translation] TODO: SWITCH"
+      translate_exp file e >>= fun core_e ->
+      E.fresh_symbol       >>= fun a_e    ->
+      (* TODO: should properly interpret the integer constants *)
+      let (found_default, ns) =
+        let x = collect_cases s in
+        (x.found_default, List.map fst x.cases) in
+      E.replicateM (List.length ns) (E.fresh_named_symbol "case") >>= fun ds ->
+      let d_cases' = List.fold_left (fun acc (n, d) ->
+        Pmap.add n d acc) Pmap.empty (List.combine ns ds) in
+      E.fresh_named_symbol "default"                         >>= fun d_default' ->
+      (if found_default then
+        E.fresh_named_symbol "break"
+      else
+        E.return d_default')                                 >>= fun d_break'   ->
+      E.get_visible_objects                                  >>= fun _as        ->
+      let run_as = [ (a, C.Esym a) | forall (a MEM _as) | true ] in
+      translate_stmt file f (Some d_default') (Some d_cases') d_loop (Some d_break') s >>= fun core_s ->
+
+      E.return $
+        C.Ewseq [Some a_e] core_e
+          (List.fold_left (fun acc (n, d) ->
+            C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst n))
+              (C.Erun d run_as)
+              acc
+           )
+             (C.Ewseq [] (C.Erun d_default' run_as)
+                (C.Ewseq [] core_s
+                   (C.Esave d_break' [ (a, lookup_type a) | forall (a MEM _as) | true ] C.Eskip)
+                )
+             )
+             $ Pmap.bindings d_cases')
   
+  
+  (* TODO: the promotions *)
+  | A.CASE n s ->
+      translate_stmt_ s     >>= fun core_s ->
+      E.get_visible_objects >>= fun _as    ->
+      (* TODO: should properly interpret the integer constant *)
+      E.return (C.Esave (Pmap.find (fst n) (from_Some d_cases)) [ (a, lookup_type a) | forall (a MEM _as) | true ] core_s)
   
   (* TODO *)
-  | A.CASE n s -> Boot.outOfHomeomorphism "[translation] TODO: CASE"
-  
-  
-  (* TODO *)
-  | A.DEFAULT s -> Boot.outOfHomeomorphism "[translation] TODO: DEFAULT"
+  | A.DEFAULT s ->
+      translate_stmt_ s     >>= fun core_s ->
+      E.get_visible_objects >>= fun _as    ->
+      E.return (C.Esave (from_Some d_default) [ (a, lookup_type a) | forall (a MEM _as) | true ] core_s)
+
   
   
   (* TODO *)
   | A.LABEL l s ->
       translate_stmt_ s     >>= fun core_s ->
       E.get_visible_objects >>= fun _as    ->
-      E.return (C.Esave l ([ (a, lookup_type a) | forall (a MEM _as) | true ]) core_s)
+      E.return (C.Esave l [ (a, lookup_type a) | forall (a MEM _as) | true ] core_s)
   
   
   (* TODO *)
@@ -1925,16 +2010,16 @@ let rec hack1 e =
     | C.Enot _ -> Pmap.empty
     | C.Ectype _ -> Pmap.empty
     | C.Elet _ _ e2 -> hack1 e2
-    | C.Eif _ e2 e3 -> Pmap.concat (hack1 e2) (hack1 e3)
+    | C.Eif _ e2 e3 -> Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (hack1 e2) (hack1 e3)
     | C.Eproc _ _ _ -> Pmap.empty
     | C.Ecall _ _ -> Pmap.empty
     | C.Esame _ _ -> Pmap.empty
     | C.Eundef _ -> Pmap.empty
     | C.Eerror -> Pmap.empty
     | C.Eaction _ -> Pmap.empty
-    | C.Eunseq es -> List.fold_left (Pmap.concat) Pmap.empty (List.map hack1 es)
-    | C.Ewseq _ e1 e2 -> Pmap.concat (hack1 e1) (hack1 e2)
-    | C.Esseq _ e1 e2 -> Pmap.concat (hack1 e1) (hack1 e2)
+    | C.Eunseq es -> List.fold_left (Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc)) Pmap.empty (List.map hack1 es)
+    | C.Ewseq _ e1 e2 -> Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (hack1 e1) (hack1 e2)
+    | C.Esseq _ e1 e2 -> Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) (hack1 e1) (hack1 e2)
     | C.Easeq _ _ _ -> Pmap.empty
     | C.Eindet e -> hack1 e
     | C.Ebound _ e -> hack1 e
@@ -2017,7 +2102,7 @@ let translate_file stdlib (file: A.file _) : E.t (C.file zero) =
     (fun acc (name, (args, body)) ->
        (* translate the body to Core *)
 (*       register_freevars body >> *)
-       translate_stmt file name None None body >>= fun core_body ->
+       translate_stmt file name None None None None body >>= fun core_body ->
       
       (* HACK !!!!!!! *)
 (*      let core_body = hack2 (hack1 core_body) core_body in *)
@@ -2036,7 +2121,7 @@ let translate_file stdlib (file: A.file _) : E.t (C.file zero) =
 (* This is the entry function (called from main.ml) *)
 let translate stdlib (file: A.file _) : C.file zero =
 let (cfile, <| E.fun_map= funs |>) = (translate_file stdlib file) (E.init stdlib) in
-  <| C.main= cfile.C.main; C.fun_map= Pmap.concat funs cfile.C.fun_map |>
+  <| C.main= cfile.C.main; C.fun_map= Ocaml.Pmap.fold (fun k v acc -> Pmap.add k v acc) funs cfile.C.fun_map |>
 
 
 (* E.init (translate_file file) *)
