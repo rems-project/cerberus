@@ -116,7 +116,7 @@ let rec import_expr e =
   | Core.Eindet e            -> Kindet (import_expr e)
   | Core.Ebound i e          -> Kbound i (import_expr e)
   | Core.Esave k a_tys e     -> Ksave k a_tys (import_expr e)
-  | Core.Erun k a_vs         -> Krun k (List.map (fun (a, v) -> (a, import_expr v)) a_vs)
+  | Core.Erun _ k a_vs       -> Krun k (List.map (fun (a, v) -> (a, import_expr v)) a_vs)
   end
 
 and import_action (_, act) =
@@ -156,7 +156,7 @@ let rec export_expr e =
   | Kindet e            -> Core.Eindet (export_expr e)
   | Kbound i e          -> Core.Ebound i (export_expr e)
   | Ksave k a_tys e     -> Core.Esave k a_tys (export_expr e)
-  | Krun k a_vs         -> Core.Erun k (List.map (fun (a,v) -> (a, export_expr v)) a_vs)
+  | Krun k a_vs         -> Core.Erun {} k (List.map (fun (a,v) -> (a, export_expr v)) a_vs)
   end
 
 and export_action act =
@@ -352,7 +352,7 @@ let rec hack x =
   | Core.Eindet e              -> hack e
   | Core.Ebound i e            -> hack e
   | Core.Esave d a_tys e       -> Core.Esave d a_tys (hack e)
-  | Core.Erun d a_vs           -> Core.Erun d a_vs
+  | Core.Erun bs d a_vs        -> Core.Erun bs d a_vs
   | Core.Eret e                -> Core.Eret (hack e)
   | Core.End es                -> Core.End es
   | _ -> x

@@ -97,6 +97,7 @@ let rec annotate_expr p_aid e =
   | Esave k a_tys e      -> Esave k a_tys (annotate_expr p_aid e)
   | End es               -> End (List.map (annotate_expr p_aid) es)
   | Eproc bs f pes       -> Eproc ({snd p_aid} union bs) f pes
+  | Erun bs d a_vs       -> Erun ({snd p_aid} union bs) d a_vs
   | _                    -> e
 end
 
@@ -926,19 +927,19 @@ and red2_unseq x =
 
 and red2_run x =
   match x with
-    | (Erun d a_vs, _K :: _KS) ->
+    | (Erun bs d a_vs, _K :: _KS) ->
         E.get_cont d >>= fun (a_tys, e_cont) ->
         push_trace (Rule_Run, None) >>
         (* we have create the objects which are visible at the level of the save but not from the run *)
         let (create_as, create_tys) = unzip $ List.filter (fun (a,_) -> not (List.exist (fun (x,_) -> x = a) a_vs)) a_tys in
         (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
         let kill_es = List.map snd $ List.filter (fun (a,_) -> not (List.exist (fun (x,_) -> x = a) a_tys)) a_vs in
-
-        E.return
-          (Ewseq [] (mk_unseq $ List.map (fun e -> pkill e) kill_es)
-             (Ewseq (List.map (Some) create_as) (mk_unseq $ List.map (fun ty -> pcreate (Ectype ty) []) create_tys)
-                (List.fold_left (fun acc (a, v) -> subst_sym a v acc) e_cont a_vs)),
-           [] :: _KS)
+        let e =
+          Ewseq [] (mk_unseq $ List.map (fun e -> pkill e) kill_es)
+            (Ewseq (List.map (Some) create_as) (mk_unseq $ List.map (fun ty -> pcreate (Ectype ty) []) create_tys)
+               (List.fold_left (fun acc (a, v) -> subst_sym a v acc) e_cont a_vs)) in
+        (* TODO: it seems strange that annotate_expr need to know the polarity *)
+        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs e, [] :: _KS)
     | _ -> E.mzero
   end
 
@@ -1024,7 +1025,7 @@ let rec convert_expr e =
     | Ebound i e          -> Ebound i (convert_expr e)
     | Esame e1 e2         -> Esame (convert_expr e1) (convert_expr e2)
     | Esave k a_tys e     -> Esave k a_tys (convert_expr e)
-    | Erun k a_vs         -> Erun k (List.map (fun (a,v) -> (a, convert_expr v)) a_vs)
+    | Erun bs k a_vs      -> Erun {} k (List.map (fun (a,v) -> (a, convert_expr v)) a_vs)
     | Eret e              -> Eret (convert_expr e)
   end
 
@@ -1130,7 +1131,7 @@ let rec collect_conts e =
         St.return ()
     | Easeq _ _ _ ->
         St.return ()
-    | Erun _ _ ->
+    | Erun _ _ _ ->
         St.return ()
     | Eunseq _ ->
         St.return ()
@@ -1210,7 +1211,7 @@ let rec collect_conts' e =
         Pmap.empty
     | Easeq _ _ _ ->
         Pmap.empty
-    | Erun _ _ ->
+    | Erun _ _ _ ->
         Pmap.empty
     | Eunseq _ ->
         Pmap.empty

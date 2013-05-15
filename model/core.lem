@@ -107,7 +107,7 @@ type expr 'a =
   
   (* Continuation operators *)
   | Esave of ksym * (* list sym * *) list (sym * Ail.ctype) * expr 'a (* TODO: may have to add the possibility of storing a number instead of a ctype (for allocated objects) *)
-  | Erun of ksym * list (sym * expr 'a) (* * list (expr 'a) * list (either Ail.ctype num) *)
+  | Erun of set 'a * ksym * list (sym * expr 'a) (* * list (expr 'a) * list (either Ail.ctype num) *)
     (* In the first list are expressions to substs free-symbols (not coming from C variables local
        to a block we are jumping into) in the continuation. The second list gives the effective
        types (or none for dynamically allocated objects) for C variables local to the block we are
@@ -213,7 +213,7 @@ let rec is_value e =
 *)
     | Esave _ _ _ ->
         is_value e
-    | Erun _ _ ->
+    | Erun _ _ _ ->
         false
     | Eret e ->
         false

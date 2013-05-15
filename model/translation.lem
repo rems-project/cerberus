@@ -1844,7 +1844,7 @@ let rec translate_stmt file f d_default d_cases d_loop d_break (_, stmt) : E.t (
         C.Esave d_loop [(* TODO *)]
           (C.Ewseq [Some a_e] core_e
              (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e) (C.Econst (Int.int 0))))
-                (C.Ewseq [] core_s (C.Erun d_loop [(* TODO *)]))
+                (C.Ewseq [] core_s (C.Erun {} d_loop [(* TODO *)]))
                 (C.Esave d_break [(* TODO *)] C.Eskip)
              )
           )
@@ -1874,17 +1874,17 @@ let rec translate_stmt file f d_default d_cases d_loop d_break (_, stmt) : E.t (
              (C.Ewseq [Some a] core_e
                 (C.Eif (C.Eop C.OpEq (C.Esym a) (C.Econst (Int.int 0)))
                    C.Eskip
-                   (C.Erun d_loop [(* TODO *)])
+                   (C.Erun {} d_loop [(* TODO *)])
                 )
              )
           )
   
   | A.BREAK ->
       E.get_visible_objects >>= fun _as ->
-      E.return (C.Erun (from_Some d_break) [ (a, C.Esym a) | forall (a MEM _as) | true ])
+      E.return (C.Erun {} (from_Some d_break) [ (a, C.Esym a) | forall (a MEM _as) | true ])
   
   | A.CONTINUE ->
-      E.return (C.Erun (from_Some d_loop) [(* TODO *)])
+      E.return (C.Erun {} (from_Some d_loop) [(* TODO *)])
   
   
   | A.RETURN_VOID ->
@@ -1934,10 +1934,10 @@ let rec translate_stmt file f d_default d_cases d_loop d_break (_, stmt) : E.t (
         C.Ewseq [Some a_e] core_e
           (List.fold_left (fun acc (n, d) ->
             C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst n))
-              (C.Erun d run_as)
+              (C.Erun {} d run_as)
               acc
            )
-             (C.Ewseq [] (C.Erun d_default' run_as)
+             (C.Ewseq [] (C.Erun {} d_default' run_as)
                 (C.Ewseq [] core_s
                    (C.Esave d_break' [ (a, lookup_type a) | forall (a MEM _as) | true ] C.Eskip)
                 )
@@ -1970,7 +1970,7 @@ let rec translate_stmt file f d_default d_cases d_loop d_break (_, stmt) : E.t (
   (* TODO *)
   | A.GOTO l ->
       E.get_visible_objects >>= fun _as ->
-      E.return (C.Erun l [ (a, C.Esym a) | forall (a MEM _as) | true ])
+      E.return (C.Erun {} l [ (a, C.Esym a) | forall (a MEM _as) | true ])
   
   
   (* ------------------------------------------------------------------------------------------------------ *)
@@ -2024,7 +2024,7 @@ let rec hack1 e =
     | C.Eindet e -> hack1 e
     | C.Ebound _ e -> hack1 e
     | C.Esave d _as e -> Pmap.add d _as (hack1 e)
-    | C.Erun _ _ -> Pmap.empty
+    | C.Erun _ _ _ -> Pmap.empty
     | C.Eret _ -> Pmap.empty
 (*    | End of list (expr 'a) *)
     | _ -> Pmap.empty
