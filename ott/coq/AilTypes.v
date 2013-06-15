@@ -37,15 +37,15 @@ Definition eq_integerType x y :=
   end.
 
 Record qualifiers := make_qualifiers {
-  const_qualified : bool;
-  restrict_qualified : bool;
-  volatile_qualified : bool
+  const    : bool;
+  restrict : bool;
+  volatile : bool
 }.
 
 Definition eq_qualifiers x y := 
-     Bool.eqb (const_qualified    x) (const_qualified    y)
-  && Bool.eqb (restrict_qualified x) (restrict_qualified y)
-  && Bool.eqb (volatile_qualified x) (volatile_qualified y).
+     Bool.eqb (const    x) (const    y)
+  && Bool.eqb (restrict x) (restrict y)
+  && Bool.eqb (volatile x) (volatile y).
 
 Inductive basicType : Set :=  (*r basic types (\S6.2.5\#14) *)
  | Integer (it:integerType).

@@ -9,7 +9,7 @@ Lemma precision_ge_one P it : 1 <= precision P it.
 Proof.
   destruct it.
   + set (precision_Char P) as Hchar;
-    case_eq (is_signed P Char); intros Heq; rewrite Heq in Hchar; clear Heq;
+    case_eq (signed P Char); intros Heq; rewrite Heq in Hchar; clear Heq;
     set (precision_Signed P Ichar) as Hmin; simpl in Hmin;
     [|set (lePrecision_Signed_Unsigned P Ichar)];
     omega.
