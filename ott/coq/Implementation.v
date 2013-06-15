@@ -35,22 +35,22 @@ Definition min_precision ibt : Z :=
 
 Record implementation := make_implementation {
   binary_mode : binaryMode;
-  is_signed : integerType -> bool;
+  signed : integerType -> bool;
   precision : integerType -> Z;
   size_t : integerType;
   ptrdiff_t : integerType;
 
-  is_signed_Signed   ibt : is_signed (Signed   ibt) = true;
-  is_signed_Bool         : is_signed Bool           = false;
-  is_signed_Unsigned ibt : is_signed (Unsigned ibt) = false;
+  signed_Signed   ibt : signed (Signed   ibt) = true;
+  signed_Bool         : signed Bool           = false;
+  signed_Unsigned ibt : signed (Unsigned ibt) = false;
 
-  is_signed_size_t    : is_signed size_t    = false;
-  is_signed_ptrdiff_t : is_signed ptrdiff_t = true;
+  signed_size_t    : signed size_t    = false;
+  signed_ptrdiff_t : signed ptrdiff_t = true;
 
   precision_ptrdiff_t : 16 <= precision ptrdiff_t;
   precision_size_t    : 16 <= precision size_t;
 
-  precision_Char :  precision Char = if is_signed Char
+  precision_Char :  precision Char = if signed Char
                                        then precision (Signed   Ichar)
                                        else precision (Unsigned Ichar);
 

@@ -3,128 +3,96 @@ Require Import ZArith.
 
 Require Import Common.
 Require Import AilTypes.
-Require Import Implementation.
+Require Import Implementation Implementation_proof.
 
 Local Open Scope Z.
+Local Open Scope list_scope.
 
-
-Definition unqualified := {|
-  isConstQualified    := false;
-  isRestrictQualified := false;
-  isVolatileQualified := false 
+Definition no_qualifiers := {|
+  const    := false;
+  restrict := false;
+  volatile := false 
 |}.
 
-Definition isUnqualified_fun qs :=
+Definition unqualified qs :=
   match qs with
-  | {| isConstQualified    := false;
-       isRestrictQualified := false;
-       isVolatileQualified := false |} => true
-  | _                                  => false
+  | {| const    := false;
+       restrict := false;
+       volatile := false |} => true
+  | _                       => false
   end.
 
-(*
-Fixpoint typeEquiv_fun t1 t2 : bool :=
-  match t1, t2 with
-  | Void          , Void           => true
-  | Basic bt1     , Basic bt2      => bool_of_decision (decide bt1 bt2 : Decision (_ = _))
-  | Array t1 n1   , Array t2 n2    => andb (bool_of_decision (decide n1 n2 : Decision (_ = _)))
-                                           (typeEquiv_fun t1 t2)
-  | Function t1 p1, Function t2 p2 => andb (typeEquiv_fun t1 t2)
-                                           (typeEquiv_params_fun p1 p2)
-  | Pointer qs1 t1, Pointer qs2 t2 => andb (list_equiv_fun (fun x y => bool_of_decision(decide x y:Decision (x = y))) qs1 qs2)
-                                           (typeEquiv_fun t1 t2)
-  | _             , _              => false
-  end
-with typeEquiv_params_fun p1 p2 : bool :=
-  match p1, p2 with
-  | ParamsNil           , ParamsNil            => true
-  | ParamsCons qs1 t1 p1, ParamsCons qs2 t2 p2 => andb (list_equiv_fun (fun x y => bool_of_decision(decide x y:Decision (x = y))) qs1 qs2)
-                                                       (andb (typeEquiv_fun t1 t2)
-                                                             (typeEquiv_params_fun p1 p2))
-  | _                   , _                    => false
-  end.
-*)
-
-Definition isInteger_fun t :=
+Definition integer t :=
   match t with
   | Basic (Integer _) => true
   | _ => false
   end.
 
-Definition isVoid_fun t :=
+Definition void t :=
   match t with
   | Void => true
   | _ => false
   end.
 
-Definition isPointer_fun t :=
+Definition pointer t :=
   match t with
   | Pointer _ _ => true
   | _ => false
   end.
 
-Definition isBool_fun t :=
+Definition boolean t :=
   match t with
   | Basic (Integer Bool) => true
   | _ => false
   end.
 
-(*
-Definition isSigned_fun P it : bool :=
-  match it with
-  | Signed _ => true
-  | Char => isSigned_fun P Char
-  | _ => false
-  end.
-*)
+Definition unsigned P it : bool :=
+  negb (signed P it).
 
-Definition isUnsigned_fun P it : bool :=
-  negb (isSigned_fun P it).
-
-Definition integerTypeRange P it :=
+Definition integer_type_range P it :=
   let prec := precision P it in
-  if isUnsigned_fun P it then
-    @mkRange 0 (2^prec - 1) (integerTypeRange_unsigned (precision_ge_one P _))
+  if unsigned P it then
+    @make_range 0 (2^prec - 1) (integerTypeRange_unsigned (precision_ge_one P _))
   else
-    match binMode P with
-    | TwosComplement    => @mkRange (-2^(prec - 1))     (2^(prec - 1) - 1) (integerTypeRange_signed1 (precision_ge_one P _))
-    | OnesComplement    => @mkRange (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
-    | SignPlusMagnitude => @mkRange (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
+    match binary_mode P with
+    | Two'sComplement   => @make_range (-2^(prec - 1))     (2^(prec - 1) - 1) (integerTypeRange_signed1 (precision_ge_one P _))
+    | One'sComplement   => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
+    | SignPlusMagnitude => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
     end.
 
-Definition isSignedType_fun it : bool :=
+Definition signed_type it : bool :=
   match it with
   | Signed _ => true
   | _ => false
   end.
 
-Definition isUnsignedType_fun it : bool :=
+Definition unsigned_type it : bool :=
   match it with
   | Unsigned _ => true
   | Bool => true
   | _ => false
   end.
 
-Definition inIntegerTypeRange_fun P n it : bool :=
-  memNat_fun n (integerTypeRange P it).
+Definition in_integer_type_range P n it : bool :=
+  mem_nat n (integer_type_range P it).
 
-Definition leIntegerTypeRange_fun P it1 it2 : bool :=
+Definition le_integer_type_range P it1 it2 : bool :=
   match it1, it2 with
   | Char             , Char              => true
-  | Char             , Signed   Ichar    => isSigned_fun P Char
-  | Char             , Signed   ibt      => orb (isSigned_fun P Char)
-                                                (Z.ltb (precision P Char) (precision P (Signed ibt)))
-  | Signed Ichar     , Char              => isSigned_fun P Char
-  | Signed ibt       , Char              => andb (isSigned_fun P Char)
-                                                 (Z.eqb (precision P (Signed ibt)) (precision P Char))
-  | Unsigned Ichar   , Char              => negb (isSigned_fun P Char)
-  | Unsigned ibt     , Char              => andb (negb (isSigned_fun P Char))
-                                                 (Z.eqb (precision P (Unsigned ibt)) (precision P Char))
-  | Char             , Unsigned _        => negb (isSigned_fun P Char)
-  | Char             , Bool              => andb (negb (isSigned_fun P Char))
-                                                 (Z.eqb (precision P Char) (precision P Bool))
-  | Bool             , Char              => orb (negb (isSigned_fun P Char))
-                                                (Z.ltb (precision P Bool) (precision P Char))
+  | Char             , Signed   Ichar    => signed P Char
+  | Char             , Signed   ibt      => signed P Char ||
+                                            Z.ltb (precision P Char) (precision P (Signed ibt))
+  | Signed Ichar     , Char              => signed P Char
+  | Signed ibt       , Char              => signed P Char &&
+                                            Z.eqb (precision P (Signed ibt)) (precision P Char)
+  | Unsigned Ichar   , Char              => negb (signed P Char)
+  | Unsigned ibt     , Char              => negb (signed P Char) &&
+                                            Z.eqb (precision P (Unsigned ibt)) (precision P Char)
+  | Char             , Unsigned _        => negb (signed P Char)
+  | Char             , Bool              => negb (signed P Char) &&
+                                            Z.eqb (precision P Char) (precision P Bool)
+  | Bool             , Char              => negb (signed P Char) ||
+                                            Z.ltb (precision P Bool) (precision P Char)
 
   | Signed   Ichar   , Signed   _        => true
   | Signed   Short   , Signed   Short    => true
@@ -162,7 +130,7 @@ Definition leIntegerTypeRange_fun P it1 it2 : bool :=
   | Signed   _       , Unsigned _        => false
 
   | Bool             , Signed   ibt2     => Z.ltb (precision P Bool)
-                                                  (precision P (Signed   ibt2))
+                                                  (precision P (Signed ibt2))
   | Unsigned _       , Signed   Ichar    => false
   | Unsigned Short   , Signed   Short    => false
   | Unsigned Int     , Signed   Int      => false
@@ -173,22 +141,22 @@ Definition leIntegerTypeRange_fun P it1 it2 : bool :=
   end.
 
 
-Definition eqIntegerRankBase_fun it1 it2 : bool :=
+Definition eq_integer_rank_base it1 it2 : bool :=
   match it1, it2 with
-  | Signed ibt1, Unsigned ibt2   => bool_of_decision (decide ibt1 ibt2 : Decision (ibt1 = ibt2))
+  | Signed ibt1, Unsigned ibt2   => eq_integerBaseType ibt1 ibt2
   | Char       , Unsigned  Ichar => true
   | Char       , Signed    Ichar => true
   | _          , _               => false
   end.
 
-Definition eqIntegerRank_fun it1 it2 : bool :=
-  orb (bool_of_decision (decide it1 it2 : Decision (it1 = it2)))
-      (orb (eqIntegerRankBase_fun it1 it2)
-           (eqIntegerRankBase_fun it2 it1)).
+Definition eq_integer_rank it1 it2 : bool :=
+  orb (eq_integerType it1 it2)
+      (orb (eq_integer_rank_base it1 it2)
+           (eq_integer_rank_base it2 it1)).
 
-Definition ltIntegerRankBase_fun P it1 it2 : bool :=
+Definition lt_integer_rank_base P it1 it2 : bool :=
   match it1, it2 with
-  | Bool        , it              => negb (bool_of_decision (decide Bool it : Decision (_ = _)))
+  | Bool        , it              => negb (eq_integerType Bool it)
   | Signed  Long, Signed LongLong => true
   | Signed   Int, Signed     Long => true
   | Signed Short, Signed      Int => true
@@ -197,20 +165,20 @@ Definition ltIntegerRankBase_fun P it1 it2 : bool :=
   | _           , _               => false
   end.
 
-Definition ltIntegerRankCongruence_fun P it1 it2 : bool :=
+Definition lt_integer_rank_congruence P it1 it2 : bool :=
   match it1, it2 with
   | _            , Bool          => false
   | Bool         , _             => true
   | _            , Char          => false
-  | Char         , Unsigned ibt2 => ltIntegerRankBase_fun P (Signed Ichar) (Signed ibt2)
-  | Char         , Signed   ibt2 => ltIntegerRankBase_fun P (Signed Ichar) (Signed ibt2)
-  | Signed ibt1  , Signed   ibt2 => ltIntegerRankBase_fun P (Signed  ibt1) (Signed ibt2)
-  | Unsigned ibt1, Unsigned ibt2 => ltIntegerRankBase_fun P (Signed  ibt1) (Signed ibt2)
-  | Unsigned ibt1, it2           => ltIntegerRankBase_fun P (Signed  ibt1) it2
-  | it1          , Unsigned ibt2 => ltIntegerRankBase_fun P it1            (Signed ibt2)
+  | Char         , Unsigned ibt2 => lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
+  | Char         , Signed   ibt2 => lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
+  | Signed ibt1  , Signed   ibt2 => lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
+  | Unsigned ibt1, Unsigned ibt2 => lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
+  | Unsigned ibt1, it2           => lt_integer_rank_base P (Signed  ibt1) it2
+  | it1          , Unsigned ibt2 => lt_integer_rank_base P it1            (Signed ibt2)
   end.
 
-Definition ltIntegerRank_fun it1 it2 : bool :=
+Definition lt_integer_rank it1 it2 : bool :=
   match it1, it2 with
   | _             , Bool           => false
   | Bool          , _              => true
@@ -249,152 +217,149 @@ Definition ltIntegerRank_fun it1 it2 : bool :=
   | _             , _              => false
   end.
 
-Definition leIntegerRank_fun it1 it2 : bool :=
-  orb (eqIntegerRank_fun it1 it2) (ltIntegerRank_fun it1 it2).
+Definition le_integer_rank it1 it2 : bool :=
+  orb (eq_integer_rank it1 it2) (lt_integer_rank it1 it2).
 
-Definition isArithmetic_fun t : bool := isInteger_fun t.
+Definition arithmetic t : bool := integer t.
 
-Definition isScalar_fun t : bool := orb (isPointer_fun t) (isArithmetic_fun t).
+Definition scalar t : bool := orb (pointer t) (arithmetic t).
 
-Definition isArray_fun t : bool :=
+Definition array t : bool :=
   match t with
   | Array _ _ => true
   | _         => false
   end.
 
-Definition isFunction_fun t : bool :=
+Definition function t : bool :=
   match t with
   | Function _ _ => true
   | _            => false
   end.
 
-Definition isCorrespondingUnsigned_fun it1 it2 : bool :=
+Definition is_corresponding_unsigned it1 it2 : bool :=
   match it1, it2 with
-  | Signed ibt1, Unsigned ibt2 => bool_of_decision (decide ibt1 ibt2 : Decision (ibt1 = ibt2))
+  | Signed ibt1, Unsigned ibt2 => eq_integerBaseType ibt1 ibt2
   | _          , _             => false
   end.
 
-Definition isCorrespondingUnsigned_find it : option integerType :=
+Definition find_corresponding_unsigned it : option integerType :=
   match it with
   | Signed ibt => Some (Unsigned ibt)
   | _          => None
   end.
 
-Definition isIntegerPromotion_fun P it1 it2 : bool :=
+Definition corresponding_unsigned it : integerType :=
+  match it with
+  | Signed ibt => Unsigned ibt
+  | _          => it
+  end.
+
+Definition is_integer_promotion P it1 it2 : bool :=
   match it1, it2 with
   | Signed   Int, Signed   Int => true
   | Unsigned Int, Signed   Int => false
   | Unsigned Int, Unsigned Int => true
   | Signed   Int, Unsigned Int => false
-  | _           , Signed   Int => andb (leIntegerRank_fun        it1 (Signed Int))
-                                       (leIntegerTypeRange_fun P it1 (Signed Int))
-  | _           , Unsigned Int => andb (leIntegerRank_fun        it1 (Signed Int))
-                                       (negb (leIntegerTypeRange_fun P it1 (Signed Int)))
-  | _           , _            => andb (bool_of_decision (decide it1 it2 : Decision (it1 = it2)))
-                                       (negb (leIntegerRank_fun it1 (Signed Int)))
+  | _           , Signed   Int => le_integer_rank it1 (Signed Int) &&
+                                  le_integer_type_range P it1 (Signed Int)
+  | _           , Unsigned Int => le_integer_rank it1 (Signed Int) &&
+                                  negb (le_integer_type_range P it1 (Signed Int))
+  | _           , _            => eq_integerType it1 it2 &&
+                                  negb (le_integer_rank it1 (Signed Int))
   end.
 
-Definition isIntegerPromotion_find P it : integerType :=
+Definition integer_promotion P it : integerType :=
   match it with
   | Signed   Int => Signed   Int
   | Unsigned Int => Unsigned Int
-  | _            => if leIntegerRank_fun it (Signed Int)
-                      then if leIntegerTypeRange_fun P it (Signed Int)
+  | _            => if le_integer_rank it (Signed Int)
+                      then if le_integer_type_range P it (Signed Int)
                              then Signed Int
                              else Unsigned Int
                       else it
   end.
 
-Definition isUsualArithmeticInteger_fun P it1 it2 it3 : bool :=
-  if bool_of_decision(decide it1 it2 : Decision (it1 = it2)) then
-    bool_of_decision(decide it1 it3 : Decision (it1 = it3))
+Definition is_usual_arithmetic_integer_promoted P it1 it2 it3 : bool :=
+  if eq_integerType it1 it2 then
+     eq_integerType it1 it3
   else
-    if isSignedType_fun it1 then
-      if isSignedType_fun it2 then
-        if ltIntegerRank_fun it2 it1 then
-          bool_of_decision(decide it1 it3 : Decision (it1 = it3))
+    if signed_type it1 then
+      if signed_type it2 then
+        if lt_integer_rank it2 it1 then
+          eq_integerType it1 it3
         else
-          bool_of_decision(decide it2 it3 : Decision (it2 = it3))
-      else if isUnsignedType_fun it2 then
-        if leIntegerRank_fun it1 it2 then
-          bool_of_decision(decide it2 it3 : Decision (it2 = it3))
+          eq_integerType it2 it3
+      else if unsigned_type it2 then
+        if le_integer_rank it1 it2 then
+          eq_integerType it2 it3
         else
-          if leIntegerTypeRange_fun P it2 it1 then
-            bool_of_decision(decide it1 it3 : Decision (it1 = it3))
+          if le_integer_type_range P it2 it1 then
+            eq_integerType it1 it3
           else
-            isCorrespondingUnsigned_fun it1 it3
+            is_corresponding_unsigned it1 it3
       else
         false
-    else if isUnsignedType_fun it1 then
-      if isUnsignedType_fun it2 then
-        if ltIntegerRank_fun it2 it1 then
-          bool_of_decision(decide it1 it3 : Decision (it1 = it3))
+    else if unsigned_type it1 then
+      if unsigned_type it2 then
+        if lt_integer_rank it2 it1 then
+          eq_integerType it1 it3
         else
-          bool_of_decision(decide it2 it3 : Decision (it2 = it3))
-      else if isSignedType_fun it2 then
-        if leIntegerRank_fun it2 it1 then
-          bool_of_decision(decide it1 it3 : Decision (it1 = it3))
-        else if leIntegerTypeRange_fun P it1 it2 then
-          bool_of_decision(decide it2 it3 : Decision (it2 = it3))
+          eq_integerType it2 it3
+      else if signed_type it2 then
+        if le_integer_rank it2 it1 then
+          eq_integerType it1 it3
+        else if le_integer_type_range P it1 it2 then
+          eq_integerType it2 it3
         else
-          isCorrespondingUnsigned_fun it2 it3
+          is_corresponding_unsigned it2 it3
       else
         false
     else
       false.
 
-Definition isUsualArithmeticInteger_find P it1 it2 : option integerType :=
-  if bool_of_decision(decide it1 it2 : Decision (it1 = it2)) then
-    Some it1
+Definition usual_arithmetic_integer_promoted P it1 it2 : integerType :=
+  if eq_integerType it1 it2 then
+    it1
   else
-    if isSignedType_fun it1 then
-      if isSignedType_fun it2 then
-        if ltIntegerRank_fun it2 it1 then
-          Some it1
+    if signed_type it1 then
+      if signed_type it2 then
+        if lt_integer_rank it2 it1 then
+          it1
         else
-          Some it2
-      else if isUnsignedType_fun it2 then
-        if leIntegerRank_fun it1 it2 then
-          Some it2
+          it2
+      else
+        if le_integer_rank it1 it2 then
+          it2
         else
-          if leIntegerTypeRange_fun P it2 it1 then
-            Some it1
+          if le_integer_type_range P it2 it1 then
+            it1
           else
-            isCorrespondingUnsigned_find it1
-      else
-        None
-    else if isUnsignedType_fun it1 then
-      if isUnsignedType_fun it2 then
-        if ltIntegerRank_fun it2 it1 then
-          Some it1
-        else
-          Some it2
-      else if isSignedType_fun it2 then
-        if leIntegerRank_fun it2 it1 then
-          Some it1
-        else if leIntegerTypeRange_fun P it1 it2 then
-          Some it2
-        else
-          isCorrespondingUnsigned_find it2
-      else
-        None
+            corresponding_unsigned it1
     else
-      None.
+      if unsigned_type it2 then
+        if lt_integer_rank it2 it1 then
+          it1
+        else
+          it2
+      else
+        if le_integer_rank it2 it1 then
+          it1
+        else if le_integer_type_range P it1 it2 then
+          it2
+        else
+          corresponding_unsigned it2.
 
-Definition isUsualArithmetic_find P t1 t2 : option type :=
+Definition usual_arithmetic_integer P it1 it2 : integerType :=
+  usual_arithmetic_integer_promoted P (integer_promotion P it1)
+                                      (integer_promotion P it2).
+
+Definition usual_arithmetic P t1 t2 : option ctype :=
   match t1, t2 with
-  | Basic (Integer it1), Basic (Integer it2) =>
-      match isUsualArithmeticInteger_find P (isIntegerPromotion_find P it1) (isIntegerPromotion_find P it2) with
-      | Some it => Some (Basic (Integer it))
-      | None    => None
-      end
-  | _, _ => None
+  | Basic (Integer it1), Basic (Integer it2) => Some (Basic (Integer (usual_arithmetic_integer P it1 it2)))
+  | _                  , _                   => None
   end.
 
-Definition isUsualArithmetic_fun P t1 t2 t3 : bool :=
-  bool_of_decision (decide (isUsualArithmetic_find P t1 t2) (Some t3) : Decision (_ = _)).
-
-Definition isObject_fun t : bool :=
+Definition object t : bool :=
   match t with
   | Basic _ => true
   | Void => true
@@ -403,7 +368,7 @@ Definition isObject_fun t : bool :=
   | _ => false
   end.
 
-Definition isComplete_fun t : bool :=
+Definition complete t : bool :=
   match t with
   | Basic _ => true
   | Pointer _ _ => true
@@ -411,91 +376,107 @@ Definition isComplete_fun t : bool :=
   | _ => false
   end.
 
-Definition isIncomplete_fun t : bool :=
+Definition incomplete t : bool :=
   match t with
   | Void => true
   | _ => false
   end.
 
-Definition isModifiable_fun qs t : bool :=
-  andb (isObject_fun t)
-       (andb (negb (isArray_fun t)) 
-             (andb (negb (isIncomplete_fun t))
-                   (negb (bool_of_decision (decide (isConstQualified qs) true : Decision (_ = _))))
-             )
-       ).
+Definition modifiable q t : bool :=
+  object t &&
+  negb (array t) &&
+  negb (incomplete t) &&
+  negb (const q).
 
-Definition isReal_fun t : bool := isInteger_fun t.
+Definition real t : bool := integer t.
 
-Definition isLvalueConvertible_fun t : bool := andb (negb (isArray_fun t)) (isComplete_fun t).
+Definition lvalue_convertible t : bool := negb (array t) && complete t.
 
-Fixpoint isCompatible_fun t1 t2 {struct t1} : bool :=
+Fixpoint is_compatible t1 t2 {struct t1} : bool :=
   match t1, t2 with
   | Void          , Void           => true
-  | Basic bt1     , Basic bt2      => bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2))
-  | Array    t1 n1, Array    t2 n2 => andb (isCompatible_fun t1 t2) (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
-  | Function t1 p1, Function t2 p2 => andb (isCompatible_fun t1 t2) (isCompatible_params_fun p1 p2)
-  | Pointer qs1 t1, Pointer qs2 t2 => andb (bool_of_decision (decide qs1 qs2 : Decision (_ = _))) (isCompatible_fun t1 t2)
+  | Basic bt1     , Basic bt2      => eq_basicType bt1 bt2
+  | Array    t1 n1, Array    t2 n2 => is_compatible t1 t2 && eq_nat n1 n2
+  | Function t1 p1, Function t2 p2 => let fix is_compatible_params p1 p2 :=
+                                        match p1, p2 with
+                                        | nil          , nil           => true
+                                        | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 && is_compatible_params p1 p2
+                                        | _            , _             => false
+                                        end in
+                                      is_compatible t1 t2 && is_compatible_params p1 p2
+  | Pointer  q1 t1, Pointer  q2 t2 => is_compatible t1 t2 && eq_qualifiers q1 q2
   | _             , _              => false
-  end
-with isCompatible_params_fun p1 p2 : bool :=
-  match p1, p2 with
-  | ParamsNil         , ParamsNil          => true
-  | ParamsNil         , _                  => false
-  | _                 , ParamsNil          => false
-  | ParamsCons _ t1 p1, ParamsCons _ t2 p2 => andb (isCompatible_fun        t1 t2)
-                                                   (isCompatible_params_fun p1 p2)
   end.
 
-Fixpoint isComposite_fun t1 t2 t3 : bool :=
+Fixpoint is_compatible_params (p1 p2 : list (qualifiers * ctype)) : bool :=
+  match p1, p2 with
+  | nil          , nil           => true
+  | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 &&
+                                        is_compatible_params p1 p2
+  | _            , _             => false
+  end.
+
+Fixpoint is_composite t1 t2 t3 : bool :=
   match t1, t2, t3 with
   | Void          , Void          , Void           => true
-  | Basic bt1     , Basic bt2     , Basic bt3      => andb (bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2)))
-                                                           (bool_of_decision (decide bt1 bt3 : Decision (bt1 = bt3)))
-  | Array t1 n1   , Array t2 n2   , Array t3 n3    => andb (andb (bool_of_decision (decide n1 n2 : Decision (n1 = n2)))
-                                                                 (bool_of_decision (decide n1 n3 : Decision (n1 = n3))))
-                                                           (isComposite_fun t1 t2 t3)
-  | Function t1 p1, Function t2 p2, Function t3 p3 => andb (isComposite_fun        t1 t2 t3)
-                                                           (isComposite_params_fun p1 p2 p3)
-  | Pointer qs1 t1, Pointer qs2 t2, Pointer qs3 t3 => andb (andb (bool_of_decision(decide qs1 qs2:Decision (_ = _)))
-                                                                 (bool_of_decision(decide qs1 qs3:Decision (_ = _))))
-                                                           (isComposite_fun t1 t2 t3)
+  | Basic bt1     , Basic bt2     , Basic bt3      => eq_basicType bt1 bt2 && eq_basicType bt1 bt3
+  | Array t1 n1   , Array t2 n2   , Array t3 n3    => is_composite t1 t2 t3 && eq_nat n1 n2 && eq_nat n1 n3
+  | Function t1 p1, Function t2 p2, Function t3 p3 => 
+      let fix is_composite_params p1 p2 p3 :=
+        match p1, p2, p3 with
+        | nil          , nil          , nil            => true
+        | (_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3 => unqualified q3 &&
+                                                          is_composite t1 t2 t3 &&
+                                                          is_composite_params p1 p2 p3
+        | _            , _            , _              => false
+        end in
+      is_composite t1 t2 t3 && is_composite_params p1 p2 p3
+  | Pointer  q1 t1, Pointer  q2 t2, Pointer  q3 t3 => is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
   | _             , _             , _              => false
-  end
-with isComposite_params_fun p1 p2 p3 : bool :=
-  match p1, p2, p3 with
-  | ParamsNil         , ParamsNil         , ParamsNil            => true
-  | ParamsCons _ t1 p1, ParamsCons _ t2 p2, ParamsCons qs3 t3 p3 => andb (isUnqualified_fun qs3)
-                                                                         (andb (isComposite_fun        t1 t2 t3)
-                                                                               (isComposite_params_fun p1 p2 p3))
-  | _                 , _                 , _                    => false
   end.
 
-Fixpoint isComposite_find t1 t2 : option type :=
+Fixpoint is_composite_params (p1 p2 p3 : list (qualifiers * ctype)) : bool :=
+  match p1, p2, p3 with
+  | nil          , nil          , nil            => true
+  | (_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3 => unqualified q3 && is_composite t1 t2 t3 && is_composite_params p1 p2 p3
+  | _            , _            , _              => false
+  end.
+
+Fixpoint composite t1 t2 : option ctype :=
   match t1, t2 with
   | Void          , Void           => Some Void
-  | Basic bt1     , Basic bt2      => if bool_of_decision (decide bt1 bt2 : Decision (bt1 = bt2))
+  | Basic bt1     , Basic bt2      => if eq_basicType bt1 bt2
                                         then Some (Basic bt1)
                                         else None
-  | Array t1 n1   , Array t2 n2    => if bool_of_decision (decide n1 n2 : Decision (n1 = n2))
-                                        then option_map (fun t => Array t n1) (isComposite_find t1 t2)
+  | Array t1 n1   , Array t2 n2    => if eq_nat n1 n2
+                                        then option_map (fun t => Array t n1) (composite t1 t2)
                                         else None
-  | Function t1 p1, Function t2 p2 => match isComposite_find t1 t2, isComposite_params_find p1 p2 with
-                                      | Some t, Some p => Some (Function t p)
-                                      | _     , _      => None
-                                      end
-  | Pointer qs1 t1, Pointer qs2 t2 => if bool_of_decision (decide qs1 qs2 :Decision (_ = _))
-                                        then option_map (Pointer qs1) (isComposite_find t1 t2)
-                                        else None
-  | _             , _              => None
-  end
-with isComposite_params_find p1 p2 : option params :=
-  match p1, p2 with
-  | ParamsNil         , ParamsNil          => Some (ParamsNil)
-  | ParamsCons _ t1 p1, ParamsCons _ t2 p2 =>
-      match isComposite_find t1 t2, isComposite_params_find p1 p2 with
-      | Some t, Some p => Some (ParamsCons unqualified t p)
+  | Function t1 p1, Function t2 p2 =>
+      let fix find_composite_params p1 p2 : option (list (qualifiers * ctype)) :=
+        match p1, p2 with
+        | nil          , nil           => Some nil
+        | (_, t1) :: p1, (_, t2) :: p2 => match composite t1 t2, find_composite_params p1 p2 with
+                                          | Some t, Some p => Some ((no_qualifiers, t) :: p)
+                                          | _     , _      => None
+                                          end
+        | _             , _            => None
+        end in
+      match composite t1 t2, find_composite_params p1 p2 with
+      | Some t, Some p => Some (Function t p)
       | _     , _      => None
       end
-  | _                 , _                  => None
+  | Pointer  q1 t1, Pointer  q2 t2 => if eq_qualifiers q1 q2
+                                        then option_map (Pointer q1) (composite t1 t2)
+                                        else None
+  | _             , _              => None
+  end.
+
+Fixpoint composite_params (p1 p2 : list (qualifiers * ctype)) : option (list (qualifiers * ctype)) :=
+  match p1, p2 with
+  | nil          , nil           => Some nil
+  | (_, t1) :: p1, (_, t2) :: p2 => match composite t1 t2, composite_params p1 p2 with
+                                    | Some t, Some p => Some ((no_qualifiers, t) :: p)
+                                    | _     , _      => None
+                                    end
+  | _            , _             => None
   end.
