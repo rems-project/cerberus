@@ -1,4 +1,3 @@
-Require Import Bool.
 Require Import ZArith.
 
 Require Import Common.
@@ -7,12 +6,16 @@ Require Import Implementation Implementation_proof.
 
 Local Open Scope Z.
 Local Open Scope list_scope.
+Local Open Scope bool_scope.
 
-Definition no_qualifiers := {|
-  const    := false;
-  restrict := false;
-  volatile := false 
-|}.
+Definition pointer_convert (t:ctype) : ctype :=
+  match t with
+  | Void         => Void
+  | Basic    bt  => Basic bt
+  | Pointer  q t => Pointer q t
+  | Array    t n => Pointer no_qualifiers t
+  | Function t q => Pointer no_qualifiers (Function t q)
+end.
 
 Definition unqualified qs :=
   match qs with
@@ -48,17 +51,6 @@ Definition boolean t :=
 
 Definition unsigned P it : bool :=
   negb (signed P it).
-
-Definition integer_type_range P it :=
-  let prec := precision P it in
-  if unsigned P it then
-    @make_range 0 (2^prec - 1) (integerTypeRange_unsigned (precision_ge_one P _))
-  else
-    match binary_mode P with
-    | Two'sComplement   => @make_range (-2^(prec - 1))     (2^(prec - 1) - 1) (integerTypeRange_signed1 (precision_ge_one P _))
-    | One'sComplement   => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
-    | SignPlusMagnitude => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
-    end.
 
 Definition signed_type it : bool :=
   match it with
@@ -279,7 +271,7 @@ Definition integer_promotion P it : integerType :=
                       else it
   end.
 
-Definition is_usual_arithmetic_integer_promoted P it1 it2 it3 : bool :=
+Definition is_usual_arithmetic_prmoted_integer P it1 it2 it3 : bool :=
   if eq_integerType it1 it2 then
      eq_integerType it1 it3
   else
@@ -317,7 +309,7 @@ Definition is_usual_arithmetic_integer_promoted P it1 it2 it3 : bool :=
     else
       false.
 
-Definition usual_arithmetic_integer_promoted P it1 it2 : integerType :=
+Definition usual_arithmetic_promoted_integer P it1 it2 : integerType :=
   if eq_integerType it1 it2 then
     it1
   else
@@ -350,7 +342,7 @@ Definition usual_arithmetic_integer_promoted P it1 it2 : integerType :=
           corresponding_unsigned it2.
 
 Definition usual_arithmetic_integer P it1 it2 : integerType :=
-  usual_arithmetic_integer_promoted P (integer_promotion P it1)
+  usual_arithmetic_promoted_integer P (integer_promotion P it1)
                                       (integer_promotion P it2).
 
 Definition usual_arithmetic P t1 t2 : option ctype :=
