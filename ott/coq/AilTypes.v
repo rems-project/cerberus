@@ -42,6 +42,12 @@ Record qualifiers := make_qualifiers {
   volatile : bool
 }.
 
+Definition no_qualifiers := {|
+  const    := false;
+  restrict := false;
+  volatile := false 
+|}.
+
 Definition eq_qualifiers x y := 
      Bool.eqb (const    x) (const    y)
   && Bool.eqb (restrict x) (restrict y)
