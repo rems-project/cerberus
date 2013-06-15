@@ -110,16 +110,16 @@ Proof.
   end; my_auto.
 Qed.
 
-Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
- | Void : type (*r \texttt{void} type (\S6.2.5\#19) *)
+Inductive ctype : Set :=  (*r $\texttt{Ail}_\tau$ types *)
+ | Void : ctype (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic (bt:basicType) (*r basic types (\S6.2.5\#14) *)
- | Array (t:type) (n:nat) (*r array types (\S6.2.5\#20) *)
- | Function (t:type) (p:list (qualifiers * type)) (*r function types *)
- | Pointer (q:qualifiers) (t:type) (*r pointer types *).
+ | Array (t:ctype) (n:nat) (*r array types (\S6.2.5\#20) *)
+ | Function (t:ctype) (p:list (qualifiers * ctype)) (*r function types *)
+ | Pointer (q:qualifiers) (t:ctype) (*r pointer types *).
 
-Definition type_nrect
-         (P : type -> Type)
-         (Q : list (qualifiers * type) -> Type)
+Definition ctype_nrect
+         (P : ctype -> Type)
+         (Q : list (qualifiers * ctype) -> Type)
 
          (Hnil      : Q nil)
          (Hcons     : forall {q} {t} {p}, P t -> Q p -> Q (cons (q,t) p))
@@ -128,7 +128,7 @@ Definition type_nrect
          (HBasic    : forall {bt}, P (Basic bt))
          (HArray    : forall {t} {n}, P t -> P (Array t n))
          (HFunction : forall {t} {p}, P t -> Q p -> P (Function t p))
-         (HPointer  : forall {q : qualifiers} {t : type}, P t -> P (Pointer q t)) :
+         (HPointer  : forall {q : qualifiers} {t : ctype}, P t -> P (Pointer q t)) :
   forall t, P t
 :=
   fix f t : P t :=
@@ -145,34 +145,34 @@ Definition type_nrect
     | Pointer  _ _ => HPointer  (f _)
     end.
 
-Fixpoint eq_type x y :=
+Fixpoint eq_ctype x y :=
   match x, y with
   | Void          , Void           => true
   | Basic    bt1  , Basic bt2      => eq_basicType bt1 bt2
-  | Array    t1 n1, Array    t2 n2 => eq_type t1 t2 && eq_nat n1 n2
+  | Array    t1 n1, Array    t2 n2 => eq_ctype t1 t2 && eq_nat n1 n2
   | Function t1 p1, Function t2 p2 => let fix eq_params p1 p2 : bool :=
                                         match p1, p2 with
                                         | nil            , nil             => true
-                                        | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_type t1 t2 && eq_params p1 p2
+                                        | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params p1 p2
                                         | _              , _               => false
                                         end in
-                                      eq_type t1 t2 && eq_params p1 p2
-  | Pointer  q1 t1, Pointer  q2 t2 => eq_qualifiers q1 q2 && eq_type t1 t2
+                                      eq_ctype t1 t2 && eq_params p1 p2
+  | Pointer  q1 t1, Pointer  q2 t2 => eq_qualifiers q1 q2 && eq_ctype t1 t2
   | _             , _              => false
   end.
 
-Fixpoint eq_params (p1 p2 : list (qualifiers * type)) : bool :=
+Fixpoint eq_params (p1 p2 : list (qualifiers * ctype)) : bool :=
   match p1, p2 with
   | nil            , nil             => true
-  | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_type t1 t2 && eq_params p1 p2
+  | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params p1 p2
   | _              , _               => false
   end.
 
-Lemma eq_type_correct :
-  forall x y, boolSpec (eq_type x y) (x = y).
+Lemma eq_ctype_correct :
+  forall x y, boolSpec (eq_ctype x y) (x = y).
 Proof.
-  apply (type_nrect (fun x => forall y, boolSpec (eq_type x y) (x = y))
-                    (fun x => forall y, boolSpec (eq_params x y) (x = y)));
+  apply (ctype_nrect (fun x => forall y, boolSpec (eq_ctype  x y) (x = y))
+                     (fun x => forall y, boolSpec (eq_params x y) (x = y)));
   destruct y; simpl; fold eq_params;
   repeat (
     my_auto;
@@ -180,43 +180,21 @@ Proof.
     | |- context[eq_basicType  ?x ?y] => set (eq_basicType_correct  x y)
     | |- context[eq_qualifiers ?x ?y] => set (eq_qualifiers_correct x y)
     | |- context[eq_nat        ?x ?y] => set (eq_nat_correct        x y)
-    | H : forall _, boolSpec (eq_type   ?x _) _ |- context[eq_type   ?x ?y] => set (H y)
+    | H : forall _, boolSpec (eq_ctype  ?x _) _ |- context[eq_ctype  ?x ?y] => set (H y)
     | H : forall _, boolSpec (eq_params ?x _) _ |- context[eq_params ?x ?y] => set (H y)
     end;
     boolSpec_destruct
   ).
 Qed.
 
-(*
-Inductive type : Set :=  (*r $\texttt{Ail}_\tau$ types *)
- | Void : type (*r \texttt{void} type (\S6.2.5\#19) *)
- | Basic (bt:basicType) (*r basic types (\S6.2.5\#14) *)
- | Array (ty:type) (n:nat) (*r array types (\S6.2.5\#20) *)
- | Function (ty:type) (p:params) (*r function types *)
- | Pointer (qs:qualifiers) (ty:type) (*r pointer types *)
-with params : Set :=
- | ParamsNil  
- | ParamsCons (qs:qualifiers) (ty:type) (p:params).
-
-Fixpoint type_eq_dec   (t1 t2 :   type) : Decision (t1 = t2)
-with     params_eq_dec (p1 p2 : params) : Decision (p1 = p2).
-Proof.
-  + dec_eq.
-  + dec_eq.
-Defined.
-
-Instance type_DecEq : DecidableEq type   := type_eq_dec.
-Instance params_DecEq : DecidableEq params := params_eq_dec.
-*)
-
 Inductive typeCategory : Set := 
- | LvalueType (q:qualifiers) (t:type)
- | ExpressionType (t:type).
+ | LvalueType (q:qualifiers) (t:ctype)
+ | ExpressionType (t:ctype).
 
 Definition eq_typeCategory x y : bool :=
   match x, y with
-  | LvalueType q1  t1, LvalueType q2  t2 => eq_type t1 t2 && eq_qualifiers q1 q2
-  | ExpressionType t1, ExpressionType t2 => eq_type t1 t2
+  | LvalueType q1  t1, LvalueType q2  t2 => eq_ctype t1 t2 && eq_qualifiers q1 q2
+  | ExpressionType t1, ExpressionType t2 => eq_ctype t1 t2
   | _                , _                 => false
   end.
 
@@ -227,7 +205,7 @@ Proof.
   repeat (
     my_auto;
     match goal with
-    | |- context[eq_type       ?x ?y] => set (eq_type_correct       x y)
+    | |- context[eq_ctype      ?x ?y] => set (eq_ctype_correct      x y)
     | |- context[eq_qualifiers ?x ?y] => set (eq_qualifiers_correct x y)
     end;
     boolSpec_destruct
