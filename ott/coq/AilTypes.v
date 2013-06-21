@@ -68,28 +68,27 @@ Inductive ctype : Set :=  (*r $\texttt{Ail}_\tau$ types *)
  | Function (t:ctype) (p:list (qualifiers * ctype)) (*r function types *)
  | Pointer (q:qualifiers) (t:ctype) (*r pointer types *).
 
+
+Definition eq_params_aux eq_ctype :=
+  fix eq_params (p1 p2 : list (qualifiers * ctype)) : bool :=
+    match p1, p2 with
+    | nil            , nil             => true
+    | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params p1 p2
+    | _              , _               => false
+    end.
+
 Fixpoint eq_ctype x y :=
+  let eq_params := eq_params_aux eq_ctype in
   match x, y with
   | Void          , Void           => true
   | Basic    bt1  , Basic bt2      => eq_basicType bt1 bt2
   | Array    t1 n1, Array    t2 n2 => eq_ctype t1 t2 && eq_nat n1 n2
-  | Function t1 p1, Function t2 p2 => let fix eq_params p1 p2 : bool :=
-                                        match p1, p2 with
-                                        | nil            , nil             => true
-                                        | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params p1 p2
-                                        | _              , _               => false
-                                        end in
-                                      eq_ctype t1 t2 && eq_params p1 p2
+  | Function t1 p1, Function t2 p2 => eq_ctype t1 t2 && eq_params p1 p2
   | Pointer  q1 t1, Pointer  q2 t2 => eq_qualifiers q1 q2 && eq_ctype t1 t2
   | _             , _              => false
   end.
 
-Fixpoint eq_params (p1 p2 : list (qualifiers * ctype)) : bool :=
-  match p1, p2 with
-  | nil            , nil             => true
-  | cons (q1,t1) p1, cons (q2,t2) p2 => eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params p1 p2
-  | _              , _               => false
-  end.
+Definition eq_params := eq_params_aux eq_ctype.
 
 Inductive typeCategory : Set := 
  | LvalueType (q:qualifiers) (t:ctype)

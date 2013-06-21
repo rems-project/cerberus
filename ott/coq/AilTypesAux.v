@@ -2,7 +2,7 @@ Require Import ZArith.
 
 Require Import Common.
 Require Import AilTypes.
-Require Import Implementation Implementation_proof.
+Require Import Implementation.
 
 Local Open Scope Z.
 Local Open Scope list_scope.
@@ -65,10 +65,10 @@ Definition unsigned_type it : bool :=
   | _ => false
   end.
 
-Definition in_integer_type_range P n it : bool :=
-  mem_nat n (integer_type_range P it).
+Definition in_integer_range P n it : bool :=
+  Range.mem_nat n (integer_range P it).
 
-Definition le_integer_type_range P it1 it2 : bool :=
+Definition le_integer_range P it1 it2 : bool :=
   match it1, it2 with
   | Char             , Char              => true
   | Char             , Signed   Ichar    => signed P Char
@@ -111,7 +111,7 @@ Definition le_integer_type_range P it1 it2 : bool :=
   | Unsigned Int     , Unsigned Long     => true
   | Unsigned Int     , Unsigned LongLong => true
   | Unsigned Long    , Unsigned Long     => true
-  | Unsigned Long    , Unsigned LongLong  => true
+  | Unsigned Long    , Unsigned LongLong => true
   | Unsigned LongLong, Unsigned LongLong => true
   | Unsigned ibt     , Bool              => Z.eqb (precision P (Unsigned ibt))
                                                   (precision P Bool)
@@ -234,13 +234,13 @@ Definition is_corresponding_unsigned it1 it2 : bool :=
   | _          , _             => false
   end.
 
-Definition find_corresponding_unsigned it : option integerType :=
+Definition corresponding_unsigned it : option integerType :=
   match it with
   | Signed ibt => Some (Unsigned ibt)
   | _          => None
   end.
 
-Definition corresponding_unsigned it : integerType :=
+Definition make_corresponding_unsigned it : integerType :=
   match it with
   | Signed ibt => Unsigned ibt
   | _          => it
@@ -253,9 +253,9 @@ Definition is_integer_promotion P it1 it2 : bool :=
   | Unsigned Int, Unsigned Int => true
   | Signed   Int, Unsigned Int => false
   | _           , Signed   Int => le_integer_rank it1 (Signed Int) &&
-                                  le_integer_type_range P it1 (Signed Int)
+                                  le_integer_range P it1 (Signed Int)
   | _           , Unsigned Int => le_integer_rank it1 (Signed Int) &&
-                                  negb (le_integer_type_range P it1 (Signed Int))
+                                  negb (le_integer_range P it1 (Signed Int))
   | _           , _            => eq_integerType it1 it2 &&
                                   negb (le_integer_rank it1 (Signed Int))
   end.
@@ -265,13 +265,13 @@ Definition integer_promotion P it : integerType :=
   | Signed   Int => Signed   Int
   | Unsigned Int => Unsigned Int
   | _            => if le_integer_rank it (Signed Int)
-                      then if le_integer_type_range P it (Signed Int)
+                      then if le_integer_range P it (Signed Int)
                              then Signed Int
                              else Unsigned Int
                       else it
   end.
 
-Definition is_usual_arithmetic_prmoted_integer P it1 it2 it3 : bool :=
+Definition is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool :=
   if eq_integerType it1 it2 then
      eq_integerType it1 it3
   else
@@ -285,7 +285,7 @@ Definition is_usual_arithmetic_prmoted_integer P it1 it2 it3 : bool :=
         if le_integer_rank it1 it2 then
           eq_integerType it2 it3
         else
-          if le_integer_type_range P it2 it1 then
+          if le_integer_range P it2 it1 then
             eq_integerType it1 it3
           else
             is_corresponding_unsigned it1 it3
@@ -300,7 +300,7 @@ Definition is_usual_arithmetic_prmoted_integer P it1 it2 it3 : bool :=
       else if signed_type it2 then
         if le_integer_rank it2 it1 then
           eq_integerType it1 it3
-        else if le_integer_type_range P it1 it2 then
+        else if le_integer_range P it1 it2 then
           eq_integerType it2 it3
         else
           is_corresponding_unsigned it2 it3
@@ -323,10 +323,10 @@ Definition usual_arithmetic_promoted_integer P it1 it2 : integerType :=
         if le_integer_rank it1 it2 then
           it2
         else
-          if le_integer_type_range P it2 it1 then
+          if le_integer_range P it2 it1 then
             it1
           else
-            corresponding_unsigned it1
+            make_corresponding_unsigned it1
     else
       if unsigned_type it2 then
         if lt_integer_rank it2 it1 then
@@ -336,14 +336,24 @@ Definition usual_arithmetic_promoted_integer P it1 it2 : integerType :=
       else
         if le_integer_rank it2 it1 then
           it1
-        else if le_integer_type_range P it1 it2 then
+        else if le_integer_range P it1 it2 then
           it2
         else
-          corresponding_unsigned it2.
+          make_corresponding_unsigned it2.
+
+Definition is_usual_arithmetic_integer P it1 it2 it3 : bool :=
+  is_usual_arithmetic_promoted_integer P (integer_promotion P it1)
+                                         (integer_promotion P it2) it3.
 
 Definition usual_arithmetic_integer P it1 it2 : integerType :=
   usual_arithmetic_promoted_integer P (integer_promotion P it1)
                                       (integer_promotion P it2).
+
+Definition is_usual_arithmetic P t1 t2 t3 : bool :=
+  match t1, t2, t3 with
+  | Basic (Integer it1), Basic (Integer it2), Basic (Integer it3) => is_usual_arithmetic_integer P it1 it2 it3
+  | _                  , _                  , _                   => false
+  end.
 
 Definition usual_arithmetic P t1 t2 : option ctype :=
   match t1, t2 with
@@ -384,57 +394,63 @@ Definition real t : bool := integer t.
 
 Definition lvalue_convertible t : bool := negb (array t) && complete t.
 
+Definition is_compatible_params_aux is_compatible :=
+  fix is_compatible_params (p1 p2 : list (qualifiers * ctype)) : bool :=
+    match p1, p2 with
+    | nil          , nil           => true
+    | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 && is_compatible_params p1 p2
+    | _            , _             => false
+    end.
+
 Fixpoint is_compatible t1 t2 {struct t1} : bool :=
+  let is_compatible_params := is_compatible_params_aux is_compatible in
   match t1, t2 with
   | Void          , Void           => true
   | Basic bt1     , Basic bt2      => eq_basicType bt1 bt2
   | Array    t1 n1, Array    t2 n2 => is_compatible t1 t2 && eq_nat n1 n2
-  | Function t1 p1, Function t2 p2 => let fix is_compatible_params p1 p2 :=
-                                        match p1, p2 with
-                                        | nil          , nil           => true
-                                        | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 && is_compatible_params p1 p2
-                                        | _            , _             => false
-                                        end in
-                                      is_compatible t1 t2 && is_compatible_params p1 p2
+  | Function t1 p1, Function t2 p2 => is_compatible t1 t2 && is_compatible_params p1 p2
   | Pointer  q1 t1, Pointer  q2 t2 => is_compatible t1 t2 && eq_qualifiers q1 q2
   | _             , _              => false
   end.
 
-Fixpoint is_compatible_params (p1 p2 : list (qualifiers * ctype)) : bool :=
-  match p1, p2 with
-  | nil          , nil           => true
-  | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 &&
-                                        is_compatible_params p1 p2
-  | _            , _             => false
-  end.
+Definition is_compatible_params := is_compatible_params_aux is_compatible.
 
-Fixpoint is_composite t1 t2 t3 : bool :=
+Definition is_composite_params_aux is_composite :=
+  fix  is_composite_params_aux(p1 p2 p3 : list (qualifiers * ctype)) : bool :=
+    match p1, p2, p3 with
+    | nil          , nil          , nil            => true
+    | (_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3 => unqualified q3 &&
+                                                      is_composite t1 t2 t3 &&
+                                                      is_composite_params_aux p1 p2 p3
+    | _            , _            , _              => false
+    end.
+
+Fixpoint is_composite (t1 t2 t3 : ctype) : bool :=
+  let is_composite_params := is_composite_params_aux is_composite in
   match t1, t2, t3 with
   | Void          , Void          , Void           => true
   | Basic bt1     , Basic bt2     , Basic bt3      => eq_basicType bt1 bt2 && eq_basicType bt1 bt3
   | Array t1 n1   , Array t2 n2   , Array t3 n3    => is_composite t1 t2 t3 && eq_nat n1 n2 && eq_nat n1 n3
-  | Function t1 p1, Function t2 p2, Function t3 p3 => 
-      let fix is_composite_params p1 p2 p3 :=
-        match p1, p2, p3 with
-        | nil          , nil          , nil            => true
-        | (_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3 => unqualified q3 &&
-                                                          is_composite t1 t2 t3 &&
-                                                          is_composite_params p1 p2 p3
-        | _            , _            , _              => false
-        end in
-      is_composite t1 t2 t3 && is_composite_params p1 p2 p3
+  | Function t1 p1, Function t2 p2, Function t3 p3 => is_composite t1 t2 t3 && is_composite_params p1 p2 p3
   | Pointer  q1 t1, Pointer  q2 t2, Pointer  q3 t3 => is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
   | _             , _             , _              => false
   end.
 
-Fixpoint is_composite_params (p1 p2 p3 : list (qualifiers * ctype)) : bool :=
-  match p1, p2, p3 with
-  | nil          , nil          , nil            => true
-  | (_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3 => unqualified q3 && is_composite t1 t2 t3 && is_composite_params p1 p2 p3
-  | _            , _            , _              => false
-  end.
+Definition is_composite_params := is_composite_params_aux is_composite.
+
+Definition composite_params_aux composite :=
+  fix composite_params (p1 p2 : list (qualifiers * ctype)) : option (list (qualifiers * ctype)):=
+    match p1, p2 with
+    | nil          , nil           => Some nil
+    | (_, t1) :: p1, (_, t2) :: p2 => match composite t1 t2, composite_params p1 p2 with
+                                      | Some t, Some p => Some ((no_qualifiers, t) :: p)
+                                      | _     , _      => None
+                                      end
+    | _            , _             => None
+    end.
 
 Fixpoint composite t1 t2 : option ctype :=
+  let composite_params := composite_params_aux composite in
   match t1, t2 with
   | Void          , Void           => Some Void
   | Basic bt1     , Basic bt2      => if eq_basicType bt1 bt2
@@ -444,16 +460,7 @@ Fixpoint composite t1 t2 : option ctype :=
                                         then option_map (fun t => Array t n1) (composite t1 t2)
                                         else None
   | Function t1 p1, Function t2 p2 =>
-      let fix find_composite_params p1 p2 : option (list (qualifiers * ctype)) :=
-        match p1, p2 with
-        | nil          , nil           => Some nil
-        | (_, t1) :: p1, (_, t2) :: p2 => match composite t1 t2, find_composite_params p1 p2 with
-                                          | Some t, Some p => Some ((no_qualifiers, t) :: p)
-                                          | _     , _      => None
-                                          end
-        | _             , _            => None
-        end in
-      match composite t1 t2, find_composite_params p1 p2 with
+      match composite t1 t2, composite_params p1 p2 with
       | Some t, Some p => Some (Function t p)
       | _     , _      => None
       end
@@ -463,12 +470,4 @@ Fixpoint composite t1 t2 : option ctype :=
   | _             , _              => None
   end.
 
-Fixpoint composite_params (p1 p2 : list (qualifiers * ctype)) : option (list (qualifiers * ctype)) :=
-  match p1, p2 with
-  | nil          , nil           => Some nil
-  | (_, t1) :: p1, (_, t2) :: p2 => match composite t1 t2, composite_params p1 p2 with
-                                    | Some t, Some p => Some ((no_qualifiers, t) :: p)
-                                    | _     , _      => None
-                                    end
-  | _            , _             => None
-  end.
+Definition composite_params := composite_params_aux composite.
