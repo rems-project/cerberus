@@ -855,17 +855,9 @@ Lemma make_corresponding_unsigned_unique {it1} :
   findUnique (make_corresponding_unsigned it1) (D.correspondingUnsigned it1).
 Proof. intros it2. destruct it1, it2; inversion 1; reflexivity. Qed.
 
-Inductive promoted : integerType -> Set :=
-  | Promoted_SignedInt        : promoted (Signed   Int)
-  | Promoted_SignedLong       : promoted (Signed   Long)
-  | Promoted_SignedLongLong   : promoted (Signed   LongLong)
-  | Promoted_UnsignedInt      : promoted (Unsigned Int)
-  | Promoted_UnsignedLong     : promoted (Unsigned Long)
-  | Promoted_UnsignedLongLong : promoted (Unsigned LongLong).
-
 Lemma integerPromotion_promoted {P} {it1} {it2} :
   D.integerPromotion P it1 it2 ->
-  promoted it2.
+  D.promoted it2.
 Proof.
   inversion 1; my_auto.
   set (le_integer_rank_correct P it2 (Signed Int)).
@@ -920,8 +912,8 @@ Proof.
 Qed.
 
 Lemma is_usual_arithmetic_promoted_integer_correct P it1 it2 it3 :
-  promoted it1 ->
-  promoted it2 ->
+  D.promoted it1 ->
+  D.promoted it2 ->
   boolSpec (is_usual_arithmetic_promoted_integer P it1 it2 it3)
            (D.usualArithmeticPromotedInteger     P it1 it2 it3).
 Proof.
@@ -957,8 +949,8 @@ Proof.
 Qed.
 
 Lemma usual_arithmetic_promoted_integer_correct P {it1 it2} :
-  promoted it1 ->
-  promoted it2 ->
+  D.promoted it1 ->
+  D.promoted it2 ->
   findSpec (usual_arithmetic_promoted_integer P it1 it2) (D.usualArithmeticPromotedInteger P it1 it2).
 Proof.
   do 2 unfold_goal.
@@ -992,8 +984,8 @@ Proof.
 Qed.
 
 Lemma usual_arithmetic_promoted_integer_unique {P} {it1 it2} :
-  promoted it1 ->
-  promoted it2 ->
+  D.promoted it1 ->
+  D.promoted it2 ->
   findUnique (usual_arithmetic_promoted_integer P it1 it2) (D.usualArithmeticPromotedInteger P it1 it2).
 Proof.
   do 2 unfold_goal.
@@ -1022,8 +1014,8 @@ Proof.
 Qed.
 
 Lemma usualArithmeticPromotedInteger_functional P {it1 it2 it3 it3'} :
-  promoted it1 ->
-  promoted it2 ->
+  D.promoted it1 ->
+  D.promoted it2 ->
   D.usualArithmeticPromotedInteger P it1 it2 it3  ->
   D.usualArithmeticPromotedInteger P it1 it2 it3' ->
   it3 = it3'.
