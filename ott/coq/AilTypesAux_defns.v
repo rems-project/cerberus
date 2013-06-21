@@ -8,6 +8,14 @@ Require Import Range_defns.
 
 Local Open Scope Z.
 
+(* defns JisSigned *)
+Inductive signed : implementation -> integerType -> Prop :=    (* defn isSigned *)
+ | Signed_Int : forall (P:implementation) (ibt:integerBaseType),
+     signed P (Signed ibt)
+ | Signed_Char : forall (P:implementation),
+     Implementation.signed P Char = true  ->
+     signed P Char.
+
 Inductive unqualified : qualifiers -> Set :=
   | Unqualified  : unqualified no_qualifiers.
 
@@ -58,18 +66,18 @@ Inductive unsignedType : integerType -> Set :=    (* defn isUnsigned *)
 
 (** definitions *)
 
-(* defns JinTypeRange *)
-Inductive inIntegerTypeRange : implementation -> nat -> integerType -> Prop :=    (* defn inTypeRange *)
- | InIntegerTypeRange : forall (P:implementation) (n:nat) (it:integerType),
-     memNat n (integer_type_range P it)  ->
-     inIntegerTypeRange P n it.
+(* defns JinRange *)
+Inductive inIntegerRange : implementation -> nat -> integerType -> Prop :=    (* defn inRange *)
+ | InIntegerRange : forall (P:implementation) (n:nat) (it:integerType),
+     memNat n (integer_range P it)  ->
+     inIntegerRange P n it.
 (** definitions *)
 
-(* defns JleTypeRange *)
-Inductive leIntegerTypeRange : implementation -> integerType -> integerType -> Prop :=    (* defn leTypeRange *)
- | LeIntegerTypeRange : forall (P:implementation) (it1 it2:integerType),
-     sub (integer_type_range P it1) (integer_type_range P it2) ->
-     leIntegerTypeRange P it1 it2.
+(* defns JleRange *)
+Inductive leIntegerRange : implementation -> integerType -> integerType -> Prop :=    (* defn leRange *)
+ | LeIntegerRange : forall (P:implementation) (it1 it2:integerType),
+     sub (integer_range P it1) (integer_range P it2) ->
+     leIntegerRange P it1 it2.
 (** definitions *)
 
 (* defns JeqRank *)
@@ -170,13 +178,13 @@ Inductive integerPromotion : implementation -> integerType -> integerType -> Set
       ~ it = Unsigned Int ->
       ~ it = Signed   Int ->
      leIntegerRank P it (Signed Int) ->
-     leIntegerTypeRange P it (Signed Int) ->
+     leIntegerRange P it (Signed Int) ->
      integerPromotion P it (Signed Int)
  | IntegerPromotion_ToUnsignedInt : forall (P:implementation) (it:integerType),
       ~ it = Unsigned Int ->
       ~ it = Signed   Int ->
      leIntegerRank P it (Signed Int) ->
-      ~ leIntegerTypeRange P it (Signed Int) ->
+      ~ leIntegerRange P it (Signed Int) ->
      integerPromotion P it (Unsigned Int)
  | IntegerPromotion_UnsignedInt : forall (P:implementation),
      integerPromotion P (Unsigned Int) (Unsigned Int)
@@ -231,21 +239,21 @@ Inductive usualArithmeticPromotedInteger : implementation -> integerType -> inte
      unsignedType it1 ->
      signedType it2 ->
      leIntegerRank P it1 it2 ->
-     leIntegerTypeRange P it1 it2 ->
+     leIntegerRange P it1 it2 ->
      usualArithmeticPromotedInteger P it1 it2 it2
  | UsualArithmeticPromotedInteger_GtSigned : forall (P:implementation) (it1 it2 :integerType),
       ~ (   it1  =  it2   )  ->
      signedType it1 ->
      unsignedType it2 ->
      leIntegerRank P it2 it1 ->
-     leIntegerTypeRange P it2 it1 ->
+     leIntegerRange P it2 it1 ->
      usualArithmeticPromotedInteger P it1 it2 it1
  | UsualArithmeticPromotedInteger_LtSigned' : forall (P:implementation) (it1 it2 it2':integerType),
       ~ (   it1  =  it2   )  ->
      unsignedType it1 ->
      signedType it2 ->
      leIntegerRank P it1 it2 ->
-      ~ (  leIntegerTypeRange P it1 it2  )  ->
+      ~ (  leIntegerRange P it1 it2  )  ->
      correspondingUnsigned it2 it2' ->
      usualArithmeticPromotedInteger P it1 it2 it2'
  | UsualArithmeticPromotedInteger_GtSigned' : forall (P:implementation) (it1 it2 it1':integerType),
@@ -253,7 +261,7 @@ Inductive usualArithmeticPromotedInteger : implementation -> integerType -> inte
      signedType it1 ->
      unsignedType it2 ->
      leIntegerRank P it2 it1 ->
-      ~ (  leIntegerTypeRange P it2 it1  )  ->
+      ~ (  leIntegerRange P it2 it1  )  ->
      correspondingUnsigned it1 it1' ->
      usualArithmeticPromotedInteger P it1 it2 it1'.
 (** definitions *)
@@ -263,7 +271,7 @@ Inductive usualArithmeticInteger (P : implementation) : integerType -> integerTy
       forall (it1 it2 it1' it2' it : integerType),
       integerPromotion P it1 it1' ->
       integerPromotion P it2 it2' ->
-      usualArithmeticInteger P it1' it2' it ->
+      usualArithmeticPromotedInteger P it1' it2' it ->
       usualArithmeticInteger P it1 it2 it.
 
 Inductive usualArithmetic (P : implementation) : ctype -> ctype -> ctype -> Prop :=

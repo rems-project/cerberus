@@ -2,7 +2,7 @@
 
 Require Import ZArith.
 
-Require Export Range.
+Require Import Range.
 Require Import AilTypes.
 
 Local Open Scope Z.
@@ -61,23 +61,23 @@ Record implementation := make_implementation {
        if there are M value bits in the signed type and N in the unsigned
        type, then M ≤ N
    *)
-  lePrecision_Signed_Unsigned ibt    : precision (Signed   ibt) <= precision (Unsigned    ibt);
+  le_precision_Signed_Unsigned ibt    : precision (Signed   ibt) <= precision (Unsigned    ibt);
   (* unsigned char has no padding. *)
-  lePrecision_Signed_Unsigned_Ichar  : precision (Signed Ichar) <  precision (Unsigned  Ichar);
+  le_precision_Signed_Unsigned_Ichar  : precision (Signed Ichar) <  precision (Unsigned  Ichar);
 
-  lePrecision_Signed_Long_LongLong   : precision (Signed  Long) <= precision (Signed LongLong);
-  lePrecision_Signed_Int_Long        : precision (Signed   Int) <= precision (Signed     Long);
-  lePrecision_Signed_Short_Int       : precision (Signed Short) <= precision (Signed      Int);
-  lePrecision_Signed_Ichar_Short     : precision (Signed Ichar) <= precision (Signed    Short);
+  le_precision_Signed_Long_LongLong   : precision (Signed  Long) <= precision (Signed LongLong);
+  le_precision_Signed_Int_Long        : precision (Signed   Int) <= precision (Signed     Long);
+  le_precision_Signed_Short_Int       : precision (Signed Short) <= precision (Signed      Int);
+  le_precision_Signed_Ichar_Short     : precision (Signed Ichar) <= precision (Signed    Short);
 
   (* Note: this cannot be inferred from the standard text but it is vital for
            integer conversions.
    *)
-  lePrecision_Unsigned_Long_LongLong : precision (Unsigned  Long) <= precision (Unsigned LongLong);
-  lePrecision_Unsigned_Int_Long      : precision (Unsigned   Int) <= precision (Unsigned     Long);
-  lePrecision_Unsigned_Short_Int     : precision (Unsigned Short) <= precision (Unsigned      Int);
-  lePrecision_Unsigned_Ichar_Short   : precision (Unsigned Ichar) <= precision (Unsigned    Short);
-  lePrecision_Unsigned_Bool_Ichar    : precision Bool             <= precision (Unsigned    Ichar)
+  le_precision_Unsigned_Long_LongLong : precision (Unsigned  Long) <= precision (Unsigned LongLong);
+  le_precision_Unsigned_Int_Long      : precision (Unsigned   Int) <= precision (Unsigned     Long);
+  le_precision_Unsigned_Short_Int     : precision (Unsigned Short) <= precision (Unsigned      Int);
+  le_precision_Unsigned_Ichar_Short   : precision (Unsigned Ichar) <= precision (Unsigned    Short);
+  le_precision_Unsigned_Bool_Ichar    : precision Bool             <= precision (Unsigned    Ichar)
 }.
 
 
@@ -87,13 +87,13 @@ Proof.
   + set (precision_Char P) as Hchar;
     case_eq (signed P Char); intros Heq; rewrite Heq in Hchar; clear Heq;
     set (precision_Signed P Ichar) as Hmin; simpl in Hmin;
-    [|set (lePrecision_Signed_Unsigned P Ichar)];
+    [|set (le_precision_Signed_Unsigned P Ichar)];
     omega.
   + exact (precision_Bool P).
   + set (precision_Signed P ibt) as Hmin.
     destruct ibt; simpl in Hmin; omega.
   + set (precision_Signed P ibt) as Hmin.
-    set (lePrecision_Signed_Unsigned P ibt).
+    set (le_precision_Signed_Unsigned P ibt).
     destruct ibt; simpl in Hmin; omega.
 Defined.
 
@@ -106,7 +106,7 @@ Proof.
     omega.
 Qed.
 
-Definition integerTypeRange_unsigned {p} : 1 <= p -> 0 <= 2^p - 1.
+Definition integer_range_unsigned {p} : 1 <= p -> 0 <= 2^p - 1.
 Proof.
   intros.
   assert (0 <= p) as Hge_zero by omega.
@@ -114,7 +114,7 @@ Proof.
   omega.
 Qed.
 
-Definition integerTypeRange_signed_upper {p} : 1 <= p -> 0 <= 2^(p-1) - 1.
+Definition integer_range_signed_upper {p} : 1 <= p -> 0 <= 2^(p-1) - 1.
 Proof.
   intros.
   assert (0 <= p - 1) as Hge_zero by omega.
@@ -122,7 +122,7 @@ Proof.
   omega.
 Qed.
 
-Definition integerTypeRange_signed_lower1 {p} : 1 <= p -> -2^(p-1) <= 0.
+Definition integer_range_signed_lower1 {p} : 1 <= p -> -2^(p-1) <= 0.
 Proof.
   intros.
   assert (0 <= p - 1) as Hge_zero by omega.
@@ -130,7 +130,7 @@ Proof.
   omega.
 Qed.
 
-Definition integerTypeRange_signed_lower2 {p} : 1 <= p -> -2^(p-1) + 1 <= 0.
+Definition integer_range_signed_lower2 {p} : 1 <= p -> -2^(p-1) + 1 <= 0.
 Proof.
   intros.
   assert (0 <= p - 1) as Hge_zero by omega.
@@ -138,29 +138,29 @@ Proof.
   omega.
 Qed.
 
-Definition integerTypeRange_signed1 {p} : 1 <= p -> -2^(p-1) <= 2^(p-1) - 1.
+Definition integer_range_signed1 {p} : 1 <= p -> -2^(p-1) <= 2^(p-1) - 1.
 Proof.
   intros Hge_one.
-  set (integerTypeRange_signed_upper  Hge_one).
-  set (integerTypeRange_signed_lower1 Hge_one).
+  set (integer_range_signed_upper  Hge_one).
+  set (integer_range_signed_lower1 Hge_one).
   apply (Z.le_trans _ 0 _); assumption.
 Qed.
 
-Definition integerTypeRange_signed2 {p} : 1 <= p -> -2^(p-1) + 1 <= 2^(p-1) - 1.
+Definition integer_range_signed2 {p} : 1 <= p -> -2^(p-1) + 1 <= 2^(p-1) - 1.
 Proof.
   intros Hge_one.
-  set (integerTypeRange_signed_upper  Hge_one).
-  set (integerTypeRange_signed_lower2 Hge_one).
+  set (integer_range_signed_upper  Hge_one).
+  set (integer_range_signed_lower2 Hge_one).
   apply (Z.le_trans _ 0 _); assumption.
 Qed.
 
-Definition integer_type_range P it :=
+Definition integer_range P it :=
   let prec := precision P it in
   if signed P it then
     match binary_mode P with
-    | Two'sComplement   => @make_range (-2^(prec - 1))     (2^(prec - 1) - 1) (integerTypeRange_signed1 (precision_ge_one P _))
-    | One'sComplement   => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
-    | SignPlusMagnitude => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integerTypeRange_signed2 (precision_ge_one P _))
+    | Two'sComplement   => @make_range (-2^(prec - 1))     (2^(prec - 1) - 1) (integer_range_signed1 (precision_ge_one P _))
+    | One'sComplement   => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (precision_ge_one P _))
+    | SignPlusMagnitude => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (precision_ge_one P _))
     end
   else
-    @make_range 0 (2^prec - 1) (integerTypeRange_unsigned (precision_ge_one P _)).
+    @make_range 0 (2^prec - 1) (integer_range_unsigned (precision_ge_one P _)).

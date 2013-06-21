@@ -106,6 +106,11 @@ Definition optionSpec {A} (o : option A) (P : A -> Type) : Type :=
 Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
   forall a, P a -> o = Some a.
 
+Definition findSpec {A} (a : A) (P : A -> Type) : Type := P a.
+
+Definition findUnique {A} (a : A) (P : A -> Type) : Type :=
+  forall a', P a' -> a' = a.
+
 Definition bool_of_decision {P} : Decision P -> bool :=
   fun d => match d with
            | inl _ => true
