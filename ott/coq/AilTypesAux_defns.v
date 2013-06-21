@@ -172,6 +172,14 @@ Inductive correspondingUnsigned : integerType -> integerType -> Prop :=    (* de
      correspondingUnsigned (Signed ibt) (Unsigned ibt).
 (** definitions *)
 
+Inductive promoted : integerType -> Set :=
+  | Promoted_SignedInt        : promoted (Signed   Int)
+  | Promoted_SignedLong       : promoted (Signed   Long)
+  | Promoted_SignedLongLong   : promoted (Signed   LongLong)
+  | Promoted_UnsignedInt      : promoted (Unsigned Int)
+  | Promoted_UnsignedLong     : promoted (Unsigned Long)
+  | Promoted_UnsignedLongLong : promoted (Unsigned LongLong).
+
 (* defns JisPromotion *)
 Inductive integerPromotion : implementation -> integerType -> integerType -> Set :=    (* defn isPromotion *)
  | IntegerPromotion_ToSignedInt : forall (P:implementation) (it:integerType),
