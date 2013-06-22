@@ -9,6 +9,8 @@ Require Relations.
 Require Import Classes.SetoidClass.
 
 Open Scope type.
+Open Scope list.
+Open Scope bool.
 
 Definition neg P := P -> False.
 Definition boolSpec (b : bool) p := if b then p else neg p.
@@ -163,8 +165,8 @@ Obligation Tactic := my_auto.
 Definition Decision_elim {P} {A} : Decision P -> (P -> A) -> (neg P -> A) -> A :=
   fun d pos neg =>
     match d with
-    | inl P => pos P
-    | inr N => neg N
+    | inl p => pos p
+    | inr n => neg n
     end.
 
 Ltac destruct_decide :=
@@ -238,18 +240,6 @@ Ltac dec_eq :=
   repeat decision_eq;
   left; reflexivity.
 
-Instance bool_DecEq : DecidableEq bool.
-Proof. dec_eq. Defined.
-
-Instance list_DecEq {A} `{dec_A : DecidableEq A} : DecidableEq (list A).
-Proof. dec_eq. Defined.
-
-Instance pair_DecEq {A B : Type} `{dec_A : DecidableEq A} `{dec_B : DecidableEq B} : DecidableEq (A * B).
-Proof. dec_eq. Defined. 
-
-Instance option_DecEq {A : Type} (dec_A : DecidableEq A) : DecidableEq (option A).
-Proof. dec_eq. Defined. 
-
 Require Import RelationClasses.
 
 Class Trichotomous {A} (R: Relation_Definitions.relation A) := {
@@ -283,186 +273,6 @@ Ltac apply_ctx :=
   match goal with
   | [ f : _ -> ?t |- ?t ] => apply f
   end.
-
-Fixpoint list_in_fun {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
-  match ls with
-  | nil   => false
-  | x::xs => orb (eq x a) (list_in_fun eq a xs)
-  end.
-
-Fixpoint list_in_fun_correct {A:Type} {eq : A -> A -> bool} (a : A) (ls : list A) :
-  (forall x y, boolSpec (eq x y) (x = y)) ->
-  boolSpec (list_in_fun eq a ls) (List.In a ls).
-Proof.
-  intros eq_correct.
-  do 2 unfold_goal.
-  destruct ls;
-  my_auto;
-  fold (@list_in_fun A);
-  bool_simpl;
-  repeat (match goal with
-  | [|- context[eq ?x a]] =>
-      notHyp (x = a); notHyp (neg (x = a));
-      set (eq_correct x a)
-  | [|- context[list_in_fun eq a ?ls]] =>
-      notHyp (In a ls); notHyp (neg (In a ls));
-      set (list_in_fun_correct A eq a ls eq_correct)      
-  end; boolSpec_simpl);
-  my_auto.
-Qed.
-
-Fixpoint list_forall_fun {A:Type} (dec : A -> bool) (ls : list A) : bool :=
-  match ls with
-  | nil   => true
-  | x::xs => andb (dec x) (list_forall_fun dec xs)
-  end.
-
-Fixpoint list_forall_fun_correct {A} {P : A -> Prop} {dec} ls :
-  (forall a, boolSpec (dec a) (P a)) ->
-  boolSpec (list_forall_fun dec ls) (Forall P ls).
-Proof.
-  intros dec_correct.
-  do 2 unfold_goal.
-  destruct ls;
-  my_auto;
-  fold (@list_forall_fun A);
-  bool_simpl;
-  repeat (match goal with
-  | [|- context[dec ?a]] =>
-      notHyp (P a); notHyp (neg (P a));
-      set (dec_correct a)
-  | [|- context[list_forall_fun dec ?ls]] =>
-      notHyp (Forall P ls); notHyp (neg (Forall P ls));
-      set (list_forall_fun_correct A P dec ls dec_correct)      
-  end; boolSpec_simpl);
-  my_auto.
-Defined.
-
-Definition sub {A} (l1 l2 : list A) :=
-  List.Forall (fun x => List.In x l2) l1.
-
-Definition list_sub_fun {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
-  list_forall_fun (fun x => list_in_fun eq x l2) l1.
-
-Lemma list_sub_fun_correct  {A} {eq : A -> A -> bool} (l1 l2 : list A) :
-  (forall x y, boolSpec (eq x y) (x = y)) ->
-  boolSpec (list_sub_fun eq l1 l2) (sub l1 l2).
-Proof.
-  intros eq_correct.
-  set (fun x => list_in_fun_correct x l2 eq_correct) as in_correct.
-  exact (list_forall_fun_correct l1 in_correct).
-Defined.
-
-Definition equiv {A} (l1 l2 : list A) :=
-  sub l1 l2 * sub l2 l1.
-
-Definition list_equiv_fun {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
-  andb (list_sub_fun eq l1 l2) (list_sub_fun eq l2 l1).
-
-Lemma list_equiv_fun_correct  {A} {eq : A -> A -> bool} (l1 l2 : list A) :
-  (forall x y, boolSpec (eq x y) (x = y)) ->
-  boolSpec (list_equiv_fun eq l1 l2) (equiv l1 l2).
-Proof.
-  intros eq_correct.
-  do 2 unfold_goal.
-  set (list_sub_fun_correct l1 l2 eq_correct).
-  set (list_sub_fun_correct l2 l1 eq_correct).
-  repeat boolSpec_destruct;
-  solve [constructor; assumption
-        |inversion 1; contradiction].
-Qed.
-
-Definition sub_weaken1 {A} {a} {xs ys : list A} : sub (a :: xs) ys -> sub xs ys.
-Proof.
-  destruct ys; inversion 1.
-  + match goal with
-    | [H : In _ nil |- _] => now inversion H
-    end.
-  + assumption.
-Qed.
-
-Fixpoint sub_weaken2 {A} {a} {xs ys : list A} : sub xs ys -> sub xs (a :: ys).
-  destruct xs; intros H.
-  + constructor.
-  + inversion H.
-    constructor.
-    * apply in_cons; assumption.
-    * apply (sub_weaken2 A a xs ys H3).
-Qed.
-
-Lemma sub_In {A} {xs ys : list A} {x} : In x xs -> sub xs ys -> In x ys.
-Proof.
-  revert xs.
-  fix IH 1.
-  destruct xs.
-  - inversion 1.
-  - destruct 1.
-    + inversion 1; subst.
-      assumption.
-    + inversion 1; subst.
-      apply (IH xs).
-      * assumption.
-      * eapply sub_weaken1; eassumption.
-Qed.
-
-Fixpoint sub_trans {A} {xs ys zs : list A} : sub xs ys -> sub ys zs -> sub xs zs.
-Proof.
-  destruct xs; intros H1 H2.
-  + constructor.
-  + inversion H1; subst.
-    constructor.
-    * eapply sub_In; eassumption.
-    * eapply sub_trans; eassumption.
-Qed.
-
-Definition equiv_cons {A} {xs ys : list A} {a}  : equiv xs ys -> equiv (a :: xs) (a :: ys).
-Proof.
-  destruct xs; intros [H1 H2].
-  - split.
-    + repeat constructor.
-    + inversion H2.
-      * repeat constructor.
-      * match goal with
-        | [H : In _ nil |- _] => now inversion H
-        end.
-  - split.
-    + constructor.
-      * repeat constructor.
-      * apply sub_weaken2.
-        exact H1.
-    + constructor.
-      * repeat constructor.
-      * apply (sub_weaken2 H2).
-Qed.
-
-Instance equiv_Equivalence {A} : Equivalence (@equiv A).
-Proof.
-  split.
-  - unfold Reflexive.
-    fix IH 1. 
-    intros [|].
-    + repeat constructor.
-    + intros.
-      apply equiv_cons.
-      apply IH.
-  - inversion 1; constructor; assumption.
-  - inversion 1; inversion 1; constructor;
-    eapply sub_trans; eassumption.
-Qed.
-
-Lemma Zeqb_correct x y : boolSpec (Z.eqb x y) (x = y).
-Proof.
-  case_eq (Z.eqb x y); intros Heq.
-  + exact (proj1 (Z.eqb_eq  _ _) Heq).
-  + exact (proj1 (Z.eqb_neq _ _) Heq).
-Qed.
-
-Lemma Zltb_correct x y : boolSpec (Z.ltb x y) (x < y)%Z.
-Proof.
-  case_eq (Z.ltb x y); intros Heq.
-  + exact (proj1 (Z.ltb_lt  _ _) Heq).
-  + exact (proj1 (Z.ltb_nlt _ _) Heq).
-Qed.
 
 Lemma Decision_boolSpec {P} (D : Decision P) : boolSpec (bool_of_decision D) P.
 Proof. destruct D; assumption. Qed.
@@ -576,7 +386,79 @@ Definition option_bool {A} : option A -> (A -> bool) -> bool :=
     | None   => false
     end.
 
+Definition eq_bool := Bool.eqb.
+
+Lemma eq_bool_correct x y :
+  boolSpec (eq_bool x y) (x = y).
+Proof.
+  do 2 unfold_goal.
+  case_eq (eqb x y).
+  + apply eqb_true_iff.
+  + apply eqb_false_iff.
+Qed.
+
+Definition eq_list {A} (eq_A : A -> A -> bool) :=
+  fix eq_list (l1 l2 : list A) : bool :=
+    match l1, l2 with
+    | nil     , nil      => true
+    | a1 :: l1, a2 :: l2 => eq_A a1 a2 && eq_list l1 l2
+    | _       , _        => false
+    end.
+
+Definition eq_list_correct {A} {eq_A} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  forall x y, boolSpec (eq_list eq_A x y) (x = y).
+Proof.
+  unfold_goal.
+  intros eq_A_correct.
+  fix eq_list_correct 1.
+  destruct x, y; simpl;
+  unfold andb;
+  repeat match goal with
+  | |- eq_A ?x ?y = _ -> _ => case_fun (eq_A_correct x y)
+  | |- eq_list eq_A ?x ?y = _ -> _ => case_fun (eq_list_correct x y)
+  | _ => context_destruct
+  end; my_auto.
+Qed.
+
+Definition eq_pair {A B} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) : A * B -> A * B -> bool :=
+  fun p1 p2 => 
+    let '(a1, b1) := p1 in
+    let '(a2, b2) := p2 in
+    eq_A a1 a2 && eq_B b1 b2.
+
+Definition eq_pair_correct {A B} {eq_A} {eq_B} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall x y : B, boolSpec (eq_B x y) (x = y)) ->
+  forall x y, boolSpec (eq_pair eq_A eq_B x y) (x = y).
+Proof.
+  intros eq_A_correct eq_B_correct.
+  destruct x as [a1 b1], y as [a2 b2]; simpl.
+  set (eq_A_correct a1 a2).
+  set (eq_B_correct b1 b2).
+  repeat (boolSpec_destruct; my_auto).
+Qed.
+
+Definition eq_option {A} (eq_A : A -> A -> bool) : option A -> option A -> bool :=
+  fun o1 o2 => 
+    match o1, o2 with
+    | Some a1, Some a2 => eq_A a1 a2
+    | None   , None    => true
+    | _      , _       => false
+    end.
+
+Definition eq_option_correct {A} {eq_A} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  forall x y, boolSpec (eq_option eq_A x y) (x = y).
+Proof.
+  intros eq_A_correct.
+  destruct x as [a1|], y as [a2|]; simpl;
+  [set (eq_A_correct a1 a2); boolSpec_destruct|..]; my_auto.
+Qed.
+
 Definition eq_nat := beq_nat.
+Definition le_nat := leb.
+
 Lemma eq_nat_correct x y :
   boolSpec (eq_nat x y) (x = y).
 Proof.
@@ -586,4 +468,195 @@ Proof.
   end.
   - apply beq_nat_true.
   - apply beq_nat_false.
+Qed.
+
+Fixpoint le_nat_correct x y : boolSpec (le_nat x y) (x <= y).
+Proof.
+  do 2 unfold_goal.
+  case_eq (leb x y); intros Heq.
+  - exact (leb_complete _ _ Heq).
+  - intros H.
+    set (leb_correct _ _ H).
+    congruence.
+Qed.
+
+
+Fixpoint in_list {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
+  match ls with
+  | nil   => false
+  | x::xs => orb (eq x a) (in_list eq a xs)
+  end.
+
+Definition in_list_correct {A:Type} {eq_A : A -> A -> bool}  :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  (forall a l, boolSpec (in_list eq_A a l) (List.In a l)).
+Proof.
+  intros eq_A_correct.
+  fix in_list_correct 2.
+  do 2 unfold_goal;
+  destruct l; simpl;
+  fold (@in_list A); unfold orb;
+  repeat match goal with
+  | [|- eq_A ?x ?a = _ -> _] => case_fun (eq_A_correct x a)
+  | [|- in_list eq_A ?a ?l = _ -> _] => case_fun (in_list_correct a l)
+  | _ => context_destruct
+  end; my_auto.
+Qed.
+
+Inductive allList {A : Type} (P : A -> Type) : list A -> Prop :=
+  | AllList_nil  : allList P nil
+  | AllList_cons {x} {l} : P x -> allList P l -> allList P (x :: l).
+Arguments AllList_nil [A P].
+Arguments AllList_cons [A P x l] _ _.
+
+Definition all_list {A:Type} (dec : A -> bool) :=
+  fix all_list (l : list A) : bool :=
+    match l with
+    | nil   => true
+    | x::xs => andb (dec x) (all_list xs)
+    end.
+
+Lemma all_list_correct {A} {P : A -> Type} {dec} :
+  (forall a, boolSpec (dec a) (P a)) ->
+  (forall l, boolSpec (all_list dec l) (allList P l)).
+Proof.
+  intros dec_correct.
+  fix all_list_correct 1.
+  intros l.
+  do 2 unfold_goal;
+  destruct l; simpl;
+  fold (@all_list A dec); unfold andb;
+  repeat match goal with
+  | |- dec ?a = _ -> _ => case_fun (dec_correct a)
+  | |- all_list dec ?l = _ -> _ => case_fun (all_list_correct l)
+  | _ => context_destruct
+  end; my_auto.
+Defined.
+
+Definition subList {A} (l1 l2 : list A) :=
+  allList (fun x => List.In x l2) l1.
+
+Definition sub_list {A} (eq : A -> A -> bool) (l1 l2 : list A) :=
+  all_list (fun x => in_list eq x l2) l1.
+
+Lemma sub_list_correct  {A} {eq : A -> A -> bool} :
+  (forall x y, boolSpec (eq x y) (x = y)) ->
+  (forall x y, boolSpec (sub_list eq x y) (subList x y)).
+Proof.
+  intros eq_correct.
+  set (fun l2 x => in_list_correct eq_correct x l2) as Hinner.
+  exact (fun l1 l2 => all_list_correct (Hinner l2) l1).
+Defined.
+
+Definition equivList {A} (l1 l2 : list A) :=
+  subList l1 l2 * subList l2 l1.
+
+Definition equiv_list {A} (eq_A : A -> A -> bool) (l1 l2 : list A) :=
+  andb (sub_list eq_A l1 l2) (sub_list eq_A l2 l1).
+
+Lemma equiv_list_correct  {A} {eq_A : A -> A -> bool} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  (forall x y, boolSpec (equiv_list eq_A x y) (equivList x y)).
+Proof.
+  intros eq_correct x y.
+  do 3 unfold_goal.
+  set (sub_list_correct eq_correct x y).
+  set (sub_list_correct eq_correct y x).
+  repeat boolSpec_destruct; my_auto.
+Qed.
+
+Definition subList_weaken1 {A} {a} {xs ys : list A} : subList (a :: xs) ys -> subList xs ys.
+Proof.
+  destruct ys; inversion_clear 1.
+  + match goal with
+    | [H : In _ nil |- _] => now inversion H
+    end.
+  + assumption.
+Qed.
+
+Fixpoint subList_weaken2 {A} {a} {xs ys : list A} : subList xs ys -> subList xs (a :: ys).
+  destruct xs; intros H.
+  + constructor.
+  + inversion_clear H.
+    constructor.
+    * econstructor (now my_auto).
+    * apply subList_weaken2; assumption.
+Qed.
+
+Lemma subList_In {A} {xs ys : list A} {x} : In x xs -> subList xs ys -> In x ys.
+Proof.
+  revert xs.
+  fix IH 1.
+  destruct xs.
+  - inversion 1.
+  - destruct 1.
+    + inversion 1; subst.
+      assumption.
+    + inversion 1; subst.
+      apply (IH xs).
+      * assumption.
+      * eapply subList_weaken1; eassumption.
+Qed.
+
+Fixpoint subList_trans {A} {xs ys zs : list A} : subList xs ys -> subList ys zs -> subList xs zs.
+Proof.
+  destruct xs; intros H1 H2.
+  + constructor.
+  + inversion H1; subst.
+    constructor.
+    * eapply subList_In; eassumption.
+    * eapply subList_trans; eassumption.
+Qed.
+
+Definition equivList_cons {A} {xs ys : list A} {a}  : equivList xs ys -> equivList (a :: xs) (a :: ys).
+Proof.
+  destruct xs; intros [H1 H2].
+  - split.
+    + repeat constructor.
+    + inversion H2.
+      * repeat constructor.
+      * match goal with
+        | [H : In _ nil |- _] => now inversion H
+        end.
+  - split.
+    + constructor.
+      * repeat constructor.
+      * apply subList_weaken2.
+        exact H1.
+    + constructor.
+      * repeat constructor.
+      * apply (subList_weaken2 H2).
+Qed.
+
+Instance equivList_Equivalence {A} : Equivalence (@equivList A).
+Proof.
+  split.
+  - unfold Reflexive.
+    fix IH 1. 
+    intros [|].
+    + repeat constructor.
+    + intros.
+      apply equivList_cons.
+      apply IH.
+  - inversion 1; constructor; assumption.
+  - inversion 1; inversion 1; constructor;
+    eapply subList_trans; eassumption.
+Qed.
+
+Definition eq_Z := Z.eqb.
+
+Lemma eq_Z_correct x y : boolSpec (eq_Z x y) (x = y).
+Proof.
+  case_eq (eq_Z x y); intros Heq.
+  + exact (proj1 (Z.eqb_eq  _ _) Heq).
+  + exact (proj1 (Z.eqb_neq _ _) Heq).
+Qed.
+
+Definition lt_Z := Z.ltb.
+
+Lemma lt_Z_correct x y : boolSpec (lt_Z x y) (x < y)%Z.
+Proof.
+  case_eq (lt_Z x y); intros Heq.
+  + exact (proj1 (Z.ltb_lt  _ _) Heq).
+  + exact (proj1 (Z.ltb_nlt _ _) Heq).
 Qed.
