@@ -6,6 +6,7 @@ Require Import List.
 
 Require Import Common.
 Require Import AilTypes.
+Require Import Context.
 
 Open Scope type.
 
@@ -133,11 +134,68 @@ with expression {A : Set} : Set :=
 Arguments expression  : default implicits.
 Arguments expression' : default implicits.
 
+Definition eq_arguments_aux {A : Set} (eq_A : A -> A -> bool) eq_expression :=
+  fix eq_arguments (a1 a2 : list (expression A)) : bool :=
+    match a1, a2 with
+    | nil     , nil      => true
+    | e1 :: a1, e2 :: a2 => eq_expression eq_A e1 e2 && eq_arguments a1 a2
+    | _       , _        => false
+    end.
+Arguments eq_arguments_aux : default implicits.
+
+Fixpoint eq_expression' {A} eq_A (e1 e2 : expression' A) {struct e1} : bool :=
+  let equiv_arguments := eq_arguments_aux eq_A eq_expression in
+  match e1, e2 with
+  | Unary uop1 e1, Unary uop2 e2 =>
+      eq_unaryOperator uop1 uop2 &&
+      eq_expression eq_A e1 e2
+  | Binary e1_1 bop1 e2_1, Binary e1_2 bop2 e2_2 =>
+      eq_expression eq_A e1_1 e1_2 &&
+      eq_binaryOperator bop1 bop2 &&
+      eq_expression eq_A e2_1 e2_2
+  | Assign e1_1 e2_1, Assign e1_2 e2_2 =>
+      eq_expression eq_A e1_1 e1_2 &&
+      eq_expression eq_A e2_1 e2_2
+  | CompoundAssign e1_1 aop1 e2_1, CompoundAssign e1_2 aop2 e2_2 =>
+      eq_expression eq_A e1_1 e1_2 &&
+      eq_arithmeticOperator aop1 aop2 &&
+      eq_expression eq_A e2_1 e2_2
+  | Conditional e1_1 e2_1 e3_1, Conditional e1_2 e2_2 e3_2 =>
+      eq_expression eq_A e1_1 e1_2 &&
+      eq_expression eq_A e2_1 e2_2 &&
+      eq_expression eq_A e3_1 e3_2
+  | Cast q1 t1 e1, Cast q2 t2 e2 =>
+      eq_qualifiers q1 q2 &&
+      eq_ctype t1 t2 &&
+      eq_expression eq_A e1 e2
+  | Call e1 es1, Call e2 es2 =>
+      eq_expression eq_A e1 e2 &&
+      equiv_arguments es1 es2
+  | Constant c1, Constant c2 =>
+      eq_constant c1 c2
+  | Var v1, Var v2 =>
+      eq_identifier v1 v2
+  | SizeOf q1 t1, SizeOf q2 t2 =>
+      eq_qualifiers q1 q2 &&
+      eq_ctype t1 t2
+  | AlignOf q1 t1, AlignOf q2 t2 =>
+      eq_qualifiers q1 q2 &&
+      eq_ctype t1 t2
+  | _, _ => false
+  end
+with eq_expression {A} eq_A (e1 e2 : expression A) {struct e1} : bool :=
+  match e1, e2 with
+  | AnnotatedExpression a1 e1, AnnotatedExpression a2 e2 => eq_A a1 a2 && eq_expression' eq_A e1 e2
+  end.
+
+Definition eq_arguments {A} eq_A (a1 a2 : list (expression A)) :=
+  eq_arguments_aux eq_A eq_expression a1 a2.
+
 Definition equiv_arguments_aux {A} equiv_expression :=
   fix equiv_arguments (a1 a2 : list (expression A)) : bool :=
     match a1, a2 with
     | nil     , nil      => true
-    | e1 :: a1, e2 :: a2 => equiv_expression e1 e2 && equiv_arguments a1 a2
+    | e1 :: a1, e2 :: a2 => equiv_expression  e1 e2 && equiv_arguments a1 a2
     | _       , _        => false
     end.
 Arguments equiv_arguments_aux : default implicits.
@@ -190,8 +248,10 @@ with equiv_expression {A} (e1 e2 : expression A) {struct e1} : bool :=
 Definition equiv_arguments {A} (a1 a2 : list (expression A)) :=
   equiv_arguments_aux equiv_expression a1 a2.
 
-Definition gamma : Set := list (identifier * (qualifiers * ctype)).
 Definition bindings : Set := list (identifier * (qualifiers * ctype)).
+
+Definition eq_bindings : bindings -> bindings -> bool :=
+  eq_list (eq_pair eq_identifier (eq_pair eq_qualifiers eq_ctype)).
  
 Inductive statement' {A B : Set} : Set := 
  | Skip
@@ -211,15 +271,140 @@ Inductive statement' {A B : Set} : Set :=
  | Goto (v:identifier)
  | Declaration (d:list (identifier * expression B))
 with statement {A B : Set} : Set :=
- | AnnotatedStament (a:A) (s:statement).
+ | AnnotatedStatement (a:A) (s:statement').
 Arguments statement  : default implicits.
 Arguments statement' : default implicits.
+
+Definition eq_declaration {A : Set} eq_A (d1 d2 : list (identifier * expression A)) : bool :=
+  eq_list (eq_pair eq_identifier (eq_expression eq_A)) d1 d2.
+
+Fixpoint equiv_declaration {A : Set} (d1 d2 : list (identifier * expression A)) : bool :=
+  match d1, d2 with
+  | nil           , nil            => true
+  | (v1, e1) :: d1, (v2, e2) :: d2 => eq_identifier v1 v2 && equiv_expression e1 e2 && equiv_declaration d1 d2
+  | _             , _              => false
+  end.
+
+Definition eq_block_aux {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) equiv_statement :=
+  fix equiv_block (ss1 ss2 : list (statement A B)) : bool :=
+    match ss1, ss2 with
+    | nil      , nil       => true
+    | s1 :: ss1, s2 :: ss2 => equiv_statement eq_A eq_B s1 s2 && equiv_block ss1 ss2
+    | _        , _         => false
+    end.
+
+Fixpoint eq_statement' {A B : Set} eq_A (eq_B : B -> B -> bool) (s1 s2 : statement' A B) : bool :=
+  let eq_block := eq_block_aux eq_A eq_B eq_statement in
+  match s1, s2 with
+  | Skip, Skip => true
+  | Expression e1, Expression e2 =>
+      eq_expression eq_B e1 e2
+  | Block b1 ss1, Block b2 ss2 =>
+      eq_bindings b1 b2 &&
+      eq_block ss1 ss2
+  | If e1 s1_1 s2_1, If e2 s1_2 s2_2 =>
+      eq_expression eq_B e1 e2 &&
+      eq_statement eq_A eq_B s1_1 s1_2 &&
+      eq_statement eq_A eq_B s2_1 s2_2  
+  | While e1 s1, While e2 s2 =>
+      eq_expression eq_B e1 e2 &&
+      eq_statement eq_A eq_B s1 s2
+  | Do s1 e1, Do s2 e2 =>
+      eq_expression eq_B e1 e2 &&
+      eq_statement eq_A eq_B s1 s2
+  | Break, Break => true
+  | Continue, Continue => true
+  | ReturnVoid, ReturnVoid => true
+  | Return e1, Return e2 =>
+      eq_expression eq_B e1 e2
+  | Switch e1 s1, Switch e2 s2 =>
+      eq_expression eq_B e1 e2 &&
+      eq_statement eq_A eq_B s1 s2
+  | Case ic1 s1, Case ic2 s2 =>
+      eq_integerConstant ic1 ic2 &&
+      eq_statement eq_A eq_B s1 s2
+  | Default s1, Default s2 =>
+      eq_statement eq_A eq_B s1 s2
+  | Label v1 s1, Label v2 s2 =>
+      eq_identifier v1 v2 &&
+      eq_statement eq_A eq_B s1 s2
+  | Goto v1, Goto v2 =>
+      eq_identifier v1 v2
+  | Declaration d1, Declaration d2 =>
+      eq_declaration eq_B d1 d2
+  | _, _ => false
+  end
+with eq_statement {A B : Set} eq_A eq_B (s1 s2 : statement A B) : bool :=
+  match s1, s2 with
+  | AnnotatedStatement a1 s1, AnnotatedStatement a2 s2 =>
+      eq_A a1 a2 &&
+      eq_statement' eq_A eq_B s1 s2
+  end.
+
+Definition eq_block {A B} eq_A eq_B (ss1 ss2 : list (statement A B)) := eq_block_aux eq_A eq_B eq_statement ss1 ss2.
+
+Definition equiv_block_aux {A B : Set} equiv_statement :=
+  fix equiv_block (ss1 ss2 : list (statement A B)) : bool :=
+    match ss1, ss2 with
+    | nil      , nil       => true
+    | s1 :: ss1, s2 :: ss2 => equiv_statement s1 s2 && equiv_block ss1 ss2
+    | _        , _         => false
+    end.
+
+Fixpoint equiv_statement' {A B : Set} (s1 s2 : statement' A B) : bool :=
+  let equiv_block := equiv_block_aux equiv_statement in
+  match s1, s2 with
+  | Skip, Skip => true
+  | Expression e1, Expression e2 =>
+      equiv_expression e1 e2
+  | Block b1 ss1, Block b2 ss2 =>
+      eq_bindings b1 b2 &&
+      equiv_block ss1 ss2
+  | If e1 s1_1 s2_1, If e2 s1_2 s2_2 =>
+      equiv_expression e1 e2 &&
+      equiv_statement s1_1 s1_2 &&
+      equiv_statement s2_1 s2_2  
+  | While e1 s1, While e2 s2 =>
+      equiv_expression e1 e2 &&
+      equiv_statement s1 s2
+  | Do s1 e1, Do s2 e2 =>
+      equiv_expression e1 e2 &&
+      equiv_statement s1 s2
+  | Break, Break => true
+  | Continue, Continue => true
+  | ReturnVoid, ReturnVoid => true
+  | Return e1, Return e2 =>
+      equiv_expression e1 e2
+  | Switch e1 s1, Switch e2 s2 =>
+      equiv_expression e1 e2 &&
+      equiv_statement s1 s2
+  | Case ic1 s1, Case ic2 s2 =>
+      eq_integerConstant ic1 ic2 &&
+      equiv_statement s1 s2
+  | Default s1, Default s2 =>
+      equiv_statement s1 s2
+  | Label v1 s1, Label v2 s2 =>
+      eq_identifier v1 v2 &&
+      equiv_statement s1 s2
+  | Goto v1, Goto v2 =>
+      eq_identifier v1 v2
+  | Declaration d1, Declaration d2 =>
+      equiv_declaration d1 d2
+  | _, _ => false
+  end
+with equiv_statement {A B : Set} (s1 s2 : statement A B) : bool :=
+  match s1, s2 with
+  | AnnotatedStatement _ s1, AnnotatedStatement _ s2 =>
+      equiv_statement' s1 s2
+  end.
+
+Definition equiv_block {A B} (ss1 ss2 : list (statement A B)) := equiv_block_aux equiv_statement ss1 ss2.
 
 (* Currently unused.
 Definition declaration : Set := identifier * option storageDuration.
 *)
 
-Definition sigma {A B} : Set := list (identifier * ((ctype * bindings) * statement A B)).
+Definition sigma {A B : Set} : Set := context identifier ((ctype * bindings) * statement A B).
 Arguments sigma  : default implicits.
 
 Definition parameters_of_bindings : bindings -> list (qualifiers * ctype) := map snd.

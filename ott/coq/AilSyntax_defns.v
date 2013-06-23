@@ -64,3 +64,76 @@ with equivExpression {A} : expression A -> expression A -> Set :=
 Arguments equivExpression' : default implicits.
 Arguments equivArguments : default implicits.
 Arguments equivExpression : default implicits.
+
+Inductive equivDeclaration {A : Set} : list (identifier * expression A) -> list (identifier * expression A) -> Set :=
+  | EquivDeclaration_nil :
+      equivDeclaration nil nil
+  | EquivDeclaration_cons {v} {e1 e2} {d1 d2} :
+      equivExpression e1 e2 ->
+      equivDeclaration d1 d2 ->
+      equivDeclaration ((v, e1) :: d1) ((v, e2) :: d2).
+Arguments equivDeclaration : default implicits.
+
+Inductive equivStatement' {A B : Set} : statement' A B -> statement' A B -> Set := 
+  | EquivStatement'_Skip :
+      equivStatement' Skip Skip
+  | EquivStatement'_Expression {e1 e2} :
+      equivExpression e1 e2 ->
+      equivStatement' (Expression e1) (Expression e2)
+  | EquivStatement'_Block {b} {ss1 ss2} :
+      equivBlock ss1 ss2 ->
+      equivStatement' (Block b ss1) (Block b ss2)
+  | EquivStatement'_If {e1 e2} {s1_1 s1_2 s2_1 s2_2} :
+      equivExpression e1 e2 ->
+      equivStatement s1_1 s1_2 ->
+      equivStatement s2_1 s2_2 ->
+     equivStatement' (If e1 s1_1 s2_1) (If e2 s1_2 s2_2)
+  | EquivStatement'_While {e1 e2} {s1 s2} :
+      equivExpression e1 e2 ->
+      equivStatement s1 s2 ->
+      equivStatement' (While e1 s1) (While e2 s2)
+  | EquivStatement'_Do {s1 s2} {e1 e2} :
+      equivExpression e1 e2 ->
+      equivStatement s1 s2 ->
+      equivStatement' (Do s1 e1) (Do s2 e2)
+  | EquivStatement'_Break :
+      equivStatement' Break Break
+  | EquivStatement'_Continue :
+      equivStatement' Continue Continue
+  | EquivStatement'_ReturnVoid :
+      equivStatement' ReturnVoid ReturnVoid
+  | EquivStatement'_Return {e1 e2} :
+      equivExpression e1 e2 ->
+      equivStatement' (Return e1) (Return e2)
+  | EquivStatement'_Switch {e1 e2} {s1 s2} :
+      equivExpression e1 e2 ->
+      equivStatement s1 s2 ->
+      equivStatement' (Switch e1 s1) (Switch e2 s2)
+  | EquivStatement'_Case {ic} {s1 s2} :
+      equivStatement s1 s2 ->
+     equivStatement' (Case ic s1) (Case ic s2)
+  | EquivStatement'_Default {s1 s2} :
+      equivStatement s1 s2 ->
+      equivStatement' (Default s1) (Default s2)
+  | EquivStatement'_Label {v} {s1 s2} :
+      equivStatement s1 s2 ->
+      equivStatement' (Label v s1) (Label v s2)
+  | EquivStatement'_Goto {v} :
+      equivStatement' (Goto v) (Goto v)
+  | EquivStatement'_Declaration {d1 d2} :
+      equivDeclaration d1 d2 ->
+      equivStatement' (Declaration d1) (Declaration d2)
+with equivStatement {A B : Set} : statement A B -> statement A B -> Set :=
+  | EquivStatement_AnnotatedStatement {a1 a2} {s1 s2:statement' A B} :
+      equivStatement' s1 s2 ->
+      equivStatement (AnnotatedStatement a1 s1) (AnnotatedStatement a2 s2)
+with equivBlock {A B : Set} : list (statement A B) -> list (statement A B) -> Set :=
+  | EquivBlock_nil :
+      equivBlock nil nil
+  | EquivBlock_cons {s1 s2} {b1 b2} :
+      equivStatement s1 s2 ->
+      equivBlock b1 b2 ->
+      equivBlock (s1 :: b1) (s2 :: b2).
+Arguments equivStatement' : default implicits.
+Arguments equivStatement : default implicits.
+Arguments equivBlock : default implicits.
