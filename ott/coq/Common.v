@@ -105,6 +105,33 @@ Definition optionSpec {A} (o : option A) (P : A -> Type) : Type :=
   | None   => forall a, neg (P a)
   end.
 
+Ltac optionSpec_destruct :=
+  match goal with
+  | H:optionSpec ?o _
+    |- _ =>
+        match o with
+        | Some _ => fail 1
+        | None   => fail 1
+        | _ =>
+            let Heq := fresh in
+            case_eq o; [intros ?|]; intros Heq; rewrite Heq in *; clear Heq; simpl in H
+        end
+  end.
+
+Ltac optionSpec_destruct_hyp v :=
+  match goal with
+  | H:optionSpec ?o _
+    |- _ =>
+        match o with
+        | Some _ => fail 1
+        | None   => fail 1
+        | _ =>
+            let Heq := fresh in
+            try (let v' := fresh in rename v into v');
+            case_eq o; [intros v|]; intros Heq; rewrite Heq in *; clear Heq; simpl in H
+        end
+  end.
+
 Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
   forall a, P a -> o = Some a.
 
@@ -660,3 +687,9 @@ Proof.
   + exact (proj1 (Z.ltb_lt  _ _) Heq).
   + exact (proj1 (Z.ltb_nlt _ _) Heq).
 Qed.
+
+Definition cross {A B C D} f g : A * B -> C * D := 
+  fun p => (f (fst p), g (snd p)).
+
+Definition cross2 {A B C D} f g : A * B -> C * D -> Type  :=
+  fun p1 p2 => f (fst p1) (fst p2) * g (snd p1) (snd p2).

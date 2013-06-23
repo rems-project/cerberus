@@ -302,14 +302,14 @@ Proof.
   | _ => idtac
   end; simpl;
   match goal with
-  | [|- context[Z.ltb ?x ?y] ] =>
+  | [|- context[lt_Z ?x ?y] ] =>
       let Heq := fresh in
-      set (Zltb_correct x y);
-      case_eq (Z.ltb x y); intros Heq; rewrite Heq in *; clear Heq
-  | [|- context[Z.eqb ?x ?y] ] =>
+      set (lt_Z_correct x y);
+      case_eq (lt_Z x y); intros Heq; rewrite Heq in *; clear Heq
+  | [|- context[eq_Z ?x ?y] ] =>
       let Heq := fresh in
-      set (Zeqb_correct x y);
-      case_eq (Z.eqb x y); intros Heq; rewrite Heq in *; clear Heq
+      set (eq_Z_correct x y);
+      case_eq (eq_Z x y); intros Heq; rewrite Heq in *; clear Heq
   | _ => idtac
   end; boolSpec_simpl; simpl;
   match goal with
@@ -493,9 +493,9 @@ Lemma lt_integer_rank_base_correct P it1 it2 : boolSpec (lt_integer_rank_base P 
 Proof.
   do 2 unfold_goal; my_auto; intros;
   match goal with
-  | [ H : Z.ltb ?z ?z = true  |- _ ] => rewrite Z.ltb_irrefl in H
-  | [ H : Z.ltb ?x ?y = true  |- _ ] => set (proj1 (Z.ltb_lt  x y) H)
-  | [ H : Z.ltb ?x ?y = false |- _ ] => set (proj1 (Z.ltb_nlt x y) H)
+  | [ H : lt_Z ?z ?z = true  |- _ ] => unfold lt_Z; rewrite Z.ltb_irrefl in H
+  | [ H : lt_Z ?x ?y = true  |- _ ] => unfold lt_Z; set (proj1 (Z.ltb_lt  x y) H)
+  | [ H : lt_Z ?x ?y = false |- _ ] => unfold lt_Z; set (proj1 (Z.ltb_nlt x y) H)
   | _ => ltIntegerRankBase_tac
   end; my_auto.
 Qed.
@@ -932,9 +932,9 @@ Proof.
     abstract (
         simpl in *;
         match goal with
-        | |- context[Z.ltb (precision P ?it1) (precision P ?it2)] =>
+        | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
             let Heq := fresh in
-            case_eq (Z.ltb (precision P it1) (precision P it2));
+            case_eq (lt_Z (precision P it1) (precision P it2));
             intros Heq; rewrite_all Heq; clear Heq
         | _ => idtac
         end;
@@ -968,9 +968,9 @@ Proof.
     abstract (
         simpl in *;
         match goal with
-        | |- context[Z.ltb (precision P ?it1) (precision P ?it2)] =>
+        | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
             let Heq := fresh in
-            case_eq (Z.ltb (precision P it1) (precision P it2));
+            case_eq (lt_Z (precision P it1) (precision P it2));
             intros Heq; rewrite_all Heq; clear Heq
         | _ => idtac
         end;
@@ -1005,9 +1005,9 @@ Proof.
   subst; simpl in *;
   repeat match goal with
   | H : D.correspondingUnsigned _ ?it |- _ => is_var it; inversion_clear H
-  | |- context[Z.ltb (precision P ?it1) (precision P ?it2)] =>
+  | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
       let Heq := fresh in
-      case_eq (Z.ltb (precision P it1) (precision P it2));
+      case_eq (lt_Z (precision P it1) (precision P it2));
       intros Heq; rewrite_all Heq; clear Heq
   | _ => solve [congruence|contradiction]
   end.

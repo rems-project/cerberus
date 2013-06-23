@@ -1,5 +1,7 @@
+Require Import Common.
 Require Import AilSyntax.
 Require Import AilTypes.
+Require Context_defns.
 
 Inductive equivExpression' {A} : expression' A -> expression' A -> Set := 
   | EquivExpression'_Unary :
@@ -137,3 +139,15 @@ with equivBlock {A B : Set} : list (statement A B) -> list (statement A B) -> Se
 Arguments equivStatement' : default implicits.
 Arguments equivStatement : default implicits.
 Arguments equivBlock : default implicits.
+
+Definition equivSigma {A B : Set} : sigma A B -> sigma A B -> Type :=
+  Context_defns.equiv (cross2 eq (@equivStatement A B)).
+
+Definition equivEqSigma {A B : Set} : sigma A B -> sigma A B -> Type :=
+  Context_defns.equiv eq.
+
+Definition equivProgram {A B : Set} : program A B -> program A B -> Type :=
+  cross2 eq equivSigma.
+
+Definition equivEqProgram {A B : Set} : program A B -> program A B -> Type :=
+  cross2 eq equivEqSigma.

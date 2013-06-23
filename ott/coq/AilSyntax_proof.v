@@ -1,6 +1,7 @@
 Require Import Common.
 Require Import AilTypes AilTypes_proof.
 Require Import AilSyntax AilSyntax_defns.
+Require Import Context_proof.
 
 Lemma eq_identifier_correct x y :
   boolSpec (eq_identifier x y) (x = y).
@@ -290,4 +291,59 @@ Proof.
   | IH : forall _, boolSpec (eq_block _ _ ?x _) _|- eq_block _ _ ?x ?y = _ -> _ => case_fun (IH y)
   | _ => context_destruct
   end; now my_auto.
+Qed.
+
+
+Lemma eq_sigma_correct {A B : Set} {eq_A} {eq_B} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall x y : B, boolSpec (eq_B x y) (x = y)) ->
+  forall (x y : sigma A B), boolSpec (eq_sigma eq_A eq_B x y) (x = y).
+Proof.
+  intros eq_A_correct eq_B_correct.
+  apply (eq_context_correct eq_identifier_correct
+                            (eq_pair_correct
+                               (eq_pair_correct eq_ctype_correct eq_bindings_correct)
+                               (eq_statement_correct eq_A_correct eq_B_correct))).
+Qed.
+
+Lemma equiv_sigma_correct {A B : Set} :
+  forall (x y : sigma A B), boolSpec (equiv_sigma x y) (equivSigma x y).
+Proof.
+  apply (equiv_correct eq_identifier_correct).
+  destruct x as [x1 x2], y as [y1 y2]; simpl.
+  set (eq_pair_correct eq_ctype_correct eq_bindings_correct x1 y1).
+  set (equiv_statement_correct x2 y2).
+  repeat boolSpec_destruct; my_auto.
+Qed.
+
+Lemma equiv_eq_sigma_correct {A B : Set} {eq_A} {eq_B} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall x y : B, boolSpec (eq_B x y) (x = y)) ->
+  forall (x y : sigma A B), boolSpec (equiv_eq_sigma eq_A eq_B x y) (equivEqSigma x y).
+Proof.
+  intros eq_A_correct eq_B_correct.
+  apply (equiv_correct eq_identifier_correct
+                       (eq_pair_correct
+                          (eq_pair_correct eq_ctype_correct eq_bindings_correct)
+                          (eq_statement_correct eq_A_correct eq_B_correct))).
+Qed.
+
+Lemma equiv_program_correct {A B : Set} :
+  forall x y : program A B, boolSpec (equiv_program x y) (equivProgram x y).
+Proof.
+  intros [x1 x2] [y1 y2]; simpl.
+  set (eq_identifier_correct x1 y1).
+  set (equiv_sigma_correct x2 y2).
+  repeat boolSpec_destruct; my_auto.
+Qed.
+
+Lemma equiv_eq_program_correct {A B : Set} {eq_A} {eq_B} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall x y : B, boolSpec (eq_B x y) (x = y)) ->
+  forall x y : program A B, boolSpec (equiv_eq_program eq_A eq_B x y) (equivEqProgram x y).
+Proof.
+  intros eq_A_correct eq_B_correct [x1 x2] [y1 y2]; simpl.
+  set (eq_identifier_correct x1 y1).
+  set (equiv_eq_sigma_correct eq_A_correct eq_B_correct x2 y2).
+  repeat boolSpec_destruct; my_auto.
 Qed.
