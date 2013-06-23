@@ -73,18 +73,18 @@ Definition le_integer_range P it1 it2 : bool :=
   | Char             , Char              => true
   | Char             , Signed   Ichar    => signed P Char
   | Char             , Signed   ibt      => signed P Char ||
-                                            Z.ltb (precision P Char) (precision P (Signed ibt))
+                                            lt_Z (precision P Char) (precision P (Signed ibt))
   | Signed Ichar     , Char              => signed P Char
   | Signed ibt       , Char              => signed P Char &&
-                                            Z.eqb (precision P (Signed ibt)) (precision P Char)
+                                            eq_Z (precision P (Signed ibt)) (precision P Char)
   | Unsigned Ichar   , Char              => negb (signed P Char)
   | Unsigned ibt     , Char              => negb (signed P Char) &&
-                                            Z.eqb (precision P (Unsigned ibt)) (precision P Char)
+                                            eq_Z (precision P (Unsigned ibt)) (precision P Char)
   | Char             , Unsigned _        => negb (signed P Char)
   | Char             , Bool              => negb (signed P Char) &&
-                                            Z.eqb (precision P Char) (precision P Bool)
+                                            eq_Z (precision P Char) (precision P Bool)
   | Bool             , Char              => negb (signed P Char) ||
-                                            Z.ltb (precision P Bool) (precision P Char)
+                                            lt_Z (precision P Bool) (precision P Char)
 
   | Signed   Ichar   , Signed   _        => true
   | Signed   Short   , Signed   Short    => true
@@ -97,7 +97,7 @@ Definition le_integer_range P it1 it2 : bool :=
   | Signed   Long    , Signed   Long     => true
   | Signed   Long    , Signed   LongLong => true
   | Signed   LongLong, Signed   LongLong => true
-  | Signed   ibt1    , Signed   ibt2     => Z.eqb (precision P (Signed ibt1))
+  | Signed   ibt1    , Signed   ibt2     => eq_Z (precision P (Signed ibt1))
                                                   (precision P (Signed ibt2))
 
   | Bool             , Bool              => true
@@ -113,22 +113,22 @@ Definition le_integer_range P it1 it2 : bool :=
   | Unsigned Long    , Unsigned Long     => true
   | Unsigned Long    , Unsigned LongLong => true
   | Unsigned LongLong, Unsigned LongLong => true
-  | Unsigned ibt     , Bool              => Z.eqb (precision P (Unsigned ibt))
+  | Unsigned ibt     , Bool              => eq_Z (precision P (Unsigned ibt))
                                                   (precision P Bool)
-  | Unsigned ibt1    , Unsigned   ibt2   => Z.eqb (precision P (Unsigned ibt1))
+  | Unsigned ibt1    , Unsigned   ibt2   => eq_Z (precision P (Unsigned ibt1))
                                                   (precision P (Unsigned ibt2))
 
   | Signed   _       , Bool              => false
   | Signed   _       , Unsigned _        => false
 
-  | Bool             , Signed   ibt2     => Z.ltb (precision P Bool)
+  | Bool             , Signed   ibt2     => lt_Z (precision P Bool)
                                                   (precision P (Signed ibt2))
   | Unsigned _       , Signed   Ichar    => false
   | Unsigned Short   , Signed   Short    => false
   | Unsigned Int     , Signed   Int      => false
   | Unsigned Long    , Signed   Long     => false
   | Unsigned LongLong, Signed   LongLong => false
-  | Unsigned ibt1    , Signed   ibt2     => Z.ltb (precision P (Unsigned ibt1))
+  | Unsigned ibt1    , Signed   ibt2     => lt_Z (precision P (Unsigned ibt1))
                                                   (precision P (Signed   ibt2))
   end.
 
@@ -153,7 +153,7 @@ Definition lt_integer_rank_base P it1 it2 : bool :=
   | Signed   Int, Signed     Long => true
   | Signed Short, Signed      Int => true
   | Signed Ichar, Signed    Short => true
-  | Signed  ibt1, Signed     ibt2 => Z.ltb (precision P (Signed ibt1)) (precision P (Signed ibt2))
+  | Signed  ibt1, Signed     ibt2 => lt_Z (precision P (Signed ibt1)) (precision P (Signed ibt2))
   | _           , _               => false
   end.
 

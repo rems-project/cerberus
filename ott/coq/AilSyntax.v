@@ -407,6 +407,15 @@ Definition declaration : Set := identifier * option storageDuration.
 Definition sigma {A B : Set} : Set := context identifier ((ctype * bindings) * statement A B).
 Arguments sigma  : default implicits.
 
+Definition eq_sigma {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
+  eq_context eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)).
+
+Definition equiv_sigma {A B : Set} (S1 S2 : sigma A B) :=
+  equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2.
+
+Definition equiv_eq_sigma {A B : Set}  (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) (S1 S2 : sigma A B) :=
+  equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2.
+
 Definition parameters_of_bindings : bindings -> list (qualifiers * ctype) := map snd.
 
 Definition type_from_sigma {A B} (f : (ctype * bindings) * statement A B) :=
@@ -416,3 +425,12 @@ Arguments type_from_sigma  : default implicits.
 Definition program {A B} : Set := identifier * sigma A B.
 Arguments program  : default implicits.
 (** induction principles *)
+
+Definition eq_program {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
+  eq_pair eq_identifier (eq_sigma eq_A eq_B).
+
+Definition equiv_program {A B : Set} (p1 p2 : program A B)  :=
+  eq_pair eq_identifier equiv_sigma p1 p2.
+
+Definition equiv_eq_program {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
+  eq_pair eq_identifier (equiv_eq_sigma eq_A eq_B).
