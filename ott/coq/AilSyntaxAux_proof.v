@@ -1,44 +1,38 @@
 Require Import Common.
 Require Import AilTypes.
-Require Import AilTypesAux.
-Require Import AilTypesAux_fun.
-Require Import AilTypesAux_proof.
-Require Import AilSyntax.
-Require Import AilSyntaxAux. 
-Require Import AilSyntaxAux_fun.
+Require Import AilTypesAux AilTypesAux_proof.
+Require Import AilSyntax AilSyntax_proof.
+Require Import AilSyntaxAux.
 
-Fixpoint fv_fun_correct           id e : boolSpec (fv_fun           id e) (fv           id e)
-with     fv_arguments_fun_correct id l : boolSpec (fv_arguments_fun id l) (fv_arguments id l).
+Require AilSyntaxAux_defns.
+Module D := AilSyntaxAux_defns.
+
+Lemma fv_correct {A} v :
+  forall x : expression A, boolSpec (fv v x) (D.fv v x).
 Proof.
-  + unfold_goal.
-    destruct e;
-    try set (fv_fun_correct id e );
-    try set (fv_fun_correct id e1);
-    try set (fv_fun_correct id e2);
-    try set (fv_fun_correct id e3);
-    try set (fv_arguments_fun_correct id l);
-    my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
-  + unfold_goal.
-    destruct l;
-    try set (fv_fun_correct id e);
-    try set (fv_arguments_fun_correct id l);
-    my_auto' fail ltac:(progress (bool_simpl; boolSpec_simpl)).
-Defined.
-
-Ltac isNullPointerConstant_fun_tac :=
-  match goal with
-  | [|- boolSpec (isNullPointerConstant_fun ?e) _] =>
-      is_var e; unfold boolSpec; destruct e; simpl; try finish fail; repeat var_destruct
-  end.
-
-Fixpoint isNullPointerConstant_fun_correct e : boolSpec (isNullPointerConstant_fun e) (isNullPointerConstant e).
-Proof.
-  unfold_goal.
-  destruct e; simpl;
-  unfold andb;
+  apply (expression_nrect (fun x => boolSpec (fv'          v x) (D.fv'         v x))
+                          (fun x => boolSpec (fv           v x) (D.fv          v x))
+                          (fun x => boolSpec (fv_arguments v x) (D.fvArguments v x)));
+  intros; unfold_goal; simpl; unfold orb; fold (@fv_arguments A);
   repeat match goal with
-  | [|- isNullPointerConstant_fun ?e = _ -> _] => case_fun (isNullPointerConstant_fun_correct e)
-  | [|- isUnqualified_fun ?qs        = _ -> _] => case_fun (isUnqualified_fun_correct qs)
+  | IH : boolSpec (fv ?v ?e) _ |- fv ?v ?e = _ -> _ => case_fun IH
+  | IH : boolSpec (fv' ?v ?e) _ |- fv' ?v ?e = _ -> _ => case_fun IH
+  | IH : boolSpec (fv_arguments ?v ?e) _ |- fv_arguments ?v ?e = _ -> _ => case_fun IH
+  | |- eq_identifier ?x ?y = _ -> _ => case_fun (eq_identifier_correct x y)
   | _ => context_destruct
-  end; try finish fail.
-Defined.
+  end; now my_auto.
+Qed.
+
+Lemma nullPointerConstant_correct {A} :
+  forall x : expression A, boolSpec (null_pointer_constant x) (D.nullPointerConstant x).
+Proof.
+  apply (expression_nrect (fun x => boolSpec (null_pointer_constant' x) (D.nullPointerConstant' x))
+                          (fun x => boolSpec (null_pointer_constant  x) (D.nullPointerConstant  x))
+                          (fun x => True));
+  intros; unfold boolSpec; simpl; unfold andb;
+  repeat match goal with
+  | IH : boolSpec _ _ |- _ => boolSpec_destruct
+  | |- unqualified ?q = _ -> _ => case_fun (unqualified_correct q)
+  | _ => context_destruct
+  end; now my_auto.
+Qed.
