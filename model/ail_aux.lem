@@ -1,10 +1,18 @@
 (* Auxillary functions for the Ail IR *)
 open Ail
 
+(* TODO *)
+module E = Exception
 
-val const_int: forall 'a. int -> expression 'a
-let const_int n = CONSTANT (CONST_INT (n, None))
 
+val zero: expression_t unit
+let zero = ((), CONSTANT (CONST_INT (Int.int 0, OCTAL, None)))
+
+val decimal_const_int: int -> expression_t unit
+let decimal_const_int n = ((), CONSTANT (CONST_INT (n, DECIMAL, None)))
+
+val octal_const_int: int -> expression_t unit
+let octal_const_int n = ((), CONSTANT (CONST_INT (n, OCTAL, None)))
 
 
 

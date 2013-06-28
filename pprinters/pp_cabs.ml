@@ -84,8 +84,17 @@ let pp_integer_suffix s =
     | SUFFIX_LONG_LONG          -> "LL"
   in
   P.optional (P.string -| to_string) s
-let pp_integer_constant (i, s) = !^ (string_of_int i) ^^ pp_integer_suffix s
+let pp_integer_constant (i, s) = !^ i ^^ pp_integer_suffix s
 
+
+let pp_character_prefix p =
+  let to_string = function
+    | PREFIX_L -> "L"
+    | PREFIX_u -> "u"
+    | PREFIX_U -> "U"
+  in
+  P.optional (P.string -| to_string) p
+let pp_character_constant (p, c) = pp_character_prefix p ^^ P.squotes (!^ c)
 
 let pp_encoding_prefix = function
   | ENCODING_u8 -> !^ "u8"
@@ -210,7 +219,7 @@ and pp_exp p (exp, _) =
       | IDENTIFIER id                 -> !^ id
       | CONSTANT (CONST_INT ic)       -> pp_integer_constant ic
       | CONSTANT (CONST_FLOAT fc)     -> !^ fc
-      | CONSTANT (CONST_CHAR cc)      -> !^ cc
+      | CONSTANT (CONST_CHAR cc)      -> pp_character_constant cc
       | STRING_LITERAL s              -> pp_string_literal s (* TODO: should put braces when cabs_transform does an actual translation of the string *)
       | SUBSCRIPT (e1, e2)            -> f e1 ^^ P.brackets (f e2)
       | CALL (e, es)                  -> f e ^^ P.parens (comma_list f es)

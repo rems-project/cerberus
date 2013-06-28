@@ -1081,90 +1081,232 @@ module Raw2Sets =
   let inter s s' =
     M.inter (this s) (this s')
   
-  (** val diff : t -> t -> t **)
+  (** val diff :
+      t
+      ->
+      t
+      ->
+      t **)
   
   let diff s s' =
-    M.diff (this s) (this s')
+    M.diff
+      (this
+        s)
+      (this
+        s')
   
-  (** val equal : t -> t -> bool **)
+  (** val equal :
+      t
+      ->
+      t
+      ->
+      bool **)
   
   let equal s s' =
-    M.equal (this s) (this s')
+    M.equal
+      (this
+        s)
+      (this
+        s')
   
-  (** val subset : t -> t -> bool **)
+  (** val subset :
+      t
+      ->
+      t
+      ->
+      bool **)
   
   let subset s s' =
-    M.subset (this s) (this s')
+    M.subset
+      (this
+        s)
+      (this
+        s')
   
-  (** val empty : t **)
+  (** val empty :
+      t **)
   
   let empty =
     M.empty
   
-  (** val is_empty : t -> bool **)
+  (** val is_empty :
+      t
+      ->
+      bool **)
   
   let is_empty s =
-    M.is_empty (this s)
+    M.is_empty
+      (this
+        s)
   
-  (** val elements : t -> elt list **)
+  (** val elements :
+      t
+      ->
+      elt
+      list **)
   
   let elements s =
-    M.elements (this s)
+    M.elements
+      (this
+        s)
   
-  (** val choose : t -> elt option **)
+  (** val choose :
+      t
+      ->
+      elt
+      option **)
   
   let choose s =
-    M.choose (this s)
+    M.choose
+      (this
+        s)
   
-  (** val fold : (elt -> 'a1 -> 'a1) -> t -> 'a1 -> 'a1 **)
+  (** val fold :
+      (elt
+      ->
+      'a1
+      ->
+      'a1)
+      ->
+      t
+      ->
+      'a1
+      ->
+      'a1 **)
   
   let fold f s =
-    M.fold f (this s)
+    M.fold
+      f
+      (this
+        s)
   
-  (** val cardinal : t -> nat **)
+  (** val cardinal :
+      t
+      ->
+      nat **)
   
   let cardinal s =
-    M.cardinal (this s)
+    M.cardinal
+      (this
+        s)
   
-  (** val filter : (elt -> bool) -> t -> t **)
+  (** val filter :
+      (elt
+      ->
+      bool)
+      ->
+      t
+      ->
+      t **)
   
   let filter f s =
-    M.filter f (this s)
+    M.filter
+      f
+      (this
+        s)
   
-  (** val for_all : (elt -> bool) -> t -> bool **)
+  (** val for_all :
+      (elt
+      ->
+      bool)
+      ->
+      t
+      ->
+      bool **)
   
   let for_all f s =
-    M.for_all f (this s)
+    M.for_all
+      f
+      (this
+        s)
   
-  (** val exists_ : (elt -> bool) -> t -> bool **)
+  (** val exists_ :
+      (elt
+      ->
+      bool)
+      ->
+      t
+      ->
+      bool **)
   
   let exists_ f s =
-    M.exists_ f (this s)
+    M.exists_
+      f
+      (this
+        s)
   
-  (** val partition : (elt -> bool) -> t -> t*t **)
+  (** val partition :
+      (elt
+      ->
+      bool)
+      ->
+      t
+      ->
+      t*t **)
   
   let partition f s =
-    let p = M.partition f (this s) in (fst p),(snd p)
+    let p =
+      M.partition
+        f
+        (this
+          s)
+    in
+    (fst
+      p),(snd
+           p)
   
-  (** val eq_dec : t -> t -> bool **)
+  (** val eq_dec :
+      t
+      ->
+      t
+      ->
+      bool **)
   
   let eq_dec s s' =
-    let b = M.equal s s' in if b then true else false
+    let b =
+      M.equal
+        s
+        s'
+    in
+    if b
+    then true
+    else false
   
-  (** val compare : t -> t -> comparison **)
+  (** val compare :
+      t
+      ->
+      t
+      ->
+      comparison **)
   
   let compare s s' =
-    M.compare (this s) (this s')
+    M.compare
+      (this
+        s)
+      (this
+        s')
   
-  (** val min_elt : t -> elt option **)
+  (** val min_elt :
+      t
+      ->
+      elt
+      option **)
   
   let min_elt s =
-    M.min_elt (this s)
+    M.min_elt
+      (this
+        s)
   
-  (** val max_elt : t -> elt option **)
+  (** val max_elt :
+      t
+      ->
+      elt
+      option **)
   
   let max_elt s =
-    M.max_elt (this s)
+    M.max_elt
+      (this
+        s)
  end
 
 module MakeListOrdering = 

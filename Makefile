@@ -26,10 +26,11 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 
 # Where and how ocamlbuild will be called
 OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -tag annot -tag debug -package text -package pprint
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package text -package pprint -libs nums
 
 
 MODEL_FILES=\
+  big_int_.lem \
   boot.lem \
   ail_typing_errors.lem \
   multiset.lem \
@@ -55,6 +56,7 @@ MODEL_FILES=\
   cabs.lem \
   ail.lem \
   undefined.lem \
+  implementation.lem \
   core.lem \
   debug.lem \
   ail_aux.lem \
@@ -70,8 +72,9 @@ MODEL_FILES=\
   core_run.lem \
   sb.lem \
   annotate.lem \
+  decode.lem \
   cabs_transform.lem \
-  cabs_to_ail.lem \
+  cabs0_to_ail.lem \
   ail_typing.lem \
   range.lem \
   translation.lem
@@ -82,7 +85,9 @@ OCAML_LIB_FILES=\
   boot.lem \
   pprint_.lem \
   output.lem \
-  document.lem
+  document.lem \
+  decode.lem \
+  big_int_.lem
 
 # TODO: would be nice to have a way to tell Lem when a module is spurious
 SPURIOUS_FILES=\
@@ -92,6 +97,7 @@ SPURIOUS_FILES=\
   cabs0.ml
 
 CORE_PARSER_FILES=\
+  core_parser_util.ml \
   core_parser.mly core_lexer.mll \
   core_parser_base.ml core_parser_base.mli
 
@@ -102,7 +108,7 @@ CPARSER_FILES=\
 
 PPRINTERS_FILES=\
   colour.ml \
-  pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
+  pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
 
 FILES=$(MODEL_FILES) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES) $(PPRINTERS_FILES)
@@ -115,6 +121,7 @@ ocaml_byte: lem_ocaml
 	@cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
 # YUCK
 	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs_transform.ml
+	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
 # Sort of YUCK
 	@sed -i"" -e 's/<<HG-IDENTITY>>/$(shell hg id)/' $(OCAML_BUILD_DIR)/main.ml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
@@ -129,6 +136,7 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
 	@sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_transform.ml
+	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
 
 # (FUTURE) this would be the way to go if there was a way to not have Lem recompiled
 #          all the dependencies of a module

@@ -2,12 +2,11 @@ open Global
 
 type ordering = Lt | Eq | Gt
 
-(*
-class (ORD 'a)
+class (Ord 'a)
   val compare : 'a -> 'a -> ordering
 end
-*)
 
+(*
 class (ord 'a)
   val lt : 'a -> 'a -> bool
   val eq : 'a -> 'a -> bool
@@ -20,6 +19,7 @@ class (ord 'a)
   val min : 'a -> 'a -> 'a
   val max : 'a -> 'a -> 'a
 end
+*)
 
 (*
 instance forall 'a. (ORD 'a) => (ord 'a)
@@ -69,6 +69,16 @@ let of_int i =
     else Lt
 
 (* HACK: until working type classes *)
+
+(*
 val compare: forall 'a. 'a -> 'a -> ordering
 let compare x y =
-  of_int (Ocaml.Pervasives.compare x y)
+  (*of_int (Ocaml.Pervasives.compare x y) *)
+  Lt
+*)
+
+(*
+instance (Ord int)
+  let compare n1 n2 = of_int (Int.compare n1 n2)
+end
+*)

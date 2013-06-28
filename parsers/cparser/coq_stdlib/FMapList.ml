@@ -109,11 +109,11 @@ module Raw =
   (** val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem **)
   
   let coq_R_mem_correct x x0 res =
-    Obj.magic (fun x1 _ -> mem_rect x1) x __ (fun y _ z _ -> R_mem_0 y)
-      (fun y y0 y1 y2 _ _ _ z _ -> R_mem_1 (y, y0, y1, y2))
-      (fun y y0 y1 y2 _ _ _ z _ -> R_mem_2 (y, y0, y1, y2))
-      (fun y y0 y1 y2 _ _ _ y6 z _ -> R_mem_3 (y, y0, y1, y2, (mem x y2),
-      (y6 (mem x y2) __))) x0 res __
+    let princ = fun x1 -> mem_rect x1 in
+    Obj.magic princ x (fun y _ z _ -> R_mem_0 y) (fun y y0 y1 y2 _ _ _ z _ ->
+      R_mem_1 (y, y0, y1, y2)) (fun y y0 y1 y2 _ _ _ z _ -> R_mem_2 (y, y0,
+      y1, y2)) (fun y y0 y1 y2 _ _ _ y6 z _ -> R_mem_3 (y, y0, y1, y2,
+      (mem x y2), (y6 (mem x y2) __))) x0 res __
   
   (** val find : key -> 'a1 t -> 'a1 option **)
   
@@ -200,7 +200,8 @@ module Raw =
       key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find **)
   
   let coq_R_find_correct x x0 res =
-    Obj.magic (fun x1 _ -> find_rect x1) x __ (fun y _ z _ -> R_find_0 y)
+    let princ = fun x1 -> find_rect x1 in
+    Obj.magic princ x (fun y _ z _ -> R_find_0 y)
       (fun y y0 y1 y2 _ _ _ z _ -> R_find_1 (y, y0, y1, y2))
       (fun y y0 y1 y2 _ _ _ z _ -> R_find_2 (y, y0, y1, y2))
       (fun y y0 y1 y2 _ _ _ y6 z _ -> R_find_3 (y, y0, y1, y2, (find x y2),
@@ -381,7 +382,8 @@ module Raw =
       key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove **)
   
   let coq_R_remove_correct x x0 res =
-    Obj.magic (fun x1 _ -> remove_rect x1) x __ (fun y _ z _ -> R_remove_0 y)
+    let princ = fun x1 -> remove_rect x1 in
+    Obj.magic princ x (fun y _ z _ -> R_remove_0 y)
       (fun y y0 y1 y2 _ _ _ z _ -> R_remove_1 (y, y0, y1, y2))
       (fun y y0 y1 y2 _ _ _ z _ -> R_remove_2 (y, y0, y1, y2))
       (fun y y0 y1 y2 _ _ _ y6 z _ -> R_remove_3 (y, y0, y1, y2,
@@ -458,10 +460,11 @@ module Raw =
       coq_R_fold **)
   
   let coq_R_fold_correct x0 x1 x2 res =
-    Obj.magic (fun _ x x3 _ -> fold_rect x x3) __ (fun _ y0 y1 y2 _ z _ ->
-      R_fold_0 (y0, y1, y2)) (fun _ y0 y1 y2 y3 y4 y5 _ y7 z _ -> R_fold_1
-      (y0, y1, y2, y3, y4, y5, (fold y0 y5 (y0 y3 y4 y2)),
-      (y7 (fold y0 y5 (y0 y3 y4 y2)) __))) __ x0 x1 x2 res __
+    let princ = fun x x3 -> fold_rect x x3 in
+    Obj.magic princ (fun _ y0 y1 y2 _ z _ -> R_fold_0 (y0, y1, y2))
+      (fun _ y0 y1 y2 y3 y4 y5 _ y7 z _ -> R_fold_1 (y0, y1, y2, y3, y4, y5,
+      (fold y0 y5 (y0 y3 y4 y2)), (y7 (fold y0 y5 (y0 y3 y4 y2)) __))) x0 x1
+      x2 res __
   
   (** val equal : ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool **)
   

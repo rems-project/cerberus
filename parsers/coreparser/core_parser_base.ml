@@ -1,5 +1,5 @@
 exception Error = Core_parser.Error
-type token  = Core_parser.token
-type result = (Global.zero Core.file, Global.zero Core.fun_map) Global.either
+type token  = Core_parser_util.token
+type result = Core_parser_util.result
 
 let start = Core_parser.start

@@ -1,3 +1,3 @@
 #!/bin/sh
 
-csem --pcabs --pail --pcore --skip-core-tcheck --std ../model/core_std/std.core $*
+csem --pcabs --pail --pcore --skip-core-tcheck --impl gcc_4.9.0_x86_64-apple-darwin10.8.0 $*

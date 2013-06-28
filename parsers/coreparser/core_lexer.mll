@@ -1,8 +1,8 @@
 {
 open Pervasives_
 
-module P = Core_parser
-type token = P.token
+module T = Core_parser_util
+type token = T.token
 
 let keywords =
   List.fold_left
@@ -10,70 +10,82 @@ let keywords =
     (Pmap.empty Pervasives.compare)
     [
       (* ctype tokens *)
-      ("const",    P.CONST);
-      ("restrict", P.RESTRICT);
-      ("volatile", P.VOLATILE);
-      ("_Atomic",  P.ATOMIC);
-      ("short",    P.SHORT);
-      ("int",      P.INT);
-      ("long",     P.LONG);
-      ("bool",     P.BOOL);
-      ("signed",   P.SIGNED);
-      ("unsigned", P.UNSIGNED);
-      ("float",    P.FLOAT);
-      ("double",   P.DOUBLE);
-      ("_Complex", P.COMPLEX);
-      ("char",     P.CHAR);
-      ("void",     P.VOID);
-      ("struct",   P.STRUCT);
-      ("union",    P.UNION);
-      ("enum",     P.ENUM);
-      ("size_t",   P.SIZE_T);
-      ("intptr_t", P.INTPTR_T);
-      ("wchar_t",  P.WCHAR_T);
-      ("char16_t", P.CHAR16_T);
-      ("char32_t", P.CHAR32_T);
-      ("enum",     P.ENUM);
+      ("_Atomic",     T.ATOMIC);
+      ("short",       T.SHORT);
+      ("int",         T.INT);
+      ("long",        T.LONG);
+      ("long_long",   T.LONG_LONG);
+      ("bool",        T.BOOL);
+      ("signed",      T.SIGNED);
+      ("unsigned",    T.UNSIGNED);
+      ("float",       T.FLOAT);
+      ("double",      T.DOUBLE);
+      ("long_double", T.LONG_DOUBLE);
+      ("_Complex",    T.COMPLEX);
+      ("char",        T.CHAR);
+      ("ichar",       T.ICHAR);
+      ("void",        T.VOID);
+      ("struct",      T.STRUCT);
+      ("union",       T.UNION);
+      ("enum",        T.ENUM);
+      ("size_t",      T.SIZE_T);
+      ("intptr_t",    T.INTPTR_T);
+      ("wchar_t",     T.WCHAR_T);
+      ("char16_t",    T.CHAR16_T);
+      ("char32_t",    T.CHAR32_T);
       
-      ("integer", P.INTEGER);
-      ("boolean", P.BOOLEAN);
-      ("address", P.ADDRESS);
-      ("ctype",   P.CTYPE  );
-      ("unit",   P.UNIT    );
-      ("skip",   P.SKIP    );
-      ("not",    P.NOT     );
-      ("true",   P.TRUE    );
-      ("false",  P.FALSE   );
-      ("let",    P.LET     );
-      ("in",     P.IN      );
-      ("fun",    P.FUN     );
-      ("proc",    P.FUN     );
-      ("end",    P.END     );
-      ("create", P.CREATE  );
-      ("alloc",  P.ALLOC   );
-      ("kill",   P.KILL    );
-      ("store",  P.STORE   );
-      ("load",   P.LOAD    );
-      ("same",   P.SAME    );
-      ("undef",  P.UNDEF   );
-      ("error",  P.ERROR   );
-      ("if",     P.IF      );
-      ("then",   P.THEN    );
-      ("else",   P.ELSE    );
-      ("ret",    P.RET     );
-      ("save",   P.SAVE    );
-      ("run",    P.RUN     );
+      ("def",     T.DEF     ); (* for implementation files only *)
+      ("integer", T.INTEGER );
+      ("boolean", T.BOOLEAN );
+      ("address", T.ADDRESS );
+      ("ctype",   T.CTYPE   );
+      ("unit",    T.UNIT    );
+      ("skip",    T.SKIP    );
+      ("not",     T.NOT     );
+      ("true",    T.TRUE    );
+      ("false",   T.FALSE   );
+      ("let",     T.LET     );
+      ("in",      T.IN      );
+      ("fun",     T.FUN     );
+      ("proc",    T.FUN     );
+      ("end",     T.END     );
+      ("create",  T.CREATE  );
+      ("alloc",   T.ALLOC   );
+      ("kill",    T.KILL    );
+      ("store",   T.STORE   );
+      ("load",    T.LOAD    );
+      ("same",    T.SAME    );
+      ("undef",   T.UNDEF   );
+      ("error",   T.ERROR   );
+      ("if",      T.IF      );
+      ("then",    T.THEN    );
+      ("else",    T.ELSE    );
+      ("ret",     T.RET     );
+      ("save",    T.SAVE    );
+      ("run",     T.RUN     );
+      ("case",    T.CASE    );
+      ("of",      T.OF      );
+
+(* TODO: temporary *)
+      ("is_scalar",   T.IS_SCALAR  );
+      ("is_integer",  T.IS_INTEGER );
+      ("is_signed",   T.IS_SIGNED  );
+      ("is_unsigned", T.IS_UNSIGNED);
     ]
 
 let scan_sym lexbuf =
   let id = Lexing.lexeme lexbuf in
   try
     Pmap.find id keywords
-  (* default to variable name, as opposed to type *)
   with Not_found ->
-    (* Check if the token is an enumeration constant *)
-      P.SYM id
+    T.SYM id
 
+let scan_impl lexbuf =
+  let id = Lexing.lexeme lexbuf in
+  try
+    T.IMPL (Pmap.find id Implementation.impl_map)
+  with Not_found ->
+    failwith "Found an invalid impl_name."
 
 let lex_comment remainder lexbuf =
   let ch = Lexing.lexeme_char lexbuf 0 in
@@ -84,6 +96,7 @@ let lex_comment remainder lexbuf =
 }
 
 
+let impl_name = '<' ['A'-'Z' 'a'-'z' '_']* '>'
 let symbolic_name = ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
 
@@ -102,49 +115,52 @@ rule main = parse
   
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
-      { P.INT_CONST (int_of_string integer) }
+      { T.INT_CONST (Num.num_of_string integer) }
   
   (* binary operators *)
-  | '+'   { P.PLUS }
-  | '-'   { P.MINUS }
-  | '*'   { P.STAR }
-  | '/'   { P.SLASH }
-  | '%'   { P.PERCENT }
-  | '='   { P.EQ }
-  | '<'   { P.LT }
-  | "/\\" { P.SLASH_BACKSLASH }
-  | "\\/" { P.BACKSLASH_SLASH }
+  | '+'   { T.PLUS }
+  | '-'   { T.MINUS }
+  | '*'   { T.STAR }
+  | '/'   { T.SLASH }
+  | '%'   { T.PERCENT }
+  | '='   { T.EQ }
+  | '<'   { T.LT }
+  | "<="  { T.LE }
+  | "/\\" { T.SLASH_BACKSLASH }
+  | "\\/" { T.BACKSLASH_SLASH }
   
   (* negative action *)
-  | '~' { P.TILDE }
-  
-  (* negative marker *)
-  | '!' { P.EXCLAM }
+  | '~' { T.TILDE }
   
   (* sequencing operators *)
-  | "||"  { P.PIPE_PIPE }
-  | ';'   { P.SEMICOLON }
-  | ">>"  { P.GT_GT }
-  | "|>"  { P.PIPE_GT }
+  | "||"  { T.PIPE_PIPE }
+  | ';'   { T.SEMICOLON }
+  | ">>"  { T.GT_GT }
+  | "|>"  { T.PIPE_GT }
   
   (* pattern symbols *)
-  | "_"  { P.UNDERSCORE }
+  | "_"  { T.UNDERSCORE }
   
-  | "<- " { P.LT_MINUS }
-  | '('   { P.LPAREN }
-  | ')'   { P.RPAREN }
-  | '{'   { P.LBRACE }
-  | '}'   { P.RBRACE }
-  | '['	  { P.LBRACKET }
-  | ']'	  { P.RBRACKET }
-  | '.'   { P.DOT }
-  | ','   { P.COMMA }
-  | ':'   { P.COLON }
-  | ":="  { P.COLON_EQ }
+  | "| "  { T.PIPE }
+  | "<- " { T.LT_MINUS }
+  | "-> " { T.MINUS_GT }
+  | '('   { T.LPAREN }
+  | ')'   { T.RPAREN }
+  | '{'   { T.LBRACE }
+  | '}'   { T.RBRACE }
+  | '['	  { T.LBRACKET }
+  | ']'	  { T.RBRACKET }
+  | '<'	  { T.LANGLE }
+  | '>'	  { T.RANGLE }
+  | '.'   { T.DOT }
+  | ','   { T.COMMA }
+  | ':'   { T.COLON }
+  | ":="  { T.COLON_EQ }
 
+  | impl_name { scan_impl lexbuf }
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
-  | eof  {P.EOF}
+  | eof  {T.EOF}
   | _
     { raise_error ("Unexpected symbol \""
                    ^ Lexing.lexeme lexbuf ^ "\" in "

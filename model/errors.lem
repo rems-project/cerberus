@@ -10,6 +10,7 @@ type cause =
   | CABS_TO_AIL_DUPLICATED_LABEL
   | CABS_TO_AIL_UNDECLARED_IDENTIFIER
   | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
+  | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
   
   | AIL_TYPECHECK_CALL_RETURN
   | AIL_TYPECHECK_CALL_ARGUMENTS_ASSIGNABLE
@@ -142,6 +143,11 @@ let to_string = function
   | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
       "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
        ``..At most, one storage-class specifier may be given [...]..``\n"
+  | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE ->
+      "Violation of constraint 6.8.5#3 Iteration statements, \
+       Constraints: ..The declaration part of a for statement \
+       shall only declare identifiers for objects having storage \
+       class auto or register.. in\n"
   | AIL_TYPECHECK_CALL_RETURN ->
       "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``The \
        expression that denotes the function shall have type pointer to \

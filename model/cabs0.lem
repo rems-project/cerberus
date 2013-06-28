@@ -110,14 +110,31 @@ and expression =
   | MEMBEROFPTR of expression * atom
   | OFFSETOF of (list spec_elem * decl_type) * atom
 
+and integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+
+and character_prefix =
+  | PREFIX_L
+  | PREFIX_u
+  | PREFIX_U
+
+and encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
 
 and constant =
   (* The atom is the textual representation of the constant in
      the source code. It does include quotes. *)
-  | CONST_INT of atom
+  | CONST_INT of atom * option integer_suffix
   | CONST_FLOAT of atom
-  | CONST_CHAR of atom
-  | CONST_STRING of atom
+  | CONST_CHAR of option character_prefix * atom
+  | CONST_STRING of atom (* TODO *)
 
 and init_expression =
   | NO_INIT
@@ -175,5 +192,5 @@ and for_clause =
  | FC_DECL of definition
 
 
-(* file name, list of toplevel definitions *)
-type file = atom * list definition
+(* list of toplevel definitions *)
+type file = list definition

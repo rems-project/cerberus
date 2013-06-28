@@ -7,8 +7,8 @@ module Make :
  functor (A:T) ->
  functor (Inter:sig 
   type 'a result =
-    | Err
-    | OK of 'a
+  | Err
+  | OK of 'a
   
   val result_rect : 'a2 -> ('a1 -> 'a2) -> 'a1 result -> 'a2
   
@@ -21,8 +21,8 @@ module Make :
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
   type stack =
-    | Nil_stack
-    | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
+  | Nil_stack
+  | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
   
   val stack_rect :
     'a1 -> (A.noninitstate -> A.Gram.symbol_semantic_type -> stack -> 'a1 ->
@@ -41,9 +41,9 @@ module Make :
   val reduce : stack -> A.Gram.production -> stack result
   
   type step_result =
-    | Fail_sr
-    | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
-    | Progress_sr of stack * A.GramDefs.token coq_Stream
+  | Fail_sr
+  | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+  | Progress_sr of stack * A.GramDefs.token coq_Stream
   
   val step_result_rect :
     'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream ->
@@ -58,9 +58,9 @@ module Make :
   val step : stack -> A.GramDefs.token coq_Stream -> step_result result
   
   type parse_result =
-    | Fail_pr
-    | Timeout_pr
-    | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+  | Fail_pr
+  | Timeout_pr
+  | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
   
   val parse_result_rect :
     'a1 -> 'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream

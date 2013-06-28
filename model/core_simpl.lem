@@ -1,6 +1,6 @@
 open Global
 open Core
-
+open Core_aux
 
 (*
 module Effect = struct
@@ -324,11 +324,40 @@ let simpl_pure = function
         
 *)
 
-let simpl e = e
+let rec simpl e =
+  match e with
+    | Eunseq es ->
+        Eunseq (List.map simpl es)
+(*    | Ewseq of list (option sym) * expr 'a * expr 'a *)
+    | Ewseq [Some a] e1 e2 ->
+        let e1' = simpl e1 in
+        if is_pure e1' then
+          simpl (subst_sym a e1' e2)
+        else
+          Ewseq [Some a] e1' (simpl e2)
+    | Ewseq _ Eskip e2 ->
+        simpl e2
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (simpl e1) (simpl e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (simpl e1) (simpl e2)
+    | Eindet e ->
+        Eindet (simpl e)
+    | Ebound j e ->
+        Ebound j (simpl e)
+    | Esave d a_tys e ->
+        Esave d a_tys (simpl e)
+    | Eret e ->
+        Eret (simpl e)
+    
+    | _ -> e
+end
 
 
 let simplify (f: file zero) : file zero =
   <|
-      main= f.main;
-      fun_map= Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.fun_map
+      main=   f.main;
+      stdlib= f.stdlib;
+      impl=   f.impl;
+      funs=   Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.funs
   |>

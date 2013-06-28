@@ -1,20 +1,81 @@
 %{
 open Global
 
+
+type ctype_ =
+  | VOID_
+  | BASIC_ of Ail.basic_type
+  | ARRAY_ of ctype_ * Num.num option (* NOTE: if the element type is WILDCARD, we ignore the size, ie. _[n] is the same as _[m] *)
+  | STRUCT_ of Ail.id * (Ail.id * Core.member) list
+  | UNION_  of Ail.id * (Ail.id * Core.member) list
+  | ENUM_ of Ail.id
+  | FUNCTION_ of Core.ctype * Core.ctype list
+  | POINTER_ of ctype_
+  | ATOMIC_ of ctype_
+  | SIZE_T_
+  | INTPTR_T_
+  | WCHAR_T_
+  | CHAR16_T_
+  | CHAR32_T_
+  | WILDCARD
+
+
+let rec project_ctype_ = function
+  | VOID_ ->
+      Core.VOID
+  | BASIC_ bty ->
+      Core.BASIC bty
+  | ARRAY_ (ty_, n_opt) ->
+    Core.ARRAY (project_ctype_ ty_, n_opt)
+  | STRUCT_ (x, membrs) ->
+      Core.STRUCT (x, membrs)
+  | UNION_ (x, membrs) ->
+      Core.UNION (x, membrs)
+  | ENUM_ id ->
+      Core.ENUM id
+  | FUNCTION_ (ty, tys) ->
+      Core.FUNCTION (ty, tys)
+  | POINTER_ ty_ ->
+      Core.POINTER (project_ctype_ ty_)
+  | ATOMIC_ ty_ ->
+      Core.ATOMIC (project_ctype_ ty_)
+  | SIZE_T_ ->
+      Core.SIZE_T
+  | INTPTR_T_ ->
+      Core.INTPTR_T
+  | WCHAR_T_ ->
+      Core.WCHAR_T
+  | CHAR16_T_ ->
+      Core.CHAR16_T
+  | CHAR32_T_ ->
+      Core.CHAR32_T
+  | WILDCARD ->
+      failwith "This is not a completely defined ctype."
+
+type name =
+  | Sym of string
+  | Impl of Implementation.implementation_constant
+
 type expr =
   | Eskip
-  | Econst of int
+  | Econst of Num.num
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
+  | Eimpl of Implementation.implementation_constant
   | Eop of Core.binop * expr * expr
   | Etrue
   | Efalse
+  | Eis_scalar of expr
+  | Eis_integer of expr
+  | Eis_signed of expr
+  | Eis_unsigned of expr
   | Enot of expr
-  | Ectype of Ail.ctype
+  | Ectype of Core.ctype
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
+  | Ecase of expr * (ctype_ * expr) list (* This is a hackish syntactic sugar, that should really only used to case over ctypes *)
   | Eproc of string * expr list
-  | Ecall of string * expr list
+  | Ecall of name * expr list
   | Esame of expr * expr
   | Eundef
   | Eerror
@@ -37,6 +98,10 @@ and action =
   | Load of expr * expr
 and paction = Core.polarity * action
 
+type declaration =
+  | Def_decl  of Implementation.implementation_constant * Core.core_base_type * expr
+  | IFun_decl of Implementation.implementation_constant * (Core.core_base_type * (string * Core.core_base_type) list * expr)
+  | Fun_decl  of string * (Core.core_type * (string * Core.core_base_type) list * expr)
 
 (* TODO *)
 let convert e arg_syms fsyms =
@@ -44,9 +109,14 @@ let convert e arg_syms fsyms =
     | Eskip                     -> Core.Eskip
     | Econst n                  -> Core.Econst n
     | Esym a                    -> Boot.print_debug ("LOOKING FOR> " ^ a) $ Core.Esym (Pmap.find a syms) (* Error handling *)
+    | Eimpl i                   -> Core.Eimpl i
     | Eop (binop, e1, e2)       -> Core.Eop (binop, f st e1, f st e2)
     | Etrue                     -> Core.Etrue
     | Efalse                    -> Core.Efalse
+    | Eis_scalar e              -> Core.Eis_scalar (f st e)
+    | Eis_integer e             -> Core.Eis_integer (f st e)
+    | Eis_signed e              -> Core.Eis_signed (f st e)
+    | Eis_unsigned e            -> Core.Eis_unsigned (f st e)
     | Enot e                    -> Core.Enot (f st e)
     | Ectype ty                 -> Core.Ectype ty
     | Elet (a, e1, e2) ->
@@ -54,8 +124,26 @@ let convert e arg_syms fsyms =
         Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
 
     | Eif (e1, e2, e3)          -> Core.Eif (f st e1, f st e2, f st e3)
+
+    | Ecase (e, es) ->
+        (* TODO: if we use Error here, then error isn't anymore just the delayed C static error. *)
+        List.fold_right (fun (ty_, e') acc ->
+          Core.Eif (Core.Eop (Core.OpEq, f st e, Core.Ectype (project_ctype_ ty_)), f st e', acc)
+        ) es Core.Eerror
+
     | Eproc (func, args)        -> Core.Eproc (Pset.empty compare, Pmap.find func fsyms, List.map (f st) args)
-    | Ecall (func, args)        -> Core.Ecall (Pmap.find func fsyms, List.map (f st) args)
+    | Ecall (Impl func, args)   -> Core.Ecall (Core.Impl func, List.map (f st) args)
+    | Ecall (Sym func, args)    ->
+        let fsym =
+          try
+            Pmap.find func fsyms
+          with Not_found ->
+            try
+              Pmap.find func M.std
+            with Not_found ->
+              prerr_endline $ Colour.ansi_format [Colour.Red] ("PARSING ERROR: the function `" ^ func ^ "' was not declared.");
+              exit 1 in
+        Core.Ecall (Core.Sym fsym, List.map (f st) args)
     | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
     | Eundef                    -> Core.Eundef Undefined.DUMMY
     | Eerror                    -> Core.Eerror
@@ -104,28 +192,55 @@ let convert e arg_syms fsyms =
   in f (0, arg_syms) e
 
 
-let mk_file funs =
-  let (main, _, fsyms, fun_map) =
-    List.fold_left (fun (main, count, fsyms, fun_map) (fname, fdef) ->
-      (* TODO: better error *)
-      if Pmap.mem fname fsyms then failwith ("duplicate definition of `" ^ fname ^ "'")
-      else
-        let a_fun = (count, Some fname) in
-        ((if fname = "main" then Some a_fun else main), count+1,
-         Pmap.add fname a_fun fsyms,
-         Pmap.add a_fun fdef fun_map)
-    ) (None, 0, Pmap.empty compare, Pmap.empty compare) funs
-  in
-  let fun_map' =
-    Pmap.map (fun (coreTy_ret, args, fbody) ->
-      let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
-        let _a = (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
-        (0, Pmap.empty compare, []) args in
-      (coreTy_ret, args', convert fbody arg_syms fsyms)) fun_map in
-  match main with
-    | Some a_main -> Left { Core.main=    a_main;
-                            Core.fun_map= fun_map' }
-    | None        -> Right fun_map'
+(* TODO: clean up this mess *)
+let mk_file decls =
+  (* if this is not an implementation file. *)
+  if List.for_all (function Fun_decl _ -> true | _ -> false) decls then
+    let (main, _, fsyms, fun_map) =
+      List.fold_left (fun (main, count, fsyms, fun_map) decl ->
+        match decl with
+          | Fun_decl (fname, fdef) ->
+            (* TODO: better error *)
+            if Pmap.mem fname fsyms then
+              failwith ("duplicate definition of `" ^ fname ^ "'")
+            else
+              let a_fun = (count, Some fname) in
+              ((if fname = "main" then Some a_fun else main),
+               count+1,
+               Pmap.add fname a_fun fsyms,
+               Pmap.add a_fun fdef fun_map)
+          | _ -> assert false
+      ) (None, 0, Pmap.empty compare, Pmap.empty compare) decls
+    in
+    let fun_map' =
+      Pmap.map (fun (coreTy_ret, args, fbody) ->
+        let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
+          let _a = (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
+          (0, Pmap.empty compare, []) args in
+        (coreTy_ret, args', convert fbody arg_syms fsyms)) fun_map in
+    match main with
+      | Some a_main -> Core_parser_util.Rfile (a_main, fun_map')
+      | None        -> Core_parser_util.Rstd fun_map'
+  else
+    let impl_map =
+      List.fold_left (fun impl_map decl ->
+        match decl with
+          | Def_decl (i, bty, e) ->
+              if Pmap.mem i impl_map then
+                failwith ("(TODO_MSG) duplication declaration of " ^ Implementation.string_of_implementation_constant i)
+              else
+                Pmap.add i (Core.Def (bty, convert e (Pmap.empty compare) (Pmap.empty compare))) impl_map
+          | IFun_decl (i, (bty, args, fbody)) ->
+              let (_, arg_syms, args') = List.fold_left (fun (count, m, args') (x, ty) ->
+                let _a = (count, Some x) in (count+1, Pmap.add x _a m, (_a, ty) :: args'))
+                (0, Pmap.empty compare, []) args in
+              Pmap.add i (Core.IFun (bty, args', convert fbody arg_syms (Pmap.empty compare))) impl_map
+          | Fun_decl _ ->
+              failwith "(TODO_MSG) found a function declaration in an implementation file."
+      ) (Pmap.empty compare) decls in
+    
+    (* TODO: add a check for completeness *)
+    Core_parser_util.Rimpl impl_map
 
 
 
@@ -145,32 +260,40 @@ let subst name =
 %}
 
 %token CREATE ALLOC KILL STORE LOAD
-%token <int> INT_CONST
+%token <Num.num> INT_CONST
 %token <string> SYM
+%token <Core.name> NAME
+%token <Implementation.implementation_constant> IMPL
 %token SKIP RET
 %token NOT
 %token TRUE FALSE
 %token LET IN
-%token FUN PROC END
+%token DEF FUN PROC END
 %token SAVE RUN
 %token PLUS MINUS STAR SLASH PERCENT
-%token EQ LT
+%token EQ LT LE
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 %token TILDE
 %token EXCLAM
-%token PIPE_PIPE SEMICOLON PIPE_GT GT_GT
+%token PIPE PIPE_PIPE SEMICOLON PIPE_GT GT_GT
 %token UNDERSCORE
-%token LT_MINUS
+%token LANGLE RANGLE
+%token LT_MINUS MINUS_GT
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET DOT COMMA COLON COLON_EQ
 %token SAME
 %token UNDEF ERROR
 %token IF THEN ELSE
+%token CASE OF
 %token INTEGER BOOLEAN ADDRESS CTYPE UNIT
+
+(* TODO: temporary *)
+%token IS_SCALAR IS_INTEGER IS_SIGNED IS_UNSIGNED
+
 
 
 (* ctype tokens *)
-%token CONST RESTRICT VOLATILE ATOMIC SHORT INT LONG
-%token BOOL SIGNED UNSIGNED FLOAT DOUBLE COMPLEX CHAR VOID STRUCT UNION ENUM
+%token ATOMIC SHORT INT LONG LONG_LONG
+%token BOOL SIGNED UNSIGNED FLOAT DOUBLE LONG_DOUBLE COMPLEX ICHAR CHAR VOID STRUCT UNION ENUM
 %token SIZE_T INTPTR_T WCHAR_T CHAR16_T CHAR32_T
 
 
@@ -181,10 +304,10 @@ let subst name =
 %left NOT
 %left PLUS MINUS
 %left STAR SLASH PERCENT
-%left EQ LT
+%left EQ LT LE
 
-%start start
-%type <(Global.zero Core.file, Global.zero Core.fun_map) Global.either> start
+%start <Core_parser_util.result>start
+%parameter <M : sig val std : (string, Core.sym) Pmap.map end>
 
 %%
 
@@ -202,8 +325,8 @@ delimited_nonempty_list(opening, separator, X, closing):
    { xs }
 
 start:
-| funs = nonempty_list(fun_declaration) EOF
-    { mk_file funs }
+| decls = nonempty_list(declaration) EOF
+    { mk_file decls }
 
 core_base_type:
 | INTEGER
@@ -230,24 +353,8 @@ core_type:
     { Core.TyEffect baseTy }
 
 (* BEGIN Ail types *)
-qualifier:
-| CONST
-    { Ail.CONST }
-| RESTRICT
-    { Ail.RESTRICT }
-| VOLATILE
-    { Ail.VOLATILE }
-(*
-| ATOMIC
-    { Ail.ATOMIC_Q }
-*)
-
-qualifiers:
-| qs= list(qualifier)
-    { Pset.from_list Pervasives.compare qs }
-
 integer_base_type:
-| CHAR
+| ICHAR
     { Ail.ICHAR }
 | SHORT
     { Ail.SHORT }
@@ -255,7 +362,7 @@ integer_base_type:
     { Ail.INT }
 | LONG
     { Ail.LONG }
-| LONG LONG
+| LONG_LONG
     { Ail.LONG_LONG }
 (*| EXTENDED_INTEGER of string *)
 
@@ -272,7 +379,7 @@ real_floating_type:
     { Ail.FLOAT }
 | DOUBLE
     { Ail.DOUBLE }
-| LONG DOUBLE
+| LONG_DOUBLE
     { Ail.LONG_DOUBLE }
 
 basic_type:
@@ -286,40 +393,44 @@ basic_type:
     { Ail.COMPLEX rft }
 
 member_def:
-| ty= ctype name= SYM 
-    { (subst name, Ail.MEMBER ty) }
-| ty= ctype name= SYM COLON n= INT_CONST
-    { (subst name, Ail.BITFIELD (ty, n, None)) }
+| ty_= ctype_ name= SYM 
+    { (subst name, Core.MEMBER (project_ctype_ ty_)) }
+| ty_= ctype_ name= SYM COLON n= INT_CONST
+    { (subst name, Core.BITFIELD (project_ctype_ ty_, n, None)) }
 
-ctype:
-| qs= qualifiers VOID
-    { Ail.VOID qs }
-| qs= qualifiers bty= basic_type
-    { Ail.BASIC (qs, bty) }
-| ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
-    { Ail.ARRAY (ty, n_opt) }
-| qs= qualifiers STRUCT tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
-    { Ail.STRUCT (qs, subst tag, mems) }
-| qs= qualifiers UNION tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
-    { Ail.UNION (qs, subst tag, mems) }
+ctype_:
+| VOID
+    { VOID_ }
+| bty= basic_type
+    { BASIC_ bty }
+| ty_= ctype_ LBRACKET n_opt= INT_CONST? RBRACKET
+    { ARRAY_ (ty_, n_opt) }
+| STRUCT tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
+    { STRUCT_ (subst tag, mems) }
+| UNION tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
+    { UNION_ (subst tag, mems) }
 | ENUM name= SYM
-    { Ail.ENUM (subst name)}
-| ty_ret= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Ail.FUNCTION (ty_ret, tys) }
-| qs= qualifiers ty= ctype STAR
-    { Ail.POINTER (qs, ty) }
-| ATOMIC ty= ctype
-    { Ail.ATOMIC ty }
+    { ENUM_ (subst name) }
+| ty_= ctype_ tys_= delimited(LPAREN, separated_list(COMMA, ctype_), RPAREN)
+    { FUNCTION_ (project_ctype_ ty_, List.map project_ctype_ tys_) }
+| ty_= ctype_ STAR
+    { POINTER_ ty_ }
+| ATOMIC ty_= ctype_
+    { ATOMIC_ ty_ }
 | SIZE_T
-    { Ail.SIZE_T }
+    { SIZE_T_ }
 | INTPTR_T
-    { Ail.INTPTR_T }
+    { INTPTR_T_ }
 | WCHAR_T
-    { Ail.WCHAR_T }
+    { WCHAR_T_ }
 | CHAR16_T
-    { Ail.CHAR16_T }
+    { CHAR16_T_ }
 | CHAR32_T
-    { Ail.CHAR32_T }
+    { CHAR32_T_ }
+| UNDERSCORE
+    { WILDCARD }
+
+
 
 (* END Ail types *)
 
@@ -405,6 +516,17 @@ impure_expr:
     { e }
 
 
+guards:
+|
+    { [] }
+| PIPE ty_ = ctype_ MINUS_GT e= impure_expr gs= guards
+    { (ty_, e) :: gs }
+
+name:
+| a = SYM
+    { Sym a }
+| i = IMPL
+    { Impl i }
 
 expr:
 | e = delimited(LPAREN, expr, RPAREN)
@@ -416,8 +538,15 @@ expr:
 | n = INT_CONST
     { Econst n }
 
+| i = IMPL
+    { Eimpl i }
+
 | a = SYM
     { Esym a }
+
+(* some sugar *)
+| e1 = expr LE e2 = expr
+    { Eop (Core.OpOr, Eop (Core.OpLt, e1, e2), Eop (Core.OpEq, e1, e2)) }
 
 | e1 = expr op = binary_operator e2 = expr
     { Eop (op, e1, e2) }
@@ -428,11 +557,21 @@ expr:
 | FALSE
     { Efalse }
 
+(* TODO: temporary *)
+| IS_SCALAR LPAREN e = expr RPAREN
+    { Eis_scalar e }
+| IS_INTEGER LPAREN e= expr RPAREN
+    { Eis_integer e }
+| IS_SIGNED LPAREN e= expr RPAREN
+    { Eis_signed e }
+| IS_UNSIGNED LPAREN e= expr RPAREN
+    { Eis_unsigned e }
+
 | NOT e = expr
     { Enot e }
 
-| ty = ctype
-    { Ectype ty }
+| ty_ = ctype_
+    { Ectype (project_ctype_ ty_) }
 
 | LET a = SYM EQ e1 = expr IN e2 = impure_expr END (* TODO: END is tasteless. *)
     { Elet (a, e1, e2) }
@@ -440,11 +579,14 @@ expr:
 | IF b = expr THEN e1 = impure_expr ELSE e2 = impure_expr (* TODO: may need to also allow unseq_expr *)
     { Eif (b, e1, e2) }
 
+| CASE e = expr OF es = guards END
+    { Ecase (e, es) }
+
 (* HACK: shouldn't be in the parser, but insted impure Ecall should be converted to Eproc by the typechecker *)
 | f = SYM es = delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
     { Eproc (f, es) }
 
-| f = SYM es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+| f = name es = delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Ecall (f, es) }
 (*
 | SAME LPAREN e1 = expr e2 = expr RPAREN
@@ -464,11 +606,30 @@ expr:
 
 
 fun_argument:
-| x = SYM COLON ty = core_base_type
-    { (x, ty) }
+| x = SYM COLON bty = core_base_type
+    { (x, bty) }
+
+
+def_declaration:
+| DEF dname = IMPL COLON bty = core_base_type COLON_EQ e = impure_expr
+  { Def_decl (dname, bty, e) }
+
+ifun_declaration:
+| FUN fname = IMPL args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreBTy_ret = core_base_type COLON_EQ fbody = impure_expr
+  { IFun_decl (fname, (coreBTy_ret, List.rev args, fbody)) }
 
 fun_declaration:
 | FUN fname = SYM args = delimited(LPAREN, separated_list(COMMA, fun_argument), RPAREN) COLON coreTy_ret = core_type COLON_EQ fbody = impure_expr
-  { (fname, (coreTy_ret, List.rev args, fbody)) }
+  { Fun_decl (fname, (coreTy_ret, List.rev args, fbody)) }
+
+
+
+declaration:
+| d= def_declaration
+    { d }
+| d= ifun_declaration
+    { d }
+| d= fun_declaration
+    { d }
 
 %%

@@ -113,13 +113,31 @@ with expression :=
   | MEMBEROFPTR : expression -> atom -> expression
   | OFFSETOF : (list spec_elem * decl_type) -> atom -> expression
 
+with integer_suffix :=
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+
+with character_prefix :=
+  | PREFIX_L
+  | PREFIX_u
+  | PREFIX_U
+
+with encoding_prefix :=
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+
 with constant :=
   (* The atom is the textual representation of the constant in
      the source code. It does include quotes. *)
-  | CONST_INT : atom -> constant
+  | CONST_INT : atom -> option integer_suffix -> constant
   | CONST_FLOAT : atom -> constant
-  | CONST_CHAR : atom -> constant
-  | CONST_STRING : atom -> constant
+  | CONST_CHAR : option character_prefix -> atom -> constant
+  | CONST_STRING : (* TODO: option encoding_prefix -> *) atom -> constant
 
 with init_expression :=
   | NO_INIT
