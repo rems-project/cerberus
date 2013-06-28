@@ -1,6 +1,5 @@
 open Global
 
-(* DEBUG *) open Pp_cabs0
 
 
 (* use this to print a halting error message *)
@@ -154,13 +153,15 @@ let () =
             Exception.return (c_preprocessing m)
         >|> Exception.fmap Cparser.Driver.parse
         >|> pass_message "1. Parsing completed!"
-(*
+
         >|> Exception.fmap Cabs_transform.transform_file
         >|> pass_message "1.5. Cabs AST transform completed!"
         >|> pass_through_test !print_cabs (run_pp -| Pp_cabs.pp_file)
-*)
+
+(*
         >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
-        >|> Exception.rbind (Cabs0_to_ail.desugar "main")
+*)
+        >|> Exception.rbind (Cabs_to_ail.desugar "main")
         >|> pass_message "2. Cabs -> Ail completed!"
         >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
         >|> Exception.rbind Ail_typing.annotate

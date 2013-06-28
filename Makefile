@@ -74,7 +74,7 @@ MODEL_FILES=\
   annotate.lem \
   decode.lem \
   cabs_transform.lem \
-  cabs0_to_ail.lem \
+  cabs_to_ail.lem \
   ail_typing.lem \
   range.lem \
   translation.lem
@@ -121,7 +121,7 @@ ocaml_byte: lem_ocaml
 	@cp lib/ocaml/src/* $(OCAML_BUILD_DIR)
 # YUCK
 	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs_transform.ml
-	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
+#	@sed -i"" -e 's/Cabs0/Cparser.Cabs0/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
 # Sort of YUCK
 	@sed -i"" -e 's/<<HG-IDENTITY>>/$(shell hg id)/' $(OCAML_BUILD_DIR)/main.ml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
@@ -136,7 +136,7 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
 	@sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_transform.ml
-	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
+#	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
 
 # (FUTURE) this would be the way to go if there was a way to not have Lem recompiled
 #          all the dependencies of a module
