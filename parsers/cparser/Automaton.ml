@@ -24,83 +24,84 @@ module Types =
  functor (Init:AutInit) ->
  struct 
   type state =
-    | Init
-    | Ninit of Init.noninitstate
+  | Init
+  | Ninit of Init.noninitstate
   
   (** val state_rect : 'a1 -> (Init.noninitstate -> 'a1) -> state -> 'a1 **)
   
   let state_rect f f0 = function
-    | Init -> f
-    | Ninit x -> f0 x
+  | Init -> f
+  | Ninit x -> f0 x
   
   (** val state_rec : 'a1 -> (Init.noninitstate -> 'a1) -> state -> 'a1 **)
   
   let state_rec f f0 = function
-    | Init -> f
-    | Ninit x -> f0 x
+  | Init -> f
+  | Ninit x -> f0 x
   
   (** val coq_StateAlph : state coq_Alphabet **)
   
   let coq_StateAlph =
     { coq_AlphabetComparable = (fun x y ->
       match x with
-        | Init -> (match y with
-                     | Init -> Eq
-                     | Ninit n -> Lt)
-        | Ninit x0 ->
-            (match y with
-               | Init -> Gt
-               | Ninit y0 ->
-                   compare Init.coq_NonInitStateAlph.coq_AlphabetComparable
-                     x0 y0)); coq_AlphabetFinite =
+      | Init ->
+        (match y with
+         | Init -> Eq
+         | Ninit n -> Lt)
+      | Ninit x0 ->
+        (match y with
+         | Init -> Gt
+         | Ninit y0 ->
+           compare Init.coq_NonInitStateAlph.coq_AlphabetComparable x0 y0));
+      coq_AlphabetFinite =
       (Init::(map (fun x -> Ninit x)
                (all_list Init.coq_NonInitStateAlph.coq_AlphabetFinite))) }
   
   type action =
-    | Shift_act of Init.noninitstate
-    | Reduce_act of Init.Gram.production
-    | Fail_act
+  | Shift_act of Init.noninitstate
+  | Reduce_act of Init.Gram.production
+  | Fail_act
   
   (** val action_rect :
       Init.Gram.terminal -> (Init.noninitstate -> __ -> 'a1) ->
       (Init.Gram.production -> 'a1) -> 'a1 -> action -> 'a1 **)
   
   let action_rect term f f0 f1 = function
-    | Shift_act x -> f x __
-    | Reduce_act x -> f0 x
-    | Fail_act -> f1
+  | Shift_act x -> f x __
+  | Reduce_act x -> f0 x
+  | Fail_act -> f1
   
   (** val action_rec :
       Init.Gram.terminal -> (Init.noninitstate -> __ -> 'a1) ->
       (Init.Gram.production -> 'a1) -> 'a1 -> action -> 'a1 **)
   
   let action_rec term f f0 f1 = function
-    | Shift_act x -> f x __
-    | Reduce_act x -> f0 x
-    | Fail_act -> f1
+  | Shift_act x -> f x __
+  | Reduce_act x -> f0 x
+  | Fail_act -> f1
   
   type default_action =
-    | Default_reduce_act of Init.Gram.production
-    | Accept_act
+  | Default_reduce_act of Init.Gram.production
+  | Accept_act
   
   (** val default_action_rect :
       (Init.Gram.production -> 'a1) -> 'a1 -> default_action -> 'a1 **)
   
   let default_action_rect f f0 = function
-    | Default_reduce_act x -> f x
-    | Accept_act -> f0
+  | Default_reduce_act x -> f x
+  | Accept_act -> f0
   
   (** val default_action_rec :
       (Init.Gram.production -> 'a1) -> 'a1 -> default_action -> 'a1 **)
   
   let default_action_rec f f0 = function
-    | Default_reduce_act x -> f x
-    | Accept_act -> f0
+  | Default_reduce_act x -> f x
+  | Accept_act -> f0
   
   type pseudoprod = Init.Gram.production option
   
-  type item = { pseudoprod_item : pseudoprod; dot_pos_item : 
-                nat; lookaheads_item : Init.Gram.terminal list }
+  type item = { pseudoprod_item : pseudoprod; dot_pos_item : nat;
+                lookaheads_item : Init.Gram.terminal list }
   
   (** val item_rect :
       (pseudoprod -> nat -> Init.Gram.terminal list -> 'a1) -> item -> 'a1 **)
@@ -146,8 +147,8 @@ module type T =
   val last_symb_of_non_init_state : noninitstate -> Gram.symbol
   
   type state =
-    | Init
-    | Ninit of noninitstate
+  | Init
+  | Ninit of noninitstate
   
   val state_rect : 'a1 -> (noninitstate -> 'a1) -> state -> 'a1
   
@@ -156,9 +157,9 @@ module type T =
   val coq_StateAlph : state coq_Alphabet
   
   type action =
-    | Shift_act of noninitstate
-    | Reduce_act of Gram.production
-    | Fail_act
+  | Shift_act of noninitstate
+  | Reduce_act of Gram.production
+  | Fail_act
   
   val action_rect :
     Gram.terminal -> (noninitstate -> __ -> 'a1) -> (Gram.production -> 'a1)
@@ -169,8 +170,8 @@ module type T =
     -> 'a1 -> action -> 'a1
   
   type default_action =
-    | Default_reduce_act of Gram.production
-    | Accept_act
+  | Default_reduce_act of Gram.production
+  | Accept_act
   
   val default_action_rect :
     (Gram.production -> 'a1) -> 'a1 -> default_action -> 'a1
@@ -180,8 +181,8 @@ module type T =
   
   type pseudoprod = Gram.production option
   
-  type item = { pseudoprod_item : pseudoprod; dot_pos_item : 
-                nat; lookaheads_item : Gram.terminal list }
+  type item = { pseudoprod_item : pseudoprod; dot_pos_item : nat;
+                lookaheads_item : Gram.terminal list }
   
   val item_rect :
     (pseudoprod -> nat -> Gram.terminal list -> 'a1) -> item -> 'a1
@@ -200,14 +201,13 @@ module type T =
     type token = (Gram.terminal, Gram.symbol_semantic_type) sigT
     
     type parse_tree =
-      | Terminal_pt of Gram.terminal * Gram.symbol_semantic_type
-      | Non_terminal_pt of Gram.production * token list * 
-         tuple * parse_tree_list
+    | Terminal_pt of Gram.terminal * Gram.symbol_semantic_type
+    | Non_terminal_pt of Gram.production * token list * tuple
+       * parse_tree_list
     and parse_tree_list =
-      | Nil_ptl
-      | Cons_ptl of token list * Gram.symbol * Gram.symbol_semantic_type
-         * parse_tree * token list * Gram.symbol list * 
-         tuple * parse_tree_list
+    | Nil_ptl
+    | Cons_ptl of token list * Gram.symbol * Gram.symbol_semantic_type
+       * parse_tree * token list * Gram.symbol list * tuple * parse_tree_list
     
     val parse_tree_rect :
       (Gram.terminal -> Gram.symbol_semantic_type -> 'a1) -> (Gram.production

@@ -316,7 +316,7 @@ and translate_definition_to_declarations d =
 (* only supporting decimal for now *)
 and decode_integer_constant ic =
   let (n, suff) = Boot.span_string Boot.is_digit ic in
-  (Int.int (Ocaml.Nat_num.num_of_string n),
+  (Int.int_of_string n,
    match suff with
      | ""    -> None
      | "u"   -> Some C.SUFFIX_UNSIGNED
@@ -333,14 +333,32 @@ and decode_integer_constant ic =
      | "uLL" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
      | "Ull" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
      | "ULL" -> Some C.SUFFIX_UNSIGNED_LONG_LONG
-     | _     -> Boot.assert_false "TODO msg: impossible case"
+     | _     -> Boot.assert_false ("[Cabs_transform.decode_integer_constant] impossible case: " ^ suff)
    end)
+
+and translate_integer_suffix suff =
+  match suff with
+    | C0.SUFFIX_UNSIGNED           -> C.SUFFIX_UNSIGNED
+    | C0.SUFFIX_UNSIGNED_LONG      -> C.SUFFIX_UNSIGNED_LONG
+    | C0.SUFFIX_UNSIGNED_LONG_LONG -> C.SUFFIX_UNSIGNED_LONG_LONG
+    | C0.SUFFIX_LONG               -> C.SUFFIX_LONG
+    | C0.SUFFIX_LONG_LONG          -> C.SUFFIX_LONG_LONG
+  end
+
+and translate_character_prefix pref =
+  match pref with
+    | C0.PREFIX_L -> C.PREFIX_L
+    | C0.PREFIX_u -> C.PREFIX_u
+    | C0.PREFIX_U -> C.PREFIX_U
+  end
 
 and translate_constant c =
   match c with
-    | C0.CONST_INT i      -> C.CONST_INT (decode_integer_constant i)
-    | C0.CONST_FLOAT f    -> C.CONST_FLOAT f
-    | C0.CONST_CHAR c     -> C.CONST_CHAR c
+    | C0.CONST_INT n None         -> C.CONST_INT (n, None)
+    | C0.CONST_INT n (Some suff)  -> C.CONST_INT (n, Some (translate_integer_suffix suff))
+    | C0.CONST_FLOAT f            -> C.CONST_FLOAT f
+    | C0.CONST_CHAR None c        -> C.CONST_CHAR (None, c)
+    | C0.CONST_CHAR (Some pref) c -> C.CONST_CHAR (Some (translate_character_prefix pref), c)
   end
 
 

@@ -15,8 +15,8 @@ module Make =
  functor (A:T) ->
  functor (Inter:sig 
   type 'a result =
-    | Err
-    | OK of 'a
+  | Err
+  | OK of 'a
   
   val result_rect : 'a2 -> ('a1 -> 'a2) -> 'a1 result -> 'a2
   
@@ -29,8 +29,8 @@ module Make =
   val app_str : 'a1 list -> 'a1 coq_Stream -> 'a1 coq_Stream
   
   type stack =
-    | Nil_stack
-    | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
+  | Nil_stack
+  | Cons_stack of A.noninitstate * A.Gram.symbol_semantic_type * stack
   
   val stack_rect :
     'a1 -> (A.noninitstate -> A.Gram.symbol_semantic_type -> stack -> 'a1 ->
@@ -49,9 +49,9 @@ module Make =
   val reduce : stack -> A.Gram.production -> stack result
   
   type step_result =
-    | Fail_sr
-    | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
-    | Progress_sr of stack * A.GramDefs.token coq_Stream
+  | Fail_sr
+  | Accept_sr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+  | Progress_sr of stack * A.GramDefs.token coq_Stream
   
   val step_result_rect :
     'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream ->
@@ -66,9 +66,9 @@ module Make =
   val step : stack -> A.GramDefs.token coq_Stream -> step_result result
   
   type parse_result =
-    | Fail_pr
-    | Timeout_pr
-    | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
+  | Fail_pr
+  | Timeout_pr
+  | Parsed_pr of A.Gram.symbol_semantic_type * A.GramDefs.token coq_Stream
   
   val parse_result_rect :
     'a1 -> 'a1 -> (A.Gram.symbol_semantic_type -> A.GramDefs.token coq_Stream
@@ -91,18 +91,18 @@ module Make =
   
   let first_term_word word follow =
     match word with
-      | [] -> follow
-      | t0::l -> let Coq_existT (t1, s) = t0 in t1
+    | [] -> follow
+    | t0::l -> let Coq_existT (t1, s) = t0 in t1
   
   (** val extend_stack :
       Inter.stack -> A.noninitstate list -> __ -> Inter.stack **)
   
   let rec extend_stack stack_cur states x =
     match states with
-      | [] -> stack_cur
-      | t0::q ->
-          let semt,semq = Obj.magic x in
-          Inter.Cons_stack (t0, semt, (extend_stack stack_cur q semq))
+    | [] -> stack_cur
+    | t0::q ->
+      let semt,semq = Obj.magic x in
+      Inter.Cons_stack (t0, semt, (extend_stack stack_cur q semq))
   
   type past_invariant = { states_pi : A.noninitstate list; sem_pi : tuple }
   
@@ -140,10 +140,8 @@ module Make =
   
   type hole_future_invariant = { future_hfi : (A.Gram.symbol list, tuple)
                                               sigT;
-                                 word_future_hfi : 
-                                 A.GramDefs.token list;
-                                 future_sem_proof_hfi : 
-                                 A.GramDefs.parse_tree_list;
+                                 word_future_hfi : A.GramDefs.token list;
+                                 future_sem_proof_hfi : A.GramDefs.parse_tree_list;
                                  hole_hfi : (A.Gram.production, tuple) sigT
                                             option }
   
@@ -199,27 +197,29 @@ module Make =
   
   let hole_pseudo_hfi normalized h =
     match hole_hfi normalized h with
-      | Some i -> Some (Coq_existT ((Some (projT1 i)), (projT2 i)))
-      | None -> None
+    | Some i -> Some (Coq_existT ((Some (projT1 i)), (projT2 i)))
+    | None -> None
   
   (** val symbl_hfi : bool -> hole_future_invariant -> A.Gram.symbol list **)
   
   let symbl_hfi normalized h =
     match hole_hfi normalized h with
-      | Some i -> (A.Gram.NT
-          (A.Gram.prod_lhs (projT1 i)))::(projT1 (future_hfi normalized h))
-      | None -> projT1 (future_hfi normalized h)
+    | Some i ->
+      (A.Gram.NT
+        (A.Gram.prod_lhs (projT1 i)))::(projT1 (future_hfi normalized h))
+    | None -> projT1 (future_hfi normalized h)
   
   (** val sem_hfi : bool -> hole_future_invariant -> tuple **)
   
   let sem_hfi normalized h =
     match hole_hfi normalized h with
-      | Some i ->
-          Obj.magic
-            ((uncurry (List0.map (Obj.magic __) (A.Gram.prod_rhs (projT1 i)))
-               (A.Gram.prod_action (projT1 i)) (projT2 i)),
-            (projT2 (future_hfi normalized h)))
-      | None -> projT2 (future_hfi normalized h)
+    | Some i ->
+      Obj.magic
+        ((uncurry (List0.map (Obj.magic __) (A.Gram.prod_rhs (projT1 i)))
+           (A.Gram.prod_action (projT1 i)) (projT2 i)),(projT2
+                                                         (future_hfi
+                                                           normalized h)))
+    | None -> projT2 (future_hfi normalized h)
   
   (** val coq_JMeq_rew_r : 'a1 -> 'a2 -> 'a3 -> 'a3 **)
   

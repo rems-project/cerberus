@@ -562,8 +562,8 @@ translation_unit_file:
 | translation_unit EOF
     {}
 | error
-    { Parser_errors.fatal_error "%s:%d Error:@ parse error"
-        $endpos.Lexing.pos_fname $endpos.Lexing.pos_lnum }
+    { Parser_errors.fatal_error "%s:%d:%d Error:@ parse error"
+        $endpos.Lexing.pos_fname $endpos.Lexing.pos_lnum $endpos.Lexing.pos_cnum }
 
 translation_unit:
 | external_declaration

@@ -20,6 +20,7 @@ module type MAKE =
   functor (L : Lexer_util.LEXER with type token = B.token) ->
     PARSER with type result = B.result
 
+
 module Make
   (B : BASE)
   (L : Lexer_util.LEXER with type token = B.token) =

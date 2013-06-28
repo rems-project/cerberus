@@ -33,6 +33,34 @@ type sym = Symbol.t
 type ksym = Symbol.t
 
 
+
+
+(* C types (this is a simplication of what is need for typechecking) *)
+(* TODO: what about Ail.ATOMIC_Q ? *)
+type ctype =
+  | VOID
+  | BASIC of Ail.basic_type
+  | ARRAY of ctype * option int
+  | STRUCT of Ail.id * list (Ail.id * member)
+  | UNION  of Ail.id * list (Ail.id * member)
+  | ENUM of Ail.id
+  | FUNCTION of ctype * list ctype
+  | POINTER of ctype
+  | ATOMIC of ctype
+  | SIZE_T
+  | INTPTR_T
+  | WCHAR_T
+  | CHAR16_T
+  | CHAR32_T
+
+and member =
+  | MEMBER of (* alignment_specifier * *) ctype
+  | BITFIELD of ctype * int * (option bool)
+
+
+
+
+
 (* Binary operators *)
 type binop =
   (* arithmetic operators *)
@@ -54,85 +82,74 @@ type polarity =
   | Pos
   | Neg
 
+type name =
+  | Sym of sym
+  | Impl of Implementation.implementation_constant
 
 type expr 'a =
-  (* TODO: removed these *)
-  | COMMENT of string * expr 'a
-  | DEBUG of string
-  
   (* pure expressions *)
-
-  | Etuple of list (expr 'a) (* TODO: may be temporary *)
-
   | Enull
-
-
-  | Eskip
-  | Econst of int
-  | Eaddr of mem_addr
-  | Esym of sym
-  | Eop of binop * expr 'a * expr 'a
   | Etrue
   | Efalse
+  | Econst of int
+  | Ectype of ctype
+  | Eaddr of mem_addr
+  | Esym of sym
+  | Eimpl of Implementation.implementation_constant
+  | Etuple of list (expr 'a)
   | Enot of expr 'a
-  | Ectype of Ail.ctype
-  | Elet of sym * expr 'a * expr 'a
-  | Eif of expr 'a * expr 'a * expr 'a
-  
-  | Eproc of set 'a * sym * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
-  | Ecall of sym * list (expr 'a)
-  (* K: I think this one is also pure | I don't anymore *)
-  | Esame of expr 'a * expr 'a
-
+  | Eop of binop * expr 'a * expr 'a
+  | Ecall of name * list (expr 'a)
   
   (* undefined behaviour and late static error / failed assert *)
   | Eundef of Undefined.undefined_behaviour
   | Eerror
   
+  (* potentialy effectful *)
+  | Eskip
+  | Elet of sym * expr 'a * expr 'a
+  | Eif of expr 'a * expr 'a * expr 'a
+  | Eproc of set 'a * sym * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Esame of expr 'a * expr 'a
   | Eaction of paction 'a
   
   (* sequencing operators *)
   | Eunseq of list (expr 'a)
 
   | Ewseq of list (option sym) * expr 'a * expr 'a
-
-(*  | Ewseq of list (list (option sym) * expr 'a) * expr 'a *)
   | Esseq of list (option sym) * expr 'a * expr 'a
-  | Easeq of option sym * action 'a * paction 'a
+  | Easeq of option sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
   
-  (* indeterminately-sequenced expressions and boundary *)
-  (* TODO: this doesn't exists after the first stage of dynamics *)
-  | Eindet of expr 'a (* TODO: add unique indices *)
-  | Ebound of num * expr 'a
+  (* indeterminately-sequenced expressions and boundary *) 
+  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of num * expr 'a (* this ctor doesn't exist at runtine *)
   
   (* Continuation operators *)
-  | Esave of ksym * (* list sym * *) list (sym * Ail.ctype) * expr 'a (* TODO: may have to add the possibility of storing a number instead of a ctype (for allocated objects) *)
-  | Erun of set 'a * ksym * list (sym * expr 'a) (* * list (expr 'a) * list (either Ail.ctype num) *)
-    (* In the first list are expressions to substs free-symbols (not coming from C variables local
-       to a block we are jumping into) in the continuation. The second list gives the effective
-       types (or none for dynamically allocated objects) for C variables local to the block we are
-       jumping into but whose declaration we miss *)
+  (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
+  | Esave of ksym * list (sym * ctype) * expr 'a
+  | Erun of set 'a * ksym * list (sym * expr 'a)
     (* TODO: need more for VLAs *)
   
   | Eret of expr 'a
   
   (* Non deterministic choice (resulting from indet expressions) *)
-  (* TODO: this only exists for the second stage of dynamics *)
+  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
   | End of list (expr 'a)
   
-  (* TODO: this should probably be added back to the syntax *)
-(* | Kshift of sym * expr 'a *)
   
-  (* TODO: these are not anymore constructors, but functions that need to be
-           exposed by the Std library
+  | Eshift of sym *expr 'a
 
-     Kmax of Ail.ctype
-     Kmin of Ail.ctype
-     Ksizeof of Ail.ctype
-     Kalignof of Ail.ctype
-     Koffsetof of Ail.ctype
-     Kconv of Ail.ctype * Ail.ctype * sym
-*)
+
+(* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  | Eis_scalar of expr 'a
+  | Eis_integer of expr 'a
+  | Eis_signed of expr 'a
+  | Eis_unsigned of expr 'a
+
+
+
+
+
 
 (* the qualification prefixes are for pprint *)
 and action_ 'a =
@@ -145,12 +162,37 @@ and action 'a  = set 'a * action_ 'a
 and paction 'a = polarity * action 'a
 
 
+
+
+val sizeof: expr zero -> expr zero
+let sizeof e = Ecall (Impl Implementation.Sizeof) [e]
+
+val alignof: expr zero -> expr zero
+let alignof e = Ecall (Impl Implementation.Alignof) [e]
+
+val ctype_min: expr zero -> expr zero
+let ctype_min e = Ecall (Impl Implementation.Ctype_min) [e]
+
+val ctype_max: expr zero -> expr zero
+let ctype_max e = Ecall (Impl Implementation.Ctype_max) [e]
+
+
+
+
+
+type impl_decl 'a =
+  | Def  of core_base_type * expr 'a
+  | IFun of core_base_type * list (sym * core_base_type) * expr 'a
+type impl 'a = map Implementation.implementation_constant (impl_decl 'a)
+
 type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
 
 (* a Core file is just a set of named functions *)
 type file 'a = <|
-  main    : sym;
-  fun_map : fun_map 'a;
+  main   : sym;
+  stdlib : fun_map 'a;
+  impl   : impl 'a;
+  funs   : fun_map 'a;
 |>
 
 
@@ -172,6 +214,8 @@ let rec is_value e =
     | Eaddr _ ->
         true
     | Esym _ ->
+        true
+    | Eimpl _ ->
         true
     | Eop _ _ _ ->
         true
@@ -219,4 +263,6 @@ let rec is_value e =
         false
     | End es ->
         false (* TODO: think about it *)
+    | Eshift a e ->
+        false
   end

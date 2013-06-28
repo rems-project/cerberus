@@ -143,8 +143,6 @@ let rec check expected_type e =
     | TyBase wildcard -> E.return () (* TODO: remove wildcard *)
     | _               ->
         match e with
-          | COMMENT _ e -> check expected_type e
-          | DEBUG msg   -> E.fail (Errors.CORE_TYPECHECK ("(check) found a DEBUG: `" ^ msg ^ "'."))
           
          (*
           +                              (α,τ) ∈ Γ
@@ -244,11 +242,13 @@ let rec check expected_type e =
           +  ----------------------------------- (f, [τ1, ..., τk] → τ* ) ∈ Γ (call)
           +         Γ ⊢ f (e1, ..., ek) ↑ τ*
           *)
+(* TODO: working (sort of)
           | Ecall f args -> E.get_fun f >>= fun (baseTys_vars, coreTy_return) ->
                             if List.length args <> List.length baseTys_vars
                               then E.fail $ CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS (List.length args) (List.length baseTys_vars)
                               else E.mapM_ (fun (arg, baseTy) -> check (TyBase baseTy) arg) (List.combine args baseTys_vars) >>
                               guard_expected coreTy_return
+*)
           
          (*
           +  ------------- ∀τ (undef)     ------------- ∀τ (error)
@@ -372,8 +372,6 @@ let rec check expected_type e =
 
 and infer e =
   match e with
-    | COMMENT _ e -> infer e
-    | DEBUG msg   -> E.fail (Errors.CORE_TYPECHECK ("(infer) found a DEBUG: `" ^ msg ^ "'."))
     
    (*
     +                              (α,τ) ∈ Γ
@@ -457,7 +455,9 @@ and infer e =
                 Errors.CORE_TYPECHECK_IF_BRANCHES >>
         E.return (retTy baseTy_e1)
     
-    
+
+(*
+TODO: working (sort of)    
     | Ecall f args ->
         E.get_fun f >>= fun (baseTys_vars, coreTy_return) ->
         (* display an error if the wrong number of arguments is provided *)
@@ -465,7 +465,7 @@ and infer e =
           then E.fail $ Errors.CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS (List.length args) (List.length baseTys_vars)
           else E.mapM_ (fun (arg, baseTy) -> check (TyBase baseTy) arg) (List.combine args baseTys_vars) >>
                E.return coreTy_return
-
+*)
 
 (*
         E.mapM infer args >>= fun coreTys_args ->
@@ -727,7 +727,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
 
 
 let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
-  let functions = Ocaml.Pmap.bindings f.fun_map in
+  let functions = Ocaml.Pmap.bindings f.funs in
   let init_fenv =
     List.fold_left (fun acc (fname, (ftype, args, _)) ->
       Pmap.add fname (List.map snd args, ftype) acc) Pmap.empty functions in
@@ -742,7 +742,7 @@ let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
              | E.Error err  -> Exception.fail err
            end
          )
-       ) (Ocaml.Pmap.bindings f.fun_map)
+       ) (Ocaml.Pmap.bindings f.funs)
        (Exception.return ()))
     (fun _ -> Exception.return f)
 

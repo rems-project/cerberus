@@ -1,5 +1,4 @@
 (* C undefined behaviours *)
-
 type undefined_behaviour =
   | DUMMY (* TODO: this is a hack before fixing the parser *)
   
@@ -283,4 +282,35 @@ let string_of_undefined_behaviour = function
 end
 
 
+
+(* Exception monad for possibly undefined executions *)
+type t 'a =
+    | Defined of 'a
+    | Undef of list undefined_behaviour
+    | Error
+
+val return: forall 'a. 'a -> t 'a
+let return x = Defined x
+
+val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let (>>=) m f =
+  match m with
+    | Defined x -> f x
+    | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
+    | Error     -> Error
+end
+
+let sequence ms = List.fold_right (fun m acc ->
+  m   >>= fun x  ->
+  acc >>= fun xs ->
+  return (x::xs)) ms (return [])
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+let mapM f xs = sequence (List.map f xs)
+
+
+val undef: forall 'a. list undefined_behaviour -> t 'a
+let undef us = Undef us
+
+val error: forall 'a. t 'a
+let error = Error
 

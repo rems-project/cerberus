@@ -1,5 +1,7 @@
+COQC=/usr/local/bin/coqc # TODO: this is local to AddaX (to get coq 8.3pl3)
+
 all:
-	coqc -noglob extraction
+	$(COQC) -noglob extraction
 
 clean:
 	rm -rf extraction.vo

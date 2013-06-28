@@ -124,7 +124,7 @@ let pp_basic_type = function
   | REAL_FLOATING rf -> pp_real_floating_type rf
   | COMPLEX c        -> pp_real_floating_type c ^^^ !^ "_Complex"
 
-let pp_integer = P.string -| string_of_int
+let pp_integer = P.string -| Num.string_of_num
 
 let rec pp_ctype t =
   let pp_qs qs =
@@ -205,8 +205,9 @@ let pp_integer_suffix =
   in
   P.string -| to_string
 
-let pp_integer_constant (n, suff_opt) =
-  !^ (string_of_int n) ^^ (P.optional pp_integer_suffix suff_opt)
+(* TODO: should reverse the decoding of n *)
+let pp_integer_constant (n, _, suff_opt) =
+  !^ (Num.string_of_num n) ^^ (P.optional pp_integer_suffix suff_opt)
 
 
 let pp_character_prefix =
@@ -241,7 +242,7 @@ let pp_string_literal (pref_opt, str) =
   (P.optional pp_encoding_prefix pref_opt) ^^ P.dquotes (!^ str)
 
 
-let pp_expression_l expr_l =
+let pp_expression_t expr_t =
   let rec pp p (_, expr) =
     let p' = precedence expr in
     let pp = P.group -| pp p' in
@@ -298,13 +299,15 @@ let pp_expression_l expr_l =
             P.braces (comma_list (fun (mem, e) -> pp_id mem ^^ P.equals ^^^ pp e) mems)
         | OFFSETOF (ty, mem) ->
             !^ "offsetof" ^^ P.parens (pp_ctype ty ^^ P.comma ^^^ pp_id mem)
+        | PRINTF (e1, es) ->
+            !^ "printf" ^^ P.parens (pp e1 ^^ P.comma ^^^ comma_list pp es)
   in
-  pp None expr_l
+  pp None expr_t
 
 
 let pp_definition file (name, e) = 
   let (ty, _) = Pmap.find name file.id_map in
-  pp_ctype ty ^^^ pp_id name ^^^ P.equals ^^^ pp_expression_l e
+  pp_ctype ty ^^^ pp_id name ^^^ P.equals ^^^ pp_expression_t e
 
 
 let rec pp_statement_l file (_, stmt) =
@@ -318,20 +321,20 @@ let rec pp_statement_l file (_, stmt) =
     | SKIP ->
         P.semi
     | EXPRESSION e ->
-        pp_expression_l e ^^ P.semi
+        pp_expression_t e ^^ P.semi
     | BLOCK (ids, ss) -> (* TODO: decls *)
         let block = P.separate_map (P.break 1) pp_statement_l ss in
         !^ "BLOCK_VARS" ^^^ comma_list pp_id ids ^^^
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | IF (e, s1, s2) ->
-        !^ "if" ^^^ P.parens (pp_expression_l e) ^/^
+        !^ "if" ^^^ P.parens (pp_expression_t e) ^/^
           P.nest 2 (pp_statement_l s1) ^^^
         !^ "else" ^/^
           pp_statement_l s2
     | WHILE (e, s) ->
-        !^ "while" ^^^ P.parens (pp_expression_l e) ^^^ pp_statement_l s
+        !^ "while" ^^^ P.parens (pp_expression_t e) ^^^ pp_statement_l s
     | DO (e, s) ->
-        !^ "do" ^^^ pp_statement_l s ^^^ !^ "while" ^^^ P.parens (pp_expression_l e)
+        !^ "do" ^^^ pp_statement_l s ^^^ !^ "while" ^^^ P.parens (pp_expression_t e)
     | BREAK ->
         !^ "break" ^^ P.semi
     | CONTINUE ->
@@ -339,9 +342,9 @@ let rec pp_statement_l file (_, stmt) =
     | RETURN_VOID ->
         !^ "return" ^^ P.semi
     | RETURN_EXPRESSION e ->
-        !^ "return" ^^^ pp_expression_l e ^^ P.semi
+        !^ "return" ^^^ pp_expression_t e ^^ P.semi
     | SWITCH (e, s) ->
-        !^ "switch" ^^^ P.parens (pp_expression_l e) ^/^ pp_statement_l s
+        !^ "switch" ^^^ P.parens (pp_expression_t e) ^/^ pp_statement_l s
     | CASE (ic, s) ->
         pp_integer_constant ic ^^ P.colon ^/^ pp_statement_l s
     | DEFAULT s ->
@@ -376,5 +379,6 @@ let pp_function file (id, (args, s)) =
 
 let pp_file file =
   let pp d f = d ^^ pp_function file f ^^ P.break 1 in
-  List.fold_left pp P.empty (Pmap.bindings file.fn_map)
+(*  (List.fold_left (fun (name, (ty, _)) -> pp_ctype ty ^^^ pp_id name) P.empty (Pmap.bindings file.id_map)) ^^^ *)
+  (List.fold_left pp P.empty (Pmap.bindings file.fn_map))
 

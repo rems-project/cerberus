@@ -2,7 +2,7 @@ open Global
 
 let outOfHomeomorphism msg = Pervasives.failwith ("[OutOfHomeomorphism exception>\n" ^ msg)
 
-let assert_false msg = Pervasives.print_endline ("[Impossible error>\n" ^ msg); Pervasives.exit 1
+let assert_false msg = Pervasives.failwith ("[Impossible error>\n" ^ msg)
 
 let debug str = Pervasives.failwith ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m")
 
@@ -91,4 +91,5 @@ let to_plain_string d =
   str
 
 let pp_ail_ctype ty = to_plain_string $ Pp_ail.pp_ctype ty
+let pp_ail_expr e = to_plain_string $ Pp_ail.pp_expression_t e
 let pp_core_expr e = to_plain_string $ Pp_core.pp_expr e

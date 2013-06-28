@@ -1,6 +1,7 @@
 open Global
 open Core
 open Core_aux
+module U = Undefined
 
 open Debug
 
@@ -68,11 +69,11 @@ type taction_id = num
 
 (* Fully evaluated description of an action *)
 type trace_action =
-  | Tcreate of Ail.ctype * mem_addr (* the second argument is the created object *)
+  | Tcreate of ctype * mem_addr (* the second argument is the created object *)
   | Talloc of (* TODO: num *) int * mem_addr (* the second argument is the created object *)
   | Tkill of mem_addr
-  | Tstore of Ail.ctype * mem_addr * mem_value
-  | Tload of Ail.ctype * mem_addr * mem_value (* the last argument is the read value *)
+  | Tstore of ctype * mem_addr * mem_value
+  | Tload of ctype * mem_addr * mem_value (* the last argument is the read value *)
 
 type trace_paction = polarity * trace_action
 
@@ -173,39 +174,6 @@ module L = struct
 end
 
 
-(* Exception monad for possibly undefined executions *)
-module U = struct
-  type t 'a =
-    | Defined of 'a
-    | Undef of list Undefined.undefined_behaviour
-    | Error
-  
-  val return: forall 'a. 'a -> t 'a
-  let return x = Defined x
-  
-  val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-  let (>>=) m f =
-    match m with
-      | Defined x -> f x
-      | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
-      | Error     -> Error
-  end
-  
-  let sequence ms = List.fold_right (fun m acc ->
-    m   >>= fun x  ->
-    acc >>= fun xs ->
-    return (x::xs)) ms (return [])
-  val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-  let mapM f xs = sequence (List.map f xs)
-  
-  
-  val undef: forall 'a. list Undefined.undefined_behaviour -> t 'a
-  let undef us = Undef us
-  
-  val error: forall 'a. t 'a
-  let error = Error
-end
-
 
 
 module Effect = struct
@@ -226,8 +194,8 @@ module Effect = struct
     execution_mode: execution_mode;                                             (* TODO: it's a bit silly that this is here, since the setting won't change *)
     mem:            mem_state;                                                  (* the memory layout state                            *)
     current_proc:   option sym;                                                 (* the C function whose body we are reducing (if any) *)
-    fun_map:        fun_map taction_id;                                         (* map of functions                                   *)
-    cont_map:       map sym (map ksym (list (sym * Ail.ctype) * expr taction_id)); (* maps of labeled continuations (per function)       *)
+    file:           file taction_id;                                            
+    cont_map:       map sym (map ksym (list (sym * ctype) * expr taction_id));  (* maps of labeled continuations (per function)       *)
     tact_counter:   num;                                                        (* counter for the trace actions map                  *)
     tact_map:       Pmap.map taction_id trace_action;
     trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
@@ -328,20 +296,28 @@ module Effect = struct
   let set_current_proc pname = fun s ->
     U.return [((), <| s with current_proc= Some pname |>)]
   
+  val get_file: t (file taction_id)
+  let get_file = fun s ->
+    U.return [(s.file, s)]
   
-  val register_funs: fun_map taction_id -> t unit
-  let register_funs funs = fun s ->
-    U.return [((), <| s with fun_map= funs |>)]
-  
-  val get_fun_map: t (fun_map taction_id)
-  let get_fun_map = fun s ->
-    U.return [(s.fun_map, s)]
-  
+(*
+  val get_fun: name -> t (core_type * list (sym * core_base_type) * expr taction_id)
+  let get_fun fname = fun s ->
+    match fname with
+      | Sym  f -> U.return [(Pmap.find f s.funs, s)]
+      | Impl f ->
+          match Pmap.find f s.impl_map with
+            | IFun bty fargs fbody -> U.return [((TyBase bty, fargs, fbody), s)]
+            | _ -> Boot.assert_false "[Core_run.get_fun] found a Def used as  IFun"
+          end
+  end
+*)
+
   val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_id)
-  let get_proc fname = fun s ->
-    U.return [(Pmap.find fname s.fun_map, s)]
+  let get_proc psym = fun s ->
+    U.return [(Pmap.find psym s.file.funs, s)]
   
-  val register_conts: map sym (map ksym (list (sym * Ail.ctype) * expr taction_id)) -> t unit
+  val register_conts: map sym (map ksym (list (sym * ctype) * expr taction_id)) -> t unit
   let register_conts ks = fun s ->
     U.return [((), <| s with cont_map= ks |>)]
   
@@ -352,7 +328,7 @@ module Effect = struct
       | (a,b) :: xs' -> Pmap.add a b (map_from_list xs')
     end
   
-  val get_cont: ksym -> t (list (sym * Ail.ctype) * expr taction_id)
+  val get_cont: ksym -> t (list (sym * ctype) * expr taction_id)
   let get_cont d = fun s ->
     U.return [(Pmap.find d (Pmap.find (from_Some s.current_proc) s.cont_map), s)]
 
@@ -403,23 +379,21 @@ open E.Operators
 
 (* ************************************************************************** *)
 (* TODO: dummy memory model (concrete with isolated objects, ignoring C types) *)
-val initial_state: E.state
-let initial_state = <|
+val initial_state: file taction_id -> E.state
+let initial_state file = <|
   E.execution_mode= E.Exhaustive;
   E.mem=            (Pmap.empty, 0);
   E.current_proc=   None;
-  E.fun_map=        Pmap.empty;
+  E.file=           file;
   E.cont_map=       Pmap.empty;
   E.tact_counter=   0;
   E.tact_map=       Pmap.empty;
   E.trace=          []
 |>
 
-val init: E.t unit
-let init = fun _ -> U.return [((), initial_state)]
 
 (* static object allocation *)
-val create: list Symbol.t -> Ail.ctype -> E.t mem_addr
+val create: list Symbol.t -> ctype -> E.t mem_addr
 let create pref _ = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $
@@ -441,13 +415,13 @@ let kill o = fun (<| E.mem= (m, i) |> as s) ->
   Boot.print_debug ("[Core_run.kill] @" ^ (string_of_num $ snd o))
   U.return [((), <| s with E.mem= (Pmap.remove o m, i) |> )]
 
-val store: Ail.ctype -> mem_addr -> mem_value -> E.t unit
+val store: ctype -> mem_addr -> mem_value -> E.t unit
 let store _ o v = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o))
   U.return [((), <| s with E.mem= (Pmap.add o v m, i) |>)]
 
-val load: Ail.ctype -> mem_addr -> E.t mem_value
+val load: ctype -> mem_addr -> E.t mem_value
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
   (* DEBUG *)
   if not (Pmap.mem o m) then
@@ -568,22 +542,31 @@ let put_syms _as v =
 
 (* takes the symbolic names of a function, some pure expressions and produce
    the function body where the arguments have been substituted *)
-val call_function: forall 'a. fun_map 'a -> sym -> list (expr 'a) -> expr 'a
-let call_function fun_map fname args =
-  let (_, params, fbody) = Pmap.find fname fun_map in
+val call_function: forall 'a. file 'a -> name -> list (expr 'a) -> expr 'a
+let call_function file fname args =
+  let (_, params, fbody) =
+    match fname with
+      | Sym  f -> if Pmap.mem f file.stdlib then Pmap.find f file.stdlib
+                                            else Pmap.find f file.funs
+      | Impl f -> match Pmap.find f file.impl with
+                    | IFun bty fargs fbody -> (TyBase bty, fargs, fbody)
+                    | _ -> Boot.assert_false "[Core_run.call_function] found a Def used as an IFun"
+                 end
+    end in
   if List.length params <> List.length args then
-    Boot.assert_false $ "[Core_run.call_function] wrong number of args applied to `" ^ Boot.pp_core_expr (Esym fname) ^ "'"
+    Boot.assert_false $ "[Core_run.call_function] wrong number of args applied to `" ^
+      Boot.pp_core_expr (match fname with Impl f -> Eimpl f | Sym f -> Esym f end) ^ "'"
   else
     (List.fold_left2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
 
 
 val call_proc: sym -> list (expr taction_id) -> E.t (expr taction_id)
-let call_proc fname args =
-  E.get_proc fname >>= fun (_, params, fbody) ->
+let call_proc psym args =
+  E.get_proc psym >>= fun (_, params, fbody) ->
   if List.length params <> List.length args then
-    Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" ^ Boot.pp_core_expr (Esym fname) ^ "'"
+    Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" ^ Boot.pp_core_expr (Esym psym) ^ "'"
   else
-    E.set_current_proc fname >>
+    E.set_current_proc psym >>
     E.return (List.fold_left2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
 
 
@@ -600,9 +583,9 @@ let rec collect_values v =
 (* evaluation of pure epxressions (will crash on ill-typed and/or non pure
    expressions) *)
 open U
-val     eval: forall 'a. fun_map 'a -> expr 'a -> U.t (expr 'a)
-let rec eval fun_map pe =
-  let eval = eval fun_map in
+val     eval: forall 'a. file 'a -> expr 'a -> U.t (expr 'a)
+let rec eval file pe =
+  let eval = eval file in
   match pe with
     | Eundef u -> U.undef [u]
     | Eerror   -> U.error
@@ -616,8 +599,8 @@ let rec eval fun_map pe =
             | (OpMul, Econst n1,  Econst n2 ) -> Econst (Int.( * ) n1 n2)
             | (OpDiv, Econst n1,  Econst n2 ) -> Econst (Int.(/) n1 n2)
             | (OpMod, Econst n1,  Econst n2 ) -> Econst (Int.(%) n1 n2)
-            | (OpEq,  Econst n1,  Econst n2 ) -> if n1 = n2 then Etrue else Efalse
-            | (OpEq,  Ectype ty1, Ectype ty2) -> if Ail.ctype_eq ty1 ty2 then Etrue else Efalse
+            | (OpEq,  Econst n1,  Econst n2 ) -> if Int.eq n1 n2   then Etrue else Efalse
+            | (OpEq,  Ectype ty1, Ectype ty2) -> if ty1 = ty2 then Etrue else Efalse
             | (OpLt,  Econst n1,  Econst n2 ) -> if Int.(<) n1 n2 then Etrue else Efalse
             | (OpOr,  Efalse,     Efalse    ) -> Efalse
             | (OpOr,  _,          _         ) -> Etrue
@@ -638,7 +621,7 @@ let rec eval fun_map pe =
           | Etrue  -> eval pe2
           | Efalse -> eval pe3
         end
-    | Ecall f pes -> eval (call_function fun_map f pes)
+    | Ecall f pes -> eval (call_function file f pes)
 
 
 
@@ -671,6 +654,22 @@ let rec eval fun_map pe =
         eval pe1 >>= fun v1 ->
         eval (subst_syms _as v1 pe2)
     
+    
+(* TODO: temporary *)
+  | Eis_scalar pe ->
+      eval pe >>= fun (Ectype ty) ->
+      U.return (if Ail_typing_aux.is_scalar_type (unproj_ctype ty) then Etrue else Efalse)
+  | Eis_integer pe ->
+      eval pe >>= fun (Ectype ty) ->
+      U.return (if Ail_typing_aux.is_integer_type (unproj_ctype ty) then Etrue else Efalse)
+  | Eis_signed pe ->
+      eval pe >>= fun (Ectype ty) ->
+      U.return (if Ail_typing_aux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
+  | Eis_unsigned pe ->
+      eval pe >>= fun (Ectype ty) ->
+      U.return (if Ail_typing_aux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
+    
+    
     (* If [pe] is not pure this is wrong, we should crash instead *)
     | _ -> if is_value pe then U.return pe else Boot.assert_false $ "[Core_run.eval] found an impure expression or a symbol: " ^ Boot.pp_core_expr pe
   end
@@ -681,8 +680,8 @@ let rec eval fun_map pe =
 open E.Operators
 val perform_action: action_ taction_id -> E.t (trace_action * expr taction_id)
 let perform_action act =
-  E.get_fun_map >>= fun fun_map ->
-  let eval = eval fun_map in
+  E.get_file >>= fun file ->
+  let eval = eval file in
   match act with
     | Create pe pref ->
         E.runU (eval pe) >>= fun (Ectype ty) ->
@@ -750,16 +749,16 @@ and red2_pure x =
     | (e, [] :: _KS) ->
         if is_pure e then
           push_trace (Rule_Pure_Hole, None) >>
-          E.get_fun_map                     >>= fun fun_map ->
-          E.runU (eval fun_map e)           >>= fun v       ->
+          E.get_file                     >>= fun file ->
+          E.runU (eval file e)           >>= fun v       ->
           E.return (v, _KS)
         else
           E.mzero
     | (e, _K :: _KS) ->
         if is_pure e then
           push_trace (Rule_Pure, None) >>
-          E.get_fun_map                >>= fun fun_map ->
-          E.runU (eval fun_map e)      >>= fun v       ->
+          E.get_file                >>= fun file ->
+          E.runU (eval file e)      >>= fun v       ->
           E.return (apply_cont _K v, [] :: _KS)
         else
           E.mzero
@@ -769,8 +768,8 @@ and red2_pure x =
 and red2_if x =
   match x with
     | (Eif pe e2 e3, _KS) ->
-        E.get_fun_map            >>= fun fun_map ->
-        E.runU (eval fun_map pe) >>= function
+        E.get_file            >>= fun file ->
+        E.runU (eval file pe) >>= function
           | Etrue  -> push_trace (Rule_If, None) >> E.return (e2, _KS)
           | Efalse -> push_trace (Rule_If, None) >> E.return (e3, _KS)
         end
@@ -780,8 +779,8 @@ and red2_if x =
 and red2_let x =
   match x with
     | (Elet _a pe1 e2, _KS) ->
-        E.get_fun_map               >>= fun fun_map ->
-        E.runU (eval fun_map pe1)   >>= fun v1      ->
+        E.get_file               >>= fun file ->
+        E.runU (eval file pe1)   >>= fun v1      ->
         push_trace (Rule_Let, None) >> E.return (subst_sym _a v1 e2, _KS)
     | _ -> E.mzero
   end
@@ -790,8 +789,8 @@ and red2_ret x =
   match x with
     | (Eret pe, _K :: _KS) ->
           push_trace (Rule_Ret, None) >>
-          E.get_fun_map               >>= fun fun_map ->
-          E.runU (eval fun_map pe)    >>= fun v ->
+          E.get_file               >>= fun file ->
+          E.runU (eval file pe)    >>= fun v ->
           E.return (v, _KS)
 
 (*
@@ -842,8 +841,8 @@ and red2_proc x =
   match x with
     | (Eproc bs f es, _KS) ->
         push_trace (Rule_Proc, None)      >>
-        E.get_fun_map                     >>= fun fun_map ->
-        E.runU (U.mapM (eval fun_map) es) >>= fun vs      ->
+        E.get_file                     >>= fun file ->
+        E.runU (U.mapM (eval file) es) >>= fun vs      ->
         call_proc f vs                    >>= fun f_body  ->
 (*
 Boot.print_debug (Boot.pp_core_expr (Core.Etuple es)) $
@@ -863,8 +862,8 @@ and red2_wseq x =
     | (Ewseq _as e1 e2, _KS) ->
         push_trace (Rule_Wseq, None) >>
           if is_pure e1 then
-            E.get_fun_map            >>= fun fun_map ->
-            E.runU (eval fun_map e1) >>= fun v1      ->
+            E.get_file            >>= fun file ->
+            E.runU (eval file e1) >>= fun v1      ->
             Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr v1) $
             E.return (subst_syms _as v1 e2, _KS)
           else match _KS with
@@ -902,8 +901,8 @@ and red2_sseq x =
     | (Esseq _as e1 e2, _KS) ->
         push_trace (Rule_Sseq, None) >>
           if is_pure e1 then
-            E.get_fun_map            >>= fun fun_map ->
-            E.runU (eval fun_map e1) >>= fun v1      ->
+            E.get_file            >>= fun file ->
+            E.runU (eval file e1) >>= fun v1      ->
             Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
             E.return (subst_syms _as v1 e2, _KS)
           else match _KS with
@@ -981,8 +980,8 @@ in
     | (e, []) ->
         if is_pure e then
           get_fulltrace           >>= fun (tact_map, t) ->
-          E.get_fun_map           >>= fun fun_map       ->
-          E.runU (eval fun_map e) >>= fun v             ->
+          E.get_file           >>= fun file       ->
+          E.runU (eval file e) >>= fun v             ->
           E.return ((v, []), (tact_map, t))
         else
           continue
@@ -997,12 +996,14 @@ in
 
 
 (* Dummy function doing nothing, but required to typecheck *)
+val     convert_expr: forall 'a. expr 'a -> expr taction_id
 let rec convert_expr e =
   match e with
     | Eskip               -> Eskip
     | Etuple es           -> Etuple (List.map convert_expr es)
     | Enull               -> Enull
     | Econst n            -> Econst n
+    | Eimpl i             -> Eimpl i
     | Eaddr o             -> Eaddr o
     | Esym a              -> Esym a
     | Etrue               -> Etrue
@@ -1027,6 +1028,12 @@ let rec convert_expr e =
     | Esave k a_tys e     -> Esave k a_tys (convert_expr e)
     | Erun bs k a_vs      -> Erun {} k (List.map (fun (a,v) -> (a, convert_expr v)) a_vs)
     | Eret e              -> Eret (convert_expr e)
+
+(* TODO: temporary *)
+    | Eis_scalar e   -> Eis_scalar (convert_expr e)
+    | Eis_integer e  -> Eis_integer (convert_expr e)
+    | Eis_signed e   -> Eis_signed (convert_expr e)
+    | Eis_unsigned e -> Eis_unsigned (convert_expr e)
   end
 
 
@@ -1041,6 +1048,26 @@ and convert_action (_, a) =
   end)
 
 
+val convert_file: forall 'a. file 'a -> file taction_id
+let convert_file file = <|
+  main=   file.main;
+  stdlib= Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.stdlib;
+  impl=   Pmap.map (function
+            | Def bty e       -> Def bty (convert_expr e)
+            | IFun bty args e -> IFun bty args (convert_expr e)
+          end) file.impl;
+  funs=   Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
+ |>
+(* TODO: this version doesn't typecheck (says that 'a should be num), ask the lem people if it is normal *)
+(*
+<| file with
+  impl= Pmap.map (function
+          | Def bty e       -> Def bty (convert_expr e)
+          | IFun bty args e -> IFun bty args (convert_expr e)
+        end) file.impl;
+  funs= Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
+ |>
+*)
 
 
 
@@ -1054,7 +1081,7 @@ open St.Operators
 
 type collect_conts_state = <|
   bound_syms: set sym;
-  conts: map ksym (list (sym * Ail.ctype) * expr taction_id)
+  conts: map ksym (list (sym * ctype) * expr taction_id)
 |>
 
 (* val     collect_cont: expr taction_id -> St.t (Pmap.map ksym (expr taction_id * list sym)) (Pmap.map ksym (expr taction_id * list sym)) *)
@@ -1103,6 +1130,8 @@ let rec collect_conts e =
         St.return ()
     | Econst _ ->
         St.return ()
+    | Eimpl _ ->
+        St.return ()
     | Eaddr _ ->
         St.return ()
     | Esym _ ->
@@ -1143,6 +1172,16 @@ let rec collect_conts e =
         Boot.assert_false "Core_run.collect_conts: the ctor `Eindet' should exists at this stage."
     | Ebound _ _ ->
         Boot.assert_false "Core_run.collect_conts: the ctor `Ebound' should exists at this stage."
+
+(* TODO: temporary *)
+    | Eis_scalar _ ->
+        St.return ()
+    | Eis_integer _ ->
+        St.return ()
+    | Eis_signed _ ->
+        St.return ()
+    | Eis_unsigned _ ->
+        St.return ()
   end
 
 
@@ -1155,7 +1194,7 @@ let rec collect_conts e =
 
 
 
-val     collect_conts': expr taction_id -> map ksym (list (sym * Ail.ctype) * expr taction_id)
+val     collect_conts': expr taction_id -> map ksym (list (sym * ctype) * expr taction_id)
 let rec collect_conts' e =
   match e with
     | Esave d a_tys e ->
@@ -1182,6 +1221,8 @@ let rec collect_conts' e =
     | Eskip ->
         Pmap.empty
     | Econst _ ->
+        Pmap.empty
+    | Eimpl _ ->
         Pmap.empty
     | Eaddr _ ->
         Pmap.empty
@@ -1223,6 +1264,16 @@ let rec collect_conts' e =
         Boot.assert_false "Core_run.collect_conts': the ctor `Eindet' should exists at this stage."
     | Ebound _ _ ->
         Boot.assert_false "Core_run.collect_conts': the ctor `Ebound' should exists at this stage."
+
+(* TODO: temporary *)
+    | Eis_scalar _ ->
+        Pmap.empty
+    | Eis_integer _ ->
+        Pmap.empty
+    | Eis_signed _ ->
+        Pmap.empty
+    | Eis_unsigned _ ->
+        Pmap.empty
   end
 
 
@@ -1230,35 +1281,34 @@ let rec collect_conts' e =
 
 open E.Operators
 
-val runE: E.execution_mode -> sym -> fun_map taction_id -> E.t (Core.expr taction_id * (Pmap.map taction_id trace_action * E.trace))
-let runE execution_mode main funs =
+val runE: E.execution_mode -> file taction_id -> E.t (Core.expr taction_id * (Pmap.map taction_id trace_action * E.trace))
+let runE execution_mode file =
   (* collect the continuations in all functions *)
-  let cont_map: map sym (map ksym (list (sym * Ail.ctype) * expr taction_id)) =
+  let cont_map: map sym (map ksym (list (sym * ctype) * expr taction_id)) =
     List.fold_left (fun acc (fname, (_, _, fbody)) ->
 (*      Pmap.add fname (let (_, s) = St.run_impl (collect_conts fbody) <| bound_syms= {}; conts= Pmap.empty |> in s.conts) acc *)
       Pmap.add fname (collect_conts' fbody) acc
-    ) Pmap.empty $ Pmap.bindings funs in
-  let (_, _, main_body) = Pmap.find main funs in
+    ) Pmap.empty $ Pmap.bindings file.funs in
+  let (_, _, main_body) = Pmap.find file.main file.funs in
   
   (_DEBUG 2 (print_cont_map cont_map))
   
   E.set_execution_mode execution_mode    >>
-  E.set_current_proc main                >>
-  E.register_funs funs                   >>
+  E.set_current_proc file.main           >>
   E.register_conts cont_map              >>
   star_red2 (main_body, [(* Khole *)[]]) >>= fun ((value, _), (tact_map, trace)) ->
   E.return (value, (tact_map, List.rev trace))
 
 
 val run: E.execution_mode -> file zero -> Exception.t (list ((Core.expr taction_id) * (Pmap.map taction_id trace_action * E.trace))) Errors.cause
-let run execution_mode f =
-  let (main, funs) = (f.main, Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) f.fun_map) in
-    match (runE execution_mode main funs) initial_state with
+let run execution_mode file =
+  let file' = convert_file file in
+    match (runE execution_mode file') (initial_state file') with
       | U.Defined zs ->
           let traces = List.map fst zs in
           Boot.print_debug ("NUMBER OF TRACES= " ^ (string_of_num $ List.length traces))
           Exception.return traces
           
       | U.Undef us -> Exception.fail (Errors.CORE_UNDEF us)
-(*      | E.Error -> E.Error *)
+      | U.Error -> Boot.assert_false "TODO: Core_run.run found an U.Error"
     end

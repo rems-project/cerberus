@@ -40,6 +40,7 @@ let to_bool = function
 
 module Operators = struct
   let (>>=) = bind
+  let (=<<) = rbind
 end
 
 open Operators

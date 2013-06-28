@@ -21,7 +21,7 @@ let rec string_of_dyn_rule = function
 
 let string_of_mem_value = function
   | Core_run.Muninit     -> "uninit"
-  | Core_run.Mint n      -> string_of_int n
+  | Core_run.Mint n      -> Num.string_of_num n
   | Core_run.Mobj (_, x) -> string_of_int x
   | Core_run.Mnull       -> "NULL"
 
@@ -29,20 +29,23 @@ let string_of_sym = function
   | (_, Some str) -> str
   | (n, None)     -> "a_" ^ string_of_int n
 
-let string_of_trace_action = function
-  | Core_run.Tcreate (ty, o) ->
-      "[" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o)) ^ ": @" ^ string_of_int (snd o) ^ "]" ^
-        " <= create {" ^ (Boot.to_plain_string $ Pp_ail.pp_ctype ty) ^ "}"
-  | Core_run.Talloc (n, o) ->
-      "@" ^ string_of_int (snd o) ^ " <= alloc " ^ string_of_int n
-  | Core_run.Tkill o ->
-      "kill @" ^ string_of_int (snd o)
-  | Core_run.Tstore (ty, o, n) ->
-      "store {" ^ (Boot.to_plain_string $ Pp_ail.pp_ctype ty) ^ "} @" ^ string_of_int (snd o) ^
-      " " ^ string_of_mem_value n
-  | Core_run.Tload (ty, o, v) ->
-      "load {" ^ (Boot.to_plain_string $ Pp_ail.pp_ctype ty) ^ "} @" ^
-      string_of_int (snd o) ^ " = " ^ string_of_mem_value v
+let string_of_trace_action tact =
+  let f o =
+    "[" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o)) ^
+      ": @" ^ string_of_int (snd o) ^ "]" in
+  match tact with
+    | Core_run.Tcreate (ty, o) ->
+        f o ^ " <= create {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}"
+    | Core_run.Talloc (n, o) ->
+        f o ^ " <= alloc " ^ Num.string_of_num n
+    | Core_run.Tkill o ->
+        "kill " ^ f o
+    | Core_run.Tstore (ty, o, n) ->
+        "store {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^ f o ^
+          " " ^ string_of_mem_value n
+    | Core_run.Tload (ty, o, v) ->
+        "load {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^
+          f o ^ " = " ^ string_of_mem_value v
 
 
 let rec string_of_trace tact_map t =

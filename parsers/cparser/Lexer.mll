@@ -141,10 +141,12 @@ let integer_suffix =
   | long_suffix unsigned_suffix?
   | long_long_suffix unsigned_suffix?
 
+(*
 let integer_constant =
     decimal_constant integer_suffix?
   | octal_constant integer_suffix?
   | hexadecimal_constant integer_suffix?
+*)
 
 (* Floating constants *)
 let sign = ['-' '+']
@@ -194,10 +196,7 @@ let escape_sequence =
 let c_char =
     [^ '\'' '\\' '\n']
   | escape_sequence
-let c_char_sequence = c_char+
-let character_constant =
-    "'" c_char_sequence "'"
-  | "L'" c_char_sequence "'"
+let character_constant = c_char+
 
 (* String literals *)
 let s_char =
@@ -207,6 +206,11 @@ let s_char_sequence = s_char+
 let string_literal =
     '"' s_char_sequence? '"'
   | 'L' '"' s_char_sequence? '"'
+
+let integer_constant =
+    decimal_constant
+  | octal_constant
+  | hexadecimal_constant
 
 rule initial = parse
   (* Beginning of a comment *)
@@ -218,13 +222,37 @@ rule initial = parse
   
   | '\n'                          { new_line lexbuf; initial lexbuf }
   | whitespace_char               { initial lexbuf }
-|		'#'			{ hash lexbuf}
-  | integer_constant as s         { CONSTANT (Cabs0.CONST_INT s,
-					      currentLoc lexbuf) }
+  | '#'                           { hash lexbuf}
+  
+  | (integer_constant as s) unsigned_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED), currentLoc lexbuf) }
+  | (integer_constant as s) unsigned_suffix long_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+  | (integer_constant as s) unsigned_suffix long_long_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+  | (integer_constant as s) long_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG), currentLoc lexbuf) }
+  | (integer_constant as s) long_suffix unsigned_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+  | (integer_constant as s) long_long_suffix unsigned_suffix
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+  | (integer_constant as s)
+      { CONSTANT (Cabs0.CONST_INT (s, None), currentLoc lexbuf) }
+  
   | floating_constant as s        { CONSTANT (Cabs0.CONST_FLOAT s,
                                               currentLoc lexbuf) }
-  | character_constant as s       { CONSTANT (Cabs0.CONST_CHAR s,
-                                              currentLoc lexbuf) }
+
+
+  |     "'" (character_constant as s) "'"
+      { CONSTANT (Cabs0.CONST_CHAR (None, s), currentLoc lexbuf) }
+  | "L'" (character_constant as s) "'"
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_L, s), currentLoc lexbuf) }
+  | "u'" (character_constant as s) "'"
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_u, s), currentLoc lexbuf) }
+  | "U'" (character_constant as s) "'"
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_U, s), currentLoc lexbuf) }
+
+
   | string_literal as s           { STRING_LITERAL (s, currentLoc lexbuf) }
   | "..."                         { ELLIPSIS(currentLoc lexbuf) }
   | "+="                          { ADD_ASSIGN(currentLoc lexbuf) }

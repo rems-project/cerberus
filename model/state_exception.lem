@@ -11,7 +11,7 @@ let bind m f = fun s ->
 
 
 (* Reinventing the wheel *)
-val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+val fma: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
 val join: forall 'a 's 'msg. t (t 'a 's 'msg) 's 'msg -> t 'a 's 'msg
 let fmap f m = bind m (fun z -> return $ f z)
 let join mm  = bind mm (fun z -> z)
@@ -43,6 +43,7 @@ let sequence ms =
 
 let listM t xs = sequence (t xs)
 
+val mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t (list 'b) 's 'msg
 let mapM f = listM (List.map f)
 
 let rec foldlM f l a =

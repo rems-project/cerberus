@@ -11,7 +11,7 @@ module Effect = struct
   type id = Symbol.t
   type id_set = Symbol.sset
 
-  type env 'a = <|
+  type env = <|
     symbol_set   : id_set;                             (* the set of existing symbols                                    *)
     label_map    : map string id;
     symbol_table : St.t string id;                     (* table (with stacked scopes) associating identifiers to symbols *)
@@ -23,13 +23,13 @@ module Effect = struct
     
     
     id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
-    globals      : list (id * A.expression_l 'a);      (* global definitions (??) *)
+    globals      : list (id * A.expression_t unit);      (* global definitions (??) *)
     fields_map   : map id (list (id * A.member));      (* struct/union members    *)
-    fn_map       : map id (list id * A.statement_l 'a) (* functions map           *)
+    fn_map       : map id (list id * A.statement_l unit) (* functions map           *)
   |>
   
   (* Exception monad in the State monad (st = env 'b) *)
-  type t 'a 'b = M.t 'a (env 'b) Errors.cause
+  type t 'a = M.t 'a env Errors.cause
   
   
   (* BEGIN TEMPORARY: (TODO) these will disappear with the fixed module system. *)
@@ -103,7 +103,7 @@ module Effect = struct
     )
   
   
-  val init: forall 'a 'b. t 'a 'b -> Exception.t 'a Errors.cause
+  val init: forall 'a. t 'a -> Exception.t 'a Errors.cause
   let init m =
     M.run m
     <|
@@ -118,7 +118,7 @@ module Effect = struct
     |>
   
   
-  val to_program: forall 'a. id -> t (A.file 'a) 'a
+  val to_program: id -> t (A.file unit)
   let to_program main =
     M.read (fun env ->
       <|
@@ -167,15 +167,15 @@ let initial_desugar_state = <|
 
 
 (* Substitute an already registered name for its corresponding symbol *)
-val subst: forall 'b. string -> E.t Symbol.t 'b
+val subst: string -> E.t Symbol.t
 let subst name =
   E.option (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER) (E.resolve name)
 
 (* ---------------------------------------------------------------------------------------------- *)
 
-val register_name:   string   -> E.t Symbol.t Location.t
-val register_labels: C.stmt_l -> E.t unit Location.t
-val fetch_label_id:  string   -> E.t Symbol.t Location.t
+val register_name:   string   -> E.t Symbol.t
+val register_labels: C.stmt_l -> E.t unit
+val fetch_label_id:  string   -> E.t Symbol.t
 
 
 let register_name name =
@@ -282,7 +282,7 @@ let desugar_binop = function
 end
 
 
-let desugar_integer_constant (n, suff_opt) =
+let desugar_integer_constant (str, suff_opt) =
   let desugar_integer_suffix = function
     | C.SUFFIX_UNSIGNED           -> A.SUFFIX_UNSIGNED
     | C.SUFFIX_UNSIGNED_LONG      -> A.SUFFIX_UNSIGNED_LONG
@@ -290,19 +290,22 @@ let desugar_integer_constant (n, suff_opt) =
     | C.SUFFIX_LONG               -> A.SUFFIX_LONG
     | C.SUFFIX_LONG_LONG          -> A.SUFFIX_LONG_LONG
   end in
+  let (n, basis) = Decode.decode_integer_constant str in
   match suff_opt with
-    | Some suff -> (n, Some (desugar_integer_suffix suff))
-    | None      -> (n, None)
+    | Some suff -> (n, basis, Some (desugar_integer_suffix suff))
+    | None      -> (n, basis, None)
   end
 
-let desugar_character_constant c =
-  let (preff, c') = Boot.span_string (not -| Boot.is_quote) c in
-  (match preff with
-    | ""  -> None
-    | "L" -> Some A.PREFIX_L
-    | "u" -> Some A.PREFIX_u
-    | "U" -> Some A.PREFIX_U
-   end, Boot.unquote_string c')
+let desugar_character_constant (pref_opt, c) =
+  let desugar_character_prefix = function
+    | C.PREFIX_L -> A.PREFIX_L
+    | C.PREFIX_u -> A.PREFIX_u
+    | C.PREFIX_U -> A.PREFIX_U
+  end in
+  match pref_opt with
+    | Some pref -> (Some (desugar_character_prefix pref), c)
+    | None      -> (None, c)
+  end
 
 let desugar_constant = function
   | C.CONST_INT c   -> A.CONST_INT (desugar_integer_constant c)
@@ -325,10 +328,10 @@ let desugar_string_literal (pref_opt, str) =
 
 (* ---------------------------------------------------------------------------------------------- *)
 
-val desugar_specifier: forall 'b. C.specifiers         -> E.t (A.basic_type) 'b
-val desugar_storage:   forall 'b. list C.storage_class -> E.t (option A.storage_duration) 'b
-val desugar_type:      C.c_type             -> E.t (A.ctype) Location.t
-val desugar_expr:      forall 'b. C.exp_l              -> E.t (A.expression Location.t) 'b
+val desugar_specifier: C.specifiers         -> E.t (A.basic_type)
+val desugar_storage:   list C.storage_class -> E.t (option A.storage_duration)
+val desugar_type:      C.c_type             -> E.t (A.ctype)
+val desugar_expr:      C.exp_l              -> E.t (A.expression_t unit)
 (* val desugar_stmt:      forall 'b. desugar_state -> C.stmt_l             -> E.t (A.statement Location.t) 'b *)
 
 (* TODO: polish *)
@@ -474,7 +477,7 @@ end
   | C.ARRAY _ t (Some e) ->
       let size =
         match e with
-        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return (Some size)
+        | (C.CONSTANT (C.CONST_INT (size, _)), _) -> E.return (Some $ fst (Decode.decode_integer_constant size))
         | (_, l) ->
             let msg = "We don't support VLAs and moreover the size of an array \
                        must be an integer constant.\n" in
@@ -519,7 +522,7 @@ and eval_constant_exp (e, _) =
     | C.IDENTIFIER _           -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
 
     (* HACK !!!!! *)
-    | C.CONSTANT (C.CONST_INT (n, _)) -> E.return n
+    | C.CONSTANT (C.CONST_INT (n, _)) -> E.return $ fst (Decode.decode_integer_constant n)
 
     (* TODO the rest later *)
 (*    
@@ -560,10 +563,10 @@ and desugar_field f =
 
 
 
-let rec desugar_exp (e, l) =
+let rec desugar_exp (e, _) =
   let f  = desugar_exp in
   let ft = desugar_type in
-  Pair.make l <$> (match e with
+  Pair.make () <$> (match e with
   | C.CONSTANT c   -> E.return (A.CONSTANT (desugar_constant c))
 
   (* HACKISH *)
@@ -573,7 +576,7 @@ let rec desugar_exp (e, l) =
   
   
   | C.STRING_LITERAL str      -> E.return (A.STRING_LITERAL $ desugar_string_literal str)
-  | C.GENERIC_SELECTION _ _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "general selection")
+  | C.GENERIC_SELECTION _ _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "generic selection")
   
   
   (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
@@ -581,7 +584,7 @@ let rec desugar_exp (e, l) =
      ( *((E1)+(E2))) ]]". *)
   | C.SUBSCRIPT e1 e2 ->
       A.UNARY A.INDIRECTION <$> (
-        Pair.make l <$> (A.BINARY (A.ARITHMETIC A.ADD) <$> f e1 <*> f e2)
+        Pair.make () <$> (A.BINARY (A.ARITHMETIC A.ADD) <$> f e1 <*> f e2)
       )
   
   (* TODO: this is obviously a partial hack *)
@@ -607,16 +610,16 @@ let rec desugar_exp (e, l) =
   (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
      equivalent to [[ (E+=1) ]]". *)
   | C.UNARY C.PREFIX_INCR e ->
-      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.const_int (Int.int 1))
+      A.ASSIGN (Some A.ADD) <$> f e <@> Ail_aux.decimal_const_int (Int.int 1)
   
   (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
      analogous to the prefix [[ ++ ]] operator". *)
   | C.UNARY C.PREFIX_DECR e ->
-      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.const_int (Int.int 1))
+      A.ASSIGN (Some A.SUB) <$> f e <@> Ail_aux.decimal_const_int (Int.int 1)
   
   (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
      equivalent to [[ (E==0) ]]". *)
-  | C.UNARY C.NOT e        -> A.BINARY A.EQ (l, Ail_aux.const_int (Int.int 0))    <$> f e
+  | C.UNARY C.NOT e        -> A.BINARY A.EQ (Ail_aux.octal_const_int (Int.int 0)) <$> f e
   | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
 
   (* TODO: this may be temporary hack (see comment before Ail.EXPR_SIZEOF *)
@@ -635,6 +638,7 @@ let rec desugar_exp (e, l) =
                               <$> f e1 <*> f e2
   | C.OFFSETOF ty x -> Boot.assert_false "TODO: desugar_exp, C.OFFSETOF"
   end)
+
 
 
 let rec desugar_stmt st (s, l) =
@@ -710,7 +714,7 @@ let rec desugar_stmt st (s, l) =
            long as representable, does not matter with respect to the
            semantics. Hence, we arbitrarily choose "1" (which can always be
            represented as an object of type int). *)
-        | None -> (C.CONSTANT (C.CONST_INT (Int.int 1, None)), l)
+        | None -> (C.CONSTANT (C.CONST_INT ("1", None)), l)
         end in
       let s3 =
         match e3_opt with
@@ -743,7 +747,7 @@ let rec desugar_stmt st (s, l) =
           match e2_opt with
           | Some e2 -> e2
           (* See comment above. *)
-          | None -> (C.CONSTANT (C.CONST_INT (Int.int 1, None)), l)
+          | None -> (C.CONSTANT (C.CONST_INT ("1", None)), l)
           end in
         let s3 =
           match e3_opt with
@@ -873,7 +877,7 @@ and desugar_init i =
   match i with
     | C.SINGLE_INIT e         -> desugar_exp e
     | C.ARRAY_INIT is         -> E.mapM desugar_init is >>= fun d_is ->
-                                 E.return (Location.dummy, A.CONST_ARRAY d_is)
+                                 E.return ((), A.CONST_ARRAY d_is)
     | C.STRUCT_INIT id fields -> Boot.assert_false "TODO: desugar_init, STRUCT_INIT"
     | C.UNION_INIT id  fields -> Boot.assert_false "TODO: desugar_init, UNION_INIT"
   end
@@ -923,7 +927,7 @@ and member =
 end
 
 
-val desugar_global_defn: desugar_state -> C.g_defn_l -> E.t unit Location.t
+val desugar_global_defn: desugar_state -> C.g_defn_l -> E.t unit
 let desugar_global_defn st (defn, l) =
   match defn with
   | C.FUNCTION_DEFINITION decl s ->
@@ -935,20 +939,20 @@ let desugar_global_defn st (defn, l) =
   | C.EXTERNAL_DECLARATION defns ->
       let f = function
         | (id, Some e, l) -> (id, e)
-        | (id, None,   l) -> (id, (l, Ail_aux.const_int (Int.int 0)))
+        | (id, None,   l) -> Boot.assert_false "(id, (l, Ail_aux.const_int (Int.int 0)))"
       end in
       List.map f -| filter_opt <$> E.mapM desugar_defn defns >>= fun d_defns ->
       E.add_globals d_defns
    end
 
 
-val desugar_program: string -> list C.g_defn_l -> E.t (Ail.file Location.t) Location.t
+val desugar_program: string -> list C.g_defn_l -> E.t (Ail.file unit)
 let desugar_program startup global_defns =
   E.iter (desugar_global_defn initial_desugar_state) global_defns      >>= fun ()   ->
   E.option (Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve startup) >>= fun main ->
   E.to_program main
 
 
-val desugar: string -> list C.g_defn_l -> Exception.t (Ail.file Location.t) Errors.cause
+val desugar: string -> list C.g_defn_l -> Exception.t (Ail.file unit) Errors.cause
 let desugar startup global_defns =
   E.init (desugar_program startup global_defns)

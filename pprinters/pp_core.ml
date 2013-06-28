@@ -19,6 +19,7 @@ let precedence = function
   | Econst _          -> Some 0
   | Eaddr _           -> Some 0
   | Esym _            -> Some 0
+  | Eimpl _           -> Some 0
   | Etrue             -> Some 0
   | Efalse            -> Some 0
   | Ectype _          -> Some 0
@@ -34,6 +35,7 @@ let precedence = function
   | Esame _           -> Some 2
   | Eproc _           -> Some 2
   | Ecall _           -> Some 2
+  | Eshift _          -> Some 2
   | Eop (OpMul, _, _) -> Some 3
   | Eop (OpDiv, _, _) -> Some 3
   | Eop (OpMod, _, _) -> Some 3
@@ -51,10 +53,15 @@ let precedence = function
   | Eunseq _          -> Some 14
   | Etuple _          -> None (* shouldn't be needed *)
   | Ebound _          -> None (* shouldn't be needed *)
-  | COMMENT _         -> None
-  | DEBUG _           -> None
 (* TODO: hack *)
   | End _             -> None
+
+(* TODO: temporary *)
+  | Eis_scalar _   -> Some 2
+  | Eis_integer _  -> Some 2
+  | Eis_signed _   -> Some 2
+  | Eis_unsigned _ -> Some 2
+
 
 
 let lt_precedence p1 p2 =
@@ -69,6 +76,7 @@ let pp_constant c = !^ (ansi_format [Magenta] c)
 let pp_control  w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol   a = !^ (ansi_format [Blue] $ Symbol.to_string_pretty a)
 let pp_number   n = !^ (ansi_format [Yellow] n)
+let pp_impl     i = P.angles (!^ (ansi_format [Yellow] $ Implementation.string_of_implementation_constant i))
 
 
 let rec pp_core_base_type = function
@@ -84,6 +92,30 @@ let rec pp_core_base_type = function
 let pp_core_type = function
   | TyBase   baseTy -> pp_core_base_type baseTy
   | TyEffect baseTy -> P.brackets (pp_core_base_type baseTy)
+
+
+let rec pp_ctype t =
+  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
+  match t with
+    | VOID                    -> !^ "void"
+    | BASIC bt                -> Pp_ail.pp_basic_type bt
+    | ARRAY (ty, n_opt)       -> pp_ctype ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
+    | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
+    | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
+    | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
+    | FUNCTION (ty, args_tys) -> pp_ctype ty ^^^
+                                 P.parens (comma_list pp_ctype args_tys)
+    | POINTER ty              -> pp_ctype ty ^^ P.star
+    | ATOMIC ty               -> !^ "_Atomic" ^^^ pp_ctype ty
+    | SIZE_T                  -> !^ "size_t"
+    | INTPTR_T                -> !^ "intptr_t"
+    | WCHAR_T                 -> !^ "wchar_t"
+    | CHAR16_T                -> !^ "char16_t"
+    | CHAR32_T                -> !^ "char32_t"
+
+and pp_member = function
+  | MEMBER ty           -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
+  | BITFIELD (ty, w, _) -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.colon ^^^ Pp_ail.pp_integer w ^^ P.semi
 
 
 let pp_binop = function
@@ -108,6 +140,9 @@ let pp_polarity = function
   | Pos -> P.empty
   | Neg -> P.tilde
 
+let pp_name = function
+  | Sym a  -> pp_symbol a
+  | Impl i -> pp_impl i
 
 let rec pp_expr e =
   let rec pp p e =
@@ -127,10 +162,6 @@ let rec pp_expr e =
     (if lt_precedence p' p then fun x -> x else P.parens) $
 (*      P.parens $ *)
       match e with
-        | COMMENT (str, e) ->
-            !^ (ansi_format [Bold; Red] $ "--" ^ str) ^^ P.break 1 ^^ pp e
-        | DEBUG str ->
-            !^ (ansi_format [Bold; Inverted; Red] $ "[DEBUG]{" ^ str ^ "}")
         | Etuple es ->
             P.parens (comma_list pp es)
         | Enull ->
@@ -138,11 +169,13 @@ let rec pp_expr e =
         | Eskip ->
             pp_keyword "skip"
         | Econst n ->
-            pp_number (string_of_int n)
+            pp_number (Num.string_of_num n)
         | Eaddr (pref, name) ->
             P.at ^^ P.braces (pp_prefix pref ^^ !^ (string_of_int name))
         | Esym a ->
             pp_symbol a
+        | Eimpl i ->
+            pp_impl i
         | Eop (op, e1, e2) ->
             pp e1 ^^^ pp_binop op ^^^ pp e2
         | Etrue ->
@@ -152,7 +185,7 @@ let rec pp_expr e =
         | Enot e ->
             pp_keyword "not" ^^^ pp e
         | Ectype ty ->
-            Pp_ail.pp_ctype ty
+            pp_ctype ty
         | Elet (a, e1, e2) ->
             pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^
             ((* P.align $ *) pp e1) ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2
@@ -163,7 +196,7 @@ let rec pp_expr e =
         | Eproc (_, fname, es) ->
             pp_symbol fname ^^ P.braces (comma_list pp es)
         | Ecall (fname, es) ->
-            pp_symbol fname ^^ P.parens (comma_list pp es)
+            pp_name fname ^^ P.parens (comma_list pp es)
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | Eundef u ->
@@ -211,13 +244,25 @@ let rec pp_expr e =
             P.brackets (pp e)
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
-              P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ Pp_ail.pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
+              P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
         | Erun (_, l, es) ->
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^ pp e) es)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
         | End es ->
             P.brackets $ P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es
+        | Eshift (a, e) ->
+            pp_keyword "shift" ^^ P.parens (pp_symbol a ^^ P.comma ^^^ pp e)
+        
+        (* TODO: temporary *)
+        | Eis_scalar e ->
+            pp_keyword "is_scalar" ^^^ P.parens (pp e)
+        | Eis_integer e ->
+            pp_keyword "is_integer" ^^^ P.parens (pp e)
+        | Eis_signed e ->
+            pp_keyword "is_signed" ^^^ P.parens (pp e)
+        | Eis_unsigned e ->
+            pp_keyword "is_unsigned" ^^^ P.parens (pp e)
   in pp None e
 
 and pp_action = function
@@ -229,6 +274,26 @@ and pp_action = function
 
 
 
+(* TODO: hackish (move to core.lem + some of these are implementation stuff ) *)
+let std = [
+(*
+  "overflow";
+  "conv_int";
+  "conv";
+  "div_zero";
+  "usual_arithmetic";
+  "ctype_width";
+  "exp";
+  "representable";
+  "alignof";
+  "max";
+  "min";
+  "offsetof";
+  "shift";
+  "sizeof";
+*)
+]
+
 let pp_file file =
   let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype in
   let f acc (fname, (ftype, args, body)) =
@@ -236,4 +301,5 @@ let pp_file file =
       pp_keyword "fun" ^^^ pp_symbol fname ^^^ P.parens (comma_list pp_argument args) ^^ P.colon ^^^ pp_core_type ftype ^^^
       P.colon ^^ P.equals ^^
       P.nest 2 (P.break 1 ^^ pp_expr body) ^^ P.break 1 ^^ P.break 1 in
-  List.fold_left f P.empty (Pmap.bindings file.fun_map) ^^ P.break 1
+  List.fold_left f P.empty (List.filter (function ((_, Some f), _) -> not (List.mem f std) | _ -> true) $
+    Pmap.bindings file.funs) ^^ P.break 1

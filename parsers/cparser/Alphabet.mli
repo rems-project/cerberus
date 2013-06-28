@@ -53,9 +53,8 @@ val coq_AlphabetComparable : 'a1 coq_Alphabet -> 'a1 coq_Comparable
 
 val coq_AlphabetFinite : 'a1 coq_Alphabet -> 'a1 coq_Finite
 
-type 'a coq_Numbered = { injN : ('a -> coq_N); surjN : 
-                         (coq_N -> 'a); injN_bound : 
-                         coq_N }
+type 'a coq_Numbered = { injN : ('a -> coq_N); surjN : (coq_N -> 'a);
+                         injN_bound : coq_N }
 
 val coq_Numbered_rect :
   (('a1 -> coq_N) -> (coq_N -> 'a1) -> __ -> coq_N -> __ -> 'a2) -> 'a1
