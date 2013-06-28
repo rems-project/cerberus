@@ -1,14 +1,13 @@
 # Looking for Lem
-ifneq ($(wildcard ../lem/lem),)
-  LEMDIR=../lem
-  LEMLIB_DIR=../lem/library
+ifneq ($(wildcard $(PWD)/../lem/lem),)
+  LEMDIR=$(PWD)/../lem
 else ifdef LEM_PATH
   LEMDIR=$(LEM_PATH)
-  LEMLIB_DIR=$(LEM_PATH)/library
 else
   $(error could not find lem (please set the variable LEM_PATH))
 endif
 
+LEMLIB_DIR=$(LEMDIR)/library
 LEM=$(LEMDIR)/lem -wl ign -lib $(LEMLIB_DIR)
 
 
