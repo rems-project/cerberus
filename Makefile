@@ -1,6 +1,6 @@
 # Looking for Lem
-ifneq ($(wildcard $(PWD)/../lem-csem/lem),)
-  LEMDIR=$(PWD)/../lem-csem
+ifneq ($(wildcard $(PWD)/../lem/lem),)
+  LEMDIR=$(PWD)/../lem
 else ifdef LEM_PATH
   LEMDIR=$(LEM_PATH)
 else
@@ -25,7 +25,7 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 
 # Where and how ocamlbuild will be called
 OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package text -package pprint -libs nums
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug  -package pprint -libs nums
 
 
 MODEL_FILES=\
