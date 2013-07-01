@@ -1,0 +1,6 @@
+The state of this directory is post the application of the Makefile, so nothing
+should be done. If you nevertheless want to apply the Makefile, you will need:
+
+  - menhir (tested with version 20120123)
+  - Coq (version 8.4 works for coq_stdlib, but NOT validator/ where 8.3pl3
+         is needed instead)

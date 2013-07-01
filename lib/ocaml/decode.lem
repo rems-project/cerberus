@@ -1,0 +1,3 @@
+val decode_integer_constant: forall 'a. string -> int * 'a (* Ail.encoding_basis *)
+val decode_character_constant: string -> int
+

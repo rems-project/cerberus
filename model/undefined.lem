@@ -1,0 +1,316 @@
+(* C undefined behaviours *)
+type undefined_behaviour =
+  | DUMMY (* TODO: this is a hack before fixing the parser *)
+  
+  (* An object is referred to outside of its lifetime (6.2.4). *)
+  | Outside_lifetime
+  
+  (* The execution of a program contains a data race (5.1.2.4#25). *)
+  | Data_race
+  
+  (* A side effect on a scalar object is unsequenced relative to either a different side effect
+     on the same scalar object or a value computation using the value of the same scalar
+     object (6.5). *)
+  | Unsequenced_race
+  
+  (* TODO(??): (§6.5#2) If there are multiple allowable orderings of the subexpressions of an expression, the behavior is undefined if such an unsequenced side effect occurs in any of the orderings. *)
+  
+  (* An exceptional condition occurs during the evaluation of an expression (6.5). *)
+  | Exceptional_condition
+  
+  (* An object has its stored value accessed other than by an lvalue of an allowable type (6.5). *)
+  | Illtyped_load
+  
+  (* A member of an atomic structure or union is accessed (6.5.2.3). *)
+  | Access_atomic_structUnion_member
+  
+  (* The operand of the unary * operator has an invalid value (6.5.3.2). *)
+  | Indirection_invalid_value
+  
+  (* A pointer is converted to other than an integer or pointer type (6.5.4). *)
+  | TODO_find_a_name
+  
+  (* The value of the second operand of the / or % operator is zero (6.5.5). *)
+  | Division_by_zero
+  | Modulo_by_zero
+  
+  (* TODO(§6.5.5#6) When integers are divided, the result of the / operator is the algebraic quotient with any fractional part discarded.105) If the quotient a/b is representable, the expression (a/b)*b + a%b shall equal a; otherwise, the behavior of both a/b and a%b is undefined. *)
+  
+  (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
+     produces a result that does not point into, or just beyond, the same array object (6.5.6). *)
+  | Array_pointer_addition_outside
+  | Array_pointer_subtraction_outside
+  
+  (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
+     produces a result that points just beyond the array object and is used as the operand of a
+     unary * operator that is evaluated (6.5.6). *)
+  | Array_pointer_addition_beyond_indirection
+  | Array_pointer_substraction_beyond_indirection
+  
+  (* Pointers that do not point into, or just beyond, the same array object are subtracted (6.5.6). *)
+  | Disjoint_array_pointers_substraction
+  
+  (* An array subscript is out of range, even if an object is apparently accessible with the given
+     subscript (as in the lvalue expression a[1][7] given the declaration int a[4][5]) (6.5.6). *)
+  | TODO_find_a_name5
+  
+  (* The result of subtracting two pointers is not representable in an object of type ptrdiff_t (6.5.6). *)
+  | Pointers_substraction_not_representable
+  
+  (* An expression is shifted by a negative number or by an amount greater than or equal to the
+     width of the promoted expression (6.5.7). *)
+  | Negative_shift
+  | Shift_too_large
+  
+  (* An expression having signed promoted type is left-shifted and either the value of the
+     expression is negative or the result of shifting would be not be representable in the promoted
+     type (6.5.7). *)
+  | Negative_left_shift
+  | Non_representable_left_shift
+  
+  (* Pointers that do not point to the same aggregate or union (nor just beyond the same array
+     object) are compared using relational operators (6.5.8). *)
+  | Distinct_aggregate_union_pointer_comparison
+  
+  (* An object is assigned to an inexactly overlapping object or to an exactly overlapping object
+     with incompatible type (6.5.16.1). *)
+  | TODO_find_a_name10
+  
+  (* The value of a pointer to an object whose lifetime has ended is used (6.2.4). *)
+  | Pointer_to_dead_object
+  
+  (* The value of an object with automatic storage duration is used while it is indeterminate (6.2.4, 6.7.9, 6.8). *)
+  | Use_indeterminate_automatic_object
+  
+  (* A trap representation is read by an lvalue expression that does not have character type (6.2.6.1). *)
+  | Lvalue_read_trap_representation
+  
+  (* A trap representation is produced by a side effect that modifies any part of the object using
+     an lvalue expression that does not have character type (6.2.6.1). *)
+  | Lvalue_side_effect_trap_representation
+  
+  (* The operands to certain operators are such that they could produce a negative zero result, but
+     the implementation does not support negative zeros (6.2.6.2). *)
+  | Unsupported_negative_zero
+  
+  (* An lvalue does not designate an object when evaluated (6.3.2.1). *)
+  | Lvalue_not_an_object
+  
+  (* The argument to the assert macro does not have a scalar type (7.2). *)
+  | Illtyped_assert
+  
+  (* The member designator parameter of an offsetof macro is an invalid right operand of
+     the . operator for the type parameter, or designates a bit-field (7.19). *)
+  | TODO_find_a_name12
+  
+  
+
+
+
+
+
+val pretty_string_of_undefined_behaviour: undefined_behaviour -> string
+let pretty_string_of_undefined_behaviour = function
+  | DUMMY ->
+      "DUMMY undefined behaviour (temporary HACK coming from the Core parser)."
+
+  | Outside_lifetime ->
+      "(§6.2.4#2) an object is referred to outside of its lifetime."
+  | Data_race ->
+      "(§5.1.2.4#25) the execution of the program contains a data race."
+  | Unsequenced_race ->
+      "(§6.5#2) a side effect on a scalar object is unsequenced relative to either a different \
+                side effect on the same scalar object or a value computation using the value of \
+                the same scalar object."
+  | Exceptional_condition ->
+      "(§6.5#2) an exceptional condition occurred during the evaluation of an expression."
+  | Illtyped_load ->
+      "[Illtyped_load]TODO: where is the actual std text? (suppose to be in 6.5)"
+  | Access_atomic_structUnion_member ->
+      "(§6.5.2.3#5) a member of an atomic structure or union object is accessed."
+  | Indirection_invalid_value ->
+      "(§6.5.3.2#4) the operand of the unary * operator has an invalid value."
+  | TODO_find_a_name ->
+      "TODO[find text] A pointer is converted to other than an integer or pointer type (6.5.4)."
+  | Division_by_zero ->
+      "(§6.5.5#5) the value of the second operand of a / operator is zero."
+  | Modulo_by_zero ->
+      "(§6.5.5#5) the value of the second operand of a % operator is zero."
+  | Array_pointer_addition_outside ->
+      "(§6.5.6#8) found the addition of a pointer into, or just beyond, and array object and an \
+                  integer type procuding a result that does not point into, or just beyond, the \
+                  same array object."
+  | Array_pointer_subtraction_outside ->
+      "(§6.5.6#8) found the substraction of a pointer into, or just beyond, and array object and \
+                  an integer type procuding a result that does not point into, or just beyond, the \
+                  same array object."
+  | Array_pointer_addition_beyond_indirection ->
+      "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
+                  integer type procuding a result that points just beyond the array object and is \
+                  used as the operand of a unary * operator that is evaluated."
+  | Array_pointer_substraction_beyond_indirection ->
+      "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
+                  integer type procuding a result that points just beyond the array object and is \
+                  used as the operand of a unary * operator that is evaluated."
+  | Disjoint_array_pointers_substraction ->
+      "(§6.5.6#9) found the substraction of two pointers that do not point into, or just beyond, \
+                  the same array object."
+  
+  (* An array subscript is out of range, even if an object is apparently accessible with the given
+     subscript (as in the lvalue expression a[1][7] given the declaration int a[4][5]) (6.5.6). *)
+  | TODO_find_a_name5 ->
+      "TODO_find_a_name5"
+  
+  | Pointers_substraction_not_representable ->
+      "(§6.5.6#9) found the substraction of two pointers whose result is not representable in an \
+                  object of type ptrdiff_t"
+  | Negative_shift ->
+      "(§6.5.7#3) found a bitwise shift operator (<< >>) whose right operand has negative value."
+  | Shift_too_large ->
+      "(§6.5.7#3) found a bitwise shift operator (<< >>) whose right operand has a value larger \
+                  than or equal to the width of the promoted left operand."
+  | Negative_left_shift ->
+      "(§6.5.7#4) found << operator whose operand has a negative value."
+  | Non_representable_left_shift ->
+      "(§6.5.7#4) found << operator whose operand has a value that is not representable in the \
+                  promoted type."
+  | Distinct_aggregate_union_pointer_comparison ->
+      "(§6.5.8#5) found the comparison of two pointers that do not point to the same aggregate or \
+                  union (nor just beyond the same array object)."
+  
+  (* An object is assigned to an inexactly overlapping object or to an exactly overlapping object
+     with incompatible type (6.5.16.1). *)
+  | TODO_find_a_name10 ->
+      "TODO_find_a_name10"
+  
+  (* The value of a pointer to an object whose lifetime has ended is used (6.2.4). *)
+  | Pointer_to_dead_object ->
+      "Pointer_to_dead_object (TODO: find the text, if there is an explicit one)"
+  
+  (* The value of an object with automatic storage duration is used while it is indeterminate (6.2.4, 6.7.9, 6.8). *)
+  | Use_indeterminate_automatic_object ->
+      "TODO[of course there is not explicit piece of text saying that (would be to easy otherwise)]"
+  
+  | Lvalue_read_trap_representation ->
+      "(§6.2.6.1#5) an lvalue expression that does not have character type tried to read from an \
+                    object storing a trap representation."
+  | Lvalue_side_effect_trap_representation ->
+      "(§6.2.6.1#5) an lvalue expression that does not have character type performed a side effect \
+                    that produced a trap representation in (part of) an object."
+  | Unsupported_negative_zero ->
+      "(§6.2.6.2#3) the evaluation of one of these operators: &, |, ^, ~, <<, and >> produced a \
+                    negative zero, but this implementation being used does not support them."
+  | Lvalue_not_an_object ->
+      "(§6.3.2.1#1) found an lvalue that does not designate an object when evaluted."
+  | Illtyped_assert ->
+      "(§7.2.1.1#1) found an assert whose argument does not have a scalar type"
+  
+  (* The member designator parameter of an offsetof macro is an invalid right operand of
+     the . operator for the type parameter, or designates a bit-field (7.19). *)
+  | TODO_find_a_name12 ->
+      "TODO_find_a_name12"
+end
+
+
+
+val string_of_undefined_behaviour: undefined_behaviour -> string
+let string_of_undefined_behaviour = function
+  | DUMMY ->
+      "DUMMY"
+  | Outside_lifetime ->
+      "Outside_lifetime"
+  | Data_race ->
+      "Data_race"
+  | Unsequenced_race ->
+      "Unsequenced_race"
+  | Exceptional_condition ->
+      "Exceptional_condition"
+  | Illtyped_load ->
+      "Illtyped_load"
+  | Access_atomic_structUnion_member ->
+      "Access_atomic_structUnion_member"
+  | Indirection_invalid_value ->
+      "Indirection_invalid_value"
+  | TODO_find_a_name ->
+      "TODO_find_a_name"
+  | Division_by_zero ->
+      "Division_by_zero"
+  | Modulo_by_zero ->
+      "Modulo_by_zero"
+  | Array_pointer_addition_outside ->
+      "Array_pointer_addition_outside"
+  | Array_pointer_subtraction_outside ->
+      "Array_pointer_subtraction_outside"
+  | Array_pointer_addition_beyond_indirection ->
+      "Array_pointer_addition_beyond_indirection"
+  | Array_pointer_substraction_beyond_indirection ->
+      "Array_pointer_substraction_beyond_indirection"
+  | Disjoint_array_pointers_substraction ->
+      "Disjoint_array_pointers_substraction"
+  | TODO_find_a_name5 ->
+      "TODO_find_a_name5"
+  | Pointers_substraction_not_representable ->
+      "Pointers_substraction_not_representable"
+  | Negative_shift ->
+      "Negative_shift"
+  | Shift_too_large ->
+      "Shift_too_large"
+  | Negative_left_shift ->
+      "Negative_left_shift"
+  | Non_representable_left_shift ->
+      "Non_representable_left_shift"
+  | Distinct_aggregate_union_pointer_comparison ->
+      "Distinct_aggregate_union_pointer_comparison"
+  | TODO_find_a_name10 ->
+      "TODO_find_a_name10"
+  | Pointer_to_dead_object ->
+      "Pointer_to_dead_object"
+  | Use_indeterminate_automatic_object ->
+      "Use_indeterminate_automatic_object"
+  | Lvalue_read_trap_representation ->
+      "Lvalue_read_trap_representation"
+  | Lvalue_side_effect_trap_representation ->
+      "Lvalue_side_effect_trap_representation"
+  | Unsupported_negative_zero ->
+      "Unsupported_negative_zero"
+  | Lvalue_not_an_object ->
+      "Lvalue_not_an_object"
+  | Illtyped_assert ->
+      "Illtyped_assert"
+  | TODO_find_a_name12 ->
+      "TODO_find_a_name12"
+end
+
+
+
+(* Exception monad for possibly undefined executions *)
+type t 'a =
+    | Defined of 'a
+    | Undef of list undefined_behaviour
+    | Error
+
+val return: forall 'a. 'a -> t 'a
+let return x = Defined x
+
+val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let (>>=) m f =
+  match m with
+    | Defined x -> f x
+    | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
+    | Error     -> Error
+end
+
+let sequence ms = List.fold_right (fun m acc ->
+  m   >>= fun x  ->
+  acc >>= fun xs ->
+  return (x::xs)) ms (return [])
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+let mapM f xs = sequence (List.map f xs)
+
+
+val undef: forall 'a. list undefined_behaviour -> t 'a
+let undef us = Undef us
+
+val error: forall 'a. t 'a
+let error = Error
+

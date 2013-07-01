@@ -1,0 +1,770 @@
+open Core
+open Errors
+
+(* -------------------------------------------------------------------------- *)
+module Effect = struct
+  type error 'a =
+    | Success of 'a
+    | Error of cause
+  
+  type sym_env = Pmap.map sym core_base_type
+  type fun_env = Pmap.map sym (list core_base_type * core_type)
+  
+  type t 'a = State.t (error 'a) (sym_env * fun_env)
+  
+  let return x = State.return (Success x)
+  let bind m f = State.bind m function
+                                | Success x -> f x
+                                | Error msg -> State.return (Error msg)
+                              end
+  let fmap = State.map
+  
+  
+  module Operators = struct
+    let (>>=)    = bind
+    val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let (>>) m f = m >>= fun _ -> f
+    let (<$>)    = fmap
+  end
+  
+  let string_of_senv senv =
+    List.fold_right (fun (x,_) acc -> Symbol.to_string_pretty x ^ "; " ^ acc) (Ocaml.Pmap.bindings senv) ""
+  
+  let get a = fun (senv, fenv) ->
+      let ret = if Pmap.mem a senv then Success (Pmap.find a senv)
+                                   else Error (* CORE_TYPECHECK_GET_FAILURE *)
+                                              (CORE_TYPECHECK ("[get]> " ^ string_of_senv senv ^ " | " ^ Symbol.to_string_pretty a))
+      in (ret, (senv,fenv))
+  
+  let get_fun f = fun (senv, fenv) ->
+    let ret = if Pmap.mem f fenv then Success (Pmap.find f fenv)
+                                 else Error (CORE_TYPECHECK_UNDECLARED_FUNCTION f)
+    in (ret, (senv,fenv))
+  
+  let put a baseTy = fun (senv,fenv) -> (Success (), (Pmap.add a baseTy senv, fenv))
+  
+  let put_fun f coreTy = fun (senv,fenv) -> (Success (), (senv, Pmap.add f coreTy fenv))
+
+  
+  val fail: forall 'a. Errors.cause -> t 'a
+  let fail cause       = fun env -> (Error cause, env)
+  val guard: bool -> Errors.cause -> t unit
+  let guard cond cause = if cond then return () else fail cause
+  
+  
+  val _try: forall 'a. t 'a -> t 'a -> t 'a
+  let _try f handler =
+    fun env -> match f env with
+                 | (Success x, env') -> (Success x, env')
+                 | (Error _, _)      -> handler env
+               end
+
+  val _try2: forall 'a. t 'a -> ('a -> t 'a) -> t 'a -> t 'a
+  let _try2 f cont handler =
+    fun env -> match f env with
+                 | (Success x, env') -> cont x env'
+                 | (Error _, _)      -> handler env
+               end
+  
+  
+  let run = State.run
+  
+  open Operators
+  let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
+                                                  acc >>= fun xs ->
+                                                  return (x::xs))
+                                    ms (return [])
+  let mapM f xs = sequence (List.map f xs)
+  
+  let sequence_ ms = List.fold_right (>>) ms (return ())
+  val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+  let mapM_ f _as = sequence_ (List.map f _as)
+  
+  val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+  let rec foldM f a = function
+    | []    -> return a
+    | x::xs -> f a x >>= fun fax -> foldM f fax xs
+  end
+end
+
+let ($) f x = f x
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+module E = Effect
+open E.Operators
+
+let is_arithOp = function
+  | OpAdd -> true
+  | OpSub -> true
+  | OpMul -> true
+  | OpDiv -> true
+  | OpMod -> true
+  | _     -> false
+end
+
+let is_relOp = function
+  | OpEq -> true
+  | OpLt -> true
+  | _    -> false
+end
+
+let is_connective = function
+  | OpAnd -> true
+  | OpOr  -> true
+  | _     -> false
+end
+
+let base_type = function
+  | TyBase baseTy   -> baseTy
+  | TyEffect baseTy -> baseTy
+  end
+
+let base_type_to_list = function
+  | Tuple coreTys -> coreTys
+  | coreTy        -> [coreTy]
+  end
+
+let core_type_eq coreTy1 coreTy2 =
+  match (coreTy1, coreTy2) with
+    | (TyBase wildcard, TyBase _) -> true
+    | (TyBase _, TyBase wildcard) -> true
+    | (TyEffect wildcard, TyEffect _) -> true
+    | (TyEffect _, TyEffect wildcard) -> true
+    | (TyBase baseTy1,   TyBase baseTy2) -> baseTy1 = baseTy2
+    | (TyEffect baseTy1, TyEffect baseTy2) -> baseTy1 = baseTy2
+    | _ -> false (* TODO: check *)
+  end
+
+
+let rec check expected_type e =
+  let guard_expected ty = E.guard (expected_type = ty) (CORE_TYPECHECK_INCORRECT_EXPECTED ty expected_type "" (* (Document.to_plain_string $ Core.Print.pp_expr None e)*)) in
+  match expected_type with
+    | TyBase wildcard -> E.return () (* TODO: remove wildcard *)
+    | _               ->
+        match e with
+          
+         (*
+          +                              (α,τ) ∈ Γ
+          +  --------------- (const)     --------- (sym)
+          +  Γ ⊢ n ↑ integer             Γ ⊢ α ↑ τ
+          *)
+          | Econst _ -> guard_expected (TyBase Integer)
+          | Esym a -> E.get a >>= fun baseTy_a ->
+                      guard_expected (TyBase baseTy_a)
+          
+         (*
+          +  Γ ⊢ e1 ↑ τ1    Γ ⊢ e2 ↑ τ2
+          +  -------------------------- (•,τ1,τ2,τ) ∈ Γ (op)
+          +       Γ ⊢ e1 • e2 ↑ τ
+          *)
+          | Eop op e1 e2 ->
+              let check_arith =
+                check (TyBase Integer) e1 >>
+                check (TyBase Integer) e2 >>
+                guard_expected (TyBase Integer)   in
+              let check_rel =
+                check (TyBase Integer) e1 >>
+                check (TyBase Integer) e2 >>
+                guard_expected (TyBase Boolean) in
+              let check_logic =
+                check (TyBase Boolean) e1 >>
+                check (TyBase Boolean) e2 >>
+                guard_expected (TyBase Boolean) in
+              match op with
+                | OpAdd -> check_arith
+                | OpSub -> check_arith
+                | OpMul -> check_arith
+                | OpDiv -> check_arith
+                | OpMod -> check_arith
+                | OpEq  -> check_rel
+                | OpLt  -> check_rel
+                | OpAnd -> check_logic
+                | OpOr  -> check_logic
+              end
+          
+         (*
+          +  ------------------ (true)     ------------------- (false)
+          +  Γ ⊢ true ↑ boolean            Γ ⊢ false ↑ boolean
+          +  
+          +                     Γ ⊢ e ↑ boolean
+          +                    ----------------- (not)
+          +                    Γ ⊢ ¬ e ↑ boolean
+          *)
+          | Etrue  -> guard_expected (TyBase Boolean)
+          | Efalse -> guard_expected (TyBase Boolean)
+          | Enot e -> check (TyBase Boolean) e >> guard_expected (TyBase Boolean)
+          
+         (*
+          +  ------------- (ctype)
+          +  Γ ⊢ T ↑ ctype
+          *)
+          | Ectype ty -> guard_expected (TyBase Ctype)
+          
+         (*
+          +  Γ ⊢ e1 ↓ τ1     Γ; (a,τ1) ⊢ e2 ↑ τ2*
+          +  ------------------------------------ (let)
+          +       Γ ⊢ let a = e1 in e2 ↑ τ2*
+          *)
+          | Elet a e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                            match coreTy_e1 with
+                              | TyEffect _       -> E.fail CORE_TYPECHECK_LET_EFFECT
+                              | TyBase (Tuple _) -> E.fail CORE_TYPECHECK_LET_TUPLE
+                              | TyBase baseTy_e1 -> E.put a baseTy_e1 >> check expected_type e2
+                            end
+          
+         (*
+          +  Γ ⊢ b ↑ boolean     Γ ⊢ e1 ↑ τ*     Γ ⊢ e2 ↑ τ*
+          +  ----------------------------------------------- (if_same)
+          +           Γ ⊢ if b then e1 else e1 ↑ τ*
+          +
+          +  Γ ⊢ b ↑ boolean     Γ ⊢ e1 ↑ [τ]     Γ ⊢ e2 ↑ τ
+          +  ----------------------------------------------- (if_left)
+          +           Γ ⊢ if b then e1 else e1 ↑ [τ]
+          +
+          +  Γ ⊢ b ↑ boolean     Γ ⊢ e1 ↑ τ     Γ ⊢ e2 ↑ [τ]
+          +  ----------------------------------------------- (if_right)
+          +           Γ ⊢ if b then e1 else e1 ↑ [τ]
+          *)
+          | Eif b e1 e2 -> check (TyBase Boolean) b >>
+                           match expected_type with
+                             | TyBase _        -> check expected_type e1 >> check expected_type e2
+                             | TyEffect baseTy -> E._try2 (check (TyBase baseTy) e1)
+                                                          (fun _ -> check expected_type e2)
+                                                          (check expected_type e1 >>
+                                                           E._try (check expected_type e2)
+                                                                  (check (TyBase baseTy) e2)
+                                                          )
+                           end
+          
+         (*
+          +  Γ ⊢ e1 ↑ τ1     ...     Γ ⊢ ek ↑ τk
+          +  ----------------------------------- (f, [τ1, ..., τk] → τ* ) ∈ Γ (call)
+          +         Γ ⊢ f (e1, ..., ek) ↑ τ*
+          *)
+(* TODO: working (sort of)
+          | Ecall f args -> E.get_fun f >>= fun (baseTys_vars, coreTy_return) ->
+                            if List.length args <> List.length baseTys_vars
+                              then E.fail $ CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS (List.length args) (List.length baseTys_vars)
+                              else E.mapM_ (fun (arg, baseTy) -> check (TyBase baseTy) arg) (List.combine args baseTys_vars) >>
+                              guard_expected coreTy_return
+*)
+          
+         (*
+          +  ------------- ∀τ (undef)     ------------- ∀τ (error)
+          +  Γ ⊢ undef ↑ τ                Γ ⊢ error ↑ τ
+          *)
+          | Eundef _ -> E.return () (* TODO: check *)
+          | Eerror -> E.return () (* TODO: check *)
+          
+         (*
+          +  ------------- (skip)
+          +  Γ ⊢ skip ↑ unit
+          *)
+          | Eskip -> guard_expected (TyBase Unit)
+          
+         (*
+          +  Γ ⊢ e1 ↓ [(τ1, ..., τk)]     Γ; (τ1, α1); ...; (τk, αk) ⊢ e2 ↑ τ*
+          +  ----------------------------------------------------------------- (wseq)
+          +                 Γ ⊢ (α1, ..., αk) ← e1 ; e2 ↑ τ*
+          *)
+          (* TODO: the comment is outdated *)
+          | Ewseq [] e1 e2 -> infer e1 >>
+                              check expected_type e2
+          | Ewseq _as e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                               let baseTy_e1 =  match coreTy_e1 with
+                                                  | TyBase   baseTy_e1 -> baseTy_e1
+                                                  | TyEffect baseTy_e1 -> baseTy_e1
+                                                end
+                               in match baseTy_e1 with
+                                    | Tuple baseTys -> if List.length _as <> List.length baseTys
+                                                         then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) (List.length baseTys)
+                                                         else E.mapM_ (fun (a, ty) -> match a with
+                                                                                        | Some a -> E.put a ty
+                                                                                        | None   -> E.return ()
+                                                                                      end) (List.combine _as baseTys)
+                                    | _             -> if List.length _as <> 1
+                                                         then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) 1
+                                                         else let [a] = _as in
+                                                              match a with
+                                                                | Some a -> E.put a baseTy_e1
+                                                                | None   -> E.return ()
+                                                              end
+                                  end >> check expected_type e2
+          
+
+          | Esseq [] e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                              match coreTy_e1 with
+                                | TyBase _           -> E.fail CORE_TYPECHECK_SEQ_PURE
+                                | TyEffect baseTy_e1 -> check expected_type e2
+                              end
+          | Esseq _as e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                              match coreTy_e1 with
+                                | TyBase _           -> E.fail CORE_TYPECHECK_SEQ_PURE
+                                | TyEffect baseTy_e1 -> 
+                                match baseTy_e1 with
+                                  | Tuple baseTys -> if List.length _as <> List.length baseTys
+                                                       then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) (List.length baseTys)
+                                                       else E.mapM_ (fun (a, ty) -> match a with
+                                                                                      | Some a -> E.put a ty
+                                                                                      | None   -> E.return ()
+                                                                                    end) (List.combine _as baseTys)
+                                  | _             -> if List.length _as <> 1
+                                                       then E.fail $ CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY (List.length _as) 1
+                                                       else let [a] = _as in
+                                                            match a with
+                                                              | Some a -> E.put a baseTy_e1
+                                                              | None   -> E.return ()
+                                                            end
+                                end >> check expected_type e2
+                              end
+
+
+          | Eunseq es          -> E.fail (Errors.CORE_TYPECHECK "TODO(check unseq)")
+          | Eindet e           -> E.fail (Errors.CORE_TYPECHECK "TODO(check indet)")
+          
+         (*
+          +        Γ ⊢ ty ↑ ctype                         Γ ⊢ e ↑ integer
+          +  -------------------------- (create)     ----------------------- (alloc)
+          +  Γ ⊢ create{ty} ↑ [address]              Γ ⊢ alloc e ↑ [address]
+          *)
+          | Eaction (Pos, (_, Create ty _)) -> check (TyBase Ctype) ty   >> guard_expected (TyEffect Address)
+          | Eaction (Neg, (_, Create ty _)) -> check (TyBase Ctype) ty   >> guard_expected (TyEffect Unit)
+          | Eaction (Pos, (_, Alloc n _))   -> check (TyBase Integer) n  >> guard_expected (TyEffect Address)
+          | Eaction (Neg, (_, Alloc n _))   -> check (TyBase Integer) n  >> guard_expected (TyEffect Unit)
+          
+         (*
+          +    Γ ⊢ e ↑ address
+          +  ------------------- (kill)
+          +  Γ ⊢ kill e ↑ [unit]
+          *)
+          | Eaction (_, (_, Kill e)) -> check (TyBase Address) e >>
+                                        guard_expected (TyEffect Unit)
+          
+          
+         (*
+          +  Γ ⊢ ty ↑ ctype     Γ ⊢ e1 ↑ address     Γ ⊢ e2 ↑ integer
+          +  ------------------------------------------------------ (store)
+          +               Γ ⊢ store{ty} e1 e2 ↑ [unit]
+          +
+          +            Γ ⊢ ty ↑ ctype     Γ ⊢ e ↑ address
+          +            ---------------------------------- (load)
+          +                 Γ ⊢ load{ty} e ↑ [integer]
+
+          *)
+          | Eaction (_, (_, Store ty e1 e2)) -> check (TyBase Ctype)     ty >>
+                                                check (TyBase Address)   e1 >>
+                                                check (TyBase Integer)   e2 >>
+                                                guard_expected (TyEffect Unit)
+          | Eaction (Pos, (_, Load ty e))    -> check (TyBase Address) e >> guard_expected (TyEffect Integer)
+          | Eaction (Neg, (_, Load ty e))    -> check (TyBase Address) e >> guard_expected (TyEffect Unit)
+
+         (*
+          +  Γ ⊢ a1 ↑ address     Γ ⊢ a2 ↑ address
+          +  ------------------------------------- (same)
+          +         Γ ⊢ same a1 a2 ↑ unit
+          *)
+          | Esame a1 a2 -> check (TyBase Address) a1 >>
+                           check (TyBase Address) a2 >>
+                           guard_expected (TyBase Unit) (* TODO: base or effect ???? *)
+        end
+  end
+
+and infer e =
+  match e with
+    
+   (*
+    +                              (α,τ) ∈ Γ
+    +  --------------- (const)     --------- (sym)
+    +  Γ ⊢ n ↓ integer             Γ ⊢ α ↓ τ
+    *)
+    | Econst n -> E.return (TyBase Integer)
+    | Esym a   -> E.get a >>= fun baseTy_a -> E.return (TyBase baseTy_a)
+    
+    
+   (*
+    +  Γ ⊢ e1 ↑ τ1    Γ ⊢ e2 ↑ τ2
+    +  -------------------------- (•,τ1,τ2,τ) ∈ Γ (op)
+    +       Γ ⊢ e1 • e2 ↓ τ
+    *)
+    | Eop op e1 e2 ->
+        let op_type = if is_arithOp op || is_relOp op then TyBase Integer
+                                                      else TyBase Boolean in
+        check op_type e1 >>
+        check op_type e2 >>
+        E.return op_type
+    
+    
+   (*
+    +  ------------------ (true)     ------------------- (false)
+    +  Γ ⊢ true ↓ boolean            Γ ⊢ false ↓ boolean
+    +  
+    +                     Γ ⊢ e ↑ boolean
+    +                    ----------------- (not)
+    +                    Γ ⊢ ¬ e ↓ boolean
+    *)
+    | Etrue  -> E.return (TyBase Boolean)
+    | Efalse -> E.return (TyBase Boolean)
+    | Enot e -> check (TyBase Boolean) e  >> E.return (TyBase Boolean)
+    
+    
+   (*
+    +  ------------- (ctype)
+    +  Γ ⊢ T ↓ ctype
+    *)
+    | Ectype ty -> E.return (TyBase Ctype)
+    
+    
+   (*
+    +  Γ ⊢ e1 ↓ τ1     Γ; (a,τ1) ⊢ e2 ↓ τ2*
+    +  ------------------------------------ (let)
+    +       Γ ⊢ let a = e1 in e2 ↓ τ2*
+    *)
+    | Elet a e1 e2 -> infer e1 >>= fun coreTy_e1 ->
+                      match coreTy_e1 with
+                        | TyEffect _       -> E.fail CORE_TYPECHECK_LET_EFFECT
+                        | TyBase (Tuple _) -> E.fail CORE_TYPECHECK_LET_TUPLE
+                        | TyBase baseTy    -> E.put a baseTy >> infer e2
+                      end
+    
+    
+   (*
+    +         Γ ⊢ b ↑ boolean                         Γ ⊢ b ↑ boolean
+    +    Γ ⊢ e1 ↓ τ     Γ ⊢ e2 ↓ τ              Γ ⊢ e1 ↓ [τ]     Γ ⊢ e2 : τ
+    +  ---------------------------- (if1)      ------------------------------ (if2)
+    +  Γ ⊢ if b then e1 else e2 ↓ τ            Γ ⊢ if b then e1 else e2 : [τ]
+    +
+    +         Γ ⊢ b ↑ boolean                         Γ ⊢ b ↑ boolean
+    +    Γ ⊢ e1 ↓ τ     Γ ⊢ e2 ↓ [τ]           Γ ⊢ e1 ↓ [τ]     Γ ⊢ e2 ↓ [τ]
+    +  ----------------------------- (if3)     ------------------------------ (if4)
+    +  Γ ⊢ if b then e1 else e2 ↓ [τ]          Γ ⊢ if b then e1 else e2 ↓ [τ]
+    *)
+    | Eif b e1 e2 ->
+        check (TyBase Boolean) b >>
+        infer e1                 >>= fun coreTy_e1 ->
+        infer e2                 >>= fun coreTy_e2 ->
+        let (baseTy_e1, baseTy_e2, retTy) =
+          match (coreTy_e1, coreTy_e2) with
+            | (TyBase baseTy1,   TyBase baseTy2  ) -> (baseTy1, baseTy2, TyBase  )
+            | (TyBase baseTy1,   TyEffect baseTy2) -> (baseTy1, baseTy2, TyEffect)
+            | (TyEffect baseTy1, TyBase baseTy2  ) -> (baseTy1, baseTy2, TyEffect)
+            | (TyEffect baseTy1, TyEffect baseTy2) -> (baseTy1, baseTy2, TyEffect)
+          end
+        in
+        E.guard (baseTy_e1 = baseTy_e2)
+                Errors.CORE_TYPECHECK_IF_BRANCHES >>
+        E.return (retTy baseTy_e1)
+    
+
+(*
+TODO: working (sort of)    
+    | Ecall f args ->
+        E.get_fun f >>= fun (baseTys_vars, coreTy_return) ->
+        (* display an error if the wrong number of arguments is provided *)
+        if List.length args <> List.length baseTys_vars
+          then E.fail $ Errors.CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS (List.length args) (List.length baseTys_vars)
+          else E.mapM_ (fun (arg, baseTy) -> check (TyBase baseTy) arg) (List.combine args baseTys_vars) >>
+               E.return coreTy_return
+*)
+
+(*
+        E.mapM infer args >>= fun coreTys_args ->
+        if List.length baseTys_vars <> List.length coreTys_args
+          then E.fail (Errors.CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS)
+          else E.mapM_
+                 (fun (baseTy_expected, coreTy_found) ->
+                    match coreTy_found with
+                      | TyBase baseTy_found ->
+                          if baseTy_expected = baseTy_found
+                            then E.return ()
+                            else E.fail (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED
+                                         coreTy_found (TyBase baseTy_expected))
+                      | _ -> E.fail Errors.CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
+                  end)
+                 (List.combine baseTys_vars coreTys_args) >>
+               E.return coreTy_ret
+*)
+
+(*               E.return (TyBase wildcard) (* E.fail "TODO(infer call)" *) *)
+    
+(*
+    | Kunseq es ->
+      E.mapM infer es >>= fun coreTys ->
+      E.return $
+        List.fold_left
+          (fun acc coreTy ->
+             let base   x        = TyBase x   in
+             let effect x        = TyEffect x in
+             let (kind, baseTys) = match acc with
+                                     | TyBase (tuple baseTys)   -> (base,   baseTys)
+                                     | TyEffect (tuple baseTys) -> (effect, baseTys)
+                                   end in
+             match coreTy with
+               | TyBase   baseTy -> kind (tuple (baseTy :: baseTys))
+               | TyEffect baseTy -> TyEffect (tuple (baseTy :: baseTys))
+             end)
+          (TyBase (tuple [])) coreTys
+    
+*)
+
+
+
+
+
+
+
+
+    
+   (*
+    +  ------------- (undef)    ------------- (error)
+    +  Γ ⊢ undef : _            Γ ⊢ error : _
+    ----------------------------------------------------------------------------------------------*)
+    | Eundef _ -> E.return (TyBase Wildcard)
+    | Eerror -> E.return (TyBase Wildcard)
+    
+    
+   (*
+    +  --------------- (skip)
+    +  Γ ⊢ skip : unit
+    ----------------------------------------------------------------------------------------------*)
+    | Eskip -> E.return (TyBase Unit)
+    
+    
+   (*
+
+TODO: fix the picture
+
+    +  Γ ⊢ e1 : [τ1]
+    +  Γ, (_αs : τ1) ⊢ e2 : τ2*
+    +  ------------------------------------------------ (wseq)
+    +    Γ ⊢ _αs1 ← e1 >> ... >> _αsk ← ek >> e' : [τ2]
+    ----------------------------------------------------------------------------------------------*)
+    (* TODO: the code doesn't look right *)
+    | Ewseq _as e1 e2 ->
+        infer e1 >>= fun coreTy_e1 ->
+        let baseTys = base_type_to_list (base_type coreTy_e1) in
+        let n = List.length _as in
+        let m = List.length baseTys in
+        if n <> m && n>0 then
+          E.fail (Errors.CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY n m)
+        else
+          (if n = 0 then
+             E.return ()
+           else
+             E.mapM_ (fun (a,coreTy) -> match a with
+                                          | Some a -> E.put a coreTy
+                                          | None   -> E.return ()
+                                        end) (List.combine _as baseTys)) >>
+          infer e2 >>= fun coreTy_e2 ->
+          E.return $
+            match coreTy_e2 with
+              | TyEffect _    -> coreTy_e2
+              | TyBase baseTy -> match coreTy_e1 with
+                                   | TyEffect _ -> TyEffect baseTy
+                                   | TyBase _   -> coreTy_e2
+                                 end
+            end
+    
+    
+   (*
+    +    Γ ⊢ e1 : T1*   ...   Γ ⊢ ek : Tk*
+    +  ----------------------------------- (unseq)
+    +  Γ ⊢ e1 || ... || ek : T*
+    ----------------------------------------------------------------------------------------------*)
+    | Eunseq es ->
+      E.mapM infer es >>= fun coreTys ->
+      
+      let (isEffectful, Tys) = List.fold_right (fun ty (x,bs) ->
+                                 match ty with
+                                   | TyBase   b -> (x   , b :: bs)
+                                   | TyEffect b -> (true, b :: bs)
+                                 end) coreTys (false, [])
+      in E.return $ TyEffect (Tuple Tys)
+(*
+
+E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.string_of_expr e)
+	             | TyEffect b -> E.return b
+	      end)
+	      coreTys
+      >>= fun Tys -> 
+*)
+
+
+(* (E.return $ TyEffect (tuple (List.map (function TyEffect b -> b end) coreTys))) *)
+
+(*      
+      if List.exist (function TyBase _ -> true | _ -> false end) coreTys then
+	(* TODO: hack *)
+	KKK
+        E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ )
+      else
+*)  
+      
+(*
+      E.return $
+        List.fold_left
+          (fun acc coreTy ->
+             let base   x        = TyBase x   in
+             let effect x        = TyEffect x in
+             let (kind, baseTys) = match acc with
+                                     | TyBase (tuple baseTys)   -> (base,   baseTys)
+                                     | TyEffect (tuple baseTys) -> (effect, baseTys)
+                                   end in
+             match coreTy with
+               | TyBase   baseTy -> kind (tuple (baseTy :: baseTys))
+               | TyEffect baseTy -> TyEffect (tuple (baseTy :: baseTys))
+             end)
+          (TyBase (tuple [])) (List.rev coreTys)
+*)
+    
+   (*
+    +   Γ ⊢ e : T              Γ ⊢ e : T
+    +  ----------- (intet)    ----------- (atom)
+    +  Γ ⊢ [e] : T            Γ ⊢ {e} : T
+    ----------------------------------------------------------------------------------------------*)
+    | Eindet e -> infer e
+    
+    
+   (*
+    +  ------------------------ (create)
+    +  Γ ⊢ create{τ} : address*
+    ----------------------------------------------------------------------------------------------*)
+    | Eaction (Pos, (_, Create ty _)) -> E.return (TyEffect Address)
+    
+    | Eaction (Neg, (_, Create ty _)) -> E.return (TyEffect Unit)
+    
+    
+   (*
+    +      Γ ⊢ e : integer
+    +  ---------------------- (alloc)
+    +  Γ ⊢ alloc e : address*
+    ----------------------------------------------------------------------------------------------*)
+    | Eaction (Pos, (_, Alloc e _)) ->
+        check (TyBase Integer) e >>
+        E.return (TyEffect Address)
+    
+    | Eaction (Neg, (_, Alloc e _)) ->
+        check (TyBase Integer) e >>
+        E.return (TyEffect Unit)
+    
+    
+   (*
+    +   Γ ⊢ e : address
+    +  ------------------ (kill)
+    +  Γ ⊢ kill e : unit*
+    ----------------------------------------------------------------------------------------------*)
+    | Eaction (_, (_, Kill e)) ->
+        check (TyBase Address) e >>
+        E.return (TyEffect Unit)
+    
+    
+   (*
+    +   Γ ⊢ e1 : address    Γ ⊢ e2 : integer
+    +  -------------------------------------- (store)
+    +      Γ ⊢ store{τ} e1 e2 : unit*
+    ----------------------------------------------------------------------------------------------*)
+    | Eaction (_, (_, Store ty e1 e2)) ->
+        check (TyBase Address)   e1 >>
+        check (TyBase Integer)   e2 >>
+        E.return (TyEffect Unit)
+    
+    
+   (*
+    +     Γ ⊢ e : address
+    +  ------------------------ (load)
+    +  Γ ⊢ load{τ} e : integer*
+    ----------------------------------------------------------------------------------------------*)
+    | Eaction (Pos, (_, Load ty e)) ->
+        check (TyBase Address) e >>
+        E.return (TyEffect Integer)
+    
+    | Eaction (Neg, (_, Load ty e)) ->
+        check (TyBase Address) e >>
+        E.return (TyEffect Unit)
+    
+    
+   (*
+    +   (α1,address) ∈ Γ    (α2,address) ∈ Γ
+    +  ------------------------------------- (same)
+    +         Γ ⊢ same α1 α2 : unit*
+    ----------------------------------------------------------------------------------------------*)
+
+(* TODO *)
+(*
+    | Ksame a1 a2 ->
+        E.get a1                        >>= fun baseTy_a1 ->
+        E.get a2                        >>= fun baseTy_a2 ->
+        E.guard (baseTy_a1 = address)
+                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a1) (TyBase address)) >>
+        E.guard (baseTy_a2 = address)
+                (Errors.CORE_TYPECHECK_INCORRECT_EXPECTED (TyBase baseTy_a2) (TyBase address)) >>
+        E.return (TyEffect unit)
+    
+    | _ -> E.fail (Errors.CORE_TYPECHECK "TODO")
+*)
+    (* TODO: checking label in the environment *)
+    | Esave _ _ e -> infer e >>= function
+                     | TyBase   baseTy -> E.return (TyEffect baseTy)
+                     | TyEffect baseTy -> E.return (TyEffect baseTy)
+                   end 
+    
+
+
+    (* TODO: check *)
+    | Easeq _a_opt act pact -> infer (Eaction (Pos, act))
+    
+    
+    
+    (* TODO: check *)
+    | Eret e -> infer e
+
+
+
+
+
+(*    | _ -> Boot.outOfHomeomorphism ("Core_typing.infer> " ^ (Document.to_plain_string $ Core.Print.pp_expr None e)) *)
+  end
+
+
+let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
+  let functions = Ocaml.Pmap.bindings f.funs in
+  let init_fenv =
+    List.fold_left (fun acc (fname, (ftype, args, _)) ->
+      Pmap.add fname (List.map snd args, ftype) acc) Pmap.empty functions in
+  Exception.bind
+    (List.fold_right
+       (fun (fname, (coreTy_return, baseTys_vars, fbody)) acc ->
+         Exception.bind acc (fun () ->
+           match State.run (E.mapM_ (fun (a, baseTy_a) -> E.put a baseTy_a) baseTys_vars >> check coreTy_return fbody)
+                           (Pmap.empty, init_fenv)
+           with
+             | E.Success () -> Exception.return ()
+             | E.Error err  -> Exception.fail err
+           end
+         )
+       ) (Ocaml.Pmap.bindings f.funs)
+       (Exception.return ()))
+    (fun _ -> Exception.return f)
+
+
+(*
+  let functions = Ocaml.Pmap.bindings f.fun_map in
+  (* collect the symbolic names of the functions for the initial function environment. *)
+  let init_fenv =
+    List.fold_left (fun acc (fname, (ftype, args, _)) ->
+      Pmap.add fname (List.map snd args, ftype) acc) (Pmap.map (fun (ty, tys, _) -> (List.map snd tys, ty)) stdlib) functions in
+  Exception.bind
+    (List.fold_right
+       (fun (fname, (coreTy_return, baseTys_vars, fbody)) acc ->
+         Exception.bind acc (fun () ->
+           match State.run (E.mapM_ (fun (a, baseTy_a) -> E.put a baseTy_a) baseTys_vars >> check coreTy_return fbody)
+                           (Pmap.empty, init_fenv)
+           with
+             | E.Success () -> Exception.return ()
+             | E.Error err  -> Exception.fail err
+           end
+         )
+       ) (Ocaml.Pmap.bindings f.fun_map)
+       (Exception.return ()))
+    (fun _ -> Exception.return f)
+*)

@@ -1,0 +1,7 @@
+let find a m =
+  match Pmap.mem a m with
+    | true  -> Some (Pmap.find a m)
+    | false -> None
+  end
+
+let of_list ls = List.fold_left (fun m (k, e) -> Pmap.add k e m) Pmap.empty ls

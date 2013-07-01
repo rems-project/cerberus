@@ -1,0 +1,511 @@
+
+type implementation_constant =
+  (* J.3.2 Environment *)
+  (* The mapping between physical source file multibyte characters and the source character set in
+     translation phase 1 (5.1.1.2). *)
+  (* TODO: don't care about that (only for now?) *)
+  
+  (* The name and type of the function called at program startup in a freestanding environment (5.1.2.1). *)
+  | Environment__startup_name
+  | Environment__startup_type
+  
+  (* The effect of program termination in a freestanding environment (5.1.2.1). *)
+  (* TODO: don't care for now *)
+  
+  (* An alternative manner in which the main function may be defined (5.1.2.2.1). *)
+  (* TODO: don't care for now *)  
+  
+  (* The values given to the strings pointed to by the argv argument to main (5.1.2.2.1). *)
+  (* TODO: don't care for now *)
+  
+  (* What constitutes an interactive device (5.1.2.3). *)
+  (* TODO: don't care for now *)
+  
+  (* Whether a program can have more than one thread of execution in a freestanding environment
+     (5.1.2.4). *)
+  (* TODO: don't care for now *)
+  
+  (* The set of signals, their semantics, and their default handling (7.14). *)
+  (* TODO: don't care for now *)
+  
+  (* Signal values other than SIGFPE, SIGILL, and SIGSEGV that correspond to a computational
+     exception (7.14.1.1). *)
+  (* TODO: don't care for now *)
+  
+  (* Signals for which the equivalent of signal(sig, SIG_IGN); is executed at program startup
+     (7.14.1.1). *)
+  (* TODO: don't care for now *)
+  
+  (* The set of environment names and the method for altering the environment list used by the
+     getenv function (7.22.4.6).  *)
+  (* TODO: don't care for now *)
+  
+  (* The manner of execution of the string by the system function (7.22.4.8). *)
+  (* TODO: don't care for now *)  
+  
+  (* J.3.3 Identifiers *)
+  (* Which additional multibyte characters may appear in identifiers and their correspondence to
+     universal character names (6.4.2). *)
+  (* TODO: don't care for now *)  
+  
+  (* The number of significant initial characters in an identifier (5.2.4.1, 6.4.2). *)
+  (* TODO: don't care for now *)  
+  
+  (* J.3.4 Characters *)
+  (* The number of bits in a byte (3.6). *)
+  | Characters__bits_in_byte
+  
+  (* The values of the members of the execution character set (5.2.1). *)
+  | Characters__execution_character_set_values
+  
+  (* The unique value of the member of the execution character set produced for
+     each of the standard alphabetic escape sequences (5.2.2). *)
+  | Characters__TODO1
+  
+  (* The value of a char object into which has been stored any character other
+     than a member of the basic execution character set (6.2.5). *)
+  | Characters__TODO2
+  
+  (* Which of signed char or unsigned char has the same range, representation, and
+     behavior as ‘‘plain’’ char (6.2.5, 6.3.1.1). *)
+  | Characters__plain_char_sign
+  
+  (* The mapping of members of the source character set (in character constants
+     and string literals) to members of the execution character set
+     (6.4.4.4, 5.1.1.2). *)
+  | Characters__TODO3
+  
+  (* The value of an integer character constant containing more than one character
+     or containing a character or escape sequence that does not map to a
+     single-byte execution character (6.4.4.4). *)
+  | Characters__TODO4
+  
+  (* The value of a wide character constant containing more than one multibyte
+     character or a single multibyte character that maps to multiple members of
+     the extended execution character set, or containing a multibyte character or
+     escape sequence not represented in the extended execution character set
+     (6.4.4.4). *)
+  | Characters__TODO5
+  
+  (* The current locale used to convert a wide character constant consisting of a
+     single multibyte character that maps to a member of the extended execution
+     character set into a corresponding wide character code (6.4.4.4). *)
+  | Characters__TODO6
+  
+  (* Whether differently-prefixed wide string literal tokens can be concatenated
+     and, if so, the treatment of the resulting multibyte character sequence
+     (6.4.5). *)
+  | Characters__TODO7
+  
+  (* The current locale used to convert a wide string literal into corresponding
+     wide character codes (6.4.5). *)
+  | Characters__TODO8
+  
+  (* The value of a string literal containing a multibyte character or escape
+     sequence not represented in the execution character set (6.4.5). *)
+  | Characters__TODO9
+  
+  (* The encoding of any of wchar_t, char16_t, and char32_t where the
+     corresponding standard encoding macro (__STDC_ISO_10646__, __STDC_UTF_16__,
+     or__STDC_UTF_32__) is not defined (6.10.8.2). *)
+  | Characters__TODO10
+  
+  (* J.3.5 Integers *)
+  (* Any extended integer types that exist in the implementation (6.2.5). *)
+  (* TODO: don't have extended types for now, GCC doesn't have any *)
+  
+  (* Whether signed integer types are represented using sign and magnitude, two’s complement, or
+     ones’ complement, and whether the extraordinary value is a trap representation or an ordinary
+     value (6.2.6.2). *)
+  (* TODO: I guess this is going to be flag of the memory model, but never used in a Core.Eimpl *)
+  
+  (* The rank of any extended integer type relative to another extended integer type with the same
+     precision (6.3.1.1). *)
+  (* TODO: don't have extended types for now, GCC doesn't have any *)
+  
+  (* The result of, or the signal raised by, converting an integer to a signed integer type when the
+     value cannot be represented in an object of that type (6.3.1.3). *)
+  (* TODO: not sure how to do it for now *)
+  
+  (* The results of some bitwise operations on signed integers (6.5). *)
+  (* TODO: will have several Ctors *)
+  | Sizeof
+  | Alignof
+  | SHR_signed_negative
+  
+  (* J.3.6 Floating_point*)
+  (* TODO: we don't do floating points *)
+  
+  (* J.3.7 Array_pointers *)
+  (* TODO: these are in memory.lem for now *)
+  
+  (* J.3.8 Hints *)
+  (* TODO: will probably never care about these *)
+  
+  (* J.3.9 Structure_unions_enumerations_bitfields *)
+  (* Whether a ‘‘plain’’ int bit-field is treated as a signed int bit-field or
+     as an unsigned int bit-field (6.7.2, 6.7.2.1). *)
+  | Plain_bitfield_sign
+  
+  (* Allowable bit-field types other than _Bool, signed int, and unsigned int
+     (6.7.2.1). *)
+  | Bitfield_other_types
+  
+  (* Whether atomic types are permitted for bit-fields (6.7.2.1). *)
+  |  Atomic_bitfield_permitted
+  
+  (* Whether a bit-field can straddle a storage-unit boundary (6.7.2.1). *)
+  (* TODO *)
+  
+  (* The order of allocation of bit-fields within a unit (6.7.2.1). *)
+  (* TODO: ARRRGG *)
+  
+  (* The alignment of non-bit-field members of structures (6.7.2.1). This should
+     present no problem unless binary data written by one implementation is read
+     by another. *)
+  (* TODO: ARRRGG *)
+  
+  (* The integer type compatible with each enumerated type (6.7.2.2). *)
+  (* TODO: ARRRGG *)
+  
+  (* J.3.10 Qualifiers *)
+  (* What constitutes an access to an object that has volatile-qualified type (6.7.3). *)
+  (* TODO *)
+  
+  (* J.3.12 Library_functions*)
+  (* TODOS *)
+  
+  (* J.3.13 Architecture *)
+  (* TODOS *)
+
+
+(* TODO: PRESENT BETTER *)
+  | Ctype_min
+  | Ctype_max
+
+
+(* TODO: this is for the parsing (a bit disgusting to do it that way *)
+let impl_map =
+  List.fold_left (fun acc (k, v) -> Pmap.add k v acc) Pmap.empty
+  [
+    ("<bits_in_byte>", Characters__bits_in_byte);
+    ("<sizeof>",       Sizeof);
+    ("<alignof>",      Alignof);
+    ("<ctype_min>",    Ctype_min);
+    ("<ctype_max>",    Ctype_max);
+  ]
+
+
+
+
+let string_of_implementation_constant = function
+  | Environment__startup_name ->
+      "Environment.startup_name"
+  | Environment__startup_type ->
+      "Environment.startup_type"
+  | Characters__bits_in_byte ->
+      "Characters.bits_in_byte"
+  | Characters__execution_character_set_values ->
+      "Characters.execution_character_set_values"
+  | Characters__TODO1 ->
+      "Characters.TODO1"
+  | Characters__TODO2 ->
+      "Characters.TODO2"
+  | Characters__plain_char_sign ->
+      "Characters.plain_char_sign"
+  | Characters__TODO3 ->
+      "Characters.TODO3"
+  | Characters__TODO4 ->
+      "Characters.TODO4"
+  | Characters__TODO5 ->
+      "Characters.TODO5"
+  | Characters__TODO6 ->
+      "Characters.TODO6"
+  | Characters__TODO7 ->
+      "Characters.TODO7"
+  | Characters__TODO8 ->
+      "Characters.TODO8"
+  | Characters__TODO9 ->
+      "Characters.TODO9"
+  | Characters__TODO10 ->
+      "Characters.TODO10"
+  | Sizeof ->
+      "sizeof"
+  | Alignof ->
+      "alignof"
+  | SHR_signed_negative ->
+      "SHR_signed_negative"
+  | Plain_bitfield_sign ->
+      "Plain_bitfield_sign"
+  | Bitfield_other_types ->
+      "Bitfield_other_types"
+  |  Atomic_bitfield_permitted ->
+      "Atomic_bitfield_permitted"
+  | Ctype_min ->
+      "ctype_min"
+  | Ctype_max ->
+      "ctype_max"
+end
+
+
+
+
+(*
+
+(* TODO: would love to have signatures *)
+
+(* Fixing a dummy implementation for now *)
+
+
+(* Listing of implementation defined behaviours *)
+
+
+
+type sign =
+  | Signed
+  | Unsigned
+
+
+
+(* J.3.1 *)
+(*
+module Translation = struct
+  (*How a diagnostic is identified (3.10, 5.1.1.3). *)
+  (* TODO: don't care about that (probably forever) *)
+  
+  (* Whether each nonempty sequence of white-space characters other than new-line is retained or
+     replaced by one space character in translation phase 3 (5.1.1.2). *)
+  (* TODO: don't care about that (probably forever) *)
+end
+*)
+
+
+(* J.3.2 *)
+module Environment = struct
+  val todo: num
+(*  let todo = Boot.assert_false "TODO" *)
+  
+  (* The mapping between physical source file multibyte characters and the source character set in
+     translation phase 1 (5.1.1.2). *)
+  (* TODO: don't care about that (only for now?) *)
+  
+  (* The name and type of the function called at program startup in a freestanding environment
+     (5.1.2.1). *)
+  val startup_name: string
+  val startup_type: Ail.ctype
+  let startup_name = "main"
+(*  let startup_type = Boot.assert_false "TODO" *)
+  
+  (* The effect of program termination in a freestanding environment (5.1.2.1). *)
+  (* TODO: don't care for now *)
+  
+  (* An alternative manner in which the main function may be defined (5.1.2.2.1). *)
+  (* TODO: don't care for now *)  
+  
+  (* The values given to the strings pointed to by the argv argument to main (5.1.2.2.1). *)
+  (* TODO: don't care for now *)
+  
+  (* What constitutes an interactive device (5.1.2.3). *)
+  (* TODO: don't care for now *)
+  
+  (* Whether a program can have more than one thread of execution in a freestanding environment
+     (5.1.2.4). *)
+  (* TODO: don't care for now *)
+  
+  (* The set of signals, their semantics, and their default handling (7.14). *)
+  (* TODO: don't care for now *)
+  
+  (* Signal values other than SIGFPE, SIGILL, and SIGSEGV that correspond to a computational
+     exception (7.14.1.1). *)
+  (* TODO: don't care for now *)
+  
+  (* Signals for which the equivalent of signal(sig, SIG_IGN); is executed at program startup
+     (7.14.1.1). *)
+  (* TODO: don't care for now *)
+  
+  (* The set of environment names and the method for altering the environment list used by the
+     getenv function (7.22.4.6).  *)
+  (* TODO: don't care for now *)
+  
+  (* The manner of execution of the string by the system function (7.22.4.8). *)
+  (* TODO: don't care for now *)  
+end
+
+
+(*
+(* J.3.3 *)
+module Identifiers = struct
+  (* Which additional multibyte characters may appear in identifiers and their correspondence to
+     universal character names (6.4.2). *)
+  (* TODO: don't care for now *)  
+  
+  (* The number of significant initial characters in an identifier (5.2.4.1, 6.4.2). *)
+  (* TODO: don't care for now *)  
+end
+*)
+
+
+(* J.3.4 *)
+module Characters = struct
+  (* The number of bits in a byte (3.6). *)
+  val bits_in_byte: num
+  let bits_in_byte = 8
+  
+  (* The values of the members of the execution character set (5.2.1). *)
+  val execution_character_set_values: Pmap.map string num
+  let execution_character_set_values = Pmap.empty (* TODO *)
+  
+  (* The unique value of the member of the execution character set produced for
+     each of the standard alphabetic escape sequences (5.2.2). *)
+  
+  (* The value of a char object into which has been stored any character other
+     than a member of the basic execution character set (6.2.5). *)
+  
+  (* Which of signed char or unsigned char has the same range, representation, and
+     behavior as ‘‘plain’’ char (6.2.5, 6.3.1.1). *)
+  val plain_char_sign: sign (* TODO: maybe have a specified twoc-ctor type *)
+  let plain_char_sign = Unsigned
+  
+  (* The mapping of members of the source character set (in character constants
+     and string literals) to members of the execution character set
+     (6.4.4.4, 5.1.1.2). *)
+  
+  (* The value of an integer character constant containing more than one character
+     or containing a character or escape sequence that does not map to a
+     single-byte execution character (6.4.4.4). *)
+  
+  (* The value of a wide character constant containing more than one multibyte
+     character or a single multibyte character that maps to multiple members of
+     the extended execution character set, or containing a multibyte character or
+     escape sequence not represented in the extended execution character set
+     (6.4.4.4). *)
+  
+  (* The current locale used to convert a wide character constant consisting of a
+     single multibyte character that maps to a member of the extended execution
+     character set into a corresponding wide character code (6.4.4.4). *)
+  
+  (* Whether differently-prefixed wide string literal tokens can be concatenated
+     and, if so, the treatment of the resulting multibyte character sequence
+     (6.4.5). *)
+  
+  (* The current locale used to convert a wide string literal into corresponding
+     wide character codes (6.4.5). *)
+  
+  (* The value of a string literal containing a multibyte character or escape
+     sequence not represented in the execution character set (6.4.5). *)
+  
+  (* The encoding of any of wchar_t, char16_t, and char32_t where the
+     corresponding standard encoding macro (__STDC_ISO_10646__, __STDC_UTF_16__,
+     or__STDC_UTF_32__) is not defined (6.10.8.2). *)
+
+
+end
+
+
+(* J.3.5 *)
+(*
+module Integers = struct
+  (* Any extended integer types that exist in the implementation (6.2.5). *)
+  (* TODO: don't have extended types for now, GCC doesn't have any *)
+  
+  (* Whether signed integer types are represented using sign and magnitude, two’s complement, or
+     ones’ complement, and whether the extraordinary value is a trap representation or an ordinary
+     value (6.2.6.2). *)
+  (* TODO: not sure how to do it for now (inside Core?) *)
+  
+  (* The rank of any extended integer type relative to another extended integer type with the same
+     precision (6.3.1.1). *)
+  (* TODO: don't have extended types for now, GCC doesn't have any *)
+  
+  (* The result of, or the signal raised by, converting an integer to a signed integer type when the
+     value cannot be represented in an object of that type (6.3.1.3). *)
+  (* TODO: not sure how to do it for now (inside Core?) *)
+  
+  (* The results of some bitwise operations on signed integers (6.5). *)
+  (* TODO: hacked away in Core for now *)
+end
+*)
+
+
+(* J.3.6 *)
+(*
+module Floating_point = struct
+  val todo: num
+(*  let todo = Boot.assert_false "TODO" *)
+
+end
+*)
+
+
+(* J.3.7 *)
+(* TODO: these are in memory.lem for now *)
+(*
+module Arrays_pointers = struct
+end
+*)
+
+
+(* J.3.8 *)
+(* TODO: will probably never care about these *)
+(*
+module Hints = struct
+end
+*)
+
+
+(* J.3.9 *)
+module Structure_unions_enumerations_bitfields = struct
+  (* Whether a ‘‘plain’’ int bit-field is treated as a signed int bit-field or
+     as an unsigned int bit-field (6.7.2, 6.7.2.1). *)
+  val plain_bitfield_sign: sign
+  let plain_bitfield_sign = Signed (* following GCC *)
+  
+  (* Allowable bit-field types other than _Bool, signed int, and unsigned int
+     (6.7.2.1). *)
+  val bitfield_other_types: list Ail.ctype
+  let bitfield_other_types = []  (* following GCC in `strictly conforming mode' *)
+  
+  (* Whether atomic types are permitted for bit-fields (6.7.2.1). *)
+  val atomic_bitfield_permitted: bool
+  let atomic_bitfield_permitted = false (* TODO: check what GCC does *)
+  
+  (* Whether a bit-field can straddle a storage-unit boundary (6.7.2.1). *)
+  
+  
+  (* The order of allocation of bit-fields within a unit (6.7.2.1). *)
+  (* ARRGGG *)
+  
+  (* The alignment of non-bit-field members of structures (6.7.2.1). This should
+     present no problem unless binary data written by one implementation is read
+     by another. *)
+  
+  
+  (* The integer type compatible with each enumerated type (6.7.2.2). *)
+  (* AARRG *)
+end
+
+
+(* J.3.10 *)
+(*
+module Qualifiers = struct
+  (* What constitutes an access to an object that has volatile-qualified type (6.7.3). *)
+end
+*)
+
+
+(* J.3.12 *)
+(*
+module Library_functions = struct
+end
+*)
+
+
+(*
+(* J.3.13 *)
+module Architecture = struct
+  val todo: num
+  let todo = Boot.assert_false "TODO"
+end
+*)
+
+*)

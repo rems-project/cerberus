@@ -1,0 +1,2 @@
+val to_plain_string : Pprint_.t -> string
+let inline {ocaml} to_plain_string = Ocaml.Document.to_plain_string

@@ -1,0 +1,6 @@
+val decode_integer_constant: forall 'a. string -> int * 'a (* Ail.encoding_basis *)
+let inline {ocaml} decode_integer_constant = Ocaml.Decode.decode_integer_constant
+
+val decode_character_constant: string -> int
+let inline {ocaml} decode_character_constant = Ocaml.Decode.decode_character_constant
+
