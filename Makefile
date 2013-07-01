@@ -1,6 +1,6 @@
 # Looking for Lem
-ifneq ($(wildcard $(PWD)/../lem/lem),)
-  LEMDIR=$(PWD)/../lem
+ifneq ($(wildcard $(PWD)/../lem-csem/lem),)
+  LEMDIR=$(PWD)/../lem-csem
 else ifdef LEM_PATH
   LEMDIR=$(LEM_PATH)
 else
