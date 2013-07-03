@@ -293,7 +293,6 @@ Proof.
   end; now my_auto.
 Qed.
 
-
 Lemma eq_sigma_correct {A B : Set} {eq_A} {eq_B} :
   (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
   (forall x y : B, boolSpec (eq_B x y) (x = y)) ->
@@ -347,3 +346,36 @@ Proof.
   set (equiv_eq_sigma_correct eq_A_correct eq_B_correct x2 y2).
   repeat boolSpec_destruct; my_auto.
 Qed.
+
+Lemma eq_gamma_correct x y :
+  boolSpec (eq_gamma x y) (x = y).
+Proof.
+  apply (eq_context_correct eq_identifier_correct (eq_pair_correct eq_qualifiers_correct eq_ctype_correct)).
+Qed.
+
+Lemma equiv_gamma_correct x y :
+  boolSpec (equiv_gamma x y) (Context_defns.equiv eq x y).
+Proof.
+  apply (equiv_correct eq_identifier_correct (eq_pair_correct eq_qualifiers_correct eq_ctype_correct)).
+Qed.
+
+Lemma lookup_correct {B} (C : Context.context identifier B) v :
+  optionSpec (lookup C v) (Context_defns.lookup C v).
+Proof. apply (lookup_correct eq_identifier_correct). Qed.
+
+Definition lookup_unique {B} {C : Context.context identifier B} {v} :
+  optionUnique (lookup C v) (Context_defns.lookup C v).
+Proof. apply (lookup_unique eq_identifier_correct). Qed.
+
+Definition lookup_functional {B} {C : Context.context identifier B} {v}:
+  forall {p1 p2},
+    Context_defns.lookup C v p1 ->
+    Context_defns.lookup C v p2 ->
+    p1 = p2.
+Proof.
+  intros ? ? H1 H2.
+  set (lookup_unique _ H1).
+  set (lookup_unique _ H2).
+  congruence.
+Qed.
+

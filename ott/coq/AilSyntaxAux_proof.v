@@ -23,7 +23,7 @@ Proof.
   end; now my_auto.
 Qed.
 
-Lemma nullPointerConstant_correct {A} :
+Lemma null_pointer_constant_correct {A} :
   forall x : expression A, boolSpec (null_pointer_constant x) (D.nullPointerConstant x).
 Proof.
   apply (expression_nrect (fun x => boolSpec (null_pointer_constant' x) (D.nullPointerConstant' x))
