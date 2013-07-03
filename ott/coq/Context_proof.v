@@ -15,7 +15,7 @@ Proof.
 Qed.
 
 Definition lookup_functional {A B : Set} :
-  forall C (a : A) (b1 b2 : B),
+  forall {C} {a : A} {b1 b2 : B},
     D.lookup C a b1 ->
     D.lookup C a b2 ->
     b1 = b2.

@@ -8,15 +8,6 @@ Local Open Scope Z.
 Local Open Scope list_scope.
 Local Open Scope bool_scope.
 
-Definition pointer_convert (t:ctype) : ctype :=
-  match t with
-  | Void         => Void
-  | Basic    bt  => Basic bt
-  | Pointer  q t => Pointer q t
-  | Array    t n => Pointer no_qualifiers t
-  | Function t q => Pointer no_qualifiers (Function t q)
-end.
-
 Definition unqualified qs :=
   match qs with
   | {| const    := false;
@@ -142,9 +133,7 @@ Definition eq_integer_rank_base it1 it2 : bool :=
   end.
 
 Definition eq_integer_rank it1 it2 : bool :=
-  orb (eq_integerType it1 it2)
-      (orb (eq_integer_rank_base it1 it2)
-           (eq_integer_rank_base it2 it1)).
+  eq_integerType it1 it2 || eq_integer_rank_base it1 it2 || eq_integer_rank_base it2 it1.
 
 Definition lt_integer_rank_base P it1 it2 : bool :=
   match it1, it2 with
@@ -271,6 +260,18 @@ Definition integer_promotion P it : integerType :=
                       else it
   end.
 
+Definition is_promotion P t1 t2 : bool :=
+  match t1, t2 with
+  | Basic (Integer it1), Basic (Integer it2) => is_integer_promotion P it1 it2
+  | _                  , _                   => false
+  end.
+
+Definition promotion P t : option ctype :=
+  match t with
+  | Basic (Integer it) => Some (Basic (Integer (integer_promotion P it)))
+  | _                  => None
+  end.
+
 Definition is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool :=
   if eq_integerType it1 it2 then
      eq_integerType it1 it3
@@ -392,28 +393,26 @@ Definition modifiable q t : bool :=
 
 Definition real t : bool := integer t.
 
-Definition lvalue_convertible t : bool := negb (array t) && complete t.
-
-Definition is_compatible_params_aux is_compatible :=
-  fix is_compatible_params (p1 p2 : list (qualifiers * ctype)) : bool :=
+Definition compatible_params_aux compatible :=
+  fix compatible_params (p1 p2 : list (qualifiers * ctype)) : bool :=
     match p1, p2 with
     | nil          , nil           => true
-    | (_, t1) :: p1, (_, t2) :: p2 => is_compatible t1 t2 && is_compatible_params p1 p2
+    | (_, t1) :: p1, (_, t2) :: p2 => compatible t1 t2 && compatible_params p1 p2
     | _            , _             => false
     end.
 
-Fixpoint is_compatible t1 t2 {struct t1} : bool :=
-  let is_compatible_params := is_compatible_params_aux is_compatible in
+Fixpoint compatible t1 t2 {struct t1} : bool :=
+  let compatible_params := compatible_params_aux compatible in
   match t1, t2 with
   | Void          , Void           => true
   | Basic bt1     , Basic bt2      => eq_basicType bt1 bt2
-  | Array    t1 n1, Array    t2 n2 => is_compatible t1 t2 && eq_nat n1 n2
-  | Function t1 p1, Function t2 p2 => is_compatible t1 t2 && is_compatible_params p1 p2
-  | Pointer  q1 t1, Pointer  q2 t2 => is_compatible t1 t2 && eq_qualifiers q1 q2
+  | Array    t1 n1, Array    t2 n2 => compatible t1 t2 && eq_nat n1 n2
+  | Function t1 p1, Function t2 p2 => compatible t1 t2 && compatible_params p1 p2
+  | Pointer  q1 t1, Pointer  q2 t2 => compatible t1 t2 && eq_qualifiers q1 q2
   | _             , _              => false
   end.
 
-Definition is_compatible_params := is_compatible_params_aux is_compatible.
+Definition compatible_params := compatible_params_aux compatible.
 
 Definition is_composite_params_aux is_composite :=
   fix  is_composite_params_aux(p1 p2 p3 : list (qualifiers * ctype)) : bool :=
@@ -471,3 +470,31 @@ Fixpoint composite t1 t2 : option ctype :=
   end.
 
 Definition composite_params := composite_params_aux composite.
+
+Definition combine_qualifiers qs1 qs2 := {|
+  const    := const    qs1 || const    qs2;
+  restrict := restrict qs1 || restrict qs2;
+  volatile := volatile qs1 || volatile qs2
+|}.
+
+Definition sub_qualifiers qs1 qs2 :=
+     implb (const    qs1) (const    qs2)
+  && implb (restrict qs1) (restrict qs2)
+  && implb (volatile qs1) (volatile qs2).
+
+Definition pointer_conversion (t:ctype) : ctype :=
+  match t with
+  | Void         => Void
+  | Basic    bt  => Basic bt
+  | Pointer  q t => Pointer q t
+  | Array    t n => Pointer no_qualifiers t
+  | Function t q => Pointer no_qualifiers (Function t q)
+end.
+
+Definition lvalue_convertible t : bool := negb (array t) && complete t.
+
+Definition lvalue_conversion t : option ctype :=
+  if lvalue_convertible t then
+    Some (pointer_conversion t)
+  else
+    None.

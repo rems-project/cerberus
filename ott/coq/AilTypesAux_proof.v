@@ -13,6 +13,7 @@ Module D := AilTypesAux_defns.
 
 Local Open Scope Z.
 
+
 Lemma signed_correct P it : boolSpec (signed P it) (D.signed P it).
 Proof.
   unfold_goal.
@@ -273,7 +274,7 @@ Proof.
   exact (Hnlt (integer_range_precision_unsigned_signed_inv (D.Unsigned_Int P ibt) (D.Signed_Int P ibt) HleRange)).
 Qed.
 
-Lemma in_integer_typerange_correct P n it : boolSpec (in_integer_range P n it) (D.inIntegerRange P n it).
+Lemma in_integer_range_correct P n it : boolSpec (in_integer_range P n it) (D.inIntegerRange P n it).
 Proof.
   do 2 unfold_goal.
   set (mem_nat_correct n (integer_range P it)).
@@ -906,9 +907,47 @@ Lemma integerPromotion_functional {P} {it1 it2 it2'} :
   it2 = it2'.
 Proof.
   intros H1 H2.
-  rewrite (integer_promotion_unique _ H1).
-  rewrite (integer_promotion_unique _ H2).
-  reflexivity.
+  set (integer_promotion_unique _ H1).
+  set (integer_promotion_unique _ H2).
+  congruence.
+Qed.
+
+Lemma is_promotion_correct P t1 t2 : boolSpec (is_promotion P t1 t2) (D.promotion P t1 t2).
+Proof.
+  do 2 unfold_goal.
+  my_auto; intros Heq; [
+    set (boolSpec_elim1 (is_integer_promotion_correct P _ _) Heq)
+  | set (boolSpec_elim2 (is_integer_promotion_correct P _ _) Heq)]; my_auto.
+Qed.
+
+Lemma promotion_correct P t1 :
+  optionSpec (promotion P t1) (D.promotion P t1).
+Proof.
+  do 2 unfold_goal.
+  repeat var_destruct.
+  constructor.
+  apply integer_promotion_correct.
+Qed.
+
+Lemma promotion_unique {P} {t1} :
+  optionUnique (promotion P t1) (D.promotion P t1).
+Proof.
+  do 2 unfold_goal.
+  inversion_clear 1.
+  repeat apply f_equal.
+  apply (integer_promotion_unique).
+  assumption.
+Qed.
+
+Lemma promotion_functional {P} {t1 t2 t2'} :
+  D.promotion P t1 t2  ->
+  D.promotion P t1 t2' ->
+  t2 = t2'.
+Proof.
+  intros H1 H2.
+  set (promotion_unique _ H1).
+  set (promotion_unique _ H2).
+  congruence.
 Qed.
 
 Lemma is_usual_arithmetic_promoted_integer_correct P it1 it2 it3 :
@@ -1076,7 +1115,7 @@ Proof.
              (integerPromotion_promoted A2)) as A;
       exact (usualArithmeticPromotedInteger_functional P
                (integerPromotion_promoted A1)
-               (integerPromotion_promoted A2) H A)
+               (integerPromotion_promoted A2) A H)
   end.
 Qed.
 
@@ -1196,28 +1235,20 @@ Proof.
   destruct (integer t); my_auto.
 Qed.
 
-Lemma lvalueConvertible_correct t : boolSpec (lvalue_convertible t) (D.lvalueConvertible t).
+Lemma compatible_correct :
+  forall t1 t2, boolSpec (compatible t1 t2) (D.compatible t1 t2).
 Proof.
-  do 2 unfold_goal.
-  set (array_correct t).
-  set (complete_correct t).
-  repeat (boolSpec_destruct; my_auto).
-Qed.
-
-Lemma is_compatible_correct :
-  forall t1 t2, boolSpec (is_compatible t1 t2) (D.compatible t1 t2).
-Proof.
-  apply (ctype_nrect (fun x => forall y, boolSpec (is_compatible        x y) (D.compatible       x y))
-                     (fun x => forall y, boolSpec (is_compatible_params x y) (D.compatibleParams x y)));
+  apply (ctype_nrect (fun x => forall y, boolSpec (compatible        x y) (D.compatible       x y))
+                     (fun x => forall y, boolSpec (compatible_params x y) (D.compatibleParams x y)));
   intros; destruct y;
   unfold_goal; simpl;
-  fold is_compatible_params; unfold andb;
+  fold compatible_params; unfold andb;
   repeat match goal with
   | [|- eq_basicType ?x ?y = _ -> _] => case_fun (eq_basicType_correct x y)
   | [|- eq_nat ?x ?y = _ -> _] => case_fun (eq_nat_correct x y)
   | [|- eq_qualifiers ?x ?y = _ -> _] => case_fun (eq_qualifiers_correct x y)
-  | [IH : forall _, boolSpec (is_compatible ?t1 _) _ |- is_compatible ?t1 ?t2 = _ -> _] => case_fun (IH t2)
-  | [IH : forall _, boolSpec (is_compatible_params ?p1 _) _ |- is_compatible_params ?t1 ?t2 = _ -> _] =>  case_fun (IH t2)
+  | [IH : forall _, boolSpec (compatible ?t1 _) _ |- compatible ?t1 ?t2 = _ -> _] => case_fun (IH t2)
+  | [IH : forall _, boolSpec (compatible_params ?p1 _) _ |- compatible_params ?t1 ?t2 = _ -> _] =>  case_fun (IH t2)
   | _ => context_destruct
   end; now my_auto.
 Qed.
@@ -1295,3 +1326,139 @@ Proof.
   set (composite_unique _ _ _ H2).
   congruence.
 Qed.
+
+Lemma lvalue_convertible_correct t : boolSpec (lvalue_convertible t) (D.lvalueConvertible t).
+Proof.
+  do 2 unfold_goal.
+  set (array_correct t).
+  set (complete_correct t).
+  repeat (boolSpec_destruct; my_auto).
+Qed.
+
+Lemma pointer_conversion_correct t1 : findSpec (pointer_conversion t1) (D.pointerConversion t1).
+Proof. destruct t1; my_auto. Qed.
+
+Lemma pointer_conversion_unique t1 : findUnique (pointer_conversion t1) (D.pointerConversion t1).
+Proof.
+  destruct t1;
+  inversion_clear 1;
+  match goal with
+  | H : D.unqualified _ |- _ => inversion_clear H
+  | H : neg (D.array (Array _ _)) |- _ => exfalso; apply H; constructor
+  | H : neg (D.function (Function _ _)) |- _ => exfalso; apply H; constructor
+  | _ => idtac
+  end; my_auto.
+Qed.
+
+Lemma pointerConversion_functional {t t1 t2} :
+  D.pointerConversion t t1 ->
+  D.pointerConversion t t2 ->
+  t1 = t2.
+Proof.
+  intros H1 H2.
+  set (pointer_conversion_unique _ _ H1).
+  set (pointer_conversion_unique _ _ H2).
+  congruence.
+Qed.
+
+Lemma lvalue_conversion_correct t1 : optionSpec (lvalue_conversion t1) (D.lvalueConversion t1).
+Proof.
+  do 2 unfold_goal.
+  set (pointer_conversion_correct t1).
+  set (lvalue_convertible_correct t1).
+  boolSpec_destruct; my_auto.
+Qed.
+
+Lemma lvalue_conversion_unique t1 : optionUnique (lvalue_conversion t1) (D.lvalueConversion t1).
+Proof.
+  do 2 unfold_goal.
+  set (lvalue_convertible_correct t1).
+  inversion_clear 1; boolSpec_destruct; my_auto.
+  match goal with
+  | H : D.pointerConversion _ _ |- _ => set (pointer_conversion_unique t1 _ H1); congruence
+  end.
+Qed.
+
+Lemma lvalueConversion_functional {t t1 t2} :
+  D.lvalueConversion t t1 ->
+  D.lvalueConversion t t2 ->
+  t1 = t2.
+Proof.
+  intros H1 H2.
+  set (lvalue_conversion_unique _ _ H1).
+  set (lvalue_conversion_unique _ _ H2).
+  congruence.
+Qed.
+
+(* Lemma: it doesn't matter whether we check 'pointer' before or after lvalue conversion. *)
+Lemma lvalue_conversion_pointer t : D.lvalueConvertible t -> (D.pointer t <-> D.pointer (pointer_conversion t)).
+Proof.
+  inversion_clear 1 as [? Hnarray Hcomplete].
+  destruct t; split;
+  solve [ trivial
+        | exfalso; apply Hnarray; constructor
+        | inversion Hcomplete ].
+Qed.
+
+(* Pointer conversion leaves pointers untouched. *)
+Lemma pointer_conversion_pointer {t} : D.pointer t -> pointer_conversion t = t.
+Proof. inversion 1; reflexivity. Qed.
+
+Lemma lvalueConversion_pointer t1 t2 : D.lvalueConversion t1 t2 -> (D.pointer t1 <-> D.pointer t2).
+Proof.
+  inversion_clear 1 as [? ? ? Hpointer].
+  rewrite <- (pointer_conversion_unique _ _ Hpointer).
+  apply lvalue_conversion_pointer.
+  assumption.
+Qed.
+
+(* Pointer conversion leaves integers untouched. *)
+Lemma pointer_conversion_integer_id {t} : D.integer t -> pointer_conversion t = t.
+Proof. inversion 1; reflexivity. Qed.
+
+Lemma pointer_conversion_integer {t} : D.integer (pointer_conversion t) -> D.integer t.
+Proof. destruct t; my_auto. Qed.
+
+Lemma pointer_conversion_arithmetic_id {t} : D.arithmetic t -> pointer_conversion t = t.
+Proof. inversion 1; apply pointer_conversion_integer_id; assumption. Qed.
+
+Lemma pointer_conversion_arithmetic {t} : D.arithmetic (pointer_conversion t) -> D.arithmetic t.
+Proof. inversion 1; constructor; apply pointer_conversion_integer; assumption. Qed.
+
+Lemma inIntegerRange_leIntegerRange {P} {it1 it2} {n} :
+  D.leIntegerRange P it1 it2 ->
+  D.inIntegerRange P n it1 ->
+  D.inIntegerRange P n it2.
+Proof.
+  inversion 1; inversion 1; subst.
+  repeat match goal with
+  | [H : sub    _ _ |- _ ] => inversion_clear H
+  | [H : memNat _ _ |- _ ] => inversion_clear H
+  end.
+  constructor; constructor;
+  eapply Z.le_trans; eassumption.
+Qed.
+
+Definition inIntegerRange_Signed_Int_Long {P} {n} :=
+  inIntegerRange_leIntegerRange (n:=n) (
+    D.LeIntegerRange _ _ _
+      (integer_range_precision_signed (D.Signed_Int P _) (D.Signed_Int P _) (le_precision_Signed_Int_Long P))
+  ).
+
+Definition inIntegerRange_Signed_Long_LongLong {P} {n} :=
+  inIntegerRange_leIntegerRange (n:=n) (
+    D.LeIntegerRange _ _ _
+      (integer_range_precision_signed (D.Signed_Int P _) (D.Signed_Int P _) (le_precision_Signed_Long_LongLong P))
+  ).
+
+Definition inIntegerRange_Unsigned_Int_Long {P} {n} :=
+  inIntegerRange_leIntegerRange (n:=n) (
+    D.LeIntegerRange _ _ _
+      (integer_range_precision_unsigned (D.Unsigned_Int P _) (D.Unsigned_Int P _) (le_precision_Unsigned_Int_Long P))
+  ).
+
+Definition inIntegerRange_Unsigned_Long_LongLong {P} {n} :=
+  inIntegerRange_leIntegerRange (n:=n) (
+    D.LeIntegerRange _ _ _
+      (integer_range_precision_unsigned (D.Unsigned_Int P _) (D.Unsigned_Int P _) (le_precision_Unsigned_Long_LongLong P))
+  ).

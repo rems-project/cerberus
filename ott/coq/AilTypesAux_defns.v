@@ -2,6 +2,7 @@
 
 Require Import ZArith.
 
+Require Import Common.
 Require Import AilTypes.
 Require Import Implementation.
 Require Import Range_defns.
@@ -202,6 +203,12 @@ Inductive integerPromotion : implementation -> integerType -> integerType -> Set
       ~ leIntegerRank P it (Signed Int) ->
      integerPromotion P it it.
 
+Inductive promotion (P : implementation) : ctype -> ctype -> Prop :=
+ | Promotion :
+     forall {it1 it2},
+       integerPromotion P it1 it2 ->
+       promotion P (Basic (Integer it1)) (Basic (Integer it2)).
+
 (* defns JisUsualArithmetic *)
 Inductive usualArithmeticPromotedInteger : implementation -> integerType -> integerType -> integerType -> Prop :=    (* defn isUsualArithmetic *)
  | UsualArithmeticPromotedInteger_Eq : forall (P:implementation) (it:integerType),
@@ -333,12 +340,6 @@ Inductive real : ctype -> Prop :=    (* defn real *)
      real t.
 (** definitions *)
 
-(* defns JisLvalueConvertible *)
-Inductive lvalueConvertible : ctype -> Prop :=    (* defn isLvalueConvertible *)
- | LvalueConvertible : forall (t:ctype),
-     ~ array  t ->
-     complete t ->
-     lvalueConvertible t.
 (** definitions *)
 
 (* defns JisCompatible *)
@@ -404,3 +405,31 @@ with compositeParams : list (qualifiers * ctype) -> list (qualifiers * ctype) ->
      compositeParams p1 p2 p3 ->
      unqualified q3 ->
      compositeParams ((q1, t1) :: p1) ((q2, t2) :: p2) ((q3, t3) :: p3).
+
+(* defns JisLvalueConvertible *)
+Inductive lvalueConvertible : ctype -> Prop :=    (* defn isLvalueConvertible *)
+ | LvalueConvertible : forall (t:ctype),
+     ~ array  t ->
+     complete t ->
+     lvalueConvertible t.
+
+Inductive pointerConversion : ctype -> ctype -> Set :=
+  | PointerConversion_Array :
+      forall {t} {n} {q},
+        unqualified q ->
+        pointerConversion (Array t n) (Pointer q t)
+  | PointerConversion_Function :
+      forall {t} {q q'},
+        unqualified q' ->
+        pointerConversion (Function t q) (Pointer q' (Function t q))
+  | PointerConversion_other :
+      forall {t},
+        neg (array    t) ->
+        neg (function t) ->
+        pointerConversion t t.
+
+Inductive lvalueConversion : ctype -> ctype -> Prop :=
+  | LvalueConversion : forall t1 t2,
+      lvalueConvertible t1 ->
+      pointerConversion t1 t2 ->
+      lvalueConversion t1 t2.

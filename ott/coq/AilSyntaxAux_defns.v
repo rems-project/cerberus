@@ -57,7 +57,7 @@ Inductive fv' {A} : identifier -> expression' A -> Prop :=    (* defn fv *)
      forall {v} {e} {es},
        fvArguments v es ->
        fv' v (Call e es)
- | Fv_Variable : forall (v:identifier),
+ | Fv'_Var : forall (v:identifier),
      fv' v (Var v)
 with fv {A} : identifier -> expression A -> Prop :=
  | Fv_AnnotatedExpression :

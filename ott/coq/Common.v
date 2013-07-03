@@ -132,13 +132,18 @@ Ltac optionSpec_destruct_hyp v :=
         end
   end.
 
+Definition optionSpec_elim1 {A} {o : option A} {P : A -> Type} {a : A} : optionSpec o P -> o = Some a -> P a.
+Proof. intros; subst; assumption. Defined.
+Definition optionSpec_elim2 {A} {o : option A} {P : A -> Type}         : optionSpec o P -> o = None   -> forall a, neg (P a).
+Proof. intros ? ?; subst; assumption. Defined.
+
 Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
   forall a, P a -> o = Some a.
 
 Definition findSpec {A} (a : A) (P : A -> Type) : Type := P a.
 
 Definition findUnique {A} (a : A) (P : A -> Type) : Type :=
-  forall a', P a' -> a' = a.
+  forall a', P a' -> a = a'.
 
 Definition bool_of_decision {P} : Decision P -> bool :=
   fun d => match d with
@@ -357,19 +362,84 @@ Ltac context_destruct :=
       context_destruct_inner c
   end.
 
+
 Ltac case_fun G :=
   match goal with
-  | [|- _ = ?o -> _] =>
+  | |- _ = ?o -> _ =>
       is_var o;
       let Heq := fresh in
-      let H := fresh in
-      destruct o;
-      intros Heq;
-      generalize G;
-      rewrite Heq;
-      intros H;
-      simpl in H
+      match type of o with
+      | bool =>
+          intros Heq;
+          destruct o; [
+            apply (boolSpec_elim1 G) in Heq
+          | apply (boolSpec_elim2 G) in Heq]
+      | option _ =>
+          intros Heq;
+          destruct o; [
+            apply (optionSpec_elim1 G) in Heq
+          | lapply (optionSpec_elim2 G); [clear Heq; intros Heq|exact Heq]]
+      | _ =>
+          let H := fresh in
+          destruct o;
+          intros Heq;
+          generalize G;
+          rewrite Heq;
+          intros H;
+          simpl in H
+      end
   end.
+
+Ltac case_fun_tac G tpos tneg :=
+  match goal with
+  | |- _ = ?o -> _ =>
+      is_var o;
+      let Heq := fresh in
+      match type of o with
+      | bool =>
+          intros Heq;
+          destruct o; [
+            apply (boolSpec_elim1 G) in Heq; tpos Heq
+          | apply (boolSpec_elim2 G) in Heq; tneg Heq]
+      | option _ =>
+          intros Heq;
+          destruct o; [
+            apply (optionSpec_elim1 G) in Heq; tpos Heq
+          | lapply (optionSpec_elim2 G); [clear Heq; intros Heq|exact Heq]; tneg Heq]
+      | _ =>
+          let H := fresh in
+          destruct o;
+          intros Heq;
+          generalize G;
+          rewrite Heq;
+          intros H;
+          simpl in H;
+          [tpos H|tneg H];
+          clear Heq
+      end
+  end.
+
+Ltac autodestruct_hyp H :=
+  match type of H with
+  | { _ : _ & _} =>
+      let H1 := fresh in
+      let H2 := fresh in
+      destruct H as [H1 H2];
+      autodestruct_hyp H1;
+      autodestruct_hyp H2
+  | _ * _ =>
+      let H1 := fresh in
+      let H2 := fresh in
+      destruct H as [H1 H2];
+      autodestruct_hyp H1;
+      autodestruct_hyp H2
+  | _ => idtac
+  end.
+
+Ltac autodestruct H :=
+  autodestruct_hyp H; Tactics.subst_no_fail; Tactics.autoinjections.
+
+Ltac id_tac H := idtac.
 
 Ltac case_fun_hyp G :=
   match goal with

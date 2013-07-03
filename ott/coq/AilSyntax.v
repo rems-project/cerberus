@@ -62,7 +62,7 @@ Definition eq_arithmeticOperator a1 a2 :=
   end.
 
 Inductive constant : Set := 
- | ConstantInteger (int_const:integerConstant).
+ | ConstantInteger (ic:integerConstant).
 
 Definition eq_constant c1 c2 :=
   match c1, c2 with
@@ -415,6 +415,16 @@ Definition equiv_sigma {A B : Set} (S1 S2 : sigma A B) :=
 
 Definition equiv_eq_sigma {A B : Set}  (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) (S1 S2 : sigma A B) :=
   equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2.
+
+Definition gamma : Set := Context.context identifier (qualifiers * ctype).
+
+Definition eq_gamma : gamma -> gamma -> bool :=
+  eq_context eq_identifier (eq_pair eq_qualifiers eq_ctype).
+
+Definition equiv_gamma : gamma -> gamma -> bool :=
+  equiv eq_identifier (eq_pair eq_qualifiers eq_ctype).
+
+Definition lookup {B} (C : Context.context identifier B) := Context.lookup eq_identifier C.
 
 Definition parameters_of_bindings : bindings -> list (qualifiers * ctype) := map snd.
 

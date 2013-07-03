@@ -68,7 +68,6 @@ Inductive ctype : Set :=  (*r $\texttt{Ail}_\tau$ types *)
  | Function (t:ctype) (p:list (qualifiers * ctype)) (*r function types *)
  | Pointer (q:qualifiers) (t:ctype) (*r pointer types *).
 
-
 Definition eq_params_aux eq_ctype :=
   fix eq_params (p1 p2 : list (qualifiers * ctype)) : bool :=
     match p1, p2 with
@@ -91,13 +90,13 @@ Fixpoint eq_ctype x y :=
 Definition eq_params := eq_params_aux eq_ctype.
 
 Inductive typeCategory : Set := 
- | LvalueType (q:qualifiers) (t:ctype)
- | ExpressionType (t:ctype).
+ | LValueType (q:qualifiers) (t:ctype)
+ | RValueType (t:ctype).
 
 Definition eq_typeCategory x y : bool :=
   match x, y with
-  | LvalueType q1  t1, LvalueType q2  t2 => eq_ctype t1 t2 && eq_qualifiers q1 q2
-  | ExpressionType t1, ExpressionType t2 => eq_ctype t1 t2
+  | LValueType q1  t1, LValueType q2  t2 => eq_ctype t1 t2 && eq_qualifiers q1 q2
+  | RValueType     t1, RValueType     t2 => eq_ctype t1 t2
   | _                , _                 => false
   end.
 
