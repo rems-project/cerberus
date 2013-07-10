@@ -379,3 +379,26 @@ Proof.
   congruence.
 Qed.
 
+Lemma mem_correct {B} (C : Context.context identifier B) v :
+  boolSpec (mem v C) (Context_defns.mem v C).
+Proof.
+  exact (mem_correct eq_identifier_correct v C).
+Qed.
+
+Lemma fresh_correct {B} (C : Context.context identifier B) v :
+  boolSpec (fresh v C) (Context_defns.fresh v C).
+Proof.
+  exact (fresh_correct eq_identifier_correct v C).
+Qed.
+
+Lemma fresh_bindings_correct {B} (C : Context.context identifier B) bs :
+  boolSpec (fresh_bindings bs C) (Context_defns.freshBindings bs C).
+Proof.
+  exact (fresh_bindings_correct eq_identifier_correct bs C).
+Qed.
+
+Lemma disjoint_correct {B1 B2 : Set} (C1 : Context.context identifier B1) (C2 : Context.context identifier B1) :
+  boolSpec (disjoint C1 C2) (Context_defns.disjoint C1 C2).
+Proof.
+  exact (disjoint_correct eq_identifier_correct C1 C2).
+Qed.

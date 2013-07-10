@@ -425,6 +425,10 @@ Definition equiv_gamma : gamma -> gamma -> bool :=
   equiv eq_identifier (eq_pair eq_qualifiers eq_ctype).
 
 Definition lookup {B} (C : Context.context identifier B) := Context.lookup eq_identifier C.
+Definition mem {B} v (C : Context.context identifier B) := Context.mem eq_identifier v C.
+Definition fresh {B} v (C : Context.context identifier B) := Context.fresh eq_identifier v C.
+Definition fresh_bindings {B} (bs : bindings) (C : Context.context identifier B) := Context.fresh_bindings eq_identifier bs C.
+Definition disjoint {B1 B2} : Context.context identifier B1 -> Context.context identifier B2 -> bool := Context.disjoint eq_identifier.
 
 Definition parameters_of_bindings : bindings -> list (qualifiers * ctype) := map snd.
 
