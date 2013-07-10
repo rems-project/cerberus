@@ -75,25 +75,55 @@ Proof.
       * eapply IH; eassumption.
 Qed.
 
+Lemma mem_correct {A B} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall a (C : context A B), boolSpec (mem eq_A a C) (D.mem a C).
+Proof.
+  intros eq_A_correct a C.
+  unfold mem.
+  pose proof (lookup_correct eq_A_correct C a).
+  optionSpec_destruct; firstorder.
+Qed.
+
+Lemma fresh_correct {A B} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall a (C : context A B), boolSpec (fresh eq_A a C) (D.fresh a C).
+Proof.
+  intros eq_A_correct a C.
+  unfold fresh.
+  pose proof (mem_correct eq_A_correct a C) as H.
+  boolSpec_destruct; firstorder.
+Qed.
+
+Lemma fresh_bindings_correct {A B1 B2 : Set} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall (bs : list (A * B1)) (C : context A B2),
+  boolSpec (fresh_bindings eq_A bs C) (D.freshBindings bs C).
+Proof.
+  intros eq_A_correct bs C.
+  exact (all_list_correct (fun b => fresh_correct eq_A_correct (fst b) C) bs).
+Qed.
+
 Lemma disjoint_cons_left_lookup {A B1 B2: Set} {a} {b} {C1 : context A B1} {C2 : context A B2} :
-  D.disjoint (add C1 a b) C2 -> forall b', neg (D.lookup C2 a b').
+  D.disjoint (add a b C1) C2 -> D.fresh a C2.
 Proof.
   intros Hdisjoint.
-  assert (D.lookup (add C1 a b) a b) as Hlookup by constructor.
-  exact (fun _ => Hdisjoint _ _ _ Hlookup).
+  assert (D.lookup (add a b C1) a b) as Hlookup by constructor.
+  exact (Hdisjoint a (existT _ b (D.Lookup_hd a b C1))).
 Qed.
 
-Lemma disjoint_cons_left_lookup_inv {A B1 B2: Set} {a} {b} {C1 : context A B1} {C2 : context A B2} :
-  D.disjoint C1 C2 -> (forall b, neg (D.lookup C2 a b)) -> D.disjoint (add C1 a b) C2.
+Lemma disjoint_cons_left_lookup_inv {A B1 B2 : Set} {a} {b} {C1 : context A B1} {C2 : context A B2} :
+  D.disjoint C1 C2 -> D.fresh a C2 -> D.disjoint (add a b C1) C2.
 Proof.
-  intros Hdisjoint Hnlookup.
-  intros ? ? ?.
-  inversion 1; subst.
-  - apply Hnlookup.
-  - eapply Hdisjoint.
-    eassumption.
+  intros Hdisjoint Hfresh.
+  unfold D.disjoint.
+  unfold D.mem.
+  intros ? [? H] [? ?].
+  inversion H; subst.
+  apply Hfresh.
+  eexists; eassumption.
+  eapply Hdisjoint; eexists; eassumption.
 Qed.
-
 
 Lemma disjoint_weaken {A B1 B2: Set} {eq_A} :
   (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
@@ -103,10 +133,13 @@ Lemma disjoint_weaken {A B1 B2: Set} {eq_A} :
     D.disjoint (p :: C1) C2 ->
     D.disjoint       C1  C2.
 Proof.
-  intros eq_A_correct [? ?] ? ? Hdisjoint a' ? ? ?.
-  set (eq_A_correct a a'); boolSpec_destruct; my_auto;
-  eapply (Hdisjoint a');
-  econstructor (eassumption).
+  intros eq_A_correct [? ?] ? ? Hdisjoint a' [? ?] [? ?].
+  set (eq_A_correct a a'); boolSpec_destruct; my_auto; (
+    eapply (Hdisjoint a'); [
+        eexists; finish eassumption
+      | repeat econstructor; eassumption
+    ]
+  ).
 Qed.  
 
 Lemma disjoint_cons_left {A B1 B2: Set} p {C1 C1' : context A B1} {C2 : context A B2} :
@@ -137,9 +170,27 @@ Proof.
     + intuition.
 Qed.
 
+Lemma disjoint_freshBindings {A B1 B2 : Set} {C2 : context A B2} :
+  forall {bs : list (A * B1)}
+         (HdisjointBindings : D.disjointBindings bs)
+         (Hfresh : D.freshBindings bs C2)
+         {C1 : context A B1}
+         (Hdisjoint : D.disjoint C1 C2),
+    D.disjoint (add_bindings bs C1) C2.
+Proof.
+  induction bs as [| [? ?]]; intros.
+  - assumption.
+  - eapply IHbs.
+    + inversion_clear HdisjointBindings; assumption.
+    + inversion_clear Hfresh; assumption.
+    + eapply disjoint_cons_left_lookup_inv.
+      * assumption.
+      * inversion_clear Hfresh; assumption.
+Qed.
+
 Definition context_ind {A B: Set} (P : context A B -> Type) :
   (P nil) ->
-  (forall a b C, P C -> P (add C a b)) ->
+  (forall a b C, P C -> P (add a b C)) ->
   (forall C, P C).
 Proof.
   intros Hnil Hcons.
@@ -396,3 +447,70 @@ Proof.
     + my_auto.
   - my_auto.
 Qed.
+
+Definition disjoint_correct {A B1 B2} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall (C1 : context A B1) (C2 : context A B2),
+    boolSpec (disjoint eq_A C1 C2) (D.disjoint C1 C2).
+Proof.
+  intros eq_A_correct C1 C2.
+  induction C1; unfold_goal; simpl.
+  - intros ? [? H1]; inversion H1.
+  - do 2 context_destruct.
+    case_fun (lookup_correct eq_A_correct C2 a).
+    + intros Hdisjoint; eapply Hdisjoint; eexists; finish eassumption.
+    + boolSpec_destruct.
+      * intros ? [? H1]; inversion H1; subst; firstorder.
+      * intros Hdisjoint.
+        apply IHC1.
+        intros a' [? H1] [? H2].
+        pose proof (eq_A_correct a a').
+        boolSpec_destruct; my_auto; [
+            firstorder
+          | eapply Hdisjoint; eexists; [econstructor 2|]; eassumption
+        ].
+Qed.
+
+Lemma negb_correct {P} {p} :
+  boolSpec p P ->
+  boolSpec (negb p) (neg P).
+Proof.
+  intros p_correct.
+  boolSpec_destruct; my_auto.
+Qed.
+
+Lemma fresh_in_bindings_correct {A B : Set} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall a (xs : list (A * B)), boolSpec (fresh_in_bindings eq_A a xs) (D.freshInBindings a xs).
+Proof.
+  intros eq_A_correct a xs.
+  do 2 unfold_goal.
+  pose proof (all_list_correct (fun (x : A * B) => negb_correct (eq_A_correct a (fst x))) xs) as H.
+  boolSpec_destruct.
+  - induction xs as [| [? ?]].
+    + constructor.
+    + inversion_clear H.
+      constructor.
+      * assumption.
+      * apply IHxs; assumption.
+  - induction xs as [| [? ?]].
+    + intros _; apply H; constructor.
+    + inversion_clear 1.
+      apply IHxs.
+      * intros ?; apply H; constructor; assumption.
+      * assumption.
+Qed.
+
+Lemma disjoint_bindings_correct {A B : Set} {eq_A} :
+  (forall x y, boolSpec (eq_A x y) (x = y)) ->
+  forall (xs : list (A * B)), boolSpec (disjoint_bindings eq_A xs) (D.disjointBindings xs).
+Proof.
+  intros eq_A_correct xs.
+  induction xs as [|[? ?]]; simpl;
+  unfold boolSpec; unfold andb;
+  repeat match goal with
+  | |- fresh_in_bindings _ ?a ?xs = _ -> _ => case_fun (fresh_in_bindings_correct eq_A_correct a xs)
+  | |- disjoint_bindings _ _ = _ -> _ => case_fun IHxs
+  | _ => context_destruct
+  end; my_auto.    
+Qed.  

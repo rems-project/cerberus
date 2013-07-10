@@ -2060,7 +2060,7 @@ Proof.
   | H1 : D.lookup ?C ?v ?r1
   , H2 : D.lookup ?C ?v ?r2 |- _ => notSame r1 r2; pose proof (lookup_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | HG : D.lookup G ?v _
-  , HS : D.lookup S ?v _ |- _ => destruct (Hdisjoint _ _ _ HG HS)
+  , HS : D.lookup S ?v _ |- _ => exfalso; eapply Hdisjoint; eexists; eassumption
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => reflexivity
