@@ -124,12 +124,14 @@ Proof.
   end; now my_auto.
 Qed.
 
-Lemma equiv_expression_correct {A} :
-  forall (x y : expression A), boolSpec (equiv_expression x y) (equivExpression x y).
+Lemma equiv_expression_correct {A1 A2} :
+  forall (x : expression A1) (y : expression A2), boolSpec (equiv_expression x y) (equivExpression x y).
 Proof.
-  apply (expression_nrect (fun x => forall y, boolSpec (equiv_expression' x y) (equivExpression' x y))
-                          (fun x => forall y, boolSpec (equiv_expression  x y) (equivExpression  x y))
-                          (fun x => forall y, boolSpec (equiv_arguments   x y) (equivArguments   x y)));
+  apply (
+    expression_nrect
+      (fun x => forall y : expression' A2      , boolSpec (equiv_expression' x y) (equivExpression' x y))
+      (fun x => forall y : expression  A2      , boolSpec (equiv_expression  x y) (equivExpression  x y))
+      (fun x => forall y : list (expression A2), boolSpec (equiv_arguments   x y) (equivArguments   x y)));
   intros; destruct y;
   unfold_goal; simpl;
   match goal with
@@ -170,7 +172,7 @@ Proof.
   apply (eq_list_correct (eq_pair_correct eq_identifier_correct (eq_expression_correct eq_A_correct))).
 Qed.
 
-Fixpoint equiv_declaration_correct {A : Set} (x y : list (identifier * expression A)) :
+Fixpoint equiv_declaration_correct {A1 A2 : Set} (x : list (identifier * expression A1)) (y : list (identifier * expression A2)) :
     boolSpec (equiv_declaration x y) (equivDeclaration x y).
 Proof.
   unfold_goal.
@@ -178,9 +180,9 @@ Proof.
   repeat match goal with
   | |- eq_identifier ?x ?y = _ -> _ => case_fun (eq_identifier_correct x y)
   | |- equiv_expression ?x ?y = _ -> _ => case_fun (equiv_expression_correct x y)
-  | |- equiv_declaration ?x ?y = _ -> _ => case_fun (equiv_declaration_correct A x y)
+  | |- equiv_declaration ?x ?y = _ -> _ => case_fun (equiv_declaration_correct A1 A2 x y)
   | _ => context_destruct
-  end; my_auto.
+  end; now my_auto.
 Qed.
 
 Definition statement_nrect
@@ -241,12 +243,14 @@ with g s : Q s :=
   end
 for g.
 
-Lemma equiv_statement_correct {A B} :
-  forall (x y : statement A B), boolSpec (equiv_statement x y) (equivStatement x y).
+Lemma equiv_statement_correct {A1 A2 B1 B2} :
+  forall (x : statement A1 B1) (y : statement A2 B2), boolSpec (equiv_statement x y) (equivStatement x y).
 Proof.
-  apply (statement_nrect (fun x => forall y, boolSpec (equiv_statement' x y) (equivStatement' x y))
-                         (fun x => forall y, boolSpec (equiv_statement  x y) (equivStatement  x y))
-                         (fun x => forall y, boolSpec (equiv_block      x y) (equivBlock      x y)));
+  apply (
+    statement_nrect
+      (fun x => forall y : statement' A2 B2      , boolSpec (equiv_statement' x y) (equivStatement' x y))
+      (fun x => forall y : statement  A2 B2      , boolSpec (equiv_statement  x y) (equivStatement  x y))
+      (fun x => forall y : list (statement A2 B2), boolSpec (equiv_block      x y) (equivBlock      x y)));
   intros;
   unfold_goal; destruct y; simpl; unfold andb;
   repeat match goal with
@@ -305,8 +309,8 @@ Proof.
                                (eq_statement_correct eq_A_correct eq_B_correct))).
 Qed.
 
-Lemma equiv_sigma_correct {A B : Set} :
-  forall (x y : sigma A B), boolSpec (equiv_sigma x y) (equivSigma x y).
+Lemma equiv_sigma_correct {A1 A2 B1 B2 : Set} :
+  forall (x : sigma A1 B1) (y : sigma A2 B2), boolSpec (equiv_sigma x y) (equivSigma x y).
 Proof.
   apply (equiv_correct eq_identifier_correct).
   destruct x as [x1 x2], y as [y1 y2]; simpl.
@@ -327,8 +331,8 @@ Proof.
                           (eq_statement_correct eq_A_correct eq_B_correct))).
 Qed.
 
-Lemma equiv_program_correct {A B : Set} :
-  forall x y : program A B, boolSpec (equiv_program x y) (equivProgram x y).
+Lemma equiv_program_correct {A1 A2 B1 B2 : Set} :
+  forall (x : program A1 B1) (y : program A2 B2), boolSpec (equiv_program x y) (equivProgram x y).
 Proof.
   intros [x1 x2] [y1 y2]; simpl.
   set (eq_identifier_correct x1 y1).
@@ -401,4 +405,55 @@ Lemma disjoint_correct {B1 B2 : Set} (C1 : Context.context identifier B1) (C2 : 
   boolSpec (disjoint C1 C2) (Context_defns.disjoint C1 C2).
 Proof.
   exact (disjoint_correct eq_identifier_correct C1 C2).
+Qed.
+
+Lemma equivExpression_refl {A} :
+  forall (e : expression A), equivExpression e e.
+Proof.
+  apply (
+    expression_nrect
+      (fun e => equivExpression' e e)
+      (fun e => equivExpression e e)
+      (fun es => equivArguments es es)
+  ); intros; constructor; assumption.
+Qed.
+
+Lemma equivExpression_symm {A B} :
+  forall (e1 : expression A) (e2 : expression B),
+    equivExpression e1 e2 ->
+    equivExpression e2 e1.
+Proof.
+  apply (
+    expression_nrect
+      (fun x => forall (y : expression' B) (Hequiv : equivExpression' x y), equivExpression' y x)
+      (fun x => forall y (Hequiv : equivExpression x y), equivExpression y x)
+      (fun x => forall (y : list (expression B)) (Hequiv : equivArguments x y), equivArguments y x)
+  ); intros; inversion Hequiv; subst; constructor;
+  match goal with
+  | IH : forall _, _ -> ?C _ ?e1 |- ?C _ ?e1 => apply IH; assumption
+  end.
+Qed.
+
+Lemma equivDeclaration_refl {A} (ds : list (identifier * expression A)) :
+  equivDeclaration ds ds.
+Proof. induction ds as [| [? ?]]; constructor; solve [assumption | apply equivExpression_refl]. Qed.
+  
+Lemma equivStatement_refl {A B} (s : statement A B) :
+  equivStatement s s.
+Proof.
+  apply (
+    statement_nrect
+      (fun s => equivStatement' s s)
+      (fun s => equivStatement s s)
+      (fun ss => equivBlock ss ss)
+  ); intros; constructor; try solve [assumption|apply equivExpression_refl|apply equivDeclaration_refl].
+Qed.
+
+Lemma equivSigma_refl {A B} (S : sigma A B) :
+  equivSigma S S.
+Proof.
+  split;
+  intros v b Hlookup;
+  exists b;
+  repeat first [split | assumption | reflexivity | apply equivStatement_refl].
 Qed.

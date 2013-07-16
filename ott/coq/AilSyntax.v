@@ -144,7 +144,7 @@ Definition eq_arguments_aux {A : Set} (eq_A : A -> A -> bool) eq_expression :=
 Arguments eq_arguments_aux : default implicits.
 
 Fixpoint eq_expression' {A} eq_A (e1 e2 : expression' A) {struct e1} : bool :=
-  let equiv_arguments := eq_arguments_aux eq_A eq_expression in
+  let eq_arguments := eq_arguments_aux eq_A eq_expression in
   match e1, e2 with
   | Unary uop1 e1, Unary uop2 e2 =>
       eq_unaryOperator uop1 uop2 &&
@@ -170,7 +170,7 @@ Fixpoint eq_expression' {A} eq_A (e1 e2 : expression' A) {struct e1} : bool :=
       eq_expression eq_A e1 e2
   | Call e1 es1, Call e2 es2 =>
       eq_expression eq_A e1 e2 &&
-      equiv_arguments es1 es2
+      eq_arguments es1 es2
   | Constant c1, Constant c2 =>
       eq_constant c1 c2
   | Var v1, Var v2 =>
@@ -191,16 +191,16 @@ with eq_expression {A} eq_A (e1 e2 : expression A) {struct e1} : bool :=
 Definition eq_arguments {A} eq_A (a1 a2 : list (expression A)) :=
   eq_arguments_aux eq_A eq_expression a1 a2.
 
-Definition equiv_arguments_aux {A} equiv_expression :=
-  fix equiv_arguments (a1 a2 : list (expression A)) : bool :=
+Definition equiv_arguments_aux {A1 A2 : Set} equiv_expression :=
+  fix equiv_arguments (a1 : list (expression A1)) (a2 : list (expression A2)) : bool :=
     match a1, a2 with
     | nil     , nil      => true
-    | e1 :: a1, e2 :: a2 => equiv_expression  e1 e2 && equiv_arguments a1 a2
+    | e1 :: a1, e2 :: a2 => equiv_expression e1 e2 && equiv_arguments a1 a2
     | _       , _        => false
     end.
 Arguments equiv_arguments_aux : default implicits.
 
-Fixpoint equiv_expression' {A} (e1 e2 : expression' A) {struct e1} : bool :=
+Fixpoint equiv_expression' {A1 A2 : Set} (e1 : expression' A1) (e2 : expression' A2) {struct e1} : bool :=
   let equiv_arguments := equiv_arguments_aux equiv_expression in
   match e1, e2 with
   | Unary uop1 e1, Unary uop2 e2 =>
@@ -240,12 +240,12 @@ Fixpoint equiv_expression' {A} (e1 e2 : expression' A) {struct e1} : bool :=
       eq_ctype t1 t2
   | _, _ => false
   end
-with equiv_expression {A} (e1 e2 : expression A) {struct e1} : bool :=
+with equiv_expression {A1 A2 : Set} (e1 : expression A1) (e2 : expression A2) {struct e1} : bool :=
   match e1, e2 with
   | AnnotatedExpression _ e1, AnnotatedExpression _ e2 => equiv_expression' e1 e2
   end.
 
-Definition equiv_arguments {A} (a1 a2 : list (expression A)) :=
+Definition equiv_arguments {A1 A2 : Set} (a1 : list (expression A1)) (a2 : list (expression A2)) :=
   equiv_arguments_aux equiv_expression a1 a2.
 
 Definition bindings : Set := list (identifier * (qualifiers * ctype)).
@@ -278,7 +278,7 @@ Arguments statement' : default implicits.
 Definition eq_declaration {A : Set} eq_A (d1 d2 : list (identifier * expression A)) : bool :=
   eq_list (eq_pair eq_identifier (eq_expression eq_A)) d1 d2.
 
-Fixpoint equiv_declaration {A : Set} (d1 d2 : list (identifier * expression A)) : bool :=
+Fixpoint equiv_declaration {A1 A2 : Set} (d1 : list (identifier * expression A1)) (d2 : list (identifier * expression A2)) : bool :=
   match d1, d2 with
   | nil           , nil            => true
   | (v1, e1) :: d1, (v2, e2) :: d2 => eq_identifier v1 v2 && equiv_expression e1 e2 && equiv_declaration d1 d2
@@ -343,15 +343,15 @@ with eq_statement {A B : Set} eq_A eq_B (s1 s2 : statement A B) : bool :=
 
 Definition eq_block {A B} eq_A eq_B (ss1 ss2 : list (statement A B)) := eq_block_aux eq_A eq_B eq_statement ss1 ss2.
 
-Definition equiv_block_aux {A B : Set} equiv_statement :=
-  fix equiv_block (ss1 ss2 : list (statement A B)) : bool :=
+Definition equiv_block_aux {A1 A2 B1 B2 : Set} equiv_statement :=
+  fix equiv_block (ss1 : list (statement A1 B1)) (ss2 : list (statement A2 B2)) : bool :=
     match ss1, ss2 with
     | nil      , nil       => true
     | s1 :: ss1, s2 :: ss2 => equiv_statement s1 s2 && equiv_block ss1 ss2
     | _        , _         => false
     end.
 
-Fixpoint equiv_statement' {A B : Set} (s1 s2 : statement' A B) : bool :=
+Fixpoint equiv_statement' {A1 A2 B1 B2 : Set} (s1 : statement' A1 B1) (s2 : statement' A2 B2) : bool :=
   let equiv_block := equiv_block_aux equiv_statement in
   match s1, s2 with
   | Skip, Skip => true
@@ -392,13 +392,13 @@ Fixpoint equiv_statement' {A B : Set} (s1 s2 : statement' A B) : bool :=
       equiv_declaration d1 d2
   | _, _ => false
   end
-with equiv_statement {A B : Set} (s1 s2 : statement A B) : bool :=
+with equiv_statement {A1 A2 B1 B2 : Set} (s1 : statement A1 B1) (s2 : statement A2 B2) : bool :=
   match s1, s2 with
   | AnnotatedStatement _ s1, AnnotatedStatement _ s2 =>
       equiv_statement' s1 s2
   end.
 
-Definition equiv_block {A B} (ss1 ss2 : list (statement A B)) := equiv_block_aux equiv_statement ss1 ss2.
+Definition equiv_block {A1 A2 B1 B2 : Set} (ss1 : list (statement A1 B1)) (ss2 : list (statement A2 B2)) := equiv_block_aux equiv_statement ss1 ss2.
 
 (* Currently unused.
 Definition declaration : Set := identifier * option storageDuration.
@@ -410,8 +410,8 @@ Arguments sigma  : default implicits.
 Definition eq_sigma {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
   eq_context eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)).
 
-Definition equiv_sigma {A B : Set} (S1 S2 : sigma A B) :=
-  equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2.
+Definition equiv_sigma {A1 A2 B1 B2 : Set} (S1 : sigma A1 B1) (S2 : sigma A2 B2) :=
+  equiv eq_identifier (equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2.
 
 Definition equiv_eq_sigma {A B : Set}  (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) (S1 S2 : sigma A B) :=
   equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2.
@@ -443,8 +443,8 @@ Arguments program  : default implicits.
 Definition eq_program {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
   eq_pair eq_identifier (eq_sigma eq_A eq_B).
 
-Definition equiv_program {A B : Set} (p1 p2 : program A B)  :=
-  eq_pair eq_identifier equiv_sigma p1 p2.
+Definition equiv_program {A1 A2 B1 B2 : Set} (p1 : program A1 B1) (p2 : program A2 B2)  :=
+  equiv_pair eq_identifier equiv_sigma p1 p2.
 
 Definition equiv_eq_program {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) :=
   eq_pair eq_identifier (equiv_eq_sigma eq_A eq_B).
