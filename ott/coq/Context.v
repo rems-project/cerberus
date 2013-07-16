@@ -46,16 +46,16 @@ Fixpoint linearize {A B: Set} (eq_A : A -> A -> bool) C : context A B :=
   | (a, b) :: C => (a, b) :: remove_var eq_A a (linearize eq_A C)
   end.
 
-Fixpoint all_linear {A B: Set} (eq_A : A -> A -> bool) (p : A -> B -> bool) C : bool :=
+Fixpoint all_linear {A B: Set} (p : A -> B -> bool) C : bool :=
   match C with
   | nil         => true
-  | (a, b) :: C => p a b && all_linear eq_A p C
+  | (a, b) :: C => p a b && all_linear p C
   end.
 
 Definition all {A B: Set} (eq_A : A -> A -> bool) (p : A -> B -> bool) C : bool :=
-  all_linear eq_A p (linearize eq_A C).
+  all_linear p (linearize eq_A C).
 
-Definition sub_p {A B: Set} (eq_A : A -> A -> bool) (p : A -> bool) (equiv_B : B -> B -> bool) (C1 C2 : context A B) :=
+Definition sub_p {A B1 B2: Set} (eq_A : A -> A -> bool) (p : A -> bool) (equiv_B : B1 -> B2 -> bool) (C1 : context A B1) (C2 : context A B2) :=
   all eq_A (fun a b =>
               if p a
                 then match lookup eq_A C2 a with
@@ -64,14 +64,14 @@ Definition sub_p {A B: Set} (eq_A : A -> A -> bool) (p : A -> bool) (equiv_B : B
                      end
                 else true) C1.
 
-Definition sub {A B: Set} (eq_A : A -> A -> bool) (equiv_B : B -> B -> bool) :=
+Definition sub {A B1 B2: Set} (eq_A : A -> A -> bool) (equiv_B : B1 -> B2 -> bool) :=
   sub_p eq_A (fun _ => true) equiv_B.
 
-Definition equiv_p {A B: Set} (eq_A : A -> A -> bool) (p : A -> bool) (equiv_B : B -> B -> bool) (C1 C2 : context A B) :=
-  sub_p eq_A p equiv_B C1 C2 && sub_p eq_A p equiv_B C2 C1.
+Definition equiv_p {A B1 B2: Set} (eq_A : A -> A -> bool) (p : A -> bool) (equiv_B : B1 -> B2 -> bool) (C1 : context A B1) (C2 : context A B2) :=
+  sub_p eq_A p equiv_B C1 C2 && sub_p eq_A p (fun x y => equiv_B y x) C2 C1.
 
-Definition equiv {A B: Set} (eq_A : A -> A -> bool) (equiv_B : B -> B -> bool)  (C1 C2 : context A B) :=
-  sub eq_A equiv_B C1 C2 && sub eq_A equiv_B C2 C1.
+Definition equiv {A B1 B2: Set} (eq_A : A -> A -> bool) (equiv_B : B1 -> B2 -> bool) C1 C2 :=
+  sub eq_A equiv_B C1 C2 && sub eq_A (fun x y => equiv_B y x) C2 C1.
 
 Fixpoint disjoint {A B1 B2} eq_A (C1 : context A B1) (C2 : context A B2) : bool :=
   match C1 with
@@ -90,3 +90,15 @@ Fixpoint disjoint_bindings {A B : Set} eq_A (xs : list (A * B)) :=
   | (a, _) :: xs => fresh_in_bindings eq_A a xs && disjoint_bindings eq_A xs
   | nil          => true
   end.
+
+Fixpoint mapP_linear {A B1 B2 : Set} (p : B1 -> option B2) (C : context A B1) : option (context A B2) :=
+  match C with
+  | nil          => Some nil
+  | (a, b1) :: C => match p b1, mapP_linear p C with
+                    | Some b2, Some C => Some ((a, b2) :: C)
+                    | _      , _      => None
+                    end
+  end.
+
+Definition mapP {A B1 B2 : Set} eq_A (p : B1 -> option B2) (C : context A B1) : option (context A B2) :=
+  mapP_linear p (linearize eq_A C).
