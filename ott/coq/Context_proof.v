@@ -315,7 +315,7 @@ Qed.
 Definition all_linear_correct {A B: Set} {eq_A : A -> A -> bool} {p : A -> B -> bool} {P : A -> B -> Type} :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x y, boolSpec (p    x y) (P x y)) ->
-  forall C, D.linear C -> boolSpec (all_linear eq_A p C) (forall a b, D.lookup C a b -> P a b).
+  forall C, D.linear C -> boolSpec (all_linear p C) (forall a b, D.lookup C a b -> P a b).
 Proof.
   intros eq_A_correct p_correct.
   induction C as [| [a b] C IH];
@@ -326,7 +326,7 @@ Proof.
     end.
     + inversion 1 as [| ? ? ? ? Hlinear]; subst.
       match goal with
-      | [|- context[all_linear eq_A p ?C] ] =>
+      | [|- context[all_linear p ?C] ] =>
           set (IH Hlinear); boolSpec_destruct
       end.
       inversion 1; my_auto.
@@ -358,24 +358,24 @@ Proof.
     eapply linearize_sound; eassumption.
 Qed.
 
-Lemma sub_p_correct_aux {A B : Set} {eq_A} {p} {equiv_B} {P : A -> Type} {E : B -> B -> Type}:
+Lemma sub_p_correct_aux {A B1 B2 : Set} {eq_A} {p} {equiv_B} {P : A -> Type} {E : B1 -> B2 -> Type}:
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x, boolSpec (p x) (P x)) ->
   (forall x y, boolSpec (equiv_B x y) (E x y)) ->
-  forall (C1 C2 : context A B) a b,
-    boolSpec ((fun a b =>
+  forall (C1 : context A B1) (C2 : context A B2) a b1,
+    boolSpec ((fun a b1 =>
                  if p a
                    then match lookup eq_A C2 a with
-                        | Some b' => equiv_B b b'
+                        | Some b2 => equiv_B b1 b2
                         | None    => false
                         end
-                   else true) a b) (P a -> {b' : B & D.lookup C2 a b' * E b b'}).
+                   else true) a b1) (P a -> {b2 : B2 & D.lookup C2 a b2 * E b1 b2}).
 Proof.
-  intros eq_A_correct p_correct equiv_B_correct C1 C2 a b.
+  intros eq_A_correct p_correct equiv_B_correct C1 C2 a b1.
   unfold_goal.
-  set (p_correct a) as Hp; boolSpec_destruct; [|my_auto].
-  set (lookup_correct eq_A_correct C2 a) as Hlookup; optionSpec_destruct_hyp b'.
-  - set (equiv_B_correct b b') as Hequiv; boolSpec_destruct.
+  pose proof (p_correct a) as Hp; boolSpec_destruct; [|my_auto].
+  pose proof (lookup_correct eq_A_correct C2 a) as Hlookup; optionSpec_destruct_hyp b2.
+  - pose proof (equiv_B_correct b1 b2) as Hequiv; boolSpec_destruct.
     + eauto.
     + intros H'.
       destruct (H' Hp) as [? [H'' ?]].
@@ -386,11 +386,11 @@ Proof.
     exact (Hlookup _ H'').
 Qed.
 
-Lemma sub_p_correct {A B: Set} {eq_A : A -> A -> bool} {p : A -> bool} {equiv_B : B -> B -> bool} {P} {E} :
+Lemma sub_p_correct {A B1 B2: Set} {eq_A : A -> A -> bool} {p : A -> bool} {equiv_B : B1 -> B2 -> bool} {P} {E} :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x, boolSpec (p x) (P x)) ->
   (forall x y, boolSpec (equiv_B x y) (E x y)) ->
-  forall (C1 C2 : context A B), boolSpec (sub_p eq_A p equiv_B C1 C2) (D.subP P E C1 C2).
+  forall (C1 : context A B1) (C2 : context A B2), boolSpec (sub_p eq_A p equiv_B C1 C2) (D.subP P E C1 C2).
 Proof.
   intros eq_A_correct p_correct equiv_B_correct C1 C2.
   do 2 unfold_goal.
@@ -398,18 +398,18 @@ Proof.
   boolSpec_destruct; unfold_goal; intuition.
 Qed.
 
-Lemma subP_sub {A B} E (C1 C2 : context A B):
+Lemma subP_sub {A B1 B2} E (C1 : context A B1) (C2 : context A B2):
   D.subP (fun _ => True) E C1 C2 -> D.sub E C1 C2.
 Proof. unfold D.sub; intuition. Qed.
 
-Lemma sub_subP {A B} E (C1 C2 : context A B):
+Lemma sub_subP {A B1 B2} E (C1 : context A B1) (C2 : context A B2):
   D.sub E C1 C2 -> D.subP (fun _ => True) E C1 C2.
 Proof. unfold D.subP; intuition. Qed.
 
-Lemma sub_correct {A B: Set} {eq_A : A -> A -> bool} {equiv_B : B -> B -> bool} {E} :
+Lemma sub_correct {A B1 B2: Set} {eq_A : A -> A -> bool} {equiv_B : B1 -> B2 -> bool} {E} :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x y, boolSpec (equiv_B x y) (E x y)) ->
-  forall (C1 C2 : context A B), boolSpec (sub eq_A equiv_B C1 C2) (D.sub E C1 C2).
+  forall (C1 : context A B1) (C2 : context A B2), boolSpec (sub eq_A equiv_B C1 C2) (D.sub E C1 C2).
 Proof.
   intros eq_A_correct equiv_B_correct C1 C2.
   assert (forall x : A, boolSpec ((fun _ => true) x) ((fun _ => True) x)) as p_correct by my_auto.
@@ -418,33 +418,28 @@ Proof.
   intuition.
 Qed.
 
-Lemma equiv_p_correct {A B: Set} {eq_A : A -> A -> bool} {p : A -> bool} {equiv_B : B -> B -> bool} {P} {E} :
+Lemma equiv_p_correct {A B1 B2: Set} {eq_A : A -> A -> bool} {p : A -> bool} {equiv_B : B1 -> B2 -> bool} {P} {E} :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x, boolSpec (p x) (P x)) ->
   (forall x y, boolSpec (equiv_B x y) (E x y)) ->
-  forall (C1 C2 : context A B), boolSpec (equiv_p eq_A p equiv_B C1 C2) (D.equivP P E C1 C2).
+  forall (C1 : context A B1) (C2 : context A B2), boolSpec (equiv_p eq_A p equiv_B C1 C2) (D.equivP P E C1 C2).
 Proof.
   intros eq_A_correct p_correct equiv_B_correct C1 C2.
   do 2 unfold_goal.
   set (sub_p_correct eq_A_correct p_correct equiv_B_correct C1 C2); boolSpec_destruct.
-  - set (sub_p_correct eq_A_correct p_correct equiv_B_correct C2 C1); boolSpec_destruct.
-    + my_auto.
-    + my_auto.
+  - set (sub_p_correct eq_A_correct p_correct (fun x y => equiv_B_correct y x) C2 C1); boolSpec_destruct; my_auto.
   - my_auto.
 Qed.
   
-
-Lemma equiv_correct {A B: Set} {eq_A : A -> A -> bool} {equiv_B : B -> B -> bool} {E} :
+Lemma equiv_correct {A B1 B2: Set} {eq_A : A -> A -> bool} {equiv_B : B1 -> B2 -> bool} {E} :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall x y, boolSpec (equiv_B x y) (E x y)) ->
-  forall (C1 C2 : context A B), boolSpec (equiv eq_A equiv_B C1 C2) (D.equiv E C1 C2).
+  forall (C1 : context A B1) (C2 : context A B2), boolSpec (equiv eq_A equiv_B C1 C2) (D.equiv E C1 C2).
 Proof.
   intros eq_A_correct equiv_B_correct C1 C2.
   do 2 unfold_goal.
   set (sub_correct eq_A_correct equiv_B_correct C1 C2); boolSpec_destruct.
-  - set (sub_correct eq_A_correct equiv_B_correct C2 C1); boolSpec_destruct.
-    + my_auto.
-    + my_auto.
+  - set (sub_correct eq_A_correct (fun x y => equiv_B_correct y x) C2 C1); boolSpec_destruct; my_auto.
   - my_auto.
 Qed.
 
@@ -469,14 +464,6 @@ Proof.
             firstorder
           | eapply Hdisjoint; eexists; [econstructor 2|]; eassumption
         ].
-Qed.
-
-Lemma negb_correct {P} {p} :
-  boolSpec p P ->
-  boolSpec (negb p) (neg P).
-Proof.
-  intros p_correct.
-  boolSpec_destruct; my_auto.
 Qed.
 
 Lemma fresh_in_bindings_correct {A B : Set} {eq_A} :
@@ -514,3 +501,178 @@ Proof.
   | _ => context_destruct
   end; my_auto.    
 Qed.  
+
+Lemma fresh_equiv {A B1 B2 : Set} {C1 : context A B1} {C2 : context A B2} :
+    D.equiv (fun _ _ => True) C1 C2 ->
+    forall {a},
+      D.fresh a C1 ->
+      D.fresh a C2.
+Proof.
+  intros Hequiv ? Hfresh1 [? Hlookup2].
+  destruct ((snd Hequiv) _ _ Hlookup2) as [? [Hlookup1 _]].
+  eapply Hfresh1; eexists; eassumption.
+Qed.
+
+Lemma freshBindings_equiv {A B1 B2 B : Set} {C1 : context A B1} {C2 : context A B2} :
+  D.equiv (fun _ _ => True) C1 C2 ->
+  forall {bs : list (A * B)},
+    D.freshBindings bs C1 ->
+    D.freshBindings bs C2.
+Proof.
+  intros Hequiv bs HfreshBindings1.
+  induction bs.
+  - constructor.
+  - inversion_clear HfreshBindings1.
+    constructor.
+    * eapply fresh_equiv; eassumption.
+    * apply IHbs; assumption.
+Qed.
+
+Lemma equiv_weaken {A B1 B2 : Set} (P Q : B1 -> B2 -> Type) :
+  (forall {b1 b2}, P b1 b2 -> Q b1 b2) ->
+  forall {C1 : context A B1} {C2 : context A B2},
+    D.equiv P C1 C2 ->
+    D.equiv Q C1 C2.
+Proof. firstorder. Qed.
+
+
+Lemma mapP_linear_correct {A B1 B2 : Set} {P : B1 ->  B2 -> Type} {eq_A} {p : B1 -> option B2} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall b1, optionSpec (p b1) (P b1)) ->
+  forall (C1 : context A B1),
+    D.linear C1 ->
+    match mapP_linear p C1 with
+    | Some C2 => D.equiv P C1 C2
+    | None    => {a : A & {b1 : B1 & D.lookup C1 a b1 * forall b2, neg (P b1 b2)}}
+    end.
+Proof.
+  intros eq_A_correct p_correct.
+  induction C1 as [|[a b1] C1]; intros Hlinear; simpl.
+  - constructor; inversion 1.
+  - pose proof (p_correct b1).
+    optionSpec_destruct_hyp b2.
+    + destruct (mapP_linear p C1).
+      * split.
+          intros a' b1' Hlookup1.
+          pose proof (eq_A_correct a a'); boolSpec_destruct; [subst|].
+            inversion Hlookup1; [|congruence]; subst.
+            exists b2.
+            split.
+            constructor.
+            assumption.
+
+            inversion Hlookup1; [congruence|]; subst.  
+            destruct IHC1 as [Hsub _].
+            inversion_clear Hlinear; assumption.
+            destruct (Hsub a' b1' H5) as [b2' [? Hlookup2]].
+            exists b2'.
+            split.
+            constructor 2; assumption.
+            assumption.
+
+          intros a' b2' Hlookup1.
+          inversion Hlookup1; subst.
+            eexists; split; [constructor | assumption].
+
+            destruct IHC1 as [_ IH].
+            inversion_clear Hlinear; assumption.
+            destruct (IH a' b2' H5) as [b1' [Hlookup1' ?]].
+            eexists; split; [constructor 2; eassumption | assumption].
+      * destruct IHC1 as [a' [b1' [Hlookup1 ?]]].
+        inversion_clear Hlinear; assumption.
+        pose proof (eq_A_correct a a'); boolSpec_destruct; [subst|].
+          inversion Hlinear; subst.
+          now firstorder.
+
+          exists a'.
+          exists b1'.
+          split; [constructor; assumption | assumption].
+    + exists a.
+      exists b1.
+      split.
+      constructor.
+      assumption.
+Qed.
+
+Lemma mapP_linear_sound {A B1 B2 : Set} {P : B1 ->  B2 -> Type} {eq_A} {p : B1 -> option B2} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall b1 b2, p b1 = Some b2 -> P b1 b2) ->
+  forall {C1 : context A B1} {C2 : context A B2},
+    D.linear C1 ->
+    mapP_linear p C1 = Some C2 ->
+    D.equiv P C1 C2.
+Proof.
+  intros eq_A_correct p_sound.
+  induction C1 as [|[a b1] C1]; intros C2 Hlinear; simpl.
+  - inversion_clear 1; split; inversion 1.
+  - case_eq (p b1); [intros b2 Heq|congruence].
+    pose proof (p_sound b1 b2 Heq); clear Heq.
+    case_eq (mapP_linear p C1); [intros C2' Heq|congruence].
+    inversion Hlinear; subst.
+    pose proof (IHC1 C2' H3 Heq); clear Heq.
+    Require Tactics.
+    intros; Tactics.subst_no_fail; Tactics.autoinjections.
+    split.
+    + intros a' b1' Hlookup1.
+      pose proof (eq_A_correct a a'); boolSpec_destruct; [subst|].
+      inversion Hlookup1; [subst|congruence].
+      * exists b2.
+        split; [constructor | assumption].
+      * inversion Hlookup1; [congruence|subst].  
+        destruct X0 as [Hsub _].
+        inversion_clear Hlinear.
+        destruct (Hsub a' b1' H7) as [b2' [? Hlookup2]].
+        exists b2'.
+        split; [constructor 2; assumption | assumption].
+    + intros a' b2' Hlookup1.
+      inversion Hlookup1; subst.
+      * eexists; split; [constructor | assumption].
+      * destruct X0 as [_ Hsub2].
+        inversion_clear Hlinear.
+        destruct (Hsub2 a' b2' H7) as [b1' [Hlookup1' ?]].
+        eexists; split; [constructor 2; eassumption | assumption].
+Qed.
+
+Lemma mapP_correct {A B1 B2 : Set} {P : B1 ->  B2 -> Type} {eq_A} (p : B1 -> option B2) :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall b1, optionSpec (p b1) (P b1)) ->
+  forall (C1 : context A B1),
+    match mapP eq_A p C1 with
+    | Some C2 => D.equiv P C1 C2
+    | None    => {a : A & {b1 : B1 & D.lookup C1 a b1 * forall b2, neg (P b1 b2)}}
+    end.
+Proof.
+  intros eq_A_correct p_correct C1.
+  pose proof (mapP_linear_correct eq_A_correct p_correct _ (linearize_linear eq_A_correct C1)) as H.
+  unfold mapP.
+  destruct (mapP_linear p (linearize eq_A C1)).
+  - split.
+    + intros ? ? Hlookup1.
+      exact ((fst H) _ _ (linearize_complete eq_A_correct _ _ _ Hlookup1)).
+    + intros ? ? Hlookup2.
+      destruct ((snd H) _ _ Hlookup2) as [? [Hlookup1 ?]].
+      apply (linearize_sound eq_A_correct) in Hlookup1.
+      now firstorder.
+  - destruct H as [? [? [Hlookup1 ?]]].
+    apply (linearize_sound eq_A_correct) in Hlookup1.
+    now firstorder.
+Qed.
+
+Lemma mapP_sound {A B1 B2 : Set} {P : B1 ->  B2 -> Type} {eq_A} {p : B1 -> option B2} :
+  (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
+  (forall b1 b2, p b1 = Some b2 -> P b1 b2) ->
+  forall {C1 : context A B1} {C2 : context A B2},
+    mapP eq_A p C1 = Some C2 ->
+    D.equiv P C1 C2.
+Proof.
+  intros eq_A_correct p_sound C1 C2 Heq.
+  unfold mapP in Heq.
+  pose proof (mapP_linear_sound eq_A_correct p_sound (linearize_linear eq_A_correct C1) Heq) as Hequiv.
+  split.
+  - intros ? ? Hlookup1.
+    exact ((fst Hequiv) _ _ (linearize_complete eq_A_correct _ _ _ Hlookup1)).
+  - intros ? ? Hlookup2.
+    destruct ((snd Hequiv) _ _ Hlookup2) as [? [Hlookup1 ?]].
+    apply (linearize_sound eq_A_correct) in Hlookup1.
+    now firstorder.
+Qed.

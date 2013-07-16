@@ -14,17 +14,17 @@ Definition freshBindings {A B1 B2 : Set} (bs : list (A * B1)) (C : context A B2)
 Definition disjoint {A B1 B2 : Set} (C1 : context A B1) (C2 : context A B2) : Type :=
   forall (a : A), mem a C1 -> mem a C2 -> False.
 
-Definition subP {A B: Set} (P : A -> Type) (E : B -> B -> Type) (C1 C2 : context A B) :=
-  forall id, P id -> forall b1, lookup C1 id b1 -> {b2 : B & lookup C2 id b2 * E b1 b2}.
+Definition subP {A B1 B2: Set} (P : A -> Type) (E : B1 -> B2 -> Type) (C1 : context A B1) (C2 : context A B2) :=
+  forall id, P id -> forall b1, lookup C1 id b1 -> {b2 : B2 & lookup C2 id b2 * E b1 b2}.
 
-Definition sub {A B: Set} (E : B -> B -> Type) (C1 C2 : context A B) :=
-  forall id, forall b1, lookup C1 id b1 -> {b2 : B & lookup C2 id b2 * E b1 b2}.
+Definition sub {A B1 B2: Set} (E : B1 -> B2 -> Type) (C1 : context A B1) (C2 : context A B2) :=
+  forall id, forall b1, lookup C1 id b1 -> {b2 : B2 & lookup C2 id b2 * E b1 b2}.
 
-Definition equivP {A B: Set} (P : A -> Type) (E : B -> B -> Type) (C1 C2 : context A B) :=
-  subP P E C1 C2 * subP P E C2 C1.
+Definition equivP {A B1 B2: Set} (P : A -> Type) (E : B1 -> B2 -> Type) (C1 : context A B1) (C2 : context A B2) :=
+  subP P E C1 C2 * subP P (fun x y => E y x) C2 C1.
 
-Definition equiv {A B: Set} (E : B -> B -> Type) (C1 C2 : context A B) :=
-  sub E C1 C2 * sub E C2 C1.
+Definition equiv {A B1 B2: Set} (E : B1 -> B2 -> Type) (C1 : context A B1) (C2 : context A B2) :=
+  sub E C1 C2 * sub (fun x y => E y x) C2 C1.
 
 Inductive linear {A B: Set} : context A B -> Type :=
   | Linear_nil        : linear nil
