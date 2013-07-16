@@ -1,5 +1,4 @@
 Require Import Bool.
-Require Import ZArith.
 Require Import Omega.
 
 Require Import Common.
@@ -8,11 +7,10 @@ Require Import Range_defns Range_proof.
 Require Import AilTypes AilTypes_proof.
 Require Import AilTypesAux.
 
-Require AilTypesAux_defns.
-Module D := AilTypesAux_defns.
-
 Local Open Scope Z.
 
+Require AilTypesAux_defns.
+Module D := AilTypesAux_defns.
 
 Lemma signed_correct P it : boolSpec (signed P it) (D.signed P it).
 Proof.
@@ -1462,3 +1460,163 @@ Definition inIntegerRange_Unsigned_Long_LongLong {P} {n} :=
     D.LeIntegerRange _ _ _
       (integer_range_precision_unsigned (D.Unsigned_Int P _) (D.Unsigned_Int P _) (le_precision_Unsigned_Long_LongLong P))
   ).
+
+Local Close Scope Z.
+
+Lemma pointer_to_complete_object_correct t :
+  if pointer_to_complete_object t
+    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.complete t'}}
+    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.complete t').
+Proof.
+  unfold_goal.
+  repeat match goal with
+  | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; now intuition
+  | _ => context_destruct
+  end; right; congruence.
+Qed.
+
+Lemma pointers_to_compatible_complete_objects_correct t1 t2 :
+  if pointers_to_compatible_complete_objects t1 t2
+    then {q1' : qualifiers & {t1' : ctype &
+         {q2' : qualifiers & {t2' : ctype &
+           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
+           D.complete t1' * D.complete t2' * D.compatible t1' t2'}}}}
+    else neg (D.pointer t1) + neg (D.pointer t2)
+         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.complete t1'))
+         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.complete t2'))
+         + (forall q1' q2' t1' t2',
+              t1 = Pointer q1' t1' ->
+              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+Proof.
+  unfold_goal.
+  unfold andb.
+  repeat match goal with
+  | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; now intuition
+  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; left; inversion 1
+      end
+  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; right; inversion 1
+      end
+  | [_ : neg (D.complete t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
+  | [_ : neg (D.complete t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
+  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | _ => context_destruct
+  end.
+Qed.
+
+Lemma pointers_to_compatible_objects_correct t1 t2 :
+  if pointers_to_compatible_objects t1 t2
+    then {q1' : qualifiers & {t1' : ctype &
+         {q2' : qualifiers & {t2' : ctype &
+           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
+           D.object t1'  * D.object t2' * D.compatible t1' t2'}}}}
+    else neg (D.pointer t1) + neg (D.pointer t2)
+         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.object t1'))
+         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.object t2'))
+         + (forall q1' q2' t1' t2',
+              t1 = Pointer q1' t1' ->
+              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+Proof.
+  unfold_goal.
+  unfold andb.
+  repeat match goal with
+  | [|- object ?t = _ -> _] => case_fun (object_correct t)
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; intuition
+  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; left; inversion 1
+      end
+  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; left; right; inversion 1
+      end
+  | [_ : neg (D.object t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
+  | [_ : neg (D.object t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
+  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | _ => context_destruct
+  end.
+Qed.
+
+Lemma pointer_to_object_correct t :
+  if pointer_to_object t
+    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.object t'}}
+    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.object t').
+Proof.
+  unfold_goal.
+  repeat match goal with
+  | [|- object ?t = _ -> _] => case_fun (object_correct t)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; intuition
+  | [|- neg (D.pointer ?t) + _] =>
+      match t with
+      | Pointer _ _ => right
+      | _           => left; inversion 1
+      end
+  | _ => context_destruct
+  end; congruence.
+Qed.
+
+Lemma pointer_to_void_correct t :
+  if pointer_to_void t
+    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.void t'}}
+    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.void t').
+Proof.
+  unfold_goal.
+  repeat match goal with
+  | [|- void ?t = _ -> _] => case_fun (void_correct t)
+  | [|- neg _] => intros [? [? [? ?]]]
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => eexists; eexists; now intuition
+  | [|- neg (D.pointer ?t) + _] =>
+      match t with
+      | Pointer _ _ => right; intros; inversion 1
+      | _           => left; inversion 1
+      end
+  | _ => context_destruct
+  end; congruence.
+Qed.
+
+Lemma pointers_to_compatible_types_correct t1 t2 :
+  if pointers_to_compatible_types t1 t2
+    then {q1' : qualifiers & {t1' : ctype &
+         {q2' : qualifiers & {t2' : ctype &
+           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
+           D.compatible t1' t2'}}}}
+    else neg (D.pointer t1) + neg (D.pointer t2)
+         + (forall q1' q2' t1' t2',
+              t1 = Pointer q1' t1' ->
+              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+Proof.
+  unfold_goal.
+  repeat match goal with
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
+  | [|- _ * _] => split
+  | [|- {_ : _ & _}] => repeat eexists; now intuition 
+  | [|- neg (D.pointer ?t) + _ + _ ] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; left; inversion 1
+      end
+  | [|- _ + neg (D.pointer ?t) + _ ] =>
+      match t with
+      | Pointer _ _ => fail 1
+      | _           => left; right; inversion 1
+      end
+  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ ] => right; intros; congruence
+  | _ => context_destruct
+  end.
+Qed.

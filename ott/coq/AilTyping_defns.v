@@ -105,7 +105,7 @@ Inductive typeOfConstant : implementation -> integerConstant -> integerType -> P
      inIntegerRange P n (Unsigned LongLong) ->
      typeOfConstant P (n , Some ULL) (Unsigned LongLong).
 
-Inductive typeOfExpression' {A B} {P} {G} {S : sigma A B} : expression' B -> typeCategory -> Prop :=    (* defn typeOfExpression' *)
+Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : expression' A -> typeCategory -> Prop :=    (* defn typeOfExpression' *)
  | TypeOfExpression'_Variable : forall (v:identifier) (q:qualifiers) (t:ctype),
      lookup G v (q, t)  ->
      typeOfExpression' (Var v) (LValueType q t)
@@ -526,11 +526,11 @@ Inductive typeOfExpression' {A B} {P} {G} {S : sigma A B} : expression' B -> typ
      typeOfRValue e1 t1 ->
      typeOfRValue e2 t2 ->
      typeOfExpression' (Binary e1 Comma e2) (RValueType t2)
-with typeOfExpression {A B} {P} {G} {S : sigma A B} : expression B -> typeCategory -> Prop :=
+with typeOfExpression {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : expression A -> typeCategory -> Prop :=
  | TypeOfExpression_Annotated : forall a e t,
      typeOfExpression' e t ->
      typeOfExpression (AnnotatedExpression a e) t
-with typeOfRValue {A B} {P} {G} {S : sigma A B} : expression B -> ctype -> Prop :=    (* defn typeOfRValue *)
+with typeOfRValue {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : expression A -> ctype -> Prop :=    (* defn typeOfRValue *)
  | typeOfRValue_RValueType : forall e (t t':ctype),
      typeOfExpression e (RValueType t') ->
      pointerConversion t' t ->
@@ -539,22 +539,22 @@ with typeOfRValue {A B} {P} {G} {S : sigma A B} : expression B -> ctype -> Prop 
      typeOfLValue e q t' ->
      lvalueConversion t' t ->
      typeOfRValue e t
-with typeOfLValue {A B} {P} {G} {S : sigma A B} : expression B -> qualifiers -> ctype -> Prop :=
+with typeOfLValue {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : expression A -> qualifiers -> ctype -> Prop :=
  | TypeOfLValue : forall e q t,
      typeOfExpression e (LValueType q t) ->
      typeOfLValue e q t
-with typeable {A B} {P} {G} {S : sigma A B} : expression B -> Prop :=    (* defn typeable *)
+with typeable {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : expression A -> Prop :=    (* defn typeable *)
  | Typeable : forall e t,
      typeOfExpression e t ->
      typeable e
-with typeOfArguments {A B} {P} {G} {S : sigma A B} : list (expression B) -> list (qualifiers * ctype) -> Prop :=    (* defn assignable *)
+with typeOfArguments {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : list (expression A) -> list (qualifiers * ctype) -> Prop :=    (* defn assignable *)
  | TypeOfArguments_nil : typeOfArguments nil nil
  | TypeOfArguments_cons es p : forall e q t t',
      pointerConversion t t' ->
      assignable t' e ->
      typeOfArguments es p ->
      typeOfArguments (e :: es) ((q, t) :: p)
-with assignable {A B} {P} {G} {S : sigma A B}: ctype -> expression B -> Prop :=
+with assignable {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma}: ctype -> expression A -> Prop :=
  | Assignable_Arithmetic : forall e2 t1 t2,
      typeOfRValue e2 t2 ->
      arithmetic t1 ->
@@ -606,88 +606,88 @@ Inductive wellFormedBindings : bindings -> Prop :=
      allList wellFormedBinding bs ->
      wellFormedBindings bs.
 
-Inductive wellTypedDefinition {A B} P G (S : sigma  A B) : identifier * expression B -> Prop :=
+Inductive wellTypedDefinition {A B1 B2: Set} P (S : sigma  B1 B2) G : identifier * expression A -> Prop :=
   | WellTypedDefinition :
       forall v e q t,
         lookup G v (q, t) ->
-        assignable P G S t e ->
-        wellTypedDefinition P G S (v, e).
+        assignable P S G t e ->
+        wellTypedDefinition P S G (v, e).
 
-Inductive wellTypedStatement' {A B} P G (S : sigma A B) : ctype -> statement' A B -> Prop :=    (* defn wellTypedStatement *)
+Inductive wellTypedStatement' {A1 A2 B1 B2: Set} {P} {S : sigma B1 B2} (G : gamma) : ctype -> statement' A1 A2 -> Prop :=    (* defn wellTypedStatement *)
  | WellTypedStatement'_Label : forall t_return l s,
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (Label l s)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (Label l s)
  | WellTypedStatement'_Case : forall t_return ic it s,
      typeOfConstant P ic it ->
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (Case ic s)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (Case ic s)
  | WellTypedStatement'_Default : forall t_return s,
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (Default s)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (Default s)
  | WellTypedStatement'_Block : forall t_return bs ss,
      wellFormedBindings bs ->
      freshBindings bs S ->
-     allList (wellTypedStatement P (Context.add_bindings bs G) S t_return) ss ->
-     wellTypedStatement' P G S t_return (Block bs ss)
+     allList (wellTypedStatement (Context.add_bindings bs G) t_return) ss ->
+     wellTypedStatement' G t_return (Block bs ss)
  | WellTypedStatement'_Skip : forall t_return,
-     wellTypedStatement' P G S t_return Skip
+     wellTypedStatement' G t_return Skip
  | WellTypedStatement'_Expression : forall t_return e,
-     typeable P G S e ->
-     wellTypedStatement' P G S t_return (Expression e)
+     typeable P S G e ->
+     wellTypedStatement' G t_return (Expression e)
  | WellTypedStatement'_If : forall t_return e s1 s2 t,
-     typeOfRValue P G S e t ->
+     typeOfRValue P S G e t ->
      scalar t ->
-     wellTypedStatement  P G S t_return s1 ->
-     wellTypedStatement  P G S t_return s2 ->
-     wellTypedStatement' P G S t_return (If e s1 s2)
+     wellTypedStatement  G t_return s1 ->
+     wellTypedStatement  G t_return s2 ->
+     wellTypedStatement' G t_return (If e s1 s2)
  | WellTypedStatement'_Switch : forall t_return e s t,
-     typeOfRValue P G S e t ->
+     typeOfRValue P S G e t ->
      integer t ->
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (Switch e s)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (Switch e s)
  | WellTypedStatement'_While : forall t_return e s t,
-     typeOfRValue P G S e t ->
+     typeOfRValue P S G e t ->
      scalar t ->
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (While e s)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (While e s)
  | WellTypedStatement'_Do : forall t_return s e t,
-     typeOfRValue P G S e t ->
+     typeOfRValue P S G e t ->
      scalar t ->
-     wellTypedStatement  P G S t_return s ->
-     wellTypedStatement' P G S t_return (Do s e)
+     wellTypedStatement  G t_return s ->
+     wellTypedStatement' G t_return (Do s e)
  | WellTypedStatement'_Goto : forall t_return l,
-     wellTypedStatement' P G S t_return (Goto l)
+     wellTypedStatement' G t_return (Goto l)
  | WellTypedStatement'_Continue : forall t_return,
-     wellTypedStatement' P G S t_return Continue
+     wellTypedStatement' G t_return Continue
  | WellTypedStatement'_Break : forall t_return,
-     wellTypedStatement' P G S t_return Break
+     wellTypedStatement' G t_return Break
  | WellTypedStatement'_ReturnVoid :
-     wellTypedStatement' P G S Void ReturnVoid
+     wellTypedStatement' G Void ReturnVoid
  | WellTypedStatement'_Return : forall t_return e,
-     assignable P G S t_return e ->
-     wellTypedStatement' P G S t_return (Return e)
+     assignable P S G t_return e ->
+     wellTypedStatement' G t_return (Return e)
  | WellTypedStatement'_Declaration : forall t_return ds,
-     allList (wellTypedDefinition P G S) ds ->
-     wellTypedStatement' P G S t_return (Declaration ds)
-with wellTypedStatement {A B} P G (S : sigma A B) : ctype -> statement A B -> Prop :=
+     allList (wellTypedDefinition P S G) ds ->
+     wellTypedStatement' G t_return (Declaration ds)
+with wellTypedStatement {A1 A2 B1 B2: Set} {P} {S : sigma B1 B2} (G : gamma) : ctype -> statement A1 A2 -> Prop :=
  | WellTypedStatement_AnnotatedStatement : forall t_return a s,
-     wellTypedStatement' P G S t_return s ->
-     wellTypedStatement  P G S t_return (AnnotatedStatement a s).
+     wellTypedStatement' G t_return s ->
+     wellTypedStatement  G t_return (AnnotatedStatement a s).
+Arguments wellTypedStatement' : default implicits.
+Arguments wellTypedStatement  : default implicits.
 
-Inductive wellTypedFunction {A B} P (S : sigma A B) : (ctype * bindings) * statement A B -> Prop :=
+Inductive wellTypedFunction {A1 A2 B1 B2: Set} P (S : sigma B1 B2) : (ctype * bindings) * statement A1 A2 -> Prop :=
   | WellTypedFunction t_return bs s :
       wellFormedBindings bs ->
       freshBindings bs S ->
       wfType (Function t_return (parameters_of_bindings bs)) ->
-      wellTypedStatement P (Context.add_bindings bs nil) S t_return s ->
+      wellTypedStatement P S (Context.add_bindings bs Context.empty) t_return s ->
       wellTypedFunction P S (t_return, bs, s).      
 
-Inductive wellTypedSigma {A B} P (S : sigma A B) : Prop :=
- | WellTypedSigma :
-     (forall v p, lookup S v p -> wellTypedFunction P S p) ->
-     wellTypedSigma P S.
+Definition wellTypedSigma {A1 A2: Set} P (S : sigma A1 A2) : Prop :=
+  forall v p, lookup S v p -> wellTypedFunction P S p.
 
-Inductive wellTypedProgram {A B} P : program A B -> Prop :=    (* defn wellTypedProgram *)
+Inductive wellTypedProgram {A1 A2: Set} P : program A1 A2 -> Prop :=    (* defn wellTypedProgram *)
  | WellTypedProgram main S s:
        lookup S main (Basic (Integer (Signed Int)), nil, s) ->
        wellTypedSigma P S ->
