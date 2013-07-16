@@ -20,6 +20,7 @@ Module D.
   Require AilTyping_defns.
 
   Include Context_defns.
+  Include AilSyntax_defns.
   Include AilTyping_defns.
   Include AilTypesAux_defns.
 End D.
@@ -85,44 +86,44 @@ Proof.
   congruence.
 Qed.
 
-Lemma typeOfExpression_sub {A B} {P} {G1 G2:gamma} {S:sigma A B} {e} :
+Lemma typeOfExpression_sub {A B1 B2} {P} {S : sigma B1 B2} {G1 G2 : gamma} {e : expression A} :
   D.subP (fun v => D.fv v e) eq G1 G2 ->
   forall t,
-    D.typeOfExpression P G1 S e t ->
-    D.typeOfExpression P G2 S e t.
+    D.typeOfExpression P S G1 e t ->
+    D.typeOfExpression P S G2 e t.
 Proof.
   apply (
     expression_nrect
-      (fun x => forall (Hfree : D.subP (fun v => D.fv'         v x) eq G1 G2) t (T1 : D.typeOfExpression' P G1 S x t), D.typeOfExpression' P G2 S x t)
-      (fun x => forall (Hfree : D.subP (fun v => D.fv          v x) eq G1 G2) t (T1 : D.typeOfExpression  P G1 S x t), D.typeOfExpression  P G2 S x t)
-      (fun x => forall (Hfree : D.subP (fun v => D.fvArguments v x) eq G1 G2) t (T1 : D.typeOfArguments   P G1 S x t), D.typeOfArguments   P G2 S x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fv'         v x) eq G1 G2) t (T1 : D.typeOfExpression' P S G1 x t), D.typeOfExpression' P S G2 x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fv          v x) eq G1 G2) t (T1 : D.typeOfExpression  P S G1 x t), D.typeOfExpression  P S G2 x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fvArguments v x) eq G1 G2) t (T1 : D.typeOfArguments   P S G1 x t), D.typeOfArguments   P S G2 x t)
   ); intros; inversion_clear T1;
   match goal with
-  | H : D.assignable   P G1 S _ _   |- _ => inversion H; subst
+  | H : D.assignable   P S G1 _ _   |- _ => inversion H; subst
   | _ => idtac
   end;
   repeat match goal with
-  | H : D.typeOfLValue P G1 S _ _ _ |- _ => inversion_clear H
-  | H : D.typeOfRValue P G1 S _ _   |- _ => inversion_clear H
-  | H : D.typeOfExpression _ G1 _ ?e _, IH : D.subP (fun _ => D.fv _ ?e) _ _ _ -> _ |- _ =>
+  | H : D.typeOfLValue P S G1 _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfRValue P S G1 _ _   |- _ => inversion_clear H
+  | H : D.typeOfExpression _ _ G1 ?e _, IH : D.subP (fun _ => D.fv _ ?e) _ _ _ -> _ |- _ =>
       notHyp (D.subP (fun v => D.fv v e) eq G1 G2);
       let Hfree_sub := fresh in
       assert (D.subP (fun v => D.fv v e) eq G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
-  | H : D.typeOfExpression' _ G1 _ ?e _, IH : D.subP (fun _ => D.fv' _ ?e) _ _ _ -> _ |- _ =>
+  | H : D.typeOfExpression' _ _ G1 ?e _, IH : D.subP (fun _ => D.fv' _ ?e) _ _ _ -> _ |- _ =>
       notHyp (D.subP (fun v => D.fv' v e) eq G1 G2);
       let Hfree_sub := fresh in
       assert (D.subP (fun v => D.fv' v e) eq G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
-  | H : D.typeOfArguments _ G1 _ ?es _, IH : D.subP (fun _ => D.fvArguments _ ?es) _ _ _ -> _ |- _ =>
+  | H : D.typeOfArguments _ _ G1 ?es _, IH : D.subP (fun _ => D.fvArguments _ ?es) _ _ _ -> _ |- _ =>
       notHyp (D.subP (fun v => D.fvArguments v es) eq G1 G2);
       let Hfree_sub := fresh in
       assert (D.subP (fun v => D.fvArguments v es) eq G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
-  | H : D.lookup G1 ?v _ |- D.typeOfExpression' _ G2 _ (Var ?v) _ =>
+  | H : D.lookup G1 ?v _ |- D.typeOfExpression' _ _ G2 (Var ?v) _ =>
       constructor; destruct (Hfree _ (D.Fv'_Var v) _ H) as [? [? ?]]; congruence
   end;
   econstructor (
@@ -137,10 +138,10 @@ Proof.
   ).
 Qed.
 
-Lemma type_of_rvalue_correct_aux {A B} {P} {G} {S : sigma A B} {e} :
-  optionSpec   (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
-  optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
-  optionSpec   (type_of_rvalue P G S e) (D.typeOfRValue P G S e).
+Lemma type_of_rvalue_correct_aux {A B1 B2} {P} {G} {S : sigma B1 B2} {e : expression A} :
+  optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
+  optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
+  optionSpec   (type_of_rvalue P S G e) (D.typeOfRValue P S G e).
 Proof.
   intros type_of_expression_correct type_of_expression_unique.
   do 3 unfold_goal.
@@ -157,8 +158,8 @@ Proof.
         )
     | inversion_clear 1;
       repeat match goal with
-      | H : D.typeOfLValue     P G S _ _ _ |- _ => inversion_clear H
-      | H : D.typeOfExpression P G S _ _   |- _ =>
+      | H : D.typeOfLValue     P S G _ _ _ |- _ => inversion_clear H
+      | H : D.typeOfExpression P S G _ _   |- _ =>
           let Heq := fresh in
           set (type_of_expression_unique _ H) as Hfresh;
           congruence || Tactics.autoinjections; now firstorder
@@ -166,10 +167,10 @@ Proof.
     ].
 Qed.
 
-Lemma type_of_rvalue_unique_aux {A B} {P} {G} {S : sigma A B} {e} :
-  optionSpec   (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
-  optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
-  optionUnique (type_of_rvalue P G S e) (D.typeOfRValue P G S e).
+Lemma type_of_rvalue_unique_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} :
+  optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
+  optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
+  optionUnique (type_of_rvalue P S G e) (D.typeOfRValue P S G e).
 Proof.
   intros type_of_expression_correct type_of_expression_unique ? ?.
   do 2 unfold_goal.
@@ -181,9 +182,9 @@ Proof.
   | _ => context_destruct
   end;
   repeat match goal with
-  | H : D.typeOfLValue     P G S _ _ _ |- _ => inversion_clear H
-  | H : D.typeOfRValue     P G S _ _   |- _ => inversion_clear H
-  | H : D.typeOfExpression P G S _ _   |- _ =>
+  | H : D.typeOfLValue     P S G _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfRValue     P S G _ _   |- _ => inversion_clear H
+  | H : D.typeOfExpression P S G _ _   |- _ =>
       let Heq := fresh in
       set (type_of_expression_unique _ H) as Hfresh;
       discriminate Hfresh || Tactics.autoinjections
@@ -193,11 +194,11 @@ Proof.
         | now firstorder ].
 Qed.
 
-Lemma typeOfExpression_functional_aux {A B} {P} {G} {S : sigma A B} {e} :
-  optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
+Lemma typeOfExpression_functional_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} :
+  optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
   forall {tc tc'},
-    D.typeOfExpression P G S e tc  ->
-    D.typeOfExpression P G S e tc' ->
+    D.typeOfExpression P S G e tc  ->
+    D.typeOfExpression P S G e tc' ->
     tc = tc'.
 Proof.
   intros type_of_expression_unique ? ? H1 H2.
@@ -206,21 +207,21 @@ Proof.
   congruence.
 Qed.
 
-Lemma typeOfRValue_functional_aux {A B} {P} {G} {S : sigma A B} {e} :
-  optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e) ->
+Lemma typeOfRValue_functional_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} :
+  optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
   forall {t t'},
-    D.typeOfRValue P G S e t  ->
-    D.typeOfRValue P G S e t' ->
+    D.typeOfRValue P S G e t  ->
+    D.typeOfRValue P S G e t' ->
     t = t'.
 Proof.
   intros type_of_expression_unique.
   inversion_clear 1; inversion_clear 1;
   repeat match goal with
-  | H : D.typeOfLValue P G S _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfLValue P S G _ _ _ |- _ => inversion_clear H
   end;
   match goal with
-  | H1 : D.typeOfExpression P G S ?e _
-  , H2 : D.typeOfExpression P G S ?e _ |- _ =>
+  | H1 : D.typeOfExpression P S G ?e _
+  , H2 : D.typeOfExpression P S G ?e _ |- _ =>
       let Heq := fresh in
       set (typeOfExpression_functional_aux type_of_expression_unique H1 H2) as Heq;
       discriminate Heq || Tactics.autoinjections
@@ -230,9 +231,9 @@ Proof.
     | eapply lvalueConversion_functional ; eassumption ].
 Qed.
 
-Lemma type_of_rvalue_lvalue_eq {A B} {P} {G} {S : sigma A B} {e} {q1} {t1 t2} :
-  type_of_expression P G S e = Some (LValueType q1 t1) ->
-  type_of_rvalue P G S e = Some t2 ->
+Lemma type_of_rvalue_lvalue_eq {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} {q1} {t1 t2} :
+  type_of_expression P S G e = Some (LValueType q1 t1) ->
+  type_of_rvalue P S G e = Some t2 ->
   t1 = t2.
 Proof.
   intros Heq.
@@ -241,11 +242,11 @@ Proof.
   destruct t1; my_auto.
 Qed.
 
-Lemma type_of_rvalue_aux_lvalue_eq_lift {A B} {P} {G} {S : sigma A B} {e} {q1} {t1 t2}:
-  D.typeOfExpression P G S e (LValueType q1 t1) ->
-  type_of_expression P G S e = Some (LValueType q1 t1) ->
-  type_of_rvalue P G S e = Some t2 ->
-  D.typeOfRValue P G S e t1.
+Lemma type_of_rvalue_aux_lvalue_eq_lift {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} {q1} {t1 t2}:
+  D.typeOfExpression P S G e (LValueType q1 t1) ->
+  type_of_expression P S G e = Some (LValueType q1 t1) ->
+  type_of_rvalue P S G e = Some t2 ->
+  D.typeOfRValue P S G e t1.
 Proof.
   intros ? Heq1 Heq2.
   rewrite <- (type_of_rvalue_lvalue_eq Heq1 Heq2) in Heq2.
@@ -334,10 +335,10 @@ Ltac types_elaborate_tac :=
 Ltac types_tac :=
   repeat first [types_neg_tac | types_elaborate_tac | finish fail].
 
-Lemma assignable_correct_aux {A B} {P} {G} {S : sigma A B} {t1} {e2} :
-  optionSpec   (type_of_expression P G S e2) (D.typeOfExpression P G S e2) ->
-  optionUnique (type_of_expression P G S e2) (D.typeOfExpression P G S e2) ->
-  boolSpec (assignable P G S t1 e2) (D.assignable P G S t1 e2).
+Lemma assignable_correct_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {t1} {e2 : expression A} :
+  optionSpec   (type_of_expression P S G e2) (D.typeOfExpression P S G e2) ->
+  optionUnique (type_of_expression P S G e2) (D.typeOfExpression P S G e2) ->
+  boolSpec (assignable P S G t1 e2) (D.assignable P S G t1 e2).
 Proof.
   intros type_of_expression_correct type_of_expression_unique.
   set (type_of_rvalue_correct_aux type_of_expression_correct type_of_expression_unique).
@@ -361,7 +362,7 @@ Proof.
       econstructor (solve [econstructor (eassumption) | eassumption])
     | inversion 1; my_auto;
       match goal with
-      | H : D.typeOfRValue P G S e2 _ |- _ =>
+      | H : D.typeOfRValue P S G e2 _ |- _ =>
           let Heq := fresh in
           set (type_of_rvalue_unique _ H) as Heq;
           discriminate Heq || injection Heq; intros; subst
@@ -382,172 +383,14 @@ Proof.
   end; solve [ constructor; assumption | inversion 1; types_tac].
 Qed.
 
-Lemma pointer_to_complete_object_correct t :
-  if pointer_to_complete_object t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.complete t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.complete t').
-Proof.
-  unfold_goal.
-  repeat match goal with
-  | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; now intuition
-  | _ => context_destruct
-  end; right; congruence.
-Qed.
-
-Lemma pointers_to_compatible_complete_objects_correct t1 t2 :
-  if pointers_to_compatible_complete_objects t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.complete t1' * D.complete t2' * D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.complete t1'))
-         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.complete t2'))
-         + (forall q1' q2' t1' t2',
-              t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
-Proof.
-  unfold_goal.
-  unfold andb.
-  repeat match goal with
-  | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; now intuition
-  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; left; left; left; inversion 1
-      end
-  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; left; left; right; inversion 1
-      end
-  | [_ : neg (D.complete t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
-  | [_ : neg (D.complete t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
-  | _ => context_destruct
-  end.
-Qed.
-
-Lemma pointers_to_compatible_objects_correct t1 t2 :
-  if pointers_to_compatible_objects t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.object t1'  * D.object t2' * D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.object t1'))
-         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.object t2'))
-         + (forall q1' q2' t1' t2',
-              t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
-Proof.
-  unfold_goal.
-  unfold andb.
-  repeat match goal with
-  | [|- object ?t = _ -> _] => case_fun (object_correct t)
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; intuition
-  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; left; left; left; inversion 1
-      end
-  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; left; left; right; inversion 1
-      end
-  | [_ : neg (D.object t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
-  | [_ : neg (D.object t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
-  | _ => context_destruct
-  end.
-Qed.
-
-Lemma pointer_to_object_correct t :
-  if pointer_to_object t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.object t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.object t').
-Proof.
-  unfold_goal.
-  repeat match goal with
-  | [|- object ?t = _ -> _] => case_fun (object_correct t)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; intuition
-  | [|- neg (D.pointer ?t) + _] =>
-      match t with
-      | Pointer _ _ => right
-      | _           => left; inversion 1
-      end
-  | _ => context_destruct
-  end; congruence.
-Qed.
-
-Lemma pointer_to_void_correct t :
-  if pointer_to_void t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.void t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.void t').
-Proof.
-  unfold_goal.
-  repeat match goal with
-  | [|- void ?t = _ -> _] => case_fun (void_correct t)
-  | [|- neg _] => intros [? [? [? ?]]]
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; now intuition
-  | [|- neg (D.pointer ?t) + _] =>
-      match t with
-      | Pointer _ _ => right; intros; inversion 1
-      | _           => left; inversion 1
-      end
-  | _ => context_destruct
-  end; congruence.
-Qed.
-
-Lemma pointers_to_compatible_types_correct t1 t2 :
-  if pointers_to_compatible_types t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' q2' t1' t2',
-              t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
-Proof.
-  unfold_goal.
-  repeat match goal with
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => repeat eexists; now intuition 
-  | [|- neg (D.pointer ?t) + _ + _ ] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; left; inversion 1
-      end
-  | [|- _ + neg (D.pointer ?t) + _ ] =>
-      match t with
-      | Pointer _ _ => fail 1
-      | _           => left; right; inversion 1
-      end
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ ] => right; intros; congruence
-  | _ => context_destruct
-  end.
-Qed.
-
-Lemma well_typed_equality_correct {A B} {P} {G} {S : sigma A B} {e1 e2} {aop} {t1 t2} :
-  (forall {t1 t1'}, D.typeOfRValue P G S e1 t1 -> D.typeOfRValue P G S e1 t1' -> t1 = t1') ->
-  (forall {t2 t2'}, D.typeOfRValue P G S e2 t2 -> D.typeOfRValue P G S e2 t2' -> t2 = t2') ->
-  D.typeOfRValue P G S e1 t1 ->
-  D.typeOfRValue P G S e2 t2 ->
+Lemma well_typed_equality_correct {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} {aop} {t1 t2} :
+  (forall {t1 t1'}, D.typeOfRValue P S G e1 t1 -> D.typeOfRValue P S G e1 t1' -> t1 = t1') ->
+  (forall {t2 t2'}, D.typeOfRValue P S G e2 t2 -> D.typeOfRValue P S G e2 t2' -> t2 = t2') ->
+  D.typeOfRValue P S G e1 t1 ->
+  D.typeOfRValue P S G e2 t2 ->
   (aop = Eq) + (aop = Ne) ->
   boolSpec (well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2))
-           (D.typeOfExpression' P G S (Binary e1 aop e2) (RValueType (Basic (Integer (Signed Int))))).
+           (D.typeOfExpression' P S G (Binary e1 aop e2) (RValueType (Basic (Integer (Signed Int))))).
 Proof.
   intros typeOfRValue_unique1 typeOfRValue_unique2 H1 H2 Haop.
   do 2 unfold_goal.
@@ -573,18 +416,18 @@ Proof.
                                Pointer ?q2 ?t2 = _ ->
                                neg (D.compatible _ _)
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
-  | |- D.typeOfExpression' P G S _ _ => types_tac; econstructor (finish eassumption)
-  | H : _ + _ |- D.typeOfExpression' P G S _ _ => destruct H as [? | ?]
+  | |- D.typeOfExpression' P S G _ _ => types_tac; econstructor (finish eassumption)
+  | H : _ + _ |- D.typeOfExpression' P S G _ _ => destruct H as [? | ?]
   end;
   abstract (
   match goal with
   | |- neg _ => inversion_clear 1
   end;
   repeat match goal with
-  | [ H1 : D.typeOfRValue P G S e1 ?t1
-    , H2 : D.typeOfRValue P G S e1 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique1 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | [ H1 : D.typeOfRValue P G S e2 ?t1
-    , H2 : D.typeOfRValue P G S e2 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique2 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | [ H1 : D.typeOfRValue P S G e1 ?t1
+    , H2 : D.typeOfRValue P S G e1 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique1 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | [ H1 : D.typeOfRValue P S G e2 ?t1
+    , H2 : D.typeOfRValue P S G e2 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique2 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [                      Hfalse : forall _ _, Pointer ?q1 Void = Pointer _ _ -> neg (D.void _)    |- False ] => now eapply (Hfalse q1 Void eq_refl D.Void_Void)
@@ -685,15 +528,15 @@ Proof.
   end.
 Qed.
 
-Lemma well_typed_conditional_correct_aux {A B} {P} {G} {S : sigma A B} {t1 t2 t3} {e1 e2 e3} :
-  (forall {t1 t1'}, D.typeOfRValue P G S e1 t1 -> D.typeOfRValue P G S e1 t1' -> t1 = t1') ->
-  (forall {t2 t2'}, D.typeOfRValue P G S e2 t2 -> D.typeOfRValue P G S e2 t2' -> t2 = t2') ->
-  (forall {t3 t3'}, D.typeOfRValue P G S e3 t3 -> D.typeOfRValue P G S e3 t3' -> t3 = t3') ->
-  D.typeOfRValue P G S e1 t1 ->
-  D.typeOfRValue P G S e2 t2 ->
-  D.typeOfRValue P G S e3 t3 ->
+Lemma well_typed_conditional_correct_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {t1 t2 t3} {e1 e2 e3 : expression A} :
+  (forall {t1 t1'}, D.typeOfRValue P S G e1 t1 -> D.typeOfRValue P S G e1 t1' -> t1 = t1') ->
+  (forall {t2 t2'}, D.typeOfRValue P S G e2 t2 -> D.typeOfRValue P S G e2 t2' -> t2 = t2') ->
+  (forall {t3 t3'}, D.typeOfRValue P S G e3 t3 -> D.typeOfRValue P S G e3 t3' -> t3 = t3') ->
+  D.typeOfRValue P S G e1 t1 ->
+  D.typeOfRValue P S G e2 t2 ->
+  D.typeOfRValue P S G e3 t3 ->
   optionSpec (well_typed_conditional P t1 t2 t3 (null_pointer_constant e2) (null_pointer_constant e3))
-             (D.typeOfExpression' P G S (Conditional e1 e2 e3)).
+             (D.typeOfExpression' P S G (Conditional e1 e2 e3)).
 Proof.
   intros typeOfRValue_functional1 typeOfRValue_functional2 typeOfRValue_functional3 ? ? ?.
   do 2 unfold_goal.
@@ -717,13 +560,13 @@ Proof.
   | |- composite_pointer ?t1 ?t2 = _ -> _ => case_fun_tac (composite_pointer_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
   | |- Some _ = Some _ -> _ => intros ?; Tactics.subst_no_fail; Tactics.autoinjections
-  | H : neg _ + neg _ + {_ : _ & {_ : _ & {_ : _ & {_ : _ & (_ = _) * (_ = _) * neg _}}}} |- D.typeOfExpression' P G S _ _ =>
+  | H : neg _ + neg _ + {_ : _ & {_ : _ & {_ : _ & {_ : _ & (_ = _) * (_ = _) * neg _}}}} |- D.typeOfExpression' P S G _ _ =>
       destruct H as [[H | H] | H];
       [ exfalso; apply H; constructor
       | exfalso; apply H; constructor
       | autodestruct H]
   | H : D.compatible ?t1 ?t2, Hfind : forall _, neg (D.composite ?t1 ?t2 _) |- _ => destruct (compatible_composite H Hfind)
-  | |- D.typeOfExpression' P G S _ _ => 
+  | |- D.typeOfExpression' P S G _ _ => 
         econstructor (
           solve [
               eassumption
@@ -736,9 +579,9 @@ Proof.
   abstract (
   inversion 1; subst;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2 
-  , H  : forall _ _, D.typeOfRValue P G S ?e _ -> _ -> _ = _ |- _ =>
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2 
+  , H  : forall _ _, D.typeOfRValue P S G ?e _ -> _ -> _ = _ |- _ =>
       notSame t1 t2;
       pose proof (H _ _ H1 H2);
       Tactics.subst_no_fail; Tactics.autoinjections
@@ -753,25 +596,25 @@ Proof.
   end; my_auto; now firstorder).
 Qed.
 
-Lemma nullPointerConstant_typeOfExpression {A B} {P} {G} {S : sigma A B} :
-  forall e,
+Lemma nullPointerConstant_typeOfExpression {A B1 B2} {P} {S : sigma B1 B2} {G} :
+  forall e : expression A,
   D.nullPointerConstant e ->
-    D.typeOfExpression P G S e (RValueType (Basic (Integer (Signed Int))))
-  + D.typeOfExpression P G S e (RValueType (Pointer no_qualifiers Void))
-  + forall tc, neg (D.typeOfExpression P G S e tc).
+    D.typeOfExpression P S G e (RValueType (Basic (Integer (Signed Int))))
+  + D.typeOfExpression P S G e (RValueType (Pointer no_qualifiers Void))
+  + forall tc, neg (D.typeOfExpression P S G e tc).
 Proof.
   apply (
     expression_nrect
       (fun e =>
          forall (Hnull : D.nullPointerConstant' e),
-           D.typeOfExpression' P G S e (RValueType (Basic (Integer (Signed Int)))) +
-           D.typeOfExpression' P G S e (RValueType (Pointer no_qualifiers Void))   +
-           forall tc, neg (D.typeOfExpression' P G S e tc))
+           D.typeOfExpression' P S G e (RValueType (Basic (Integer (Signed Int)))) +
+           D.typeOfExpression' P S G e (RValueType (Pointer no_qualifiers Void))   +
+           forall tc, neg (D.typeOfExpression' P S G e tc))
       (fun e =>
          forall (Hnull : D.nullPointerConstant  e),
-           D.typeOfExpression  P G S e (RValueType (Basic (Integer (Signed Int)))) +
-           D.typeOfExpression  P G S e (RValueType (Pointer no_qualifiers Void))   +
-           forall tc, neg (D.typeOfExpression  P G S e tc))
+           D.typeOfExpression  P S G e (RValueType (Basic (Integer (Signed Int)))) +
+           D.typeOfExpression  P S G e (RValueType (Pointer no_qualifiers Void))   +
+           forall tc, neg (D.typeOfExpression  P S G e tc))
       (fun _ => True));
   intros;
   first [now trivial | inversion_clear Hnull].
@@ -791,9 +634,9 @@ Proof.
                                                      | econstructor (now repeat first [inversion 1 | constructor])])).
     + right; inversion 1; subst.
       repeat match goal with
-      | [Hfalse : forall _, neg (D.typeOfExpression P G S e _), H : D.typeOfExpression P G S e _ |- _] => exact (Hfalse _ H)
-      | [H : D.typeOfRValue P G S _ _   |- _] => inversion_clear H
-      | [H : D.typeOfLValue P G S _ _ _ |- _] => inversion_clear H
+      | [Hfalse : forall _, neg (D.typeOfExpression P S G e _), H : D.typeOfExpression P S G e _ |- _] => exact (Hfalse _ H)
+      | [H : D.typeOfRValue P S G _ _   |- _] => inversion_clear H
+      | [H : D.typeOfLValue P S G _ _ _ |- _] => inversion_clear H
       end.
   - left; left; repeat constructor.
     + unfold_integer_range;
@@ -810,12 +653,12 @@ Proof.
     + right; inversion_clear 1; firstorder.
 Qed.
 
-Lemma nullPointerConstant_typeOfRValue {A B} {P} {G} {S : sigma A B} :
-  forall e,
+Lemma nullPointerConstant_typeOfRValue {A B1 B2} {P} {S : sigma B1 B2} {G} :
+  forall e : expression A,
   D.nullPointerConstant e ->
-    D.typeOfRValue P G S e (Basic (Integer (Signed Int)))
-  + D.typeOfRValue P G S e (Pointer no_qualifiers Void)
-  + forall t, neg (D.typeOfRValue P G S e t).
+    D.typeOfRValue P S G e (Basic (Integer (Signed Int)))
+  + D.typeOfRValue P S G e (Pointer no_qualifiers Void)
+  + forall t, neg (D.typeOfRValue P S G e t).
 Proof.
   intros e Hnull.
   destruct (nullPointerConstant_typeOfExpression (P:=P) (G:=G) (S:=S) e Hnull) as [[? | ?] | ?].
@@ -823,7 +666,7 @@ Proof.
   - left; right; econstructor (solve [finish eassumption | constructor; inversion 1]).
   - right; inversion_clear 1.
     + firstorder.
-    + match goal with | H : D.typeOfLValue P G S e _ _ |- _ => inversion_clear H end.
+    + match goal with | H : D.typeOfLValue P S G e _ _ |- _ => inversion_clear H end.
       firstorder.
 Qed.  
 
@@ -841,11 +684,11 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma typeOfExpression'_unique_functional {A B} {P} {G} {S : sigma A B} {e} :
-  (optionUnique (type_of_expression' P G S e) (D.typeOfExpression' P G S e)) ->
+Lemma typeOfExpression'_unique_functional {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression' A} :
+  (optionUnique (type_of_expression' P S G e) (D.typeOfExpression' P S G e)) ->
   forall {tc tc'},
-    D.typeOfExpression' P G S e tc  ->
-    D.typeOfExpression' P G S e tc' ->
+    D.typeOfExpression' P S G e tc  ->
+    D.typeOfExpression' P S G e tc' ->
     tc = tc'.
 Proof.
   intros type_of_expression'_unique ? ? H1 H2.
@@ -854,27 +697,27 @@ Proof.
   congruence.
 Qed.
 
-Lemma typeOfExpression'_functional_conditional {A B} {P} {G} {S : sigma A B} {e1 e2 e3} :
-  (forall {t1 t1'}, D.typeOfRValue P G S e1 t1 -> D.typeOfRValue P G S e1 t1' -> t1 = t1') ->
-  (forall {t2 t2'}, D.typeOfRValue P G S e2 t2 -> D.typeOfRValue P G S e2 t2' -> t2 = t2') ->
-  (forall {t3 t3'}, D.typeOfRValue P G S e3 t3 -> D.typeOfRValue P G S e3 t3' -> t3 = t3') ->
-  forall {tc tc'}, D.typeOfExpression' P G S (Conditional e1 e2 e3) tc  ->
-                   D.typeOfExpression' P G S (Conditional e1 e2 e3) tc' ->
+Lemma typeOfExpression'_functional_conditional {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
+  (forall {t1 t1'}, D.typeOfRValue P S G e1 t1 -> D.typeOfRValue P S G e1 t1' -> t1 = t1') ->
+  (forall {t2 t2'}, D.typeOfRValue P S G e2 t2 -> D.typeOfRValue P S G e2 t2' -> t2 = t2') ->
+  (forall {t3 t3'}, D.typeOfRValue P S G e3 t3 -> D.typeOfRValue P S G e3 t3' -> t3 = t3') ->
+  forall {tc tc'}, D.typeOfExpression' P S G (Conditional e1 e2 e3) tc  ->
+                   D.typeOfExpression' P S G (Conditional e1 e2 e3) tc' ->
                    tc = tc'.
 Proof.
   intros Hunique1 Hunique2 Hunique3.
   inversion_clear 1; inversion_clear 1;
   repeat match goal with
-  | [ Hunique : forall _ _, D.typeOfRValue P G S ?e _ -> D.typeOfRValue P G S ?e _ -> _ = _
-    , H1 : D.typeOfRValue P G S ?e ?t1, H2 : D.typeOfRValue P G S ?e ?t2 |- _] => notSame t1 t2; pose proof (Hunique _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | [ Hunique : forall _ _, D.typeOfRValue P S G ?e _ -> D.typeOfRValue P S G ?e _ -> _ = _
+    , H1 : D.typeOfRValue P S G ?e ?t1, H2 : D.typeOfRValue P S G ?e ?t2 |- _] => notSame t1 t2; pose proof (Hunique _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | [ H1 : D.usualArithmetic P ?t1 ?t2 ?t, H2 : D.usualArithmetic P ?t1 ?t2 ?t' |- _] => notSame t t'; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | [ H1 : D.composite ?t1 ?t2 ?t, H2 : D.composite ?t1 ?t2 ?t' |- _] => notSame t t'; pose proof (composite_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | [ Hunique : forall _ _, D.typeOfRValue P G S ?e _ -> D.typeOfRValue P G S ?e _ -> _ = _
+  | [ Hunique : forall _ _, D.typeOfRValue P S G ?e _ -> D.typeOfRValue P S G ?e _ -> _ = _
     , Hnull : D.nullPointerConstant ?e
-    , H : D.typeOfRValue P G S ?e (Pointer _ ?t) |- _] =>
+    , H : D.typeOfRValue P S G ?e (Pointer _ ?t) |- _] =>
       notSame t Void;
       let H' := fresh in
-      destruct (@nullPointerConstant_typeOfRValue _ _ P G S e Hnull) as [[H' | H']| H'];
+      destruct (@nullPointerConstant_typeOfRValue _ _ _ P S G e Hnull) as [[H' | H']| H'];
       [ discriminate (Hunique _ _ H H')
       | let Heq := fresh in set (Hunique _ _ H H') as Heq; inversion Heq; clear Heq; subst
       | destruct (H' _ H)]
@@ -882,37 +725,37 @@ Proof.
   end.
 Qed.
 
-Lemma typeOfExpression'_neg_conditional1 {A B} {P} {G} {S : sigma A B} {e1 e2 e3} : 
-  (forall t, neg (D.typeOfRValue P G S e1 t)) ->
-  forall tc, neg (D.typeOfExpression' P G S (Conditional e1 e2 e3) tc).
+Lemma typeOfExpression'_neg_conditional1 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
+  (forall t, neg (D.typeOfRValue P S G e1 t)) ->
+  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
 Proof. intros ?; inversion 1; firstorder. Qed.
 
-Lemma typeOfExpression'_neg_conditional2 {A B} {P} {G} {S : sigma A B} {e1 e2 e3} : 
-  (forall t, neg (D.typeOfRValue P G S e2 t)) ->
-  forall tc, neg (D.typeOfExpression' P G S (Conditional e1 e2 e3) tc).
+Lemma typeOfExpression'_neg_conditional2 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
+  (forall t, neg (D.typeOfRValue P S G e2 t)) ->
+  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
 Proof. intros ?; inversion 1; firstorder. Qed.
 
-Lemma typeOfExpression'_neg_conditional3 {A B} {P} {G} {S : sigma A B} {e1 e2 e3} : 
-  (forall t, neg (D.typeOfRValue P G S e3 t)) ->
-  forall tc, neg (D.typeOfExpression' P G S (Conditional e1 e2 e3) tc).
+Lemma typeOfExpression'_neg_conditional3 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} : 
+  (forall t, neg (D.typeOfRValue P S G e3 t)) ->
+  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
 Proof. intros ?; inversion 1; firstorder. Qed.
 
-Definition type_of_expression'_spec {A B} P G (S : sigma A B) e :=
-  optionSpec   (type_of_expression' P G S e) (D.typeOfExpression' P G S e) *
-  optionUnique (type_of_expression' P G S e) (D.typeOfExpression' P G S e).
+Definition type_of_expression'_spec {A B1 B2} P (S : sigma B1 B2) G (e : expression' A) :=
+  optionSpec   (type_of_expression' P S G e) (D.typeOfExpression' P S G e) *
+  optionUnique (type_of_expression' P S G e) (D.typeOfExpression' P S G e).
 
-Definition type_of_expression_spec {A B} P G (S : sigma A B) e :=
-  optionSpec   (type_of_expression P G S e) (D.typeOfExpression P G S e) *
-  optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e).
+Definition type_of_expression_spec {A B1 B2} P (S : sigma B1 B2) G (e : expression A) :=
+  optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) *
+  optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e).
 
-Definition well_typed_arguments_spec {A B} P G (S : sigma A B) es :=
-  forall ps, boolSpec (well_typed_arguments P G S es ps) (D.typeOfArguments P G S es ps).
+Definition well_typed_arguments_spec {A B1 B2} P (S : sigma B1 B2) G (es : list (expression A)) :=
+  forall ps, boolSpec (well_typed_arguments P S G es ps) (D.typeOfArguments P S G es ps).
 
-Definition type_of_expression'_correct_Constant {A B} {P} {G} {S : sigma A B} {c} :
-  type_of_expression'_spec P G S (Constant c).
+Definition type_of_expression'_correct_Constant {A B1 B2} {P} {S : sigma B1 B2} {G} {c} :
+  type_of_expression'_spec (A:=A) P S G (Constant c).
 Proof.
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Constant c)).
+  pull_out (option typeCategory) (type_of_expression' (A:=A) P S G (Constant c)).
   unfold_goal.
   unfold option_bind.
   destruct c; simpl.
@@ -935,22 +778,22 @@ Proof.
   end.
 Qed.
 
-Lemma type_of_expression'_correct_Unary {A B} {P} {G} {S : sigma A B} {aop} {e} :
-  type_of_expression_spec P G S e ->
-  type_of_expression'_spec P G S (Unary aop e).
+Lemma type_of_expression'_correct_Unary {A B1 B2} {P} {S : sigma B1 B2} {G} {aop} {e : expression A} :
+  type_of_expression_spec P S G e ->
+  type_of_expression'_spec P S G (Unary aop e).
 Proof.
   intros [Hcorrect Hunique].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Unary aop e)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Unary aop e)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold option_bind.
   unfold option_map.
   unfold andb.
   unfold orb.
   destruct aop;
   repeat match goal with
-  | |- type_of_rvalue P G S e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
-  | |- type_of_expression P G S e = _ -> _ => case_fun Hcorrect
+  | |- type_of_rvalue P S G e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
+  | |- type_of_expression P S G e = _ -> _ => case_fun Hcorrect
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- promotion P ?c = _ -> _ => case_fun (promotion_correct P c)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
@@ -974,15 +817,15 @@ Proof.
   | H : forall _, neg _ |- False => eapply H; eassumption
   | |- None = Some _ => exfalso
   | |- ?c _ = ?c _ => apply f_equal
-  | H : D.typeOfLValue P G S _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfLValue P S G _ _ _ |- _ => inversion_clear H
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1 
-  , H2 : D.typeOfRValue P G S ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux Hunique H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfRValue P S G ?e ?t1 
+  , H2 : D.typeOfRValue P S G ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux Hunique H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.promotion P ?t ?t1 
   , H2 : D.promotion P ?t ?t2 |- _ => notSame t1 t2; pose proof (promotion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : D.typeOfExpression P G S ?e ?t1 
-  , H2 : D.typeOfExpression P G S ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux Hunique H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfExpression P S G ?e ?t1 
+  , H2 : D.typeOfExpression P S G ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux Hunique H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.lvalueConversion ?t ?t1 
   , H2 : D.lvalueConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (lvalueConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -992,19 +835,19 @@ Proof.
   end).
 Qed.
 
-Lemma type_of_expression'_correct_Binary_Comma {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Comma e2).
+Lemma type_of_expression'_correct_Binary_Comma {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Comma e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Comma e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Comma e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold option_bind.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
@@ -1017,27 +860,27 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1 
-  , H2 : D.typeOfRValue P G S ?e ?t2 |- ?t1 = ?t2 => eapply typeOfRValue_functional_aux; eassumption
+  | H1 : D.typeOfRValue P S G ?e ?t1 
+  , H2 : D.typeOfRValue P S G ?e ?t2 |- ?t1 = ?t2 => eapply typeOfRValue_functional_aux; eassumption
   | H : forall _, neg _ |- False => eapply H; eassumption
   end.
 Qed.
 
-Lemma type_of_expression'_correct_Binary_Arithmetic_Mul {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Mul) e2).
+Lemma type_of_expression'_correct_Binary_Arithmetic_Mul {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Mul) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Mul) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Mul) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1052,9 +895,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1 
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfRValue P S G ?e ?t1 
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1065,21 +908,21 @@ Proof.
   end.
 Qed.
 
-Lemma type_of_expression'_correct_Binary_Arithmetic_Div {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Div) e2).
+Lemma type_of_expression'_correct_Binary_Arithmetic_Div {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Div) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Div) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Div) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1094,9 +937,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1 
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfRValue P S G ?e ?t1 
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1107,21 +950,21 @@ Proof.
   end.
 Qed.
 
-Lemma type_of_expression'_correct_Binary_Arithmetic_Mod {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Mod) e2).
+Lemma type_of_expression'_correct_Binary_Arithmetic_Mod {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Mod) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Mod) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Mod) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1136,9 +979,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1150,21 +993,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Arithmetic_Add {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Add) e2).
+Definition type_of_expression'_correct_Binary_Arithmetic_Add {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Add) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Add) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Add) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
@@ -1182,9 +1025,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1198,21 +1041,21 @@ Proof.
   end).
 Qed.
 
-Definition type_of_expression'_correct_Binary_Arithmetic_Sub {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Sub) e2).
+Definition type_of_expression'_correct_Binary_Arithmetic_Sub {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Sub) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Sub) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Sub) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
@@ -1231,9 +1074,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1253,21 +1096,21 @@ Proof.
   end).
 Qed.
 
-Definition type_of_expression'_correct_Binary_Arithmetic_Shl {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Shl) e2).
+Definition type_of_expression'_correct_Binary_Arithmetic_Shl {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Shl) e2).
 Proof. 
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Shl) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Shl) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- promotion P ?t = _ -> _ => case_fun (promotion_correct P t)
   | _ => context_destruct
@@ -1282,9 +1125,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.promotion P ?t ?t1 
   , H2 : D.promotion P ?t ?t2 |- _ => notSame t1 t2; pose proof (promotion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1298,21 +1141,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Arithmetic_Shr {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Shr) e2).
+Definition type_of_expression'_correct_Binary_Arithmetic_Shr {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Shr) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Shr) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Shr) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- promotion P ?t = _ -> _ => case_fun (promotion_correct P t)
   | _ => context_destruct
@@ -1327,9 +1170,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.promotion P ?t ?t1 
   , H2 : D.promotion P ?t ?t2 |- _ => notSame t1 t2; pose proof (promotion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1343,21 +1186,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Band {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Band) e2).
+Definition type_of_expression'_correct_Binary_Band {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Band) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Band) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Band) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1372,9 +1215,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1388,21 +1231,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Bor {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Bor) e2).
+Definition type_of_expression'_correct_Binary_Bor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Bor) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Bor) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Bor) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1417,9 +1260,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1433,21 +1276,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Xor {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 (Arithmetic Xor) e2).
+Definition type_of_expression'_correct_Binary_Xor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 (Arithmetic Xor) e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 (Arithmetic Xor) e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 (Arithmetic Xor) e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- usual_arithmetic P ?t1 ?t2 = _ -> _ => case_fun (usual_arithmetic_correct P t1 t2)
   | _ => context_destruct
@@ -1462,9 +1305,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1478,21 +1321,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_And {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 And e2).
+Definition type_of_expression'_correct_Binary_And {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 And e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 And e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 And e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- scalar ?t = _ -> _ => case_fun (scalar_correct t)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
@@ -1506,9 +1349,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => progress types_tac
@@ -1516,21 +1359,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Or {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Or e2).
+Definition type_of_expression'_correct_Binary_Or {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Or e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Or e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Or e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- scalar ?t = _ -> _ => case_fun (scalar_correct t)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
@@ -1544,9 +1387,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => progress types_tac
@@ -1554,21 +1397,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Lt {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Lt e2).
+Definition type_of_expression'_correct_Binary_Lt {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Lt e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Lt e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Lt e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- real ?t = _ -> _ => case_fun (real_correct t)
   | |- pointers_to_compatible_objects ?t1 ?t2 = _ -> _ => case_fun_tac (pointers_to_compatible_objects_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
@@ -1583,9 +1426,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
@@ -1598,21 +1441,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Gt {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Gt e2).
+Definition type_of_expression'_correct_Binary_Gt {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Gt e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Gt e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Gt e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- real ?t = _ -> _ => case_fun (real_correct t)
   | |- pointers_to_compatible_objects ?t1 ?t2 = _ -> _ => case_fun_tac (pointers_to_compatible_objects_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
@@ -1627,9 +1470,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
@@ -1642,21 +1485,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Le {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Le e2).
+Definition type_of_expression'_correct_Binary_Le {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Le e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Le e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Le e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- real ?t = _ -> _ => case_fun (real_correct t)
   | |- pointers_to_compatible_objects ?t1 ?t2 = _ -> _ => case_fun_tac (pointers_to_compatible_objects_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
@@ -1671,9 +1514,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
@@ -1686,21 +1529,21 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Ge {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Ge e2).
+Definition type_of_expression'_correct_Binary_Ge {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Ge e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Ge e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Ge e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- real ?t = _ -> _ => case_fun (real_correct t)
   | |- pointers_to_compatible_objects ?t1 ?t2 = _ -> _ => case_fun_tac (pointers_to_compatible_objects_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
@@ -1715,9 +1558,9 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
@@ -1730,25 +1573,25 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Eq {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Eq e2).
+Definition type_of_expression'_correct_Binary_Eq {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Eq e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Eq e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Eq e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
-  | H1 : D.typeOfRValue P G S e1 _ , H2 : D.typeOfRValue P G S e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | H1 : D.typeOfRValue P S G e1 _ , H2 : D.typeOfRValue P S G e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
       case_fun (well_typed_equality_correct
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique1)
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique2) H1 H2 (inl (eq_refl Eq)))
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (inl (eq_refl Eq)))
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
@@ -1761,36 +1604,36 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H2 : neg (D.typeOfExpression' P G S (Binary e1 Eq e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
+  | H2 : neg (D.typeOfExpression' P S G (Binary e1 Eq e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
   | _ => finish fail
   | H : _ + _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Ne {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Binary e1 Ne e2).
+Definition type_of_expression'_correct_Binary_Ne {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Binary e1 Ne e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Binary e1 Ne e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Binary e1 Ne e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   unfold option_bind.
   unfold option_map.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
-  | H1 : D.typeOfRValue P G S e1 _ , H2 : D.typeOfRValue P G S e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | H1 : D.typeOfRValue P S G e1 _ , H2 : D.typeOfRValue P S G e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
       case_fun (well_typed_equality_correct
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique1)
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique2) H1 H2 (inr (eq_refl Ne)))
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (inr (eq_refl Ne)))
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
@@ -1803,32 +1646,32 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H2 : neg (D.typeOfExpression' P G S (Binary e1 Ne e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
+  | H2 : neg (D.typeOfExpression' P S G (Binary e1 Ne e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
   | _ => finish fail
   | H : _ + _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_Assign {A B} {P} {G} {S : sigma A B} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (Assign e1 e2).
+Definition type_of_expression'_correct_Assign {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (Assign e1 e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Assign e1 e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
-  fold (@assignable A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Assign e1 e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
+  fold (@assignable A B1 B2 P S G).
   unfold andb.
   repeat match goal with
-  | |- type_of_expression P G S e1 = _ -> _ => case_fun Hcorrect1
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
-  | |- assignable P G S (pointer_conversion ?t) e2 = _ -> _ => pose proof (pointer_conversion_correct t); case_fun (assignable_correct_aux (t1:=pointer_conversion t) Hcorrect2 Hunique2)
+  | |- type_of_expression P S G e1 = _ -> _ => case_fun Hcorrect1
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- assignable P S G (pointer_conversion ?t) e2 = _ -> _ => pose proof (pointer_conversion_correct t); case_fun (assignable_correct_aux (t1:=pointer_conversion t) Hcorrect2 Hunique2)
   | |- modifiable ?q ?t = _ -> _ => case_fun (modifiable_correct q t)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
@@ -1842,40 +1685,40 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H : D.typeOfLValue P G S _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfLValue P S G _ _ _ |- _ => inversion_clear H
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : D.typeOfExpression P G S ?e ?t1
-  , H2 : D.typeOfExpression P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfExpression P S G ?e ?t1
+  , H2 : D.typeOfExpression P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : findSpec ?t1 (D.pointerConversion ?t)
   , H2 : D.pointerConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (pointerConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : forall _, neg (D.typeOfRValue P G S ?e _), H : D.assignable P G S _ ?e |- False => inversion_clear H
+  | _ : forall _, neg (D.typeOfRValue P S G ?e _), H : D.assignable P S G _ ?e |- False => inversion_clear H
   | _ => reflexivity
   | H : _ + _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_CompoundAssign {A B} {P} {G} {S : sigma A B} {aop} {e1 e2} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression'_spec P G S (CompoundAssign e1 aop e2).
+Definition type_of_expression'_correct_CompoundAssign {A B1 B2} {P} {S : sigma B1 B2} {G} {aop} {e1 e2 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression'_spec P S G (CompoundAssign e1 aop e2).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (CompoundAssign e1 aop e2)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (CompoundAssign e1 aop e2)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold option_bind.
   unfold andb.
   unfold orb.
   repeat match goal with
-  | |- type_of_expression P G S e1 = _ -> _ => case_fun Hcorrect1
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_expression P S G e1 = _ -> _ => case_fun Hcorrect1
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
   | |- modifiable ?q ?t = _ -> _ => case_fun (modifiable_correct q t)
   | |- arithmetic ?t = _ -> _ => case_fun (arithmetic_correct t)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
@@ -1895,15 +1738,15 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H : D.typeOfLValue P G S _ _ _ |- _ => inversion_clear H
+  | H : D.typeOfLValue P S G _ _ _ |- _ => inversion_clear H
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : D.typeOfExpression P G S ?e ?t1
-  , H2 : D.typeOfExpression P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfExpression P S G ?e ?t1
+  , H2 : D.typeOfExpression P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.lvalueConversion ?t ?t1 
   , H2 : D.lvalueConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (lvalueConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
@@ -1919,29 +1762,29 @@ Proof.
   end).
 Qed.
 
-Definition type_of_expression'_correct_Conditional {A B} {P} {G} {S : sigma A B} {e1 e2 e3} :
-  type_of_expression_spec P G S e1 ->
-  type_of_expression_spec P G S e2 ->
-  type_of_expression_spec P G S e3 ->
-  type_of_expression'_spec P G S (Conditional e1 e2 e3).
+Definition type_of_expression'_correct_Conditional {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
+  type_of_expression_spec P S G e1 ->
+  type_of_expression_spec P S G e2 ->
+  type_of_expression_spec P S G e3 ->
+  type_of_expression'_spec P S G (Conditional e1 e2 e3).
 Proof.
   intros [Hcorrect1 Hunique1] [Hcorrect2 Hunique2] [Hcorrect3 Hunique3].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Conditional e1 e2 e3)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Conditional e1 e2 e3)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold option_bind.
   repeat match goal with
-  | |- type_of_rvalue P G S e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
-  | |- type_of_rvalue P G S e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
-  | |- type_of_rvalue P G S e3 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect3 Hunique3)
-  | H1 : D.typeOfRValue P G S e1 _
-  , H2 : D.typeOfRValue P G S e2 _
-  , H3 : D.typeOfRValue P G S e3 _
+  | |- type_of_rvalue P S G e1 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect1 Hunique1)
+  | |- type_of_rvalue P S G e2 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect2 Hunique2)
+  | |- type_of_rvalue P S G e3 = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect3 Hunique3)
+  | H1 : D.typeOfRValue P S G e1 _
+  , H2 : D.typeOfRValue P S G e2 _
+  , H3 : D.typeOfRValue P S G e3 _
     |- well_typed_conditional P _ _ _ (null_pointer_constant e2) (null_pointer_constant e3) = _ -> _ =>
       case_fun (well_typed_conditional_correct_aux
-                  (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique1)
-                  (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique2)
-                  (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique3)
+                  (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
+                  (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2)
+                  (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique3)
                   H1 H2 H3)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
@@ -1950,40 +1793,40 @@ Proof.
   end;
   match goal with
   | |- optionSpec _ _ => assumption
-  | H1 : D.typeOfExpression' P G S (Conditional _ _ _) _ |- optionUnique (Some _) _ =>
+  | H1 : D.typeOfExpression' P S G (Conditional _ _ _) _ |- optionUnique (Some _) _ =>
       let H2 := fresh in
       intros ? H2;
       apply f_equal;
       exact (typeOfExpression'_functional_conditional
-               (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique1)
-               (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique2)
-               (@typeOfRValue_functional_aux _ _ _ _ _ _ Hunique3) H1 H2)
-  | H1 : forall _, neg (D.typeOfExpression' P G S (Conditional _ _ _) _) |- optionUnique None _ =>
+               (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
+               (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2)
+               (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique3) H1 H2)
+  | H1 : forall _, neg (D.typeOfExpression' P S G (Conditional _ _ _) _) |- optionUnique None _ =>
       let H2 := fresh in
       intros ? H2; destruct (H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P G S e1 _) |- _ =>
+  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e1 _) |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional1 H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P G S e2 _) |- _ =>
+  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e2 _) |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional2 H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P G S e3 _) |- _ =>
+  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e3 _) |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional3 H1 _ H2)
   end.
 Qed.
 
-Definition type_of_expression'_correct_Cast {A B} {P} {G} {S : sigma A B} {q} {t} {e} :
-  type_of_expression_spec P G S e ->
-  type_of_expression'_spec P G S (Cast q t e).
+Definition type_of_expression'_correct_Cast {A B1 B2} {P} {S : sigma B1 B2} {G} {q} {t} {e : expression A} :
+  type_of_expression_spec P S G e ->
+  type_of_expression'_spec P S G (Cast q t e).
 Proof.
   intros [Hcorrect Hunique].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Cast q t e)); simpl.
-  fold (@type_of_rvalue A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Cast q t e)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
   unfold andb.
   repeat match goal with
-  | |- type_of_rvalue P G S e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
+  | |- type_of_rvalue P S G e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
   | |- wf_lvalue ?q ?t = _ -> _ => case_fun (wf_lvalue_correct q t)
   | |- scalar ?t = _ -> _ => case_fun (scalar_correct t)
   | _ => context_destruct
@@ -1998,30 +1841,30 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => reflexivity
   end.
 Qed.
 
-Definition type_of_expression'_correct_Call {A B} {P} {G} {S : sigma A B} {e} {es} :
-  well_typed_arguments_spec P G S es ->
-  type_of_expression_spec P G S e ->
-  type_of_expression'_spec P G S (Call e es).
+Definition type_of_expression'_correct_Call {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} {es} :
+  well_typed_arguments_spec P S G es ->
+  type_of_expression_spec P S G e ->
+  type_of_expression'_spec P S G (Call e es).
 Proof.
   intros Hargs [Hcorrect Hunique].
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Call e es)); simpl.
-  fold (@type_of_rvalue A B P G S).
-  fold (@assignable A B P G S).
-  fold (@well_typed_arguments A B P G S).
+  pull_out (option typeCategory) (type_of_expression' P S G (Call e es)); simpl.
+  fold (@type_of_rvalue A B1 B2 P S G).
+  fold (@assignable A B1 B2 P S G).
+  fold (@well_typed_arguments A B1 B2 P S G).
   unfold andb.
   repeat match goal with
-  | |- type_of_rvalue P G S e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
-  | |- well_typed_arguments P G S ?es ?ps = _ -> _ => case_fun (Hargs ps)
+  | |- type_of_rvalue P S G e = _ -> _ => case_fun (type_of_rvalue_correct_aux Hcorrect Hunique)
+  | |- well_typed_arguments P S G ?es ?ps = _ -> _ => case_fun (Hargs ps)
   | |- unqualified ?q = _ -> _ => case_fun (unqualified_correct q)
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
@@ -2035,22 +1878,22 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfRValue P G S ?e ?t1
-  , H2 : D.typeOfRValue P G S ?e ?t2
-  , H  : optionUnique _ (D.typeOfExpression P G S ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S G ?e ?t1
+  , H2 : D.typeOfRValue P S G ?e ?t2
+  , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => finish fail
   end.
 Qed.
 
-Definition type_of_expression'_correct_Var {A B} {P} {G} {S : sigma A B} {v} :
+Definition type_of_expression'_correct_Var {A B1 B2} {P} {S : sigma B1 B2} {G} {v} :
   D.disjoint G S ->
-  type_of_expression'_spec P G S (Var v).
+  type_of_expression'_spec (A:=A) P S G (Var v).
 Proof.
   intros Hdisjoint.
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (Var v)); simpl.
+  pull_out (option typeCategory) (type_of_expression' (A:=A) P S G (Var v)); simpl.
   repeat match goal with
   | |- lookup ?C v = _ -> _ => case_fun (lookup_correct C v)
   | _ => context_destruct
@@ -2075,11 +1918,11 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_SizeOf {A B} {P} {G} {S : sigma A B} {q} {t} :
-  type_of_expression'_spec P G S (SizeOf q t).
+Definition type_of_expression'_correct_SizeOf {A B1 B2} {P} {S : sigma B1 B2} {G} {q} {t} :
+  type_of_expression'_spec (A:=A) P S G (SizeOf q t).
 Proof.
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (SizeOf q t)); simpl.
+  pull_out (option typeCategory) (type_of_expression' (A:=A) P S G (SizeOf q t)); simpl.
   unfold andb.
   unfold negb.
   repeat match goal with
@@ -2104,11 +1947,11 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression'_correct_AlignOf {A B} {P} {G} {S : sigma A B} {q} {t} :
-  type_of_expression'_spec P G S (AlignOf q t).
+Definition type_of_expression'_correct_AlignOf {A B1 B2} {P} {S : sigma B1 B2} {G} {q} {t} :
+  type_of_expression'_spec (A:=A) P S G (AlignOf q t).
 Proof.
   unfold type_of_expression'_spec.
-  pull_out (option typeCategory) (type_of_expression' P G S (AlignOf q t)); simpl.
+  pull_out (option typeCategory) (type_of_expression' (A:=A) P S G (AlignOf q t)); simpl.
   unfold andb.
   unfold negb.
   repeat match goal with
@@ -2133,25 +1976,25 @@ Proof.
   end.
 Qed.
 
-Definition well_typed_arguments_correct_nil {A B} {P} {G} {S : sigma A B} :
-  well_typed_arguments_spec P G S nil.
+Definition well_typed_arguments_correct_nil {A B1 B2} {P} {S : sigma B1 B2} {G} :
+  well_typed_arguments_spec (A:=A) P S G nil.
 Proof.
   destruct ps; simpl.
   - constructor.
   - inversion 1.
 Qed.
 
-Definition well_typed_arguments_correct_cons {A B} {P} {G} {S : sigma A B} {e} {es} :
-  type_of_expression_spec P G S e ->
-  well_typed_arguments_spec P G S es ->
-  well_typed_arguments_spec P G S (e :: es).
+Definition well_typed_arguments_correct_cons {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} {es} :
+  type_of_expression_spec P S G e ->
+  well_typed_arguments_spec P S G es ->
+  well_typed_arguments_spec P S G (e :: es).
 Proof.
   intros [Hcorrect Hunique] Hargs ps.
-  pull_out bool (well_typed_arguments P G S (e :: es) ps); simpl.
+  pull_out bool (well_typed_arguments P S G (e :: es) ps); simpl.
   unfold andb.
   repeat match goal with
-  | |- assignable P G S (pointer_conversion ?t) e = _ -> _ => pose proof (pointer_conversion_correct t); case_fun (assignable_correct_aux (t1:=pointer_conversion t) Hcorrect Hunique)
-  | |- well_typed_arguments P G S ?es ?ps = _ -> _ => case_fun (Hargs ps)
+  | |- assignable P S G (pointer_conversion ?t) e = _ -> _ => pose proof (pointer_conversion_correct t); case_fun (assignable_correct_aux (t1:=pointer_conversion t) Hcorrect Hunique)
+  | |- well_typed_arguments P S G ?es ?ps = _ -> _ => case_fun (Hargs ps)
   | _ => context_destruct
   | |- true  = ?v -> _ => is_var v; intros ?; subst
   | |- false = ?v -> _ => is_var v; intros ?; subst
@@ -2167,9 +2010,9 @@ Proof.
   end.
 Qed.
 
-Definition type_of_expression_correct_AnnotatedExpression {A B} {P} {G} {S : sigma A B} {a} {e} :
-  type_of_expression'_spec P G S e ->
-  type_of_expression_spec P G S (AnnotatedExpression a e).
+Definition type_of_expression_correct_AnnotatedExpression {A B1 B2} {P} {S : sigma B1 B2} {G} {a} {e : expression' A} :
+  type_of_expression'_spec P S G e ->
+  type_of_expression_spec P S G (AnnotatedExpression a e).
 Proof.
   intros [Hcorrect Hunique].
   unfold type_of_expression_spec; simpl.
@@ -2181,20 +2024,20 @@ Proof.
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
   repeat match goal with
-  | H1 : D.typeOfExpression' P G S ?e ?t1
-  , H  : optionUnique (Some ?t2) (D.typeOfExpression' P G S ?e) |- _ => notSame t1 t2; pose proof (H _ H1); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfExpression' P S G ?e ?t1
+  , H  : optionUnique (Some ?t2) (D.typeOfExpression' P S G ?e) |- _ => notSame t1 t2; pose proof (H _ H1); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   end; reflexivity.
 Qed.
 
-Definition type_of_expression_correct_unique {A B} P G (S : sigma A B) :
+Definition type_of_expression_correct_unique {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, type_of_expression_spec P G S e.
+  forall e : expression A, type_of_expression_spec P S G e.
 Proof.
   intros Hdisjoint.
-  eapply (expression_nrect (fun e => type_of_expression'_spec P G S e)
-                           (fun e => type_of_expression_spec  P G S e)
-                           (fun es => well_typed_arguments_spec P G S es));
+  eapply (expression_nrect (fun e => type_of_expression'_spec P S G e)
+                           (fun e => type_of_expression_spec  P S G e)
+                           (fun es => well_typed_arguments_spec P S G es));
   intros.
   apply type_of_expression'_correct_Unary; assumption.
   destruct bop.
@@ -2232,52 +2075,52 @@ Proof.
   apply type_of_expression_correct_AnnotatedExpression; assumption.
 Qed.
 
-Definition type_of_expression_correct {A B} P G (S : sigma A B) :
+Definition type_of_expression_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, optionSpec (type_of_expression P G S e) (D.typeOfExpression P G S e).
+  forall e : expression A, optionSpec (type_of_expression P S G e) (D.typeOfExpression P S G e).
 Proof.
   intros Hdisjoint e.
-  destruct (type_of_expression_correct_unique P G S Hdisjoint e) as [? _].
+  destruct (type_of_expression_correct_unique P Hdisjoint e) as [? _].
   assumption.
 Qed.
 
-Definition type_of_expression_unique {A B} P G (S : sigma A B) :
+Definition type_of_expression_unique {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, optionUnique (type_of_expression P G S e) (D.typeOfExpression P G S e).
+  forall e : expression A, optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e).
 Proof.
   intros Hdisjoint e.
-  destruct (type_of_expression_correct_unique P G S Hdisjoint e) as [_ ?].
+  destruct (type_of_expression_correct_unique P Hdisjoint e) as [_ ?].
   assumption.
 Qed.
 
-Lemma typeOfExpression_functional {A B} {P} {G} {S : sigma A B} {e} (Hdisjoint : D.disjoint G S) :
+Lemma typeOfExpression_functional {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} (Hdisjoint : D.disjoint G S) :
   forall {tc1 tc2},
-    D.typeOfExpression P G S e tc1 ->
-    D.typeOfExpression P G S e tc2 ->
+    D.typeOfExpression P S G e tc1 ->
+    D.typeOfExpression P S G e tc2 ->
     tc1 = tc2.
 Proof.
   intros ? ? H1 H2.
-  set (type_of_expression_unique P G S Hdisjoint e _ H1).
-  set (type_of_expression_unique P G S Hdisjoint e _ H2).
+  set (type_of_expression_unique P Hdisjoint e _ H1).
+  set (type_of_expression_unique P Hdisjoint e _ H2).
   congruence.
 Qed.
 Arguments typeOfExpression_functional : default implicits.
 
-Lemma typeable_correct {A B} P G (S : sigma A B) :
+Lemma typeable_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, boolSpec (typeable P G S e) (D.typeable P G S e).
+  forall e : expression A, boolSpec (typeable P S G e) (D.typeable P S G e).
 Proof.
   intros Hdisjoint e.
   unfold typeable.
-  pose proof (type_of_expression_correct P G S Hdisjoint e).
+  pose proof (type_of_expression_correct P Hdisjoint e).
   optionSpec_destruct; simpl.
   - econstructor; eassumption.
   - inversion_clear 1; firstorder.
 Qed.
 
-Definition type_of_rvalue_correct {A B} P G (S : sigma A B) :
+Definition type_of_rvalue_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, optionSpec (type_of_rvalue P G S e) (D.typeOfRValue P G S e).
+  forall e : expression A, optionSpec (type_of_rvalue P S G e) (D.typeOfRValue P S G e).
 Proof.
   intros Hdisjoint e.
   apply type_of_rvalue_correct_aux.
@@ -2285,9 +2128,9 @@ Proof.
   apply type_of_expression_unique; assumption.
 Qed.
 
-Definition type_of_rvalue_unique {A B} P G (S : sigma A B) :
+Definition type_of_rvalue_unique {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall e, optionUnique (type_of_rvalue P G S e) (D.typeOfRValue P G S e).
+  forall e : expression A, optionUnique (type_of_rvalue P S G e) (D.typeOfRValue P S G e).
 Proof.
   intros Hdisjoint e.
   apply type_of_rvalue_unique_aux.
@@ -2295,21 +2138,21 @@ Proof.
   apply type_of_expression_unique; assumption.
 Qed.
 
-Lemma typeOfRValue_functional {A B} {P} {G} {S : sigma A B} (Hdisjoint : D.disjoint G S) :
-  forall e {t1 t2},
-    D.typeOfRValue P G S e t1 ->
-    D.typeOfRValue P G S e t2 ->
+Lemma typeOfRValue_functional {A B1 B2} {P} {S : sigma B1 B2} {G} (Hdisjoint : D.disjoint G S) :
+  forall (e : expression A) {t1 t2},
+    D.typeOfRValue P S G e t1 ->
+    D.typeOfRValue P S G e t2 ->
     t1 = t2.
 Proof.
   intros e ? ? H1 H2.
-  set (type_of_rvalue_unique P G S Hdisjoint e _ H1).
-  set (type_of_rvalue_unique P G S Hdisjoint e _ H2).
+  set (type_of_rvalue_unique P Hdisjoint e _ H1).
+  set (type_of_rvalue_unique P Hdisjoint e _ H2).
   congruence.
 Qed.
 
-Lemma assignable_correct {A B} P G (S : sigma A B) :
+Lemma assignable_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall t1 e2, boolSpec (assignable P G S t1 e2) (D.assignable P G S t1 e2).
+  forall t1 (e2 : expression A), boolSpec (assignable P S G t1 e2) (D.assignable P S G t1 e2).
 Proof.
   intros Hdisjoint t1 e2.
   apply assignable_correct_aux.
@@ -2337,32 +2180,32 @@ Proof.
   end; my_auto.
 Qed.
 
-Lemma well_typed_block_correct_aux {A B} P G (S : sigma A B) t_return :
-  (forall  s, boolSpec (well_typed_statement P G S t_return s) (D.wellTypedStatement P G S t_return s)) ->
-  (forall ss, boolSpec (well_typed_block P G S t_return ss) (allList (D.wellTypedStatement P G S t_return) ss)).
+Lemma well_typed_block_correct_aux {A1 A2 B1 B2} P {S : sigma B1 B2} {G} {t_return} :
+  (forall  s : statement A1 A2, boolSpec (well_typed_statement P S G t_return s) (D.wellTypedStatement P S G t_return s)) ->
+  (forall ss : list (statement A1 A2), boolSpec (well_typed_block P S G t_return ss) (allList (D.wellTypedStatement P S G t_return) ss)).
 Proof.
   intros well_typed_statement_correct.
   induction ss; simpl;
   unfold boolSpec;
   unfold andb;
   repeat match goal with
-  | |- well_typed_statement P G S t_return ?s = _ -> _ => case_fun (well_typed_statement_correct s)
-  | |- well_typed_block P G S t_return ?ss = _ -> _ => case_fun IHss
+  | |- well_typed_statement P S G t_return ?s = _ -> _ => case_fun (well_typed_statement_correct s)
+  | |- well_typed_block P S G t_return ?ss = _ -> _ => case_fun IHss
   | _ => context_destruct
   | |- allList _ _ => constructor; assumption
   | |- neg _ =>  inversion_clear 1; contradiction
   end.
 Qed.
 
-Lemma well_typed_definition_correct {A B} P G (S : sigma A B) :
+Lemma well_typed_definition_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall d, boolSpec (well_typed_definition P G S d) (D.wellTypedDefinition P G S d).
+  forall (d : identifier * expression A), boolSpec (well_typed_definition P S G d) (D.wellTypedDefinition P S G d).
 Proof.
   intros Hdisjoint d.
   do 2 unfold_goal.
   repeat match goal with
   | |- lookup G ?v = _ -> _ => case_fun (lookup_correct G v)
-  | |- assignable P G S ?t ?e = _ -> _ => case_fun (assignable_correct P G S Hdisjoint t e)
+  | |- assignable P S G ?t ?e = _ -> _ => case_fun (assignable_correct P Hdisjoint t e)
   | _ => context_destruct
   | |- D.wellTypedDefinition _ _ _ _ =>  econstructor; eassumption
   | |- neg _ => inversion_clear 1;
@@ -2375,9 +2218,9 @@ Proof.
   end.
 Qed.
 
-Lemma well_typed_definitions_correct {A B} P G (S : sigma A B) :
+Lemma well_typed_definitions_correct {A B1 B2} P {S : sigma B1 B2} {G} :
   D.disjoint G S ->
-  forall ds, boolSpec (well_typed_definitions P G S ds) (allList (D.wellTypedDefinition P G S) ds).
+  forall (ds : list (identifier * expression A)), boolSpec (well_typed_definitions P S G ds) (allList (D.wellTypedDefinition P S G) ds).
 Proof.
   intros Hdisjoint.
   apply all_list_correct.
@@ -2385,41 +2228,44 @@ Proof.
   assumption.
 Qed.
 
-Lemma well_typed_statement_correct {A B} P (S : sigma A B) t_return :
-  forall s G (Hdisjoint : D.disjoint G S),
-  boolSpec (well_typed_statement P G S t_return s) (D.wellTypedStatement P G S t_return s).
+Lemma well_typed_statement_correct {A1 A2 B1 B2} P {S : sigma B1 B2} {G} :
+  D.disjoint G S ->
+  forall t_return (s : statement A1 A2),
+    boolSpec (well_typed_statement P S G t_return s) (D.wellTypedStatement P S G t_return s).
 Proof.
+  intros Hdisjoint t_return s.
+  revert s G Hdisjoint.
   eapply (
     statement_nrect
-      (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement' P G S t_return s ) (D.wellTypedStatement' P G S t_return s))
-      (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement  P G S t_return s ) (D.wellTypedStatement P G S t_return s))
-      (fun ss => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_block      P G S t_return ss) (allList (D.wellTypedStatement P G S t_return) ss))
+      (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement' P S G t_return s ) (D.wellTypedStatement' P S G t_return s))
+      (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement  P S G t_return s ) (D.wellTypedStatement P S G t_return s))
+      (fun ss => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_block      P S G t_return ss) (allList (D.wellTypedStatement P S G t_return) ss))
   );
   intros; simpl;
   match goal with
-  | |- context [well_typed_block_aux (well_typed_statement _ ?G _ _) ?ss] => fold (@well_typed_block A B P G S t_return ss)
+  | |- context [well_typed_block_aux (well_typed_statement _ _ ?G _) ?ss] => fold (@well_typed_block A1 A2 B1 B2 P S G t_return ss)
   | _ => idtac
   end;
   unfold boolSpec; unfold andb;
   repeat match goal with
   | |- fresh_bindings ?bs ?C = _ -> _ => case_fun (fresh_bindings_correct C bs)
-  | |- typeable _ ?G _ ?e = _ -> _ => case_fun (typeable_correct P G S Hdisjoint e)
-  | |- assignable _ ?G _ ?t1 ?e2 = _ -> _ => case_fun (assignable_correct P G S Hdisjoint t1 e2)
-  | |- type_of_rvalue _ ?G _ ?e = _ -> _ => case_fun (type_of_rvalue_correct P G S Hdisjoint e)
+  | |- typeable _ _ ?G ?e = _ -> _ => case_fun (typeable_correct P Hdisjoint e)
+  | |- assignable _ _ ?G ?t1 ?e2 = _ -> _ => case_fun (assignable_correct P Hdisjoint t1 e2)
+  | |- type_of_rvalue _ _ ?G ?e = _ -> _ => case_fun (type_of_rvalue_correct P Hdisjoint e)
   | |- scalar ?t = _ -> _ => case_fun (scalar_correct t)
   | |- integer ?t = _ -> _ => case_fun (integer_correct t)
   | |- eq_ctype ?x ?y = _ -> _ => case_fun (eq_ctype_correct x y)
   | |- type_of_constant _ ?ic = _ -> _ => case_fun (type_of_constant_correct P ic)
-  | |- well_typed_definitions _ ?G _ ?ds = _ -> _ => case_fun (well_typed_definitions_correct P G S Hdisjoint ds)
+  | |- well_typed_definitions _ _ ?G ?ds = _ -> _ => case_fun (well_typed_definitions_correct P Hdisjoint ds)
   | |- well_formed_bindings ?bs = _ -> _ => case_fun (well_formed_bindings_correct bs)
-  | IH : forall _ _, boolSpec _ (D.wellTypedStatement  _ _ _ _ ?s) |- well_typed_statement  _ ?G _ _ ?s = _ -> _ => case_fun (IH G Hdisjoint)
-  | IH : forall _ _, boolSpec _ (D.wellTypedStatement' _ _ _ _ ?s) |- well_typed_statement' _ ?G _ _ ?s = _ -> _ => case_fun (IH G Hdisjoint)
-  | IH : forall _ _, boolSpec _ (allList (D.wellTypedStatement _ _ _ _) ?ss) |- well_typed_block _ ?G _ _ ?ss = _ -> _ =>
+  | IH : forall _ _, boolSpec _ (D.wellTypedStatement  _ _ _ _ ?s) |- well_typed_statement  _ _ ?G _ ?s = _ -> _ => case_fun (IH G Hdisjoint)
+  | IH : forall _ _, boolSpec _ (D.wellTypedStatement' _ _ _ _ ?s) |- well_typed_statement' _ _ ?G _ ?s = _ -> _ => case_fun (IH G Hdisjoint)
+  | IH : forall _ _, boolSpec _ (allList (D.wellTypedStatement _ _ _ _) ?ss) |- well_typed_block _ _ ?G _ ?ss = _ -> _ =>
       is_var G; case_fun (IH _ Hdisjoint)
-  | H : D.wellFormedBindings _, IH : forall _ _, boolSpec _ (allList (D.wellTypedStatement _ _ _ _) ?ss) |-well_typed_block _ ?G _ _ ?ss = _ -> _ =>
+  | H : D.wellFormedBindings _, IH : forall _ _, boolSpec _ (allList (D.wellTypedStatement _ _ _ _) ?ss) |- well_typed_block _ _ ?G _ ?ss = _ -> _ =>
       not_var G;
       let IH' := fresh in
-      assert (boolSpec (well_typed_block P G S t_return ss) (allList (D.wellTypedStatement P G S t_return) ss))
+      assert (boolSpec (well_typed_block P S G t_return ss) (allList (D.wellTypedStatement P S G t_return) ss))
         as IH'
         by (apply IH; apply disjoint_freshBindings; [inversion_clear H|..]; assumption);
       case_fun IH'
@@ -2430,15 +2276,15 @@ Proof.
   end;
   inversion 1; subst;
   repeat match goal with
-  | H1 : D.typeOfRValue P _ S ?e ?t1
-  , H2 : D.typeOfRValue P _ S ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfRValue_functional Hdisjoint _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  | H1 : D.typeOfRValue P S _ ?e ?t1
+  , H2 : D.typeOfRValue P S _ ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfRValue_functional Hdisjoint _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
   | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
   | H :  neg (?c = ?c) |- False => apply H; constructor
   end.
 Qed.
 
-Lemma well_typed_function_correct {A B : Set} P (S : sigma A B) p :
+Lemma well_typed_function_correct {A1 A2 B1 B2 : Set} P (S : sigma B1 B2) (p : _ * _ * statement A1 A2) :
   boolSpec (well_typed_function P S p) (D.wellTypedFunction P S p).
 Proof.
   do 2 unfold_goal.
@@ -2447,10 +2293,10 @@ Proof.
   | |- fresh_bindings ?bs ?S = _ -> _ => case_fun (fresh_bindings_correct S bs)
   | |- well_formed_bindings ?bs = _ -> _ => case_fun (well_formed_bindings_correct bs)
   | |- AilWf.wf_type ?t = _ -> _ => case_fun (wf_type_correct t)
-  | H : D.wellFormedBindings ?bs |- well_typed_statement _ (add_bindings ?bs empty) _ ?t ?s = _ -> _ =>
-      notHyp (D.disjoint (add_bindings b nil) S);
+  | H : D.wellFormedBindings ?bs |- well_typed_statement _ _ (add_bindings ?bs empty) ?t ?s = _ -> _ =>
+      notHyp (D.disjoint (add_bindings b empty) S);
       let Hdisjoint := fresh in
-      assert (D.disjoint (add_bindings b nil) S) as Hdisjoint
+      assert (D.disjoint (add_bindings b empty) S) as Hdisjoint
         by (
           apply disjoint_freshBindings; [
               inversion_clear H; assumption
@@ -2458,9 +2304,209 @@ Proof.
             | intros ? [? Hfalse]; inversion Hfalse
           ]
         );
-      case_fun (well_typed_statement_correct P S t s (add_bindings bs nil) Hdisjoint)
+      case_fun (well_typed_statement_correct P Hdisjoint t s)
   | _ => context_destruct
   | |- D.wellTypedFunction _ _ _ =>  constructor; assumption
   | |- neg _ => now (inversion 1; my_auto)
   end.
+Qed.
+ 
+Ltac typeOfExpression_equiv_tac S1 S2 :=
+  match goal with
+  | Hlookup     : D.lookup S1 _ _
+  , HequivSigma : D.equivSigma S1 S2 |- D.typeOfExpression' _ S2 _ (Var _) (RValueType (type_from_sigma _)) => destruct ((fst HequivSigma) _ _ Hlookup) as [? [? [? ?]]]; econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | IH : forall _ _, D.equivExpression ?e1 _ -> D.typeOfExpression _ S1 _ ?e1 _ -> D.typeOfExpression _ S2 _ _ _
+  , _  : D.equivExpression ?e1 ?e2 |- D.typeOfExpression _ S2 _ ?e2 _ => eapply IH; now typeOfExpression_equiv_tac S1 S2
+  | |- D.typeOfExpression _ S2 _ _ _ => econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | IH : forall _ _, D.equivExpression' ?e1 _ -> D.typeOfExpression' _ S1 _ ?e1 _ -> D.typeOfExpression' _ S2 _ _ _
+  , _  : D.equivExpression' ?e1 ?e2 |- D.typeOfExpression' _ S2 _ ?e2 _ => eapply IH; now typeOfExpression_equiv_tac S1 S2
+  | |- D.typeOfExpression' _ S2 _ _ _ => econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | IH : forall _ _, D.equivArguments ?es1 _ -> D.typeOfArguments _ S1 _ ?es1 _ -> D.typeOfArguments _ S2 _ _ _
+  , _  : D.equivArguments ?es1 ?es2 |- D.typeOfArguments _ S2 _ ?es2 _ => eapply IH; now typeOfExpression_equiv_tac S1 S2
+  | |- D.typeOfArguments _ S2 _ _ _ => econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | H : D.typeOfRValue _ _ _ ?e1 _
+  , _  : D.equivExpression ?e1 ?e2 |- D.typeOfRValue _ _ _ ?e2 _ => inversion_clear H; econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | H : D.typeOfLValue _ _ _ ?e1 _ _
+  , _  : D.equivExpression ?e1 ?e2 |- D.typeOfLValue _ _ _ ?e2 _ _ => inversion_clear H; econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | H : D.assignable _ _ _ _ ?e1
+  , _  : D.equivExpression ?e1 ?e2 |- D.assignable _ _ _ _ ?e2 => inversion H; subst; econstructor (now typeOfExpression_equiv_tac S1 S2)
+  | |- D.nullPointerConstant _ => eapply nullPointerConstant_equiv; eassumption
+  | _ : D.equivExpression ?e1 ?e2
+  , H : neg (D.nullPointerConstant ?e1) |- neg (D.nullPointerConstant ?e2) => intros ?; apply H; eapply nullPointerConstant_equiv; [eapply equivExpression_symm; eassumption | assumption]
+  | _ => solve [eassumption|reflexivity]
+  | |- type_from_sigma _ = type_from_sigma _ => unfold type_from_sigma; congruence
+  end.
+
+Lemma typeOfExpression_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+  D.equivSigma S1 S2 ->
+  forall {e1 : expression A1} {e2 : expression A2} {t},
+    D.equivExpression e1 e2 ->
+    D.typeOfExpression P S1 G e1 t ->
+    D.typeOfExpression P S2 G e2 t.
+Proof.
+  intros HequivSigma.
+  apply (
+    expression_nrect
+      (fun x => forall (y : expression' A2) t (Hequiv : D.equivExpression' x y) (Ht1 : D.typeOfExpression' P S1 G x t), D.typeOfExpression' P S2 G y t)
+      (fun x => forall y t (Hequiv : D.equivExpression x y) (Ht1 : D.typeOfExpression P S1 G x t), D.typeOfExpression P S2 G y t)
+      (fun x => forall (y : list (expression A2)) p (Hequiv : D.equivArguments x y) (Ht1 : D.typeOfArguments P S1 G x p), D.typeOfArguments P S2 G y p)
+  ); intros; inversion Hequiv; subst; inversion Ht1; subst;
+  now typeOfExpression_equiv_tac S1 S2.
+Qed.
+
+Lemma typeable_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+  D.equivSigma S1 S2 ->
+  forall {e1 : expression A1} {e2 : expression A2},
+    D.equivExpression e1 e2 ->
+    D.typeable P S1 G e1 ->
+    D.typeable P S2 G e2.
+Proof. inversion_clear 3. econstructor; eapply typeOfExpression_equiv; eassumption. Qed.
+
+Lemma typeOfRValue_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+  D.equivSigma S1 S2 ->
+  forall {e1 : expression A1} {e2 : expression A2} {t},
+    D.equivExpression e1 e2 ->
+    D.typeOfRValue P S1 G e1 t ->
+    D.typeOfRValue P S2 G e2 t.
+Proof.
+  inversion_clear 3;
+  repeat match goal with
+  | H : D.typeOfLValue _ _ _ _ _ _ |- _ => inversion_clear H
+  end;
+  econstructor (
+    solve [
+        eassumption
+      | eapply typeOfExpression_equiv; eassumption
+      | econstructor; eapply typeOfExpression_equiv; eassumption
+    ]
+  ).
+Qed.
+
+Lemma assignable_equiv {A A' B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+  D.equivSigma S1 S2 ->
+  forall {t1} {e2 : expression A} {e2' : expression A'},
+    D.equivExpression e2 e2' ->
+    D.assignable P S1 G t1 e2 ->
+    D.assignable P S2 G t1 e2'.
+Proof.
+  inversion_clear 3;
+  econstructor (
+    solve [
+        eassumption
+      | eapply typeOfRValue_equiv; eassumption
+      | eapply typeOfExpression_equiv; eassumption
+      | eapply nullPointerConstant_equiv; eassumption
+      ]
+    ).
+Qed.
+
+Lemma wellTypedDeclaration_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+  D.equivSigma S1 S2 ->
+  forall {ds1 : list (_ * expression A1)} {ds2 : list (_ * expression A2)},
+    D.equivDeclaration ds1 ds2 ->
+    allList (D.wellTypedDefinition P S1 G) ds1 ->
+    allList (D.wellTypedDefinition P S2 G) ds2.
+Proof.
+  induction ds1; inversion_clear 1; intros Ht1.
+  - constructor.
+  - inversion_clear Ht1.
+    constructor.
+    + match goal with
+      | H : D.wellTypedDefinition _ S1 _ _ |- _ => inversion_clear H
+      end.
+      econstructor.
+      * eassumption.
+      * eapply assignable_equiv; eassumption.
+    + eapply IHds1; eassumption.
+Qed.
+
+Lemma freshBindings_equivSigma {A1 A2 B1 B2 : Set} {S1 : sigma A1 B1} {S2 : sigma A2 B2} :
+  D.equivSigma S1 S2 ->
+  forall {bs : bindings},
+    D.freshBindings bs S1 ->
+    D.freshBindings bs S2.
+Proof.
+  intro Hequiv.
+  eapply freshBindings_equiv.
+  eapply equiv_weaken; now eauto.
+Qed.
+  
+Lemma wellTypedStatement_equiv {A1 A1' A2 A2' B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} :
+  D.equivSigma S1 S2 ->
+  forall {s1 : statement A1 A1'} {s2 : statement A2 A2'} {t_return},
+    D.equivStatement s1 s2 ->
+    D.wellTypedStatement P S1 G t_return s1 ->
+    D.wellTypedStatement P S2 G t_return s2.
+Proof.
+  intros HequivSigma s1 s2 t_return.
+  revert s1 s2 G.
+  eapply (
+    statement_nrect
+      (fun x => forall (y : statement' A2 A2') G (Hequiv : D.equivStatement' x y) (Ht1 : D.wellTypedStatement' P S1 G t_return x), D.wellTypedStatement' P S2 G t_return y)
+      (fun x => forall (y : statement A2 A2') G (Hequiv : D.equivStatement x y) (Ht1 : D.wellTypedStatement P S1 G t_return x), D.wellTypedStatement P S2 G t_return y)
+      (fun x => forall (y : list (statement A2 A2')) G (Hequiv : D.equivBlock x y) (Ht1 : allList (D.wellTypedStatement P S1 G t_return) x), allList (D.wellTypedStatement P S2 G t_return) y)
+  ); intros; inversion Hequiv; subst; inversion Ht1; subst;
+  econstructor;
+  match goal with
+  | H : forall _ _, _ -> D.wellTypedStatement _ _ _ _ ?s1 -> _
+  , _ : D.equivStatement ?s1 ?s2 |-  D.wellTypedStatement _ S2 _ _ ?s2 => eapply H; eassumption
+  | H : forall _ _, _ -> D.wellTypedStatement' _ _ _ _ ?s1 -> _
+  , _ : D.equivStatement' ?s1 ?s2 |-  D.wellTypedStatement' _ S2 _ _ ?s2 => eapply H; eassumption
+  | H : forall _ _, _ -> allList (D.wellTypedStatement _ _ _ _) ?ss1 -> _
+  , _ : D.equivBlock ?ss1 ?ss2 |-  allList (D.wellTypedStatement _ S2 _ _) ?ss2 => eapply H; eassumption
+  | |- D.typeable     _ S2 _ _   => eapply typeable_equiv; eassumption
+  | |- D.assignable   _ S2 _ _ _ => eapply assignable_equiv; eassumption
+  | |- D.typeOfRValue _ S2 _ _ _ => eapply typeOfRValue_equiv; eassumption
+  | |- D.freshBindings _ S2 => eapply freshBindings_equivSigma; eassumption
+  | |- allList (D.wellTypedDefinition _ S2 _) _ => eapply wellTypedDeclaration_equiv; eassumption
+  | _ => eassumption
+  end.
+Qed.
+
+Lemma wellTypedFunction_equiv {A1 A1' A2 A2' B1 B1' B2 B2': Set} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} :
+  D.equivSigma S1 S2 ->
+  forall {p1 : _ * statement A1 A1'} {p2 : _ * statement A2 A2'},
+    cross2 eq (@D.equivStatement A1 A2 A1' A2') p1 p2 ->
+    D.wellTypedFunction P S1 p1 ->
+    D.wellTypedFunction P S2 p2.
+Proof.
+  intros HequivSigma [[? ?] ?] [[? ?] ?] [Heq ?].
+  inversion_clear Heq.
+  inversion_clear 1.
+  econstructor.
+  - assumption.
+  - eapply freshBindings_equivSigma; eassumption.
+  - assumption.
+  - eapply wellTypedStatement_equiv; eassumption.
+Qed.
+
+Lemma wellTypedSigma_equiv {A1 A1' A2 A2': Set} {P} {S1 : sigma A1 A1'} {S2 : sigma A2 A2'} :
+  D.equivSigma S1 S2 ->
+  D.wellTypedSigma P S1 ->
+  D.wellTypedSigma P S2.
+Proof.
+  intros [Hsub1 Hsub2] Ht1.
+  intros ? ? Hlookup2.
+  destruct (Hsub2 _ _  Hlookup2) as [? [Hlookup1 ?]].
+  set (Ht1 _ _ Hlookup1).
+  eapply wellTypedFunction_equiv.
+  constructor; eassumption.
+  eassumption.
+  eassumption.
+Qed.
+
+Lemma wellTypedProgram_equiv {A1 A1' A2 A2': Set} {P} :
+  forall {p1 : program A1 A1'} {p2 : program A1 A1'},
+    D.equivProgram p1 p2 ->
+    D.wellTypedProgram P p1 ->
+    D.wellTypedProgram P p2.
+Proof.
+  intros [? ?] [? ?] [Heq HequivSigma]; simpl in *; subst.
+  inversion_clear 1.
+  match goal with
+  | H : D.lookup _ _ _ |- _ => destruct ((fst HequivSigma) _ _ H) as [[? ?] [? [? ?]]]; simpl in *; subst
+  end.
+  econstructor.
+  - eassumption.
+  - eapply wellTypedSigma_equiv; eassumption.
 Qed.

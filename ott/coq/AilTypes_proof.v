@@ -104,6 +104,20 @@ Proof.
   ).
 Qed.
 
+Lemma eq_params_correct :
+  forall x y, boolSpec (eq_params x y) (x = y).
+Proof.
+  induction x; destruct y; simpl;
+  unfold boolSpec;
+  unfold andb;
+  repeat match goal with
+  | |- eq_qualifiers ?x ?y = _ -> _ => case_fun (eq_qualifiers_correct x y)
+  | |- eq_ctype ?x ?y = _ -> _ => case_fun (eq_ctype_correct x y)
+  | IH : forall _, boolSpec _ _ |- eq_params _ ?y = _ -> _ => case_fun (IH y)
+  | _ => context_destruct
+  end; congruence.
+Qed.
+
 Lemma eq_typeCategory_correct x y :
   boolSpec (eq_typeCategory x y) (x = y).
 Proof.

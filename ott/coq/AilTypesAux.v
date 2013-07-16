@@ -203,7 +203,7 @@ Definition le_integer_rank it1 it2 : bool :=
 
 Definition arithmetic t : bool := integer t.
 
-Definition scalar t : bool := orb (pointer t) (arithmetic t).
+Definition scalar t : bool := pointer t || arithmetic t.
 
 Definition array t : bool :=
   match t with
@@ -484,11 +484,9 @@ Definition sub_qualifiers qs1 qs2 :=
 
 Definition pointer_conversion (t:ctype) : ctype :=
   match t with
-  | Void         => Void
-  | Basic    bt  => Basic bt
-  | Pointer  q t => Pointer q t
   | Array    t n => Pointer no_qualifiers t
   | Function t q => Pointer no_qualifiers (Function t q)
+  | _            => t
 end.
 
 Definition lvalue_convertible t : bool := negb (array t) && complete t.
@@ -498,3 +496,39 @@ Definition lvalue_conversion t : option ctype :=
     Some (pointer_conversion t)
   else
     None.
+
+Definition pointer_to_complete_object t : bool :=
+  match t with
+  | Pointer _ t => complete t
+  | _           => false
+  end.
+
+Definition pointers_to_compatible_complete_objects t1 t2 : bool :=
+  match t1, t2 with
+  | Pointer _ t1, Pointer _ t2 => complete t1 && complete t2 && compatible t1 t2
+  | _           , _            => false
+  end.  
+
+Definition pointers_to_compatible_objects t1 t2 : bool :=
+  match t1, t2 with
+  | Pointer _ t1, Pointer _ t2 => object t1 && object t2 && compatible t1 t2
+  | _           , _            => false
+  end.  
+
+Definition pointer_to_object t : bool :=
+  match t with
+  | Pointer _ t => object t
+  | _           => false
+  end.
+
+Definition pointer_to_void t : bool :=
+  match t with
+  | Pointer _ Void => true
+  | _              => false
+  end.
+
+Definition pointers_to_compatible_types t1 t2 : bool :=
+  match t1, t2 with
+  | Pointer _ t1, Pointer _ t2 => compatible t1 t2
+  | _           , _            => false
+  end.  

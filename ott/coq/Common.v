@@ -360,7 +360,6 @@ Ltac context_destruct :=
       context_destruct_inner c
   end.
 
-
 Ltac case_fun G :=
   match goal with
   | |- _ = ?o -> _ =>
@@ -481,6 +480,14 @@ Definition option_bool {A} : option A -> (A -> bool) -> bool :=
     | None   => false
     end.
 
+Lemma negb_correct {P} {p} :
+  boolSpec p P ->
+  boolSpec (negb p) (neg P).
+Proof.
+  intros p_correct.
+  boolSpec_destruct; my_auto.
+Qed.
+
 Definition eq_bool := Bool.eqb.
 
 Lemma eq_bool_correct x y :
@@ -514,6 +521,30 @@ Proof.
   | |- eq_list eq_A ?x ?y = _ -> _ => case_fun (eq_list_correct x y)
   | _ => context_destruct
   end; my_auto.
+Qed.
+
+Definition cross {A B C D} f g : A * B -> C * D := 
+  fun p => (f (fst p), g (snd p)).
+
+Definition cross2 {A B C D} f g : A * B -> C * D -> Type  :=
+  fun p1 p2 => f (fst p1) (fst p2) * g (snd p1) (snd p2).
+
+Definition equiv_pair {A1 A2 B1 B2} (equiv_A : A1 -> A2 -> bool) (equiv_B : B1 -> B2 -> bool) : A1 * B1 -> A2 * B2 -> bool :=
+  fun p1 p2 => 
+    let '(a1, b1) := p1 in
+    let '(a2, b2) := p2 in
+    equiv_A a1 a2 && equiv_B b1 b2.
+
+Definition equiv_pair_correct {A1 A2 B1 B2} {equiv_A : A1 -> A2 -> bool} {equiv_B : B1 -> B2 -> bool} {E1} {E2} :
+  (forall x y, boolSpec (equiv_A x y) (E1 x y)) ->
+  (forall x y, boolSpec (equiv_B x y) (E2 x y)) ->
+  forall x y, boolSpec (equiv_pair equiv_A equiv_B x y) (cross2 E1 E2 x y).
+Proof.
+  intros equiv_A_correct equiv_B_correct.
+  destruct x as [a1 b1], y as [a2 b2]; simpl.
+  set (equiv_A_correct a1 a2).
+  set (equiv_B_correct b1 b2).
+  repeat (boolSpec_destruct; my_auto).
 Qed.
 
 Definition eq_pair {A B} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) : A * B -> A * B -> bool :=
@@ -574,7 +605,6 @@ Proof.
     set (leb_correct _ _ H).
     congruence.
 Qed.
-
 
 Fixpoint in_list {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
   match ls with
@@ -765,9 +795,3 @@ Proof.
   + exact (proj1 (Z.ltb_lt  _ _) Heq).
   + exact (proj1 (Z.ltb_nlt _ _) Heq).
 Qed.
-
-Definition cross {A B C D} f g : A * B -> C * D := 
-  fun p => (f (fst p), g (snd p)).
-
-Definition cross2 {A B C D} f g : A * B -> C * D -> Type  :=
-  fun p1 p2 => f (fst p1) (fst p2) * g (snd p1) (snd p2).
