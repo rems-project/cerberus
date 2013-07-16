@@ -3,7 +3,7 @@ Require Import AilSyntax.
 Require Import AilTypes.
 Require Context_defns.
 
-Inductive equivExpression' {A} : expression' A -> expression' A -> Set := 
+Inductive equivExpression' {A1 A2 : Set} : expression' A1 -> expression' A2 -> Set := 
   | EquivExpression'_Unary :
       forall {uop} {e1 e2},
         equivExpression e1 e2 ->
@@ -50,7 +50,7 @@ Inductive equivExpression' {A} : expression' A -> expression' A -> Set :=
   | EquivExpression'_AlignOf :
       forall {q} {t},
         equivExpression' (AlignOf q t) (AlignOf q t)
-with equivArguments {A} : list (expression A) -> list (expression A) -> Set :=
+with equivArguments {A1 A2 : Set} : list (expression A1) -> list (expression A2) -> Set :=
   | EquivArguments_nil :
       equivArguments nil nil
   | EquivArguments_cons :
@@ -58,7 +58,7 @@ with equivArguments {A} : list (expression A) -> list (expression A) -> Set :=
         equivExpression e1 e2 ->
         equivArguments es1 es2 ->
         equivArguments (e1 :: es1) (e2 :: es2)
-with equivExpression {A} : expression A -> expression A -> Set :=
+with equivExpression {A1 A2 : Set} : expression A1 -> expression A2 -> Set :=
   | EquivExpression :
       forall {a1 a2} {e1 e2},
         equivExpression' e1 e2 ->
@@ -67,7 +67,7 @@ Arguments equivExpression' : default implicits.
 Arguments equivArguments : default implicits.
 Arguments equivExpression : default implicits.
 
-Inductive equivDeclaration {A : Set} : list (identifier * expression A) -> list (identifier * expression A) -> Set :=
+Inductive equivDeclaration {A1 A2 : Set} : list (identifier * expression A1) -> list (identifier * expression A2) -> Set :=
   | EquivDeclaration_nil :
       equivDeclaration nil nil
   | EquivDeclaration_cons {v} {e1 e2} {d1 d2} :
@@ -76,7 +76,7 @@ Inductive equivDeclaration {A : Set} : list (identifier * expression A) -> list 
       equivDeclaration ((v, e1) :: d1) ((v, e2) :: d2).
 Arguments equivDeclaration : default implicits.
 
-Inductive equivStatement' {A B : Set} : statement' A B -> statement' A B -> Set := 
+Inductive equivStatement' {A1 A2 B1 B2 : Set} : statement' A1 B1 -> statement' A2 B2 -> Set := 
   | EquivStatement'_Skip :
       equivStatement' Skip Skip
   | EquivStatement'_Expression {e1 e2} :
@@ -125,11 +125,11 @@ Inductive equivStatement' {A B : Set} : statement' A B -> statement' A B -> Set 
   | EquivStatement'_Declaration {d1 d2} :
       equivDeclaration d1 d2 ->
       equivStatement' (Declaration d1) (Declaration d2)
-with equivStatement {A B : Set} : statement A B -> statement A B -> Set :=
-  | EquivStatement_AnnotatedStatement {a1 a2} {s1 s2:statement' A B} :
+with equivStatement {A1 A2 B1 B2 : Set} : statement A1 B1 -> statement A2 B2 -> Set :=
+  | EquivStatement_AnnotatedStatement {a1 a2} {s1} {s2} :
       equivStatement' s1 s2 ->
       equivStatement (AnnotatedStatement a1 s1) (AnnotatedStatement a2 s2)
-with equivBlock {A B : Set} : list (statement A B) -> list (statement A B) -> Set :=
+with equivBlock {A1 A2 B1 B2 : Set} : list (statement A1 B1) -> list (statement A2 B2) -> Set :=
   | EquivBlock_nil :
       equivBlock nil nil
   | EquivBlock_cons {s1 s2} {b1 b2} :
@@ -140,13 +140,13 @@ Arguments equivStatement' : default implicits.
 Arguments equivStatement : default implicits.
 Arguments equivBlock : default implicits.
 
-Definition equivSigma {A B : Set} : sigma A B -> sigma A B -> Type :=
-  Context_defns.equiv (cross2 eq (@equivStatement A B)).
+Definition equivSigma {A1 A2 B1 B2 : Set} : sigma A1 B1 -> sigma A2 B2 -> Type :=
+  Context_defns.equiv (cross2 eq (@equivStatement A1 A2 B1 B2)).
 
 Definition equivEqSigma {A B : Set} : sigma A B -> sigma A B -> Type :=
   Context_defns.equiv eq.
 
-Definition equivProgram {A B : Set} : program A B -> program A B -> Type :=
+Definition equivProgram {A1 A2 B1 B2 : Set} : program A1 B1 -> program A2 B2 -> Type :=
   cross2 eq equivSigma.
 
 Definition equivEqProgram {A B : Set} : program A B -> program A B -> Type :=
