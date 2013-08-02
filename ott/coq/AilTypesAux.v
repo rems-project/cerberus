@@ -113,16 +113,15 @@ Definition le_integer_range P it1 it2 : bool :=
   | Signed   _       , Unsigned _        => false
 
   | Bool             , Signed   ibt2     => lt_Z (precision P Bool)
-                                                  (precision P (Signed ibt2))
+                                                 (precision P (Signed ibt2))
   | Unsigned _       , Signed   Ichar    => false
   | Unsigned Short   , Signed   Short    => false
   | Unsigned Int     , Signed   Int      => false
   | Unsigned Long    , Signed   Long     => false
   | Unsigned LongLong, Signed   LongLong => false
   | Unsigned ibt1    , Signed   ibt2     => lt_Z (precision P (Unsigned ibt1))
-                                                  (precision P (Signed   ibt2))
+                                                 (precision P (Signed   ibt2))
   end.
-
 
 Definition eq_integer_rank_base it1 it2 : bool :=
   match it1, it2 with
@@ -273,74 +272,68 @@ Definition promotion P t : option ctype :=
   end.
 
 Definition is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool :=
-  if eq_integerType it1 it2 then
-     eq_integerType it1 it3
-  else
-    if signed_type it1 then
-      if signed_type it2 then
-        if lt_integer_rank it2 it1 then
-          eq_integerType it1 it3
-        else
-          eq_integerType it2 it3
-      else if unsigned_type it2 then
-        if le_integer_rank it1 it2 then
-          eq_integerType it2 it3
-        else
-          if le_integer_range P it2 it1 then
-            eq_integerType it1 it3
-          else
-            is_corresponding_unsigned it1 it3
+  if signed_type it1 then
+    if signed_type it2 then
+      if lt_integer_rank it2 it1 then
+        eq_integerType it1 it3
       else
-        false
-    else if unsigned_type it1 then
-      if unsigned_type it2 then
-        if lt_integer_rank it2 it1 then
-          eq_integerType it1 it3
-        else
-          eq_integerType it2 it3
-      else if signed_type it2 then
-        if le_integer_rank it2 it1 then
-          eq_integerType it1 it3
-        else if le_integer_range P it1 it2 then
-          eq_integerType it2 it3
-        else
-          is_corresponding_unsigned it2 it3
+        eq_integerType it2 it3
+    else if unsigned_type it2 then
+      if le_integer_rank it1 it2 then
+        eq_integerType it2 it3
       else
-        false
+        if le_integer_range P it2 it1 then
+          eq_integerType it1 it3
+        else
+          is_corresponding_unsigned it1 it3
     else
-      false.
+      false
+  else if unsigned_type it1 then
+    if unsigned_type it2 then
+      if lt_integer_rank it2 it1 then
+        eq_integerType it1 it3
+      else
+        eq_integerType it2 it3
+    else if signed_type it2 then
+      if le_integer_rank it2 it1 then
+        eq_integerType it1 it3
+      else if le_integer_range P it1 it2 then
+        eq_integerType it2 it3
+      else
+        is_corresponding_unsigned it2 it3
+    else
+      false
+  else
+    false.
 
 Definition usual_arithmetic_promoted_integer P it1 it2 : integerType :=
-  if eq_integerType it1 it2 then
-    it1
-  else
-    if signed_type it1 then
-      if signed_type it2 then
-        if lt_integer_rank it2 it1 then
-          it1
-        else
-          it2
+  if signed_type it1 then
+    if signed_type it2 then
+      if lt_integer_rank it2 it1 then
+        it1
       else
-        if le_integer_rank it1 it2 then
-          it2
-        else
-          if le_integer_range P it2 it1 then
-            it1
-          else
-            make_corresponding_unsigned it1
+        it2
     else
-      if unsigned_type it2 then
-        if lt_integer_rank it2 it1 then
-          it1
-        else
-          it2
+      if le_integer_rank it1 it2 then
+        it2
       else
-        if le_integer_rank it2 it1 then
+        if le_integer_range P it2 it1 then
           it1
-        else if le_integer_range P it1 it2 then
-          it2
         else
-          make_corresponding_unsigned it2.
+          make_corresponding_unsigned it1
+  else
+    if unsigned_type it2 then
+      if lt_integer_rank it2 it1 then
+        it1
+      else
+        it2
+    else
+      if le_integer_rank it2 it1 then
+        it1
+      else if le_integer_range P it1 it2 then
+        it2
+      else
+        make_corresponding_unsigned it2.
 
 Definition is_usual_arithmetic_integer P it1 it2 it3 : bool :=
   is_usual_arithmetic_promoted_integer P (integer_promotion P it1)

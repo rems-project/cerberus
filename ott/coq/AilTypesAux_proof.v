@@ -955,34 +955,32 @@ Lemma is_usual_arithmetic_promoted_integer_correct P it1 it2 it3 :
            (D.usualArithmeticPromotedInteger     P it1 it2 it3).
 Proof.
   do 2 unfold_goal.
-  set (eq_integerType_correct it1 it2); boolSpec_destruct.
-  - set (eq_integerType_correct it1 it3); boolSpec_destruct; my_auto.
-  - set (lt_integer_rank_correct P it1 it2).
-    set (lt_integer_rank_correct P it2 it1).
-    set (le_integer_rank_correct P it1 it2).
-    set (le_integer_rank_correct P it2 it1).
-    set (le_integer_range_correct P it1 it2).
-    set (le_integer_range_correct P it2 it1).
-    inversion 1;
-    inversion 1;
-    subst;
-    abstract (
-        simpl in *;
-        match goal with
-        | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
-            let Heq := fresh in
-            case_eq (lt_Z (precision P it1) (precision P it2));
-            intros Heq; rewrite_all Heq; clear Heq
-        | _ => idtac
-        end;
-        match goal with
-        | |- context [D.usualArithmeticPromotedInteger P (Unsigned  _) (Signed ?ibt) _] => set (make_corresponding_unsigned_Signed_correct ibt)
-        | |- context [D.usualArithmeticPromotedInteger P (Signed ?ibt) (Unsigned  _) _] => set (make_corresponding_unsigned_Signed_correct ibt)
-        | _ => idtac
-        end;
-        destruct_integerType_hyp it3;
-        solve [inversion 1; my_auto | econstructor (now my_auto)]      
-    ).
+  set (lt_integer_rank_correct P it1 it2).
+  set (lt_integer_rank_correct P it2 it1).
+  set (le_integer_rank_correct P it1 it2).
+  set (le_integer_rank_correct P it2 it1).
+  set (le_integer_range_correct P it1 it2).
+  set (le_integer_range_correct P it2 it1).
+  inversion 1;
+  inversion 1;
+  subst;
+  abstract (
+    simpl in *;
+    match goal with
+    | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
+           let Heq := fresh in
+           case_eq (lt_Z (precision P it1) (precision P it2));
+           intros Heq; rewrite_all Heq; clear Heq
+    | _ => idtac
+    end;
+    match goal with
+    | |- context [D.usualArithmeticPromotedInteger P (Unsigned  _) (Signed ?ibt) _] => set (make_corresponding_unsigned_Signed_correct ibt)
+    | |- context [D.usualArithmeticPromotedInteger P (Signed ?ibt) (Unsigned  _) _] => set (make_corresponding_unsigned_Signed_correct ibt)
+    | _ => idtac
+    end;
+    destruct_integerType_hyp it3;
+    solve [inversion 1; my_auto | econstructor (now my_auto)]
+  ).
 Qed.
 
 Lemma usual_arithmetic_promoted_integer_correct P {it1 it2} :
@@ -991,33 +989,31 @@ Lemma usual_arithmetic_promoted_integer_correct P {it1 it2} :
   findSpec (usual_arithmetic_promoted_integer P it1 it2) (D.usualArithmeticPromotedInteger P it1 it2).
 Proof.
   do 2 unfold_goal.
-  set (eq_integerType_correct it1 it2); boolSpec_destruct.
-  - my_auto.
-  - set (lt_integer_rank_correct P it1 it2).
-    set (lt_integer_rank_correct P it2 it1).
-    set (le_integer_rank_correct P it1 it2).
-    set (le_integer_rank_correct P it2 it1).
-    set (le_integer_range_correct P it1 it2).
-    set (le_integer_range_correct P it2 it1).
-    inversion 1;
-    inversion 1;
-    subst;
-    abstract (
-        simpl in *;
-        match goal with
-        | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
-            let Heq := fresh in
-            case_eq (lt_Z (precision P it1) (precision P it2));
-            intros Heq; rewrite_all Heq; clear Heq
-        | _ => idtac
-        end;
-        match goal with
-        | |- context [D.usualArithmeticPromotedInteger P (Unsigned  _) (Signed ?ibt) _] => set (make_corresponding_unsigned_Signed_correct ibt)
-        | |- context [D.usualArithmeticPromotedInteger P (Signed ?ibt) (Unsigned  _) _] => set (make_corresponding_unsigned_Signed_correct ibt)
-        | _ => idtac
-        end;
-        solve [inversion 1; my_auto | econstructor (now my_auto)]      
-    ).
+  set (lt_integer_rank_correct P it1 it2).
+  set (lt_integer_rank_correct P it2 it1).
+  set (le_integer_rank_correct P it1 it2).
+  set (le_integer_rank_correct P it2 it1).
+  set (le_integer_range_correct P it1 it2).
+  set (le_integer_range_correct P it2 it1).
+  inversion 1;
+  inversion 1;
+  subst;
+  abstract (
+    simpl in *;
+    match goal with
+    | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
+           let Heq := fresh in
+           case_eq (lt_Z (precision P it1) (precision P it2));
+           intros Heq; rewrite_all Heq; clear Heq
+    | _ => idtac
+    end;
+    match goal with
+    | |- context [D.usualArithmeticPromotedInteger P (Unsigned  _) (Signed ?ibt) _] => set (make_corresponding_unsigned_Signed_correct ibt)
+    | |- context [D.usualArithmeticPromotedInteger P (Signed ?ibt) (Unsigned  _) _] => set (make_corresponding_unsigned_Signed_correct ibt)
+    | _ => idtac
+    end;
+    solve [inversion 1; my_auto | econstructor (now my_auto)]      
+  ).
 Qed.
 
 Lemma usual_arithmetic_promoted_integer_unique {P} {it1 it2} :
