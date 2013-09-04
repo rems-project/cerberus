@@ -3,9 +3,10 @@ Require Import AilTypes.
 Require Import AilTypesAux_defns.
 
 Inductive adjusted : ctype -> Prop :=
- | Adjusted t : ~ array    t ->
-                 ~ function t ->
-                   adjusted t.
+ | Adjusted t :
+     ~ array    t ->
+     ~ function t ->
+     adjusted t.
 
 
 (* defns JwfLvalue *)

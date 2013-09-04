@@ -59,6 +59,9 @@ Definition unsigned_type it : bool :=
 Definition in_integer_range P n it : bool :=
   Range.mem_nat n (integer_range P it).
 
+Definition in_min_integer_range n it : bool :=
+  Range.mem_nat n (Implementation.min_integer_range it).
+
 Definition le_integer_range P it1 it2 : bool :=
   match it1, it2 with
   | Char             , Char              => true

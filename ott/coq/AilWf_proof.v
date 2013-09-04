@@ -83,8 +83,8 @@ Proof.
   | |- D.wfType       _   => econstructor (eassumption)
   | |- D.wfParameters _   => econstructor (eassumption)
   | |- D.wfLvalue     _ _ => econstructor (finish eassumption)
-  | Hfalse : neg (D.wfType ?t), H : D.wfLvalue _ ?t |- False => exact (Hfalse (wfLvalue_incl H))
-  | |- neg _ => inversion 1; subst; try finish ltac:(now function_neg)
+  | Hfalse : ~ D.wfType ?t, H : D.wfLvalue _ ?t |- False => exact (Hfalse (wfLvalue_incl H))
+  | |- ~ _ => inversion 1; subst; try finish ltac:(now function_neg)
   | _ => boolSpec_simpl; try context_destruct
   end.
 Qed.

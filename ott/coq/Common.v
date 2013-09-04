@@ -10,13 +10,20 @@ Open Scope type.
 Open Scope list.
 Open Scope bool.
 
-Definition neg P := P -> False.
-Definition boolSpec (b : bool) p := if b then p else neg p.
+(*Definition neg P := P -> False.*)
+Definition boolSpec (b : bool) (P : Prop) := if b then P else ~ P.
+
+Definition optionBoolSpec {A} (o : option bool) (P : A -> Prop) :=
+  match o with
+  | Some true  => forall a, P a
+  | Some false => forall a, ~ (P a)
+  | None   => ~ (forall a, P a) /\ ~ (forall a, ~ (P a))
+  end.
 
 Lemma boolSpec_true {p} : boolSpec true p = p.
 Proof. reflexivity. Defined.
 
-Lemma boolSpec_false {p} : boolSpec false p = neg p.
+Lemma boolSpec_false {p} : boolSpec false p = ~ p.
 Proof. reflexivity. Defined.
 
 Ltac boolSpec_destruct :=
@@ -80,27 +87,29 @@ Ltac boolSpec_simpl :=
       end
   end.
 
+(*
 Definition decidable P := P + neg P.
 Class Decision (P : Type) := decision : decidable P.
 
-Definition boolSpec_Decision {b : bool} {P : Type} (B : boolSpec b P) : Decision P.
+Definition boolSpec_Decision {b : bool} {P : Prop} (B : boolSpec b P) : Decision P.
 Proof. destruct b; [left | right]; assumption. Defined.
-Definition boolSpec_elim1 {b : bool} {P : Type} : boolSpec b P -> b = true -> P.
+*)
+
+Definition boolSpec_elim1 {b : bool} {P : Prop} : boolSpec b P -> b = true -> P.
 Proof. intros; subst; assumption. Defined.
-Definition boolSpec_elim2 {b : bool} {P : Type} : boolSpec b P -> b = false -> neg P.
+Definition boolSpec_elim2 {b : bool} {P : Prop} : boolSpec b P -> b = false -> ~ P.
 Proof. intros; subst; assumption. Defined.
-Definition boolSpec_elim1_inv {b : bool} {P : Type} : boolSpec b P -> P -> b = true.
+Definition boolSpec_elim1_inv {b : bool} {P : Prop} : boolSpec b P -> P -> b = true.
 Proof. destruct b; solve [reflexivity | contradiction]. Defined.
-Definition boolSpec_elim2_inv {b : bool} {P : Type} : boolSpec b P -> neg P -> b = false.
+Definition boolSpec_elim2_inv {b : bool} {P : Prop} : boolSpec b P -> ~ P -> b = false.
 Proof. destruct b; solve [reflexivity | contradiction]. Defined.
 Lemma boolSpec_elim {b : bool} {P : Prop} : boolSpec b P -> (P <-> b = true).
 Proof. intros B; generalize (boolSpec_elim1 B), (boolSpec_elim1_inv B); tauto. Defined.
 
-
-Definition optionSpec {A} (o : option A) (P : A -> Type) : Type :=
+Definition optionSpec {A} (o : option A) (P : A -> Prop) : Prop :=
   match o with
   | Some a => P a
-  | None   => forall a, neg (P a)
+  | None   => forall a, ~ P a
   end.
 
 Ltac optionSpec_destruct :=
@@ -130,19 +139,20 @@ Ltac optionSpec_destruct_hyp v :=
         end
   end.
 
-Definition optionSpec_elim1 {A} {o : option A} {P : A -> Type} {a : A} : optionSpec o P -> o = Some a -> P a.
+Definition optionSpec_elim1 {A} {o : option A} {P : A -> Prop} {a : A} : optionSpec o P -> o = Some a -> P a.
 Proof. intros; subst; assumption. Defined.
-Definition optionSpec_elim2 {A} {o : option A} {P : A -> Type}         : optionSpec o P -> o = None   -> forall a, neg (P a).
+Definition optionSpec_elim2 {A} {o : option A} {P : A -> Prop}         : optionSpec o P -> o = None   -> forall a, ~ P a.
 Proof. intros ? ?; subst; assumption. Defined.
 
-Definition optionUnique {A} (o : option A) (P : A -> Type) : Type :=
+Definition optionUnique {A} (o : option A) (P : A -> Prop) : Prop :=
   forall a, P a -> o = Some a.
 
-Definition findSpec {A} (a : A) (P : A -> Type) : Type := P a.
+Definition findSpec {A} (a : A) (P : A -> Prop) : Prop := P a.
 
-Definition findUnique {A} (a : A) (P : A -> Type) : Type :=
+Definition findUnique {A} (a : A) (P : A -> Prop) : Prop :=
   forall a', P a' -> a = a'.
 
+(*
 Definition bool_of_decision {P} : Decision P -> bool :=
   fun d => match d with
            | inl _ => true
@@ -162,6 +172,7 @@ Class DecidableRelation {A} (R : Relation_Definitions.relation A) :=
   decide : forall x y : A, Decision (R x y).
 Class DecidableEq (A : Type) :=
   Decidable_Equality :> DecidableRelation (@eq A).
+*)
 
 Ltac finish t := solve [ congruence | discriminate | reflexivity | t
                        | econstructor (solve [eauto])
@@ -183,7 +194,7 @@ Ltac decide_destruct :=
           ) || fail 1
       | _ => destruct d
       end
-  | [ |- context[decide ?a ?b] ] => destruct (decide a b)
+(*  | [ |- context[decide ?a ?b] ] => destruct (decide a b)*)
   | [ |- ?a = ?a -> _] => intros _
   end.
 Ltac scatter d := subst; simpl; first [d | decide_destruct].
@@ -192,6 +203,7 @@ Ltac my_auto' f d := repeat (subst; simpl; auto; try (now finish_scatter_loop f 
 Ltac my_auto := my_auto' fail fail.
 Obligation Tactic := my_auto.
 
+(*
 Definition Decision_elim {P} {A} : Decision P -> (P -> A) -> (neg P -> A) -> A :=
   fun d pos neg =>
     match d with
@@ -237,6 +249,7 @@ Ltac decision_eq_destruct :=
   match goal with [ |- forall x y, _] =>
     destruct x; destruct y; try solve [left; reflexivity | right; inversion 1]
   end.
+*)
 
 Ltac notHyp P :=
   match goal with
@@ -244,6 +257,7 @@ Ltac notHyp P :=
   | _ => idtac
   end.
 
+(*
 Ltac decision_eq_fix :=
   match goal with
   | [|- forall x y :?A, _] =>
@@ -269,6 +283,7 @@ Ltac dec_eq :=
   decision_eq_destruct;
   repeat decision_eq;
   left; reflexivity.
+*)
 
 Require Import RelationClasses.
 
@@ -304,8 +319,10 @@ Ltac apply_ctx :=
   | [ f : _ -> ?t |- ?t ] => apply f
   end.
 
-Lemma Decision_boolSpec {P} (D : Decision P) : boolSpec (bool_of_decision D) P.
+(*
+Lemma Decision_boolSpec {P : Prop} (D : Decision P) : boolSpec (bool_of_decision D) P.
 Proof. destruct D; assumption. Qed.
+*)
 
 Ltac var_destruct_inner c :=
   match c with
@@ -362,6 +379,31 @@ Ltac context_destruct :=
 
 Ltac case_fun G :=
   match goal with
+  | |- ?t = ?o -> _ =>
+      is_var o;
+      let H := fresh in
+      match type of G with
+      | boolSpec _ _ =>
+          intros H;
+          destruct o; [
+            apply (boolSpec_elim1 G) in H
+          | apply (boolSpec_elim2 G) in H]
+      | optionSpec _ _ =>
+          intros H;
+          destruct o; [
+            apply (optionSpec_elim1 G) in H
+          | lapply (optionSpec_elim2 G); [clear H; intros H|exact H]]
+      | _ =>
+          intros ?;
+          subst o;
+          pose proof G as H;
+          destruct t;
+          simpl in H
+      end
+  end.
+
+(*Ltac case_fun G :=
+  match goal with
   | |- _ = ?o -> _ =>
       is_var o;
       let Heq := fresh in
@@ -386,6 +428,7 @@ Ltac case_fun G :=
           simpl in H
       end
   end.
+*)
 
 Ltac case_fun_tac G tpos tneg :=
   match goal with
@@ -424,7 +467,19 @@ Ltac autodestruct_hyp H :=
       destruct H as [H1 H2];
       autodestruct_hyp H1;
       autodestruct_hyp H2
+  | exists _ , _ =>
+      let H1 := fresh in
+      let H2 := fresh in
+      destruct H as [H1 H2];
+      autodestruct_hyp H1;
+      autodestruct_hyp H2
   | _ * _ =>
+      let H1 := fresh in
+      let H2 := fresh in
+      destruct H as [H1 H2];
+      autodestruct_hyp H1;
+      autodestruct_hyp H2
+  | _ /\ _ =>
       let H1 := fresh in
       let H2 := fresh in
       destruct H as [H1 H2];
@@ -482,7 +537,7 @@ Definition option_bool {A} : option A -> (A -> bool) -> bool :=
 
 Lemma negb_correct {P} {p} :
   boolSpec p P ->
-  boolSpec (negb p) (neg P).
+  boolSpec (negb p) (~ P).
 Proof.
   intros p_correct.
   boolSpec_destruct; my_auto.
@@ -511,11 +566,11 @@ Definition eq_list_correct {A} {eq_A} :
   (forall x y : A, boolSpec (eq_A x y) (x = y)) ->
   forall x y, boolSpec (eq_list eq_A x y) (x = y).
 Proof.
-  unfold_goal.
   intros eq_A_correct.
   fix eq_list_correct 1.
   destruct x, y; simpl;
   unfold andb;
+  unfold boolSpec;
   repeat match goal with
   | |- eq_A ?x ?y = _ -> _ => case_fun (eq_A_correct x y)
   | |- eq_list eq_A ?x ?y = _ -> _ => case_fun (eq_list_correct x y)
@@ -526,8 +581,8 @@ Qed.
 Definition cross {A B C D} f g : A * B -> C * D := 
   fun p => (f (fst p), g (snd p)).
 
-Definition cross2 {A B C D} f g : A * B -> C * D -> Type  :=
-  fun p1 p2 => f (fst p1) (fst p2) * g (snd p1) (snd p2).
+Definition cross2 {A B C D} f g : A * B -> C * D -> Prop  :=
+  fun p1 p2 => f (fst p1) (fst p2) /\  g (snd p1) (snd p2).
 
 Definition equiv_pair {A1 A2 B1 B2} (equiv_A : A1 -> A2 -> bool) (equiv_B : B1 -> B2 -> bool) : A1 * B1 -> A2 * B2 -> bool :=
   fun p1 p2 => 
@@ -535,7 +590,7 @@ Definition equiv_pair {A1 A2 B1 B2} (equiv_A : A1 -> A2 -> bool) (equiv_B : B1 -
     let '(a2, b2) := p2 in
     equiv_A a1 a2 && equiv_B b1 b2.
 
-Definition equiv_pair_correct {A1 A2 B1 B2} {equiv_A : A1 -> A2 -> bool} {equiv_B : B1 -> B2 -> bool} {E1} {E2} :
+Definition equiv_pair_correct {A1 A2 B1 B2} {equiv_A : A1 -> A2 -> bool} {equiv_B : B1 -> B2 -> bool} {E1 : A1 -> A2 -> Prop} {E2 : B1 -> B2 -> Prop} :
   (forall x y, boolSpec (equiv_A x y) (E1 x y)) ->
   (forall x y, boolSpec (equiv_B x y) (E2 x y)) ->
   forall x y, boolSpec (equiv_pair equiv_A equiv_B x y) (cross2 E1 E2 x y).
@@ -606,13 +661,13 @@ Proof.
     congruence.
 Qed.
 
-Fixpoint in_list {A:Type} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
+Fixpoint in_list {A:Set} (eq : A -> A -> bool) (a : A) (ls : list A) : bool :=
   match ls with
   | nil   => false
   | x::xs => orb (eq x a) (in_list eq a xs)
   end.
 
-Definition in_list_correct {A:Type} {eq_A : A -> A -> bool}  :
+Definition in_list_correct {A:Set} {eq_A : A -> A -> bool}  :
   (forall x y, boolSpec (eq_A x y) (x = y)) ->
   (forall a l, boolSpec (in_list eq_A a l) (List.In a l)).
 Proof.

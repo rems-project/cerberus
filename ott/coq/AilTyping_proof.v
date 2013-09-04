@@ -48,9 +48,9 @@ Proof.
       set (Program.Basics.compose H inIntegerRange_Unsigned_Int_Long);
       contradiction
   | [|- D.typeOfConstant _ _ _] => econstructor (eassumption)
-  | [|- forall _, neg (D.typeOfConstant _ _ _)] => inversion 1; subst
+  | [|- forall _, ~ D.typeOfConstant _ _ _] => inversion 1; subst
   | [|- forall _, D.typeOfConstant _ _ _ -> _ = _] => inversion 1; subst
-  | [|-  _ * _] => split
+  | [|-  _ /\ _] => split
   | _ => context_destruct
   end; solve [congruence | contradiction].
 Qed.
@@ -68,9 +68,9 @@ Proof.
       set (Program.Basics.compose H inIntegerRange_Unsigned_Int_Long);
       contradiction
   | [|- D.typeOfConstant _ _ _] => econstructor (eassumption)
-  | [|- forall _, neg (D.typeOfConstant _ _ _)] => inversion 1; subst
+  | [|- forall _, ~ D.typeOfConstant _ _ _] => inversion 1; subst
   | [|- forall _, D.typeOfConstant _ _ _ -> _ = _] => inversion 1; subst
-  | [|-  _ * _] => split
+  | [|-  _ /\ _] => split
   | _ => context_destruct
   end; solve [congruence | contradiction].
 Qed.
@@ -87,16 +87,16 @@ Proof.
 Qed.
 
 Lemma typeOfExpression_sub {A B1 B2} {P} {S : sigma B1 B2} {G1 G2 : gamma} {e : expression A} :
-  D.subP (fun v => D.fv v e) eq G1 G2 ->
+  D.subP (fun v => D.fv v e) (fun _ => eq) G1 G2 ->
   forall t,
     D.typeOfExpression P S G1 e t ->
     D.typeOfExpression P S G2 e t.
 Proof.
   apply (
     expression_nrect
-      (fun x => forall (Hfree : D.subP (fun v => D.fv'         v x) eq G1 G2) t (T1 : D.typeOfExpression' P S G1 x t), D.typeOfExpression' P S G2 x t)
-      (fun x => forall (Hfree : D.subP (fun v => D.fv          v x) eq G1 G2) t (T1 : D.typeOfExpression  P S G1 x t), D.typeOfExpression  P S G2 x t)
-      (fun x => forall (Hfree : D.subP (fun v => D.fvArguments v x) eq G1 G2) t (T1 : D.typeOfArguments   P S G1 x t), D.typeOfArguments   P S G2 x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fv'         v x) (fun _ => eq) G1 G2) t (T1 : D.typeOfExpression' P S G1 x t), D.typeOfExpression' P S G2 x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fv          v x) (fun _ => eq) G1 G2) t (T1 : D.typeOfExpression  P S G1 x t), D.typeOfExpression  P S G2 x t)
+      (fun x => forall (Hfree : D.subP (fun v => D.fvArguments v x) (fun _ => eq) G1 G2) t (T1 : D.typeOfArguments   P S G1 x t), D.typeOfArguments   P S G2 x t)
   ); intros; inversion_clear T1;
   match goal with
   | H : D.assignable   P S G1 _ _   |- _ => inversion H; subst
@@ -106,25 +106,25 @@ Proof.
   | H : D.typeOfLValue P S G1 _ _ _ |- _ => inversion_clear H
   | H : D.typeOfRValue P S G1 _ _   |- _ => inversion_clear H
   | H : D.typeOfExpression _ _ G1 ?e _, IH : D.subP (fun _ => D.fv _ ?e) _ _ _ -> _ |- _ =>
-      notHyp (D.subP (fun v => D.fv v e) eq G1 G2);
+      notHyp (D.subP (fun v => D.fv v e) (fun _ => eq) G1 G2);
       let Hfree_sub := fresh in
-      assert (D.subP (fun v => D.fv v e) eq G1 G2) as Hfree_sub
+      assert (D.subP (fun v => D.fv v e) (fun _ => eq) G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
   | H : D.typeOfExpression' _ _ G1 ?e _, IH : D.subP (fun _ => D.fv' _ ?e) _ _ _ -> _ |- _ =>
-      notHyp (D.subP (fun v => D.fv' v e) eq G1 G2);
+      notHyp (D.subP (fun v => D.fv' v e) (fun _ => eq) G1 G2);
       let Hfree_sub := fresh in
-      assert (D.subP (fun v => D.fv' v e) eq G1 G2) as Hfree_sub
+      assert (D.subP (fun v => D.fv' v e) (fun _ => eq) G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
   | H : D.typeOfArguments _ _ G1 ?es _, IH : D.subP (fun _ => D.fvArguments _ ?es) _ _ _ -> _ |- _ =>
-      notHyp (D.subP (fun v => D.fvArguments v es) eq G1 G2);
+      notHyp (D.subP (fun v => D.fvArguments v es) (fun _ => eq) G1 G2);
       let Hfree_sub := fresh in
-      assert (D.subP (fun v => D.fvArguments v es) eq G1 G2) as Hfree_sub
+      assert (D.subP (fun v => D.fvArguments v es) (fun _ => eq) G1 G2) as Hfree_sub
         by (intros ? ?; apply Hfree; solve [econstructor (eassumption) | assumption]);
       set (IH Hfree_sub _ H)
   | H : D.lookup G1 ?v _ |- D.typeOfExpression' _ _ G2 (Var ?v) _ =>
-      constructor; destruct (Hfree _ (D.Fv'_Var v) _ H) as [? [? ?]]; congruence
+      constructor; destruct (Hfree _ D.Fv'_Var _ H) as [? [? ?]]; congruence
   end;
   econstructor (
       solve [ eassumption
@@ -138,7 +138,7 @@ Proof.
   ).
 Qed.
 
-Lemma type_of_rvalue_correct_aux {A B1 B2} {P} {G} {S : sigma B1 B2} {e : expression A} :
+Lemma type_of_rvalue_correct_aux {A B1 B2} {P} {S : sigma B1 B2} {G} {e : expression A} :
   optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
   optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e) ->
   optionSpec   (type_of_rvalue P S G e) (D.typeOfRValue P S G e).
@@ -267,56 +267,55 @@ Qed.
 
 Ltac types_neg_tac :=
   match goal with
-  | [H : D.complete Void |- _ ] => inversion H
-  | [H : D.object (Function _ _) |- _ ] => inversion H
-  | [H : D.integer Void           |- _ ] => inversion H
-  | [H : D.integer (Array _ _) |- _ ] => inversion H
-  | [H : D.integer (Function _ _) |- _ ] => inversion H
-  | [H : D.integer (Pointer  _ _) |- _ ] => inversion H
-  | [H : D.arithmetic Void           |- _ ] => inversion_clear H
-  | [H : D.arithmetic (Array    _ _) |- _ ] => inversion_clear H
-  | [H : D.arithmetic (Function _ _) |- _ ] => inversion_clear H
-  | [H : D.arithmetic (Pointer  _ _) |- _ ] => inversion_clear H
-  | [H : D.scalar Void           |- _ ] => inversion_clear H
-  | [H : D.scalar (Array _ _) |- _ ] => inversion_clear H
-  | [H : D.scalar (Function _ _) |- _ ] => inversion_clear H
-  | [H : D.pointer (Basic _) |- _] => inversion H
-  | [H : D.pointer (Array _ _) |- _] => inversion H
-  | [H : D.pointer (Function _ _) |- _] => inversion H
-  | [H : D.pointer Void |- _] => inversion H
-  | [H : neg (D.pointer (Pointer _ _)) |- _ ] => exfalso; apply H; now constructor
-  | [H : neg (D.void Void) |- _ ] => exfalso; apply H; now constructor
-  | [H : neg (D.object Void) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.object (Basic _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.object (Pointer _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.object (Array _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.complete (Basic _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.complete (Pointer _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.complete (Array _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.pointer (Pointer _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.arithmetic (Basic (Integer _))) |- _ ] => exfalso; apply H; do 2 constructor
-  | [H : neg (D.integer    (Basic (Integer _))) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.arithmetic (Basic ?bt)) |- _ ] => is_var bt; destruct bt
-  | [H : neg (D.integer    (Basic ?bt)) |- _ ] => is_var bt; destruct bt
-  | [H : neg (D.void Void) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.boolean Bool) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.function (Function _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.array (Array _ _)) |- _ ] => exfalso; apply H; constructor
-  | [H : neg (D.scalar (Pointer _ _)) |- _ ] => exfalso; apply H; constructor; constructor
-  | [H : neg (D.scalar (Basic ?bt)) |- _ ] => is_var bt; destruct bt
-  | [H : neg (D.scalar (Basic (Integer _))) |- _ ] => exfalso; apply H; constructor 2; constructor
-  | [H : D.void (Array _ _)    |- _ ] => inversion H
-  | [H : D.void (Function _ _) |- _ ] => inversion H
-  | [H : D.void (Pointer  _ _) |- _ ] => inversion H
-  | [H : D.void (Basic _)      |- _ ] => inversion H
-  | [H : D.boolean Void        |- _ ] => inversion H
-  | [H : D.boolean (Array _ _)    |- _ ] => inversion H
-  | [H : D.boolean (Function _ _) |- _ ] => inversion H
-  | [H : D.boolean (Pointer  _ _) |- _ ] => inversion H
-  | [H : D.boolean Void        |- _ ] => inversion H
-  | [H : D.boolean (Array _ _)    |- _ ] => inversion H
-  | [H : D.boolean (Function _ _) |- _ ] => inversion H
-  | [H : D.boolean (Basic _) |- _ ] => inversion H
+  | H : D.complete Void |- _ => inversion H
+  | H : D.object (Function _ _) |- _ => inversion H
+  | H : D.integer Void           |- _ => inversion H
+  | H : D.integer (Array _ _)    |- _ => inversion H
+  | H : D.integer (Function _ _) |- _ => inversion H
+  | H : D.integer (Pointer  _ _) |- _ => inversion H
+  | H : D.arithmetic Void           |- _ => inversion_clear H
+  | H : D.arithmetic (Array    _ _) |- _ => inversion_clear H
+  | H : D.arithmetic (Function _ _) |- _ => inversion_clear H
+  | H : D.arithmetic (Pointer  _ _) |- _ => inversion_clear H
+  | H : D.scalar Void           |- _ => inversion_clear H
+  | H : D.scalar (Array _ _)    |- _ => inversion_clear H
+  | H : D.scalar (Function _ _) |- _ => inversion_clear H
+  | H : D.pointer (Basic _) |- _ => inversion H
+  | H : D.pointer (Array _ _)    |- _ => inversion H
+  | H : D.pointer (Function _ _) |- _ => inversion H
+  | H : D.pointer Void           |- _ => inversion H
+  | H : ~ D.void Void |- _ => exfalso; apply H; now constructor
+  | H : ~ D.object Void          |- _ => exfalso; apply H; constructor
+  | H : ~ D.object (Basic _)     |- _ => exfalso; apply H; constructor
+  | H : ~ D.object (Pointer _ _) |- _ => exfalso; apply H; constructor
+  | H : ~ D.object (Array _ _)   |- _ => exfalso; apply H; constructor
+  | H : ~ D.complete (Basic _)     |- _ => exfalso; apply H; constructor
+  | H : ~ D.complete (Pointer _ _) |- _ => exfalso; apply H; constructor
+  | H : ~ D.complete (Array _ _)   |- _ => exfalso; apply H; constructor
+  | H : ~ D.pointer (Pointer _ _) |- _ => exfalso; apply H; now constructor
+  | H : ~ D.arithmetic (Basic (Integer _)) |- _ => exfalso; apply H; do 2 constructor
+  | H : ~ D.integer    (Basic (Integer _)) |- _ => exfalso; apply H; constructor
+  | H : ~ D.arithmetic (Basic ?bt) |- _ => is_var bt; destruct bt
+  | H : ~ D.integer    (Basic ?bt) |- _ => is_var bt; destruct bt
+  | H : ~ D.void Void |- _ => exfalso; apply H; constructor
+  | H : ~ D.boolean Bool |- _ => exfalso; apply H; constructor
+  | H : ~ D.function (Function _ _) |- _ => exfalso; apply H; constructor
+  | H : ~ D.array (Array _ _) |- _ => exfalso; apply H; constructor
+  | H : ~ D.scalar (Pointer _ _)       |- _ => exfalso; apply H; constructor; constructor
+  | H : ~ D.scalar (Basic ?bt)         |- _ => is_var bt; destruct bt
+  | H : ~ D.scalar (Basic (Integer _)) |- _ => exfalso; apply H; constructor 2; constructor
+  | H : D.void (Array _ _)    |- _ => inversion H
+  | H : D.void (Function _ _) |- _ => inversion H
+  | H : D.void (Pointer  _ _) |- _ => inversion H
+  | H : D.void (Basic _)      |- _ => inversion H
+  | H : D.boolean Void           |- _ => inversion H
+  | H : D.boolean (Array _ _)    |- _ => inversion H
+  | H : D.boolean (Function _ _) |- _ => inversion H
+  | H : D.boolean (Pointer  _ _) |- _ => inversion H
+  | H : D.boolean Void           |- _ => inversion H
+  | H : D.boolean (Array _ _)    |- _ => inversion H
+  | H : D.boolean (Function _ _) |- _ => inversion H
+  | H : D.boolean (Basic _)      |- _ => inversion H
   | H : D.wellTypedBinaryArithmetic (Pointer _ _) Add _ |- _ => inversion_clear H
   | H : D.wellTypedBinaryArithmetic _ Add (Pointer _ _) |- _ => inversion_clear H
   end.
@@ -388,7 +387,7 @@ Lemma well_typed_equality_correct {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : e
   (forall {t2 t2'}, D.typeOfRValue P S G e2 t2 -> D.typeOfRValue P S G e2 t2' -> t2 = t2') ->
   D.typeOfRValue P S G e1 t1 ->
   D.typeOfRValue P S G e2 t2 ->
-  (aop = Eq) + (aop = Ne) ->
+  (aop = Eq) \/ (aop = Ne) ->
   boolSpec (well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2))
            (D.typeOfExpression' P S G (Binary e1 aop e2) (RValueType (Basic (Integer (Signed Int))))).
 Proof.
@@ -409,39 +408,39 @@ Proof.
   | [|- compatible ?t1 ?t2 = ?o -> _] => case_fun (compatible_correct t1 t2)
   | _ => context_destruct
   | _ => destruct Haop; subst aop
-  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
-  | [                      Hfalse : forall _ _, Pointer ?q1 Void = Pointer _ _ -> neg (D.void _)    |- False ] => now eapply (Hfalse q1 Void eq_refl D.Void_Void)
+  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.complete _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | [                      Hfalse : forall _ _, Pointer ?q1 Void = Pointer _ _ -> ~ D.void _ |- False ] => now eapply (Hfalse q1 Void eq_refl D.Void_Void)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | |- D.typeOfExpression' P S G _ _ => types_tac; econstructor (finish eassumption)
-  | H : _ + _ |- D.typeOfExpression' P S G _ _ => destruct H as [? | ?]
+  | H : _ \/ _ |- D.typeOfExpression' P S G _ _ => destruct H as [? | ?]
   end;
   abstract (
   match goal with
-  | |- neg _ => inversion_clear 1
+  | |- ~ _ => inversion_clear 1
   end;
   repeat match goal with
   | [ H1 : D.typeOfRValue P S G e1 ?t1
     , H2 : D.typeOfRValue P S G e1 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique1 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | [ H1 : D.typeOfRValue P S G e2 ?t1
     , H2 : D.typeOfRValue P S G e2 ?t2 |- _ ] => notSame t1 t2; pose proof (typeOfRValue_unique2 _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
-  | [                      Hfalse : forall _ _, Pointer ?q1 Void = Pointer _ _ -> neg (D.void _)    |- False ] => now eapply (Hfalse q1 Void eq_refl D.Void_Void)
+  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.complete _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | [                      Hfalse : forall _ _, Pointer ?q1 Void = Pointer _ _ -> ~ D.void _    |- False ] => now eapply (Hfalse q1 Void eq_refl D.Void_Void)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H
+  | H : _ \/ _ |- _ => destruct H
   end).
 Qed.
 
 Lemma combine_qualifiers_left_not_pointer {t1 t2} :
-  neg (D.pointer t2) -> combine_qualifiers_left t1 t2 = t1.
+  ~ D.pointer t2 -> combine_qualifiers_left t1 t2 = t1.
 Proof.
   intros Hnpointer;
   destruct t1; destruct t2;
@@ -450,7 +449,7 @@ Proof.
 Qed.
 
 Lemma combine_qualifiers_right_not_pointer {t1 t2} :
-  neg (D.pointer t1) -> combine_qualifiers_right t1 t2 = t2.
+  ~ D.pointer t1 -> combine_qualifiers_right t1 t2 = t2.
 Proof.
   intros Hnpointer;
   destruct t1; destruct t2;
@@ -460,10 +459,10 @@ Qed.
 
 Lemma compatible_composite_None {t1} {t2} :
   D.compatible t1 t2 ->
-  neg (composite t1 t2 = None).
+  composite t1 t2 <> None.
 Proof.
-  apply (ctype_nrect (fun x => forall y (Hcompat : D.compatible x y), neg (composite x y = None))
-                     (fun x => forall y (Hcompat : D.compatibleParams x y), neg (composite_params x y = None)));
+  apply (ctype_nrect (fun x => forall y (Hcompat : D.compatible x y), composite x y <> None)
+                     (fun x => forall y (Hcompat : D.compatibleParams x y), composite_params x y <> None));
   intros; unfold_goal;
   destruct y; simpl;
   unfold option_map; fold composite_params;
@@ -484,7 +483,7 @@ Qed.
 
 Lemma compatible_composite {t1} {t2} :
   D.compatible t1 t2 ->
-  neg (forall t3, neg (D.composite t1 t2 t3)).
+  ~ forall t3, ~ D.composite t1 t2 t3.
 Proof.
   intros H.
   set (compatible_composite_None H).
@@ -495,23 +494,19 @@ Qed.
 Lemma composite_pointer_correct t1 t2 :
   match composite_pointer t1 t2 with
   | Some t =>
-      {q1' : qualifiers & {t1' : ctype &
-      {q2' : qualifiers & {t2' : ctype & {
-        t' : ctype &
-            (t1 = Pointer  q1' t1')
-          * (t2 = Pointer  q2' t2')
-          * (t  = Pointer (combine_qualifiers q1' q2') t')
-          * D.compatible t1' t2'
-          * D.composite  t1' t2' t'
-      }}}}}
-  | None   => neg (D.pointer t1) +
-              neg (D.pointer t2) +
-              {q1' : qualifiers & {t1' : ctype &
-              {q2' : qualifiers & {t2' : ctype &
-                  (t1 = Pointer q1' t1')
-                * (t2 = Pointer q2' t2')
-                * neg (D.compatible t1' t2')
-              }}}}
+      exists q1' t1' q2' t2' t',
+           t1 = Pointer  q1' t1'
+        /\ t2 = Pointer  q2' t2'
+        /\ t  = Pointer (combine_qualifiers q1' q2') t'
+        /\ D.compatible t1' t2'
+        /\ D.composite  t1' t2' t'
+  | None   =>
+      ~ D.pointer t1 \/
+      ~ D.pointer t2 \/
+      exists q1' t1' q2' t2',
+           t1 = Pointer q1' t1'
+        /\ t2 = Pointer q2' t2'
+        /\ ~ D.compatible t1' t2'
   end.
 Proof.
   unfold_goal;
@@ -519,12 +514,12 @@ Proof.
   repeat match goal with
   | [|- composite ?t1 ?t2 = _ -> _] => case_fun (composite_correct t1 t2)
   | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- neg _ + _ + _] => solve [ left; left ; inversion 1
-                                | left; right; inversion 1
-                                | repeat first [right | eexists | assumption]]
+  | [|- ~ _ \/ _ \/ _] => solve [ left; inversion 1
+                                | right; left; inversion 1
+                                | repeat first [right; right | eexists | assumption]]
   | _ => context_destruct
-  | [|- {_ : _ & _}] => repeat first [eexists | split | reflexivity | assumption]
-  | [H : D.compatible ?t1 ?t2, Hfind : forall _, neg (D.composite ?t1 ?t2 _) |- _] => destruct (compatible_composite H Hfind)
+  | [|- exists _ , _] => repeat first [eexists | split | reflexivity | assumption]
+  | [H : D.compatible ?t1 ?t2, Hfind : forall _, ~ D.composite ?t1 ?t2 _ |- _] => destruct (compatible_composite H Hfind)
   end.
 Qed.
 
@@ -560,12 +555,12 @@ Proof.
   | |- composite_pointer ?t1 ?t2 = _ -> _ => case_fun_tac (composite_pointer_correct t1 t2) autodestruct id_tac
   | _ => context_destruct
   | |- Some _ = Some _ -> _ => intros ?; Tactics.subst_no_fail; Tactics.autoinjections
-  | H : neg _ + neg _ + {_ : _ & {_ : _ & {_ : _ & {_ : _ & (_ = _) * (_ = _) * neg _}}}} |- D.typeOfExpression' P S G _ _ =>
-      destruct H as [[H | H] | H];
+  | H : ~ _ \/ ~ _ \/ exists _ _ _ _,  _ = _ /\ _ = _ /\ ~ _ |- D.typeOfExpression' P S G _ _ =>
+      destruct H as [H | [H | H]];
       [ exfalso; apply H; constructor
       | exfalso; apply H; constructor
       | autodestruct H]
-  | H : D.compatible ?t1 ?t2, Hfind : forall _, neg (D.composite ?t1 ?t2 _) |- _ => destruct (compatible_composite H Hfind)
+  | H : D.compatible ?t1 ?t2, Hfind : forall _, ~ D.composite ?t1 ?t2 _ |- _ => destruct (compatible_composite H Hfind)
   | |- D.typeOfExpression' P S G _ _ => 
         econstructor (
           solve [
@@ -587,34 +582,34 @@ Proof.
       Tactics.subst_no_fail; Tactics.autoinjections
   end;
   repeat match goal with
-  | Hfalse : forall _ _, Pointer _ ?t   = Pointer _ _ -> neg (D.object _) , H : D.object ?t |- _ => destruct (Hfalse _ _ eq_refl H)
-  | Hfalse : forall _ _, Pointer _ Void = Pointer _ _ -> neg (D.void   _) |- _ => exfalso; apply (Hfalse _ _ eq_refl); constructor
-  | H  : D.usualArithmetic P ?t1 ?t2 _ , Hfalse : forall _, neg (D.usualArithmetic P ?t1 ?t2 _) |- _  => destruct (Hfalse _ H)
+  | Hfalse : forall _ _, Pointer _ ?t   = Pointer _ _ -> ~ D.object _ , H : D.object ?t |- _ => destruct (Hfalse _ _ eq_refl H)
+  | Hfalse : forall _ _, Pointer _ Void = Pointer _ _ -> ~ D.void   _ |- _ => exfalso; apply (Hfalse _ _ eq_refl); constructor
+  | H  : D.usualArithmetic P ?t1 ?t2 _ , Hfalse : forall _, ~ D.usualArithmetic P ?t1 ?t2 _ |- _  => destruct (Hfalse _ H)
   | H1 : D.usualArithmetic P ?t1 ?t2 ?t, H2 : D.usualArithmetic P ?t1 ?t2 ?t' |- _ => notSame t t'; set (usualArithmetic_functional H1 H2)
   | _ => progress (repeat types_neg_tac)
-  | H : _ + _ |- _ => destruct H
-  end; my_auto; now firstorder).
+  | H : _ \/ _ |- _ => destruct H
+  end; my_auto; finish fail).
 Qed.
 
 Lemma nullPointerConstant_typeOfExpression {A B1 B2} {P} {S : sigma B1 B2} {G} :
   forall e : expression A,
   D.nullPointerConstant e ->
     D.typeOfExpression P S G e (RValueType (Basic (Integer (Signed Int))))
-  + D.typeOfExpression P S G e (RValueType (Pointer no_qualifiers Void))
-  + forall tc, neg (D.typeOfExpression P S G e tc).
+  \/ D.typeOfExpression P S G e (RValueType (Pointer no_qualifiers Void))
+  \/ forall tc, ~ D.typeOfExpression P S G e tc.
 Proof.
   apply (
     expression_nrect
       (fun e =>
          forall (Hnull : D.nullPointerConstant' e),
-           D.typeOfExpression' P S G e (RValueType (Basic (Integer (Signed Int)))) +
-           D.typeOfExpression' P S G e (RValueType (Pointer no_qualifiers Void))   +
-           forall tc, neg (D.typeOfExpression' P S G e tc))
+           D.typeOfExpression' P S G e (RValueType (Basic (Integer (Signed Int)))) \/
+           D.typeOfExpression' P S G e (RValueType (Pointer no_qualifiers Void))   \/
+           forall tc, ~ D.typeOfExpression' P S G e tc)
       (fun e =>
          forall (Hnull : D.nullPointerConstant  e),
-           D.typeOfExpression  P S G e (RValueType (Basic (Integer (Signed Int)))) +
-           D.typeOfExpression  P S G e (RValueType (Pointer no_qualifiers Void))   +
-           forall tc, neg (D.typeOfExpression  P S G e tc))
+           D.typeOfExpression  P S G e (RValueType (Basic (Integer (Signed Int)))) \/
+           D.typeOfExpression  P S G e (RValueType (Pointer no_qualifiers Void))   \/
+           forall tc, ~ D.typeOfExpression  P S G e tc)
       (fun _ => True));
   intros;
   first [now trivial | inversion_clear Hnull].
@@ -622,23 +617,23 @@ Proof.
     | H : D.unqualified ?q |- _ => is_var q; inversion H; subst
     end.
     match goal with
-    | IH : D.nullPointerConstant  ?e -> _, H : D.nullPointerConstant  ?e |- _ => destruct (IH H) as [[? | ?] |?]
+    | IH : D.nullPointerConstant  ?e -> _, H : D.nullPointerConstant  ?e |- _ => destruct (IH H) as [? | [? | ?]]
     end.
-    + left; right; econstructor (econstructor (solve [ eassumption
+    + right; left; econstructor (econstructor (solve [ eassumption
                                                      | reflexivity
                                                      | econstructor (constructor; constructor)
                                                      | econstructor (now repeat first [inversion 1 | constructor])])).
-    + left; right; econstructor (econstructor (solve [ eassumption
+    + right; left; econstructor (econstructor (solve [ eassumption
                                                      | reflexivity
                                                      | econstructor (constructor; constructor)
                                                      | econstructor (now repeat first [inversion 1 | constructor])])).
-    + right; inversion 1; subst.
+    + right; right; inversion 1; subst.
       repeat match goal with
-      | [Hfalse : forall _, neg (D.typeOfExpression P S G e _), H : D.typeOfExpression P S G e _ |- _] => exact (Hfalse _ H)
+      | [Hfalse : forall _, ~ D.typeOfExpression P S G e _, H : D.typeOfExpression P S G e _ |- _] => exact (Hfalse _ H)
       | [H : D.typeOfRValue P S G _ _   |- _] => inversion_clear H
       | [H : D.typeOfLValue P S G _ _ _ |- _] => inversion_clear H
       end.
-  - left; left; repeat constructor.
+  - left; repeat constructor.
     + unfold_integer_range;
       eapply Implementation.integer_range_signed_upper;
       eapply Implementation.precision_ge_one.
@@ -646,29 +641,29 @@ Proof.
       solve [eapply Implementation.integer_range_signed_lower1; eapply Implementation.precision_ge_one
             |eapply Implementation.integer_range_signed_lower2; eapply Implementation.precision_ge_one].
   - match goal with
-    | IH : D.nullPointerConstant' ?e -> _, H : D.nullPointerConstant' ?e |- _ => destruct (IH H)  as [[? | ?] |?]
+    | IH : D.nullPointerConstant' ?e -> _, H : D.nullPointerConstant' ?e |- _ => destruct (IH H)  as [? | [? | ?]]
     end.
-    + left ; left ; constructor; assumption.
-    + left ; right; constructor; assumption.
-    + right; inversion_clear 1; firstorder.
+    + left ; constructor; assumption.
+    + right; left; constructor; assumption.
+    + right; right; inversion_clear 1; firstorder.
 Qed.
 
 Lemma nullPointerConstant_typeOfRValue {A B1 B2} {P} {S : sigma B1 B2} {G} :
   forall e : expression A,
-  D.nullPointerConstant e ->
-    D.typeOfRValue P S G e (Basic (Integer (Signed Int)))
-  + D.typeOfRValue P S G e (Pointer no_qualifiers Void)
-  + forall t, neg (D.typeOfRValue P S G e t).
+     D.nullPointerConstant e ->
+     D.typeOfRValue P S G e (Basic (Integer (Signed Int)))
+  \/ D.typeOfRValue P S G e (Pointer no_qualifiers Void)
+  \/ forall t, ~ D.typeOfRValue P S G e t.
 Proof.
   intros e Hnull.
-  destruct (nullPointerConstant_typeOfExpression (P:=P) (G:=G) (S:=S) e Hnull) as [[? | ?] | ?].
-  - left; left ; econstructor (solve [finish eassumption | constructor; inversion 1]).
-  - left; right; econstructor (solve [finish eassumption | constructor; inversion 1]).
-  - right; inversion_clear 1.
+  destruct (nullPointerConstant_typeOfExpression (P:=P) (G:=G) (S:=S) e Hnull) as [? | [? | ?]].
+  - left ; econstructor (solve [finish eassumption | constructor; inversion 1]).
+  - right; left; econstructor (solve [finish eassumption | constructor; inversion 1]).
+  - right; right; inversion_clear 1.
     + firstorder.
     + match goal with | H : D.typeOfLValue P S G e _ _ |- _ => inversion_clear H end.
       firstorder.
-Qed.  
+Qed.
 
 Lemma combine_qualifiers_unqualified_left {q} :
   combine_qualifiers no_qualifiers q = q.
@@ -707,7 +702,7 @@ Lemma typeOfExpression'_functional_conditional {A B1 B2} {P} {S : sigma B1 B2} {
 Proof.
   intros Hunique1 Hunique2 Hunique3.
   inversion_clear 1; inversion_clear 1;
-  repeat match goal with
+  try now repeat match goal with
   | [ Hunique : forall _ _, D.typeOfRValue P S G ?e _ -> D.typeOfRValue P S G ?e _ -> _ = _
     , H1 : D.typeOfRValue P S G ?e ?t1, H2 : D.typeOfRValue P S G ?e ?t2 |- _] => notSame t1 t2; pose proof (Hunique _ _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | [ H1 : D.usualArithmetic P ?t1 ?t2 ?t, H2 : D.usualArithmetic P ?t1 ?t2 ?t' |- _] => notSame t t'; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
@@ -717,7 +712,7 @@ Proof.
     , H : D.typeOfRValue P S G ?e (Pointer _ ?t) |- _] =>
       notSame t Void;
       let H' := fresh in
-      destruct (@nullPointerConstant_typeOfRValue _ _ _ P S G e Hnull) as [[H' | H']| H'];
+      destruct (@nullPointerConstant_typeOfRValue _ _ _ P S G e Hnull) as [H' | [H' | H']];
       [ discriminate (Hunique _ _ H H')
       | let Heq := fresh in set (Hunique _ _ H H') as Heq; inversion Heq; clear Heq; subst
       | destruct (H' _ H)]
@@ -726,26 +721,26 @@ Proof.
 Qed.
 
 Lemma typeOfExpression'_neg_conditional1 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
-  (forall t, neg (D.typeOfRValue P S G e1 t)) ->
-  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
+  (forall t, ~ D.typeOfRValue P S G e1 t) ->
+  forall tc, ~ D.typeOfExpression' P S G (Conditional e1 e2 e3) tc.
 Proof. intros ?; inversion 1; firstorder. Qed.
 
 Lemma typeOfExpression'_neg_conditional2 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} :
-  (forall t, neg (D.typeOfRValue P S G e2 t)) ->
-  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
+  (forall t, ~ D.typeOfRValue P S G e2 t) ->
+  forall tc, ~ D.typeOfExpression' P S G (Conditional e1 e2 e3) tc.
 Proof. intros ?; inversion 1; firstorder. Qed.
 
 Lemma typeOfExpression'_neg_conditional3 {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 e3 : expression A} : 
-  (forall t, neg (D.typeOfRValue P S G e3 t)) ->
-  forall tc, neg (D.typeOfExpression' P S G (Conditional e1 e2 e3) tc).
+  (forall t, ~ D.typeOfRValue P S G e3 t) ->
+  forall tc, ~ D.typeOfExpression' P S G (Conditional e1 e2 e3) tc.
 Proof. intros ?; inversion 1; firstorder. Qed.
 
 Definition type_of_expression'_spec {A B1 B2} P (S : sigma B1 B2) G (e : expression' A) :=
-  optionSpec   (type_of_expression' P S G e) (D.typeOfExpression' P S G e) *
+  optionSpec   (type_of_expression' P S G e) (D.typeOfExpression' P S G e) /\
   optionUnique (type_of_expression' P S G e) (D.typeOfExpression' P S G e).
 
 Definition type_of_expression_spec {A B1 B2} P (S : sigma B1 B2) G (e : expression A) :=
-  optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) *
+  optionSpec   (type_of_expression P S G e) (D.typeOfExpression P S G e) /\
   optionUnique (type_of_expression P S G e) (D.typeOfExpression P S G e).
 
 Definition well_typed_arguments_spec {A B1 B2} P (S : sigma B1 B2) G (es : list (expression A)) :=
@@ -764,13 +759,13 @@ Proof.
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   repeat match goal with
   | |- optionSpec (Some _) _ => now my_auto
   | |- optionSpec None _ => inversion_clear 1
   | |- optionUnique _ _ => inversion_clear 1
-  | H : forall _, neg _ |- False => eapply H; eassumption
+  | H : forall _, ~ _ |- False => eapply H; eassumption
   | H1 : D.typeOfConstant P ?ic ?it1 
   , H2 : D.typeOfConstant P ?ic ?it2 |- ?it1 = ?it2 => exact (typeOfConstant_functional H1 H2)
   | |- None = Some _ => exfalso
@@ -808,13 +803,13 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   abstract (
   repeat match goal with
   | |- optionSpec None _ => inversion_clear 1
   | |- optionUnique _ _ => inversion_clear 1
-  | H : forall _, neg _ |- False => eapply H; eassumption
+  | H : forall _, ~ _ |- False => eapply H; eassumption
   | |- None = Some _ => exfalso
   | |- ?c _ = ?c _ => apply f_equal
   | H : D.typeOfLValue P S G _ _ _ |- _ => inversion_clear H
@@ -828,8 +823,8 @@ Proof.
   , H2 : D.typeOfExpression P S G ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux Hunique H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.lvalueConversion ?t ?t1 
   , H2 : D.lvalueConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (lvalueConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | |- _ => finish fail
   | _ => progress types_tac
   end).
@@ -851,7 +846,7 @@ Proof.
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec (Some _) _ => now my_auto
@@ -862,7 +857,7 @@ Proof.
   repeat match goal with
   | H1 : D.typeOfRValue P S G ?e ?t1 
   , H2 : D.typeOfRValue P S G ?e ?t2 |- ?t1 = ?t2 => eapply typeOfRValue_functional_aux; eassumption
-  | H : forall _, neg _ |- False => eapply H; eassumption
+  | H : forall _, ~ _ |- False => eapply H; eassumption
   end.
 Qed.
 
@@ -887,7 +882,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -900,10 +895,10 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.arithmetic ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.arithmetic ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.arithmetic ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.arithmetic ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => finish fail
   end.
 Qed.
@@ -929,7 +924,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -942,10 +937,10 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.arithmetic ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.arithmetic ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.arithmetic ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.arithmetic ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => finish fail
   end.
 Qed.
@@ -971,7 +966,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -984,11 +979,11 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => progress types_tac
   end.
 Qed.
@@ -1016,7 +1011,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   abstract (
   match goal with
@@ -1030,14 +1025,14 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.arithmetic ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.arithmetic ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
-  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.arithmetic ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.arithmetic ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.complete _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end).
 Qed.
 
@@ -1065,7 +1060,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   abstract (
   match goal with
@@ -1079,20 +1074,20 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.arithmetic ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.arithmetic ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.arithmetic ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.arithmetic ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | H : D.wellTypedBinaryArithmetic (Pointer _ _) _ _ |- _ => inversion_clear H
   | H : D.wellTypedBinaryArithmetic _ _ (Pointer _ _) |- _ => inversion_clear H
-  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | [ H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.complete _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end).
 Qed.
 
@@ -1117,7 +1112,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1130,14 +1125,14 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.promotion P ?t ?t1 
   , H2 : D.promotion P ?t ?t2 |- _ => notSame t1 t2; pose proof (promotion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1162,7 +1157,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1175,18 +1170,18 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.promotion P ?t ?t1 
   , H2 : D.promotion P ?t ?t2 |- _ => notSame t1 t2; pose proof (promotion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Band {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+Definition type_of_expression'_correct_Binary_Arithmetic_Band {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
   type_of_expression_spec P S G e1 ->
   type_of_expression_spec P S G e2 ->
   type_of_expression'_spec P S G (Binary e1 (Arithmetic Band) e2).
@@ -1207,7 +1202,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1220,18 +1215,18 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Bor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+Definition type_of_expression'_correct_Binary_Arithmetic_Bor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
   type_of_expression_spec P S G e1 ->
   type_of_expression_spec P S G e2 ->
   type_of_expression'_spec P S G (Binary e1 (Arithmetic Bor) e2).
@@ -1252,7 +1247,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1265,18 +1260,18 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
-Definition type_of_expression'_correct_Binary_Xor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
+Definition type_of_expression'_correct_Binary_Arithmetic_Xor {A B1 B2} {P} {S : sigma B1 B2} {G} {e1 e2 : expression A} :
   type_of_expression_spec P S G e1 ->
   type_of_expression_spec P S G e2 ->
   type_of_expression'_spec P S G (Binary e1 (Arithmetic Xor) e2).
@@ -1297,7 +1292,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1310,14 +1305,14 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.usualArithmetic P ?t ?t' ?t1 
   , H2 : D.usualArithmetic P ?t ?t' ?t2 |- _ => notSame t1 t2; pose proof (usualArithmetic_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1341,7 +1336,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1352,10 +1347,10 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1379,7 +1374,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1390,10 +1385,10 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1418,7 +1413,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1429,15 +1424,15 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1462,7 +1457,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1473,15 +1468,15 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1506,7 +1501,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1517,15 +1512,15 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1550,7 +1545,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1561,15 +1556,15 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.object   _) |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | [ H : D.object   ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.object _ |- False ] => now eapply (Hfalse q1 t1 eq_refl H)
   | [ Hfalse : forall _ _ _ _, Pointer ?q1 ?t1 = _ ->
                                Pointer ?q2 ?t2 = _ ->
-                               neg (D.compatible _ _)
+                               ~ D.compatible _ _
   , H : D.compatible ?t1 ?t2 |- False] => now eapply (Hfalse q1 q2 t1 t2 eq_refl eq_refl H)
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1591,12 +1586,12 @@ Proof.
   | H1 : D.typeOfRValue P S G e1 _ , H2 : D.typeOfRValue P S G e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
       case_fun (well_typed_equality_correct
               (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (inl (eq_refl Eq)))
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (or_introl (eq_refl Eq)))
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => assumption
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1607,11 +1602,11 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H2 : neg (D.typeOfExpression' P S G (Binary e1 Eq e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H2 : ~ D.typeOfExpression' P S G (Binary e1 Eq e2) (RValueType (Basic (Integer (Signed Int)))) |- False => apply H2; econstructor (eassumption)
   | _ => finish fail
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1633,12 +1628,12 @@ Proof.
   | H1 : D.typeOfRValue P S G e1 _ , H2 : D.typeOfRValue P S G e2 _ |- well_typed_equality ?t1 ?t2 (null_pointer_constant ?e1) (null_pointer_constant ?e2)  = _ -> _ =>
       case_fun (well_typed_equality_correct
               (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
-              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (inr (eq_refl Ne)))
+              (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2) H1 H2 (or_intror (eq_refl Ne)))
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => assumption
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1649,11 +1644,11 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H2 : neg (D.typeOfExpression' P S G (Binary e1 Ne e2) (RValueType (Basic (Integer (Signed Int))))) |- False => apply H2; econstructor (eassumption)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H2 : ~ D.typeOfExpression' P S G (Binary e1 Ne e2) (RValueType (Basic (Integer (Signed Int)))) |- False => apply H2; econstructor (eassumption)
   | _ => finish fail
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1677,7 +1672,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1696,11 +1691,11 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : findSpec ?t1 (D.pointerConversion ?t)
   , H2 : D.pointerConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (pointerConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | _ : forall _, neg (D.typeOfRValue P S G ?e _), H : D.assignable P S G _ ?e |- False => inversion_clear H
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | _ : forall _, ~ D.typeOfRValue P S G ?e _, H : D.assignable P S G _ ?e |- False => inversion_clear H
   | _ => reflexivity
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end.
 Qed.
 
@@ -1729,7 +1724,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   abstract (
   match goal with
@@ -1749,16 +1744,16 @@ Proof.
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfExpression_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | H1 : D.lvalueConversion ?t ?t1 
   , H2 : D.lvalueConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (lvalueConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> neg (D.complete _) |- False => now eapply (Hfalse q1 t1 eq_refl H)
-  | _ : neg (D.integer ?t), H : D.arithmetic ?t |- False => inversion_clear H
-  | _ : neg (D.integer ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H
-  | _ : neg (D.integer ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H
-  | _ : neg (D.arithmetic ?t1), H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
-  | _ : neg (D.arithmetic ?t2), H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H : D.complete ?t1 , Hfalse : forall _ _, Pointer ?q1 ?t1 = Pointer _ _ -> ~ D.complete _ |- False => now eapply (Hfalse q1 t1 eq_refl H)
+  | _ : ~ D.integer ?t, H : D.arithmetic ?t |- False => inversion_clear H
+  | _ : ~ D.integer ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H
+  | _ : ~ D.integer ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H
+  | _ : ~ D.arithmetic ?t1, H : D.wellTypedBinaryArithmetic ?t1 _ _ |- _ => inversion_clear H; contradiction
+  | _ : ~ D.arithmetic ?t2, H : D.wellTypedBinaryArithmetic _ _ ?t2 |- _ => inversion_clear H; contradiction
   | _ => progress types_tac
-  | H : _ + _ |- _ => destruct H as [? | ?]
+  | H : _ \/ _ |- _ => destruct H as [? | ?]
   end).
 Qed.
 
@@ -1789,7 +1784,7 @@ Proof.
   | _ => context_destruct
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec _ _ => assumption
@@ -1801,16 +1796,16 @@ Proof.
                (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique1)
                (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique2)
                (@typeOfRValue_functional_aux _ _ _ _ _ _ _ Hunique3) H1 H2)
-  | H1 : forall _, neg (D.typeOfExpression' P S G (Conditional _ _ _) _) |- optionUnique None _ =>
+  | H1 : forall _, ~ D.typeOfExpression' P S G (Conditional _ _ _) _ |- optionUnique None _ =>
       let H2 := fresh in
       intros ? H2; destruct (H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e1 _) |- _ =>
+  | H1 : forall _ : ctype, ~ D.typeOfRValue P S G e1 _ |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional1 H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e2 _) |- _ =>
+  | H1 : forall _ : ctype, ~ D.typeOfRValue P S G e2 _ |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional2 H1 _ H2)
-  | H1 : forall _ : ctype, neg (D.typeOfRValue P S G e3 _) |- _ =>
+  | H1 : forall _ : ctype, ~ D.typeOfRValue P S G e3 _ |- _ =>
       let H2 := fresh in
       intros ? H2; destruct (typeOfExpression'_neg_conditional3 H1 _ H2)
   end.
@@ -1833,7 +1828,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1844,8 +1839,8 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => reflexivity
   end.
 Qed.
@@ -1870,7 +1865,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1881,8 +1876,8 @@ Proof.
   | H1 : D.typeOfRValue P S G ?e ?t1
   , H2 : D.typeOfRValue P S G ?e ?t2
   , H  : optionUnique _ (D.typeOfExpression P S G ?e) |- _ => notSame t1 t2; pose proof (typeOfRValue_functional_aux H H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => finish fail
   end.
 Qed.
@@ -1900,7 +1895,7 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
@@ -1912,8 +1907,8 @@ Proof.
   , H2 : D.lookup ?C ?v ?r2 |- _ => notSame r1 r2; pose proof (lookup_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
   | HG : D.lookup G ?v _
   , HS : D.lookup S ?v _ |- _ => exfalso; eapply Hdisjoint; eexists; eassumption
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => reflexivity
   end.
 Qed.
@@ -1933,16 +1928,16 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
   | |- optionUnique (Some _) _ => inversion_clear 1; repeat apply f_equal
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
-  repeat match goal with
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  match goal with
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => congruence
   end.
 Qed.
@@ -1962,16 +1957,16 @@ Proof.
   | |- Some _ = ?v -> _ => is_var v; intros ?; subst
   | |- None   = ?v -> _ => is_var v; intros ?; subst
   | |- optionSpec (Some _) _ => econstructor (finish eassumption)
-  | |- _ * _ => split
+  | |- _ /\ _ => split
   end;
   match goal with
   | |- optionSpec None _ => inversion_clear 1
   | |- optionUnique (Some _) _ => inversion_clear 1; repeat apply f_equal
   | |- optionUnique None _ => inversion_clear 1; exfalso
   end;
-  repeat match goal with
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  match goal with
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   | _ => congruence
   end.
 Qed.
@@ -2006,7 +2001,7 @@ Proof.
   repeat match goal with
   | H1 : findSpec ?t1 (D.pointerConversion ?t)
   , H2 : D.pointerConversion ?t ?t2 |- _ => notSame t1 t2; pose proof (pointerConversion_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
   end.
 Qed.
 
@@ -2026,7 +2021,7 @@ Proof.
   repeat match goal with
   | H1 : D.typeOfExpression' P S G ?e ?t1
   , H  : optionUnique (Some ?t2) (D.typeOfExpression' P S G ?e) |- _ => notSame t1 t2; pose proof (H _ H1); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
   end; reflexivity.
 Qed.
 
@@ -2049,9 +2044,9 @@ Proof.
   apply type_of_expression'_correct_Binary_Arithmetic_Sub; assumption.
   apply type_of_expression'_correct_Binary_Arithmetic_Shl; assumption.
   apply type_of_expression'_correct_Binary_Arithmetic_Shr; assumption.
-  apply type_of_expression'_correct_Binary_Band; assumption.
-  apply type_of_expression'_correct_Binary_Bor; assumption.
-  apply type_of_expression'_correct_Binary_Xor; assumption.
+  apply type_of_expression'_correct_Binary_Arithmetic_Band; assumption.
+  apply type_of_expression'_correct_Binary_Arithmetic_Bor; assumption.
+  apply type_of_expression'_correct_Binary_Arithmetic_Xor; assumption.
   apply type_of_expression'_correct_Binary_Comma; assumption.
   apply type_of_expression'_correct_Binary_And; assumption.
   apply type_of_expression'_correct_Binary_Or; assumption.
@@ -2193,7 +2188,7 @@ Proof.
   | |- well_typed_block P S G t_return ?ss = _ -> _ => case_fun IHss
   | _ => context_destruct
   | |- allList _ _ => constructor; assumption
-  | |- neg _ =>  inversion_clear 1; contradiction
+  | |- ~ _ =>  inversion_clear 1; contradiction
   end.
 Qed.
 
@@ -2208,11 +2203,11 @@ Proof.
   | |- assignable P S G ?t ?e = _ -> _ => case_fun (assignable_correct P Hdisjoint t e)
   | _ => context_destruct
   | |- D.wellTypedDefinition _ _ _ _ =>  econstructor; eassumption
-  | |- neg _ => inversion_clear 1;
+  | |- ~ _ => inversion_clear 1;
                 repeat match goal with
                 | H1 : D.lookup ?C ?v ?r1
                 , H2 : D.lookup ?C ?v ?r2 |- _ => notSame r1 r2; pose proof (lookup_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-                | H : forall _, neg _ |- _ => eapply H; eassumption
+                | H : forall _, ~ _ |- _ => eapply H; eassumption
                 | _ => contradiction
                 end
   end.
@@ -2235,7 +2230,7 @@ Lemma well_typed_statement_correct {A1 A2 B1 B2} P {S : sigma B1 B2} {G} :
 Proof.
   intros Hdisjoint t_return s.
   revert s G Hdisjoint.
-  eapply (
+  apply (
     statement_nrect
       (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement' P S G t_return s ) (D.wellTypedStatement' P S G t_return s))
       (fun s  => forall G (Hdisjoint : D.disjoint G S), boolSpec (well_typed_statement  P S G t_return s ) (D.wellTypedStatement P S G t_return s))
@@ -2278,9 +2273,9 @@ Proof.
   repeat match goal with
   | H1 : D.typeOfRValue P S _ ?e ?t1
   , H2 : D.typeOfRValue P S _ ?e ?t2 |- _ => notSame t1 t2; pose proof (typeOfRValue_functional Hdisjoint _ H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
-  | H1 : neg ?P, H2 : ?P |- False => destruct (H1 H2)
-  | H1 : forall _, neg (?P _), H2 : ?P _ |- False => destruct (H1 _ H2)
-  | H :  neg (?c = ?c) |- False => apply H; constructor
+  | H1 : ~ ?P, H2 : ?P |- False => destruct (H1 H2)
+  | H1 : forall _, ~ ?P _, H2 : ?P _ |- False => destruct (H1 _ H2)
+  | H :  ?c <> ?c |- False => apply H; constructor
   end.
 Qed.
 
@@ -2294,9 +2289,9 @@ Proof.
   | |- well_formed_bindings ?bs = _ -> _ => case_fun (well_formed_bindings_correct bs)
   | |- AilWf.wf_type ?t = _ -> _ => case_fun (wf_type_correct t)
   | H : D.wellFormedBindings ?bs |- well_typed_statement _ _ (add_bindings ?bs empty) ?t ?s = _ -> _ =>
-      notHyp (D.disjoint (add_bindings b empty) S);
+      notHyp (D.disjoint (add_bindings bs empty) S);
       let Hdisjoint := fresh in
-      assert (D.disjoint (add_bindings b empty) S) as Hdisjoint
+      assert (D.disjoint (add_bindings bs empty) S) as Hdisjoint
         by (
           apply disjoint_freshBindings; [
               inversion_clear H; assumption
@@ -2307,14 +2302,42 @@ Proof.
       case_fun (well_typed_statement_correct P Hdisjoint t s)
   | _ => context_destruct
   | |- D.wellTypedFunction _ _ _ =>  constructor; assumption
-  | |- neg _ => now (inversion 1; my_auto)
+  | |- ~ _ => now (inversion 1; my_auto)
   end.
 Qed.
- 
+
+Definition well_typed_sigma_correct {A B : Set} P (S : sigma A B) :
+  boolSpec (well_typed_sigma P S) (D.wellTypedSigma P S).
+Proof.
+  do 2 unfold_goal.
+  match goal with
+  | |- if ?t then _ else _ =>
+      pose proof (all_correct eq_identifier_correct (fun _ => well_typed_function_correct P S) S : boolSpec t _);
+      boolSpec_destruct;
+      now my_auto
+  end.
+Qed.
+
+Lemma well_typed_program_correct {A B} P (p : _ * sigma A B) :
+  boolSpec (well_typed_program P p) (D.wellTypedProgram P p).
+Proof.
+  do 2 unfold_goal.
+  repeat match goal with
+  | |- lookup ?S ?v = _ -> _ => case_fun (lookup_correct S v)
+  | |- well_typed_sigma ?P ?S = _ -> _ => case_fun (well_typed_sigma_correct P S)
+  | _ => context_destruct
+  | |- D.wellTypedProgram _ _ => econstructor; eassumption
+  end;
+  inversion_clear 1;
+  repeat match goal with
+  | H1 : D.lookup ?S ?id ?t1, H2 : D.lookup ?S ?id ?t2 |- _ => pose proof (lookup_functional H1 H2); Tactics.subst_no_fail; Tactics.autoinjections; clear H1
+  end; my_auto; now firstorder.
+Qed.
+
 Ltac typeOfExpression_equiv_tac S1 S2 :=
   match goal with
   | Hlookup     : D.lookup S1 _ _
-  , HequivSigma : D.equivSigma S1 S2 |- D.typeOfExpression' _ S2 _ (Var _) (RValueType (type_from_sigma _)) => destruct ((fst HequivSigma) _ _ Hlookup) as [? [? [? ?]]]; econstructor (now typeOfExpression_equiv_tac S1 S2)
+  , HequivSigma : D.equivSigma S1 S2 |- D.typeOfExpression' _ S2 _ (Var _) (RValueType (type_from_sigma _)) => destruct ((proj1 HequivSigma) _ _ Hlookup) as [? [? [? ?]]]; econstructor (now typeOfExpression_equiv_tac S1 S2)
   | IH : forall _ _, D.equivExpression ?e1 _ -> D.typeOfExpression _ S1 _ ?e1 _ -> D.typeOfExpression _ S2 _ _ _
   , _  : D.equivExpression ?e1 ?e2 |- D.typeOfExpression _ S2 _ ?e2 _ => eapply IH; now typeOfExpression_equiv_tac S1 S2
   | |- D.typeOfExpression _ S2 _ _ _ => econstructor (now typeOfExpression_equiv_tac S1 S2)
@@ -2332,12 +2355,12 @@ Ltac typeOfExpression_equiv_tac S1 S2 :=
   , _  : D.equivExpression ?e1 ?e2 |- D.assignable _ _ _ _ ?e2 => inversion H; subst; econstructor (now typeOfExpression_equiv_tac S1 S2)
   | |- D.nullPointerConstant _ => eapply nullPointerConstant_equiv; eassumption
   | _ : D.equivExpression ?e1 ?e2
-  , H : neg (D.nullPointerConstant ?e1) |- neg (D.nullPointerConstant ?e2) => intros ?; apply H; eapply nullPointerConstant_equiv; [eapply equivExpression_symm; eassumption | assumption]
+  , H : ~ D.nullPointerConstant ?e1 |- ~ D.nullPointerConstant ?e2 => intros ?; apply H; eapply nullPointerConstant_equiv; [eapply equivExpression_symm; eassumption | assumption]
   | _ => solve [eassumption|reflexivity]
   | |- type_from_sigma _ = type_from_sigma _ => unfold type_from_sigma; congruence
   end.
 
-Lemma typeOfExpression_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+Lemma typeOfExpression_equiv {A1 A2 B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
   D.equivSigma S1 S2 ->
   forall {e1 : expression A1} {e2 : expression A2} {t},
     D.equivExpression e1 e2 ->
@@ -2354,7 +2377,7 @@ Proof.
   now typeOfExpression_equiv_tac S1 S2.
 Qed.
 
-Lemma typeable_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+Lemma typeable_equiv {A1 A2 B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
   D.equivSigma S1 S2 ->
   forall {e1 : expression A1} {e2 : expression A2},
     D.equivExpression e1 e2 ->
@@ -2382,7 +2405,7 @@ Proof.
   ).
 Qed.
 
-Lemma assignable_equiv {A A' B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+Lemma assignable_equiv {A A' B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
   D.equivSigma S1 S2 ->
   forall {t1} {e2 : expression A} {e2' : expression A'},
     D.equivExpression e2 e2' ->
@@ -2400,24 +2423,33 @@ Proof.
     ).
 Qed.
 
-Lemma wellTypedDeclaration_equiv {A1 A2 B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'}  :
+Lemma wellTypedDefinition_equiv {A1 A2 B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
+  D.equivSigma S1 S2 ->
+  forall {d1 : _ * expression A1} {d2 :_ * expression A2},
+    D.equivDefinition d1 d2 ->
+    D.wellTypedDefinition P S1 G d1 ->
+    D.wellTypedDefinition P S2 G d2.
+Proof.
+  intros HequivSigma [];
+  inversion_clear 1;
+  inversion_clear 1;
+  econstructor.
+  - eassumption.
+  - eapply assignable_equiv; eassumption.
+Qed.
+
+Lemma wellTypedDeclaration_equiv {A1 A2 B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
   D.equivSigma S1 S2 ->
   forall {ds1 : list (_ * expression A1)} {ds2 : list (_ * expression A2)},
     D.equivDeclaration ds1 ds2 ->
     allList (D.wellTypedDefinition P S1 G) ds1 ->
     allList (D.wellTypedDefinition P S2 G) ds2.
 Proof.
-  induction ds1; inversion_clear 1; intros Ht1.
-  - constructor.
-  - inversion_clear Ht1.
-    constructor.
-    + match goal with
-      | H : D.wellTypedDefinition _ S1 _ _ |- _ => inversion_clear H
-      end.
-      econstructor.
-      * eassumption.
-      * eapply assignable_equiv; eassumption.
-    + eapply IHds1; eassumption.
+  induction ds1;
+  inversion_clear 1;
+  inversion_clear 1;
+  econstructor;
+  solve [eassumption | eapply wellTypedDefinition_equiv; eassumption | eapply IHds1; eassumption].
 Qed.
 
 Lemma freshBindings_equivSigma {A1 A2 B1 B2 : Set} {S1 : sigma A1 B1} {S2 : sigma A2 B2} :
@@ -2431,7 +2463,7 @@ Proof.
   eapply equiv_weaken; now eauto.
 Qed.
   
-Lemma wellTypedStatement_equiv {A1 A1' A2 A2' B1 B1' B2 B2'} {P} {G} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} :
+Lemma wellTypedStatement_equiv {A1 A1' A2 A2' B1 B1' B2 B2'} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} {G} :
   D.equivSigma S1 S2 ->
   forall {s1 : statement A1 A1'} {s2 : statement A2 A2'} {t_return},
     D.equivStatement s1 s2 ->
@@ -2466,7 +2498,7 @@ Qed.
 Lemma wellTypedFunction_equiv {A1 A1' A2 A2' B1 B1' B2 B2': Set} {P} {S1 : sigma B1 B1'} {S2 : sigma B2 B2'} :
   D.equivSigma S1 S2 ->
   forall {p1 : _ * statement A1 A1'} {p2 : _ * statement A2 A2'},
-    cross2 eq (@D.equivStatement A1 A2 A1' A2') p1 p2 ->
+    D.equivFunction p1 p2 ->
     D.wellTypedFunction P S1 p1 ->
     D.wellTypedFunction P S2 p2.
 Proof.
@@ -2504,7 +2536,7 @@ Proof.
   intros [? ?] [? ?] [Heq HequivSigma]; simpl in *; subst.
   inversion_clear 1.
   match goal with
-  | H : D.lookup _ _ _ |- _ => destruct ((fst HequivSigma) _ _ H) as [[? ?] [? [? ?]]]; simpl in *; subst
+  | H : D.lookup _ _ _ |- _ => destruct ((proj1 HequivSigma) _ _ H) as [[? ?] [? [? ?]]]; simpl in *; subst
   end.
   econstructor.
   - eassumption.
