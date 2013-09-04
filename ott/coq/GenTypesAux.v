@@ -1,20 +1,31 @@
 Require Import Common.
 Require Import AilTypes.
+Require Import AilSyntax.
+Require Import Range.
+
+Require Implementation.
+Require AilTyping.
+Require AilTypesAux.
+
 Require Import GenTypes.
 
-Require AilTypesAux.
+Definition array gt : bool :=
+  match gt with
+  | GenArray _ _ => true
+  | _            => false
+  end.
+
+Definition function gt : bool :=
+  match gt with
+  | GenFunction _ _ => true
+  | _            => false
+  end.
 
 Definition pointer_conversion gt :=
   match gt with
   | GenArray    t _ => GenPointer no_qualifiers t
   | GenFunction t q => GenPointer no_qualifiers (Function t q)
   | _               => gt
-  end.
-
-Definition array gt : bool :=
-  match gt with
-  | GenArray _ _ => true
-  | _            => false
   end.
 
 Definition integer gt :=
@@ -39,20 +50,6 @@ Definition void gt : bool :=
   match gt with
   | GenVoid => true
   | _ => false
-  end.
-
-(* Sound but not principal. *)
-Definition promotion gt : option genType :=
-  match gt with
-  | GenBasic (GenInteger git) => Some (GenBasic (GenInteger (Promote git)))
-  | _                         => None
-  end.
-
-(* Sound but not principal. *)
-Definition usual_arithmetic gt1 gt2 :=
-  match gt1, gt2 with
-  | GenBasic (GenInteger git1), GenBasic (GenInteger git2) => Some (GenBasic (GenInteger (Usual git1 git2)))
-  | _ , _ => None
   end.
 
 Definition pointer_to_complete_object gt : bool :=
@@ -99,27 +96,47 @@ Definition composite_pointer gt1 gt2 : option genType :=
   | _               , _                => None
   end.
 
-Require Import Implementation.
-Require Import Range.
-Require Import AilTypesAux.
-Require Import AilTyping.
+(* Sound but not principal. *)
+Definition integer_promotion git : genIntegerType :=
+  Promote git.
+
+Definition promotion gt : option genType :=
+  match gt with
+  | GenBasic (GenInteger git) => Some (GenBasic (GenInteger (integer_promotion git)))
+  | _                         => None
+  end.
+
+(* Sound but not principal. *)
+Definition usual_arithmetic_promoted_integer git1 git2 : genIntegerType :=
+  Usual git1 git2.
+
+Definition usual_arithmetic_integer git1 git2 : genIntegerType :=
+  usual_arithmetic_promoted_integer
+    (integer_promotion git1)
+    (integer_promotion git2).
+
+Definition usual_arithmetic gt1 gt2 :=
+  match gt1, gt2 with
+  | GenBasic (GenInteger git1), GenBasic (GenInteger git2) => Some (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
+  | _ , _ => None
+  end.
 
 Fixpoint interpret_genIntegerType P git : option integerType :=
   match git with
   | Concrete it => Some it
-  | SizeT => Some (size_t P)
-  | PtrdiffT => Some (ptrdiff_t P)
-  | Unknown ic => type_of_constant P ic
+  | SizeT => Some (Implementation.size_t P)
+  | PtrdiffT => Some (Implementation.ptrdiff_t P)
+  | Unknown ic => AilTyping.type_of_constant P ic
   | Promote git =>
       interpret_genIntegerType P git >>= fun it =>
-      Some (integer_promotion P it)
+      Some (AilTypesAux.integer_promotion P it)
   | Usual git1 git2 =>
       interpret_genIntegerType P git1 >>= fun it1 =>
       interpret_genIntegerType P git2 >>= fun it2 =>
-      Some (usual_arithmetic_integer P it1 it2)
+      Some (AilTypesAux.usual_arithmetic_integer P it1 it2)
   end.
 
-Fixpoint interpret_genBasicType P gbt : option basicType :=
+Definition interpret_genBasicType P gbt : option basicType :=
   match gbt with
   | GenInteger git  => interpret_genIntegerType P git >>= fun it =>
                        Some (Integer it)
@@ -141,8 +158,6 @@ Definition interpret_genTypeCategory P gt : option typeCategory :=
                           Some (RValueType   t)
   | GenLValueType q t  => Some (LValueType q t)
   end.
-
-Require Import AilSyntax.
 
 Definition signed_integerSuffix (s : integerSuffix) : bool :=
   match s with
@@ -173,45 +188,3 @@ Definition min_interpret_optionIntegerSuffix os :=
 
 Definition min_interpret_integerConstant (ic:integerConstant) :=
   min_interpret_optionIntegerSuffix (snd ic).
-
-Require Import ZArith.
-Open Local Scope Z.
-
-Lemma le_one_min_precision ibt : 1 <= min_precision ibt.
-Proof. destruct ibt; simpl; omega. Qed.
-
-Definition min_range_unsigned ibt :=
-  let prec := min_precision ibt in
-  @make_range 0 (2^prec - 1) (integer_range_unsigned (le_one_min_precision ibt)).
-
-Definition min_range_signed ibt :=
-  let prec := min_precision ibt in
-  @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (le_one_min_precision ibt)). 
-
-Definition min_integer_range git :=
-  match git with
-  | Promote _
-  | Usual _ _
-  | Concrete Char           => make_range (integer_range_signed_upper (le_one_min_precision Ichar))
-  | Concrete Bool           => make_range Z.le_0_1
-  | Concrete (Unsigned ibt) => min_range_unsigned ibt
-  | Concrete (Signed   ibt) => min_range_signed   ibt
-  | SizeT                   => min_range_unsigned Int
-  | PtrdiffT                => min_range_signed   Int
-  | Unknown ic              => if signed_integerConstant ic
-                                 then min_range_signed   (min_interpret_integerConstant ic)
-                                 else min_range_unsigned (min_interpret_integerConstant ic)
-  end.
-
-Definition max_integerBaseType ibt1 ibt2 : integerBaseType :=
-  match ibt1, ibt2 with
-  | LongLong, _
-  | _       , LongLong => LongLong
-  | Long    , _
-  | _       , Long     => Long
-  | Int     , _
-  | _       , Int      => Int
-  | Short   , _
-  | _       , Short    => Short
-  | _       , _        => Ichar
-  end.

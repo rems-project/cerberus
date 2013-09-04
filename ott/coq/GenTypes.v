@@ -22,8 +22,6 @@ Fixpoint eq_genIntegerType x y : bool :=
   | _, _ => false
   end.
 
-(* equiv_genIntegerType? Looks like composite might need it. *)
-
 Inductive genBasicType : Set :=
  | GenInteger (git:genIntegerType).
 
@@ -79,7 +77,7 @@ Fixpoint inject_type t : genType :=
   match t with
   | Void         => GenVoid
   | Basic bt     => GenBasic (inject_basicType bt)
-  | Pointer q t => GenPointer q t
+  | Pointer  q t => GenPointer q t
   | Array    t n => GenArray t n
   | Function t p => GenFunction t p
   end.
