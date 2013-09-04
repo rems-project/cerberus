@@ -1,5 +1,6 @@
 Require Import Bool.
 Require Import Omega.
+Require Import RelationClasses.
 
 Require Import Common.
 Require Import Implementation.
@@ -192,7 +193,7 @@ Qed.
 Lemma integer_range_precision_signed_unsigned {P} {it1} {it2} :
   D.signed   P it1 ->
   D.unsigned P it2 ->
-  neg (sub (integer_range P it1) (integer_range P it2)).
+  ~ sub (integer_range P it1) (integer_range P it2).
 Proof.
   inversion 1;
   inversion 1;
@@ -263,11 +264,11 @@ Proof.
 Qed.
 
 Lemma integer_range_precision_Unsigned_Signed_eq {P} {ibt} :
-  neg (precision P (Unsigned ibt) = precision P (Signed ibt)) ->
-  neg (sub (integer_range P (Unsigned ibt)) (integer_range P (Signed ibt))).
+  ~ precision P (Unsigned ibt) = precision P (Signed ibt) ->
+  ~ sub (integer_range P (Unsigned ibt)) (integer_range P (Signed ibt)).
 Proof.
   intros Hneq HleRange.
-  assert (neg (precision P (Unsigned ibt) < precision P (Signed ibt))) as Hnlt
+  assert (~ precision P (Unsigned ibt) < precision P (Signed ibt)) as Hnlt
   by apply (Zle_not_lt _ _ (le_precision_Signed_Unsigned P ibt)).
   exact (Hnlt (integer_range_precision_unsigned_signed_inv (D.Unsigned_Int P ibt) (D.Signed_Int P ibt) HleRange)).
 Qed.
@@ -277,6 +278,125 @@ Proof.
   do 2 unfold_goal.
   set (mem_nat_correct n (integer_range P it)).
   my_auto' fail ltac:(progress boolSpec_simpl).
+Qed.
+
+Lemma inIntegerRange_inversion {P} {n} {it}:
+  D.inIntegerRange P n it ->
+  memNat n (integer_range P it).
+Proof. my_auto. Qed.
+
+Lemma min_integer_range_sub P it :
+  sub (min_integer_range it) (integer_range P it).
+Proof.
+  unfold integer_range.
+  pose proof (precision_Char P).
+  pose proof (precision_ge_one P it).
+  case_eq (Implementation.signed P Char); intros Hsigned;
+  constructor;
+  destruct it;
+  rewrite_all Hsigned;
+  match goal with
+  | |- context[Bool] =>
+      idtac
+  | |- context[Char] =>
+      pose proof (precision_Signed P Ichar);
+      pose proof (precision_Unsigned P Ichar)
+  | |- context[Signed ?ibt] =>
+      pose proof (precision_Signed P ibt);
+      destruct ibt
+  | |- context[Unsigned ?ibt] =>
+      pose proof (precision_Unsigned P ibt);
+      destruct ibt
+  end;
+  unfold min_integer_range;
+  unfold min_range_signed;
+  unfold integer_range_signed_upper;
+  unfold min_range_unsigned;
+  repeat match goal with
+  | |- context[binary_mode P] => destruct (binary_mode P)
+  | |- context[Implementation.signed P Char] => rewrite_all Hsigned
+  | |- context[Implementation.signed P Bool] => rewrite (signed_Bool P)
+  | |- context[Implementation.signed P (Signed ?ibt)] => rewrite (signed_Signed P ibt)
+  | |- context[Implementation.signed P (Unsigned ?ibt)] => rewrite (signed_Unsigned P ibt)
+  end;
+  repeat rewrite max_make_range;
+  repeat rewrite min_make_range;
+  now match goal with
+  | |- 2 ^ _ - 1 <= _ - 1 => 
+      apply Z.sub_le_mono; [|omega];
+      apply Z.pow_le_mono; [omega|];
+      simpl in *; omega
+  | |- 1 <= 2 ^ precision _ Bool - 1 =>
+      assert (1 = 2 - 1)%Z as Heq by omega; rewrite Heq at 1;
+      apply Z.sub_le_mono; [|omega];
+      assert (2 = 2 ^ 1)%Z as Heq' by reflexivity; rewrite Heq' at 1;
+      apply Z.pow_le_mono; [omega|];
+      exact (precision_Bool P)
+  | |- 0 <= 0 => omega
+  | |- - 2 ^ (precision P Char - 1) <= 0 =>
+      assert (0 = -0)%Z as Heq by reflexivity;
+      rewrite Heq;
+      apply (proj1 (Z.opp_le_mono _ _));
+      apply (Z.le_trans _ 1); [omega|];
+      assert (1 = 2^0)%Z as Heq' by reflexivity;
+      rewrite Heq' at 1;
+      apply Z.pow_le_mono_r; omega
+  | |- - 2 ^ (precision P Char - 1) + 1 <= 0 =>
+      apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1));
+      rewrite <- Z.add_sub_assoc;
+      rewrite Zplus_0_r;
+      apply (proj1 (Z.opp_le_mono _ _));
+      assert (1 = 2^0)%Z as Heq' by reflexivity;
+      rewrite Heq' at 1;
+      apply Z.pow_le_mono_r; omega
+  | |- - 2 ^ (precision _ (Signed ?ibt) - 1) <= _ =>
+      apply (Z.le_trans _ (- 2 ^ (min_precision ibt - 1 - 1))); [|simpl; omega];
+      apply (proj1 (Z.opp_le_mono _ _));
+      apply Z.pow_le_mono_r; omega
+  | |- - 2 ^ (precision _ (Signed _) - 1) + 1 <= _ =>
+      apply Z.add_le_mono; [|omega];
+      apply (proj1 (Z.opp_le_mono _ _));
+      apply Z.pow_le_mono_r; simpl in *; omega
+  end.
+Qed.
+
+Lemma in_min_integer_range_correct n it :
+  boolSpec (in_min_integer_range n it) (D.inMinIntegerRange n it).
+Proof.
+  do 2 unfold_goal.
+  pose proof (mem_nat_correct n (Implementation.min_integer_range it)) as Hmem.
+  boolSpec_destruct.
+  - constructor.
+    eapply sub_mem.
+    eapply min_integer_range_sub.
+    assumption.
+  - destruct (mem_neg Hmem);
+    intros Hrange;
+    pose proof (Hrange min_implementation_signed_char)   as Hsigned;
+    pose proof (Hrange min_implementation_unsigned_char) as Hunsigned;
+    inversion_clear Hunsigned;
+    inversion_clear Hsigned;
+    repeat match goal with
+    | H : Range_defns.memNat _ _ |- _ => inversion_clear H
+    end;
+    repeat match goal with
+    | it  : integerType     |- _ => destruct it
+    | ibt : integerBaseType |- _ => destruct ibt
+    end;
+    repeat match goal with
+    | H : _ (Range.max ?r) _ |- _ =>
+        let z := eval compute in (Range.max r) in
+        replace (Range.max r) with z in *; [|reflexivity]
+    | H : _ _ (Range.max ?r) |- _ =>
+        let z := eval compute in (Range.max r) in
+        replace (Range.max r) with z in *; [|reflexivity]
+    | H : _ (Range.min ?r) _ |- _ =>
+        let z := eval compute in (Range.min r) in
+        replace (Range.min r) with z in *; [|reflexivity]
+    | H : _ _ (Range.min ?r) |- _ =>
+        let z := eval compute in (Range.min r) in
+        replace (Range.min r) with z in *; [|reflexivity]
+    end; omega.
 Qed.
 
 Lemma le_integer_range_correct P it1 it2 :
@@ -323,7 +443,7 @@ Proof.
       set (le_precision_Unsigned_Ichar_Short   P);
       set (le_precision_Unsigned_Bool_Ichar    P);
       omega
-  | [ Hunsigned1 : D.unsigned ?P ?it1, Hunsigned2 : D.unsigned ?P ?it2 |- neg (D.leIntegerRange ?P ?it1 ?it2) ] =>
+  | [ Hunsigned1 : D.unsigned ?P ?it1, Hunsigned2 : D.unsigned ?P ?it2 |- ~ D.leIntegerRange ?P ?it1 ?it2 ] =>
       inversion 1; subst;
       match goal with
       | [H : sub _ _ |- _] => set (integer_range_precision_unsigned_inv Hunsigned1 Hunsigned2 H)
@@ -334,7 +454,7 @@ Proof.
       set (le_precision_Unsigned_Ichar_Short   P);
       set (le_precision_Unsigned_Bool_Ichar    P);
       match goal with
-      | [ H : neg (_ = _) |- _ ] => apply H
+      | [ H : _ <> _ |- _ ] => apply H
       end;
       omega
   | [ Hsigned1 : D.signed ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- D.leIntegerRange ?P ?it1 ?it2 ] =>
@@ -345,7 +465,7 @@ Proof.
       set (le_precision_Signed_Short_Int     P);
       set (le_precision_Signed_Ichar_Short   P);
       omega
-  | [ Hsigned1 : D.signed ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- neg (D.leIntegerRange ?P ?it1 ?it2) ] =>
+  | [ Hsigned1 : D.signed ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- ~ D.leIntegerRange ?P ?it1 ?it2 ] =>
       inversion 1; subst;
       match goal with
       | [H : sub _ _ |- _] => set (integer_range_precision_signed_inv Hsigned1 Hsigned2 H)
@@ -355,13 +475,13 @@ Proof.
       set (le_precision_Signed_Short_Int     P);
       set (le_precision_Signed_Ichar_Short   P);
       match goal with
-      | [ H : neg (_ = _) |- _ ] => apply H
+      | [ H : _ <> _ |- _ ] => apply H
       end;
       omega
-  | [ Hsigned1 : D.signed ?P ?it1, Hunsigned2 : D.unsigned ?P ?it2 |- neg (D.leIntegerRange ?P ?it1 ?it2) ] =>
+  | [ Hsigned1 : D.signed ?P ?it1, Hunsigned2 : D.unsigned ?P ?it2 |- ~ D.leIntegerRange ?P ?it1 ?it2 ] =>
       set (integer_range_precision_signed_unsigned Hsigned1 Hunsigned2);
       inversion 1; contradiction
-  | [ Hunsigned1 : D.unsigned ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- neg (D.leIntegerRange ?P ?it1 ?it2) ] =>
+  | [ Hunsigned1 : D.unsigned ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- ~ D.leIntegerRange ?P ?it1 ?it2 ] =>
       inversion 1; subst;
       match goal with
       | [H : sub _ _ |- _] => set (integer_range_precision_unsigned_signed_inv Hunsigned1 Hsigned2 H)
@@ -407,15 +527,15 @@ Ltac eqIntegerRank_finish :=
         | intros; apply D.EqIntegerRank_Refl].
 Ltac eqIntegerRank_tac := my_auto' eqIntegerRank_finish fail.
 
-Lemma eqIntegerRank_dec_aux it1 it2 : D.eqIntegerRankBase it1 it2 + D.eqIntegerRankBase it2 it1 + (it1 = it2) + neg (D.eqIntegerRank it1 it2).
+Lemma eqIntegerRank_dec_aux it1 it2 : D.eqIntegerRankBase it1 it2 \/ D.eqIntegerRankBase it2 it1 \/ (it1 = it2) \/ ~ D.eqIntegerRank it1 it2.
 Proof.
   set (eq_integerType_correct it1 it2); boolSpec_destruct.
-  - left; right; assumption.
+  - right; right; left; assumption.
   - set (eq_integer_rank_base_correct it1 it2); boolSpec_destruct.
-    + left; left; left; assumption.
+    + left; assumption.
     + set (eq_integer_rank_base_correct it2 it1); boolSpec_destruct.
-      * left; left; right; assumption.
-      * right; my_auto.
+      * right; left;  assumption.
+      * right; right; right; my_auto.
 Qed.
 
 Lemma eq_integer_rank_correct it1 it2 :
@@ -438,7 +558,7 @@ Proof.
   intros it1 it it2.
   generalize (eqIntegerRank_dec_aux it1 it);
   generalize (eqIntegerRank_dec_aux it it2);
-  destruct_sum;
+  intuition;
   solve [
       congruence
     | repeat (
@@ -477,7 +597,7 @@ Ltac precision_tac :=
 Instance ltIntegerRankBase_asymm {P} : Asymmetric (D.ltIntegerRankBase P).
 Proof. intros; inversion 1; inversion 1; my_auto; precision_tac; intuition. Qed.
 
-Lemma ltIntegerRankBase_least P it : neg (D.ltIntegerRankBase P it Bool).
+Lemma ltIntegerRankBase_least P it : ~ D.ltIntegerRankBase P it Bool.
 Proof. inversion 1; intuition. Qed.
 
 Ltac ltIntegerRankBase_tac :=
@@ -602,7 +722,7 @@ Ltac ltIntegerRankCongruence_dec_tac :=
   ltIntegerRankCongruence_tac;
   try solve
     [ inversion 1; ltIntegerRankCongruence_tac
-    | unfold neg; intros; apply_ctx; constructor; inversion 1
+    | intros; apply_ctx; constructor; inversion 1
     | inversion 2; ltIntegerRankCongruence_tac
     | inversion 1; ltIntegerRankCongruence_tac;
       match goal with
@@ -684,7 +804,7 @@ Definition lt_integer_rank_neg_next it : option integerType :=
 
 Ltac ltIntegerRank_neg_tac_next P it1 it2 :=
   let next := eval compute in (lt_integer_rank_neg_next it1) in
-  assert (neg (D.ltIntegerRank P it1 it2)) by (clear_integerType; intros ?; now abstract (do 5 ltIntegerRank_neg_tac));
+  assert (~ D.ltIntegerRank P it1 it2) by (clear_integerType; intros ?; now abstract (do 5 ltIntegerRank_neg_tac));
   match next with
   | Some ?it1' =>
       let eq      := eval compute in (eq_integer_rank it1  it2) in
@@ -1189,14 +1309,14 @@ Proof.
 Qed.
 
 Lemma usual_arithmetic_Integer_Some {P} {it1 it2} :
-  {t : ctype & usual_arithmetic P (Basic (Integer it1)) (Basic (Integer it2)) = Some t}.
+  exists t : ctype, usual_arithmetic P (Basic (Integer it1)) (Basic (Integer it2)) = Some t.
 Proof.
   exists (Basic (Integer (usual_arithmetic_integer P it1 it2))).
   reflexivity.
 Qed.
 
 Lemma usual_arithmetic_Integer_None {P} {it1 it2} :
-  neg (usual_arithmetic P (Basic (Integer it1)) (Basic (Integer it2)) = None).
+  usual_arithmetic P (Basic (Integer it1)) (Basic (Integer it2)) <> None.
 Proof.
   destruct (usualArithmetic_Integer P it1 it2) as [t H].
   set (usual_arithmetic_unique _ H).
@@ -1338,8 +1458,8 @@ Proof.
   inversion_clear 1;
   match goal with
   | H : D.unqualified _ |- _ => inversion_clear H
-  | H : neg (D.array (Array _ _)) |- _ => exfalso; apply H; constructor
-  | H : neg (D.function (Function _ _)) |- _ => exfalso; apply H; constructor
+  | H : ~ D.array (Array _ _) |- _ => exfalso; apply H; constructor
+  | H : ~ D.function (Function _ _) |- _ => exfalso; apply H; constructor
   | _ => idtac
   end; my_auto.
 Qed.
@@ -1461,103 +1581,101 @@ Local Close Scope Z.
 
 Lemma pointer_to_complete_object_correct t :
   if pointer_to_complete_object t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.complete t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.complete t').
+    then exists q t', (t = Pointer q t') /\ D.complete t'
+    else ~ D.pointer t \/ forall q t', t = Pointer q t' -> ~ D.complete t'.
 Proof.
   unfold_goal.
   repeat match goal with
   | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; now intuition
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => eexists; eexists; now intuition
   | _ => context_destruct
   end; right; congruence.
 Qed.
 
 Lemma pointers_to_compatible_complete_objects_correct t1 t2 :
   if pointers_to_compatible_complete_objects t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.complete t1' * D.complete t2' * D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.complete t1'))
-         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.complete t2'))
-         + (forall q1' q2' t1' t2',
+    then exists q1' t1' q2' t2',
+           t1 = Pointer q1' t1' /\ t2 = Pointer q2' t2' /\
+           D.complete t1' /\ D.complete t2' /\ D.compatible t1' t2'
+    else ~ D.pointer t1 \/ ~ D.pointer t2
+         \/ (forall q1' t1', t1 = Pointer q1' t1' -> ~ D.complete t1')
+         \/ (forall q2' t2', t2 = Pointer q2' t2' -> ~ D.complete t2')
+         \/ (forall q1' q2' t1' t2',
               t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+              t2 = Pointer q2' t2' -> ~ D.compatible t1' t2').
 Proof.
   unfold_goal.
   unfold andb.
   repeat match goal with
   | [|- complete ?t = _ -> _] => case_fun (complete_correct t)
   | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; now intuition
-  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => eexists; eexists; eexists; eexists; now intuition
+  | [|- ~ D.pointer ?t \/ _ ] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; left; left; left; inversion 1
+      | _           => left; inversion 1
       end
-  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
+  | [|- _ \/ ~ D.pointer ?t \/ _] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; left; left; right; inversion 1
+      | _           => right; left; inversion 1
       end
-  | [_ : neg (D.complete t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
-  | [_ : neg (D.complete t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | [_ : ~ D.complete ?t1       |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; left; intros; congruence
+  | [_ : ~ D.complete ?t2       |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; right; left; intros; congruence
+  | [_ : ~ D.compatible ?t1 ?t2 |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; right; right; intros; congruence
   | _ => context_destruct
   end.
 Qed.
 
 Lemma pointers_to_compatible_objects_correct t1 t2 :
   if pointers_to_compatible_objects t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.object t1'  * D.object t2' * D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' t1', t1 = Pointer q1' t1' -> neg (D.object t1'))
-         + (forall q2' t2', t2 = Pointer q2' t2' -> neg (D.object t2'))
-         + (forall q1' q2' t1' t2',
+    then exists q1' t1' q2' t2',
+           t1 = Pointer q1' t1' /\ t2 = Pointer q2' t2' /\
+           D.object t1'  /\ D.object t2' /\ D.compatible t1' t2'
+    else ~ D.pointer t1 \/ ~ D.pointer t2
+         \/ (forall q1' t1', t1 = Pointer q1' t1' -> ~ D.object t1')
+         \/ (forall q2' t2', t2 = Pointer q2' t2' -> ~ D.object t2')
+         \/ (forall q1' q2' t1' t2',
               t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+              t2 = Pointer q2' t2' -> ~ D.compatible t1' t2').
 Proof.
   unfold_goal.
   unfold andb.
   repeat match goal with
   | [|- object ?t = _ -> _] => case_fun (object_correct t)
   | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; eexists; eexists; intuition
-  | [|- neg (D.pointer ?t) + _ + _ + _ + _] =>
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => eexists; eexists; eexists; eexists; intuition
+  | [|- ~ D.pointer ?t \/ _] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; left; left; left; inversion 1
+      | _           => left; inversion 1
       end
-  | [|- _ + neg (D.pointer ?t) + _ + _ + _] =>
+  | [|- _ \/ ~ D.pointer ?t \/ _ ] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; left; left; right; inversion 1
+      | _           => right; left; inversion 1
       end
-  | [_ : neg (D.object t1)      |- _ + _ + _ + _ + _ ] => left; left; right; intros; congruence
-  | [_ : neg (D.object t2)      |- _ + _ + _ + _ + _ ] => left; right; intros; congruence
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ + _ + _ ] => right; intros; congruence
+  | [_ : ~ D.object t1        |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; left; intros; congruence
+  | [_ : ~ D.object t2        |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; right; left; intros; congruence
+  | [_ : ~ D.compatible t1 t2 |- _ \/ _ \/ _ \/ _ \/ _ ] => right; right; right; right; intros; congruence
   | _ => context_destruct
   end.
 Qed.
 
 Lemma pointer_to_object_correct t :
   if pointer_to_object t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.object t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.object t').
+    then exists q t', t = Pointer q t' /\ D.object t'
+    else ~ D.pointer t \/ forall q t', t = Pointer q t' -> ~ D.object t'.
 Proof.
   unfold_goal.
   repeat match goal with
   | [|- object ?t = _ -> _] => case_fun (object_correct t)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; intuition
-  | [|- neg (D.pointer ?t) + _] =>
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => eexists; eexists; intuition
+  | [|- ~ D.pointer ?t \/ _] =>
       match t with
       | Pointer _ _ => right
       | _           => left; inversion 1
@@ -1568,16 +1686,16 @@ Qed.
 
 Lemma pointer_to_void_correct t :
   if pointer_to_void t
-    then {q : qualifiers & {t' : ctype & (t = Pointer q t') * D.void t'}}
-    else neg (D.pointer t) + forall q t', t = Pointer q t' -> neg (D.void t').
+    then exists q t', t = Pointer q t' /\ D.void t'
+    else ~ D.pointer t \/ forall q t', t = Pointer q t' -> ~ D.void t'.
 Proof.
   unfold_goal.
   repeat match goal with
   | [|- void ?t = _ -> _] => case_fun (void_correct t)
-  | [|- neg _] => intros [? [? [? ?]]]
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => eexists; eexists; now intuition
-  | [|- neg (D.pointer ?t) + _] =>
+  | [|- ~ _] => intros [? [? [? ?]]]
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => eexists; eexists; now intuition
+  | [|- ~ D.pointer ?t \/ _] =>
       match t with
       | Pointer _ _ => right; intros; inversion 1
       | _           => left; inversion 1
@@ -1588,31 +1706,30 @@ Qed.
 
 Lemma pointers_to_compatible_types_correct t1 t2 :
   if pointers_to_compatible_types t1 t2
-    then {q1' : qualifiers & {t1' : ctype &
-         {q2' : qualifiers & {t2' : ctype &
-           (t1 = Pointer q1' t1') * (t2 = Pointer q2' t2') *
-           D.compatible t1' t2'}}}}
-    else neg (D.pointer t1) + neg (D.pointer t2)
-         + (forall q1' q2' t1' t2',
+    then exists q1' t1' q2' t2',
+           t1 = Pointer q1' t1' /\ t2 = Pointer q2' t2' /\
+           D.compatible t1' t2'
+    else ~ D.pointer t1 \/ ~ D.pointer t2
+         \/ (forall q1' q2' t1' t2',
               t1 = Pointer q1' t1' ->
-              t2 = Pointer q2' t2' -> neg (D.compatible t1' t2')).
+              t2 = Pointer q2' t2' -> ~ D.compatible t1' t2').
 Proof.
   unfold_goal.
   repeat match goal with
   | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (compatible_correct t1 t2)
-  | [|- _ * _] => split
-  | [|- {_ : _ & _}] => repeat eexists; now intuition 
-  | [|- neg (D.pointer ?t) + _ + _ ] =>
+  | [|- _ /\ _] => split
+  | [|- exists _, _] => repeat eexists; now intuition 
+  | [|- ~ D.pointer ?t \/ _ ] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; left; inversion 1
+      | _           => left; inversion 1
       end
-  | [|- _ + neg (D.pointer ?t) + _ ] =>
+  | [|- _ \/ ~ D.pointer ?t \/ _ ] =>
       match t with
       | Pointer _ _ => fail 1
-      | _           => left; right; inversion 1
+      | _           => right; left; inversion 1
       end
-  | [_ : neg (D.compatible t1 t2) |- _ + _ + _ ] => right; intros; congruence
+  | [_ : ~ D.compatible t1 t2 |- _ \/ _ \/ _ ] => right; right; intros; congruence
   | _ => context_destruct
   end.
 Qed.

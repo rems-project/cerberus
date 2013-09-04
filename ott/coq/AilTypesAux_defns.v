@@ -17,13 +17,13 @@ Inductive signed : implementation -> integerType -> Prop :=    (* defn isSigned 
      Implementation.signed P Char = true  ->
      signed P Char.
 
-Inductive unqualified : qualifiers -> Set :=
+Inductive unqualified : qualifiers -> Prop :=
   | Unqualified  : unqualified no_qualifiers.
 
 (** definitions *)
 
 (* defns JisInteger *)
-Inductive integer : ctype -> Set :=    (* defn isInteger *)
+Inductive integer : ctype -> Prop :=    (* defn isInteger *)
  | Integer_Integer : forall (it:integerType),
      integer (Basic (Integer it)).
 (** definitions *)
@@ -56,11 +56,11 @@ Inductive unsigned : implementation -> integerType -> Prop :=    (* defn isUnsig
      unsigned P Char.
 (** definitions *)
 
-Inductive signedType : integerType -> Set :=    (* defn isSigned *)
+Inductive signedType : integerType -> Prop :=    (* defn isSigned *)
  | SignedType : forall (ibt:integerBaseType),
      signedType (Signed ibt).
 
-Inductive unsignedType : integerType -> Set :=    (* defn isUnsigned *)
+Inductive unsignedType : integerType -> Prop :=    (* defn isUnsigned *)
  | UnsignedType_Int : forall (ibt:integerBaseType),
      unsignedType (Unsigned ibt)
  | UnsignedType_Bool : unsignedType Bool.
@@ -73,6 +73,9 @@ Inductive inIntegerRange : implementation -> nat -> integerType -> Prop :=    (*
      memNat n (integer_range P it)  ->
      inIntegerRange P n it.
 (** definitions *)
+
+Definition inMinIntegerRange n it :=
+  forall P, inIntegerRange P n it.
 
 (* defns JleRange *)
 Inductive leIntegerRange : implementation -> integerType -> integerType -> Prop :=    (* defn leRange *)
@@ -173,7 +176,7 @@ Inductive correspondingUnsigned : integerType -> integerType -> Prop :=    (* de
      correspondingUnsigned (Signed ibt) (Unsigned ibt).
 (** definitions *)
 
-Inductive promoted : integerType -> Set :=
+Inductive promoted : integerType -> Prop :=
   | Promoted_SignedInt        : promoted (Signed   Int)
   | Promoted_SignedLong       : promoted (Signed   Long)
   | Promoted_SignedLongLong   : promoted (Signed   LongLong)
@@ -182,7 +185,7 @@ Inductive promoted : integerType -> Set :=
   | Promoted_UnsignedLongLong : promoted (Unsigned LongLong).
 
 (* defns JisPromotion *)
-Inductive integerPromotion : implementation -> integerType -> integerType -> Set :=    (* defn isPromotion *)
+Inductive integerPromotion : implementation -> integerType -> integerType -> Prop :=
  | IntegerPromotion_ToSignedInt : forall (P:implementation) (it:integerType),
       ~ it = Unsigned Int ->
       ~ it = Signed   Int ->
@@ -210,7 +213,7 @@ Inductive promotion (P : implementation) : ctype -> ctype -> Prop :=
        promotion P (Basic (Integer it1)) (Basic (Integer it2)).
 
 (* defns JisUsualArithmetic *)
-Inductive usualArithmeticPromotedInteger : implementation -> integerType -> integerType -> integerType -> Prop :=    (* defn isUsualArithmetic *)
+Inductive usualArithmeticPromotedInteger : implementation -> integerType -> integerType -> integerType -> Prop :=
  | UsualArithmeticPromotedInteger_Eq : forall (P:implementation) (it:integerType),
      usualArithmeticPromotedInteger P it it it
  | UsualArithmeticPromotedInteger_GtSameSigned : forall (P:implementation) (it1 it2:integerType),
@@ -413,7 +416,7 @@ Inductive lvalueConvertible : ctype -> Prop :=    (* defn isLvalueConvertible *)
      complete t ->
      lvalueConvertible t.
 
-Inductive pointerConversion : ctype -> ctype -> Set :=
+Inductive pointerConversion : ctype -> ctype -> Prop :=
   | PointerConversion_Array :
       forall {t} {n} {q},
         unqualified q ->
@@ -424,8 +427,8 @@ Inductive pointerConversion : ctype -> ctype -> Set :=
         pointerConversion (Function t q) (Pointer q' (Function t q))
   | PointerConversion_other :
       forall {t},
-        neg (array    t) ->
-        neg (function t) ->
+        ~ array    t ->
+        ~ function t ->
         pointerConversion t t.
 
 Inductive lvalueConversion : ctype -> ctype -> Prop :=

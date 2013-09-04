@@ -178,14 +178,14 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      typeOfExpression' (Unary Bnot e) (RValueType t)
  | TypeOfExpression'_SizeOf : forall (q:qualifiers) (t t':ctype),
      wfLvalue q t ->
-     neg (function t) ->
-     neg (incomplete t) ->
+     ~ function t ->
+     ~ incomplete t ->
      Basic (Integer (size_t P)) = t' ->
      typeOfExpression' (SizeOf q t) (RValueType t')
  | TypeOfExpression'_AlignOf : forall (q:qualifiers) (t t':ctype),
      wfLvalue q t ->
-     neg (function t) ->
-     neg (incomplete t) ->
+     ~ function t ->
+     ~ incomplete t ->
      Basic (Integer (size_t P)) = t' ->
      typeOfExpression' (AlignOf q t) (RValueType t')
  | TypeOfExpression'_CastScalar : forall (q:qualifiers) (t:ctype) e (t':ctype),
@@ -447,7 +447,7 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      scalar t1 ->
      typeOfRValue e2 t2 ->
      typeOfRValue e3 t3 ->
-     neg (pointer t2) ->
+     ~ pointer t2 ->
      pointer t3 ->
      nullPointerConstant e2 ->
      typeOfExpression' (Conditional e1 e2 e3) (RValueType t3)
@@ -465,7 +465,7 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      typeOfRValue e2 t2 ->
      typeOfRValue e3 t3 ->
      pointer t2 ->
-     neg (pointer t3) ->
+     ~ pointer t3 ->
      nullPointerConstant e3 ->
      typeOfExpression' (Conditional e1 e2 e3) (RValueType t2)
  | TypeOfExpression'_ConditionalPointerVoid1 : forall e1 e2 e3 (q2 q3 q:qualifiers) (t2 t1 t3:ctype),
@@ -473,8 +473,8 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      scalar t1 ->
      typeOfRValue e2 (Pointer q2 t2) ->
      typeOfRValue e3 (Pointer q3 t3) ->
-     neg (compatible t2 t3) ->
-     neg (nullPointerConstant e2) ->
+     ~ compatible t2 t3 ->
+     ~ nullPointerConstant e2 ->
      void t2 ->
      object t3 ->
      combine_qualifiers q2 q3 = q ->
@@ -484,8 +484,8 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      scalar t1 ->
      typeOfRValue e2 (Pointer q2 t2) ->
      typeOfRValue e3 (Pointer q3 t3) ->
-     neg (compatible t2 t3) ->
-     neg (nullPointerConstant e3) ->
+     ~ compatible t2 t3 ->
+     ~ nullPointerConstant e3 ->
      object t2 ->
      void t3 ->
      combine_qualifiers q2 q3 = q ->
@@ -497,7 +497,7 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      assignable t e2 ->
      typeOfExpression' (Assign e1 e2) (RValueType t)
  | TypeOfExpression'_CompoundAssignPlusMinusArithmetic : forall aop e1 e2 (t1:ctype) (q:qualifiers) (t t2 :ctype),
-     (aop = Add) + (aop = Sub) ->
+     (aop = Add) \/ (aop = Sub) ->
      typeOfLValue e1 q t ->
      lvalueConversion t t1 ->
      typeOfRValue e2 t2 ->
@@ -506,7 +506,7 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      arithmetic t2 ->
      typeOfExpression' (CompoundAssign e1 aop e2) (RValueType t1)
  | TypeOfExpression'_CompoundAssignPlusMinusPointer : forall aop e1 e2 (t1:ctype) (q' q:qualifiers) (t t2:ctype),
-     (aop = Add) + (aop = Sub) ->
+     (aop = Add) \/ (aop = Sub) ->
      typeOfLValue e1 q' (Pointer q t) ->
      lvalueConversion (Pointer q t) t1 ->
      typeOfRValue e2 t2 ->
@@ -515,7 +515,7 @@ Inductive typeOfExpression' {A B1 B2: Set} {P} {S : sigma B1 B2} {G : gamma} : e
      integer t2 ->
      typeOfExpression' (CompoundAssign e1 aop e2) (RValueType t1)
  | TypeOfExpression'_CompoundAssign : forall aop e1 e2 (t1:ctype) (q:qualifiers) (t t2:ctype),
-     neg ((aop = Add) + (aop = Sub)) ->
+     ~ (aop = Add \/ aop = Sub) ->
      typeOfLValue e1 q t ->
      lvalueConversion t t1 ->
      typeOfRValue e2 t2 ->

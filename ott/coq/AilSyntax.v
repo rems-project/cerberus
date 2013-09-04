@@ -275,14 +275,20 @@ with statement {A B : Set} : Set :=
 Arguments statement  : default implicits.
 Arguments statement' : default implicits.
 
-Definition eq_declaration {A : Set} eq_A (d1 d2 : list (identifier * expression A)) : bool :=
-  eq_list (eq_pair eq_identifier (eq_expression eq_A)) d1 d2.
+Definition eq_definition {A : Set} eq_A (d1 d2 : identifier * expression A) : bool :=
+  eq_pair eq_identifier (eq_expression eq_A) d1 d2.
 
-Fixpoint equiv_declaration {A1 A2 : Set} (d1 : list (identifier * expression A1)) (d2 : list (identifier * expression A2)) : bool :=
-  match d1, d2 with
-  | nil           , nil            => true
-  | (v1, e1) :: d1, (v2, e2) :: d2 => eq_identifier v1 v2 && equiv_expression e1 e2 && equiv_declaration d1 d2
-  | _             , _              => false
+Definition eq_declaration {A : Set} eq_A (ds1 ds2 : list (identifier * expression A)) : bool :=
+  eq_list (eq_definition eq_A) ds1 ds2.
+
+Definition equiv_definition {A1 A2 : Set} (d1 : identifier * expression A1) (d2 : identifier * expression A2) : bool :=
+  equiv_pair eq_identifier equiv_expression d1 d2.
+
+Fixpoint equiv_declaration {A1 A2 : Set} (ds1 : list (identifier * expression A1)) (ds2 : list (identifier * expression A2)) : bool :=
+  match ds1, ds2 with
+  | nil      , nil       => true
+  | d1 :: ds1, d2 :: ds2 => equiv_definition d1 d2 && equiv_declaration ds1 ds2
+  | _        , _         => false
   end.
 
 Definition eq_block_aux {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) equiv_statement :=
@@ -411,10 +417,10 @@ Definition eq_sigma {A B : Set} (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) 
   eq_context eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)).
 
 Definition equiv_sigma {A1 A2 B1 B2 : Set} (S1 : sigma A1 B1) (S2 : sigma A2 B2) :=
-  equiv eq_identifier (equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2.
+  equiv eq_identifier (fun _ => equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2.
 
 Definition equiv_eq_sigma {A B : Set}  (eq_A : A -> A -> bool) (eq_B : B -> B -> bool) (S1 S2 : sigma A B) :=
-  equiv eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2.
+  equiv eq_identifier (fun _ => eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2.
 
 Definition gamma : Set := Context.context identifier (qualifiers * ctype).
 
@@ -422,7 +428,7 @@ Definition eq_gamma : gamma -> gamma -> bool :=
   eq_context eq_identifier (eq_pair eq_qualifiers eq_ctype).
 
 Definition equiv_gamma : gamma -> gamma -> bool :=
-  equiv eq_identifier (eq_pair eq_qualifiers eq_ctype).
+  equiv eq_identifier (fun _ => eq_pair eq_qualifiers eq_ctype).
 
 Definition lookup {B} (C : Context.context identifier B) := Context.lookup eq_identifier C.
 Definition mem {B} v (C : Context.context identifier B) := Context.mem eq_identifier v C.

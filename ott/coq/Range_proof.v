@@ -62,3 +62,37 @@ Defined.
 
 Definition mem_nat_correct n r : boolSpec (mem_nat n r) (Range_defns.memNat n r) :=
   mem_correct (Z_of_nat n) r.
+
+Lemma mem_neg {z r} :
+  ~ Range_defns.mem z r ->
+  (max r < z) + (z < min r).
+Proof.
+  intros Hfalse.
+  pose proof (lt_Z_correct (max r) z).
+  pose proof (lt_Z_correct z (min r)).
+  repeat boolSpec_destruct.
+  - exfalso.
+    unfold max in *.
+    unfold min in *.
+    set (proj2_sig r) as Hle.
+    simpl in Hle.
+    omega.
+  - right; assumption.
+  - left; assumption.
+  - exfalso; apply Hfalse; constructor; omega.
+Qed.
+
+Lemma sub_mem {z} {r1 r2} :
+  Range_defns.sub r1 r2 ->
+  Range_defns.mem z r1 ->
+  Range_defns.mem z r2.
+Proof.
+  inversion_clear 1.
+  inversion_clear 1.
+  constructor; eapply Z.le_trans; eassumption.
+Qed.
+
+Lemma memNat_inversion {n r} :
+  Range_defns.memNat n r ->
+  (Z.of_nat n) <= max r /\ min r <= (Z.of_nat n).
+Proof. inversion_clear 1; auto. Qed.
