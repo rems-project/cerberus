@@ -1,5 +1,4 @@
 Require Import Common.
-Require Import Implementation.
 Require Import AilSyntax.
 Require Import AilTypes.
 Require Import AilSyntaxAux.
@@ -12,14 +11,10 @@ Require Import GenTypes.
 Require Import GenTypesAux.
 Require Import Annotation.
 
-Notation "'do' x <- m ; c" := (m >>= (fun x => c))
+Local Notation "'do' x <- m ; c" := (m >>= (fun x => c))
     (at level 60, right associativity, x ident).
-Notation "'do' ( x , y ) <- m ; c" := (m >>= (fun p => let '(x, y) := p in c))
+Local Notation "'do' ( x , y ) <- m ; c" := (m >>= (fun p => let '(x, y) := p in c))
     (at level 60, right associativity, x ident, y ident).
-
-Definition type_of {A1 A2 : Set} (A : annotation A1 A2) (e : expression A2) :=
-  let '(AnnotatedExpression a _) := e in
-  get_type A a.
 
 Definition annotate_rvalue_aux {A1 A2 : Set}
                                (A : annotation A1 A2)
@@ -31,8 +26,33 @@ Definition annotate_rvalue_aux {A1 A2 : Set}
                           Some (e, inject_type t)
   end.
 
-(* Sound but not principal. *)
-Definition type_of_constant ic : genIntegerType := Unknown ic.
+Definition type_of_constant ic : genIntegerType :=
+  match ic with
+  | (n, None) =>
+      if AilTypesAux.in_min_integer_range n (Signed Int) then
+        Concrete (Signed Int)
+      else
+        Unknown ic
+  | (n, Some U) =>
+      if AilTypesAux.in_min_integer_range n (Unsigned Int) then
+        Concrete (Unsigned Int)
+      else
+        Unknown ic
+  | (n, Some L) =>
+      if AilTypesAux.in_min_integer_range n (Signed Long) then
+        Concrete (Signed Long)
+      else
+        Unknown ic
+  | (n, Some UL) =>
+      if AilTypesAux.in_min_integer_range n (Unsigned Long) then
+        Concrete (Unsigned Long)
+      else
+        Unknown ic
+  | (n, Some LL) =>
+      Concrete (Signed LongLong)
+  | (n, Some ULL) =>
+      Concrete (Unsigned LongLong)
+  end.
 
 Definition well_typed_assignment t1 t2 null2 :=
   match t1, t2 with
@@ -198,10 +218,10 @@ Fixpoint annotate_expression' {A1 A2 B1 B2 : Set}
       do e1 <- annotate_expression A S G e1;
       match type_of A e1 with
       | GenLValueType q1 t1 =>
-          do e2 <- annotate_assignee t1 e2;
-          let t := AilTypesAux.pointer_conversion t1 in
           if AilTypesAux.modifiable q1 t1
-            then Some (Assign e1 e2, GenRValueType (inject_type t))
+            then let t := AilTypesAux.pointer_conversion t1 in
+                 do e2 <- annotate_assignee t e2; 
+                 Some (Assign e1 e2, GenRValueType (inject_type t))
             else None
       | _ => None
       end
@@ -363,7 +383,7 @@ Definition annotate_block_aux {A1 A2 B : Set}
 
 Definition annotate_definition {A1 A2 B1 B2 : Set}
                                (A : annotation A1 A2)
-                               (S : sigma B1 B2) G (d : identifier * expression A1) :=
+                               (S : sigma B1 B2) (G : gamma) (d : identifier * expression A1) :=
   let '(v, e) := d in
   match lookup G v with
   | Some (_, t) => do e <- annotate_assignee A S G t e;
@@ -373,7 +393,7 @@ Definition annotate_definition {A1 A2 B1 B2 : Set}
 
 Fixpoint annotate_definitions {A1 A2 B1 B2 : Set}
                               (A : annotation A1 A2)
-                              (S : sigma B1 B2) G ds :=
+                              (S : sigma B1 B2) (G : gamma) ds :=
   match ds with
   | nil     => Some nil
   | d :: ds => do d  <- annotate_definition  A S G d;
@@ -383,7 +403,7 @@ Fixpoint annotate_definitions {A1 A2 B1 B2 : Set}
 
 Fixpoint annotate_statement' {A1 A2 B B1 B2 : Set}
                              (A : annotation A1 A2)
-                             (S : sigma B1 B2) G t_return (s : statement' B A1) : option (statement' B A2) :=
+                             (S : sigma B1 B2) (G : gamma) t_return (s : statement' B A1) : option (statement' B A2) :=
   let annotate_block bs := annotate_block_aux A (annotate_statement A S (Context.add_bindings bs G) t_return) in
   match s with
   | Label l s => do s <- annotate_statement A S G t_return s; Some (Label l s)
@@ -433,14 +453,14 @@ Fixpoint annotate_statement' {A1 A2 B B1 B2 : Set}
   end
 with annotate_statement {A1 A2 B B1 B2 : Set}
                         (A : annotation A1 A2)
-                        (S : sigma B1 B2) G t_return (s : statement B A1) : option (statement B A2) :=
+                        (S : sigma B1 B2) (G : gamma) t_return (s : statement B A1) : option (statement B A2) :=
   let '(AnnotatedStatement b s) := s in
   do s <- annotate_statement' A S G t_return s;
   Some (AnnotatedStatement b s).
 
 Definition annotate_block {A1 A2 B B1 B2 : Set}
                           (A : annotation A1 A2)
-                          (S : sigma B1 B2) G t_return (bs : list (statement B A1)) :=
+                          (S : sigma B1 B2) (G : gamma) t_return (bs : list (statement B A1)) :=
   annotate_block_aux A (annotate_statement A S G t_return) bs.
 
 Definition annotate_function {A1 A2 B B1 B2 : Set}
@@ -457,7 +477,7 @@ Definition annotate_function {A1 A2 B B1 B2 : Set}
     None.
 
 Definition annotate_sigma {A1 A2 B : Set} (A : annotation A1 A2) (S : sigma B A1) : option (sigma B A2) :=
-  Context.mapP eq_identifier (annotate_function A S) S.
+  Context.mapP eq_identifier (fun _ => annotate_function A S) S.
 
 Definition annotate_program {A1 A2 B : Set} (A : annotation A1 A2) (p:program B A1) : option (program B A2) :=
   let (main, S) := p in
