@@ -5,7 +5,7 @@ Require Import Context.
 
 Require Import GenTypes.
 Require Import Annotation.
-Require Import GenSyntaxAux.
+Require Import GenSyntax.
 
 Require Import AilTypes_proof.
 Require Import AilSyntax_proof.
@@ -16,13 +16,12 @@ Require Tactics.
 Module D.
   Require Context_defns.
   Require AilSyntax_defns.
-  Require GenSyntaxAux_defns.
+  Require GenSyntax_defns.
 
   Include Context_defns.
   Include AilSyntax_defns.
-  Include GenSyntaxAux_defns.
+  Include GenSyntax_defns.
 End D.
-
 
 Lemma equiv_annotation_expression_correct {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (e1 : expression A1) (e2 : expression A2) :
   match equiv_annotation_expression A A' e1 e2 with
@@ -68,7 +67,7 @@ Proof.
   end; my_auto' fail ltac:(rewrite id_add_get; reflexivity).
 Qed.
 
-Lemma equivAnnotationExpression_equivExpression {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (e1 : expression A2) (e2 : expression A2') :
+Lemma equivAnnotationExpression_equivExpression {A1 A2 A2' : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {e1 : expression A2} {e2 : expression A2'} :
   D.equivAnnotationExpression A A' e1 e2 -> D.equivExpression e1 e2.
 Proof.
   revert e2.
@@ -79,6 +78,22 @@ Proof.
       (fun x => forall y (HequivAnnot : D.equivAnnotationArguments   A A' x y), D.equivArguments   x y)
 
   ); intros; inversion HequivAnnot; subst; constructor; now firstorder.
+Qed.
+
+Lemma equivAnnotationExpression_transport {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {e1 : expression A1} {e2 : expression A2} :
+  D.equivExpression e1 e2 ->
+  exists e2' : expression A2',
+    D.equivExpression e1 e2' /\
+    D.equivAnnotationExpression A A' e2 e2'.
+Proof.
+  intros Hequiv.
+  pose proof (equiv_annotation_expression_correct A A' e1 e2).
+  destruct (equiv_annotation_expression A A' e1 e2) as [e2'|].
+  - exists e2'; intuition.
+    eapply equivExpression_trans.
+    + eassumption.
+    + eapply equivAnnotationExpression_equivExpression; eassumption.
+  - contradiction.
 Qed.
 
 Lemma equiv_annotation_definition_correct {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (d1 : _ * expression A1) (d2 : _ * expression A2) :
@@ -96,7 +111,7 @@ Proof.
   end; my_auto.
 Qed.
 
-Lemma equivAnnotationDefinition_equivDefinition {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (d1 : _ * expression A2) (d2 : _ * expression A2') :
+Lemma equivAnnotationDefinition_equivDefinition {A1 A2 A2' : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {d1 : _ * expression A2} {d2 : _ * expression A2'} :
   D.equivAnnotationDefinition A A' d1 d2 -> D.equivDefinition d1 d2.
 Proof.
   inversion_clear 1.
@@ -104,6 +119,19 @@ Proof.
   eapply equivAnnotationExpression_equivExpression; eassumption.
 Qed.
 
+Lemma equivAnnotationDefinition_transport {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {d1 : _ * expression A1} {d2 : _ * expression A2} :
+  D.equivDefinition d1 d2 ->
+  exists d2' : _ * expression A2',
+    D.equivDefinition d1 d2' /\
+    D.equivAnnotationDefinition A A' d2 d2'.
+Proof.
+  inversion_clear 1.
+  match goal with
+  | v : identifier , Hequiv : D.equivExpression ?e1 ?e2 |- _ =>
+      destruct (equivAnnotationExpression_transport A A' Hequiv) as [e2' []];
+      exists (v, e2'); split; constructor; assumption
+  end.
+Qed.
 
 Lemma equiv_annotation_declaration_correct {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (ds1 : list (_ * expression A1)) (ds2 : list(_ * expression A2)) :
   match equiv_annotation_declaration A A' ds1 ds2 with
@@ -123,13 +151,33 @@ Proof.
   end; my_auto.
 Qed.
 
-Lemma equivAnnotationDeclaration_equivDeclaration {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (ds1 : list (_ * expression A2)) (ds2 : list (_ * expression A2')) :
+Lemma equivAnnotationDeclaration_equivDeclaration {A1 A2 A2' : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {ds1 : list (_ * expression A2)} {ds2 : list (_ * expression A2')} :
   D.equivAnnotationDeclaration A A' ds1 ds2 -> D.equivDeclaration ds1 ds2.
 Proof.
   revert ds2.
   induction ds1; inversion_clear 1; constructor.
   - eapply equivAnnotationDefinition_equivDefinition; eassumption.
   - eapply IHds1; eassumption.
+Qed.
+
+Lemma equivAnnotationDeclaration_transport {A1 A2 A2' : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {ds1 : list (_ * expression A1)} {ds2 : list (_ * expression A2)} :
+  D.equivDeclaration ds1 ds2 ->
+  exists ds2' : list (_ * expression A2'),
+    D.equivDeclaration ds1 ds2' /\
+    D.equivAnnotationDeclaration A A' ds2 ds2'.
+Proof.
+  revert ds2.
+  induction ds1 as [[]|];
+  destruct  ds2 as [[]|];
+  inversion_clear 1.
+  - exists nil; split; constructor.
+  - match goal with
+    | Hequiv1 : D.equivDefinition  ?d1  ?d2
+    , Hequiv2 : D.equivDeclaration ?ds1 ?ds2 |- _ =>
+        destruct (equivAnnotationDefinition_transport A A' Hequiv1) as [d2'  []];
+        destruct (IHds1 _ Hequiv2)                                  as [ds2' []];
+        exists (d2' :: ds2'); split; econstructor; assumption
+    end.
 Qed.
 
 Lemma equiv_annotation_statement_correct {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (s1 : statement B A1) (s2 : statement B A2) :
@@ -172,7 +220,7 @@ Proof.
   end; my_auto.
 Qed.
 
-Lemma equivAnnotationStatement_equivStatement {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (s1 : statement B A2) (s2 : statement B A2') :
+Lemma equivAnnotationStatement_equivStatement {A1 A2 A2' B : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {s1 : statement B A2} {s2 : statement B A2'} :
   D.equivAnnotationStatement A A' s1 s2 -> D.equivStatement s1 s2.
 Proof.
   revert s2.
@@ -190,6 +238,22 @@ Proof.
   | eapply equivAnnotationExpression_equivExpression; eassumption
   | eapply equivAnnotationDeclaration_equivDeclaration; eassumption
   ].
+Qed.
+
+Lemma equivAnnotationStatement_transport {A1 A2 A2' B B1 B2 : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {s1 : statement B A1} {s2 : statement B A2} :
+  D.equivStatement s1 s2 ->
+  exists s2' : statement B A2',
+    D.equivStatement s1 s2' /\
+    D.equivAnnotationStatement A A' s2 s2'.
+Proof.
+  intros Hequiv.
+  pose proof (equiv_annotation_statement_correct A A' s1 s2).
+  destruct (equiv_annotation_statement A A' s1 s2) as [s2'|].
+  - exists s2'; intuition.
+    eapply equivStatement_trans.
+    + eassumption.
+    + eapply equivAnnotationStatement_equivStatement; eassumption.
+  - contradiction.
 Qed.
 
 Lemma equiv_annotation_function_correct {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (p1 : _ * _ * statement B A1) (p2 : _ * _ * statement B A2) :
@@ -215,13 +279,29 @@ Proof.
   end.
 Qed.
 
-Lemma equivAnnotationFunction_equivFunction {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (p1 : _ * _ * statement B A2) (p2 : _ * _ * statement B A2') :
+Lemma equivAnnotationFunction_equivFunction {A1 A2 A2' B : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {p1 : _ * _ * statement B A2} {p2 : _ * _ * statement B A2'} :
   D.equivAnnotationFunction A A' p1 p2 -> D.equivFunction p1 p2.
 Proof.
   inversion_clear 1.
   constructor.
   - assumption.
   - eapply equivAnnotationStatement_equivStatement; eassumption.
+Qed.
+
+Lemma wellAnnotationFunction_transport {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {p1 : _ * _ * statement B A1} {p2 : _ * _ * statement B A2} :
+  D.equivFunction p1 p2 ->
+  exists p2' : _ * _ * statement B A2',
+    D.equivFunction p1 p2' /\
+    D.equivAnnotationFunction A A' p2 p2'.
+Proof.
+  intros Hequiv.
+  pose proof (equiv_annotation_function_correct A A' p1 p2).
+  destruct (equiv_annotation_function A A' p1 p2) as [p2'|].
+  - exists p2'; intuition.
+    eapply equivFunction_trans.
+    + eassumption.
+    + eapply equivAnnotationFunction_equivFunction; eassumption.
+  - contradiction.
 Qed.
 
 Lemma equiv_annotation_sigma_correct_aux {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (S1 : sigma B A1) v (p2 : _ * _ * statement B A2) :
@@ -274,11 +354,67 @@ Proof.
   end.
 Qed.
 
-Lemma equivAnnotationSigma_equivSigma {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (S1 : sigma B A2) (S2 : sigma B A2') :
+Lemma equivAnnotationSigma_equivSigma {A1 A2 A2' B : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {S1 : sigma B A2} {S2 : sigma B A2'} :
   D.equivAnnotationSigma A A' S1 S2 -> D.equivSigma S1 S2.
 Proof.
   intros HequivAnnot.
   split; [apply proj1 in HequivAnnot | apply proj2 in HequivAnnot]; intros v p Hlookup;
   destruct (HequivAnnot v p Hlookup) as [p' [Hlookup' HequivAnnotFunction]];
   exists p'; (split; [exact Hlookup' | eapply equivAnnotationFunction_equivFunction; eexact HequivAnnotFunction]).
+Qed.
+
+Lemma wellAnnotationSigma_transport {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {S1 : sigma B A1} {S2 : sigma B A2} :
+  D.equivSigma S1 S2 ->
+  exists S2' : sigma B A2',
+    D.equivSigma S1 S2' /\
+    D.equivAnnotationSigma A A' S2 S2'.
+Proof.
+  intros Hequiv.
+  pose proof (equiv_annotation_sigma_correct A A' S1 S2).
+  destruct (equiv_annotation_sigma A A' S1 S2) as [S2'|].
+  - exists S2'; intuition.
+    eapply equivSigma_trans.
+    + eassumption.
+    + eapply equivAnnotationSigma_equivSigma; eassumption.
+  - contradiction.
+Qed.
+
+Lemma equiv_annotation_program_correct {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (p1 : program B A1) (p2 : program B A2) :
+  match equiv_annotation_program A A' p1 p2 with
+  | Some p2' => D.equivProgram p1 p2 /\ D.equivAnnotationProgram A A' p2 p2'
+  | None     => ~ D.equivProgram p1 p2
+  end.
+Proof.
+  unfold_goal.
+  unfold option_bind.
+  repeat match goal with
+  | |- equiv_annotation_sigma A A' ?S1 ?S2 = _ -> _ => case_fun (equiv_annotation_sigma_correct A A' S1 S2)
+  | |- eq_identifier ?x ?y = _ -> _ => case_fun (eq_identifier_correct x y); subst
+  | _ => context_destruct
+  end; [intuition; econstructor (finish eassumption) | ..]; inversion_clear 1; contradiction.
+Qed.
+
+Lemma equivAnnotationProgram_equivProgram {A1 A2 A2' B : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} {p1 : program B A2} {s2 : program B A2'} :
+  D.equivAnnotationProgram A A' p1 s2 -> D.equivProgram p1 s2.
+Proof.
+  inversion_clear 1.
+  constructor.
+  - assumption.
+  - eapply equivAnnotationSigma_equivSigma; eassumption.
+Qed.
+
+Lemma wellAnnotationProgram_transport {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') {p1 : program B A1} {p2 : program B A2} :
+  D.equivProgram p1 p2 ->
+  exists p2' : program B A2',
+    D.equivProgram p1 p2' /\
+    D.equivAnnotationProgram A A' p2 p2'.
+Proof.
+  intros Hequiv.
+  pose proof (equiv_annotation_program_correct A A' p1 p2).
+  destruct (equiv_annotation_program A A' p1 p2) as [p2'|].
+  - exists p2'; intuition.
+    eapply equivProgram_trans.
+    + eassumption.
+    + eapply equivAnnotationProgram_equivProgram; eassumption.
+  - contradiction.
 Qed.

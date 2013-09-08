@@ -497,6 +497,18 @@ Lemma equivDefinition_symm {A B} {d1 : identifier * expression A} {d2 : identifi
   equivDefinition d2 d1.
 Proof. inversion_clear 1; constructor; apply equivExpression_symm; assumption. Qed.
 
+Lemma equivDefinition_trans {A B C} :
+  forall {d1 : _ * _ A} {d2 : _ * _ B} {d3 : _ * _ C},
+    equivDefinition d1 d2 ->
+    equivDefinition d2 d3 ->
+    equivDefinition d1 d3.
+Proof.
+  inversion_clear 1.
+  inversion_clear 1.
+  constructor.
+  eapply equivExpression_trans; eassumption.
+Qed.
+
 Lemma equivDeclaration_refl {A} (ds : list (identifier * expression A)) :
   equivDeclaration ds ds.
 Proof. induction ds; constructor; solve [assumption | apply equivDefinition_refl]. Qed.
@@ -505,6 +517,20 @@ Lemma equivDeclaration_symm {A B} {ds1 : list (identifier * expression A)} {ds2 
   equivDeclaration ds1 ds2 ->
   equivDeclaration ds2 ds1.
 Proof. revert ds2; induction ds1; inversion_clear 1; constructor; [apply equivDefinition_symm| apply IHds1]; assumption. Qed.
+
+Lemma equivDeclaration_trans {A B C} :
+  forall {ds1 : list (_ * _ A)} {ds2 : list (_ * _ B)} {ds3 : list (_ * _ C)},
+    equivDeclaration ds1 ds2 ->
+    equivDeclaration ds2 ds3 ->
+    equivDeclaration ds1 ds3.
+Proof.
+  induction ds1;
+  inversion_clear 1;
+  inversion_clear 1;
+  constructor.
+  - eapply equivDefinition_trans; eassumption.
+  - eapply IHds1; eassumption.
+Qed.
   
 Lemma equivStatement_refl {A B} (s : statement A B) :
   equivStatement s s.
@@ -529,18 +555,53 @@ Proof.
   ); intros; inversion_clear Hequiv; constructor; repeat first [assumption |apply equivExpression_symm|apply equivDeclaration_symm]; now firstorder.
 Qed.
 
+Lemma equivStatement_trans {A1 A2 B1 B2 C1 C2 : Set} {s1 : statement A1 A2} {s2 : statement B1 B2} {s3 : statement C1 C2} :
+  equivStatement s1 s2 ->
+  equivStatement s2 s3 ->
+  equivStatement s1 s3.
+Proof.
+  pose proof (@equivExpression_trans A2 B2 C2).
+  pose proof (@equivDeclaration_trans A2 B2 C2).
+  revert s2 s3.
+  apply (
+    statement_nrect
+      (fun x => forall (y : statement' B1 B2) (z : statement' C1 C2) (Hequiv1 : equivStatement' x y) (Hequiv2 : equivStatement' y z), equivStatement' x z)
+      (fun x => forall y z (Hequiv1 : equivStatement x y) (Hequiv2 : equivStatement y z), equivStatement x z)
+      (fun x => forall (y : list (statement B1 B2)) (z : list (statement C1 C2)) (Hequiv1 : equivBlock x y) (Hequiv2 : equivBlock y z), equivBlock x z)
+  ); intros; destruct y; inversion_clear Hequiv1; destruct z; inversion_clear Hequiv2; constructor; now firstorder.
+Qed.
+
+Lemma equivFunction_refl {A1 A2} (p : _ * _ * statement A1 A2) :
+  equivFunction p p.
+Proof.
+  constructor.
+  - reflexivity.
+  - apply equivStatement_refl.
+Qed.
+
 Lemma equivFunction_symm {A1 A2 B1 B2} {p1 : _ * _ * statement A1 A2} {p2 : _ * _ * statement B1 B2} :
   equivFunction p1 p2 ->
   equivFunction p2 p1.
 Proof. inversion_clear 1; constructor; [congruence | apply equivStatement_symm; assumption]. Qed.
+
+Lemma equivFunction_trans {A1 A2 B1 B2 C1 C2 : Set} {p1 : _ * _ * statement A1 A2} {p2 : _ * _ * statement B1 B2} {p3 : _ * _ * statement C1 C2} :
+  equivFunction p1 p2 ->
+  equivFunction p2 p3 ->
+  equivFunction p1 p3.
+Proof.
+  inversion_clear 1.
+  inversion_clear 1.
+  constructor.
+  - congruence.
+  - eapply equivStatement_trans; eassumption.
+Qed.
 
 Lemma equivSigma_refl {A B} (S : sigma A B) :
   equivSigma S S.
 Proof.
   split;
   intros v b Hlookup;
-  exists b;
-  repeat first [split | assumption | reflexivity | apply equivStatement_refl].
+  exists b; (split; [assumption | apply equivFunction_refl]).
 Qed.
 
 Lemma equivSigma_symm {A1 A2 B1 B2} {S1 : sigma A1 A2} {S2 : sigma B1 B2} :
@@ -553,4 +614,55 @@ Proof.
   [apply proj2 in Hequiv | apply proj1 in Hequiv];
   pose proof (Hequiv v p Hlookup) as [p' [Hlookup' Hequiv']];
   exists p'; (split; [| apply equivFunction_symm]; assumption).
+Qed.
+
+Lemma equivSigma_trans {A1 A2 B1 B2 C1 C2 : Set} {S1 : sigma A1 A2} {S2 : sigma B1 B2} {S3 : sigma C1 C2} :
+  equivSigma S1 S2 ->
+  equivSigma S2 S3 ->
+  equivSigma S1 S3.
+Proof.
+  intros Hequiv1 Hequiv2.
+  split.
+  - intros v p1 Hlookup1.
+    destruct (proj1 Hequiv1 v p1 Hlookup1) as [p2 [Hlookup2 HequivFunction1]].
+    destruct (proj1 Hequiv2 v p2 Hlookup2) as [p3 [Hlookup3 HequivFunction2]].
+    exists p3; split.
+    + exact Hlookup3.
+    + exact (equivFunction_trans HequivFunction1 HequivFunction2).
+  - intros v p3 Hlookup3.
+    destruct (proj2 Hequiv2 v p3 Hlookup3) as [p2 [Hlookup2 HequivFunction2]].
+    destruct (proj2 Hequiv1 v p2 Hlookup2) as [p1 [Hlookup1 HequivFunction1]].
+    exists p1; split.
+    + exact Hlookup1.
+    + exact (equivFunction_trans HequivFunction1 HequivFunction2).
+Qed.
+
+Lemma equivProgram_refl {A1 A2} (p : program A1 A2) :
+  equivProgram p p.
+Proof.
+  constructor.
+  - reflexivity.
+  - apply equivSigma_refl.
+Qed.
+
+Lemma equivProgram_symm {A1 A2 B1 B2} {p1 : program A1 A2} {p2 : program B1 B2} :
+  equivProgram p1 p2 ->
+  equivProgram p2 p1.
+Proof.
+  inversion_clear 1.
+  constructor.
+  - congruence.
+  - apply equivSigma_symm; assumption.
+Qed.
+
+Lemma equivProgram_trans {A1 A2 B1 B2 C1 C2 : Set} {p1 : program A1 A2} {p2 : program B1 B2} {p3 : program C1 C2} :
+  equivProgram p1 p2 ->
+  equivProgram p2 p3 ->
+  equivProgram p1 p3.
+Proof.
+  inversion_clear 1.
+  inversion_clear 1.
+  constructor.
+  - congruence.
+  - eapply equivSigma_trans; eassumption.
 Qed.
