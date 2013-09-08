@@ -1238,7 +1238,7 @@ Inductive wellAnnotatedFunction {A1 A2 B B1 B2: Set} (A : annotation A1 A2) (S :
 Definition wellAnnotatedSigma {A1 A2 B : Set} (A : annotation A1 A2) (S : sigma B A2) : Prop :=
   forall v p, lookup S v p -> wellAnnotatedFunction A S p.
 
-Inductive wellAnnotatedProgram {A1 A2 B : Set} (A : annotation A1 A2) : program A1 A2 -> Prop :=
+Inductive wellAnnotatedProgram {A1 A2 B : Set} (A : annotation A1 A2) : program B A2 -> Prop :=
  | WellAnnotatedProgram main S s:
      lookup S main (Basic (Integer (Signed Int)), nil, s) ->
      wellAnnotatedSigma A S ->

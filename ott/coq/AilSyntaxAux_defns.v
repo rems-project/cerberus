@@ -129,10 +129,15 @@ with constantArgumentsContext {A} (ic : integerConstant) : list (expression A) -
      constantArgumentsContext ic es ->
      constantArgumentsContext ic (e :: es).
 
-Inductive constantDeclarationContext {A : Set} (ic : integerConstant) : list (identifier * expression A) -> Prop :=
- | ConstantDeclarationContext_head v e ds:
+Inductive constantDefinitionContext {A : Set} (ic : integerConstant) : identifier * expression A -> Prop :=
+ | ConstantDefinitionContext v e :
      constantExpressionContext ic e ->
-     constantDeclarationContext ic ((v, e) :: ds)
+     constantDefinitionContext ic (v, e).
+
+Inductive constantDeclarationContext {A : Set} (ic : integerConstant) : list (identifier * expression A) -> Prop :=
+ | ConstantDeclarationContext_head d ds:
+     constantDefinitionContext ic d ->
+     constantDeclarationContext ic (d :: ds)
  | ConstantDeclarationContext_tail d ds:
      constantDeclarationContext ic ds ->
      constantDeclarationContext ic (d :: ds).
@@ -183,6 +188,7 @@ Inductive constantStatementContext' {A B : Set} (ic : integerConstant) : stateme
      constantStatementContext ic s ->
      constantStatementContext' ic (Default s)
  | ConstantStatementContext'_Label v s :
+     constantStatementContext ic s ->
      constantStatementContext' ic (Label v s)
  | ConstantStatementContext'_Declaration d :
      constantDeclarationContext ic d ->

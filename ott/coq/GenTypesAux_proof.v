@@ -4,23 +4,26 @@ Require Import Implementation.
 Require Import AilTypesAux.
 Require Import AilTyping.
 
-Require Import AilTyping_proof.
-
 Require Import GenTypes.
 Require Import GenTypesAux.
 
 Module D.
-Require AilTyping_defns.
 Require GenTypesAux_defns.
 
-Include AilTyping_defns.
 Include GenTypesAux_defns.
 End D.
 
 Module A.
+Require AilTyping_defns.
+Require AilTypesAux_defns.
+
+Include AilTyping_defns.
 Include AilTypesAux_defns.
-Include AilTypesAux_proof.
 End A.
+
+Require AilTyping_proof.
+Require AilTypesAux_proof.
+
 
 Ltac genType_neg_tac :=
   match goal with
@@ -60,12 +63,12 @@ Proof.
   unfold optionSpec;
   unfold option_bind;
   repeat match goal with
-  | |- type_of_constant P ?ic = _ -> _ => case_fun (type_of_constant_correct P ic)
+  | |- type_of_constant P ?ic = _ -> _ => case_fun (AilTyping_proof.type_of_constant_correct P ic)
   | H : optionSpec (interpret_genIntegerType P ?git) _ |- interpret_genIntegerType P ?git = _ -> _ => case_fun H
   | _ => context_destruct
   end;
   solve [
-    econstructor; solve [eassumption | apply A.integer_promotion_correct | apply A.usual_arithmetic_integer_correct]
+    econstructor; solve [eassumption | apply AilTypesAux_proof.integer_promotion_correct | apply AilTypesAux_proof.usual_arithmetic_integer_correct]
   | inversion_clear 1;
     match goal with
     | H : forall _, ~ _ |- False => eapply H; eassumption
@@ -81,15 +84,15 @@ Proof.
   revert it1 it2.
   induction git; inversion 1; inversion 1; subst;
   repeat match goal with
-  | H1 : D.typeOfConstant P ?ic ?it1
-  , H2 : D.typeOfConstant P ?ic ?it2 |- ?it1 = ?it2 => eapply typeOfConstant_functional; eassumption
+  | H1 : A.typeOfConstant P ?ic ?it1
+  , H2 : A.typeOfConstant P ?ic ?it2 |- ?it1 = ?it2 => eapply AilTyping_proof.typeOfConstant_functional; eassumption
   | IH : forall _ _, D.interpretGenIntegerType P ?git _ -> D.interpretGenIntegerType P ?git _ -> _ = _
   , H1 : D.interpretGenIntegerType P ?git ?it1
   , H2 : D.interpretGenIntegerType P ?git ?it2 |- _ => notSame it1 it2; assert (it1 = it2) by (eapply IH; eassumption); subst
   | H1 : A.integerPromotion P ?it ?it1
-  , H2 : A.integerPromotion P ?it ?it2 |- ?it1 = ?it2 => eapply A.integerPromotion_functional; eassumption
+  , H2 : A.integerPromotion P ?it ?it2 |- ?it1 = ?it2 => eapply AilTypesAux_proof.integerPromotion_functional; eassumption
   | H1 : A.usualArithmeticInteger P ?it1 ?it2 ?it3
-  , H2 : A.usualArithmeticInteger P ?it1 ?it2 ?it3' |- ?it3 = ?it3' => eapply A.usualArithmeticInteger_functional; eassumption
+  , H2 : A.usualArithmeticInteger P ?it1 ?it2 ?it3' |- ?it3 = ?it3' => eapply AilTypesAux_proof.usualArithmeticInteger_functional; eassumption
   end; finish fail.
 Qed.
 
@@ -189,11 +192,10 @@ Lemma array_correct gt :
   boolSpec (array gt) (D.array gt).
 Proof. destruct gt; my_auto. Qed.
 
-Lemma array_interpret {gt} :
+Lemma array_transport {P} {t} {gt} :
   D.array gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.array t.
+  D.interpretGenType P gt t ->
+  A.array t.
 Proof. inversion 1; inversion 1; my_auto. Qed.
 
 Lemma array_inject {t} :
@@ -205,11 +207,10 @@ Lemma function_correct gt :
   boolSpec (function gt) (D.function gt).
 Proof. destruct gt; my_auto. Qed.
 
-Lemma function_interpret {gt} {t} :
+Lemma function_transport {P} {gt} {t} :
   D.function gt ->
-  forall {P},
-    D.interpretGenType P gt t ->
-    A.function t.
+  D.interpretGenType P gt t ->
+  A.function t.
 Proof. inversion 1; inversion 1; my_auto. Qed.
 
 (*
@@ -235,12 +236,31 @@ Proof.
   end; finish ltac:(now genType_neg_tac).
 Qed.
 
-Lemma pointerConversion_interpret {gt1 gt2} {t1 t2} :
+Lemma pointerConversion_interpret {P} {gt1 gt2} {t1} :
   D.pointerConversion gt1 gt2 ->
-  forall {P},
-    D.interpretGenType P gt1 t1 ->
-    D.interpretGenType P gt2 t2 ->
+  D.interpretGenType P gt1 t1 ->
+  exists t2,
+    D.interpretGenType P gt2 t2 /\
     A.pointerConversion t1 t2.
+Proof.
+  intros Hpc Hinterp1.
+  pose proof (AilTypesAux_proof.pointer_conversion_correct t1) as Hpc'.
+  exists (AilTypesAux.pointer_conversion t1).
+  inversion Hpc     ; subst;
+  inversion Hinterp1; subst;
+  inversion Hpc'    ; subst;
+  repeat match goal with
+  | H : AilTypesAux_defns.unqualified ?q |- _ => is_var q; inversion H; subst
+  end;
+  split;
+  solve [econstructor (eassumption) | genType_neg_tac].
+Qed.
+
+Lemma pointerConversion_transport {P} {gt1 gt2} {t1 t2} :
+  D.pointerConversion gt1 gt2 ->
+  D.interpretGenType P gt1 t1 ->
+  D.interpretGenType P gt2 t2 ->
+  A.pointerConversion t1 t2.
 Proof.
   inversion_clear 1;
   inversion 1; inversion 1; subst;
@@ -255,25 +275,25 @@ Proof.
   end; now my_auto.
 Qed.
 
-(*
-Lemma pointerConversion_inject {t1 t2} :
+Lemma pointerConversion_inject {P} {t1 t2} {gt1} :
   A.pointerConversion t1 t2 ->
-  D.pointerConversion (inject_type t1) (inject_type t2).
+  D.interpretGenType P gt1 t1 ->
+  exists gt2 : genType,
+    D.interpretGenType P gt2 t2 /\ D.pointerConversion gt1 gt2.
 Proof.
-  inversion 1; my_auto.
-  destruct t2; my_auto; types_neg_tac.
+  inversion 1;
+  inversion 1; subst;
+  eexists; split; econstructor; finish ltac:(solve [eassumption|AilTyping_proof.types_neg_tac]).
 Qed.
-*)
 
 Lemma integer_correct gt :
   boolSpec (integer gt) (D.integer gt).
 Proof. destruct gt; my_auto. Qed.
 
-Lemma integer_interpret {gt} :
+Lemma integer_transport {P} {gt} {t}:
   D.integer gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.integer t.
+  D.interpretGenType P gt t ->
+  A.integer t.
 Proof.
   inversion_clear 1.
   inversion_clear 1.
@@ -299,14 +319,13 @@ Proof.
   genType_neg_tac.
 Qed.
 
-Lemma real_interpret {gt} :
+Lemma real_transport {P} {gt} {t} :
   D.real gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.real t.
+  D.interpretGenType P gt t ->
+  A.real t.
 Proof.
   inversion 1; inversion 1; subst;
-  solve [genType_neg_tac|constructor; eapply integer_interpret; eassumption].
+  solve [genType_neg_tac|constructor; eapply integer_transport; eassumption].
 Qed.
 
 Lemma real_inject {P} {gt} {t} :
@@ -323,11 +342,10 @@ Lemma pointer_correct gt :
   boolSpec (pointer gt) (D.pointer gt).
 Proof. destruct gt; my_auto. Qed.
 
-Lemma pointer_interpret {gt} :
+Lemma pointer_interpret {P} {gt} {t}:
   D.pointer gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.pointer t.
+  D.interpretGenType P gt t ->
+  A.pointer t.
 Proof. inversion 1; inversion 1; my_auto. Qed.
 
 Lemma pointer_inject {P} {gt} {t} :
@@ -348,14 +366,13 @@ Proof.
   repeat (boolSpec_destruct; my_auto).
 Qed.
 
-Lemma arithmetic_interpret {gt} :
+Lemma arithmetic_transport {P} {gt} {t} :
   D.arithmetic gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.arithmetic t.
+  D.interpretGenType P gt t ->
+  A.arithmetic t.
 Proof.
   inversion 1; inversion 1; my_auto.
-  constructor; eapply integer_interpret; eassumption.
+  constructor; eapply integer_transport; eassumption.
 Qed.
 
 Lemma arithmetic_inject {P} {gt} {t} :
@@ -377,14 +394,13 @@ Proof.
   repeat (boolSpec_destruct; my_auto).
 Qed.
 
-Lemma scalar_interpret {gt} :
+Lemma scalar_transport {P} {gt} {t}:
   D.scalar gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.scalar t.
+  D.interpretGenType P gt t ->
+  A.scalar t.
 Proof.
   inversion 1; inversion 1; subst;
-  solve [ my_auto | genType_neg_tac | econstructor (eapply arithmetic_interpret; eassumption) ].
+  solve [ my_auto | genType_neg_tac | econstructor (eapply arithmetic_transport; eassumption) ].
 Qed.
 
 Lemma scalar_inject {P} {gt} {t} :
@@ -405,11 +421,10 @@ Lemma void gt :
   boolSpec (void gt) (D.void gt).
 Proof. destruct gt; my_auto. Qed.
 
-Lemma void_interpret {gt} :
+Lemma void_transport {P} {gt} {t}:
   D.void gt ->
-  forall {P} {t},
-    D.interpretGenType P gt t ->
-    A.void t.
+  D.interpretGenType P gt t ->
+  A.void t.
 Proof. inversion 1; inversion 1; my_auto. Qed.
 
 Lemma void_inject {P} {gt} {t} :
@@ -425,7 +440,7 @@ Lemma pointer_to_complete_object_correct gt :
 Proof.
   unfold_goal.
   repeat match goal with
-  | |- complete ?gt = _ -> _ => case_fun (A.complete_correct gt)
+  | |- complete ?gt = _ -> _ => case_fun (AilTypesAux_proof.complete_correct gt)
   | |- _ /\ _ => split
   | |- exists _ , _ => eexists; eexists; now intuition
   | _ => context_destruct
@@ -447,8 +462,8 @@ Proof.
   unfold_goal.
   unfold andb.
   repeat match goal with
-  | [|- complete ?t = _ -> _] => case_fun (A.complete_correct t)
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (A.compatible_correct t1 t2)
+  | [|- complete ?t = _ -> _] => case_fun (AilTypesAux_proof.complete_correct t)
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (AilTypesAux_proof.compatible_correct t1 t2)
   | [|- _ /\ _] => split
   | [|- exists _, _] => repeat eexists; now intuition
   | [|- ~ D.pointer ?t \/  _] =>
@@ -483,8 +498,8 @@ Proof.
   unfold_goal.
   unfold andb.
   repeat match goal with
-  | [|- object ?t = _ -> _] => case_fun (A.object_correct t)
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (A.compatible_correct t1 t2)
+  | [|- object ?t = _ -> _] => case_fun (AilTypesAux_proof.object_correct t)
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (AilTypesAux_proof.compatible_correct t1 t2)
   | [|- _ /\ _] => split
   | [|- exists _ , _] => repeat eexists; intuition
   | [|- ~ D.pointer ?t \/ _ \/ _ \/ _ \/ _] =>
@@ -511,7 +526,7 @@ Lemma pointer_to_object_correct gt :
 Proof.
   unfold_goal.
   repeat match goal with
-  | [|- object ?t = _ -> _] => case_fun (A.object_correct t)
+  | [|- object ?t = _ -> _] => case_fun (AilTypesAux_proof.object_correct t)
   | [|- _ /\ _] => split
   | [|- exists _ , _] => repeat eexists; intuition
   | [|- ~ D.pointer ?t \/ _] =>
@@ -530,7 +545,7 @@ Lemma pointer_to_void_correct gt :
 Proof.
   unfold_goal.
   repeat match goal with
-  | [|- void ?t = _ -> _] => case_fun (A.void_correct t)
+  | [|- void ?t = _ -> _] => case_fun (AilTypesAux_proof.void_correct t)
   | [|- ~ _] => intros [? [? [? ?]]]
   | [|- _ /\ _] => split
   | [|- exists _ , _] => repeat eexists; now intuition
@@ -555,7 +570,7 @@ Lemma pointers_to_compatible_types_correct gt1 gt2 :
 Proof.
   unfold_goal.
   repeat match goal with
-  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (A.compatible_correct t1 t2)
+  | [|- compatible ?t1 ?t2 = _ -> _] => case_fun (AilTypesAux_proof.compatible_correct t1 t2)
   | [|- _ /\ _] => split
   | [|- exists _ , _] => repeat eexists; now intuition 
   | [|- ~ D.pointer ?t \/ _ \/ _ ] =>
@@ -583,12 +598,26 @@ Definition integerPromotion_functional {git1 git2 git2'} :
   git2 = git2'.
 Proof. inversion 1; inversion 1; my_auto. Qed.
 
-Definition integerPromotion_interpret {git1 git2} :
+Definition integerPromotion_interpret {P} {git1 git2} {it1} :
   D.integerPromotion git1 git2 ->
-  forall {P} {it1 it2},
-    D.interpretGenIntegerType P git1 it1 ->
-    D.interpretGenIntegerType P git2 it2 ->
+  D.interpretGenIntegerType P git1 it1 ->
+  exists it2,
+    D.interpretGenIntegerType P git2 it2 /\
     A.integerPromotion P it1 it2.
+Proof.
+  intros Hip Hinterp1.
+  pose proof (AilTypesAux_proof.integer_promotion_correct P it1).
+  exists (AilTypesAux.integer_promotion P it1).
+  inversion Hip     ; subst;
+  inversion Hinterp1; subst;
+  split; now my_auto.
+Qed.
+
+Definition integerPromotion_transport {P} {git1 git2} {it1 it2} :
+  D.integerPromotion git1 git2 ->
+  D.interpretGenIntegerType P git1 it1 ->
+  D.interpretGenIntegerType P git2 it2 ->
+  A.integerPromotion P it1 it2.
 Proof.
   inversion_clear 1.
   inversion_clear 2.
@@ -636,12 +665,11 @@ Proof.
   repeat apply f_equal; eapply integerPromotion_functional; eassumption.
 Qed.
 
-Definition promotion_interpret {gt1 gt2} :
+Lemma promotion_transport {P} {gt1 gt2} {t1 t2}:
   D.promotion gt1 gt2 ->
-  forall {P} {t1 t2},
-    D.interpretGenType P gt1 t1 ->
-    D.interpretGenType P gt2 t2 ->
-    A.promotion P t1 t2.
+  D.interpretGenType P gt1 t1 ->
+  D.interpretGenType P gt2 t2 ->
+  A.promotion P t1 t2.
 Proof.
   inversion_clear 1;
   inversion_clear 1;
@@ -649,7 +677,26 @@ Proof.
   repeat match goal with
   | H : D.interpretGenBasicType P _ _ |- _ => inversion_clear H
   end.
-  constructor; eapply integerPromotion_interpret; eassumption.
+  constructor; eapply integerPromotion_transport; eassumption.
+Qed.
+
+Definition promotion_interpret {P} {gt1 gt2} {t1}:
+  D.promotion gt1 gt2 ->
+  D.interpretGenType P gt1 t1 ->
+  exists t2,
+    D.interpretGenType P gt2 t2 /\
+    A.promotion P t1 t2.
+Proof.
+  inversion 1; subst.
+  inversion 1; subst.
+  match goal with
+  | H : D.interpretGenBasicType _ _ _ |- _ => inversion H; subst
+  end.
+  match goal with
+  | H : D.integerPromotion ?git1 _, Hinterp : D.interpretGenIntegerType P ?git1 _ |- _ =>
+      destruct (integerPromotion_interpret H Hinterp) as [it2 []]
+  end.
+  exists (Basic (Integer it2)); split; my_auto.
 Qed.
 
 Lemma promotion_inject {P} {t1 t2} {gt1} :
@@ -673,37 +720,26 @@ Proof.
   split; repeat constructor; assumption.
 Qed.
 
-Lemma promoted_interpret {git} :
+Lemma promoted_transport {P} {git} {it}:
   D.promoted git ->
-  forall {P} {it},
-    D.interpretGenIntegerType P git it ->
-    A.promoted it.
+  D.interpretGenIntegerType P git it ->
+  A.promoted it.
 Proof.
   inversion_clear 1;
   inversion_clear 1.
   eapply AilTypesAux_proof.integerPromotion_promoted; eassumption.
 Qed.
 
-Lemma promoted_integerPromotion {P} {it} :
-  A.promoted it ->
-  A.integerPromotion P it it.
-Proof.
-  pose (A.le_integer_rank_correct P it (Signed Int)).
-  inversion 1; econstructor (now my_auto).
-Qed.
-
 Lemma promoted_inject {P} {it} :
   A.promoted it ->
-  {git : genIntegerType &
-    D.interpretGenIntegerType P git it *
-    D.promoted git
-  }.
+  exists git : genIntegerType,
+    D.interpretGenIntegerType P git it /\ D.promoted git.
 Proof.
   exists (Promote (Concrete it)).
   split.
   - econstructor.
     + econstructor.
-    + apply promoted_integerPromotion; assumption.
+    + apply AilTypesAux_proof.promoted_integerPromotion; assumption.
   - constructor.
 Qed.
 
@@ -723,7 +759,7 @@ Proof.
   congruence.
 Qed.
 
-Lemma usualArithmeticPromotedInteger_interpret {git1 git2 git3} :
+Lemma usualArithmeticPromotedInteger_transport {git1 git2 git3} :
   D.promoted git1 ->
   D.promoted git2 ->
   D.usualArithmeticPromotedInteger git1 git2 git3 ->
@@ -744,7 +780,7 @@ Proof.
   | H : D.promoted ?git, _ : D.interpretGenIntegerType P ?git ?it |- _ =>
     notHyp (A.promoted it);
     assert (A.promoted it)
-      by (eapply promoted_interpret; [eexact H | eassumption])
+      by (eapply promoted_transport; [eexact H | eassumption])
   end.
   match goal with
   | H : A.usualArithmeticInteger P _ _ _ |- _ => inversion_clear H
@@ -753,10 +789,41 @@ Proof.
   | H : A.integerPromotion P ?it1 ?it2 |- _ =>
       notSame it1 it2;
       assert (it1 = it2)
-        by (eapply AilTypesAux_proof.integerPromotion_functional; [eapply promoted_integerPromotion; eassumption | eassumption]);
+        by (eapply AilTypesAux_proof.integerPromotion_functional; [eapply AilTypesAux_proof.promoted_integerPromotion; eassumption | eassumption]);
       subst
   end.
   assumption.
+Qed.
+
+Lemma usualArithmeticPromotedInteger_interpret {P} {git1 git2 git3} {it1 it2} :
+  D.promoted git1 ->
+  D.promoted git2 ->
+  D.usualArithmeticPromotedInteger git1 git2 git3 ->
+  D.interpretGenIntegerType P git1 it1 ->
+  D.interpretGenIntegerType P git2 it2 ->
+  exists it3,
+    D.interpretGenIntegerType P git3 it3 /\
+    A.usualArithmeticPromotedInteger P it1 it2 it3.
+Proof.
+  inversion 3; subst.
+  intros Hinterp1 Hinterp2.
+  match goal with
+  | H :  D.promoted git1 |- _ =>   pose proof (promoted_transport H Hinterp1) as Hpromoted1'
+  end.
+  match goal with
+  | H :  D.promoted git2 |- _ =>   pose proof (promoted_transport H Hinterp2) as Hpromoted2'
+  end.
+  pose proof (AilTypesAux_proof.usual_arithmetic_promoted_integer_correct P Hpromoted1' Hpromoted2').
+  exists (AilTypesAux.usual_arithmetic_promoted_integer P it1 it2).
+  split.
+  - econstructor.
+    + eassumption.
+    + eassumption.
+    + econstructor.
+      * eapply AilTypesAux_proof.promoted_integerPromotion; eassumption.
+      * eapply AilTypesAux_proof.promoted_integerPromotion; eassumption.
+      * assumption.
+  - assumption.
 Qed.
 
 Lemma usualArithmeticPromotedInteger_inject {P} {it1 it2 it3} {git1 git2} :
@@ -776,8 +843,7 @@ Proof.
   - econstructor.
     + eassumption.
     + eassumption.
-    + econstructor;
-      solve [eapply promoted_integerPromotion; eassumption | eassumption].
+    + econstructor; solve [eapply AilTypesAux_proof.promoted_integerPromotion; eassumption | eassumption].
   - apply usual_arithmetic_promoted_integer_correct; assumption.
 Qed.
 
@@ -824,10 +890,10 @@ Proof.
   exists (AilTypesAux.integer_promotion P it1).
   econstructor.
   - eassumption.
-  - eapply A.integer_promotion_correct.
+  - eapply AilTypesAux_proof.integer_promotion_correct.
 Qed.
 
-Lemma usualArithmeticInteger_interpret {git1 git2 git3} :
+Lemma usualArithmeticInteger_transport {git1 git2 git3} :
   D.usualArithmeticInteger git1 git2 git3 ->
   forall {P} {it1 it2 it3},
     D.interpretGenIntegerType P git1 it1 ->
@@ -852,12 +918,40 @@ Proof.
   | H : D.integerPromotion ?git1 ?git2
   , H1 : D.interpretGenIntegerType P ?git1 ?it1
   , H2 : D.interpretGenIntegerType P ?git2 ?it2 |- A.integerPromotion P ?it1 _ =>
-      apply (integerPromotion_interpret H H1 H2)
+      apply (integerPromotion_transport H H1 H2)
   | H1 : D.integerPromotion git1 _
   , H2 : D.integerPromotion git2 _ |- A.usualArithmeticPromotedInteger P _ _ it3 =>
-      eapply (usualArithmeticPromotedInteger_interpret (integerPromotion_promoted H1) (integerPromotion_promoted H2));
+      eapply (usualArithmeticPromotedInteger_transport (integerPromotion_promoted H1) (integerPromotion_promoted H2));
       eassumption
   end.
+Qed.
+
+Lemma usualArithmeticInteger_interpret {P} {git1 git2 git3} {it1 it2}:
+  D.usualArithmeticInteger git1 git2 git3 ->
+  D.interpretGenIntegerType P git1 it1 ->
+  D.interpretGenIntegerType P git2 it2 ->
+  exists it3,
+    D.interpretGenIntegerType P git3 it3 /\
+    A.usualArithmeticInteger P it1 it2 it3.
+Proof.
+  inversion 1; subst.
+  intros Hinterp1 Hinterp2.
+  match goal with
+  | Hip1 : D.integerPromotion git1 ?git1'
+  , Hip2 : D.integerPromotion git2 ?git2'
+  , H    : D.usualArithmeticPromotedInteger ?git1' ?git2' _ |- _ =>
+      destruct (integerPromotion_interpret Hip1 Hinterp1) as [it1' [Hinterp1' Hip1']];
+      destruct (integerPromotion_interpret Hip2 Hinterp2) as [it2' [Hinterp2' Hip2']];
+      destruct (usualArithmeticPromotedInteger_interpret (integerPromotion_promoted Hip1) (integerPromotion_promoted Hip2) H Hinterp1' Hinterp2')
+        as [it3 [Hinterp3 H']]
+  end.
+  exists it3.
+  split.
+  - exact Hinterp3.
+  - econstructor.
+    + eexact Hip1'.
+    + eexact Hip2'.
+    + eexact H'.
 Qed.
 
 Lemma usualArithmeticInteger_inject {P} {it1 it2 it3} {git1 git2} :
@@ -874,8 +968,8 @@ Proof.
     do 2 econstructor;
     repeat first [
       eassumption
-    | eapply promoted_integerPromotion
-    | eapply A.integerPromotion_promoted
+    | eapply AilTypesAux_proof.promoted_integerPromotion
+    | eapply AilTypesAux_proof.integerPromotion_promoted
     ].
   - econstructor.
     + exact (integer_promotion_correct git1).
@@ -901,7 +995,7 @@ Proof.
   eapply usualArithmeticInteger_functional; eassumption.
 Qed.
 
-Lemma usualArithmetic_interpret {gt1 gt2 gt3} :
+Lemma usualArithmetic_transport {gt1 gt2 gt3} :
   D.usualArithmetic gt1 gt2 gt3 ->
   forall {P} {t1 t2 t3},
     D.interpretGenType P gt1 t1 ->
@@ -913,7 +1007,35 @@ Proof.
   repeat match goal with
   | H : D.interpretGenBasicType P _ _ |- _ => inversion_clear H
   end.
-  constructor; eapply usualArithmeticInteger_interpret; eassumption.
+  constructor; eapply usualArithmeticInteger_transport; eassumption.
+Qed.
+
+Lemma usualArithmetic_interpret {P} {gt1 gt2 gt3} {t1 t2}:
+  D.usualArithmetic gt1 gt2 gt3 ->
+  D.interpretGenType P gt1 t1 ->
+  D.interpretGenType P gt2 t2 ->
+  exists t3,
+    D.interpretGenType P gt3 t3 /\
+    A.usualArithmetic P t1 t2 t3.
+Proof.
+  inversion 1; subst.
+  inversion 1; subst.
+  inversion 1; subst.
+  repeat match goal with
+  | H : D.interpretGenBasicType P (GenInteger ?git) _ |- _ =>
+      match goal with
+      | _ : D.interpretGenIntegerType P git _ |- _ => fail 1
+      | _ => inversion H; subst
+      end
+  end.
+  match goal with
+  | H1 : D.interpretGenIntegerType P ?git1 ?it1
+  , H2 : D.interpretGenIntegerType P ?git2 ?it2
+  , H  : D.usualArithmeticInteger ?git1 ?git2 ?git3 |- _ =>
+      destruct (usualArithmeticInteger_interpret H H1 H2) as [it3 []]
+  end.
+  exists (Basic (Integer it3)).
+  split; repeat constructor; assumption.
 Qed.
 
 Lemma usualArithmetic_inject {P} {t1 t2 t3} {gt1 gt2} :

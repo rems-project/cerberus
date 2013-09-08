@@ -9,6 +9,37 @@ Require Import AilSyntaxAux_defns.
 Require Import AilWf_defns.
 Require Import AilTypesAux_defns.
 
+Inductive signedIntegerSuffix : integerSuffix -> Prop :=
+ | SignedIntegerSuffix_L  : signedIntegerSuffix L
+ | SignedIntegerSuffix_LL : signedIntegerSuffix LL.
+
+Inductive unsignedIntegerSuffix : integerSuffix -> Prop :=
+ | UnsignedIntegerSuffix_U   : unsignedIntegerSuffix U
+ | UnsignedIntegerSuffix_UL  : unsignedIntegerSuffix UL
+ | UnsignedIntegerSuffix_ULL : unsignedIntegerSuffix ULL.
+
+Inductive signedOptionIntegerSuffix : option integerSuffix -> Prop :=
+ | SignedOptionIntegerSuffix_None :
+     signedOptionIntegerSuffix None
+ | SignedOptionIntegerSuffix_Some s :
+     signedIntegerSuffix s ->
+     signedOptionIntegerSuffix (Some s).
+
+Inductive unsignedOptionIntegerSuffix : option integerSuffix -> Prop :=
+ | UnsignedOptionIntegerSuffix_Some s :
+     unsignedIntegerSuffix s ->
+     unsignedOptionIntegerSuffix (Some s).
+
+Inductive typeableConstant P : integerConstant -> Prop :=
+ | TypeableConstant_Signed n os : 
+     signedOptionIntegerSuffix os ->
+     inIntegerRange P n (Signed LongLong) ->
+     typeableConstant P (n, os)
+ | TypeableConstant_Unsigned n os : 
+    unsignedOptionIntegerSuffix os ->
+    inIntegerRange P n (Unsigned LongLong) ->
+    typeableConstant P (n, os).
+
 Inductive wellTypedBinaryArithmetic : ctype -> arithmeticOperator -> ctype -> Prop :=    (* defn eType *)
  | WellTypedBinaryArithmetic_Mul :
      forall {t1 t2},

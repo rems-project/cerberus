@@ -86,6 +86,81 @@ Proof.
   congruence.
 Qed.
 
+Lemma typeableConstant_typeOfConstant {P} {ic} :
+  D.typeableConstant P ic ->
+  exists it,
+    D.typeOfConstant P ic it.
+Proof.
+  inversion_clear 1;
+  repeat match goal with
+  | H : D.signedOptionIntegerSuffix   _ |- _ => inversion_clear H
+  | H : D.unsignedOptionIntegerSuffix _ |- _ => inversion_clear H
+  | H : D.signedIntegerSuffix         _ |- _ => inversion_clear H
+  | H : D.unsignedIntegerSuffix       _ |- _ => inversion_clear H
+  end;
+  match goal with
+  | |- exists _, D.typeOfConstant P (?n, None) _ =>
+      pose proof (in_integer_range_correct P n (Signed Int));
+      boolSpec_destruct; [exists (Signed Int); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some L) _ =>
+      pose proof (in_integer_range_correct P n (Signed Long));
+      boolSpec_destruct; [exists (Signed Long); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some LL) _ =>
+      pose proof (in_integer_range_correct P n (Signed LongLong));
+      boolSpec_destruct; [exists (Signed LongLong); econstructor (eassumption)|contradiction]
+  | |- exists _, D.typeOfConstant P (?n, Some U) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned Int));
+      boolSpec_destruct; [exists (Unsigned Int); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some UL) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned Long));
+      boolSpec_destruct; [exists (Unsigned Long); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some ULL) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned LongLong));
+      boolSpec_destruct; [exists (Unsigned LongLong); econstructor (eassumption)|contradiction]
+  end;
+  match goal with
+  | |- exists _, D.typeOfConstant P (?n, None) _ =>
+      pose proof (in_integer_range_correct P n (Signed Long));
+      boolSpec_destruct; [exists (Signed Long); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some L) _ =>
+      pose proof (in_integer_range_correct P n (Signed LongLong));
+      boolSpec_destruct; [exists (Signed LongLong); econstructor (eassumption)|contradiction]
+  | |- exists _, D.typeOfConstant P (?n, Some U) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned Long));
+      boolSpec_destruct; [exists (Unsigned Long); econstructor (eassumption)|]
+  | |- exists _, D.typeOfConstant P (?n, Some UL) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned LongLong));
+      boolSpec_destruct; [exists (Unsigned LongLong); econstructor (eassumption)|contradiction]
+  end;
+  match goal with
+  | |- exists _, D.typeOfConstant P (?n, None) _ =>
+      pose proof (in_integer_range_correct P n (Signed LongLong));
+      boolSpec_destruct; [exists (Signed LongLong); econstructor (eassumption)|contradiction]
+  | |- exists _, D.typeOfConstant P (?n, Some U) _ =>
+      pose proof (in_integer_range_correct P n (Unsigned LongLong));
+      boolSpec_destruct; [exists (Unsigned LongLong); econstructor (eassumption)|contradiction]
+  end.
+Qed.
+
+Lemma typeOfConstant_typeableConstant {P} {ic} {it} :
+  D.typeOfConstant P ic it ->
+  D.typeableConstant P ic.
+Proof.
+  inversion_clear 1;
+  econstructor (
+    solve [
+      repeat constructor
+    | repeat first [
+        assumption
+      | apply inIntegerRange_Signed_Long_LongLong
+      | apply inIntegerRange_Signed_Int_Long
+      | apply inIntegerRange_Unsigned_Long_LongLong
+      | apply inIntegerRange_Unsigned_Int_Long
+      ]
+    ]
+  ).
+Qed.
+
 Lemma typeOfExpression_sub {A B1 B2} {P} {S : sigma B1 B2} {G1 G2 : gamma} {e : expression A} :
   D.subP (fun v => D.fv v e) (fun _ => eq) G1 G2 ->
   forall t,
@@ -2541,4 +2616,183 @@ Proof.
   econstructor.
   - eassumption.
   - eapply wellTypedSigma_equiv; eassumption.
+Qed.
+
+Lemma typeOfLValue_typeableConstant_aux {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {e : expression A} {q} {t} :
+  (forall {tc},
+     D.typeOfExpression P S G e tc ->
+     (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic)) ->
+  D.typeOfLValue P S G e q t ->
+  (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic).
+Proof.
+  intros typeOfExpression_typeableConstant.
+  inversion_clear 1.
+  eapply typeOfExpression_typeableConstant; eassumption.
+Qed.
+
+Lemma typeOfRValue_typeableConstant_aux {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {e : expression A} {t} :
+  (forall {tc},
+     D.typeOfExpression P S G e tc ->
+     (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic)) ->
+  D.typeOfRValue P S G e t ->
+  (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic).
+Proof.
+  intros typeOfExpression_typeableConstant.
+  inversion_clear 1.
+  - eapply typeOfExpression_typeableConstant; eassumption.
+  - eapply (typeOfLValue_typeableConstant_aux typeOfExpression_typeableConstant); eassumption.
+Qed.
+
+Lemma assignable_typeableConstant_aux {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {t1} {e2 : expression A} :
+  (forall {tc},
+     D.typeOfExpression P S G e2 tc ->
+     (forall ic, D.constantExpressionContext ic e2 -> D.typeableConstant P ic)) ->
+  D.assignable P S G t1 e2 ->
+  (forall ic, D.constantExpressionContext ic e2 -> D.typeableConstant P ic).
+Proof.
+  intros typeOfExpression_typeableConstant.
+  inversion_clear 1;
+  eapply (typeOfRValue_typeableConstant_aux typeOfExpression_typeableConstant); eassumption.
+Qed.
+
+Lemma typeOfExpression_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {e : expression A} {tc} :
+  D.typeOfExpression P S G e tc ->
+  (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic).
+Proof.
+  revert e tc.
+  apply (
+    expression_nrect
+      (fun x => forall tc (Ht : D.typeOfExpression' P S G x tc), forall ic (Hcontext : D.constantExpressionContext' ic x), D.typeableConstant P ic)
+      (fun x => forall tc (Ht : D.typeOfExpression P S G x tc), forall ic (Hcontext : D.constantExpressionContext ic x), D.typeableConstant P ic)
+      (fun x => forall ps (Ht : D.typeOfArguments P S G x ps), forall ic (Hcontext : D.constantArgumentsContext ic x), D.typeableConstant P ic)
+  ); intros;
+  inversion Ht      ; subst;
+  inversion Hcontext; subst;
+  match goal with
+  | _ : D.constantExpressionContext _ ?e
+  , _ : D.typeOfExpression P S G ?e _
+  , IH : forall _, D.typeOfExpression P S G ?e _ -> _ |- _ => eapply IH; eassumption
+  | _ : D.constantExpressionContext' _ ?e
+  , _ : D.typeOfExpression' P S G ?e _
+  , IH : forall _, D.typeOfExpression' P S G ?e _ -> _ |- _ => eapply IH; eassumption
+  | _ : D.constantArgumentsContext _ ?es
+  , _ : D.typeOfArguments P S G ?es _
+  , IH : forall _, D.typeOfArguments P S G ?es _ -> _ |- _ => eapply IH; eassumption
+  | _ : D.constantExpressionContext _ ?e
+  , _ : D.typeOfRValue P S G ?e _
+  , IH : forall _, D.typeOfExpression P S G ?e _ -> _ |- _ => eapply (typeOfRValue_typeableConstant_aux IH); eassumption
+  | _ : D.constantExpressionContext _ ?e
+  , _ : D.typeOfLValue P S G ?e _ _
+  , IH : forall _, D.typeOfExpression P S G ?e _ -> _ |- _ => eapply (typeOfLValue_typeableConstant_aux IH); eassumption
+  | _ : D.constantExpressionContext _ ?e
+  , _ : D.assignable P S G _ ?e
+  , IH : forall _, D.typeOfExpression P S G ?e _ -> _ |- _ => eapply (assignable_typeableConstant_aux IH); eassumption
+  | _ => eapply typeOfConstant_typeableConstant; eassumption
+  end.
+Qed.
+
+Lemma typeOfRValue_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {e : expression A} {t} :
+  D.typeOfRValue P S G e t ->
+  (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic).
+Proof.
+  eapply typeOfRValue_typeableConstant_aux.
+  eapply @typeOfExpression_typeableConstant.
+Qed.
+
+Lemma typeable_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {e : expression A} :
+  D.typeable P S G e ->
+  (forall ic, D.constantExpressionContext ic e -> D.typeableConstant P ic).
+Proof.
+  inversion_clear 1; eapply @typeOfExpression_typeableConstant; eassumption. Qed.
+
+
+Lemma assignable_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {t1} {e2 : expression A} :
+  D.assignable P S G t1 e2 ->
+  (forall ic, D.constantExpressionContext ic e2 -> D.typeableConstant P ic).
+Proof.
+  eapply assignable_typeableConstant_aux.
+  eapply @typeOfExpression_typeableConstant.
+Qed.
+
+Lemma wellTypedDefinition_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {d : _ * expression A} :
+  D.wellTypedDefinition P S G d ->
+  (forall ic, D.constantDefinitionContext ic d -> D.typeableConstant P ic).
+Proof.
+  inversion_clear 1;
+  inversion_clear 1;
+  eapply @assignable_typeableConstant;
+  eassumption.
+Qed.
+
+Lemma wellTypedDeclaration_typeableConstant {P} {A B1 B2 : Set} {S : sigma B1 B2} {G} {ds : list (_ * expression A)} :
+  allList (D.wellTypedDefinition P S G) ds ->
+  (forall ic, D.constantDeclarationContext ic ds -> D.typeableConstant P ic).
+Proof.
+  induction ds;
+  inversion_clear 1;
+  inversion_clear 1.
+  - eapply wellTypedDefinition_typeableConstant; eassumption.
+  - eapply IHds; eassumption.
+Qed.
+
+Lemma wellTypedStatement_typeableConstant {P} {A B B1 B2 : Set} {S : sigma B1 B2} {G} {t} {s : statement B A} :
+  D.wellTypedStatement P S G t s ->
+  (forall ic, D.constantStatementContext ic s -> D.typeableConstant P ic).
+Proof.
+  revert G.
+  apply (
+    statement_nrect
+      (fun x => forall G (Ht : D.wellTypedStatement' P S G t x) ic (Hcontext : D.constantStatementContext' ic x), D.typeableConstant P ic)
+      (fun x => forall G (Ht : D.wellTypedStatement P S G t x) ic (Hcontext : D.constantStatementContext ic x), D.typeableConstant P ic)
+      (fun x => forall G (Ht : allList (D.wellTypedStatement P S G t) x) ic (Hcontext : D.constantBlockContext ic x), D.typeableConstant P ic)
+  ); intros;
+  inversion Ht      ; subst;
+  inversion Hcontext; subst;
+  match goal with
+  | IH : forall _, D.wellTypedStatement P S _ _ ?s -> _
+  , _ : D.constantStatementContext _ ?s |- _ => is_var s; eapply IH; eassumption
+  | IH : forall _, D.wellTypedStatement' P S _ _ ?s -> _
+  , _ : D.constantStatementContext' _ ?s |- _ => is_var s; eapply IH; eassumption
+  | IH : forall _, allList (D.wellTypedStatement P S _ _) ?ss -> _
+  , _ : D.constantBlockContext _ ?ss |- _ => is_var ss; eapply IH; eassumption
+  | _ : D.assignable P S _ _ ?e
+  , _ : D.constantExpressionContext _ ?e |- _ => eapply assignable_typeableConstant; eassumption
+  | _ : D.typeOfRValue P S _ ?e _
+  , _ : D.constantExpressionContext _ ?e |- _ => eapply typeOfRValue_typeableConstant; eassumption
+  | _ : D.typeable P S _ ?e
+  , _ : D.constantExpressionContext _ ?e |- _ => eapply typeable_typeableConstant; eassumption
+  | _ : allList (D.wellTypedDefinition P S _) ?ds
+  , _ : D.constantDeclarationContext _ ?ds |- _ => eapply wellTypedDeclaration_typeableConstant; eassumption
+  | _ => eapply typeOfConstant_typeableConstant; eassumption
+  end.
+Qed.
+
+Lemma wellTypedFunction_typeableConstant {P} {A B B1 B2 : Set} {S : sigma B1 B2} {p : _ * _ * statement B A} :
+  D.wellTypedFunction P S p ->
+  (forall ic, D.constantFunctionContext ic p -> D.typeableConstant P ic).
+Proof.
+  inversion_clear 1;
+  inversion_clear 1.
+  eapply wellTypedStatement_typeableConstant; eassumption.
+Qed.
+
+Lemma wellTypedSigma_typeableConstant {P} {A B : Set} {S : sigma B A} :
+  D.wellTypedSigma P S ->
+  (forall ic, D.constantSigmaContext ic S -> D.typeableConstant P ic).
+Proof.
+  intros Ht.
+  inversion_clear 1.
+  match goal with
+  | H : D.lookup S _ _ |- _ => pose proof (Ht _ _ H)
+  end.
+  eapply wellTypedFunction_typeableConstant; eassumption.
+Qed.
+
+Lemma wellTypedProgram_typeableConstant {P} {A B : Set} {p : program B A} :
+  D.wellTypedProgram P p ->
+  (forall ic, D.constantProgramContext ic p -> D.typeableConstant P ic).
+Proof.
+  inversion_clear 1;
+  inversion_clear 1.
+  eapply wellTypedSigma_typeableConstant; eassumption.
 Qed.
