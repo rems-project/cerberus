@@ -1,7 +1,7 @@
 VALIDATOR_EXTRACTED := $(foreach f, $(foreach f, $(shell find validator/ -name '*.v'), $(shell basename $f .v)), $f.ml $f.mli)
 EXTRACTED := $(VALIDATOR_EXTRACTED) Cabs0.ml Cabs0.mli Parser.ml Parser.mli
 
-COQC=/usr/local/bin/coqc # TODO: this is local to AddaX (to get coq 8.3pl3)
+COQC= coqc
 
 default: pre_parser.ml Parser.v Cabs0.vo
 	make -C validator/
@@ -12,7 +12,7 @@ pre_parser.ml : pre_parser.mly
 	menhir pre_parser.mly
 
 Parser.v : Parser.vy
-	menhir --coq Parser.vy
+	menhir --coq --coq-no-complete Parser.vy
 	@sed -i"" -e 's/Main/Validator_main/' Parser.v
 
 Cabs0.vo : Cabs0.v

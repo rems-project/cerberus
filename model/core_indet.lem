@@ -45,7 +45,7 @@ open L.Operators
 (* TODO: rename *)
 type expr =
   | Eskip
-  | Econst of int
+  | Econst of Core.constant
   | Eaddr of Core.mem_addr
   | Esym of Core.sym
   | Eop of Core.binop * expr * expr
@@ -95,7 +95,7 @@ val     import_expr: Core.expr zero -> expr
 let rec import_expr e =
   match e with
   | Core.Eskip               -> Eskip
-  | Core.Econst n            -> Econst n
+  | Core.Econst c            -> Econst c
   | Core.Eaddr o             -> Eaddr o
   | Core.Esym a              -> Esym a
   | Core.Eop binop e1 e2     -> Eop binop (import_expr e1) (import_expr e2)
@@ -367,7 +367,7 @@ end
 
 (* TODO: hack *)
 (*  *)
-val order: Core.file zero -> Exception.t (list (num * Core.file zero)) (Errors.cause)
+val order: Core.file zero -> Exception.t (list (num * Core.file zero)) (Errors.t)
 let order (f: Core.file zero) =
 (*  let fbodies' = List.map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
   

@@ -17,6 +17,7 @@ type typeSpecifier =
 | Tunsigned
 | T_Bool
 | Tnamed of atom
+| Tatomic of (spec_elem list*decl_type)
 | Tstruct of atom option * field_group list option * attribute list
 | Tunion of atom option * field_group list option * attribute list
 | Tenum of atom option * ((atom*expression option)*cabsloc) list option
@@ -26,11 +27,13 @@ and storage =
 | STATIC
 | EXTERN
 | REGISTER
+| THREAD_LOCAL
 | TYPEDEF
 and cvspec =
 | CV_CONST
 | CV_VOLATILE
 | CV_RESTRICT
+| CV_ATOMIC
 and spec_elem =
 | SpecCV of cvspec
 | SpecAttr of attribute
@@ -99,6 +102,15 @@ and expression =
 | BINARY of binary_operator * expression * expression
 | QUESTION of expression * expression * expression
 | CAST of (spec_elem list*decl_type) * init_expression
+| C11_ATOMIC_INIT of expression * expression
+| C11_ATOMIC_STORE of expression * expression * expression
+| C11_ATOMIC_LOAD of expression * expression
+| C11_ATOMIC_EXCHANGE of expression * expression * expression
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression
+   * expression * expression
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression
+   * expression * expression
+| C11_ATOMIC_FETCH_KEY of expression * expression * expression
 | CALL of expression * expression list
 | BUILTIN_VA_ARG of expression * (spec_elem list*decl_type)
 | CONSTANT of constant
@@ -142,12 +154,13 @@ and attribute =
 
 (** val typeSpecifier_rect :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    (atom -> 'a1) -> (atom option -> field_group list option -> attribute
-    list -> 'a1) -> (atom option -> field_group list option -> attribute list
-    -> 'a1) -> (atom option -> ((atom*expression option)*cabsloc) list option
-    -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
+    (atom -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (atom option ->
+    field_group list option -> attribute list -> 'a1) -> (atom option ->
+    field_group list option -> attribute list -> 'a1) -> (atom option ->
+    ((atom*expression option)*cabsloc) list option -> attribute list -> 'a1)
+    -> typeSpecifier -> 'a1 **)
 
-let typeSpecifier_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
+let typeSpecifier_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 = function
 | Tvoid -> f
 | Tchar -> f0
 | Tshort -> f1
@@ -159,18 +172,20 @@ let typeSpecifier_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
 | Tunsigned -> f7
 | T_Bool -> f8
 | Tnamed x -> f9 x
-| Tstruct (x, x0, x1) -> f10 x x0 x1
-| Tunion (x, x0, x1) -> f11 x x0 x1
-| Tenum (x, x0, x1) -> f12 x x0 x1
+| Tatomic x -> f10 x
+| Tstruct (x, x0, x1) -> f11 x x0 x1
+| Tunion (x, x0, x1) -> f12 x x0 x1
+| Tenum (x, x0, x1) -> f13 x x0 x1
 
 (** val typeSpecifier_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    (atom -> 'a1) -> (atom option -> field_group list option -> attribute
-    list -> 'a1) -> (atom option -> field_group list option -> attribute list
-    -> 'a1) -> (atom option -> ((atom*expression option)*cabsloc) list option
-    -> attribute list -> 'a1) -> typeSpecifier -> 'a1 **)
+    (atom -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (atom option ->
+    field_group list option -> attribute list -> 'a1) -> (atom option ->
+    field_group list option -> attribute list -> 'a1) -> (atom option ->
+    ((atom*expression option)*cabsloc) list option -> attribute list -> 'a1)
+    -> typeSpecifier -> 'a1 **)
 
-let typeSpecifier_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
+let typeSpecifier_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 = function
 | Tvoid -> f
 | Tchar -> f0
 | Tshort -> f1
@@ -182,41 +197,48 @@ let typeSpecifier_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 = function
 | Tunsigned -> f7
 | T_Bool -> f8
 | Tnamed x -> f9 x
-| Tstruct (x, x0, x1) -> f10 x x0 x1
-| Tunion (x, x0, x1) -> f11 x x0 x1
-| Tenum (x, x0, x1) -> f12 x x0 x1
+| Tatomic x -> f10 x
+| Tstruct (x, x0, x1) -> f11 x x0 x1
+| Tunion (x, x0, x1) -> f12 x x0 x1
+| Tenum (x, x0, x1) -> f13 x x0 x1
 
-(** val storage_rect : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1 **)
+(** val storage_rect :
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1 **)
 
-let storage_rect f f0 f1 f2 f3 = function
+let storage_rect f f0 f1 f2 f3 f4 = function
 | AUTO -> f
 | STATIC -> f0
 | EXTERN -> f1
 | REGISTER -> f2
-| TYPEDEF -> f3
+| THREAD_LOCAL -> f3
+| TYPEDEF -> f4
 
-(** val storage_rec : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1 **)
+(** val storage_rec :
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1 **)
 
-let storage_rec f f0 f1 f2 f3 = function
+let storage_rec f f0 f1 f2 f3 f4 = function
 | AUTO -> f
 | STATIC -> f0
 | EXTERN -> f1
 | REGISTER -> f2
-| TYPEDEF -> f3
+| THREAD_LOCAL -> f3
+| TYPEDEF -> f4
 
-(** val cvspec_rect : 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1 **)
+(** val cvspec_rect : 'a1 -> 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1 **)
 
-let cvspec_rect f f0 f1 = function
+let cvspec_rect f f0 f1 f2 = function
 | CV_CONST -> f
 | CV_VOLATILE -> f0
 | CV_RESTRICT -> f1
+| CV_ATOMIC -> f2
 
-(** val cvspec_rec : 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1 **)
+(** val cvspec_rec : 'a1 -> 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1 **)
 
-let cvspec_rec f f0 f1 = function
+let cvspec_rec f f0 f1 f2 = function
 | CV_CONST -> f
 | CV_VOLATILE -> f0
 | CV_RESTRICT -> f1
+| CV_ATOMIC -> f2
 
 (** val spec_elem_rect :
     (cvspec -> 'a1) -> (attribute -> 'a1) -> (storage -> 'a1) -> 'a1 ->
@@ -429,93 +451,264 @@ let unary_operator_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 = function
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
     list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
-    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem
-    list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
-    (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
-    ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 -> expression
-    -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> (expression ->
-    'a1 -> atom -> 'a1) -> ((spec_elem list*decl_type) -> atom -> 'a1) ->
-    expression -> 'a1 **)
+    expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+    expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+    'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+    'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 -> expression
+    -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression
+    -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression list -> 'a1) ->
+    (expression -> 'a1 -> (spec_elem list*decl_type) -> 'a1) -> (constant ->
+    'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1) -> ((spec_elem
+    list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
+    (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
+    list*decl_type) -> atom -> 'a1) -> expression -> 'a1 **)
 
-let rec expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 = function
+let rec expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20 = function
 | UNARY (u, e0) ->
-  f u e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
+  f u e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0)
 | BINARY (b, e0, e1) ->
   f0 b e0
-    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0) e1
-    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1)
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
 | QUESTION (e0, e1, e2) ->
-  f1 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    e1 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1)
-    e2 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e2)
+  f1 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
 | CAST (p, i) -> f2 p i
+| C11_ATOMIC_INIT (e0, e1) ->
+  f3 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
+| C11_ATOMIC_STORE (e0, e1, e2) ->
+  f4 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
+| C11_ATOMIC_LOAD (e0, e1) ->
+  f5 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
+| C11_ATOMIC_EXCHANGE (e0, e1, e2) ->
+  f6 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG (e0, e1, e2, e3, e4) ->
+  f7 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2) e3
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e3) e4
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e4)
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK (e0, e1, e2, e3, e4) ->
+  f8 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2) e3
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e3) e4
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e4)
+| C11_ATOMIC_FETCH_KEY (e0, e1, e2) ->
+  f9 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
 | CALL (e0, l) ->
-  f3 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    l
+  f10 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) l
 | BUILTIN_VA_ARG (e0, p) ->
-  f4 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    p
-| CONSTANT c -> f5 c
-| VARIABLE a -> f6 a
+  f11 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) p
+| CONSTANT c -> f12 c
+| VARIABLE a -> f13 a
 | EXPR_SIZEOF e0 ->
-  f7 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-| TYPE_SIZEOF p -> f8 p
-| ALIGNOF p -> f9 p
+  f14 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0)
+| TYPE_SIZEOF p -> f15 p
+| ALIGNOF p -> f16 p
 | INDEX (e0, e1) ->
-  f10 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    e1 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1)
+  f17 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
 | MEMBEROF (e0, a) ->
-  f11 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    a
+  f18 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) a
 | MEMBEROFPTR (e0, a) ->
-  f12 e0 (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    a
-| OFFSETOF (p, a) -> f13 p a
+  f19 e0
+    (expression_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) a
+| OFFSETOF (p, a) -> f20 p a
 
 (** val expression_rec :
     (unary_operator -> expression -> 'a1 -> 'a1) -> (binary_operator ->
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
     expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
     list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
-    expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem
-    list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) ->
-    (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
-    ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 -> expression
-    -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> (expression ->
-    'a1 -> atom -> 'a1) -> ((spec_elem list*decl_type) -> atom -> 'a1) ->
-    expression -> 'a1 **)
+    expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+    expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+    'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+    'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+    expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 -> expression
+    -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression
+    -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression list -> 'a1) ->
+    (expression -> 'a1 -> (spec_elem list*decl_type) -> 'a1) -> (constant ->
+    'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1) -> ((spec_elem
+    list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) ->
+    (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+    atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
+    list*decl_type) -> atom -> 'a1) -> expression -> 'a1 **)
 
-let rec expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 = function
+let rec expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 f20 = function
 | UNARY (u, e0) ->
-  f u e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
+  f u e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0)
 | BINARY (b, e0, e1) ->
-  f0 b e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    e1 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1)
+  f0 b e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
 | QUESTION (e0, e1, e2) ->
-  f1 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    e1 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1) e2
-    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e2)
+  f1 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
 | CAST (p, i) -> f2 p i
+| C11_ATOMIC_INIT (e0, e1) ->
+  f3 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
+| C11_ATOMIC_STORE (e0, e1, e2) ->
+  f4 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
+| C11_ATOMIC_LOAD (e0, e1) ->
+  f5 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
+| C11_ATOMIC_EXCHANGE (e0, e1, e2) ->
+  f6 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG (e0, e1, e2, e3, e4) ->
+  f7 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2) e3
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e3) e4
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e4)
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK (e0, e1, e2, e3, e4) ->
+  f8 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2) e3
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e3) e4
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e4)
+| C11_ATOMIC_FETCH_KEY (e0, e1, e2) ->
+  f9 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1) e2
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e2)
 | CALL (e0, l) ->
-  f3 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0) l
+  f10 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) l
 | BUILTIN_VA_ARG (e0, p) ->
-  f4 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0) p
-| CONSTANT c -> f5 c
-| VARIABLE a -> f6 a
+  f11 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) p
+| CONSTANT c -> f12 c
+| VARIABLE a -> f13 a
 | EXPR_SIZEOF e0 ->
-  f7 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-| TYPE_SIZEOF p -> f8 p
-| ALIGNOF p -> f9 p
+  f14 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0)
+| TYPE_SIZEOF p -> f15 p
+| ALIGNOF p -> f16 p
 | INDEX (e0, e1) ->
-  f10 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    e1 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e1)
+  f17 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) e1
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e1)
 | MEMBEROF (e0, a) ->
-  f11 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    a
+  f18 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) a
 | MEMBEROFPTR (e0, a) ->
-  f12 e0 (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 e0)
-    a
-| OFFSETOF (p, a) -> f13 p a
+  f19 e0
+    (expression_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      f16 f17 f18 f19 f20 e0) a
+| OFFSETOF (p, a) -> f20 p a
 
 (** val integer_suffix_rect :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> integer_suffix -> 'a1 **)
@@ -663,6 +856,7 @@ and statement =
 | LABEL of atom * statement * cabsloc
 | GOTO of atom * cabsloc
 | DEFINITION of definition
+| PAR of statement list * cabsloc
 and for_clause =
 | FC_EXP of expression
 | FC_DECL of definition
@@ -697,42 +891,51 @@ let definition_rec f f0 f1 = function
     cabsloc -> 'a1) -> (expression -> statement -> 'a1 -> cabsloc -> 'a1) ->
     (expression -> statement -> 'a1 -> cabsloc -> 'a1) -> (statement -> 'a1
     -> cabsloc -> 'a1) -> (atom -> statement -> 'a1 -> cabsloc -> 'a1) ->
-    (atom -> cabsloc -> 'a1) -> (definition -> 'a1) -> statement -> 'a1 **)
+    (atom -> cabsloc -> 'a1) -> (definition -> 'a1) -> (statement list ->
+    cabsloc -> 'a1) -> statement -> 'a1 **)
 
-let rec statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 = function
+let rec statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 = function
 | NOP c -> f c
 | COMPUTATION (e, c) -> f0 e c
 | BLOCK (l, c) -> f1 l c
 | If (e, s0, o, c) ->
   f2 e s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) o
-    c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) o c
 | WHILE (e, s0, c) ->
   f3 e s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | DOWHILE (e, s0, c) ->
   f4 e s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | FOR (o, o0, o1, s0, c) ->
   f5 o o0 o1 s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | BREAK c -> f6 c
 | CONTINUE c -> f7 c
 | RETURN (o, c) -> f8 o c
 | SWITCH (e, s0, c) ->
   f9 e s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | CASE (e, s0, c) ->
   f10 e s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | DEFAULT (s0, c) ->
   f11 s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | LABEL (a, s0, c) ->
   f12 a s0
-    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | GOTO (a, c) -> f13 a c
 | DEFINITION d -> f14 d
+| PAR (l, c) -> f15 l c
 
 (** val statement_rec :
     (cabsloc -> 'a1) -> (expression -> cabsloc -> 'a1) -> (statement list ->
@@ -744,42 +947,51 @@ let rec statement_rect f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 = fun
     cabsloc -> 'a1) -> (expression -> statement -> 'a1 -> cabsloc -> 'a1) ->
     (expression -> statement -> 'a1 -> cabsloc -> 'a1) -> (statement -> 'a1
     -> cabsloc -> 'a1) -> (atom -> statement -> 'a1 -> cabsloc -> 'a1) ->
-    (atom -> cabsloc -> 'a1) -> (definition -> 'a1) -> statement -> 'a1 **)
+    (atom -> cabsloc -> 'a1) -> (definition -> 'a1) -> (statement list ->
+    cabsloc -> 'a1) -> statement -> 'a1 **)
 
-let rec statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 = function
+let rec statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 = function
 | NOP c -> f c
 | COMPUTATION (e, c) -> f0 e c
 | BLOCK (l, c) -> f1 l c
 | If (e, s0, o, c) ->
   f2 e s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) o
-    c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) o c
 | WHILE (e, s0, c) ->
   f3 e s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | DOWHILE (e, s0, c) ->
   f4 e s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | FOR (o, o0, o1, s0, c) ->
   f5 o o0 o1 s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | BREAK c -> f6 c
 | CONTINUE c -> f7 c
 | RETURN (o, c) -> f8 o c
 | SWITCH (e, s0, c) ->
   f9 e s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | CASE (e, s0, c) ->
   f10 e s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | DEFAULT (s0, c) ->
   f11 s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | LABEL (a, s0, c) ->
   f12 a s0
-    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 s0) c
+    (statement_rec f f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15
+      s0) c
 | GOTO (a, c) -> f13 a c
 | DEFINITION d -> f14 d
+| PAR (l, c) -> f15 l c
 
 (** val for_clause_rect :
     (expression -> 'a1) -> (definition -> 'a1) -> for_clause -> 'a1 **)

@@ -1,8 +1,12 @@
 open Global
 
+module Opt = Option
+
 module C    = Cabs0
 module A    = Ail
 module Aaux = Ail_aux
+
+module ATaux = Ail_typing_aux
 
 
 module Effect = struct
@@ -26,24 +30,49 @@ module Effect = struct
                             check if 'case' statements are allowed) *)
     
     
-    id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
-    globals      : list (id * A.expression_t unit);    (* global definitions (??) *)
-    fields_map   : map id (list (id * A.member));      (* struct/union members    *)
-    fn_map       : map id (list id * A.statement_l unit) (* functions map           *)
+    declarations : map id A.declaration;                  (* map associating identifiers to their (Ail) declaration         *)
+    globals      : list (id * A.expression_t unit);       (* global definitions (??) *)
+    fields_map   : map id (list (id * A.member));         (* struct/union members    *)
+    fn_map       : map id (list id * A.statement_l unit); (* functions map           *)
+    
+    location : Location.t; (* AST location, for error messages *)
+    
   |>
   
-  type t 'a = M.t 'a state Errors.cause
+  type t 'a = M.t 'a state Errors.t
   
   
   (* BEGIN TEMPORARY: (TODO) these will disappear with the fixed module system. *)
   let return    = M.return
-  let fail      = M.fail
-  let option    = M.option
-  let of_option = M.of_option
   let mapM      = M.mapM
   let foldrM    = M.foldrM
   let iter      = M.iter
   (* END TEMPORARY *)
+  
+  val fail: forall 'a. Errors.cause -> t 'a
+  let fail msg = fun env ->
+    Exception.fail (env.location, msg)
+  
+  val of_option: forall 'a. Errors.cause -> option 'a -> t 'a
+  let of_option msg = function
+    | Some a -> return a
+    | None   -> fail msg
+  end
+  
+  val option: forall 'a. Errors.cause -> t (option 'a) -> t 'a
+  let option msg m =
+    M.bind m (function
+      | Some a -> return a
+      | None   -> fail msg
+    end)
+
+
+
+  
+  val set_location: Location.t -> t unit
+  let set_location loc = M.update $ fun env ->
+    <| env with location= loc |>
+  
   
   
   (* Liftings of the operations on the `symbol_table' *)
@@ -91,9 +120,9 @@ module Effect = struct
 
   
   
-  let add_id id decl         = M.update (fun env -> <| env with id_map=  Pmap.add id decl env.id_map |>)
-  let add_fn id formals body = M.update (fun env -> <| env with fn_map=  Pmap.add id (formals, body) env.fn_map |>)
-  let add_globals defns      = M.update (fun env -> <| env with globals= env.globals @ defns |>)
+  let add_declaration id decl = M.update (fun env -> <| env with declarations=  Pmap.add id decl env.declarations |>)
+  let add_fn id formals body  = M.update (fun env -> <| env with fn_map=  Pmap.add id (formals, body) env.fn_map |>)
+  let add_globals defns       = M.update (fun env -> <| env with globals= env.globals @ defns |>)
   
   
   let return_label_map = fun env -> Exception.return (env.label_map, env)
@@ -106,7 +135,7 @@ module Effect = struct
     )
   
   
-  val init: forall 'a. t 'a -> Exception.t 'a Errors.cause
+  val init: forall 'a. t 'a -> Exception.t 'a Errors.t
   let init m =
     M.run m
     <|
@@ -115,10 +144,11 @@ module Effect = struct
       symbol_table        = St.create_scope St.empty;
       fields_symbol_table = Pmap.empty;
       inside_switch       = false;
-      id_map              = Pmap.empty;
+      declarations        = Pmap.empty;
       globals             = [];
       fields_map          = Pmap.empty;
-      fn_map              = Pmap.empty
+      fn_map              = Pmap.empty;
+      location            = Location.unknowned;
     |>
   
   
@@ -127,7 +157,7 @@ module Effect = struct
     M.read (fun env ->
       <|
         A.main=    main;
-        A.id_map=  env.id_map;
+        A.id_map=  env.declarations;
         A.globals= env.globals;
         A.fn_map=  env.fn_map
      |>
@@ -173,9 +203,9 @@ let subst name =
 
 (* ---------------------------------------------------------------------------------------------- *)
 
-val register_name:   string      -> E.t Symbol.t
+val register_name: string -> E.t Symbol.t
 val register_labels: C.statement -> E.t unit
-val fetch_label_id:  string      -> E.t Symbol.t
+val fetch_label_id: string -> E.t Symbol.t
 
 
 let register_name name =
@@ -248,9 +278,9 @@ let desugar_unary_operator = function
   | C.POSDECR -> A.POSTFIX_DECR
   
   (* These cases cannot occurs since these constructors are translated away. *)
-  | C.NOT     -> Boot.assert_false ""
-  | C.PREINCR -> Boot.assert_false ""
-  | C.PREDECR -> Boot.assert_false ""
+  | C.NOT     -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] NOT"
+  | C.PREINCR -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] PREINCR"
+  | C.PREDECR -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] PREDECR"
 end
 
 
@@ -330,7 +360,7 @@ let desugar_constant = function
   | C.CONST_INT ic suff_opt  -> A.CONST_INT (desugar_integer_constant ic suff_opt)
   | C.CONST_FLOAT fc         -> A.CONST_FLOAT fc (* TODO: decoding *)
   | C.CONST_CHAR pref_opt cc -> A.CONST_CHAR (desugar_character_constant pref_opt cc)
-  | C.CONST_STRING str       -> Boot.assert_false "TODO"
+  | C.CONST_STRING str       -> Boot.assert_false "TODO [Cabs0_to_ail.desugar_constant] CONST_STRING"
 end
 
 
@@ -580,7 +610,7 @@ let desugar_specifier specifiers =
 
 
 val translate_cabsloc: C.cabsloc -> Location.t
-let translate_cabsloc loc = Boot.assert_false "TODO"
+let translate_cabsloc loc = Boot.assert_false "TODO [Cabs0_to_ail.translate_cabsloc]"
 
 val loc_of_statement: C.statement -> C.cabsloc
 let loc_of_statement = function
@@ -724,7 +754,7 @@ let rec desugar_statement s =
     | C.GOTO label _ ->
         A.GOTO <$> fetch_label_id label
     | C.DEFINITION def ->
-        Boot.assert_false "WIP: DEFINITION"
+        Boot.assert_false "WIP [Cabs0_to_ail.desugar_statement] DEFINITION"
   end
 (*
   | C.DECLARATION defns ->
@@ -782,6 +812,7 @@ let rec desugar_decl_type decl =
   match decl with
     | C.JUSTBASE ->
         fun ty -> E.return ty
+        
 
 (*
     | C.ARRAY decl' specs attrs e_opt -> (* decl_type * list cvspec * list attribute * option expression *)
@@ -888,6 +919,100 @@ and decl_l = declaration * location
 
 
 
+(*
+val     eval_constant_expression': C.expression -> E.t int
+let rec eval_constant_expression' e =
+  (* TODO: inline these if we get Or patterns in Lem *)
+  let is_assignment = function
+    | C.ASSIGN      -> true
+    | C.ADD_ASSIGN  -> true
+    | C.SUB_ASSIGN  -> true
+    | C.MUL_ASSIGN  -> true
+    | C.DIV_ASSIGN  -> true
+    | C.MOD_ASSIGN  -> true
+    | C.BAND_ASSIGN -> true
+    | C.BOR_ASSIGN  -> true
+    | C.XOR_ASSIGN  -> true
+    | C.SHL_ASSIGN  -> true
+    | C.SHR_ASSIGN  -> true
+    | _             -> false
+  end in
+  let is_increment_decrement = function
+    | C.PREINCR -> true
+    | C.PREDECR -> true
+    | C.POSINCR -> true
+    | C.POSDECR -> true
+    | _         -> false
+  end in
+  match e with
+    | C.BINARY bop e1 e2 ->
+        match bop with
+        if is_assignment bop || bop = C.COMMA then
+          E.fail Errors.CONSTRAINT_6_6__3
+        else
+          eval_constant_expression' e1 >>= fun n1 ->
+          eval_constant_expression' e2 >>= fun n2 ->
+          match bop with
+            | C.ADD
+            | C.SUB
+            | C.MUL
+            | C.DIV
+            | C.MOD
+            | C.AND
+            | C.OR
+            | C.BAND
+            | C.BOR
+            | C.XOR
+            | C.SHL
+            | C.SHR
+            | EQ
+            | NE
+            | LT
+            | GT
+            | LE
+            | GE
+
+    
+    | C.UNARY uop e ->
+        if is_increment_decrement uop then
+          E.fail Erros.CONSTRAINT_6_6__3
+        else
+          
+
+
+
+  | BINARY of binary_operator * expression * expression
+  | QUESTION of expression * expression * expression
+
+    (* A CAST can actually be a constructor expression *)
+  | CAST of (list spec_elem * decl_type) * init_expression
+
+  | C11_ATOMIC_INIT of expression * expression
+  | C11_ATOMIC_STORE of expression * expression * expression
+  | C11_ATOMIC_LOAD of expression * expression
+  | C11_ATOMIC_EXCHANGE of expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+  | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+
+  | CALL of expression * list expression
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+  | CONSTANT of constant
+  | VARIABLE of atom
+  | EXPR_SIZEOF of expression
+  | TYPE_SIZEOF of (list spec_elem * decl_type)
+  | ALIGNOF of (list spec_elem * decl_type)
+  | INDEX of expression * expression
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
+  end
+
+*)
+
+
+
+
 
 
 (* TODO: if we add VLA then for EXPR_SIZEOF, we need to check whether
@@ -898,17 +1023,17 @@ let rec eval_constant_expression ((), e) =
     | A.NULL ->
         E.return (Int.int 0)
     | A.STRING_LITERAL str ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] STRING_LITERAL"
     | A.UNARY A.PLUS e ->
         eval_constant_expression e
     | A.UNARY A.MINUS e ->
         Int.neg <$> eval_constant_expression e
     | A.UNARY A.BNOT e ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] BNOT"
     | A.UNARY _ _ ->
         E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
     | A.BINARY bip e1 e2 ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] BINARY"
 (*    | A.ASSIGN of option arithmetic_operator * expression_t 'a * expression_t 'a *)
 (*    | A.CONDITIONAL of expression_t 'a * expression_t 'a * expression_t 'a *)
 (*    | A.CAST of ctype * expression_t 'a *)
@@ -921,17 +1046,17 @@ let rec eval_constant_expression ((), e) =
         (* TODO: this is wrong, but need impl-def informations ... *)
         E.return n
     | A.CONSTANT _ ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONSTANT"
     | A.EXPR_SIZEOF e ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] EXPR_SIZEOF"
     | A.SIZEOF ty ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] SIZEOF"
     | A.ALIGNOF ty ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] ALIGNOF"
     | A.CONST_ARRAY es ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONST_ARRAY"
     | A.CONST_STRUCT_UNION x_es ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONST_STRUCT_UNION"
 (*
     | A.OFFSETOF of ctype * id
 *)
@@ -966,7 +1091,7 @@ let rec desugar_spec_elem_list specs =
     | C.SpecAttr attr  -> (sts      , qs                            , ss                  )
     | C.SpecStorage st -> (st :: sts, qs                            , ss                  )
     | C.SpecType spec  -> (sts      , qs                            , Multiset.add spec ss)
-    | C.SpecInline     -> Boot.assert_false "TODO: not sure what to do with this one"
+    | C.SpecInline     -> Boot.assert_false "TODO [Cabs0_to_ail.desugar_spec_elem_list f] SpecInline: not sure what to do with this one"
   end in
   let (sts, qs, ss) = List.fold_left f ([], {}, Multiset.emp) specs in
   desugar_storage sts  >>= fun sd_opt ->
@@ -977,9 +1102,9 @@ let rec desugar_spec_elem_list specs =
       (* TODO: getting rid of attributes here (for now) *)
       (* TODO: very likely to be wrong for some cases *)
     | [(C.Tstruct None None attrs, 1)] ->
-        Boot.assert_false "TODO: this case corresponds to a type decl, so it cannot occur here(?)"
+        Boot.assert_false "TODO [Cabs0_to_ail] this case corresponds to a type decl, so it cannot occur here(?)"
     | [(C.Tstruct None (Some []) attrs, 1)] ->
-        Boot.assert_false "desugar_type: found a `struct {}', not sure what to do for now"
+        Boot.assert_false "[Cabs0_to_ail] desugar_type: found a `struct {}', not sure what to do for now"
     | [(C.Tstruct (Some tag) (Some []) attrs, 1)] ->
         subst tag           >>= fun id       ->
         E.resolve_fields id >>= fun d_fields ->
@@ -1064,7 +1189,70 @@ let desugar_global_defn st (defn, l) =
 *)
 
 
+val     desugar_compound_init_expression: A.declaration -> list (list C.initwhat * C.init_expression) -> Opt.t (E.t (A.expression_t unit))
+let rec desugar_init_expression_aux (ty, _) ie =
+  match ie with
+    | C.SINGLE_INIT e ->
+        Opt.return (desugar_expression e)
 
+(*
+    | C.COMPOUND_INIT iwies ->
+        if 
+
+
+        E.mapM (fun (iws, ie') -> do Opt
+          d_ie <- desugar_init_expression_aux ie'
+          
+
+
+
+
+            | None     -> Opt.fail
+            | Some d_e ->
+                
+*)
+
+  end
+
+(*
+
+(*
+  | CONST_ARRAY of list (expression_t 'a)
+  | CONST_STRUCT_UNION of list (id * expression_t 'a)
+*)
+
+
+
+
+
+  | COMPOUND_INIT of list (list initwhat * init_expression)
+
+
+and initwhat =
+  | INFIELD_INIT of atom
+  | ATINDEX_INIT of expression
+
+
+    *)
+
+
+val     desugar_init_expression: A.declaration -> C.init_expression -> E.t (option (A.expression_t unit))
+let rec desugar_init_expression (ty, sd_opt) ie =
+  match ie with
+    | C.NO_INIT ->
+        E.return None
+    | _ ->
+        (* (§6.7.9#3) The type of the entity to be initialized shall be an array of unknown size or
+                      a complete object type that is not a variable length array type. *)
+        if not $ ATaux.is_array_type ty && not (ATaux.has_known_constant_size ty) ||
+                 ATaux.is_complete_object_type ty && not (ATaux.is_VLA_type ty) then
+          Boot.assert_false "[Cabs0_to_ail.desugar_init_expression] ERROR"
+        else
+          
+          
+          
+          Boot.assert_false "TODO [Cabs0_to_ail.desugar_init_expression] COMPOUND_INIT"
+  end
 
 
 
@@ -1085,28 +1273,26 @@ let desugar_definition = function
       E.add_fn id formals d_s
       
 *)
-
-      Boot.assert_false "WIP: FUNDEF"
+      Boot.assert_false "WIP [Cabs0_to_ail.desugar_definition] FUNDEF"
+  
   (* global variable(s), or function prototype *)
   | C.DECDEF (specs, ins) loc ->
+      (* for each init-declaration *)
       E.mapM function C.Init_name (C.Name str decl_t [] loc') ie ->
-        mk_declaration specs decl_t >>= fun decl ->
+        mk_declaration specs decl_t >>= fun (decl : A.declaration) ->
+        register_name str           >>= fun id ->
+        E.add_declaration id decl   >>
         
-        register_name str          >>= fun id ->
-        E.add_id id decl           >>
-        desugar_init_expression ie >>= fun d_ie ->
-
-
-(*
-  let add_id id decl         = M.update (fun env -> <| env with id_map=  Pmap.add id decl env.id_map |>)
-*)
-
         
 
-(*
-    id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
-    globals      : list (id * A.expression_t unit);    (* global definitions (??) *)
-*)
+(*        desugar_init_expression decl ie >>= fun d_ie -> *)
+
+
+
+
+(*      KKK *)
+
+
 
 
         E.return ()
@@ -1119,15 +1305,15 @@ let desugar_definition = function
 
 
 (* Name (str, decl_t, [], loc) *)
-
-
-      Boot.assert_false "WIP: DECDEF"
+      Boot.assert_false "WIP [Cabs0_to_ail.desugar_definition] DECDEF"
+  
   | C.PRAGMA str loc ->
-      Boot.assert_false "[Cabs0_to_ail] PRAGMA: not supported for now"
+(*      E.set_location loc >> *)
+      E.fail (Errors.CSEM_NOT_SUPPORTED "PRAGMA")
 end 
 
 
-val desugar: string -> C.file -> Exception.t (Ail.file unit) Errors.cause
+val desugar: string -> C.file -> Exception.t (Ail.file unit) Errors.t
 let desugar startup defs =
   E.init (
     E.iter desugar_definition defs                                       >>

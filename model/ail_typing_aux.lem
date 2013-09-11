@@ -183,9 +183,6 @@ let is_aggregate_type ty =
   is_array_type ty || is_structure_type ty
 
 
-(* §6.2.5#23 *)
-(* has_known_constant_size *)
-
 
 (* §6.2.5#24 *)
 val is_derived_declarator_type: ctype -> bool
@@ -275,7 +272,7 @@ let is_unqualified = function
   end
 
 
-let is_complete_object t =
+let is_complete_object_type t =
   match t with
   | VOID _ -> false
   | _      -> is_object_type t
@@ -297,7 +294,7 @@ let is_pointer_to_function = function
   end
 
 let is_pointer_to_complete_object = function
-  | POINTER _ t -> is_complete_object t
+  | POINTER _ t -> is_complete_object_type t
   | _           -> false 
   end
 
@@ -593,14 +590,14 @@ let usual_arithmetic t1 t2 = common (promote t1) (promote t2)
 
 let is_complete t =
   match t with
-  | BASIC    _ _ -> is_complete_object t
-  | POINTER  _ _ -> is_complete_object t
+  | BASIC    _ _ -> is_complete_object_type t
+  | POINTER  _ _ -> is_complete_object_type t
   | ARRAY    _ _ -> true
   | FUNCTION _ _ -> false
   | SIZE_T       -> true
   end
 
-let is_incomplete t = not (is_complete t)
+let is_incomplete_type t = not (is_complete t)
 
 let is_const = function
   | BASIC    q _ -> CONST IN q
@@ -612,7 +609,7 @@ let is_const = function
 
 let is_modifiable t =
   not (is_array_type t)
-  && not (is_incomplete t)
+  && not (is_incomplete_type t)
   && not (is_const t)
 
 let is_bool = function
@@ -652,7 +649,7 @@ let pointer_convert (t: Ail.ctype) : Ail.ctype =
   end
 
 let lvalue_convert (t: Ail.ctype) : option Ail.ctype =
-  if is_incomplete t && not (is_array_type t) then
+  if is_incomplete_type t && not (is_array_type t) then
     None
   else
     Some (unqualify t)
@@ -750,3 +747,14 @@ let usual_arithmetic (t1: Ail.ctype) (t2: Ail.ctype) : Ail.ctype =
     Boot.debug "ERROR in usual_arith"
 *)
 
+
+(* TODO *)
+val is_VLA_type: ctype -> bool
+let is_VLA_type ty =
+  Boot.print_debug "WARNING: using Ail_typing_aux.is_VLA_type which has a bogus definition" false
+
+
+(* §6.2.5#23 *)
+val has_known_constant_size: ctype -> bool
+let has_known_constant_size ty =
+  not (is_incomplete_type ty || is_VLA_type ty)

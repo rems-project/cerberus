@@ -11,7 +11,7 @@ end
 module type PARSER =
 sig
   type result
-  val parse : Input.t -> (result, Errors.cause) Exception.t
+  val parse : Input.t -> (result, Errors.t) Exception.t
 end
 
 module type MAKE =

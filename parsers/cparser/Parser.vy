@@ -15,16 +15,20 @@ Require Import List.
   LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN
 
 %token<cabsloc> LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT COMMA
-  SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO REGISTER INLINE
-  CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID STRUCT
-  UNION ENUM BOOL
+  SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT AUTO THREAD_LOCAL REGISTER INLINE
+  CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE ATOMIC VOID STRUCT
+  UNION ENUM BOOL LBRACES BARES RBRACES
 
 %token<cabsloc> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK
   RETURN BUILTIN_VA_ARG OFFSETOF
 
+%token<cabsloc> C11_ATOMIC_INIT C11_ATOMIC_STORE C11_ATOMIC_LOAD
+  C11_ATOMIC_EXCHANGE C11_ATOMIC_COMPARE_EXCHANGE_STRONG C11_ATOMIC_COMPARE_EXCHANGE_WEAK
+  C11_ATOMIC_FETCH_KEY
+
 %token EOF
 
-%type<expression * cabsloc> primary_expression postfix_expression
+%type<expression * cabsloc> primary_expression atomic_operation postfix_expression
   unary_expression cast_expression multiplicative_expression additive_expression
   shift_expression relational_expression equality_expression AND_expression
   exclusive_OR_expression inclusive_OR_expression logical_AND_expression
@@ -39,6 +43,7 @@ Require Import List.
 %type<init_name> init_declarator
 %type<storage * cabsloc> storage_class_specifier
 %type<typeSpecifier * cabsloc> type_specifier struct_or_union_specifier enum_specifier
+%type<typeSpecifier * cabsloc> atomic_type_specifier
 %type<(option atom -> option (list field_group) -> list attribute -> typeSpecifier) * cabsloc> struct_or_union
 %type<list field_group (* Reverse order *)> struct_declaration_list
 %type<field_group> struct_declaration
@@ -73,6 +78,11 @@ Require Import List.
 %type<list definition (* Reverse order *)> translation_unit
 %type<definition> external_declaration function_definition
 
+%type<statement>par_statement
+%type<list statement>par_statement_list
+
+
+
 %start<list definition> translation_unit_file
 %%
 
@@ -87,12 +97,35 @@ primary_expression:
 | loc = LPAREN expr = expression RPAREN
     { (fst expr, loc)}
 
+
+(* NOTE: this is not present in the actual C11 syntax *)
+atomic_operation:
+| loc = C11_ATOMIC_INIT LPAREN obj = postfix_expression COMMA value = postfix_expression RPAREN
+    { (C11_ATOMIC_INIT (fst obj) (fst value), loc) }
+| loc = C11_ATOMIC_STORE LPAREN object_ = postfix_expression COMMA desired = postfix_expression COMMA order = postfix_expression RPAREN
+    { (C11_ATOMIC_STORE (fst object_) (fst desired) (fst order), loc) }
+| loc = C11_ATOMIC_LOAD LPAREN object_ = postfix_expression COMMA order = postfix_expression RPAREN
+    { (C11_ATOMIC_LOAD (fst object_) (fst order), loc) }
+| loc = C11_ATOMIC_EXCHANGE LPAREN object_ = postfix_expression COMMA desired = postfix_expression COMMA order = postfix_expression RPAREN
+    { (C11_ATOMIC_EXCHANGE (fst object_) (fst desired) (fst order), loc) }
+| loc = C11_ATOMIC_COMPARE_EXCHANGE_STRONG LPAREN object_ = postfix_expression COMMA expected = postfix_expression COMMA
+  desired = postfix_expression COMMA success = postfix_expression COMMA failure = postfix_expression RPAREN
+    { (C11_ATOMIC_COMPARE_EXCHANGE_STRONG (fst object_) (fst expected) (fst desired) (fst success) (fst failure), loc) }
+| loc = C11_ATOMIC_COMPARE_EXCHANGE_WEAK LPAREN object_ = postfix_expression COMMA expected = postfix_expression COMMA
+  desired = postfix_expression COMMA success = postfix_expression COMMA failure = postfix_expression RPAREN
+    { (C11_ATOMIC_COMPARE_EXCHANGE_WEAK (fst object_) (fst expected) (fst desired) (fst success) (fst failure), loc) }
+
+
 (* 6.5.2 *)
 postfix_expression:
 | expr = primary_expression
     { expr }
 | expr = postfix_expression LBRACK index = expression RBRACK
     { (INDEX (fst expr) (fst index), snd expr) }
+(* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
+| expr = atomic_operation
+    { expr }
+
 | expr = postfix_expression LPAREN args = argument_expression_list RPAREN
     { (CALL (fst expr) (rev args), snd expr) }
 | expr = postfix_expression LPAREN RPAREN
@@ -350,6 +383,8 @@ storage_class_specifier:
     { (STATIC, loc) }
 | loc = AUTO
     { (AUTO, loc) } 
+| loc = THREAD_LOCAL
+    { (THREAD_LOCAL, loc) } 
 | loc = REGISTER
     { (REGISTER, loc) }
 
@@ -375,6 +410,8 @@ type_specifier:
     { (Tunsigned, loc) }
 | loc = BOOL
     { (T_Bool, loc) }
+| spec = atomic_type_specifier
+    { spec }
 | spec = struct_or_union_specifier
     { spec }
 | spec = enum_specifier
@@ -413,6 +450,11 @@ struct_declaration:
 | static_assert_declaration
     {}
 *)
+
+(* 6.7.2.4 *)
+atomic_type_specifier:
+| loc = ATOMIC LPAREN ty = type_name RPAREN
+    { (Tatomic ty, loc) }
 
 specifier_qualifier_list:
 | typ = type_specifier rest = specifier_qualifier_list
@@ -475,6 +517,8 @@ type_qualifier:
     { (CV_RESTRICT, loc) }
 | loc = VOLATILE
     { (CV_VOLATILE, loc) }
+| loc = ATOMIC
+    { (CV_ATOMIC, loc) }
 
 (* 6.7.4 *)
 function_specifier:
@@ -651,6 +695,7 @@ statement_dangerous:
 | stmt = selection_statement_dangerous
 | stmt = iteration_statement(statement_dangerous)
 | stmt = jump_statement
+| stmt = par_statement
     { stmt }
 
 statement_safe:
@@ -660,6 +705,7 @@ statement_safe:
 | stmt = selection_statement_safe
 | stmt = iteration_statement(statement_safe)
 | stmt = jump_statement
+| stmt = par_statement
     { stmt }
 
 (* 6.8.1 *)
@@ -755,6 +801,18 @@ jump_statement:
     { RETURN (Some (fst expr)) loc }
 | loc = RETURN SEMICOLON
     { RETURN None loc }
+
+(* TODO[non-standard] cppmem thread notation *)
+par_statement:
+| loc = LBRACES ss = par_statement_list RBRACES
+    { PAR ss loc }
+
+par_statement_list:
+| s = statement_dangerous
+    { [s] }
+| s = statement_dangerous BARES ss = par_statement_list
+    { s :: ss }
+
 
 (* 6.9 *)
 translation_unit_file:

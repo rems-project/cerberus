@@ -132,6 +132,8 @@ type implementation_constant =
   | Sizeof
   | Alignof
   | SHR_signed_negative
+  | Bitwise_complement
+  
   
   (* J.3.6 Floating_point*)
   (* TODO: we don't do floating points *)
@@ -235,6 +237,8 @@ let string_of_implementation_constant = function
       "alignof"
   | SHR_signed_negative ->
       "SHR_signed_negative"
+  | Bitwise_complement ->
+      "Bitwise_complement"
   | Plain_bitfield_sign ->
       "Plain_bitfield_sign"
   | Bitfield_other_types ->

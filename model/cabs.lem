@@ -105,7 +105,7 @@ type qualifier =
   | CONST
   | RESTRICT
   | VOLATILE
-  | ATOMIC
+  | ATOMIC_Q
 
 type specifier =
   | VOID
@@ -120,6 +120,7 @@ type specifier =
   | BOOL
   | COMPLEX
   | NAMED of string
+  | ATOMIC of c_type
   | STRUCT of option string * list field * list attribute
   | UNION of option string * list field * list attribute
   | ENUM of option string * option (list (string * option exp_l)) * list attribute

@@ -21,9 +21,15 @@
   COLON AND MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN LEFT_ASSIGN
   RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN LPAREN RPAREN LBRACK RBRACK 
   LBRACE RBRACE DOT COMMA SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT
-  AUTO REGISTER INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE BOOL
+  AUTO THREAD_LOCAL ATOMIC REGISTER INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE BOOL
   CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE SWITCH WHILE DO 
   FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG OFFSETOF STATIC_ASSERT
+  LBRACES BARES RBRACES
+
+%token<Cabs0.cabsloc> C11_ATOMIC_INIT C11_ATOMIC_STORE C11_ATOMIC_LOAD
+  C11_ATOMIC_EXCHANGE C11_ATOMIC_COMPARE_EXCHANGE_STRONG C11_ATOMIC_COMPARE_EXCHANGE_WEAK
+  C11_ATOMIC_FETCH_KEY
+
 
 %token EOF
 
@@ -90,9 +96,23 @@ primary_expression:
 | LPAREN expression RPAREN
     {}
 
+(* NOTE: this is not present in the actual C11 syntax *)
+atomic_operation:
+| C11_ATOMIC_INIT LPAREN postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_STORE LPAREN postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_LOAD LPAREN postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_EXCHANGE LPAREN postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG LPAREN postfix_expression COMMA postfix_expression COMMA
+  postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK LPAREN postfix_expression COMMA postfix_expression COMMA
+  postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
+    {}
+
 postfix_expression:
 | primary_expression
 | postfix_expression LBRACK expression RBRACK
+(* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
+| atomic_operation
 | postfix_expression LPAREN argument_expression_list? RPAREN
 | BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
     {}
@@ -286,6 +306,7 @@ storage_class_specifier_no_typedef:
 | EXTERN
 | STATIC
 | AUTO
+| THREAD_LOCAL
 | REGISTER
     {}
 
@@ -300,6 +321,7 @@ type_specifier_no_typedef_name:
 | SIGNED
 | UNSIGNED
 | BOOL
+| atomic_type_specifier
 | struct_or_union_specifier
 | enum_specifier
     {}
@@ -325,6 +347,10 @@ struct_declaration:
 (*
 | static_assert_declaration
 *)
+    {}
+
+atomic_type_specifier:
+| ATOMIC LPAREN type_name RPAREN
     {}
 
 specifier_qualifier_list:
@@ -373,6 +399,7 @@ type_qualifier:
 | CONST
 | RESTRICT
 | VOLATILE
+| ATOMIC
     {}
 
 function_specifier:
@@ -497,6 +524,7 @@ statement_dangerous:
 | selection_statement_dangerous
 | iteration_statement(statement_dangerous)
 | jump_statement
+| par_statement
     {}
 
 statement_safe:
@@ -506,6 +534,7 @@ statement_safe:
 | selection_statement_safe
 | iteration_statement(statement_safe)
 | jump_statement
+| par_statement
     {}
 
 labeled_statement(last_statement):
@@ -558,12 +587,23 @@ jump_statement:
 | RETURN expression? SEMICOLON
     {}
 
+(* TODO[non-standard] cppmem thread notation *)
+par_statement:
+| LBRACES par_statement_list RBRACES
+    {}
+
+par_statement_list:
+| statement_dangerous
+| statement_dangerous BARES par_statement_list
+    {}
+
+
 translation_unit_file:
 | translation_unit EOF
     {}
 | error
     { Parser_errors.fatal_error "%s:%d:%d Error:@ parse error"
-        $endpos.Lexing.pos_fname $endpos.Lexing.pos_lnum $endpos.Lexing.pos_cnum }
+        $startpos.Lexing.pos_fname $startpos.Lexing.pos_lnum $startpos.Lexing.pos_bol }
 
 translation_unit:
 | external_declaration

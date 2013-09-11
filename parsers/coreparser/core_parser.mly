@@ -58,7 +58,7 @@ type name =
 
 type expr =
   | Eskip
-  | Econst of Num.num
+  | Econst of Core.constant
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
   | Eimpl of Implementation.implementation_constant
@@ -107,7 +107,7 @@ type declaration =
 let convert e arg_syms fsyms =
   let rec f ((count, syms) as st) = function
     | Eskip                     -> Core.Eskip
-    | Econst n                  -> Core.Econst n
+    | Econst c                  -> Core.Econst c
     | Esym a                    -> Boot.print_debug ("LOOKING FOR> " ^ a) $ Core.Esym (Pmap.find a syms) (* Error handling *)
     | Eimpl i                   -> Core.Eimpl i
     | Eop (binop, e1, e2)       -> Core.Eop (binop, f st e1, f st e2)
@@ -536,7 +536,7 @@ expr:
     { Eskip }
 
 | n = INT_CONST
-    { Econst n }
+    { Econst (Core.Cint n) }
 
 | i = IMPL
     { Eimpl i }

@@ -21,7 +21,7 @@ let rec string_of_dyn_rule = function
 
 let string_of_mem_value = function
   | Core_run.Muninit     -> "uninit"
-  | Core_run.Mint n      -> Num.string_of_num n
+  | Core_run.Mbase c     -> Boot.to_plain_string $ Pp_core.pp_constant c
   | Core_run.Mobj (_, x) -> string_of_int x
   | Core_run.Mnull       -> "NULL"
 

@@ -5,7 +5,7 @@ open Errors
 module Effect = struct
   type error 'a =
     | Success of 'a
-    | Error of cause
+    | Error of Errors.t
   
   type sym_env = Pmap.map sym core_base_type
   type fun_env = Pmap.map sym (list core_base_type * core_type)
@@ -33,12 +33,13 @@ module Effect = struct
   let get a = fun (senv, fenv) ->
       let ret = if Pmap.mem a senv then Success (Pmap.find a senv)
                                    else Error (* CORE_TYPECHECK_GET_FAILURE *)
-                                              (CORE_TYPECHECK ("[get]> " ^ string_of_senv senv ^ " | " ^ Symbol.to_string_pretty a))
+                                              (Location.unknowned,
+                                               CORE_TYPECHECK ("[get]> " ^ string_of_senv senv ^ " | " ^ Symbol.to_string_pretty a))
       in (ret, (senv,fenv))
   
   let get_fun f = fun (senv, fenv) ->
     let ret = if Pmap.mem f fenv then Success (Pmap.find f fenv)
-                                 else Error (CORE_TYPECHECK_UNDECLARED_FUNCTION f)
+                                 else Error (Location.unknowned, CORE_TYPECHECK_UNDECLARED_FUNCTION f)
     in (ret, (senv,fenv))
   
   let put a baseTy = fun (senv,fenv) -> (Success (), (Pmap.add a baseTy senv, fenv))
@@ -47,7 +48,7 @@ module Effect = struct
 
   
   val fail: forall 'a. Errors.cause -> t 'a
-  let fail cause       = fun env -> (Error cause, env)
+  let fail cause       = fun env -> (Error (Location.unknowned, cause), env)
   val guard: bool -> Errors.cause -> t unit
   let guard cond cause = if cond then return () else fail cause
   
@@ -726,7 +727,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
   end
 
 
-let typecheck (f: file 'a) : Exception.t (file 'a) Errors.cause =
+let typecheck (f: file 'a) : Exception.t (file 'a) Errors.t =
   let functions = Ocaml.Pmap.bindings f.funs in
   let init_fenv =
     List.fold_left (fun acc (fname, (ftype, args, _)) ->

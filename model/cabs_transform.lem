@@ -27,7 +27,7 @@ end
 val translate_typeSpecifier: C0.typeSpecifier -> C.specifier
 val translate_storage: C0.storage -> C.storage_class
 val translate_cvspec: C0.cvspec -> C.qualifier
-val translate_spec_elem_list: list C0.spec_elem -> list C.storage_class * list C.attribute * C.qualifiers * C.specifiers
+val translate_spec_elem_list: list C0.spec_elem -> list C.storage_class * C.qualifiers * C.specifiers
 val translate_field_group: C0.field_group -> list C.field
 
 let rec translate_typeSpecifier spec =
@@ -43,13 +43,13 @@ let rec translate_typeSpecifier spec =
     | C0.Tunsigned -> C.UNSIGNED
     | C0.T_Bool    -> C.BOOL
     | C0.Tnamed a  -> C.NAMED a
+    | C0.Tatomic (specs, decl) ->
+        C.ATOMIC (fst $ mk_c_type specs decl)
     (* NOTE: for struct/union, our AST forgets "field groups" *)
-    | C0.Tstruct a_opt fields_opt attrs ->
-        C.STRUCT a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt)
-                       (List.map translate_attribute attrs)
-    | C0.Tunion a_opt fields_opt attrs ->
-        C.UNION a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt)
-                      (List.map translate_attribute attrs)
+    | C0.Tstruct a_opt fields_opt [] ->
+        C.STRUCT a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) []
+    | C0.Tunion a_opt fields_opt [] ->
+        C.UNION a_opt (f_opt_list (List.flatten -| List.map translate_field_group) fields_opt) []
 
 (*
     | C0.Tenum a_opt xs attrs ->
@@ -59,15 +59,6 @@ let rec translate_typeSpecifier spec =
   end
 
 
-and translate_storage s = 
-  match s with
-    | C0.AUTO     -> C.AUTO
-    | C0.STATIC   -> C.STATIC
-    | C0.EXTERN   -> C.EXTERN
-    | C0.REGISTER -> C.REGISTER
-    | C0.TYPEDEF  -> C.TYPEDEF
-  end
-(* TODO: add [THREAD_LOCAL] to the parser *)
 
 
 and translate_cvspec s =
@@ -75,25 +66,32 @@ and translate_cvspec s =
     | C0.CV_CONST    -> C.CONST
     | C0.CV_VOLATILE -> C.VOLATILE
     | C0.CV_RESTRICT -> C.RESTRICT
+    | C0.CV_ATOMIC   -> C.ATOMIC_Q
   end
-(* TODO: add [ATOMIC] to the parser *)
 
 
+(* OK *)
 and translate_spec_elem_list specs =
-  let f (scs, attrs, qs, ss) = function
-    | C0.SpecCV cv      -> (scs, attrs, Set.add (translate_cvspec cv) qs, ss)
-    | C0.SpecAttr attr  -> (scs, (translate_attribute attr) :: attrs, qs, ss)
-    | C0.SpecStorage st -> ((translate_storage st) :: scs, attrs, qs, ss)
-    | C0.SpecInline     -> Boot.outOfHomeomorphism "TODO: not sure what to do with this one"
-    | C0.SpecType spec  -> (scs, attrs, qs, Multiset.add (translate_typeSpecifier spec) ss)
+  (* C0.storage -> C.storage_class *)
+  let translate_storage = function
+    | C0.AUTO         -> C.AUTO
+    | C0.STATIC       -> C.STATIC
+    | C0.EXTERN       -> C.EXTERN
+    | C0.REGISTER     -> C.REGISTER
+    | C0.TYPEDEF      -> C.TYPEDEF
+    | C0.THREAD_LOCAL -> C.THREAD_LOCAL
   end in
-  List.fold_left f ([], [], {}, Multiset.emp) specs
+  let f (scs, qs, ss) = function
+    | C0.SpecCV cv      -> (scs, Set.add (translate_cvspec cv) qs, ss)
+    | C0.SpecStorage st -> (translate_storage st :: scs, qs, ss)
+    | C0.SpecType spec  -> (scs, qs, Multiset.add (translate_typeSpecifier spec) ss)
+    
+    | C0.SpecInline -> Boot.assert_false "TODO[Cabs_transform.translate_spec_elem_list] SpecInline: not sure what to do with this one"
+    | C0.SpecAttr _ -> Boot.assert_false "[Cabs_transform.translate_spec_elem_list] we do not support atrributes"
+  end in
+  List.fold_left f ([], {}, Multiset.emp) specs
 
 
-and translate_attribute attr =
-  match attr with
-    | C0.ATTR x es -> C.ATTR x [] (* (List.map translate_expression es) *)
-  end
 
 
 
@@ -103,16 +101,26 @@ and translate_attribute attr =
 and translate_decl decl =
   match decl with
     | C0.JUSTBASE ->
-        fun (attrs, qs, ss) -> C.BASE qs ss
+        fun (qs, ss) -> C.BASE qs ss
+
 
     | C0.ARRAY decl cvspecs attrs e_opt ->
-        fun (attrs', qs, ss) ->
+        fun (qs, ss) ->
+          
+(*          (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss)) *)
+
+          C.ARRAY {} (C.BASE qs ss) (f_opt translate_expression e_opt)
+
+(*
           C.ARRAY qs (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss))
                       (f_opt translate_expression e_opt)
+*)
 
     | C0.PTR cvspecs attrs decl ->
-        fun (attrs', qs, ss) ->
-          C.POINTER qs (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss))
+        fun (qs, ss) ->
+(*          C.POINTER qs (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss)) *)
+          C.POINTER {} (C.BASE qs ss)
+
 
     (* NOTE: ignoring the VLA flag (not supported for now) *)
     | C0.PROTO decl (params, is_vla) ->
@@ -122,58 +130,33 @@ and translate_decl decl =
           ((n, ty, scs), Location.dummy)
         ) params in
         
-        fun (attrs', qs, ss) ->
-          C.FUNCTION (translate_decl decl ([], {}, ss))
+        fun (qs, ss) ->
+          C.FUNCTION (translate_decl decl ({}, ss))
                       params'
 
-(*
- | C0.PROTO of decl_type * (list parameter * bool)
-
-and parameter =
-  | C0.PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
-
-
-
-  | FUNCTION of c_type * list decl_l
-
-and declaration = string * c_type * list storage_class
-
-and decl_l = declaration * location
-
-
-*)
 
   end
 
 
 
-(*
-PARAM of list spec_elem * option string * decl_type * list attribute * cabsloc
-*)
-
-(*
-val translate_cvspec: C0.cvspec -> C.qualifier
-*)
-
-(* 
-(*The bool is true for variable length parameters. *)
- | PROTO of decl_type * (list parameter * bool)
-*)
-(*
-  | FUNCTION of c_type * list decl_l
-*)
 
 
 
-and mk_c_type specs decl =
-    let (scs, attrs, qs, ss) = translate_spec_elem_list specs in
-    ((translate_decl decl) (attrs, qs, ss), scs)
+(* list C0.spec_elem -> C0.decl_type -> C.c_type * list C.storage_class *)
+and mk_c_type specs decl_t =
+  (* extract the storage_classes, qualifiers and specifiers from a list spec_elem.
+     This apply to the base type of the declaration. *)
+  let (scs, qs, ss) = translate_spec_elem_list specs in
+  (translate_decl decl_t (qs, ss), scs)
+
+
+
 
 
 and translate_field_group fg =
     match fg with
       | C0.Field_group specs nes _ ->
-          let (scs, attrs, qs, ss) = translate_spec_elem_list specs in
+          let (scs, qs, ss) = translate_spec_elem_list specs in
           List.map function
             | (Some (C0.Name n decl attrs l), None) ->
                 C.BasicField n (fst $ mk_c_type specs decl)
@@ -183,21 +166,6 @@ and translate_field_group fg =
                 C.BitField None (fst $ mk_c_type specs C0.JUSTBASE) (translate_expression e)
           end nes
     end
-
-(*
-
-Name of string * decl_type * list attribute * cabsloc
-
-and field_group =
-  | Field_group of list spec_elem * list (option name * option expression) * cabsloc
-
-and field =
-  | BasicField of string * c_type
-  | BitField of option string * c_type * exp_l
-*)
-
-
-
 
 
 
@@ -248,6 +216,7 @@ C has a single definition but C' has a defn_l list
     | C0.DEFAULT s _    -> C.DEFAULT (fs s)
     | C0.LABEL a s _    -> C.LABEL a (fs s)
     | C0.GOTO a _       -> C.GOTO a
+    | C0.PAR ss _       -> C.PAR (List.map fs ss)
     | C0.DEFINITION def -> C.DECLARATION (translate_definition_to_declarations def)
 (*
 TODO: add cppmem's par to the parser
@@ -261,7 +230,7 @@ TODO: add cppmem's par to the parser
 
 
 
-
+(* TODO: no attribute for now *)
 and translate_definition_to_declarations d =
   match d with
     | C0.FUNDEF _ _ _ _ ->
@@ -271,9 +240,10 @@ and translate_definition_to_declarations d =
         [(C.TYPE_DEF (fst $ mk_c_type specs C0.JUSTBASE), Location.dummy)]
     
     | C0.DECDEF (specs, ins) _ ->
-        List.map (fun (C0.Init_name (C0.Name x decl attrs _) ie) ->
-          let (ty, scs) = mk_c_type (specs @ List.map (C0.SpecAttr) attrs) decl in
-          ((C.OTHER_DEF ((x, ty, scs), Location.dummy) (translate_init_expression ie)), Location.dummy)
+        (* create a Cabs definition for each Cabs0 init_name *)
+        List.map (fun (C0.Init_name (C0.Name ident decl_t [] _) ie) ->
+          let (ty, scs) = mk_c_type specs decl_t in
+          ((C.OTHER_DEF ((ident, ty, scs), Location.dummy) (translate_init_expression ie)), Location.dummy)
         ) ins
     | C0.PRAGMA s l ->
         Boot.assert_false "[Cabs_transform.translate_definition_to_declarations] PRAGMA: not supported for now"
@@ -488,15 +458,7 @@ and translate_init_expression ie =
                                           the typechecking)"
            end
   end
-(*
-    | C0.SINGLE_INIT e       -> Some (C.SINGLE_INIT $ translate_expression e)
-    | C0.COMPOUND_INIT is ->
-        match translate_init_expression_aux is with
-          | None -> Boot.assert_false "[Cabs_transform.translate_init_expression], COMPOUND_INIT TODO: only supporting arrays for now (and not even doing length checks as this has to be done in the typechecking)"
-          | Some z -> Some z
-        end
-  end
-*)
+
 
 
 (* val translate_definition: C0.definition -> C.g_defn_l *)

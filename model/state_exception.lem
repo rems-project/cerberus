@@ -11,7 +11,7 @@ let bind m f = fun s ->
 
 
 (* Reinventing the wheel *)
-val fma: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
 val join: forall 'a 's 'msg. t (t 'a 's 'msg) 's 'msg -> t 'a 's 'msg
 let fmap f m = bind m (fun z -> return $ f z)
 let join mm  = bind mm (fun z -> z)

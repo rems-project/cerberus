@@ -154,13 +154,12 @@ let () =
         >|> Exception.fmap Cparser.Driver.parse
         >|> pass_message "1. Parsing completed!"
 
+        >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
+
         >|> Exception.fmap Cabs_transform.transform_file
         >|> pass_message "1.5. Cabs AST transform completed!"
         >|> pass_through_test !print_cabs (run_pp -| Pp_cabs.pp_file)
 
-(*
-        >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
-*)
         >|> Exception.rbind (Cabs_to_ail.desugar "main")
         >|> pass_message "2. Cabs -> Ail completed!"
         >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
@@ -184,7 +183,7 @@ let () =
       
       if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
       else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m)
-                                                      else Exception.fail (Errors.UNSUPPORTED "The file extention is not supported") in
+                                                      else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
     let core_backend m =
       ((m
       >?> !skip_core_tcheck)

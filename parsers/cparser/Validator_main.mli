@@ -1813,106 +1813,37 @@ module Make :
       sigT option -> 'a1) -> hole_future_invariant -> 'a1
     
     val future_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.symbol
-      list,
-      tuple)
-      sigT
+      bool -> hole_future_invariant -> (Aut.Gram.symbol list, tuple) sigT
     
     val word_future_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.GramDefs.token
-      list
+      bool -> hole_future_invariant -> Aut.GramDefs.token list
     
     val future_sem_proof_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.GramDefs.parse_tree_list
+      bool -> hole_future_invariant -> Aut.GramDefs.parse_tree_list
     
     val hole_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.production,
-      tuple)
-      sigT
+      bool -> hole_future_invariant -> (Aut.Gram.production, tuple) sigT
       option
     
     val hole_pseudo_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.production
-      option,
-      tuple)
-      sigT
-      option
+      bool -> hole_future_invariant -> (Aut.Gram.production option, tuple)
+      sigT option
     
-    val symbl_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.Gram.symbol
-      list
+    val symbl_hfi : bool -> hole_future_invariant -> Aut.Gram.symbol list
     
-    val sem_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      tuple
+    val sem_hfi : bool -> hole_future_invariant -> tuple
     
-    val coq_JMeq_rew_r :
-      'a1
-      ->
-      'a2
-      ->
-      'a3
-      ->
-      'a3
+    val coq_JMeq_rew_r : 'a1 -> 'a2 -> 'a3 -> 'a3
     
-    val eq_rew_r_dep :
-      'a1
-      ->
-      'a1
-      ->
-      'a2
-      ->
-      'a2
+    val eq_rew_r_dep : 'a1 -> 'a1 -> 'a2 -> 'a2
     
-    val eq_rew_dep :
-      'a1
-      ->
-      'a2
-      ->
-      'a1
-      ->
-      'a2
+    val eq_rew_dep : 'a1 -> 'a2 -> 'a1 -> 'a2
    end
   
-  val complete_validator :
-    bool
+  val complete_validator : bool
   
-  val safe_validator :
-    bool
+  val safe_validator : bool
   
-  val parse :
-    nat
-    ->
-    Aut.GramDefs.token
-    coq_Stream
-    ->
-    Inter.parse_result
+  val parse : nat -> Aut.GramDefs.token coq_Stream -> Inter.parse_result
  end
 

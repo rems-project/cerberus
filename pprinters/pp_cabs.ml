@@ -157,22 +157,23 @@ let pp_qualifier = function
   | CONST    -> !^ (ansi_format [Cyan; Bold] "const")
   | RESTRICT -> !^ (ansi_format [Cyan; Bold] "restrict")
   | VOLATILE -> !^ (ansi_format [Cyan; Bold] "volatile")
-  | ATOMIC   -> !^ (ansi_format [Cyan; Bold] "atomic") (* TODO *)
+  | ATOMIC_Q -> !^ (ansi_format [Cyan; Bold] "_Atomic")
 
 
 let rec pp_specifier = function
-  | VOID     -> !^ (ansi_format [Green] "void")
-  | CHAR     -> !^ (ansi_format [Green] "char")
-  | SHORT    -> !^ (ansi_format [Green] "short")
-  | INT      -> !^ (ansi_format [Green] "int")
-  | LONG     -> !^ (ansi_format [Green] "long")
-  | FLOAT    -> !^ (ansi_format [Green] "float")
-  | DOUBLE   -> !^ (ansi_format [Green] "double")
-  | SIGNED   -> !^ (ansi_format [Green] "signed")
-  | UNSIGNED -> !^ (ansi_format [Green] "unsigned")
-  | BOOL     -> !^ (ansi_format [Green] "_Bool")
-  | COMPLEX  -> !^ (ansi_format [Green] "_Complex")
-  | NAMED ty -> !^ (ansi_format [Green] ty)
+  | VOID      -> !^ (ansi_format [Green] "void")
+  | CHAR      -> !^ (ansi_format [Green] "char")
+  | SHORT     -> !^ (ansi_format [Green] "short")
+  | INT       -> !^ (ansi_format [Green] "int")
+  | LONG      -> !^ (ansi_format [Green] "long")
+  | FLOAT     -> !^ (ansi_format [Green] "float")
+  | DOUBLE    -> !^ (ansi_format [Green] "double")
+  | SIGNED    -> !^ (ansi_format [Green] "signed")
+  | UNSIGNED  -> !^ (ansi_format [Green] "unsigned")
+  | BOOL      -> !^ (ansi_format [Green] "_Bool")
+  | COMPLEX   -> !^ (ansi_format [Green] "_Complex")
+  | NAMED ty  -> !^ (ansi_format [Green] ty)
+  | ATOMIC ty -> !^ (ansi_format [Green] "_Atomic") ^^ P.parens (pp_type ty)
   (* TODO: attributes *)
   | STRUCT (tag_opt, fs, attrs) ->
       !^ (ansi_format [Cyan; Bold] "struct") ^^
@@ -202,13 +203,31 @@ and pp_field = function
 
 
 and pp_type = function
+  | BASE (_, ss) ->
+      pp_ss ss
+  | ARRAY (_, ty, e_opt) -> 
+      !^ "array " ^^^ (P.optional (pp_exp None) e_opt) ^^^ !^ "of" ^^^ pp_type ty
+  | POINTER (_, ty) ->
+      !^ "pointer to" ^^^ pp_type ty
+  | FUNCTION (ty, ds) ->
+      !^ "function" ^^^ P.parens (comma_list (fun ((_, ty, _), _) -> pp_type ty) ds) ^^^
+      !^ "returning" ^^^ pp_type ty
+
+
+(*
+
   | BASE (qs, ss)     -> pp_qs qs ^^ pp_ss ss
-  | ARRAY (qs, ty, e) -> (* pp_qs qs ^^ pp_type ty ^^^ P.brackets (match e with
+  | ARRAY (qs, ty, e_opt) -> 
+    !^ "array " ^^^ (P.optional (pp_exp None) e_opt) ^^^ !^ "of" ^^^ P.parens (pp_type ty)
+
+
+(* pp_qs qs ^^ pp_type ty ^^^ P.brackets (match e with
                                                                        | Some e -> pp_exp None e
                                                                        | None   -> P.empty) *)
-                         !^ "BOOM"
+(*                         !^ "BOOM" *)
   | POINTER (qs, ty)  -> pp_qs qs ^^^ P.parens (pp_type ty) ^^^ P.star
   | FUNCTION (ty, ds) -> pp_type ty ^^ P.parens (!^ "TODO") (* (P.comma_list f ts) *) (* TODO *)
+*)
 
 
 and pp_exp p (exp, _) =
@@ -303,7 +322,10 @@ and pp_ss ss =
       | PAR ss                              -> let par = P.separate_map (P.bar ^^ P.bar ^^ P.bar) pp_stmt ss in
                                                P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ par) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
   
-  and pp_declaration ((s, ty, scs), _) =
+  and pp_declaration ((str, ty, scs), _) =
+    !^ "declare" ^^^ !^ str ^^^ !^ "as" ^^^ pp_type ty
+
+(*
     List.fold_right ins_space (List.map pp_storage_class scs) P.empty ^^
     (match ty with
       | ARRAY (qs, ty, e) -> pp_qs qs ^^ pp_type ty ^^^ (!^ s) ^^
@@ -315,7 +337,7 @@ and pp_ss ss =
 pp_type ty ^^ !^ (ansi_format [Blue] s) ^^
                                 P.parens (comma_list pp_declaration decls)
       | ty                   -> pp_type ty ^^ !^ (ansi_format [Yellow] s))
-
+*)
     
   
   and pp_init_exp = function

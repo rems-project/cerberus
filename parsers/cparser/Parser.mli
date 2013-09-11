@@ -21,13 +21,22 @@ module Gram :
   | AND_t
   | ANDAND_t
   | AND_ASSIGN_t
+  | ATOMIC_t
   | AUTO_t
   | BANG_t
   | BAR_t
   | BARBAR_t
+  | BARES_t
   | BOOL_t
   | BREAK_t
   | BUILTIN_VA_ARG_t
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t
+  | C11_ATOMIC_EXCHANGE_t
+  | C11_ATOMIC_FETCH_KEY_t
+  | C11_ATOMIC_INIT_t
+  | C11_ATOMIC_LOAD_t
+  | C11_ATOMIC_STORE_t
   | CASE_t
   | CHAR_t
   | COLON_t
@@ -59,6 +68,7 @@ module Gram :
   | INLINE_t
   | INT_t
   | LBRACE_t
+  | LBRACES_t
   | LBRACK_t
   | LEFT_t
   | LEFT_ASSIGN_t
@@ -78,6 +88,7 @@ module Gram :
   | PTR_t
   | QUESTION_t
   | RBRACE_t
+  | RBRACES_t
   | RBRACK_t
   | REGISTER_t
   | RESTRICT_t
@@ -95,6 +106,7 @@ module Gram :
   | STRUCT_t
   | SUB_ASSIGN_t
   | SWITCH_t
+  | THREAD_LOCAL_t
   | TILDE_t
   | TYPEDEF_t
   | TYPEDEF_NAME_t
@@ -115,7 +127,8 @@ module Gram :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
   
   val terminal'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -126,7 +139,8 @@ module Gram :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
   
   type terminal = terminal'
   
@@ -141,6 +155,8 @@ module Gram :
   | Coq_argument_expression_list_nt
   | Coq_assignment_expression_nt
   | Coq_assignment_operator_nt
+  | Coq_atomic_operation_nt
+  | Coq_atomic_type_specifier_nt
   | Coq_block_item_nt
   | Coq_block_item_list_nt
   | Coq_c_initializer_nt
@@ -179,6 +195,8 @@ module Gram :
   | Coq_logical_AND_expression_nt
   | Coq_logical_OR_expression_nt
   | Coq_multiplicative_expression_nt
+  | Coq_par_statement_nt
+  | Coq_par_statement_list_nt
   | Coq_parameter_declaration_nt
   | Coq_parameter_list_nt
   | Coq_parameter_type_list_nt
@@ -215,8 +233,8 @@ module Gram :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    nonterminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> nonterminal' -> 'a1
   
   val nonterminal'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -225,8 +243,8 @@ module Gram :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    nonterminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> nonterminal' -> 'a1
   
   type nonterminal = nonterminal'
   
@@ -248,6 +266,22 @@ module Gram :
   type symbol_semantic_type = __
   
   type production' =
+  | Prod_281
+  | Prod_280
+  | Prod_279
+  | Prod_278
+  | Prod_277
+  | Prod_276
+  | Prod_275
+  | Prod_274
+  | Prod_273
+  | Prod_272
+  | Prod_271
+  | Prod_270
+  | Prod_269
+  | Prod_268
+  | Prod_267
+  | Prod_266
   | Prod_265
   | Prod_264
   | Prod_263
@@ -540,7 +574,9 @@ module Gram :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
-    -> 'a1 -> 'a1 -> production' -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> production' ->
+    'a1
   
   val production'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -568,7 +604,9 @@ module Gram :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
-    -> 'a1 -> 'a1 -> production' -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> production' ->
+    'a1
   
   type production = production'
   
@@ -631,13 +669,22 @@ module Coq__1 :
   | AND_t
   | ANDAND_t
   | AND_ASSIGN_t
+  | ATOMIC_t
   | AUTO_t
   | BANG_t
   | BAR_t
   | BARBAR_t
+  | BARES_t
   | BOOL_t
   | BREAK_t
   | BUILTIN_VA_ARG_t
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t
+  | C11_ATOMIC_EXCHANGE_t
+  | C11_ATOMIC_FETCH_KEY_t
+  | C11_ATOMIC_INIT_t
+  | C11_ATOMIC_LOAD_t
+  | C11_ATOMIC_STORE_t
   | CASE_t
   | CHAR_t
   | COLON_t
@@ -669,6 +716,7 @@ module Coq__1 :
   | INLINE_t
   | INT_t
   | LBRACE_t
+  | LBRACES_t
   | LBRACK_t
   | LEFT_t
   | LEFT_ASSIGN_t
@@ -688,6 +736,7 @@ module Coq__1 :
   | PTR_t
   | QUESTION_t
   | RBRACE_t
+  | RBRACES_t
   | RBRACK_t
   | REGISTER_t
   | RESTRICT_t
@@ -705,6 +754,7 @@ module Coq__1 :
   | STRUCT_t
   | SUB_ASSIGN_t
   | SWITCH_t
+  | THREAD_LOCAL_t
   | TILDE_t
   | TYPEDEF_t
   | TYPEDEF_NAME_t
@@ -725,7 +775,8 @@ module Coq__1 :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
   
   val terminal'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -736,7 +787,8 @@ module Coq__1 :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> terminal' -> 'a1
   
   type terminal = terminal'
   
@@ -751,6 +803,8 @@ module Coq__1 :
   | Coq_argument_expression_list_nt
   | Coq_assignment_expression_nt
   | Coq_assignment_operator_nt
+  | Coq_atomic_operation_nt
+  | Coq_atomic_type_specifier_nt
   | Coq_block_item_nt
   | Coq_block_item_list_nt
   | Coq_c_initializer_nt
@@ -789,6 +843,8 @@ module Coq__1 :
   | Coq_logical_AND_expression_nt
   | Coq_logical_OR_expression_nt
   | Coq_multiplicative_expression_nt
+  | Coq_par_statement_nt
+  | Coq_par_statement_list_nt
   | Coq_parameter_declaration_nt
   | Coq_parameter_list_nt
   | Coq_parameter_type_list_nt
@@ -825,8 +881,8 @@ module Coq__1 :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    nonterminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> nonterminal' -> 'a1
   
   val nonterminal'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -835,8 +891,8 @@ module Coq__1 :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    nonterminal' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> nonterminal' -> 'a1
   
   type nonterminal = nonterminal'
   
@@ -858,6 +914,22 @@ module Coq__1 :
   type symbol_semantic_type = __
   
   type production' =
+  | Prod_281
+  | Prod_280
+  | Prod_279
+  | Prod_278
+  | Prod_277
+  | Prod_276
+  | Prod_275
+  | Prod_274
+  | Prod_273
+  | Prod_272
+  | Prod_271
+  | Prod_270
+  | Prod_269
+  | Prod_268
+  | Prod_267
+  | Prod_266
   | Prod_265
   | Prod_264
   | Prod_263
@@ -1150,7 +1222,9 @@ module Coq__1 :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
-    -> 'a1 -> 'a1 -> production' -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> production' ->
+    'a1
   
   val production'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -1178,7 +1252,9 @@ module Coq__1 :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
-    -> 'a1 -> 'a1 -> production' -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> production' ->
+    'a1
   
   type production = production'
   
@@ -1244,13 +1320,22 @@ module Aut :
     | AND_t
     | ANDAND_t
     | AND_ASSIGN_t
+    | ATOMIC_t
     | AUTO_t
     | BANG_t
     | BAR_t
     | BARBAR_t
+    | BARES_t
     | BOOL_t
     | BREAK_t
     | BUILTIN_VA_ARG_t
+    | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t
+    | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t
+    | C11_ATOMIC_EXCHANGE_t
+    | C11_ATOMIC_FETCH_KEY_t
+    | C11_ATOMIC_INIT_t
+    | C11_ATOMIC_LOAD_t
+    | C11_ATOMIC_STORE_t
     | CASE_t
     | CHAR_t
     | COLON_t
@@ -1282,6 +1367,7 @@ module Aut :
     | INLINE_t
     | INT_t
     | LBRACE_t
+    | LBRACES_t
     | LBRACK_t
     | LEFT_t
     | LEFT_ASSIGN_t
@@ -1301,6 +1387,7 @@ module Aut :
     | PTR_t
     | QUESTION_t
     | RBRACE_t
+    | RBRACES_t
     | RBRACK_t
     | REGISTER_t
     | RESTRICT_t
@@ -1318,6 +1405,7 @@ module Aut :
     | STRUCT_t
     | SUB_ASSIGN_t
     | SWITCH_t
+    | THREAD_LOCAL_t
     | TILDE_t
     | TYPEDEF_t
     | TYPEDEF_NAME_t
@@ -1330,382 +1418,36 @@ module Aut :
     | XOR_ASSIGN_t
     
     val terminal'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      terminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> terminal' -> 'a1
     
     val terminal'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      terminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> terminal' -> 'a1
     
-    type terminal
-      =
-      terminal'
+    type terminal = terminal'
     
-    val terminalNum :
-      terminal
-      coq_Numbered
+    val terminalNum : terminal coq_Numbered
     
-    val coq_TerminalAlph :
-      terminal
-      coq_Alphabet
+    val coq_TerminalAlph : terminal coq_Alphabet
     
     type nonterminal' = Gram.nonterminal' =
     | AND_expression_nt
@@ -1714,6 +1456,8 @@ module Aut :
     | Coq_argument_expression_list_nt
     | Coq_assignment_expression_nt
     | Coq_assignment_operator_nt
+    | Coq_atomic_operation_nt
+    | Coq_atomic_type_specifier_nt
     | Coq_block_item_nt
     | Coq_block_item_list_nt
     | Coq_c_initializer_nt
@@ -1752,6 +1496,8 @@ module Aut :
     | Coq_logical_AND_expression_nt
     | Coq_logical_OR_expression_nt
     | Coq_multiplicative_expression_nt
+    | Coq_par_statement_nt
+    | Coq_par_statement_list_nt
     | Coq_parameter_declaration_nt
     | Coq_parameter_list_nt
     | Coq_parameter_type_list_nt
@@ -1782,354 +1528,62 @@ module Aut :
     | Coq_unary_operator_nt
     
     val nonterminal'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      nonterminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> nonterminal' -> 'a1
     
     val nonterminal'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      nonterminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> nonterminal' -> 'a1
     
-    type nonterminal
-      =
-      nonterminal'
+    type nonterminal = nonterminal'
     
-    val nonterminalNum :
-      nonterminal
-      coq_Numbered
+    val nonterminalNum : nonterminal coq_Numbered
     
-    val coq_NonTerminalAlph :
-      nonterminal
-      coq_Alphabet
+    val coq_NonTerminalAlph : nonterminal coq_Alphabet
     
     type symbol = Gram.symbol =
     | T of terminal
     | NT of nonterminal
     
     val symbol_rect :
-      (terminal
-      ->
-      'a1)
-      ->
-      (nonterminal
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      'a1
+      (terminal -> 'a1) -> (nonterminal -> 'a1) -> symbol -> 'a1
     
     val symbol_rec :
-      (terminal
-      ->
-      'a1)
-      ->
-      (nonterminal
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      'a1
+      (terminal -> 'a1) -> (nonterminal -> 'a1) -> symbol -> 'a1
     
-    val coq_SymbolAlph :
-      symbol
-      coq_Alphabet
+    val coq_SymbolAlph : symbol coq_Alphabet
     
-    type symbol_semantic_type
-      =
-      __
+    type symbol_semantic_type = __
     
     type production' = Gram.production' =
+    | Prod_281
+    | Prod_280
+    | Prod_279
+    | Prod_278
+    | Prod_277
+    | Prod_276
+    | Prod_275
+    | Prod_274
+    | Prod_273
+    | Prod_272
+    | Prod_271
+    | Prod_270
+    | Prod_269
+    | Prod_268
+    | Prod_267
+    | Prod_266
     | Prod_265
     | Prod_264
     | Prod_263
@@ -2397,1302 +1851,120 @@ module Aut :
     | Prod_1
     
     val production'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      production'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> production' -> 'a1
     
     val production'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      production'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> production' -> 'a1
     
-    type production
-      =
-      production'
+    type production = production'
     
-    val productionNum :
-      production
-      coq_Numbered
+    val productionNum : production coq_Numbered
     
-    val coq_ProductionAlph :
-      production
-      coq_Alphabet
+    val coq_ProductionAlph : production coq_Alphabet
     
     val prod_contents :
-      production
-      ->
-      (nonterminal*symbol
-      list,
-      symbol_semantic_type
-      arrows)
+      production -> (nonterminal*symbol list, symbol_semantic_type arrows)
       sigT
     
-    val prod_lhs :
-      production
-      ->
-      nonterminal
+    val prod_lhs : production -> nonterminal
     
-    val prod_rhs :
-      production
-      ->
-      symbol
-      list
+    val prod_rhs : production -> symbol list
     
-    val prod_action :
-      production
-      ->
-      symbol_semantic_type
-      arrows
+    val prod_action : production -> symbol_semantic_type arrows
     
-    val start_symbol :
-      symbol
+    val start_symbol : symbol
     
-    type token
-      =
-      (terminal,
-      symbol_semantic_type)
-      sigT
+    type token = (terminal, symbol_semantic_type) sigT
     
     type parse_tree =
-    | Terminal_pt of terminal
-       * symbol_semantic_type
-    | Non_terminal_pt of production
-       * token
-         list
-       * tuple
-       * parse_tree_list
+    | Terminal_pt of terminal * symbol_semantic_type
+    | Non_terminal_pt of production * token list * tuple * parse_tree_list
     and parse_tree_list =
     | Nil_ptl
-    | Cons_ptl of token
-                  list
-       * symbol
-       * symbol_semantic_type
-       * parse_tree
-       * token
-         list
-       * symbol
-         list
-       * tuple
-       * parse_tree_list
+    | Cons_ptl of token list * symbol * symbol_semantic_type * parse_tree
+       * token list * symbol list * tuple * parse_tree_list
     
     val parse_tree_rect :
-      (terminal
-      ->
-      symbol_semantic_type
-      ->
-      'a1)
-      ->
-      (production
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      'a1
+      (terminal -> symbol_semantic_type -> 'a1) -> (production -> token list
+      -> tuple -> parse_tree_list -> 'a1) -> symbol -> token list ->
+      symbol_semantic_type -> parse_tree -> 'a1
     
     val parse_tree_rec :
-      (terminal
-      ->
-      symbol_semantic_type
-      ->
-      'a1)
-      ->
-      (production
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      'a1
+      (terminal -> symbol_semantic_type -> 'a1) -> (production -> token list
+      -> tuple -> parse_tree_list -> 'a1) -> symbol -> token list ->
+      symbol_semantic_type -> parse_tree -> 'a1
     
     val parse_tree_list_rect :
-      'a1
-      ->
-      (token
-      list
-      ->
-      symbol
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      token
-      list
-      ->
-      symbol
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
-      ->
-      'a1)
-      ->
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
+      'a1 -> (token list -> symbol -> symbol_semantic_type -> parse_tree ->
+      token list -> symbol list -> tuple -> parse_tree_list -> 'a1 -> 'a1) ->
+      symbol list -> token list -> tuple -> parse_tree_list -> 'a1
     
     val parse_tree_list_rec :
-      'a1
-      ->
-      (token
-      list
-      ->
-      symbol
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      token
-      list
-      ->
-      symbol
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
-      ->
-      'a1)
-      ->
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
+      'a1 -> (token list -> symbol -> symbol_semantic_type -> parse_tree ->
+      token list -> symbol list -> tuple -> parse_tree_list -> 'a1 -> 'a1) ->
+      symbol list -> token list -> tuple -> parse_tree_list -> 'a1
     
     val parse_tree_size :
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      nat
+      symbol -> token list -> symbol_semantic_type -> parse_tree -> nat
     
     val parse_tree_list_size :
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      nat
+      symbol list -> token list -> tuple -> parse_tree_list -> nat
    end
   
   module GramDefs : 
@@ -3703,13 +1975,22 @@ module Aut :
     | AND_t
     | ANDAND_t
     | AND_ASSIGN_t
+    | ATOMIC_t
     | AUTO_t
     | BANG_t
     | BAR_t
     | BARBAR_t
+    | BARES_t
     | BOOL_t
     | BREAK_t
     | BUILTIN_VA_ARG_t
+    | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t
+    | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t
+    | C11_ATOMIC_EXCHANGE_t
+    | C11_ATOMIC_FETCH_KEY_t
+    | C11_ATOMIC_INIT_t
+    | C11_ATOMIC_LOAD_t
+    | C11_ATOMIC_STORE_t
     | CASE_t
     | CHAR_t
     | COLON_t
@@ -3741,6 +2022,7 @@ module Aut :
     | INLINE_t
     | INT_t
     | LBRACE_t
+    | LBRACES_t
     | LBRACK_t
     | LEFT_t
     | LEFT_ASSIGN_t
@@ -3760,6 +2042,7 @@ module Aut :
     | PTR_t
     | QUESTION_t
     | RBRACE_t
+    | RBRACES_t
     | RBRACK_t
     | REGISTER_t
     | RESTRICT_t
@@ -3777,6 +2060,7 @@ module Aut :
     | STRUCT_t
     | SUB_ASSIGN_t
     | SWITCH_t
+    | THREAD_LOCAL_t
     | TILDE_t
     | TYPEDEF_t
     | TYPEDEF_NAME_t
@@ -3789,382 +2073,36 @@ module Aut :
     | XOR_ASSIGN_t
     
     val terminal'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      terminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> terminal' -> 'a1
     
     val terminal'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      terminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> terminal' -> 'a1
     
-    type terminal
-      =
-      terminal'
+    type terminal = terminal'
     
-    val terminalNum :
-      terminal
-      coq_Numbered
+    val terminalNum : terminal coq_Numbered
     
-    val coq_TerminalAlph :
-      terminal
-      coq_Alphabet
+    val coq_TerminalAlph : terminal coq_Alphabet
     
     type nonterminal' = Coq__1.nonterminal' =
     | AND_expression_nt
@@ -4173,6 +2111,8 @@ module Aut :
     | Coq_argument_expression_list_nt
     | Coq_assignment_expression_nt
     | Coq_assignment_operator_nt
+    | Coq_atomic_operation_nt
+    | Coq_atomic_type_specifier_nt
     | Coq_block_item_nt
     | Coq_block_item_list_nt
     | Coq_c_initializer_nt
@@ -4211,6 +2151,8 @@ module Aut :
     | Coq_logical_AND_expression_nt
     | Coq_logical_OR_expression_nt
     | Coq_multiplicative_expression_nt
+    | Coq_par_statement_nt
+    | Coq_par_statement_list_nt
     | Coq_parameter_declaration_nt
     | Coq_parameter_list_nt
     | Coq_parameter_type_list_nt
@@ -4241,354 +2183,62 @@ module Aut :
     | Coq_unary_operator_nt
     
     val nonterminal'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      nonterminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> nonterminal' -> 'a1
     
     val nonterminal'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      nonterminal'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> nonterminal' -> 'a1
     
-    type nonterminal
-      =
-      nonterminal'
+    type nonterminal = nonterminal'
     
-    val nonterminalNum :
-      nonterminal
-      coq_Numbered
+    val nonterminalNum : nonterminal coq_Numbered
     
-    val coq_NonTerminalAlph :
-      nonterminal
-      coq_Alphabet
+    val coq_NonTerminalAlph : nonterminal coq_Alphabet
     
     type symbol = Coq__1.symbol =
     | T of terminal
     | NT of nonterminal
     
     val symbol_rect :
-      (terminal
-      ->
-      'a1)
-      ->
-      (nonterminal
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      'a1
+      (terminal -> 'a1) -> (nonterminal -> 'a1) -> symbol -> 'a1
     
     val symbol_rec :
-      (terminal
-      ->
-      'a1)
-      ->
-      (nonterminal
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      'a1
+      (terminal -> 'a1) -> (nonterminal -> 'a1) -> symbol -> 'a1
     
-    val coq_SymbolAlph :
-      symbol
-      coq_Alphabet
+    val coq_SymbolAlph : symbol coq_Alphabet
     
-    type symbol_semantic_type
-      =
-      __
+    type symbol_semantic_type = __
     
     type production' = Coq__1.production' =
+    | Prod_281
+    | Prod_280
+    | Prod_279
+    | Prod_278
+    | Prod_277
+    | Prod_276
+    | Prod_275
+    | Prod_274
+    | Prod_273
+    | Prod_272
+    | Prod_271
+    | Prod_270
+    | Prod_269
+    | Prod_268
+    | Prod_267
+    | Prod_266
     | Prod_265
     | Prod_264
     | Prod_263
@@ -4856,1316 +2506,195 @@ module Aut :
     | Prod_1
     
     val production'_rect :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      production'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> production' -> 'a1
     
     val production'_rec :
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      'a1
-      ->
-      production'
-      ->
-      'a1
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+      'a1 -> production' -> 'a1
     
-    type production
-      =
-      production'
+    type production = production'
     
-    val productionNum :
-      production
-      coq_Numbered
+    val productionNum : production coq_Numbered
     
-    val coq_ProductionAlph :
-      production
-      coq_Alphabet
+    val coq_ProductionAlph : production coq_Alphabet
     
     val prod_contents :
-      production
-      ->
-      (nonterminal*symbol
-      list,
-      symbol_semantic_type
-      arrows)
+      production -> (nonterminal*symbol list, symbol_semantic_type arrows)
       sigT
     
-    val prod_lhs :
-      production
-      ->
-      nonterminal
+    val prod_lhs : production -> nonterminal
     
-    val prod_rhs :
-      production
-      ->
-      symbol
-      list
+    val prod_rhs : production -> symbol list
     
-    val prod_action :
-      production
-      ->
-      symbol_semantic_type
-      arrows
+    val prod_action : production -> symbol_semantic_type arrows
     
-    val start_symbol :
-      symbol
+    val start_symbol : symbol
     
-    type token
-      =
-      (terminal,
-      symbol_semantic_type)
-      sigT
+    type token = (terminal, symbol_semantic_type) sigT
     
     type parse_tree = Coq__1.parse_tree =
-    | Terminal_pt of terminal
-       * symbol_semantic_type
-    | Non_terminal_pt of production
-       * token
-         list
-       * tuple
-       * parse_tree_list
+    | Terminal_pt of terminal * symbol_semantic_type
+    | Non_terminal_pt of production * token list * tuple * parse_tree_list
     and parse_tree_list = Coq__1.parse_tree_list =
     | Nil_ptl
-    | Cons_ptl of token
-                  list
-       * symbol
-       * symbol_semantic_type
-       * parse_tree
-       * token
-         list
-       * symbol
-         list
-       * tuple
-       * parse_tree_list
+    | Cons_ptl of token list * symbol * symbol_semantic_type * parse_tree
+       * token list * symbol list * tuple * parse_tree_list
     
     val parse_tree_rect :
-      (terminal
-      ->
-      symbol_semantic_type
-      ->
-      'a1)
-      ->
-      (production
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      'a1
+      (terminal -> symbol_semantic_type -> 'a1) -> (production -> token list
+      -> tuple -> parse_tree_list -> 'a1) -> symbol -> token list ->
+      symbol_semantic_type -> parse_tree -> 'a1
     
     val parse_tree_rec :
-      (terminal
-      ->
-      symbol_semantic_type
-      ->
-      'a1)
-      ->
-      (production
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1)
-      ->
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      'a1
+      (terminal -> symbol_semantic_type -> 'a1) -> (production -> token list
+      -> tuple -> parse_tree_list -> 'a1) -> symbol -> token list ->
+      symbol_semantic_type -> parse_tree -> 'a1
     
     val parse_tree_list_rect :
-      'a1
-      ->
-      (token
-      list
-      ->
-      symbol
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      token
-      list
-      ->
-      symbol
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
-      ->
-      'a1)
-      ->
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
+      'a1 -> (token list -> symbol -> symbol_semantic_type -> parse_tree ->
+      token list -> symbol list -> tuple -> parse_tree_list -> 'a1 -> 'a1) ->
+      symbol list -> token list -> tuple -> parse_tree_list -> 'a1
     
     val parse_tree_list_rec :
-      'a1
-      ->
-      (token
-      list
-      ->
-      symbol
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      token
-      list
-      ->
-      symbol
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
-      ->
-      'a1)
-      ->
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      'a1
+      'a1 -> (token list -> symbol -> symbol_semantic_type -> parse_tree ->
+      token list -> symbol list -> tuple -> parse_tree_list -> 'a1 -> 'a1) ->
+      symbol list -> token list -> tuple -> parse_tree_list -> 'a1
     
     val parse_tree_size :
-      symbol
-      ->
-      token
-      list
-      ->
-      symbol_semantic_type
-      ->
-      parse_tree
-      ->
-      nat
+      symbol -> token list -> symbol_semantic_type -> parse_tree -> nat
     
     val parse_tree_list_size :
-      symbol
-      list
-      ->
-      token
-      list
-      ->
-      tuple
-      ->
-      parse_tree_list
-      ->
-      nat
+      symbol list -> token list -> tuple -> parse_tree_list -> nat
    end
   
-  val nullable_nterm :
-    Coq__1.nonterminal
-    ->
-    bool
+  val nullable_nterm : Coq__1.nonterminal -> bool
   
-  val first_nterm :
-    Coq__1.nonterminal
-    ->
-    Coq__1.terminal
-    list
+  val first_nterm : Coq__1.nonterminal -> Coq__1.terminal list
   
   type noninitstate' =
+  | Nis_582
+  | Nis_581
+  | Nis_580
+  | Nis_579
+  | Nis_578
+  | Nis_577
+  | Nis_576
+  | Nis_575
+  | Nis_574
+  | Nis_573
+  | Nis_572
+  | Nis_571
+  | Nis_570
+  | Nis_569
+  | Nis_568
+  | Nis_567
+  | Nis_566
+  | Nis_565
+  | Nis_564
+  | Nis_563
+  | Nis_562
+  | Nis_561
+  | Nis_560
+  | Nis_559
+  | Nis_558
+  | Nis_557
+  | Nis_556
+  | Nis_555
+  | Nis_554
+  | Nis_553
+  | Nis_552
+  | Nis_551
+  | Nis_550
+  | Nis_549
+  | Nis_548
+  | Nis_547
+  | Nis_546
+  | Nis_545
+  | Nis_544
+  | Nis_543
+  | Nis_542
+  | Nis_541
+  | Nis_540
+  | Nis_539
+  | Nis_538
+  | Nis_537
+  | Nis_536
+  | Nis_535
+  | Nis_534
+  | Nis_533
+  | Nis_532
+  | Nis_531
+  | Nis_530
+  | Nis_529
+  | Nis_528
+  | Nis_527
+  | Nis_526
+  | Nis_525
+  | Nis_524
+  | Nis_523
+  | Nis_522
+  | Nis_521
+  | Nis_520
+  | Nis_519
+  | Nis_518
+  | Nis_517
+  | Nis_516
+  | Nis_515
   | Nis_514
   | Nis_513
   | Nis_512
@@ -6730,8 +3259,14 @@ module Aut :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    noninitstate' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> noninitstate' -> 'a1
   
   val noninitstate'_rec :
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
@@ -6782,8 +3317,14 @@ module Aut :
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
     'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
     -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
-    noninitstate' -> 'a1
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+    'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1
+    -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> noninitstate' -> 'a1
   
   type noninitstate = noninitstate'
   
@@ -7589,209 +4130,41 @@ module Parser :
           | More of key * 'elt * 'elt tree * 'elt enumeration
           
           val enumeration_rect :
-            'a2
-            ->
-            (key
-            ->
-            'a1
-            ->
-            'a1
-            tree
-            ->
-            'a1
-            enumeration
-            ->
-            'a2
-            ->
-            'a2)
-            ->
-            'a1
-            enumeration
-            ->
-            'a2
+            'a2 -> (key -> 'a1 -> 'a1 tree -> 'a1 enumeration -> 'a2 -> 'a2)
+            -> 'a1 enumeration -> 'a2
           
           val enumeration_rec :
-            'a2
-            ->
-            (key
-            ->
-            'a1
-            ->
-            'a1
-            tree
-            ->
-            'a1
-            enumeration
-            ->
-            'a2
-            ->
-            'a2)
-            ->
-            'a1
-            enumeration
-            ->
-            'a2
+            'a2 -> (key -> 'a1 -> 'a1 tree -> 'a1 enumeration -> 'a2 -> 'a2)
+            -> 'a1 enumeration -> 'a2
           
-          val cons :
-            'a1
-            tree
-            ->
-            'a1
-            enumeration
-            ->
-            'a1
-            enumeration
+          val cons : 'a1 tree -> 'a1 enumeration -> 'a1 enumeration
           
           val equal_more :
-            ('a1
-            ->
-            'a1
-            ->
-            bool)
-            ->
-            StatePseudoprodPosOrderedType.Alt.t
-            ->
-            'a1
-            ->
-            ('a1
-            enumeration
-            ->
-            bool)
-            ->
-            'a1
-            enumeration
-            ->
-            bool
+            ('a1 -> 'a1 -> bool) -> StatePseudoprodPosOrderedType.Alt.t ->
+            'a1 -> ('a1 enumeration -> bool) -> 'a1 enumeration -> bool
           
           val equal_cont :
-            ('a1
-            ->
-            'a1
-            ->
-            bool)
-            ->
-            'a1
-            tree
-            ->
-            ('a1
-            enumeration
-            ->
-            bool)
-            ->
-            'a1
-            enumeration
-            ->
-            bool
+            ('a1 -> 'a1 -> bool) -> 'a1 tree -> ('a1 enumeration -> bool) ->
+            'a1 enumeration -> bool
           
-          val equal_end :
-            'a1
-            enumeration
-            ->
-            bool
+          val equal_end : 'a1 enumeration -> bool
           
-          val equal :
-            ('a1
-            ->
-            'a1
-            ->
-            bool)
-            ->
-            'a1
-            tree
-            ->
-            'a1
-            tree
-            ->
-            bool
+          val equal : ('a1 -> 'a1 -> bool) -> 'a1 tree -> 'a1 tree -> bool
           
-          val map :
-            ('a1
-            ->
-            'a2)
-            ->
-            'a1
-            tree
-            ->
-            'a2
-            tree
+          val map : ('a1 -> 'a2) -> 'a1 tree -> 'a2 tree
           
-          val mapi :
-            (key
-            ->
-            'a1
-            ->
-            'a2)
-            ->
-            'a1
-            tree
-            ->
-            'a2
-            tree
+          val mapi : (key -> 'a1 -> 'a2) -> 'a1 tree -> 'a2 tree
           
-          val map_option :
-            (key
-            ->
-            'a1
-            ->
-            'a2
-            option)
-            ->
-            'a1
-            tree
-            ->
-            'a2
-            tree
+          val map_option : (key -> 'a1 -> 'a2 option) -> 'a1 tree -> 'a2 tree
           
           val map2_opt :
-            (key
-            ->
-            'a1
-            ->
-            'a2
-            option
-            ->
-            'a3
-            option)
-            ->
-            ('a1
-            tree
-            ->
-            'a3
-            tree)
-            ->
-            ('a2
-            tree
-            ->
-            'a3
-            tree)
-            ->
-            'a1
-            tree
-            ->
-            'a2
-            tree
-            ->
-            'a3
+            (key -> 'a1 -> 'a2 option -> 'a3 option) -> ('a1 tree -> 'a3
+            tree) -> ('a2 tree -> 'a3 tree) -> 'a1 tree -> 'a2 tree -> 'a3
             tree
           
           val map2 :
-            ('a1
-            option
-            ->
-            'a2
-            option
-            ->
-            'a3
-            option)
-            ->
-            'a1
-            tree
-            ->
-            'a2
-            tree
-            ->
-            'a3
-            tree
+            ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 tree -> 'a2 tree
+            -> 'a3 tree
           
           module Proofs : 
            sig 
@@ -7799,9 +4172,7 @@ module Parser :
              sig 
               module OrderElts : 
                sig 
-                type t
-                  =
-                  StatePseudoprodPosOrderedType.Alt.t
+                type t = StatePseudoprodPosOrderedType.Alt.t
                end
               
               module OrderTac : 
@@ -7810,25 +4181,16 @@ module Parser :
                end
               
               val eq_dec :
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                bool
+                StatePseudoprodPosOrderedType.Alt.t ->
+                StatePseudoprodPosOrderedType.Alt.t -> bool
               
               val lt_dec :
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                bool
+                StatePseudoprodPosOrderedType.Alt.t ->
+                StatePseudoprodPosOrderedType.Alt.t -> bool
               
               val eqb :
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                bool
+                StatePseudoprodPosOrderedType.Alt.t ->
+                StatePseudoprodPosOrderedType.Alt.t -> bool
              end
             
             module PX : 
@@ -7837,9 +4199,7 @@ module Parser :
                sig 
                 module OrderElts : 
                  sig 
-                  type t
-                    =
-                    StatePseudoprodPosOrderedType.Alt.t
+                  type t = StatePseudoprodPosOrderedType.Alt.t
                  end
                 
                 module OrderTac : 
@@ -7848,25 +4208,16 @@ module Parser :
                  end
                 
                 val eq_dec :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                 
                 val lt_dec :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                 
                 val eqb :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                end
              end
             
@@ -7876,9 +4227,7 @@ module Parser :
                sig 
                 module OrderElts : 
                  sig 
-                  type t
-                    =
-                    StatePseudoprodPosOrderedType.Alt.t
+                  type t = StatePseudoprodPosOrderedType.Alt.t
                  end
                 
                 module OrderTac : 
@@ -7887,25 +4236,16 @@ module Parser :
                  end
                 
                 val eq_dec :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                 
                 val lt_dec :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                 
                 val eqb :
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  StatePseudoprodPosOrderedType.Alt.t
-                  ->
-                  bool
+                  StatePseudoprodPosOrderedType.Alt.t ->
+                  StatePseudoprodPosOrderedType.Alt.t -> bool
                end
               
               module PX : 
@@ -7914,9 +4254,7 @@ module Parser :
                  sig 
                   module OrderElts : 
                    sig 
-                    type t
-                      =
-                      StatePseudoprodPosOrderedType.Alt.t
+                    type t = StatePseudoprodPosOrderedType.Alt.t
                    end
                   
                   module OrderTac : 
@@ -7925,6562 +4263,971 @@ module Parser :
                    end
                   
                   val eq_dec :
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    bool
+                    StatePseudoprodPosOrderedType.Alt.t ->
+                    StatePseudoprodPosOrderedType.Alt.t -> bool
                   
                   val lt_dec :
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    bool
+                    StatePseudoprodPosOrderedType.Alt.t ->
+                    StatePseudoprodPosOrderedType.Alt.t -> bool
                   
                   val eqb :
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    StatePseudoprodPosOrderedType.Alt.t
-                    ->
-                    bool
+                    StatePseudoprodPosOrderedType.Alt.t ->
+                    StatePseudoprodPosOrderedType.Alt.t -> bool
                  end
                end
               
-              type key
-                =
-                StatePseudoprodPosOrderedType.Alt.t
+              type key = StatePseudoprodPosOrderedType.Alt.t
               
-              type 'elt t
-                =
-                (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                list
+              type 'elt t = (StatePseudoprodPosOrderedType.Alt.t*'elt) list
               
-              val empty :
-                'a1
-                t
+              val empty : 'a1 t
               
-              val is_empty :
-                'a1
-                t
-                ->
-                bool
+              val is_empty : 'a1 t -> bool
               
-              val mem :
-                key
-                ->
-                'a1
-                t
-                ->
-                bool
+              val mem : key -> 'a1 t -> bool
               
               type 'elt coq_R_mem =
-              | R_mem_0 of 'elt
-                           t
-              | R_mem_1 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_mem_2 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_mem_3 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * bool
-                 * 'elt
-                   coq_R_mem
+              | R_mem_0 of 'elt t
+              | R_mem_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_mem_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_mem_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * bool * 'elt coq_R_mem
               
               val coq_R_mem_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                bool
-                ->
-                'a1
-                coq_R_mem
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
-                coq_R_mem
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool
+                -> 'a1 coq_R_mem -> 'a2
               
               val coq_R_mem_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                bool
-                ->
-                'a1
-                coq_R_mem
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
-                coq_R_mem
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 t -> bool
+                -> 'a1 coq_R_mem -> 'a2
               
               val mem_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val mem_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
-              val coq_R_mem_correct :
-                key
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
-                coq_R_mem
+              val coq_R_mem_correct : key -> 'a1 t -> bool -> 'a1 coq_R_mem
               
-              val find :
-                key
-                ->
-                'a1
-                t
-                ->
-                'a1
-                option
+              val find : key -> 'a1 t -> 'a1 option
               
               type 'elt coq_R_find =
-              | R_find_0 of 'elt
-                            t
-              | R_find_1 of 'elt
-                            t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_find_2 of 'elt
-                            t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_find_3 of 'elt
-                            t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * 'elt
-                   option
-                 * 'elt
-                   coq_R_find
+              | R_find_0 of 'elt t
+              | R_find_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_find_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_find_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt option * 'elt coq_R_find
               
               val coq_R_find_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                option
-                ->
-                'a1
-                coq_R_find
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                option
-                ->
-                'a1
-                coq_R_find
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t ->
+                'a1 option -> 'a1 coq_R_find -> 'a2
               
               val coq_R_find_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                option
-                ->
-                'a1
-                coq_R_find
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                option
-                ->
-                'a1
-                coq_R_find
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1 t ->
+                'a1 option -> 'a1 coq_R_find -> 'a2
               
               val find_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val find_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val coq_R_find_correct :
-                key
-                ->
-                'a1
-                t
-                ->
-                'a1
-                option
-                ->
-                'a1
-                coq_R_find
+                key -> 'a1 t -> 'a1 option -> 'a1 coq_R_find
               
-              val add :
-                key
-                ->
-                'a1
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
+              val add : key -> 'a1 -> 'a1 t -> 'a1 t
               
               type 'elt coq_R_add =
-              | R_add_0 of 'elt
-                           t
-              | R_add_1 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_add_2 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_add_3 of 'elt
-                           t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * 'elt
-                   t
-                 * 'elt
-                   coq_R_add
+              | R_add_0 of 'elt t
+              | R_add_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_add_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_add_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt t * 'elt coq_R_add
               
               val coq_R_add_rect :
-                key
-                ->
-                'a1
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_add
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_add
-                ->
-                'a2
+                key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t
+                -> 'a1 coq_R_add -> 'a2
               
               val coq_R_add_rec :
-                key
-                ->
-                'a1
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_add
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_add
-                ->
-                'a2
+                key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 t -> 'a1 coq_R_add -> 'a2 -> 'a2) -> 'a1 t -> 'a1 t
+                -> 'a1 coq_R_add -> 'a2
               
               val add_rect :
-                key
-                ->
-                'a1
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val add_rec :
-                key
-                ->
-                'a1
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> 'a1 -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val coq_R_add_correct :
-                key
-                ->
-                'a1
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_add
+                key -> 'a1 -> 'a1 t -> 'a1 t -> 'a1 coq_R_add
               
-              val remove :
-                key
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
+              val remove : key -> 'a1 t -> 'a1 t
               
               type 'elt coq_R_remove =
-              | R_remove_0 of 'elt
-                              t
-              | R_remove_1 of 'elt
-                              t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_remove_2 of 'elt
-                              t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-              | R_remove_3 of 'elt
-                              t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * 'elt
-                   t
-                 * 'elt
-                   coq_R_remove
+              | R_remove_0 of 'elt t
+              | R_remove_1 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_remove_2 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+              | R_remove_3 of 'elt t * StatePseudoprodPosOrderedType.Alt.t
+                 * 'elt * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * 'elt t * 'elt coq_R_remove
               
               val coq_R_remove_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_remove
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_remove
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1 t ->
+                'a1 t -> 'a1 coq_R_remove -> 'a2
               
               val coq_R_remove_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_remove
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_remove
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a1 t -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1 t ->
+                'a1 t -> 'a1 coq_R_remove -> 'a2
               
               val remove_rect :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val remove_rec :
-                key
-                ->
-                ('a1
-                t
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
+                key -> ('a1 t -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2) -> ('a1 t -> StatePseudoprodPosOrderedType.Alt.t
+                -> 'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list ->
+                __ -> __ -> __ -> 'a2) -> ('a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> 'a1 t -> 'a2
               
               val coq_R_remove_correct :
-                key
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                coq_R_remove
+                key -> 'a1 t -> 'a1 t -> 'a1 coq_R_remove
               
-              val elements :
-                'a1
-                t
-                ->
-                'a1
-                t
+              val elements : 'a1 t -> 'a1 t
               
-              val fold :
-                (key
-                ->
-                'a1
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                ->
-                'a2
+              val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2
               
-              type ('elt,
-                    'a) coq_R_fold =
-              | R_fold_0 of (key
-                            ->
-                            'elt
-                            ->
-                            'a
-                            ->
-                            'a)
-                 * 'elt
-                   t
-                 * 'a
-              | R_fold_1 of (key
-                            ->
-                            'elt
-                            ->
-                            'a
-                            ->
-                            'a)
-                 * 'elt
-                   t
-                 * 'a
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * 'a
-                 * ('elt,
-                   'a)
-                   coq_R_fold
+              type ('elt, 'a) coq_R_fold =
+              | R_fold_0 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
+              | R_fold_1 of (key -> 'elt -> 'a -> 'a) * 'elt t * 'a
+                 * StatePseudoprodPosOrderedType.Alt.t * 'elt
+                 * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * 
+                 'a * ('elt, 'a) coq_R_fold
               
               val coq_R_fold_rect :
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                ('a1,
-                __)
-                coq_R_fold
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                (key
-                ->
-                'a1
-                ->
-                'a3
-                ->
-                'a3)
-                ->
-                'a1
-                t
-                ->
-                'a3
-                ->
-                'a3
-                ->
-                ('a1,
-                'a3)
-                coq_R_fold
-                ->
-                'a2
+                (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2)
+                -> (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 ->
+                'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold -> 'a2
               
               val coq_R_fold_rec :
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                ('a1,
-                __)
-                coq_R_fold
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                (key
-                ->
-                'a1
-                ->
-                'a3
-                ->
-                'a3)
-                ->
-                'a1
-                t
-                ->
-                'a3
-                ->
-                'a3
-                ->
-                ('a1,
-                'a3)
-                coq_R_fold
-                ->
-                'a2
+                (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2)
+                -> (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                ('a1, __) coq_R_fold -> 'a2 -> 'a2) -> (key -> 'a1 -> 'a3 ->
+                'a3) -> 'a1 t -> 'a3 -> 'a3 -> ('a1, 'a3) coq_R_fold -> 'a2
               
               val fold_rect :
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                (key
-                ->
-                'a1
-                ->
-                'a3
-                ->
-                'a3)
-                ->
-                'a1
-                t
-                ->
-                'a3
-                ->
-                'a2
+                (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2)
+                -> (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> 'a2
+                -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a2
               
               val fold_rec :
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                (__
-                ->
-                (key
-                ->
-                'a1
-                ->
-                __
-                ->
-                __)
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                (key
-                ->
-                'a1
-                ->
-                'a3
-                ->
-                'a3)
-                ->
-                'a1
-                t
-                ->
-                'a3
-                ->
-                'a2
+                (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ -> __ -> 'a2)
+                -> (__ -> (key -> 'a1 -> __ -> __) -> 'a1 t -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> 'a2
+                -> 'a2) -> (key -> 'a1 -> 'a3 -> 'a3) -> 'a1 t -> 'a3 -> 'a2
               
               val coq_R_fold_correct :
-                (key
-                ->
-                'a1
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                ->
-                'a2
-                ->
-                ('a1,
-                'a2)
-                coq_R_fold
+                (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 -> ('a1,
+                'a2) coq_R_fold
               
-              val equal :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                bool
+              val equal : ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool
               
               type 'elt coq_R_equal =
-              | R_equal_0 of 'elt
-                             t
-                 * 'elt
-                   t
-              | R_equal_1 of 'elt
-                             t
-                 * 'elt
-                   t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * bool
-                 * 'elt
-                   coq_R_equal
-              | R_equal_2 of 'elt
-                             t
-                 * 'elt
-                   t
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
-                 * StatePseudoprodPosOrderedType.Alt.t
-                 * 'elt
-                 * (StatePseudoprodPosOrderedType.Alt.t*'elt)
-                   list
+              | R_equal_0 of 'elt t * 'elt t
+              | R_equal_1 of 'elt t * 'elt t
+                 * StatePseudoprodPosOrderedType.Alt.t * 'elt
+                 * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * StatePseudoprodPosOrderedType.Alt.t * 'elt
+                 * (StatePseudoprodPosOrderedType.Alt.t*'elt) list * 
+                 bool * 'elt coq_R_equal
+              | R_equal_2 of 'elt t * 'elt t
+                 * StatePseudoprodPosOrderedType.Alt.t * 'elt
+                 * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
+                 * StatePseudoprodPosOrderedType.Alt.t * 'elt
+                 * (StatePseudoprodPosOrderedType.Alt.t*'elt) list
                  * StatePseudoprodPosOrderedType.Alt.t
                    OrderedType.coq_Compare
-              | R_equal_3 of 'elt
-                             t
-                 * 'elt
-                   t
-                 * 'elt
-                   t
-                 * 'elt
-                   t
+              | R_equal_3 of 'elt t * 'elt t * 'elt t * 'elt t
               
               val coq_R_equal_rect :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                bool
-                ->
-                'a1
-                coq_R_equal
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                OrderedType.coq_Compare
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
-                coq_R_equal
-                ->
-                'a2
+                ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2)
+                -> ('a1 t -> 'a1 t -> StatePseudoprodPosOrderedType.Alt.t ->
+                'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __
+                -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> bool -> 'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1
+                t -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t OrderedType.coq_Compare
+                -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1
+                t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
+                coq_R_equal -> 'a2
               
               val coq_R_equal_rec :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                bool
-                ->
-                'a1
-                coq_R_equal
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                OrderedType.coq_Compare
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
-                coq_R_equal
-                ->
-                'a2
+                ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2)
+                -> ('a1 t -> 'a1 t -> StatePseudoprodPosOrderedType.Alt.t ->
+                'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __
+                -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> bool -> 'a1 coq_R_equal -> 'a2 -> 'a2) -> ('a1 t -> 'a1
+                t -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t OrderedType.coq_Compare
+                -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1
+                t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> bool -> 'a1
+                coq_R_equal -> 'a2
               
               val equal_rect :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                OrderedType.coq_Compare
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a2
+                ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2)
+                -> ('a1 t -> 'a1 t -> StatePseudoprodPosOrderedType.Alt.t ->
+                'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __
+                -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t OrderedType.coq_Compare
+                -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1
+                t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
               
               val equal_rec :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                __
-                ->
-                __
-                ->
-                'a2
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                ->
-                'a1
-                ->
-                (StatePseudoprodPosOrderedType.Alt.t*'a1)
-                list
-                ->
-                __
-                ->
-                StatePseudoprodPosOrderedType.Alt.t
-                OrderedType.coq_Compare
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                ('a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                'a1
-                t
-                ->
-                __
-                ->
-                __
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                'a2
+                ('a1 -> 'a1 -> bool) -> ('a1 t -> 'a1 t -> __ -> __ -> 'a2)
+                -> ('a1 t -> 'a1 t -> StatePseudoprodPosOrderedType.Alt.t ->
+                'a1 -> (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __
+                -> StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ -> __ ->
+                __ -> 'a2 -> 'a2) -> ('a1 t -> 'a1 t ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t -> 'a1 ->
+                (StatePseudoprodPosOrderedType.Alt.t*'a1) list -> __ ->
+                StatePseudoprodPosOrderedType.Alt.t OrderedType.coq_Compare
+                -> __ -> __ -> 'a2) -> ('a1 t -> 'a1 t -> 'a1 t -> __ -> 'a1
+                t -> __ -> __ -> 'a2) -> 'a1 t -> 'a1 t -> 'a2
               
               val coq_R_equal_correct :
-                ('a1
-                ->
-                'a1
-                ->
-                bool)
-                ->
-                'a1
-                t
-                ->
-                'a1
-                t
-                ->
-                bool
-                ->
-                'a1
+                ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool -> 'a1
                 coq_R_equal
               
-              val map :
-                ('a1
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                t
+              val map : ('a1 -> 'a2) -> 'a1 t -> 'a2 t
               
-              val mapi :
-                (key
-                ->
-                'a1
-                ->
-                'a2)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                t
+              val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
               
               val option_cons :
-                key
-                ->
-                'a1
-                option
-                ->
-                (key*'a1)
-                list
-                ->
-                (key*'a1)
-                list
+                key -> 'a1 option -> (key*'a1) list -> (key*'a1) list
               
               val map2_l :
-                ('a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option)
-                ->
-                'a1
-                t
-                ->
-                'a3
-                t
+                ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a3 t
               
               val map2_r :
-                ('a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option)
-                ->
-                'a2
-                t
-                ->
-                'a3
-                t
+                ('a1 option -> 'a2 option -> 'a3 option) -> 'a2 t -> 'a3 t
               
               val map2 :
-                ('a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                t
-                ->
-                'a3
-                t
+                ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+                'a3 t
               
-              val combine :
-                'a1
-                t
-                ->
-                'a2
-                t
-                ->
-                ('a1
-                option*'a2
-                option)
-                t
+              val combine : 'a1 t -> 'a2 t -> ('a1 option*'a2 option) t
               
               val fold_right_pair :
-                ('a1
-                ->
-                'a2
-                ->
-                'a3
-                ->
-                'a3)
-                ->
-                ('a1*'a2)
-                list
-                ->
-                'a3
-                ->
-                'a3
+                ('a1 -> 'a2 -> 'a3 -> 'a3) -> ('a1*'a2) list -> 'a3 -> 'a3
               
               val map2_alt :
-                ('a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option)
-                ->
-                'a1
-                t
-                ->
-                'a2
-                t
-                ->
-                (key*'a3)
-                list
+                ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t ->
+                (key*'a3) list
               
               val at_least_one :
-                'a1
-                option
-                ->
-                'a2
-                option
-                ->
-                ('a1
-                option*'a2
-                option)
-                option
+                'a1 option -> 'a2 option -> ('a1 option*'a2 option) option
               
               val at_least_one_then_f :
-                ('a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option)
-                ->
-                'a1
-                option
-                ->
-                'a2
-                option
-                ->
-                'a3
-                option
+                ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 option -> 'a2
+                option -> 'a3 option
              end
             
             type 'elt coq_R_mem =
-            | R_mem_0 of 'elt
-                         tree
-            | R_mem_1 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_mem_0 of 'elt tree
+            | R_mem_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * bool * 'elt coq_R_mem
+            | R_mem_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
                * Z_as_Int.int
-               * bool
-               * 'elt
-                 coq_R_mem
-            | R_mem_2 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_mem_3 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * bool
-               * 'elt
-                 coq_R_mem
+            | R_mem_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * bool * 'elt coq_R_mem
             
             val coq_R_mem_rect :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 tree -> bool -> 'a1
+              coq_R_mem -> 'a2
             
             val coq_R_mem_rec :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              bool
-              ->
-              'a1
-              coq_R_mem
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> bool -> 'a1 coq_R_mem -> 'a2
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              bool -> 'a1 coq_R_mem -> 'a2 -> 'a2) -> 'a1 tree -> bool -> 'a1
+              coq_R_mem -> 'a2
             
             type 'elt coq_R_find =
-            | R_find_0 of 'elt
-                          tree
-            | R_find_1 of 'elt
-                          tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_find_0 of 'elt tree
+            | R_find_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt option * 'elt coq_R_find
+            | R_find_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
                * Z_as_Int.int
-               * 'elt
-                 option
-               * 'elt
-                 coq_R_find
-            | R_find_2 of 'elt
-                          tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_find_3 of 'elt
-                          tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 option
-               * 'elt
-                 coq_R_find
+            | R_find_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt option * 'elt coq_R_find
             
             val coq_R_find_rect :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find
+              -> 'a2 -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1
+              tree -> 'a1 option -> 'a1 coq_R_find -> 'a2
             
             val coq_R_find_rec :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              coq_R_find
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 option -> 'a1 coq_R_find
+              -> 'a2 -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> 'a1 option -> 'a1 coq_R_find -> 'a2 -> 'a2) -> 'a1
+              tree -> 'a1 option -> 'a1 coq_R_find -> 'a2
             
             type 'elt coq_R_bal =
-            | R_bal_0 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-            | R_bal_1 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_2 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_3 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_4 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-            | R_bal_5 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_6 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_7 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_bal_8 of 'elt
-                         tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_bal_0 of 'elt tree * key * 'elt * 'elt tree
+            | R_bal_1 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_bal_2 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_bal_3 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_bal_4 of 'elt tree * key * 'elt * 'elt tree
+            | R_bal_5 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_bal_6 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int
+            | R_bal_7 of 'elt tree * key * 'elt * 'elt tree * 'elt tree * 
+               key * 'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_bal_8 of 'elt tree * key * 'elt * 'elt tree
             
             val coq_R_bal_rect :
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_bal
-              ->
-              'a2
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> 'a2)
+              -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> 'a1
+              tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ ->
+              __ -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __
+              -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int ->
+              __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1
+              tree -> __ -> __ -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> key
+              -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> __ -> 'a1 tree -> key
+              -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) ->
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> __ ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree ->
+              __ -> __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a2) -> ('a1 tree -> key -> 'a1
+              -> 'a1 tree -> __ -> __ -> __ -> __ -> 'a2) -> 'a1 tree -> key
+              -> 'a1 -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_bal -> 'a2
             
             val coq_R_bal_rec :
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_bal
-              ->
-              'a2
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> 'a2)
+              -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> 'a1
+              tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ ->
+              __ -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree -> __
+              -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int ->
+              __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1
+              tree -> __ -> __ -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> key
+              -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> __ -> 'a1 tree -> key
+              -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) ->
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> __ -> __ -> __ ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> __ -> 'a2) -> ('a1 tree -> key -> 'a1 -> 'a1 tree ->
+              __ -> __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a2) -> ('a1 tree -> key -> 'a1
+              -> 'a1 tree -> __ -> __ -> __ -> __ -> 'a2) -> 'a1 tree -> key
+              -> 'a1 -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_bal -> 'a2
             
             type 'elt coq_R_add =
-            | R_add_0 of 'elt
-                         tree
-            | R_add_1 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_add_0 of 'elt tree
+            | R_add_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt tree * 'elt coq_R_add
+            | R_add_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
                * Z_as_Int.int
-               * 'elt
-                 tree
-               * 'elt
-                 coq_R_add
-            | R_add_2 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_add_3 of 'elt
-                         tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * 'elt
-                 coq_R_add
+            | R_add_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt tree * 'elt coq_R_add
             
             val coq_R_add_rect :
-              key
-              ->
-              'a1
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
+              key -> 'a1 -> ('a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              'a1 tree -> 'a1 coq_R_add -> 'a2 -> 'a2) -> ('a1 tree -> 'a1
+              tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ ->
+              __ -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree
+              -> Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> 'a1 coq_R_add
+              -> 'a2 -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_add -> 'a2
             
             val coq_R_add_rec :
-              key
-              ->
-              'a1
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_add
-              ->
-              'a2
+              key -> 'a1 -> ('a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree
+              -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ ->
+              'a1 tree -> 'a1 coq_R_add -> 'a2 -> 'a2) -> ('a1 tree -> 'a1
+              tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ ->
+              __ -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree
+              -> Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> 'a1 coq_R_add
+              -> 'a2 -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_add -> 'a2
             
             type 'elt coq_R_remove_min =
-            | R_remove_min_0 of 'elt
-                                tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-            | R_remove_min_1 of 'elt
-                                tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * ('elt
-                 tree*(key*'elt))
-               * 'elt
-                 coq_R_remove_min
-               * 'elt
-                 tree
+            | R_remove_min_0 of 'elt tree * key * 'elt * 'elt tree
+            | R_remove_min_1 of 'elt tree * key * 'elt * 'elt tree
+               * 'elt tree * key * 'elt * 'elt tree * Z_as_Int.int
+               * ('elt tree*(key*'elt)) * 'elt coq_R_remove_min * 'elt tree
                * (key*'elt)
             
             val coq_R_remove_min_rect :
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              ('a1
-              tree*(key*'a1))
-              ->
-              'a1
-              coq_R_remove_min
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              ('a1
-              tree*(key*'a1))
-              ->
-              'a1
-              coq_R_remove_min
-              ->
-              'a2
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree
+              -> key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree
+              -> Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1
+              coq_R_remove_min -> 'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2)
+              -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree*(key*'a1))
+              -> 'a1 coq_R_remove_min -> 'a2
             
             val coq_R_remove_min_rec :
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              ('a1
-              tree*(key*'a1))
-              ->
-              'a1
-              coq_R_remove_min
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              ('a1
-              tree*(key*'a1))
-              ->
-              'a1
-              coq_R_remove_min
-              ->
-              'a2
+              ('a1 tree -> key -> 'a1 -> 'a1 tree -> __ -> 'a2) -> ('a1 tree
+              -> key -> 'a1 -> 'a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree
+              -> Z_as_Int.int -> __ -> ('a1 tree*(key*'a1)) -> 'a1
+              coq_R_remove_min -> 'a2 -> 'a1 tree -> (key*'a1) -> __ -> 'a2)
+              -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> ('a1 tree*(key*'a1))
+              -> 'a1 coq_R_remove_min -> 'a2
             
             type 'elt coq_R_merge =
-            | R_merge_0 of 'elt
-                           tree
-               * 'elt
-                 tree
-            | R_merge_1 of 'elt
-                           tree
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_merge_2 of 'elt
-                           tree
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * (key*'elt)
-               * key
-               * 'elt
+            | R_merge_0 of 'elt tree * 'elt tree
+            | R_merge_1 of 'elt tree * 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_merge_2 of 'elt tree * 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt
+               * 'elt tree * Z_as_Int.int * 'elt tree * (key*'elt) * 
+               key * 'elt
             
             val coq_R_merge_rect :
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              key
-              ->
-              'a1
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_merge
-              ->
-              'a2
+              ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ ->
+              key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
+              'a1 coq_R_merge -> 'a2
             
             val coq_R_merge_rec :
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              key
-              ->
-              'a1
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_merge
-              ->
-              'a2
+              ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ ->
+              key -> 'a1 -> __ -> 'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree ->
+              'a1 coq_R_merge -> 'a2
             
             type 'elt coq_R_remove =
-            | R_remove_0 of 'elt
-                            tree
-            | R_remove_1 of 'elt
-                            tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_remove_0 of 'elt tree
+            | R_remove_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt tree * 'elt coq_R_remove
+            | R_remove_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
                * Z_as_Int.int
-               * 'elt
-                 tree
-               * 'elt
-                 coq_R_remove
-            | R_remove_2 of 'elt
-                            tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_remove_3 of 'elt
-                            tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * 'elt
-                 coq_R_remove
+            | R_remove_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt tree * 'elt coq_R_remove
             
             val coq_R_remove_rect :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> 'a1 coq_R_remove
+              -> 'a2 -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> 'a1 tree -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+              tree -> 'a1 tree -> 'a1 coq_R_remove -> 'a2
             
             val coq_R_remove_rec :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_remove
-              ->
-              'a2
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 tree -> 'a1 coq_R_remove
+              -> 'a2 -> 'a2) -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a2) -> ('a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> __ -> 'a1 tree -> 'a1 coq_R_remove -> 'a2 -> 'a2) -> 'a1
+              tree -> 'a1 tree -> 'a1 coq_R_remove -> 'a2
             
             type 'elt coq_R_concat =
-            | R_concat_0 of 'elt
-                            tree
-               * 'elt
-                 tree
-            | R_concat_1 of 'elt
-                            tree
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_concat_2 of 'elt
-                            tree
-               * 'elt
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 tree
-               * (key*'elt)
+            | R_concat_0 of 'elt tree * 'elt tree
+            | R_concat_1 of 'elt tree * 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_concat_2 of 'elt tree * 'elt tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt tree * key * 'elt
+               * 'elt tree * Z_as_Int.int * 'elt tree * (key*'elt)
             
             val coq_R_concat_rect :
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_concat
-              ->
+              ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ ->
+              'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat ->
               'a2
             
             val coq_R_concat_rec :
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a1
-              tree
-              ->
-              (key*'a1)
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              coq_R_concat
-              ->
+              ('a1 tree -> 'a1 tree -> __ -> 'a2) -> ('a1 tree -> 'a1 tree ->
+              'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __
+              -> 'a2) -> ('a1 tree -> 'a1 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> 'a1 tree -> key -> 'a1 -> 'a1
+              tree -> Z_as_Int.int -> __ -> 'a1 tree -> (key*'a1) -> __ ->
+              'a2) -> 'a1 tree -> 'a1 tree -> 'a1 tree -> 'a1 coq_R_concat ->
               'a2
             
             type 'elt coq_R_split =
-            | R_split_0 of 'elt
-                           tree
-            | R_split_1 of 'elt
-                           tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
+            | R_split_0 of 'elt tree
+            | R_split_1 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt triple * 'elt coq_R_split * 'elt tree
+               * 'elt option * 'elt tree
+            | R_split_2 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
                * Z_as_Int.int
-               * 'elt
-                 triple
-               * 'elt
-                 coq_R_split
-               * 'elt
-                 tree
-               * 'elt
-                 option
-               * 'elt
-                 tree
-            | R_split_2 of 'elt
-                           tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_split_3 of 'elt
-                           tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt
-                 triple
-               * 'elt
-                 coq_R_split
-               * 'elt
-                 tree
-               * 'elt
-                 option
-               * 'elt
-                 tree
+            | R_split_3 of 'elt tree * 'elt tree * key * 'elt * 'elt tree
+               * Z_as_Int.int * 'elt triple * 'elt coq_R_split * 'elt tree
+               * 'elt option * 'elt tree
             
             val coq_R_split_rect :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 triple -> 'a1 coq_R_split
+              -> 'a2 -> 'a1 tree -> 'a1 option -> 'a1 tree -> __ -> 'a2) ->
+              ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int
+              -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> key ->
+              'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a1 triple
+              -> 'a1 coq_R_split -> 'a2 -> 'a1 tree -> 'a1 option -> 'a1 tree
+              -> __ -> 'a2) -> 'a1 tree -> 'a1 triple -> 'a1 coq_R_split ->
               'a2
             
             val coq_R_split_rec :
-              StatePseudoprodPosOrderedType.Alt.t
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a2)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              __
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
-              'a2
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              option
-              ->
-              'a1
-              tree
-              ->
-              __
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a1
-              triple
-              ->
-              'a1
-              coq_R_split
-              ->
+              StatePseudoprodPosOrderedType.Alt.t -> ('a1 tree -> __ -> 'a2)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> __ -> 'a1 triple -> 'a1 coq_R_split
+              -> 'a2 -> 'a1 tree -> 'a1 option -> 'a1 tree -> __ -> 'a2) ->
+              ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int
+              -> __ -> __ -> __ -> 'a2) -> ('a1 tree -> 'a1 tree -> key ->
+              'a1 -> 'a1 tree -> Z_as_Int.int -> __ -> __ -> __ -> 'a1 triple
+              -> 'a1 coq_R_split -> 'a2 -> 'a1 tree -> 'a1 option -> 'a1 tree
+              -> __ -> 'a2) -> 'a1 tree -> 'a1 triple -> 'a1 coq_R_split ->
               'a2
             
-            type ('elt,
-                  'elt') coq_R_map_option =
-            | R_map_option_0 of 'elt
-                                tree
-            | R_map_option_1 of 'elt
-                                tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-               * 'elt'
-                 tree
-               * ('elt,
-                 'elt')
-                 coq_R_map_option
-               * 'elt'
-                 tree
-               * ('elt,
-                 'elt')
-                 coq_R_map_option
-            | R_map_option_2 of 'elt
-                                tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-                 tree
-               * ('elt,
-                 'elt')
-                 coq_R_map_option
-               * 'elt'
-                 tree
-               * ('elt,
-                 'elt')
-                 coq_R_map_option
+            type ('elt, 'elt') coq_R_map_option =
+            | R_map_option_0 of 'elt tree
+            | R_map_option_1 of 'elt tree * 'elt tree * key * 'elt
+               * 'elt tree * Z_as_Int.int * 'elt' * 'elt' tree
+               * ('elt, 'elt') coq_R_map_option * 'elt' tree
+               * ('elt, 'elt') coq_R_map_option
+            | R_map_option_2 of 'elt tree * 'elt tree * key * 'elt
+               * 'elt tree * Z_as_Int.int * 'elt' tree
+               * ('elt, 'elt') coq_R_map_option * 'elt' tree
+               * ('elt, 'elt') coq_R_map_option
             
             val coq_R_map_option_rect :
-              (key
-              ->
-              'a1
-              ->
-              'a2
-              option)
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a3)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a3)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a3)
-              ->
-              'a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
+              (key -> 'a1 -> 'a2 option) -> ('a1 tree -> __ -> 'a3) -> ('a1
+              tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int ->
+              __ -> 'a2 -> __ -> 'a2 tree -> ('a1, 'a2) coq_R_map_option ->
+              'a3 -> 'a2 tree -> ('a1, 'a2) coq_R_map_option -> 'a3 -> 'a3)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> 'a2 tree -> ('a1, 'a2)
+              coq_R_map_option -> 'a3 -> 'a2 tree -> ('a1, 'a2)
+              coq_R_map_option -> 'a3 -> 'a3) -> 'a1 tree -> 'a2 tree ->
+              ('a1, 'a2) coq_R_map_option -> 'a3
             
             val coq_R_map_option_rec :
-              (key
-              ->
-              'a1
-              ->
-              'a2
-              option)
-              ->
-              ('a1
-              tree
-              ->
-              __
-              ->
-              'a3)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a3)
-              ->
-              ('a1
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
-              ->
-              'a3)
-              ->
-              'a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              ('a1,
-              'a2)
-              coq_R_map_option
-              ->
-              'a3
+              (key -> 'a1 -> 'a2 option) -> ('a1 tree -> __ -> 'a3) -> ('a1
+              tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int ->
+              __ -> 'a2 -> __ -> 'a2 tree -> ('a1, 'a2) coq_R_map_option ->
+              'a3 -> 'a2 tree -> ('a1, 'a2) coq_R_map_option -> 'a3 -> 'a3)
+              -> ('a1 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> __ -> 'a2 tree -> ('a1, 'a2)
+              coq_R_map_option -> 'a3 -> 'a2 tree -> ('a1, 'a2)
+              coq_R_map_option -> 'a3 -> 'a3) -> 'a1 tree -> 'a2 tree ->
+              ('a1, 'a2) coq_R_map_option -> 'a3
             
-            type ('elt,
-                  'elt',
-                  'elt'') coq_R_map2_opt =
-            | R_map2_opt_0 of 'elt
-                              tree
-               * 'elt'
-                 tree
-            | R_map2_opt_1 of 'elt
-                              tree
-               * 'elt'
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-            | R_map2_opt_2 of 'elt
-                              tree
-               * 'elt'
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-                 tree
-               * key
-               * 'elt'
-               * 'elt'
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-                 tree
-               * 'elt'
-                 option
-               * 'elt'
-                 tree
-               * 'elt''
-               * 'elt''
-                 tree
-               * ('elt,
-                 'elt',
-                 'elt'')
-                 coq_R_map2_opt
-               * 'elt''
-                 tree
-               * ('elt,
-                 'elt',
-                 'elt'')
-                 coq_R_map2_opt
-            | R_map2_opt_3 of 'elt
-                              tree
-               * 'elt'
-                 tree
-               * 'elt
-                 tree
-               * key
-               * 'elt
-               * 'elt
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-                 tree
-               * key
-               * 'elt'
-               * 'elt'
-                 tree
-               * Z_as_Int.int
-               * 'elt'
-                 tree
-               * 'elt'
-                 option
-               * 'elt'
-                 tree
-               * 'elt''
-                 tree
-               * ('elt,
-                 'elt',
-                 'elt'')
-                 coq_R_map2_opt
-               * 'elt''
-                 tree
-               * ('elt,
-                 'elt',
-                 'elt'')
-                 coq_R_map2_opt
+            type ('elt, 'elt', 'elt'') coq_R_map2_opt =
+            | R_map2_opt_0 of 'elt tree * 'elt' tree
+            | R_map2_opt_1 of 'elt tree * 'elt' tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int
+            | R_map2_opt_2 of 'elt tree * 'elt' tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt' tree * key * 'elt'
+               * 'elt' tree * Z_as_Int.int * 'elt' tree * 'elt' option
+               * 'elt' tree * 'elt'' * 'elt'' tree
+               * ('elt, 'elt', 'elt'') coq_R_map2_opt * 'elt'' tree
+               * ('elt, 'elt', 'elt'') coq_R_map2_opt
+            | R_map2_opt_3 of 'elt tree * 'elt' tree * 'elt tree * key * 
+               'elt * 'elt tree * Z_as_Int.int * 'elt' tree * key * 'elt'
+               * 'elt' tree * Z_as_Int.int * 'elt' tree * 'elt' option
+               * 'elt' tree * 'elt'' tree
+               * ('elt, 'elt', 'elt'') coq_R_map2_opt * 'elt'' tree
+               * ('elt, 'elt', 'elt'') coq_R_map2_opt
             
             val coq_R_map2_opt_rect :
-              (key
-              ->
-              'a1
-              ->
-              'a2
-              option
-              ->
-              'a3
-              option)
-              ->
-              ('a1
-              tree
-              ->
-              'a3
-              tree)
-              ->
-              ('a2
-              tree
-              ->
-              'a3
-              tree)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              key
-              ->
-              'a2
-              ->
-              'a2
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              'a2
-              option
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              'a3
-              ->
-              __
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              key
-              ->
-              'a2
-              ->
-              'a2
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              'a2
-              option
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a4)
-              ->
-              'a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
+              (key -> 'a1 -> 'a2 option -> 'a3 option) -> ('a1 tree -> 'a3
+              tree) -> ('a2 tree -> 'a3 tree) -> ('a1 tree -> 'a2 tree -> __
+              -> 'a4) -> ('a1 tree -> 'a2 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a4) -> ('a1 tree ->
+              'a2 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int
+              -> __ -> 'a2 tree -> key -> 'a2 -> 'a2 tree -> Z_as_Int.int ->
+              __ -> 'a2 tree -> 'a2 option -> 'a2 tree -> __ -> 'a3 -> __ ->
+              'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a3 tree
+              -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a4) -> ('a1 tree
+              -> 'a2 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> 'a2 tree -> key -> 'a2 -> 'a2 tree ->
+              Z_as_Int.int -> __ -> 'a2 tree -> 'a2 option -> 'a2 tree -> __
+              -> __ -> 'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 ->
+              'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a4) ->
+              'a1 tree -> 'a2 tree -> 'a3 tree -> ('a1, 'a2, 'a3)
+              coq_R_map2_opt -> 'a4
             
             val coq_R_map2_opt_rec :
-              (key
-              ->
-              'a1
-              ->
-              'a2
-              option
-              ->
-              'a3
-              option)
-              ->
-              ('a1
-              tree
-              ->
-              'a3
-              tree)
-              ->
-              ('a2
-              tree
-              ->
-              'a3
-              tree)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              __
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              key
-              ->
-              'a2
-              ->
-              'a2
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              'a2
-              option
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              'a3
-              ->
-              __
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a4)
-              ->
-              ('a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a1
-              tree
-              ->
-              key
-              ->
-              'a1
-              ->
-              'a1
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              key
-              ->
-              'a2
-              ->
-              'a2
-              tree
-              ->
-              Z_as_Int.int
-              ->
-              __
-              ->
-              'a2
-              tree
-              ->
-              'a2
-              option
-              ->
-              'a2
-              tree
-              ->
-              __
-              ->
-              __
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
-              ->
-              'a4)
-              ->
-              'a1
-              tree
-              ->
-              'a2
-              tree
-              ->
-              'a3
-              tree
-              ->
-              ('a1,
-              'a2,
-              'a3)
-              coq_R_map2_opt
-              ->
-              'a4
+              (key -> 'a1 -> 'a2 option -> 'a3 option) -> ('a1 tree -> 'a3
+              tree) -> ('a2 tree -> 'a3 tree) -> ('a1 tree -> 'a2 tree -> __
+              -> 'a4) -> ('a1 tree -> 'a2 tree -> 'a1 tree -> key -> 'a1 ->
+              'a1 tree -> Z_as_Int.int -> __ -> __ -> 'a4) -> ('a1 tree ->
+              'a2 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree -> Z_as_Int.int
+              -> __ -> 'a2 tree -> key -> 'a2 -> 'a2 tree -> Z_as_Int.int ->
+              __ -> 'a2 tree -> 'a2 option -> 'a2 tree -> __ -> 'a3 -> __ ->
+              'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a3 tree
+              -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a4) -> ('a1 tree
+              -> 'a2 tree -> 'a1 tree -> key -> 'a1 -> 'a1 tree ->
+              Z_as_Int.int -> __ -> 'a2 tree -> key -> 'a2 -> 'a2 tree ->
+              Z_as_Int.int -> __ -> 'a2 tree -> 'a2 option -> 'a2 tree -> __
+              -> __ -> 'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 ->
+              'a3 tree -> ('a1, 'a2, 'a3) coq_R_map2_opt -> 'a4 -> 'a4) ->
+              'a1 tree -> 'a2 tree -> 'a3 tree -> ('a1, 'a2, 'a3)
+              coq_R_map2_opt -> 'a4
             
-            val fold' :
-              (key
-              ->
-              'a1
-              ->
-              'a2
-              ->
-              'a2)
-              ->
-              'a1
-              tree
-              ->
-              'a2
-              ->
-              'a2
+            val fold' : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 tree -> 'a2 -> 'a2
             
-            val flatten_e :
-              'a1
-              enumeration
-              ->
-              (key*'a1)
-              list
+            val flatten_e : 'a1 enumeration -> (key*'a1) list
            end
          end
         
         type 'elt bst =
-          'elt
-          Raw.tree
+          'elt Raw.tree
           (* singleton inductive, whose constructor was Bst *)
         
-        val bst_rect :
-          ('a1
-          Raw.tree
-          ->
-          __
-          ->
-          'a2)
-          ->
-          'a1
-          bst
-          ->
-          'a2
+        val bst_rect : ('a1 Raw.tree -> __ -> 'a2) -> 'a1 bst -> 'a2
         
-        val bst_rec :
-          ('a1
-          Raw.tree
-          ->
-          __
-          ->
-          'a2)
-          ->
-          'a1
-          bst
-          ->
-          'a2
+        val bst_rec : ('a1 Raw.tree -> __ -> 'a2) -> 'a1 bst -> 'a2
         
-        val this :
-          'a1
-          bst
-          ->
-          'a1
-          Raw.tree
+        val this : 'a1 bst -> 'a1 Raw.tree
         
-        type 'elt t
-          =
-          'elt
-          bst
+        type 'elt t = 'elt bst
         
-        type key
-          =
-          StatePseudoprodPosOrderedType.Alt.t
+        type key = StatePseudoprodPosOrderedType.Alt.t
         
-        val empty :
-          'a1
-          t
+        val empty : 'a1 t
         
-        val is_empty :
-          'a1
-          t
-          ->
-          bool
+        val is_empty : 'a1 t -> bool
         
-        val add :
-          key
-          ->
-          'a1
-          ->
-          'a1
-          t
-          ->
-          'a1
-          t
+        val add : key -> 'a1 -> 'a1 t -> 'a1 t
         
-        val remove :
-          key
-          ->
-          'a1
-          t
-          ->
-          'a1
-          t
+        val remove : key -> 'a1 t -> 'a1 t
         
-        val mem :
-          key
-          ->
-          'a1
-          t
-          ->
-          bool
+        val mem : key -> 'a1 t -> bool
         
-        val find :
-          key
-          ->
-          'a1
-          t
-          ->
-          'a1
-          option
+        val find : key -> 'a1 t -> 'a1 option
         
-        val map :
-          ('a1
-          ->
-          'a2)
-          ->
-          'a1
-          t
-          ->
-          'a2
-          t
+        val map : ('a1 -> 'a2) -> 'a1 t -> 'a2 t
         
-        val mapi :
-          (key
-          ->
-          'a1
-          ->
-          'a2)
-          ->
-          'a1
-          t
-          ->
-          'a2
-          t
+        val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t
         
         val map2 :
-          ('a1
-          option
-          ->
-          'a2
-          option
-          ->
-          'a3
-          option)
-          ->
-          'a1
-          t
-          ->
-          'a2
-          t
-          ->
-          'a3
-          t
+          ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t
         
-        val elements :
-          'a1
-          t
-          ->
-          (key*'a1)
-          list
+        val elements : 'a1 t -> (key*'a1) list
         
-        val cardinal :
-          'a1
-          t
-          ->
-          nat
+        val cardinal : 'a1 t -> nat
         
-        val fold :
-          (key
-          ->
-          'a1
-          ->
-          'a2
-          ->
-          'a2)
-          ->
-          'a1
-          t
-          ->
-          'a2
-          ->
-          'a2
+        val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2
         
-        val equal :
-          ('a1
-          ->
-          'a1
-          ->
-          bool)
-          ->
-          'a1
-          t
-          ->
-          'a1
-          t
-          ->
-          bool
+        val equal : ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool
        end
       
-      val pseudoprod_rhs :
-        Aut.Gram.production
-        option
-        ->
-        Aut.Gram.symbol
-        list
+      val pseudoprod_rhs : Aut.Gram.production option -> Aut.Gram.symbol list
       
-      val nullable_symb :
-        Aut.Gram.symbol
-        ->
-        bool
+      val nullable_symb : Aut.Gram.symbol -> bool
       
-      val nullable_word :
-        Aut.Gram.symbol
-        list
-        ->
-        bool
+      val nullable_word : Aut.Gram.symbol list -> bool
       
-      val first_nterm_set :
-        Aut.Gram.nonterminal
-        ->
-        TerminalSet.t
+      val first_nterm_set : Aut.Gram.nonterminal -> TerminalSet.t
       
-      val first_symb_set :
-        Aut.Gram.symbol
-        ->
-        TerminalSet.t
+      val first_symb_set : Aut.Gram.symbol -> TerminalSet.t
       
-      val first_word_set :
-        Aut.Gram.symbol
-        list
-        ->
-        TerminalSet.t
+      val first_word_set : Aut.Gram.symbol list -> TerminalSet.t
       
       val future_of_pseudoprod :
-        Aut.Gram.production
-        option
-        ->
-        nat
-        ->
-        Aut.Gram.symbol
-        list
+        Aut.Gram.production option -> nat -> Aut.Gram.symbol list
       
-      val items_map :
-        TerminalSet.t
-        StatePseudoprodPosMap.t
+      val items_map : TerminalSet.t StatePseudoprodPosMap.t
       
       val find_items_map :
-        Aut.state
-        ->
-        Aut.pseudoprod
-        ->
-        nat
-        ->
-        TerminalSet.t
+        Aut.state -> Aut.pseudoprod -> nat -> TerminalSet.t
       
       val forallb_items :
-        (Aut.state
-        ->
-        Aut.pseudoprod
-        ->
-        nat
-        ->
-        TerminalSet.t
-        ->
-        bool)
-        ->
-        bool
+        (Aut.state -> Aut.pseudoprod -> nat -> TerminalSet.t -> bool) -> bool
       
-      val is_nullable_stable :
-        bool
+      val is_nullable_stable : bool
       
-      val is_first_stable :
-        bool
+      val is_first_stable : bool
       
-      val is_end_accept :
-        bool
+      val is_end_accept : bool
       
-      val is_start_future :
-        bool
+      val is_start_future : bool
       
-      val is_terminal_shift :
-        bool
+      val is_terminal_shift : bool
       
-      val is_end_reduce :
-        bool
+      val is_end_reduce : bool
       
-      val is_non_terminal_goto :
-        bool
+      val is_non_terminal_goto : bool
       
-      val is_non_terminal_closed :
-        bool
+      val is_non_terminal_closed : bool
       
-      val is_complete :
-        bool
+      val is_complete : bool
      end
     
     val first_term_word :
-      Aut.GramDefs.token
-      list
-      ->
-      Aut.Gram.terminal
-      ->
-      Aut.Gram.terminal
+      Aut.GramDefs.token list -> Aut.Gram.terminal -> Aut.Gram.terminal
     
     val extend_stack :
-      Inter.stack
-      ->
-      Aut.noninitstate
-      list
-      ->
-      __
-      ->
-      Inter.stack
+      Inter.stack -> Aut.noninitstate list -> __ -> Inter.stack
     
-    type past_invariant = { states_pi : Aut.noninitstate
-                                        list;
-                            sem_pi : tuple }
+    type past_invariant = { states_pi : Aut.noninitstate list; sem_pi : tuple }
     
     val past_invariant_rect :
-      (Aut.noninitstate
-      list
-      ->
-      tuple
-      ->
-      'a1)
-      ->
-      past_invariant
-      ->
-      'a1
+      (Aut.noninitstate list -> tuple -> 'a1) -> past_invariant -> 'a1
     
     val past_invariant_rec :
-      (Aut.noninitstate
-      list
-      ->
-      tuple
-      ->
-      'a1)
-      ->
-      past_invariant
-      ->
-      'a1
+      (Aut.noninitstate list -> tuple -> 'a1) -> past_invariant -> 'a1
     
-    val states_pi :
-      past_invariant
-      ->
-      Aut.noninitstate
-      list
+    val states_pi : past_invariant -> Aut.noninitstate list
     
-    val symbl_pi :
-      past_invariant
-      ->
-      Aut.Gram.symbol
-      list
+    val symbl_pi : past_invariant -> Aut.Gram.symbol list
     
-    val sem_pi :
-      past_invariant
-      ->
-      tuple
+    val sem_pi : past_invariant -> tuple
     
-    val stack_pi :
-      past_invariant
-      ->
-      Inter.stack
-      ->
-      Inter.stack
+    val stack_pi : past_invariant -> Inter.stack -> Inter.stack
     
-    type hole_future_invariant = { future_hfi : (Aut.Gram.symbol
-                                                list,
-                                                tuple)
+    type hole_future_invariant = { future_hfi : (Aut.Gram.symbol list, tuple)
                                                 sigT;
-                                   word_future_hfi : Aut.GramDefs.token
-                                                     list;
+                                   word_future_hfi : Aut.GramDefs.token list;
                                    future_sem_proof_hfi : Aut.GramDefs.parse_tree_list;
-                                   hole_hfi : (Aut.Gram.production,
-                                              tuple)
-                                              sigT
-                                              option }
+                                   hole_hfi : (Aut.Gram.production, tuple)
+                                              sigT option }
     
     val hole_future_invariant_rect :
-      bool
-      ->
-      ((Aut.Gram.symbol
-      list,
-      tuple)
-      sigT
-      ->
-      __
-      ->
-      Aut.GramDefs.token
-      list
-      ->
-      Aut.GramDefs.parse_tree_list
-      ->
-      (Aut.Gram.production,
-      tuple)
-      sigT
-      option
-      ->
-      'a1)
-      ->
-      hole_future_invariant
-      ->
-      'a1
+      bool -> ((Aut.Gram.symbol list, tuple) sigT -> __ -> Aut.GramDefs.token
+      list -> Aut.GramDefs.parse_tree_list -> (Aut.Gram.production, tuple)
+      sigT option -> 'a1) -> hole_future_invariant -> 'a1
     
     val hole_future_invariant_rec :
-      bool
-      ->
-      ((Aut.Gram.symbol
-      list,
-      tuple)
-      sigT
-      ->
-      __
-      ->
-      Aut.GramDefs.token
-      list
-      ->
-      Aut.GramDefs.parse_tree_list
-      ->
-      (Aut.Gram.production,
-      tuple)
-      sigT
-      option
-      ->
-      'a1)
-      ->
-      hole_future_invariant
-      ->
-      'a1
+      bool -> ((Aut.Gram.symbol list, tuple) sigT -> __ -> Aut.GramDefs.token
+      list -> Aut.GramDefs.parse_tree_list -> (Aut.Gram.production, tuple)
+      sigT option -> 'a1) -> hole_future_invariant -> 'a1
     
     val future_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.symbol
-      list,
-      tuple)
-      sigT
+      bool -> hole_future_invariant -> (Aut.Gram.symbol list, tuple) sigT
     
     val word_future_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.GramDefs.token
-      list
+      bool -> hole_future_invariant -> Aut.GramDefs.token list
     
     val future_sem_proof_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.GramDefs.parse_tree_list
+      bool -> hole_future_invariant -> Aut.GramDefs.parse_tree_list
     
     val hole_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.production,
-      tuple)
-      sigT
+      bool -> hole_future_invariant -> (Aut.Gram.production, tuple) sigT
       option
     
     val hole_pseudo_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      (Aut.Gram.production
-      option,
-      tuple)
-      sigT
-      option
+      bool -> hole_future_invariant -> (Aut.Gram.production option, tuple)
+      sigT option
     
-    val symbl_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      Aut.Gram.symbol
-      list
+    val symbl_hfi : bool -> hole_future_invariant -> Aut.Gram.symbol list
     
-    val sem_hfi :
-      bool
-      ->
-      hole_future_invariant
-      ->
-      tuple
+    val sem_hfi : bool -> hole_future_invariant -> tuple
     
-    val coq_JMeq_rew_r :
-      'a1
-      ->
-      'a2
-      ->
-      'a3
-      ->
-      'a3
+    val coq_JMeq_rew_r : 'a1 -> 'a2 -> 'a3 -> 'a3
     
-    val eq_rew_r_dep :
-      'a1
-      ->
-      'a1
-      ->
-      'a2
-      ->
-      'a2
+    val eq_rew_r_dep : 'a1 -> 'a1 -> 'a2 -> 'a2
     
-    val eq_rew_dep :
-      'a1
-      ->
-      'a2
-      ->
-      'a1
-      ->
-      'a2
+    val eq_rew_dep : 'a1 -> 'a2 -> 'a1 -> 'a2
    end
   
-  val complete_validator :
-    bool
+  val complete_validator : bool
   
-  val safe_validator :
-    bool
+  val safe_validator : bool
   
-  val parse :
-    nat
-    ->
-    Aut.GramDefs.token
-    coq_Stream
-    ->
-    Inter.parse_result
+  val parse : nat -> Aut.GramDefs.token coq_Stream -> Inter.parse_result
  end
 
-val parse :
-  nat
-  ->
-  Aut.GramDefs.token
-  coq_Stream
-  ->
-  Parser.Inter.parse_result
+val parse : nat -> Aut.GramDefs.token coq_Stream -> Parser.Inter.parse_result
 

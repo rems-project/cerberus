@@ -72,7 +72,7 @@ let lt_precedence p1 p2 =
 
 
 let pp_keyword  w = !^ (ansi_format [Bold; Magenta] w)
-let pp_constant c = !^ (ansi_format [Magenta] c)
+let pp_const    c = !^ (ansi_format [Magenta] c)
 let pp_control  w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol   a = !^ (ansi_format [Blue] $ Symbol.to_string_pretty a)
 let pp_number   n = !^ (ansi_format [Yellow] n)
@@ -144,6 +144,15 @@ let pp_name = function
   | Sym a  -> pp_symbol a
   | Impl i -> pp_impl i
 
+let pp_constant = function
+  | Cint n ->
+      pp_number (Num.string_of_num n)
+  | Carray _ ->
+      !^ "ARRAY"
+  | Cfunction _ ->
+      !^ "FUNCTION"
+
+
 let rec pp_expr e =
   let rec pp p e =
     let p' = precedence e in
@@ -165,11 +174,11 @@ let rec pp_expr e =
         | Etuple es ->
             P.parens (comma_list pp es)
         | Enull ->
-            pp_constant "null"
+            pp_const "null"
         | Eskip ->
             pp_keyword "skip"
-        | Econst n ->
-            pp_number (Num.string_of_num n)
+        | Econst c ->
+            pp_constant c
         | Eaddr (pref, name) ->
             P.at ^^ P.braces (pp_prefix pref ^^ !^ (string_of_int name))
         | Esym a ->
@@ -179,9 +188,9 @@ let rec pp_expr e =
         | Eop (op, e1, e2) ->
             pp e1 ^^^ pp_binop op ^^^ pp e2
         | Etrue ->
-            pp_constant "true"
+            pp_const "true"
         | Efalse ->
-            pp_constant "false"
+            pp_const "false"
         | Enot e ->
             pp_keyword "not" ^^^ pp e
         | Ectype ty ->
@@ -246,7 +255,7 @@ let rec pp_expr e =
             pp_keyword "save" ^^^ pp_symbol l ^^
               P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
         | Erun (_, l, es) ->
-            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^ pp e) es)
+            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
         | End es ->

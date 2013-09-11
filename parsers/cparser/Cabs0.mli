@@ -17,6 +17,7 @@ type typeSpecifier =
 | Tunsigned
 | T_Bool
 | Tnamed of atom
+| Tatomic of (spec_elem list*decl_type)
 | Tstruct of atom option * field_group list option * attribute list
 | Tunion of atom option * field_group list option * attribute list
 | Tenum of atom option * ((atom*expression option)*cabsloc) list option
@@ -26,11 +27,13 @@ and storage =
 | STATIC
 | EXTERN
 | REGISTER
+| THREAD_LOCAL
 | TYPEDEF
 and cvspec =
 | CV_CONST
 | CV_VOLATILE
 | CV_RESTRICT
+| CV_ATOMIC
 and spec_elem =
 | SpecCV of cvspec
 | SpecAttr of attribute
@@ -99,6 +102,15 @@ and expression =
 | BINARY of binary_operator * expression * expression
 | QUESTION of expression * expression * expression
 | CAST of (spec_elem list*decl_type) * init_expression
+| C11_ATOMIC_INIT of expression * expression
+| C11_ATOMIC_STORE of expression * expression * expression
+| C11_ATOMIC_LOAD of expression * expression
+| C11_ATOMIC_EXCHANGE of expression * expression * expression
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression
+   * expression * expression
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression
+   * expression * expression
+| C11_ATOMIC_FETCH_KEY of expression * expression * expression
 | CALL of expression * expression list
 | BUILTIN_VA_ARG of expression * (spec_elem list*decl_type)
 | CONSTANT of constant
@@ -142,25 +154,27 @@ and attribute =
 
 val typeSpecifier_rect :
   'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> (atom
-  -> 'a1) -> (atom option -> field_group list option -> attribute list ->
-  'a1) -> (atom option -> field_group list option -> attribute list -> 'a1)
-  -> (atom option -> ((atom*expression option)*cabsloc) list option ->
-  attribute list -> 'a1) -> typeSpecifier -> 'a1
+  -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (atom option ->
+  field_group list option -> attribute list -> 'a1) -> (atom option ->
+  field_group list option -> attribute list -> 'a1) -> (atom option ->
+  ((atom*expression option)*cabsloc) list option -> attribute list -> 'a1) ->
+  typeSpecifier -> 'a1
 
 val typeSpecifier_rec :
   'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> (atom
-  -> 'a1) -> (atom option -> field_group list option -> attribute list ->
-  'a1) -> (atom option -> field_group list option -> attribute list -> 'a1)
-  -> (atom option -> ((atom*expression option)*cabsloc) list option ->
-  attribute list -> 'a1) -> typeSpecifier -> 'a1
+  -> 'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (atom option ->
+  field_group list option -> attribute list -> 'a1) -> (atom option ->
+  field_group list option -> attribute list -> 'a1) -> (atom option ->
+  ((atom*expression option)*cabsloc) list option -> attribute list -> 'a1) ->
+  typeSpecifier -> 'a1
 
-val storage_rect : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1
+val storage_rect : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1
 
-val storage_rec : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1
+val storage_rec : 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> storage -> 'a1
 
-val cvspec_rect : 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1
+val cvspec_rect : 'a1 -> 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1
 
-val cvspec_rec : 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1
+val cvspec_rec : 'a1 -> 'a1 -> 'a1 -> 'a1 -> cvspec -> 'a1
 
 val spec_elem_rect :
   (cvspec -> 'a1) -> (attribute -> 'a1) -> (storage -> 'a1) -> 'a1 ->
@@ -233,24 +247,40 @@ val expression_rect :
   expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
   expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
   list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
-  expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list*decl_type)
-  -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1)
-  -> ((spec_elem list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) ->
-  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression ->
-  'a1 -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
-  list*decl_type) -> atom -> 'a1) -> expression -> 'a1
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+  expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+  expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 -> expression
+  -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression ->
+  'a1 -> 'a1) -> (expression -> 'a1 -> expression list -> 'a1) -> (expression
+  -> 'a1 -> (spec_elem list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom
+  -> 'a1) -> (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) ->
+  'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 ->
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) ->
+  (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem list*decl_type) -> atom
+  -> 'a1) -> expression -> 'a1
 
 val expression_rec :
   (unary_operator -> expression -> 'a1 -> 'a1) -> (binary_operator ->
   expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
   expression -> 'a1 -> expression -> 'a1 -> 'a1) -> ((spec_elem
   list*decl_type) -> init_expression -> 'a1) -> (expression -> 'a1 ->
-  expression list -> 'a1) -> (expression -> 'a1 -> (spec_elem list*decl_type)
-  -> 'a1) -> (constant -> 'a1) -> (atom -> 'a1) -> (expression -> 'a1 -> 'a1)
-  -> ((spec_elem list*decl_type) -> 'a1) -> ((spec_elem list*decl_type) ->
-  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression ->
-  'a1 -> atom -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem
-  list*decl_type) -> atom -> 'a1) -> expression -> 'a1
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+  'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 ->
+  expression -> 'a1 -> expression -> 'a1 -> 'a1) -> (expression -> 'a1 ->
+  expression -> 'a1 -> expression -> 'a1 -> expression -> 'a1 -> expression
+  -> 'a1 -> 'a1) -> (expression -> 'a1 -> expression -> 'a1 -> expression ->
+  'a1 -> 'a1) -> (expression -> 'a1 -> expression list -> 'a1) -> (expression
+  -> 'a1 -> (spec_elem list*decl_type) -> 'a1) -> (constant -> 'a1) -> (atom
+  -> 'a1) -> (expression -> 'a1 -> 'a1) -> ((spec_elem list*decl_type) ->
+  'a1) -> ((spec_elem list*decl_type) -> 'a1) -> (expression -> 'a1 ->
+  expression -> 'a1 -> 'a1) -> (expression -> 'a1 -> atom -> 'a1) ->
+  (expression -> 'a1 -> atom -> 'a1) -> ((spec_elem list*decl_type) -> atom
+  -> 'a1) -> expression -> 'a1
 
 val integer_suffix_rect :
   'a1 -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> integer_suffix -> 'a1
@@ -318,6 +348,7 @@ and statement =
 | LABEL of atom * statement * cabsloc
 | GOTO of atom * cabsloc
 | DEFINITION of definition
+| PAR of statement list * cabsloc
 and for_clause =
 | FC_EXP of expression
 | FC_DECL of definition
@@ -340,7 +371,8 @@ val statement_rect :
   cabsloc -> 'a1) -> (expression -> statement -> 'a1 -> cabsloc -> 'a1) ->
   (expression -> statement -> 'a1 -> cabsloc -> 'a1) -> (statement -> 'a1 ->
   cabsloc -> 'a1) -> (atom -> statement -> 'a1 -> cabsloc -> 'a1) -> (atom ->
-  cabsloc -> 'a1) -> (definition -> 'a1) -> statement -> 'a1
+  cabsloc -> 'a1) -> (definition -> 'a1) -> (statement list -> cabsloc ->
+  'a1) -> statement -> 'a1
 
 val statement_rec :
   (cabsloc -> 'a1) -> (expression -> cabsloc -> 'a1) -> (statement list ->
@@ -352,7 +384,8 @@ val statement_rec :
   cabsloc -> 'a1) -> (expression -> statement -> 'a1 -> cabsloc -> 'a1) ->
   (expression -> statement -> 'a1 -> cabsloc -> 'a1) -> (statement -> 'a1 ->
   cabsloc -> 'a1) -> (atom -> statement -> 'a1 -> cabsloc -> 'a1) -> (atom ->
-  cabsloc -> 'a1) -> (definition -> 'a1) -> statement -> 'a1
+  cabsloc -> 'a1) -> (definition -> 'a1) -> (statement list -> cabsloc ->
+  'a1) -> statement -> 'a1
 
 val for_clause_rect :
   (expression -> 'a1) -> (definition -> 'a1) -> for_clause -> 'a1

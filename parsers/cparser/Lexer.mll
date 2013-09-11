@@ -51,6 +51,17 @@ let init filename channel : Lexing.lexbuf =
       ("while", fun loc -> WHILE loc);
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("_Bool", fun loc -> BOOL loc);
+      ("_Thread_local", fun loc -> THREAD_LOCAL loc);
+      ("_Atomic", fun loc -> ATOMIC loc);
+      
+      ("__c11_atomic_init", fun loc -> C11_ATOMIC_INIT loc);
+      ("__c11_atomic_store", fun loc -> C11_ATOMIC_STORE loc);
+      ("__c11_atomic_load", fun loc -> C11_ATOMIC_LOAD loc);
+      ("__c11_atomic_exchange", fun loc -> C11_ATOMIC_EXCHANGE loc);
+      ("__c11_atomic_compare_exchange_strong", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_STRONG loc);
+      ("__c11_atomic_compare_exchange_weak", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_WEAK loc);
+      ("__c11_atomic_fetch_key", fun loc -> C11_ATOMIC_FETCH_KEY loc);
+      
       ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
 (*      ("_Static_assert", fun loc -> STATIC_ASSERT) *)
     ];
@@ -300,6 +311,11 @@ rule initial = parse
   | ";"                           { SEMICOLON(currentLoc lexbuf) }
   | ","                           { COMMA(currentLoc lexbuf) }
   | "."                           { DOT(currentLoc lexbuf) }
+  
+  | "{{{"                         { LBRACES(currentLoc lexbuf) }
+  | "|||"                         { BARES(currentLoc lexbuf) }
+  | "}}}"                         { RBRACES(currentLoc lexbuf) }
+  
   | identifier as id              {
         try Hashtbl.find lexicon id (currentLoc lexbuf)
         with Not_found ->
@@ -416,6 +432,9 @@ and onelinecomment = parse
             | INLINE loc -> loop q INLINE_t loc
             | INT loc -> loop q INT_t loc
             | LBRACE loc -> loop q LBRACE_t loc
+            | LBRACES loc -> loop q LBRACES_t loc
+            | BARES loc -> loop q BARES_t loc
+            | RBRACES loc -> loop q RBRACES_t loc
             | LBRACK loc -> loop q LBRACK_t loc
             | LEFT loc -> loop q LEFT_t loc
             | LEFT_ASSIGN loc -> loop q LEFT_ASSIGN_t loc
@@ -477,6 +496,16 @@ and onelinecomment = parse
             | VOLATILE loc -> loop q VOLATILE_t loc
             | WHILE loc -> loop q WHILE_t loc
             | XOR_ASSIGN loc -> loop q XOR_ASSIGN_t loc
+            | THREAD_LOCAL loc -> loop q THREAD_LOCAL_t loc
+            | ATOMIC loc -> loop q ATOMIC_t loc
+            
+            | C11_ATOMIC_INIT loc -> loop q C11_ATOMIC_INIT_t loc
+            | C11_ATOMIC_STORE loc -> loop q C11_ATOMIC_STORE_t loc
+            | C11_ATOMIC_LOAD loc -> loop q C11_ATOMIC_LOAD_t loc
+            | C11_ATOMIC_EXCHANGE loc -> loop q C11_ATOMIC_EXCHANGE_t loc
+            | C11_ATOMIC_COMPARE_EXCHANGE_STRONG loc -> loop q C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t loc
+            | C11_ATOMIC_COMPARE_EXCHANGE_WEAK loc -> loop q C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t loc
+            | C11_ATOMIC_FETCH_KEY loc -> loop q C11_ATOMIC_FETCH_KEY_t loc
     in
     compute_token_stream (lazy (assert false)) !tokens
 

@@ -25,15 +25,16 @@ Inductive typeSpecifier := (* Merge all specifiers into one type *)
    * a forward declaration or simple reference to the type).
    * They also have a list of __attribute__s that appeared between the
    * keyword and the type name (definitions only) *)
+  | Tatomic : (list spec_elem * decl_type) -> typeSpecifier
   | Tstruct : option atom -> option (list field_group) -> list attribute -> typeSpecifier
   | Tunion : option atom -> option (list field_group) -> list attribute -> typeSpecifier
   | Tenum : option atom -> option (list (atom * option expression * cabsloc)) -> list attribute -> typeSpecifier
 
 with storage :=
-  AUTO | STATIC | EXTERN | REGISTER | TYPEDEF
+  AUTO | STATIC | EXTERN | REGISTER | THREAD_LOCAL | TYPEDEF
 
 with cvspec :=
-  CV_CONST | CV_VOLATILE | CV_RESTRICT
+  CV_CONST | CV_VOLATILE | CV_RESTRICT | CV_ATOMIC
 
 (* Type specifier elements. These appear at the start of a declaration *)
 (* Everywhere they appear in this file, they appear as a 'list spec_elem', *)
@@ -100,7 +101,16 @@ with expression :=
 
     (* A CAST can actually be a constructor expression *)
   | CAST : (list spec_elem * decl_type) -> init_expression -> expression
-
+  
+  (* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
+  | C11_ATOMIC_INIT : expression -> expression -> expression
+  | C11_ATOMIC_STORE : expression -> expression -> expression -> expression
+  | C11_ATOMIC_LOAD : expression -> expression -> expression
+  | C11_ATOMIC_EXCHANGE : expression -> expression -> expression -> expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG : expression -> expression -> expression -> expression -> expression -> expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK : expression -> expression -> expression -> expression -> expression -> expression
+  | C11_ATOMIC_FETCH_KEY : expression -> expression -> expression -> expression
+  
   | CALL : expression -> list expression -> expression
   | BUILTIN_VA_ARG : expression -> list spec_elem * decl_type -> expression
   | CONSTANT : constant -> expression
@@ -189,6 +199,7 @@ with statement :=
  | LABEL : atom -> statement -> cabsloc -> statement
  | GOTO : atom -> cabsloc -> statement
  | DEFINITION : definition -> statement (*definition or declaration of a variable or type*)
+ | PAR : list statement -> cabsloc -> statement (* TODO: this is a fake syntax for thread creation (with direct join) *)
 
 with for_clause :=
  | FC_EXP : expression -> for_clause
