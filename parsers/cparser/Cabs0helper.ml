@@ -93,8 +93,8 @@ end
 
 let string_of_cabsloc l =
   let loc = extern_loc l in
-  Printf.sprintf "%s:%d:%d" loc.Lexing.pos_fname loc.Lexing.pos_lnum loc.Lexing.pos_cnum
+  Printf.sprintf "%s:%d:%d" loc.Lexing.pos_fname loc.Lexing.pos_lnum loc.Lexing.pos_bol (* TODO: maybe wrong *)
 
 let format_cabsloc pp l =
   let loc = extern_loc l in
-  Format.fprintf pp "%s:%d:%d" loc.Lexing.pos_fname loc.Lexing.pos_lnum loc.Lexing.pos_cnum
+  Format.fprintf pp "%s:%d:%d" loc.Lexing.pos_fname loc.Lexing.pos_lnum loc.Lexing.pos_bol (* TODO: maybe wrong *)

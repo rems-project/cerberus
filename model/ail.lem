@@ -213,6 +213,14 @@ type string_literal = option encoding_prefix * string (* textual representation 
 type declaration = ctype * option storage_duration
 
 
+type memory_order =
+  | relaxed
+  | consume
+  | acquire
+  | release
+  | acq_rel
+  | seq_cst
+
 type expression 'a =
   | NULL (* TODO: move inside constant ? *)
   | STRING_LITERAL of string_literal
@@ -241,6 +249,20 @@ type expression 'a =
   | FREE of expression_t 'a
   | MEMCMP of expression_t 'a * expression_t 'a * expression_t 'a
   | MEMCPY of expression_t 'a * expression_t 'a * expression_t 'a
+
+  (* atomic operations (from stdatomic.h) *)
+  (* TODO: the memory_order argument is more restrictive than it should be (should allow any expression) *)
+  | ATOMIC_STORE of expression_t 'a * expression_t 'a * memory_order
+  | ATOMIC_LOAD of expression_t 'a * memory_order
+  | ATOMIC_EXCHANGE of expression_t 'a * expression_t 'a * memory_order
+  | ATOMIC_COMPARE_EXCHANGE_STRONG of expression_t 'a * expression_t 'a * memory_order * memory_order
+  | ATOMIC_COMPARE_EXCHANGE_WEAK of expression_t 'a * expression_t 'a * memory_order * memory_order
+  | ATOMIC_FETCH_KEY of expression_t 'a * expression_t 'a * memory_order
+(*  | ATOMIC_FLAG_TEST_AND_SET of (volatile atomic_flag *object, memory_order order); *)
+(*  | ATOMIC_FLAG_CLEAR(volatile atomic_flag *object, memory_order order); *)
+
+
+
 
 
   (* HACKISH: making it a special case because its type is "polymorphic" *)
@@ -288,8 +310,8 @@ and statement_l 'a = Location.t * statement 'a
 type file 'a = <|
   (* the main function name *)
   main:    id;
-  id_map:  map id declaration; (* declared identifiers *)
-  globals: list (id * expression_t 'a);
+  id_map:  map id declaration;               (* declared identifiers *)
+  globals: list (id * expression_t 'a);      (* *)
   fn_map:  map id (list id * statement_l 'a) (* functions *)
 |>
 

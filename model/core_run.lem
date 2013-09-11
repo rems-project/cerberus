@@ -57,12 +57,16 @@ let compose_cont k1 k2 = k1 @ k2
 (* TODO: this is part of the "memory model" but need to be before Effect (...) *)
 type mem_value =
   | Muninit
-  | Mint of int
+  | Mbase of constant
   | Mobj of (list Symbol.t * num)
   | Mnull
 
 
 type mem_state = Pmap.map mem_addr mem_value * num
+
+
+
+
 
 
 type taction_id = num
@@ -101,6 +105,7 @@ let rec annotate_expr p_aid e =
   | Erun bs d a_vs       -> Erun ({snd p_aid} union bs) d a_vs
   | _                    -> e
 end
+
 
 
 (* TODO: doesn't do what it should *)
@@ -255,7 +260,7 @@ module Effect = struct
   
   
   
-  (* like msum, but the order matter, no it's not a like msum (ahem) *)
+  (* like msum, but the order matter, so it's not a like msum (ahem) *)
   val     dmsum: forall 'a. list (t 'a) -> t 'a
   let rec dmsum ms =
     fun s ->
@@ -315,7 +320,10 @@ module Effect = struct
 
   val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_id)
   let get_proc psym = fun s ->
-    U.return [(Pmap.find psym s.file.funs, s)]
+    if not $ Pmap.mem psym s.file.funs then
+      Boot.assert_false $ "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym)
+    else
+      U.return [(Pmap.find psym s.file.funs, s)]
   
   val register_conts: map sym (map ksym (list (sym * ctype) * expr taction_id)) -> t unit
   let register_conts ks = fun s ->
@@ -594,19 +602,19 @@ let rec eval file pe =
         eval pe2 >>= fun v2 ->
         U.return
           match (binop, v1, v2) with
-            | (OpAdd, Econst n1,  Econst n2 ) -> Econst (Int.(+) n1 n2)
-            | (OpSub, Econst n1,  Econst n2 ) -> Econst (Int.(-) n1 n2)
-            | (OpMul, Econst n1,  Econst n2 ) -> Econst (Int.( * ) n1 n2)
-            | (OpDiv, Econst n1,  Econst n2 ) -> Econst (Int.(/) n1 n2)
-            | (OpMod, Econst n1,  Econst n2 ) -> Econst (Int.(%) n1 n2)
-            | (OpEq,  Econst n1,  Econst n2 ) -> if Int.eq n1 n2   then Etrue else Efalse
-            | (OpEq,  Ectype ty1, Ectype ty2) -> if ty1 = ty2 then Etrue else Efalse
-            | (OpLt,  Econst n1,  Econst n2 ) -> if Int.(<) n1 n2 then Etrue else Efalse
-            | (OpOr,  Efalse,     Efalse    ) -> Efalse
-            | (OpOr,  _,          _         ) -> Etrue
-            | (OpAnd, Etrue,      Etrue     ) -> Etrue
-            | (OpAnd, _,          _         ) -> Efalse
-            | (_,     v1,         v2        ) -> Boot.assert_false $ Boot.pp_core_expr (Eop binop v1 v2)
+            | (OpAdd, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(+) n1 n2)
+            | (OpSub, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(-) n1 n2)
+            | (OpMul, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.( * ) n1 n2)
+            | (OpDiv, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(/) n1 n2)
+            | (OpMod, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(%) n1 n2)
+            | (OpEq,  Econst (Cint n1), Econst (Cint n2) ) -> if Int.eq n1 n2   then Etrue else Efalse
+            | (OpEq,  Ectype ty1,       Ectype ty2       ) -> if ty1 = ty2 then Etrue else Efalse
+            | (OpLt,  Econst (Cint n1), Econst (Cint n2) ) -> if Int.(<) n1 n2 then Etrue else Efalse
+            | (OpOr,  Efalse,           Efalse           ) -> Efalse
+            | (OpOr,  _,                _                ) -> Etrue
+            | (OpAnd, Etrue,            Etrue            ) -> Etrue
+            | (OpAnd, _,                _                ) -> Efalse
+            | (_,     v1,               v2               ) -> Boot.assert_false $ "[Core_run.eval] unmatched Eop: " ^ Boot.pp_core_expr (Eop binop v1 v2)
           end
     | Enot pe ->
         eval pe >>= function
@@ -688,8 +696,8 @@ let perform_action act =
         create pref ty   >>= fun o           ->
         E.return (Tcreate ty o, Eaddr o)
     | Alloc pe pref ->
-        E.runU (eval pe) >>= fun (Econst n) ->
-        alloc pref n     >>= fun o          ->
+        E.runU (eval pe) >>= fun (Econst (Cint n)) ->
+        alloc pref n     >>= fun o                 ->
         E.return (Talloc n o, Eaddr o)
     | Kill pe ->
         E.runU (eval pe) >>= fun (Eaddr o) ->
@@ -697,21 +705,26 @@ let perform_action act =
         E.return (Tkill o, Eskip)
     | Store pe1 pe2 pe3 ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
-        E.runU (eval pe2) >>= fun (Eaddr o)   ->
-        E.runU (eval pe3) >>= function
-          | Econst n -> store ty o (Mint n)  >> E.return (Tstore ty o (Mint n), Eskip)
-          | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o'), Eskip)
-          | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull), Eskip)
-          | v        -> Boot.assert_false $ "[perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
+        E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
+	  | Eaddr o ->
+              E.runU (eval pe3) >>= function
+                | Econst c -> store ty o (Mbase c) >> E.return (Tstore ty o (Mbase c), Eskip)
+                | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o'), Eskip)
+                | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull),   Eskip)
+                | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
+              end
+
+
+          | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
         end
     | Load pe1 pe2 ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
           | Eaddr o -> load ty o >>= function
-                         | Mint v -> E.return (Tload ty o (Mint v), Econst v)
-                         | Mobj v -> E.return (Tload ty o (Mobj v), Eaddr v)
-                         | Munint -> Boot.print_debug "READ AN UNINIT" $
-                                       E.return (Tload ty o Munint, Econst (Int.neg (Int.int 10)))
+                         | Mbase v -> E.return (Tload ty o (Mbase v), Econst v)
+                         | Mobj v  -> E.return (Tload ty o (Mobj v), Eaddr v)
+                         | Munint  -> Boot.print_debug "READ AN UNINIT" $
+                                        E.return (Tload ty o Munint, Econst (Cint $ Int.neg (Int.int 10)))
                        end
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
@@ -790,8 +803,9 @@ and red2_ret x =
     | (Eret pe, _K :: _KS) ->
           push_trace (Rule_Ret, None) >>
           E.get_file               >>= fun file ->
-          E.runU (eval file pe)    >>= fun v ->
+          E.runU (eval file pe)    >>= fun v    ->
           E.return (v, _KS)
+
 
 (*
         if is_value e then
@@ -890,7 +904,7 @@ and red2_neg_wseq x =
                 | Eunseq e2's -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq $ Eaction (Neg, b) :: e2's), _KS)
                 | _           -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq [Eaction (Neg, b); e2]), _KS)
               end
-          | _ -> Boot.assert_false "impossible"
+          | _ -> Boot.assert_false "[Core_run.red2_neg_wseq] impossible"
         end
     | _ -> E.mzero
 end
@@ -929,7 +943,7 @@ and red2_run x =
     | (Erun bs d a_vs, _K :: _KS) ->
         E.get_cont d >>= fun (a_tys, e_cont) ->
         push_trace (Rule_Run, None) >>
-        (* we have create the objects which are visible at the level of the save but not from the run *)
+        (* we have to create the objects which are visible at the level of the save but not from the run *)
         let (create_as, create_tys) = unzip $ List.filter (fun (a,_) -> not (List.exist (fun (x,_) -> x = a) a_vs)) a_tys in
         (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
         let kill_es = List.map snd $ List.filter (fun (a,_) -> not (List.exist (fun (x,_) -> x = a) a_tys)) a_vs in
@@ -1002,7 +1016,7 @@ let rec convert_expr e =
     | Eskip               -> Eskip
     | Etuple es           -> Etuple (List.map convert_expr es)
     | Enull               -> Enull
-    | Econst n            -> Econst n
+    | Econst c            -> Econst c
     | Eimpl i             -> Eimpl i
     | Eaddr o             -> Eaddr o
     | Esym a              -> Esym a
@@ -1300,7 +1314,7 @@ let runE execution_mode file =
   E.return (value, (tact_map, List.rev trace))
 
 
-val run: E.execution_mode -> file zero -> Exception.t (list ((Core.expr taction_id) * (Pmap.map taction_id trace_action * E.trace))) Errors.cause
+val run: E.execution_mode -> file zero -> Exception.t (list ((Core.expr taction_id) * (Pmap.map taction_id trace_action * E.trace))) Errors.t
 let run execution_mode file =
   let file' = convert_file file in
     match (runE execution_mode file') (initial_state file') with
@@ -1309,6 +1323,6 @@ let run execution_mode file =
           Boot.print_debug ("NUMBER OF TRACES= " ^ (string_of_num $ List.length traces))
           Exception.return traces
           
-      | U.Undef us -> Exception.fail (Errors.CORE_UNDEF us)
+      | U.Undef us -> Exception.fail (Location.unknowned, Errors.CORE_UNDEF us)
       | U.Error -> Boot.assert_false "TODO: Core_run.run found an U.Error"
     end

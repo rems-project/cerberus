@@ -99,8 +99,8 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
 --  n
 
 
--- fun usual_arithmetic (ty: ctype, ty: ctype): ctype :=
---  ty
+fun usual_arithmetic (ty: ctype, ty: ctype): ctype :=
+  ty
 
 fun ctype_width (ty: ctype): integer :=
   <sizeof>(ty) * <bits_in_byte>

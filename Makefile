@@ -76,6 +76,8 @@ MODEL_FILES=\
   cabs_to_ail.lem \
   ail_typing.lem \
   range.lem \
+  translation_effect.lem \
+  translation_aux.lem \
   translation.lem
 
 OCAML_LIB=lib/ocaml
@@ -132,8 +134,8 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
 # (FUTURE) see comment below
 #          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)
 	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix ../model/, $(MODEL_FILES))
-	@sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
-	@sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
+	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
+	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_transform.ml
 #	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs0_to_ail.ml
 
@@ -179,6 +181,13 @@ $(OCAML_BUILD_DIR)/cparser/% : % | $(OCAML_BUILD_DIR)
 $(OCAML_BUILD_DIR):
 	mkdir $(OCAML_BUILD_DIR)
 	cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
+
+
+
+
+# Temporary rule while memory.lem is WIP
+memory:
+	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
 
 
 clean:

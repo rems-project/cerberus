@@ -12,7 +12,7 @@ end
 module type PARSER =
 sig
   type result
-  val parse : Input.t -> (result, Errors.cause) Exception.t
+  val parse : Input.t -> (result, Errors.t) Exception.t
 end
 
 module type MAKE =
@@ -33,7 +33,7 @@ struct
       Exception.return result
     with B.Error ->
       let token = Lexing.lexeme lexbuf in
-      Exception.throw (Errors.PARSER ("Unexpected token: " ^ token ^ "."))
+      Exception.throw (Location.unknowned, Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
   let parse input = L.lexbuf parse_exn (L.make input)
 end

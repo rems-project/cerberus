@@ -1,9 +1,36 @@
 open Global
 open Boot
-open Ail
+(* module A = Ail *)
+module C    = Core
+module Caux = Core_aux
 
 (* TEMPORARY *)
 let todo s = assert_false $ "[TODO] " ^ s
+
+
+(* Ctype functions (for the Core variant) *)
+let compatible ty1 ty2 =
+  Ail_typing_aux.compatible (Caux.unproj_ctype ty1) (Caux.unproj_ctype ty2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (* May not be canonical for now *)
@@ -200,8 +227,8 @@ type member_id = Ail.id (*this used to be sym, but we don't want the packing fla
 (* Similarly, I assume that member_id values give
 the appropriate equality.   Likewise for enum types? *)
 
-type struct_definition = list (member_id * Ail.ctype)
-type union_definition = list (member_id * Ail.ctype)
+type struct_definition = list (member_id * C.ctype)
+type union_definition = list (member_id * C.ctype)
 (* (plus more stuff for attributes, handling anonymous struct definitions, bitfields,...). To be fixed up by Kayvan soon from cabs.lem and cabs_parser.lem *)
 
 
@@ -212,14 +239,15 @@ structure, so record layout for each type definition, not for each
 type in use.  Though the existence of different packing compilation
 flags makes this a bit finer than you might think.*)
 
-type struct_layout (* [name = "sl*"] *) = <|
+type struct_layout [name = "sl*"] = <|
   sl_offsets : Pmap.map member_id address;
   sl_size : address;
   sl_alignment : address ;
 |>
 (* plus something for bitfields and for terminal and variable-length arrays...*)
 
-type union_layout = <|
+
+type union_layout [name = "ul*"] = <|
   ul_size : address;
   ul_alignment : address;
 |>
@@ -255,6 +283,8 @@ but we should fix it.  For intptr_t and suchlike you get some symbolic
 constraint w.r.t. the sizes of other types. *)
 
 
+
+
   structs : Pmap.map struct_tag struct_layout;
   unions : Pmap.map union_tag union_layout;
 |>
@@ -266,9 +296,9 @@ constraint w.r.t. the sizes of other types. *)
 
 type lift_value 'a = 
   | Specified of 'a
-  | Unspecified of Ail.ctype 
+  | Unspecified of C.ctype 
   | Trap_representation of num (* don't need to remember the type as if you do anything with this you've already hit undefined behaviour, but you do need the size because you can read the representation of a trap representation *)
-  | Indeterminate_value of Ail.ctype
+  | Indeterminate_value of C.ctype
 
 
 
@@ -289,12 +319,12 @@ type numeric_value = lift_value num
 type member_offset = 
   | Struct_offset of struct_tag * member_id
   | Union_offset of  union_tag	* member_id
-  | Array_offset of Ail.ctype * unlifted_numeric_value
+  | Array_offset of C.ctype * unlifted_numeric_value
 *)
 
      (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_offset_path *)
 
-  (* we thought about also having an "| Array_shift of Ail.ctype" so
+  (* we thought about also having an "| Array_shift of C.ctype" so
   that we could represent subarrays, but in both standard and
   kernel-programmer C we believe it's legit to subtract off a pointer
   that you've been handed, as long as the underlying actual array is
@@ -314,9 +344,9 @@ block-top-level address stuff *)
 
 (*
 type fancy_type = 
-  | Cast of Ail.ctype * fancy_type 
+  | Cast of C.ctype * fancy_type 
   | Member_offset of member_offset * fancy_type 
-  | Type of Ail.ctype (* the type of the unprojected thing...*)
+  | Type of C.ctype (* the type of the unprojected thing...*)
 *)
 
 (*
@@ -373,20 +403,20 @@ type block = | HACK (* it is defined after *)
 
 type symbolic_address = <|
   address_sid:   symbolic_address_id;
-  address_ctype: ctype;
+  address_ctype: C.ctype;
 |>
 
 type pointer_operation_nullary =
-  | Null of Ail.ctype
+  | Null of C.ctype
   | Block of block
   | Address of symbolic_address
   | Function_pointer (* TODO *)
 
 type pointer_operation_unary = 
 (*  | Struct_or_union_offset of struct_or_union_tag * member_id *)
-  | Struct_or_union_offset of ctype * member_id (* the [ctype] must be a STRUCT or UNION *)
-  | Array_offset of Ail.ctype * unlifted_numeric_value
-  | Cast of Ail.ctype
+  | Struct_or_union_offset of C.ctype * member_id (* the [ctype] must be a STRUCT or UNION *)
+  | Array_offset of C.ctype * unlifted_numeric_value
+  | Cast of C.ctype
 
 type pointer_expression =
   | Nullary of pointer_operation_nullary
@@ -396,12 +426,12 @@ type pointer_expression =
 
 (* (always defined)
    Change a non-array (nor function ptr) ctype into an ARRAY of size 1, or does nothing. *)
-val arrayify: Ail.ctype -> Ail.ctype
+val arrayify: C.ctype -> C.ctype
 let arrayify ty =
   match ty with
-    | ARRAY _ _    -> ty
-    | FUNCTION _ _ -> ty
-    | ty           -> ARRAY ty (Some (Int.int 1))
+    | C.ARRAY _ _    -> ty
+    | C.FUNCTION _ _ -> ty
+    | ty             -> C.ARRAY ty (Some (Int.int 1))
   end
 
 
@@ -410,11 +440,11 @@ let arrayify ty =
 
 (* Check whether the second argument is a member of the first one.
    (only defined if the first argument is a STRUCT or UNION ctype) *)
-val is_member_of: ctype -> member_id -> bool
+val is_member_of: C.ctype -> member_id -> bool
 let is_member_of ty m_id =
   match ty with
-    | STRUCT _ _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
-    | UNION _ _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
+    | C.STRUCT _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
+    | C.UNION _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
     | _                 -> assert_false "TODO: message"
   end
 
@@ -424,8 +454,8 @@ let rec check_prefixes xs ys m_id =
   match (xs, ys) with
     | ((idx, mx) :: xs, (idy, my) :: ys) ->
         match (mx, my) with
-          | (MEMBER ty1, MEMBER ty2)                 -> Ail_typing_aux.compatible ty1 ty2
-          | (BITFIELD ty1 n1 p1, BITFIELD ty2 n2 p2) -> Ail_typing_aux.compatible ty1 ty2 && n1 = n2 && p1 = p2
+          | (C.MEMBER ty1, C.MEMBER ty2)                 -> compatible ty1 ty2
+          | (C.BITFIELD ty1 n1 p1, C.BITFIELD ty2 n2 p2) -> compatible ty1 ty2 && n1 = n2 && p1 = p2
         end && (if idx = m_id && idy = m_id then true else check_prefixes xs ys m_id)
     | _ -> assert_false "TODO message"
   end
@@ -433,12 +463,12 @@ let rec check_prefixes xs ys m_id =
 (* Check whether the two first argument have isomorphic prefix up to the third argument.
    (only defined if the two first arguments are both a STRUCT ctypes are both UNION ctypes, and
     the third argument is a member of the both of them) *)
-val structs_unions_compatible_upto: ctype -> ctype -> member_id -> bool
+val structs_unions_compatible_upto: C.ctype -> C.ctype -> member_id -> bool
 let structs_unions_compatible_upto ty1 ty2 m_id =
   match (ty1, ty2) with
-    | (STRUCT _ _ membrs1, STRUCT _ _ membrs2) ->
+    | (C.STRUCT _ membrs1, C.STRUCT _ membrs2) ->
         check_prefixes membrs1 membrs2 m_id
-    | (UNION _ _ membrs1, UNION _ _ membrs2) ->
+    | (C.UNION _ membrs1, C.UNION _ membrs2) ->
         check_prefixes membrs1 membrs2 m_id
     | _ -> assert_false "TODO message"
   end 
@@ -447,13 +477,13 @@ let structs_unions_compatible_upto ty1 ty2 m_id =
 
 
 (* Check whether two lists of struct/union members have a one-to-one correspondence between them. *)
-val     members_one_to_one: list member -> list member -> bool
+val     members_one_to_one: list C.member -> list C.member -> bool
 let rec members_one_to_one membrs1 membrs2 =
   match (membrs1, membrs2) with
-    | ((MEMBER ty1) :: xs, (MEMBER ty2) :: ys) -> Ail_typing_aux.compatible ty1 ty2
+    | ((C.MEMBER ty1) :: xs, (C.MEMBER ty2) :: ys) -> compatible ty1 ty2
     (* TODO!!! currently not looking at the packing flag *)
-    | ((BITFIELD ty1 n1 _) :: xs, (BITFIELD ty2 n2 _) :: ys) ->
-        Ail_typing_aux.compatible ty1 ty2 && assert_false "TODO"
+    | ((C.BITFIELD ty1 n1 _) :: xs, (C.BITFIELD ty2 n2 _) :: ys) ->
+        compatible ty1 ty2 && assert_false "TODO"
   end
 
 
@@ -468,12 +498,12 @@ if one member of the pair is declared with an alignment specifier, the other is 
 
 (* Moreover, two structure, union, [...] declared in separate translation units are compatible if
    their tags and members satisfy the following requirements: *)
-val compatible_struct_union: ctype -> ctype -> bool
+val compatible_struct_union: C.ctype -> C.ctype -> bool
 let compatible_struct_union ty1 ty2 =
-  let (qs1, tag1, membrs1, qs2, tag2, membrs2) =
+  let ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2) =
     match (ty1, ty2) with
-      | (STRUCT qs1 tag1 membrs1, STRUCT qs2 tag2 membrs2) -> (qs1, tag1, membrs1, qs2, tag2, membrs2)
-      | (UNION qs1 tag1 membrs1, UNION qs2 tag2 membrs2) -> (qs1, tag1, membrs1, qs2, tag2, membrs2)
+      | (C.STRUCT (* qs1 *) tag1 membrs1, C.STRUCT (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
+      | (C.UNION  (* qs1 *) tag1 membrs1, C.UNION  (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
       | _ -> Boot.assert_false "TODO message"
     end
   (* If one is declared with a tag, the other shall be declared with the same tag. *)
@@ -488,7 +518,7 @@ let compatible_struct_union ty1 ty2 =
 
 
 
-val     outermost_dynamic_type: pointer_expression -> Ail.ctype (* TODO: jazz this up to return the size and current position for arrays *)
+val     outermost_dynamic_type: pointer_expression -> C.ctype (* TODO: jazz this up to return the size and current position for arrays *)
 (* TYPEDEFs will have been substituted out before we ever get here, btw *)
 let rec outermost_dynamic_type pe =
   match pe with
@@ -497,11 +527,11 @@ let rec outermost_dynamic_type pe =
     | Nullary (Function_pointer) -> todo "TODO"
     | Unary (Struct_or_union_offset s_ty m_id) pe ->
         let (tag, membrs) = match s_ty with
-          | STRUCT _ tag membrs -> (tag, membrs)
-          | UNION  _ tag membrs -> (tag, membrs)
+          | C.STRUCT tag membrs -> (tag, membrs)
+          | C.UNION  tag membrs -> (tag, membrs)
           end
         in match outermost_dynamic_type pe with
-          | Ail.STRUCT _ tag' membrs' ->
+          | C.STRUCT tag' membrs' ->
               if tag <> tag' then
                 assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
                 (* P: later the above check will have to be conditionally-on-flags more liberal, to support
@@ -535,10 +565,10 @@ let wf_pointer_expression_unary pop p =
         
         (* If [m_id] is not a member of [s_ty] *)
         if match s_ty with
-            | STRUCT qs tag members -> List.for_all (fun (x,_) -> m_id <> x) members
-            | UNION  qs tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            | C.STRUCT tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            | C.UNION  tag members -> List.for_all (fun (x,_) -> m_id <> x) members
             
-            | ATOMIC _ -> false (* is undefined according to §6.5.2.3#5 *)
+            | C.ATOMIC _ -> false (* is undefined according to §6.5.2.3#5 *)
             
             | _ -> assert_false "[Memory.wf_pointer_expression_unary] illformed `Struct_or_union' ctor"
            end
@@ -551,14 +581,14 @@ let wf_pointer_expression_unary pop p =
         else
           let p_ty = outermost_dynamic_type p in
           match p_ty with
-            | STRUCT _ _ _ ->
+            | C.STRUCT _ _ ->
                 if assert_false "not semantics_options.isomorphic_stuct_are_compatible" then
-                  Ail_typing_aux.compatible s_ty p_ty
+                  compatible s_ty p_ty
                 else
                   assert_false "structs_are_isomorphic s_ty p_ty"
-            | UNION _ _ _ ->
+            | C.UNION _ _ ->
                 if assert_false "not semantics_options.isomorphic_union_are_compatible" then
-                  Ail_typing_aux.compatible s_ty p_ty
+                  compatible s_ty p_ty
                 else
                   todo "Ail_typing_aux.unions_are_isomorphic s_ty p_ty"
             | _ -> false (* TODO: Or should that be an assert_false? *)
@@ -566,8 +596,8 @@ let wf_pointer_expression_unary pop p =
     
     | Array_offset ty n ->
         match arrayify (outermost_dynamic_type p) with
-          | ARRAY elem_ty None -> todo "no array size in the type of p"
-          | ARRAY elem_ty (Some size) ->
+          | C.ARRAY elem_ty None -> todo "no array size in the type of p"
+          | C.ARRAY elem_ty (Some size) ->
               todo "...walk over the p (using 'typeof') to find the size of the array and where we are in it already, and the element type ty' ..."
               todo "...check ty and ty' are more-or-less the same"
               todo "...check we're in bounds (or plus one)"

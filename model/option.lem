@@ -1,13 +1,21 @@
 open Global
 
-let unit a = Some a
-let bind m f =
+type t 'a = option 'a
+
+val return: forall 'a. 'a -> option 'a
+let return z = Some z
+
+val (>>=): forall 'a 'b. option 'a -> ('a -> option 'b) -> option 'b
+let (>>=) m f =
   match m with
-    | Some a -> f a
+    | Some z -> f z
     | None   -> None
   end
 
-let map f m = bind m (unit -| f)
+val fail: forall 'a. option 'a
+let fail = None
+
+
 
 let is_some = function
   | Some _ -> true

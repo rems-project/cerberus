@@ -25,22 +25,40 @@ module Effect = struct
     id_map       : map id A.declaration;               (* map associating identifiers to their (Ail) declaration         *)
     globals      : list (id * A.expression_t unit);      (* global definitions (??) *)
     fields_map   : map id (list (id * A.member));      (* struct/union members    *)
-    fn_map       : map id (list id * A.statement_l unit) (* functions map           *)
+    fn_map       : map id (list id * A.statement_l unit); (* functions map           *)
+
+    location : Location.t; (* AST location, for error messages *)
   |>
   
   (* Exception monad in the State monad (st = env 'b) *)
-  type t 'a = M.t 'a env Errors.cause
+  type t 'a = M.t 'a env Errors.t
   
   
   (* BEGIN TEMPORARY: (TODO) these will disappear with the fixed module system. *)
   let return    = M.return
-  let fail      = M.fail
-  let option    = M.option
-  let of_option = M.of_option
   let mapM      = M.mapM
   let foldrM    = M.foldrM
   let iter      = M.iter
   (* END TEMPORARY *)
+  
+  
+  val fail: forall 'a. Errors.cause -> t 'a
+  let fail msg = fun env ->
+    Exception.fail (env.location, msg)
+  
+  val of_option: forall 'a. Errors.cause -> option 'a -> t 'a
+  let of_option msg = function
+    | Some a -> return a
+    | None   -> fail msg
+  end
+  
+  val option: forall 'a. Errors.cause -> t (option 'a) -> t 'a
+  let option msg m =
+    M.bind m (function
+      | Some a -> return a
+      | None   -> fail msg
+    end)
+
   
   
   (* Liftings of the operations on the `symbol_table' *)
@@ -103,7 +121,7 @@ module Effect = struct
     )
   
   
-  val init: forall 'a. t 'a -> Exception.t 'a Errors.cause
+  val init: forall 'a. t 'a -> Exception.t 'a Errors.t
   let init m =
     M.run m
     <|
@@ -114,7 +132,8 @@ module Effect = struct
       id_map              = Pmap.empty;
       globals             = [];
       fields_map          = Pmap.empty;
-      fn_map              = Pmap.empty
+      fn_map              = Pmap.empty;
+      location            = Location.unknowned
     |>
   
   
@@ -140,6 +159,15 @@ let resolve_fields tag =
   M.read (fun env ->
     Pmap.find tag env.fields_map
   )
+
+
+
+
+  val set_location: Location.t -> t unit
+  let set_location loc = M.update $ fun env ->
+    <| env with location= loc |>
+
+
 
   
   module Operators = struct
@@ -250,7 +278,7 @@ let desugar_qualifiers =
     | C.CONST    -> A.CONST
     | C.RESTRICT -> A.RESTRICT
     | C.VOLATILE -> A.VOLATILE
-    | C.ATOMIC   -> A.ATOMIC_Q
+    | C.ATOMIC_Q -> A.ATOMIC_Q
   end
 
 
@@ -939,7 +967,7 @@ let desugar_global_defn st (defn, l) =
   | C.EXTERNAL_DECLARATION defns ->
       let f = function
         | (id, Some e, l) -> (id, e)
-        | (id, None,   l) -> Boot.assert_false "(id, (l, Ail_aux.const_int (Int.int 0)))"
+        | (id, None,   l) -> Boot.assert_false "[Cabs_to_ail.desugar_global_defn] EXTERNAL_DECLARATION: (id, (l, Ail_aux.const_int (Int.int 0)))"
       end in
       List.map f -| filter_opt <$> E.mapM desugar_defn defns >>= fun d_defns ->
       E.add_globals d_defns
@@ -953,6 +981,6 @@ let desugar_program startup global_defns =
   E.to_program main
 
 
-val desugar: string -> list C.g_defn_l -> Exception.t (Ail.file unit) Errors.cause
+val desugar: string -> list C.g_defn_l -> Exception.t (Ail.file unit) Errors.t
 let desugar startup global_defns =
   E.init (desugar_program startup global_defns)

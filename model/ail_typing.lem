@@ -4,8 +4,86 @@ module A = Ail
 module T = Ail_typing_aux
 module Annot = Annotate
 
+(*
 module E = Exception
 open E.Operators
+*)
+
+
+(* TODO(yuck, yuck): extending exception with a location *)
+module Effect = struct
+  module M  = State_exception
+  
+  type t 'a = M.t 'a Location.t Errors.t
+  
+  
+  let return    = M.return
+  let fmap      = M.fmap
+  let mapM      = M.mapM
+  let map2      = M.map2
+  let map3      = M.map3
+  
+  val fail: forall 'a. Errors.cause -> t 'a
+  let fail msg = fun loc ->
+    Exception.fail (loc, msg)
+  
+  val of_option: forall 'a. Errors.cause -> option 'a -> t 'a
+  let of_option msg = function
+    | Some a -> return a
+    | None   -> fail msg
+  end
+  
+
+
+  module Operators = struct
+    let (>>=)     = M.bind
+    let (=<<) k m = M.bind m k
+  end
+  open Operators
+  
+  
+  val inj_right: forall 'a 'b 'c. ('b -> t 'c) -> 'a * 'b -> t ('a * 'c)
+  let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
+  
+  
+  let sequence_map mmap =
+    Ocaml.Pmap.fold (fun k m mm->
+      m  >>= fun x   ->
+      mm >>= fun map ->
+      return (Pmap.add k x map)
+    ) mmap (return Pmap.empty)
+  
+  val map_map: forall 'key 'a 'b. ('a -> t 'b) -> Pmap.map 'key 'a -> t (Pmap.map 'key 'b)
+  let map_map f m = sequence_map (Ocaml.Pmap.map f m)
+
+
+(* TODO init *)
+val init: forall 'a. t 'a -> Exception.t 'a Errors.t
+let init m =
+  M.run m Location.unknowned
+
+
+
+
+end
+
+module E = Effect
+open E.Operators
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
 
 let report msg exp = msg
 let invalid msg exp = E.fail (report msg exp)
@@ -30,7 +108,7 @@ let rec is_null_pointer_constant e =
   | _ -> false
   end
 
-val type_of: forall 'msg. A.expression_t A.type_class -> E.t A.ctype 'msg
+val type_of: A.expression_t A.type_class -> E.t A.ctype
 let type_of e =
   let ty' =
     match Annot.type_of e with
@@ -55,7 +133,7 @@ let lvalue_type_of error e =
    recursion. [annotate_exp] complements the process. *)
 
 (* val     check_exp: Ail.file Location.t -> Location.t -> A.expression (Location.t * Ail.type_class) -> E.t Ail.type_class Errors.cause *)
-val     check_exp: Ail.file unit -> A.expression A.type_class -> E.t A.type_class Errors.cause
+val     check_exp: Ail.file unit -> A.expression A.type_class -> E.t A.type_class
 let rec check_exp env e_head =
   match e_head with
     | A.NULL ->
@@ -173,8 +251,8 @@ let rec check_exp env e_head =
         type_of e2 >>= fun t2 ->
         match (t1, t2) with
           | (A.POINTER _ b1, A.POINTER _ b2) ->
-              if T.is_complete_object b1 then
-                if T.is_complete_object b2 then
+              if T.is_complete_object_type b1 then
+                if T.is_complete_object_type b2 then
                   if T.compatible_unqualified b1 b2 then
                 (*
                 E.fail (Errors.AIL_TYPECHECK_UNSUPPORTED
@@ -186,7 +264,7 @@ let rec check_exp env e_head =
                 else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
               else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
           | (A.POINTER _ b1, _) ->
-              if T.is_complete_object b1 then
+              if T.is_complete_object_type b1 then
                 if T.is_integer_type t2 then
                   E.return (A.T_EXP t1)
                 else E.fail Errors.AIL_TYPECHECK_SUB_INTEGER_OR_POINTER
@@ -482,12 +560,15 @@ let rec check_exp env e_head =
           let t_return = T.function_return t_base in
           let t_args = T.function_parameters t_base in
           if T.is_void_type t_return
-            || (T.is_complete_object t_return && not (T.is_array_type t_return)) then
+            || (T.is_complete_object_type t_return && not (T.is_array_type t_return)) then
             if List.length t_args = List.length es then
               let is_assignable t e =
               (* TODO Hack! *)
+              true in
+(*
                 let exp = A.ASSIGN None (one (A.T_LVALUE t)) e in
                 E.to_bool (check_exp env exp) in
+*)
               if List.for_all2 is_assignable t_args es then
                 E.return (A.T_EXP t_return)
               else E.fail Errors.AIL_TYPECHECK_CALL_ARGUMENTS_ASSIGNABLE
@@ -496,9 +577,9 @@ let rec check_exp env e_head =
         else E.fail Errors.AIL_TYPECHECK_CALL_FUNCTION_POINTER
     
     | A.MEMBEROF e (tag, field) ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] MEMBEROF"
     | A.MEMBEROFPTR e (tag, field) ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] MEMBEROFPTR"
     
     (* TODO: this is wrong *)
     | A.CONSTANT (A.CONST_INT (i, _, None)) ->
@@ -526,7 +607,8 @@ let rec check_exp env e_head =
     
     | A.VARIABLE id ->
         let (t, _) = Pmap.find id env.A.id_map in
-        if Pmap.mem id env.A.fn_map then
+        if T.is_function_type t || Pmap.mem id env.A.fn_map then
+          (* if this is a declared identifier with function type, or a function identifier *)
           E.return (A.T_EXP t)
         else
           E.return (A.T_LVALUE t)
@@ -540,7 +622,7 @@ let rec check_exp env e_head =
     | A.EXPR_SIZEOF e ->
         type_of e >>= fun t ->
         if not (T.is_function_type t) then
-          if not (T.is_incomplete t) then
+          if not (T.is_incomplete_type t) then
             E.return (A.T_EXP (A.SIZE_T))
           else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
@@ -551,14 +633,14 @@ let rec check_exp env e_head =
     (* TODO: the bit-field thing *)
     | A.SIZEOF t ->
         if not (T.is_function_type t) then
-          if not (T.is_incomplete t) then
+          if not (T.is_incomplete_type t) then
             E.return (A.T_EXP (A.SIZE_T))
           else E.fail Errors.AIL_TYPECHECK_SIZEOF_INCOMPLETE
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
     
     | A.ALIGNOF t ->
         if not (T.is_function_type t) then
-          if not (T.is_incomplete t) then
+          if not (T.is_incomplete_type t) then
             E.return (A.T_EXP (A.SIZE_T))
           else E.fail Errors.AIL_TYPECHECK_ALIGNOF_INCOMPLETE
         else E.fail Errors.AIL_TYPECHECK_SIZEOF_FUNCTION
@@ -590,20 +672,20 @@ let rec check_exp env e_head =
           E.return (A.T_EXP (A.VOID {}))
     
     | A.CONST_ARRAY es ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] CONST_ARRAY"
     
     | A.CONST_STRUCT_UNION x_es ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] CONST_STRUCT_UNION"
     
     | A.OFFSETOF ty x ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] OFFSETOF"
     
     | A.PRINTF e es ->
-        Boot.assert_false "TODO"
+        Boot.assert_false "TODO [Ail_typing.check_exp] PRINTF"
   end
 
 
-and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type_class) Errors.cause =
+and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type_class) =
   let f = annotate_exp env in
   let a_type e =
     E.fmap (fun t -> Pair.make t e) (check_exp env e) in
@@ -620,11 +702,11 @@ and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type
         | A.CAST t e ->
             E.fmap (A.CAST t) (f e)
         | A.CALL e es ->
-            E.map2 (A.CALL) (f e) (E.map_list f es)
+            E.map2 (A.CALL) (f e) (E.mapM f es)
         | A.MEMBEROF e (tag, field) ->
-            Boot.assert_false "TODO"
+            Boot.assert_false "TODO [ail_typing.a_type] MEMBEROF"
         | A.MEMBEROFPTR e (tag, field) ->
-            Boot.assert_false "TODO"
+            Boot.assert_false "TODO [ail_typing.a_type] MEMBEROFPTR"
         (* TODO: here we get read of the EXPR_SIZEOF ctor (see comment before
                  Ail.EXPR_SIZEOF) *)
         | A.EXPR_SIZEOF e ->
@@ -643,12 +725,12 @@ and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type
         | A.ASSERT e ->
             E.fmap A.ASSERT (f e)
         | A.CONST_ARRAY es ->
-            E.fmap A.CONST_ARRAY (E.map_list f es)
+            E.fmap A.CONST_ARRAY (E.mapM f es)
 (* TODO:
         | A.CONST_STRUCT_UNION of list (id * expression_t 'a)
 *)
         | A.PRINTF e es ->
-            E.map2 A.PRINTF (f e) (E.map_list f es)
+            E.map2 A.PRINTF (f e) (E.mapM f es)
         
         (* nothing happens for the following ctors *)
         | A.NULL ->
@@ -715,7 +797,7 @@ and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type
   end
 
 
-val     annotate_stmt: A.file unit -> A.statement_l unit -> E.t (A.statement_l A.type_class) Errors.cause
+val     annotate_stmt: A.file unit -> A.statement_l unit -> E.t (A.statement_l A.type_class)
 let rec annotate_stmt env (l, stmt) =
   let fe = annotate_exp  env in
   let fs = annotate_stmt env in
@@ -724,7 +806,7 @@ let rec annotate_stmt env (l, stmt) =
       | A.EXPRESSION e ->
           E.fmap A.EXPRESSION (fe e)
       | A.BLOCK ids ss ->
-          E.fmap (A.BLOCK ids) (E.map_list fs ss)
+          E.fmap (A.BLOCK ids) (E.mapM fs ss)
       (* (§6.8.4) Selection statements ****************************************** *)
       | A.IF e s1 s2 ->
           fe e       >>= fun e' ->
@@ -768,9 +850,9 @@ let rec annotate_stmt env (l, stmt) =
       | A.LABEL id s ->
           E.fmap (A.LABEL id) (fs s)
       | A.DECLARATION dl ->
-          E.fmap A.DECLARATION (E.map_list (E.inj_right fe) dl)
+          E.fmap A.DECLARATION (E.mapM (E.inj_right fe) dl)
       | A.PAR ss ->
-          E.fmap A.PAR (E.map_list fs ss)
+          E.fmap A.PAR (E.mapM fs ss)
       
       (* nothing happens for the following ctors *)
       | A.SKIP ->
@@ -829,13 +911,15 @@ map_stmt f_s f_e stmt
   end
 
 
-val annotate: A.file unit -> E.t (A.file A.type_class) Errors.cause
+val annotate: A.file unit -> Exception.t (A.file A.type_class) Errors.t
 let annotate file =
-  E.map_list (E.inj_right (annotate_exp  file)) file.A.globals >>= fun gs ->
-  E.map_map  (E.inj_right (annotate_stmt file)) file.A.fn_map  >>= fun fs ->
-  E.return <|
-    A.main    = file.A.main;
-    A.id_map  = file.A.id_map;
-    A.globals = gs;
-    A.fn_map  = fs
-  |>
+  E.init (
+    E.mapM (E.inj_right (annotate_exp  file)) file.A.globals    >>= fun gs ->
+    E.map_map (E.inj_right (annotate_stmt file)) file.A.fn_map  >>= fun fs ->
+    E.return <|
+      A.main    = file.A.main;
+      A.id_map  = file.A.id_map;
+      A.globals = gs;
+      A.fn_map  = fs
+    |>
+  )

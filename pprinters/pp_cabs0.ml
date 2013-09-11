@@ -19,6 +19,15 @@ let precedence = function
   | OFFSETOF _ -> Some 0
   
   | INDEX _
+  
+  | C11_ATOMIC_INIT _
+  | C11_ATOMIC_STORE _
+  | C11_ATOMIC_LOAD _
+  | C11_ATOMIC_EXCHANGE _
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG _
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK _
+  | C11_ATOMIC_FETCH_KEY _
+  
   | CALL _
   | MEMBEROF _
   | MEMBEROFPTR _
@@ -104,6 +113,9 @@ let rec pp_typeSpecifier = function
   | Tunsigned  -> pp_type "unsigned"
   | T_Bool     -> pp_type "_Bool"
   | Tnamed str -> pp_type str
+  | Tatomic (spec_elems, decl_t) ->
+    pp_type "_Atomic" ^^
+    P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems)
   
   | Tstruct (str_opt, fg_opt, []) -> 
       pp_keyword "struct" ^^
@@ -131,17 +143,19 @@ let rec pp_typeSpecifier = function
 
 
 and pp_storage = function
-  | AUTO     -> pp_keyword "auto"
-  | STATIC   -> pp_keyword "static"
-  | EXTERN   -> pp_keyword "extern"
-  | REGISTER -> pp_keyword "register"
-  | TYPEDEF  -> pp_keyword "typedef"
+  | AUTO         -> pp_keyword "auto"
+  | STATIC       -> pp_keyword "static"
+  | EXTERN       -> pp_keyword "extern"
+  | REGISTER     -> pp_keyword "register"
+  | THREAD_LOCAL -> pp_keyword "_Thread_local"
+  | TYPEDEF      -> pp_keyword "typedef"
 
 
 and pp_cvspec = function
   | CV_CONST    -> pp_keyword "const"
   | CV_VOLATILE -> pp_keyword "volatile"
   | CV_RESTRICT -> pp_keyword "restrict"
+  | CV_ATOMIC   -> pp_keyword "_Atomic"
 
 
 and pp_spec_elem = function
@@ -164,7 +178,10 @@ and pp_decl_type = function
          )
  | PTR (specs, [], decl_t) ->
      fun z ->
-       pp_decl_type decl_t (P.star ^^^ P.separate_map P.space pp_cvspec specs ^^^ z)
+       pp_decl_type decl_t $ P.parens (P.star ^^^ P.separate_map P.space pp_cvspec specs ^^^ z)
+
+
+
  | PROTO (decl_t, (params, is_va)) ->
      fun z->
        pp_decl_type decl_t z ^^
@@ -260,6 +277,29 @@ and pp_expression p expr =
       | CAST ((spec_elems, decl_t), ie) ->
           P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems) ^^
           pp_init_expression ie
+      
+      | C11_ATOMIC_INIT (e1, e2) ->
+          !^ "__c11_atomic_init" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2)
+      | C11_ATOMIC_STORE (e1, e2, e3) ->
+          !^ "__c11_atomic_store" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+      | C11_ATOMIC_LOAD (e1, e2) ->
+          !^ "__c11_atomic_load" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2)
+      | C11_ATOMIC_EXCHANGE (e1, e2, e3) ->
+          !^ "__c11_atomic_exchange" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+      | C11_ATOMIC_COMPARE_EXCHANGE_STRONG (e1, e2, e3, e4, e5) ->
+          !^ "__c11_atomic_compare_exchange_strong" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3 ^^ P.comma ^^^ f e3 ^^ P.comma ^^^ f e5)
+      | C11_ATOMIC_COMPARE_EXCHANGE_WEAK (e1, e2, e3, e4, e5) ->
+          !^ "__c11_atomic_compare_exchange_weak" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3 ^^ P.comma ^^^ f e3 ^^ P.comma ^^^ f e5)
+      | C11_ATOMIC_FETCH_KEY (e1, e2, e3) ->
+          !^ "__c11_atomic_fetch_key" ^^
+          P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+      
       | CALL (e, es) ->
           f e ^^ P.parens (comma_list f es)
 (*  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type) *)
@@ -404,6 +444,12 @@ and pp_statement = function
      pp_keyword "goto" ^^^ !^ str ^^ P.semi
  | DEFINITION def ->
      pp_definition def
+ | PAR (ss, _) ->
+     let threads = P.separate_map (P.space ^^ P.bar ^^ P.bar ^^ P.bar ^^ P.space)
+                                  (fun s -> P.nest 2 (pp_statement s)) ss in
+     P.lbrace ^^ P.lbrace ^^ P.lbrace ^^^
+     threads ^^^
+     P.rbrace ^^ P.rbrace ^^ P.rbrace
 
 
 and pp_for_clause = function

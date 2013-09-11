@@ -1,0 +1,390 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+
+\documentclass[11pt,a4paper,twocolumn]{article}
+
+\usepackage[british]{babel}
+\bibliographystyle{alpha}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+
+\usepackage{xltxtra}
+  \setmainfont[Mapping=tex-text, Ligatures={Common}, Numbers={OldStyle}]{Adobe Garamond Pro}
+  \setmonofont[Scale=0.72, Ligatures=NoCommon]{Monaco}
+  \setsansfont[Scale=0.9, Ligatures=NoCommon]{Gill Sans}
+  \defaultfontfeatures{Scale=MatchLowercase}
+
+% \usepackage{unicode-math}
+%   \setmathfont{STIXGeneral}
+
+\usepackage[colorlinks, citecolor=citeBlue]{hyperref}
+\usepackage{url}
+
+\addtolength{\voffset}{-2cm}
+\addtolength{\hoffset}{-1.5cm}
+\addtolength{\textwidth}{3cm}
+\addtolength{\textheight}{4cm}
+
+\usepackage{color}
+\definecolor{citeBlue}{rgb}{0,0,1}
+% WIP colors
+\definecolor{orange}{rgb}{1,0.5,0}
+\definecolor{red}{rgb}{1,0,0}
+\definecolor{blue}{rgb}{0,0,0.5}
+
+
+\newcommand{\ail}{\textsf{Ail}}
+\newcommand{\core}{\textsf{Core}}
+\newcommand{\theC}{\textsf{C}}
+\newcommand{\Csem}{\textsf{Csem}}
+
+\newcommand{\IBMPOWER}{IBM POWER}
+\newcommand{\POWER}{POWER}
+\newcommand{\Coq}{Coq}
+\newcommand{\Lem}{Lem}
+\newcommand{\OCaml}{OCaml}
+\newcommand{\HOL}{HOL4}
+\newcommand{\Isabelle}{Isabelle}
+\newcommand{\LLVM}{LLVM}
+\newcommand{\GCC}{GCC}
+\newcommand{\CCured}{CCured}
+
+% \newcommand{\IBMPOWER}{\textsf{IBM POWER}}
+% \newcommand{\POWER}{\textsf{POWER}}
+% \newcommand{\Coq}{\textsf{Coq}}
+% \newcommand{\Lem}{\textsf{Lem}}
+% \newcommand{\OCaml}{\textsf{OCaml}}
+% \newcommand{\HOL}{\textsf{HOL4}}
+% \newcommand{\Isabelle}{\textsf{Isabelle}}
+% \newcommand{\LLVM}{\textsf{LLVM}}
+% \newcommand{\GCC}{\textsf{GCC}}
+% \newcommand{\CCured}{\textsf{CCured}}
+
+
+\newcommand{\TODO}{\textsc{ToDo}}
+
+
+\title{Second Year Report \& Dissertation Schedule}
+\author{Kayvan Memarian}
+\date{August 2013}
+
+
+\begin{document}
+
+\maketitle
+
+\section*{Context}
+
+{\color{blue} The project laid out, in my first year report was the
+  developpement of an executable formal semantics for the C
+  programming language. While there exists past work on this topic,
+  and several formalizations of C have been produced, the present work
+  focuses on two aspects which have not really been dealt with in the
+  past. First we consider that a formal model of the C language should
+  not make any assumption regarding implementation defined choices
+  (aspects of the language that the C standard leaves up to the
+  implementor to define). Second, we would like a semantics capable of
+  dealing with realistic low level programs, like pre-existing
+  fragments of operating systems.}
+
+To answer to this problem, I have opted for a {\it elaborative}
+approach, where the semantics of C is given through a translation
+function to a simpler and more principled language (called Core)
+designed specifically for this purpose, and for which a direct
+semantics is given.
+
+Most of my work during my second year has been focused on fixing the
+design for the Core language. Adding successively new features as they
+where needed to make an accurate translation function from C
+possible. 
+
+
+\section*{Research activity}
+
+\subsection*{Implementing Core and adding control operators}
+During the first month following the submission of my first year
+report, my focus was the implementation of Core's dynamics in the
+\texttt{Lem} specification language. This was integrated on Csem,
+a tool started by Justus Matthiesen and that I took over during my
+first year.
+
+The tool can be though of as a C compiler and evaluator: it takes as
+input a preprocessed C program; translates it into a intermediate
+language very close to the actual C; performs the C typechecking and
+type annotate the program; then the translation to Core is then run
+and finally the Core implementation evaluates the generated Core
+program.
+
+My original design of Core did not provide special constructs for the
+elaboration of C's control features like loops, switches, gotos and in
+particular the \texttt{break} and \texttt{continue} statements. The
+original plan was to model these features purely through the use of
+recursive Core functions. As a result the original implementation of
+the Core's dynamics followed a traditional small-step style.  While
+that approach kept the dynamics of Core simple (there was no need to
+talk about continuations in it) and was nicely compositional, it had
+the undesirable side-effect of requiring in the elaboration function
+from C to Core to introduces significant duplications of code and a
+loss of the original program structure through the creation of a large
+quantity of auxiliary functions (e.g. for each \texttt{return}
+statement in a C function, one would need to create a separate Core
+function containing the elaboration of the prefix of the C
+function up to that particular \texttt{return}). As an alternative we
+added to Core a pair of constructs similar to labeled and goto
+statements. Since memory objects and in particular their lifetime are
+made precise in the syntax of Core, these constructs have slightly
+convoluted semantics as it does include the creation and termination
+of objects life. For example, in C one can have the following situation:
+\begin{verbatim}
+int *p;
+{
+  int x;
+  p = &x;
+  goto label;
+}
+
+...
+
+label:
+  S;
+\end{verbatim}
+
+Here when the execution enter the block (region surrounded by braces),
+a new memory object is created corresponding to \texttt{x}, and the
+following assignment makes to global pointer \texttt{p} to that memory
+object. Then, the \texttt{goto} statement jumps out of the block,
+ending at the same time the lifetime of local memory object. At this
+pointer, the C standard says that the value of the pointer become
+{\it indeterminate}. This is precisely something we aim accurately
+modeling with our semantics. To do so, we therefore need to somehow
+propagate throught the C to Core elaboration some informations
+regarding block-scope C variable. This cannot be directly as Core does
+not provide memory reference (with is C's ``variables'' really are),
+instead we have symbolic names, some of them corresponding to the
+memory location of objects (eg. in the elaboration of the beginning of
+the lifetime of a C object, a specific C memory allocating action is
+performed and its value is binded to a fresh symbolic names). As a
+result, Core's labeling and goto statements are annotated with the
+relevant symbolic names in way allowing us simulate lambda lifting.
+
+A side effect of this new approach to modelling C's control operator,
+is a loss of some compositionally at the level of C functions, since
+the elaboration from C to Core now needs to pre-calculate the
+continuations associated to labels (this is made unavoidable by
+forward jumps) and the relation between block scoped object and Core
+symbolic names.
+
+Another related construct we added to Core is one analogous to C's
+\texttt{return}. The addition of these three construsts radically
+changed the shaped of Core's dynamics which is now implemented as a
+small-step evaluator working on stack of continuations.
+
+
+\subsection*{Indeterminately sequenced expressions}
+
+In the first year report, I mentionned C function calls and the fact
+that regarding their ordering the C standard says that they are ``{\it
+  indeterminately-sequenced} with actions for which other operators do
+not already enforce any ordering''. This combines with the semantics
+of the post increment and decrement operators whose two actions (load
+and incrementing/decrementing store) are defined to be atomic from the
+point of view of an indeterminately-sequence function call. To model
+this, Core has the special ordering operator ($\rhd$), for
+increments/decrements, and the unary operator ($\{ \cdot \}$), marking
+indeterminately-sequenced expression.
+
+When we want to be actually run a Core expression with some
+indeterminate sequencing, we need to enumerate all possible induced
+sequencing graph. For example, in \texttt{x++~+~\{ E \}} we have two
+possible sequencing graph: one where the expression E occurs before
+the increment, and one where it occurs after.
+
+One way to solve this problem is to take the graph semantics of the
+Core expression (actions are nodes; the sequencing operator adds an
+edge from the nodes of its first operand to the nodes of its second
+operand; the unsequencing operator adds no edge; \dots), isolate
+indeterminately sequenced actions and find all ways edges that can
+added to the graph to make everything strictly ordered. The problem
+here is again the lack of compositionality. Instead, I have wrote a
+compositional Core to Core rewriting system, which in the pipeline of
+Csem comes after a simple type-checker for Core but before the
+evaluator and produce the set of possible Core programs (or introduce
+non-determinism inside Core expressions).
+
+
+
+\subsection*{Tool engineering}
+
+I have also spent a fair amount of my time doing general software
+engineering on Csem. We use to use are own C parser (other works tend
+to make use of the CIL framework, but prefered not to rely on it as
+its parser doesn't follow clearly what the standard describes) but we
+did not support struct/union, typedef, compound expressions  and the
+multitude of ways to write constant. Since making a C complete parser
+is notoriously difficult, we opted to adopt a thrustworthy parser
+produces in the context of the Compcert project.
+
+I have also worked on adding to Csem the infrastructure that will
+allow us to use it as a tool for detecting programs dependancy on
+implementation defined behaviours. In particular by adding a Core
+standard library and the mechanism to import implementation defined
+choices definition files.
+
+
+\subsection*{Memory layout model}
+
+From the point of view of our semantic model of C, the dynamics of
+Core described earlier allow us to specify what memory actions occurs
+during the evaluation of C expressions and statements, and what
+ordering constraints must be respected. This leaves out the details of
+where and how the memory objects are stored, accessed and
+modified. This aspect is dealt with by a memory layout model. This can
+be made in component of our semantic tool (Csem) that remains
+independent of the other components (like the C typechecking, or the
+dynamics of C implemented by the elaboration function and Core's
+implementation).
+
+The development of such a memory model for Csem has been another focus
+of my work. The main challenge comes from the fact that the C standard
+tries to describe a model which on one side, the respect of some hight
+level properties are impossed on implementation (like guaranties on
+the absence 
+
+
+
+
+
+{\color {red}
+rhoncus tincidunt ligula, et iaculis enim consectetur ac. Etiam luctus
+sem sem, vitae lacinia eros lobortis a.
+
+mattis mollis, massa leo cursus ipsum, vitae malesuada mi ligula non
+turpis. Duis pellentesque nibh purus, eu pharetra risus molestie
+at. Nulla mauris eros, bibendum in ipsum et, dapibus fermentum
+quam. Praesent ut vestibulum nisi, sed faucibus ante. Duis a tellus
+leo.
+
+Aenean quis scelerisque felis. Curabitur pulvinar elit id turpis
+vestibulum, at pulvinar sem dignissim. Suspendisse leo leo,
+ullamcorper eget urna eu, sollicitudin pharetra orci. Sed lacinia
+lectus ligula, malesuada pharetra nulla mollis vitae. Morbi nulla
+nisi, facilisis eget sem non, ultricies suscipit ipsum. Donec vitae
+eleifend felis. Maecenas vestibulum sollicitudin massa, nec tristique
+metus ultricies a. Nam scelerisque massa vel commodo elementum. Aenean
+sed vestibulum arcu. Nulla mattis erat vitae rhoncus iaculis. Nullam
+at laoreet risus, nec porttitor quam. Mauris ac consectetur
+felis. Proin dolor enim, accumsan in condimentum ac, condimentum ut
+lectus. Nunc pretium augue a condimentum sagittis. Morbi lacinia
+sodales tristique.
+
+Aliquam erat volutpat. Nulla facilisi. In sagittis lacus ornare mauris
+rhoncus laoreet. Fusce ut neque accumsan, imperdiet nisi ut,
+condimentum dui. Sed mattis, nulla ac venenatis venenatis, nulla eros
+auctor lorem, id commodo ipsum turpis vel tortor. Morbi molestie
+tincidunt hendrerit. Vivamus eu est varius, mollis justo eleifend,
+mattis nisi. Cras tempus sodales purus eget pretium. Nulla imperdiet
+in felis a facilisis. Donec congue est rhoncus, blandit enim non,
+posuere lacus. Donec pharetra in nisi sed convallis.}
+
+At the moment, our memory model only exists as a mix of prose and
+non-operational Lem code. The current version of Csem relies on a
+naive memory model (map from memory objects to values) which has
+sufficient to evaluate ordering related part of the semantics and
+simple expressions. In the short term, I am planning to polish and
+translate to operational Lem code our real memory layout to be able to
+connect it to the rest of Csem.
+
+
+\subsection*{}
+
+In the short term, I plan polish the Csem tool, a lots of hole remains
+in the elaboration function, and add the memory model as just
+described. Once this is done, I will be able to do large scale testing
+of the semantics (so far I have only relied on small hand written
+programs). This will probably make us of Regehr's Csmith tool.
+
+In goal of producing out of Csem a tool for the detection of program
+dependency on implementations, I plan to modify the Core evaluator by
+adding a symbolic evaluator. This will allow to continue program
+execution until implementation defined constant are really needed.
+
+Another short term project is to connect Csem's to an operational
+version of Mark Batty's concurency memory model that has be developped
+last year by a master student.
+
+
+\subsection*{Thesis layout}
+
+{\color{red} Pellentesque non metus dictum, fringilla elit sed,
+  pharetra magna. Aliquam erat volutpat. Aliquam porttitor arcu justo,
+  a molestie mauris tempor sit amet. Phasellus non laoreet dui,
+  pellentesque faucibus ante. Maecenas id erat at est bibendum
+  rhoncus. Quisque lorem elit, commodo quis porta non, in- terdum ac
+  nisl. Ut tempor commodo nibh, sed euismod nunc adipiscing
+  sed. Aliquam pulvinar, nulla vel mattis mollis, massa leo cursus
+  ipsum, vitae malesuada mi ligula non turpis. Duis pellentesque nibh
+  purus, eu pharetra risus molestie at. Nulla mauris eros, bibendum in
+  ipsum et, dapibus fermentum quam. Praesent ut vestibulum nisi, sed
+  faucibus ante. Duis a tellus leo.  Aenean quis scelerisque
+  felis. Curabitur pulvinar elit id turpis vestibulum, at pulvinar sem
+  dignissim. Suspendisse leo leo, ullamcorper eget urna eu,
+  sollicitudin pharetra orci. Sed la- cinia lectus ligula, malesuada
+  pharetra nulla mollis vitae. Morbi nulla nisi, facilisis eget sem
+  non, ultricies suscipit ipsum. Donec vitae eleifend felis. Maecenas
+  vestibulum sollicitudin massa, nec tristique metus ultricies a. Nam
+  scelerisque massa vel com- modo elementum. Aenean sed vestibulum
+  arcu. Nulla mattis erat vitae rhoncus iaculis. Nullam at laoreet
+  risus, nec porttitor quam. Mauris ac consectetur felis. Proin dolor
+  enim, accumsan in condimentum ac, condimentum ut lectus. Nunc
+  pretium augue a condimentum sagittis. Morbi lacinia sodales
+  tristique.  Aliquam erat volutpat. Nulla facilisi. In sagittis lacus
+  ornare mauris rhoncus laoreet. Fusce ut neque accumsan, imperdiet
+  nisi ut, condimentum dui. Sed mattis, nulla ac venenatis ven-
+  enatis, nulla eros auctor lorem, id commodo ipsum turpis vel
+  tortor. Morbi molestie tincidunt hendrerit. Vivamus eu est varius,
+  mollis justo eleifend, mattis nisi. Cras tempus sodales purus eget
+  pretium. Nulla imperdiet in felis a facilisis. Donec congue est
+  rhoncus, blandit enim non, posuere lacus. Donec pharetra in nisi sed
+  convallis.  Aenean quis scelerisque felis. Curabitur pulvinar elit
+  id turpis vestibulum, at pulvinar sem dignissim. Suspendisse leo
+  leo, ullamcorper eget urna eu, sollicitudin pharetra orci. Sed la-
+  cinia lectus ligula, malesuada pharetra nulla mollis vitae. Morbi
+  nulla nisi, facilisis eget sem non, ultricies suscipit ipsum. Donec
+  vitae eleifend felis. Maecenas vestibulum sollicitudin massa, nec
+  tristique metus ultricies a. Nam scelerisque massa vel com- modo
+  elementum. Aenean sed vestibulum arcu. Nulla mattis erat vitae
+  rhoncus iaculis. Nullam at laoreet risus, nec porttitor quam. Morbi
+  nulla nisi, facilisis eget sem non, ultricies suscipit ipsum.}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

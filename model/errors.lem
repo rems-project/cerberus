@@ -4,6 +4,16 @@ open Core
 type cause =
   | CSEM_NOT_SUPPORTED of string
   
+  
+  (* Cabs0_to_ail *)
+  | CONSTRAINT_6_6__3
+  
+  
+  
+  
+  
+  
+  
   | CABS_TO_AIL_NO_STARTUP of string
   | CABS_TO_AIL_NOT_CONSTANT_EXRESSION
   | CABS_TO_AIL_MULTIPLE_REGISTRATION
@@ -121,10 +131,34 @@ type cause =
   | OTHER of string
 
 
+type t = Location.t * cause
 
-let to_string = function
-  | CSEM_NOT_SUPPORTED msg ->
-      "Csem doesn't yet support `" ^ msg ^"'"
+
+
+let to_string (loc, c) =
+  Location.to_string loc ^ ": " ^
+  match c with
+    | CSEM_NOT_SUPPORTED msg ->
+        "Csem doesn't yet support `" ^ msg ^"'"
+    
+    
+    (* Cabs0_to_ail *)
+    | CONSTRAINT_6_6__3 ->
+        "Violation of constraint 6.6#3 [Constant expressions] `Constant \
+         expressions shall not contain assignment, increment, decrement, \
+         function-call, or comma operators, except when they are contained \
+         within a subexpression that is not evaluated.'\n"
+
+
+
+
+
+
+
+
+
+
+
   | CABS_TO_AIL_NO_STARTUP startup ->
       "Could not find startup function: `" ^ startup ^ "'\n"
   | CABS_TO_AIL_NOT_CONSTANT_EXRESSION ->

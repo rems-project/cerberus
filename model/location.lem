@@ -6,6 +6,10 @@ type loc = <|
 |>
 type t = option loc
 
+
+let unknowned = None
+
+
 val dummy: t
 let dummy =
   let pos = <| L.pos_fname= ""; L.pos_lnum= 0; L.pos_bol= 0; L.pos_cnum= 0 |> in

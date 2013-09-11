@@ -9,6 +9,11 @@ let pstore ty x n   = Eaction (Pos, ({}, Store ty x n  ))
 let pload ty x      = Eaction (Pos, ({}, Load ty x     ))
 
 
+(* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
+let zero : expr zero = Econst (Cint (Int.int 0))
+let one  : expr zero = Econst (Cint (Int.int 1))
+
+
 (* Project an Ail.ctype into a Core.ctype *)
 let rec proj_ctype ty =
   let proj_member = function
@@ -463,7 +468,7 @@ let rec trailing_actions e =
   | Eret e ->
       trailing_actions e
   | End es ->
-      Boot.assert_false "WIP"
+      Boot.assert_false "WIP [Core_aux.trailing_actions] End"
   | Eshift _ e ->
       trailing_actions e
 end
