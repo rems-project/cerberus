@@ -353,12 +353,12 @@ let rec check expected_type e =
           +                 Γ ⊢ load{ty} e ↑ [integer]
 
           *)
-          | Eaction (_, (_, Store ty e1 e2)) -> check (TyBase Ctype)     ty >>
-                                                check (TyBase Address)   e1 >>
-                                                check (TyBase Integer)   e2 >>
-                                                guard_expected (TyEffect Unit)
-          | Eaction (Pos, (_, Load ty e))    -> check (TyBase Address) e >> guard_expected (TyEffect Integer)
-          | Eaction (Neg, (_, Load ty e))    -> check (TyBase Address) e >> guard_expected (TyEffect Unit)
+          | Eaction (_, (_, Store ty e1 e2 _)) -> check (TyBase Ctype)     ty >>
+                                                  check (TyBase Address)   e1 >>
+                                                  check (TyBase Integer)   e2 >>
+                                                  guard_expected (TyEffect Unit)
+          | Eaction (Pos, (_, Load ty e _))    -> check (TyBase Address) e >> guard_expected (TyEffect Integer)
+          | Eaction (Neg, (_, Load ty e _))    -> check (TyBase Address) e >> guard_expected (TyEffect Unit)
 
          (*
           +  Γ ⊢ a1 ↑ address     Γ ⊢ a2 ↑ address
@@ -664,7 +664,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  -------------------------------------- (store)
     +      Γ ⊢ store{τ} e1 e2 : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (_, (_, Store ty e1 e2)) ->
+    | Eaction (_, (_, Store ty e1 e2 _)) ->
         check (TyBase Address)   e1 >>
         check (TyBase Integer)   e2 >>
         E.return (TyEffect Unit)
@@ -675,11 +675,11 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  ------------------------ (load)
     +  Γ ⊢ load{τ} e : integer*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (Pos, (_, Load ty e)) ->
+    | Eaction (Pos, (_, Load ty e _)) ->
         check (TyBase Address) e >>
         E.return (TyEffect Integer)
     
-    | Eaction (Neg, (_, Load ty e)) ->
+    | Eaction (Neg, (_, Load ty e _)) ->
         check (TyBase Address) e >>
         E.return (TyEffect Unit)
     

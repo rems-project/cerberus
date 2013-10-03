@@ -65,6 +65,12 @@ let keywords =
       ("run",     T.RUN     );
       ("case",    T.CASE    );
       ("of",      T.OF      );
+      ("seq_cst", T.SEQ_CST );
+      ("relaxed", T.RELAXED );
+      ("release", T.RELEASE );
+      ("acquire", T.ACQUIRE );
+      ("consume", T.CONSUME );
+      ("acq_rel", T.ACQ_REL );
 
 (* TODO: temporary *)
       ("is_scalar",   T.IS_SCALAR  );

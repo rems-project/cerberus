@@ -2,11 +2,11 @@ open Global
 open Core
 
 (* Some aliases for positive actions *)
-let pcreate ty pref = Eaction (Pos, ({}, Create ty pref))
-let palloc e pref   = Eaction (Pos, ({}, Alloc e pref  ))
-let pkill x         = Eaction (Pos, ({}, Kill x        ))
-let pstore ty x n   = Eaction (Pos, ({}, Store ty x n  ))
-let pload ty x      = Eaction (Pos, ({}, Load ty x     ))
+let pcreate ty pref  = Eaction (Pos, ({}, Create ty pref ))
+let palloc e pref    = Eaction (Pos, ({}, Alloc e pref   ))
+let pkill x          = Eaction (Pos, ({}, Kill x         ))
+let pstore ty x n mo = Eaction (Pos, ({}, Store ty x n mo))
+let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
@@ -179,9 +179,9 @@ and free_syms_action (_, act_) =
         free_syms n
     | Kill o ->
         free_syms o
-    | Store ty o n ->
+    | Store ty o n _ ->
         free_syms ty union free_syms o union free_syms n
-    | Load ty o ->
+    | Load ty o _ ->
         free_syms ty union free_syms o
 end
 
@@ -273,12 +273,12 @@ let rec subst_sym a v e =
 
 and subst_sym_action_ a v act =
   match act with
-    | Create e_ty pref   -> Create (subst_sym a v e_ty) pref
-    | Alloc e_n   pref   -> Alloc (subst_sym a v e_n) pref
-    | Kill e_o           -> Kill (subst_sym a v e_o)
-    | Store e_ty e_o e_v -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v)
-    | Load e_ty e_o      -> Load (subst_sym a v e_ty) (subst_sym a v e_o)
-    | _                  -> act
+    | Create e_ty pref      -> Create (subst_sym a v e_ty) pref
+    | Alloc e_n   pref      -> Alloc (subst_sym a v e_n) pref
+    | Kill e_o              -> Kill (subst_sym a v e_o)
+    | Store e_ty e_o e_v mo -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v) mo
+    | Load e_ty e_o mo      -> Load (subst_sym a v e_ty) (subst_sym a v e_o) mo
+    | _                     -> act
   end
 and subst_sym_action a  v (bs, act) = (bs, subst_sym_action_ a v act)
 and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)

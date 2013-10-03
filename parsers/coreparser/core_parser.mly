@@ -94,8 +94,8 @@ and action =
   | Create of expr
   | Alloc of expr
   | Kill of expr
-  | Store of expr * expr * expr
-  | Load of expr * expr
+  | Store of expr * expr * expr * Ail.memory_order
+  | Load of expr * expr * Ail.memory_order
 and paction = Core.polarity * action
 
 type declaration =
@@ -187,8 +187,8 @@ let convert e arg_syms fsyms =
       | Create e_ty            -> (Pset.empty compare, Core.Create (f st e_ty, []))
       | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n, []))
       | Kill e_o               -> (Pset.empty compare, Core.Kill (f st e_o))
-      | Store (e_ty, e_o, e_n) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n))
-      | Load (e_ty, e_o)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o)))
+      | Store (e_ty, e_o, e_n, mo) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n, mo))
+      | Load (e_ty, e_o, mo)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o, mo)))
   in f (0, arg_syms) e
 
 
@@ -289,7 +289,8 @@ let subst name =
 (* TODO: temporary *)
 %token IS_SCALAR IS_INTEGER IS_SIGNED IS_UNSIGNED
 
-
+(* Memory orders *)
+%token NA SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
 
 (* ctype tokens *)
 %token ATOMIC SHORT INT LONG LONG_LONG
@@ -445,6 +446,14 @@ ctype_:
 | SLASH_BACKSLASH { Core.OpAnd }
 | BACKSLASH_SLASH { Core.OpOr  }
 
+memory_order:
+| SEQ_CST { Ail.Seq_cst }
+| RELAXED { Ail.Relaxed }
+| RELEASE { Ail.Release }
+| ACQUIRE { Ail.Acquire }
+| CONSUME { Ail.Consume }
+| ACQ_REL { Ail.Acq_rel }
+
 action:
 | CREATE ty = delimited(LPAREN, expr, RPAREN)
     { Create ty }
@@ -453,9 +462,13 @@ action:
 | KILL e = expr
     { Kill e }
 | STORE LPAREN ty = expr COMMA x = expr COMMA n = expr RPAREN
-    { Store (ty, x, n) }
+    { Store (ty, x, n, Ail.NA) }
 | LOAD LPAREN ty = expr COMMA x = expr RPAREN
-    { Load (ty, x) }
+    { Load (ty, x, Ail.NA) }
+| STORE LPAREN ty = expr COMMA x = expr COMMA n = expr COMMA mo = memory_order RPAREN
+    { Store (ty, x, n, mo) }
+| LOAD LPAREN ty = expr COMMA x = expr COMMA mo = memory_order RPAREN
+    { Load (ty, x, mo) }
 
 paction:
 | act = action

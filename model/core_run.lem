@@ -703,7 +703,7 @@ let perform_action act =
         E.runU (eval pe) >>= fun (Eaddr o) ->
         kill o           >>
         E.return (Tkill o, Eskip)
-    | Store pe1 pe2 pe3 ->
+    | Store pe1 pe2 pe3 _ ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
@@ -717,7 +717,7 @@ let perform_action act =
 
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
         end
-    | Load pe1 pe2 ->
+    | Load pe1 pe2 _ ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
           | Eaddr o -> load ty o >>= function
@@ -1054,11 +1054,11 @@ let rec convert_expr e =
 and convert_paction (p, a) = (p, convert_action a)
 and convert_action (_, a) =
   ({}, match a with
-    | Create ty pref -> Create (convert_expr ty) pref
-    | Alloc n pref   -> Alloc (convert_expr n) pref
-    | Kill e         -> Kill (convert_expr e)
-    | Store ty o v   -> Store (convert_expr ty) (convert_expr o) (convert_expr v)
-    | Load ty o      -> Load (convert_expr ty) (convert_expr o)
+    | Create ty pref  -> Create (convert_expr ty) pref
+    | Alloc n pref    -> Alloc (convert_expr n) pref
+    | Kill e          -> Kill (convert_expr e)
+    | Store ty o v mo -> Store (convert_expr ty) (convert_expr o) (convert_expr v) mo
+    | Load ty o mo    -> Load (convert_expr ty) (convert_expr o) mo
   end)
 
 
