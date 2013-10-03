@@ -103,3 +103,9 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
+  | SEQ_CST
+  | RELAXED
+  | RELEASE
+  | ACQUIRE
+  | CONSUME
+  | ACQ_REL

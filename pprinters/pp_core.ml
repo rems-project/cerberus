@@ -152,7 +152,15 @@ let pp_constant = function
   | Cfunction _ ->
       !^ "FUNCTION"
 
-
+let pp_memory_order = function
+  | Ail.NA      -> pp_const "NA"
+  | Ail.Seq_cst -> pp_const "Seq_cst"
+  | Ail.Relaxed -> pp_const "Relaxed"
+  | Ail.Release -> pp_const "Release"
+  | Ail.Acquire -> pp_const "Acquire"
+  | Ail.Consume -> pp_const "Consume"
+  | Ail.Acq_rel -> pp_const "Acq_rel"
+  
 let rec pp_expr e =
   let rec pp p e =
     let p' = precedence e in
@@ -275,11 +283,11 @@ let rec pp_expr e =
   in pp None e
 
 and pp_action = function
-  | Create (ty, _)     -> pp_keyword "create" ^^ P.parens (pp_expr ty)
-  | Alloc (a, _)       -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
-  | Kill e             -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
-  | Store (ty, e1, e2) -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2)
-  | Load (ty, e)       -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e)
+  | Create (ty, _)         -> pp_keyword "create" ^^ P.parens (pp_expr ty)
+  | Alloc (a, _)           -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
+  | Kill e                 -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
+  | Store (ty, e1, e2, mo) -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
+  | Load (ty, e, mo)       -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
 
 
 

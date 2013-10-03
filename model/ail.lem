@@ -214,12 +214,13 @@ type declaration = ctype * option storage_duration
 
 
 type memory_order =
-  | relaxed
-  | consume
-  | acquire
-  | release
-  | acq_rel
-  | seq_cst
+  | NA
+  | Seq_cst
+  | Relaxed
+  | Release
+  | Acquire
+  | Consume
+  | Acq_rel
 
 type expression 'a =
   | NULL (* TODO: move inside constant ? *)

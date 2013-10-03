@@ -164,8 +164,8 @@ and action_ 'a =
   | Create of expr 'a * list Symbol.t
   | Alloc of expr 'a * list Symbol.t
   | Kill of expr 'a
-  | Store of expr 'a * expr 'a * expr 'a
-  | Load of expr 'a * expr 'a
+  | Store of expr 'a * expr 'a * expr 'a * Ail.memory_order
+  | Load of expr 'a * expr 'a * Ail.memory_order
 and action 'a  = set 'a * action_ 'a
 and paction 'a = polarity * action 'a
 

@@ -130,7 +130,7 @@ and translate_expr stdlib file expr =
         f e >>= fun core_e ->
         (* shouldn't be a real load ? *)
         return $ C.Ewseq [Some a_e] core_e
-                     (Caux.pload (Caux.mk_ctype ty) (C.Esym a_e))
+                     (Caux.pload (Caux.mk_ctype ty) (C.Esym a_e) Ail.NA)
     
 
 
@@ -149,10 +149,11 @@ and translate_expr stdlib file expr =
         return $
           C.Ewseq [Some a_lvalue] core_e
             (C.Easeq (Some a_load)
-               ({}, C.Load (Caux.mk_ctype (Annotate.lvalue_type_of e)) (C.Esym a_lvalue))
+               ({}, C.Load (Caux.mk_ctype (Annotate.lvalue_type_of e)) (C.Esym a_lvalue) Ail.NA)
                (C.Neg, ({}, C.Store (Caux.mk_ctype (Annotate.lvalue_type_of e))
                                       (C.Esym a_lvalue)
                                       (conv_int [Caux.mk_ctype (Annotate.exp_type_of e); (C.Eop C.OpAdd (C.Esym a_load) Caux.one)])
+                                      Ail.NA
                                     ))
             )
     
@@ -163,10 +164,12 @@ and translate_expr stdlib file expr =
         translate_lvalue stdlib file e >>= fun core_e   ->
         return $
           C.Ewseq [Some a_lvalue] core_e
-            (C.Ewseq [Some a_load] (Caux.pload (Caux.mk_ctype (Annotate.lvalue_type_of e)) (C.Esym a_lvalue))
+            (C.Ewseq [Some a_load] (Caux.pload (Caux.mk_ctype (Annotate.lvalue_type_of e)) (C.Esym a_lvalue) Ail.NA)
                (C.Ewseq [] (Caux.pstore (Caux.mk_ctype (Annotate.lvalue_type_of e))
                                         (C.Esym a_lvalue)
-                                        (conv_int [Caux.mk_ctype (Annotate.exp_type_of e); (C.Eop C.OpSub (C.Esym a_load) Caux.one)]))
+                                        (conv_int [Caux.mk_ctype (Annotate.exp_type_of e); (C.Eop C.OpSub (C.Esym a_load) Caux.one)])
+                                        Ail.NA
+                           )
                   (C.Esym a_load)
                )
             )
@@ -525,7 +528,9 @@ and translate_expr stdlib file expr =
           C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
             (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store (Caux.mk_ctype (Annotate.lvalue_type_of e1))
                                               (C.Esym a_e1)
-                                              (conv [Caux.mk_ctype (Annotate.exp_type_of e1); Caux.mk_ctype (Annotate.exp_type_of e2); C.Esym a_e2]))
+                                              (conv [Caux.mk_ctype (Annotate.exp_type_of e1); Caux.mk_ctype (Annotate.exp_type_of e2); C.Esym a_e2])
+                                              Ail.NA
+                                           )
                                    )
                         )
                        (C.Esym a_e2))
@@ -677,7 +682,7 @@ and translate_expr stdlib file expr =
         if T.is_function_type t then
           return (C.Econst (C.Cfunction id))
         else
-          return $ Caux.pload (Caux.mk_ctype (Annotate.lvalue_type_of expr)) (C.Esym id)
+          return $ Caux.pload (Caux.mk_ctype (Annotate.lvalue_type_of expr)) (C.Esym id) Ail.NA
     
     (* TODO *)
     | A.EXPR_SIZEOF e ->
@@ -1078,7 +1083,7 @@ let rec translate_stmt stdlib file f d_default d_cases d_loop d_break (_, stmt) 
         translate_expr stdlib file e                          >>= fun core_e      ->
         conv (Annotate.exp_type_of e) (lookup_type id) core_e >>= fun core_conv_e ->
         return $ C.Ewseq [Some a] core_conv_e
-                     (Caux.pstore (Caux.mk_ctype (lookup_type id)) (C.Esym id) (C.Esym a)) (* TODO: the id is probably wrong *)
+                     (Caux.pstore (Caux.mk_ctype (lookup_type id)) (C.Esym id) (C.Esym a) Ail.NA) (* TODO: the id is probably wrong *)
       ) defns >>=
       
       (* This pass combine the translated declerations *)

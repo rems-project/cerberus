@@ -81,8 +81,8 @@ and action =
   | Create of expr * list Symbol.t
   | Alloc of expr * list Symbol.t
   | Kill of expr
-  | Store of expr * expr * expr
-  | Load of expr * expr
+  | Store of expr * expr * expr * Ail.memory_order
+  | Load of expr * expr * Ail.memory_order
 and paction = Core.polarity * action
 
 
@@ -123,11 +123,11 @@ let rec import_expr e =
 
 and import_action (_, act) =
   match act with
-    | Core.Create e_ty pref   -> Create (import_expr e_ty) pref
-    | Core.Alloc e_n pref     -> Alloc (import_expr e_n) pref
-    | Core.Kill e_o           -> Kill (import_expr e_o)
-    | Core.Store e_ty e_o e_n -> Store (import_expr e_ty) (import_expr e_o) (import_expr e_n)
-    | Core.Load e_ty e_o      -> Load (import_expr e_ty) (import_expr e_o)
+    | Core.Create e_ty pref      -> Create (import_expr e_ty) pref
+    | Core.Alloc e_n pref        -> Alloc (import_expr e_n) pref
+    | Core.Kill e_o              -> Kill (import_expr e_o)
+    | Core.Store e_ty e_o e_n mo -> Store (import_expr e_ty) (import_expr e_o) (import_expr e_n) mo
+    | Core.Load e_ty e_o mo      -> Load (import_expr e_ty) (import_expr e_o) mo
   end
 and import_paction (p, act) = (p, import_action act)
 
@@ -168,8 +168,8 @@ and export_action act =
     | Create e_ty pref   -> Core.Create (export_expr e_ty) pref
     | Alloc e_n pref     -> Core.Alloc (export_expr e_n) pref
     | Kill e_o           -> Core.Kill (export_expr e_o)
-    | Store e_ty e_o e_n -> Core.Store (export_expr e_ty) (export_expr e_o) (export_expr e_n)
-    | Load e_ty e_o      -> Core.Load (export_expr e_ty) (export_expr e_o)
+    | Store e_ty e_o e_n mo -> Core.Store (export_expr e_ty) (export_expr e_o) (export_expr e_n) mo
+    | Load e_ty e_o mo      -> Core.Load (export_expr e_ty) (export_expr e_o) mo
   end)
 and export_paction (p, act) = (p, export_action act)
 
