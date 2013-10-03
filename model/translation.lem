@@ -11,6 +11,8 @@ module U    = Undefined
 open Translation_effect
 open Translation_aux
 
+(* TODO: now everything is mapped to nonatomics. The translation to atomics still
+   needs to be defined *)
 
 (* val     translate_lvalue: C.file ->  *)
 let rec translate_lvalue stdlib file exp =

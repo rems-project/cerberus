@@ -76,8 +76,8 @@ type trace_action =
   | Tcreate of ctype * mem_addr (* the second argument is the created object *)
   | Talloc of (* TODO: num *) int * mem_addr (* the second argument is the created object *)
   | Tkill of mem_addr
-  | Tstore of ctype * mem_addr * mem_value
-  | Tload of ctype * mem_addr * mem_value (* the last argument is the read value *)
+  | Tstore of ctype * mem_addr * mem_value * Ail.memory_order
+  | Tload of ctype * mem_addr * mem_value * Ail.memory_order (* the one but last argument is the read value *)
 
 type trace_paction = polarity * trace_action
 
@@ -703,28 +703,28 @@ let perform_action act =
         E.runU (eval pe) >>= fun (Eaddr o) ->
         kill o           >>
         E.return (Tkill o, Eskip)
-    | Store pe1 pe2 pe3 _ ->
+    | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> store ty o (Mbase c) >> E.return (Tstore ty o (Mbase c), Eskip)
-                | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o'), Eskip)
-                | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull),   Eskip)
+                | Econst c -> store ty o (Mbase c) >> E.return (Tstore ty o (Mbase c) mo, Eskip)
+                | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o') mo, Eskip)
+                | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull) mo,   Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end
 
 
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
         end
-    | Load pe1 pe2 _ ->
+    | Load pe1 pe2 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
           | Eaddr o -> load ty o >>= function
-                         | Mbase v -> E.return (Tload ty o (Mbase v), Econst v)
-                         | Mobj v  -> E.return (Tload ty o (Mobj v), Eaddr v)
+                         | Mbase v -> E.return (Tload ty o (Mbase v) mo, Econst v)
+                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                                        E.return (Tload ty o Munint, Econst (Cint $ Int.neg (Int.int 10)))
+                                        E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
                        end
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end

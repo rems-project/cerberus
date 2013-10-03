@@ -40,12 +40,14 @@ let string_of_trace_action tact =
         f o ^ " <= alloc " ^ Num.string_of_num n
     | Core_run.Tkill o ->
         "kill " ^ f o
-    | Core_run.Tstore (ty, o, n) ->
+    | Core_run.Tstore (ty, o, n, mo) ->
         "store {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^ f o ^
-          " " ^ string_of_mem_value n
-    | Core_run.Tload (ty, o, v) ->
+          " " ^ string_of_mem_value n ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
+    | Core_run.Tload (ty, o, v, mo) ->
         "load {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^
-          f o ^ " = " ^ string_of_mem_value v
+          f o ^ " = " ^ string_of_mem_value v ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
 
 
 let rec string_of_trace tact_map t =
