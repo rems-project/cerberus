@@ -22,12 +22,14 @@ let string_of_trace_action tact =
         f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}"
     | Core_run.Tkill o ->
         "{\\color{red}\\mathbf{K}} " ^ f o
-    | Core_run.Tstore (ty, o, n) ->
+    | Core_run.Tstore (ty, o, n, mo) ->
         "{\\color{red}\\mathbf{S}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}} " ^ f o ^
-          " := " ^ Pp_run.string_of_mem_value n
-    | Core_run.Tload (ty, o, v) ->
+          " := " ^ Pp_run.string_of_mem_value n ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
+    | Core_run.Tload (ty, o, v, mo) ->
         "{\\color{red}\\mathbf{L}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}} " ^
-          f o ^ " = " ^ Pp_run.string_of_mem_value v
+          f o ^ " = " ^ Pp_run.string_of_mem_value v ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
 
 
 let pp n sb =
