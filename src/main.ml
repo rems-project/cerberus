@@ -143,7 +143,7 @@ let () =
         (* Calling a C preprocessor before running the parser
            (TODO: the choice of the compiler shouldn't be hardcoded) *)
         let c_preprocessing (f: Input.t) =
-          let temp_name = Filename.temp_file (Input.name f) "" in
+          let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
           (* TODO: add an command line option for custom include directories, for now
              I hardcode the location of csmith on AddaX *)
           if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I ~/Applications/Builds/Formal/csmith-git/include/csmith-2.2.0 " ^
