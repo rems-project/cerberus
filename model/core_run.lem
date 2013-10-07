@@ -427,9 +427,10 @@ let kill o = fun (<| E.mem= (m, i) |> as s) ->
 
 val store: ctype -> mem_addr -> mem_value -> E.t unit
 let store _ o v = fun (<| E.mem= (m, i) |> as s) ->
+  let values = if not (Pmap.mem o m) then [] else (Pmap.find o m) in 
   (* DEBUG *)
   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o))
-  U.return [((), <| s with E.mem= (Pmap.add o [(v, 0)] m, i) |>)]
+  U.return [((), <| s with E.mem= (Pmap.add o ((v, 0)::values) m, i) |>)]
 
 val load: ctype -> mem_addr -> E.t mem_value
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
@@ -442,7 +443,7 @@ let load _ o = fun (<| E.mem= (m, _) |> as s) ->
     (* DEBUG *)
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o))
     match values with
-    | (value, action)::_ -> U.return [(value, s)]
+    | (value, _)::_ -> U.return [(value, s)]
     | _ -> (* TODO: if this happens there is a bug in core_run.lem. What kind of
                      error do we throw? *)
             U.undef [Undefined.Outside_lifetime]
