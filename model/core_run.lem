@@ -729,14 +729,14 @@ let perform_action act =
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> store ty o (Mbase c) 0                      >> 
-                              add_trace_action (Tstore ty o (Mbase c) mo) >>= fun taid ->
+                | Econst c -> add_trace_action (Tstore ty o (Mbase c) mo) >>= fun taid ->
+                              store ty o (Mbase c) taid                   >> 
                               E.return (taid, Eskip)
-                | Eaddr o' -> store ty o (Mobj o') 0                      >> 
-                              add_trace_action (Tstore ty o (Mobj o') mo) >>= fun taid ->
+                | Eaddr o' -> add_trace_action (Tstore ty o (Mobj o') mo) >>= fun taid ->
+                              store ty o (Mobj o') taid                   >> 
                               E.return (taid, Eskip)
-                | Enull    -> store ty o (Mnull)   0                    >> 
-                              add_trace_action (Tstore ty o (Mnull) mo) >>= fun taid ->
+                | Enull    -> add_trace_action (Tstore ty o (Mnull) mo) >>= fun taid ->
+                              store ty o (Mnull) taid                   >> 
                               E.return (taid, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end
