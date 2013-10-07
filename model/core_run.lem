@@ -413,12 +413,6 @@ let initial_state file = <|
 
 
 
-val add_trace_action: trace_action -> E.t taction_id
-let add_trace_action tact = 
-  fun (<| E.tact_counter= n; E.tact_map= tact_map |> as s) ->
-    U.return [(n, <| s with E.tact_counter= n+1; E.tact_map= Pmap.add n tact tact_map; |>)]
-
-
 (* push an element in the trace *)
 val push_trace: (dyn_rule * option (set taction_id * taction_id)) -> E.t unit
 let push_trace (r, tact_opt) =
@@ -474,7 +468,7 @@ let store _ o v taid = fun (<| E.mem= (m, i) |> as s) ->
   (* We append the new value to the values already present in the memory *)
   U.return [((), <| s with E.mem= (Pmap.add o ((v, taid)::values) m, i) |>)]
 
-val load: ctype -> mem_addr -> E.t mem_value
+val load: ctype -> mem_addr -> E.t (mem_value * taction_id)
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
   (* DEBUG *)
   if not (Pmap.mem o m) then
@@ -486,7 +480,7 @@ let load _ o = fun (<| E.mem= (m, _) |> as s) ->
     (* Returns the last value stored in memory *)
     let values = (Pmap.find o m) in
     match values with
-    | (value, _)::_ -> U.return [(value, s)]
+    | (value, taid)::_ -> U.return [((value, taid), s)]
     | _ -> Boot.assert_false "todo"
     end
 
@@ -750,7 +744,10 @@ let perform_action act =
     | Load pe1 pe2 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
-          | Eaddr o -> load ty o >>= function
+          | Eaddr o -> load ty o >>= fun (value, store_taid) ->
+                       (* Updating readsfrom *)
+                       (fun (<| E.rf = rf |> as s) -> U.return [((), <| s with E.rf = Set.add (store_taid, new_taid) rf|>)]) >>
+                       match value with
                          | Mbase v -> E.return (Tload ty o (Mbase v) mo, Econst v)
                          | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
