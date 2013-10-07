@@ -208,6 +208,10 @@ module Effect = struct
     tact_counter:   num;                                                        (* counter for the trace actions map                  *)
     tact_map:       Pmap.map taction_id trace_action;
     trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
+    sb:             set (taction_id * taction_id);
+    asw:            set (taction_id * taction_id);
+    rf:             set (taction_id * taction_id);
+    mo:             Pmap.map mem_addr (list taction_id);
   |>
   
   type t 'a = state -> U.t (list ('a * state))
@@ -400,7 +404,11 @@ let initial_state file = <|
   E.cont_map=       Pmap.empty;
   E.tact_counter=   0;
   E.tact_map=       Pmap.empty;
-  E.trace=          []
+  E.trace=          [];
+  E.sb=             {};
+  E.asw=            {};
+  E.rf=             {};
+  E.mo=             Pmap.empty;
 |>
 
 
