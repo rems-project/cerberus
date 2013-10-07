@@ -412,6 +412,12 @@ let initial_state file = <|
 |>
 
 
+(* Adds a trace_action to the modification order *)
+val push_mod_order: mem_addr -> taction_id -> E.t unit
+let push_mod_order o taid = fun (<|E.mo = mod_order |> as s) ->
+  let order = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
+  U.return [((), <| s with E.mo = Pmap.add o (taid::order) mod_order |>)] 
+
 
 (* push an element in the trace *)
 val push_trace: (dyn_rule * option (set taction_id * taction_id)) -> E.t unit
@@ -726,17 +732,19 @@ let perform_action act =
         E.return (Tkill o, Eskip)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
-        E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
+        E.runU (eval pe2) >>= function
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> store ty o (Mbase c) new_taid >> 
-                              E.return (Tstore ty o (Mbase c) mo, Eskip)
-                | Eaddr o' -> store ty o (Mobj o') new_taid >> 
-                              E.return (Tstore ty o (Mobj o') mo, Eskip)
-                | Enull    -> store ty o (Mnull) new_taid >> 
-                              E.return (Tstore ty o (Mnull) mo, Eskip)
+                | Econst c -> E.return ((Mbase c), Eskip)
+                | Eaddr o' -> E.return ((Mobj o'), Eskip)
+                | Enull    -> E.return (Mnull, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
-              end
+              end                       >>= fun (value, e) ->
+              store ty o value new_taid >>
+              (if is_atomic_type ty 
+               then push_mod_order o new_taid
+               else E.return ()) >>
+              E.return (Tstore ty o value mo, e) 
 
 
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e

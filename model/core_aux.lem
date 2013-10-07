@@ -577,3 +577,10 @@ let have_simple_race e1 e2 =
   | Load of expr 'a * expr 'a
 
 *)
+
+val is_atomic_type: ctype -> bool
+let is_atomic_type t = 
+  match t with
+  | ATOMIC _ -> true
+  | _ -> false
+  end
