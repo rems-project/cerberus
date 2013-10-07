@@ -56,7 +56,9 @@ let compose_cont k1 k2 = k1 @ k2
 
 (* TODO: this is part of the "memory model" but need to be before Effect (...) *)
 type mem_value =
-  | Muninit
+  | Muninit    (* TODO: Kayvan has to check whether we van remove this constructor 
+                  and use the empty list in mem_state to denote a created, but 
+                  uninitialized variable. *) 
   | Mbase of constant
   | Mobj of (list Symbol.t * num)
   | Mnull
@@ -403,20 +405,19 @@ let initial_state file = <|
 
 
 (* static object allocation *)
-val create: list Symbol.t -> ctype -> E.t mem_addr
-let create pref _ = fun (<| E.mem= (m, i) |> as s) ->
+val create: list Symbol.t -> ctype -> taction_id -> E.t mem_addr
+let create pref _ taid = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $
-  
   let o = (pref, i) in
-  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, 0)] m, i+1) |>)]
+  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1) |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
-val alloc: list Symbol.t -> int -> E.t mem_addr
-let alloc pref _ = fun (<| E.mem= (m, i) |> as s) ->
+val alloc: list Symbol.t -> int -> taction_id -> E.t mem_addr
+let alloc pref _ taid = fun (<| E.mem= (m, i) |> as s) ->
   let o = (pref, i) in
-  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, 0)] m, i+1) |>)]
+  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1) |>)]
 
 (* static/dynamic object deallocation *)
 val kill: mem_addr -> E.t unit
@@ -425,12 +426,13 @@ let kill o = fun (<| E.mem= (m, i) |> as s) ->
   Boot.print_debug ("[Core_run.kill] @" ^ (string_of_num $ snd o))
   U.return [((), <| s with E.mem= (Pmap.remove o m, i) |> )]
 
-val store: ctype -> mem_addr -> mem_value -> E.t unit
-let store _ o v = fun (<| E.mem= (m, i) |> as s) ->
-  let values = if not (Pmap.mem o m) then [] else (Pmap.find o m) in 
+val store: ctype -> mem_addr -> mem_value -> taction_id -> E.t unit
+let store _ o v taid = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
-  Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o))
-  U.return [((), <| s with E.mem= (Pmap.add o ((v, 0)::values) m, i) |>)]
+  Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o)) $
+  let values = if not (Pmap.mem o m) then [] else (Pmap.find o m) in 
+  (* We append the new value to the values already present in the memory *)
+  U.return [((), <| s with E.mem= (Pmap.add o ((v, taid)::values) m, i) |>)]
 
 val load: ctype -> mem_addr -> E.t mem_value
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
@@ -439,14 +441,13 @@ let load _ o = fun (<| E.mem= (m, _) |> as s) ->
     Boot.print_debug ("[Core_run.load] Not_found: @" ^ (string_of_num $ snd o))
     U.undef [Undefined.Outside_lifetime]
   else
-    let values = (Pmap.find o m) in
     (* DEBUG *)
-    Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o))
+    Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o)) $
+    (* Returns the last value stored in memory *)
+    let values = (Pmap.find o m) in
     match values with
     | (value, _)::_ -> U.return [(value, s)]
-    | _ -> (* TODO: if this happens there is a bug in core_run.lem. What kind of
-                     error do we throw? *)
-            U.undef [Undefined.Outside_lifetime]
+    | _ -> Boot.assert_false "todo"
     end
 
 
@@ -701,11 +702,11 @@ let perform_action act =
   match act with
     | Create pe pref ->
         E.runU (eval pe) >>= fun (Ectype ty) ->
-        create pref ty   >>= fun o           ->
+        create pref ty 0 >>= fun o           ->
         E.return (Tcreate ty o, Eaddr o)
     | Alloc pe pref ->
         E.runU (eval pe) >>= fun (Econst (Cint n)) ->
-        alloc pref n     >>= fun o                 ->
+        alloc pref n 0   >>= fun o                 ->
         E.return (Talloc n o, Eaddr o)
     | Kill pe ->
         E.runU (eval pe) >>= fun (Eaddr o) ->
@@ -716,9 +717,9 @@ let perform_action act =
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> store ty o (Mbase c) >> E.return (Tstore ty o (Mbase c) mo, Eskip)
-                | Eaddr o' -> store ty o (Mobj o') >> E.return (Tstore ty o (Mobj o') mo, Eskip)
-                | Enull    -> store ty o (Mnull)   >> E.return (Tstore ty o (Mnull) mo,   Eskip)
+                | Econst c -> store ty o (Mbase c) 0 >> E.return (Tstore ty o (Mbase c) mo, Eskip)
+                | Eaddr o' -> store ty o (Mobj o') 0 >> E.return (Tstore ty o (Mobj o') mo, Eskip)
+                | Enull    -> store ty o (Mnull)   0 >> E.return (Tstore ty o (Mnull) mo,   Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end
 
