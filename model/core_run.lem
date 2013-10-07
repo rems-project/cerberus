@@ -708,36 +708,31 @@ val perform_action: action_ taction_id -> E.t (taction_id * expr taction_id)
 let perform_action act =
   E.get_file >>= fun file ->
   let eval = eval file in
+  (fun (<| E.tact_counter = new_taid |> as s) -> U.return [(new_taid, s)]) >>= fun new_taid ->
   match act with
     | Create pe pref ->
-        E.runU (eval pe)                >>= fun (Ectype ty) ->
-        create pref ty 0                >>= fun o           ->
-        add_trace_action $ Tcreate ty o >>= fun taid        ->
-        E.return (taid, Eaddr o)
+        E.runU (eval pe)              >>= fun (Ectype ty) ->
+        create pref ty new_taid       >>= fun o           ->
+        E.return (Tcreate ty o, Eaddr o)
     | Alloc pe pref ->
         E.runU (eval pe)              >>= fun (Econst (Cint n)) ->
-        alloc pref n 0                >>= fun o                 ->
-        add_trace_action $ Talloc n o >>= fun taid              ->
-        E.return (taid, Eaddr o)
+        alloc pref n new_taid         >>= fun o                 ->
+        E.return (Talloc n o, Eaddr o)
     | Kill pe ->
         E.runU (eval pe)           >>= fun (Eaddr o) ->
         kill o                     >>
-        add_trace_action (Tkill o) >>= fun taid      ->
-        E.return (taid, Eskip)
+        E.return (Tkill o, Eskip)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> add_trace_action (Tstore ty o (Mbase c) mo) >>= fun taid ->
-                              store ty o (Mbase c) taid                   >> 
-                              E.return (taid, Eskip)
-                | Eaddr o' -> add_trace_action (Tstore ty o (Mobj o') mo) >>= fun taid ->
-                              store ty o (Mobj o') taid                   >> 
-                              E.return (taid, Eskip)
-                | Enull    -> add_trace_action (Tstore ty o (Mnull) mo) >>= fun taid ->
-                              store ty o (Mnull) taid                   >> 
-                              E.return (taid, Eskip)
+                | Econst c -> store ty o (Mbase c) new_taid >> 
+                              E.return (Tstore ty o (Mbase c) mo, Eskip)
+                | Eaddr o' -> store ty o (Mobj o') new_taid >> 
+                              E.return (Tstore ty o (Mobj o') mo, Eskip)
+                | Enull    -> store ty o (Mnull) new_taid >> 
+                              E.return (Tstore ty o (Mnull) mo, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end
 
@@ -748,18 +743,16 @@ let perform_action act =
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
           | Eaddr o -> load ty o >>= function
-                         | Mbase v -> add_trace_action $ Tload ty o (Mbase v) mo >>= fun taid ->
-                                      E.return (taid, Econst v)
-                         | Mobj v  -> add_trace_action $ Tload ty o (Mobj v) mo >>= fun taid ->
-                                      E.return (taid, Eaddr v)
+                         | Mbase v -> E.return (Tload ty o (Mbase v) mo, Econst v)
+                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                                      add_trace_action $ Tload ty o Munint mo >>= fun taid ->
-                                      E.return (taid, Econst (Cint $ Int.neg (Int.int 10)))
+                                      E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
                        end
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
-end
-
+  end >>= fun (tact, e) ->
+  (fun (<| E.tact_map = tact_map |> as s) -> 
+    U.return [((new_taid, e), <| s with E.tact_counter= new_taid+1; E.tact_map= Pmap.add new_taid tact tact_map; |>)])
 
 
 
