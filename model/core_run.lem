@@ -62,7 +62,6 @@ type mem_value =
   | Mnull
 
 
-type mem_state = Pmap.map mem_addr mem_value * num
 
 
 
@@ -80,6 +79,9 @@ type trace_action =
   | Tload of ctype * mem_addr * mem_value * Ail.memory_order (* the one but last argument is the read value *)
 
 type trace_paction = polarity * trace_action
+
+
+type mem_state = Pmap.map mem_addr (list (mem_value * taction_id)) * num
 
 
 
@@ -407,14 +409,14 @@ let create pref _ = fun (<| E.mem= (m, i) |> as s) ->
   Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $
   
   let o = (pref, i) in
-  U.return [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
+  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, 0)] m, i+1) |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
 val alloc: list Symbol.t -> int -> E.t mem_addr
 let alloc pref _ = fun (<| E.mem= (m, i) |> as s) ->
   let o = (pref, i) in
-  U.return [(o, <| s with E.mem= (Pmap.add o Muninit m, i+1) |>)]
+  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, 0)] m, i+1) |>)]
 
 (* static/dynamic object deallocation *)
 val kill: mem_addr -> E.t unit
@@ -427,7 +429,7 @@ val store: ctype -> mem_addr -> mem_value -> E.t unit
 let store _ o v = fun (<| E.mem= (m, i) |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o))
-  U.return [((), <| s with E.mem= (Pmap.add o v m, i) |>)]
+  U.return [((), <| s with E.mem= (Pmap.add o [(v, 0)] m, i) |>)]
 
 val load: ctype -> mem_addr -> E.t mem_value
 let load _ o = fun (<| E.mem= (m, _) |> as s) ->
@@ -436,10 +438,15 @@ let load _ o = fun (<| E.mem= (m, _) |> as s) ->
     Boot.print_debug ("[Core_run.load] Not_found: @" ^ (string_of_num $ snd o))
     U.undef [Undefined.Outside_lifetime]
   else
+    let values = (Pmap.find o m) in
     (* DEBUG *)
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o))
-    U.return [(Pmap.find o m, s)]
-
+    match values with
+    | (value, action)::_ -> U.return [(value, s)]
+    | _ -> (* TODO: if this happens there is a bug in core_run.lem. What kind of
+                     error do we throw? *)
+            U.undef [Undefined.Outside_lifetime]
+    end
 
 
 
