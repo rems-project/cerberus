@@ -404,6 +404,38 @@ let initial_state file = <|
 |>
 
 
+
+val add_trace_action: trace_action -> E.t taction_id
+let add_trace_action tact = 
+  fun (<| E.tact_counter= n; E.tact_map= tact_map |> as s) ->
+    U.return [(n, <| s with E.tact_counter= n+1; E.tact_map= Pmap.add n tact tact_map; |>)]
+
+
+(* push an element in the trace *)
+val push_trace: (dyn_rule * option (set taction_id * taction_id)) -> E.t unit
+let push_trace (r, tact_opt) =
+  Boot.print_debug ("RULE ==> " ^ string_of_rule r) $
+    fun (<| E.trace= t |> as s) ->
+      U.return [((), <| s with E.trace= (r, tact_opt) :: t |>)]
+     
+
+(* get the last element of the trace (crash if none). *)
+val get_trace: E.t (dyn_rule * option (set taction_id * trace_action))
+let get_trace = function
+  | <| E.trace= [] |> ->
+      Boot.assert_false "[Core_run.get_trace] empty trace"
+  | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as s) ->
+      U.return [((r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), s)]
+end
+
+val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
+let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as s) ->
+  U.return [((tact_map, t), s)]
+
+
+
+
+
 (* static object allocation *)
 val create: list Symbol.t -> ctype -> taction_id -> E.t mem_addr
 let create pref _ taid = fun (<| E.mem= (m, i) |> as s) ->
@@ -499,29 +531,6 @@ let pick_one pred l =
 
 
 
-
-(* push an element in the trace *)
-val push_trace: (dyn_rule * option (set taction_id * trace_action)) -> E.t (option taction_id)
-let push_trace (r, tact_opt) =
-  Boot.print_debug ("RULE ==> " ^ string_of_rule r) $
-    fun (<| E.tact_counter= n; E.tact_map= tact_map; E.trace= t |> as s) ->
-      match tact_opt with
-        | None            -> U.return [(None,   <| s with E.trace= (r, None) :: t |>)]
-        | Some (bs, tact) -> U.return [(Some n, <| s with E.tact_counter= n+1; E.tact_map= Pmap.add n tact tact_map; E.trace= (r, Some (bs, n)) :: t |>)]
-     end
-
-(* get the last element of the trace (crash if none). *)
-val get_trace: E.t (dyn_rule * option (set taction_id * trace_action))
-let get_trace = function
-  | <| E.trace= [] |> ->
-      Boot.assert_false "[Core_run.get_trace] empty trace"
-  | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as s) ->
-      U.return [((r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), s)]
-end
-
-val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
-let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as s) ->
-  U.return [((tact_map, t), s)]
 
 
 
@@ -695,31 +704,40 @@ let rec eval file pe =
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
 open E.Operators
-val perform_action: action_ taction_id -> E.t (trace_action * expr taction_id)
+val perform_action: action_ taction_id -> E.t (taction_id * expr taction_id)
 let perform_action act =
   E.get_file >>= fun file ->
   let eval = eval file in
   match act with
     | Create pe pref ->
-        E.runU (eval pe) >>= fun (Ectype ty) ->
-        create pref ty 0 >>= fun o           ->
-        E.return (Tcreate ty o, Eaddr o)
+        E.runU (eval pe)                >>= fun (Ectype ty) ->
+        create pref ty 0                >>= fun o           ->
+        add_trace_action $ Tcreate ty o >>= fun taid        ->
+        E.return (taid, Eaddr o)
     | Alloc pe pref ->
-        E.runU (eval pe) >>= fun (Econst (Cint n)) ->
-        alloc pref n 0   >>= fun o                 ->
-        E.return (Talloc n o, Eaddr o)
+        E.runU (eval pe)              >>= fun (Econst (Cint n)) ->
+        alloc pref n 0                >>= fun o                 ->
+        add_trace_action $ Talloc n o >>= fun taid              ->
+        E.return (taid, Eaddr o)
     | Kill pe ->
-        E.runU (eval pe) >>= fun (Eaddr o) ->
-        kill o           >>
-        E.return (Tkill o, Eskip)
+        E.runU (eval pe)           >>= fun (Eaddr o) ->
+        kill o                     >>
+        add_trace_action (Tkill o) >>= fun taid      ->
+        E.return (taid, Eskip)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function (* fun (Eaddr o)   -> *)
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> store ty o (Mbase c) 0 >> E.return (Tstore ty o (Mbase c) mo, Eskip)
-                | Eaddr o' -> store ty o (Mobj o') 0 >> E.return (Tstore ty o (Mobj o') mo, Eskip)
-                | Enull    -> store ty o (Mnull)   0 >> E.return (Tstore ty o (Mnull) mo,   Eskip)
+                | Econst c -> store ty o (Mbase c) 0                      >> 
+                              add_trace_action (Tstore ty o (Mbase c) mo) >>= fun taid ->
+                              E.return (taid, Eskip)
+                | Eaddr o' -> store ty o (Mobj o') 0                      >> 
+                              add_trace_action (Tstore ty o (Mobj o') mo) >>= fun taid ->
+                              E.return (taid, Eskip)
+                | Enull    -> store ty o (Mnull)   0                    >> 
+                              add_trace_action (Tstore ty o (Mnull) mo) >>= fun taid ->
+                              E.return (taid, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end
 
@@ -730,10 +748,13 @@ let perform_action act =
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
           | Eaddr o -> load ty o >>= function
-                         | Mbase v -> E.return (Tload ty o (Mbase v) mo, Econst v)
-                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
+                         | Mbase v -> add_trace_action $ Tload ty o (Mbase v) mo >>= fun taid ->
+                                      E.return (taid, Econst v)
+                         | Mobj v  -> add_trace_action $ Tload ty o (Mobj v) mo >>= fun taid ->
+                                      E.return (taid, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                                        E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
+                                      add_trace_action $ Tload ty o Munint mo >>= fun taid ->
+                                      E.return (taid, Econst (Cint $ Int.neg (Int.int 10)))
                        end
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
@@ -751,8 +772,8 @@ val red2: expr taction_id * list (cont taction_id) -> E.t (expr taction_id * lis
 let rec red2_pos x =
   match x with
     | (Eaction (Pos, (bs, a)), _KS) ->
-        perform_action a                    >>= fun (a, v)   ->
-        push_trace (Rule_Pos, Some (bs, a)) >>= fun (Some aid) ->
+        perform_action a                    >>= fun (aid, v)   ->
+        push_trace (Rule_Pos, Some (bs, aid)) >>
         E.return (v, annotate (Pos, aid) _KS)
     | _ -> E.mzero
   end
@@ -760,8 +781,8 @@ let rec red2_pos x =
 and red2_neg x =
   match x with
     | (Eaction (Neg, (bs, a)), _KS) ->
-        perform_action a                    >>= fun (a, v)   ->
-        push_trace (Rule_Neg, Some (bs, a)) >>= fun (Some aid) ->
+        perform_action a                    >>= fun (aid, v)   ->
+        push_trace (Rule_Neg, Some (bs, aid)) >>
         E.return (v, annotate (Neg, aid) _KS)
     | _ -> E.mzero
   end 
