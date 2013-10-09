@@ -394,6 +394,60 @@ open E.Operators
 
 
 (* ************************************************************************** *)
+(* Translation from states to executions in Cmm *)
+
+val num_to_cvalue: num -> Cmm.cvalue
+let num_to_cvalue n = Cmm.Rigid (Cmm.Concrete n)
+
+val string_to_cvalue: string -> Cmm.cvalue
+let string_to_cvalue s = Cmm.Rigid (Cmm.Symbolic s)
+
+val addr_to_cvalue: mem_addr -> Cmm.cvalue
+let addr_to_cvalue _ = string_to_cvalue "?"
+
+val mem_value_to_cvalue: mem_value -> Cmm.cvalue
+let mem_value_to_cvalue _ = string_to_cvalue "?"
+
+val to_cmm_action: trace_action -> option Cmm.action
+let to_cmm_action action = 
+  match action with
+  | Tcreate _ _ -> None
+  | Talloc _ _ -> None
+  | Tkill _ -> None
+  | Tstore ty o value mo -> None
+  | Tload ty o value mo -> None
+  end
+
+val to_observable_execution: E.state -> Cmm.observable_execution
+let to_observable_execution s = 
+  let pre_execution =
+    <|
+      Cmm.actions = {};
+      Cmm.threads = {};
+      Cmm.lk      = (fun x -> Cmm.Atomic);
+      Cmm.sb      = {};
+      Cmm.asw     = {};
+      Cmm.dd      = {};
+    |> in
+  let execution_witness = 
+    <|
+      Cmm.rf  = {};
+      Cmm.mo  = {};
+      Cmm.sc  = {};
+      Cmm.lo  = {};
+      Cmm.ao  = {};
+      Cmm.tot = {};
+    |> in
+  (pre_execution, execution_witness)
+  
+val to_complete_execution: E.state -> Cmm.complete_execution
+let to_complete_execution s = 
+  let (Xo, Xw) = to_observable_execution s in
+  (* TODO: Choose the right memory model *)
+  let rl = Cmm.release_acquire_no_locks_relations Xo Xw in
+  (Xo, Xw, rl)
+
+(* ************************************************************************** *)
 (* TODO: dummy memory model (concrete with isolated objects, ignoring C types) *)
 val initial_state: file taction_id -> E.state
 let initial_state file = <|
