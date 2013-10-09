@@ -94,8 +94,8 @@ and action =
   | Create of expr
   | Alloc of expr
   | Kill of expr
-  | Store of expr * expr * expr * Ail.memory_order
-  | Load of expr * expr * Ail.memory_order
+  | Store of expr * expr * expr * Cmm.memory_order
+  | Load of expr * expr * Cmm.memory_order
 and paction = Core.polarity * action
 
 type declaration =
@@ -447,12 +447,12 @@ ctype_:
 | BACKSLASH_SLASH { Core.OpOr  }
 
 memory_order:
-| SEQ_CST { Ail.Seq_cst }
-| RELAXED { Ail.Relaxed }
-| RELEASE { Ail.Release }
-| ACQUIRE { Ail.Acquire }
-| CONSUME { Ail.Consume }
-| ACQ_REL { Ail.Acq_rel }
+| SEQ_CST { Cmm.Seq_cst }
+| RELAXED { Cmm.Relaxed }
+| RELEASE { Cmm.Release }
+| ACQUIRE { Cmm.Acquire }
+| CONSUME { Cmm.Consume }
+| ACQ_REL { Cmm.Acq_rel }
 
 action:
 | CREATE ty = delimited(LPAREN, expr, RPAREN)
@@ -462,9 +462,9 @@ action:
 | KILL e = expr
     { Kill e }
 | STORE LPAREN ty = expr COMMA x = expr COMMA n = expr RPAREN
-    { Store (ty, x, n, Ail.NA) }
+    { Store (ty, x, n, Cmm.NA) }
 | LOAD LPAREN ty = expr COMMA x = expr RPAREN
-    { Load (ty, x, Ail.NA) }
+    { Load (ty, x, Cmm.NA) }
 | STORE LPAREN ty = expr COMMA x = expr COMMA n = expr COMMA mo = memory_order RPAREN
     { Store (ty, x, n, mo) }
 | LOAD LPAREN ty = expr COMMA x = expr COMMA mo = memory_order RPAREN

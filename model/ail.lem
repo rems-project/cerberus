@@ -1,5 +1,4 @@
 open Global
-open Cmm
 
 type id = Symbol.t
 
@@ -214,15 +213,6 @@ type string_literal = option encoding_prefix * string (* textual representation 
 type declaration = ctype * option storage_duration
 
 
-type memory_order =
-  | NA
-  | Seq_cst
-  | Relaxed
-  | Release
-  | Acquire
-  | Consume
-  | Acq_rel
-
 type expression 'a =
   | NULL (* TODO: move inside constant ? *)
   | STRING_LITERAL of string_literal
@@ -254,14 +244,14 @@ type expression 'a =
 
   (* atomic operations (from stdatomic.h) *)
   (* TODO: the memory_order argument is more restrictive than it should be (should allow any expression) *)
-  | ATOMIC_STORE of expression_t 'a * expression_t 'a * memory_order
-  | ATOMIC_LOAD of expression_t 'a * memory_order
-  | ATOMIC_EXCHANGE of expression_t 'a * expression_t 'a * memory_order
-  | ATOMIC_COMPARE_EXCHANGE_STRONG of expression_t 'a * expression_t 'a * memory_order * memory_order
-  | ATOMIC_COMPARE_EXCHANGE_WEAK of expression_t 'a * expression_t 'a * memory_order * memory_order
-  | ATOMIC_FETCH_KEY of expression_t 'a * expression_t 'a * memory_order
-(*  | ATOMIC_FLAG_TEST_AND_SET of (volatile atomic_flag *object, memory_order order); *)
-(*  | ATOMIC_FLAG_CLEAR(volatile atomic_flag *object, memory_order order); *)
+  | ATOMIC_STORE of expression_t 'a * expression_t 'a * Cmm.memory_order
+  | ATOMIC_LOAD of expression_t 'a * Cmm.memory_order
+  | ATOMIC_EXCHANGE of expression_t 'a * expression_t 'a * Cmm.memory_order
+  | ATOMIC_COMPARE_EXCHANGE_STRONG of expression_t 'a * expression_t 'a * Cmm.memory_order * Cmm.memory_order
+  | ATOMIC_COMPARE_EXCHANGE_WEAK of expression_t 'a * expression_t 'a * Cmm.memory_order * Cmm.memory_order
+  | ATOMIC_FETCH_KEY of expression_t 'a * expression_t 'a * Cmm.memory_order
+(*  | ATOMIC_FLAG_TEST_AND_SET of (volatile atomic_flag *object, Cmm.memory_order order); *)
+(*  | ATOMIC_FLAG_CLEAR(volatile atomic_flag *object, Cmm.memory_order order); *)
 
 
 

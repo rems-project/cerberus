@@ -153,13 +153,13 @@ let pp_constant = function
       !^ "FUNCTION"
 
 let pp_memory_order = function
-  | Ail.NA      -> pp_const "NA"
-  | Ail.Seq_cst -> pp_const "Seq_cst"
-  | Ail.Relaxed -> pp_const "Relaxed"
-  | Ail.Release -> pp_const "Release"
-  | Ail.Acquire -> pp_const "Acquire"
-  | Ail.Consume -> pp_const "Consume"
-  | Ail.Acq_rel -> pp_const "Acq_rel"
+  | Cmm.NA      -> pp_const "NA"
+  | Cmm.Seq_cst -> pp_const "Seq_cst"
+  | Cmm.Relaxed -> pp_const "Relaxed"
+  | Cmm.Release -> pp_const "Release"
+  | Cmm.Acquire -> pp_const "Acquire"
+  | Cmm.Consume -> pp_const "Consume"
+  | Cmm.Acq_rel -> pp_const "Acq_rel"
   
 let rec pp_expr e =
   let rec pp p e =

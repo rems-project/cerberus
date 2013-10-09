@@ -81,8 +81,8 @@ and action =
   | Create of expr * list Symbol.t
   | Alloc of expr * list Symbol.t
   | Kill of expr
-  | Store of expr * expr * expr * Ail.memory_order
-  | Load of expr * expr * Ail.memory_order
+  | Store of expr * expr * expr * Cmm.memory_order
+  | Load of expr * expr * Cmm.memory_order
 and paction = Core.polarity * action
 
 
