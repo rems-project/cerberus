@@ -1,4 +1,5 @@
 open Global
+open Cmm
 
 type id = Symbol.t
 
