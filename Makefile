@@ -10,6 +10,9 @@ endif
 LEMLIB_DIR=$(LEMDIR)/library
 LEM=$(LEMDIR)/lem -wl ign -lib $(LEMLIB_DIR)
 
+# The directory of Mark's axiomatic model of concurrency in C11
+CMMDIR=../../../rsem/cpp/axiomatic/ntc/
+
 
 # Source directories
 LEMDIRS=lib/ocaml model
@@ -90,6 +93,9 @@ OCAML_LIB_FILES=\
   decode.lem \
   big_int_.lem
 
+CMM_FILES=\
+  cmm.lem
+
 # TODO: would be nice to have a way to tell Lem when a module is spurious
 SPURIOUS_FILES=\
   pprint_.ml \
@@ -133,7 +139,7 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
            $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES))
 # (FUTURE) see comment below
 #          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)
-	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix ../model/, $(MODEL_FILES))
+	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix $(CMMDIR), $(CMM_FILES)) $(addprefix ../model/, $(MODEL_FILES)) 
 	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_transform.ml
