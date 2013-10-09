@@ -77,8 +77,8 @@ type trace_action =
   | Tcreate of ctype * mem_addr (* the second argument is the created object *)
   | Talloc of (* TODO: num *) int * mem_addr (* the second argument is the created object *)
   | Tkill of mem_addr
-  | Tstore of ctype * mem_addr * mem_value * Ail.memory_order
-  | Tload of ctype * mem_addr * mem_value * Ail.memory_order (* the one but last argument is the read value *)
+  | Tstore of ctype * mem_addr * mem_value * Cmm.memory_order
+  | Tload of ctype * mem_addr * mem_value * Cmm.memory_order (* the one but last argument is the read value *)
 
 type trace_paction = polarity * trace_action
 
