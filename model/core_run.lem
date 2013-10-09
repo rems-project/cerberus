@@ -502,9 +502,9 @@ let store _ o v taid = fun (<| E.mem= (m, i) |> as s) ->
   U.return [((), <| s with E.mem= (Pmap.add o ((v, taid)::values) m, i) |>)]
 
 val load: ctype -> mem_addr -> E.t (mem_value * taction_id)
-let load _ o = fun (<| E.mem= (m, _) |> as s) ->
-  (* DEBUG *)
+let load ty o = fun (<| E.mem= (m, _) |> as s) ->
   if not (Pmap.mem o m) then
+    (* DEBUG *)
     Boot.print_debug ("[Core_run.load] Not_found: @" ^ (string_of_num $ snd o))
     U.undef [Undefined.Outside_lifetime]
   else
@@ -512,11 +512,15 @@ let load _ o = fun (<| E.mem= (m, _) |> as s) ->
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o)) $
     (* Returns the last value stored in memory *)
     let values = (Pmap.find o m) in
-    match values with
-    | (value, taid)::_ -> U.return [((value, taid), s)]
-    | _ -> Boot.assert_false "todo"
-    end
-
+    if is_atomic_type ty then
+      (* load any of the past values *)
+      U.return [((value, taid), s) | forall ((value, taid) MEM values) | true]
+    else
+      (* load the last value *)    
+      match values with
+      | (value, taid)::_ -> U.return [((value, taid), s)]
+      | _ -> Boot.assert_false "Last value cannot be loaded, because there are no values."
+      end
 
 
 (* ************************************************************************** *)
