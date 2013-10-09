@@ -410,13 +410,40 @@ let initial_state file = <|
   E.rf=             {};
   E.mo=             Pmap.empty;
 |>
+  
+(* Reverses the first list, and then appends that list to the second list. *)
+val reverse_and_append: forall 'a. list 'a -> list 'a -> list 'a
+let rec reverse_and_append left right = 
+  match left with 
+  | [] -> right
+  | h::t -> reverse_and_append t (h::right)
+  end
 
+(* Inserts an element in a list. There can be multiple places to insert the element,
+   the function returns a list containing all possible resulting lists. 
+   The make the function recursive, there is an auxiliary argument (of type list) 
+   that will be reversed and appended to the resulting list. *)
+val list_insert_aux: forall 'a. 'a -> list 'a -> list 'a -> list (list 'a)
+let rec list_insert_aux element aux list = 
+  let new_list = reverse_and_append aux (element::list) in
+  match list with
+  | []   -> [new_list]
+  | h::t -> List.append [new_list] (list_insert_aux element (h::aux) t)
+  end
+  
+(* Inserts an element in a list. There can be multiple places to insert the element,
+   the function returns a list containing all possible resulting lists. *)
+val list_insert: forall 'a. 'a -> list 'a -> list (list 'a)
+let list_insert element list = 
+  list_insert_aux element [] list
 
 (* Adds a trace_action to the modification order *)
 val push_mod_order: mem_addr -> taction_id -> E.t unit
 let push_mod_order o taid = fun (<|E.mo = mod_order |> as s) ->
-  let order = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
-  U.return [((), <| s with E.mo = Pmap.add o (taid::order) mod_order |>)] 
+  let order_of_o = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
+  U.return [((), <| s with E.mo = Pmap.add o new_order_of_o mod_order |>)
+            | forall (new_order_of_o MEM list_insert taid order_of_o)
+            | true] 
 
 
 (* push an element in the trace *)
