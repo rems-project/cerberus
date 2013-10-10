@@ -208,6 +208,8 @@ module Effect = struct
     tact_counter:   num;                                                        (* counter for the trace actions map                  *)
     tact_map:       Pmap.map taction_id trace_action;
     trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
+    (* The following members are named after their counterparts in Cmm. *)
+    lk:             Pmap.map Cmm.location Cmm.location_kind;
     sb:             set (taction_id * taction_id);
     asw:            set (taction_id * taction_id);
     rf:             set (taction_id * taction_id);
@@ -403,36 +405,78 @@ val string_to_cvalue: string -> Cmm.cvalue
 let string_to_cvalue s = Cmm.Rigid (Cmm.Symbolic s)
 
 val addr_to_cvalue: mem_addr -> Cmm.cvalue
-let addr_to_cvalue _ = string_to_cvalue "?"
+let addr_to_cvalue (_, i) = num_to_cvalue i
 
 val mem_value_to_cvalue: mem_value -> Cmm.cvalue
 let mem_value_to_cvalue _ = string_to_cvalue "?"
 
-val to_cmm_action: trace_action -> option Cmm.action
-let to_cmm_action action = 
+val type_to_location_kind: ctype -> Cmm.location_kind
+let type_to_location_kind ty = 
+  (* There are no fences yet, so the the type is Cmm.Atomic or Cmm.Non_Atomic *)
+  if is_atomic_type ty then Cmm.Atomic else Cmm.Non_Atomic
+
+val to_cmm_action: taction_id -> trace_action -> option Cmm.action
+let to_cmm_action taid action = 
   match action with
   | Tcreate _ _ -> None
   | Talloc _ _ -> None
   | Tkill _ -> None
+  (* The types are: ctype * mem_addr * mem_value * Cmm.memory_order *)
   | Tstore ty o value mo -> None
   | Tload ty o value mo -> None
   end
 
+val to_cmm_action_map: Pmap.map taction_id trace_action -> Pmap.map taction_id Cmm.action
+let to_cmm_action_map pmap = 
+  let id_action_pairs = {(id, Pmap.find id pmap) | forall (id IN Pmap.domain pmap) | true} in
+  let foldfunction = (fun (id, action) auxmap -> 
+                      match to_cmm_action id action with
+                      | None -> auxmap
+                      | Some cmm_action -> Pmap.add id cmm_action auxmap
+                      end) in
+  Set.fold foldfunction id_action_pairs Pmap.empty
+
+(* Auxilary function for list_to_relation *)
+val list_to_relation_aux: forall 'a. list 'a -> option 'a -> set ('a * 'a)
+let rec list_to_relation_aux list prev = 
+  match list with 
+  | [] -> {}
+  | h::t -> (match prev with
+             | None -> list_to_relation_aux t (Some h)
+             | Some item -> Set.add (h, item) (list_to_relation_aux t (Some h))
+             end)
+  end
+
+(* Outputs the total order with h1 > h2 > h3 for input h1::h2::h3::[] *)
+val list_to_relation: forall 'a. list 'a -> set ('a * 'a)
+let list_to_relation list = 
+  tc (list_to_relation_aux list None)
+
 val to_observable_execution: E.state -> Cmm.observable_execution
 let to_observable_execution s = 
+  let actions = to_cmm_action_map s.E.tact_map in
+  let to_cmm_relation = fun rel -> 
+      (Set.image (fun (x, y) -> (Pmap.find x actions, Pmap.find y actions)) rel) in
   let pre_execution =
     <|
-      Cmm.actions = {};
+      Cmm.actions = Pmap.range actions;
       Cmm.threads = {};
-      Cmm.lk      = (fun x -> Cmm.Atomic);
+      (* We use Non_Atomic as the default location_kind. Some locations are not used
+         in the execution (i.e. there are no actions at that location) and then it does
+         not matter which location_kind we specify. But some actions might be used, but 
+         not present in s.E.lk (for example if it has been created with an alloc rather 
+         than a create). In this case the default location_kind does matter. *)
+      Cmm.lk      = (fun x -> if Pmap.mem x s.E.lk then Pmap.find x s.E.lk else Cmm.Non_Atomic);
       Cmm.sb      = {};
       Cmm.asw     = {};
       Cmm.dd      = {};
     |> in
   let execution_witness = 
     <|
-      Cmm.rf  = {};
-      Cmm.mo  = {};
+      Cmm.rf  = to_cmm_relation s.E.rf;
+      Cmm.mo  = Pervasives.bigunion { to_cmm_relation $ list_to_relation l
+                                    | forall (l IN Pmap.range s.E.mo) 
+                                    | true };
       Cmm.sc  = {};
       Cmm.lo  = {};
       Cmm.ao  = {};
@@ -459,6 +503,7 @@ let initial_state file = <|
   E.tact_counter=   0;
   E.tact_map=       Pmap.empty;
   E.trace=          [];
+  E.lk=             Pmap.empty;
   E.sb=             {};
   E.asw=            {};
   E.rf=             {};
@@ -527,16 +572,22 @@ let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as s) ->
 
 (* static object allocation *)
 val create: list Symbol.t -> ctype -> taction_id -> E.t mem_addr
-let create pref _ taid = fun (<| E.mem= (m, i) |> as s) ->
+let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as s) ->
   (* DEBUG *)
   Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $
+  (* We update the memory (obviously) and we add information about the location 
+     kind to the state *)
   let o = (pref, i) in
-  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1) |>)]
+  U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1);
+                          E.lk = Pmap.add (addr_to_cvalue o) (type_to_location_kind ty) lk |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
 val alloc: list Symbol.t -> int -> taction_id -> E.t mem_addr
 let alloc pref _ taid = fun (<| E.mem= (m, i) |> as s) ->
+  (* We do not know yet what the type is, so we don't know wether it is atomic
+     or nonatomic, so we can't update the location kind in the state. When the 
+     location kind is not set, it is assumed to be nonatomic *)
   let o = (pref, i) in
   U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1) |>)]
 
