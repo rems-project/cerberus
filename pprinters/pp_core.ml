@@ -232,7 +232,7 @@ let rec pp_expr e =
             P.brackets $ P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es
 (*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
         | Ewseq ([], e1, e2) ->
-            pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2
+            P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2)
         | Ewseq ([Some a], e1, e2) ->
             pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
         | Ewseq ([None], e1, e2) ->
