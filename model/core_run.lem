@@ -422,8 +422,16 @@ let to_cmm_action taid action =
   | Talloc _ _ -> None
   | Tkill _ -> None
   (* The types are: ctype * mem_addr * mem_value * Cmm.memory_order *)
-  | Tstore ty o value mo -> None
-  | Tload ty o value mo -> None
+  | Tstore _ o value mo -> Some $ Cmm.Store (Pervasives.string_of_num taid) 
+                                            (string_to_cvalue "?") 
+                                             mo 
+                                            (addr_to_cvalue o) 
+                                            (mem_value_to_cvalue value)
+  | Tload _ o value mo -> Some $ Cmm.Load (Pervasives.string_of_num taid) 
+                                          (string_to_cvalue "?") 
+                                           mo 
+                                          (addr_to_cvalue o) 
+                                          (mem_value_to_cvalue value)
   end
 
 val to_cmm_action_map: Pmap.map taction_id trace_action -> Pmap.map taction_id Cmm.action
