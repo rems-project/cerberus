@@ -40,10 +40,15 @@ let options = Arg.align [
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
 
+let debug_print str =
+  if !Settings.debug > 0 then
+    print_endline str
+
+
 (* some block functions used by the pipeline *)
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
-let pass_message      m   = Exception.fmap (fun v -> print_endline (Colour.ansi_format [Colour.Green] m); v)
+let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
 let return_unit m         = Exception.bind m (fun _ -> Exception.return ())
 
 let catch m =
@@ -59,7 +64,7 @@ let run_pp =
 
 (* for given traces: generated a temporary .dot file, call dot2tex on it and then pdflatex *)
 let write_sb fname ts =
-  print_endline (Colour.ansi_format [Colour.Green] "[generating the pdf of the sb-graph(s)]");
+  debug_print (Colour.ansi_format [Colour.Green] "[generating the pdf of the sb-graph(s)]");
   let dot = List.fold_left (fun acc (n, (_, t)) ->
     (Boot.to_plain_string $ Pp_sb.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc
   ) "" (numerote ts) in
@@ -106,7 +111,7 @@ let () =
       match Core_parser.parse (Input.file fname) with
         | Exception.Result (Core_parser_util.Rstd z) -> z
         | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib." in
-  print_endline (Colour.ansi_format [Colour.Green] "0.1. - Core standard library loaded.");
+  debug_print (Colour.ansi_format [Colour.Green] "0.1. - Core standard library loaded.");
   
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
   let module Core_parser_base = struct
@@ -134,7 +139,7 @@ let () =
         match Core_parser.parse (Input.file iname) with
           | Exception.Result (Core_parser_util.Rimpl z) -> z
           | _ -> error "(TODO_MSG) found an error while parsing the implementation file." in
-  print_endline (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
+  debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   
   
   let pipeline file_name =
@@ -181,8 +186,8 @@ let () =
         >|> pass_message "1-4. Parsing completed!"
         >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
       
-      if      Filename.check_suffix file_name ".c"    then (print_endline "Cmulator mode"    ; c_frontend    m)
-      else if Filename.check_suffix file_name ".core" then (print_endline "Core runtime mode"; core_frontend m)
+      if      Filename.check_suffix file_name ".c"    then (debug_print "Cmulator mode"    ; c_frontend    m)
+      else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
                                                       else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
     let core_backend m =
       ((m
