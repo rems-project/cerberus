@@ -672,9 +672,6 @@ let store _ o v taid = fun (<| E.mem= (m, i) |> as s) ->
   (* We append the new value to the values already present in the memory *)
   U.return [((), <| s with E.mem= (Pmap.add o ((v, taid)::values) m, i) |>)]
 
-(* Loads a value (and the taction_id of the action that stored that value). When
-   the location is atomic, it non-deterministically loads from any of the past 
-   values. Otherwise it loads the last value. *)
 val load: ctype -> mem_addr -> E.t (mem_value * taction_id)
 let load ty o = fun (<| E.mem= (m, _) |> as s) ->
   if not (Pmap.mem o m) then
@@ -686,7 +683,7 @@ let load ty o = fun (<| E.mem= (m, _) |> as s) ->
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o)) $
     (* Returns the last value stored in memory *)
     let values = (Pmap.find o m) in
-    if get_location_kind s (addr_to_cvalue o) = Cmm.Atomic then
+    if is_atomic_type ty then
       (* load any of the past values *)
       U.return [((value, taid), s) | forall ((value, taid) MEM values) | true]
     else

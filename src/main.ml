@@ -20,11 +20,15 @@ let random_mode      = ref Core_run.E.Exhaustive
 let sb_graph         = ref false
 let skip_core_tcheck = ref false (* TODO: this is temporary, until I fix the typechecker (...) *)
 
+(* Test mode of Kyndylan *)
+let testing = ref false
+
 
 (* command-line handler *)
 let options = Arg.align [
   ("--impl",  Arg.Set_string impl_file,   "<name> Select an implementation definition");
   ("--debug", Arg.Set_int Settings.debug, "       Set the debug noise level (default: 0 = nothing)");
+  ("--test",  Arg.Set testing           , "       Activate Kyndylan's test mode");
   
   (* Core backend options *)
   ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                               "       Do not run the Core typechecker");
@@ -49,7 +53,9 @@ let debug_print str =
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
 let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_unit m         = Exception.bind m (fun _ -> Exception.return ())
+let return_none m         = Exception.bind m (fun _ -> Exception.return None)
+let return_empty m        = Exception.bind m (fun _ -> Exception.return [])
+
 
 let catch m =
   match Exception.catch m with
@@ -78,6 +84,134 @@ let write_sb fname ts =
   Sys.remove (fname ^ ".log")
 
 
+
+
+
+
+
+
+
+
+
+(* load the Core standard library *)
+let load_stdlib csemlib_path =
+  let fname = Filename.concat csemlib_path "corelib/std.core" in
+  if not (Sys.file_exists fname) then
+    error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "'."
+  else
+    (* An preliminary instance of the Core parser *)
+    let module Core_parser_base = struct
+      include Core_parser.Make (struct let std = Pmap.empty compare end)
+      type token = Core_parser_util.token
+      type result = Core_parser_util.result
+    end in
+    let module Core_parser =
+      Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
+    (* TODO: yuck *)
+    match Core_parser.parse (Input.file fname) with
+      | Exception.Result (Core_parser_util.Rstd z) -> z
+      | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib."
+
+
+let load_impl core_parse csemlib_path =
+    if !impl_file = "" then 
+      error "expecting an implementation to be specified (using --impl <name>)."
+    else
+      let iname = Filename.concat csemlib_path ("corelib/impls/" ^ !impl_file ^ ".impl") in
+      if not (Sys.file_exists iname) then
+        error $ "couldn't find the implementation file\n (looked at: `" ^ iname ^ "'."
+      else
+      (* TODO: yuck *)
+        match core_parse (Input.file iname) with
+          | Exception.Result (Core_parser_util.Rimpl z) -> z
+          | _ -> error "(TODO_MSG) found an error while parsing the implementation file."
+
+
+let pipeline stdlib impl core_parse file_name =
+  let frontend m =
+    let c_frontend m =
+      (* Calling a C preprocessor before running the parser
+         (TODO: the choice of the compiler shouldn't be hardcoded) *)
+      let c_preprocessing (f: Input.t) =
+        let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
+        (* TODO: add an command line option for custom include directories, for now
+           I hardcode the location of csmith on AddaX *)
+        if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I ~/Applications/Builds/Formal/csmith-git/include/csmith-2.2.0 " ^
+                           Input.name f ^ " > " ^ temp_name) <> 0 then
+          error "the C preprocessor failed";
+        Input.file temp_name in
+          Exception.return (c_preprocessing m)
+      >|> Exception.fmap Cparser.Driver.parse
+      >|> pass_message "1. Parsing completed!"
+          
+      >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
+          
+      >|> Exception.fmap Cabs_transform.transform_file
+      >|> pass_message "1.5. Cabs AST transform completed!"
+      >|> pass_through_test !print_cabs (run_pp -| Pp_cabs.pp_file)
+          
+      >|> Exception.rbind (Cabs_to_ail.desugar "main")
+      >|> pass_message "2. Cabs -> Ail completed!"
+      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
+      >|> Exception.rbind Ail_typing.annotate
+      >|> pass_message "3. Ail typechecking completed!"
+      >|> Exception.fmap (Translation.translate stdlib impl)
+      >|> pass_message "4. Translation to Core completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
+      >|> Exception.fmap Core_simpl.simplify
+      >|> pass_message "5. Core to Core simplication completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
+    
+    let core_frontend m =
+          core_parse m
+      >|> Exception.fmap (function
+            | Core_parser_util.Rfile (a_main, funs) ->
+              { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.funs= funs }
+            | _ -> assert false)
+      >|> pass_message "1-4. Parsing completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
+    if      Filename.check_suffix file_name ".c"    then (debug_print "Cmulator mode"    ; c_frontend    m)
+    else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
+                                                    else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
+  let core_backend m =
+    ((m
+    >?> !skip_core_tcheck)
+      (pass_message "5. Skipping Core's typechecking")
+      (fun m ->
+            Exception.rbind Core_typing.typecheck m
+        >|> pass_message "5. Core's typechecking completed!")
+    >?> !execute)
+      (fun m ->
+        (pass_message "6. Enumerating indet orders:" m
+        >|> Exception.rbind Core_indet.order
+        >|> pass_message "7. Now running:"
+	>?> !testing)
+	  (* TODO: this is ridiculous *)
+	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run !random_mode f)))
+	  (Exception.rbind
+             (Exception.map_list
+		(fun (n,f) -> Core_run.run !random_mode f
+                              >|> pass_message ("SB order #" ^ string_of_int n)
+                              >|> pass_through Pp_run.pp_traces
+                              >|> pass_through_test !sb_graph (write_sb file_name)
+                              >|> return_empty
+		)
+	     )
+	  )
+      )
+      return_empty in
+  
+  file_name
+  >|> Input.file
+  >|> frontend
+  >|> core_backend
+
+
+
+
+
+
+
 (* the entry point *)
 let () =
   print_endline "Csem (hg version: <<HG-IDENTITY>>)"; (* this is "sed-out" by the Makefile *)
@@ -94,23 +228,7 @@ let () =
       error "expecting the environment variable CSEMLIB_PATH to point to the location of std.core." in
   
   (* Looking for and parsing the core standard library *)
-  let stdlib =
-    let fname = Filename.concat csemlib_path "corelib/std.core" in
-    if not (Sys.file_exists fname) then
-      error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "'."
-    else
-      (* An preliminary instance of the Core parser *)
-      let module Core_parser_base = struct
-        include Core_parser.Make (struct let std = Pmap.empty compare end)
-        type token = Core_parser_util.token
-        type result = Core_parser_util.result
-      end in
-      let module Core_parser =
-        Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-      (* TODO: yuck *)
-      match Core_parser.parse (Input.file fname) with
-        | Exception.Result (Core_parser_util.Rstd z) -> z
-        | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib." in
+  let stdlib = load_stdlib csemlib_path in
   debug_print (Colour.ansi_format [Colour.Green] "0.1. - Core standard library loaded.");
   
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
@@ -127,91 +245,7 @@ let () =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   
   (* Looking for and parsing the implementation file *)
-  let impl =
-    if !impl_file = "" then 
-      error "expecting an implementation to be specified (using --impl <name>)."
-    else
-      let iname = Filename.concat csemlib_path ("corelib/impls/" ^ !impl_file ^ ".impl") in
-      if not (Sys.file_exists iname) then
-        error $ "couldn't find the implementation file\n (looked at: `" ^ iname ^ "'."
-      else
-      (* TODO: yuck *)
-        match Core_parser.parse (Input.file iname) with
-          | Exception.Result (Core_parser_util.Rimpl z) -> z
-          | _ -> error "(TODO_MSG) found an error while parsing the implementation file." in
+  let impl = load_impl Core_parser.parse csemlib_path in
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   
-  
-  let pipeline file_name =
-    let frontend m =
-      let c_frontend m =
-        (* Calling a C preprocessor before running the parser
-           (TODO: the choice of the compiler shouldn't be hardcoded) *)
-        let c_preprocessing (f: Input.t) =
-          let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
-          (* TODO: add an command line option for custom include directories, for now
-             I hardcode the location of csmith on AddaX *)
-          if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I ~/Applications/Builds/Formal/csmith-git/include/csmith-2.2.0 " ^
-                             Input.name f ^ " > " ^ temp_name) <> 0 then
-            error "the C preprocessor failed";
-          Input.file temp_name in
-            Exception.return (c_preprocessing m)
-        >|> Exception.fmap Cparser.Driver.parse
-        >|> pass_message "1. Parsing completed!"
-
-        >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
-
-        >|> Exception.fmap Cabs_transform.transform_file
-        >|> pass_message "1.5. Cabs AST transform completed!"
-        >|> pass_through_test !print_cabs (run_pp -| Pp_cabs.pp_file)
-
-        >|> Exception.rbind (Cabs_to_ail.desugar "main")
-        >|> pass_message "2. Cabs -> Ail completed!"
-        >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
-        >|> Exception.rbind Ail_typing.annotate
-        >|> pass_message "3. Ail typechecking completed!"
-        >|> Exception.fmap (Translation.translate stdlib impl)
-        >|> pass_message "4. Translation to Core completed!"
-        >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
-        >|> Exception.fmap Core_simpl.simplify
-        >|> pass_message "5. Core to Core simplication completed!"
-        >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
-        
-      let core_frontend m =
-            Core_parser.parse m
-        >|> Exception.fmap (function
-          | Core_parser_util.Rfile (a_main, funs) ->
-              { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.funs= funs }
-          | _ -> assert false)
-        >|> pass_message "1-4. Parsing completed!"
-        >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
-      
-      if      Filename.check_suffix file_name ".c"    then (debug_print "Cmulator mode"    ; c_frontend    m)
-      else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
-                                                      else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
-    let core_backend m =
-      ((m
-      >?> !skip_core_tcheck)
-        (pass_message "5. Skipping Core's typechecking")
-        (fun m ->
-              Exception.rbind Core_typing.typecheck m
-          >|> pass_message "5. Core's typechecking completed!")
-      >?> !execute)
-        (fun m ->
-          pass_message "6. Enumerating indet orders:" m
-          >|> Exception.rbind Core_indet.order
-          >|> pass_message "7. Now running:"
-          >|> Exception.rbind
-              (Exception.map_list
-                 (fun (n,f) -> Core_run.run !random_mode f
-                               >|> pass_message ("SB order #" ^ string_of_int n)
-                               >|> pass_through Pp_run.pp_traces
-                               >|> pass_through_test !sb_graph (write_sb file_name)))
-          >|> return_unit)
-        return_unit in
-    
-    file_name
-    >|> Input.file
-    >|> frontend
-    >|> core_backend in
-  List.iter (catch -| pipeline) !files;
+  List.iter (catch -| pipeline stdlib impl Core_parser.parse) !files;
