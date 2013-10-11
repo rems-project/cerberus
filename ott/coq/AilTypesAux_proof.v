@@ -983,6 +983,14 @@ Proof.
   destruct_integerType_hyp it2; my_auto.
 Qed.
 
+Lemma promoted_integerPromotion {P} {it} :
+  D.promoted it ->
+  D.integerPromotion P it it.
+Proof.
+  pose (le_integer_rank_correct P it (Signed Int)).
+  inversion 1; econstructor (now my_auto).
+Qed.
+
 Lemma is_integer_promotion_correct P it1 it2 : boolSpec (is_integer_promotion P it1 it2) (D.integerPromotion P it1 it2).
 Proof.
   do 2 unfold_goal.

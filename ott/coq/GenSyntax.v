@@ -209,7 +209,7 @@ Definition equiv_annotation_sigma {A1 A2 A2' B : Set} (A : annotation A1 A2) (A'
   else
     None.
 
-Definition equiv_annotation_program {A1 A2 A2' B : Set} {A : annotation A1 A2} {A' : annotation A1 A2'} (p1 : program B A1) (p2 : program B A2) :=
+Definition equiv_annotation_program {A1 A2 A2' B : Set} (A : annotation A1 A2) (A' : annotation A1 A2') (p1 : program B A1) (p2 : program B A2) :=
   let '(v1, S1) := p1 in
   let '(v2, S2) := p2 in
   if eq_identifier v1 v2 then

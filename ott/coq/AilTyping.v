@@ -7,6 +7,40 @@ Require Import AilSyntaxAux.
 Require Import AilWf.
 Require Import Implementation.
 
+Definition signed_integerSuffix (s : integerSuffix) : bool :=
+  match s with
+      |  L |  LL => true
+  | U | UL | ULL => false
+  end.
+
+Definition signed_optionIntegerConstant (os : option integerSuffix) : bool :=
+  match os with
+  | None   => true
+  | Some s => signed_integerSuffix s
+  end.
+
+Definition signed_integerConstant (ic : integerConstant) : bool :=
+  let '(_, os) := ic in
+  signed_optionIntegerConstant os.
+
+Definition min_interpret_integerSuffix s :=
+  match s with
+  | L   => Long
+  | LL  => LongLong
+  | U   => Int
+  | UL  => Long
+  | ULL => LongLong
+  end.
+
+Definition min_interpret_optionIntegerSuffix os :=
+  match os with
+  | None   => Int
+  | Some s => min_interpret_integerSuffix s
+  end.
+
+Definition min_interpret_integerConstant (ic:integerConstant) :=
+  min_interpret_optionIntegerSuffix (snd ic).
+
 Definition type_of_constant P ic : option integerType :=
   match ic with
   | (n, None) =>
@@ -213,13 +247,13 @@ Fixpoint type_of_expression' {A B1 B2} P (S : sigma B1 B2) (G : gamma) (e : expr
       | _                                  => None
       end
   | Assign e1 e2 =>
-      match type_of_expression P S G e1, type_of_rvalue e2 with
-      | Some (LValueType q1 t1), Some t2 =>
+      match type_of_expression P S G e1 with
+      | Some (LValueType q1 t1) =>
           let t := pointer_conversion t1 in
           if modifiable q1 t1 && assignable t e2
             then Some (RValueType t)
             else None
-      | _, _ => None
+      | _ => None
       end
   | Binary e1 (Arithmetic (Mul  as aop)) e2
   | Binary e1 (Arithmetic (Div  as aop)) e2

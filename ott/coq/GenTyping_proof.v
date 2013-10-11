@@ -3446,7 +3446,7 @@ Proof.
   end.
 Qed.
 
-(* Section 7: from well-typed to well-annotated (with a particular choice of annotation, namely 'concrete_annotation')  *)
+(* Section 7: from well-typed to well-annotated (with a particular choice of annotation, namely 'concrete_annotation') *)
 
 Lemma typeOfLValue_wellAnnotatedLValue_aux {A B1 B2 : Set} {S : sigma B1 B2} {G : gamma} {e1 : expression A} :
   (forall {gtc}, 

@@ -65,15 +65,7 @@ Definition inject_basicType bt : genBasicType :=
   | Integer it => GenInteger (inject_integerType it)
   end.
 
-Definition inject_parameters_aux (inject_type : ctype -> genType) :=
-  fix inject_parameters (p : list (qualifiers * ctype)) :=
-    match p with
-    | nil         => nil
-    | (q, t) :: p => (q, inject_type t) :: (inject_parameters p)
-    end.
-
-Fixpoint inject_type t : genType :=
-  let inject_parameters := inject_parameters_aux inject_type in
+Definition inject_type t : genType :=
   match t with
   | Void         => GenVoid
   | Basic bt     => GenBasic (inject_basicType bt)
@@ -81,8 +73,6 @@ Fixpoint inject_type t : genType :=
   | Array    t n => GenArray t n
   | Function t p => GenFunction t p
   end.
-
-Definition inject_parameters := inject_parameters_aux inject_type.
 
 Definition inject_typeCategory tc : genTypeCategory :=
   match tc with
