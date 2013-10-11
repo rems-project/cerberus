@@ -158,33 +158,3 @@ Definition interpret_genTypeCategory P gt : option typeCategory :=
                           Some (RValueType   t)
   | GenLValueType q t  => Some (LValueType q t)
   end.
-
-Definition signed_integerSuffix (s : integerSuffix) : bool :=
-  match s with
-      |  L |  LL => true
-  | U | UL | ULL => false
-  end.
-
-Definition signed_integerConstant (ic : integerConstant) : bool :=
-  match snd ic with
-  | None   => true
-  | Some s => signed_integerSuffix s
-  end.
-
-Definition min_interpret_integerSuffix s :=
-  match s with
-  | L   => Long
-  | LL  => LongLong
-  | U   => Int
-  | UL  => Long
-  | ULL => LongLong
-  end.
-
-Definition min_interpret_optionIntegerSuffix os :=
-  match os with
-  | None   => Int
-  | Some s => min_interpret_integerSuffix s
-  end.
-
-Definition min_interpret_integerConstant (ic:integerConstant) :=
-  min_interpret_optionIntegerSuffix (snd ic).
