@@ -1,0 +1,1322 @@
+open Global
+
+module Opt = Option
+
+module C    = Cabs0
+module A    = Ail
+module Aaux = Ail_aux
+
+module ATaux = Ail_typing_aux
+
+
+module Effect = struct
+  module M  = State_exception
+  module St = Symbol_table
+
+  type id = Symbol.t
+  type id_set = Symbol.sset
+
+  type state = <|
+    symbol_set   : id_set;                             (* the set of existing symbols                                    *)
+    label_map    : map string id;
+    symbol_table : St.t string id;                     (* table (with stacked scopes) associating identifiers to symbols *)
+    
+    (* TODO disgusting hack for now: identical field names are given the same symbol. I don't see any other way without
+                                     typing information. The proper way will be to postpone the symbolization until after
+                                     the type checking *)
+    fields_symbol_table : map string id;
+    
+    inside_switch: bool; (* Are we inside the body of switch statement? (needed to
+                            check if 'case' statements are allowed) *)
+    
+    
+    declarations : map id A.declaration;                  (* map associating identifiers to their (Ail) declaration         *)
+    globals      : list (id * A.expression_t unit);       (* global definitions (??) *)
+    fields_map   : map id (list (id * A.member));         (* struct/union members    *)
+    fn_map       : map id (list id * A.statement_l unit); (* functions map           *)
+    
+    location : Location.t; (* AST location, for error messages *)
+    
+  |>
+  
+  type t 'a = M.t 'a state Errors.t
+  
+  
+  (* BEGIN TEMPORARY: (TODO) these will disappear with the fixed module system. *)
+  let return    = M.return
+  let mapM      = M.mapM
+  let foldrM    = M.foldrM
+  let iter      = M.iter
+  (* END TEMPORARY *)
+  
+  val fail: forall 'a. Errors.cause -> t 'a
+  let fail msg = fun env ->
+    Exception.fail (env.location, msg)
+  
+  val of_option: forall 'a. Errors.cause -> option 'a -> t 'a
+  let of_option msg = function
+    | Some a -> return a
+    | None   -> fail msg
+  end
+  
+  val option: forall 'a. Errors.cause -> t (option 'a) -> t 'a
+  let option msg m =
+    M.bind m (function
+      | Some a -> return a
+      | None   -> fail msg
+    end)
+
+
+
+  
+  val set_location: Location.t -> t unit
+  let set_location loc = M.update $ fun env ->
+    <| env with location= loc |>
+  
+  
+  
+  (* Liftings of the operations on the `symbol_table' *)
+  let create_scope  = M.update (fun env -> 
+    <| env with symbol_table=         St.create_scope env.symbol_table |>)
+  let destroy_scope = M.update (fun env ->
+    <| env with symbol_table=         St.destroy_scope env.symbol_table |>)
+  let push_table t  = M.update (fun env ->
+    <| env with symbol_table=         St.push_table t env.symbol_table;
+(*                fields_symbol_tables= Pmap.map (St.push_table env.fields_symbol_tables *)
+
+     |>)
+  
+  let symbols       = M.read (fun env -> St.symbols env.symbol_table)
+  let resolve name  = M.read (fun env -> St.find name env.symbol_table)
+  let return_scope  = M.read (fun env -> St.return_scope env.symbol_table)
+  
+  (* TODO: separate the increment of symbol_set in a shared function *)
+  let fresh_name name_opt =
+    M.modify (fun env ->
+      let ((symbol, symbol_set'), symbol_table') =
+        match name_opt with
+          | None      -> (Symbol.fresh env.symbol_set, env.symbol_table)
+          | Some name -> let (x,y) = Symbol.fresh_pretty name env.symbol_set in ((x,y), St.add name x env.symbol_table)
+        end in
+      (symbol, <|env with  symbol_set= symbol_set'; symbol_table= symbol_table' |>)
+    )
+
+  (* disgusting HACK *)
+  let register_fieldname name_opt =
+    M.modify (fun env ->
+      match name_opt with
+        | None -> let (sym, sset') = Symbol.fresh env.symbol_set in
+                  (sym, <| env with symbol_set= sset' |>)
+        
+        | Some name ->
+            if Pmap.mem name env.fields_symbol_table then
+              (* use the same symbol if a same field name has already been registered *)
+              (Pmap.find name env.fields_symbol_table, env)
+            else
+              let (sym, sset') = Symbol.fresh_pretty name env.symbol_set in
+              (sym, <|env with  symbol_set= sset'; symbol_table= St.add name sym env.symbol_table |>)
+        end
+  )
+
+  
+  
+  let add_declaration id decl = M.update (fun env -> <| env with declarations=  Pmap.add id decl env.declarations |>)
+  let add_fn id formals body  = M.update (fun env -> <| env with fn_map=  Pmap.add id (formals, body) env.fn_map |>)
+  let add_globals defns       = M.update (fun env -> <| env with globals= env.globals @ defns |>)
+  
+  
+  let return_label_map = fun env -> Exception.return (env.label_map, env)
+  
+  let fresh_label name =
+    M.modify (fun env ->
+      let (symbol, symbol_set') = Symbol.fresh_pretty name env.symbol_set in
+      (symbol, <|env with  symbol_set= symbol_set';
+                           label_map=  Pmap.add name symbol env.label_map |>)
+    )
+  
+  
+  val init: forall 'a. t 'a -> Exception.t 'a Errors.t
+  let init m =
+    M.run m
+    <|
+      symbol_set          = Symbol.init;
+      label_map           = Pmap.empty;
+      symbol_table        = St.create_scope St.empty;
+      fields_symbol_table = Pmap.empty;
+      inside_switch       = false;
+      declarations        = Pmap.empty;
+      globals             = [];
+      fields_map          = Pmap.empty;
+      fn_map              = Pmap.empty;
+      location            = Location.unknowned;
+    |>
+  
+  
+  val to_program: id -> t (A.file unit)
+  let to_program main =
+    M.read (fun env ->
+      <|
+        A.main=    main;
+        A.id_map=  env.declarations;
+        A.globals= env.globals;
+        A.fn_map=  env.fn_map
+     |>
+    )
+  
+
+(* val register_fields: id -> list (id * A.member) -> t unit *)
+let register_fields tag fields =
+  M.update (fun env ->
+    <| env with fields_map= Pmap.add tag fields env.fields_map |>
+  )
+
+let resolve_fields tag =
+  M.read (fun env ->
+    Pmap.find tag env.fields_map
+  )
+
+  let set_inside_switch =
+    M.update (fun env -> <| env with inside_switch= true |>)
+  
+  let is_inside_switch =
+    M.read (fun env -> env.inside_switch)
+  
+  module Operators = struct
+    let (>>=)    = M.bind
+    let (>>) m f = m >>= fun _ -> f
+    let (<$>)    = M.fmap
+    let (<*>)    = M.app
+    let (<@>)    = M.papp
+  end
+end
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+module E = Effect
+open E.Operators
+
+
+(* Substitute an already registered name for its corresponding symbol *)
+val subst: string -> E.t Symbol.t
+let subst name =
+  E.option (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER) (E.resolve name)
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+val register_name: string -> E.t Symbol.t
+val register_labels: C.statement -> E.t unit
+val fetch_label_id: string -> E.t Symbol.t
+
+
+let register_name name =
+  E.return_scope >>= fun scope ->
+  if Symbol_table.mem name scope then E.fail Errors.CABS_TO_AIL_MULTIPLE_REGISTRATION
+                                 else E.fresh_name (Some name)
+
+
+let rec register_labels s =
+  let f name =
+    E.return_label_map >>= fun label_map ->
+    if Pmap.mem name label_map then E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
+                               else E.fresh_label name
+  in match s with
+    | C.NOP _ ->
+        E.return ()
+    | C.COMPUTATION  _ _ ->
+        E.return ()
+    | C.BLOCK ss _ ->
+        E.iter register_labels ss
+    | C.If _ s1 s2_opt _ ->
+        register_labels s1 >>
+        match s2_opt with
+          | Some s2 -> register_labels s2
+          | None    -> E.return ()
+        end
+    | C.WHILE _ s _ ->
+        register_labels s
+    | C.DOWHILE _ s _ ->
+        register_labels s
+    | C.FOR _ _ _ s _ ->
+        register_labels s
+    | C.BREAK _ ->
+        E.return ()
+    | C.CONTINUE _ ->
+        E.return ()
+    | C.RETURN _ _ ->
+        E.return ()
+    | C.SWITCH _ s _ ->
+        register_labels s
+    | C.CASE _ s _ ->
+        register_labels s
+    | C.DEFAULT s _ ->
+        register_labels s
+    | C.LABEL _ s _ ->
+        register_labels s
+    | C.GOTO _ _ ->
+        E.return ()
+    | C.DEFINITION _ ->
+        (* TODO: check *)
+        E.return ()
+  end
+
+
+let fetch_label_id name =
+  E.return_label_map >>= fun label_map ->
+  if Pmap.mem name label_map then E.return (Pmap.find name label_map)
+                             else E.fail Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER
+
+(* ---------------------------------------------------------------------------------------------- *)
+
+val desugar_unary_operator: C.unary_operator -> A.unary_operator
+let desugar_unary_operator = function
+  | C.MINUS   -> A.MINUS
+  | C.PLUS    -> A.PLUS
+  | C.BNOT    -> A.BNOT
+  | C.MEMOF   -> A.INDIRECTION
+  | C.ADDROF  -> A.ADDRESS
+  | C.POSINCR -> A.POSTFIX_INCR
+  | C.POSDECR -> A.POSTFIX_DECR
+  
+  (* These cases cannot occurs since these constructors are translated away. *)
+  | C.NOT     -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] NOT"
+  | C.PREINCR -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] PREINCR"
+  | C.PREDECR -> Boot.assert_false "[Cabs0_to_ail.desugar_unary_operator] PREDECR"
+end
+
+
+val desugar_cvspec: C.cvspec -> A.qualifier
+let desugar_cvspec = function
+  | C.CV_CONST    -> A.CONST
+  | C.CV_RESTRICT -> A.RESTRICT
+  | C.CV_VOLATILE -> A.VOLATILE
+end
+(* TODO: add [ATOMIC] to the parser *)
+
+
+val desugar_arithmetic_operator: C.binary_operator -> A.arithmetic_operator
+let desugar_arithmetic_operator = function
+  | C.ADD  -> A.ADD
+  | C.SUB  -> A.SUB
+  | C.MUL  -> A.MUL
+  | C.DIV  -> A.DIV
+  | C.MOD  -> A.MOD
+  | C.BAND -> A.BAND
+  | C.XOR  -> A.XOR
+  | C.BOR  -> A.BOR
+  | C.SHL  -> A.SHL
+  | C.SHR  -> A.SHR
+  | _ -> Boot.assert_false "[Cabs0_to_ail.desugar_arithmetic_operator] should only be called on \
+                            operators allowed for compound assignments [§6.5.16#1]."
+end
+
+
+val desugar_binary_operator: C.binary_operator -> A.binary_operator
+let desugar_binop = function
+  | C.AND   -> A.AND
+  | C.OR    -> A.OR
+  | C.EQ    -> A.EQ
+  | C.NE    -> A.NE
+  | C.LT    -> A.LT
+  | C.GT    -> A.GT
+  | C.LE    -> A.LE
+  | C.GE    -> A.GE
+  | C.COMMA -> A.COMMA
+  | op      -> A.ARITHMETIC (desugar_arithmetic_operator op)
+end
+
+
+val desugar_integer_constant: C.atom -> option C.integer_suffix -> A.integer_constant
+let desugar_integer_constant str suff_opt =
+  let desugar_integer_suffix = function
+    | C.SUFFIX_UNSIGNED           -> A.SUFFIX_UNSIGNED
+    | C.SUFFIX_UNSIGNED_LONG      -> A.SUFFIX_UNSIGNED_LONG
+    | C.SUFFIX_UNSIGNED_LONG_LONG -> A.SUFFIX_UNSIGNED_LONG_LONG
+    | C.SUFFIX_LONG               -> A.SUFFIX_LONG
+    | C.SUFFIX_LONG_LONG          -> A.SUFFIX_LONG_LONG
+  end in
+  let (n, basis) = Decode.decode_integer_constant str in
+  match suff_opt with
+    | Some suff -> (n, basis, Some (desugar_integer_suffix suff))
+    | None      -> (n, basis, None)
+  end
+
+
+val desugar_character_constant: option C.character_prefix -> C.atom -> A.character_constant
+(* TODO: decoding + impl-def independence (and Ail should store an integer, instead of a string) *) 
+let desugar_character_constant pref_opt c =
+  let desugar_character_prefix = function
+    | C.PREFIX_L -> A.PREFIX_L
+    | C.PREFIX_u -> A.PREFIX_u
+    | C.PREFIX_U -> A.PREFIX_U
+  end in
+  match pref_opt with
+    | Some pref -> (Some (desugar_character_prefix pref), c)
+    | None      -> (None, c)
+  end
+
+
+val desugar_constant: C.constant -> A.constant
+let desugar_constant = function
+  | C.CONST_INT ic suff_opt  -> A.CONST_INT (desugar_integer_constant ic suff_opt)
+  | C.CONST_FLOAT fc         -> A.CONST_FLOAT fc (* TODO: decoding *)
+  | C.CONST_CHAR pref_opt cc -> A.CONST_CHAR (desugar_character_constant pref_opt cc)
+  | C.CONST_STRING str       -> Boot.assert_false "TODO [Cabs0_to_ail.desugar_constant] CONST_STRING"
+end
+
+
+(*
+TODO: WIP
+let desugar_string_literal (pref_opt, str) =
+  let desugar_encoding_prefix = function
+    | C.ENCODING_u8 -> A.ENCODING_u8
+    | C.ENCODING_u  -> A.ENCODING_u
+    | C.ENCODING_U  -> A.ENCODING_U
+    | C.ENCODING_L  -> A.ENCODING_L
+  end in
+  match pref_opt with
+    | Some pref -> (Some (desugar_encoding_prefix pref), str)
+    | None      -> (None, str)
+  end
+*)
+
+
+
+
+
+
+
+val     desugar_expression: C.expression -> E.t (A.expression_t unit)
+let rec desugar_expression e =
+  let f = desugar_expression in
+  Pair.make () <$> (match e with
+    (* [§6.5.3.3#5] "(...) The expression !E is equivalent to (0==E)." *)
+    | C.UNARY C.NOT e ->
+        A.BINARY A.EQ Aaux.zero <$> f e
+    
+  end)
+
+(*
+    (* [§6.5.3#2] Unary operators, Semantic says: "The expression [[ ++E ]] is
+       equivalent to [[ (E+=1) ]]". *)
+  | C.UNARY C.PREFIX_INCR e ->
+      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.decimal_const_int (Int.int 1))
+  
+  (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+     analogous to the prefix [[ ++ ]] operator". *)
+  | C.UNARY C.PREFIX_DECR e ->
+      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.decimal_const_int (Int.int 1))
+
+
+
+
+
+
+  | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
+
+
+  (* These cases cannot occurs since these constructors are translated away. *)
+  | C.NOT     -> Boot.assert_false ""
+  | C.PREINCR -> Boot.assert_false ""
+  | C.PREDECR -> Boot.assert_false ""
+
+
+    | C.UNARY of unary_operator * expression
+    | C.BINARY of binary_operator * expression * expression
+    | C.QUESTION of expression * expression * expression
+    
+    (* A CAST can actually be a constructor expression *)
+    | C.CAST of (list spec_elem * decl_type) * init_expression
+    
+    | C.CALL of expression * list expression
+    | C.BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+    | C.CONSTANT of constant
+    | C.VARIABLE of atom
+    | C.EXPR_SIZEOF of expression
+    | C.TYPE_SIZEOF of (list spec_elem * decl_type)
+    | C.ALIGNOF of (list spec_elem * decl_type)
+    | C.INDEX of expression * expression
+    | C.MEMBEROF of expression * atom
+    | C.MEMBEROFPTR of expression * atom
+    | C.OFFSETOF of (list spec_elem * decl_type) * atom
+
+
+*)
+
+(*
+  let f  = desugar_exp in
+  let ft = desugar_type in
+  Pair.make l <$> (match e with
+  | C.CONSTANT c   -> E.return (A.CONSTANT (desugar_constant c))
+
+  (* HACKISH *)
+  | C.IDENTIFIER "NULL" -> E.return A.NULL
+
+  | C.IDENTIFIER x -> A.VARIABLE <$> subst x
+  
+  
+  | C.STRING_LITERAL str      -> E.return (A.STRING_LITERAL $ desugar_string_literal str)
+  | C.GENERIC_SELECTION _ _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "general selection")
+  
+  
+  (* 6.5.2.1#2 Array subscripting, Semantics: "The definition of the
+     subscripting operator [...] is that [[ E1[E2] ]] is identical to [[
+     ( *((E1)+(E2))) ]]". *)
+  | C.SUBSCRIPT e1 e2 ->
+      A.UNARY A.INDIRECTION <$> (
+        Pair.make l <$> (A.BINARY (A.ARITHMETIC A.ADD) <$> f e1 <*> f e2)
+      )
+  
+  (* TODO: this is obviously a partial hack *)
+  | C.CALL (C.IDENTIFIER "malloc", _) [e]          -> A.MALLOC <$> f e
+  | C.CALL (C.IDENTIFIER "free"  , _) [e]          -> A.FREE   <$> f e
+  | C.CALL (C.IDENTIFIER "memcmp", _) [e1; e2; e3] -> A.MEMCMP <$> f e1 <*> f e2 <*> f e3
+  | C.CALL (C.IDENTIFIER "memcpy", _) [e1; e2; e3] -> A.MEMCPY <$> f e1 <*> f e2 <*> f e3
+  | C.CALL (C.IDENTIFIER "assert", _) [e]          -> A.ASSERT <$> f e
+
+  
+  | C.CALL e es            -> A.CALL <$> f e <*> E.mapM f es
+
+  | C.MEMBEROF e x         -> E.fail (Errors.CSEM_NOT_SUPPORTED "memberof operator")
+  | C.MEMBEROFPTR e x      -> E.fail (Errors.CSEM_NOT_SUPPORTED "memberofptr operator")
+
+(* KKK
+  | MEMBEROF of expression_l 'a * id
+  | MEMBEROFPTR of expression_l 'a * id
+*)
+
+
+
+  (* 6.5.3#2 Unary operators, Semantic says: "The expression [[ ++E ]] is
+     equivalent to [[ (E+=1) ]]". *)
+  | C.UNARY C.PREFIX_INCR e ->
+      A.ASSIGN (Some A.ADD) <$> f e <@> (l, Ail_aux.decimal_const_int (Int.int 1))
+  
+  (* 6.5.3#2 Unary operators, Semantic: "The prefix [[ -- ]] operator is
+     analogous to the prefix [[ ++ ]] operator". *)
+  | C.UNARY C.PREFIX_DECR e ->
+      A.ASSIGN (Some A.SUB) <$> f e <@> (l, Ail_aux.decimal_const_int (Int.int 1))
+  
+  (* 6.5.3.3 Unary arithmetic operators, Semantics: "The expression [[ !E ]] is
+     equivalent to [[ (E==0) ]]". *)
+  | C.UNARY C.NOT e        -> A.BINARY A.EQ (l, Ail_aux.octal_const_int (Int.int 0))    <$> f e
+  | C.UNARY unop  e        -> A.UNARY (desugar_unop unop) <$> f e
+
+  (* TODO: this may be temporary hack (see comment before Ail.EXPR_SIZEOF *)
+  | C.EXPR_SIZEOF e        -> A.EXPR_SIZEOF               <$> f e
+
+
+  | C.TYPE_SIZEOF  t       -> A.SIZEOF                    <$> ft t
+  | C.TYPE_ALIGNOF t       -> A.ALIGNOF                   <$> ft t
+  | C.CAST t e             -> A.CAST                      <$> ft t <*> f e
+  | C.BINARY o e1 e2       -> A.BINARY (desugar_binop o)  <$> f e1 <*> f e2
+  | C.CONDITIONAL e1 e2 e3 -> A.CONDITIONAL <$> f e1 <*> f e2 <*> f e3
+  | C.ASSIGN o_opt e1 e2   -> A.ASSIGN match o_opt with
+                                         | Some o -> Some (desugar_arithop o)
+                                         | None   -> None
+                                       end
+                              <$> f e1 <*> f e2
+  | C.OFFSETOF ty x -> Boot.assert_false "TODO: desugar_exp, C.OFFSETOF"
+  end)
+*)
+
+
+
+
+
+(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
+   instead) *)
+(* TODO: we should do something about `char' here (implementation-defined choice) *)
+(* TODO: is this only used by [desugar_spec_elem_list]? *)
+val desugar_specifier: multiset C.typeSpecifier -> E.t (A.basic_type)
+let desugar_specifier specifiers =
+  let mk_mset = Multiset.from_list in
+  let desugar_map =
+    List.fold_left
+      (fun m (x, y) -> Pmap.add x y m)
+      (Ocaml.Pmap.empty Multiset.compare_int)
+      (
+        (* TODO: maybe move that somewhere else *)
+          [(mk_mset [C.Tchar], A.CHAR)]
+
+        @ [(mk_mset [C.Tsigned; C.Tchar], A.INTEGER (A.SIGNED A.ICHAR))]
+        @ [(mk_mset [C.Tunsigned; C.Tchar], A.INTEGER (A.UNSIGNED A.ICHAR))]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.SHORT)))
+          [ [C.Tshort];
+            [C.Tsigned; C.Tshort];
+            [C.Tshort; C.Tint];
+            [C.Tsigned; C.Tshort; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.SHORT)))
+          [ [C.Tunsigned; C.Tshort];
+            [C.Tunsigned; C.Tshort; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.INT)))
+          [ [C.Tint];
+            [C.Tsigned];
+            [C.Tsigned; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.INT)))
+          [ [C.Tunsigned];
+            [C.Tunsigned; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG)))
+          [ [C.Tlong];
+            [C.Tsigned; C.Tlong];
+            [C.Tlong; C.Tint];
+            [C.Tsigned; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG)))
+          [ [C.Tunsigned; C.Tlong];
+            [C.Tunsigned; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG_LONG)))
+          [ [C.Tlong; C.Tlong];
+            [C.Tsigned; C.Tlong; C.Tlong];
+            [C.Tlong; C.Tlong; C.Tint];
+            [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
+          [ [C.Tunsigned; C.Tlong; C.Tlong];
+            [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
+          ]
+        @ [(mk_mset [C.Tfloat], A.REAL_FLOATING A.FLOAT)]
+        @ [(mk_mset [C.Tdouble], A.REAL_FLOATING A.DOUBLE)]
+        @ [(mk_mset [C.Tlong; C.Tdouble], A.REAL_FLOATING A.LONG_DOUBLE)]
+        @ [(mk_mset [C.T_Bool], A.INTEGER A.BOOL)]
+(*
+        @ [(mk_mset [C.Tfloat; C.COMPLEX], A.COMPLEX A.FLOAT)]
+        @ [(mk_mset [C.Tdouble; C.COMPLEX], A.COMPLEX A.DOUBLE)]
+        @ [(mk_mset [C.Tlong; C.Tdouble; C.COMPLEX], A.COMPLEX A.LONG_DOUBLE)]
+*)
+      ) in
+  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
+              (Map_.find specifiers desugar_map)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val translate_cabsloc: C.cabsloc -> Location.t
+let translate_cabsloc loc = Boot.assert_false "TODO [Cabs0_to_ail.translate_cabsloc]"
+
+val loc_of_statement: C.statement -> C.cabsloc
+let loc_of_statement = function
+  | C.NOP loc ->
+      loc
+  | C.COMPUTATION _ loc ->
+      loc
+  | C.BLOCK _ loc ->
+      loc
+  | C.If _ _ _ loc ->
+      loc
+  | C.WHILE _ _ loc ->
+      loc
+  | C.DOWHILE _ _ loc ->
+      loc
+  | C.FOR _ _ _ _ loc ->
+      loc
+  | C.BREAK loc ->
+      loc
+  | C.CONTINUE loc ->
+      loc
+  | C.RETURN _ loc ->
+      loc
+  | C.SWITCH _ _ loc ->
+      loc
+  | C.CASE _ _ loc ->
+      loc
+  | C.DEFAULT _ loc ->
+      loc
+  | C.LABEL _ _ loc ->
+      loc
+  | C.GOTO _ loc ->
+      loc
+  | C.DEFINITION (C.FUNDEF _ _ _ loc) ->
+      loc
+  | C.DEFINITION (C.DECDEF _ loc) ->
+      loc
+  | C.DEFINITION (C.PRAGMA _ loc) ->
+      loc
+end
+
+val     desugar_statement: C.statement -> E.t (A.statement_l unit)
+let rec desugar_statement s =
+  let fs = desugar_statement  in
+  let fe = desugar_expression in
+  Pair.make (translate_cabsloc $ loc_of_statement s) <$>
+    match s with
+    | C.NOP _ ->
+        E.return A.SKIP
+    | C.COMPUTATION e _ ->
+        A.EXPRESSION <$> fe e
+    | C.BLOCK ss _ ->
+        (* Open up a new scope, transform each statement/declaration in the
+           block and tear down the scope again. *)
+        E.create_scope  >>
+        E.mapM fs ss    >>= fun d_ss ->
+        E.symbols       >>= fun ids  ->
+        E.destroy_scope >>
+        E.return (A.BLOCK (List.rev ids) d_ss) (* TODO: shouldn't do the rev here *)
+    | C.If e s1 s2_opt _ ->
+        let d_s2 = match s2_opt with
+          | Some s2 -> fs s2
+      (* Adding or removing a (finite number of) null operation is semantically
+         sound since "a null statement [...] performs no operations" (6.8.3#3,
+         Expression and null statements, Semantics). *)
+          | None    -> E.return (None, A.SKIP)
+        end in
+        A.IF <$> fe e <*> fs s1 <*> d_s2
+    | C.WHILE e s _ ->
+        A.WHILE  <$> fe e <*> fs s
+    | C.DOWHILE e s _ ->
+        A.DO     <$> fe e <*> fs s
+(*      fs s >>= fun s ->
+      fe e >>= fun e ->
+      E.return (A.BLOCK [] [s; Pair.make l (A.WHILE e s)]) *) (* NOTE: this translation is wrong because is duplicates potential labels *)
+    | C.FOR fclause_opt e2_opt e3_opt s loc ->
+        let are_all_auto_or_register (C.DECDEF (specs, _) _) =
+          List.exist (function
+            | C.SpecStorage C.AUTO -> true
+            | C.SpecStorage C.REGISTER -> true
+            | _ -> false
+          end) specs in
+        match fclause_opt with
+          | None                 -> E.return (C.NOP loc)
+          | Some (C.FC_EXP e1)   -> E.return (C.COMPUTATION e1 loc)
+          | Some (C.FC_DECL def) ->
+              if are_all_auto_or_register def then
+                E.return (C.DEFINITION def)
+              else
+                E.fail Errors.CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
+        end >>= fun s1 ->
+        let e2' = match e2_opt with
+          | Some e2 -> e2
+            (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+               statement) an omitted controlling expression is replace by an
+               unspecified non-zero integer constant. We believe that the choice, as
+               long as representable, does not matter with respect to the
+               semantics. Hence, we arbitrarily choose "1" (which can always be
+               represented as an object of type int). *)
+          | None -> C.CONSTANT (C.CONST_INT "1" None)
+        end in
+        let s3 = match e3_opt with
+          | Some e3 -> C.COMPUTATION e3 loc
+          | None    -> C.NOP loc
+        end in
+        
+        let body = C.BLOCK [s; s3] loc  in
+        let loop = C.WHILE e2' body loc in
+        snd <$> fs (C.BLOCK [s1; loop] loc)
+    | C.BREAK _ ->
+        E.return A.BREAK
+    | C.CONTINUE _ ->
+        E.return A.CONTINUE
+    | C.RETURN (Some e) _ ->
+        A.RETURN_EXPRESSION <$> fe e
+    | C.RETURN None _ ->
+        E.return A.RETURN_VOID
+    | C.SWITCH e s _ ->
+        A.SWITCH <$> fe e <*> (E.set_inside_switch >> fs s)
+    | C.CASE e s _ ->
+        (* (§6.8.1#2) "A case label shall appear only in a switch statement." *)
+        E.is_inside_switch >>= function
+          | false -> E.fail Errors.CASE_OUTSIDE_SWITCH
+          | true  ->
+              let integer_constant =
+                match e with
+                  | C.CONSTANT (C.CONST_INT ic suff) -> E.return (desugar_integer_constant ic suff)
+                  | _ -> E.fail (Errors.CSEM_NOT_SUPPORTED "anything other than integer \
+                           constants as [[ case ]] labels.")
+                end in
+              A.CASE <$> integer_constant <*> fs s
+        end
+    | C.DEFAULT s _ ->
+        (* (§6.8.1#2) "A default label shall appear only in a switch statement." *)
+        E.is_inside_switch >>= function
+          | false -> E.fail Errors.DEFAULT_OUTSIDE_SWITCH
+          | true  -> A.DEFAULT <$> fs s
+        end
+    | C.LABEL label s _ ->
+        A.LABEL <$> fetch_label_id label <*> fs s
+    | C.GOTO label _ ->
+        A.GOTO <$> fetch_label_id label
+    | C.DEFINITION def ->
+        Boot.assert_false "WIP [Cabs0_to_ail.desugar_statement] DEFINITION"
+  end
+(*
+  | C.DECLARATION defns ->
+      let d_defns = E.mapM desugar_defn defns in
+      (* We remove all declarations that don't contain an initialiser. *)
+      let f = function
+        | (id, Some d_e, _) -> Some (id, d_e)
+        | (_,  None,     _) -> None
+        end in
+      A.DECLARATION <$> (List_.filter_map f -| filter_opt <$> d_defns)
+  end
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* FROM Cabs.lem 
+
+type storage_class =
+  | TYPEDEF
+  | EXTERN
+  | STATIC
+  | THREAD_LOCAL
+  | AUTO
+  | REGISTER
+*)
+
+
+
+
+
+
+
+
+(* TODO: temporary getting rid of the attributes (to change soon) *)
+(* TODO: pretty sure I made a mistake somewhere *)
+(*val   desugar_decl_type: C.decl_type -> A.ctype -> E.t A.ctype *)
+let rec desugar_decl_type decl =
+  match decl with
+    | C.JUSTBASE ->
+        fun ty -> E.return ty
+        
+
+(*
+    | C.ARRAY decl' specs attrs e_opt -> (* decl_type * list cvspec * list attribute * option expression *)
+        fun ty ->
+          let ty' = 
+          A.ARRAY ty 
+*)
+
+(*
+| decl = direct_declarator LBRACK quallst = type_qualifier_list expr = assignment_expression RBRACK
+    { match decl with Name name typ attr loc =>
+	Name name (ARRAY typ (rev quallst) [] (Some (fst expr))) attr loc end }
+| decl = direct_declarator LBRACK expr = assignment_expression RBRACK
+    { match decl with Name name typ attr loc =>
+	Name name (ARRAY typ [] [] (Some (fst expr))) attr loc end }
+| decl = direct_declarator LBRACK quallst = type_qualifier_list RBRACK
+    { match decl with Name name typ attr loc =>
+	Name name (ARRAY typ (rev quallst) [] None) attr loc end }
+| decl = direct_declarator LBRACK RBRACK
+    { match decl with Name name typ attr loc =>
+	Name name (ARRAY typ [] [] None) attr loc end }
+
+
+
+
+| typ[qualifiers e]
+    { ARRAY typ cvspec [] (Some (fst expr)) }
+| [qualifiers e]
+    { ARRAY JUSTBASE cvspec [] (Some (fst expr)) }
+| ty [e]
+    { ARRAY typ [] [] (Some (fst expr)) }
+| [e]
+    { ARRAY JUSTBASE [] [] (Some (fst expr)) }
+| ty[qualifiers]
+    { ARRAY typ cvspec [] None }
+| [qualifiers]
+    { ARRAY JUSTBASE cvspec [] None }
+| typ[]
+    { ARRAY typ [] [] None }
+| []
+    { ARRAY JUSTBASE [] [] None }
+*)
+
+
+
+
+(*   | ARRAY of ctype * option int *)
+
+(*
+          
+ | PTR of list cvspec * list attribute * decl_type
+(* The bool is true for variable length parameters. *)
+ | PROTO of decl_type * (list parameter * bool)
+*)
+
+(*
+    | C0.ARRAY decl cvspecs attrs e_opt ->
+        fun (attrs', qs, ss) ->
+          C.ARRAY qs (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss))
+                      (f_opt translate_expression e_opt)
+*)
+
+
+  end
+
+(*
+
+
+    | C0.PTR cvspecs attrs decl ->
+        fun (attrs', qs, ss) ->
+          C.POINTER qs (translate_decl decl ([], Set.from_list (List.map translate_cvspec cvspecs), ss))
+
+    (* NOTE: ignoring the VLA flag (not supported for now) *)
+    | C0.PROTO decl (params, is_vla) ->
+        let params' = List.map (fun (C0.PARAM specs n_opt decl attrs _) ->
+          let n = match n_opt with Some n -> n | None -> "" end in (* HACK!!! to get void params (which are unnamed) (not not) working *)
+          let (ty, scs) = mk_c_type specs decl in
+          ((n, ty, scs), Location.dummy)
+        ) params in
+        
+        fun (attrs', qs, ss) ->
+          C.FUNCTION (translate_decl decl ([], {}, ss))
+                      params'
+
+(*
+ | C0.PROTO of decl_type * (list parameter * bool)
+
+and parameter =
+  | C0.PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
+
+
+
+  | FUNCTION of c_type * list decl_l
+
+and declaration = string * c_type * list storage_class
+
+and decl_l = declaration * location
+
+
+*)
+
+  end
+*)
+
+
+
+(*
+val     eval_constant_expression': C.expression -> E.t int
+let rec eval_constant_expression' e =
+  (* TODO: inline these if we get Or patterns in Lem *)
+  let is_assignment = function
+    | C.ASSIGN      -> true
+    | C.ADD_ASSIGN  -> true
+    | C.SUB_ASSIGN  -> true
+    | C.MUL_ASSIGN  -> true
+    | C.DIV_ASSIGN  -> true
+    | C.MOD_ASSIGN  -> true
+    | C.BAND_ASSIGN -> true
+    | C.BOR_ASSIGN  -> true
+    | C.XOR_ASSIGN  -> true
+    | C.SHL_ASSIGN  -> true
+    | C.SHR_ASSIGN  -> true
+    | _             -> false
+  end in
+  let is_increment_decrement = function
+    | C.PREINCR -> true
+    | C.PREDECR -> true
+    | C.POSINCR -> true
+    | C.POSDECR -> true
+    | _         -> false
+  end in
+  match e with
+    | C.BINARY bop e1 e2 ->
+        match bop with
+        if is_assignment bop || bop = C.COMMA then
+          E.fail Errors.CONSTRAINT_6_6__3
+        else
+          eval_constant_expression' e1 >>= fun n1 ->
+          eval_constant_expression' e2 >>= fun n2 ->
+          match bop with
+            | C.ADD
+            | C.SUB
+            | C.MUL
+            | C.DIV
+            | C.MOD
+            | C.AND
+            | C.OR
+            | C.BAND
+            | C.BOR
+            | C.XOR
+            | C.SHL
+            | C.SHR
+            | EQ
+            | NE
+            | LT
+            | GT
+            | LE
+            | GE
+
+    
+    | C.UNARY uop e ->
+        if is_increment_decrement uop then
+          E.fail Erros.CONSTRAINT_6_6__3
+        else
+          
+
+
+
+  | BINARY of binary_operator * expression * expression
+  | QUESTION of expression * expression * expression
+
+    (* A CAST can actually be a constructor expression *)
+  | CAST of (list spec_elem * decl_type) * init_expression
+
+  | C11_ATOMIC_INIT of expression * expression
+  | C11_ATOMIC_STORE of expression * expression * expression
+  | C11_ATOMIC_LOAD of expression * expression
+  | C11_ATOMIC_EXCHANGE of expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+  | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+
+  | CALL of expression * list expression
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+  | CONSTANT of constant
+  | VARIABLE of atom
+  | EXPR_SIZEOF of expression
+  | TYPE_SIZEOF of (list spec_elem * decl_type)
+  | ALIGNOF of (list spec_elem * decl_type)
+  | INDEX of expression * expression
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
+  end
+
+*)
+
+
+
+
+
+
+(* TODO: if we add VLA then for EXPR_SIZEOF, we need to check whether
+   the expr has VLA type because in this the expr is evaluated ... *)
+val     eval_constant_expression: Ail.expression_t unit -> E.t int
+let rec eval_constant_expression ((), e) =
+  match e with
+    | A.NULL ->
+        E.return (Int.int 0)
+    | A.STRING_LITERAL str ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] STRING_LITERAL"
+    | A.UNARY A.PLUS e ->
+        eval_constant_expression e
+    | A.UNARY A.MINUS e ->
+        Int.neg <$> eval_constant_expression e
+    | A.UNARY A.BNOT e ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] BNOT"
+    | A.UNARY _ _ ->
+        E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    | A.BINARY bip e1 e2 ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] BINARY"
+(*    | A.ASSIGN of option arithmetic_operator * expression_t 'a * expression_t 'a *)
+(*    | A.CONDITIONAL of expression_t 'a * expression_t 'a * expression_t 'a *)
+(*    | A.CAST of ctype * expression_t 'a *)
+(*    | A.CALL of expression_t 'a * list (expression_t 'a) *)
+(*
+    | A.MEMBEROF of expression_t 'a * (id * id)    (* struct/union name and field name *)
+    | A.MEMBEROFPTR of expression_t 'a * (id * id) (* struct/union name and field name *)
+*)
+    | A.CONSTANT (A.CONST_INT (n, basis, suff)) ->
+        (* TODO: this is wrong, but need impl-def informations ... *)
+        E.return n
+    | A.CONSTANT _ ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONSTANT"
+    | A.EXPR_SIZEOF e ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] EXPR_SIZEOF"
+    | A.SIZEOF ty ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] SIZEOF"
+    | A.ALIGNOF ty ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] ALIGNOF"
+    | A.CONST_ARRAY es ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONST_ARRAY"
+    | A.CONST_STRUCT_UNION x_es ->
+        Boot.assert_false "WIP [Cabs0_to_ail.eval_constant_expression] CONST_STRUCT_UNION"
+(*
+    | A.OFFSETOF of ctype * id
+*)
+    (* TODO: the std doesn't forbid identifiers, but I guess it should? *)
+    | A.VARIABLE _ ->
+        E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+    
+    | _ -> E.fail Errors.CABS_TO_AIL_NOT_CONSTANT_EXRESSION
+  end
+
+
+(* TODO: getting rid of attributes for now *)
+val     desugar_spec_elem_list: list C.spec_elem -> E.t (option A.storage_duration * A.ctype)
+let rec desugar_spec_elem_list specs =
+  (* DOCUMENT: 6.2.4 *)
+  (* TODO:  (6.2.4#3) (NOT _Thread_local) AND (external linkage OR internal linkage OR static) --> A.STATIC
+            (6.2.4#4) _Thread_local --> A.THREAD
+            (6.2.4#5) no linkage AND (NOT static) --> A.AUTOMATIC *)
+  (* val desugar_storage: list C.storage -> E.t (option A.storage_duration) *)
+  let desugar_storage = function
+    | []           -> E.return None
+    | [C.AUTO]     -> E.return (Some A.AUTOMATIC)
+    | [C.STATIC]   -> E.return (Some A.STATIC)
+    | [C.REGISTER] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
+    | [C.EXTERN]   -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
+(*    | [C.THREAD_LOCAL] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class _Thread_local") *)
+    | [C.TYPEDEF]  -> E.return None  (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+    | _::_::_      -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
+  end in
+  let f (sts, qs, ss) = function
+    | C.SpecCV cv      -> (sts      , Set.add (desugar_cvspec cv) qs, ss                  )
+    | C.SpecAttr attr  -> (sts      , qs                            , ss                  )
+    | C.SpecStorage st -> (st :: sts, qs                            , ss                  )
+    | C.SpecType spec  -> (sts      , qs                            , Multiset.add spec ss)
+    | C.SpecInline     -> Boot.assert_false "TODO [Cabs0_to_ail.desugar_spec_elem_list f] SpecInline: not sure what to do with this one"
+  end in
+  let (sts, qs, ss) = List.fold_left f ([], {}, Multiset.emp) specs in
+  desugar_storage sts  >>= fun sd_opt ->
+  Pair.make sd_opt <$>
+  match Pmap.bindings ss with
+    | [(C.Tvoid, 1)] ->
+        E.return (A.VOID qs)
+      (* TODO: getting rid of attributes here (for now) *)
+      (* TODO: very likely to be wrong for some cases *)
+    | [(C.Tstruct None None attrs, 1)] ->
+        Boot.assert_false "TODO [Cabs0_to_ail] this case corresponds to a type decl, so it cannot occur here(?)"
+    | [(C.Tstruct None (Some []) attrs, 1)] ->
+        Boot.assert_false "[Cabs0_to_ail] desugar_type: found a `struct {}', not sure what to do for now"
+    | [(C.Tstruct (Some tag) (Some []) attrs, 1)] ->
+        subst tag           >>= fun id       ->
+        E.resolve_fields id >>= fun d_fields ->
+        E.return (A.STRUCT qs id d_fields)
+    | [(C.Tstruct None (Some fields) attrs, 1)] ->
+        E.fresh_name None                 >>= fun id        ->
+        E.mapM desugar_field_group fields >>= fun d_fieldss ->
+        E.return (A.STRUCT qs id $ List.concat d_fieldss)
+    | [(C.Tnamed "size_t", 1)] ->
+        E.return A.SIZE_T
+    | [(C.Tnamed "intptr_t", 1)] ->
+        E.return A.INTPTR_T
+    
+    | _ -> desugar_specifier ss >>= fun bty ->
+           E.return (A.BASIC qs bty)
+  end
+
+
+(* val mk_declaration: list C.spec_elem -> C.decl_type -> E.t A.declaration *)
+and mk_declaration specs decl =
+  desugar_spec_elem_list specs >>= fun (st_opt, ty) ->
+  desugar_decl_type decl ty    >>= fun ty'          ->
+  E.return (ty', st_opt)
+
+
+(* val desugar_field_group: C.field_group -> E.t (list (A.id * A.member)) *)
+and desugar_field_group (C.Field_group specs nes loc) =
+  E.mapM function
+    | (Some (C.Name n decl attrs l), None) ->
+        fst <$> mk_declaration specs decl >>= fun ty ->
+        E.register_fieldname (Some n)     >>= fun id ->
+        E.return (id, A.MEMBER ty)
+    | (Some (C.Name n decl attrs l), Some e) ->
+        fst <$> mk_declaration specs decl                   >>= fun d_ty  ->
+        (desugar_expression e >>= eval_constant_expression) >>= fun width ->
+        E.register_fieldname (Some n)                       >>= fun id    ->
+        E.return (id, A.BITFIELD d_ty width None)
+    | (None, Some e) ->
+        fst <$> mk_declaration specs C.JUSTBASE             >>= fun d_ty  ->
+        (desugar_expression e >>= eval_constant_expression) >>= fun width ->
+        E.register_fieldname None                           >>= fun id    ->
+        E.return (id, A.BITFIELD d_ty width None)
+  end nes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+val desugar_global_defn: desugar_state -> C.g_defn_l -> E.t unit
+let desugar_global_defn st (defn, l) =
+  match defn with
+  | C.FUNCTION_DEFINITION decl s ->
+      desugar_function_decl decl             >>= fun (id, formals) ->
+      register_labels s >> desugar_stmt st s >>= fun d_s           ->
+      E.destroy_scope                        >>= fun ()            ->
+      E.add_fn id formals d_s
+  
+  | C.EXTERNAL_DECLARATION defns ->
+      let f = function
+        | (id, Some e, l) -> (id, e)
+        | (id, None,   l) -> Boot.assert_false "(id, (l, Ail_aux.const_int (Int.int 0)))"
+      end in
+      List.map f -| filter_opt <$> E.mapM desugar_defn defns >>= fun d_defns ->
+      E.add_globals d_defns
+   end
+*)
+
+
+val     desugar_compound_init_expression: A.declaration -> list (list C.initwhat * C.init_expression) -> Opt.t (E.t (A.expression_t unit))
+let rec desugar_init_expression_aux (ty, _) ie =
+  match ie with
+    | C.SINGLE_INIT e ->
+        Opt.return (desugar_expression e)
+
+(*
+    | C.COMPOUND_INIT iwies ->
+        if 
+
+
+        E.mapM (fun (iws, ie') -> do Opt
+          d_ie <- desugar_init_expression_aux ie'
+          
+
+
+
+
+            | None     -> Opt.fail
+            | Some d_e ->
+                
+*)
+
+  end
+
+(*
+
+(*
+  | CONST_ARRAY of list (expression_t 'a)
+  | CONST_STRUCT_UNION of list (id * expression_t 'a)
+*)
+
+
+
+
+
+  | COMPOUND_INIT of list (list initwhat * init_expression)
+
+
+and initwhat =
+  | INFIELD_INIT of atom
+  | ATINDEX_INIT of expression
+
+
+    *)
+
+
+val     desugar_init_expression: A.declaration -> C.init_expression -> E.t (option (A.expression_t unit))
+let rec desugar_init_expression (ty, sd_opt) ie =
+  match ie with
+    | C.NO_INIT ->
+        E.return None
+    | _ ->
+        (* (§6.7.9#3) The type of the entity to be initialized shall be an array of unknown size or
+                      a complete object type that is not a variable length array type. *)
+        if not $ ATaux.is_array_type ty && not (ATaux.has_known_constant_size ty) ||
+                 ATaux.is_complete_object_type ty && not (ATaux.is_VLA_type ty) then
+          Boot.assert_false "[Cabs0_to_ail.desugar_init_expression] ERROR"
+        else
+          
+          
+          
+          Boot.assert_false "TODO [Cabs0_to_ail.desugar_init_expression] COMPOUND_INIT"
+  end
+
+
+
+
+val desugar_definition: C.definition -> E.t unit
+let desugar_definition = function
+  | C.FUNDEF specs (C.Name fname decl_t attrs _) s loc ->
+      mk_declaration specs decl_t >>= fun decl ->
+(*
+      
+      (* ... *)
+      let decl = ((fname, ftype, scs), Location.dummy) in
+      let s = (translate_statement s) in
+      
+      desugar_function_decl decl               >>= fun (id, formals) ->
+      register_labels s >> desugar_statement s >>= fun d_s           ->
+      E.destroy_scope                          >>
+      E.add_fn id formals d_s
+      
+*)
+      Boot.assert_false "WIP [Cabs0_to_ail.desugar_definition] FUNDEF"
+  
+  (* global variable(s), or function prototype *)
+  | C.DECDEF (specs, ins) loc ->
+      (* for each init-declaration *)
+      E.mapM function C.Init_name (C.Name str decl_t [] loc') ie ->
+        mk_declaration specs decl_t >>= fun (decl : A.declaration) ->
+        register_name str           >>= fun id ->
+        E.add_declaration id decl   >>
+        
+        
+
+(*        desugar_init_expression decl ie >>= fun d_ie -> *)
+
+
+
+
+(*      KKK *)
+
+
+
+
+        E.return ()
+      end ins >>= fun _ ->
+
+(*
+      let (ns, ies) = (function Init_name n ie -> (n, ie)) ins in
+      E.mapM mk_ctype specs
+*)
+
+
+(* Name (str, decl_t, [], loc) *)
+      Boot.assert_false "WIP [Cabs0_to_ail.desugar_definition] DECDEF"
+  
+  | C.PRAGMA str loc ->
+(*      E.set_location loc >> *)
+      E.fail (Errors.CSEM_NOT_SUPPORTED "PRAGMA")
+end 
+
+
+val desugar: string -> C.file -> Exception.t (Ail.file unit) Errors.t
+let desugar startup defs =
+  E.init (
+    E.iter desugar_definition defs                                       >>
+    E.option (Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve startup) >>=
+    E.to_program
+  )

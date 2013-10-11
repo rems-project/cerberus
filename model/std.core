@@ -1,0 +1,29 @@
+import Implementations.Dummy
+
+{-
+--  in_range :: ctype -> value -> boolean
+fun in_range ty v =
+  min{ty} <= v \/ v <= max{ty}
+
+--  overflow :: ctype -> value -> value
+fun overflow ty v =
+  if in_range ty v then v
+                   else undef
+-}
+
+
+{-
+-- sizeof
+sizeof (ty: ctype) : integer =
+  case ty of
+    -- (§6.5.3.4#4) When sizeof is applied to an operand that has type char, unsigned char, or
+    --              signed char, (or a qualified version thereof) the result is 1. 
+    | BASIC _ CHAR
+    | BASIC _ (INTEGER (SIGNED ICHAR))
+    | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> 1
+    
+    -- (TODO: check)
+    -- (§6.5.3.4#4) When applied to an operand that has array type, the result is the total number
+    -- of bytes in the array.
+    | ARRAY a_ty (Some n) -> *sizeof a_ty) * n
+-}

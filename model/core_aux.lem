@@ -1,0 +1,586 @@
+open Global
+open Core
+
+(* Some aliases for positive actions *)
+let pcreate ty pref  = Eaction (Pos, ({}, Create ty pref ))
+let palloc e pref    = Eaction (Pos, ({}, Alloc e pref   ))
+let pkill x          = Eaction (Pos, ({}, Kill x         ))
+let pstore ty x n mo = Eaction (Pos, ({}, Store ty x n mo))
+let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
+
+
+(* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
+let zero : expr zero = Econst (Cint (Int.int 0))
+let one  : expr zero = Econst (Cint (Int.int 1))
+
+
+(* Project an Ail.ctype into a Core.ctype *)
+let rec proj_ctype ty =
+  let proj_member = function
+    | Ail.MEMBER ty               -> MEMBER (proj_ctype ty)
+    | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
+  end in
+  match ty with
+    | Ail.VOID _               -> VOID
+    | Ail.BASIC _ bt           -> BASIC bt
+    | Ail.ARRAY ty n_opt       -> ARRAY (proj_ctype ty) n_opt
+    | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
+    | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
+    | Ail.ENUM id              -> ENUM id
+    | Ail.FUNCTION ty tys      -> FUNCTION (proj_ctype ty) (List.map proj_ctype tys)
+    | Ail.POINTER _ ty         -> POINTER (proj_ctype ty)
+    | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
+    | Ail.TYPEDEF _            -> Boot.assert_false "[Core_aux.proj_ctype] found a A.TYPEDEF"
+    | Ail.SIZE_T               -> SIZE_T
+    | Ail.INTPTR_T             -> INTPTR_T
+    | Ail.WCHAR_T              -> WCHAR_T
+    | Ail.CHAR16_T             -> CHAR16_T
+    | Ail.CHAR32_T             -> CHAR32_T
+end
+
+(* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
+let rec unproj_ctype ty =
+  let unproj_member = function
+    | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
+    | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
+  end in
+  match ty with
+    | VOID               -> Ail.VOID {}
+    | BASIC bt           -> Ail.BASIC {} bt
+    | ARRAY ty n_opt     -> Ail.ARRAY (unproj_ctype ty) n_opt
+    | STRUCT tag members -> Ail.STRUCT {} tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
+    | UNION  tag members -> Ail.UNION  {} tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
+    | ENUM id            -> Ail.ENUM id
+    | FUNCTION ty tys    -> Ail.FUNCTION (unproj_ctype ty) (List.map unproj_ctype tys)
+    | POINTER ty         -> Ail.POINTER {} (unproj_ctype ty)
+    | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
+    | SIZE_T             -> Ail.SIZE_T
+    | INTPTR_T           -> Ail.INTPTR_T
+    | WCHAR_T            -> Ail.WCHAR_T
+    | CHAR16_T           -> Ail.CHAR16_T
+    | CHAR32_T           -> Ail.CHAR32_T
+end
+
+val mk_ctype: forall 'a. Ail.ctype -> expr 'a
+let mk_ctype ty = Ectype (proj_ctype ty)
+
+let rec mk_wseq a_opts_es =
+  match a_opts_es with
+    | []               -> Eskip
+    | [(_, e)]         -> e
+    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq es')
+end
+
+let mk_unseq = function
+  | []  -> Eskip
+  | [e] -> e
+  | es  -> Eunseq es
+end
+
+
+
+let rec concat_wseq e e' =
+   match e with
+     | Ewseq _as e1 e2 -> Ewseq _as e1 (concat_wseq e2 e')
+     | Eskip           -> e'
+     | _               -> Ewseq [] e e'
+  end
+
+let is_negative = function
+  | Eaction (Neg, _) -> true
+  | _ -> false
+end
+
+let is_negative_action = function
+  | (Neg, _) -> true
+  | _ -> false
+end
+
+
+let rec free_syms e =
+  match e with
+  | Etuple es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
+  | Enull ->
+      {}
+  | Eskip ->
+      {}
+  | Econst _ ->
+      {}
+  | Eaddr _ ->
+      {}
+  | Esym a ->
+      {a}
+  | Eop _ e1 e2 ->
+      free_syms e1 union free_syms e2
+  | Etrue ->
+      {}
+  | Efalse ->
+      {}
+  | Enot e ->
+      free_syms e
+  | Ectype _ ->
+      {}
+  | Elet a e1 e2 ->
+      free_syms e1 union (free_syms e2 \ {a})
+  | Eif e1 e2 e3 ->
+      free_syms e1 union free_syms e2 union free_syms e3
+  | Eproc _ _ es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
+  | Ecall _ es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
+  | Esame e1 e2 ->
+      free_syms e1 union free_syms e2
+  | Eundef _ ->
+      {}
+  | Eerror ->
+      {}
+  | Eaction (_, act) ->
+      free_syms_action act
+  | Eunseq es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
+  | Ewseq _as e1 e2 ->
+      free_syms e1 union (free_syms e2 \ (set_from_options _as))
+  | Esseq _as e1 e2 ->
+      free_syms e1 union (free_syms e2 \ (set_from_options _as))
+  | Easeq a_opt act1 (_, act2) ->
+      free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Some a -> {a} | None -> {} end))
+  | Esave _ _ e ->
+      free_syms e
+  | Erun _ _ _ ->
+      {}
+  | Eret e ->
+      free_syms e
+  | End es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
+  | Eindet e ->
+      free_syms e
+  | Ebound _ e ->
+      free_syms e
+  | Eshift a e ->
+      free_syms e
+
+(* TODO: temporary *)
+  | Eis_scalar e ->
+      free_syms e
+  | Eis_integer e ->
+      free_syms e
+  | Eis_signed e ->
+      free_syms e
+  | Eis_unsigned e ->
+      free_syms e
+end
+
+and free_syms_action (_, act_) =
+  match act_ with
+    | Create ty _ ->
+        free_syms ty
+    | Alloc n _ ->
+        free_syms n
+    | Kill o ->
+        free_syms o
+    | Store ty o n _ ->
+        free_syms ty union free_syms o union free_syms n
+    | Load ty o _ ->
+        free_syms ty union free_syms o
+end
+
+
+(* check if a symbolic names is part of a pattern *)
+val in_pattern: sym -> list (option sym) -> bool
+let rec in_pattern a p =
+  match p with
+    | []             -> false
+    | Nothing  :: xs -> in_pattern a xs
+    | Some a'  :: xs -> if a = a' then true else in_pattern a xs
+  end
+
+(* substitute in an expression a symbolic name with a (pure) expression *)
+val     subst_sym: forall 'a. sym -> expr 'a -> expr 'a -> expr 'a
+let rec subst_sym a v e =
+  match e with
+    | Etuple es ->
+        Etuple $ List.map (subst_sym a v) es
+    | Enull ->
+        Enull
+    | Eskip ->
+        Eskip
+    | Econst n ->
+        Econst n
+    | Eaddr o ->
+        Eaddr o
+    | Esym a' ->
+        if a = a' then v else e
+    | Eop binop e1 e2 ->
+        Eop binop (subst_sym a v e1) (subst_sym a v e2)
+    | Etrue ->
+        Etrue
+    | Efalse ->
+      Efalse
+    | Enot e ->
+        Enot (subst_sym a v e)
+    | Ectype ty ->
+        Ectype ty
+    | Elet _a e1 e2 ->
+        Elet _a (subst_sym a v e1) (if a = _a then e2 else subst_sym a v e2)
+    | Eif e1 e2 e3 ->
+        Eif (subst_sym a v e1) (subst_sym a v e2) (subst_sym a v e3)
+    | Eproc bs f args ->
+        Eproc bs f (List.map (subst_sym a v) args)
+    | Ecall f args ->
+        Ecall f (List.map (subst_sym a v) args)
+    | Esame e1 e2 ->
+        Esame (subst_sym a v e1) (subst_sym a v e2)
+    | Eundef u ->
+        Eundef u
+    | Eerror ->
+        Eerror
+    | Eaction p ->
+        Eaction (subst_sym_paction a v p)
+    | Eunseq es ->
+        Eunseq (List.map (subst_sym a v) es)
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (subst_sym a v e1) (if in_pattern a _as then e2 else subst_sym a v e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (subst_sym a v e1) (if in_pattern a _as then e2 else subst_sym a v e2)
+    | Easeq _a act p  ->
+        Easeq _a (subst_sym_action a v act) (if Some a = _a then p else subst_sym_paction a v p)
+    | Eindet (* i *) e -> (* Eindet (* i *) (subst_sym a v e) *)
+        Boot.assert_false "[Core_aux.subst_sym] #Eindet"
+    | Ebound i e -> (* Ebound i (subst_sym a v e) *)
+        Boot.assert_false "[Core_aux.subst_sym] #Ebound"
+    | Erun bs k a_vs ->
+        Erun bs k (* ((a,v) :: a_vs) *) $ list_update a v a_vs
+    | Esave k a_tys e ->
+        Esave k a_tys (subst_sym a v e)
+    | Eret e ->
+        Eret (subst_sym a v e)
+    | End es ->
+        End $ List.map (subst_sym a v) es
+    | Eshift a' e ->
+        Eshift a' (subst_sym a v e)
+
+(* TODO: temporary *)
+  | Eis_scalar e ->
+      Eis_scalar (subst_sym a v e)
+  | Eis_integer e ->
+      Eis_integer (subst_sym a v e)
+  | Eis_signed e ->
+      Eis_signed (subst_sym a v e)
+  | Eis_unsigned e ->
+      Eis_unsigned (subst_sym a v e)
+  end
+
+and subst_sym_action_ a v act =
+  match act with
+    | Create e_ty pref      -> Create (subst_sym a v e_ty) pref
+    | Alloc e_n   pref      -> Alloc (subst_sym a v e_n) pref
+    | Kill e_o              -> Kill (subst_sym a v e_o)
+    | Store e_ty e_o e_v mo -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v) mo
+    | Load e_ty e_o mo      -> Load (subst_sym a v e_ty) (subst_sym a v e_o) mo
+    | _                     -> act
+  end
+and subst_sym_action a  v (bs, act) = (bs, subst_sym_action_ a v act)
+and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
+
+
+
+(* TODO: [subst_syms _as v e] substitute the symbols _as with the corresponding
+   of the value expression [v] in the expression [e]. This function leads
+   to a crash if [v] is not a value or its type doesn't match the symbolic
+   pattern *)
+val subst_syms: forall 'a. list (option sym) -> expr 'a -> expr 'a -> expr 'a
+let subst_syms _as v e =
+  match (_as, v) with
+    | ([]       , _        ) -> e
+    | ([None], _           ) -> e
+    | ([Some _a], _        ) -> subst_sym _a v e
+
+    | (_        , Etuple vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
+
+(*
+    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
+*)
+  end 
+
+(* Asuming well typed expressions *)
+let rec is_pure e =
+  match e with
+   | Enull ->
+       true
+   | Etrue ->
+       true
+   | Efalse ->
+       true
+   | Econst _ ->
+       true
+   | Ectype _ ->
+       true
+   | Eaddr _ ->
+       true
+   | Esym _ ->
+       true
+   | Eimpl _ ->
+       true
+   | Etuple _ ->
+       true
+   | Enot _ ->
+       true
+   | Eop _ _ _ ->
+       true
+   | Ecall _ _ ->
+       true
+   | Eundef _ ->
+       true
+   | Eerror ->
+       true
+   | Eskip ->
+       false
+   | Elet _ _ e2 ->
+       is_pure e2
+   | Eif _ e2 e3 ->
+       is_pure e2 && is_pure e3
+   | Eproc _ _ _ ->
+       false
+   | Esame _ _ ->
+       false
+   | Eaction _ ->
+       false
+   | Eunseq es ->
+       List.for_all is_pure es
+   | Ewseq _ e1 e2 ->
+       is_pure e1 && is_pure e2
+   | Esseq _ e1 e2 ->
+       is_pure e1 && is_pure e2
+   | Easeq _ _ _ ->
+       false
+   | Eindet _ ->
+       false
+   | Ebound _ _ ->
+       false
+   | Esave _ _ _ ->
+       false
+   | Erun _ _ _ ->
+       false
+   | Eret _ ->
+       false
+   | End es ->
+       false
+   | Eshift a e ->
+       false
+
+(* TODO: temporary *)
+  | Eis_scalar _ ->
+      true
+  | Eis_integer _ ->
+      true
+  | Eis_signed _ ->
+      true
+  | Eis_unsigned _ ->
+      true
+end
+
+
+let rec is_value e =
+  match e with
+   | Etuple pes ->
+       List.for_all is_value pes
+   | Enull ->
+       true
+   | Econst _ ->
+       true
+   | Eaddr _ ->
+       true
+   | Etrue ->
+       true
+   | Efalse ->
+       true
+   | Ectype _ ->
+       true
+(*
+   | Eundef _ ->
+       true
+   | Eerror ->
+       true
+*)
+   
+   | _ -> false
+end
+
+
+(* TODO: documentation *)
+let rec trailing_actions e =
+  match e with
+  | Etuple _ ->
+      []
+  | Enull ->
+      []
+  | Eskip ->
+      []
+  | Econst _ ->
+      []
+  | Eaddr _ ->
+      []
+  | Esym _ ->
+      []
+  | Eop _ _ _ ->
+      []
+  | Etrue ->
+      []
+  | Efalse ->
+      []
+  | Enot _ ->
+      []
+  | Ectype _ ->
+      []
+  | Elet _ _ e2 ->
+      trailing_actions e2
+  | Eif _ _ e3 ->
+      trailing_actions e3
+  | Eproc _ _ _ ->
+      []
+  | Ecall _ _ ->
+      [] (* TODO: check *)
+  | Esame _ _ ->
+      []
+  | Eundef _ ->
+      []
+  | Eerror ->
+      []
+  | Eaction pact ->
+      [pact]
+  | Eunseq es ->
+      List.concat $ List.map trailing_actions es
+  | Ewseq _ e1 e2 ->
+      [ act | forall (act MEM trailing_actions e1) | is_negative_action act ] @ trailing_actions e2
+  | Esseq _ _ e2 ->
+      trailing_actions e2
+  | Easeq _ act pact ->
+      [pact]
+  | Eindet e ->
+      trailing_actions e (* TODO: check *)
+  | Ebound _ e ->
+      trailing_actions e
+  | Esave _ _ e ->
+      trailing_actions e
+  | Erun _ _ _ ->
+      []
+  | Eret e ->
+      trailing_actions e
+  | End es ->
+      Boot.assert_false "WIP [Core_aux.trailing_actions] End"
+  | Eshift _ e ->
+      trailing_actions e
+end
+
+
+(*
+(* symbolic evaluation *)
+let rec simpl e =
+  match e with
+  | Etuple es ->
+      Etuple $ List.map simpl e
+  | Enull ->
+      Enull
+  | Eskip ->
+      Eskip
+  | Econst n ->
+      Econst n
+  | Eaddr addr ->
+      Eaddr addr
+  | Esym a ->
+      Esym a
+  | Eop bop pe1 pe2 ->
+      match (simpl pe1, simpl pe2) with
+        | (OpAdd, Econst n1,  Econst n2 ) -> Econst (Int.(+) n1 n2)
+        | (OpSub, Econst n1,  Econst n2 ) -> Econst (Int.(-) n1 n2)
+        | (OpMul, Econst n1,  Econst n2 ) -> Econst (Int.( * ) n1 n2)
+        | (OpDiv, Econst n1,  Econst n2 ) -> Econst (Int.(/) n1 n2)
+        | (OpMod, Econst n1,  Econst n2 ) -> Econst (Int.(%) n1 n2)
+        | (OpEq,  Econst n1,  Econst n2 ) -> if n1 = n2 then Etrue else Efalse
+        | (OpEq,  Ectype ty1, Ectype ty2) -> if Ail.ctype_eq ty1 ty2 then Etrue else Efalse
+        | (OpLt,  Econst n1,  Econst n2 ) -> if Int.(<) n1 n2 then Etrue else Efalse
+        | (OpOr,  Efalse,     Efalse    ) -> Efalse
+        | (OpOr,  _,          _         ) -> Etrue
+        | (OpAnd, Etrue,      Etrue     ) -> Etrue
+        | (OpAnd, _,          _         ) -> Efalse
+        | (_,     pe1',         pe2'    ) -> Eop bop pe1' pe2'
+      end
+  | Etrue ->
+      Etrue
+  | Efalse ->
+      Efalse
+  | Enot pe ->
+      match simpl pe with
+        | Etrue  -> Efalse
+        | Efalse -> Etrue
+        | pe'    -> pe'
+      end
+  | Ectype ty ->
+      Ectype ty
+  | Elet a pe1 e2 ->
+      let pe1' = simpl pe1 in
+      if is_value pe1' then
+        simpl (subst_sym a pe1' e2)
+      else
+        Elet a pe1' (simpl e2)
+  | Eif pe1 e2 e3 ->
+      match simpl pe1 with
+        | Etrue  -> simpl e2
+        | Efalse -> simpl e3
+        | pe1'   -> Eif pe1' (simpl e2) (simpl e3)
+  | Eproc bs f pes ->
+      
+  | Ecall f pes ->
+      
+  | Esame pe1 pe2 ->
+      
+  | Eundef u ->
+      Eundef u (* TODO: should use the monad in Undefined *)
+  | Eerror ->
+      Eerror (* TODO: should use the monad in Undefined *)
+  
+  | Eaction pact ->
+      
+  | Eunseq es ->
+      
+
+  | Ewseq _as e1 e2 ->
+      
+  | Esseq _as e1 e2 ->
+      
+  | Easeq a_opt act pact ->
+      
+  | Eindet e ->
+      
+  | Ebound j e ->
+      
+  | Esave d a_tys e ->
+      
+  | Erun bs d a_vs ->
+      
+  | Eret e ->
+      
+  | End es ->
+      
+(*  | Eshift of sym *expr 'a *)
+end
+*)
+
+(*
+let have_simple_race e1 e2 =
+  let are_simple_racy (_, (_, act1)) (_, (_, act2)) =
+    match (act1, act2) with
+      | Load
+
+  | Store of expr 'a * expr 'a * expr 'a
+  | Load of expr 'a * expr 'a
+
+*)
+
+val is_atomic_type: ctype -> bool
+let is_atomic_type t = 
+  match t with
+  | ATOMIC _ -> true
+  | _ -> false
+  end

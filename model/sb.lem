@@ -1,0 +1,85 @@
+open Global
+
+
+(* Temporary hack *)
+type sb' = <|
+  actions': Pmap.map Core_run.taction_id Core_run.trace_action;
+  edges':   Pmap.map Core_run.taction_id (list Core_run.taction_id)
+|>
+
+type sb = <|
+  actions: Pmap.map Core_run.taction_id Core_run.trace_action;
+  edges: list (Core_run.taction_id * Core_run.taction_id)
+|>
+
+
+
+(* NOTE: will crash on ill-formed traces *)
+(* TODO: I don't like it *)
+val extract: (Pmap.map Core_run.taction_id Core_run.trace_action * Core_run.Effect.trace) -> sb'
+let extract (tact_map, t) =
+  let es =
+    List.fold_left (fun edges (r, bs_act) ->
+    match bs_act with
+      | None ->
+          edges
+      | Some (bs, aid) ->
+          (* add a n sb-edge from each action in bs to aid *)
+          Set.fold (fun b edges -> Pmap.add b ({aid} union if Pmap.mem b edges then Pmap.find b edges else {}) edges) bs edges
+(*        Pmap.add aid (bs union (if Pmap.mem aid edges then Pmap.find aid edges else {})) edges *)
+    end) Pmap.empty t
+  in <| actions'= tact_map; edges'= Pmap.map Set.to_list es |>
+
+
+
+
+
+(*
+
+        (<| _sb with actions'= Pmap.add i a _sb.actions';
+                     edges'=   List.fold_left (fun es b ->
+                                 let ib = Pmap.find b is in
+                                 Pmap.add ib (i :: (if Pmap.mem ib es then Pmap.find ib es else [])) es
+                               ) _sb.edges' (Set.to_list bs)
+          |>, i+1, Pmap.add a i is)
+    end
+  ) (Pmap.empty, 0, Pmap.empty) t
+  in sb
+*)
+
+(*
+  List.fold_left (fun (_sb, i, is) (r, bs_a) ->
+    match bs_a with
+      | None              -> (_sb, i, is)
+      | Some (bs, aid) ->
+        let a = Pmap.find aid tact_map in
+        (<| _sb with actions'= Pmap.add i a _sb.actions';
+                     edges'=   List.fold_left (fun es b ->
+                                 let ib = Pmap.find b is in
+                                 Pmap.add ib (i :: (if Pmap.mem ib es then Pmap.find ib es else [])) es
+                               ) _sb.edges' (Set.to_list bs)
+          |>, i+1, Pmap.add a i is)
+    end
+  ) (<| actions'= Pmap.empty; edges'= Pmap.empty |>, 0, Pmap.empty) t
+  in sb
+*)
+
+
+(* TODO: this should be in the stdlib *)
+val     assocs: forall 'a 'b. 'a -> list ('a * 'b) -> list 'b
+let rec assocs z l =
+  match l with
+    | []           -> []
+    | (x,y) :: xys -> if x = z then y :: assocs z xys else assocs z xys
+  end
+
+val     exists_path: num -> num -> list (num * num) -> bool
+let rec exists_path a b es =
+  List.exist (fun b' -> b = b' || exists_path b' b es) (assocs a es)
+
+
+(* remove the edges implied by transitivity *)
+val simplify: sb' -> sb
+let simplify sb =
+  let edges' = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings sb.edges') in
+  <| actions= sb.actions'; edges= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) edges')) edges' |>

@@ -1,0 +1,35 @@
+open Common
+open AilTypes
+open AilSyntax
+open AilTypesAux
+
+let adjusted t : bool = not (array t) && not (is_function t)
+
+let wf_lvalue_aux q t : bool =
+  match t with
+  | Pointer _  t' -> not (object t') --> not (q.restrict)
+  | _             -> if is_function t
+                       then unqualified q 
+                       else not (q.restrict) 
+  end
+
+let rec wf_parameters_aux wf_type p : bool =
+  match p with
+  | []          -> true
+  | (q, t) :: p -> adjusted t && not (incomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
+  end
+
+let rec wf_type t : bool =
+  let wf_parameters = wf_parameters_aux wf_type in
+  match t with
+  | Void -> true
+  | Basic _ -> true
+  | Array t _ -> complete t && wf_type t
+  | Function t p -> not (array  t) && not (is_function t) && wf_type  t && wf_parameters p
+  | Pointer q t -> wf_type t && wf_lvalue_aux q t
+  end
+
+let wf_lvalue q t : bool =
+  wf_type t && wf_lvalue_aux q t
+
+let wf_parameters = wf_parameters_aux wf_type
