@@ -209,6 +209,7 @@ module Effect = struct
     tact_map:       Pmap.map taction_id trace_action;
     trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
     (* The following members are named after their counterparts in Cmm. *)
+    cmm_tact_map:   Pmap.map taction_id Cmm.action;
     lk:             Pmap.map Cmm.location Cmm.location_kind;
     sb:             set (taction_id * taction_id);
     asw:            set (taction_id * taction_id);
@@ -421,7 +422,6 @@ let to_cmm_action taid action =
   | Tcreate _ _ -> None
   | Talloc _ _ -> None
   | Tkill _ -> None
-  (* The types are: ctype * mem_addr * mem_value * Cmm.memory_order *)
   | Tstore _ o value mo -> Some $ Cmm.Store (Pervasives.string_of_num taid) 
                                             (string_to_cvalue "?") 
                                              mo 
@@ -433,16 +433,6 @@ let to_cmm_action taid action =
                                           (addr_to_cvalue o) 
                                           (mem_value_to_cvalue value)
   end
-
-val to_cmm_action_map: Pmap.map taction_id trace_action -> Pmap.map taction_id Cmm.action
-let to_cmm_action_map pmap = 
-  let id_action_pairs = {(id, Pmap.find id pmap) | forall (id IN Pmap.domain pmap) | true} in
-  let foldfunction = (fun (id, action) auxmap -> 
-                      match to_cmm_action id action with
-                      | None -> auxmap
-                      | Some cmm_action -> Pmap.add id cmm_action auxmap
-                      end) in
-  Set.fold foldfunction id_action_pairs Pmap.empty
 
 (* Auxilary function for list_to_relation *)
 val list_to_relation_aux: forall 'a. list 'a -> option 'a -> set ('a * 'a)
@@ -459,22 +449,34 @@ let rec list_to_relation_aux list prev =
 val list_to_relation: forall 'a. list 'a -> set ('a * 'a)
 let list_to_relation list = 
   tc (list_to_relation_aux list None)
+  
+val get_location_kind: E.state -> Cmm.location -> Cmm.location_kind
+let get_location_kind s x = 
+  (* We use Non_Atomic as the default location_kind. Some locations are not used
+     in the execution (i.e. there are no actions at that location) and then it does
+     not matter which location_kind we specify. But some actions might be used, but 
+     not present in s.E.lk (for example if it has been created with an alloc rather 
+     than a create). In this case the default location_kind does matter. *)
+   if Pmap.mem x s.E.lk then Pmap.find x s.E.lk else Cmm.Non_Atomic
+   
+val is_atomic_location: mem_addr -> E.t bool
+let is_atomic_location o = 
+  fun s -> U.return [(get_location_kind s (addr_to_cvalue o) = Cmm.Atomic, s)]
+   
+val is_nonatomic_location: mem_addr -> E.t bool
+let is_nonatomic_location o = 
+  fun s -> U.return [(get_location_kind s (addr_to_cvalue o) = Cmm.Non_Atomic, s)]
 
 val to_observable_execution: E.state -> Cmm.observable_execution
 let to_observable_execution s = 
-  let actions = to_cmm_action_map s.E.tact_map in
   let to_cmm_relation = fun rel -> 
-      (Set.image (fun (x, y) -> (Pmap.find x actions, Pmap.find y actions)) rel) in
+      (Set.image (fun (x, y) -> (Pmap.find x s.E.cmm_tact_map, Pmap.find y s.E.cmm_tact_map)) rel) in
   let pre_execution =
     <|
-      Cmm.actions = Pmap.range actions;
+      Cmm.actions = Pmap.range s.E.cmm_tact_map;
       Cmm.threads = {};
-      (* We use Non_Atomic as the default location_kind. Some locations are not used
-         in the execution (i.e. there are no actions at that location) and then it does
-         not matter which location_kind we specify. But some actions might be used, but 
-         not present in s.E.lk (for example if it has been created with an alloc rather 
-         than a create). In this case the default location_kind does matter. *)
-      Cmm.lk      = (fun x -> if Pmap.mem x s.E.lk then Pmap.find x s.E.lk else Cmm.Non_Atomic);
+
+      Cmm.lk      = (fun x -> get_location_kind s x);
       Cmm.sb      = {};
       Cmm.asw     = {};
       Cmm.dd      = {};
@@ -498,6 +500,35 @@ let to_complete_execution s =
   (* TODO: Choose the right memory model *)
   let rl = Cmm.release_acquire_no_locks_relations Xo Xw in
   (Xo, Xw, rl)
+  
+val to_happens_before: Cmm.observable_execution -> set (Cmm.action * Cmm.action)
+let to_happens_before (Xo, Xw) = 
+  (* TODO: Choose the right memory model *)
+  let sw = Cmm.release_acquire_no_locks_synchronizes_with_set Xo.Cmm.actions Xo.Cmm.sb Xo.Cmm.asw Xw.Cmm.rf in
+  Cmm.no_consume_hb Xo.Cmm.sb sw
+  
+  
+(*
+val discard_CoWR: taction_id -> taction_id -> E.t unit
+let discard_CoWR write_taid read_taid = fun s ->
+  let (Xo, Xw) = to_observable_execution s in
+  let hb = to_happens_before (Xo, Xw) in
+  exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, r) IN hb
+  
+val has_CoWW: state -> Cmm.action -> bool
+let has_CoWW s w1 = 
+  let Xo = to_pre_execution s in
+  let Xw = to_execution_witness s in
+  let hb = to_hb2 Xo Xw in
+  exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, w1) IN hb
+  
+val has_data_race: state -> bool
+let has_data_race s = 
+  let Xo = to_pre_execution s in
+  let Xw = to_execution_witness s in
+  let hb = to_hb2 Xo Xw in
+  not (Set.is_empty (Cmm.data_races (Xo, Xw, [("hb", hb)]))) 
+*)
 
 (* ************************************************************************** *)
 (* TODO: dummy memory model (concrete with isolated objects, ignoring C types) *)
@@ -511,6 +542,7 @@ let initial_state file = <|
   E.tact_counter=   0;
   E.tact_map=       Pmap.empty;
   E.trace=          [];
+  E.cmm_tact_map=   Pmap.empty;
   E.lk=             Pmap.empty;
   E.sb=             {};
   E.asw=            {};
@@ -550,7 +582,26 @@ let push_mod_order o taid = fun (<|E.mo = mod_order |> as s) ->
   let order_of_o = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
   U.return [((), <| s with E.mo = Pmap.add o new_order_of_o mod_order |>)
             | forall (new_order_of_o MEM list_insert taid order_of_o)
-            | true] 
+            | true]
+            
+(* Returns a taid that has not been used yet *)
+val get_new_taid: E.t num
+let get_new_taid = 
+  fun (<| E.tact_counter = new_taid |> as s) -> U.return [(new_taid, s)]
+
+(* Adds the trace_action and corresponding Cmm.action (if there is one) to the state *)  
+val add_tact: taction_id -> trace_action -> E.t unit
+let add_tact taid tact = 
+  fun (<| E.tact_map = tact_map; 
+          E.cmm_tact_map = cmm_tact_map; |> as s) ->
+    let cmm_action_opt = to_cmm_action taid tact in
+    let new_cmm_tact_map = match cmm_action_opt with
+                           | None -> cmm_tact_map
+                           | Some cmm_tact -> Pmap.add taid cmm_tact cmm_tact_map
+                           end in
+    U.return [((), <| s with E.tact_counter= taid+1; 
+                             E.tact_map= Pmap.add taid tact tact_map;
+                             E.cmm_tact_map= new_cmm_tact_map; |>)]
 
 
 (* push an element in the trace *)
@@ -860,20 +911,23 @@ val perform_action: action_ taction_id -> E.t (taction_id * expr taction_id)
 let perform_action act =
   E.get_file >>= fun file ->
   let eval = eval file in
-  (fun (<| E.tact_counter = new_taid |> as s) -> U.return [(new_taid, s)]) >>= fun new_taid ->
+  get_new_taid >>= fun new_taid ->
   match act with
     | Create pe pref ->
-        E.runU (eval pe)              >>= fun (Ectype ty) ->
-        create pref ty new_taid       >>= fun o           ->
-        E.return (Tcreate ty o, Eaddr o)
+        E.runU (eval pe)                 >>= fun (Ectype ty) ->
+        create pref ty new_taid          >>= fun o           ->
+        add_tact new_taid (Tcreate ty o) >>
+        E.return (new_taid, Eaddr o)
     | Alloc pe pref ->
-        E.runU (eval pe)              >>= fun (Econst (Cint n)) ->
-        alloc pref n new_taid         >>= fun o                 ->
-        E.return (Talloc n o, Eaddr o)
+        E.runU (eval pe)               >>= fun (Econst (Cint n)) ->
+        alloc pref n new_taid          >>= fun o                 ->
+        add_tact new_taid (Talloc n o) >>
+        E.return (new_taid, Eaddr o)
     | Kill pe ->
-        E.runU (eval pe)           >>= fun (Eaddr o) ->
-        kill o                     >>
-        E.return (Tkill o, Eskip)
+        E.runU (eval pe)            >>= fun (Eaddr o) ->
+        kill o                      >>
+        add_tact new_taid (Tkill o) >>
+        E.return (new_taid, Eskip)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
@@ -885,10 +939,12 @@ let perform_action act =
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end                       >>= fun (value, e) ->
               store ty o value new_taid >>
-              (if is_atomic_type ty 
+              is_atomic_location o      >>= fun is_atomic ->
+              (if is_atomic
                then push_mod_order o new_taid
-               else E.return ()) >>
-              E.return (Tstore ty o value mo, e) 
+               else E.return ())        >>
+              add_tact new_taid (Tstore ty o value mo) >>               
+              E.return (new_taid, e) 
 
 
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
@@ -904,16 +960,12 @@ let perform_action act =
                          | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
                                       E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
-                       end
+                       end                    >>= fun (tact, e) ->
+                       add_tact new_taid tact >>
+                       E.return (new_taid, e)
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
-  end >>= fun (tact, e) ->
-  (fun (<| E.tact_map = tact_map |> as s) -> 
-    U.return [((new_taid, e), <| s with E.tact_counter= new_taid+1; E.tact_map= Pmap.add new_taid tact tact_map; |>)])
-
-
-
-
+  end                    
 
 (* NOTE: the assumption is made that an Eunseq cannot directly be the
          subexpression of an another Eunseq *)
