@@ -1,0 +1,49 @@
+type big_int = Ocaml.Big_int_.big_int
+
+(* Addition *)
+val (+) : big_int -> big_int -> big_int
+let inline {ocaml} (+) = Ocaml.Big_int_.add_big_int
+
+(* Subtraction *)
+val (-) : big_int -> big_int -> big_int
+let inline {ocaml} (-) = Ocaml.Big_int_.sub_big_int
+
+(* Multiplication *)
+val ( * ) : big_int -> big_int -> big_int
+let inline {ocaml} ( * ) = Ocaml.Big_int_.mult_big_int
+
+(* Integer Exponentiation *)
+val ( ** ) : big_int -> num -> big_int
+let inline {ocaml} ( ** ) = Ocaml.Big_int_.power_big_int_positive_int
+
+(* Integer division *)
+val (/) : big_int -> big_int -> big_int
+let inline {ocaml} (/) = Ocaml.Big_int_.div_big_int
+
+(* Modulo *)
+val (%) : big_int -> big_int -> big_int
+let inline {ocaml} (%) = Ocaml.Big_int_.mod_big_int
+
+(* Less *)
+val (<) : big_int -> big_int -> bool
+let inline {ocaml} (<) = Ocaml.Big_int_.lt_big_int
+
+(* Less equal *)
+val (<=) : big_int -> big_int -> bool
+let inline {ocaml} (<=) = Ocaml.Big_int_.le_big_int
+
+(* Greater *)
+val (>) : big_int -> big_int -> bool
+let inline {ocaml} (>) = Ocaml.Big_int_.gt_big_int
+
+(* Greater equal *)
+val (>=) : big_int -> big_int -> bool
+let inline {ocaml} (>=) = Ocaml.Big_int_.ge_big_int
+
+(* transformation of num to integer *)
+val int : num -> big_int
+let inline {ocaml} int = Ocaml.Big_int_.big_int_of_int
+
+(* negation, i.e. neg 5 = -5 *)
+val neg : big_int -> big_int
+let inline {ocaml} neg = Ocaml.Big_int_.minus_big_int

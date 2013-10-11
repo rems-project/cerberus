@@ -1,0 +1,206 @@
+(* AST type used by Jacques-Henri Jourdan's parser *)
+
+type atom = string
+
+(* Context information. *)
+type cabsloc = int (* Location.t *)
+
+type typeSpecifier = (* Merge all specifiers into one type *)
+  | Tvoid                 (* Type specifier ISO 6.7.2 *)
+  | Tchar
+  | Tshort
+  | Tint
+  | Tlong
+  | Tfloat
+  | Tdouble
+  | Tsigned
+  | Tunsigned
+  | T_Bool
+  | Tnamed of atom
+  (* each of the following three kinds of specifiers contains a field
+   * or list item iff it corresponds to a definition (as opposed to
+   * a forward declaration or simple reference to the type).
+   * They also have a list of __attribute__s that appeared between the
+   * keyword and the type name (definitions only) *)
+  | Tatomic of(list spec_elem * decl_type)
+  | Tstruct of option atom * option (list field_group) * list attribute
+  | Tunion of option atom * option (list field_group) * list attribute
+  | Tenum of option atom * option (list (atom * option expression * cabsloc)) * list attribute
+
+and storage =
+  AUTO | STATIC | EXTERN | THREAD_LOCAL | REGISTER | TYPEDEF
+
+and cvspec =
+  CV_CONST | CV_VOLATILE | CV_RESTRICT | CV_ATOMIC
+
+(* Type specifier elements. These appear at the start of a declaration *)
+(* Everywhere they appear in this file, they appear as a 'list spec_elem', *)
+(* which is not interpreted by cabs -- rather, this "word soup" is passed *)
+(* on to the compiler.  Thus, we can represent e.g. 'int long float x' even *)
+(* though the compiler will of course choke. *)
+and spec_elem =
+  | SpecCV of cvspec            (* const/volatile *)
+  | SpecAttr of attribute
+  | SpecStorage of storage
+  | SpecInline
+  | SpecType of typeSpecifier
+
+(* Declarator type. They modify the base type given in the specifier. Keep
+ * them in the order as they are printed (this means that the top level
+ * constructor for ARRAY and PTR is the inner-level in the meaning of the
+ * declared type) *)
+and decl_type =
+ | JUSTBASE
+ | ARRAY of decl_type * list cvspec * list attribute * option expression
+ | PTR of list cvspec * list attribute * decl_type
+(* The bool is true for variable length parameters. *)
+ | PROTO of decl_type * (list parameter * bool)
+
+and parameter =
+  | PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
+
+(* The optional expression is the bitfield *)
+and field_group =
+  | Field_group of list spec_elem * list (option name * option expression) * cabsloc
+
+(* The decl_type is in the order in which they are printed. Only the name of
+ * the declared identifier is pulled out. *)
+(* e.g: in "int *x", "*x" is the declarator; "x" will be pulled out as *)
+(* the atom, and decl_type will be PTR([], JUSTBASE) *)
+and name =
+  | Name of atom * decl_type * list attribute * cabsloc
+
+(* A variable declarator ("name") with an initializer *)
+and init_name =
+  | Init_name of name * init_expression
+
+(*
+** Expressions
+*)
+and binary_operator =
+  | ADD | SUB | MUL | DIV | MOD
+  | AND | OR
+  | BAND | BOR | XOR | SHL | SHR
+  | EQ | NE | LT | GT | LE | GE
+  | ASSIGN
+  | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN
+  | BAND_ASSIGN | BOR_ASSIGN | XOR_ASSIGN | SHL_ASSIGN | SHR_ASSIGN
+  | COMMA
+
+and unary_operator =
+  | MINUS | PLUS | NOT | BNOT | MEMOF | ADDROF
+  | PREINCR | PREDECR | POSINCR | POSDECR
+
+and expression =
+  | UNARY of unary_operator * expression
+  | BINARY of binary_operator * expression * expression
+  | QUESTION of expression * expression * expression
+
+    (* A CAST can actually be a constructor expression *)
+  | CAST of (list spec_elem * decl_type) * init_expression
+
+  | C11_ATOMIC_INIT of expression * expression
+  | C11_ATOMIC_STORE of expression * expression * expression
+  | C11_ATOMIC_LOAD of expression * expression
+  | C11_ATOMIC_EXCHANGE of expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+  | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+
+  | CALL of expression * list expression
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+  | CONSTANT of constant
+  | VARIABLE of atom
+  | EXPR_SIZEOF of expression
+  | TYPE_SIZEOF of (list spec_elem * decl_type)
+  | ALIGNOF of (list spec_elem * decl_type)
+  | INDEX of expression * expression
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
+
+and integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+
+and character_prefix =
+  | PREFIX_L
+  | PREFIX_u
+  | PREFIX_U
+
+and encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+
+and constant =
+  (* The atom is the textual representation of the constant in
+     the source code. It does include quotes. *)
+  | CONST_INT of atom * option integer_suffix
+  | CONST_FLOAT of atom
+  | CONST_CHAR of option character_prefix * atom
+  | CONST_STRING of atom (* TODO *)
+
+and init_expression =
+  | NO_INIT
+  | SINGLE_INIT of expression
+  | COMPOUND_INIT of list (list initwhat * init_expression)
+
+and initwhat =
+  | INFIELD_INIT of atom
+  | ATINDEX_INIT of expression
+
+and attribute =
+  | ATTR of atom * list expression
+
+(* like name_group, except the declared variables are allowed to have initializers *)
+(* e.g.: int x=1, y=2; *)
+type init_name_group = (list spec_elem * list init_name)
+
+(* The base type and the storage are common to all names. Each name might
+ * contain type or storage modifiers *)
+(* e.g.: int x, y; *)
+type name_group = (list spec_elem * list name)
+
+(*
+** Declaration definition (at toplevel)
+*)
+type definition =
+ | FUNDEF of list spec_elem * name * statement * cabsloc
+ | DECDEF of init_name_group * cabsloc  (* global variable(s), or function prototype *)
+ | PRAGMA of atom * cabsloc
+
+(*
+** statements
+*)
+
+and statement =
+ | NOP of cabsloc
+ | COMPUTATION of expression * cabsloc
+ | BLOCK of list statement * cabsloc
+ | If of expression * statement * option statement * cabsloc
+ | WHILE of expression * statement * cabsloc
+ | DOWHILE of expression * statement * cabsloc
+ | FOR of option for_clause * option expression * option expression * statement * cabsloc
+ | BREAK of cabsloc
+ | CONTINUE of cabsloc
+ | RETURN of option expression * cabsloc
+ | SWITCH of expression * statement * cabsloc
+ | CASE of expression * statement * cabsloc
+ | DEFAULT of statement * cabsloc
+ | LABEL of atom * statement * cabsloc
+ | GOTO of atom * cabsloc
+ | DEFINITION of definition (*definition or declaration of a variable or type*)
+ | PAR of list statement * cabsloc
+
+and for_clause =
+ | FC_EXP of expression
+ | FC_DECL of definition
+
+
+(* list of toplevel definitions *)
+type file = list definition

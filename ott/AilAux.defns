@@ -1,0 +1,83 @@
+defns
+Jfv :: '' ::=
+
+defn
+id fv e :: :: fv :: Fv by
+
+id fv e
+----------- :: Unary
+id fv uop e
+
+id fv e1
+--------------- :: Binary1
+id fv e1 bop e2
+
+id fv e2
+--------------- :: Binary2
+id fv e1 bop e2
+
+id fv e1
+------------- :: Assign1
+id fv e1 = e2
+
+id fv e2
+------------- :: Assign2
+id fv e1 = e2
+
+id fv e1
+----------------- :: CompoundAssign1
+id fv e1 aop = e2
+
+id fv e2
+----------------- :: CompoundAssign2
+id fv e1 aop = e2
+
+id fv e_1
+------------------ :: Conditional1
+id fv e1 ? e2 : e3
+
+id fv e_2
+------------------ :: Conditional2
+id fv e1 ? e2 : e3
+
+id fv e3
+------------------ :: Conditional3
+id fv e1 ? e2 : e3
+
+id fv e
+------------ :: Cast
+id fv (ty) e
+
+id fv e
+-------------------- :: Call
+id fv e (e1, .., ek)
+
+id fv ej
+-------------------- :: CallArgument
+id fv e (e1, .., ek)
+
+%TODO
+
+% id fv e
+% ------------- :: Memberof
+% id fv e . id'
+
+% id fv e
+% -------------- :: Memberofptr
+% id fv e -> id'
+
+-------- :: Variable
+id fv id
+
+defns
+JisNullPointerConstant :: '' ::=
+
+defn
+isNullPointerConstant e :: :: isNullPointerConstant :: IsNullPointerConstant by
+
+----------------------- :: Zero
+isNullPointerConstant 0
+
+isNullPointerConstant e
+-------------------------------- :: Pointer
+isNullPointerConstant (void *) e

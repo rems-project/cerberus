@@ -1,0 +1,23 @@
+open Global
+
+type t 'a = option 'a
+
+val return: forall 'a. 'a -> option 'a
+let return z = Some z
+
+val (>>=): forall 'a 'b. option 'a -> ('a -> option 'b) -> option 'b
+let (>>=) m f =
+  match m with
+    | Some z -> f z
+    | None   -> None
+  end
+
+val fail: forall 'a. option 'a
+let fail = None
+
+
+
+let is_some = function
+  | Some _ -> true
+  | None   -> false
+end

@@ -1,0 +1,89 @@
+open Global
+
+type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
+
+val return: forall 'a 's 'msg. 'a -> t 'a 's 'msg
+let return a = fun s -> Exception.return (a, s)
+
+val bind: forall 'a 'b 's 'msg. t 'a 's 'msg -> ('a -> t 'b 's 'msg) -> t 'b 's 'msg
+let bind m f = fun s ->
+  Exception.bind (m s) (fun (a, s') -> (f a) s')
+
+
+(* Reinventing the wheel *)
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+val join: forall 'a 's 'msg. t (t 'a 's 'msg) 's 'msg -> t 'a 's 'msg
+let fmap f m = bind m (fun z -> return $ f z)
+let join mm  = bind mm (fun z -> z)
+
+val app: forall 'a 'b 's 'msg. t ('a -> 'b) 's 'msg -> t 'a 's 'msg -> t 'b 's 'msg
+val papp: forall 'a 'b 's 'msg. t ('a -> 'b) 's 'msg -> 'a -> t 'b 's 'msg
+let app  mf m = bind mf (fun f -> fmap f m)
+let papp mf x = bind mf (fun f -> return (f x))
+
+module Operators = struct
+  let (>>=) = bind
+  let (<$>) = fmap
+  let (<*>) = app
+end
+open Operators
+
+let app2 mf mx my = mf <*> mx <*> my
+let app3 mf mx my mz = (app2 mf mx my) <*> mz
+let map2 f mx my = f <$> mx <*> my
+let map3 f mx my mz = (map2 f mx my) <*> mz
+
+let sequence ms =
+  List.fold_right
+    (fun m m' ->
+      m  >>= fun x  ->
+      m' >>= fun xs ->
+      return (x::xs)
+    ) ms (return [])
+
+let listM t xs = sequence (t xs)
+
+val mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t (list 'b) 's 'msg
+let mapM f = listM (List.map f)
+
+let rec foldlM f l a =
+  match l with
+    | [] -> return a
+    | x::xs -> f x a >>= foldlM f xs
+  end
+
+let rec foldrM f l a =
+  match l with
+    | [] -> return a
+    | x::xs -> foldrM f xs a >>= f x
+  end
+
+let iter f l = foldlM (fun a () -> f a) l ()
+
+
+(* Exception stuff *)
+let fail msg = fun _ -> Exception.fail msg
+
+let of_option msg = function
+  | Some a -> return a
+  | None   -> fail msg
+end
+
+let option msg m =
+  let f o =
+    match o with
+      | Some a -> return a
+      | None   -> fail msg
+    end in
+  bind m f
+
+
+(* The state actions *)
+val read:   forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
+val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
+val modify: forall 'a 's 'msg. ('s -> 'a * 's) -> t 'a 's 'msg
+val run:    forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.t 'a 'msg
+let read   f = fun s -> Exception.return (f s, s)
+let update f = fun s -> Exception.return ((), f s)
+let modify f = fun s -> Exception.return (f s)
+let run    m = fun s -> Exception.fmap fst (m s)
