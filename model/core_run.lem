@@ -507,28 +507,35 @@ let to_happens_before (Xo, Xw) =
   let sw = Cmm.release_acquire_no_locks_synchronizes_with_set Xo.Cmm.actions Xo.Cmm.sb Xo.Cmm.asw Xw.Cmm.rf in
   Cmm.no_consume_hb Xo.Cmm.sb sw
   
-  
-(*
-val discard_CoWR: taction_id -> taction_id -> E.t unit
-let discard_CoWR write_taid read_taid = fun s ->
+val discard_CoWR_states: taction_id -> taction_id -> E.t unit
+let discard_CoWR_states write_taid read_taid = fun s ->
+  let w1 = Pmap.find write_taid s.E.cmm_tact_map in
+  let r = Pmap.find read_taid s.E.cmm_tact_map in
   let (Xo, Xw) = to_observable_execution s in
   let hb = to_happens_before (Xo, Xw) in
-  exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, r) IN hb
+  if exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, r) IN hb then
+    U.return []
+  else
+    U.return [((), s)]
   
-val has_CoWW: state -> Cmm.action -> bool
-let has_CoWW s w1 = 
-  let Xo = to_pre_execution s in
-  let Xw = to_execution_witness s in
-  let hb = to_hb2 Xo Xw in
-  exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, w1) IN hb
+val discard_CoWW_states: taction_id -> E.t unit
+let discard_CoWW_states write_taid = fun s ->
+  let w1 = Pmap.find write_taid s.E.cmm_tact_map in
+  let (Xo, Xw) = to_observable_execution s in
+  let hb = to_happens_before (Xo, Xw) in
+  if exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, w1) IN hb then
+    U.return []
+  else
+    U.return [((), s)]
   
-val has_data_race: state -> bool
-let has_data_race s = 
-  let Xo = to_pre_execution s in
-  let Xw = to_execution_witness s in
-  let hb = to_hb2 Xo Xw in
-  not (Set.is_empty (Cmm.data_races (Xo, Xw, [("hb", hb)]))) 
-*)
+val check_for_dataraces: E.t unit
+let check_for_dataraces = fun s ->
+  let (Xo, Xw) = to_observable_execution s in
+  let hb = to_happens_before (Xo, Xw) in
+  if (Set.is_empty (Cmm.data_races (Xo, Xw, [("hb", hb)]))) then
+    U.return [((), s)]
+  else
+    U.undef [Undefined.Data_race]
 
 (* ************************************************************************** *)
 (* TODO: dummy memory model (concrete with isolated objects, ignoring C types) *)
@@ -937,22 +944,25 @@ let perform_action act =
                 | Eaddr o' -> E.return ((Mobj o'), Eskip)
                 | Enull    -> E.return (Mnull, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
-              end                       >>= fun (value, e) ->
-              store ty o value new_taid >>
-              is_atomic_location o      >>= fun is_atomic ->
-              (if is_atomic
-               then push_mod_order o new_taid
-               else E.return ())        >>
-              add_tact new_taid (Tstore ty o value mo) >>               
+              end                                      >>= fun (value, e) ->
+              store ty o value new_taid                >>
+              add_tact new_taid (Tstore ty o value mo) >>  
+              is_atomic_location o                     >>= fun is_atomic ->
+              (if is_atomic then
+                 push_mod_order o new_taid    >>
+                 discard_CoWW_states new_taid >>
+                 check_for_dataraces
+               else 
+                 (* Need to check for dataraces *)
+                 E.return ()
+               )                                       >>
               E.return (new_taid, e) 
-
-
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
         end
     | Load pe1 pe2 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
-          | Eaddr o -> load ty o >>= fun (value, store_taid) ->
+          | Eaddr o -> load ty o                                >>= fun (value, store_taid) ->
                        (* Updating readsfrom *)
                        (fun (<| E.rf = rf |> as s) -> U.return [((), <| s with E.rf = Set.add (store_taid, new_taid) rf|>)]) >>
                        match value with
@@ -960,8 +970,16 @@ let perform_action act =
                          | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
                                       E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
-                       end                    >>= fun (tact, e) ->
-                       add_tact new_taid tact >>
+                       end                                      >>= fun (tact, e) ->
+                       add_tact new_taid tact                   >>
+                       is_atomic_location o                     >>= fun is_atomic ->
+                       (if is_atomic then
+                          discard_CoWR_states store_taid new_taid >>
+                          check_for_dataraces
+                        else 
+                          (* Need to check for dataraces *)
+                          E.return ()
+                        )                                       >>                       
                        E.return (new_taid, e)
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
