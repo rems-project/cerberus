@@ -1,7 +1,5 @@
 open Global
 
-
-
 (* use this to print a halting error message *)
 let error str =
   prerr_endline $ Colour.ansi_format [Colour.Red] ("ERROR: " ^ str);
@@ -85,14 +83,6 @@ let write_sb fname ts =
 
 
 
-
-
-
-
-
-
-
-
 (* load the Core standard library *)
 let load_stdlib csemlib_path =
   let fname = Filename.concat csemlib_path "corelib/std.core" in
@@ -111,7 +101,6 @@ let load_stdlib csemlib_path =
     match Core_parser.parse (Input.file fname) with
       | Exception.Result (Core_parser_util.Rstd z) -> z
       | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib."
-
 
 let load_impl core_parse csemlib_path =
     if !impl_file = "" then 
@@ -205,10 +194,15 @@ let pipeline stdlib impl core_parse file_name =
   >|> Input.file
   >|> frontend
   >|> core_backend
+  
+  
 
-
-
-
+let run_test stdlib impl core_parse (test:Tests.test) = 
+  let ex_result = pipeline stdlib impl core_parse test.Tests.file_name in
+  let test_result = Tests.compare_results test.Tests.expected_result ex_result in
+  match test_result with
+  | Exception.Result _      -> print_endline (Colour.ansi_format [Colour.Green] ("Test succeeded (" ^ test.Tests.file_name ^ ")"))
+  | Exception.Exception msg -> print_endline (Colour.ansi_format [Colour.Red] ("Test failed (" ^ test.Tests.file_name ^ ") " ^ msg))
 
 
 
@@ -248,4 +242,7 @@ let () =
   let impl = load_impl Core_parser.parse csemlib_path in
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   
-  List.iter (catch -| pipeline stdlib impl Core_parser.parse) !files;
+  if !testing then
+    List.iter (run_test stdlib impl Core_parser.parse) Tests.get_tests
+  else 
+    List.iter (catch -| pipeline stdlib impl Core_parser.parse) !files;
