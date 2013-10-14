@@ -52,3 +52,5 @@ and generates a file "a.c.dot" with the sb orders corresponding to each trace
 (here they all have the same order)
 
 (to get a pdf: dot -Tpdf a.c.dot > a_sb.pdf)
+
+The automated tests are run when the flag --test is set. For example with "csem --impl gcc_4.9.0_x86_64-apple-darwin10.8.0 --test"

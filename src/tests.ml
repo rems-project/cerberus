@@ -1,4 +1,5 @@
 open Global
+open Core
 module E = Exception
 
 (* use this to print a halting error message *)
@@ -20,8 +21,8 @@ type execution_result = ((Core_run.taction_id Core.expr) Pset.set, Errors.t) Exc
 
 let pp_execution_result result = 
   match result with
-  | E.Result s    -> "Result " ^ (String.concat ", " (List.map (fun x -> "?") (Pset.elements s)))
-  | E.Exception e -> "Exception ?"
+  | E.Result s    -> "{" ^ (String.concat ", " (List.map (fun x -> "?") (Pset.elements s))) ^ "}"
+  | E.Exception e -> "Exception"
 
 let execution_result_equal (left:execution_result) (right:execution_result) : bool = 
   match left, right with 
@@ -44,7 +45,7 @@ let compare_results (expected:execution_result) (actual_full:execution_result_fu
   if execution_result_equal expected actual then
     E.Result ()
   else
-    E.Exception ("Expected: <" ^ (pp_execution_result expected) ^ ">. Actual: <" ^ (pp_execution_result actual) ^ ">.")
+    E.Exception ("Expected: " ^ (pp_execution_result expected) ^ ". Actual: " ^ (pp_execution_result actual) ^ ".")
 
 type test = 
   { file_name: string;
@@ -52,7 +53,8 @@ type test =
   }
     
 let get_test (file_name:string) (result:(Core_run.taction_id Core.expr) list): test = 
-  {file_name= file_name; expected_result= E.Result (Pset.from_list Pervasives.compare result); }
+  {file_name= file_name; 
+   expected_result= E.Result (Pset.from_list Pervasives.compare result); }
   
 let get_tests: test list = [get_test "tests/concurrency/dummy.c" [];
                             get_test "tests/concurrency/LB+acq_rel+acq_rel.c" [];
