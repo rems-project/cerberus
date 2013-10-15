@@ -19,10 +19,10 @@ type execution_result_full =
 (* The type we use to compare results of executions *) 
 type execution_result = ((Core_run.taction_id Core.expr) Pset.set, Errors.t) Exception.t
 
-let pp_execution_result result = 
+let pp_execution_result (result:execution_result) : string = 
   match result with
-  | E.Result s    -> "{" ^ (String.concat ", " (List.map (fun x -> "?") (Pset.elements s))) ^ "}"
-  | E.Exception e -> "Exception"
+  | E.Result s    -> "{" ^ (String.concat ", " (List.map (fun x -> Boot.to_plain_string $ Pp_core.pp_expr x) (Pset.elements s))) ^ "}"
+  | E.Exception e -> Errors.to_string e
 
 let execution_result_equal (left:execution_result) (right:execution_result) : bool = 
   match left, right with 
@@ -56,6 +56,5 @@ let get_test (file_name:string) (result:(Core_run.taction_id Core.expr) list): t
   {file_name= file_name; 
    expected_result= E.Result (Pset.from_list Pervasives.compare result); }
   
-let get_tests: test list = [get_test "tests/concurrency/dummy.c" [];
-                            get_test "tests/concurrency/LB+acq_rel+acq_rel.c" [];
-                            get_test "tests/concurrency/dummy.c" []]
+let get_tests: test list = [get_test "tests/concurrency/dummy.c" [Econst (Cint (Num.num_of_int 11))];
+                            get_test "tests/concurrency/LB+acq_rel+acq_rel.c" []]

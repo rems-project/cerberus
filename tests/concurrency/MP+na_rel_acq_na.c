@@ -6,7 +6,7 @@ int main() {
   int x=0; atomic_int y=0; int z1; int z2;
   {{{ { x=1;
         y.store(1,memory_order_release); }
-  ||| { z1=y.load(memory_order_acquire).readsvalue(1);
+  ||| { z1=y.load(memory_order_acquire);
         z2=x; }  }}}
   return z2;
 }
