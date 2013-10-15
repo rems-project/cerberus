@@ -2,6 +2,8 @@ open Parser
 
 
 let parse input : Cabs0.definition list =
+  (* TODO: hack *)
+  Lexer.contexts := [];
   Input.read (fun ic ->
     let rec inf = Datatypes.S inf in
     Obj.magic
