@@ -52,9 +52,9 @@ type test =
     expected_result: execution_result;
   }
     
-let get_test (file_name:string) (result:(Core_run.taction_id Core.expr) list): test = 
+let get_test_from_ints (file_name:string) (result:int list): test = 
   {file_name= file_name; 
-   expected_result= E.Result (Pset.from_list Pervasives.compare result); }
+   expected_result= E.Result (Pset.from_list Pervasives.compare (List.map (fun x -> Econst (Cint (Num.num_of_int x))) result)); }
   
-let get_tests: test list = [get_test "tests/concurrency/dummy.c" [Econst (Cint (Num.num_of_int 11))];
-                            get_test "tests/concurrency/LB+acq_rel+acq_rel.c" []]
+let get_tests: test list = [get_test_from_ints "tests/concurrency/dummy.c" [11];
+                            get_test_from_ints "tests/concurrency/LB+acq_rel+acq_rel.c" []]

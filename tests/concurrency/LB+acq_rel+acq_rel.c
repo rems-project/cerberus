@@ -9,6 +9,7 @@ int main() {
   {{{ { z1 = atomic_load_explicit(&x, memory_order_acquire); 
         atomic_store_explicit(&y, 1, memory_order_release); }
   ||| { z2 = atomic_load_explicit(&y, memory_order_acquire);
-        atomic_store_explicit(&x, 1, memory_order_release); }  }}}
+        atomic_store_explicit(&x, 1, memory_order_release); }  }}};
   return z1 + (2 * z2);
 }
+
