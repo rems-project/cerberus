@@ -57,4 +57,7 @@ let get_test_from_ints (file_name:string) (result:int list): test =
    expected_result= E.Result (Pset.from_list Pervasives.compare (List.map (fun x -> Econst (Cint (Num.num_of_int x))) result)); }
   
 let get_tests: test list = [get_test_from_ints "tests/concurrency/dummy.c" [11];
-                            get_test_from_ints "tests/concurrency/LB+acq_rel+acq_rel.c" []]
+                            get_test_from_ints "tests/concurrency/LB+acq_rel+acq_rel.c" [0; 1; 2];
+                            get_test_from_ints "tests/concurrency/MP+na_rel_acq_na.c" [1; 2];
+                            get_test_from_ints "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3]
+                           ]
