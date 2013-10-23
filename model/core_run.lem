@@ -409,22 +409,15 @@ let type_to_location_kind ty =
   (* There are no fences yet, so the the type is Cmm.Atomic or Cmm.Non_Atomic *)
   if is_atomic_type ty then Cmm.Atomic else Cmm.Non_Atomic
 
-val to_cmm_action: taction_id -> trace_action -> option cmm_action
+val to_cmm_action: taction_id -> trace_action -> cmm_action
 let to_cmm_action taid action = 
+  let string_taid = Pervasives.string_of_num taid in 
   match action with
-  | Tcreate _ _ -> None
-  | Talloc _ _ -> None
-  | Tkill _ -> None
-  | Tstore _ o value mo -> Some $ Cmm.Store (Pervasives.string_of_num taid) 
-                                            (Cmm.Tid 0) 
-                                             mo 
-                                            (Cmm.Loc o) 
-                                            (Cmm.Cvalue value)
-  | Tload _ o value mo -> Some $ Cmm.Load (Pervasives.string_of_num taid) 
-                                          (Cmm.Tid 0) 
-                                           mo 
-                                          (Cmm.Loc o) 
-                                          (Cmm.Cvalue value)
+  | Tcreate _ o     -> Cmm.Create string_taid (Cmm.Tid 0) (Cmm.Loc o)
+  | Talloc _ o      -> Cmm.Create string_taid (Cmm.Tid 0) (Cmm.Loc o)
+  | Tkill o         -> Cmm.Kill string_taid (Cmm.Tid 0) (Cmm.Loc o)
+  | Tstore _ o v mo -> Cmm.Store string_taid (Cmm.Tid 0) mo (Cmm.Loc o) (Cmm.Cvalue v)
+  | Tload _ o v mo  -> Cmm.Load string_taid (Cmm.Tid 0) mo (Cmm.Loc o) (Cmm.Cvalue v)
   end
 
 (* Auxilary function for list_to_relation *)
@@ -589,19 +582,15 @@ val get_new_taid: E.t num
 let get_new_taid = 
   fun (<| E.tact_counter = new_taid |> as s) -> U.return [(new_taid, s)]
 
-(* Adds the trace_action and corresponding Cmm.action (if there is one) to the state *)  
+(* Adds the trace_action and corresponding Cmm.action to the state *)  
 val add_tact: taction_id -> trace_action -> E.t unit
 let add_tact taid tact = 
   fun (<| E.tact_map = tact_map; 
           E.cmm_tact_map = cmm_tact_map; |> as s) ->
-    let cmm_action_opt = to_cmm_action taid tact in
-    let new_cmm_tact_map = match cmm_action_opt with
-                           | None -> cmm_tact_map
-                           | Some cmm_tact -> Pmap.add taid cmm_tact cmm_tact_map
-                           end in
+    let cmm_tact = to_cmm_action taid tact in
     U.return [((), <| s with E.tact_counter= taid+1; 
-                             E.tact_map= Pmap.add taid tact tact_map;
-                             E.cmm_tact_map= new_cmm_tact_map; |>)]
+                             E.tact_map=     Pmap.add taid tact tact_map;
+                             E.cmm_tact_map= Pmap.add taid cmm_tact cmm_tact_map; |>)]
 
 
 (* push an element in the trace *)
