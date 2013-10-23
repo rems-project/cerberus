@@ -65,9 +65,14 @@ type mem_value =
 
 
 
+(* Instantiation of Cmm types *)
 
-
-
+type cmm_tid = Cmm.tid num
+type cmm_loc = Cmm.location mem_addr
+type cmm_cvalue = Cmm.cvalue mem_value
+type cmm_action = Cmm.action num mem_addr mem_value
+type cmm_observable_execution = Cmm.observable_execution num mem_addr mem_value
+type cmm_complete_execution = Cmm.complete_execution num mem_addr mem_value
 
 
 type taction_id = num
@@ -209,8 +214,8 @@ module Effect = struct
     tact_map:       Pmap.map taction_id trace_action;
     trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
     (* The following members are named after their counterparts in Cmm. *)
-    cmm_tact_map:   Pmap.map taction_id Cmm.action;
-    lk:             Pmap.map Cmm.location Cmm.location_kind;
+    cmm_tact_map:   Pmap.map taction_id cmm_action;
+    lk:             Pmap.map cmm_loc Cmm.location_kind;
     sb:             set (taction_id * taction_id);
     asw:            set (taction_id * taction_id);
     rf:             set (taction_id * taction_id);
@@ -399,39 +404,27 @@ open E.Operators
 (* ************************************************************************** *)
 (* Translation from states to executions in Cmm *)
 
-val num_to_cvalue: num -> Cmm.cvalue
-let num_to_cvalue n = Cmm.Rigid (Cmm.Concrete n)
-
-val string_to_cvalue: string -> Cmm.cvalue
-let string_to_cvalue s = Cmm.Rigid (Cmm.Symbolic s)
-
-val addr_to_cvalue: mem_addr -> Cmm.cvalue
-let addr_to_cvalue (_, i) = num_to_cvalue i
-
-val mem_value_to_cvalue: mem_value -> Cmm.cvalue
-let mem_value_to_cvalue _ = string_to_cvalue "?"
-
 val type_to_location_kind: ctype -> Cmm.location_kind
 let type_to_location_kind ty = 
   (* There are no fences yet, so the the type is Cmm.Atomic or Cmm.Non_Atomic *)
   if is_atomic_type ty then Cmm.Atomic else Cmm.Non_Atomic
 
-val to_cmm_action: taction_id -> trace_action -> option Cmm.action
+val to_cmm_action: taction_id -> trace_action -> option cmm_action
 let to_cmm_action taid action = 
   match action with
   | Tcreate _ _ -> None
   | Talloc _ _ -> None
   | Tkill _ -> None
   | Tstore _ o value mo -> Some $ Cmm.Store (Pervasives.string_of_num taid) 
-                                            (string_to_cvalue "?") 
+                                            (Cmm.Tid 0) 
                                              mo 
-                                            (addr_to_cvalue o) 
-                                            (mem_value_to_cvalue value)
+                                            (Cmm.Loc o) 
+                                            (Cmm.Cvalue value)
   | Tload _ o value mo -> Some $ Cmm.Load (Pervasives.string_of_num taid) 
-                                          (string_to_cvalue "?") 
+                                          (Cmm.Tid 0) 
                                            mo 
-                                          (addr_to_cvalue o) 
-                                          (mem_value_to_cvalue value)
+                                          (Cmm.Loc o) 
+                                          (Cmm.Cvalue value)
   end
 
 (* Auxilary function for list_to_relation *)
@@ -450,7 +443,7 @@ val list_to_relation: forall 'a. list 'a -> set ('a * 'a)
 let list_to_relation list = 
   tc (list_to_relation_aux list None)
   
-val get_location_kind: E.state -> Cmm.location -> Cmm.location_kind
+val get_location_kind: E.state -> cmm_loc -> Cmm.location_kind
 let get_location_kind s x = 
   (* We use Non_Atomic as the default location_kind. Some locations are not used
      in the execution (i.e. there are no actions at that location) and then it does
@@ -461,13 +454,13 @@ let get_location_kind s x =
    
 val is_atomic_location: mem_addr -> E.t bool
 let is_atomic_location o = 
-  fun s -> U.return [(get_location_kind s (addr_to_cvalue o) = Cmm.Atomic, s)]
+  fun s -> U.return [(get_location_kind s (Cmm.Loc o) = Cmm.Atomic, s)]
    
 val is_nonatomic_location: mem_addr -> E.t bool
 let is_nonatomic_location o = 
-  fun s -> U.return [(get_location_kind s (addr_to_cvalue o) = Cmm.Non_Atomic, s)]
+  fun s -> U.return [(get_location_kind s (Cmm.Loc o) = Cmm.Non_Atomic, s)]
 
-val to_observable_execution: E.state -> Cmm.observable_execution
+val to_observable_execution: E.state -> cmm_observable_execution
 let to_observable_execution s = 
   let to_cmm_relation = fun rel -> 
       (Set.image (fun (x, y) -> (Pmap.find x s.E.cmm_tact_map, Pmap.find y s.E.cmm_tact_map)) rel) in
@@ -494,14 +487,14 @@ let to_observable_execution s =
     |> in
   (pre_execution, execution_witness)
   
-val to_complete_execution: E.state -> Cmm.complete_execution
+val to_complete_execution: E.state -> cmm_complete_execution
 let to_complete_execution s = 
   let (Xo, Xw) = to_observable_execution s in
   (* TODO: Choose the right memory model *)
   let rl = Cmm.release_acquire_no_locks_relations Xo Xw in
   (Xo, Xw, rl)
   
-val to_happens_before: Cmm.observable_execution -> set (Cmm.action * Cmm.action)
+val to_happens_before: cmm_observable_execution -> set (cmm_action * cmm_action)
 let to_happens_before (Xo, Xw) = 
   (* TODO: Choose the right memory model *)
   let sw = Cmm.release_acquire_no_locks_synchronizes_with_set Xo.Cmm.actions Xo.Cmm.sb Xo.Cmm.asw Xw.Cmm.rf in
@@ -645,7 +638,7 @@ let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as s) ->
      kind to the state *)
   let o = (pref, i) in
   U.return [(o, <| s with E.mem= (Pmap.add o [(Muninit, taid)] m, i+1);
-                          E.lk = Pmap.add (addr_to_cvalue o) (type_to_location_kind ty) lk |>)]
+                          E.lk = Pmap.add (Cmm.Loc o) (type_to_location_kind ty) lk |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
@@ -686,7 +679,7 @@ let load ty o = fun (<| E.mem= (m, _) |> as s) ->
     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o)) $
     (* Returns the last value stored in memory *)
     let values = (Pmap.find o m) in
-    if get_location_kind s (addr_to_cvalue o) = Cmm.Atomic then
+    if get_location_kind s (Cmm.Loc o) = Cmm.Atomic then
       (* load any of the past values *)
       U.return [((value, taid), s) | forall ((value, taid) MEM values) | true]
     else
