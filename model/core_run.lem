@@ -582,19 +582,16 @@ let discard_CoWW_states write_taid = fun st ->
   if exists (w2 IN Xo.Cmm.actions). (w1, w2) IN Xw.Cmm.mo && (w2, w1) IN hb then
     []
   else
-<<<<<<< local
     [(U.return (), st)]
-=======
-    U.return [((), s)]
 
 val discard_inconsistent_sc_writes: taction_id -> E.t unit
 let discard_inconsistent_sc_writes write_taid = fun s ->
   let w1 = Pmap.find write_taid s.E.cmm_tact_map in
   let (Xo, Xw) = to_observable_execution s in
   if exists (w2 IN Xo.Cmm.actions). (w2, w1) IN Xw.Cmm.sc && (w1, w2) IN Xw.Cmm.mo then
-    U.return []
+    []
   else
-    U.return [((), s)]
+    [(U.return (), s)]
 
 val discard_inconsistent_sc_reads: taction_id -> taction_id -> E.t unit
 let discard_inconsistent_sc_reads write_taid read_taid = fun s ->
@@ -605,20 +602,19 @@ let discard_inconsistent_sc_reads write_taid read_taid = fun s ->
     if exists (w2 IN Xo.Cmm.actions). Cmm.is_write w2 && 
                                       (Cmm.loc_of w1 = Cmm.loc_of w2) &&
                                       (w1,w2) IN Xw.Cmm.sc && (w2,r) IN Xw.Cmm.sc then
-      U.return []
+      []
     else
-      U.return [((), s)]
+      [(U.return (), s)]
   else if Cmm.is_seq_cst r && not (Cmm.is_seq_cst w1) then
     let hb = to_happens_before (Xo, Xw) in
     if exists (w2 IN Xo.Cmm.actions). Cmm.is_write w2 && 
                                       (Cmm.loc_of w1 = Cmm.loc_of w2) &&
                                       (w1,w2) IN hb && (w2,r) IN Xw.Cmm.sc then
-      U.return []
+      []
     else
-      U.return [((), s)]
+      [(U.return (), s)]
   else
-    U.return [((), s)]
->>>>>>> other
+    [(U.return (), s)]
   
 val check_for_dataraces: E.t unit
 let check_for_dataraces = fun st ->
@@ -679,7 +675,7 @@ let list_insert element list =
 (* Adds a sc actions to the state *)
 val push_sc_action: taction_id -> E.t unit
 let push_sc_action taid = fun (<|E.sc = sc|> as s) ->
-  U.return [((), <| s with E.sc = taid::sc|>)]
+  [(U.return (), <| s with E.sc = taid::sc|>)]
 
 (* Adds a trace_action to the modification order *)
 val push_mod_order: mem_addr -> taction_id -> E.t unit
