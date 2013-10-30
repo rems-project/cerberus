@@ -8,11 +8,10 @@ int main() {
   int x=0; 
   atomic_int y=0; 
   int z1, z2;
-  z2 = 2;
   {{{ { x = 1;
         atomic_store_explicit(&y, 1, memory_order_release); }
   ||| { z1 = atomic_load_explicit(&y, memory_order_acquire);
-        if z1 == 1 then z2 = x; }  }}};
+        if z1 == 1 then z2 = x else z2 = 2 }  }}};
   return z2;
 }
 

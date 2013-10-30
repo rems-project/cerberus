@@ -220,6 +220,7 @@ module Effect = struct
     asw:            set (taction_id * taction_id);
     rf:             set (taction_id * taction_id);
     mo:             Pmap.map mem_addr (list taction_id);
+    sc:             list taction_id;
   |>
   
   type t 'a = state -> U.t (list ('a * state))
@@ -513,6 +514,38 @@ let discard_CoWW_states write_taid = fun s ->
     U.return []
   else
     U.return [((), s)]
+
+val discard_inconsistent_sc_writes: taction_id -> E.t unit
+let discard_inconsistent_sc_writes write_taid = fun s ->
+  let w1 = Pmap.find write_taid s.E.cmm_tact_map in
+  let (Xo, Xw) = to_observable_execution s in
+  if exists (w2 IN Xo.Cmm.actions). (w2, w1) IN Xw.Cmm.sc && (w1, w2) IN Xw.Cmm.mo then
+    U.return []
+  else
+    U.return [((), s)]
+
+val discard_inconsistent_sc_reads: taction_id -> taction_id -> E.t unit
+let discard_inconsistent_sc_reads write_taid read_taid = fun s ->
+  let w1 = Pmap.find write_taid s.E.cmm_tact_map in
+  let r = Pmap.find read_taid s.E.cmm_tact_map in  
+  let (Xo, Xw) = to_observable_execution s in
+  if (w1, r) IN Xw.Cmm.sc then
+    if exists (w2 IN Xo.Cmm.actions). Cmm.is_write w2 && 
+                                      (Cmm.loc_of w1 = Cmm.loc_of w2) &&
+                                      (w1,w2) IN Xw.Cmm.sc && (w2,r) IN Xw.Cmm.sc then
+      U.return []
+    else
+      U.return [((), s)]
+  else if Cmm.is_seq_cst r && not (Cmm.is_seq_cst w1) then
+    let hb = to_happens_before (Xo, Xw) in
+    if exists (w2 IN Xo.Cmm.actions). Cmm.is_write w2 && 
+                                      (Cmm.loc_of w1 = Cmm.loc_of w2) &&
+                                      (w1,w2) IN hb && (w2,r) IN Xw.Cmm.sc then
+      U.return []
+    else
+      U.return [((), s)]
+  else
+    U.return [((), s)]
   
 val check_for_dataraces: E.t unit
 let check_for_dataraces = fun s ->
@@ -541,6 +574,7 @@ let initial_state file = <|
   E.asw=            {};
   E.rf=             {};
   E.mo=             Pmap.empty;
+  E.sc=             [];
 |>
   
 (* Reverses the first list, and then appends that list to the second list. *)
@@ -568,6 +602,11 @@ let rec list_insert_aux element aux list =
 val list_insert: forall 'a. 'a -> list 'a -> list (list 'a)
 let list_insert element list = 
   list_insert_aux element [] list
+
+(* Adds a sc actions to the state *)
+val push_sc_action: taction_id -> E.t unit
+let push_sc_action taid = fun (<|E.sc = sc|> as s) ->
+  U.return [((), <| s with E.sc = taid::sc|>)]
 
 (* Adds a trace_action to the modification order *)
 val push_mod_order: mem_addr -> taction_id -> E.t unit
@@ -931,14 +970,20 @@ let perform_action act =
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end                                      >>= fun (value, e) ->
               store ty o value new_taid                >>
-              add_tact new_taid (Tstore ty o value mo) >>  
+              add_tact new_taid (Tstore ty o value mo) >> 
+              (if mo = Cmm.Seq_cst then
+                 push_sc_action new_taid
+               else
+                 E.return ()
+              )                                        >> 
               is_atomic_location o                     >>= fun is_atomic ->
               (if is_atomic then
-                 push_mod_order o new_taid    >>
-                 discard_CoWW_states new_taid >>
+                 push_mod_order o new_taid        >>
+                 discard_CoWW_states new_taid     >>
+                 discard_inconsistent_sc_writes new_taid >>
                  check_for_dataraces
                else 
-                 (* Need to check for dataraces *)
+                 (* TODO: Need to check for dataraces *)
                  E.return ()
                )                                       >>
               E.return (new_taid, e) 
@@ -957,12 +1002,18 @@ let perform_action act =
                                       E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
                        end                                      >>= fun (tact, e) ->
                        add_tact new_taid tact                   >>
+                       (if mo = Cmm.Seq_cst then
+                          push_sc_action new_taid
+                        else
+                          E.return ()
+                       )                                        >>
                        is_atomic_location o                     >>= fun is_atomic ->
                        (if is_atomic then
-                          discard_CoWR_states store_taid new_taid >>
+                          discard_CoWR_states store_taid new_taid           >>
+                          discard_inconsistent_sc_reads store_taid new_taid >>
                           check_for_dataraces
                         else 
-                          (* Need to check for dataraces *)
+                          (* TODO: Need to check for dataraces *)
                           E.return ()
                         )                                       >>                       
                        E.return (new_taid, e)
