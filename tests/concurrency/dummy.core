@@ -1,0 +1,34 @@
+{- Translation of dummy.c -}
+
+fun main (: address): [integer] :=
+  (a, b) <- ([create(signed int) || create(signed int)]) ;
+  store(signed int, a, 1 NA) ;
+  skip ;
+  (a_101, a_102) <- ([b || 12]) >>
+  (store(signed int, a_101, conv(signed int, signed int, a_102) NA) >>
+  a_102) ;
+  (a_103, a_104) <- ([b || (a_105, a_106) <- ([load(signed int, a NA) || 10]) >>
+  overflow(signed int, (conv_int(signed int, a_105) + conv_int(signed int, a_106)))]) >>
+  (store(signed int, a_103, conv(signed int, signed int, a_104) NA) >>
+  a_104) ;
+  a_107 <- (a_108, a_109) <- ([load(signed int, b NA) || 0]) >>
+  if a_108 = a_109 then
+    1
+  else
+    0
+   >>
+  if not (a_107 = 0) then
+    (skip ;
+    a_110 <- 1 ;
+    ([kill(a) || kill(b)]) ;
+    ret a_110 ;
+    skip)
+  else
+    (skip ;
+    a_111 <- load(signed int, b NA) ;
+    ([kill(a) || kill(b)]) ;
+    ret a_111 ;
+    skip)
+   ;
+  ([kill(a) || kill(b)])
+
