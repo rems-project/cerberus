@@ -474,7 +474,7 @@ let to_observable_execution s =
       Cmm.mo  = Pervasives.bigunion { to_cmm_relation $ list_to_relation l
                                     | forall (l IN Pmap.range s.E.mo) 
                                     | true };
-      Cmm.sc  = {};
+      Cmm.sc  = to_cmm_relation (list_to_relation s.E.sc);
       Cmm.lo  = {};
       Cmm.ao  = {};
       Cmm.tot = {};
