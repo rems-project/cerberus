@@ -109,3 +109,6 @@ type token =
   | ACQUIRE
   | CONSUME
   | ACQ_REL
+  | LBRACES
+  | RBRACES
+  | PIPES

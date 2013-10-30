@@ -21,7 +21,7 @@ let keywords =
       ("float",       T.FLOAT);
       ("double",      T.DOUBLE);
       ("long_double", T.LONG_DOUBLE);
-      ("_Complex",    T.COMPLEX);
+(*      ("_Complex",    T.COMPLEX); *)
       ("char",        T.CHAR);
       ("ichar",       T.ICHAR);
       ("void",        T.VOID);
@@ -103,7 +103,7 @@ let lex_comment remainder lexbuf =
 
 
 let impl_name = '<' ['A'-'Z' 'a'-'z' '_']* '>'
-let symbolic_name = ['a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
+let symbolic_name = ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
 
 rule main = parse
@@ -144,6 +144,8 @@ rule main = parse
   | ">>"  { T.GT_GT }
   | "|>"  { T.PIPE_GT }
   
+  | "|||"  { T.PIPES }
+  
   (* pattern symbols *)
   | "_"  { T.UNDERSCORE }
   
@@ -154,6 +156,8 @@ rule main = parse
   | ')'   { T.RPAREN }
   | '{'   { T.LBRACE }
   | '}'   { T.RBRACE }
+  | "{{{" { T.LBRACES }
+  | "}}}" { T.RBRACES }
   | '['	  { T.LBRACKET }
   | ']'	  { T.RBRACKET }
   | '<'	  { T.LANGLE }

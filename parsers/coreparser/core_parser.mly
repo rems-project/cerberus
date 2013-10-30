@@ -81,6 +81,7 @@ type expr =
   | Eerror
   | Eaction of paction
   | Eunseq of expr list
+  | Epar of expr list
   | Ewseq of (string option) list * expr * expr
   | Esseq of (string option) list * expr * expr
   | Easeq of string option * action * paction
@@ -149,6 +150,7 @@ let convert e arg_syms fsyms =
     | Eerror                    -> Core.Eerror
     | Eaction pact              -> Core.Eaction (g st pact)
     | Eunseq es                 -> Core.Eunseq (List.map (f st) es)
+    | Epar    es                 -> Core.Epar (List.map (f st) es)
     | Ewseq (_as, e1, e2) ->
         let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
           match sym_opt with
@@ -160,12 +162,23 @@ let convert e arg_syms fsyms =
 
 
 
-    | Esseq (_as, e1, e2)       -> let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+    | Esseq (_as, e1, e2)       ->
+        let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
+          match sym_opt with
+            | Some sym -> let _a = (c, Some sym) in
+                          Boot.print_debug ("ADDING> " ^ sym) (c+1, Some _a :: _as, Pmap.add sym _a syms)
+            | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
+        
+        Core.Esseq (List.rev _as', f st e1, f (count', syms') e2)
+
+(*
+let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
                                      match sym_opt with
                                        | Some sym -> let _a = (c, Some sym) in (c+1, Some _a :: _as, Pmap.add sym _a syms)
                                        | None     -> (c+1, None :: _as, syms)) (count, [], Pmap.empty compare) _as in
                                    
                                    Core.Esseq (List.rev _as', f st e1, f (count', syms') e2)
+*)
     | Easeq (_a_opt, act, pact) ->
 (
         match _a_opt with
@@ -279,7 +292,7 @@ let subst name =
 %token UNDERSCORE
 %token LANGLE RANGLE
 %token LT_MINUS MINUS_GT
-%token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET DOT COMMA COLON COLON_EQ
+%token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET DOT COMMA COLON COLON_EQ LBRACES RBRACES PIPES
 %token SAME
 %token UNDEF ERROR
 %token IF THEN ELSE
@@ -402,6 +415,8 @@ member_def:
 ctype_:
 | VOID
     { VOID_ }
+| ATOMIC LPAREN ty_= ctype_ RPAREN
+    { ATOMIC_ ty_ }
 | bty= basic_type
     { BASIC_ bty }
 | ty_= ctype_ LBRACKET n_opt= INT_CONST? RBRACKET
@@ -416,8 +431,6 @@ ctype_:
     { FUNCTION_ (project_ctype_ ty_, List.map project_ctype_ tys_) }
 | ty_= ctype_ STAR
     { POINTER_ ty_ }
-| ATOMIC ty_= ctype_
-    { ATOMIC_ ty_ }
 | SIZE_T
     { SIZE_T_ }
 | INTPTR_T
@@ -487,6 +500,9 @@ pattern:
 unseq_expr:
 | es = delimited(LBRACKET, n_ary_operator(PIPE_PIPE, seq_expr), RBRACKET)
     { Eunseq es }
+| es = delimited(LBRACES, n_ary_operator(PIPES, seq_expr), RBRACES)
+    { Epar es }
+
 
 basic_expr:
 | e = expr

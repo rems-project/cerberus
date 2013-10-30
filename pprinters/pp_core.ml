@@ -51,6 +51,7 @@ let precedence = function
   | Ewseq _           -> Some 12
   | Esseq _           -> Some 13
   | Eunseq _          -> Some 14
+  | Epar _            -> None
   | Etuple _          -> None (* shouldn't be needed *)
   | Ebound _          -> None (* shouldn't be needed *)
 (* TODO: hack *)
@@ -106,7 +107,7 @@ let rec pp_ctype t =
     | FUNCTION (ty, args_tys) -> pp_ctype ty ^^^
                                  P.parens (comma_list pp_ctype args_tys)
     | POINTER ty              -> pp_ctype ty ^^ P.star
-    | ATOMIC ty               -> !^ "_Atomic" ^^^ pp_ctype ty
+    | ATOMIC ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
     | SIZE_T                  -> !^ "size_t"
     | INTPTR_T                -> !^ "intptr_t"
     | WCHAR_T                 -> !^ "wchar_t"
@@ -266,6 +267,8 @@ let rec pp_expr e =
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
+        | Epar es ->
+            P.enclose !^ "{{{" !^ "}}}" $ P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es
         | End es ->
             P.brackets $ P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es
         | Eshift (a, e) ->
