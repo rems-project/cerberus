@@ -1,6 +1,6 @@
 {- Translation of dummy.c -}
 
-fun main (: address): [integer] :=
+fun main (): [integer] :=
   (a, b) <- ([create(signed int) || create(signed int)]) ;
   store(signed int, a, 1 NA) ;
   skip ;

@@ -5,15 +5,25 @@
 -}
 
 fun main () : [integer] :=
-  x <- create({- _Atomic( -} signed int{- ) -});
-  y <- create({- _Atomic( -} signed int{- ) -});
+  x <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0);
+  y <- create(_Atomic(signed int));
+  store(_Atomic(signed int), y, 0);
+  z1 <- create(signed int);
+  z2 <- create(signed int);
   {{{
-       store(signed int, y, 1, release);
-       a1 <- load(signed int, x, acquire)
+       store(_Atomic(signed int), y, 1, release);
+       a1 <- load(_Atomic(signed int), x, acquire);
+       store(signed int, z1, a1)
   |||
-       store(signed int, x, 1, release);
-       a2 <- load(signed int, y, acquire)
+       store(_Atomic(signed int), x, 1, release);
+       a2 <- load(_Atomic(signed int), y, acquire);
+       store(signed int, z2, a2)
   }}};
+  a1 <- load(signed int, z1);
+  a2 <- load(signed int, z2);
   kill(x);
   kill(y);
+  kill(z1);
+  kill(z2);
   ret a1 + (2 * a2)
