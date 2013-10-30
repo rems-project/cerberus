@@ -1049,7 +1049,7 @@ let perform_action act =
                  push_sc_action new_taid
                else
                  E.return ()
-              )                                        >> 
+              )                                        >>
               is_atomic_location o                     >>= fun is_atomic ->
               (if is_atomic then
                  push_mod_order o new_taid        >>
@@ -1205,6 +1205,14 @@ and red2_skip x =
              | es  -> Eunseq es
            end, _KS1 :: _KS2)
 
+    | (Eskip, ((Kpar es1 es2) :: _KS1) :: _KS2) ->
+        push_trace (Rule_Skip, None) >>
+        E.return
+          (match es1 @ es2 with
+             | []  -> Eskip
+             | [e] -> e
+             | es  -> Epar es
+           end, _KS1 :: _KS2)
 
 (*    | (Eskip, _K :: _KS) -> push_trace (Rule_Skip, None) >> E.return (apply_cont _K Eskip, _KS) *)
     | _                       -> E.mzero
