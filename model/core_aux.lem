@@ -151,6 +151,8 @@ let rec free_syms e =
       {}
   | Eret e ->
       free_syms e
+  | Epar es ->
+      List.fold_left (fun acc e -> free_syms e union acc) {} es
   | End es ->
       List.fold_left (fun acc e -> free_syms e union acc) {} es
   | Eindet e ->
@@ -255,6 +257,8 @@ let rec subst_sym a v e =
         Esave k a_tys (subst_sym a v e)
     | Eret e ->
         Eret (subst_sym a v e)
+    | Epar es ->
+        Epar $ List.map (subst_sym a v) es
     | End es ->
         End $ List.map (subst_sym a v) es
     | Eshift a' e ->
@@ -348,6 +352,8 @@ let rec is_pure e =
        false
    | Eunseq es ->
        List.for_all is_pure es
+   | Epar es ->
+       false (* List.for_all is_pure es *)
    | Ewseq _ e1 e2 ->
        is_pure e1 && is_pure e2
    | Esseq _ e1 e2 ->

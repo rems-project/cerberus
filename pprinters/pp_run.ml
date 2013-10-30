@@ -17,6 +17,9 @@ let rec string_of_dyn_rule = function
   | Core_run.Rule_Run       -> "RUN"
   | Core_run.Rule_Save      -> "SAVE"
   | Core_run.Rule_Unseq     -> "unseq"
+  | Core_run.Rule_ND        -> "nd"
+  | Core_run.Rule_Par       -> "par"
+
 
 
 let string_of_mem_value = function
@@ -75,6 +78,33 @@ int, 'a) Exception.t -> (int, 'a) Exception.t
 
 *)
 
+let pp_traces i_execs =
+  List.map (fun (i, u_t) ->
+    print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^
+    match u_t with
+    | (Undefined.Defined (v, (tact_map, t)), st) ->
+        string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot.to_plain_string $ Pp_core.pp_expr v)
+    | (Undefined.Undef ubs, st) ->
+        "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
+    | (Undefined.Error, st) ->
+        "Error"
+  ) $ numerote i_execs;
+  
+  List.map (fun (i, u_t) ->
+    print_endline $ "Trace #" ^ string_of_int i ^ " = " ^
+    match u_t with
+    | (Undefined.Defined (v, (tact_map, t)), st) ->
+        Boot.to_plain_string $ Pp_core.pp_expr v
+    | (Undefined.Undef ubs, st) ->
+        "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
+    | (Undefined.Error, st) ->
+        "Error"
+  ) $ numerote i_execs
+
+
+
+
+(*
 let pp_traces ts =
   List.map (fun (i, (v, (tact_map, t))) ->
     print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^
@@ -83,3 +113,4 @@ let pp_traces ts =
   List.map (fun (i, (v, _)) ->
     print_endline $ "Trace #" ^ string_of_int i ^ " = " ^
     (Boot.to_plain_string $ Pp_core.pp_expr v)) $ numerote ts
+*)

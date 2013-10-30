@@ -144,6 +144,8 @@ type expr 'a =
   (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
   | End of list (expr 'a)
   
+  (* Parallel composition *)
+  | Epar of list (expr 'a)
   
   | Eshift of sym *expr 'a
 

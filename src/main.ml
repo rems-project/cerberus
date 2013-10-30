@@ -182,7 +182,7 @@ let pipeline stdlib impl core_parse file_name =
 		(fun (n,f) -> Core_run.run !random_mode f
                               >|> pass_message ("SB order #" ^ string_of_int n)
                               >|> pass_through Pp_run.pp_traces
-                              >|> pass_through_test !sb_graph (write_sb file_name)
+(*                              >|> pass_through_test !sb_graph (write_sb file_name) *)
                               >|> return_empty
 		)
 	     )

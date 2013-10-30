@@ -285,9 +285,9 @@ end
 
 (* Exception monad for possibly undefined executions *)
 type t 'a =
-    | Defined of 'a
-    | Undef of list undefined_behaviour
-    | Error
+  | Defined of 'a
+  | Undef of list undefined_behaviour
+  | Error
 
 val return: forall 'a. 'a -> t 'a
 let return x = Defined x
@@ -314,3 +314,11 @@ let undef us = Undef us
 val error: forall 'a. t 'a
 let error = Error
 
+
+val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+let fmap f m =
+  match m with
+    | Defined x -> Defined (f x)
+    | Undef us  -> Undef us
+    | Error     -> Error
+  end
