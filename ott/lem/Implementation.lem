@@ -45,34 +45,28 @@ let make_implementation binary_mode signed precision size_t ptrdiff_t = <|
   ptrdiff_t = ptrdiff_t
 |>
 
-(*
-TODO: add 
-  val (^) : int -> int -> int
-to standard library
-*)
-
 let integer_range P it =
   let prec = P.precision it in
   if P.signed it then
     match P.binary_mode with
-    | Two'sComplement   -> make_range (neg ((int 2)^(prec - (int 1))))     ((int 2)^(prec - (int 1)) - (int 1))
-    | One'sComplement   -> make_range (neg ((int 2)^(prec - (int 1))) + (int 1)) ((int 2)^(prec - (int 1)) - (int 1))
-    | SignPlusMagnitude -> make_range (neg ((int 2)^(prec - (int 1))) + (int 1)) ((int 2)^(prec - (int 1)) - (int 1))
+    | Two'sComplement   -> make_range (neg ((int 2)^^(prec - (int 1))))     ((int 2)^^(prec - (int 1)) - (int 1))
+    | One'sComplement   -> make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
+    | SignPlusMagnitude -> make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
     end
   else
-    make_range (int 0) ((int 2)^prec - (int 1))
+    make_range (int 0) ((int 2)^^prec - (int 1))
 
 let min_range_unsigned ibt =
   let prec = min_precision ibt in
-  make_range (int 0) ((int 2)^prec - (int 1))
+  make_range (int 0) ((int 2)^^prec - (int 1))
 
 let min_range_signed ibt =
   let prec = min_precision ibt - (int 1) in
-  make_range (neg ((int 2)^(prec - (int 1))) + (int 1)) ((int 2)^(prec - (int 1)) - (int 1))
+  make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
 
 let min_integer_range it =
   match it with
-  | Char         -> make_range (int 0) ((int 2) ^ (min_precision Ichar - (int 1) - (int 1)) - (int 1))
+  | Char         -> make_range (int 0) ((int 2) ^^ (min_precision Ichar - (int 1) - (int 1)) - (int 1))
   | Bool         -> make_range (int 0) (int 1)
   | Unsigned ibt -> min_range_unsigned ibt
   | Signed   ibt -> min_range_signed   ibt
