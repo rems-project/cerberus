@@ -202,7 +202,7 @@ let run_test stdlib impl core_parse (test:Tests.test) =
   let test_result = Tests.compare_results test.Tests.expected_result ex_result in
   match test_result with
   | Exception.Result _      -> print_endline (Colour.ansi_format [Colour.Green] ("Test succeeded (" ^ test.Tests.file_name ^ ")"))
-  | Exception.Exception msg -> print_endline (Colour.ansi_format [Colour.Red] ("Test failed (" ^ test.Tests.file_name ^ "): " ^ msg))
+  | Exception.Exception msg -> print_endline (Colour.ansi_format [Colour.Red]   ("Test failed    (" ^ test.Tests.file_name ^ "): " ^ msg))
 
 
 
