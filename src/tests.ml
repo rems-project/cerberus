@@ -66,15 +66,25 @@ type test =
     expected_result: execution_result;
   }
     
-let get_test_from_ints (file_name:string) (result:int list): test = 
+let get_test (file_name:string) 
+             (def_results:int list) 
+             (undef_results:(Undefined.undefined_behaviour list) list): test = 
+  let def_results2 = List.map (fun x -> Undefined.Defined (Econst (Cint (Num.num_of_int x)))) def_results in
+  let undef_results2 = List.map (fun x -> Undefined.Undef x) undef_results in
+  let results = Pset.from_list Pervasives.compare (def_results2 @ undef_results2) in
   {file_name= file_name; 
-   expected_result= E.Result (Pset.from_list Pervasives.compare (List.map (fun x -> Undefined.Defined (Econst (Cint (Num.num_of_int x)))) result)); }
+   expected_result= E.Result results; }
   
-let get_tests: test list = [get_test_from_ints "tests/concurrency/CoWW-CoWR.core" [1];
-                            get_test_from_ints "tests/concurrency/MP+na_rel_acq_na.core" [1; 2];
-                            get_test_from_ints "tests/concurrency/LB+acq_rel+acq_rel.core" [0; 1; 2];
-                            get_test_from_ints "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3];
-                            get_test_from_ints "tests/concurrency/MP+na_rel_acq_na.c" [1; 2];
-                            get_test_from_ints "tests/concurrency/LB+acq_rel+acq_rel.c" [0; 1; 2];
-                            get_test_from_ints "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3]
-                           ]
+let get_tests: test list = 
+  [get_test "tests/concurrency/CoWW-CoWR.core" [1] [];
+   get_test "tests/concurrency/datarace+Rna+Rna.core" [0] [];
+   get_test "tests/concurrency/datarace+Wna+Wna.core" [] [[Undefined.Data_race]];
+   get_test "tests/concurrency/datarace+Rna+Wna.core" [] [[Undefined.Data_race]];
+   get_test "tests/concurrency/datarace+Rna+Rna_Wna.core" [] [[Undefined.Data_race]];
+   get_test "tests/concurrency/MP+na_rel+acq_na.core" [1; 2] [];
+   get_test "tests/concurrency/LB+acq_rel+acq_rel.core" [0; 1; 2] [];
+   get_test "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3] [];
+   get_test "tests/concurrency/MP+na_rel+acq_na.c" [1; 2] [];
+   get_test "tests/concurrency/LB+acq_rel+acq_rel.c" [0; 1; 2] [];
+   get_test "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3] []
+   ]
