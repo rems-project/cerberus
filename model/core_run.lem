@@ -1057,8 +1057,8 @@ let perform_action act =
                  discard_inconsistent_sc_writes new_taid >>
                  check_for_dataraces
                else 
-                 (* TODO: Need to check for dataraces *)
-                 E.return ()
+                 (* TODO: For NA we can check for dataraces more efficiently *)
+                 check_for_dataraces
                )                                       >>
               E.return (new_taid, e) 
           | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
@@ -1086,9 +1086,9 @@ let perform_action act =
                           discard_CoWR_states store_taid new_taid           >>
                           discard_inconsistent_sc_reads store_taid new_taid >>
                           check_for_dataraces
-                        else 
-                          (* TODO: Need to check for dataraces *)
-                          E.return ()
+                        else
+                          (* TODO: For NA we can check for dataraces more efficiently *)
+                          check_for_dataraces
                         )                                       >>                       
                        E.return (new_taid, e)
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
