@@ -1,0 +1,25 @@
+{- The loads are allowed to both read 0, which means there is a cycle in mo union hb.
+   The total set of allowed outcomes is 0, 1, 2, 3.
+-}
+
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  z1 <- create(signed int);
+  z2 <- create(signed int);
+  {{{
+      store(_Atomic(signed int), x, 0, release);
+      store(_Atomic(signed int), y, 1, release);
+      a1 <- load(_Atomic(signed int), y, acquire);
+      store(signed int, z1, a1)
+  |||
+      store(_Atomic(signed int), y, 0, release);
+      store(_Atomic(signed int), x, 1, release);
+      a2 <- load(_Atomic(signed int), x, acquire);
+      store(signed int, z2, a2)
+  }}};
+  a1 <- load(signed int, z1);
+  a2 <- load(signed int, z2);
+  kill(x);
+  kill(z1);
+  kill(z2);
+  ret a1 + (2 * a2)

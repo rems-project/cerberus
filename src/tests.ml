@@ -76,11 +76,13 @@ let get_test (file_name:string)
    expected_result= E.Result results; }
   
 let get_tests: test list = 
-  [get_test "tests/concurrency/CoWW-CoWR.core" [1] [];
+  [get_test "tests/concurrency/coherence+rel_rel_acq.core" [1] [];
+   get_test "tests/concurrency/coherence+rel_rel+rel_rel_acq.core" [0; 1; 3] [];
    get_test "tests/concurrency/datarace+Rna+Rna.core" [0] [];
    get_test "tests/concurrency/datarace+Wna+Wna.core" [] [[Undefined.Data_race]];
    get_test "tests/concurrency/datarace+Rna+Wna.core" [] [[Undefined.Data_race]];
    get_test "tests/concurrency/datarace+Rna+Rna_Wna.core" [] [[Undefined.Data_race]];
+   get_test "tests/concurrency/hb-mo-cycle+rel_rel_acq+rel_rel_acq.core" [0; 1; 2; 3] [];
    get_test "tests/concurrency/MP+na_rel+acq_na.core" [1; 2] [];
    get_test "tests/concurrency/LB+acq_rel+acq_rel.core" [0; 1; 2] [];
    get_test "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3] [];
