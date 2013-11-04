@@ -5,16 +5,14 @@
 fun main () : [integer] :=
   x <- create(_Atomic(signed int));
   z <- create(signed int);
-  {{{
+  (a, b) <- {{{
       store(_Atomic(signed int), x, 0, release);
       store(_Atomic(signed int), x, 1, release)
   |||
       store(_Atomic(signed int), x, 2, release);
       store(_Atomic(signed int), x, 3, release);
-      a <- load(_Atomic(signed int), x, acquire);
-      store(signed int, z, a)
+      load(_Atomic(signed int), x, acquire)
   }}};
-  a <- load(signed int, z);
   kill(x);
   kill(z);
-  ret a
+  ret b

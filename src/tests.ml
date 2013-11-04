@@ -77,6 +77,7 @@ let get_test (file_name:string)
   
 let get_tests: test list = 
   [get_test "tests/concurrency/coherence+rel_rel_acq.core" [1] [];
+   get_test "tests/concurrency/coherence+init+rel_acq.core" [1] [];
    get_test "tests/concurrency/coherence+rel_rel+rel_rel_acq.core" [0; 1; 3] [];
    get_test "tests/concurrency/datarace+Rna+Rna.core" [0] [];
    get_test "tests/concurrency/datarace+Wna+Wna.core" [] [[Undefined.Data_race]];
