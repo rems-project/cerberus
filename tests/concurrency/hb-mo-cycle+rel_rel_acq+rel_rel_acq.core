@@ -4,6 +4,7 @@
 
 fun main () : [integer] :=
   x <- create(_Atomic(signed int));
+  y <- create(_Atomic(signed int));
   z1 <- create(signed int);
   z2 <- create(signed int);
   {{{
@@ -20,6 +21,7 @@ fun main () : [integer] :=
   a1 <- load(signed int, z1);
   a2 <- load(signed int, z2);
   kill(x);
+  kill(y);
   kill(z1);
   kill(z2);
   ret a1 + (2 * a2)
