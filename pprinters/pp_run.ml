@@ -1,6 +1,12 @@
 open Global
 open Core_run
 
+let rec string_of_thread_id = function
+  | Tzero         -> "0"
+  | Tpar (n, tid) -> string_of_int n ^
+                     if thread_id_eq Tzero tid then "" else "." ^ string_of_thread_id tid
+  | Tseq tid      -> string_of_thread_id tid
+
 let rec string_of_dyn_rule = function
   | Core_run.Rule_Pos       -> "POS"
   | Core_run.Rule_Neg       -> "NEG"
@@ -64,9 +70,10 @@ let rec string_of_trace tact_map t =
        | (r, None) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
            string_of_trace tact_map xs
-       | (r, Some (bs, a)) :: xs ->
+       | (r, Some (tid, bs, a)) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
            (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
+           Colour.ansi_format [Colour.Red] ("{thread " ^ string_of_thread_id tid ^ "}") ^ " " ^
            (string_of_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
 

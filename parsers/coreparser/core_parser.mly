@@ -500,8 +500,6 @@ pattern:
 unseq_expr:
 | es = delimited(LBRACKET, n_ary_operator(PIPE_PIPE, seq_expr), RBRACKET)
     { Eunseq es }
-| es = delimited(LBRACES, n_ary_operator(PIPES, seq_expr), RBRACES)
-    { Epar es }
 
 
 basic_expr:
@@ -513,6 +511,8 @@ basic_expr:
 extended_expr:
 | e = basic_expr
     { e }
+| es = delimited(LBRACES, n_ary_operator(PIPES, seq_expr), RBRACES)
+    { Epar es }
 | e = unseq_expr
     { e }
 

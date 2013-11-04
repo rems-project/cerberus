@@ -23,7 +23,7 @@ let extract (tact_map, t) =
     match bs_act with
       | None ->
           edges
-      | Some (bs, aid) ->
+      | Some (_, bs, aid) ->
           (* add a n sb-edge from each action in bs to aid *)
           Set.fold (fun b edges -> Pmap.add b ({aid} union if Pmap.mem b edges then Pmap.find b edges else {}) edges) bs edges
 (*        Pmap.add aid (bs union (if Pmap.mem aid edges then Pmap.find aid edges else {})) edges *)
