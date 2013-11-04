@@ -5,6 +5,28 @@ module U = Undefined
 
 open Debug
 
+
+
+type thread_id =
+  | Tzero
+  | Tpar of num * thread_id
+  | Tseq of thread_id
+
+let rec thread_id_eq tid1 tid2 =
+  match (tid1, tid2) with
+    | (Tzero, Tzero) ->
+        true
+    | (Tpar n1 tid1', Tpar n2 tid2') ->
+        n1 = n2 && thread_id_eq tid1' tid2'
+    | (Tseq tid1', _) ->
+        thread_id_eq tid1' tid2
+    | (_, Tseq tid2') ->
+        thread_id_eq tid1 tid2'
+    | (_, _) ->
+        false
+end
+
+
 (* BEGIN: Core continuation ********************************************************************* *)
 type _cont 'a =
   | Kunseq of list (expr 'a) * list (expr 'a)
@@ -211,7 +233,7 @@ module Effect = struct
          that has just been performed
        - the third element is the action that as been performed during that step
      *)
-  type trace = list (dyn_rule * option (set taction_id * taction_id))
+  type trace = list (dyn_rule * option (thread_id * set taction_id * taction_id))
   
   type execution_mode =
     | Exhaustive
@@ -701,7 +723,7 @@ let add_tact taid tact =
 
 
 (* push an element in the trace *)
-val push_trace: (dyn_rule * option (set taction_id * taction_id)) -> E.t unit
+val push_trace: (dyn_rule * option (thread_id * set taction_id * taction_id)) -> E.t unit
 let push_trace (r, tact_opt) =
   Boot.print_debug ("RULE ==> " ^ string_of_rule r) $
     fun (<| E.trace= t |> as st) ->
@@ -709,12 +731,12 @@ let push_trace (r, tact_opt) =
 
 
 (* get the last element of the trace (crash if none). *)
-val get_trace: E.t (dyn_rule * option (set taction_id * trace_action))
+val get_trace: E.t (dyn_rule * option (thread_id * set taction_id * trace_action))
 let get_trace = function
   | <| E.trace= [] |> ->
       Boot.assert_false "[Core_run.get_trace] empty trace"
   | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as st) ->
-      [(U.return (r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), st)]
+      [(U.return (r, match tact_opt with Some (tid, bs, n) -> Some (tid, bs, Pmap.find n tact_map) | None -> None end), st)]
 end
 
 val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
@@ -1032,14 +1054,14 @@ let perform_action act =
         E.runU (eval pe)            >>= fun (Eaddr o) ->
         kill o                      >>
         add_tact new_taid (Tkill o) >>
-        E.return (new_taid, Eskip)
+        E.return (new_taid, Enull)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
         E.runU (eval pe2) >>= function
 	  | Eaddr o ->
               E.runU (eval pe3) >>= function
-                | Econst c -> E.return ((Mbase c), Eskip)
-                | Eaddr o' -> E.return ((Mobj o'), Eskip)
+                | Econst c -> E.return ((Mbase c), Enull)
+                | Eaddr o' -> E.return ((Mobj o'), Enull)
                 | Enull    -> E.return (Mnull, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
               end                                      >>= fun (value, e) ->
@@ -1095,44 +1117,49 @@ let perform_action act =
         end
   end                    
 
+
+
+
+
 (* NOTE: the assumption is made that an Eunseq cannot directly be the
          subexpression of an another Eunseq *)
-val red2: expr taction_id * list (cont taction_id) -> E.t (expr taction_id * list (cont taction_id))
+val red2:      expr taction_id * thread_id * list (cont taction_id) ->
+          E.t (expr taction_id * thread_id * list (cont taction_id))
 
 let rec red2_pos x =
   match x with
-    | (Eaction (Pos, (bs, a)), _KS) ->
-        perform_action a                    >>= fun (aid, v)   ->
-        push_trace (Rule_Pos, Some (bs, aid)) >>
-        E.return (v, annotate (Pos, aid) _KS)
+    | (Eaction (Pos, (bs, a)), tid, _KS) ->
+        perform_action a                           >>= fun (aid, v) ->
+        push_trace (Rule_Pos, Some (tid, bs, aid)) >>
+        E.return (v, tid, annotate (Pos, aid) _KS)
     | _ -> E.mzero
   end
 
 and red2_neg x =
   match x with
-    | (Eaction (Neg, (bs, a)), _KS) ->
+    | (Eaction (Neg, (bs, a)), tid, _KS) ->
         perform_action a                    >>= fun (aid, v)   ->
-        push_trace (Rule_Neg, Some (bs, aid)) >>
-        E.return (v, annotate (Neg, aid) _KS)
+        push_trace (Rule_Neg, Some (tid, bs, aid)) >>
+        E.return (v, tid, annotate (Neg, aid) _KS)
     | _ -> E.mzero
   end 
 
 and red2_pure x =
   match x with
-    | (e, [] :: _KS) ->
+    | (e, tid, [] :: _KS) ->
         if is_pure e then
           push_trace (Rule_Pure_Hole, None) >>
           E.get_file                     >>= fun file ->
           E.runU (eval file e)           >>= fun v    ->
-          E.return (v, _KS)
+          E.return (v, Tzero, _KS)
         else
           E.mzero
-    | (e, _K :: _KS) ->
+    | (e, tid, _K :: _KS) ->
         if is_pure e then
           push_trace (Rule_Pure, None) >>
           E.get_file                >>= fun file ->
           E.runU (eval file e)      >>= fun v    ->
-          E.return (apply_cont _K v, [] :: _KS)
+          E.return (apply_cont _K v, Tzero, [] :: _KS)
         else
           E.mzero
     | _ -> E.mzero
@@ -1140,31 +1167,31 @@ and red2_pure x =
 
 and red2_if x =
   match x with
-    | (Eif pe e2 e3, _KS) ->
+    | (Eif pe e2 e3, tid, _KS) ->
         E.get_file            >>= fun file ->
         E.runU (eval file pe) >>= function
-          | Etrue  -> push_trace (Rule_If, None) >> E.return (e2, _KS)
-          | Efalse -> push_trace (Rule_If, None) >> E.return (e3, _KS)
+          | Etrue  -> push_trace (Rule_If, None) >> E.return (e2, tid, _KS)
+          | Efalse -> push_trace (Rule_If, None) >> E.return (e3, tid, _KS)
         end
     | _ -> E.mzero
   end
 
 and red2_let x =
   match x with
-    | (Elet _a pe1 e2, _KS) ->
+    | (Elet _a pe1 e2, tid, _KS) ->
         E.get_file               >>= fun file ->
         E.runU (eval file pe1)   >>= fun v1      ->
-        push_trace (Rule_Let, None) >> E.return (subst_sym _a v1 e2, _KS)
+        push_trace (Rule_Let, None) >> E.return (subst_sym _a v1 e2, tid, _KS)
     | _ -> E.mzero
   end
 
 and red2_ret x =
   match x with
-    | (Eret pe, _K :: _KS) ->
+    | (Eret pe, tid, _K :: _KS) ->
           push_trace (Rule_Ret, None) >>
           E.get_file               >>= fun file ->
           E.runU (eval file pe)    >>= fun v    ->
-          E.return (v, _KS)
+          E.return (v, tid, _KS)
 
 
 (*
@@ -1182,29 +1209,30 @@ and red2_ret x =
 
 and red2_skip x =
   match x with
-    | (Eskip, [Kwseq _ e2] :: _KS) ->
+    | (Eskip, tid, [Kwseq _ e2] :: _KS) ->
         push_trace (Rule_Skip, None) >>
-        E.return (e2, [] :: _KS)
-    | (Eskip, (Kwseq _ e2 :: _KS1) :: _KS2) ->
+        E.return (e2, tid, [] :: _KS)
+    | (Eskip, tid, (Kwseq _ e2 :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
-        E.return (e2, _KS1 :: _KS2)
+        E.return (e2, tid, _KS1 :: _KS2)
 
-    | (Eskip, [Ksseq _ e2] :: _KS) ->
+    | (Eskip, tid, [Ksseq _ e2] :: _KS) ->
         push_trace (Rule_Skip, None) >>
-        E.return (e2, [] :: _KS)
-    | (Eskip, (Ksseq _ e2 :: _KS1) :: _KS2) ->
+        E.return (e2, tid, [] :: _KS)
+    | (Eskip, tid, (Ksseq _ e2 :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
-        E.return (e2, _KS1 :: _KS2)
+        E.return (e2, tid, _KS1 :: _KS2)
 
-    | (Eskip, ((Kunseq es1 es2) :: _KS1) :: _KS2) ->
+    | (Eskip, tid, ((Kunseq es1 es2) :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
         E.return
           (match es1 @ es2 with
              | []  -> Etuple []
              | [e] -> e
              | es  -> Eunseq es
-           end, _KS1 :: _KS2)
+           end, tid, _KS1 :: _KS2)
 
+(*
     | (Eskip, ((Kpar es1 es2) :: _KS1) :: _KS2) ->
         push_trace (Rule_Skip, None) >>
         E.return
@@ -1213,6 +1241,7 @@ and red2_skip x =
              | [e] -> e
              | es  -> Epar es
            end, _KS1 :: _KS2)
+*)
 
 (*    | (Eskip, _K :: _KS) -> push_trace (Rule_Skip, None) >> E.return (apply_cont _K Eskip, _KS) *)
     | _                       -> E.mzero
@@ -1221,56 +1250,56 @@ and red2_skip x =
 
 and red2_proc x =
   match x with
-    | (Eproc bs f es, _KS) ->
-        push_trace (Rule_Proc, None)      >>
-        E.get_file                     >>= fun file ->
+    | (Eproc bs f es, tid, _KS) ->
+        push_trace (Rule_Proc, None)   >>
+        E.get_file                     >>= fun file    ->
         E.runU (U.mapM (eval file) es) >>= fun vs      ->
-        call_proc f vs                    >>= fun f_body  ->
+        call_proc f vs                 >>= fun f_body  ->
 (*
 Boot.print_debug (Boot.pp_core_expr (Core.Etuple es)) $
 Boot.print_debug (Boot.pp_core_expr f_body) $
 *)
 
 (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, [] :: _KS)
+        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, tid, [] :: _KS)
     | _ -> E.mzero
   end
 
 
 and red2_wseq x =
   match x with
-    | (Ewseq _ (Eaction (Neg, b)) e2, _KS) ->
+    | (Ewseq _ (Eaction (Neg, b)) e2, tid, _KS) ->
         E.mzero (* Leaving it to red2_neg_wseq *)
-    | (Ewseq _as e1 e2, _KS) ->
+    | (Ewseq _as e1 e2, tid, _KS) ->
         push_trace (Rule_Wseq, None) >>
           if is_pure e1 then
             E.get_file            >>= fun file ->
             E.runU (eval file e1) >>= fun v1      ->
             Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr v1) $
-            E.return (subst_syms _as v1 e2, _KS)
+            E.return (subst_syms _as v1 e2, Tseq tid, _KS)
           else match _KS with
-            | _K :: _KS -> E.return (e1, (Kwseq _as e2 :: _K) :: _KS)
-            | []        -> E.return (e1, [[Kwseq _as e2]])
+            | _K :: _KS -> E.return (e1, Tseq tid, (Kwseq _as e2 :: _K) :: _KS)
+            | []        -> E.return (e1, Tseq tid, [[Kwseq _as e2]])
           end
     | _ -> E.mzero
   end 
 
 and red2_neg_wseq x =
   match x with
-    | (Ewseq _ (Eaction (Neg, b)) e2, _KS) ->
+    | (Ewseq _ (Eaction (Neg, b)) e2, tid, _KS) ->
         push_trace (Rule_Wseq_Neg, None) >>
         E.return match e2 with
-          | Eunseq e2's -> (Eunseq $ (Eaction (Neg, b)) :: e2's, _KS)
-          | _           -> (Eunseq [Eaction (Neg, b); e2], _KS)
+          | Eunseq e2's -> (Eunseq $ (Eaction (Neg, b)) :: e2's, Tseq tid, _KS)
+          | _           -> (Eunseq [Eaction (Neg, b); e2], Tseq tid, _KS)
         end
-    | (Ewseq _as (Eunseq es) e2, _KS) ->
+    | (Ewseq _as (Eunseq es) e2, tid, _KS) ->
         pick_one (is_negative) es >>= function
                (* TODO: there is a hack here: the symbol corresponding to ej should be dropped from ej, instead of adding a skip dans the first unseq (...) *)
           | (es1, Eaction (Neg, b), es2) ->
               push_trace (Rule_Wseq_Neg, None) >>
               E.return match e2 with
-                | Eunseq e2's -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq $ Eaction (Neg, b) :: e2's), _KS)
-                | _           -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq [Eaction (Neg, b); e2]), _KS)
+                | Eunseq e2's -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq $ Eaction (Neg, b) :: e2's), Tseq tid, _KS)
+                | _           -> (Ewseq _as (Eunseq $ es1 @ Eskip :: es2) (Eunseq [Eaction (Neg, b); e2]), Tseq tid, _KS)
               end
           | _ -> Boot.assert_false "[Core_run.red2_neg_wseq] impossible"
         end
@@ -1280,16 +1309,16 @@ end
 
 and red2_sseq x =
   match x with
-    | (Esseq _as e1 e2, _KS) ->
+    | (Esseq _as e1 e2, tid, _KS) ->
         push_trace (Rule_Sseq, None) >>
           if is_pure e1 then
             E.get_file            >>= fun file ->
             E.runU (eval file e1) >>= fun v1      ->
             Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
-            E.return (subst_syms _as v1 e2, _KS)
+            E.return (subst_syms _as v1 e2, Tseq tid, _KS)
           else match _KS with
-            | _K :: _KS -> E.return (e1, (Ksseq _as e2 :: _K) :: _KS)
-            | []        -> E.return (e1, [[Ksseq _as e2]])
+            | _K :: _KS -> E.return (e1, Tseq tid, (Ksseq _as e2 :: _K) :: _KS)
+            | []        -> E.return (e1, Tseq tid, [[Ksseq _as e2]])
           end
     | _ -> E.mzero
   end
@@ -1298,17 +1327,17 @@ and red2_sseq x =
          save/run inside unseq expressions *)
 and red2_unseq x =
   match x with
-    | (Eunseq es, _K :: _KS) ->
+    | (Eunseq es, tid, _K :: _KS) ->
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
           Boot.print_debug ("ej = " ^ Boot.pp_core_expr ej) $ 
           push_trace (Rule_Unseq, None) >>
-          E.return (ej, (Kunseq es1 es2 :: _K) :: _KS)
+          E.return (ej, tid, (Kunseq es1 es2 :: _K) :: _KS)
     | _ -> E.mzero
   end
 
 and red2_run x =
   match x with
-    | (Erun bs d a_vs, _K :: _KS) ->
+    | (Erun bs d a_vs, tid, _K :: _KS) ->
         E.get_cont d >>= fun (a_tys, e_cont) ->
         push_trace (Rule_Run, None) >>
         (* we have to create the objects which are visible at the level of the save but not from the run *)
@@ -1320,37 +1349,39 @@ and red2_run x =
             (Ewseq (List.map (Some) create_as) (mk_unseq $ List.map (fun ty -> pcreate (Ectype ty) []) create_tys)
                (List.fold_left (fun acc (a, v) -> subst_sym a v acc) e_cont a_vs)) in
         (* TODO: it seems strange that annotate_expr need to know the polarity *)
-        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs e, [] :: _KS)
+        E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs e, tid, [] :: _KS)
     | _ -> E.mzero
   end
 
 and red2_save x =
   match x with
-    | (Esave _ _ e, _KS) ->
+    | (Esave _ _ e, tid, _KS) ->
         push_trace (Rule_Save, None) >>
-        E.return (e, _KS)
+        E.return (e, tid, _KS)
     | _ -> E.mzero
   end
 
 and red2_par x =
   match x with
-    | (Epar es, _K :: _KS) ->
+    | (Epar es, tid, _K :: _KS) ->
       push_trace (Rule_Par, None) >>
       if List.for_all is_pure es then
-        E.return (Eskip, _K :: _KS)
+        E.get_file                     >>= fun file ->
+        E.runU (U.mapM (eval file) es) >>= fun vs   ->
+        E.return (Etuple vs, tid, _K :: _KS)
       else
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
         Boot.print_debug ("ej = " ^ Boot.pp_core_expr ej) $ 
-        E.return (ej, (Kpar es1 es2 :: _K) :: _KS)
+        E.return (ej, Tpar (List.length es1 + 1) tid, (Kpar es1 es2 :: _K) :: _KS)
     | _ -> E.mzero
   end
 
 and red2_nd x =
   match x with
-    | (End es, _KS) ->
+    | (End es, tid, _KS) ->
         pick_one (fun _ -> true) es >>= fun (_, ej, _) ->
-        push_trace (Rule_ND, None) >>
-        E.return (ej, _KS)
+        push_trace (Rule_ND, None)  >>
+        E.return (ej, tid, _KS)
     | _ -> E.mzero
   end
 
@@ -1368,26 +1399,28 @@ and red2 e =
     ]
   ]
 
-
-val     star_red2: expr taction_id * list (cont taction_id) -> E.t ((expr taction_id * list (cont taction_id)) * (Pmap.map taction_id trace_action * E.trace))
+val star_red2:       expr taction_id * thread_id * list (cont taction_id) ->
+               E.t ((expr taction_id * thread_id * list (cont taction_id)) *
+                       (Pmap.map taction_id trace_action * E.trace))
 let rec star_red2 x =
   let continue =
-    red2 x >>= fun z ->
+    red2 x >>= fun (e, tid, _K) ->
 (* BEGIN: DEBUG *)
     get_trace >>= fun (r, _) ->
     Boot.print_debug (string_of_rule r ^ " ==>\nE= " ^
-                     (Boot.pp_core_expr (fst z)) ^ "\nKS= " ^
-                     (List.fold_left (fun acc k -> acc ^ string_of_cont k ^ "\n\n") "" $ snd z) ^ "\n----------------------------------\n\n")
+                     (Boot.pp_core_expr e) ^ "\nKS= " ^
+                     (List.fold_left (fun acc k -> acc ^ string_of_cont k ^ "\n\n") "" $ _K) ^
+                     "\n----------------------------------\n\n")
 (* END: DEBUG *)
-   star_red2 z
+   star_red2 (e, tid, _K)
 in
   match x with
-    | (e, []) ->
+    | (e, tid, []) ->
         if is_pure e then
-          get_fulltrace           >>= fun (tact_map, t) ->
-          E.get_file           >>= fun file       ->
+          get_fulltrace        >>= fun (tact_map, t) ->
+          E.get_file           >>= fun file          ->
           E.runU (eval file e) >>= fun v             ->
-          E.return ((v, []), (tact_map, t))
+          E.return ((v, tid, []), (tact_map, t))
         else
           continue
     
@@ -1714,7 +1747,7 @@ let runE execution_mode file =
   E.set_execution_mode execution_mode    >>
   E.set_current_proc file.main           >>
   E.register_conts cont_map              >>
-  star_red2 (main_body, [(* Khole *)[]]) >>= fun ((value, _), (tact_map, trace)) ->
+  star_red2 (main_body, Tzero, [(* Khole *)[]]) >>= fun ((value, _, _), (tact_map, trace)) ->
   E.return (value, (tact_map, List.rev trace))
 
 
