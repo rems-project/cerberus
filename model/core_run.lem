@@ -96,23 +96,23 @@ type mem_value =
 
 (* Instantiation of Cmm types *)
 
-type cmm_tid = Cmm.tid num
+type cmm_tid = Cmm.tid thread_id
 type cmm_loc = Cmm.location mem_addr
 type cmm_cvalue = Cmm.cvalue mem_value
-type cmm_action = Cmm.action num mem_addr mem_value
-type cmm_observable_execution = Cmm.observable_execution num mem_addr mem_value
-type cmm_complete_execution = Cmm.complete_execution num mem_addr mem_value
+type cmm_action = Cmm.action thread_id mem_addr mem_value
+type cmm_observable_execution = Cmm.observable_execution thread_id mem_addr mem_value
+type cmm_complete_execution = Cmm.complete_execution thread_id mem_addr mem_value
 
 
 type taction_id = num
 
 (* Fully evaluated description of an action *)
 type trace_action =
-  | Tcreate of ctype * mem_addr (* the second argument is the created object *)
-  | Talloc of (* TODO: num *) int * mem_addr (* the second argument is the created object *)
-  | Tkill of mem_addr
-  | Tstore of ctype * mem_addr * mem_value * Cmm.memory_order
-  | Tload of ctype * mem_addr * mem_value * Cmm.memory_order (* the one but last argument is the read value *)
+  | Tcreate of ctype * mem_addr * thread_id (* the second argument is the created object *)
+  | Talloc of (* TODO: num *) int * mem_addr * thread_id (* the second argument is the created object *)
+  | Tkill of mem_addr * thread_id
+  | Tstore of ctype * mem_addr * mem_value * Cmm.memory_order * thread_id
+  | Tload of ctype * mem_addr * mem_value * Cmm.memory_order * thread_id (* the argument mem_value is the read value *)
 
 type trace_paction = polarity * trace_action
 
@@ -233,7 +233,7 @@ module Effect = struct
          that has just been performed
        - the third element is the action that as been performed during that step
      *)
-  type trace = list (dyn_rule * option (thread_id * set taction_id * taction_id))
+  type trace = list (dyn_rule * option (set taction_id * taction_id))
   
   type execution_mode =
     | Exhaustive
@@ -479,11 +479,11 @@ val to_cmm_action: taction_id -> trace_action -> cmm_action
 let to_cmm_action taid action = 
   let string_taid = Pervasives.string_of_num taid in 
   match action with
-  | Tcreate _ o     -> Cmm.Create string_taid (Cmm.Tid 0) (Cmm.Loc o)
-  | Talloc _ o      -> Cmm.Create string_taid (Cmm.Tid 0) (Cmm.Loc o)
-  | Tkill o         -> Cmm.Kill string_taid (Cmm.Tid 0) (Cmm.Loc o)
-  | Tstore _ o v mo -> Cmm.Store string_taid (Cmm.Tid 0) mo (Cmm.Loc o) (Cmm.Cvalue v)
-  | Tload _ o v mo  -> Cmm.Load string_taid (Cmm.Tid 0) mo (Cmm.Loc o) (Cmm.Cvalue v)
+  | Tcreate _ o tid     -> Cmm.Create string_taid (Cmm.Tid tid) (Cmm.Loc o)
+  | Talloc _ o tid      -> Cmm.Create string_taid (Cmm.Tid tid) (Cmm.Loc o)
+  | Tkill o tid         -> Cmm.Kill string_taid (Cmm.Tid tid) (Cmm.Loc o)
+  | Tstore _ o v mo tid -> Cmm.Store string_taid (Cmm.Tid tid) mo (Cmm.Loc o) (Cmm.Cvalue v)
+  | Tload _ o v mo tid  -> Cmm.Load string_taid (Cmm.Tid tid) mo (Cmm.Loc o) (Cmm.Cvalue v)
   end
 
 (* Auxilary function for list_to_relation *)
@@ -723,7 +723,7 @@ let add_tact taid tact =
 
 
 (* push an element in the trace *)
-val push_trace: (dyn_rule * option (thread_id * set taction_id * taction_id)) -> E.t unit
+val push_trace: (dyn_rule * option (set taction_id * taction_id)) -> E.t unit
 let push_trace (r, tact_opt) =
   Boot.print_debug ("RULE ==> " ^ string_of_rule r) $
     fun (<| E.trace= t |> as st) ->
@@ -731,12 +731,12 @@ let push_trace (r, tact_opt) =
 
 
 (* get the last element of the trace (crash if none). *)
-val get_trace: E.t (dyn_rule * option (thread_id * set taction_id * trace_action))
+val get_trace: E.t (dyn_rule * option (set taction_id * trace_action))
 let get_trace = function
   | <| E.trace= [] |> ->
       Boot.assert_false "[Core_run.get_trace] empty trace"
   | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as st) ->
-      [(U.return (r, match tact_opt with Some (tid, bs, n) -> Some (tid, bs, Pmap.find n tact_map) | None -> None end), st)]
+      [(U.return (r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), st)]
 end
 
 val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
@@ -1034,26 +1034,26 @@ let rec eval file pe =
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
 open E.Operators
-val perform_action: action_ taction_id -> E.t (taction_id * expr taction_id)
-let perform_action act =
+val perform_action: action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
+let perform_action act tid =
   E.get_file >>= fun file ->
   let eval = eval file in
   get_new_taid >>= fun new_taid ->
   match act with
     | Create pe pref ->
-        E.runU (eval pe)                 >>= fun (Ectype ty) ->
-        create pref ty new_taid          >>= fun o           ->
-        add_tact new_taid (Tcreate ty o) >>
+        E.runU (eval pe)                     >>= fun (Ectype ty) ->
+        create pref ty new_taid              >>= fun o           ->
+        add_tact new_taid (Tcreate ty o tid) >>
         E.return (new_taid, Eaddr o)
     | Alloc pe pref ->
-        E.runU (eval pe)               >>= fun (Econst (Cint n)) ->
-        alloc pref n new_taid          >>= fun o                 ->
-        add_tact new_taid (Talloc n o) >>
+        E.runU (eval pe)                   >>= fun (Econst (Cint n)) ->
+        alloc pref n new_taid              >>= fun o                 ->
+        add_tact new_taid (Talloc n o tid) >>
         E.return (new_taid, Eaddr o)
     | Kill pe ->
-        E.runU (eval pe)            >>= fun (Eaddr o) ->
-        kill o                      >>
-        add_tact new_taid (Tkill o) >>
+        E.runU (eval pe)                >>= fun (Eaddr o) ->
+        kill o                          >>
+        add_tact new_taid (Tkill o tid) >>
         E.return (new_taid, Enull)
     | Store pe1 pe2 pe3 mo ->
         E.runU (eval pe1) >>= fun (Ectype ty) ->
@@ -1064,9 +1064,9 @@ let perform_action act =
                 | Eaddr o' -> E.return ((Mobj o'), Enull)
                 | Enull    -> E.return (Mnull, Eskip)
                 | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
-              end                                      >>= fun (value, e) ->
-              store ty o value new_taid                >>
-              add_tact new_taid (Tstore ty o value mo) >> 
+              end                                          >>= fun (value, e) ->
+              store ty o value new_taid                    >>
+              add_tact new_taid (Tstore ty o value mo tid) >> 
               (if mo = Cmm.Seq_cst then
                  push_sc_action new_taid
                else
@@ -1092,10 +1092,10 @@ let perform_action act =
                        (* Updating readsfrom *)
                        (fun (<| E.rf = rf |> as st) -> [(U.return (), <| st with E.rf = Set.add (store_taid, new_taid) rf|>)]) >>
                        match value with
-                         | Mbase v -> E.return (Tload ty o (Mbase v) mo, Econst v)
-                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo, Eaddr v)
+                         | Mbase v -> E.return (Tload ty o (Mbase v) mo tid, Econst v)
+                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo tid, Eaddr v)
                          | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                                      E.return (Tload ty o Munint mo, Econst (Cint $ Int.neg (Int.int 10)))
+                                      E.return (Tload ty o Munint mo tid, Econst (Cint $ Int.neg (Int.int 10)))
                        end                                      >>= fun (tact, e) ->
                        add_tact new_taid tact                   >>
                        (if mo = Cmm.Seq_cst then
@@ -1129,8 +1129,8 @@ val red2:      expr taction_id * thread_id * list (cont taction_id) ->
 let rec red2_pos x =
   match x with
     | (Eaction (Pos, (bs, a)), tid, _KS) ->
-        perform_action a                           >>= fun (aid, v) ->
-        push_trace (Rule_Pos, Some (tid, bs, aid)) >>
+        perform_action a tid                       >>= fun (aid, v) ->
+        push_trace (Rule_Pos, Some (bs, aid)) >>
         E.return (v, tid, annotate (Pos, aid) _KS)
     | _ -> E.mzero
   end
@@ -1138,8 +1138,8 @@ let rec red2_pos x =
 and red2_neg x =
   match x with
     | (Eaction (Neg, (bs, a)), tid, _KS) ->
-        perform_action a                    >>= fun (aid, v)   ->
-        push_trace (Rule_Neg, Some (tid, bs, aid)) >>
+        perform_action a tid                       >>= fun (aid, v)   ->
+        push_trace (Rule_Neg, Some (bs, aid)) >>
         E.return (v, tid, annotate (Neg, aid) _KS)
     | _ -> E.mzero
   end 

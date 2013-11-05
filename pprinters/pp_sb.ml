@@ -16,20 +16,25 @@ let string_of_trace_action tact =
     "[\\text{" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot
                    (fun x -> PPrint.string (Pp_run.string_of_sym x)) (fst o)) ^ "}]" in
   match tact with
-    | Core_run.Tcreate (ty, o) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}}"
-    | Core_run.Talloc (n, o) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}"
-    | Core_run.Tkill o ->
-        "{\\color{red}\\mathbf{K}} " ^ f o
-    | Core_run.Tstore (ty, o, n, mo) ->
-        "{\\color{red}\\mathbf{S}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}} " ^ f o ^
-          " := " ^ Pp_run.string_of_mem_value n ^ 
-          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
-    | Core_run.Tload (ty, o, v, mo) ->
-        "{\\color{red}\\mathbf{L}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}} " ^
-          f o ^ " = " ^ Pp_run.string_of_mem_value v ^ 
-          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
+    | Core_run.Tcreate (ty, o, tid) ->
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}}" ^
+          " on thread " ^ (Pp_run.string_of_thread_id tid)
+    | Core_run.Talloc (n, o, tid) ->
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}" ^
+          " on thread " ^ (Pp_run.string_of_thread_id tid)
+    | Core_run.Tkill (o, tid) ->
+        "{\\color{red}\\mathbf{K}} " ^ f o ^
+          " on thread " ^ (Pp_run.string_of_thread_id tid)
+    | Core_run.Tstore (ty, o, n, mo, tid) ->
+        "{\\color{red}\\mathbf{S}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "}} " ^ f o ^
+          " := " ^ Pp_run.string_of_mem_value n ^
+          " on thread " ^ (Pp_run.string_of_thread_id tid)
+    | Core_run.Tload (ty, o, v, mo, tid) ->
+        "{\\color{red}\\mathbf{L}_\\text{" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "}} " ^
+          f o ^ " = " ^ Pp_run.string_of_mem_value v ^
+          " on thread " ^ (Pp_run.string_of_thread_id tid)
 
 
 let pp n sb =

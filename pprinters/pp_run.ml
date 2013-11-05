@@ -43,20 +43,25 @@ let string_of_trace_action tact =
     "[" ^ (Boot.to_plain_string $ PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o)) ^
       ": @" ^ string_of_int (snd o) ^ "]" in
   match tact with
-    | Core_run.Tcreate (ty, o) ->
-        f o ^ " <= create {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}"
-    | Core_run.Talloc (n, o) ->
-        f o ^ " <= alloc " ^ Num.string_of_num n
-    | Core_run.Tkill o ->
-        "kill " ^ f o
-    | Core_run.Tstore (ty, o, n, mo) ->
-        "store {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^ f o ^
-          " " ^ string_of_mem_value n ^ 
-          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
-    | Core_run.Tload (ty, o, v, mo) ->
-        "load {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "} " ^
-          f o ^ " = " ^ string_of_mem_value v ^ 
-          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo)
+    | Core_run.Tcreate (ty, o, tid) ->
+        f o ^ " <= create {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ "}" ^
+        " thread: " ^ (string_of_thread_id tid)
+    | Core_run.Talloc (n, o, tid) ->
+        f o ^ " <= alloc " ^ Num.string_of_num n ^
+        " thread: " ^ (string_of_thread_id tid)
+    | Core_run.Tkill (o, tid) ->
+        "kill " ^ f o ^
+        " thread: " ^ (string_of_thread_id tid)
+    | Core_run.Tstore (ty, o, n, mo, tid) ->
+        "store {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "} " ^ f o ^
+          " " ^ string_of_mem_value n  ^
+        " thread: " ^ (string_of_thread_id tid)
+    | Core_run.Tload (ty, o, v, mo, tid) ->
+        "load {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "} " ^
+          f o ^ " = " ^ string_of_mem_value v ^
+        " thread: " ^ (string_of_thread_id tid)
 
 
 let rec string_of_trace tact_map t =
@@ -70,10 +75,10 @@ let rec string_of_trace tact_map t =
        | (r, None) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
            string_of_trace tact_map xs
-       | (r, Some (tid, bs, a)) :: xs ->
+       | (r, Some (bs, a)) :: xs ->
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
            (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
-           Colour.ansi_format [Colour.Red] ("{thread " ^ string_of_thread_id tid ^ "}") ^ " " ^
+           Colour.ansi_format [Colour.Red]  
            (string_of_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
 
