@@ -15,15 +15,15 @@ type thread_id =
 let rec thread_id_eq tid1 tid2 =
   match (tid1, tid2) with
     | (Tzero, Tzero) ->
-        true
+      true
     | (Tpar n1 tid1', Tpar n2 tid2') ->
-        n1 = n2 && thread_id_eq tid1' tid2'
+      n1 = n2 && thread_id_eq tid1' tid2'
     | (Tseq tid1', _) ->
-        thread_id_eq tid1' tid2
+      thread_id_eq tid1' tid2
     | (_, Tseq tid2') ->
-        thread_id_eq tid1 tid2'
+      thread_id_eq tid1 tid2'
     | (_, _) ->
-        false
+      false
 end
 
 
@@ -116,6 +116,14 @@ type trace_action =
 
 type trace_paction = polarity * trace_action
 
+val tid_of: trace_action -> thread_id
+let tid_of = function
+  | Tcreate _ _ tid    -> tid
+  | Talloc _ _ tid     -> tid
+  | Tkill _ tid        -> tid
+  | Tstore _ _ _ _ tid -> tid
+  | Tload _ _ _ _ tid  -> tid
+  end 
 
 type mem_state = Pmap.map mem_addr (list (mem_value * taction_id)) * num
 
@@ -526,11 +534,10 @@ let to_observable_execution s =
   let pre_execution =
     <|
       Cmm.actions = Pmap.range s.E.cmm_tact_map;
-      Cmm.threads = {};
-
+      Cmm.threads = Set.image (fun t -> Cmm.Tid (tid_of t)) (Pmap.range s.E.tact_map);
       Cmm.lk      = (fun x -> get_location_kind s x);
-      Cmm.sb      = {};
-      Cmm.asw     = {};
+      Cmm.sb      = to_cmm_relation s.E.sb;
+      Cmm.asw     = to_cmm_relation s.E.asw;
       Cmm.dd      = {};
     |> in
   let execution_witness = 
@@ -561,32 +568,6 @@ let to_happens_before (Xo, Xw) =
   
 val discard_CoWR_states: taction_id -> taction_id -> E.t unit
 let discard_CoWR_states write_taid read_taid = fun st ->
-(*
-(* DEBUG *)
-  let f = function
-    | Cmm.Lock _ _ _ _      -> "Lock"
-    | Cmm.Unlock _ _ _      -> "Unlock"
-    | Cmm.Load _ _ _ _ _    -> "Load"
-    | Cmm.Store _ _ _ _ _   -> "Store"
-    | Cmm.RMW _ _ _ _ _ _   -> "RMW"
-    | Cmm.Fence _ _ _       -> "Fence"
-    | Cmm.Blocked_rmw _ _ _ -> "Blocked_rmw"
-  end in
-  let f2 = function
-    | Tcreate _ _    -> "Tcreate"
-    | Talloc _ _     -> "Talloc"
-    | Tkill _        -> "Tkill"
-    | Tstore _ _ _ _ -> "Tstore"
-    | Tload _ _ _ _  -> "Tload"
-  end in
-  Boot.assert_false ("FOO> " ^ (Set.fold (fun z acc ->
-    acc ^ ", " ^ f2 z
-  ) (Pmap.range st.E.tact_map) ""))
-
-*)
-
-
-
   let w1 = Pmap.find write_taid st.E.cmm_tact_map in
   let r = Pmap.find read_taid st.E.cmm_tact_map in
   let (Xo, Xw) = to_observable_execution st in
