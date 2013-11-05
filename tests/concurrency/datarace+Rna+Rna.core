@@ -1,4 +1,5 @@
-{- The two non-atomic loads do *not* race. The only allowed result is 0.
+{- The two non-atomic loads do *not* race. The only allowed result
+    is 0.
 -}
 
 fun main () : [integer] :=

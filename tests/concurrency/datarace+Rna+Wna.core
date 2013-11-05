@@ -1,5 +1,5 @@
-{- In every execution the non-atomic load races with the non-atomic write.
--}
+{- In every execution the non-atomic load races with the non-atomic
+write.  -}
 
 fun main () : [integer] :=
   x <- create(signed int);
