@@ -12,6 +12,11 @@ type thread_id =
   | Tpar of num * thread_id
   | Tseq of thread_id
 
+let canonize_tid = function
+  | Tseq tid -> tid
+  | tid      -> tid
+end
+
 let rec thread_id_eq tid1 tid2 =
   match (tid1, tid2) with
     | (Tzero, Tzero) ->
@@ -466,6 +471,10 @@ let set_execution_mode mode = fun st ->
 val get_execution_mode: t execution_mode
 let get_execution_mode = fun st ->
   [(U.return st.execution_mode, st)]
+
+val register_sequencing: set taction_id -> taction_id -> t unit
+let register_sequencing bs aid = fun st ->
+  [(U.return (), <| st with sb= {(x,aid) | forall (x IN bs) | true} union st.sb |>)]
 
 
 end
@@ -1016,7 +1025,8 @@ let rec eval file pe =
          particular memory model *)
 open E.Operators
 val perform_action: action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
-let perform_action act tid =
+let perform_action act tid_ =
+  let tid = canonize_tid tid_ in
   E.get_file >>= fun file ->
   let eval = eval file in
   get_new_taid >>= fun new_taid ->
@@ -1111,6 +1121,7 @@ let rec red2_pos x =
   match x with
     | (Eaction (Pos, (bs, a)), tid, _KS) ->
         perform_action a tid                       >>= fun (aid, v) ->
+        E.register_sequencing bs aid               >>
         push_trace (Rule_Pos, Some (bs, aid)) >>
         E.return (v, tid, annotate (Pos, aid) _KS)
     | _ -> E.mzero
@@ -1120,6 +1131,7 @@ and red2_neg x =
   match x with
     | (Eaction (Neg, (bs, a)), tid, _KS) ->
         perform_action a tid                       >>= fun (aid, v)   ->
+        E.register_sequencing bs aid               >>
         push_trace (Rule_Neg, Some (bs, aid)) >>
         E.return (v, tid, annotate (Neg, aid) _KS)
     | _ -> E.mzero
