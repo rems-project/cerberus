@@ -1,29 +1,20 @@
-{- SB+rel_acq+rel_acq
-   Store Buffering (or Dekker's), with release-acquire pairs
-   The reads can both see 0 in the same execution. 
-   An exhaustive execution of this program should therefore return the values 0, 1, 2, 3.
--}
+{- SB+rel_acq+rel_acq Store Buffering (or Dekker's), with
+   release-acquire pairs The reads can both see 0 in the same
+   execution.  An exhaustive execution of this program should
+   therefore return the values 0, 1, 2, 3.  -}
 
 fun main () : [integer] :=
   x <- create(_Atomic(signed int));
   store(_Atomic(signed int), x, 0);
   y <- create(_Atomic(signed int));
   store(_Atomic(signed int), y, 0);
-  z1 <- create(signed int);
-  z2 <- create(signed int);
-  {{{
+  (a1, a2) <- {{{
        store(_Atomic(signed int), y, 1, release);
-       a1 <- load(_Atomic(signed int), x, acquire);
-       store(signed int, z1, a1)
+       load(_Atomic(signed int), x, acquire)
   |||
        store(_Atomic(signed int), x, 1, release);
-       a2 <- load(_Atomic(signed int), y, acquire);
-       store(signed int, z2, a2)
+       load(_Atomic(signed int), y, acquire)
   }}};
-  a1 <- load(signed int, z1);
-  a2 <- load(signed int, z2);
   kill(x);
   kill(y);
-  kill(z1);
-  kill(z2);
   ret a1 + (2 * a2)

@@ -1,16 +1,27 @@
-// WRC
-// The final read (z3) is required to see 1.
-// An exhaustive execution of this program should therefore only return the value 1.
-int main() {
-  atomic_int x = 0;
-  atomic_int y = 0;
-  int z1; int z2; int z3;
+{- If the final load of x is executed, it is required to see 1. An
+exhaustive execution of this program should therefore only return 1
+and 2. -}
 
-  {{{ x.store(1,mo_release);
-  ||| { z1=x.load(mo_acquire).readsvalue(1);
-        y.store(1,mo_release); }
-  ||| { z2=y.load(mo_acquire).readsvalue(1);
-        z3=x.load(mo_acquire); }
-  }}}
-  return z3;
-}
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  y <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0);
+  store(_Atomic(signed int), y, 0);
+  (foo1, foo2, a3) <- {{{
+      store(_Atomic(signed int), x, 1, release)
+  |||
+      a1 <- load(_Atomic(signed int), x, acquire);
+      if a1 = 1 then
+        store(_Atomic(signed int), y, 1, release)
+      else
+        skip
+  |||
+      a2 <- load(_Atomic(signed int), y, acquire);
+      if a2 = 1 then
+        load(_Atomic(signed int), x, acquire)
+      else
+        2
+  }}};
+  kill(x);
+  kill(y);
+  ret a3

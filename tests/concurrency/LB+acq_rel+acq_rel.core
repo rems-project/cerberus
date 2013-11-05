@@ -1,29 +1,22 @@
-{- LB+acq_rel+acq_rel
-   Load Buffering, with acquire/release pairs
-   The values of z1 and z2 cannot both be 1. They can be both 0, or one of them can be 1.
-   An exhaustive execution of this program should therefore return the values 0, 1 and 2.
--}
+{- LB+acq_rel+acq_rel Load Buffering, with acquire/release pairs The
+   values of a1 and a2 cannot both be 1. They can be both 0, or one of
+   them can be 1.  An exhaustive execution of this program should
+   therefore return the values 0, 1 and 2.  -}
 
 fun main () : [integer] :=
   x <- create(_Atomic(signed int));
   store(_Atomic(signed int), x, 0);
   y <- create(_Atomic(signed int));
   store(_Atomic(signed int), y, 0);
-  z1 <- create(signed int);
-  z2 <- create(signed int);
-  {{{
+  (a1, a2) <- {{{
        a1 <- load(_Atomic(signed int), x, acquire);
-       store(signed int, z1, a1);
-       store(_Atomic(signed int), y, 1, release)
+       store(_Atomic(signed int), y, 1, release);
+       a1
   |||
        a2 <- load(_Atomic(signed int), y, acquire);
-       store(signed int, z2, a2);
-       store(_Atomic(signed int), x, 1, release)
+       store(_Atomic(signed int), x, 1, release);
+       a2
   }}};
-  a1 <- load(signed int, z1);
-  a2 <- load(signed int, z2);
   kill(x);
   kill(y);
-  kill(z1);
-  kill(z2);
   ret a1 + (2 * a2)

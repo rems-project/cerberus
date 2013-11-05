@@ -76,7 +76,8 @@ let get_test (file_name:string)
    expected_result= E.Result results; }
   
 let get_tests: test list = 
-  [get_test "tests/concurrency/coherence+rel_rel_acq.core" [1] [];
+  [(* Core programs *)
+   get_test "tests/concurrency/coherence+rel_rel_acq.core" [1] [];
    get_test "tests/concurrency/coherence+init+rel_acq.core" [1] [];
    get_test "tests/concurrency/datarace+Rna+Rna.core" [0] [];
    get_test "tests/concurrency/datarace+Wna+Wna.core" [] [[Undefined.Data_race]];
@@ -84,9 +85,18 @@ let get_tests: test list =
    get_test "tests/concurrency/datarace+Rna+Rna_Wna.core" [] [[Undefined.Data_race]];
    get_test "tests/concurrency/datarace+Wna_rel+acq_Rna.core" [0] [[Undefined.Data_race]];
    get_test "tests/concurrency/hb-mo-cycle+rel_rel_acq+rel_rel_acq.core" [0; 1; 2; 3] [];
+   get_test "tests/concurrency/hb-mo-cycle+Wsc_Wsc_Rsc+Wsc_Wsc_Rsc.core" [1; 2; 3] [];
    get_test "tests/concurrency/MP+na_rel+acq_na.core" [1; 2] [];
    get_test "tests/concurrency/LB+acq_rel+acq_rel.core" [0; 1; 2] [];
+   get_test "tests/concurrency/LB+Rsc_Wsc+Rsc_Wsc.core" [0; 1; 2] [];
    get_test "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3] [];
+   get_test "tests/concurrency/SB+Wsc_Rsc+Wsc_Rsc.core" [1; 2; 3] [];
+   get_test "tests/concurrency/WRC+rel+acq_rel+acq_acq.core" [1; 2] [];
+   get_test "tests/concurrency/IRIW+rel+rel+acq_acq+acq_acq.core" 
+            [0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15] [];
+   get_test "tests/concurrency/IRIW+Wsc+Wsc+Rsc_Rsc+Rsc_Rsc.core"
+            [0; 1; 2; 3; 4; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15] [];
+   (* C programs *)
    get_test "tests/concurrency/MP+na_rel+acq_na.c" [1; 2] [];
    get_test "tests/concurrency/LB+acq_rel+acq_rel.c" [0; 1; 2] [];
    get_test "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3] []
