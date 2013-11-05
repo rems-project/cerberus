@@ -12,9 +12,11 @@ type thread_id =
   | Tpar of num * thread_id
   | Tseq of thread_id
 
-let canonize_tid = function
-  | Tseq tid -> tid
-  | tid      -> tid
+let rec canonize_tid tid =
+  match tid with
+    | Tzero       -> Tzero
+    | Tpar n tid' -> Tpar n (canonize_tid tid')
+    | Tseq tid'   -> (canonize_tid tid')
 end
 
 let rec thread_id_eq tid1 tid2 =
