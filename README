@@ -17,6 +17,16 @@ INSTALLATION
    with opam:
   
   
+---- Requirements for the graph generation ---
+
+  * pyparsing (can be installed by running "easy_install pyparsing")
+  * latex preview package (on debian: "apt-get install preview-latex-style", on mac with texlive: "tlmgr install preview")
+  * dot2tex (code.google.com/p/dot2tex/)
+  
+
+
+
+
 
 
 

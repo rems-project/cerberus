@@ -51,3 +51,6 @@ let inline {ocaml} pp_ail_expr = Ocaml.Boot.pp_ail_expr
 
 val pp_core_expr: forall 'a. 'a (* Core.expr *) -> string
 let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr
+
+val num_of_string: string -> num
+let inline {ocaml} num_of_string = Ocaml.Boot.num_of_string
