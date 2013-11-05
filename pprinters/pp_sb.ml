@@ -37,12 +37,21 @@ let string_of_trace_action tact =
           " on thread " ^ (Pp_run.string_of_thread_id tid)
 
 
-let pp n sb =
+let pp n g =
+  let f rel col =
+    P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
+      !^ (string_of_int i) ^^^ !^ "->" ^^^ !^ (string_of_int i') ^^^
+        P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel in
+  
   !^ ("digraph G" ^ string_of_int n) ^^ P.braces
     (P.separate_map (P.semi ^^ P.break 1) (fun (i, a) ->
       !^ (string_of_int i) ^^^ P.brackets (!^ "label=" ^^^ (P.dquotes $ !^ (string_of_int i) ^^ P.colon ^^^ !^ (string_of_trace_action a))))
-       (Pmap.bindings sb.actions) ^^ P.break 1 ^^
+       (Pmap.bindings g.actions) ^^ P.break 1 ^^
        
-       P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
-         !^ (string_of_int i) ^^^ !^ "->" ^^^ !^ (string_of_int i'))
-       sb.edges)
+       f g.sb "black" ^^ P.break 1 ^^
+       f g.asw "purple" ^^ P.break 1 ^^
+       f g.rf "red" ^^ P.break 1 ^^
+       f g.mo "blue" ^^ P.break 1 ^^
+       f g.sc "orange" ^^ P.break 1 ^^
+       f g.hb "green"
+)

@@ -2,21 +2,32 @@ open Global
 
 
 (* Temporary hack *)
-type sb' = <|
-  actions': Pmap.map Core_run.taction_id Core_run.trace_action;
-  edges':   Pmap.map Core_run.taction_id (list Core_run.taction_id)
+type graph' = <|
+  actions' : Pmap.map Core_run.taction_id Core_run.trace_action;
+  sb'      : Pmap.map Core_run.taction_id (list Core_run.taction_id);
+  asw'     : Pmap.map Core_run.taction_id (list Core_run.taction_id);
+  rf'      : Pmap.map Core_run.taction_id (list Core_run.taction_id);
+  mo'      : Pmap.map Core_run.taction_id (list Core_run.taction_id);
+  sc'      : Pmap.map Core_run.taction_id (list Core_run.taction_id);
+  hb'      : Pmap.map Core_run.taction_id (list Core_run.taction_id);
 |>
 
-type sb = <|
-  actions: Pmap.map Core_run.taction_id Core_run.trace_action;
-  edges: list (Core_run.taction_id * Core_run.taction_id)
+
+type graph = <|
+  actions : Pmap.map Core_run.taction_id Core_run.trace_action;
+  sb      : list (Core_run.taction_id * Core_run.taction_id);
+  asw     : list (Core_run.taction_id * Core_run.taction_id);
+  rf      : list (Core_run.taction_id * Core_run.taction_id);
+  mo      : list (Core_run.taction_id * Core_run.taction_id);
+  sc      : list (Core_run.taction_id * Core_run.taction_id);
+  hb      : list (Core_run.taction_id * Core_run.taction_id)
 |>
 
 
 
 (* NOTE: will crash on ill-formed traces *)
 (* TODO: I don't like it *)
-val extract: (Pmap.map Core_run.taction_id Core_run.trace_action * Core_run.Effect.trace) -> sb'
+val extract: (Pmap.map Core_run.taction_id Core_run.trace_action * Core_run.Effect.trace) -> graph'
 let extract (tact_map, t) =
   let es =
     List.fold_left (fun edges (r, bs_act) ->
@@ -28,7 +39,8 @@ let extract (tact_map, t) =
           Set.fold (fun b edges -> Pmap.add b ({aid} union if Pmap.mem b edges then Pmap.find b edges else {}) edges) bs edges
 (*        Pmap.add aid (bs union (if Pmap.mem aid edges then Pmap.find aid edges else {})) edges *)
     end) Pmap.empty t
-  in <| actions'= tact_map; edges'= Pmap.map Set.to_list es |>
+  in <| actions'= tact_map; sb'= Pmap.map Set.to_list es;
+        asw'= Pmap.empty; rf'= Pmap.empty; mo'= Pmap.empty; sc'= Pmap.empty; hb'= Pmap.empty|>
 
 
 
@@ -65,6 +77,60 @@ let extract (tact_map, t) =
 *)
 
 
+
+
+
+
+
+
+val extract2: Core_run.Effect.state -> graph'
+let extract2 st =
+  let f rel =
+    Set.fold (fun (x,y) acc ->
+      Pmap.add x (y :: if Pmap.mem x acc then Pmap.find x acc else []) acc
+    ) rel Pmap.empty in
+  
+  let g rel = Set.fold (fun (x_,y_) acc ->
+    let x = Boot.num_of_string $ Cmm.aid_of x_ in
+    let y = Boot.num_of_string $ Cmm.aid_of y_ in
+    Pmap.add x (y :: if Pmap.mem x acc then Pmap.find x acc else []) acc
+  ) rel Pmap.empty in
+  <|
+      actions'= st.Core_run.Effect.tact_map;
+      sb'=  f (st.Core_run.Effect.sb);
+      asw'= f (st.Core_run.Effect.asw);
+      rf'=  f (st.Core_run.Effect.rf);
+      mo'=  g (snd $ Core_run.to_observable_execution st).Cmm.mo;
+      sc'=  g (snd $ Core_run.to_observable_execution st).Cmm.sc;
+      hb'=  g (Core_run.to_happens_before $ Core_run.to_observable_execution st)
+   |>
+
+(*
+type sb' = <|
+  actions': Pmap.map Core_run.taction_id Core_run.trace_action;
+  edges':   Pmap.map Core_run.taction_id (list Core_run.taction_id)
+|>
+*)
+
+
+(*
+  let es =
+    List.fold_left (fun edges (r, bs_act) ->
+    match bs_act with
+      | None ->
+          edges
+      | Some (bs, aid) ->
+          (* add a n sb-edge from each action in bs to aid *)
+          Set.fold (fun b edges -> Pmap.add b ({aid} union if Pmap.mem b edges then Pmap.find b edges else {}) edges) bs edges
+(*        Pmap.add aid (bs union (if Pmap.mem aid edges then Pmap.find aid edges else {})) edges *)
+    end) Pmap.empty t
+  in <| actions'= tact_map; edges'= Pmap.map Set.to_list es |>
+*)
+
+
+
+
+
 (* TODO: this should be in the stdlib *)
 val     assocs: forall 'a 'b. 'a -> list ('a * 'b) -> list 'b
 let rec assocs z l =
@@ -79,7 +145,25 @@ let rec exists_path a b es =
 
 
 (* remove the edges implied by transitivity *)
-val simplify: sb' -> sb
-let simplify sb =
+val simplify: graph' -> graph
+let simplify g =
+  let f rel = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings rel) in
+  let sb_  = f g.sb'  in
+  let asw_ = f g.asw' in
+  let rf_  = f g.rf'  in
+  let mo_  = f g.mo'  in
+  let sc_  = f g.sc'  in
+  let hb_  = f g.hb'  in
+  <| actions= g.actions';
+     sb=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sb_))  sb_;
+     asw= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) asw_))  asw_;
+     rf=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) rf_))  rf_;
+     mo=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) mo_))  mo_;
+     sc=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sc_))  sc_;
+     hb=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) hb_))  hb_
+  |>
+
+(*
   let edges' = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings sb.edges') in
   <| actions= sb.actions'; edges= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) edges')) edges' |>
+*)

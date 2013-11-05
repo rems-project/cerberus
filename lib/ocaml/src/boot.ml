@@ -93,3 +93,6 @@ let to_plain_string d =
 let pp_ail_ctype ty = to_plain_string $ Pp_ail.pp_ctype ty
 let pp_ail_expr e = to_plain_string $ Pp_ail.pp_expression_t e
 let pp_core_expr e = to_plain_string $ Pp_core.pp_expr e
+
+
+let num_of_string = Pervasives.int_of_string

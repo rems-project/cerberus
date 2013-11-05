@@ -22,3 +22,5 @@ val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 val pp_core_expr: forall 'a. 'a (* Core.expr *) -> string
 
+val num_of_string: string -> num
+

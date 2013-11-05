@@ -67,19 +67,34 @@ let run_pp =
 
 
 (* for given traces: generated a temporary .dot file, call dot2tex on it and then pdflatex *)
-let write_sb fname ts =
-  debug_print (Colour.ansi_format [Colour.Green] "[generating the pdf of the sb-graph(s)]");
-  let dot = List.fold_left (fun acc (n, (_, t)) ->
-    (Boot.to_plain_string $ Pp_sb.pp n (Sb.simplify $ Sb.extract t)) ^ "\n\n" ^ acc
+let write_graph fname ts =
+  debug_print (Colour.ansi_format [Colour.Green] "[generating the pdf of the execution-graph(s)]");
+  
+(*  let dot = List.fold_left (fun acc (n, (_, t)) -> *)
+  let dot = List.fold_left (fun acc (i, (_, st)) ->
+    (Boot.to_plain_string $ Pp_sb.pp i (Sb.simplify $ Sb.extract2 st)) ^ "\n\n" ^ acc
+(*
+    match u_t with
+      | (Undefined.Defined _, st) ->
+          
+      | (Undefined.Undef _, st) ->
+          acc
+      | (Undefined.Error, st) ->
+          acc
+*)
   ) "" (numerote ts) in
+  
   let (temp_name, temp_chan) = Filename.open_temp_file fname "" in
   output_string temp_chan dot;
   close_out temp_chan;
+  
+  print_endline dot;
+  
   (* TODO: using /dev/null here probably only work on Unix-like systems? *)
   if Sys.command ("dot2tex --autosize -tmath " ^ temp_name ^ " | pdflatex -halt-on-error --jobname=" ^ fname ^ " > /dev/null") <> 0 then
-    prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate the pdf for the sb-graph.";
-  Sys.remove (fname ^ ".aux");
-  Sys.remove (fname ^ ".log")
+    prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate the pdf for the sb-graph."
+  else
+    (Sys.remove (fname ^ ".aux"); Sys.remove (fname ^ ".log"))
 
 
 
@@ -182,7 +197,7 @@ let pipeline stdlib impl core_parse file_name =
 		(fun (n,f) -> Core_run.run !random_mode f
                               >|> pass_message ("SB order #" ^ string_of_int n)
                               >|> pass_through Pp_run.pp_traces
-(*                              >|> pass_through_test !sb_graph (write_sb file_name) *)
+                              >|> pass_through_test !sb_graph (write_graph file_name)
                               >|> return_empty
 		)
 	     )
