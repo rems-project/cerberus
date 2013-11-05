@@ -1026,12 +1026,13 @@ let rec eval file pe =
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
 open E.Operators
-val perform_action: action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
-let perform_action act tid_ =
+val perform_action: set taction_id -> action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
+let perform_action bs act tid_ =
   let tid = canonize_tid tid_ in
   E.get_file >>= fun file ->
   let eval = eval file in
   get_new_taid >>= fun new_taid ->
+  E.register_sequencing bs new_taid >>
   match act with
     | Create pe pref ->
         E.runU (eval pe)                     >>= fun (Ectype ty) ->
@@ -1122,8 +1123,7 @@ val red2:      expr taction_id * thread_id * list (cont taction_id) ->
 let rec red2_pos x =
   match x with
     | (Eaction (Pos, (bs, a)), tid, _KS) ->
-        perform_action a tid                       >>= fun (aid, v) ->
-        E.register_sequencing bs aid               >>
+        perform_action bs a tid                       >>= fun (aid, v) ->
         push_trace (Rule_Pos, Some (bs, aid)) >>
         E.return (v, tid, annotate (Pos, aid) _KS)
     | _ -> E.mzero
@@ -1132,8 +1132,7 @@ let rec red2_pos x =
 and red2_neg x =
   match x with
     | (Eaction (Neg, (bs, a)), tid, _KS) ->
-        perform_action a tid                       >>= fun (aid, v)   ->
-        E.register_sequencing bs aid               >>
+        perform_action bs a tid                       >>= fun (aid, v)   ->
         push_trace (Rule_Neg, Some (bs, aid)) >>
         E.return (v, tid, annotate (Neg, aid) _KS)
     | _ -> E.mzero
