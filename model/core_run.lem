@@ -150,6 +150,7 @@ let rec annotate_expr p_aid e =
   | Eif e1 e2 e3         -> Eif e1 (annotate_expr p_aid e2) (annotate_expr p_aid e3)
   | Eaction (p, (bs, a)) -> Eaction (p, ({snd p_aid} union bs, a))
   | Eunseq es            -> Eunseq (List.map (annotate_expr p_aid) es)
+  | Epar es              -> Epar (List.map (annotate_expr p_aid) es)
   | Ewseq _as e1 e2      -> Ewseq _as (annotate_expr p_aid e1) (match fst p_aid with Pos -> annotate_expr p_aid e2 | Neg -> e2 end)
   | Esseq _as e1 e2      -> Esseq _as (annotate_expr p_aid e1) (annotate_expr p_aid e2)
   | Esave k a_tys e      -> Esave k a_tys (annotate_expr p_aid e)
@@ -166,7 +167,7 @@ val annotate: polarity * taction_id -> list (cont taction_id) -> list (cont tact
 let rec _annotate (p, aid) k =
   match k with
     | []                   -> []
-    | Kpar es1 es2 :: k' -> Kpar es1 es2 :: _annotate (p, aid) k'
+    | Kpar es1 es2 :: k' -> Kpar (List.map (annotate_expr (p, aid)) es1) (List.map (annotate_expr (p, aid)) es2) :: _annotate (p, aid) k'
     | Kunseq es1 es2 :: k' -> Kunseq es1 es2 :: _annotate (p, aid) k'
     | Kwseq _as e2   :: k' -> Kwseq _as (match p with Pos -> annotate_expr (p, aid) e2 | Neg -> e2 end) :: _annotate (p, aid) k'
     | Ksseq _as e2   :: k' -> Ksseq _as (annotate_expr (p, aid) e2) :: _annotate (p, aid) k'
@@ -474,12 +475,18 @@ val get_execution_mode: t execution_mode
 let get_execution_mode = fun st ->
   [(U.return st.execution_mode, st)]
 
-val register_sequencing: set taction_id -> taction_id -> t unit
-let register_sequencing bs aid = fun st ->
-  [(U.return (), <| st with sb= {(x,aid) | forall (x IN bs) | true} union st.sb |>)]
-
-
+val register_sequencing: set taction_id -> taction_id -> thread_id -> t unit
+let register_sequencing bs aid tid = fun st ->
+  let (sb_, asw_) = Set.fold (fun b (sb_acc, asw_acc) ->
+    if tid = tid_of (Pmap.find b st.tact_map) then
+      (Set.add (b, aid) sb_acc, asw_acc)
+    else
+      (sb_acc, Set.add (b, aid) asw_acc)
+  ) bs (st.sb, st.asw) in
+  
+  [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
 end
+
 
 (* -------------------------------------------------------------------------- *)
 module E = Effect
@@ -1032,7 +1039,7 @@ let perform_action bs act tid_ =
   E.get_file >>= fun file ->
   let eval = eval file in
   get_new_taid >>= fun new_taid ->
-  E.register_sequencing bs new_taid >>
+  E.register_sequencing bs new_taid tid >>
   match act with
     | Create pe pref ->
         E.runU (eval pe)                     >>= fun (Ectype ty) ->
