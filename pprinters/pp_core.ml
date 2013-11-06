@@ -286,11 +286,20 @@ let rec pp_expr e =
   in pp None e
 
 and pp_action = function
-  | Create (ty, _)         -> pp_keyword "create" ^^ P.parens (pp_expr ty)
-  | Alloc (a, _)           -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
-  | Kill e                 -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
-  | Store (ty, e1, e2, mo) -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
-  | Load (ty, e, mo)       -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
+  | Create (ty, _)                    -> pp_keyword "create" ^^ P.parens (pp_expr ty)
+  | Alloc (a, _)                      -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
+  | Kill e                            -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
+  | Store (ty, e1, e2, mo)            -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
+  | Load (ty, e, mo)                  -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
+  | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
+      pp_keyword "compare_exchange_strong" ^^
+      P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
+                pp_memory_order mo1 ^^^ !^ "|" ^^^ pp_memory_order mo2)
+  | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
+      pp_keyword "compare_exchange_weak" ^^
+      P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
+                pp_memory_order mo1 ^^^ !^ "|" ^^^ pp_memory_order mo2)
+
 
 
 
