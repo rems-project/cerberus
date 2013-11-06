@@ -97,6 +97,8 @@ and action =
   | Kill of expr
   | Store of expr * expr * expr * Cmm.memory_order
   | Load of expr * expr * Cmm.memory_order
+  | CompareExchangeStrong of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
 and paction = Core.polarity * action
 
 type declaration =
@@ -201,7 +203,12 @@ let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
       | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n, []))
       | Kill e_o               -> (Pset.empty compare, Core.Kill (f st e_o))
       | Store (e_ty, e_o, e_n, mo) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n, mo))
-      | Load (e_ty, e_o, mo)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o, mo)))
+      | Load (e_ty, e_o, mo)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o, mo))
+      | CompareExchangeStrong (e_ty, e_o, e_e, e_d, mo1, mo2)-> (Pset.empty compare,
+                                                                 Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
+      | CompareExchangeWeak (e_ty, e_o, e_e, e_d, mo1, mo2) -> (Pset.empty compare,
+                                                                Core.CompareExchangeWeak (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
+    )
   in f (0, arg_syms) e
 
 
@@ -272,7 +279,7 @@ let subst name =
 
 %}
 
-%token CREATE ALLOC KILL STORE LOAD
+%token CREATE ALLOC KILL STORE LOAD COMPARE_EXCHANGE_STRONG COMPARE_EXCHANGE_WEAK
 %token <Num.num> INT_CONST
 %token <string> SYM
 %token <Core.name> NAME
@@ -482,6 +489,10 @@ action:
     { Store (ty, x, n, mo) }
 | LOAD LPAREN ty = expr COMMA x = expr COMMA mo = memory_order RPAREN
     { Load (ty, x, mo) }
+| COMPARE_EXCHANGE_STRONG LPAREN ty = expr COMMA x = expr COMMA e = expr COMMA d = expr COMMA mo1 = memory_order COMMA mo2 = memory_order RPAREN
+    { CompareExchangeStrong (ty, x, e, d, mo1, mo2) }
+| COMPARE_EXCHANGE_WEAK LPAREN ty = expr COMMA x = expr COMMA e = expr COMMA d = expr COMMA mo1 = memory_order COMMA mo2 = memory_order RPAREN
+    { CompareExchangeWeak (ty, x, e, d, mo1, mo2) }
 
 paction:
 | act = action
