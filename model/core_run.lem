@@ -709,6 +709,11 @@ let push_mod_order o taid = fun (<|E.mo = mod_order |> as st) ->
     | forall (new_order_of_o MEM list_insert taid order_of_o)
     | true]
 
+val push_rf: taction_id -> taction_id -> E.t unit
+let push_rf store_taid read_taid = fun (<| E.rf = rf |> as st) -> 
+  let new_rf = Set.add (store_taid, read_taid) rf in
+  [(U.return (), <| st with E.rf = new_rf |>)]
+
 (* Returns a taid that has not been used yet *)
 val get_new_taid: E.t num
 let get_new_taid = 
@@ -1033,6 +1038,13 @@ let rec eval file pe =
   end
 
 
+val get_address: forall 'a. expr 'a -> E.t mem_addr
+let get_address = function 
+  | Eaddr o -> E.return o
+  | _       -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
+  end
+
+
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
 open E.Operators
@@ -1060,65 +1072,68 @@ let perform_action bs act tid_ =
         add_tact new_taid (Tkill o tid) >>
         E.return (new_taid, Enull)
     | Store pe1 pe2 pe3 mo ->
-        E.runU (eval pe1) >>= fun (Ectype ty) ->
-        E.runU (eval pe2) >>= function
-	  | Eaddr o ->
-              E.runU (eval pe3) >>= function
-                | Econst c -> E.return ((Mbase c), Enull)
-                | Eaddr o' -> E.return ((Mobj o'), Enull)
-                | Enull    -> E.return (Mnull, Eskip)
-                | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
-              end                                          >>= fun (value, e) ->
-              store ty o value new_taid                    >>
-              add_tact new_taid (Tstore ty o value mo tid) >> 
-              (if mo = Cmm.Seq_cst then
-                 push_sc_action new_taid
-               else
-                 E.return ()
-              )                                        >>
-              is_atomic_location o                     >>= fun is_atomic ->
-              (if is_atomic then
-                 push_mod_order o new_taid        >>
-                 discard_CoWW_states new_taid     >>
-                 discard_inconsistent_sc_writes new_taid >>
-                 check_for_dataraces
-               else 
-                 (* TODO: For NA we can check for dataraces more efficiently *)
-                 check_for_dataraces
-               )                                       >>
-              E.return (new_taid, e) 
-          | e -> Boot.assert_false $ "[BOOM] "  ^ Boot.pp_core_expr e
-        end
+        E.runU (eval pe1)                            >>= fun (Ectype ty) ->
+        E.runU (eval pe2)                            >>= fun (expr)      ->
+        get_address expr                             >>= fun o           ->
+        E.runU (eval pe3)                            >>= function
+         | Econst c -> E.return ((Mbase c), Enull)
+         | Eaddr o' -> E.return ((Mobj o'), Enull)
+         | Enull    -> E.return (Mnull, Eskip)
+         | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
+         end                                         >>= fun (value, e)  ->
+        store ty o value new_taid                    >>
+        add_tact new_taid (Tstore ty o value mo tid) >> 
+        (if mo = Cmm.Seq_cst then
+          push_sc_action new_taid
+         else
+          E.return ()
+         )                                           >>
+        is_atomic_location o                         >>= fun is_atomic   ->
+        (if is_atomic then
+          push_mod_order o new_taid                  >>
+          discard_CoWW_states new_taid               >>
+          discard_inconsistent_sc_writes new_taid    >>
+          check_for_dataraces
+         else 
+          (* TODO: For NA we can check for dataraces more efficiently *)
+          check_for_dataraces
+         )                                           >>
+        E.return (new_taid, e) 
     | Load pe1 pe2 mo ->
-        E.runU (eval pe1) >>= fun (Ectype ty) ->
-        E.runU (eval pe2) >>= function
-          | Eaddr o -> load ty o                                >>= fun (value, store_taid) ->
-                       (* Updating readsfrom *)
-                       (fun (<| E.rf = rf |> as st) -> [(U.return (), <| st with E.rf = Set.add (store_taid, new_taid) rf|>)]) >>
-                       match value with
-                         | Mbase v -> E.return (Tload ty o (Mbase v) mo tid, Econst v)
-                         | Mobj v  -> E.return (Tload ty o (Mobj v) mo tid, Eaddr v)
-                         | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                                      E.return (Tload ty o Munint mo tid, Econst (Cint $ Int.neg (Int.int 10)))
-                       end                                      >>= fun (tact, e) ->
-                       add_tact new_taid tact                   >>
-                       (if mo = Cmm.Seq_cst then
-                          push_sc_action new_taid
-                        else
-                          E.return ()
-                       )                                        >>
-                       is_atomic_location o                     >>= fun is_atomic ->
-                       (if is_atomic then
-                          discard_CoWR_states store_taid new_taid           >>
-                          discard_inconsistent_sc_reads store_taid new_taid >>
-                          check_for_dataraces
-                        else
-                          (* TODO: For NA we can check for dataraces more efficiently *)
-                          check_for_dataraces
-                        )                                       >>
-                       E.return (new_taid, e)
-          | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
-        end
+        E.runU (eval pe1)                                   >>= fun (Ectype ty)         ->
+        E.runU (eval pe2)                                   >>= fun (expr)              ->
+        get_address expr                                    >>= fun o                   ->
+        load ty o                                           >>= fun (value, store_taid) ->
+        push_rf store_taid new_taid                         >>
+        match value with
+         | Mbase v -> E.return (Tload ty o (Mbase v) mo tid, Econst v)
+         | Mobj v  -> E.return (Tload ty o (Mobj v) mo tid, Eaddr v)
+         | Munint  -> Boot.print_debug "READ AN UNINIT" $
+                      E.return (Tload ty o Munint mo tid, Econst (Cint $ Int.neg (Int.int 10)))
+        end                                                 >>= fun (tact, e)           ->
+        add_tact new_taid tact                              >>
+        (if mo = Cmm.Seq_cst then
+          push_sc_action new_taid
+         else
+          E.return ()
+         )                                                  >>
+        is_atomic_location o                                >>= fun is_atomic           ->
+        (if is_atomic then
+          discard_CoWR_states store_taid new_taid           >>
+          discard_inconsistent_sc_reads store_taid new_taid >>
+          check_for_dataraces
+         else
+          (* TODO: For NA we can check for dataraces more efficiently *)
+          check_for_dataraces
+         )                                                  >>
+        E.return (new_taid, e)
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+        E.runU (eval pe1) >>= fun (Ectype ty)                 ->
+        E.runU (eval pe2) >>= get_address >>= fun o           ->
+        E.runU (eval pe3) >>= get_address >>= fun expected    ->
+        E.runU (eval pe4) >>= fun desired                     ->
+        E.return (new_taid, Enull)
+         
   end
 
 
