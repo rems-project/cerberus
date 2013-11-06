@@ -168,6 +168,9 @@ and action_ 'a =
   | Kill of expr 'a
   | Store of expr 'a * expr 'a * expr 'a * Cmm.memory_order
   | Load of expr 'a * expr 'a * Cmm.memory_order
+  | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+
 and action 'a  = set 'a * action_ 'a
 and paction 'a = polarity * action 'a
 

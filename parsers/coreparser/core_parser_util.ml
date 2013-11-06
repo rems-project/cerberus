@@ -55,6 +55,8 @@ type token =
   | LONG_DOUBLE
   | LONG
   | LOAD
+  | COMPARE_EXCHANGE_STRONG
+  | COMPARE_EXCHANGE_WEAK
   | LET
   | LE
   | LBRACKET

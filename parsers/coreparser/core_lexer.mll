@@ -54,6 +54,8 @@ let keywords =
       ("kill",    T.KILL    );
       ("store",   T.STORE   );
       ("load",    T.LOAD    );
+      ("compare_exchange_strong", T.COMPARE_EXCHANGE_STRONG);
+      ("compare_exchange_weak",   T.COMPARE_EXCHANGE_WEAK);
       ("same",    T.SAME    );
       ("undef",   T.UNDEF   );
       ("error",   T.ERROR   );

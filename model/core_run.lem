@@ -120,6 +120,7 @@ type trace_action =
   | Tkill of mem_addr * thread_id
   | Tstore of ctype * mem_addr * mem_value * Cmm.memory_order * thread_id
   | Tload of ctype * mem_addr * mem_value * Cmm.memory_order * thread_id (* the argument mem_value is the read value *)
+  | Trmw of ctype * mem_addr * mem_value * mem_value * Cmm.memory_order * thread_id
 
 type trace_paction = polarity * trace_action
 
@@ -130,6 +131,7 @@ let tid_of = function
   | Tkill _ tid        -> tid
   | Tstore _ _ _ _ tid -> tid
   | Tload _ _ _ _ tid  -> tid
+  | Trmw _ _ _ _ _ tid -> tid
   end 
 
 type mem_state = Pmap.map mem_addr (list (mem_value * taction_id)) * num
@@ -510,6 +512,7 @@ let to_cmm_action taid action =
   | Tkill o tid         -> Cmm.Kill string_taid (Cmm.Tid tid) (Cmm.Loc o)
   | Tstore _ o v mo tid -> Cmm.Store string_taid (Cmm.Tid tid) mo (Cmm.Loc o) (Cmm.Cvalue v)
   | Tload _ o v mo tid  -> Cmm.Load string_taid (Cmm.Tid tid) mo (Cmm.Loc o) (Cmm.Cvalue v)
+  | Trmw _ o e d mo tid -> Cmm.RMW string_taid (Cmm.Tid tid) mo (Cmm.Loc o) (Cmm.Cvalue e) (Cmm.Cvalue d)
   end
 
 (* Auxilary function for list_to_relation *)
@@ -1112,11 +1115,11 @@ let perform_action bs act tid_ =
                         else
                           (* TODO: For NA we can check for dataraces more efficiently *)
                           check_for_dataraces
-                        )                                       >>                       
+                        )                                       >>
                        E.return (new_taid, e)
           | _ -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
         end
-  end                    
+  end
 
 
 
