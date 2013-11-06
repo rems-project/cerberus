@@ -71,8 +71,8 @@ let write_graph fname ts =
   debug_print (Colour.ansi_format [Colour.Green] "[generating the pdf of the execution-graph(s)]");
   
 (*  let dot = List.fold_left (fun acc (n, (_, t)) -> *)
-  let dot = List.fold_left (fun acc (i, (_, st)) ->
-    (Boot.to_plain_string $ Pp_sb.pp i (Sb.simplify $ Sb.extract2 st)) ^ "\n\n" ^ acc
+  let graphs = List.map (fun (i, (_, st)) ->
+    Boot.to_plain_string $ Pp_sb.pp i (Sb.simplify $ Sb.extract2 st)
 (*
     match u_t with
       | (Undefined.Defined _, st) ->
@@ -82,19 +82,38 @@ let write_graph fname ts =
       | (Undefined.Error, st) ->
           acc
 *)
-  ) "" (numerote ts) in
+  ) (numerote ts) in
   
-  let (temp_name, temp_chan) = Filename.open_temp_file fname "" in
-  output_string temp_chan dot;
-  close_out temp_chan;
+  let (tex_name, tex_chan) = Filename.open_temp_file fname ".tex" in
   
-  print_endline dot;
+  output_string tex_chan
+    "\\documentclass{article}\n\\usepackage[x11names,rgb,svgnames]{xcolor}\n\\usepackage[utf8]{inputenc}\n\\usepackage{tikz}\n\\usetikzlibrary{snakes,arrows,shapes}\n\\usepackage{amsmath}\n\\usepackage[active,tightpage]{preview}\n\\PreviewEnvironment{tikzpicture}\n\\setlength\PreviewBorder{0pt}\n\\begin{document}\n\\pagestyle{empty}\n";
+  close_out tex_chan;
   
-  (* TODO: using /dev/null here probably only work on Unix-like systems? *)
-  if Sys.command ("dot2tex --autosize -tmath " ^ temp_name ^ " | pdflatex -halt-on-error --jobname=" ^ fname ^ " > /dev/null") <> 0 then
+  List.iter (fun g ->
+    let (temp_name, temp_chan) = Filename.open_temp_file fname "" in
+    output_string temp_chan g;
+    close_out temp_chan;
+    (* TODO: using /dev/null here probably only work on Unix-like systems? *)
+    if Sys.command ("dot2tex --figonly -fpgf -tmath --autosize " ^ temp_name ^ " >> " ^ tex_name) <> 0 then
+      prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate a tex file for an execution-graph."
+  ) graphs;
+  
+  let tex_chan = open_out_gen [Open_append] 0 tex_name in
+  output_string tex_chan "\end{document}\n";
+  close_out tex_chan;
+  
+  if Sys.command ("pdflatex -halt-on-error --jobname=" ^ fname ^ " " ^ tex_name ^ " > /dev/null") <> 0 then
     prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate the pdf for the sb-graph."
   else
     (Sys.remove (fname ^ ".aux"); Sys.remove (fname ^ ".log"))
+
+
+
+
+
+
+
 
 
 

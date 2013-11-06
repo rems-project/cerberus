@@ -147,20 +147,20 @@ let pp_name = function
 
 let pp_constant = function
   | Cint n ->
-      pp_number (Num.string_of_num n)
+      (* pp_number *) !^ (Num.string_of_num n)
   | Carray _ ->
       !^ "ARRAY"
   | Cfunction _ ->
       !^ "FUNCTION"
 
 let pp_memory_order = function
-  | Cmm.NA      -> pp_const "NA"
-  | Cmm.Seq_cst -> pp_const "Seq_cst"
-  | Cmm.Relaxed -> pp_const "Relaxed"
-  | Cmm.Release -> pp_const "Release"
-  | Cmm.Acquire -> pp_const "Acquire"
-  | Cmm.Consume -> pp_const "Consume"
-  | Cmm.Acq_rel -> pp_const "Acq_rel"
+  | Cmm.NA      -> !^ "NA"
+  | Cmm.Seq_cst -> !^ "Seq_cst"
+  | Cmm.Relaxed -> !^ "Relaxed"
+  | Cmm.Release -> !^ "Release"
+  | Cmm.Acquire -> !^ "Acquire"
+  | Cmm.Consume -> !^ "Consume"
+  | Cmm.Acq_rel -> !^ "Acq_rel"
   
 let rec pp_expr e =
   let rec pp p e =

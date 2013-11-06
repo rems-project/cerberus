@@ -133,15 +133,20 @@ type sb' = <|
 
 (* TODO: this should be in the stdlib *)
 val     assocs: forall 'a 'b. 'a -> list ('a * 'b) -> list 'b
-let rec assocs z l =
+let rec assocs_ z l acc =
   match l with
-    | []           -> []
-    | (x,y) :: xys -> if x = z then y :: assocs z xys else assocs z xys
+    | []           -> acc
+    | (x,y) :: xys -> if x = z then assocs_ x xys (y :: acc) else assocs_ z xys acc
   end
+let assocs z l = assocs_ z l []
 
 val     exists_path: num -> num -> list (num * num) -> bool
-let rec exists_path a b es =
-  List.exist (fun b' -> b = b' || exists_path b' b es) (assocs a es)
+let rec exists_path_ a b es =
+  List.exist (fun b' ->
+    b = b' || exists_path_ b' b es
+  ) es
+let exists_path a b es = exists_path_ a b (assocs a es)
+
 
 
 (* remove the edges implied by transitivity *)
@@ -155,12 +160,12 @@ let simplify g =
   let sc_  = f g.sc'  in
   let hb_  = f g.hb'  in
   <| actions= g.actions';
-     sb=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sb_))  sb_;
-     asw= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) asw_))  asw_;
-     rf=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) rf_))  rf_;
-     mo=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) mo_))  mo_;
-     sc=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sc_))  sc_;
-     hb=  List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) hb_))  hb_
+     sb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sb_)) *)  sb_;
+     asw= (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) asw_)) *) asw_;
+     rf=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) rf_)) *)  rf_;
+     mo=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) mo_)) *)  mo_;
+     sc=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sc_)) *)  sc_;
+     hb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) hb_)) *)  hb_
   |>
 
 (*
