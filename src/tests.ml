@@ -92,6 +92,10 @@ let get_tests: test list =
    get_test "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3] [];
    get_test "tests/concurrency/SB+Wsc_Rsc+Wsc_Rsc.core" [1; 2; 3] [];
    get_test "tests/concurrency/WRC+rel+acq_rel+acq_acq.core" [1; 2] [];
+   get_test "tests/concurrency/RMW-strong-equal.core" [5] [];
+   get_test "tests/concurrency/RMW-strong-unequal.core" [0] [];
+   get_test "tests/concurrency/RMW-weak-equal.core" [0; 5] [];
+   get_test "tests/concurrency/RMW-weak-unequal.core" [0] [];
    get_test "tests/concurrency/IRIW+rel+rel+acq_acq+acq_acq.core" 
             [0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15] [];
    get_test "tests/concurrency/IRIW+Wsc+Wsc+Rsc_Rsc+Rsc_Rsc.core"
