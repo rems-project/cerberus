@@ -140,7 +140,7 @@ let rec assocs_ z l acc =
   end
 let assocs z l = assocs_ z l []
 
-val     exists_path: num -> num -> list (num * num) -> bool
+val     exists_path: forall 'a. 'a -> 'a -> list ('a * 'a) -> bool
 let rec exists_path_ a b es =
   List.exist (fun b' ->
     b = b' || exists_path_ b' b es
@@ -160,12 +160,12 @@ let simplify g =
   let sc_  = f g.sc'  in
   let hb_  = f g.hb'  in
   <| actions= g.actions';
-     sb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sb_)) *)  sb_;
-     asw= (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) asw_)) *) asw_;
-     rf=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) rf_)) *)  rf_;
-     mo=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) mo_)) *)  mo_;
-     sc=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sc_)) *)  sc_;
-     hb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) hb_)) *)  hb_
+     sb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sb_)) *)  try_to_transitive_reduce sb_;
+     asw= (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) asw_)) *) try_to_transitive_reduce asw_;
+     rf=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) rf_)) *)  try_to_transitive_reduce rf_;
+     mo=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) mo_)) *)  try_to_transitive_reduce mo_;
+     sc=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) sc_)) *)  try_to_transitive_reduce sc_;
+     hb=  (* List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) hb_)) *)  try_to_transitive_reduce hb_
   |>
 
 (*

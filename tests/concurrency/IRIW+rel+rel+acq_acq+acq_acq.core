@@ -8,7 +8,7 @@ fun main () : [integer] :=
   y <- create(_Atomic(signed int));
   store(_Atomic(signed int), x, 0);
   store(_Atomic(signed int), y, 0);
-  (a, b) <- {{{
+  (foo1, foo2, a, b) <- {{{
       store(_Atomic(signed int), x, 1, release)
   |||
       store(_Atomic(signed int), y, 1, release)

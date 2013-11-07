@@ -39,44 +39,54 @@ let string_of_trace_action tact =
   
   match tact with
     | Core_run.Tcreate (ty, o, tid) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ pp_ctype ty ^ "}}" ^
-          " on thread " ^ (Pp_run.string_of_thread_id tid)
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ pp_ctype ty ^ "}}"
     | Core_run.Talloc (n, o, tid) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}" ^
-          " on thread " ^ (Pp_run.string_of_thread_id tid)
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}"
     | Core_run.Tkill (o, tid) ->
-        "{\\color{red}\\mathbf{K}} " ^ f o ^
-          " on thread " ^ (Pp_run.string_of_thread_id tid)
+        "{\\color{red}\\mathbf{K}} " ^ f o
     | Core_run.Tstore (ty, o, n, mo, tid) ->
-        "{\\color{red}\\mathbf{S}_\\text{" ^ pp_ctype ty ^ 
+        "{\\color{red}\\mathbf{S}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^ f o ^
-          " := " ^ Pp_run.string_of_mem_value n ^
-          " on thread " ^ (Pp_run.string_of_thread_id tid)
+          " := " ^ Pp_run.string_of_mem_value n
     | Core_run.Tload (ty, o, v, mo, tid) ->
-        "{\\color{red}\\mathbf{L}_\\text{" ^ pp_ctype ty ^ 
+        "{\\color{red}\\mathbf{L}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^
-          f o ^ " = " ^ Pp_run.string_of_mem_value v ^
-          " on thread " ^ (Pp_run.string_of_thread_id tid)
+          f o ^ " = " ^ Pp_run.string_of_mem_value v
+    | Core_run.Trmw (ty ,o, e, d, mo, tid) ->
+        "{\\color{red}\\mathbf{RMW}_\\text{" ^ pp_ctype ty ^
+          ", " ^ pp_memory_order mo ^ "}} " ^
+          f o ^ " = " ^ Pp_run.string_of_mem_value e ^
+          " \Rightarrow " ^
+          f o ^ " := " ^ Pp_run.string_of_mem_value d
 
 
 
 
 
 let pp n g =
-  let f rel col =
+  let threads =
+    List.fold_left (fun acc (aid, act) ->
+      let tid = Core_run.tid_of act in
+      Pmap.add tid ((aid, act) :: if Pmap.mem tid acc then Pmap.find tid acc else []) acc
+    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings g.actions in
+  
+  let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
       !^ (string_of_int i) ^^^ !^ "->" ^^^ !^ (string_of_int i') ^^^
         P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel in
   
   !^ ("digraph G" ^ string_of_int n) ^^ P.braces
-    (P.separate_map (P.semi ^^ P.break 1) (fun (i, a) ->
-      !^ (string_of_int i) ^^^ P.brackets (!^ "label=" ^^^ (P.dquotes $ !^ (string_of_int i) ^^ P.colon ^^^ !^ (string_of_trace_action a))))
-       (Pmap.bindings g.actions) ^^ P.break 1 ^^
-       
-       f g.sb "black" ^^ P.break 1 ^^
-       f g.asw "DeepPink4" ^^ P.break 1 ^^
-       f g.rf "red" ^^ P.break 1 ^^
-       f g.mo "blue" ^^ P.break 1 ^^
-       f g.sc "orange" ^^ P.break 1 ^^
-       f g.hb "ForestGreen"
-)
+    (P.concat_map (fun (tid, acts) ->
+      !^ ("cluster_" ^ Pp_run.string_of_thread_id tid) ^^ P.braces
+        (P.separate_map P.semi (fun (aid, act) -> 
+          !^ (string_of_int aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (string_of_int aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
+        ) acts)
+     ) (Pmap.bindings threads) ^^ P.break 1 ^^
+     
+     pp_relation g.sb  "black"       ^^ P.break 1 ^^
+     pp_relation g.asw "DeepPink4"   ^^ P.break 1 ^^
+     pp_relation g.rf  "red"         ^^ P.break 1 ^^
+     pp_relation g.mo  "blue"        ^^ P.break 1 ^^
+     pp_relation g.sc  "orange"      ^^ P.break 1 ^^
+     pp_relation g.hb  "ForestGreen"
+    )

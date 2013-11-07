@@ -476,18 +476,34 @@ val get_execution_mode: t execution_mode
 let get_execution_mode = fun st ->
   [(U.return st.execution_mode, st)]
 
+
+(* TODO: move this out *)
+val     assocs: forall 'a 'b. 'a -> list ('a * 'b) -> list 'b
+let rec assocs_ z l acc =
+  match l with
+    | []           -> acc
+    | (x,y) :: xys -> if x = z then assocs_ x xys (y :: acc) else assocs_ z xys acc
+  end
+let assocs z l = assocs_ z l []
+
+val     exists_path: forall 'a. 'a -> 'a -> list ('a * 'a) -> bool
+let rec exists_path_ a b es =
+  List.exist (fun b' ->
+    b = b' || exists_path_ b' b es
+  ) es
+let exists_path a b es = exists_path_ a b (assocs a es)
+
+
 val register_sequencing: set taction_id -> taction_id -> thread_id -> t unit
 let register_sequencing bs aid tid = fun st ->
   let (sb_, asw_) = Set.fold (fun b (sb_acc, asw_acc) ->
     if tid = tid_of (Pmap.find b st.tact_map) then
       (Set.add (b, aid) sb_acc, asw_acc)
     else
-      (sb_acc, Set.add (b, aid) asw_acc)
-
-
-
-
-
+      if accessible b aid (Set.to_list st.sb) then
+        (sb_acc, asw_acc)
+      else
+        (sb_acc, Set.add (b, aid) asw_acc)
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
@@ -770,7 +786,16 @@ let get_trace = function
   | <| E.trace= [] |> ->
       Boot.assert_false "[Core_run.get_trace] empty trace"
   | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as st) ->
-      [(U.return (r, match tact_opt with Some (bs, n) -> Some (bs, Pmap.find n tact_map) | None -> None end), st)]
+      [(U.return (r, match tact_opt with Some (bs, n) ->
+
+(*
+        if not $ Pmap.mem n tact_map then
+          Boot.assert_false $ ">>>>>" ^ (string_of_num n)
+        else
+*)
+
+
+Some (bs, Pmap.find n tact_map) | None -> None end), st)]
 end
 
 val get_fulltrace: E.t (Pmap.map taction_id trace_action * E.trace)
@@ -1237,9 +1262,9 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
   get_new_taid                                                        >>= fun new_taid                   -> 
   load atomic_ty o                                                    >>= fun (actual_v, store_taid)     ->
   (* We decide whether it is a succes or failure *)
-  cmp actual_v expected_v                                             >>= fun is_succes                  ->
-  if is_succes then
-     (* Succes: we store the desired value *)
+  cmp actual_v expected_v                                             >>= fun is_success                  ->
+  if is_success then
+     (* Success: we store the desired value *)
      store atomic_ty o desired_v new_taid                             >>
      (* We omit an RMW event (for the store and the previous load *)
      let tact = Trmw atomic_ty o actual_v desired_v mo_succes tid in
