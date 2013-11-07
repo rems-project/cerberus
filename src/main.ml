@@ -159,7 +159,7 @@ let pipeline stdlib impl core_parse file_name =
         let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
         (* TODO: add an command line option for custom include directories, for now
            I hardcode the location of csmith on AddaX *)
-        if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I ~/Applications/Builds/Formal/csmith-git/include/csmith-2.2.0 " ^
+        if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime " ^
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in

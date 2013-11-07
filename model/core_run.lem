@@ -92,13 +92,12 @@ let compose_cont k1 k2 = k1 @ k2
 
 (* TODO: this is part of the "memory model" but need to be before Effect (...) *)
 type mem_value =
-  | Muninit    (* TODO: Kayvan has to check whether we van remove this constructor 
+  | Muninit    (* TODO: Kayvan has to check whether we can remove this constructor 
                   and use the empty list in mem_state to denote a created, but 
                   uninitialized variable. *) 
   | Mbase of constant
   | Mobj of (list Symbol.t * num)
   | Mnull
-
 
 
 (* Instantiation of Cmm types *)
@@ -484,6 +483,11 @@ let register_sequencing bs aid tid = fun st ->
       (Set.add (b, aid) sb_acc, asw_acc)
     else
       (sb_acc, Set.add (b, aid) asw_acc)
+
+
+
+
+
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
@@ -564,9 +568,18 @@ let to_observable_execution s =
   let execution_witness = 
     <|
       Cmm.rf  = to_cmm_relation s.E.rf;
+      Cmm.mo  = Set.fold (fun l acc ->
+        (to_cmm_relation $ list_to_relation l) union acc
+      ) (Pmap.range s.E.mo) {};
+
+(*
+val fold : forall 'a 'b. ('a -> 'b -> 'b) -> set 'a -> 'b -> 'b
+
+
       Cmm.mo  = Pervasives.bigunion { to_cmm_relation $ list_to_relation l
                                     | forall (l IN Pmap.range s.E.mo) 
                                     | true };
+*)
       Cmm.sc  = to_cmm_relation (list_to_relation s.E.sc);
       Cmm.lo  = {};
       Cmm.ao  = {};
@@ -1128,12 +1141,23 @@ let perform_action bs act tid_ =
          )                                                  >>
         E.return (new_taid, e)
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-        E.runU (eval pe1) >>= fun (Ectype ty)                 ->
-        E.runU (eval pe2) >>= get_address >>= fun o           ->
-        E.runU (eval pe3) >>= get_address >>= fun expected    ->
-        E.runU (eval pe4) >>= fun desired                     ->
-        E.return (new_taid, Enull)
-         
+        E.runU (eval pe1) >>= fun (Ectype ty)              ->
+        E.runU (eval pe2) >>= get_address >>= fun o        ->
+        E.runU (eval pe3) >>= get_address >>= fun expected ->
+        E.runU (eval pe4) >>= fun desired_                 ->
+        let desired = match desired_ with
+         | Econst c -> Mbase c
+         | Eaddr o' -> Mobj o'
+         | Enull    -> Mnull
+        end in
+        load ty o        >>= fun (v,  _) ->
+        load ty expected >>= fun (v', _) ->
+        if v = v' then
+          store ty o desired new_taid >>
+          E.return (new_taid, Econst (Cint (Int.int 1)))
+        else
+          store ty expected v new_taid >>
+          E.return (new_taid, Econst (Cint (Int.int 0)))
   end
 
 
@@ -1504,6 +1528,10 @@ and convert_action (_, a) =
     | Kill e          -> Kill (convert_expr e)
     | Store ty o v mo -> Store (convert_expr ty) (convert_expr o) (convert_expr v) mo
     | Load ty o mo    -> Load (convert_expr ty) (convert_expr o) mo
+    | CompareExchangeStrong ty obj expected desired mo1 mo2 ->
+        CompareExchangeStrong (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
+    | CompareExchangeWeak ty obj expected desired mo1 mo2 ->
+        CompareExchangeWeak (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
   end)
 
 

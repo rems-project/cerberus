@@ -18,7 +18,7 @@ type cause =
   | CABS_TO_AIL_NOT_CONSTANT_EXRESSION
   | CABS_TO_AIL_MULTIPLE_REGISTRATION
   | CABS_TO_AIL_DUPLICATED_LABEL
-  | CABS_TO_AIL_UNDECLARED_IDENTIFIER
+  | CABS_TO_AIL_UNDECLARED_IDENTIFIER of string
   | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
   | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
   
@@ -171,8 +171,9 @@ let to_string (loc, c) =
   | CABS_TO_AIL_DUPLICATED_LABEL ->
     "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
      names shall be unique within a function.``\n"
-  | CABS_TO_AIL_UNDECLARED_IDENTIFIER ->
-      "Violation of constraint 6.7#3 as described by footnote 91 \
+  | CABS_TO_AIL_UNDECLARED_IDENTIFIER id ->
+      "FOUND> " ^ id ^
+      "\nViolation of constraint 6.7#3 as described by footnote 91 \
        ``..[A]n undeclared identifier is a violation of syntax..``\n"
   | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
       "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
