@@ -148,3 +148,58 @@ end
 let mapUnzip f l =
   let (xs, ys) = mapUnzip_ f ([],[]) l in
   (List.rev xs, List.rev ys)
+
+
+
+(* BEGIN: stolen from cpp *)
+val     map_option: forall 'a 'b. ('a -> option 'b) -> list 'a -> list 'b
+let rec map_option f xs = 
+  match xs with 
+    | []     -> []
+    | x::xs ->
+        match f x with 
+          | None   -> map_option f xs 
+          | Some x -> x :: (map_option f xs)
+        end
+  end
+
+(* needs to be applied to a acyclic transitive relation *)
+val transitive_reduction: forall 'a. list ('a * 'a) -> option (list ('a * 'a))
+let transitive_reduction r =
+  let transitive_pairs =
+    List.flatten $
+      List.map (fun (a1,a2) -> 
+        map_option (fun (a1',a2') -> if a2 = a1' then Some (a1,a2') else None) r
+      ) r in
+  (* a partial check for cycles *)
+  if List.exist (fun (a1,a2) -> a1=a2) (r @ transitive_pairs) then 
+    None
+  else Some $ List.filter (fun (a1,a2) -> not (List.mem (a1,a2) transitive_pairs)) r 
+
+val is_transitive: forall 'a. list ('a * 'a) -> bool
+let is_transitive r =
+  let two_step_edges =
+    List.flatten $
+      List.map (fun (n,n') -> 
+        map_option (fun (n'',n''') -> if n'=n'' then Some (n,n''') else None) r
+      ) r in
+  List.for_all (fun (n,n''') -> List.mem (n,n''') r) two_step_edges
+
+
+let try_to_transitive_reduce rel =
+  if is_transitive rel then
+    match transitive_reduction rel with
+      | Some rel' -> rel'
+      | None      -> rel
+    end
+  else
+    rel
+(* END: stolen from cpp *)
+
+(* this will blow up on cyclic relations *)
+let accessible a b rel =
+  List.mem (a, b) $
+    List.flatten (
+      List.map (fun (a1,a2) -> 
+        map_option (fun (a1',a2') -> if a2 = a1' then Some (a1,a2') else None) rel
+      ) rel)

@@ -62,6 +62,13 @@ let string_of_trace_action tact =
           ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "} " ^
           f o ^ " = " ^ string_of_mem_value v ^
         " thread: " ^ (string_of_thread_id tid)
+    | Core_run.Trmw (ty ,o, e, d, mo, tid) ->
+        "RMW {" ^ (Boot.to_plain_string $ Pp_core.pp_ctype ty) ^ 
+          ", " ^ (Boot.to_plain_string $ Pp_core.pp_memory_order mo) ^ "} " ^
+          f o ^ " = " ^ string_of_mem_value e ^
+          " ==> " ^
+          f o ^ " := " ^ string_of_mem_value d ^
+        " thread: " ^ (string_of_thread_id tid)
 
 
 let rec string_of_trace tact_map t =

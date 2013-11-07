@@ -282,7 +282,10 @@ and subst_sym_action_ a v act =
     | Kill e_o              -> Kill (subst_sym a v e_o)
     | Store e_ty e_o e_v mo -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v) mo
     | Load e_ty e_o mo      -> Load (subst_sym a v e_ty) (subst_sym a v e_o) mo
-    | _                     -> act
+    | CompareExchangeStrong e_ty e_obj e_expected e_desired mo1 mo2 ->
+        CompareExchangeStrong (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
+    | CompareExchangeWeak e_ty e_obj e_expected e_desired mo1 mo2 ->
+        CompareExchangeWeak (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
   end
 and subst_sym_action a  v (bs, act) = (bs, subst_sym_action_ a v act)
 and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
@@ -355,9 +358,11 @@ let rec is_pure e =
    | Epar es ->
        false (* List.for_all is_pure es *)
    | Ewseq _ e1 e2 ->
-       is_pure e1 && is_pure e2
+       false
+       (* is_pure e1 && is_pure e2 *)
    | Esseq _ e1 e2 ->
-       is_pure e1 && is_pure e2
+       false
+       (* is_pure e1 && is_pure e2 *)
    | Easeq _ _ _ ->
        false
    | Eindet _ ->
