@@ -1061,106 +1061,172 @@ let get_address = function
 (* TODO: this function will call the implementation of a given action in a
          particular memory model *)
 open E.Operators
-val perform_action: set taction_id -> action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
-let perform_action bs act tid_ =
+
+val perform_create: set taction_id -> thread_id -> expr taction_id -> list Symbol.t ->
+                    E.t (taction_id * expr taction_id)
+let perform_create bs tid_ pe pref = 
+  E.get_file                            >>= fun file        ->
+  let eval = eval file in
   let tid = canonize_tid tid_ in
+  (* perform the create *)
+  E.runU (eval pe)                      >>= fun (Ectype ty) ->
+  get_new_taid                          >>= fun new_taid    ->
+  create pref ty new_taid               >>= fun o           ->
+  (* update the state with the new trace action *)
+  add_tact new_taid (Tcreate ty o tid)  >>
+  E.register_sequencing bs new_taid tid >>
+  E.return (new_taid, Eaddr o)
+
+val perform_alloc: set taction_id -> thread_id -> expr taction_id -> list Symbol.t ->
+                   E.t (taction_id * expr taction_id)
+let perform_alloc bs tid_ pe pref = 
+  E.get_file                            >>= fun file              ->
+  let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* perform the alloc *)
+  E.runU (eval pe)                      >>= fun (Econst (Cint n)) ->
+  get_new_taid                          >>= fun new_taid          ->
+  alloc pref n new_taid                 >>= fun o                 ->
+  (* update the state with the new trace action *)
+  add_tact new_taid (Talloc n o tid)    >>
+  E.register_sequencing bs new_taid tid >>
+  E.return (new_taid, Eaddr o)
+
+val perform_kill: set taction_id -> thread_id -> expr taction_id -> E.t (taction_id * expr taction_id)
+let perform_kill bs tid_ pe = 
+  E.get_file                            >>= fun file      ->
+  let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* perform the kill *)
+  E.runU (eval pe)                      >>= fun (Eaddr o) ->
+  kill o                                >>
+  (* update the state with the new trace action *)
+  get_new_taid                          >>= fun new_taid  ->
+  add_tact new_taid (Tkill o tid)       >>
+  E.register_sequencing bs new_taid tid >>
+  E.return (new_taid, Enull)
+
+val perform_store: set taction_id -> thread_id -> expr taction_id -> expr taction_id -> expr taction_id -> 
+                   Cmm.memory_order -> E.t (taction_id * expr taction_id)
+let perform_store bs tid_ pe1 pe2 pe3 mo = 
+  E.get_file                                   >>= fun file        ->
+  let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* perform the store *)
+  E.runU (eval pe1)                            >>= fun (Ectype ty) ->
+  E.runU (eval pe2)                            >>= fun (expr)      ->
+  get_address expr                             >>= fun o           ->
+  E.runU (eval pe3)                            >>= function
+   | Econst c -> E.return ((Mbase c), Enull)
+   | Eaddr o' -> E.return ((Mobj o'), Enull)
+   | Enull    -> E.return (Mnull, Eskip)
+   | v        -> Boot.assert_false $
+                 "[Core_run.perform_action, Kstore] " ^
+                 (Boot.pp_core_expr pe3) ^
+                 " ==> " ^ (Boot.pp_core_expr v)
+   end                                         >>= fun (value, e)  ->
+  get_new_taid                                 >>= fun new_taid    ->
+  store ty o value new_taid                    >>
+  (* update the state with the new trace action *)                 
+  add_tact new_taid (Tstore ty o value mo tid) >> 
+  E.register_sequencing bs new_taid tid        >>
+  is_atomic_location o                         >>= fun is_atomic   ->
+  (if is_atomic then
+     (if mo = Cmm.Seq_cst then
+        push_sc_action new_taid
+      else
+        E.return ()
+      )                                        >>
+     push_mod_order o new_taid
+   else 
+     E.return ()
+   )                                           >>
+  (* Discard inconsistent states *)
+  (if is_atomic then
+     discard_CoWW_states new_taid              >>
+     discard_inconsistent_sc_writes new_taid
+   else 
+     E.return ()
+   )                                           >>
+  (* Check for undefined behaviour *)
+  (* TODO: For NA we can check for dataraces more efficiently *)
+  check_for_dataraces                          >>
+  E.return (new_taid, e)
+
+val perform_load: set taction_id -> thread_id -> expr taction_id -> expr taction_id -> 
+                   Cmm.memory_order -> E.t (taction_id * expr taction_id)
+let perform_load bs tid_ pe1 pe2 mo = 
+  E.get_file                                  >>= fun file                ->
+  let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* perform the load *)
+  E.runU (eval pe1)                           >>= fun (Ectype ty)         ->
+  E.runU (eval pe2)                           >>= fun (expr)              ->
+  get_address expr                            >>= fun o                   ->
+  load ty o                                   >>= fun (value, store_taid) ->
+  (* update the state with the new trace action *)   
+  get_new_taid                                >>= fun new_taid            ->  
+  match value with
+   | Mbase v -> E.return (Econst v)
+   | Mobj v  -> E.return (Eaddr v)
+   | Munint  -> Boot.print_debug "READ AN UNINIT" $
+                E.return (Econst (Cint $ Int.neg (Int.int 10)))
+   end                                        >>= fun e                   ->
+  add_tact new_taid (Tload ty o value mo tid) >>  
+  is_atomic_location o                        >>= fun is_atomic           ->  
+  (if mo = Cmm.Seq_cst then
+     push_sc_action new_taid
+   else
+     E.return ()
+   )                                          >>
+  push_rf store_taid new_taid                 >>   
+  E.register_sequencing bs new_taid tid       >>          
+  (* Discard inconsistent states *)
+  (if is_atomic then
+     discard_CoWR_states store_taid new_taid  >>
+     discard_inconsistent_sc_reads store_taid new_taid
+   else
+     E.return ()
+   )                                          >>
+  (* Check for undefined behaviour *)
+  (* TODO: For NA we can check for dataraces more efficiently *)
+  check_for_dataraces                         >>
+  E.return (new_taid, e)
+
+val perform_compare_exchange_strong: set taction_id -> thread_id -> expr taction_id ->
+               expr taction_id -> expr taction_id -> expr taction_id -> Cmm.memory_order ->
+               Cmm.memory_order -> E.t (taction_id * expr taction_id)
+let perform_compare_exchange_strong bs tid_ pe1 pe2 pe3 pe4 mo1 mo2 = 
   E.get_file >>= fun file ->
   let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* perform the compare_exchange *)
+  
+  (* update the state with the new trace action *)
   get_new_taid >>= fun new_taid ->
   E.register_sequencing bs new_taid tid >>
+  E.return (new_taid, Enull)
+
+val perform_compare_exchange_weak: set taction_id -> thread_id -> expr taction_id ->
+               expr taction_id -> expr taction_id -> expr taction_id -> Cmm.memory_order ->
+               Cmm.memory_order -> E.t (taction_id * expr taction_id)
+let perform_compare_exchange_weak bs tid_ pe1 pe2 pe3 pe4 mo1 mo2 = 
+  get_new_taid >>= fun new_taid ->
+  E.return (new_taid, Enull)
+
+val perform_action: set taction_id -> action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
+let perform_action bs act tid =
   match act with
-    | Create pe pref ->
-        E.runU (eval pe)                     >>= fun (Ectype ty) ->
-        create pref ty new_taid              >>= fun o           ->
-        add_tact new_taid (Tcreate ty o tid) >>
-        E.return (new_taid, Eaddr o)
-    | Alloc pe pref ->
-        E.runU (eval pe)                   >>= fun (Econst (Cint n)) ->
-        alloc pref n new_taid              >>= fun o                 ->
-        add_tact new_taid (Talloc n o tid) >>
-        E.return (new_taid, Eaddr o)
-    | Kill pe ->
-        E.runU (eval pe)                >>= fun (Eaddr o) ->
-        kill o                          >>
-        add_tact new_taid (Tkill o tid) >>
-        E.return (new_taid, Enull)
-    | Store pe1 pe2 pe3 mo ->
-        E.runU (eval pe1)                            >>= fun (Ectype ty) ->
-        E.runU (eval pe2)                            >>= fun (expr)      ->
-        get_address expr                             >>= fun o           ->
-        E.runU (eval pe3)                            >>= function
-         | Econst c -> E.return ((Mbase c), Enull)
-         | Eaddr o' -> E.return ((Mobj o'), Enull)
-         | Enull    -> E.return (Mnull, Eskip)
-         | v        -> Boot.assert_false $ "[Core_run.perform_action, Kstore] " ^ (Boot.pp_core_expr pe3) ^ " ==> " ^ (Boot.pp_core_expr v)
-         end                                         >>= fun (value, e)  ->
-        store ty o value new_taid                    >>
-        add_tact new_taid (Tstore ty o value mo tid) >> 
-        (if mo = Cmm.Seq_cst then
-          push_sc_action new_taid
-         else
-          E.return ()
-         )                                           >>
-        is_atomic_location o                         >>= fun is_atomic   ->
-        (if is_atomic then
-          push_mod_order o new_taid                  >>
-          discard_CoWW_states new_taid               >>
-          discard_inconsistent_sc_writes new_taid    >>
-          check_for_dataraces
-         else 
-          (* TODO: For NA we can check for dataraces more efficiently *)
-          check_for_dataraces
-         )                                           >>
-        E.return (new_taid, e) 
-    | Load pe1 pe2 mo ->
-        E.runU (eval pe1)                                   >>= fun (Ectype ty)         ->
-        E.runU (eval pe2)                                   >>= fun (expr)              ->
-        get_address expr                                    >>= fun o                   ->
-        load ty o                                           >>= fun (value, store_taid) ->
-        push_rf store_taid new_taid                         >>
-        match value with
-         | Mbase v -> E.return (Tload ty o (Mbase v) mo tid, Econst v)
-         | Mobj v  -> E.return (Tload ty o (Mobj v) mo tid, Eaddr v)
-         | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                      E.return (Tload ty o Munint mo tid, Econst (Cint $ Int.neg (Int.int 10)))
-        end                                                 >>= fun (tact, e)           ->
-        add_tact new_taid tact                              >>
-        (if mo = Cmm.Seq_cst then
-          push_sc_action new_taid
-         else
-          E.return ()
-         )                                                  >>
-        is_atomic_location o                                >>= fun is_atomic           ->
-        (if is_atomic then
-          discard_CoWR_states store_taid new_taid           >>
-          discard_inconsistent_sc_reads store_taid new_taid >>
-          check_for_dataraces
-         else
-          (* TODO: For NA we can check for dataraces more efficiently *)
-          check_for_dataraces
-         )                                                  >>
-        E.return (new_taid, e)
-    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-        E.runU (eval pe1) >>= fun (Ectype ty)              ->
-        E.runU (eval pe2) >>= get_address >>= fun o        ->
-        E.runU (eval pe3) >>= get_address >>= fun expected ->
-        E.runU (eval pe4) >>= fun desired_                 ->
-        let desired = match desired_ with
-         | Econst c -> Mbase c
-         | Eaddr o' -> Mobj o'
-         | Enull    -> Mnull
-        end in
-        load ty o        >>= fun (v,  _) ->
-        load ty expected >>= fun (v', _) ->
-        if v = v' then
-          store ty o desired new_taid >>
-          E.return (new_taid, Econst (Cint (Int.int 1)))
-        else
-          store ty expected v new_taid >>
-          E.return (new_taid, Econst (Cint (Int.int 0)))
+    | Create pe pref                                -> perform_create bs tid pe pref
+    | Alloc pe pref                                 -> perform_alloc bs tid pe pref
+    | Kill pe                                       -> perform_kill bs tid pe
+    | Store pe1 pe2 pe3 mo                          -> perform_store bs tid pe1 pe2 pe3 mo
+    | Load pe1 pe2 mo                               -> perform_load bs tid pe1 pe2 mo
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 -> 
+          perform_compare_exchange_strong bs tid pe1 pe2 pe3 pe4 mo1 mo2
+    | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2   -> 
+          perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2
   end
-
-
 
 
 
