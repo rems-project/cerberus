@@ -680,7 +680,7 @@ and translate_expr stdlib file expr =
     
     (* WARNING: this is not enought (DEBUG FOR NOW) *)
     | A.VARIABLE id ->
-        let (t, _) = Pmap.find id file.A.id_map in
+        let (_, t, _) = Pmap.find id file.A.id_map in (* TODO: qualifiers *)
         if T.is_function_type t then
           return (C.Econst (C.Cfunction id))
         else
@@ -838,8 +838,10 @@ let rec translate_stmt stdlib file f d_default d_cases d_loop d_break (_, stmt) 
   
   
   (* return the type of a given identifier. (TODO: why is this a local function?) *)
-  let lookup_type id = fst (Pmap.find id file.A.id_map) in
-  
+  let lookup_type id =
+    let (_, t, _) = Pmap.find id file.A.id_map in
+    t
+  in
   match stmt with
   | A.SKIP ->
       return C.Eskip

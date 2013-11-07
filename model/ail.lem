@@ -238,7 +238,7 @@ type encoding_prefix =
 type string_literal = option encoding_prefix * string (* textual representation *)
 
 
-type declaration = ctype * option storage_duration
+type declaration = qualifiers * ctype * option storage_duration
 
 
 type expression 'a =
