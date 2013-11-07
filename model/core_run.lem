@@ -722,6 +722,20 @@ let push_mod_order o taid = fun (<|E.mo = mod_order |> as st) ->
     | forall (new_order_of_o MEM list_insert taid order_of_o)
     | true]
 
+val insert_after: forall 'a. 'a -> 'a -> list 'a -> list 'a
+let rec insert_after e new_e l =
+  match l with
+    | [] -> Boot.assert_false "insert_after failed, because it couldn't find the element in the list"
+    | h::t -> if h = e then new_e::l else e::(insert_after e new_e t)
+  end
+
+val mod_order_insert_after: mem_addr -> taction_id -> taction_id -> E.t unit
+let mod_order_insert_after o taid new_taid = fun (<|E.mo = mod_order |> as st) ->
+  let order_of_o = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
+  let new_order_of_o = insert_after taid new_taid order_of_o in
+  [(U.return (), <| st with E.mo = Pmap.add o new_order_of_o mod_order |>)]
+  
+
 val push_rf: taction_id -> taction_id -> E.t unit
 let push_rf store_taid read_taid = fun (<| E.rf = rf |> as st) -> 
   let new_rf = Set.add (store_taid, read_taid) rf in
@@ -1165,13 +1179,7 @@ let perform_load bs tid_ pe1 pe2 mo =
   get_address expr                            >>= fun o                   ->
   load ty o                                   >>= fun (value, store_taid) ->
   (* update the state with the new trace action *)   
-  get_new_taid                                >>= fun new_taid            ->  
-  match value with
-   | Mbase v -> E.return (Econst v)
-   | Mobj v  -> E.return (Eaddr v)
-   | Munint  -> Boot.print_debug "READ AN UNINIT" $
-                E.return (Econst (Cint $ Int.neg (Int.int 10)))
-   end                                        >>= fun e                   ->
+  get_new_taid                                >>= fun new_taid            -> 
   add_tact new_taid (Tload ty o value mo tid) >>  
   is_atomic_location o                        >>= fun is_atomic           ->  
   (if mo = Cmm.Seq_cst then
@@ -1190,29 +1198,123 @@ let perform_load bs tid_ pe1 pe2 mo =
    )                                          >>
   (* Check for undefined behaviour *)
   (* TODO: For NA we can check for dataraces more efficiently *)
-  check_for_dataraces                         >>
+  check_for_dataraces                         >> 
+  (* Return *)
+  match value with
+   | Mbase v -> E.return (Econst v)
+   | Mobj v  -> E.return (Eaddr v)
+   | Munint  -> Boot.print_debug "READ AN UNINIT" $
+                E.return (Econst (Cint $ Int.neg (Int.int 10)))
+  end                                         >>= fun e                   ->
   E.return (new_taid, e)
+
+val perform_compare_exchange: (mem_value -> mem_value -> E.t bool) ->
+               set taction_id -> thread_id -> expr taction_id ->
+               expr taction_id -> expr taction_id -> expr taction_id -> Cmm.memory_order ->
+               Cmm.memory_order -> E.t (taction_id * expr taction_id)
+let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_succes mo_failure = 
+  E.get_file                                                          >>= fun file                       ->
+  let eval = eval file in
+  let tid = canonize_tid tid_ in
+  (* We first load (NA) from pe_expected *)
+  perform_load bs tid_ pe_ty pe_expected Cmm.NA                       >>= fun (na_load_taid, expected_e) ->
+  let expected_v = match expected_e with
+   | Econst c -> Mbase c
+   | Eaddr o' -> Mobj o'
+   | Enull    -> Mnull
+  end in
+  (* We (atomically load from the object *)
+  E.runU (eval pe_ty)                                                 >>= fun (Ectype ty)                ->
+  let atomic_ty = ATOMIC ty in
+  E.runU (eval pe_o)                                                  >>= get_address >>= fun o          ->
+  E.runU (eval pe_desired)                                            >>= fun desired_e                  ->
+  let desired_v = match desired_e with
+   | Econst c -> Mbase c
+   | Eaddr o' -> Mobj o'
+   | Enull    -> Mnull
+  end in
+  (* The new_taid will be the taid of RMW if it succeeds and of the load otherwise *)
+  get_new_taid                                                        >>= fun new_taid                   -> 
+  load atomic_ty o                                                    >>= fun (actual_v, store_taid)     ->
+  (* We decide whether it is a succes or failure *)
+  cmp actual_v expected_v                                             >>= fun is_succes                  ->
+  if is_succes then
+     (* Succes: we store the desired value *)
+     store atomic_ty o desired_v new_taid                             >>
+     (* We omit an RMW event (for the store and the previous load *)
+     let tact = Trmw atomic_ty o actual_v desired_v mo_succes tid in
+     add_tact new_taid tact                                           >>  
+     is_atomic_location o                                             >>= fun is_atomic                  -> 
+     (if is_atomic then 
+        (if mo_failure = Cmm.Seq_cst then
+           push_sc_action new_taid
+         else
+           E.return ()
+         )                                                            >>
+        mod_order_insert_after o store_taid new_taid
+      else 
+        E.return ()
+      )                                                               >>
+     push_rf store_taid new_taid                                      >>   
+     E.register_sequencing {na_load_taid} new_taid tid                >>          
+     (* Discard inconsistent states *)
+     (if is_atomic then
+        discard_CoWW_states new_taid                                  >>
+        discard_CoWR_states store_taid new_taid                       >>
+        discard_inconsistent_sc_writes new_taid                       >>
+        discard_inconsistent_sc_reads store_taid new_taid
+      else
+        E.return ()
+      )                                                               >>
+     (* Check for undefined behaviour *)
+     check_for_dataraces                                              >> 
+     E.return (new_taid, Econst (Cint (Int.int 1)))
+  else
+     (* Failure: we omit a load event for the load we just did *)
+     add_tact new_taid (Tload atomic_ty o actual_v mo_failure tid)    >>  
+     is_atomic_location o                                             >>= fun is_atomic                  ->  
+     (if mo_failure = Cmm.Seq_cst then
+        push_sc_action new_taid
+      else
+        E.return ()
+      )                                                               >>
+     push_rf store_taid new_taid                                      >>   
+     E.register_sequencing {na_load_taid} new_taid tid                >>          
+     (* Discard inconsistent states *)
+     (if is_atomic then
+        discard_CoWR_states store_taid new_taid                       >>
+        discard_inconsistent_sc_reads store_taid new_taid
+      else
+        E.return ()
+      )                                                               >>
+     (* Check for undefined behaviour *)
+     check_for_dataraces                                              >> 
+     (* We store (NA) the actual value back to pe_expected *)
+     let actual_e = match actual_v with
+      | Mbase c -> Econst c
+      | Mobj o' -> Eaddr o'
+      | Mnull   -> Enull
+     end in
+     perform_store {new_taid} tid_ pe_ty pe_expected actual_e  Cmm.NA >>= fun (na_store_aid, _)          ->
+     E.return (na_store_aid, Econst (Cint (Int.int 0)))
 
 val perform_compare_exchange_strong: set taction_id -> thread_id -> expr taction_id ->
                expr taction_id -> expr taction_id -> expr taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (taction_id * expr taction_id)
-let perform_compare_exchange_strong bs tid_ pe1 pe2 pe3 pe4 mo1 mo2 = 
-  E.get_file >>= fun file ->
-  let eval = eval file in
-  let tid = canonize_tid tid_ in
-  (* perform the compare_exchange *)
+let perform_compare_exchange_strong bs tid pe1 pe2 pe3 pe4 mo1 mo2 = 
+  let cmp v1 v2 = E.return (v1 = v2) in
+  perform_compare_exchange cmp bs tid pe1 pe2 pe3 pe4 mo1 mo2
   
-  (* update the state with the new trace action *)
-  get_new_taid >>= fun new_taid ->
-  E.register_sequencing bs new_taid tid >>
-  E.return (new_taid, Enull)
-
 val perform_compare_exchange_weak: set taction_id -> thread_id -> expr taction_id ->
                expr taction_id -> expr taction_id -> expr taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (taction_id * expr taction_id)
-let perform_compare_exchange_weak bs tid_ pe1 pe2 pe3 pe4 mo1 mo2 = 
-  get_new_taid >>= fun new_taid ->
-  E.return (new_taid, Enull)
+let perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2 = 
+  let cmp v1 v2 = fun st ->
+  if v1 = v2 then
+    [(U.return true, st); (U.return false, st)]
+  else
+    [(U.return false, st)] in
+  perform_compare_exchange cmp bs tid pe1 pe2 pe3 pe4 mo1 mo2
 
 val perform_action: set taction_id -> action_ taction_id -> thread_id -> E.t (taction_id * expr taction_id)
 let perform_action bs act tid =
