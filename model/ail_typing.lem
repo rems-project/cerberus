@@ -603,7 +603,7 @@ let rec check_exp env e_head =
         E.return (A.T_EXP (A.BASIC (A.INTEGER (A.SIGNED A.INT))))
     
     | A.VARIABLE id ->
-        let (t, _) = Pmap.find id env.A.id_map in
+        let (_, t, _) = Pmap.find id env.A.id_map in
         if T.is_function_type t || Pmap.mem id env.A.fn_map then
           (* if this is a declared identifier with function type, or a function identifier *)
           E.return (A.T_EXP t)

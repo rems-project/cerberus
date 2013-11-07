@@ -25,83 +25,6 @@ let desugar_storages = function
   | _                -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
 end
 
-
-
-
-
-
-
-
-
-(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
-   instead) *)
-(* TODO: we should do something about `char' here (implementation-defined choice) *)
-(* TODO: is this only used by [desugar_spec_elem_list]? *)
-val desugar_specifier: multiset C.typeSpecifier -> E.t (A.basic_type)
-let desugar_specifier specifiers =
-  let mk_mset = Multiset.from_list in
-  let desugar_map =
-    List.fold_left
-      (fun m (x, y) -> Pmap.add x y m)
-      (Ocaml.Pmap.empty Multiset.compare_int)
-      (
-        (* TODO: maybe move that somewhere else *)
-          [(mk_mset [C.Tchar], A.CHAR)]
-
-        @ [(mk_mset [C.Tsigned; C.Tchar], A.INTEGER (A.SIGNED A.ICHAR))]
-        @ [(mk_mset [C.Tunsigned; C.Tchar], A.INTEGER (A.UNSIGNED A.ICHAR))]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.SHORT)))
-          [ [C.Tshort];
-            [C.Tsigned; C.Tshort];
-            [C.Tshort; C.Tint];
-            [C.Tsigned; C.Tshort; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.SHORT)))
-          [ [C.Tunsigned; C.Tshort];
-            [C.Tunsigned; C.Tshort; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.INT)))
-          [ [C.Tint];
-            [C.Tsigned];
-            [C.Tsigned; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.INT)))
-          [ [C.Tunsigned];
-            [C.Tunsigned; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG)))
-          [ [C.Tlong];
-            [C.Tsigned; C.Tlong];
-            [C.Tlong; C.Tint];
-            [C.Tsigned; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG)))
-          [ [C.Tunsigned; C.Tlong];
-            [C.Tunsigned; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.SIGNED A.LONG_LONG)))
-          [ [C.Tlong; C.Tlong];
-            [C.Tsigned; C.Tlong; C.Tlong];
-            [C.Tlong; C.Tlong; C.Tint];
-            [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (mk_mset s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
-          [ [C.Tunsigned; C.Tlong; C.Tlong];
-            [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
-          ]
-        @ [(mk_mset [C.Tfloat], A.REAL_FLOATING A.FLOAT)]
-        @ [(mk_mset [C.Tdouble], A.REAL_FLOATING A.DOUBLE)]
-        @ [(mk_mset [C.Tlong; C.Tdouble], A.REAL_FLOATING A.LONG_DOUBLE)]
-        @ [(mk_mset [C.T_Bool], A.INTEGER A.BOOL)]
-(*
-        @ [(mk_mset [C.Tfloat; C.COMPLEX], A.COMPLEX A.FLOAT)]
-        @ [(mk_mset [C.Tdouble; C.COMPLEX], A.COMPLEX A.DOUBLE)]
-        @ [(mk_mset [C.Tlong; C.Tdouble; C.COMPLEX], A.COMPLEX A.LONG_DOUBLE)]
-*)
-      ) in
-  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
-              (Map_.find specifiers desugar_map)
-
 val desugar_unary_operator: C.unary_operator -> A.unary_operator
 let desugar_unary_operator = function
   | C.MINUS   -> A.MINUS
@@ -151,12 +74,8 @@ let desugar_binop = function
 end
 
 
-
-
-
-
-
 *)
+
 open Global
 
 module C = Cabs0
@@ -175,7 +94,7 @@ module Effect = struct
 (*    registered_labels:   *)
     is_inside_switch: bool;
 
-    id_map       : map Symbol.t A.declaration;                  (* map associating identifiers to their (Ail) declaration *)
+    id_map       : map Symbol.t A.declaration; (* TODO: split off function definition (as in new-Ail) *)
     fn_map       : map Symbol.t (list Symbol.t * A.statement_l unit); (* functions map        *)
 
 
@@ -189,13 +108,15 @@ module Effect = struct
   val fail: forall 'a. Errors.cause -> t 'a
   let fail err = State_exception.fail (Location.dummy, err)
 
+  let of_option err = State_exception.of_option (Location.dummy, err)
+
   val make_file: Symbol.t -> t (A.file unit)
   let make_file startup =
-    State_exception.read (fun s ->
+    State_exception.read (fun st ->
       <| A.main    = startup;
-         A.id_map  = s.id_map;
+         A.id_map  = st.id_map;
          A.globals = []; (* TODO: popoulate *)
-         A.fn_map  = s.fn_map
+         A.fn_map  = st.fn_map
       |>
     )
 
@@ -301,10 +222,15 @@ module Effect = struct
       end
 
   (* TODO: storage_duration *)
-  val add_declaration : Symbol.t -> A.ctype -> t unit
-  let add_declaration v t =
-    State_exception.update (fun s ->
-    <| s with id_map = Pmap.add v (t, None) s.id_map |>)
+  val add_declaration : Symbol.t -> A.qualifiers -> A.ctype -> t unit
+  let add_declaration v q t =
+    State_exception.update (fun st ->
+    <| st with id_map = Pmap.add v (q, t, None) st.id_map |>)
+
+  val add_function : Symbol.t -> A.statement_l unit -> t unit (* TODO: parameters *)
+  let add_function v s =
+    State_exception.update (fun st ->
+    <| st with fn_map = Pmap.add v ([], s) st.fn_map |>)
 
 end
 
@@ -437,14 +363,6 @@ let desugar_program startup global_defns =
   E.to_program main
 *)
 
-(* TODO: I'm trying to see if this function can be only used where we do not need to remember a storage *)
-val mk_ctype: list C.spec_elem -> C.decl_type -> E.t A.ctype
-let mk_ctype specs decl_t =
-  (* TODO *)
-  E.return A.VOID
-(*  Boot.assert_false "HIP: mk_ctype" *)
-
-
 open O.Operators
 val     desugar_integer_constant_expression: C.expression -> O.t pre_integer_constant
 let rec desugar_integer_constant_expression expr =
@@ -537,12 +455,6 @@ let rec desugar_integer_constant_expression expr =
     | _ -> None
   end
 
-
-
-val desugar_expression: C.expression -> E.t (A.expression_t unit)
-let desugar_expression expr =
-  Boot.assert_false "HIP: desugar_expression"
-
 val desugar_integer_constant: C.atom -> option C.integer_suffix -> A.integer_constant
 let desugar_integer_constant str suff_opt =
   let desugar_integer_suffix = function
@@ -556,6 +468,17 @@ let desugar_integer_constant str suff_opt =
   match suff_opt with
     | Some suff -> (n, basis, Some (desugar_integer_suffix suff))
     | None      -> (n, basis, None)
+  end
+
+open E.Operators
+
+val desugar_expression: C.expression -> E.t (A.expression_t unit)
+let desugar_expression e =
+  Product.make () <$>
+  match e with
+  | C.VARIABLE x -> A.VARIABLE <$> E.resolve_identifier x
+  | C.CONSTANT (C.CONST_INT n s) -> E.return (A.CONSTANT (A.CONST_INT (desugar_integer_constant n s)))
+  | _ -> Boot.assert_false "HIP: desugar_expression"
   end
 
 val desugar_character_constant: option C.character_prefix -> C.atom -> A.character_constant
@@ -606,8 +529,6 @@ type A.constant =
 
 *)
 
-open E.Operators
-
 val desugar_cvspecs: list C.cvspec -> A.qualifiers
 let desugar_cvspecs =
   List.fold_left (fun qs ->
@@ -619,9 +540,107 @@ let desugar_cvspecs =
     end
   ) A.no_qualifiers
 
+val separate_spec_elem_list : list C.spec_elem -> (list C.cvspec) * (list C.typeSpecifier)
+let separate_spec_elem_list =
+  List.fold_left
+    (fun (cs, ts) s ->
+      match s with
+      | C.SpecCV      c -> (c :: cs, ts)
+      | C.SpecAttr    _ -> Boot.assert_false "SpecAttr"
+      | C.SpecStorage _ -> Boot.assert_false "SpecStorage"
+      | C.SpecInline    -> Boot.assert_false "SpecInline"
+      | C.SpecType    t -> (cs, t :: ts)
+      end)
+    ([], [])
+
+
+
+
+(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
+   instead) *)
+(* TODO: structs, enums, etc. *)
+val desugar_basic_type_specifiers: Multiset.t C.typeSpecifier -> E.t (A.basic_type)
+let desugar_basic_type_specifiers specifiers =
+  let desugar_map =
+    List.fold_left
+      (fun m (x, y) -> Pmap.add x y m)
+      (Ocaml.Pmap.empty Multiset.compare_int)
+      (
+        (* TODO: maybe move that somewhere else *)
+          [(Multiset.from_list [C.Tchar], A.CHAR)]
+
+        @ [(Multiset.from_list [C.Tsigned; C.Tchar], A.INTEGER (A.SIGNED A.ICHAR))]
+        @ [(Multiset.from_list [C.Tunsigned; C.Tchar], A.INTEGER (A.UNSIGNED A.ICHAR))]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.SIGNED A.SHORT)))
+          [ [C.Tshort];
+            [C.Tsigned; C.Tshort];
+            [C.Tshort; C.Tint];
+            [C.Tsigned; C.Tshort; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.UNSIGNED A.SHORT)))
+          [ [C.Tunsigned; C.Tshort];
+            [C.Tunsigned; C.Tshort; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.SIGNED A.INT)))
+          [ [C.Tint];
+            [C.Tsigned];
+            [C.Tsigned; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.UNSIGNED A.INT)))
+          [ [C.Tunsigned];
+            [C.Tunsigned; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.SIGNED A.LONG)))
+          [ [C.Tlong];
+            [C.Tsigned; C.Tlong];
+            [C.Tlong; C.Tint];
+            [C.Tsigned; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.UNSIGNED A.LONG)))
+          [ [C.Tunsigned; C.Tlong];
+            [C.Tunsigned; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.SIGNED A.LONG_LONG)))
+          [ [C.Tlong; C.Tlong];
+            [C.Tsigned; C.Tlong; C.Tlong];
+            [C.Tlong; C.Tlong; C.Tint];
+            [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
+          ]
+        @ List.map (fun s -> (Multiset.from_list s, A.INTEGER (A.UNSIGNED A.LONG_LONG)))
+          [ [C.Tunsigned; C.Tlong; C.Tlong];
+            [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
+          ]
+        @ [(Multiset.from_list [C.Tfloat], A.REAL_FLOATING A.FLOAT)]
+        @ [(Multiset.from_list [C.Tdouble], A.REAL_FLOATING A.DOUBLE)]
+        @ [(Multiset.from_list [C.Tlong; C.Tdouble], A.REAL_FLOATING A.LONG_DOUBLE)]
+        @ [(Multiset.from_list [C.T_Bool], A.INTEGER A.BOOL)]
+(*
+        @ [(Multiset.from_list [C.Tfloat; C.COMPLEX], A.COMPLEX A.FLOAT)]
+        @ [(Multiset.from_list [C.Tdouble; C.COMPLEX], A.COMPLEX A.DOUBLE)]
+        @ [(Multiset.from_list [C.Tlong; C.Tdouble; C.COMPLEX], A.COMPLEX A.LONG_DOUBLE)]
+*)
+      ) in
+  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
+              (Map_.find specifiers desugar_map)
+
+val desugar_type_specifiers : list C.typeSpecifier -> E.t (A.ctype)
+val desugar_spec_elem_list : list C.spec_elem -> E.t (A.qualifiers * A.ctype)
 val desugar_decl_type : C.decl_type -> A.ctype -> A.ctype
 val desugar_parameter : C.parameter -> A.qualifiers * A.ctype
 val desugar_parameters : list C.parameter -> list (A.qualifiers * A.ctype)
+
+let desugar_type_specifiers ts =
+  (* TODO: ignore structs, enums, typedefs, ... *)
+  match ts with
+(*  | [C.atomic (specs, dt)] ->*)
+  | _ -> A.BASIC <$> desugar_basic_type_specifiers (Multiset.from_list ts)
+  end
+
+let desugar_spec_elem_list specs =
+  let (cs, ts) = separate_spec_elem_list specs in
+  let q = desugar_cvspecs cs in
+  desugar_type_specifiers ts >>= fun t ->
+  E.return (q, t)
 
 let rec desugar_decl_type dt =
   match dt with
@@ -631,8 +650,10 @@ let rec desugar_decl_type dt =
       fun t ->
         (desugar_decl_type dt)
         (A.ARRAY (desugar_cvspecs cvs) t None)
-  | C.ARRAY dt cvs _ (Some (C.CONSTANT (C.CONST_INT n s))) ->
-      Boot.assert_false "TODO: integer constant"
+  | C.ARRAY dt cvs _ (Some (C.CONSTANT (C.CONST_INT n None))) ->
+      fun t ->
+        (desugar_decl_type dt)
+        (A.ARRAY (desugar_cvspecs cvs) t (Some (fst (Decode.decode_integer_constant n)))) (* TODO: for test purposes only ;) *)
   | C.ARRAY dt cvs _ (Some (C.CONSTANT e)) ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
   | C.PTR cvs _ dt ->
@@ -656,7 +677,7 @@ and desugar_parameters ps =
 val desugar_statement : C.statement  -> E.t (A.statement_l unit)
 
 val desugar_declaration: C.init_name_group -> E.t (list (Symbol.t * A.expression_t unit))
-val desugar_definition: C.definition -> E.t (sum (list (Symbol.t * A.expression_t unit)) (Symbol.t * list Symbol.t * A.statement_l unit))
+val desugar_definition: C.definition -> E.t unit
 
 val desugar_init_name : C.init_name -> E.t (Symbol.t * (A.ctype -> A.ctype) * option (A.expression_t unit))
 
@@ -742,24 +763,27 @@ and desugar_init_name iname =
   desugar_init_expression ie >>= fun e_opt   ->
   E.return (v, desugar_decl_type decl, e_opt)
     
-
 and desugar_declaration (specs, ins) : E.t (list (Symbol.t * A.expression_t unit)) =
-  Boot.assert_false "desugar_declaration"
-(*
-  (List.map (desugar_specifier specs) <$> E.mapM desugar_init_name ins) >>=
-  filter_opt <$>
-    E.mapM (fun (v, t, e_opt) ->
-      E.add_declaration v t >>
-      match e_opt with
-      | Some e -> Some (v, e)
-      | None   -> None
-      end
-    )
-*)
+  desugar_spec_elem_list specs >>= fun (q, t) ->
+  E.mapM desugar_init_name ins >>= fun decls  ->
+  filter_opt <$> E.mapM (fun (v, ft, e_opt) ->
+                   E.add_declaration v q (ft t) >>
+                   E.return
+                     match e_opt with
+                     | Some e -> Some (v, e)
+                     | None   -> None
+                     end
+                 ) decls
 
 and desugar_definition def =
   match def with
-  | C.FUNDEF specs (C.Name fname decl [] _) stmt _ ->
+  | C.FUNDEF specs (C.Name name decl _ _) stmt _ ->
+     desugar_spec_elem_list specs >>= fun (q, t) -> (* TODO: q should be A.no_qualifiers; check! *)
+     desugar_statement stmt       >>= fun s ->
+     E.register_name name         >>= fun v ->
+     (* TODO: register formals! *)
+     E.add_declaration v q (desugar_decl_type decl t) >>
+     E.add_function    v s
 
 (*
 t
@@ -769,12 +793,11 @@ fname: string (* function name *)
 decl:  decl_type
 stmt:  statement
 
-*)
-      mk_ctype specs decl >>= fun f_ty ->
-(*      let (ftype, scs) = mk_ctype specs decl in *)
+      let (ftype, scs) = mk_ctype specs decl in
+
 
       register_labels stmt >>
-      desugar_statement stmt    >>= fun d_s ->
+*)
 
 
 (*
@@ -782,7 +805,6 @@ stmt:  statement
         let (ftype, scs) = mk_c_type specs decl in
         (C.FUNCTION_DEFINITION ((fname, ftype, scs), Location.dummy) (translate_statement s), Location.dummy)
 *)
-      Boot.assert_false "HIP: desugar_definition FUNDEF"
 
     (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
   | C.DECDEF (specs, []) loc ->

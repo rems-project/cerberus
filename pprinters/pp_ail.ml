@@ -82,7 +82,6 @@ let lt_precedence p1 p2 =
 
 let pp_id id = !^ (Symbol.to_string_pretty id)
 
-
 let pp_storage_duration = function
   | STATIC    -> !^ "static"
   | THREAD    -> !^ "thread"
@@ -92,14 +91,14 @@ let pp_storage_duration = function
 
 let pp_cond switch str =
   if switch then
-    !^ str
+    (^^^) !^ str
   else
-    P.empty
+    (^^) P.empty
 
 let pp_qualifiers q =
-  pp_cond q.const    "const"    ^^
-  pp_cond q.restrict "restrict" ^^
-  pp_cond q.volatile "volatile" ^^
+  pp_cond q.const    "const"    -|
+  pp_cond q.restrict "restrict" -|
+  pp_cond q.volatile "volatile" -|
   pp_cond q.atomic_q "atomic"
 
 
@@ -137,15 +136,12 @@ let rec pp_ctype t =
   match t with
     | VOID                    -> !^ "void"
     | BASIC  b                -> pp_basic_type b
-    | ARRAY (qs, ty, n_opt)   -> pp_qualifiers qs ^^ pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
-    | STRUCT (qs, tag, mems)  -> pp_qualifiers qs ^^ !^ "struct" ^^^ pp_id tag ^^^
-                                 P.braces (pp_mems mems)
-    | UNION (qs, tag, mems)   -> pp_qualifiers qs ^^ !^ "union" ^^^ pp_id tag ^^^
-                                 P.braces (pp_mems mems)
+    | ARRAY (qs, ty, n_opt)   -> pp_qualifiers qs (pp_ctype ty) ^^ P.brackets (P.optional pp_integer n_opt)
+    | STRUCT (qs, tag, mems)  -> pp_qualifiers qs $ !^ "struct" ^^^ pp_id tag ^^^ P.braces (pp_mems mems)
+    | UNION (qs, tag, mems)   -> pp_qualifiers qs $ !^ "union" ^^^ pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ pp_id name
-    | FUNCTION (ty, ps)       -> pp_ctype ty ^^^
-                                 P.parens (comma_list (fun (q,t) -> pp_qualifiers q ^^ pp_ctype t) ps)
-    | POINTER (qs, ty)        -> pp_qualifiers qs ^^ pp_ctype ty ^^ P.star
+    | FUNCTION (ty, ps)       -> P.parens (comma_list (fun (q,t) -> pp_qualifiers q $ pp_ctype t) ps) ^^^ !^ "->" ^^^ pp_ctype ty
+    | POINTER (qs, ty)        -> P.parens (pp_qualifiers qs $ pp_ctype ty) ^^ P.star
     | ATOMIC ty               -> !^ "_Atomic" ^^^ pp_ctype ty
     | TYPEDEF name            -> pp_id name
     | SIZE_T                  -> !^ "size_t"
@@ -306,9 +302,12 @@ let pp_expression_t expr_t =
 
 
 let pp_definition file (name, e) = 
-  let (ty, _) = Pmap.find name file.id_map in
-  pp_ctype ty ^^^ pp_id name ^^^ P.equals ^^^ pp_expression_t e
+  let (q, ty, _) = Pmap.find name file.id_map in
+  (pp_qualifiers q $ pp_ctype ty) ^^^ pp_id name ^^^ P.equals ^^^ pp_expression_t e
 
+let pp_typed_id file name =
+  let (q, t, _) = Pmap.find name file.id_map in
+  pp_id name ^^ P.colon ^^^ (pp_qualifiers q $ pp_ctype t)
 
 let rec pp_statement_l file (_, stmt) =
   let pp_statement_l = pp_statement_l file in
@@ -324,7 +323,7 @@ let rec pp_statement_l file (_, stmt) =
         pp_expression_t e ^^ P.semi
     | BLOCK (ids, ss) -> (* TODO: decls *)
         let block = P.separate_map (P.break 1) pp_statement_l ss in
-        !^ "BLOCK_VARS" ^^^ comma_list pp_id ids ^^^
+        !^ "BLOCK_VARS" ^^^ comma_list (pp_typed_id file) ids ^^^
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | IF (e, s1, s2) ->
         !^ "if" ^^^ P.parens (pp_expression_t e) ^/^
@@ -362,12 +361,12 @@ let rec pp_statement_l file (_, stmt) =
 
 
 let pp_declaration file name =
-  let (ty, _) = Pmap.find name file.id_map in
-  pp_ctype ty ^^^ pp_id name
+  let (q, ty, _) = Pmap.find name file.id_map in
+  (pp_qualifiers q $ pp_ctype ty) ^^^ pp_id name
 
 
 let pp_function file (id, (args, s)) =
-  let (ty, st) = Pmap.find id file.id_map in
+  let (_, ty, st) = Pmap.find id file.id_map in
   (match ty with
     | FUNCTION (ret_ty, _) -> pp_ctype ret_ty
     | _                    -> P.empty
