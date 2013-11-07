@@ -86,8 +86,13 @@ and translate_spec_elem_list specs =
     | C0.SpecStorage st -> (translate_storage st :: scs, qs, ss)
     | C0.SpecType spec  -> (scs, qs, Multiset.add (translate_typeSpecifier spec) ss)
     
+(*
     | C0.SpecInline -> Boot.assert_false "TODO[Cabs_transform.translate_spec_elem_list] SpecInline: not sure what to do with this one"
     | C0.SpecAttr _ -> Boot.assert_false "[Cabs_transform.translate_spec_elem_list] we do not support atrributes"
+*)
+(* TODO: hack *)
+    | _ -> (scs, qs, ss)
+
   end in
   List.fold_left f ([], {}, Multiset.emp) specs
 
@@ -465,16 +470,19 @@ and translate_init_expression ie =
 and translate_definition d =
   match d with
     | C0.FUNDEF specs (C0.Name fname decl attrs _) s _ ->
+        Some $
         (* TODO: should be doing something with [attrs] *)
         let (ftype, scs) = mk_c_type specs decl in
         (C.FUNCTION_DEFINITION ((fname, ftype, scs), Location.dummy) (translate_statement s), Location.dummy)
     
     (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
     | C0.DECDEF (specs, []) l ->
+        Some $
         (C.EXTERNAL_DECLARATION
           [(C.TYPE_DEF (fst $ mk_c_type specs C0.JUSTBASE), Location.dummy)], Location.dummy)
     
     | C0.DECDEF (specs, ins) l ->
+        Some $
         (C.EXTERNAL_DECLARATION $
           List.map (fun (C0.Init_name (C0.Name x decl attrs _) ie) ->
             let (ty, scs) = mk_c_type (specs @ List.map (C0.SpecAttr) attrs) decl in
@@ -482,10 +490,15 @@ and translate_definition d =
           ) ins, Location.dummy)
     
     | C0.PRAGMA s l ->
-        Boot.outOfHomeomorphism "[Cabs_transform.translate_definition] PRAGMA: not supported for now"
+        None
  end
 
 
 (* TODO: use C0.file / C.file instead *)
 val transform_file: list C0.definition -> list C.g_defn_l
-let transform_file defs = List.map translate_definition defs
+let transform_file defs =
+  List.fold_left (fun acc def ->
+    match translate_definition def with
+      | Some z -> z :: acc
+      | None   -> acc
+   end) [] defs

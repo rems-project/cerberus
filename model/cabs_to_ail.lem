@@ -197,7 +197,7 @@ let initial_desugar_state = <|
 (* Substitute an already registered name for its corresponding symbol *)
 val subst: string -> E.t Symbol.t
 let subst name =
-  E.option (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER) (E.resolve name)
+  E.option (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name) (E.resolve name)
 
 (* ---------------------------------------------------------------------------------------------- *)
 
@@ -245,7 +245,7 @@ let rec register_labels (s, _) =
 let fetch_label_id name =
   E.return_label_map >>= fun label_map ->
   if Pmap.mem name label_map then E.return (Pmap.find name label_map)
-                             else E.fail Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER
+                             else E.fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
 
 
 (* ---------------------------------------------------------------------------------------------- *)
