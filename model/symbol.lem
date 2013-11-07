@@ -1,13 +1,5 @@
 type t = num * option string
-type sset = num
-
-let count set = set
-
-let fresh s = ((s, None), s + 1)
-
-let fresh_pretty name s =
-  let s' = s + 1 in
-  ((s, Some name), s')
+type counter = num
 
 let compare (n1, _) (n2, _) =
   if n1 = n2 then
@@ -21,6 +13,19 @@ let to_string_pretty ((_, name_opt) as s) =
   match name_opt with
     | Some name -> name
     | None      -> to_string s
+  end
+
+val fresh : counter -> t * counter
+let fresh c = ((c, None), c + 1)
+
+val fresh_pretty : string -> counter -> t * counter
+let fresh_pretty name c = ((c, Some name), c + 1)
+
+val fresh_fancy : option string -> counter -> t * counter
+let fresh_fancy name_opt =
+  match name_opt with
+  | Some name -> fresh_pretty name
+  | None      -> fresh
   end
 
 let to_string_latex (n, _) =
@@ -91,6 +96,5 @@ let return       = (49, Some "return")
 
 let malloc = (50, Some "malloc")
 let free   = (51, Some "free")
-
 
 let init = 100

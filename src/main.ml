@@ -166,22 +166,20 @@ let pipeline stdlib impl core_parse file_name =
           Exception.return (c_preprocessing m)
       >|> Exception.fmap Cparser.Driver.parse
       >|> pass_message "1. Parsing completed!"
-          
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
-          
-      >|> Exception.fmap Cabs_transform.transform_file
-      >|> pass_message "1.5. Cabs AST transform completed!"
-      >|> pass_through_test !print_cabs (run_pp -| Pp_cabs.pp_file)
-          
+
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
       >|> pass_message "2. Cabs -> Ail completed!"
       >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
+
       >|> Exception.rbind Ail_typing.annotate
       >|> pass_message "3. Ail typechecking completed!"
       >|> Exception.fmap (Translation.translate stdlib impl)
+
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
       >|> Exception.fmap Core_simpl.simplify
+
       >|> pass_message "5. Core to Core simplication completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     

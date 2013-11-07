@@ -2,22 +2,87 @@ open Global
 
 type t 'a = option 'a
 
-val return: forall 'a. 'a -> option 'a
+
+(* Functor *)
+val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+val (<$): forall 'a 'b. 'a -> t 'b -> t 'a
+
+(* fmap f m = m >>= (return -| f) *)
+let fmap f = function
+  | Some v -> Some $ f v
+  | None   -> None
+end
+
+let (<$) x m = fmap (const x) m
+
+
+(* Applicative *)
+val pure:  forall 'a. 'a -> t 'a
+val sapp:  forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
+
+let pure x =
+  Some x
+let sapp fm mx =
+  match (fm, mx) with
+    | (Some f, Some x) -> Some $ f x
+    | _                -> None
+  end
+
+
+(* Monad *)
+val return: forall 'a. 'a -> t 'a
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+
 let return z = Some z
 
-val (>>=): forall 'a 'b. option 'a -> ('a -> option 'b) -> option 'b
-let (>>=) m f =
+let bind m f =
   match m with
     | Some z -> f z
     | None   -> None
   end
 
-val fail: forall 'a. option 'a
-let fail = None
+
+
+(* Alternative *)
+val empty: forall 'a. t 'a
+let empty = None
 
 
 
+  module Operators = struct
+    let (<$>) = fmap
+    let (>>=) = bind
+    
+    val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let (>>) m1 m2 = m1 >>= fun _ -> m2
+    
+    val (<*>): forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
+    let (<*>) = sapp
+    
+    val (|*>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let (|*>) ma mb = (const id) <$> ma <*> mb
+    
+    val (<*|): forall 'a 'b. t 'a -> t 'b -> t 'a
+    let (<*|) ma mb = const <$> ma <*> mb
+    
+    val (<|>): forall 'a. t 'a -> t 'a -> t 'a
+    let (<|>) m1 m2 =
+      match m1 with
+	| Some _ -> m1
+	| None   -> m2
+      end
+
+
+  end
+
+val is_some: forall 'a. t 'a -> bool
 let is_some = function
   | Some _ -> true
   | None   -> false
+end
+
+val option: forall 'a 'b. 'b -> ('a -> 'b) -> option 'a -> 'b
+let option z f = function
+  | Some x -> f x
+  | None   -> z
 end

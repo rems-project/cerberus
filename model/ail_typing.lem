@@ -60,7 +60,7 @@ module Effect = struct
 (* TODO init *)
 val init: forall 'a. t 'a -> Exception.t 'a Errors.t
 let init m =
-  M.run m Location.unknowned
+  M.eval m Location.unknowned
 
 
 
@@ -97,14 +97,14 @@ let lvalue_convert t e =
   | Some t' -> E.return t'
   end
 
-let int = A.BASIC {} (A.INTEGER (A.SIGNED A.INT))
-let one t = Pair.make t (A.CONSTANT (A.CONST_INT (Int.int 1, A.DECIMAL, None)))
+let int = A.BASIC (A.INTEGER (A.SIGNED A.INT))
+let one t = Product.make t (A.CONSTANT (A.CONST_INT (Int.int 1, A.DECIMAL, None)))
 
 val     is_null_pointer_constant: A.expression_t A.type_class -> bool
 let rec is_null_pointer_constant e =
   match Annot.exp_of e with
   | A.CONSTANT (A.CONST_INT (n, _, _)) -> n = (Int.int 0)
-  | A.CAST (A.POINTER _ (A.VOID _)) exp -> is_null_pointer_constant exp
+  | A.CAST (A.POINTER _ A.VOID) exp -> is_null_pointer_constant exp
   | _ -> false
   end
 
@@ -112,15 +112,15 @@ val type_of: A.expression_t A.type_class -> E.t A.ctype
 let type_of e =
   let ty' =
     match Annot.type_of e with
-    | A.T_EXP    t -> E.return t
-    | A.T_LVALUE t -> lvalue_convert t e
+    | A.T_EXP      t -> E.return t
+    | A.T_LVALUE _ t -> lvalue_convert t e
     end in
   E.fmap T.pointer_convert ty'
 
 let lvalue_type_of error e =
   match Annot.type_of e with
-  | A.T_EXP    _ -> E.fail error
-  | A.T_LVALUE t -> E.return (T.pointer_convert t)
+  | A.T_EXP      _ -> E.fail error
+  | A.T_LVALUE _ t -> E.return (T.pointer_convert t)
   end
 
 (* TODO Could improve specificity of error messages: Currently, we stop as soon
@@ -137,17 +137,17 @@ val     check_exp: Ail.file unit -> A.expression A.type_class -> E.t A.type_clas
 let rec check_exp env e_head =
   match e_head with
     | A.NULL ->
-        E.return (A.T_EXP (A.POINTER {} (A.VOID {})))
+        E.return (A.T_EXP (A.POINTER A.no_qualifiers A.VOID))
     
     (* TODO: the size of the array may be wrong, because we don't handle multibyte stuff properly *)
     | A.STRING_LITERAL (enc, s) ->
         let n = Int.(+) (Int.int $ Boot.length_string s) (Int.int 1) in
         E.return $ A.T_EXP match enc with
-          | None             -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)
-          | Some ENCODING_u8 -> A.ARRAY (A.BASIC {} A.CHAR) (Some n)
-          | Some ENCODING_u  -> A.ARRAY A.CHAR16_T (Some n)
-          | Some ENCODING_U  -> A.ARRAY A.CHAR32_T (Some n)
-          | Some ENCODING_L  -> A.ARRAY A.WCHAR_T (Some n)
+          | None             -> A.ARRAY A.no_qualifiers (A.BASIC A.CHAR) (Some n)
+          | Some ENCODING_u8 -> A.ARRAY A.no_qualifiers (A.BASIC A.CHAR) (Some n)
+          | Some ENCODING_u  -> A.ARRAY A.no_qualifiers A.CHAR16_T (Some n)
+          | Some ENCODING_U  -> A.ARRAY A.no_qualifiers A.CHAR32_T (Some n)
+          | Some ENCODING_L  -> A.ARRAY A.no_qualifiers A.WCHAR_T (Some n)
         end
     
     | A.UNARY A.PLUS e ->
@@ -172,18 +172,18 @@ let rec check_exp env e_head =
         match Annot.type_of e with
           | A.T_EXP ((A.FUNCTION _ _) as t) -> E.return t
           | A.T_EXP _                       -> E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
-          | A.T_LVALUE t                    ->
+          | A.T_LVALUE _ t                  ->
               if T.is_object_type t then
                 E.return t
               else E.fail Errors.AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
         end >>= fun t ->
-        E.return (A.T_EXP (A.POINTER {} t))
+        E.return (A.T_EXP (A.POINTER A.no_qualifiers t))
     
     | A.UNARY A.INDIRECTION e ->
         type_of e >>= fun t ->
         if T.is_pointer_type t then
           if T.is_pointer_to_object t then
-            E.return (A.T_LVALUE (T.base_of_pointer t))
+            E.return (A.T_LVALUE A.no_qualifiers (T.base_of_pointer t))
           else E.return (A.T_EXP (T.base_of_pointer t))
         else E.fail Errors.AIL_TYPECHECK_INDIRECTION_POINTER
     
@@ -259,7 +259,7 @@ let rec check_exp env e_head =
 	          "Computing the difference of two pointers is not yet supported.")
                 *)
                 (* K: ugly hack *)
-                    E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.UNSIGNED A.INT))))
+                    E.return (A.T_EXP (A.BASIC (A.INTEGER (A.UNSIGNED A.INT))))
                   else E.fail Errors.AIL_TYPECHECK_SUB_COMPATIBLE_POINTERS
                 else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
               else E.fail Errors.AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
@@ -402,11 +402,11 @@ let rec check_exp env e_head =
         type_of e2                                           >>= fun t2 ->
         lvalue_convert t1 e1                                 >>= fun t  ->
         let has_all_qualifiers t1 t2 =
-          (T.qualifiers t2) subset (T.qualifiers t1) in
+          A.sub_qualifiers (T.qualifiers t2) (T.qualifiers t1) in
         if T.is_modifiable t1 then
           
           match (t1, t2) with
-            | (A.BASIC _ (A.INTEGER A.BOOL), A.POINTER _ _) ->
+            | (A.BASIC (A.INTEGER A.BOOL), A.POINTER _ _) ->
                 E.return (A.T_EXP t)
             | (A.POINTER _ b1, A.POINTER _ b2) ->
                 (* null pointer constant of pointer type *)
@@ -493,11 +493,9 @@ let rec check_exp env e_head =
           match (t2, t3) with
             | (A.POINTER _ b2, A.POINTER _ b3) ->
                 if T.is_void_type b2 && T.is_object_type b3 then
-                  let q = T.merge_qualifiers t2 t3 in
-                  E.return (A.T_EXP (A.POINTER q (A.VOID {})))
+                  E.return (A.T_EXP (A.POINTER A.no_qualifiers A.VOID))
                 else if T.is_object_type b2 && T.is_void_type b3 then
-                  let q = T.merge_qualifiers t2 t3 in
-                  E.return (A.T_EXP (A.POINTER q (A.VOID {})))
+                  E.return (A.T_EXP (A.POINTER A.no_qualifiers A.VOID))
                 
               (* null pointer constant of pointer type *)
                 else if is_null_pointer_constant e2 then
@@ -505,11 +503,10 @@ let rec check_exp env e_head =
                 else if is_null_pointer_constant e3 then
                   E.return (A.T_EXP (T.include_qualifiers t2 (T.qualifiers t3)))
                 else if T.compatible_unqualified b2 b3 then
-                  let q = T.merge_qualifiers t2 t3 in
                   E.of_option
                     Errors.AIL_TYPECHECK_CONDITIONAL_COMPATIBLE_POINTERS
                     (T.composite t2 t3) >>= fun t ->
-                  E.return (A.T_EXP (T.include_qualifiers t q))
+                  E.return (A.T_EXP t)
                 else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_POINTERS
               
             (* null pointer constant of integer type *)
@@ -522,8 +519,8 @@ let rec check_exp env e_head =
                   E.return (A.T_EXP (T.include_qualifiers t3 (T.qualifiers t2)))
                 else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
             
-            | (A.VOID _, A.VOID _) ->
-                E.return (A.T_EXP (A.VOID {}))
+            | (A.VOID, A.VOID) ->
+                E.return (A.T_EXP A.VOID)
             
             | _ ->
                 if T.is_arithmetic_type t2 then
@@ -541,9 +538,9 @@ let rec check_exp env e_head =
         
         else E.fail Errors.AIL_TYPECHECK_CONDITIONAL_SCALAR_FIRST
     
-    | A.CAST (A.VOID q) e ->
+    | A.CAST A.VOID e ->
         type_of e >>= fun _ ->
-        E.return (A.T_EXP (A.VOID q))
+        E.return (A.T_EXP A.VOID)
     
     | A.CAST t' e ->
         type_of e >>= fun t ->
@@ -583,10 +580,10 @@ let rec check_exp env e_head =
     
     (* TODO: this is wrong *)
     | A.CONSTANT (A.CONST_INT (i, _, None)) ->
-        E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+        E.return (A.T_EXP (A.BASIC (A.INTEGER (A.SIGNED A.INT))))
     | A.CONSTANT (A.CONST_INT (_, _, Some suffix)) ->
         (* (§6.4.4.1) Integer constants, with suffix *)
-        E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+        E.return (A.T_EXP (A.BASIC (A.INTEGER (A.SIGNED A.INT))))
         (* TODO: hack *)
 (*
         match suffix with
@@ -600,10 +597,10 @@ let rec check_exp env e_head =
     
     (* TODO: HACK FOR NOW *)
     | A.CONSTANT (A.CONST_FLOAT _) ->
-        E.return (A.T_EXP (A.BASIC {} (A.REAL_FLOATING A.FLOAT)))
+        E.return (A.T_EXP (A.BASIC (A.REAL_FLOATING A.FLOAT)))
     (* TODO: HACK FOR NOW *)
     | A.CONSTANT (A.CONST_CHAR _) ->
-        E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+        E.return (A.T_EXP (A.BASIC (A.INTEGER (A.SIGNED A.INT))))
     
     | A.VARIABLE id ->
         let (t, _) = Pmap.find id env.A.id_map in
@@ -611,7 +608,7 @@ let rec check_exp env e_head =
           (* if this is a declared identifier with function type, or a function identifier *)
           E.return (A.T_EXP t)
         else
-          E.return (A.T_LVALUE t)
+          E.return (A.T_LVALUE A.no_qualifiers t)
     
     (* [§6.5.3.4#5] The [...] type (an unsigned integer type) is size_t, defined
        in <stddef.h> (and other headers). *)
@@ -649,16 +646,16 @@ let rec check_exp env e_head =
     (* void *malloc(size_t size); *)
     | A.MALLOC e ->
 (*      if E.to_bool (check_exp env (A.ASSIGN None (one (Annot.a_type (A.T_LVALUE A.SIZE_T))) e)) then *)
-        E.return (A.T_EXP (A.POINTER {} (A.VOID {})))
+        E.return (A.T_EXP (A.POINTER A.no_qualifiers A.VOID))
 (*      else
         Boot.outOfHomeomorphism "[Typing.check_exp] found a A.MALLOC and failed to typecheck"
 *)
     
     (* void free(void *ptr); *)
-    | A.FREE e -> E.return (A.T_EXP (A.VOID {}))
+    | A.FREE e -> E.return (A.T_EXP A.VOID)
     
     (* int memcmp(const void *s1, const void *s2, size_t n); *)
-    | A.MEMCMP e1 e2 e3 -> E.return (A.T_EXP (A.BASIC {} (A.INTEGER (A.SIGNED A.INT))))
+    | A.MEMCMP e1 e2 e3 -> E.return (A.T_EXP (A.BASIC (A.INTEGER (A.SIGNED A.INT))))
     
     (* void *memcpy(void * restrict s1, const void * restrict s2, size_t n); *)
     | A.MEMCPY e1 e2 e3 -> Boot.outOfHomeomorphism "check_exp, found a MEMCPY"
@@ -669,7 +666,7 @@ let rec check_exp env e_head =
         if not (T.is_scalar_type ty) then
           E.fail (Errors.OTHER "assert() expect something of scalar type")
         else
-          E.return (A.T_EXP (A.VOID {}))
+          E.return (A.T_EXP A.VOID)
     
     | A.CONST_ARRAY es ->
         Boot.assert_false "TODO [Ail_typing.check_exp] CONST_ARRAY"
@@ -684,11 +681,10 @@ let rec check_exp env e_head =
         Boot.assert_false "TODO [Ail_typing.check_exp] PRINTF"
   end
 
-
 and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type_class) =
   let f = annotate_exp env in
   let a_type e =
-    E.fmap (fun t -> Pair.make t e) (check_exp env e) in
+    E.fmap (fun t -> Product.make t e) (check_exp env e) in
     a_type =<<
       match e with
         | A.UNARY o e ->
@@ -711,8 +707,8 @@ and annotate_exp env ((_, e) : A.expression_t unit) : E.t (A.expression_t A.type
                  Ail.EXPR_SIZEOF) *)
         | A.EXPR_SIZEOF e ->
             f e >>= function 
-              | (A.T_EXP    t, _) -> E.return (A.SIZEOF t)
-              | (A.T_LVALUE t, _) -> E.return (A.SIZEOF t)
+              | (A.T_EXP      t, _) -> E.return (A.SIZEOF t)
+              | (A.T_LVALUE _ t, _) -> E.return (A.SIZEOF t)
             end
         | A.MALLOC e ->
             E.fmap A.MALLOC (f e)
@@ -801,7 +797,7 @@ val     annotate_stmt: A.file unit -> A.statement_l unit -> E.t (A.statement_l A
 let rec annotate_stmt env (l, stmt) =
   let fe = annotate_exp  env in
   let fs = annotate_stmt env in
-  E.fmap (Pair.make l) $
+  E.fmap (Product.make l) $
     match stmt with
       | A.EXPRESSION e ->
           E.fmap A.EXPRESSION (fe e)

@@ -22,9 +22,10 @@ let app  mf m = bind mf (fun f -> fmap f m)
 let papp mf x = bind mf (fun f -> return (f x))
 
 module Operators = struct
-  let (>>=) = bind
-  let (<$>) = fmap
-  let (<*>) = app
+  let (>>=)    = bind
+  let (>>) m f = bind m (fun _ -> f)
+  let (<$>)    = fmap
+  let (<*>)    = app
 end
 open Operators
 
@@ -45,6 +46,14 @@ let listM t xs = sequence (t xs)
 
 val mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t (list 'b) 's 'msg
 let mapM f = listM (List.map f)
+
+
+let sequence_ ms = List.fold_right (>>) ms (return ())
+val mapM_: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t unit 's 'msg
+let mapM_ f _as = sequence_ (List.map f _as)
+
+
+
 
 let rec foldlM f l a =
   match l with
@@ -78,12 +87,18 @@ let option msg m =
   bind m f
 
 
+(* hijack the error message of a failing computation *)
+val tryWith: forall 'a 's 'msg. 'msg -> t 'a 's 'msg -> t 'a 's 'msg
+let tryWith msg m =
+  fun st ->
+    Exception.bind_exception (m st) (fun _ -> Exception.fail msg)
+
 (* The state actions *)
 val read:   forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
 val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
 val modify: forall 'a 's 'msg. ('s -> 'a * 's) -> t 'a 's 'msg
-val run:    forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.t 'a 'msg
+val eval:   forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.t 'a 'msg
 let read   f = fun s -> Exception.return (f s, s)
 let update f = fun s -> Exception.return ((), f s)
 let modify f = fun s -> Exception.return (f s)
-let run    m = fun s -> Exception.fmap fst (m s)
+let eval   m = fun s -> Exception.fmap fst (m s)

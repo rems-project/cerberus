@@ -1,3 +1,4 @@
+open Global
 open Ail
 open Ail_aux (* lift_int *)
 
@@ -24,14 +25,14 @@ val is_standard_signed_integer_type: ctype -> bool
 val is_extended_signed_integer_type: ctype -> bool
 val is_signed_integer_type: ctype -> bool
 let is_standard_signed_integer_type = function
-  | BASIC _ (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> false
-  | BASIC _ (INTEGER (SIGNED _))                    -> true
-  | _                                               -> false
+  | BASIC (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> false
+  | BASIC (INTEGER (SIGNED _))                    -> true
+  | _                                             -> false
 end
 
 let is_extended_signed_integer_type = function
-  | BASIC _ (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> true
-  | _                                               -> false
+  | BASIC (INTEGER (SIGNED (EXTENDED_INTEGER _))) -> true
+  | _                                             -> false
 end
 
 let is_signed_integer_type ty =
@@ -44,15 +45,15 @@ val is_standard_unsigned_integer_type: ctype -> bool
 val is_extended_unsigned_integer_type: ctype -> bool
 val is_unsigned_integer_type: ctype -> bool
 let is_standard_unsigned_integer_type = function
-  | BASIC _ (INTEGER BOOL)                            -> true
-  | BASIC _ (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> false
-  | BASIC _ (INTEGER (UNSIGNED _))                    -> true
-  | SIZE_T                                            -> true
-  | _                                                 -> false
+  | BASIC (INTEGER BOOL)                            -> true
+  | BASIC (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> false
+  | BASIC (INTEGER (UNSIGNED _))                    -> true
+  | SIZE_T                                          -> true
+  | _                                               -> false
 end
 
 let is_extended_unsigned_integer_type = function
-  | BASIC _ (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> true
+  | BASIC (INTEGER (UNSIGNED (EXTENDED_INTEGER _))) -> true
   | _                                               -> false
 end
 
@@ -73,8 +74,8 @@ let is_extended_integer_type ty =
 (* §6.2.5#10 *)
 val is_real_floating_type: ctype -> bool
 let is_real_floating_type = function
-  | BASIC _ (REAL_FLOATING _) -> true
-  | _                         -> false
+  | BASIC (REAL_FLOATING _) -> true
+  | _                       -> false
 end
 
 
@@ -82,8 +83,8 @@ end
 val is_complex_type: ctype -> bool
 val is_floating_type: ctype -> bool
 let is_complex_type = function
-  | BASIC _ (COMPLEX _) -> true
-  | _                   -> false
+  | BASIC (COMPLEX _) -> true
+  | _                 -> false
 end
 let is_floating_type ty =
   is_real_floating_type ty || is_complex_type ty
@@ -96,17 +97,17 @@ let is_floating_type ty =
 (* §6.2.5#14 *)
 val is_basic_type: ctype -> bool
 let is_basic_type = function
-  | BASIC _ _ -> true
-  | _         -> false
+  | BASIC _ -> true
+  | _       -> false
 end 
 
 (* §6.2.5#15 *)
 val is_character_type: ctype -> bool
 let is_character_type = function
-  | BASIC _ CHAR                       -> true
-  | BASIC _ (INTEGER (SIGNED ICHAR))   -> true
-  | BASIC _ (INTEGER (UNSIGNED ICHAR)) -> true
-  | _                                  -> false
+  | BASIC CHAR                       -> true
+  | BASIC (INTEGER (SIGNED ICHAR))   -> true
+  | BASIC (INTEGER (UNSIGNED ICHAR)) -> true
+  | _                                -> false
 end
 
 
@@ -122,8 +123,8 @@ end
 val is_integer_type: ctype -> bool
 val is_real_type: ctype -> bool
 let is_integer_type = function
-  | BASIC _ CHAR -> true
-  | ty           -> is_signed_integer_type ty || is_unsigned_integer_type ty || is_enumeration_type ty
+  | BASIC CHAR -> true
+  | ty         -> is_signed_integer_type ty || is_unsigned_integer_type ty || is_enumeration_type ty
 end
 
 let is_real_type ty =
@@ -145,8 +146,8 @@ val is_union_type: ctype -> bool
 val is_pointer_type: ctype -> bool
 val is_atomic_type: ctype -> bool
 let is_array_type = function
-  | ARRAY _ _ -> true
-  | _         -> false
+  | ARRAY _ _ _ -> true
+  | _           -> false
 end
 
 let is_structure_type = function
@@ -258,24 +259,22 @@ let extended_unsigned_integer_type =
 
 
 let is_void_type = function
-  | VOID _ -> true
-  | _      -> false
+  | VOID -> true
+  | _    -> false
 end
 
 
 
 
 let is_unqualified = function
-  | BASIC    q _ -> q = {}
-  | POINTER  q _ -> q = {}
   | _            -> true
   end
 
 
 let is_complete_object_type t =
   match t with
-  | VOID _ -> false
-  | _      -> is_object_type t
+  | VOID -> false
+  | _    -> is_object_type t
   end
 
 let is_pointer_to_object = function
@@ -304,16 +303,16 @@ let compatible_basic s1 s2 = (s1 = s2)
 (* (§6.2.7) Compatible type and composite type *)
 let rec compatible type1 type2 =
   match (type1, type2) with
-  | (BASIC q1 s1, BASIC q2 s2) ->
-      compatible_basic s1 s2 && Ocaml.Pset.equal q1 q2
+  | (BASIC s1, BASIC s2) ->
+      compatible_basic s1 s2
   | (POINTER q1 t1, POINTER q2 t2) ->
-      compatible t1 t2 && Ocaml.Pset.equal q1 q2
-  | (ARRAY t1 size1, ARRAY t2 size2) ->
-      size1 = size2 && compatible t1 t2
+      compatible t1 t2 && eq_qualifiers q1 q2
+  | (ARRAY q1 t1 size1, ARRAY q2 t2 size2) ->
+      size1 = size2 && compatible t1 t2 && eq_qualifiers q1 q2
   | (FUNCTION t1 args1, FUNCTION t2 args2) ->
       compatible t1 t2
       && List.length args1 = List.length args2
-      && List.for_all2 compatible args1 args2
+      && List.for_all2 (fun (q1, t1) (q2, t2) -> eq_qualifiers q1 q2 && compatible t1 t2) args1 args2
   
 (*
   (* (§6.2.7#1) Structure types *)
@@ -324,16 +323,14 @@ let rec compatible type1 type2 =
 *)
   
   (* TODO: this is a hack *)
-  | (SIZE_T, type2 ) -> compatible (BASIC {} (INTEGER (UNSIGNED INT))) type2
-  | (type1 , SIZE_T) -> compatible type1 (BASIC {} (INTEGER (UNSIGNED INT)))
+  | (SIZE_T, type2 ) -> compatible (BASIC (INTEGER (UNSIGNED INT))) type2
+  | (type1 , SIZE_T) -> compatible type1 (BASIC (INTEGER (UNSIGNED INT)))
   
   | _ -> false
   end
 
 let unqualify t =
   match t with
-  | BASIC _ b    -> BASIC {} b
-  | POINTER _ t' -> POINTER {} t'
   | _            -> t
   end
 
@@ -341,35 +338,37 @@ let compatible_unqualified type1 type2 =
   compatible (unqualify type1) (unqualify type2)
 
 let qualifiers = function
-  | VOID     q   -> q
-  | POINTER  q _ -> q
-  | BASIC    q _ -> q
-  | FUNCTION _ _ -> {}
-  | ARRAY    _ _ -> {}
-  | SIZE_T       -> {}
+  | _       -> no_qualifiers
   end 
 
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+  atomic_q = qs1.atomic_q || qs2.atomic_q
+|>
 
-
-
-let merge_qualifiers t1 t2 = (qualifiers t1) union (qualifiers t2)
+let sub_qualifiers qs1 qs2 =
+     qs1.const    --> qs2.const
+  && qs1.restrict --> qs2.restrict
+  && qs1.volatile --> qs2.volatile
 
 let include_qualifiers t q =
   match t with
-  | BASIC    q' b' -> BASIC (q union q') b'
-  | POINTER  q' t' -> POINTER (q union q') t'
+  | BASIC       _  -> t
+  | POINTER  q' t' -> POINTER (combine_qualifiers q q') t'
   | FUNCTION _  _  -> t
-  | ARRAY    _  _  -> t
+  | ARRAY q' t  s  -> ARRAY (combine_qualifiers q q') t s
   | SIZE_T         -> t
   end
 
 let rec eq t1 t2 =
   match (t1, t2) with
-  | (BASIC _ b1, BASIC _ b2) -> b1 = b2
+  | (BASIC b1, BASIC b2) -> b1 = b2
   | (POINTER _ t1, POINTER _ t2) -> eq t1 t2
-  | (FUNCTION t1 ts1, FUNCTION t2 ts2) ->
-      eq t1 t2 && List.for_all2 eq ts1 ts2
-  | (ARRAY t1 size1, ARRAY t2 size2) ->
+  | (FUNCTION t1 ps1, FUNCTION t2 ps2) ->
+      eq t1 t2 && List.for_all2 (fun (_,t1) (_,t2) -> eq t1 t2) ps1 ps2
+  | (ARRAY _ t1 size1, ARRAY _ t2 size2) ->
       size1 = size2 && eq t1 t2
   | _ -> false
   end
@@ -461,7 +460,7 @@ let rec common_int i1 i2 =
 
 let rec common t1 t2 =
   match (t1, t2) with
-    | (BASIC _ (INTEGER i1), BASIC _ (INTEGER i2)) -> BASIC {} (INTEGER (common_int i1 i2))
+    | (BASIC (INTEGER i1), BASIC (INTEGER i2)) -> BASIC (INTEGER (common_int i1 i2))
     
     (* UBER HACK *)
     | (SIZE_T, _) -> SIZE_T
@@ -582,7 +581,7 @@ let promote (ty: Ail.ctype) =
 *)
 
   match ty with
-  | BASIC q (INTEGER i) -> BASIC q (INTEGER (promote_int i))
+  | BASIC (INTEGER i) -> BASIC (INTEGER (promote_int i))
   | _ -> ty
   end
 
@@ -590,9 +589,9 @@ let usual_arithmetic t1 t2 = common (promote t1) (promote t2)
 
 let is_complete t =
   match t with
-  | BASIC    _ _ -> is_complete_object_type t
+  | BASIC      _ -> is_complete_object_type t
   | POINTER  _ _ -> is_complete_object_type t
-  | ARRAY    _ _ -> true
+  | ARRAY  _ _ _ -> true
   | FUNCTION _ _ -> false
   | SIZE_T       -> true
   end
@@ -600,11 +599,7 @@ let is_complete t =
 let is_incomplete_type t = not (is_complete t)
 
 let is_const = function
-  | BASIC    q _ -> CONST IN q
-  | POINTER  q _ -> CONST IN q
-  | ARRAY    _ _ -> false
-  | FUNCTION _ _ -> false
-  | SIZE_T       -> false
+  | _ -> false
   end
 
 let is_modifiable t =
@@ -613,8 +608,8 @@ let is_modifiable t =
   && not (is_const t)
 
 let is_bool = function
-  | BASIC _ (INTEGER BOOL) -> true
-  | _                      -> false
+  | BASIC (INTEGER BOOL) -> true
+  | _                    -> false
   end
 
 let base_of_pointer = function
@@ -622,11 +617,11 @@ let base_of_pointer = function
   end
 
 let base_of_array = function
-  | ARRAY t _ -> t
+  | ARRAY _ t _ -> t
   end
 
 let size_of_array = function
-  | ARRAY _ (Some s) -> s (* HACK *)
+  | ARRAY _ _ (Some s) -> s (* HACK *)
   end
 
 let function_return = function
@@ -643,8 +638,8 @@ let composite t1 t2 = if compatible t1 t2 then Some t1 else None
 
 let pointer_convert (t: Ail.ctype) : Ail.ctype =
   match t with
-  | FUNCTION _  _ -> POINTER {} t
-  | ARRAY    t' _ -> POINTER {} t'
+  | FUNCTION _  _ -> POINTER no_qualifiers t
+  | ARRAY  q t' _ -> POINTER q t'
   | _             -> t
   end
 
@@ -657,20 +652,20 @@ let lvalue_convert (t: Ail.ctype) : option Ail.ctype =
 let lvalue_convert' = unqualify
 
 let is_lvalue = function
-  | T_LVALUE _ -> true
-  | T_EXP    _ -> false
+  | T_LVALUE _ _ -> true
+  | T_EXP      _ -> false
   end
 
 let is_unsigned_of t1 t2 =
   match (t1, t2) with
-  | (BASIC _ (INTEGER (SIGNED i1)), BASIC _ (INTEGER (UNSIGNED i2))) -> i1 = i2
+  | (BASIC (INTEGER (SIGNED i1)), BASIC (INTEGER (UNSIGNED i2))) -> i1 = i2
   | _                                                                -> false
   end
 
 let is_signed_of t1 t2 =
   match (t1, t2) with
-  | (BASIC _ (INTEGER (UNSIGNED i1)), BASIC _ (INTEGER (SIGNED i2))) -> i1 = i2
-  | _                                                                -> false
+  | (BASIC (INTEGER (UNSIGNED i1)), BASIC (INTEGER (SIGNED i2))) -> i1 = i2
+  | _                                                            -> false
   end
 
 

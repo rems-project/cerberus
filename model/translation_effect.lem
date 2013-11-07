@@ -2,7 +2,7 @@
 open Global
 
 type state = <|
-  symbol_set: Symbol.sset;               (* counter for Core's symbolic names (all of them) *)
+  symbol_set: Symbol.counter;               (* counter for Core's symbolic names (all of them) *)
   visible_objects: list (list Symbol.t); (* visible C objects with scoping (used to properly
                                             annotate Esave/Erun ctors) *)
 |>

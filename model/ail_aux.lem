@@ -14,9 +14,7 @@ let decimal_const_int n = ((), CONSTANT (CONST_INT (n, DECIMAL, None)))
 val octal_const_int: int -> expression_t unit
 let octal_const_int n = ((), CONSTANT (CONST_INT (n, OCTAL, None)))
 
-
-
 let lift_int f_int otherwise = function
-  | BASIC _ (INTEGER i) -> f_int i
-  | _                   -> otherwise
+  | BASIC (INTEGER i) -> f_int i
+  | _                 -> otherwise
   end

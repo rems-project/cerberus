@@ -1,3 +1,4 @@
+open Global
 open Ail
 
 let map_exp f s exp =
@@ -71,16 +72,16 @@ let fold_stmt_left fs fe a stmt =
 
 let rec map_type f t =
   match t with
-    | BASIC _ _ -> t
+    | BASIC _ -> t
     | POINTER q t -> POINTER q (f t)
-    | ARRAY t size -> ARRAY (f t) size
-    | FUNCTION t ts -> FUNCTION (f t) (List.map f ts)
+    | ARRAY q t size -> ARRAY q (f t) size
+    | FUNCTION t ps -> FUNCTION (f t) (List.map (fun (q, t) -> (q, f t)) ps)
   end
 
 let rec for_all_type p t =
   match t with
-    | BASIC _ _ -> true
+    | BASIC _ -> true
     | POINTER _ t -> p t
-    | ARRAY t _ -> p t
-    | FUNCTION t ts -> p t && List.for_all p ts
+    | ARRAY _ t _ -> p t
+    | FUNCTION t ps -> p t && List.for_all (p -| snd) ps
   end
