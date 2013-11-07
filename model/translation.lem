@@ -690,9 +690,9 @@ and translate_expr stdlib file expr =
     | A.EXPR_SIZEOF e ->
         return (C.sizeof $ Caux.mk_ctype (Annotate.ctype_of e))
     
-    | A.SIZEOF (A.BASIC _ A.CHAR)                           -> return Caux.one
-    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.SIGNED A.ICHAR)))   -> return Caux.one
-    | A.SIZEOF (A.BASIC _ (A.INTEGER (A.UNSIGNED A.ICHAR))) -> return Caux.one
+    | A.SIZEOF (A.BASIC A.CHAR)                           -> return Caux.one
+    | A.SIZEOF (A.BASIC (A.INTEGER (A.SIGNED A.ICHAR)))   -> return Caux.one
+    | A.SIZEOF (A.BASIC (A.INTEGER (A.UNSIGNED A.ICHAR))) -> return Caux.one
     
     | A.SIZEOF ty ->
         return (C.sizeof $ Caux.mk_ctype ty)
@@ -815,7 +815,7 @@ let rec collect_cases_ (_, stmt) : St.t unit collect_cases_state =
 
 
 let collect_cases s =
-  snd $ St.run_impl (collect_cases_ s) <| found_default= false; cases= [] |>
+  snd $ St.run (collect_cases_ s) <| found_default= false; cases= [] |>
 
 
 

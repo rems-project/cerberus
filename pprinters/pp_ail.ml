@@ -90,11 +90,17 @@ let pp_storage_duration = function
   | ALLOCATED -> !^ "allocated"
 
 
-let pp_qualifier = function
-  | CONST    -> !^ "const"
-  | RESTRICT -> !^ "restrict"
-  | VOLATILE -> !^ "volatile"
-  | ATOMIC_Q -> !^ "atomic"
+let pp_cond switch str =
+  if switch then
+    !^ str
+  else
+    P.empty
+
+let pp_qualifiers q =
+  pp_cond q.const    "const"    ^^
+  pp_cond q.restrict "restrict" ^^
+  pp_cond q.volatile "volatile" ^^
+  pp_cond q.atomic_q "atomic"
 
 
 let pp_integer_base_type = function
@@ -127,25 +133,19 @@ let pp_basic_type = function
 let pp_integer = P.string -| Num.string_of_num
 
 let rec pp_ctype t =
-  let pp_qs qs =
-    if Pset.is_empty qs then
-      P.empty
-    else
-      let ins_space ds d = ds ^^ d ^^ P.space in
-      List.fold_right ins_space (List.map pp_qualifier (Pset.elements qs)) P.empty in
   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
   match t with
-    | VOID qs                 -> pp_qs qs ^^ !^ "void"
-    | BASIC (qs, b)           -> pp_qs qs ^^ pp_basic_type b
-    | ARRAY (ty, n_opt)       -> pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
-    | STRUCT (qs, tag, mems)  -> pp_qs qs ^^ !^ "struct" ^^^ pp_id tag ^^^
+    | VOID                    -> !^ "void"
+    | BASIC  b                -> pp_basic_type b
+    | ARRAY (qs, ty, n_opt)   -> pp_qualifiers qs ^^ pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
+    | STRUCT (qs, tag, mems)  -> pp_qualifiers qs ^^ !^ "struct" ^^^ pp_id tag ^^^
                                  P.braces (pp_mems mems)
-    | UNION (qs, tag, mems)   -> pp_qs qs ^^ !^ "union" ^^^ pp_id tag ^^^
+    | UNION (qs, tag, mems)   -> pp_qualifiers qs ^^ !^ "union" ^^^ pp_id tag ^^^
                                  P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ pp_id name
-    | FUNCTION (ty, args_tys) -> pp_ctype ty ^^^
-                                 P.parens (comma_list pp_ctype args_tys)
-    | POINTER (qs, ty)        -> pp_qs qs ^^ pp_ctype ty ^^ P.star
+    | FUNCTION (ty, ps)       -> pp_ctype ty ^^^
+                                 P.parens (comma_list (fun (q,t) -> pp_qualifiers q ^^ pp_ctype t) ps)
+    | POINTER (qs, ty)        -> pp_qualifiers qs ^^ pp_ctype ty ^^ P.star
     | ATOMIC ty               -> !^ "_Atomic" ^^^ pp_ctype ty
     | TYPEDEF name            -> pp_id name
     | SIZE_T                  -> !^ "size_t"
@@ -219,7 +219,7 @@ let pp_character_prefix =
   P.string -| to_string
 
 let pp_character_constant (pref_opt, c) =
-  (P.optional pp_character_prefix pref_opt) ^^ P.squotes (!^ c)
+  (P.optional pp_character_prefix pref_opt) ^^ !^ (Num.string_of_num c)
 
 
 let pp_constant = function

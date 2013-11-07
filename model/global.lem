@@ -1,13 +1,7 @@
 type map 'a 'b = Pmap.map 'a 'b
-type multiset 'a = Multiset.t 'a
 
 (* empty type *)
 type zero
-
-
-type either 'a 'b =
-  | Left of 'a
-  | Right of 'b
 
 let rec numerote_ n l =
   match l with
@@ -16,7 +10,11 @@ let rec numerote_ n l =
   end
 let numerote l = numerote_ 1 l
 
+val id: forall 'a. 'a -> 'a
+let id x = x
 
+val const: forall 'a 'b. 'a -> 'b -> 'a
+let const x _ = x
 
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)

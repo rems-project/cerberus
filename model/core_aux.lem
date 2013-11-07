@@ -21,13 +21,13 @@ let rec proj_ctype ty =
     | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
   end in
   match ty with
-    | Ail.VOID _               -> VOID
-    | Ail.BASIC _ bt           -> BASIC bt
-    | Ail.ARRAY ty n_opt       -> ARRAY (proj_ctype ty) n_opt
+    | Ail.VOID                 -> VOID
+    | Ail.BASIC bt             -> BASIC bt
+    | Ail.ARRAY q ty n_opt     -> ARRAY (proj_ctype ty) n_opt (* TODO: qualifiers *)
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.ENUM id              -> ENUM id
-    | Ail.FUNCTION ty tys      -> FUNCTION (proj_ctype ty) (List.map proj_ctype tys)
+    | Ail.FUNCTION ty ps       -> FUNCTION (proj_ctype ty) (List.map (proj_ctype -| snd) ps) (* TODO: qualifiers *)
     | Ail.POINTER _ ty         -> POINTER (proj_ctype ty)
     | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
     | Ail.TYPEDEF _            -> Boot.assert_false "[Core_aux.proj_ctype] found a A.TYPEDEF"
@@ -45,14 +45,14 @@ let rec unproj_ctype ty =
     | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
   end in
   match ty with
-    | VOID               -> Ail.VOID {}
-    | BASIC bt           -> Ail.BASIC {} bt
-    | ARRAY ty n_opt     -> Ail.ARRAY (unproj_ctype ty) n_opt
-    | STRUCT tag members -> Ail.STRUCT {} tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | UNION  tag members -> Ail.UNION  {} tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
+    | VOID               -> Ail.VOID
+    | BASIC bt           -> Ail.BASIC bt
+    | ARRAY ty n_opt     -> Ail.ARRAY  Ail.no_qualifiers (unproj_ctype ty) n_opt (* TODO: qualifier *)
+    | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
+    | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | ENUM id            -> Ail.ENUM id
-    | FUNCTION ty tys    -> Ail.FUNCTION (unproj_ctype ty) (List.map unproj_ctype tys)
-    | POINTER ty         -> Ail.POINTER {} (unproj_ctype ty)
+    | FUNCTION ty tys    -> Ail.FUNCTION (unproj_ctype ty) (List.map (Product.make Ail.no_qualifiers -| unproj_ctype) tys)
+    | POINTER ty         -> Ail.POINTER Ail.no_qualifiers (unproj_ctype ty)
     | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
     | SIZE_T             -> Ail.SIZE_T
     | INTPTR_T           -> Ail.INTPTR_T

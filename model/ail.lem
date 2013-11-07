@@ -2,18 +2,45 @@ open Global
 
 type id = Symbol.t
 
+type label = Symbol.t
+
 type storage_duration =
   | STATIC
   | THREAD
   | AUTOMATIC
   | ALLOCATED (*TODO: see 7.22.3 *)
 
-type qualifier =
-  | CONST
-  | RESTRICT
-  | VOLATILE
-  | ATOMIC_Q
-and qualifiers = set qualifier
+type qualifiers [name = "q*"] = <|
+  const    : bool;
+  restrict : bool;
+  volatile : bool;
+  atomic_q : bool
+|>
+
+let make_qualifiers c r v a = <|
+  const    = c;
+  restrict = r;
+  volatile = v;
+  atomic_q = a
+|>
+
+let no_qualifiers = <|
+  const    = false;
+  restrict = false;
+  volatile = false;
+  atomic_q = false
+|>
+
+let eq_qualifiers q1 q2 = 
+     q1.const    = q2.const
+  && q1.restrict = q2.restrict
+  && q1.volatile = q2.volatile
+  && q1.atomic_q = q2.atomic_q
+
+let sub_qualifiers qs1 qs2 =
+     qs1.const    --> qs2.const
+  && qs1.restrict --> qs2.restrict
+  && qs1.volatile --> qs2.volatile
 
 type integer_base_type =
   | ICHAR
@@ -48,18 +75,18 @@ type alignment_specifier =
 
 (* TODO: add [alignment_specifier] when needed to the ctors of ctype *)
 type ctype =
-  | VOID  of qualifiers
-  | BASIC of qualifiers * basic_type
+  | VOID
+  | BASIC of basic_type
   (* TODO Need to convert integer constant to an actual value! Otherwise, we
      cannot compare types! *)
-  | ARRAY of ctype * option int
+  | ARRAY of qualifiers * ctype * option int
 (* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
 
 (* NOTE: will need to make up ids for some of the bitfields *)
   | STRUCT of qualifiers * id * list (id * member)
   | UNION  of qualifiers * id * list (id * member)
   | ENUM of id
-  | FUNCTION of ctype * list ctype
+  | FUNCTION of ctype * list (qualifiers * ctype)
   | POINTER of qualifiers * ctype
   | ATOMIC of ctype
   | TYPEDEF of id
@@ -90,7 +117,7 @@ and member =
 
 and type_class =
   | T_EXP of ctype
-  | T_LVALUE of ctype
+  | T_LVALUE of qualifiers * ctype
   (* TODO: we need to add a T_BITFIELD *)
 
 
@@ -188,7 +215,8 @@ type character_prefix =
   | PREFIX_L
   | PREFIX_u
   | PREFIX_U
-and character_constant = option character_prefix * string (* the textual representaton *)
+(* TODO: we temporarily fix the glyph -> int mapping to use ASCII *)
+and character_constant = option character_prefix * int
 
 type constant =
   | CONST_INT of integer_constant
@@ -292,8 +320,8 @@ type statement 'a =
   | SWITCH of expression_t 'a * statement_l 'a
   | CASE of integer_constant * statement_l 'a
   | DEFAULT of statement_l 'a
-  | LABEL of id * statement_l 'a
-  | GOTO of id
+  | LABEL of label * statement_l 'a
+  | GOTO of label
   | DECLARATION of list (definition 'a)
   | PAR of list (statement_l 'a)
 
@@ -317,32 +345,23 @@ type env 'a = <|
 
 
 (* HACK: equality over ctypes. *)
-let rec and2 f l1 l2 =
+let rec and2 f g l1 l2 =
   match (l1,l2) with
-    | ([]   ,[]    ) -> true
-    | (x::xs, y::ys) -> f x y && and2 f xs ys
+    | ([]          , []         ) -> true
+    | ((x1, x2)::xs, (y1,y2)::ys) -> f x1 y1 && g x2 y2 && and2 f g xs ys
   end
 
 let rec ctype_eq ty1 ty2 =
   match (ty1, ty2) with
-    | (VOID qs1         , VOID qs2         ) -> Set.(=) qs1 qs2
-    | (BASIC qs1 b1     , BASIC qs2 b2     ) -> Set.(=) qs1 qs2 && b1 = b2
-    | (ARRAY ty1 n1     , ARRAY ty2 n2     ) -> ctype_eq ty1 ty2 && n1 = n2
-    | (POINTER qs1 ty1  , POINTER qs2 ty2  ) -> Set.(=) qs1 qs2 && ctype_eq ty1 ty2
-    | (FUNCTION ty1 tys1, FUNCTION ty2 tys2) -> ctype_eq ty1 ty2 && and2 ctype_eq tys1 tys2
-    | (STRUCT qs1 x1 ms1, STRUCT qs2 x2 ms2) -> Set.(=) qs1 qs2 && x1 = x2 && ms1 = ms2
-    | (UNION qs1 x1 ms1 , UNION qs2 x2 ms2 ) -> Set.(=) qs1 qs2 && x1 = x2 && ms1 = ms2
+    | (VOID             , VOID             ) -> true
+    | (BASIC b1         , BASIC b2         ) -> b1 = b2
+    | (ARRAY qs1 ty1 n1 , ARRAY qs2 ty2 n2 ) -> eq_qualifiers qs1 qs2 && ctype_eq ty1 ty2 && n1 = n2
+    | (POINTER qs1 ty1  , POINTER qs2 ty2  ) -> eq_qualifiers qs1 qs2 && ctype_eq ty1 ty2
+    | (FUNCTION ty1 ps1 , FUNCTION ty2 ps2 ) -> ctype_eq ty1 ty2 && and2 eq_qualifiers ctype_eq ps1 ps2
+    | (STRUCT qs1 x1 ms1, STRUCT qs2 x2 ms2) -> eq_qualifiers qs1 qs2 && x1 = x2 && ms1 = ms2
+    | (UNION qs1 x1 ms1 , UNION qs2 x2 ms2 ) -> eq_qualifiers qs1 qs2 && x1 = x2 && ms1 = ms2
   end
-
-
-
-
-
-
-
-
 
 (* Some useful aliases *)
 val unsigned_char: ctype
-let unsigned_char = BASIC {} (INTEGER (UNSIGNED ICHAR))
-
+let unsigned_char = BASIC (INTEGER (UNSIGNED ICHAR))

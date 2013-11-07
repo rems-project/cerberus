@@ -68,7 +68,7 @@ module Effect = struct
                end
   
   
-  let run = State.run
+  let eval = State.eval
   
   open Operators
   let sequence ms = List.fold_right (fun m acc -> m   >>= fun x  ->
@@ -736,7 +736,7 @@ let typecheck (f: file 'a) : Exception.t (file 'a) Errors.t =
     (List.fold_right
        (fun (fname, (coreTy_return, baseTys_vars, fbody)) acc ->
          Exception.bind acc (fun () ->
-           match State.run (E.mapM_ (fun (a, baseTy_a) -> E.put a baseTy_a) baseTys_vars >> check coreTy_return fbody)
+           match State.eval (E.mapM_ (fun (a, baseTy_a) -> E.put a baseTy_a) baseTys_vars >> check coreTy_return fbody)
                            (Pmap.empty, init_fenv)
            with
              | E.Success () -> Exception.return ()

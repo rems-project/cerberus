@@ -19,19 +19,19 @@ val exp_type_of: t -> Ail.ctype
 let exp_type_of e =
   let t =
     match type_of e with
-      | Ail.T_EXP    t -> t
-      | Ail.T_LVALUE t -> Ail_typing_aux.lvalue_convert' t
+      | Ail.T_EXP      t -> t
+      | Ail.T_LVALUE _ t -> Ail_typing_aux.lvalue_convert' t
     end in
   Ail_typing_aux.pointer_convert t
 
 let lvalue_type_of e =
   match type_of e with
-    | Ail.T_LVALUE t -> Ail_typing_aux.pointer_convert t
+    | Ail.T_LVALUE _ t -> Ail_typing_aux.pointer_convert t
   end
 
 val ctype_of: t -> Ail.ctype
 let ctype_of e =
   match type_of e with
-    | Ail.T_EXP    t -> t
-    | Ail.T_LVALUE t -> t
+    | Ail.T_EXP      t -> t
+    | Ail.T_LVALUE _ t -> t
   end
