@@ -740,6 +740,7 @@ let push_mod_order o taid = fun (<|E.mo = mod_order |> as st) ->
 
 val insert_after: forall 'a. 'a -> 'a -> list 'a -> list 'a
 let rec insert_after e new_e l =
+  (* inserts new_e after e in l *)
   match l with
     | [] -> Boot.assert_false "insert_after failed, because it couldn't find the element in the list"
     | h::t -> if h = e then new_e::l else e::(insert_after e new_e t)
@@ -750,7 +751,6 @@ let mod_order_insert_after o taid new_taid = fun (<|E.mo = mod_order |> as st) -
   let order_of_o = if Pmap.mem o mod_order then Pmap.find o mod_order else [] in
   let new_order_of_o = insert_after taid new_taid order_of_o in
   [(U.return (), <| st with E.mo = Pmap.add o new_order_of_o mod_order |>)]
-  
 
 val push_rf: taction_id -> taction_id -> E.t unit
 let push_rf store_taid read_taid = fun (<| E.rf = rf |> as st) -> 
@@ -1271,7 +1271,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
      add_tact new_taid tact                                           >>  
      is_atomic_location o                                             >>= fun is_atomic                  -> 
      (if is_atomic then 
-        (if mo_failure = Cmm.Seq_cst then
+        (if mo_succes = Cmm.Seq_cst then
            push_sc_action new_taid
          else
            E.return ()
