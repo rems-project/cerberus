@@ -15,7 +15,7 @@ type core_base_type =
   | Boolean
   | Address
   | Ctype
-  | Function
+  | CFunction
   | Unit
   | Tuple of list core_base_type
   | Wildcard
@@ -39,15 +39,17 @@ type ksym = Symbol.t
 (* C types (this is a simplication of what is need for typechecking) *)
 (* TODO: what about Ail.ATOMIC_Q ? *)
 type ctype =
-  | VOID
-  | BASIC of Ail.basic_type
-  | ARRAY of ctype * option int
+  | Void
+  | Basic of AilTypes.basicType
+  | Array of ctype * int
+  | Function of ctype * list ctype
+  | Pointer of ctype
+(*
   | STRUCT of Ail.id * list (Ail.id * member)
   | UNION  of Ail.id * list (Ail.id * member)
   | ENUM of Ail.id
-  | FUNCTION of ctype * list ctype
-  | POINTER of ctype
-  | ATOMIC of ctype
+*)
+  | Atomic of ctype
   | SIZE_T
   | INTPTR_T
   | WCHAR_T
@@ -85,7 +87,7 @@ type polarity =
 
 type name =
   | Sym of sym
-  | Impl of Implementation.implementation_constant
+  | Impl of Implementation_.implementation_constant
 
 
 type constant =
@@ -103,7 +105,7 @@ type expr 'a =
   | Ectype of ctype
   | Eaddr of mem_addr
   | Esym of sym
-  | Eimpl of Implementation.implementation_constant
+  | Eimpl of Implementation_.implementation_constant
   | Etuple of list (expr 'a)
   | Enot of expr 'a
   | Eop of binop * expr 'a * expr 'a
@@ -178,19 +180,19 @@ and paction 'a = polarity * action 'a
 
 
 val sizeof: expr zero -> expr zero
-let sizeof e = Ecall (Impl Implementation.Sizeof) [e]
+let sizeof e = Ecall (Impl Implementation_.Sizeof) [e]
 
 val alignof: expr zero -> expr zero
-let alignof e = Ecall (Impl Implementation.Alignof) [e]
+let alignof e = Ecall (Impl Implementation_.Alignof) [e]
 
 val ctype_min: expr zero -> expr zero
-let ctype_min e = Ecall (Impl Implementation.Ctype_min) [e]
+let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
 
 val ctype_max: expr zero -> expr zero
-let ctype_max e = Ecall (Impl Implementation.Ctype_max) [e]
+let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
 
 val bitwise_complement: expr zero -> expr zero
-let bitwise_complement e = Ecall (Impl Implementation.Bitwise_complement) [e]
+let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
 
 
 
@@ -199,7 +201,7 @@ let bitwise_complement e = Ecall (Impl Implementation.Bitwise_complement) [e]
 type impl_decl 'a =
   | Def  of core_base_type * expr 'a
   | IFun of core_base_type * list (sym * core_base_type) * expr 'a
-type impl 'a = map Implementation.implementation_constant (impl_decl 'a)
+type impl 'a = map Implementation_.implementation_constant (impl_decl 'a)
 
 type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
 

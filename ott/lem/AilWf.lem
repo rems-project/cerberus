@@ -7,7 +7,7 @@ let adjusted t : bool = not (array t) && not (is_function t)
 
 let wf_lvalue_aux q t : bool =
   match t with
-  | Pointer _  t' -> not (object t') --> not (q.restrict)
+  | Pointer _  t' -> not (object_ t') --> not (q.restrict)
   | _             -> if is_function t
                        then unqualified q 
                        else not (q.restrict) 

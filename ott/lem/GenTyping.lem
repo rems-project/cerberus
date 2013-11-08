@@ -28,13 +28,13 @@ let annotate_rvalue_aux (A : annotation 'A1 'A2) (annotate_expression : expressi
 let type_of_constant ic : genIntegerType =
   match ic with
   | (n, None) ->
-      if AilTypesAux.in_min_integer_range n (Signed Int) then
-        Concrete (Signed Int)
+      if AilTypesAux.in_min_integer_range n (Signed Int_) then
+        Concrete (Signed Int_)
       else
         Unknown ic
   | (n, Some U) ->
-      if AilTypesAux.in_min_integer_range n (Unsigned Int) then
-        Concrete (Unsigned Int)
+      if AilTypesAux.in_min_integer_range n (Unsigned Int_) then
+        Concrete (Unsigned Int_)
       else
         Unknown ic
   | (n, Some L) ->
@@ -56,7 +56,7 @@ let type_of_constant ic : genIntegerType =
 let well_typed_assignment t1 gt2 null2 =
   match (t1, gt2) with
   | (Pointer q1 t1, GenPointer q2 t2) -> null2 ||
-                                       AilTypesAux.sub_qualifiers q2 q1 && (AilTypesAux.compatible t1 t2 || AilTypesAux.void t1 && AilTypesAux.object t2 || AilTypesAux.void t2 && AilTypesAux.object t1)
+                                       AilTypesAux.sub_qualifiers q2 q1 && (AilTypesAux.compatible t1 t2 || AilTypesAux.void t1 && AilTypesAux.object_ t2 || AilTypesAux.void t2 && AilTypesAux.object_ t1)
   | (Pointer _  _ , _               ) -> null2
   | (_            , GenPointer _  _ ) -> AilTypesAux.boolean t1
   | (_            , _               ) -> AilTypesAux.arithmetic t1 && arithmetic gt2
@@ -186,7 +186,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       | GenPointer q (Function t p) -> if AilTypesAux.unqualified q
                                             then Some (Unary Indirection e, GenRValueType (GenPointer q (Function t p)))
                                             else None
-      | GenPointer q t                 -> if AilTypesAux.complete t && AilTypesAux.object t
+      | GenPointer q t                 -> if AilTypesAux.complete t && AilTypesAux.object_ t
                                             then Some (Unary Indirection e, GenLValueType q t)
                                             else None
       | _                              -> None
@@ -313,57 +313,57 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if scalar gt1 && scalar gt2
-        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else None
   | Binary e1 (Or  as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if scalar gt1 && scalar gt2
-        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else None
   | Binary e1 (Lt as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else None
   | Binary e1 (Gt as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else None
   | Binary e1 (Le as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else None
   | Binary e1 (Ge as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else None
   | Binary e1 (Eq as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if well_typed_equality gt1 gt2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else None
   | Binary e1 (Ne as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if well_typed_equality gt1 gt2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int)))))
+        then Some (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else None
   | SizeOf  q t ->
       if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.incomplete t)
@@ -541,7 +541,7 @@ let annotate_sigma (A : annotation 'A1 'A2) (S : sigma 'B 'A1) : option (sigma '
 let annotate_program (A : annotation 'A1 'A2) (p:program 'B 'A1) : option (program 'B 'A2) =
   let (main, S) = p in
   match lookup S main with
-  | Some ((Basic (Integer (Signed Int)), []), _) -> annotate_sigma A S >>= fun S -> Some (main, S)
+  | Some ((Basic (Integer (Signed Int_)), []), _) -> annotate_sigma A S >>= fun S -> Some (main, S)
   | Some _                                       -> None
   | None                                         -> None
   end

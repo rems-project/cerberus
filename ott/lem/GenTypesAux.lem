@@ -64,13 +64,13 @@ let pointers_to_compatible_complete_objects gt1 gt2 : bool =
 
 let pointers_to_compatible_objects gt1 gt2 : bool =
   match (gt1, gt2) with
-  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.object t1 && AilTypesAux.object t2 && AilTypesAux.compatible t1 t2
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.object_ t1 && AilTypesAux.object_ t2 && AilTypesAux.compatible t1 t2
   | (_              , _              ) -> false
   end  
 
 let pointer_to_object gt : bool =
   match gt with
-  | GenPointer _ t -> AilTypesAux.object t
+  | GenPointer _ t -> AilTypesAux.object_ t
   | _              -> false
   end
 
@@ -176,14 +176,14 @@ let min_interpret_integerSuffix s =
   match s with
   | L   -> Long
   | LL  -> LongLong
-  | U   -> Int
+  | U   -> Int_
   | UL  -> Long
   | ULL -> LongLong
   end
 
 let min_interpret_optionIntegerSuffix os =
   match os with
-  | None   -> Int
+  | None   -> Int_
   | Some s -> min_interpret_integerSuffix s
   end
 

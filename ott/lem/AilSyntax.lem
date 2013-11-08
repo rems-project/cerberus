@@ -2,7 +2,7 @@ open Common
 open AilTypes
 open Context
  
-type identifier = num
+type identifier = Symbol.t
 let eq_identifier : identifier -> identifier -> bool = (=)
 
 type integerSuffix = 
@@ -22,7 +22,7 @@ let eq_integerSuffix s1 s2 : bool =
   | (_  , _  ) -> false
   end
 
-type integerConstant (*[name = "ic*"]*) = num * option integerSuffix
+type integerConstant (*[name = "ic*"]*) = int * option integerSuffix
 
 let eq_integerConstant = eq_pair (=) (eq_option eq_integerSuffix)
 
@@ -414,7 +414,7 @@ let lookup (C : Context.context identifier 'B) = Context.lookup eq_identifier C
 let mem v (C : Context.context identifier 'B) = Context.mem eq_identifier v C
 let fresh v (C : Context.context identifier 'B) = Context.fresh eq_identifier v C
 let fresh_bindings (bs : bindings) (C : Context.context identifier 'B) = Context.fresh_bindings eq_identifier bs C
-let disjoint : Context.context identifier 'B1 -> Context.context identifier 'B2 -> bool = Context.disjoint eq_identifier
+let disjoint (C1: Context.context identifier 'B1) (C2: Context.context identifier 'B2) : bool = Context.disjoint eq_identifier C1 C2
 
 let parameters_of_bindings : bindings -> list (qualifiers * ctype) = List.map snd
 

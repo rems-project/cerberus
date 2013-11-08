@@ -1,5 +1,3 @@
-open Int
-
 open Common
 open AilTypes
 open AilTypesAux
@@ -7,7 +5,7 @@ open AilSyntax
 
 let rec null_pointer_constant' (e : expression' 'A) : bool =
   match e with
-  | Constant (ConstantInteger (0 , None)) -> true
+  | Constant (ConstantInteger (n , None)) -> Int.eq n (Int.int 0)
   | Cast q (Pointer q' Void) e            -> null_pointer_constant e && unqualified q && unqualified q'
   | _                                     -> false
   end

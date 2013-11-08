@@ -1,7 +1,7 @@
 type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
  | Ichar
  | Short
- | Int
+ | Int_
  | Long
  | LongLong
 
@@ -9,7 +9,7 @@ let eq_integerBaseType ibt1 ibt2 =
   match (ibt1, ibt2) with
   | (Ichar   , Ichar   ) -> true
   | (Short   , Short   ) -> true
-  | (Int     , Int     ) -> true
+  | (Int_    , Int_    ) -> true
   | (Long    , Long    ) -> true
   | (LongLong, LongLong) -> true
   | (_       , _       ) -> false
@@ -64,9 +64,10 @@ let eq_basicType bt1 bt2 =
 type ctype [name = "t*"] =  (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)
- | Array of ctype * num (*r array types (\S6.2.5\#20) *)
+ | Array of ctype * int (*r array types (\S6.2.5\#20) *)
  | Function of ctype * list (qualifiers * ctype) (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
+ | Atomic of ctype
 
 let rec eq_params_aux eq_ctype p1 p2 : bool =
   match (p1, p2) with
@@ -83,6 +84,7 @@ let rec eq_ctype t1 t2 =
   | (Array    t1 n1, Array    t2 n2) -> eq_ctype t1 t2 && n1 = n2
   | (Function t1 p1, Function t2 p2) -> eq_ctype t1 t2 && eq_params p1 p2
   | (Pointer  q1 t1, Pointer  q2 t2) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (Atomic t1     , Atomic      t2) -> eq_ctype t1 t2
   | (_             , _             ) -> false
   end
 

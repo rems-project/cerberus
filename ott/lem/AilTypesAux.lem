@@ -1,5 +1,3 @@
-open Int
-
 open Common
 open AilTypes
 open Implementation
@@ -53,17 +51,17 @@ let unsigned_type it : bool =
   end
 
 let in_integer_range P n it : bool =
-  Range.mem_nat n (integer_range P it)
+  Range.mem n (integer_range P it)
 
 let in_min_integer_range n it : bool =
-  Range.mem_nat n (Implementation.min_integer_range it)
+  Range.mem n (Implementation.min_integer_range it)
 
 let le_integer_range P it1 it2 : bool =
   match (it1, it2) with
   | (Char             , Char             ) -> true
   | (Char             , Signed   Ichar   ) -> P.signed Char
   | (Char             , Signed   ibt     ) -> P.signed Char ||
-                                              P.precision Char < P.precision (Signed ibt)
+                                              Int.(<) (P.precision Char) (P.precision (Signed ibt))
   | (Signed Ichar     , Char             ) -> P.signed Char
   | (Signed ibt       , Char             ) -> P.signed Char &&
                                               P.precision (Signed ibt) = P.precision Char
@@ -74,16 +72,16 @@ let le_integer_range P it1 it2 : bool =
   | (Char             , Bool             ) -> not (P.signed Char) &&
                                               P.precision Char = P.precision Bool
   | (Bool             , Char             ) -> not (P.signed Char) ||
-                                              P.precision Bool < P.precision Char
+                                              Int.(<) (P.precision Bool) (P.precision Char)
 
   | (Signed   Ichar   , Signed   _       ) -> true
   | (Signed   Short   , Signed   Short   ) -> true
-  | (Signed   Short   , Signed   Int     ) -> true
+  | (Signed   Short   , Signed   Int_    ) -> true
   | (Signed   Short   , Signed   Long    ) -> true
   | (Signed   Short   , Signed   LongLong) -> true
-  | (Signed   Int     , Signed   Int     ) -> true
-  | (Signed   Int     , Signed   Long    ) -> true
-  | (Signed   Int     , Signed   LongLong) -> true
+  | (Signed   Int_    , Signed   Int_    ) -> true
+  | (Signed   Int_    , Signed   Long    ) -> true
+  | (Signed   Int_    , Signed   LongLong) -> true
   | (Signed   Long    , Signed   Long    ) -> true
   | (Signed   Long    , Signed   LongLong) -> true
   | (Signed   LongLong, Signed   LongLong) -> true
@@ -93,12 +91,12 @@ let le_integer_range P it1 it2 : bool =
   | (Bool             , Unsigned _       ) -> true
   | (Unsigned Ichar   , Unsigned _       ) -> true
   | (Unsigned Short   , Unsigned Short   ) -> true
-  | (Unsigned Short   , Unsigned Int     ) -> true
+  | (Unsigned Short   , Unsigned Int_    ) -> true
   | (Unsigned Short   , Unsigned Long    ) -> true
   | (Unsigned Short   , Unsigned LongLong) -> true
-  | (Unsigned Int     , Unsigned Int     ) -> true
-  | (Unsigned Int     , Unsigned Long    ) -> true
-  | (Unsigned Int     , Unsigned LongLong) -> true
+  | (Unsigned Int_    , Unsigned Int_    ) -> true
+  | (Unsigned Int_    , Unsigned Long    ) -> true
+  | (Unsigned Int_    , Unsigned LongLong) -> true
   | (Unsigned Long    , Unsigned Long    ) -> true
   | (Unsigned Long    , Unsigned LongLong) -> true
   | (Unsigned LongLong, Unsigned LongLong) -> true
@@ -108,13 +106,13 @@ let le_integer_range P it1 it2 : bool =
   | (Signed   _       , Bool             ) -> false
   | (Signed   _       , Unsigned _       ) -> false
 
-  | (Bool             , Signed   ibt2    ) -> P.precision Bool < P.precision (Signed ibt2)
+  | (Bool             , Signed   ibt2    ) -> Int.(<) (P.precision Bool) (P.precision (Signed ibt2))
   | (Unsigned _       , Signed   Ichar   ) -> false
   | (Unsigned Short   , Signed   Short   ) -> false
-  | (Unsigned Int     , Signed   Int     ) -> false
+  | (Unsigned Int_    , Signed   Int_    ) -> false
   | (Unsigned Long    , Signed   Long    ) -> false
   | (Unsigned LongLong, Signed   LongLong) -> false
-  | (Unsigned ibt1    , Signed   ibt2    ) -> P.precision (Unsigned ibt1) < P.precision (Signed   ibt2)
+  | (Unsigned ibt1    , Signed   ibt2    ) -> Int.(<) (P.precision (Unsigned ibt1)) (P.precision (Signed ibt2))
   end
 
 let eq_integer_rank_base it1 it2 : bool =
@@ -132,10 +130,10 @@ let lt_integer_rank_base P it1 it2 : bool =
   match (it1, it2) with
   | (Bool        , it             ) -> not (eq_integerType Bool it)
   | (Signed  Long, Signed LongLong) -> true
-  | (Signed   Int, Signed     Long) -> true
-  | (Signed Short, Signed      Int) -> true
+  | (Signed   Int_, Signed     Long) -> true
+  | (Signed Short, Signed      Int_) -> true
   | (Signed Ichar, Signed    Short) -> true
-  | (Signed  ibt1, Signed     ibt2) -> P.precision (Signed ibt1) < P.precision (Signed ibt2)
+  | (Signed  ibt1, Signed     ibt2) -> Int.(<) (P.precision (Signed ibt1)) (P.precision (Signed ibt2))
   | (_           , _              ) -> false
   end
 
@@ -174,12 +172,12 @@ let lt_integer_rank it1 it2 : bool =
   | (Unsigned Short, Signed    _   ) -> true
   | (Unsigned Short, Unsigned  _   ) -> true
 
-  | (_             , Signed     Int) -> false
-  | (_             , Unsigned   Int) -> false
-  | (Signed     Int, Signed    _   ) -> true
-  | (Signed     Int, Unsigned  _   ) -> true
-  | (Unsigned   Int, Signed    _   ) -> true
-  | (Unsigned   Int, Unsigned  _   ) -> true
+  | (_             , Signed     Int_) -> false
+  | (_             , Unsigned   Int_) -> false
+  | (Signed     Int_, Signed    _   ) -> true
+  | (Signed     Int_, Unsigned  _   ) -> true
+  | (Unsigned   Int_, Signed    _   ) -> true
+  | (Unsigned   Int_, Unsigned  _   ) -> true
 
   | (_             , Signed    Long) -> false
   | (_             , Unsigned  Long) -> false
@@ -231,26 +229,26 @@ let make_corresponding_unsigned it : integerType =
 
 let is_integer_promotion P it1 it2 : bool =
   match (it1, it2) with
-  | (Signed   Int, Signed   Int) -> true
-  | (Unsigned Int, Signed   Int) -> false
-  | (Unsigned Int, Unsigned Int) -> true
-  | (Signed   Int, Unsigned Int) -> false
-  | (_           , Signed   Int) -> le_integer_rank it1 (Signed Int) &&
-                                    le_integer_range P it1 (Signed Int)
-  | (_           , Unsigned Int) -> le_integer_rank it1 (Signed Int) &&
-                                    not (le_integer_range P it1 (Signed Int))
+  | (Signed   Int_, Signed   Int_) -> true
+  | (Unsigned Int_, Signed   Int_) -> false
+  | (Unsigned Int_, Unsigned Int_) -> true
+  | (Signed   Int_, Unsigned Int_) -> false
+  | (_           , Signed   Int_) -> le_integer_rank it1 (Signed Int_) &&
+                                    le_integer_range P it1 (Signed Int_)
+  | (_           , Unsigned Int_) -> le_integer_rank it1 (Signed Int_) &&
+                                    not (le_integer_range P it1 (Signed Int_))
   | (_           , _           ) -> eq_integerType it1 it2 &&
-                                    not (le_integer_rank it1 (Signed Int))
+                                    not (le_integer_rank it1 (Signed Int_))
   end
 
 let integer_promotion P it : integerType =
   match it with
-  | Signed   Int -> Signed   Int
-  | Unsigned Int -> Unsigned Int
-  | _            -> if le_integer_rank it (Signed Int)
-                      then if le_integer_range P it (Signed Int)
-                             then Signed Int
-                             else Unsigned Int
+  | Signed   Int_ -> Signed   Int_
+  | Unsigned Int_ -> Unsigned Int_
+  | _            -> if le_integer_rank it (Signed Int_)
+                      then if le_integer_range P it (Signed Int_)
+                             then Signed Int_
+                             else Unsigned Int_
                       else it
   end
 
@@ -350,7 +348,7 @@ let usual_arithmetic P t1 t2 : option ctype =
   | (_                  , _                  ) -> None
   end
 
-let object t : bool =
+let object_ t : bool =
   match t with
   | Basic _ -> true
   | Void -> true
@@ -374,7 +372,7 @@ let incomplete t : bool =
   end
 
 let modifiable q t : bool =
-  object t &&
+  object_ t &&
   not (array t) &&
   not (incomplete t) &&
   not (q.const)
@@ -399,7 +397,7 @@ let rec compatible t1 t2 : bool =
   | (_             , _             ) -> false
   end
 
-let compatible_params = compatible_params_aux compatible
+let compatible_params p1 p2 = compatible_params_aux compatible p1 p2
 
 let rec is_composite_params_aux is_composite p1 p2 p3 : bool =
   match (p1, p2, p3) with
@@ -421,7 +419,7 @@ let rec is_composite t1 t2 t3 : bool =
   | (_             , _             , _             ) -> false
   end
 
-let is_composite_params = is_composite_params_aux is_composite
+let is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
 
 let rec composite_params_aux composite p1 p2 : option (list (qualifiers * ctype))=
     match (p1, p2) with
@@ -454,7 +452,7 @@ let rec composite t1 t2 : option ctype =
   | (_             , _             ) -> None
   end
 
-let composite_params = composite_params_aux composite
+let composite_params p1 p2 = composite_params_aux composite p1 p2
 
 let combine_qualifiers qs1 qs2 = <|
   const    = qs1.const    || qs2.const   ;
@@ -496,13 +494,13 @@ let pointers_to_compatible_complete_objects t1 t2 : bool =
 
 let pointers_to_compatible_objects t1 t2 : bool =
   match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> object t1 && object t2 && compatible t1 t2
+  | (Pointer _ t1, Pointer _ t2) -> object_ t1 && object_ t2 && compatible t1 t2
   | (_           , _           ) -> false
   end  
 
 let pointer_to_object t : bool =
   match t with
-  | Pointer _ t -> object t
+  | Pointer _ t -> object_ t
   | _           -> false
   end
 

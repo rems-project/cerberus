@@ -10,7 +10,7 @@ let todo s = assert_false $ "[TODO] " ^ s
 
 (* Ctype functions (for the Core variant) *)
 let compatible ty1 ty2 =
-  Ail_typing_aux.compatible (Caux.unproj_ctype ty1) (Caux.unproj_ctype ty2)
+  AilTypesAux.compatible (Caux.unproj_ctype ty1) (Caux.unproj_ctype ty2)
 
 
 
@@ -429,9 +429,9 @@ type pointer_expression =
 val arrayify: C.ctype -> C.ctype
 let arrayify ty =
   match ty with
-    | C.ARRAY _ _    -> ty
-    | C.FUNCTION _ _ -> ty
-    | ty             -> C.ARRAY ty (Some (Int.int 1))
+    | C.Array _ _    -> ty
+    | C.Function _ _ -> ty
+    | ty             -> C.Array ty 1
   end
 
 
@@ -443,8 +443,11 @@ let arrayify ty =
 val is_member_of: C.ctype -> member_id -> bool
 let is_member_of ty m_id =
   match ty with
+(*
+TODO
     | C.STRUCT _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
     | C.UNION _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
+*)
     | _                 -> assert_false "TODO: message"
   end
 
@@ -466,10 +469,13 @@ let rec check_prefixes xs ys m_id =
 val structs_unions_compatible_upto: C.ctype -> C.ctype -> member_id -> bool
 let structs_unions_compatible_upto ty1 ty2 m_id =
   match (ty1, ty2) with
+(*
+TODO
     | (C.STRUCT _ membrs1, C.STRUCT _ membrs2) ->
         check_prefixes membrs1 membrs2 m_id
     | (C.UNION _ membrs1, C.UNION _ membrs2) ->
         check_prefixes membrs1 membrs2 m_id
+*)
     | _ -> assert_false "TODO message"
   end 
 
@@ -502,8 +508,11 @@ val compatible_struct_union: C.ctype -> C.ctype -> bool
 let compatible_struct_union ty1 ty2 =
   let ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2) =
     match (ty1, ty2) with
+(*
+TODO
       | (C.STRUCT (* qs1 *) tag1 membrs1, C.STRUCT (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
       | (C.UNION  (* qs1 *) tag1 membrs1, C.UNION  (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
+*)
       | _ -> Boot.assert_false "TODO message"
     end
   (* If one is declared with a tag, the other shall be declared with the same tag. *)
@@ -527,10 +536,15 @@ let rec outermost_dynamic_type pe =
     | Nullary (Function_pointer) -> todo "TODO"
     | Unary (Struct_or_union_offset s_ty m_id) pe ->
         let (tag, membrs) = match s_ty with
+(*
+TODO
           | C.STRUCT tag membrs -> (tag, membrs)
           | C.UNION  tag membrs -> (tag, membrs)
+*)
           end
         in match outermost_dynamic_type pe with
+(*
+TODO
           | C.STRUCT tag' membrs' ->
               if tag <> tag' then
                 assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
@@ -538,6 +552,7 @@ let rec outermost_dynamic_type pe =
                 interchangeability of structs with the same prefix *)
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
+*)
           | _ -> assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
         end
     | Unary (Array_offset ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)

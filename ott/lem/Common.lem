@@ -1,5 +1,5 @@
 val option_map : forall 'A 'B. ('A -> 'B) -> option 'A -> option 'B
-let option_map = Option.map
+let option_map = Option.fmap
 (*let inline {coq} option_map = Coq.option_map*)
 
 val option_bind : forall 'A 'B. option 'A -> ('A -> option 'B) -> option 'B

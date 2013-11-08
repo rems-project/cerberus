@@ -15,7 +15,7 @@ CMMDIR=../../../rsem/cpp/axiomatic/ntc/
 
 
 # Source directories
-LEMDIRS=lib/ocaml model
+LEMDIRS=lib/ocaml ott/lem model
 MLDIRS=\
   lib/ocaml/src \
   parsers/cparser parsers/cparser/coq_stdlib parsers/cparser/validator \
@@ -31,7 +31,26 @@ OCAML_BUILD_DIR=_ocaml_generated
 OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug  -package pprint -libs nums
 
 
-MODEL_FILES=\
+AIL_FILES=\
+  Common.lem \
+  Range.lem \
+  AilTypes.lem \
+  Implementation.lem \
+  AilTypesAux.lem \
+  Context.lem \
+  AilSyntax.lem \
+  GenTypes.lem \
+  Annotation.lem \
+  GenSyntax.lem \
+  AilSyntaxAux.lem \
+  AilWf.lem \
+  AilTyping.lem \
+  GenTypesAux.lem \
+  GenTyping.lem
+
+
+# TODO: fix this horror
+MODEL_FILES1=\
   big_int_.lem \
   boot.lem \
   ail_typing_errors.lem \
@@ -54,28 +73,28 @@ MODEL_FILES=\
   document.lem \
   symbol_table.lem \
   cabs0.lem \
-  ail.lem \
+  ail.lem
+
+MODEL_FILES2=\
   undefined.lem \
-  implementation.lem \
+  implementation_.lem \
   core.lem \
   debug.lem \
   ail_aux.lem \
   ail_rewrite.lem \
   core_aux.lem \
   errors.lem \
-  implementation.lem \
   core_simpl.lem \
   core_typing.lem \
   core_indet.lem \
   ail_typing_aux.lem \
-  memory.lem \
   core_run.lem \
   sb.lem \
   annotate.lem \
   decode.lem \
   cabs_to_ail.lem \
   ail_typing.lem \
-  range.lem \
+  range_.lem \
   translation_effect.lem \
   translation_aux.lem \
   translation.lem
@@ -115,7 +134,7 @@ PPRINTERS_FILES=\
   pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
 
-FILES=$(MODEL_FILES) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES) $(PPRINTERS_FILES)
+FILES=$(MODEL_FILES1) $(AIL_FILES) $(MODEL_FILES2) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES) $(PPRINTERS_FILES)
 
 default: ocaml_byte
 
@@ -135,7 +154,7 @@ lem_ocaml: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_P
            $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES))
 # (FUTURE) see comment below
 #          $(FILES:%.lem=$(OCAML_BUILD_DIR)/%.ml)
-	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix $(CMMDIR), $(CMM_FILES)) $(addprefix ../model/, $(MODEL_FILES)) 
+	cd $(OCAML_BUILD_DIR) && OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ../$(OCAML_LIB)/$(F)) -ocaml $(addprefix $(CMMDIR), $(CMM_FILES)) $(addprefix ../model/, $(MODEL_FILES1))  $(addprefix ../ott/lem/, $(AIL_FILES)) $(addprefix ../model/, $(MODEL_FILES2))
 	sed -i"" -e 's/let emp/let emp ()/' $(OCAML_BUILD_DIR)/multiset.ml
 	sed -i"" -e 's/) emp /) (emp ()) /' $(OCAML_BUILD_DIR)/multiset.ml
 	@sed -i"" -e 's/Multiset.emp/Multiset.emp ()/' $(OCAML_BUILD_DIR)/cabs_to_ail.ml

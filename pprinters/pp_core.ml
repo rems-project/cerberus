@@ -77,7 +77,7 @@ let pp_const    c = !^ (ansi_format [Magenta] c)
 let pp_control  w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol   a = !^ (ansi_format [Blue] $ Symbol.to_string_pretty a)
 let pp_number   n = !^ (ansi_format [Yellow] n)
-let pp_impl     i = P.angles (!^ (ansi_format [Yellow] $ Implementation.string_of_implementation_constant i))
+let pp_impl     i = P.angles (!^ (ansi_format [Yellow] $ Implementation_.string_of_implementation_constant i))
 
 
 let rec pp_core_base_type = function
@@ -85,6 +85,7 @@ let rec pp_core_base_type = function
   | Boolean       -> !^ "boolean"
   | Address       -> !^ "address"
   | Ctype         -> !^ "ctype"
+  | CFunction     -> !^ "cfunction"
   | Unit          -> !^ "unit"
   | Wildcard      -> !^ "wildcard"
   | Tuple baseTys -> P.parens (P.separate_map P.comma pp_core_base_type baseTys)
@@ -98,21 +99,25 @@ let pp_core_type = function
 let rec pp_ctype t =
   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
   match t with
-    | VOID                    -> !^ "void"
-    | BASIC bt                -> Pp_ail.pp_basic_type bt
-    | ARRAY (ty, n_opt)       -> pp_ctype ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
+    | Void                    -> !^ "void"
+    | Basic bt                -> Pp_ail.pp_basicType bt
+    | Array (ty, n)           -> pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
+(*
     | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
-    | FUNCTION (ty, args_tys) -> pp_ctype ty ^^^
+*)
+    | Function (ty, args_tys) -> pp_ctype ty ^^^
                                  P.parens (comma_list pp_ctype args_tys)
-    | POINTER ty              -> pp_ctype ty ^^ P.star
-    | ATOMIC ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
+    | Pointer ty              -> pp_ctype ty ^^ P.star
+    | Atomic ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
+(*
     | SIZE_T                  -> !^ "size_t"
     | INTPTR_T                -> !^ "intptr_t"
     | WCHAR_T                 -> !^ "wchar_t"
     | CHAR16_T                -> !^ "char16_t"
     | CHAR32_T                -> !^ "char32_t"
+*)
 
 and pp_member = function
   | MEMBER ty           -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi

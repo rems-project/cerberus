@@ -56,7 +56,7 @@ let string_of_trace_action tact =
         "{\\color{red}\\mathbf{RMW}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^
           f o ^ " = " ^ Pp_run.string_of_mem_value e ^
-          " \Rightarrow " ^
+          " \\Rightarrow " ^
           f o ^ " := " ^ Pp_run.string_of_mem_value d
 
 
@@ -73,15 +73,17 @@ let pp n g =
   let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
       !^ (string_of_int i) ^^^ !^ "->" ^^^ !^ (string_of_int i') ^^^
-        P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel in
+        P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel ^^ if List.length rel > 0 then P.semi else P.empty in
   
   !^ ("digraph G" ^ string_of_int n) ^^ P.braces
     (P.concat_map (fun (tid, acts) ->
-      !^ ("cluster_" ^ Pp_run.string_of_thread_id tid) ^^ P.braces
-        (P.separate_map P.semi (fun (aid, act) -> 
+      !^ ("subgraph cluster_" ^ Pp_run.string_of_thread_id tid) ^^ P.braces
+        (!^ "label" ^^ P.equals ^^ P.dquotes !^ ("\\mathbf{thread}_{" ^ (Pp_run.string_of_thread_id tid) ^ "}") ^^ P.semi ^^
+        !^ "style=filled;color=lightgrey; node [shape=box,style=filled,color=white];" ^^
+        P.separate_map P.semi (fun (aid, act) -> 
           !^ (string_of_int aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (string_of_int aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
         ) acts)
-     ) (Pmap.bindings threads) ^^ P.break 1 ^^
+     ) (Pmap.bindings threads) ^^ P.semi ^^ P.break 1 ^^
      
      pp_relation g.sb  "black"       ^^ P.break 1 ^^
      pp_relation g.asw "DeepPink4"   ^^ P.break 1 ^^

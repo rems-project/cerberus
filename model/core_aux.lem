@@ -14,21 +14,28 @@ let zero : expr zero = Econst (Cint (Int.int 0))
 let one  : expr zero = Econst (Cint (Int.int 1))
 
 
-(* Project an Ail.ctype into a Core.ctype *)
+(* Project an AilTypes.ctype into a Core.ctype *)
+val     proj_ctype: AilTypes.ctype -> Core.ctype
 let rec proj_ctype ty =
+(*
+
+TODO: bring back structs/unions
+
   let proj_member = function
     | Ail.MEMBER ty               -> MEMBER (proj_ctype ty)
     | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
   end in
+*)
   match ty with
-    | Ail.VOID                 -> VOID
-    | Ail.BASIC bt             -> BASIC bt
-    | Ail.ARRAY q ty n_opt     -> ARRAY (proj_ctype ty) n_opt (* TODO: qualifiers *)
+    | AilTypes.Void           -> Void
+    | AilTypes.Basic bt       -> Basic bt
+    | AilTypes.Array ty n     -> Array (proj_ctype ty) n
+    | AilTypes.Function ty ps -> Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps)
+    | AilTypes.Pointer qs ty  -> Pointer (proj_ctype ty)
+(*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.ENUM id              -> ENUM id
-    | Ail.FUNCTION ty ps       -> FUNCTION (proj_ctype ty) (List.map (proj_ctype -| snd) ps) (* TODO: qualifiers *)
-    | Ail.POINTER _ ty         -> POINTER (proj_ctype ty)
     | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
     | Ail.TYPEDEF _            -> Boot.assert_false "[Core_aux.proj_ctype] found a A.TYPEDEF"
     | Ail.SIZE_T               -> SIZE_T
@@ -36,32 +43,37 @@ let rec proj_ctype ty =
     | Ail.WCHAR_T              -> WCHAR_T
     | Ail.CHAR16_T             -> CHAR16_T
     | Ail.CHAR32_T             -> CHAR32_T
+*)
 end
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
+(*
   let unproj_member = function
     | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
     | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
   end in
+*)
   match ty with
-    | VOID               -> Ail.VOID
-    | BASIC bt           -> Ail.BASIC bt
-    | ARRAY ty n_opt     -> Ail.ARRAY  Ail.no_qualifiers (unproj_ctype ty) n_opt (* TODO: qualifier *)
+    | Void            -> AilTypes.Void
+    | Basic bt        -> AilTypes.Basic bt
+    | Array ty n      -> AilTypes.Array (unproj_ctype ty) n
+    | Function ty tys -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys)
+    | Pointer ty      -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
+(*
     | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | ENUM id            -> Ail.ENUM id
-    | FUNCTION ty tys    -> Ail.FUNCTION (unproj_ctype ty) (List.map (Product.make Ail.no_qualifiers -| unproj_ctype) tys)
-    | POINTER ty         -> Ail.POINTER Ail.no_qualifiers (unproj_ctype ty)
     | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
     | SIZE_T             -> Ail.SIZE_T
     | INTPTR_T           -> Ail.INTPTR_T
     | WCHAR_T            -> Ail.WCHAR_T
     | CHAR16_T           -> Ail.CHAR16_T
     | CHAR32_T           -> Ail.CHAR32_T
+*)
 end
 
-val mk_ctype: forall 'a. Ail.ctype -> expr 'a
+val mk_ctype: forall 'a. AilTypes.ctype -> expr 'a
 let mk_ctype ty = Ectype (proj_ctype ty)
 
 let rec mk_wseq a_opts_es =
@@ -592,6 +604,6 @@ let have_simple_race e1 e2 =
 val is_atomic_type: ctype -> bool
 let is_atomic_type t = 
   match t with
-  | ATOMIC _ -> true
-  | _ -> false
+    | Atomic _ -> true
+    | _         -> false
   end
