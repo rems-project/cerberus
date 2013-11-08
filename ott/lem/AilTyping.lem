@@ -1,5 +1,3 @@
-open Int
-
 open Common
 open Context
 open AilTypes
@@ -14,8 +12,8 @@ open OptionMonad.Operators
 let type_of_constant P (ic : integerConstant) : option integerType =
   match ic with
   | (n, None) ->
-      if in_integer_range P n (Signed Int) then
-        Some (Signed Int)
+      if in_integer_range P n (Signed Int_) then
+        Some (Signed Int_)
       else if in_integer_range P n (Signed Long) then
         Some (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
@@ -23,8 +21,8 @@ let type_of_constant P (ic : integerConstant) : option integerType =
       else
         None
   | (n, Some U) ->
-      if in_integer_range P n (Unsigned Int) then
-        Some (Unsigned Int)
+      if in_integer_range P n (Unsigned Int_) then
+        Some (Unsigned Int_)
       else if in_integer_range P n (Unsigned Long) then
         Some (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
@@ -67,7 +65,7 @@ let type_of_rvalue_aux (type_of_expression : expression 'A -> option typeCategor
 let well_typed_assignment t1 t2 null2 =
   match (t1, t2) with
   | (Pointer q1 t1, Pointer q2 t2) -> null2 ||
-                                      sub_qualifiers q2 q1 && (compatible t1 t2 || void t1 && object t2 || void t2 && object t1) 
+                                      sub_qualifiers q2 q1 && (compatible t1 t2 || void t1 && object_ t2 || void t2 && object_ t1) 
   | (Pointer _  _ , _            ) -> null2
   | (_            , Pointer _  _ ) -> boolean t1
   | (_            , _            ) -> arithmetic t1 && arithmetic t2
@@ -198,7 +196,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
       | Pointer q (Function t p) -> if unqualified q
                                       then Some (RValueType (Pointer q (Function t p)))
                                       else None
-      | Pointer q t              -> if complete t && object t
+      | Pointer q t              -> if complete t && object_ t
                                       then Some (LValueType q t)
                                       else None
       | _                        -> None
@@ -309,57 +307,57 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if scalar t1 && scalar t2
-        then Some (RValueType (Basic (Integer (Signed Int))))
+        then Some (RValueType (Basic (Integer (Signed Int_))))
         else None
   | Binary e1 Or  e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if scalar t1 && scalar t2
-        then Some (RValueType (Basic (Integer (Signed Int))))
+        then Some (RValueType (Basic (Integer (Signed Int_))))
         else None
   | Binary e1 Lt e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else None
   | Binary e1 Gt e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else None
   | Binary e1 Le e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else None
   | Binary e1 Ge e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int))))
+        Some (RValueType (Basic (Integer (Signed Int_))))
       else None
   | Binary e1 Eq e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (RValueType (Basic (Integer (Signed Int))))
+        then Some (RValueType (Basic (Integer (Signed Int_))))
         else None
   | Binary e1 Ne e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (RValueType (Basic (Integer (Signed Int))))
+        then Some (RValueType (Basic (Integer (Signed Int_))))
         else None
   | SizeOf  q t ->
       if wf_lvalue q t && not (is_function t) && not (incomplete t)
@@ -520,7 +518,7 @@ let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
 let well_typed_program P (p:program 'A1 'A2) : bool =
   let (main, S) = p in
   match lookup S main with
-  | Some ((Basic (Integer (Signed Int)), []), _) -> well_typed_sigma P S
+  | Some ((Basic (Integer (Signed Int_)), []), _) -> well_typed_sigma P S
   | Some _                                       -> false
   | None                                         -> false
   end

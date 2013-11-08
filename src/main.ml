@@ -92,6 +92,7 @@ let write_graph fname ts =
   
   List.iter (fun g ->
     let (temp_name, temp_chan) = Filename.open_temp_file fname "" in
+    debug_print (Colour.ansi_format [Colour.Blue] $ "Using temporary .dot file: " ^ temp_name);
     output_string temp_chan g;
     close_out temp_chan;
     (* TODO: using /dev/null here probably only work on Unix-like systems? *)

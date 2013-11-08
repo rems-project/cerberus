@@ -91,7 +91,7 @@ let scan_sym lexbuf =
 let scan_impl lexbuf =
   let id = Lexing.lexeme lexbuf in
   try
-    T.IMPL (Pmap.find id Implementation.impl_map)
+    T.IMPL (Pmap.find id Implementation_.impl_map)
   with Not_found ->
     failwith "Found an invalid impl_name."
 

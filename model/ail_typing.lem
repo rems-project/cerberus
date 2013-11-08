@@ -91,8 +91,8 @@ let invalid msg exp = E.fail (report msg exp)
 let lvalue_convert t e =
   match T.lvalue_convert t with
   | None -> (* E.fail Errors.AIL_TYPECHECK_LVALUE_UNDEFINED *)
-      Boot.assert_false $ "[Ail_typing.lvalue_convert] found a None:\n  t = " ^
-        Boot.pp_ail_ctype t ^ "\n  e = " ^ Boot.pp_ail_expr e
+      Boot.assert_false $ "[Ail_typing.lvalue_convert] found a None:\n  t = " (* ^
+        Boot.pp_ail_ctype t *) ^ "\n  e = " (* ^ Boot.pp_ail_expr e *)
 
   | Some t' -> E.return t'
   end

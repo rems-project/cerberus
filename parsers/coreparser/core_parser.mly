@@ -3,42 +3,49 @@ open Global
 
 
 type ctype_ =
-  | VOID_
-  | BASIC_ of Ail.basic_type
-  | ARRAY_ of ctype_ * Num.num option (* NOTE: if the element type is WILDCARD, we ignore the size, ie. _[n] is the same as _[m] *)
+  | Void_
+  | Basic_ of AilTypes.basicType
+  | Array_ of ctype_ * Num.num (* NOTE: if the element type is WILDCARD, we ignore the size, ie. _[n] is the same as _[m] *)
+(*
   | STRUCT_ of Ail.id * (Ail.id * Core.member) list
   | UNION_  of Ail.id * (Ail.id * Core.member) list
   | ENUM_ of Ail.id
-  | FUNCTION_ of Core.ctype * Core.ctype list
-  | POINTER_ of ctype_
-  | ATOMIC_ of ctype_
+*)
+  | Function_ of Core.ctype * Core.ctype list
+  | Pointer_ of ctype_
+  | Atomic_ of ctype_
+(*
   | SIZE_T_
   | INTPTR_T_
   | WCHAR_T_
   | CHAR16_T_
   | CHAR32_T_
+*)
   | WILDCARD
 
 
 let rec project_ctype_ = function
-  | VOID_ ->
-      Core.VOID
-  | BASIC_ bty ->
-      Core.BASIC bty
-  | ARRAY_ (ty_, n_opt) ->
-    Core.ARRAY (project_ctype_ ty_, n_opt)
+  | Void_ ->
+      Core.Void
+  | Basic_ bty ->
+      Core.Basic bty
+  | Array_ (ty_, n) ->
+    Core.Array (project_ctype_ ty_, n)
+(*
   | STRUCT_ (x, membrs) ->
       Core.STRUCT (x, membrs)
   | UNION_ (x, membrs) ->
       Core.UNION (x, membrs)
   | ENUM_ id ->
       Core.ENUM id
-  | FUNCTION_ (ty, tys) ->
-      Core.FUNCTION (ty, tys)
-  | POINTER_ ty_ ->
-      Core.POINTER (project_ctype_ ty_)
-  | ATOMIC_ ty_ ->
-      Core.ATOMIC (project_ctype_ ty_)
+*)
+  | Function_ (ty, tys) ->
+      Core.Function (ty, tys)
+  | Pointer_ ty_ ->
+      Core.Pointer (project_ctype_ ty_)
+  | Atomic_ ty_ ->
+      Core.Atomic (project_ctype_ ty_)
+(*
   | SIZE_T_ ->
       Core.SIZE_T
   | INTPTR_T_ ->
@@ -49,19 +56,20 @@ let rec project_ctype_ = function
       Core.CHAR16_T
   | CHAR32_T_ ->
       Core.CHAR32_T
+*)
   | WILDCARD ->
       failwith "This is not a completely defined ctype."
 
 type name =
   | Sym of string
-  | Impl of Implementation.implementation_constant
+  | Impl of Implementation_.implementation_constant
 
 type expr =
   | Eskip
   | Econst of Core.constant
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
-  | Eimpl of Implementation.implementation_constant
+  | Eimpl of Implementation_.implementation_constant
   | Eop of Core.binop * expr * expr
   | Etrue
   | Efalse
@@ -102,8 +110,8 @@ and action =
 and paction = Core.polarity * action
 
 type declaration =
-  | Def_decl  of Implementation.implementation_constant * Core.core_base_type * expr
-  | IFun_decl of Implementation.implementation_constant * (Core.core_base_type * (string * Core.core_base_type) list * expr)
+  | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * expr
+  | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (string * Core.core_base_type) list * expr)
   | Fun_decl  of string * (Core.core_type * (string * Core.core_base_type) list * expr)
 
 (* TODO *)
@@ -247,7 +255,7 @@ let mk_file decls =
         match decl with
           | Def_decl (i, bty, e) ->
               if Pmap.mem i impl_map then
-                failwith ("(TODO_MSG) duplication declaration of " ^ Implementation.string_of_implementation_constant i)
+                failwith ("(TODO_MSG) duplication declaration of " ^ Implementation_.string_of_implementation_constant i)
               else
                 Pmap.add i (Core.Def (bty, convert e (Pmap.empty compare) (Pmap.empty compare))) impl_map
           | IFun_decl (i, (bty, args, fbody)) ->
@@ -283,7 +291,7 @@ let subst name =
 %token <Num.num> INT_CONST
 %token <string> SYM
 %token <Core.name> NAME
-%token <Implementation.implementation_constant> IMPL
+%token <Implementation_.implementation_constant> IMPL
 %token SKIP RET
 %token NOT
 %token TRUE FALSE
@@ -376,25 +384,28 @@ core_type:
 (* BEGIN Ail types *)
 integer_base_type:
 | ICHAR
-    { Ail.ICHAR }
+    { AilTypes.Ichar }
 | SHORT
-    { Ail.SHORT }
+    { AilTypes.Short }
 | INT
-    { Ail.INT }
+    { AilTypes.Int_ }
 | LONG
-    { Ail.LONG }
+    { AilTypes.Long }
 | LONG_LONG
-    { Ail.LONG_LONG }
+    { AilTypes.LongLong }
 (*| EXTENDED_INTEGER of string *)
 
 integer_type:
+| CHAR
+    { AilTypes.Char }
 | BOOL
-    { Ail.BOOL }
+    { AilTypes.Bool }
 | SIGNED ibt= integer_base_type
-    { Ail.SIGNED ibt }
+    { AilTypes.Signed ibt }
 | UNSIGNED ibt= integer_base_type
-    { Ail.UNSIGNED ibt }
+    { AilTypes.Unsigned ibt }
 
+(*
 real_floating_type:
 | FLOAT
     { Ail.FLOAT }
@@ -402,42 +413,48 @@ real_floating_type:
     { Ail.DOUBLE }
 | LONG_DOUBLE
     { Ail.LONG_DOUBLE }
+*)
 
 basic_type:
-| CHAR
-    { Ail.CHAR }
 | it= integer_type
-    { Ail.INTEGER it }
+    { AilTypes.Integer it }
+(*
 | rft= real_floating_type
     { Ail.REAL_FLOATING rft }
 | rft= real_floating_type COMPLEX
     { Ail.COMPLEX rft }
+*)
 
+(*
 member_def:
 | ty_= ctype_ name= SYM 
     { (subst name, Core.MEMBER (project_ctype_ ty_)) }
 | ty_= ctype_ name= SYM COLON n= INT_CONST
     { (subst name, Core.BITFIELD (project_ctype_ ty_, n, None)) }
+*)
 
 ctype_:
 | VOID
-    { VOID_ }
+    { Void_ }
 | ATOMIC LPAREN ty_= ctype_ RPAREN
-    { ATOMIC_ ty_ }
+    { Atomic_ ty_ }
 | bty= basic_type
-    { BASIC_ bty }
-| ty_= ctype_ LBRACKET n_opt= INT_CONST? RBRACKET
-    { ARRAY_ (ty_, n_opt) }
+    { Basic_ bty }
+| ty_= ctype_ LBRACKET n= INT_CONST RBRACKET
+    { Array_ (ty_, n) }
+(*
 | STRUCT tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
     { STRUCT_ (subst tag, mems) }
 | UNION tag= SYM mems= delimited(LBRACKET, separated_list(SEMICOLON, member_def), RBRACKET)
     { UNION_ (subst tag, mems) }
 | ENUM name= SYM
     { ENUM_ (subst name) }
+*)
 | ty_= ctype_ tys_= delimited(LPAREN, separated_list(COMMA, ctype_), RPAREN)
-    { FUNCTION_ (project_ctype_ ty_, List.map project_ctype_ tys_) }
+    { Function_ (project_ctype_ ty_, List.map project_ctype_ tys_) }
 | ty_= ctype_ STAR
-    { POINTER_ ty_ }
+    { Pointer_ ty_ }
+(*
 | SIZE_T
     { SIZE_T_ }
 | INTPTR_T
@@ -450,7 +467,7 @@ ctype_:
     { CHAR32_T_ }
 | UNDERSCORE
     { WILDCARD }
-
+*)
 
 
 (* END Ail types *)

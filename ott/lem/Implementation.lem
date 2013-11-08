@@ -1,4 +1,4 @@
-open Int
+open Global
 
 open Range
 open AilTypes
@@ -21,10 +21,10 @@ int) (long long int). So P (long int) ≤ precision P (long long int).
 *)
 
 let min_precision ibt : int =
-  int (*TODO remove conversion or switch to nat in Coq development *) match ibt with
+  Int.int (*TODO remove conversion or switch to nat in Coq development *) match ibt with
   | Ichar    -> 8
   | Short    -> 16
-  | Int      -> 16
+  | Int_     -> 16
   | Long     -> 32
   | LongLong -> 64
   end
@@ -48,26 +48,31 @@ let make_implementation binary_mode signed precision size_t ptrdiff_t = <|
 let integer_range P it =
   let prec = P.precision it in
   if P.signed it then
+    let prec_minus_one = Int.(-) prec (Int.int 1) in
     match P.binary_mode with
-    | Two'sComplement   -> make_range (neg ((int 2)^^(prec - (int 1))))     ((int 2)^^(prec - (int 1)) - (int 1))
-    | One'sComplement   -> make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
-    | SignPlusMagnitude -> make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
+    | Two'sComplement   -> make_range (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1)))
+                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
+    | One'sComplement   -> make_range (Int.(+) (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1))) (Int.int 1))
+                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
+    | SignPlusMagnitude -> make_range (Int.(+) (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1))) (Int.int 1))
+                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
     end
   else
-    make_range (int 0) ((int 2)^^prec - (int 1))
+    make_range (Int.int 0) (Int.(-) (Int.( ** )(Int.int 2) prec) (Int.int 1))
 
 let min_range_unsigned ibt =
   let prec = min_precision ibt in
-  make_range (int 0) ((int 2)^^prec - (int 1))
+  make_range (Int.int 0) (Int.(-) (Int.( ** )(Int.int 2) prec) (Int.int 1))
 
 let min_range_signed ibt =
-  let prec = min_precision ibt - (int 1) in
-  make_range (neg ((int 2)^^(prec - (int 1))) + (int 1)) ((int 2)^^(prec - (int 1)) - (int 1))
+  let prec = Int.(-) (min_precision ibt) (Int.int 1) in
+  make_range (Int.(+) (Int.neg (Int.( ** ) (Int.int 2) (Int.(-) prec (Int.int 1)))) (Int.int 1))
+             (Int.(-) (Int.( ** ) (Int.int 2) (Int.(-) prec (Int.int 1))) (Int.int 1))
 
 let min_integer_range it =
   match it with
-  | Char         -> make_range (int 0) ((int 2) ^^ (min_precision Ichar - (int 1) - (int 1)) - (int 1))
-  | Bool         -> make_range (int 0) (int 1)
+  | Char         -> make_range (Int.int 0) (Int.(-) (Int.( ** ) (Int.int 2) (Int.(-) (Int.(-) (min_precision Ichar) (Int.int 1)) (Int.int 1))) (Int.int 1))
+  | Bool         -> make_range (Int.int 0) (Int.int 1)
   | Unsigned ibt -> min_range_unsigned ibt
   | Signed   ibt -> min_range_signed   ibt
   end
@@ -84,15 +89,15 @@ let min_implementation_signed_char : implementation =
         end
     )
     ( fun it ->
-        int match it with
+        Int.int match it with
         | Char -> 7
         | Bool -> 1
         | Signed   Ichar -> 7
         | Unsigned Ichar -> 8
         | Signed   Short -> 15
         | Unsigned Short -> 16
-        | Signed   Int      -> 15
-        | Unsigned Int      -> 16
+        | Signed   Int_     -> 15
+        | Unsigned Int_     -> 16
         | Signed   Long     -> 31
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
@@ -114,15 +119,15 @@ let min_implementation_unsigned_char : implementation =
         end
     )
     ( fun it ->
-        int match it with
+        Int.int match it with
         | Char -> 8
         | Bool -> 1
         | Signed   Ichar -> 7
         | Unsigned Ichar -> 8
         | Signed   Short -> 15
         | Unsigned Short -> 16
-        | Signed   Int      -> 15
-        | Unsigned Int      -> 16
+        | Signed   Int_     -> 15
+        | Unsigned Int_     -> 16
         | Signed   Long     -> 31
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63

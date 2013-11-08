@@ -33,7 +33,7 @@ let eq_genBasicType gbt1 gbt2 : bool =
 type genType [name="gt*"] =
  | GenVoid
  | GenBasic of genBasicType
- | GenArray of ctype * num
+ | GenArray of ctype * Int.int
  | GenFunction of ctype * list (qualifiers * ctype)
  | GenPointer of qualifiers * ctype
 

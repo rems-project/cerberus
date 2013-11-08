@@ -68,7 +68,7 @@ type token =
   | INTEGER
   | INT
   | IN
-  | IMPL of Implementation.implementation_constant
+  | IMPL of Implementation_.implementation_constant
   | IF
   | ICHAR
   | GT_GT

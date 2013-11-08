@@ -500,10 +500,17 @@ let register_sequencing bs aid tid = fun st ->
     if tid = tid_of (Pmap.find b st.tact_map) then
       (Set.add (b, aid) sb_acc, asw_acc)
     else
-      if accessible b aid (Set.to_list st.sb) then
+      if Set.exist (fun z -> tid_of (Pmap.find z st.tact_map) = tid) $ Pmap.domain st.tact_map then
         (sb_acc, asw_acc)
       else
         (sb_acc, Set.add (b, aid) asw_acc)
+
+(*
+      if Set.exist (fun z -> false && tid_of (Pmap.find z st.tact_map) = tid && accessible z aid $ Set.to_list st.sb) $ Pmap.domain st.tact_map then
+        (sb_acc, asw_acc)
+      else
+        (sb_acc, Set.add (b, aid) asw_acc)
+*)
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
@@ -1073,16 +1080,16 @@ let rec eval file pe =
 (* TODO: temporary *)
   | Eis_scalar pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_typing_aux.is_scalar_type (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if AilTypesAux.scalar (unproj_ctype ty) then Etrue else Efalse)
   | Eis_integer pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_typing_aux.is_integer_type (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if AilTypesAux.integer (unproj_ctype ty) then Etrue else Efalse)
   | Eis_signed pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_typing_aux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if Ail_aux.signed_integer (unproj_ctype ty) then Etrue else Efalse)
   | Eis_unsigned pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_typing_aux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if Ail_aux.unsigned_integer (unproj_ctype ty) then Etrue else Efalse)
     
     
     (* If [pe] is not pure this is wrong, we should crash instead *)
@@ -1250,7 +1257,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
   end in
   (* We (atomically load from the object *)
   E.runU (eval pe_ty)                                                 >>= fun (Ectype ty)                ->
-  let atomic_ty = ATOMIC ty in
+  let atomic_ty = Atomic ty in
   E.runU (eval pe_o)                                                  >>= get_address >>= fun o          ->
   E.runU (eval pe_desired)                                            >>= fun desired_e                  ->
   let desired_v = match desired_e with

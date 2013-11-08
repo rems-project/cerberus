@@ -1,5 +1,3 @@
-open Int
-
 type range = int * int
 
 let min (r : range) = fst r
@@ -8,18 +6,18 @@ let max (r : range) = snd r
 let make_range x y : range = (x, y)
 
 let no_overlap (r1 : range) (r2 : range) : bool =
-  let is_below = max r1 <= min r2 in
-  let is_above = max r2 <= min r1 in
+  let is_below = Int.(<=) (max r1) (min r2) in
+  let is_above = Int.(<=) (max r2) (min r1) in
   is_below || is_above
 
 let sub (r1 : range) (r2 : range) : bool =
-  let is_le_max = max r1 <= max r2 in
-  let is_ge_min = min r2 <= min r1 in
+  let is_le_max = Int.(<=) (max r1) (max r2) in
+  let is_ge_min = Int.(<=) (min r2) (min r1) in
   is_le_max && is_ge_min
 
 let mem w r : bool =
-  let is_le_max = w <= max r in
-  let is_ge_min = min r <= w in
+  let is_le_max = Int.(<=) w ( max r) in
+  let is_ge_min = Int.(<=) (min r) w in
   is_le_max && is_ge_min
 
 let mem_nat n r : bool = mem (Int.int n) r

@@ -197,9 +197,21 @@ let try_to_transitive_reduce rel =
 (* END: stolen from cpp *)
 
 (* this will blow up on cyclic relations *)
+let step s rel =
+  List.fold_left (fun acc (a,b) ->
+    if List.mem a s && not (List.mem b acc) then
+      b :: acc
+    else
+      acc
+  ) s rel
+
+let rec accessible_ s rel =
+  let s' = step s rel in
+  if s = s' then
+    s
+  else
+    accessible_ s' rel
+
 let accessible a b rel =
-  List.mem (a, b) $
-    List.flatten (
-      List.map (fun (a1,a2) -> 
-        map_option (fun (a1',a2') -> if a2 = a1' then Some (a1,a2') else None) rel
-      ) rel)
+  List.mem b $ accessible_ [a] rel
+
