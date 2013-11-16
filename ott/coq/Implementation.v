@@ -69,9 +69,7 @@ Record implementation := make_implementation {
   le_precision_Signed_Short_Int       : precision (Signed Short) <= precision (Signed      Int);
   le_precision_Signed_Ichar_Short     : precision (Signed Ichar) <= precision (Signed    Short);
 
-  (* Note: this cannot be inferred from the standard text but it is vital for
-           integer conversions.
-   *)
+  (* follows from 6.2.5 #8 *)
   le_precision_Unsigned_Long_LongLong : precision (Unsigned  Long) <= precision (Unsigned LongLong);
   le_precision_Unsigned_Int_Long      : precision (Unsigned   Int) <= precision (Unsigned     Long);
   le_precision_Unsigned_Short_Int     : precision (Unsigned Short) <= precision (Unsigned      Int);
