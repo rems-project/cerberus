@@ -1019,7 +1019,7 @@ let rec eval file pe =
             | (OpAdd, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(+) n1 n2)
             | (OpSub, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(-) n1 n2)
             | (OpMul, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.( * ) n1 n2)
-            | (OpDiv, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(/) n1 n2)
+            | (OpDiv, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.div n1 n2)
             | (OpMod, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ Int.(%) n1 n2)
             | (OpEq,  Econst (Cint n1), Econst (Cint n2) ) -> if Int.eq n1 n2   then Etrue else Efalse
             | (OpEq,  Ectype ty1,       Ectype ty2       ) -> if ty1 = ty2 then Etrue else Efalse

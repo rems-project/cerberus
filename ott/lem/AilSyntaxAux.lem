@@ -38,4 +38,4 @@ and fv v e : bool =
   | AnnotatedExpression _ e -> fv' v e
   end
 
-let fv_arguments : identifier -> list (expression 'A) -> bool = fv_arguments_aux fv
+let fv_arguments (v : identifier) (a: list (expression 'A)) : bool = fv_arguments_aux fv v a

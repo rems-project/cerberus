@@ -431,3 +431,35 @@ let equiv_program (p1 : program 'A1 'B1) (p2 : program 'A2 'B2)  =
 
 let equiv_eq_program (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) =
   eq_pair eq_identifier (equiv_eq_sigma eq_A eq_B)
+
+
+
+
+(* K Hack *)
+
+(*
+type declaration = qualifiers * ctype (* * option storageDuration *)
+
+
+type file 'a = <|
+  main:    identifier;
+  id_map:  Pmap.map identifier declaration;
+  globals: list (identifier * expression 'a);
+  fn_map:  Pmap.map identifier (list identifier * statement Location.t 'a)
+|>
+
+val file_of_program: forall 'B. program Location.t 'B -> file 'B
+let file_of_program (main_id, ctx) =
+  let (ids, fns) = List.fold_left (fun (ids_, fns_) (id, ((ty, bds), s)) ->
+    (
+      Pmap.add id (AilTypes.no_qualifiers, AilTypes.Function ty (List.map snd bds)) ids_,
+      Pmap.add id (List.map fst bds, s) fns_
+    )
+  ) (Pmap.empty, Pmap.empty) ctx in
+  <|
+      main=    main_id;
+      id_map=  ids;
+      globals= [];
+      fn_map=  fns
+   |>
+*)

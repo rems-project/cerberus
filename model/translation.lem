@@ -3,7 +3,8 @@ open Global
 open Implementation_
 
 module A    = AilSyntax
-module A_Ty = AilTypes
+module Aaux = AilSyntaxAux
+module Aty  = AilTypes
 
 module C    = Core
 module Caux = Core_aux
@@ -17,9 +18,25 @@ open Translation_aux
    needs to be defined *)
 
 (* val     translate_lvalue: C.file ->  *)
-let rec translate_lvalue stdlib file exp =
-  let f = translate_expr stdlib file in
-  match Annotate.exp_of exp with
+val     translate_lvalue: C.fun_map zero -> Ail.file Ail.type_class -> A.expression GenTypes.genTypeCategory -> t (C.expr zero)
+let rec translate_lvalue stdlib file a_exp =
+  let f = (Boot.assert_false "translate_expr") stdlib file in
+  
+  if Aaux.null_pointer_constant a_exp then
+    return C.Enull
+  else
+    let A.AnnotatedExpression _ exp = a_exp in
+    match exp with
+      | A.Var id -> return (C.Esym id)
+      
+      | A.Unary A.Indirection e ->
+          E.fresh_symbol >>= fun a_e    ->
+          f e            >>= fun core_e ->
+          (* TODO: the checks *)
+          return core_e
+
+
+
     | _ -> Boot.assert_false "Translation.translate_lvalue ==> MIGRATION TO THE NEW AIL"
 (*
 TODO !!!!!!!!
@@ -27,7 +44,6 @@ TODO !!!!!!!!
     (* TODO: may be temporary *)
     | A.NULL -> return C.Enull
 
-    | A.VARIABLE id -> return (C.Esym id)
     
     | A.UNARY A.INDIRECTION e ->
         E.fresh_symbol       >>= fun a_e    ->
@@ -850,7 +866,13 @@ let collect_cases s =
 
 
 open Translation_effect
-let rec translate_stmt stdlib file f d_default d_cases d_loop d_break (_, stmt) : t (C.expr zero) =
+
+(*
+val     translate_stmt: C.fun_map zero -> A.program Location.t zero ->
+                        option Symbol.t -> option Symbol.t -> option Symbol.t -> option Symbol.t ->
+                        A.statement Location.t zero -> t (C.expr zero)
+*)
+let rec translate_stmt stdlib file f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) : t (C.expr zero) =
   let translate_stmt_ s = translate_stmt stdlib file f d_default d_cases d_loop d_break s in
   
   
@@ -1142,22 +1164,37 @@ TODO !!!!!!!!
 
 
 (* Run the translator on different functions *)
-let translate_file stdlib (file: Ail.file _) : t (C.fun_map zero) =
-  E.foldlM
-    (fun acc (name, (args, body)) ->
-       (* translate the body to Core *)
-       translate_stmt stdlib file name None None None None body >>= fun core_body ->
-       (return $ Pmap.add name (C.TyEffect C.Integer (* TODO: address for pointer type? *),
-                                 List.map (fun arg -> (arg, C.Address (* TODO: check *))) args,
-                                 core_body) acc))
-    Pmap.empty
-    (Pmap.bindings file.Ail.fn_map)
+val translate_file: C.fun_map zero -> A.program Location.t unit -> t (C.fun_map zero)
+let translate_file stdlib program =
+  E.foldlM (fun acc (fun_id, ((_, fun_args), fun_body)) ->
+    (* translate the body to Core *)
+    translate_stmt stdlib program fun_id None None None None fun_body >>= fun core_body ->
+    (return $ Pmap.add fun_id (
+                                C.TyEffect C.Integer (* TODO: address for pointer type? *),
+                                List.map (fun (arg, _) -> (arg, C.Address (* TODO: check *))) fun_args,
+                                core_body
+                               ) acc)
+  ) Pmap.empty (snd program)
+
+(*
+(fun_id, (args, body))
+(fun_id, ((return_ty, fun_args), fun_body))
+
+(fun_id, ((_, fun_args), fun_body))
+
+
+(fun_id, ((return_ty, fun_args), fun_body))
+
+*)
+
+
 
 
 (* This is the entry function (called from main.ml) *)
-let translate stdlib impl (file: Ail.file _) : C.file zero =
+val translate: C.fun_map zero -> C.impl zero -> A.program Location.t unit -> C.file zero
+let translate stdlib impl prog =
   (* TODO: this is a hack, we shouldn't expose the internals and properly use the Undefined *)
-  match (translate_file stdlib file) E.init with
-    | U.Defined (cfuns, _) -> <| C.main= file.Ail.main; C.stdlib= stdlib; C.impl= impl; C.funs= cfuns |>
+  match (translate_file stdlib prog) E.init with
+    | U.Defined (cfuns, _) -> <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.funs= cfuns |>
     | _                    -> Boot.assert_false "[Translation.translate #_] TODO"
   end
