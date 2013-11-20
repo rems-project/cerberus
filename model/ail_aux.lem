@@ -1,0 +1,38 @@
+(* Auxillary functions for the Ail IR *)
+
+(*
+open Ail
+
+(* TODO *)
+module E = Exception
+
+
+val zero: expression_t unit
+let zero = ((), CONSTANT (CONST_INT (Int.int 0, OCTAL, None)))
+
+val decimal_const_int: int -> expression_t unit
+let decimal_const_int n = ((), CONSTANT (CONST_INT (n, DECIMAL, None)))
+
+val octal_const_int: int -> expression_t unit
+let octal_const_int n = ((), CONSTANT (CONST_INT (n, OCTAL, None)))
+
+let lift_int f_int otherwise = function
+  | BASIC (INTEGER i) -> f_int i
+  | _                 -> otherwise
+  end
+*)
+
+
+open AilTypes
+
+val signed_integer: ctype -> bool
+let signed_integer = function
+  | Basic (Integer (Signed _)) -> true
+  | _                          -> false
+ end
+
+val unsigned_integer: ctype -> bool
+let unsigned_integer = function
+  | Basic (Integer (Unsigned _)) -> true
+  | _                            -> false
+end

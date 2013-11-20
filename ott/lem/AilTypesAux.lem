@@ -1,0 +1,517 @@
+open Common
+open AilTypes
+open Implementation
+
+let unqualified qs =
+  match qs with
+  | <| const    = false;
+       restrict = false;
+       volatile = false |> -> true
+  | _                      -> false
+  end
+
+let integer t =
+  match t with
+  | Basic (Integer _) -> true
+  | _ -> false
+  end
+
+let void t =
+  match t with
+  | Void -> true
+  | _ -> false
+  end
+
+let pointer t =
+  match t with
+  | Pointer _ _ -> true
+  | _ -> false
+  end
+
+let boolean t =
+  match t with
+  | Basic (Integer Bool) -> true
+  | _ -> false
+  end
+
+let unsigned P it : bool =
+  not (P.signed it)
+
+let signed_type it : bool =
+  match it with
+  | Signed _ -> true
+  | _ -> false
+  end
+
+let unsigned_type it : bool =
+  match it with
+  | Unsigned _ -> true
+  | Bool -> true
+  | _ -> false
+  end
+
+let in_integer_range P n it : bool =
+  Range.mem n (integer_range P it)
+
+let in_min_integer_range n it : bool =
+  Range.mem n (Implementation.min_integer_range it)
+
+let le_integer_range P it1 it2 : bool =
+  match (it1, it2) with
+  | (Char             , Char             ) -> true
+  | (Char             , Signed   Ichar   ) -> P.signed Char
+  | (Char             , Signed   ibt     ) -> P.signed Char ||
+                                              Int.(<) (P.precision Char) (P.precision (Signed ibt))
+  | (Signed Ichar     , Char             ) -> P.signed Char
+  | (Signed ibt       , Char             ) -> P.signed Char &&
+                                              P.precision (Signed ibt) = P.precision Char
+  | (Unsigned Ichar   , Char             ) -> not (P.signed Char)
+  | (Unsigned ibt     , Char             ) -> not (P.signed Char) &&
+                                              P.precision (Unsigned ibt) = P.precision Char
+  | (Char             , Unsigned _       ) -> not (P.signed Char)
+  | (Char             , Bool             ) -> not (P.signed Char) &&
+                                              P.precision Char = P.precision Bool
+  | (Bool             , Char             ) -> not (P.signed Char) ||
+                                              Int.(<) (P.precision Bool) (P.precision Char)
+
+  | (Signed   Ichar   , Signed   _       ) -> true
+  | (Signed   Short   , Signed   Short   ) -> true
+  | (Signed   Short   , Signed   Int_    ) -> true
+  | (Signed   Short   , Signed   Long    ) -> true
+  | (Signed   Short   , Signed   LongLong) -> true
+  | (Signed   Int_    , Signed   Int_    ) -> true
+  | (Signed   Int_    , Signed   Long    ) -> true
+  | (Signed   Int_    , Signed   LongLong) -> true
+  | (Signed   Long    , Signed   Long    ) -> true
+  | (Signed   Long    , Signed   LongLong) -> true
+  | (Signed   LongLong, Signed   LongLong) -> true
+  | (Signed   ibt1    , Signed   ibt2    ) -> P.precision (Signed ibt1) = P.precision (Signed ibt2)
+
+  | (Bool             , Bool             ) -> true
+  | (Bool             , Unsigned _       ) -> true
+  | (Unsigned Ichar   , Unsigned _       ) -> true
+  | (Unsigned Short   , Unsigned Short   ) -> true
+  | (Unsigned Short   , Unsigned Int_    ) -> true
+  | (Unsigned Short   , Unsigned Long    ) -> true
+  | (Unsigned Short   , Unsigned LongLong) -> true
+  | (Unsigned Int_    , Unsigned Int_    ) -> true
+  | (Unsigned Int_    , Unsigned Long    ) -> true
+  | (Unsigned Int_    , Unsigned LongLong) -> true
+  | (Unsigned Long    , Unsigned Long    ) -> true
+  | (Unsigned Long    , Unsigned LongLong) -> true
+  | (Unsigned LongLong, Unsigned LongLong) -> true
+  | (Unsigned ibt     , Bool             ) -> P.precision (Unsigned ibt) = P.precision Bool
+  | (Unsigned ibt1    , Unsigned   ibt2  ) -> P.precision (Unsigned ibt1) = P.precision (Unsigned ibt2)
+
+  | (Signed   _       , Bool             ) -> false
+  | (Signed   _       , Unsigned _       ) -> false
+
+  | (Bool             , Signed   ibt2    ) -> Int.(<) (P.precision Bool) (P.precision (Signed ibt2))
+  | (Unsigned _       , Signed   Ichar   ) -> false
+  | (Unsigned Short   , Signed   Short   ) -> false
+  | (Unsigned Int_    , Signed   Int_    ) -> false
+  | (Unsigned Long    , Signed   Long    ) -> false
+  | (Unsigned LongLong, Signed   LongLong) -> false
+  | (Unsigned ibt1    , Signed   ibt2    ) -> Int.(<) (P.precision (Unsigned ibt1)) (P.precision (Signed ibt2))
+  end
+
+let eq_integer_rank_base it1 it2 : bool =
+  match (it1, it2) with
+  | (Signed ibt1, Unsigned ibt2  ) -> eq_integerBaseType ibt1 ibt2
+  | (Char       , Unsigned  Ichar) -> true
+  | (Char       , Signed    Ichar) -> true
+  | (_          , _              ) -> false
+  end
+
+let eq_integer_rank it1 it2 : bool =
+  eq_integerType it1 it2 || eq_integer_rank_base it1 it2 || eq_integer_rank_base it2 it1
+
+let lt_integer_rank_base P it1 it2 : bool =
+  match (it1, it2) with
+  | (Bool        , it             ) -> not (eq_integerType Bool it)
+  | (Signed  Long, Signed LongLong) -> true
+  | (Signed   Int_, Signed     Long) -> true
+  | (Signed Short, Signed      Int_) -> true
+  | (Signed Ichar, Signed    Short) -> true
+  | (Signed  ibt1, Signed     ibt2) -> Int.(<) (P.precision (Signed ibt1)) (P.precision (Signed ibt2))
+  | (_           , _              ) -> false
+  end
+
+let lt_integer_rank_congruence P it1 it2 : bool =
+  match (it1, it2) with
+  | (_            , Bool         ) -> false
+  | (Bool         , _            ) -> true
+  | (_            , Char         ) -> false
+  | (Char         , Unsigned ibt2) -> lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
+  | (Char         , Signed   ibt2) -> lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
+  | (Signed ibt1  , Signed   ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
+  | (Unsigned ibt1, Unsigned ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
+  | (Unsigned ibt1, it2          ) -> lt_integer_rank_base P (Signed  ibt1) it2
+  | (it1          , Unsigned ibt2) -> lt_integer_rank_base P it1            (Signed ibt2)
+  end
+
+let lt_integer_rank it1 it2 : bool =
+  match (it1, it2) with
+  | (_             , Bool          ) -> false
+  | (Bool          , _             ) -> true
+
+  | (_             , Char          ) -> false
+  | (_             , Signed   Ichar) -> false
+  | (_             , Unsigned Ichar) -> false
+  | (Char          , Signed    _   ) -> true
+  | (Char          , Unsigned  _   ) -> true
+  | (Signed   Ichar, Signed    _   ) -> true
+  | (Signed   Ichar, Unsigned  _   ) -> true
+  | (Unsigned Ichar, Signed    _   ) -> true
+  | (Unsigned Ichar, Unsigned  _   ) -> true
+
+  | (_             , Signed   Short) -> false
+  | (_             , Unsigned Short) -> false
+  | (Signed   Short, Signed    _   ) -> true
+  | (Signed   Short, Unsigned  _   ) -> true
+  | (Unsigned Short, Signed    _   ) -> true
+  | (Unsigned Short, Unsigned  _   ) -> true
+
+  | (_             , Signed     Int_) -> false
+  | (_             , Unsigned   Int_) -> false
+  | (Signed     Int_, Signed    _   ) -> true
+  | (Signed     Int_, Unsigned  _   ) -> true
+  | (Unsigned   Int_, Signed    _   ) -> true
+  | (Unsigned   Int_, Unsigned  _   ) -> true
+
+  | (_             , Signed    Long) -> false
+  | (_             , Unsigned  Long) -> false
+  | (Signed    Long, Signed    _   ) -> true
+  | (Signed    Long, Unsigned  _   ) -> true
+  | (Unsigned  Long, Signed    _   ) -> true
+  | (Unsigned  Long, Unsigned  _   ) -> true
+
+  | (_             , _             ) -> false
+  end
+
+let le_integer_rank it1 it2 : bool =
+  eq_integer_rank it1 it2 || lt_integer_rank it1 it2
+
+let arithmetic t : bool = integer t
+
+let scalar t : bool = pointer t || arithmetic t
+
+let array t : bool =
+  match t with
+  | Array _ _ -> true
+  | _         -> false
+  end
+
+(* TODO: should be called "function" *)
+let is_function t : bool =
+  match t with
+  | Function _ _ -> true
+  | _            -> false
+  end
+
+let is_corresponding_unsigned it1 it2 : bool =
+  match (it1, it2) with
+  | (Signed ibt1, Unsigned ibt2) -> eq_integerBaseType ibt1 ibt2
+  | (_          , _            ) -> false
+  end
+
+let corresponding_unsigned it : option integerType =
+  match it with
+  | Signed ibt -> Some (Unsigned ibt)
+  | _          -> None
+  end
+
+let make_corresponding_unsigned it : integerType =
+  match it with
+  | Signed ibt -> Unsigned ibt
+  | _          -> it
+  end
+
+let is_integer_promotion P it1 it2 : bool =
+  match (it1, it2) with
+  | (Signed   Int_, Signed   Int_) -> true
+  | (Unsigned Int_, Signed   Int_) -> false
+  | (Unsigned Int_, Unsigned Int_) -> true
+  | (Signed   Int_, Unsigned Int_) -> false
+  | (_           , Signed   Int_) -> le_integer_rank it1 (Signed Int_) &&
+                                    le_integer_range P it1 (Signed Int_)
+  | (_           , Unsigned Int_) -> le_integer_rank it1 (Signed Int_) &&
+                                    not (le_integer_range P it1 (Signed Int_))
+  | (_           , _           ) -> eq_integerType it1 it2 &&
+                                    not (le_integer_rank it1 (Signed Int_))
+  end
+
+let integer_promotion P it : integerType =
+  match it with
+  | Signed   Int_ -> Signed   Int_
+  | Unsigned Int_ -> Unsigned Int_
+  | _            -> if le_integer_rank it (Signed Int_)
+                      then if le_integer_range P it (Signed Int_)
+                             then Signed Int_
+                             else Unsigned Int_
+                      else it
+  end
+
+let is_promotion P t1 t2 : bool =
+  match (t1, t2) with
+  | (Basic (Integer it1), Basic (Integer it2)) -> is_integer_promotion P it1 it2
+  | (_                  , _                  ) -> false
+  end
+
+let promotion P t : option ctype =
+  match t with
+  | Basic (Integer it) -> Some (Basic (Integer (integer_promotion P it)))
+  | _                  -> None
+  end
+
+let is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool =
+  if signed_type it1 then
+    if signed_type it2 then
+      if lt_integer_rank it2 it1 then
+        eq_integerType it1 it3
+      else
+        eq_integerType it2 it3
+    else if unsigned_type it2 then
+      if le_integer_rank it1 it2 then
+        eq_integerType it2 it3
+      else
+        if le_integer_range P it2 it1 then
+          eq_integerType it1 it3
+        else
+          is_corresponding_unsigned it1 it3
+    else
+      false
+  else if unsigned_type it1 then
+    if unsigned_type it2 then
+      if lt_integer_rank it2 it1 then
+        eq_integerType it1 it3
+      else
+        eq_integerType it2 it3
+    else if signed_type it2 then
+      if le_integer_rank it2 it1 then
+        eq_integerType it1 it3
+      else if le_integer_range P it1 it2 then
+        eq_integerType it2 it3
+      else
+        is_corresponding_unsigned it2 it3
+    else
+      false
+  else
+    false
+
+let usual_arithmetic_promoted_integer P it1 it2 : integerType =
+  if signed_type it1 then
+    if signed_type it2 then
+      if lt_integer_rank it2 it1 then
+        it1
+      else
+        it2
+    else
+      if le_integer_rank it1 it2 then
+        it2
+      else
+        if le_integer_range P it2 it1 then
+          it1
+        else
+          make_corresponding_unsigned it1
+  else
+    if unsigned_type it2 then
+      if lt_integer_rank it2 it1 then
+        it1
+      else
+        it2
+    else
+      if le_integer_rank it2 it1 then
+        it1
+      else if le_integer_range P it1 it2 then
+        it2
+      else
+        make_corresponding_unsigned it2
+
+let is_usual_arithmetic_integer P it1 it2 it3 : bool =
+  is_usual_arithmetic_promoted_integer P (integer_promotion P it1)
+                                         (integer_promotion P it2) it3
+
+let usual_arithmetic_integer P it1 it2 : integerType =
+  usual_arithmetic_promoted_integer P (integer_promotion P it1)
+                                      (integer_promotion P it2)
+
+let is_usual_arithmetic P t1 t2 t3 : bool =
+  match (t1, t2, t3) with
+  | (Basic (Integer it1), Basic (Integer it2), Basic (Integer it3)) -> is_usual_arithmetic_integer P it1 it2 it3
+  | (_                  , _                  , _                  ) -> false
+  end
+
+let usual_arithmetic P t1 t2 : option ctype =
+  match (t1, t2) with
+  | (Basic (Integer it1), Basic (Integer it2)) -> Some (Basic (Integer (usual_arithmetic_integer P it1 it2)))
+  | (_                  , _                  ) -> None
+  end
+
+let object_ t : bool =
+  match t with
+  | Basic _ -> true
+  | Void -> true
+  | Pointer _ _ -> true
+  | Array _ _ -> true
+  | _ -> false
+  end
+
+let complete t : bool =
+  match t with
+  | Basic _ -> true
+  | Pointer _ _ -> true
+  | Array _ _ -> true
+  | _ -> false
+  end
+
+let incomplete t : bool =
+  match t with
+  | Void -> true
+  | _ -> false
+  end
+
+let modifiable q t : bool =
+  object_ t &&
+  not (array t) &&
+  not (incomplete t) &&
+  not (q.const)
+
+let real t : bool = integer t
+
+let rec compatible_params_aux compatible p1 p2 : bool =
+  match (p1, p2) with
+  | ([]           , []           ) -> true
+  | ((_, t1) :: p1, (_, t2) :: p2) -> compatible t1 t2 && compatible_params_aux compatible p1 p2
+  | (_            , _            ) -> false
+  end
+
+let rec compatible t1 t2 : bool =
+  let compatible_params = compatible_params_aux compatible in
+  match (t1, t2) with
+  | (Void          , Void          ) -> true
+  | (Basic bt1     , Basic bt2     ) -> eq_basicType bt1 bt2
+  | (Array    t1 n1, Array    t2 n2) -> compatible t1 t2 && n1 = n2
+  | (Function t1 p1, Function t2 p2) -> compatible t1 t2 && compatible_params p1 p2
+  | (Pointer  q1 t1, Pointer  q2 t2) -> compatible t1 t2 && eq_qualifiers q1 q2
+  | (_             , _             ) -> false
+  end
+
+let compatible_params p1 p2 = compatible_params_aux compatible p1 p2
+
+let rec is_composite_params_aux is_composite p1 p2 p3 : bool =
+  match (p1, p2, p3) with
+  | ([]           , []           , []            ) -> true
+  | ((_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3) -> unqualified q3 &&
+                                                      is_composite t1 t2 t3 &&
+                                                      is_composite_params_aux is_composite p1 p2 p3
+  | (_            , _            , _             ) -> false
+  end
+
+let rec is_composite t1 t2 t3 : bool =
+  let is_composite_params = is_composite_params_aux is_composite in
+  match (t1, t2, t3) with
+  | (Void          , Void          , Void          ) -> true
+  | (Basic bt1     , Basic bt2     , Basic bt3     ) -> eq_basicType bt1 bt2 && eq_basicType bt1 bt3
+  | (Array t1 n1   , Array t2 n2   , Array t3 n3   ) -> is_composite t1 t2 t3 && n1 = n2 && n1 = n3
+  | (Function t1 p1, Function t2 p2, Function t3 p3) -> is_composite t1 t2 t3 && is_composite_params p1 p2 p3
+  | (Pointer  q1 t1, Pointer  q2 t2, Pointer  q3 t3) -> is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
+  | (_             , _             , _             ) -> false
+  end
+
+let is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
+
+let rec composite_params_aux composite p1 p2 : option (list (qualifiers * ctype))=
+    match (p1, p2) with
+    | ([]           , []           ) -> Some []
+    | ((_, t1) :: p1, (_, t2) :: p2) -> match (composite t1 t2, composite_params_aux composite p1 p2) with
+                                        | (Some t, Some p) -> Some ((no_qualifiers, t) :: p)
+                                        | (_     , _     ) -> None
+                                        end
+    | (_            , _            ) -> None
+    end
+
+let rec composite t1 t2 : option ctype =
+  let composite_params = composite_params_aux composite in
+  match (t1, t2) with
+  | (Void          , Void          ) -> Some Void
+  | (Basic bt1     , Basic bt2     ) -> if eq_basicType bt1 bt2
+                                          then Some (Basic bt1)
+                                          else None
+  | (Array t1 n1   , Array t2 n2   ) -> if n1 = n2
+                                          then option_map (fun t -> Array t n1) (composite t1 t2)
+                                          else None
+  | (Function t1 p1, Function t2 p2) ->
+      match (composite t1 t2, composite_params p1 p2) with
+      | (Some t, Some p) -> Some (Function t p)
+      | (_     , _     ) -> None
+      end
+  | (Pointer  q1 t1, Pointer  q2 t2) -> if eq_qualifiers q1 q2
+                                          then option_map (Pointer q1) (composite t1 t2)
+                                          else None
+  | (_             , _             ) -> None
+  end
+
+let composite_params p1 p2 = composite_params_aux composite p1 p2
+
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile
+|>
+
+let sub_qualifiers qs1 qs2 =
+     qs1.const    --> qs2.const
+  && qs1.restrict --> qs2.restrict
+  && qs1.volatile --> qs2.volatile
+
+let pointer_conversion (t:ctype) : ctype =
+  match t with
+  | Array    t _ -> Pointer no_qualifiers t
+  | Function t q -> Pointer no_qualifiers (Function t q)
+  | _            -> t
+end
+
+let lvalue_convertible t : bool = not (array t) && complete t
+
+let lvalue_conversion t : option ctype =
+  if lvalue_convertible t then
+    Some (pointer_conversion t)
+  else
+    None
+
+let pointer_to_complete_object t : bool =
+  match t with
+  | Pointer _ t -> complete t
+  | _           -> false
+  end
+
+let pointers_to_compatible_complete_objects t1 t2 : bool =
+  match (t1, t2) with
+  | (Pointer _ t1, Pointer _ t2) -> complete t1 && complete t2 && compatible t1 t2
+  | (_           , _           ) -> false
+  end  
+
+let pointers_to_compatible_objects t1 t2 : bool =
+  match (t1, t2) with
+  | (Pointer _ t1, Pointer _ t2) -> object_ t1 && object_ t2 && compatible t1 t2
+  | (_           , _           ) -> false
+  end  
+
+let pointer_to_object t : bool =
+  match t with
+  | Pointer _ t -> object_ t
+  | _           -> false
+  end
+
+let pointer_to_void t : bool =
+  match t with
+  | Pointer _ Void -> true
+  | _              -> false
+  end
+
+let pointers_to_compatible_types t1 t2 : bool =
+  match (t1, t2) with
+  | (Pointer _ t1, Pointer _ t2) -> compatible t1 t2
+  | (_           , _           ) -> false
+  end  

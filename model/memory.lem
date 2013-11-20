@@ -1,0 +1,1386 @@
+open Global
+open Boot
+(* module A = Ail *)
+module C    = Core
+module Caux = Core_aux
+
+(* TEMPORARY *)
+let todo s = assert_false $ "[TODO] " ^ s
+
+
+(* Ctype functions (for the Core variant) *)
+let compatible ty1 ty2 =
+  AilTypesAux.compatible (Caux.unproj_ctype ty1) (Caux.unproj_ctype ty2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* May not be canonical for now *)
+type semantic_options = <|
+  isomorphic_stuct_are_compatible: bool;
+  isomorphic_union_are_compatible: bool;
+|> 
+
+
+
+type action_id = num (* an abstract thing *)
+
+
+(* TODO fix this up *)
+type packing_flag = unit
+
+type sym = <|
+    sym_id: Symbol.t;
+    sym_pflags: packing_flag;
+|>
+
+
+
+
+
+
+
+(** block id machinery *)
+
+(* When we do an allocation, we'll make up a new block id. *)
+
+type block_id = num  (* an abstract thing *)
+
+(** symbolic computation *)
+
+(* Just how much symbolic computation do we want to support?
+
+We want to be able to test conformance between implementations and
+semantics: taking a possibly-instrumented run from an implementation
+and checking whether it's allowed by the semantics.
+
+We also want (for small programs, at least) to be able to calculate
+exhaustively the set of allowed behaviours.  
+
+For programs that don't do much address arithmetic or comparison, or
+any casts between int and pointer, we want to be able to do both those
+without committing to implementation-defined layout choices (the
+values of offsets and compound-object sizes).  The question is how
+much is much.  Options:
+
+(a) none at all (except normal array dereferencing), with no use of
+  sizeof, alignof, or offsetof, or pointer order comparison between
+  blocks.  This rules out typical use of malloc, so is too severe to
+  cover much real code.  But it does mean that we can execute programs
+  without the core arithmetic being infected with symbolicness.
+
+(b) some ad hoc theory that we can usually decide (and our symbolic
+  execution has to simply fail in cases where we can't).  I don't see
+  a canonical choice for this, but one might emerge from study of a
+  big corpus of C code.  At least if one does pointer arithmetic which is
+  obviously equivalent to normal legitimate member offset, we'd hope to be
+  able to decide it. 
+
+(c) a complete theory of arithmetic - fine for semantics, but no good
+  for execution.
+
+I think we have to go for (b).  But note that if we want to keep core
+execution for numbers as non-symbolic, then implementation-independent
+execution will have to fail as soon as we hit anything like malloc(10
+* sizeof(t)), as that's a nontrivial computation of a numeric value.
+
+Note also that there's a simple program transformation that takes a C
+program and announces sizeof and offsetof for all the type definitions
+at the beginning, which we could use in conformance testing against
+particular implementations, though not in exhaustive
+implementation-independent execution.
+
+We might also want to execute without committing to
+implementation-defined integer type sizes, but IIRC Justus said that
+the core elaboration/semantics was not set up with that in mind.
+Kayvan remarks that the elaboration (apart from the type system, which
+he's not sure about) would be trivially adaptable to symbolic sizes
+for those.  Discuss again?
+
+We certainly do want to execute without eagerly picking concrete
+addresses (which a naive operational semantics would do), as that
+would make both of our goals hard.  (Though there's a fairly simple
+program transformation which announces the addresses of all
+allocations for which a simple analysis can determine which the
+address is taken (what to do about the others is more subtle) which we
+could use in conformance testing.)  (Would these program
+transformations also be useful for Francesco?)  (To plumb in the
+concrete addresses, we could extend C syntax saying "allocate here",
+if the stack etc. are repeatable enough.).
+
+(Kayvan says that the transformation from C source to Ail is not very
+lossy: it loses concrete layout, and rewrites some C structures into
+things that the standard explicitly says are equivalent.  Hence, we
+can also implement a back-translation from Ail to C source, and
+more-or-less have that, even though the composition isn't the
+syntactic identity, the original and the translated version get
+treated the same by compilers.  Hence, we can implement the
+transformations above by working on the Ail code.  And other people
+could implement static analysis etc. by working on the Ail code.  (So
+this is a candidate CIL replacement.)  (A different thing: if you
+wanted to show some Ail->Ail transformations correct, you could check
+they commute with the elaboration into Core + the Core semantics.))
+
+
+We can support inter-block order-comparison of pointers while still
+avoiding picking concrete addresses by maintaining constraints on the
+order and on juxtaposition, making (and remembering) nondeterministic
+choices of the results of comparisons subject to a satisfiability
+check, that there exists a concrete layout consistent with them.
+
+
+*)
+
+
+(** symbolic address machinery *)
+
+(* use these Lem types both for addresses and for sizes and offsets *)
+(* could have an alias for offsets, maybe, but don't think it's worth
+having really different types.  Though "address" is a confusing name,
+if we don't *)
+
+(* ...just natural-number offsets, or are we using integers? *)
+(* ...pointers can be subtracted, so probably integers *)
+
+(* does this need to be simply a type of symbolic integers, or do we
+also need to include the offset-path stuff here?  For now I suppose
+the former, and that we'll build the offset-path stuff into the
+definitions of pointer_value comparison etc.*)
+
+(* are symbolic_address_id's distinct from block_id's ?  I think so,
+conceptually - it'd be confusing to simply include the latter in the
+former (especially given that some blocks might never actually be
+allocated) *)
+
+type concrete_address = num
+type symbolic_address_id = num (* an abstract thing *)
+
+
+type symbolic_address_binop = (* TODO all the core binops? *)
+  | SABplus 
+  | SABminus
+type symbolic_address_expr = 
+  | Symbolic of symbolic_address_id
+  | Concrete of concrete_address
+  | Binop of symbolic_address_binop * symbolic_address_expr * symbolic_address_expr
+type symbolic_address_constraint = 
+  | Equal of symbolic_address_expr * symbolic_address_expr
+  | Less of symbolic_address_expr * symbolic_address_expr
+  | And of symbolic_address_constraint * symbolic_address_constraint
+  | Not of symbolic_address_constraint
+
+type address = symbolic_address_id
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(** type definitions *)
+
+type struct_tag = Ail.id
+type union_tag = Ail.id
+
+(* I assume here that these struct_tag and union_tag values correctly
+identify the respective types reflecting the correct type
+compatibility relation.  This must cope with multiple type definitions
+with the same name but different bodies (e.g. in different files),
+which should be unequal, and multiple type definitions with the same
+name and the same body (in different files), which (?) should be equal
+iff the files were compiled with the same packing flags.  We also have
+to deal with tagless struct and union types somehow (I'm not sure if
+"tag" is quite right here).  And this has to be part of the ctype for
+struct or union types.  All this may need rejigging to fit in with
+Justus's type system.  (Kayvan notes that the Cabs->Ail may have to do
+a b it more work to make up the right names for these things.)  *)
+
+type member_id = Ail.id (*this used to be sym, but we don't want the packing flags here - they belong in the types in the type environment *)
+(* Similarly, I assume that member_id values give
+the appropriate equality.   Likewise for enum types? *)
+
+type struct_definition = list (member_id * C.ctype)
+type union_definition = list (member_id * C.ctype)
+(* (plus more stuff for attributes, handling anonymous struct definitions, bitfields,...). To be fixed up by Kayvan soon from cabs.lem and cabs_parser.lem *)
+
+
+(** type definition layout environments *)
+
+(* We suppose that layout is compositional in the type definition
+structure, so record layout for each type definition, not for each
+type in use.  Though the existence of different packing compilation
+flags makes this a bit finer than you might think.*)
+
+type struct_layout [name = "sl*"] = <|
+  sl_offsets : Pmap.map member_id address;
+  sl_size : address;
+  sl_alignment : address ;
+|>
+(* plus something for bitfields and for terminal and variable-length arrays...*)
+
+
+type union_layout [name = "ul*"] = <|
+  ul_size : address;
+  ul_alignment : address;
+|>
+
+(* note that these addresses might be symbolic - eg if we're trying to
+run implementation-independent, then we might have picked a fresh
+symbolic_address_id and added constraints on it for each struct type
+member *)
+
+(* we presumably need something for array layouts too, given that
+their packing may be different from one source file to another?  No -
+it looks as if there's no such thing as a non-packed array in C, so we
+don't have to bother. Good.  *)
+
+type scalar_layout  = <|
+  scl_size : address;
+  scl_alignment : address;
+|>
+
+
+type layout_environment = <|
+  (* something for each scalar type: *)
+(*  scalars : Pmap.map ...the scalar_type_id... (* something like Ail.basic_type *)   scalar_layout *)  (* TODO *)
+
+
+(* P argues that it'd be better to treat integer types with known
+width (int32 etc) as basic.  If instead we define them the same way as
+the impl, by preprocessor definitions that map them to the right type
+for the current impl, then to reason about code that uses them we'll
+have to fix an impl (to know that mapping and then to know that (eg)
+int is a 32-bit type).  This latter is what Ail.lem currently does,
+but we should fix it.  For intptr_t and suchlike you get some symbolic
+constraint w.r.t. the sizes of other types. *)
+
+
+
+
+  structs : Pmap.map struct_tag struct_layout;
+  unions : Pmap.map union_tag union_layout;
+|>
+
+
+
+
+(** value lifting *)
+
+type lift_value 'a = 
+  | Specified of 'a
+  | Unspecified of C.ctype 
+  | Trap_representation of num (* don't need to remember the type as if you do anything with this you've already hit undefined behaviour, but you do need the size because you can read the representation of a trap representation *)
+  | Indeterminate_value of C.ctype
+
+
+
+(** numeric values *)
+
+(* we need these before defining member offset paths as they appear in
+array deferencing *)
+
+type unlifted_numeric_value = num  (*TODO better name, and not num *)
+
+type numeric_value = lift_value num
+
+
+
+(** pointer values *)
+
+(*
+type member_offset = 
+  | Struct_offset of struct_tag * member_id
+  | Union_offset of  union_tag	* member_id
+  | Array_offset of C.ctype * unlifted_numeric_value
+*)
+
+     (* the ctype is the static type of array elements for this dereference, so that we can calculate an offset from a member_offset_path *)
+
+  (* we thought about also having an "| Array_shift of C.ctype" so
+  that we could represent subarrays, but in both standard and
+  kernel-programmer C we believe it's legit to subtract off a pointer
+  that you've been handed, as long as the underlying actual array is
+  big enough. There's nothing special about the start point of a
+  subarray. So we remove it.*)
+
+(* we thought about adding:
+
+  | Representation_offset of ...char offset... 
+
+that's supposed to actually be within the representation of wherever
+we are, not arbitrary address arith, but switched back to the
+block-top-level address stuff *)
+
+(* type member_offset_path = list member_offset *)
+     (* these will be normalised with adjacent Array_offset's coalesced *)
+
+(*
+type fancy_type = 
+  | Cast of C.ctype * fancy_type 
+  | Member_offset of member_offset * fancy_type 
+  | Type of C.ctype (* the type of the unprojected thing...*)
+*)
+
+(*
+type pointer_address =   (* "address" is not a great name, as it's likely to be confused with symbolic_address... *)
+  | Null
+  | Block_path of block_id * member_offset_path
+(*  | Block_offset of block_id * symbolic_address_id   (* not at all sure this is worth it. It would let you capture "we've done some address arithmetic but have never historically left the block". But that doesn't seem very useful. *) *)
+  | Address of symbolic_address_id
+  | Function_pointer (* TODO *)
+*)
+
+(* it's a bit odd that a pointer_address (in the Block_path case)
+remembers the history of operations on the pointer *except* the casts,
+which live in the fancy_type.  We're not sure if we should be writing
+down a definition of a set of values or the free grammar of
+construction operations (plus some equational theory over them...)*)
+
+(* at any usage of a pointer value, there are two interesting types:
+the static one that captures what the compiler thinks is going on
+(which we need eg for the address arith on an array dereference) and
+the dynamic one which tracks the construction history of the pointer
+value (which we need e.g. when we check whether a cast requires
+stricter alignment constraints than the pointer had before).  The
+first is supplied by core to each operation, so we don't need to
+remember it.  The second, we have to store with the pointer value
+somehow. *)
+
+(*
+type pointer_value =   <| 
+   address: lift_value pointer_address;
+   ftype:  fancy_type;
+|>
+*)
+
+(* not completely happy with this - it seems counter to "C programmer
+intuition" to treat p.f different from (type_of_f) ( (char* )(&p) +
+offsetof(f)) *)
+
+
+(* I guess we want to keep the underlying symbolic address constraint
+ set extend-only, so whenever we do an address computation to
+ construct a new pointer value we'll gensym a new
+ \texttt{symbolic_address_id} and add new constraints?  (for uniform
+ treatment of symbolic addresses).  Or we could keep a symbolic
+ address \emph{expression} in pointer values. *)
+
+
+(* On the path to integrating what we actually need about fancy_type
+with the rest, what is the free type of pointer-constructing
+operations, exactly? This: *)
+
+type block = | HACK (* it is defined after *)
+
+
+type symbolic_address = <|
+  address_sid:   symbolic_address_id;
+  address_ctype: C.ctype;
+|>
+
+type pointer_operation_nullary =
+  | Null of C.ctype
+  | Block of block
+  | Address of symbolic_address
+  | Function_pointer (* TODO *)
+
+type pointer_operation_unary = 
+(*  | Struct_or_union_offset of struct_or_union_tag * member_id *)
+  | Struct_or_union_offset of C.ctype * member_id (* the [ctype] must be a STRUCT or UNION *)
+  | Array_offset of C.ctype * unlifted_numeric_value
+  | Cast of C.ctype
+
+type pointer_expression =
+  | Nullary of pointer_operation_nullary
+  | Unary of pointer_operation_unary * pointer_expression
+
+
+
+(* (always defined)
+   Change a non-array (nor function ptr) ctype into an ARRAY of size 1, or does nothing. *)
+val arrayify: C.ctype -> C.ctype
+let arrayify ty =
+  match ty with
+    | C.Array _ _    -> ty
+    | C.Function _ _ -> ty
+    | ty             -> C.Array ty 1
+  end
+
+
+
+
+
+(* Check whether the second argument is a member of the first one.
+   (only defined if the first argument is a STRUCT or UNION ctype) *)
+val is_member_of: C.ctype -> member_id -> bool
+let is_member_of ty m_id =
+  match ty with
+(*
+TODO
+    | C.STRUCT _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
+    | C.UNION _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
+*)
+    | _                 -> assert_false "TODO: message"
+  end
+
+
+
+let rec check_prefixes xs ys m_id =
+  match (xs, ys) with
+    | ((idx, mx) :: xs, (idy, my) :: ys) ->
+        match (mx, my) with
+          | (C.MEMBER ty1, C.MEMBER ty2)                 -> compatible ty1 ty2
+          | (C.BITFIELD ty1 n1 p1, C.BITFIELD ty2 n2 p2) -> compatible ty1 ty2 && n1 = n2 && p1 = p2
+        end && (if idx = m_id && idy = m_id then true else check_prefixes xs ys m_id)
+    | _ -> assert_false "TODO message"
+  end
+
+(* Check whether the two first argument have isomorphic prefix up to the third argument.
+   (only defined if the two first arguments are both a STRUCT ctypes are both UNION ctypes, and
+    the third argument is a member of the both of them) *)
+val structs_unions_compatible_upto: C.ctype -> C.ctype -> member_id -> bool
+let structs_unions_compatible_upto ty1 ty2 m_id =
+  match (ty1, ty2) with
+(*
+TODO
+    | (C.STRUCT _ membrs1, C.STRUCT _ membrs2) ->
+        check_prefixes membrs1 membrs2 m_id
+    | (C.UNION _ membrs1, C.UNION _ membrs2) ->
+        check_prefixes membrs1 membrs2 m_id
+*)
+    | _ -> assert_false "TODO message"
+  end 
+
+
+
+
+(* Check whether two lists of struct/union members have a one-to-one correspondence between them. *)
+val     members_one_to_one: list C.member -> list C.member -> bool
+let rec members_one_to_one membrs1 membrs2 =
+  match (membrs1, membrs2) with
+    | ((C.MEMBER ty1) :: xs, (C.MEMBER ty2) :: ys) -> compatible ty1 ty2
+    (* TODO!!! currently not looking at the packing flag *)
+    | ((C.BITFIELD ty1 n1 _) :: xs, (C.BITFIELD ty2 n2 _) :: ys) ->
+        compatible ty1 ty2 && assert_false "TODO"
+  end
+
+
+
+(* §6.2.7#1
+
+there shall be a one-to-one correspondence between their members such that each pair of corresponding members are declared with compatible types;
+
+if one member of the pair is declared with an alignment specifier, the other is declared with an equivalent alignment specifier; and if one member of the pair is declared with a name, the other is declared with the same name. For two structures, corresponding members shall be declared in the same order. For two structures or unions, corresponding bit-fields shall have the same widths. For two enumerations, corresponding members shall have the same values.
+
+ *)
+
+(* Moreover, two structure, union, [...] declared in separate translation units are compatible if
+   their tags and members satisfy the following requirements: *)
+val compatible_struct_union: C.ctype -> C.ctype -> bool
+let compatible_struct_union ty1 ty2 =
+  let ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2) =
+    match (ty1, ty2) with
+(*
+TODO
+      | (C.STRUCT (* qs1 *) tag1 membrs1, C.STRUCT (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
+      | (C.UNION  (* qs1 *) tag1 membrs1, C.UNION  (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
+*)
+      | _ -> Boot.assert_false "TODO message"
+    end
+  (* If one is declared with a tag, the other shall be declared with the same tag. *)
+  in if tag1 <> tag2 then
+    false
+  else
+    (* If both are completed anywhere within their respective translation units, then the following
+       additional requirements apply: *)
+    assert_false "TODO"
+
+
+
+
+
+val     outermost_dynamic_type: pointer_expression -> C.ctype (* TODO: jazz this up to return the size and current position for arrays *)
+(* TYPEDEFs will have been substituted out before we ever get here, btw *)
+let rec outermost_dynamic_type pe =
+  match pe with
+    | Nullary (Null ty) -> ty
+    | Nullary (Address sym_addr) -> sym_addr.address_ctype
+    | Nullary (Function_pointer) -> todo "TODO"
+    | Unary (Struct_or_union_offset s_ty m_id) pe ->
+        let (tag, membrs) = match s_ty with
+(*
+TODO
+          | C.STRUCT tag membrs -> (tag, membrs)
+          | C.UNION  tag membrs -> (tag, membrs)
+*)
+          end
+        in match outermost_dynamic_type pe with
+(*
+TODO
+          | C.STRUCT tag' membrs' ->
+              if tag <> tag' then
+                assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
+                (* P: later the above check will have to be conditionally-on-flags more liberal, to support
+                interchangeability of structs with the same prefix *)
+              else
+                todo "get from the memory state the type of the member `m' in the struct type `tag'"
+*)
+          | _ -> assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
+        end
+    | Unary (Array_offset ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
+    | Unary (Cast ty) _ -> ty (* NOTE: the same *)
+  end
+
+
+let wf_pointer_expression_nullary pop = match pop with
+  | Null ty -> true
+  | Address sai -> 
+      todo "in some semantics: ...supposing we are in the SC world, go check that this is in a suitable allocated object... K remarks that naively you might think it's in several objects, and you need to take care"
+  | Function_pointer (* ... *) ->
+      todo "check it's a legal function pointer"
+  end
+
+(* when is a pointer-forming operation dynamically legal? *)
+(* assuming wf_pointer_expression p) *)
+val wf_pointer_expression_unary: pointer_operation_unary -> pointer_expression -> bool
+let wf_pointer_expression_unary pop p =
+  match pop with
+    | Struct_or_union_offset s_ty m_id ->
+        (* lookup the type (the static type of the occurrence (in a particular compilation unit) of
+           the member offset) in the environment associated with tag *)
+        (* K: changed Ail.ctype, so lookup is not needed anymore *)
+        
+        (* If [m_id] is not a member of [s_ty] *)
+        if match s_ty with
+            | C.STRUCT tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            | C.UNION  tag members -> List.for_all (fun (x,_) -> m_id <> x) members
+            
+            | C.ATOMIC _ -> false (* is undefined according to §6.5.2.3#5 *)
+            
+            | _ -> assert_false "[Memory.wf_pointer_expression_unary] illformed `Struct_or_union' ctor"
+           end
+        then
+          false
+        
+        (* Otherwise, check whether [s_ty] is compatible with the outermost dynamic type of the
+           pointer value [p] (for flags other then the standard strict compliance, the notion of
+           "compatibility is relaxed"). *)
+        else
+          let p_ty = outermost_dynamic_type p in
+          match p_ty with
+            | C.STRUCT _ _ ->
+                if assert_false "not semantics_options.isomorphic_stuct_are_compatible" then
+                  compatible s_ty p_ty
+                else
+                  assert_false "structs_are_isomorphic s_ty p_ty"
+            | C.UNION _ _ ->
+                if assert_false "not semantics_options.isomorphic_union_are_compatible" then
+                  compatible s_ty p_ty
+                else
+                  todo "Ail_typing_aux.unions_are_isomorphic s_ty p_ty"
+            | _ -> false (* TODO: Or should that be an assert_false? *)
+           end
+    
+    | Array_offset ty n ->
+        match arrayify (outermost_dynamic_type p) with
+          | C.ARRAY elem_ty None -> todo "no array size in the type of p"
+          | C.ARRAY elem_ty (Some size) ->
+              todo "...walk over the p (using 'typeof') to find the size of the array and where we are in it already, and the element type ty' ..."
+              todo "...check ty and ty' are more-or-less the same"
+              todo "...check we're in bounds (or plus one)"
+              todo "...think about whether we have to check the arrays have the same length (maybe we just check that at cast point)"
+          
+(*          | FUNCTION _ _ -> assert_false "TODO CHECK: if it's a function type, fail miserably" *)
+          | _ -> assert_false "TODO CHECK"
+        end
+      
+    | Cast p_ty -> assert_false "Ail_typing_aux.compatible s_ty p_ty && todo 'and the alignment is ok'"
+  end
+
+let rec wf_pointer_expression (p:pointer_expression) =
+  match p with
+    | Nullary pon  -> wf_pointer_expression_nullary pon
+    | Unary pop p' -> wf_pointer_expression p' && wf_pointer_expression_unary pop p'
+  end
+
+
+
+val equal_pointer_expression : pointer_expression -> pointer_expression -> bool
+let equal_pointer_expression pe1 pe2 =
+ todo "...the question is whether we can write this down nicely in an equational way"
+ todo "...and/or write a normalisation function that gives fairly canonical representatives "
+
+
+(*
+here's a conditional equation that could also be executed as part of a normalisation function:
+
+if ty=ty' && (if in some semantics) we stay in the array then
+Unary(Member_offset(Array_offset(ty,n)), Unary(Member_offset(Array(offset(ty',n'))))) = 
+Unary(Member_offset(Array_offset(ty,n+n')))
+
+....
+
+can't do much of this without nailing the semantic switches, but do first for aggressive C-standard semantics
+*)
+
+
+(* listing of these equations *)
+(*
+
+  Unary (Cast ty) (Unary (Cast ty') pe') when ty = ty'  -->  Unary (Cast ty) pe'
+
+  (P: the above will be true much more often - for pretty much all ty', if the applications are well-formed, no?)
+  
+  (K: ??) if we can decide that a symbolic_address points to some object following some member_offset, do we want
+          normalise to that explicit pointer_expression ?
+
+  
+
+
+
+
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* -------------------------------------------------- *)
+
+(*
+
+
+
+(** operations on pointers *)
+
+(* val current_type : fancy_type -> ctype *)
+(* let rec current_type ft = match ft with *)
+(*   | Cast ct -> ct   *)
+(*   | Member_offset (ma,ft) -> current_type ft *)
+(*   | Type ct -> ct *)
+
+
+
+(* TODO: reconcile the dynamic pointer type information with the static. And fix which the fancy type is...*)
+
+(* return the ctype produced by climbing up the cast/member_acces path
+   from the  *)
+val project_ft: fancy_type -> Ail.ctype
+let rec project_ft fty =
+  match fty with
+    | Cast ty fty -> ty
+    | Member_offset moffset fty ->
+        match project_ft fty with
+          | Ail.STRUCT qs x ->
+              todo "get from environment the type of the member x and return that"
+          | Ail.UNION  qs x ->
+              todo "the same"
+          | _ -> assert_false "[Memory.projectfy] found an ill-formed fancy_type"
+        end
+    | Type ty -> ty
+  end
+
+
+
+
+
+
+(** values *)
+
+type value =
+  | Vnum of numeric_value
+  | Vunion of sym (* union tag *) * sym (* selector *) * value
+  | Vstruct of sym (* struct tag *) * Pmap.map sym value
+  | Varray of list value 
+  | Vpointer of pointer_value
+
+
+(** blocks and block environments *)
+]
+(* maybe one day we'll rename "block" by "object" *)
+
+(* K: if these are exactly the "objects" from the std, we should rename *)
+type block =  <|
+  block_address: symbolic_address_id;
+  block_type:    Ail.ctype; (* K: if this is exactly the "effective type" (modulo for alloced objects) from the std, we should rename. *)
+|>
+(* does Ail.ctype tell me the size of all arrays? *)
+
+(* the above is ok for a non-malloc'd block.  For those, at this level 
+   we regard them as a char array?  Choices:
+
+A) make them be char arrays here, and make up new block ids for fresh
+or type-changing writes?
+
+B) make them be char arrays, and record somewhere what and where their
+subobjects are, but don't make up block ids for them (offseting them
+with pointers that hold Address (or maybe Block_offset) - which fits
+programmer intuition)
+
+C) invent a new kind of block.  In the standard, malloc'd blocks are
+really different from normal ones. But in practice it's not so clear.
+
+Peter inclines to (B), as he suspects that in practice programmers
+might well allocate char arrays (on the stack or whatever) and use
+them just like malloc'd regions.
+
+ *)
+
+
+
+
+(** memory actions *)
+
+type write = 
+  <| id : action_id;
+     typ : Ail.ctype;
+(*     addr : pointer_value;  (* or symbolic_address_id ??? *) *)
+     addr: pointer_address;
+     (* K: I think we want "pointer_address", ie. forget about fancy types in the memory state,
+           but have operations called by the execution Core actions to use "pointer_value". *)
+
+     valu : value |>
+
+(* have a special action for the splatting of padding with unspecified-value bytes, of a byte-range with holes? *)
+
+
+
+
+
+
+
+
+
+
+(** The memory state *)
+
+type memory_state = <|
+  
+  last_block_id: block_id;
+  
+  (* in some state monad?  Will have to be shared across threads.
+     Will it be extension-only, or really mutable?  At first sight,
+     extension-only.  Though for fast implementation of the semantics
+     you might want to keep a note of the blocks that don't really
+     exist any more.  And then what do we do at lifetime-end?  Remove
+     from the map, or note in some other place.  Remove from the map
+     is morally right.  *)
+  block_id_environment : Pmap.map block_id block;
+  
+  
+  layout_environment: layout_environment;
+  
+  
+  symbolic_address_constraint_environment: set symbolic_address_constraint
+
+|>
+
+
+
+module MM = struct
+
+  type ret 'a =
+    | Success of 'a
+    | Error of string
+    | Undef
+
+  type t 'a = memory_state -> ret ('a * memory_state)
+  
+  
+  (* monadic operations *)
+  val return: forall 'a. 'a -> t 'a
+  let return x = fun s ->
+    Success (x, s)
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind m f = fun s ->
+    match m s with
+      | Success (a, s') -> f a s'
+      | Error msg       -> Error msg
+      | Undef           -> Undef
+    end
+    
+  (* state operations *)
+  val get: t memory_state
+  let get = fun s -> Success (s, s)
+  
+  val set: memory_state -> t unit
+  let set s' = fun s -> Success ((), s')
+  
+  val update: (memory_state -> memory_state) -> t unit
+  let update f = fun s -> Success ((), f s)
+  
+  val modify: forall 'a. (memory_state -> 'a * memory_state) -> t 'a
+  let modify f = fun s -> Success (f s)
+  
+  
+  (* Raise the `undefined behaviour' error in the Core execution state *)
+  let undef = fun _ -> Undef
+  
+  
+  module Operators = struct
+    let (>>=) = bind
+    let (>>) m f = bind m (fun _ -> f)
+  end
+  open Operators
+  (*P: why do we nest modules above? *)
+  (* K: not sure, I've just been following Justus' style. Most of these
+        will disappear anyway once we get type classes *)
+  
+  let sequence ms = List.fold_right
+    (fun m acc -> m   >>= fun x  ->
+                  acc >>= fun xs ->
+                  return (x::xs))
+    ms (return [])
+  
+  val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+  let mapM f xs = sequence (List.map f xs)
+end
+open MM.Operators
+
+
+
+(* Memory model state operators *)
+val get_block: block_id -> MM.t block
+let get_block bid =
+  MM.get >>= fun s ->
+  if not (Pmap.mem bid s.block_id_environment) then
+    assert_false "[Memory.get_block] unregistered block id"
+  else
+    MM.return (Pmap.find bid s.block_id_environment)
+  
+val foreach_block: forall 'a. (block_id -> MM.t 'a) -> MM.t (list 'a)
+let foreach_block f = todo "do a mapM over blocks"
+
+val fresh_block_id: MM.t block_id
+let fresh_block_id =
+  MM.modify (fun s ->
+    let n = s.last_block_id in
+    (n, <| s with last_block_id= n+1 |>)
+  )
+
+
+val fresh_symbolic_address_id: MM.t symbolic_address_id
+let fresh_symbolic_address_id = todo ""
+
+val new_constraint: symbolic_address_constraint -> MM.t unit
+let new_constraint c =
+  MM.update (fun s -> <| s with symbolic_address_constraint_environment=
+                             Set.add c s.symbolic_address_constraint_environment
+                       |>)
+
+
+
+val fresh_action_id: MM.t action_id
+let fresh_action_id = todo ""
+
+
+
+
+(** type layout *)
+
+(* we lift the type definition layout information to functions giving
+layout data for arbitrary types *)
+val sizeof: Ail.ctype -> MM.t address
+let sizeof ty = todo ""
+
+val alignof: Ail.ctype -> MM.t address
+let alignof ty = todo ""
+
+
+
+
+
+
+
+(* ------------- *)
+
+
+(** Memory operations *)
+
+(* static allocation of an object *)
+val create: Ail.ctype -> MM.t block_id
+let create ty =
+  fresh_block_id            >>= fun bid ->
+  fresh_symbolic_address_id >>= fun sa  ->
+  MM.update (fun s ->
+    let block = <| block_address= sa; block_type= ty |> in
+    <| s with block_id_environment=
+           Pmap.add bid block s.block_id_environment |>
+  ) >> MM.return bid
+
+(* dynamic allocation of an object *)
+val alloc: unlifted_numeric_value -> MM.t block_id
+let alloc n =
+  fresh_block_id            >>= fun bid ->
+  fresh_symbolic_address_id >>= fun sa  ->
+  MM.update (fun s ->
+    (* we make up a pseudo effective type, following the choice B from Peter's
+       comment after the definition of the type `block' *)
+    let block = <| block_address= sa;
+                   block_type= Ail.ARRAY Ail.unsigned_char n |> in
+    <| s with block_id_environment=
+           Pmap.add bid block s.block_id_environment |>
+  ) >> MM.return bid
+
+
+
+
+
+
+
+
+(*
+type write = 
+  <| id : action_id;
+     typ : Ail.ctype;
+     addr : lift_value pointer_address;
+     valu : value |>
+
+*)
+
+(*
+val store: Ail.ctype -> pointer_value -> unlifted_numeric_value -> MM.t unit
+let store ty <| address= lvalue_addr; ftype= lvalue_fty |> n =
+  match lvalue_addr with
+    | Specified Null -> todo ""
+    | Spec
+
+
+
+
+
+  MM.get          >>= fun s    ->
+
+  fresh_action_id >>= fun a_id ->
+  
+
+
+
+  todo ""
+  
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+(* ------------- *)
+
+
+
+
+
+
+(* Interface to some querying system over the set of constraints. TODO: look
+   into using Z3 for the solving of Presburger formulae; find a scheme to
+   result of past queries to make things go faster? *)
+(* P: note that using Z3 or whatever is not on our critical path right now... *)
+val boolean_query_constraint: symbolic_address_constraint -> MM.t bool
+let boolean_query_constraint c =
+  todo "return whether c derivable from the set of contraints"
+
+
+val evaluate_symbolic_expr: symbolic_address_expr -> MM.t concrete_address
+let evaluate_symbolic_expr e = todo "evaluate e"
+
+val expr_query_constraint: symbolic_address_constraint -> MM.t concrete_address
+let expr_query_constraint c =
+  todo "solve c"
+
+
+
+
+
+
+
+
+(** pointer actions *)
+(* Recap of the memory actions *)
+(*
+val pointer_plus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
+val pointer_minus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
+val pointer_member_offset: pointer_value -> member_offset -> MM.t pointer_value
+
+val pointer_deref: 
+val get_address: 
+
+val sizeof: (OK)
+val alignof: (OK)
+
+val pointer_lt_pointer: 
+val pointer_le_pointer: 
+val pointer_gt_pointer: 
+val pointer_ge_pointer: 
+
+val pointer_eq_pointer: 
+val pointer_ne_pointer: 
+
+val create: (OK) 
+val alloc:  (OK)
+val kill: 
+
+val load: 
+val store: 
+
+
+
+val pointer_cast: pointer_value -> Ail.ctype -> MM.t ??
+
+*)
+
+
+
+
+(* want to use Lem sections to feed in the flags and any required environment data here *)
+(* the result has to be some sort of option type to signal bad behaviour
+   <--- K: I've hidden that in the state monad
+ *)
+(* K: note that array indices starts from 0 *)
+val pointer_plus_number: pointer_value -> unlifted_numeric_value -> MM.t pointer_value
+let pointer_plus_number p n =
+  let n' = todo "Get an actual integer, as used in concrete_address, from that\ 
+                 numeric_value, or fail if we can't" in
+  match p.address with
+    (* P: on reflection, this isn't much different from any other pointer
+          arithmetic, so maybe we should allow NULL + &x === &x in
+          circumstances where we're allowing arbitrary pointer arithmetic *)
+    | Specified Null            -> MM.undef
+    | Unspecified ctype         -> MM.return p
+    | Trap_representation       -> MM.undef (* actually, you would already have
+                                               failed on the read, so maybe throw
+                                               an outOfHomeomorphism *)
+    | Indeterminate_value ctype -> MM.return p
+    | Specified (Block_path block_id mapath) ->
+        (* pulling out the head of the dynamic fancy_type, is probably wrong
+           - should instead use the static type of the lvalue??? *)
+        (* K: from the std, it has to be the type stored in the block,
+              am I missing something relating to non-std uses? *)
+        (* P: what's the compiler going to do?  Use the static type, no? *)
+        get_block block_id >>= fun block ->
+        
+        let (array_elem_type, array_length) =
+          match block.block_type with
+            | Ail.ARRAY a_ty a_length -> (a_ty, a_length)
+            | ty                      -> (ty, 1) (* following (§6.5.6#7) *)
+          end in 
+        
+        let (current_index, ma_tail) =
+          match mapath with
+            | (Array_shift ma_ty ma_index) :: mas ->
+                if array_elem_type <> ma_ty then
+                  todo "block type and member_offset type disagree (what to do?)"
+                else if ma_index >= array_length then
+                  todo "member_offset is out of range (what to do?)"
+                else
+                  (ma_index, mas)
+            | (Array_one_past ma_ty) :: mas -> (array_length, mas)
+            | _ -> (0, mapath)
+          end in
+        
+        (* §6.5.6#8 "... Moreover, if the expression P points to the last
+                     element of an array object, the expression (P)+1 points one
+                     past the last element of the array object ..." *)
+        (* K: I may be improperly reading it, do we undef when n' is not
+              exactly 1, but still leads to a ptr to one past the current object? *)
+        (* P: no, I think that's the standard text just giving an example.  Any arith that gives us a ptr to one-past should be fine, not just a succ of a pointer to the last *)
+        (if current_index = array_length - 1 && n' = 1 then
+          MM.return $ Array_one_past array_elem_type
+        
+        (* §6.5.6#8 "... If both the pointer operand and the result point to
+                     elements of the same array object, or one past the last
+                     element of the array object, the evaluation shall not
+                     produce an overflow ..." *)
+        else if current_index + n' < array_length then
+          MM.return $ Array_shift array_elem_type (current_index + n')
+        
+        (* §6.5.6#8 "... otherwise, the behavior is undefined. ..." *)
+        else MM.undef) >>= fun ma ->
+        
+        MM.return <| p with address= Specified (Block_path block_id (ma :: ma_tail)) |>
+  
+  (* K: do we really have no bound checks? *)
+  (* P: various, depending on the semantics flags... *)
+  | Specified (Address sa) ->
+    (* K: being std strict for now *)
+      (* would be best to abstract more from the symbolic_address
+         state monad so that this "looks" just like an addition (and one
+         could swap out the symbolic address machinery for concrete
+         addresses at will *)
+      fresh_symbolic_address_id >>= fun sa' ->
+      new_constraint $ Equal (Symbolic sa')
+                                (Binop SABplus (Symbolic sa) (Concrete n')) >>
+      MM.return <| p with address= Specified (Address sa') |>
+  
+    (* K: being std strict for now *)
+  | Specified Function_pointer ->
+      assert_false "[Memory.pointer_plus_number] found a function pointer,\ 
+                    something must be wrong with the Ail typecheck."
+   end
+
+
+
+
+(* we're going to need something more general than equal_pointer, as
+we have to find the writes that *overlap* the footprint that we want to
+read from.  But start with this, nonetheless *)
+
+let pointer_member_offset (p : pointer_value) (ma: member_offset) =
+  match todo "member_offset" with
+  | Array_shift ty n -> todo "...use pointer_plus_number (is this identical to that?)..."
+  | Struct_offset struct_tag member_id -> 
+      todo "...do the same stuff for Null etc...."
+(*
+      ...if this is a legit member offset then
+        ...if the pointer is a block path, prepend this
+        ...if the pointer is an address, add the appropriate offset
+*)
+  | Union_offset union_tag member_id -> 
+      todo "...like struct offset..."
+  end
+
+
+let pointer_cast (p: pointer_value) (ty: Ail.ctype) = 
+  todo "..."
+
+
+
+
+
+type array_shift =
+  | Shift_index of unlifted_numeric_value
+  | One_past
+
+
+
+
+
+(* Utils to get uniform handling of block/symbolic pointers *)
+
+(* Get the block_id and index a given pointer points to (if possible).
+   We see objects of non-array type, as array objects of size 1 *)
+(* K: for symbolic pointers we may get several possible (block_id, index) pairs (?) *)
+
+(* TODO: for now I assume this function musn't be called on null pointer, nor on
+         function pointer *)
+val get_pointer_array_position: pointer_value -> MM.t (list (block_id * array_shift))
+let get_pointer_array_position p =
+  let process block =
+    match block.block_type with
+      | Ail.ARRAY elem_ty size -> (elem_ty, size)
+      | ty                     -> (ty, 1) (* following (§6.5.6#7) *)
+    end in
+  match p.address with
+    | Specified Null ->
+        assert_false "[Memory.get_pointer_array_position] called on a null \ 
+                      pointer."
+    | Specified (Block_path bid mapath) ->
+        get_block bid >>= fun block ->
+        let (elem_ty, array_size) = process block in
+        match mapath with
+          | (Array_shift a_ty a_shift) :: _ ->
+              if a_shift >= array_size then
+                (* Note that = case means that the mapath is ill-formed (as it
+                   should be a Array_one_past) *)
+                todo "for some flag, do something?. Or this pointer should \ 
+                      already have been transformed to the symbolic address \ 
+                      format, hence here we have an error."
+              else
+                MM.return [(bid, Shift_index a_shift)]
+          | (Array_one_past a_ty) :: _ ->
+              MM.return [(bid, One_past)]
+          | _ -> MM.return [(bid, Shift_index 0)]
+        end
+    | Specified (Address sa) ->
+       foreach_block (fun bid ->
+         get_block bid >>= fun block ->
+         evaluate_symbolic_expr $
+           Binop SABminus (Symbolic block.block_address) (Symbolic sa) >>= fun p_shift ->
+         let (elem_ty, array_size) = process block in
+         MM.return $
+           if p_shift < 0 || p_shift > array_size then
+             None (* our pointer doesn't point to an element of [block] (when
+                     seen as an array object) *)
+           else if p_shift < array_size then
+             (* TODO: this is currently wrong. Consider the case where [block] is
+                a struct and [p] points inside a member of that struct
+                (something we can know by looking at the fancy_type of [p]), we
+                may want to consider [p] as not being a pointer to an "array"
+                element of [block] *)
+             Some (bid, Shift_index p_shift)
+           else
+             Some (bid, One_past)
+       ) >>= MM.return -| filter_opt
+    | Specified (Function_pointer) ->
+        assert_false "[Memory.get_pointer_array_position] called on a function \ 
+                      pointer."
+    
+    (* TODO: what about Indet pointers? *)
+    | _ -> assert_false "[Memory.get_pointer_array_position] called a non `Specified' pointer"
+  end
+
+(*
+
+[pointer_minus_pointer p1 p2]
+
+  * both p1 and p2 shall point to elements of the same array object, or one past
+    the last element of the array object.
+
+>>>> In other words, if the expressions P and Q point to, respectively, the i-th and j-th elements of an array object, the expression (P)-(Q) has the value i−j provided the value fits in an object of type ptrdiff_t.
+
+>>>> Moreover, if the expression P points either to an element of an array object or one past the last element of an array object, and the expression Q points to the last element of the same array object, the expression ((Q)+1)-(P) has the same value as ((Q)-(P))+1 and as -((P)-((Q)+1)), and has the value zero if the expression P points one past the last element of the array object, even though the expression (Q)+1 does not point to an element of the array object.
+*)
+(* or lifted ? *)
+val pointer_minus_pointer: pointer_value -> pointer_value -> MM.t unlifted_numeric_value
+let pointer_minus_pointer p1 p2 =
+  match (p1.address, p2.address) with
+    | (Specified Null, _)             -> MM.undef (* first version, being std-strict *)
+    | (_, Specified Null)             -> MM.undef (* first version, being std-strict *)
+    | (Specified Function_pointer, _) -> MM.undef (* first version, being std-strict *)
+    | (_, Specified Function_pointer) -> MM.undef (* first version, being std-strict *)
+    | (_, _) ->
+        get_pointer_array_position p1 >>= fun positions1 ->
+        get_pointer_array_position p2 >>= fun positions2 ->
+        (* K: what do we do there is more then one??? *)
+        match todo "look if [positions1] and [positions2] share an object" with
+            (* [p1] and [p2] do not point within the same object (first version,
+               being std-strict) *)
+          | None -> MM.undef
+          | Some (Shift_index i, Shift_index j) ->
+              if todo "(i - j) doesn't fit in intprt_t" then
+                  MM.undef
+                else
+                  MM.return (i - j)
+          | _ -> todo "this is the `Moreover' from the std, but K doesn't really understand what it says"
+        end
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let pointer_of_numeric (* ... *) = todo "..."
+
+let numeric_of_pointer (* ... *) = todo "..."
+
+(* any other operations on pointers we need?  Other footling with
+pointer representations?*)
+
+(* General point: I'm still not sure about the choice (that we've been
+making so far) to give a particular model for pointer values, together
+with all these operations, rather than the alternative of axiomatising
+facts about arbitrary pointer-operation expressions *)
+
+
+(* we'll use this both within the semantics and to define the language-level equality comparison.  So it needs to detect 
+when the latter wouldn't be defined (according to the flags) and return some tags (that in the semantics-usage we map to false).  It also needs to be able to report that symbolic execution can't continue. *)
+let equal_pointer (p: pointer_value) (p': pointer_value) : bool =
+  match (p.address, p'.address) with
+    | (Specified Null, Specified Null) -> true
+    | (Specified (Block_path block_id mapath), Specified (Block_path block_id' mapath')) -> 
+        (* ...unless we're not allowed to do this comparison at the language level... *)
+        (block_id = block_id') && (mapath = mapath')
+        (* assuming that the paths are both legal and array-offset-normalised *)
+  
+      (* where do we deal with type isomorphisms?  I.e., have
+      iso-casts been normalised away by the time we get to all the
+      ctypes that appear in those paths, or do we have to take them
+      into account when comparing paths? *)
+
+   | (Specified (Block_path block_id mapath), Specified (Address sa')) ->
+       let (sae:symbolic_address_expr) = todo "...use the layout environment to project from the block_id/mapath..." in
+       match (todo "decide_symbolic_address_constraint") (Equal sae (Symbolic sa')) with
+         | Decided_equal -> true
+         | Decided_unequal -> false
+         | Undecided -> todo "...report that symbolic execution can't continue..."
+      end
+  |  (Specified (Address sa), Specified (Block_path block_id mapath)) -> todo "...symmetrical (pull out the above into common code)"
+  |  (Specified (Address sa), Specified (Address sa')) -> todo "...do that decide_symbolic_address_constraint thing..."
+  end
+
+
+
+(* NOTE: the following is just to remember what the standard version of pointer equality is *)
+let std_pointer_equality (p: pointer_value) (p': pointer_value) : bool =
+  match (p.address, p'.address) with
+    | (Specified Null, Specified Null) -> true
+    | (Specified (Block_path block_id mapath), Specified (Block_path block_id' mapath')) ->
+        block_id = block_id' ||
+
+        (todo "mapath goes to the last elem of block_id (seen as an array)" &&
+         todo "the same for mapath' with block_id'") ||
+
+        (todo "we know block_id is directly followed by block_id'" &&
+         todo "mapath goes to one past the last elem of block_id (were we may use the point\ 
+                       from 6.5.9#7) and mapth' is the empty path") ||
+
+        todo "the symmetric case"
+
+    | (Specified (Block_path block_id mapath), Specified (Address sa')) ->
+        todo "decide whether sa' follow one of the previous conditions"
+    |  (Specified (Address sa), Specified (Block_path block_id mapath)) -> todo "... symmetrical ..."
+    |  (Specified (Address sa), Specified (Address sa')) -> todo "... similar ..."
+  end
+
+
+*)

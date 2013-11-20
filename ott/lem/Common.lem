@@ -1,0 +1,74 @@
+val option_map : forall 'A 'B. ('A -> 'B) -> option 'A -> option 'B
+let option_map = Option.fmap
+(*let inline {coq} option_map = Coq.option_map*)
+
+val option_bind : forall 'A 'B. option 'A -> ('A -> option 'B) -> option 'B
+let option_bind = 
+  fun o f ->
+    match o with
+    | Some a -> f a
+    | None   -> None
+    end
+
+module OptionMonad = struct
+  type t 'a = option 'a
+  module Operators = struct
+    let return = Some
+    let (>>=) = option_bind
+    let (>>) m f = option_bind m (fun _ -> f)
+    let (<$>) = option_map
+  end
+end
+
+val option_bool : forall 'A. option 'A -> ('A -> bool) -> bool
+let option_bool =
+  fun o f ->
+    match o with
+    | Some a -> f a
+    | None   -> false
+    end
+
+let rec eq_list (eq_A : 'A -> 'A -> bool) l1 l2 : bool =
+    match (l1, l2) with
+    | ([]      , []      ) -> true
+    | (a1 :: l1, a2 :: l2) -> eq_A a1 a2 && eq_list eq_A l1 l2
+    | (_       , _       ) -> false
+    end
+
+let equiv_pair (equiv_A : 'A1 -> 'A2 -> bool) (equiv_B : 'B1 -> 'B2 -> bool) : 'A1 * 'B1 -> 'A2 * 'B2 -> bool =
+  fun p1 p2 -> 
+    let (a1, b1) = p1 in
+    let (a2, b2) = p2 in
+    equiv_A a1 a2 && equiv_B b1 b2
+
+let eq_pair (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) : 'A * 'B -> 'A * 'B -> bool =
+  fun p1 p2 -> 
+    let (a1, b1) = p1 in
+    let (a2, b2) = p2 in
+    eq_A a1 a2 && eq_B b1 b2
+
+let eq_option (eq_A : 'A -> 'A -> bool) : option 'A -> option 'A -> bool =
+  fun o1 o2 -> 
+    match (o1, o2) with
+    | (Some a1, Some a2) -> eq_A a1 a2
+    | (None   , None   ) -> true
+    | (_      , _      ) -> false
+    end
+ 
+let rec in_list (eq_A : 'A -> 'A -> bool) (a : 'A) (ls : list 'A) : bool =
+  match ls with
+  | []    -> false
+  | x::xs -> eq_A x a || in_list eq_A a xs
+  end
+
+let rec all_list (dec : 'A -> bool) (l : list 'A) : bool =
+    match l with
+    | []    -> true
+    | x::xs -> dec x && all_list dec xs
+    end
+
+let sub_list (eq_A : 'A -> 'A -> bool) l1 l2 =
+  all_list (fun x -> in_list eq_A x l2) l1
+
+let equiv_list (eq_A : 'A -> 'A -> bool) l1 l2 =
+  sub_list eq_A l1 l2 && sub_list eq_A l2 l1

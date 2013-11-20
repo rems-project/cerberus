@@ -1,0 +1,191 @@
+open Common
+open AilTypes
+open AilSyntax
+open Range
+
+open GenTypes
+
+open OptionMonad.Operators
+
+let array gt : bool =
+  match gt with
+  | GenArray _ _ -> true
+  | _            -> false
+  end
+
+let is_function gt : bool =
+  match gt with
+  | GenFunction _ _ -> true
+  | _               -> false
+  end
+
+let pointer_conversion gt =
+  match gt with
+  | GenArray    t _ -> GenPointer no_qualifiers t
+  | GenFunction t q -> GenPointer no_qualifiers (Function t q)
+  | _               -> gt
+  end
+
+let integer gt =
+  match gt with
+  | GenBasic (GenInteger _) -> true
+  | _ -> false
+  end
+
+let real gt : bool = integer gt
+
+let pointer gt =
+  match gt with
+  | GenPointer _ _ -> true
+  | _ -> false
+  end
+
+let arithmetic gt : bool = integer gt
+
+let scalar gt : bool = pointer gt || arithmetic gt
+
+let void gt : bool =
+  match gt with
+  | GenVoid -> true
+  | _ -> false
+  end
+
+let pointer_to_complete_object gt : bool =
+  match gt with
+  | GenPointer _ t -> AilTypesAux.complete t
+  | _              -> false
+  end
+
+let pointers_to_compatible_complete_objects gt1 gt2 : bool =
+  match (gt1, gt2) with
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.complete t1 && AilTypesAux.complete t2 && AilTypesAux.compatible t1 t2
+  | (_              , _              ) -> false
+  end  
+
+let pointers_to_compatible_objects gt1 gt2 : bool =
+  match (gt1, gt2) with
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.object_ t1 && AilTypesAux.object_ t2 && AilTypesAux.compatible t1 t2
+  | (_              , _              ) -> false
+  end  
+
+let pointer_to_object gt : bool =
+  match gt with
+  | GenPointer _ t -> AilTypesAux.object_ t
+  | _              -> false
+  end
+
+let pointer_to_void gt : bool =
+  match gt with
+  | GenPointer _ Void -> true
+  | _                 -> false
+  end
+
+let pointers_to_compatible_types gt1 gt2 : bool =
+  match (gt1, gt2) with
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.compatible t1 t2
+  | (_              , _              ) -> false
+  end
+
+let composite_pointer gt1 gt2 : option genType =
+  match (gt1, gt2) with
+  | (GenPointer q1 t1, GenPointer q2 t2) -> if AilTypesAux.compatible t1 t2
+                                             then option_map (GenPointer (AilTypesAux.combine_qualifiers q1 q2)) (AilTypesAux.composite t1 t2)
+                                             else None
+  | (_               , _               ) -> None
+  end
+
+(* Sound but not principal. *)
+let integer_promotion git : genIntegerType =
+  Promote git
+
+let promotion gt : option genType =
+  match gt with
+  | GenBasic (GenInteger git) -> Some (GenBasic (GenInteger (integer_promotion git)))
+  | _                         -> None
+  end
+
+(* Sound but not principal. *)
+let usual_arithmetic_promoted_integer git1 git2 : genIntegerType =
+  Usual git1 git2
+
+let usual_arithmetic_integer git1 git2 : genIntegerType =
+  usual_arithmetic_promoted_integer
+    (integer_promotion git1)
+    (integer_promotion git2)
+
+let usual_arithmetic gt1 gt2 =
+  match (gt1, gt2) with
+  | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) -> Some (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
+  | (_ , _) -> None
+  end
+
+let rec interpret_genIntegerType P git : option integerType =
+  match git with
+  | Concrete it -> Some it
+  | SizeT -> Some P.Implementation.size_t
+  | PtrdiffT -> Some P.Implementation.ptrdiff_t
+  | Unknown ic -> AilTyping.type_of_constant P ic
+  | Promote git ->
+      interpret_genIntegerType P git >>= fun it ->
+      Some (AilTypesAux.integer_promotion P it)
+  | Usual git1 git2 ->
+      interpret_genIntegerType P git1 >>= fun it1 ->
+      interpret_genIntegerType P git2 >>= fun it2 ->
+      Some (AilTypesAux.usual_arithmetic_integer P it1 it2)
+  end
+
+let interpret_genBasicType P gbt : option basicType =
+  match gbt with
+  | GenInteger git  -> interpret_genIntegerType P git >>= fun it ->
+                       Some (Integer it)
+  end
+
+let interpret_genType P gt : option ctype =
+  match gt with
+  | GenVoid         -> Some Void
+  | GenBasic gbt    -> interpret_genBasicType P gbt >>= fun bt ->
+                       Some (Basic bt)
+  | GenArray    t n -> Some (Array    t n)
+  | GenFunction t p -> Some (Function t p)
+  | GenPointer  q t -> Some (Pointer  q t)
+  end
+
+let interpret_genTypeCategory P gt : option typeCategory =
+  match gt with
+  | GenRValueType   gt -> interpret_genType P gt >>= fun t ->
+                          Some (RValueType   t)
+  | GenLValueType q t  -> Some (LValueType q t)
+  end
+
+let signed_integerSuffix (s : integerSuffix) : bool =
+  match s with
+  |  L  -> true
+  |  LL -> true
+  | U   -> false
+  | UL  -> false
+  | ULL -> false
+  end
+
+let signed_integerConstant (ic : integerConstant) : bool =
+  match snd ic with
+  | None   -> true
+  | Some s -> signed_integerSuffix s
+  end
+
+let min_interpret_integerSuffix s =
+  match s with
+  | L   -> Long
+  | LL  -> LongLong
+  | U   -> Int_
+  | UL  -> Long
+  | ULL -> LongLong
+  end
+
+let min_interpret_optionIntegerSuffix os =
+  match os with
+  | None   -> Int_
+  | Some s -> min_interpret_integerSuffix s
+  end
+
+let min_interpret_integerConstant (ic:integerConstant) =
+  min_interpret_optionIntegerSuffix (snd ic)

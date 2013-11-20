@@ -1,0 +1,83 @@
+-- auto-generated implementation file for: `gcc_4.9.0_x86_64-apple-darwin10.8.0'
+
+def <bits_in_byte> : integer := 8
+
+fun <ctype_min> (ty: ctype) : integer :=
+  case ty of
+    | char               -> -128
+    | signed   ichar     -> -128
+    | unsigned ichar     -> 0
+    | signed   short     -> -32768
+    | unsigned short     -> 0
+    | signed   int       -> -2147483648
+    | unsigned int       -> 0
+    | signed   long      -> -9223372036854775808
+    | unsigned long      -> 0
+    | signed   long_long -> -9223372036854775808
+    | unsigned long_long -> 0
+--    | size_t             -> 0
+--    | intptr_t           -> -9223372036854775808
+--    | wchar_t            -> -2147483648
+--    | char16_t           -> 0
+--    | char32_t           -> 0
+  end
+
+fun <ctype_max> (ty: ctype) : integer :=
+  case ty of
+    | char               -> 127
+    | signed   ichar     -> 127
+    | unsigned ichar     -> 255
+    | signed   short     -> 32767
+    | unsigned short     -> 65535
+    | signed   int       -> 2147483647
+    | unsigned int       -> 4294967295
+    | signed   long      -> 9223372036854775807
+    | unsigned long      -> 18446744073709551615
+    | signed   long_long -> 9223372036854775807
+    | unsigned long_long -> 18446744073709551615
+--    | size_t             -> 18446744073709551615
+--    | intptr_t           -> 9223372036854775807
+--    | wchar_t            -> 2147483647
+--    | char16_t           -> 65535      -- TODO: this a hack
+--    | char32_t           -> 4294967295 -- TODO: this a hack
+  end
+
+fun <sizeof> (ty: ctype) : integer :=
+  case ty of
+    | char               -> 1
+    | signed   ichar     -> 1
+    | unsigned ichar     -> 1
+    | signed   short     -> 2
+    | unsigned short     -> 2
+    | signed   int       -> 4
+    | unsigned int       -> 4
+    | signed   long      -> 8
+    | unsigned long      -> 8
+    | signed   long_long -> 8
+    | unsigned long_long -> 8
+--    | size_t             -> 8
+--    | intptr_t           -> 8
+--    | wchar_t            -> 4
+--    | char16_t           -> 2 -- TODO: this a hack
+--    | char32_t           -> 4 -- TODO: this a hack
+  end
+
+fun <alignof> (ty: ctype) : integer :=
+  case ty of
+    | char               -> 1
+    | signed   ichar     -> 1
+    | unsigned ichar     -> 1
+    | signed   short     -> 2
+    | unsigned short     -> 2
+    | signed   int       -> 4
+    | unsigned int       -> 4
+    | signed   long      -> 8
+    | unsigned long      -> 8
+    | signed   long_long -> 8
+    | unsigned long_long -> 8
+--    | size_t             -> 8
+--    | intptr_t           -> 8
+--    | wchar_t            -> 4
+--    | char16_t           -> 2 -- TODO: this a hack
+--    | char32_t           -> 4 -- TODO: this a hack
+  end

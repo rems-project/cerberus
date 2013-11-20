@@ -1,0 +1,217 @@
+type map 'a 'b = Pmap.map 'a 'b
+
+(* empty type *)
+type zero
+
+let rec numerote_ n l =
+  match l with
+    | []    -> []
+    | x::xs -> (n,x) :: numerote_ (n+1) xs
+  end
+let numerote l = numerote_ 1 l
+
+val id: forall 'a. 'a -> 'a
+let id x = x
+
+val const: forall 'a 'b. 'a -> 'b -> 'a
+let const x _ = x
+
+let (-|) f g x = f (g x)
+let (|-) g f x = f (g x)
+(* TODO: ask change in lem to be able to have
+         the traditional |> *)
+let (>|>) x f = f x
+let (>?>) x b f g = if b then f x else g x
+
+let ($) f x = f x
+let comp f g = fun x -> f (g x)
+
+let rec nub' l acc =
+  match l with
+    | []    -> []
+    | x::xs -> if List.mem x acc then nub' xs acc
+                                 else x :: nub' xs (x::acc)
+  end
+let nub l = nub' l []
+
+
+let rec or_list l =
+  match l with
+    | []    -> false
+    | x::xs -> x || or_list xs
+  end
+
+let rec delete eq x = function
+  | []    -> []
+  | y::ys -> if eq x y then ys else y :: delete eq x ys
+end
+
+let list_diff eq = List.fold_left (fun x y -> delete eq y x)
+
+
+val     zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
+let rec zip3 xs ys zs =
+  match (xs, ys, zs) with
+    | (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
+    | _                        -> []
+  end
+
+val     zip4: forall 'a 'b 'c 'd. list 'a -> list 'b -> list 'c -> list 'd -> list ('a * 'b * 'c * 'd)
+let rec zip4 xs ys zs us =
+  match (xs, ys, zs, us) with
+    | (x::xs', y::ys', z::zs', u::us') -> (x,y,z,u) :: zip4 xs' ys' zs' us'
+    | _                                -> []
+  end
+
+
+val unzip: forall 'a 'b. list ('a * 'b) -> (list 'a * list 'b)
+let unzip xys = List.fold_right (fun (x,y) (xs,ys) -> (x :: xs, y :: ys)) xys ([],[])
+
+val unzip3: forall 'a 'b 'c. list ('a * 'b * 'c) -> (list 'a * list 'b * list 'c)
+let unzip3 xyzs = List.fold_right (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) xyzs ([],[],[])
+
+
+
+let rec all p = function
+  | []    -> true
+  | x::xs -> p x  && all p xs
+end
+
+
+let from_Some = function
+  | Some x -> x
+(*  | None   -> Boot.assert_false "[Global.from_Some] found a None" *)
+end
+
+let is_Some = function
+  | Some _ -> true
+  | None   -> false
+end 
+
+
+
+let rec filter_opt l = 
+  match l with
+    | [] -> []
+    | (Some z) :: xs -> z :: filter_opt xs
+    | None     :: xs ->      filter_opt xs
+  end
+
+let rec set_from_options xs =
+  match xs with
+    | []            -> {}
+    | Some x :: xs' -> {x} union set_from_options xs'
+    | None   :: xs' -> set_from_options xs'
+end
+
+let rec replicate n x =
+  match n with
+    | 0 -> []
+    | n -> x :: replicate (n-1) x
+  end
+
+(* TODO: redo efficient *)
+let rec take n l =
+  if n <= 0 then
+    []
+  else match l with
+    | []    -> []
+    | x::xs -> x :: take (n-1) xs
+  end
+
+let rec drop n l =
+  if n <= 0 then
+    l
+  else match l with
+    | []    -> []
+    | _::xs -> drop (n-1) xs
+  end
+
+
+(* AHEM *)
+let rec splitAt k l =
+  (take k l, drop k l)
+
+let rec list_update a v xs =
+  match xs with
+    | []         -> []
+    | (x,xv)::xs' -> (if x = a then (a,v) :: xs' else (x,xv) :: list_update a v xs' )
+  end
+
+
+(* 'optimised' implementation of [\f -> unzip . map f] *)
+val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
+let rec mapUnzip_ f (xs, ys) = function
+  | []      -> (xs, ys)
+  | (l::ls) -> let (x,y) = f l in mapUnzip_ f (x::xs, y::ys) ls
+end
+let mapUnzip f l =
+  let (xs, ys) = mapUnzip_ f ([],[]) l in
+  (List.rev xs, List.rev ys)
+
+
+
+(* BEGIN: stolen from cpp *)
+val     map_option: forall 'a 'b. ('a -> option 'b) -> list 'a -> list 'b
+let rec map_option f xs = 
+  match xs with 
+    | []     -> []
+    | x::xs ->
+        match f x with 
+          | None   -> map_option f xs 
+          | Some x -> x :: (map_option f xs)
+        end
+  end
+
+(* needs to be applied to a acyclic transitive relation *)
+val transitive_reduction: forall 'a. list ('a * 'a) -> option (list ('a * 'a))
+let transitive_reduction r =
+  let transitive_pairs =
+    List.flatten $
+      List.map (fun (a1,a2) -> 
+        map_option (fun (a1',a2') -> if a2 = a1' then Some (a1,a2') else None) r
+      ) r in
+  (* a partial check for cycles *)
+  if List.exist (fun (a1,a2) -> a1=a2) (r @ transitive_pairs) then 
+    None
+  else Some $ List.filter (fun (a1,a2) -> not (List.mem (a1,a2) transitive_pairs)) r 
+
+val is_transitive: forall 'a. list ('a * 'a) -> bool
+let is_transitive r =
+  let two_step_edges =
+    List.flatten $
+      List.map (fun (n,n') -> 
+        map_option (fun (n'',n''') -> if n'=n'' then Some (n,n''') else None) r
+      ) r in
+  List.for_all (fun (n,n''') -> List.mem (n,n''') r) two_step_edges
+
+
+let try_to_transitive_reduce rel =
+  if is_transitive rel then
+    match transitive_reduction rel with
+      | Some rel' -> rel'
+      | None      -> rel
+    end
+  else
+    rel
+(* END: stolen from cpp *)
+
+(* this will blow up on cyclic relations *)
+let step s rel =
+  List.fold_left (fun acc (a,b) ->
+    if List.mem a s && not (List.mem b acc) then
+      b :: acc
+    else
+      acc
+  ) s rel
+
+let rec accessible_ s rel =
+  let s' = step s rel in
+  if s = s' then
+    s
+  else
+    accessible_ s' rel
+
+let accessible a b rel =
+  List.mem b $ accessible_ [a] rel
+
