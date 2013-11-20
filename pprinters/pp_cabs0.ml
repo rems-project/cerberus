@@ -397,10 +397,10 @@ let pp_name_group (spec_elems, ns) =
 
 let rec pp_definition = function
  | FUNDEF (spec_elems, n, s, _) ->
-     P.separate_map P.space pp_spec_elem spec_elems ^^^
+     !^ (ansi_format [Bold; Red] "FUNDEF:") ^^^ P.separate_map P.space pp_spec_elem spec_elems ^^^
      pp_name n ^^^ pp_statement s
  | DECDEF (ing, _) ->
-     pp_init_name_group ing
+     !^ (ansi_format [Bold; Red] "DECDEF:") ^^^ pp_init_name_group ing
 (* | PRAGMA (str, _) -> assert false *)
 
 

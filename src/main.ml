@@ -148,7 +148,7 @@ let load_impl core_parse csemlib_path =
       (* TODO: yuck *)
         match core_parse (Input.file iname) with
           | Exception.Result (Core_parser_util.Rimpl z) -> z
-          | _ -> error "(TODO_MSG) found an error while parsing the implementation file."
+          | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Errors.to_string err
 
 
 let pipeline stdlib impl core_parse file_name =
@@ -173,10 +173,17 @@ let pipeline stdlib impl core_parse file_name =
       >|> pass_message "2. Cabs -> Ail completed!"
       >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
 
-      >|> Exception.rbind Ail_typing.annotate
-      >|> pass_message "3. Ail typechecking completed!"
-      >|> Exception.fmap (Translation.translate stdlib impl)
 
+(*      >|> Exception.rbind Ail_typing.annotate *)
+
+
+      >|> Exception.rbind (fun z ->
+            Exception.of_option (Location.dummy, Errors.CSEM_HIP "Ail Typing error") $
+              GenTyping.annotate_program Annotation.concrete_annotation z)
+      >|> pass_message "3. Ail typechecking completed!"
+      
+      
+      >|> Exception.fmap (Translation.translate stdlib impl)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
       >|> Exception.fmap Core_simpl.simplify

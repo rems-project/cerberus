@@ -15,11 +15,11 @@ fun <ctype_min> (ty: ctype) : integer :=
     | unsigned long      -> 0
     | signed   long_long -> -9223372036854775808
     | unsigned long_long -> 0
-    | size_t             -> 0
-    | intptr_t           -> -9223372036854775808
-    | wchar_t            -> -2147483648
-    | char16_t           -> 0
-    | char32_t           -> 0
+--    | size_t             -> 0
+--    | intptr_t           -> -9223372036854775808
+--    | wchar_t            -> -2147483648
+--    | char16_t           -> 0
+--    | char32_t           -> 0
   end
 
 fun <ctype_max> (ty: ctype) : integer :=
@@ -35,11 +35,11 @@ fun <ctype_max> (ty: ctype) : integer :=
     | unsigned long      -> 18446744073709551615
     | signed   long_long -> 9223372036854775807
     | unsigned long_long -> 18446744073709551615
-    | size_t             -> 18446744073709551615
-    | intptr_t           -> 9223372036854775807
-    | wchar_t            -> 2147483647
-    | char16_t           -> 65535      -- TODO: this a hack
-    | char32_t           -> 4294967295 -- TODO: this a hack
+--    | size_t             -> 18446744073709551615
+--    | intptr_t           -> 9223372036854775807
+--    | wchar_t            -> 2147483647
+--    | char16_t           -> 65535      -- TODO: this a hack
+--    | char32_t           -> 4294967295 -- TODO: this a hack
   end
 
 fun <sizeof> (ty: ctype) : integer :=
@@ -55,11 +55,11 @@ fun <sizeof> (ty: ctype) : integer :=
     | unsigned long      -> 8
     | signed   long_long -> 8
     | unsigned long_long -> 8
-    | size_t             -> 8
-    | intptr_t           -> 8
-    | wchar_t            -> 4
-    | char16_t           -> 2 -- TODO: this a hack
-    | char32_t           -> 4 -- TODO: this a hack
+--    | size_t             -> 8
+--    | intptr_t           -> 8
+--    | wchar_t            -> 4
+--    | char16_t           -> 2 -- TODO: this a hack
+--    | char32_t           -> 4 -- TODO: this a hack
   end
 
 fun <alignof> (ty: ctype) : integer :=
@@ -75,10 +75,9 @@ fun <alignof> (ty: ctype) : integer :=
     | unsigned long      -> 8
     | signed   long_long -> 8
     | unsigned long_long -> 8
-    | size_t             -> 8
-    | intptr_t           -> 8
-    | wchar_t            -> 4
-    | char16_t           -> 2 -- TODO: this a hack
-    | char32_t           -> 4 -- TODO: this a hack
+--    | size_t             -> 8
+--    | intptr_t           -> 8
+--    | wchar_t            -> 4
+--    | char16_t           -> 2 -- TODO: this a hack
+--    | char32_t           -> 4 -- TODO: this a hack
   end
-
