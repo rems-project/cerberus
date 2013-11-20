@@ -171,7 +171,7 @@ let pipeline stdlib impl core_parse file_name =
 
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
       >|> pass_message "2. Cabs -> Ail completed!"
-      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_file)
+      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program)
 
 
 (*      >|> Exception.rbind Ail_typing.annotate *)

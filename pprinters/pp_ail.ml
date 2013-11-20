@@ -351,8 +351,8 @@ let pp_typed_id file name =
   pp_id name ^^ P.colon ^^^ (pp_qualifiers q $ pp_ctype t)
 *)
 
-let rec pp_statement file (AnnotatedStatement (_, stmt)) =
-  let pp_statement = pp_statement file in
+let rec pp_statement (AnnotatedStatement (_, stmt)) =
+  let pp_statement = pp_statement in
 (*
   let nest' (_, stmt) =
     match stmt with
@@ -428,11 +428,9 @@ let pp_function file (id, (args, s)) =
 *)
 
 
-let pp_file file =
-  assert false
-(*
-  let pp d f = d ^^ pp_function file f ^^ P.break 1 in
-(*  (List.fold_left (fun (name, (ty, _)) -> pp_ctype ty ^^^ pp_id name) P.empty (Pmap.bindings file.id_map)) ^^^ *)
-  (List.fold_left pp P.empty (Pmap.bindings file.fn_map))
 
-*)
+let pp_program (startup, defs) =
+  List.fold_left (fun acc (id, ((return_ty, params), body)) ->
+    pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs $ pp_ctype ty) ^^^ pp_id id) params) ^^^
+    pp_statement body ^^ P.break 1 ^^ acc
+  ) P.empty defs

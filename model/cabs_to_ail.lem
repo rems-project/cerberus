@@ -96,6 +96,9 @@ module Effect = struct
     (* registered_labels *)
     is_inside_switch: bool;
     
+    fun_defs : A.sigma Location.t unit;
+    
+    
     (* TODO: temporarily not having globals  *)
 (*
     id_map : map Symbol.t A.declaration; (* TODO: split off function definition (as in new-Ail) *)
@@ -113,23 +116,19 @@ module Effect = struct
 
   let of_option err = State_exception.of_option (Location.dummy, err)
 
-  val make_file: Symbol.t -> t (A.program Location.t unit)
-  let make_file startup =
-    Boot.assert_false "HIP: make_file"
-(*
+  val make_program: Symbol.t -> t (A.program Location.t unit)
+  let make_program startup =
     State_exception.read (fun st ->
-      <| A.main    = startup;
-         A.id_map  = st.id_map;
-         A.globals = []; (* TODO: popoulate *)
-         A.fn_map  = st.fn_map
-      |>
+      (startup, st.fun_defs)
     )
-*)
 
   val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
   val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM = State_exception.mapM
   let mapM_ = State_exception.mapM_
+  
+  let foldrM = State_exception.foldrM
+
 
   val tryWith: forall 'a. Errors.t -> t 'a -> t 'a
   let tryWith = State_exception.tryWith
@@ -160,14 +159,15 @@ module Effect = struct
     let initial_state : state = <|
       symbol_counter = Symbol.init;
       registered_identifiers = Symbol_table.create_scope Symbol_table.empty;
-      is_inside_switch = false
-
+      is_inside_switch = false;
+      
+      fun_defs = []
 (*      
       id_map              = Pmap.empty;
       fn_map              = Pmap.empty
 *)
     |> in
-    State_exception.eval (m >>= make_file) initial_state
+    State_exception.eval (m >>= make_program) initial_state
   
   val resolve_identifier: string -> t A.identifier
   let resolve_identifier name =
@@ -242,13 +242,11 @@ module Effect = struct
   let get_declaration id =
     Boot.assert_false "HIP"
 
-  val add_function : Symbol.t -> A.statement Location.t unit -> t unit (* TODO: parameters *)
-  let add_function v s =
-    Boot.assert_false "HIP: add_function"
-(*
+  val add_function : A.identifier -> ((ATypes.ctype * A.bindings) * A.statement Location.t unit) -> t unit (* TODO: parameters *)
+  let add_function id fun_def =
     State_exception.update (fun st ->
-    <| st with fn_map = Pmap.add v ([], s) st.fn_map |>)
-*)
+      <| st with fun_defs = (id, fun_def) :: st.fun_defs |>
+    )
 
 end
 
@@ -656,68 +654,137 @@ let desugar_basic_type_specifiers specifiers =
   E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
               (Map_.find specifiers desugar_map)
 
+(*val desugar_parameter : C.parameter -> E.t (A.identifier * ATypes.qualifiers * ATypes.ctype) *)
+
+
 val desugar_type_specifiers : list C.typeSpecifier -> E.t (ATypes.ctype)
-val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype)
-val desugar_parameter : C.parameter -> ATypes.qualifiers * ATypes.ctype
-val desugar_parameters : list C.parameter -> list (ATypes.qualifiers * ATypes.ctype)
-
-val mk_ctype : C.decl_type -> ATypes.ctype -> ATypes.ctype
-
-
-let desugar_type_specifiers ts =
+let desugar_type_specifiers = function
   (* TODO: ignore structs, enums, typedefs, ... *)
-  match ts with
 (*  | [C.atomic (specs, dt)] ->*)
-  | _ -> ATypes.Basic <$> desugar_basic_type_specifiers (Multiset.from_list ts)
-  end
+  | [C.Tvoid] ->
+      E.return ATypes.Void
+  | ss ->
+      ATypes.Basic <$> desugar_basic_type_specifiers (Multiset.from_list ss)
+end
 
+
+val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype)
 let desugar_spec_elem_list specs =
   let (cs, ts) = separate_spec_elem_list specs in
   let q = desugar_cvspecs cs in
   desugar_type_specifiers ts >>= fun t ->
   E.return (q, t)
 
-let rec mk_ctype dt =
-  match dt with
+val     desugar_decl_type : C.decl_type -> E.t (ATypes.ctype -> ATypes.ctype)
+let rec desugar_decl_type decl_ty =
+  match decl_ty with
   | C.JUSTBASE ->
-      fun t -> t
+      E.return $ fun ty -> ty
 (*
   | C.ARRAY dt cvs _ None ->
       fun t ->
         (mk_ctype dt)
         (A.Array (desugar_cvspecs cvs) t None)
 *)
-  | C.ARRAY dt cvs _ (Some (C.CONSTANT (C.CONST_INT n None))) ->
-      fun t ->
-        (mk_ctype dt)
-        (ATypes.Array (* (desugar_cvspecs cvs) *) t (fst (Decode.decode_integer_constant n))) (* TODO: for test purposes only ;) *)
+  | C.ARRAY decl_ty' cvs _ (Some (C.CONSTANT (C.CONST_INT n None))) ->
+      desugar_decl_type decl_ty' >>= fun mk_ty ->
+      E.return $ fun ty -> mk_ty (ATypes.Array (* (desugar_cvspecs cvs) *) ty (fst (Decode.decode_integer_constant n))) (* TODO: for test purposes only ;) *)
   | C.ARRAY dt cvs _ (Some (C.CONSTANT e)) ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
-  | C.PTR cvs _ dt ->
-      fun t ->
-        (mk_ctype dt)
-        (ATypes.Pointer (desugar_cvspecs cvs) t)
-  (* The bool is true for variable length parameters. *)
-  | C.PROTO dt (ps, b) ->
-      fun t ->
-        (mk_ctype dt)
-        (ATypes.Function t (desugar_parameters ps))
+  | C.PTR cvs _ decl_ty' ->
+      desugar_decl_type decl_ty' >>= fun mk_ty ->
+      E.return $ fun ty -> mk_ty (ATypes.Pointer (desugar_cvspecs cvs) ty)
+  (* TODO: ignoring variable length parameters for now *)
+  | C.PROTO decl_ty' (params, _) ->
+      desugar_decl_type decl_ty' >>= fun mk_ty    ->
+      desugar_parameters params  >>= fun d_params ->
+      E.return $ fun ty -> mk_ty (ATypes.Function ty $ List.map snd d_params)
   end
 
-and desugar_parameter p =
-  let C.PARAM specs name_opt dt _ _ = p in
-  (ATypes.no_qualifiers, mk_ctype dt ATypes.Void) (* TODO *)
 
-and desugar_parameters ps =
-  List.map desugar_parameter ps
+(*  desugar_parameters : list C.parameter -> E.t (list (A.identifier * (ATypes.qualifiers * ATypes.ctype))) *)
+and desugar_parameters params =
+  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _) acc ->
+    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
+    (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
+    if param_ty = ATypes.Void then
+      (if List.length params <> 1 then
+        E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
+      else if param_name_opt <> None then
+        E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
+      else
+        E.return [])
+    else
+      (* OTHERWISE: the real stuff *)
+      O.option 
+        (E.fail (Errors.OTHER "parameter name omitted")) (* TODO: proper message *)
+        (fun param_name ->
+          E.register_name param_name         >>= fun param_id             ->
+          desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
+          E.return (param_id, (param_qs, param_ty))
+        ) param_name_opt >>= fun d_param ->
+      E.return (d_param :: acc)
+  ) params []
 
-val desugar_statement : C.statement  -> E.t (A.statement Location.t unit)
 
-val desugar_declaration: C.init_name_group -> E.t (list (Symbol.t * A.expression unit))
+
+
+
+
+(* ========================================================================================================================================================= *)
+(*
+            | PROTO return_decl params ->
+                (* the function return type *)
+                let d_return_ty = desugar_decl_type return_decl return_base_ty in
+(*
+                (* () the special case of function with no parameters (§6.7.6.3#14) *)
+                if params = [] then
+                  E.return (A.FUNCTION d_return_ty [], [])
+                else
+*)
+                  (* for each parameter declaration (TODO: ignoring variable length parameters for now) *)
+                  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _, _) (fun_env_acc, d_params_acc) ->
+                    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
+(*
+                    (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
+                    if param_ty = ATypes.Void then
+                      if List.length params <> 1 then
+                        E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
+                      else if param_name_opt <> None then
+                        E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
+                      else
+*)
+                        (* OTHERWISE: the real stuff *)
+                        (* create a symbol for the parameter and add it to the current scope *)
+                        register_name param_name >>= fun param_id   ->
+                        desugar_type param_ty    >>= fun d_param_ty ->
+(*
+            desugar_storage sts      >>= function
+              | Some _ ->
+                  let msg = "Violation of constraint 6.7.6.3#2 Function \
+                             declarators (including prototypes), Constraints: \
+                             ..The only storage-class that shall occur in a \
+                             parameter declaration is register... in\n" in
+                  E.fail (Errors.OTHER msg)
+              | None ->
+                  E.return None
+            end >>= fun d_st ->
+*)
+                        E.return ((param_id, (param_qs, d_param_ty)) :: fun_env_acc, (param_qs, d_param_ty) :: d_params_acc)
+                ) params ([], []) >>= fun (fun_env, d_params) ->
+                E.return (fun_env, A.Function d_return_ty d_params)
+            | _ -> E.fail (Errors.OTHER "Not a function type.")
+*)
+(* ========================================================================================================================================================= *)
+
+
+
+
+
 val desugar_definition: C.definition -> E.t unit
 
-val desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * option (A.expression unit))
 
+val     desugar_statement : C.statement  -> E.t (A.statement Location.t unit)
 let rec desugar_statement stmt =
   A.AnnotatedStatement Location.dummy <$>
     match stmt with
@@ -799,20 +866,24 @@ and desugar_init_expression ie =
   | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
   end
 
+(*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * option (A.expression unit)) *)
 and desugar_init_name iname =
-  let C.Init_name (C.Name name decl _ _) ie = iname in
-  E.register_name name       >>= fun v       ->
-  desugar_init_expression ie >>= fun e_opt   ->
-  E.return (v, mk_ctype decl, e_opt)
-    
-and desugar_declaration (specs, ins) : E.t (list (Symbol.t * A.expression unit)) =
-  desugar_spec_elem_list specs >>= fun (q, t) ->
-  E.mapM desugar_init_name ins >>= fun decls  ->
-  filter_opt <$> E.mapM (fun (v, ft, e_opt) ->
-                   E.add_declaration v (* q *) (ft t) >>
+  let C.Init_name (C.Name name decl_ty _ _) ie = iname in
+  E.register_name name       >>= fun v     ->
+  desugar_init_expression ie >>= fun e_opt ->
+  desugar_decl_type decl_ty  >>= fun mk_ty ->
+  E.return (v, mk_ty , e_opt)
+
+
+(*  desugar_declaration: C.init_name_group -> E.t (list (Symbol.t * A.expression unit)) *)
+and desugar_declaration (specs, ins) =
+  desugar_spec_elem_list specs >>= fun (qs, ty) ->
+  E.mapM desugar_init_name ins >>= fun decls    ->
+  filter_opt <$> E.mapM (fun (id, mk_ty, e_opt) ->
+                   E.add_declaration id (* qs *) (mk_ty ty) >>
                    E.return
                      match e_opt with
-                     | Some e -> Some (v, e)
+                     | Some e -> Some (id, e)
                      | None   -> None
                      end
                  ) decls
@@ -824,7 +895,20 @@ and desugar_declaration (specs, ins) : E.t (list (Symbol.t * A.expression unit))
 (*  desugar_defintion: C.definition -> E.t unit *)
 and desugar_definition def =
   match def with
+    | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
+        desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
+        desugar_statement stmt       >>= fun d_stmt   ->
+        E.register_name fun_name     >>= fun fun_id   ->
+        match fun_decl with
+          | C.PROTO _ (params, _) ->
+              desugar_parameters params
+          | _ ->
+              E.fail (Errors.OTHER "Not a function type.")
+        end >>= fun d_params ->
 
+        (* TODO: register formals! *)
+(*        E.add_declaration fun_id (* qs *) (desugar_decl_type fun_decl ty) >> *)
+        E.add_function fun_id ((ty, d_params), d_stmt)
 (*
     | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
         (* TODO: should also get the qualifier and check that it is either extern or static (§6.9.1#4) *)
@@ -846,7 +930,11 @@ and desugar_definition def =
         (* TODO: register formals! *)
         E.add_declaration v q (desugar_decl_type decl t) >>
         E.add_function    v s
-(*
+
+
+
+
+
 BEGIN HIP
         (* TODO: should also get the qualifier and check that it is either extern or static (§6.9.1#4) *)
         desugar_spec_elem_list specs >>= fun (fun_qs, return_base_ty) ->
@@ -857,7 +945,7 @@ BEGIN HIP
           let process_function_decl = function
             | PROTO return_decl params ->
                 (* the function return type *)
-                let d_return_ty = mk_ctype return_decl return_base_ty in
+                let d_return_ty = desugar_decl_type return_decl return_base_ty in
 (*
                 (* () the special case of function with no parameters (§6.7.6.3#14) *)
                 if params = [] then
@@ -927,15 +1015,16 @@ BEGIN HIP
 
 
           desugar_statement stmt                  >>= fun d_stmt ->
-          E.add_declaration id (mk_ctype decl ty) >>
+          E.add_declaration id (desugar_decl_type decl ty) >>
           E.add_function id d_stmt
 
 END HIP
+
+
+
 *)
 
 
-
-            *)
 
 
     (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
