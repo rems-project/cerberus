@@ -153,31 +153,34 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
           return $ C.Ewseq [Some a_e] core_e
                      (Caux.pload (Caux.mk_ctype ty) (C.Esym a_e) Cmm.NA)
       
-
       | A.Unary A.PostfixIncr e ->
           E.fresh_symbol                    >>= fun a_lvalue ->
           E.fresh_symbol                    >>= fun a_load   ->
           translate_lvalue stdlib program e >>= fun core_e   ->
+          (* TODO: qualifiers temporarily not dealt with *)
+          let core_ty_e = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e)) in
           return $
             C.Ewseq [Some a_lvalue] core_e
               (C.Easeq (Some a_load)
-                 ({}, C.Load (Caux.mk_ctype (lvalue_type_of e)) (C.Esym a_lvalue) Cmm.NA)
-                 (C.Neg, ({}, C.Store (Caux.mk_ctype (lvalue_type_of e))
+                 ({}, C.Load core_ty_e (C.Esym a_lvalue) Cmm.NA)
+                 (C.Neg, ({}, C.Store core_ty_e
                                         (C.Esym a_lvalue)
                                         (conv_int [Caux.mk_ctype (exp_type_of e); (C.Eop C.OpAdd (C.Esym a_load) Caux.one)])
                                         Cmm.NA
-                                      ))
+                                      )
+                 )
               )
       
       (* TODO: "atomicity" of the load-store pair *)
       | A.Unary A.PostfixDecr e ->
-          E.fresh_symbol          >>= fun a_lvalue ->
-          E.fresh_symbol          >>= fun a_load   ->
+          E.fresh_symbol                    >>= fun a_lvalue ->
+          E.fresh_symbol                    >>= fun a_load   ->
           translate_lvalue stdlib program e >>= fun core_e   ->
+          let core_ty_e = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e)) in
           return $
             C.Ewseq [Some a_lvalue] core_e
-              (C.Ewseq [Some a_load] (Caux.pload (Caux.mk_ctype (lvalue_type_of e)) (C.Esym a_lvalue) Cmm.NA)
-                 (C.Ewseq [] (Caux.pstore (Caux.mk_ctype (lvalue_type_of e))
+              (C.Ewseq [Some a_load] (Caux.pload core_ty_e (C.Esym a_lvalue) Cmm.NA)
+                 (C.Ewseq [] (Caux.pstore core_ty_e
                                           (C.Esym a_lvalue)
                                           (conv_int [Caux.mk_ctype (exp_type_of e); (C.Eop C.OpSub (C.Esym a_load) Caux.one)])
                                           Cmm.NA
@@ -354,7 +357,204 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                )
             )
             )
-
+      
+      | A.Binary e1 (A.Arithmetic A.Shr) e2 -> 
+          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.SHR) e1 e2: TODO(has an implementation defined case)"
+      
+      | A.Binary e1 (A.Arithmetic A.Band) e2 ->
+          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
+      
+      | A.Binary e1 (A.Arithmetic A.Xor) e2 ->
+          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.XOR) e1 e2: TODO(has an implementation defined case)"
+      
+      | A.Binary e1 (A.Arithmetic A.Bor) e2 ->
+          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BOR) e1 e2: TODO(has an implementation defined case)"
+      
+      | A.Binary e1 A.Comma e2 ->
+          f e1 >>= fun core_e1 ->
+          f e2 >>= fun core_e2 ->
+          return $ C.Esseq [] core_e1 core_e2
+      
+      | A.Binary e1 A.And e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          return $
+            C.Ewseq [Some a_e1] core_e1
+              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) Caux.zero)
+                     Caux.zero
+                     (C.Ewseq [Some a_e2] core_e2
+                       (C.Eif (C.Eop C.OpEq (C.Esym a_e2) Caux.zero) Caux.zero Caux.one)
+                     )
+              )
+      
+      | A.Binary e1 A.Or e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          return $
+            C.Ewseq [Some a_e1] core_e1
+              (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) Caux.zero))
+                     Caux.one
+                     (C.Ewseq [Some a_e2] core_e2
+                       (C.Eif (C.Eop C.OpEq (C.Esym a_e2) Caux.zero) Caux.zero Caux.one)
+                     )
+              )
+      
+      | A.Binary e1 A.Lt e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
+      
+      | A.Binary e1 A.Gt e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Enot (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))))
+                   Caux.one
+                   Caux.zero
+                )
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
+      
+      | A.Binary e1 A.Le e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)))
+                       Caux.one
+                       Caux.zero
+                )
+          else (* MUST BE: both operands are pointers to qualified or unqualified versions of compatible object types. *)
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LE e1 e2 <pointers case>: TODO"
+    
+      (* TODO: not doing the typing stuff for now *)
+      | A.Binary e1 A.Ge e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Esym a_e1))
+                       Caux.one
+                       Caux.zero
+                )
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.GE e1 e2 <pointers case>: TODO"
+      
+      | A.Binary e1 A.Eq e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
+          else if AilTypesAux.pointer (exp_type_of e1) && AilTypesAux.pointer (exp_type_of e2) then
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
+          else if Aaux.null_pointer_constant e1 then
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+      
+      | A.Binary e1 A.Ne e2 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            return $
+              C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+                (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
+                       Caux.zero
+                       Caux.one
+                )
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.NE e1 e2 <not both of arithmetic type>: TODO"
+      
+      | A.Assign e1 e2 ->
+          E.fresh_symbol                     >>= fun a_e1    ->
+          E.fresh_symbol                     >>= fun a_e2    ->
+          translate_lvalue stdlib program e1 >>= fun core_e1 ->
+          f e2                               >>= fun core_e2 ->
+          let core_ty_e1 = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e1)) in
+          return $
+            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store core_ty_e1
+                                                (C.Esym a_e1)
+                                                (conv [Caux.mk_ctype (exp_type_of e1); Caux.mk_ctype (exp_type_of e2); C.Esym a_e2])
+                                                Cmm.NA
+                                             )
+                                     )
+                          )
+                         (C.Esym a_e2))
+      
+      (* TODO: yes this is morally reprehensible.
+         
+         (std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
+         expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
+         to an indeterminately-sequenced function call, the operation of a compound) *)
+      | A.CompoundAssign e1 aop e2 ->
+          Boot.assert_false "f (Annotate.type_of expr, A.Assign e1 (Annotate.type_of e2, A.Binary (A.Arithmetic aop) e1 e2))"
+      
+      (* TODO: conv_int on e2 and e2 !!!!!!! *)
+      | A.Conditional e1 e2 e3 ->
+          if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            E.fresh_symbol >>= fun a_e1    ->
+            E.fresh_symbol >>= fun a_e2    ->
+            E.fresh_symbol >>= fun a_e3    ->
+            f e1           >>= fun core_e1 ->
+            f e2           >>= fun core_e2 ->
+            f e3           >>= fun core_e3 ->
+            return $
+              C.Ewseq [Some a_e1] core_e1
+                (C.Eif (C.Eop C.OpEq (C.Esym a_e1) Caux.zero)
+                       core_e2
+                       core_e3)
+          else
+            Boot.assert_false "[Translation.translate_expr] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
+      
+      | A.Cast qs ty e ->
+          E.fresh_symbol >>= fun a_e    ->
+          f e            >>= fun core_e ->
+          return $
+            C.Ewseq [Some a_e] core_e
+              (conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.Esym a_e])
+      
+      (* TODO:
+           * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
+                          "default argument promotions"
+       *)
+      | A.Call e es ->
+          E.fresh_symbol >>= fun a_e    ->
+          f e            >>= fun core_e ->
+          match es with
+            | [] ->
+                (* if there are no arguments, we don't need all the temporary object creation stuff *)
+                return $ C.Esseq [Some a_e] core_e (C.Eproc {} a_e [])
+            | _ ->
+                Boot.assert_false "TODO"
+          end
 
 
 
@@ -367,263 +567,18 @@ TODO !!!!!!!!
         Boot.assert_false "TODO: Translation.translate_expr A.STRING_LITERAL"
     
     
-
-
-
-
-
-
-
-
-
-
-      
-
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-   
-
-
-
-
-    (* TODO *)
-    | A.BINARY (A.ARITHMETIC A.SHR) e1 e2 -> 
-        Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.SHR) e1 e2: TODO(has an implementation defined case)"
-    
-
-    (* TODO *)
-    | A.BINARY (A.ARITHMETIC A.BAND) e1 e2 ->
-        Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
     
     
 
-    (* TODO *)
-    | A.BINARY (A.ARITHMETIC A.XOR) e1 e2 ->
-        Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.XOR) e1 e2: TODO(has an implementation defined case)"
-    
-
-    (* TODO *)
-    | A.BINARY (A.ARITHMETIC A.BOR) e1 e2 ->
-        Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BOR) e1 e2: TODO(has an implementation defined case)"
-    
-
-    | A.BINARY A.COMMA e1 e2 -> (* DONE (maybe not, be careful when mixing with assignments) *)
-        f e1 >>= fun core_e1 ->
-        f e2 >>= fun core_e2 ->
-        return $ C.Esseq [] core_e1 core_e2
-    
-    
-
-    | A.BINARY A.AND e1 e2 -> (* DONE *)
-        E.fresh_symbol        >>= fun a_e1    ->
-        E.fresh_symbol        >>= fun a_e2    ->
-        f e1 >>= fun core_e1 ->
-        f e2 >>= fun core_e2 ->
-        return $
-          C.Ewseq [Some a_e1] core_e1
-            (C.Eif (C.Eop C.OpEq (C.Esym a_e1) Caux.zero)
-                   Caux.zero
-                   (C.Ewseq [Some a_e2] core_e2
-                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) Caux.zero) Caux.zero Caux.one)
-                   )
-            )
-    
-
-    | A.BINARY A.OR e1 e2 -> (* DONE *)
-        E.fresh_symbol        >>= fun a_e1    ->
-        E.fresh_symbol        >>= fun a_e2    ->
-        f e1 >>= fun core_e1 ->
-        f e2 >>= fun core_e2 ->
-        return $
-          C.Ewseq [Some a_e1] core_e1
-            (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) Caux.zero))
-                   Caux.one
-                   (C.Ewseq [Some a_e2] core_e2
-                     (C.Eif (C.Eop C.OpEq (C.Esym a_e2) Caux.zero) Caux.zero Caux.one)
-                   )
-            )
-    
-
-    (* TODO *)
-    | A.BINARY A.LT e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
-    
-    
-    (* TODO *)
-    | A.BINARY A.GT e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Enot (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))))
-                 Caux.one
-                 Caux.zero
-              )
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
-    
-    
-    (* TODO *)
-    | A.BINARY A.LE e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)))
-                     Caux.one
-                     Caux.zero
-              )
-        else (* MUST BE: both operands are pointers to qualified or unqualified versions of compatible object types. *)
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LE e1 e2 <pointers case>: TODO"
-    
-    
-    (* TODO: not doing the typing stuff for now *)
-    | A.BINARY A.GE e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Esym a_e1))
-                     Caux.one
-                     Caux.zero
-              )
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.GE e1 e2 <pointers case>: TODO"
-    
-
-    | A.BINARY A.EQ e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
-        else if T.is_pointer_type (Annotate.exp_type_of e1) && T.is_pointer_type (Annotate.exp_type_of e2) then
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
-        else if Ail_typing.is_null_pointer_constant e1 then
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
-    
-    
-   (* ------------------------------------------------------------------------------------------- *)
-    | A.BINARY A.NE e1 e2 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          return $
-            C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
-                     Caux.zero
-                     Caux.one
-              )
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY A.NE e1 e2 <not both of arithmetic type>: TODO"
-    
-    
-   (* ------------------------------------------------------------------------------------------- *)
-    | A.ASSIGN None e1 e2 ->
-        E.fresh_symbol           >>= fun a_e1    ->
-        E.fresh_symbol           >>= fun a_e2    ->
-        translate_lvalue stdlib program e1 >>= fun core_e1 ->
-        f e2 >>= fun core_e2 ->
-        return $
-          C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-            (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store (Caux.mk_ctype (Annotate.lvalue_type_of e1))
-                                              (C.Esym a_e1)
-                                              (conv [Caux.mk_ctype (Annotate.exp_type_of e1); Caux.mk_ctype (Annotate.exp_type_of e2); C.Esym a_e2])
-                                              Cmm.NA
-                                           )
-                                   )
-                        )
-                       (C.Esym a_e2))
-    
-    
-    (* TODO: yes this is morally reprehensible.
-
-(std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
-      expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
-       to an indeterminately-sequenced function call, the operation of a compound) *)
-    | A.ASSIGN (Some op) e1 e2 ->
-      f (Annotate.type_of expr, A.ASSIGN None e1 (Annotate.type_of e2, A.BINARY (A.ARITHMETIC op) e1 e2))
-      (* return (C.DEBUG "TODO: A.ASSIGN (Some _) e1 e2") *)
-    
-    
-
-    (* TODO: conv_int on e2 and e2 !!!!!!! *)
-    | A.CONDITIONAL e1 e2 e3 ->
-        if T.is_arithmetic_type (Annotate.exp_type_of e1) && T.is_arithmetic_type (Annotate.exp_type_of e2) then
-          E.fresh_symbol        >>= fun a_e1    ->
-          E.fresh_symbol        >>= fun a_e2    ->
-          E.fresh_symbol        >>= fun a_e3    ->
-          f e1 >>= fun core_e1 ->
-          f e2 >>= fun core_e2 ->
-          f e3 >>= fun core_e3 ->
-          return $
-            C.Ewseq [Some a_e1] core_e1
-              (C.Eif (C.Eop C.OpEq (C.Esym a_e1) Caux.zero)
-                     core_e2
-                     core_e3)
-        else
-          Boot.assert_false "[Translation.translate_expr] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
     
     
     (* ------------------------------------------------------------------------------------------ *)
-    | A.CAST ty e ->
-        E.fresh_symbol       >>= fun a_e    ->
-        f e >>= fun core_e ->
-        return $
-          C.Ewseq [Some a_e] core_e
-            (conv [Caux.mk_ctype (Annotate.exp_type_of e); Caux.mk_ctype ty; C.Esym a_e])
     
 
 
 
 
-    (* TODO:
-         * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
-                        "default argument promotions"
-     *)
-    | A.CALL e es ->
-        E.fresh_symbol >>= fun a_e    ->
-        f e            >>= fun core_e ->
-        match es with
-          | [] ->
-              (* if there are no arguments, we don't need all the temporary object creation stuff *)
-              return $ C.Esseq [Some a_e] core_e (C.Eproc {} a_e [])
-          | _ ->
-              Boot.assert_false "TODO"
-        end
 
 
 
