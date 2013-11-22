@@ -86,3 +86,8 @@ let option z f = function
   | Some x -> f x
   | None   -> z
 end
+
+val from_some: forall 'a. option 'a -> 'a
+let from_some = function
+  | Some x -> x
+end

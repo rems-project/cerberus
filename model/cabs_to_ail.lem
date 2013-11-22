@@ -490,21 +490,8 @@ let desugar_integerConstant str suff_opt =
 
 open E.Operators
 
-val     desugar_expression: C.expression -> E.t (A.expression unit)
-let rec desugar_expression e =
-  A.AnnotatedExpression () <$>
-  match e with
-  | C.UNARY uop e ->
-      A.Unary (desugar_unary_operator uop) <$> desugar_expression e
-  | C.BINARY bop e1 e2 ->
-      A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
 
 
-  | C.VARIABLE x -> A.Var <$> E.resolve_identifier x
-  | C.CONSTANT (C.CONST_INT n s) -> E.return (A.Constant (A.ConstantInteger (desugar_integerConstant n s)))
-  
-  | _ -> Boot.assert_false "HIP: desugar_expression"
-  end
 
 (*
 val desugar_character_constant: option C.character_prefix -> C.atom -> A.character_constant
@@ -534,29 +521,15 @@ let desugar_constant = function
 *)
 end
 
-(*
-type C.constant =
-  (* The atom is the textual representation of the constant in
-     the source code. It does include quotes. *)
-  | CONST_INT of atom * option integer_suffix
-  | CONST_FLOAT of atom
-  | CONST_CHAR of option character_prefix * atom
-  | CONST_STRING of atom (* TODO *)
 
 
 
-type A.constant =
-  | CONST_INT of integer_constant
-  | CONST_FLOAT of string (* the textual representaton *)
-  | CONST_CHAR of character_constant
-  | CONST_ENUM of string
-(* 
-(* TODO *)
-  | CONST_CHAR of list int64
-  | CONST_WCHAR of list int64
-*)
 
-*)
+
+
+
+
+
 
 val desugar_cvspecs: list C.cvspec -> ATypes.qualifiers
 let desugar_cvspecs =
@@ -721,7 +694,8 @@ and desugar_parameters params =
         (fun param_name ->
           E.register_name param_name         >>= fun param_id             ->
           desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
-          E.return (param_id, (param_qs, param_ty))
+          desugar_decl_type param_decl >>= fun mk_ty    ->
+          E.return (param_id, (param_qs, mk_ty param_ty))
         ) param_name_opt >>= fun d_param ->
       E.return (d_param :: acc)
   ) params []
@@ -731,57 +705,67 @@ and desugar_parameters params =
 
 
 
-(* ========================================================================================================================================================= *)
+
+
+
+
+
+val     desugar_expression: C.expression -> E.t (A.expression unit)
+let rec desugar_expression e =
+  A.AnnotatedExpression () <$>
+  match e with
+  | C.UNARY uop e ->
+      A.Unary (desugar_unary_operator uop) <$> desugar_expression e
+  | C.BINARY bop e1 e2 ->
+      A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
+  | C.QUESTION e1 e2 e3 ->
+      A.Conditional <$> desugar_expression e1 <*> desugar_expression e2 <*> desugar_expression e3
+  | C.CALL e es ->
+      A.Call <$> desugar_expression e <*> E.mapM desugar_expression es
 (*
-            | PROTO return_decl params ->
-                (* the function return type *)
-                let d_return_ty = desugar_decl_type return_decl return_base_ty in
+    (* A CAST can actually be a constructor expression *)
+  | CAST of (list spec_elem * decl_type) * init_expression
+
+  | C11_ATOMIC_INIT of expression * expression
+  | C11_ATOMIC_STORE of expression * expression * expression
+  | C11_ATOMIC_LOAD of expression * expression
+  | C11_ATOMIC_EXCHANGE of expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+  | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+*)
+  | C.CONSTANT cst ->
+      A.Constant <$> desugar_constant cst
+  | C.VARIABLE x ->
+      A.Var <$> E.resolve_identifier x
+  | C.EXPR_SIZEOF e ->
+      E.fail (Errors.OTHER "new-Ail does not yet support sizeof(expr)")
+  | C.TYPE_SIZEOF (specs, decl_ty) ->
+      desugar_spec_elem_list specs >>= fun (qs, ty) ->
+      desugar_decl_type decl_ty    >>= fun mk_ty    ->
+      E.return $ A.SizeOf qs (mk_ty ty)
+  | C.ALIGNOF (specs, decl_ty) ->
+      desugar_spec_elem_list specs >>= fun (qs, ty) ->
+      desugar_decl_type decl_ty    >>= fun mk_ty    ->
+      E.return $ A.AlignOf qs (mk_ty ty)
+  | C.INDEX e1 e2 ->
+      (* Desugaring as in (§6.5.2.1#2) *)
+      A.Unary A.Indirection <$> (
+        A.AnnotatedExpression () <$>
+          (A.Binary <$> desugar_expression e1 <*> E.return (A.Arithmetic A.Add) <*> desugar_expression e2)
+      )
 (*
-                (* () the special case of function with no parameters (§6.7.6.3#14) *)
-                if params = [] then
-                  E.return (A.FUNCTION d_return_ty [], [])
-                else
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
 *)
-                  (* for each parameter declaration (TODO: ignoring variable length parameters for now) *)
-                  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _, _) (fun_env_acc, d_params_acc) ->
-                    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
-(*
-                    (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
-                    if param_ty = ATypes.Void then
-                      if List.length params <> 1 then
-                        E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
-                      else if param_name_opt <> None then
-                        E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
-                      else
-*)
-                        (* OTHERWISE: the real stuff *)
-                        (* create a symbol for the parameter and add it to the current scope *)
-                        register_name param_name >>= fun param_id   ->
-                        desugar_type param_ty    >>= fun d_param_ty ->
-(*
-            desugar_storage sts      >>= function
-              | Some _ ->
-                  let msg = "Violation of constraint 6.7.6.3#2 Function \
-                             declarators (including prototypes), Constraints: \
-                             ..The only storage-class that shall occur in a \
-                             parameter declaration is register... in\n" in
-                  E.fail (Errors.OTHER msg)
-              | None ->
-                  E.return None
-            end >>= fun d_st ->
-*)
-                        E.return ((param_id, (param_qs, d_param_ty)) :: fun_env_acc, (param_qs, d_param_ty) :: d_params_acc)
-                ) params ([], []) >>= fun (fun_env, d_params) ->
-                E.return (fun_env, A.Function d_return_ty d_params)
-            | _ -> E.fail (Errors.OTHER "Not a function type.")
-*)
-(* ========================================================================================================================================================= *)
+  | _ -> E.fail (Errors.OTHER "Some expression Ctors are not yet included in newAil")
+end
 
 
 
-
-
-val desugar_definition: C.definition -> E.t unit
 
 
 val     desugar_statement : C.statement  -> E.t (A.statement Location.t unit)
@@ -892,140 +876,24 @@ and desugar_declaration (specs, ins) =
 
 
 (* TODO: to support VLAs we need to extend the scope of parameters ids *)
-(*  desugar_defintion: C.definition -> E.t unit *)
+(*  desugar_definition: C.definition -> E.t unit *)
 and desugar_definition def =
   match def with
     | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
         desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
-        desugar_statement stmt       >>= fun d_stmt   ->
         E.register_name fun_name     >>= fun fun_id   ->
+        (* TODO: storage class *)
+        (* starts the function scope *)
+        E.create_scope >>
         match fun_decl with
           | C.PROTO _ (params, _) ->
               desugar_parameters params
           | _ ->
               E.fail (Errors.OTHER "Not a function type.")
         end >>= fun d_params ->
-
-        (* TODO: register formals! *)
-(*        E.add_declaration fun_id (* qs *) (desugar_decl_type fun_decl ty) >> *)
+        desugar_statement stmt >>= fun d_stmt ->
+        E.destroy_scope        >>
         E.add_function fun_id ((ty, d_params), d_stmt)
-(*
-    | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
-        (* TODO: should also get the qualifier and check that it is either extern or static (§6.9.1#4) *)
-        (* NOTE: qs should moraly be empty, but it can contain qualifiers (const, ...)
-           refering to the return type which however do not make any sense here. *)
-        desugar_spec_elem_list specs >>= fun (qs, fun_ty_) ->
-        
-        (* this function gets applied to `fun_decl` *)
-      let process_function_decl = function
-          | PROTO return_decl params ->
-              
-
-
-
-
-
-        desugar_statement stmt       >>= fun d_stmt ->
-        E.register_name fun_name     >>= fun fun_id ->
-        (* TODO: register formals! *)
-        E.add_declaration v q (desugar_decl_type decl t) >>
-        E.add_function    v s
-
-
-
-
-
-BEGIN HIP
-        (* TODO: should also get the qualifier and check that it is either extern or static (§6.9.1#4) *)
-        desugar_spec_elem_list specs >>= fun (fun_qs, return_base_ty) ->
-        if not (ATypes.eq_qualifiers fun_qs ATypes.no_qualifiers) then
-          E.fail (Errors.OTHER "found a function definition with qualifiers") (* TODO: proper message *)
-        else
-          (* this function gets applied to `fun_decl` *)
-          let process_function_decl = function
-            | PROTO return_decl params ->
-                (* the function return type *)
-                let d_return_ty = desugar_decl_type return_decl return_base_ty in
-(*
-                (* () the special case of function with no parameters (§6.7.6.3#14) *)
-                if params = [] then
-                  E.return (A.FUNCTION d_return_ty [], [])
-                else
-*)
-                  (* for each parameter declaration (TODO: ignoring variable length parameters for now) *)
-                  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _, _) (fun_env_acc, d_params_acc) ->
-                    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
-(*
-                    (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
-                    if param_ty = ATypes.Void then
-                      if List.length params <> 1 then
-                        E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
-                      else if param_name_opt <> None then
-                        E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
-                      else
-*)
-                        (* OTHERWISE: the real stuff *)
-                        (* create a symbol for the parameter and add it to the current scope *)
-                        register_name param_name >>= fun param_id   ->
-                        desugar_type param_ty    >>= fun d_param_ty ->
-(*
-            desugar_storage sts      >>= function
-              | Some _ ->
-                  let msg = "Violation of constraint 6.7.6.3#2 Function \
-                             declarators (including prototypes), Constraints: \
-                             ..The only storage-class that shall occur in a \
-                             parameter declaration is register... in\n" in
-                  E.fail (Errors.OTHER msg)
-              | None ->
-                  E.return None
-            end >>= fun d_st ->
-*)
-                        E.return ((param_id, (param_qs, d_param_ty)) :: fun_env_acc, (param_qs, d_param_ty) :: d_params_acc)
-                ) params ([], []) >>= fun (fun_env, d_params) ->
-                E.return (fun_env, A.Function d_return_ty d_params)
-            | _ -> E.fail (Errors.OTHER "Not a function type.")
-
-
- in
-          
-          E.register_name fun_name                     >>= fun id     ->
-          (* TODO: storage class *)
-          (* starts the function scope *)
-          E.create_scope >>
-          (* desugar the function type and colect the parameters *)
-          process_function_decl fun_decl >>= fun (fun_env, d_fun_ty) ->
-
-            KKK
-
-
-(*
-  E.create_scope          >>= fun ()             ->
-
-  desugar_function_type t >>= fun (d_t, formals) ->
-  E.return_scope          >>= fun fn_scope       ->
-  E.destroy_scope         >>= fun ()             ->
-  E.add_id id (d_t, d_st) >>= fun ()             ->
-  E.push_table fn_scope   >>= fun ()             ->
-  E.return (id, formals)
-*)
-
-
-
-
-
-
-          desugar_statement stmt                  >>= fun d_stmt ->
-          E.add_declaration id (desugar_decl_type decl ty) >>
-          E.add_function id d_stmt
-
-END HIP
-
-
-
-*)
-
-
-
 
     (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
   | C.DECDEF (specs, []) loc ->
@@ -1037,13 +905,9 @@ END HIP
 end
 
 
-val desugar_program : string -> list C.definition -> E.t (Symbol.t)
-let desugar_program startup defs =
-  E.mapM_ desugar_definition defs >>
-  E.tryWith (Location.dummy, Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve_identifier startup)
-
-
-(* desugar "main" defs *)
-val desugar: string -> list C.definition -> Exception.t (A.program Location.t unit) Errors.t
+val desugar: C.atom -> C.file -> Exception.t (A.program Location.t unit) Errors.t
 let desugar startup defs =
-  E.eval $ desugar_program startup defs
+  E.eval (
+    E.mapM_ desugar_definition defs >>
+    E.tryWith (Location.dummy, Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve_identifier startup)
+  )

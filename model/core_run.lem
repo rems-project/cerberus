@@ -1086,10 +1086,10 @@ let rec eval file pe =
       U.return (if AilTypesAux.integer (unproj_ctype ty) then Etrue else Efalse)
   | Eis_signed pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_aux.signed_integer (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
   | Eis_unsigned pe ->
       eval pe >>= fun (Ectype ty) ->
-      U.return (if Ail_aux.unsigned_integer (unproj_ctype ty) then Etrue else Efalse)
+      U.return (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
     
     
     (* If [pe] is not pure this is wrong, we should crash instead *)
