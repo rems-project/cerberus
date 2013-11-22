@@ -53,7 +53,6 @@ AIL_FILES=\
 MODEL_FILES1=\
   big_int_.lem \
   boot.lem \
-  ail_typing_errors.lem \
   multiset.lem \
   global.lem \
   ord.lem \
@@ -73,27 +72,21 @@ MODEL_FILES1=\
   document.lem \
   symbol_table.lem \
   cabs0.lem \
-  ail.lem
 
 MODEL_FILES2=\
   undefined.lem \
   implementation_.lem \
   core.lem \
   debug.lem \
-  ail_aux.lem \
-  ail_rewrite.lem \
   core_aux.lem \
   errors.lem \
   core_simpl.lem \
   core_typing.lem \
   core_indet.lem \
-  ail_typing_aux.lem \
   core_run.lem \
   sb.lem \
-  annotate.lem \
   decode.lem \
   cabs_to_ail.lem \
-  ail_typing.lem \
   range_.lem \
   translation_effect.lem \
   translation_aux.lem \

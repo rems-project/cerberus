@@ -73,5 +73,50 @@ let conv ty1 ty2 e =
     error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
 *)
 
+open Implementation
+(* TODO: emporary *)
+val tmp_implementation: implementation
+let tmp_implementation =
+  min_implementation_signed_char
 
 
+
+open AilTypes
+val is_unsigned_integer_type: ctype -> bool
+let is_unsigned_integer_type = function
+  | Basic (Integer it) ->
+      AilTypesAux.unsigned_type it
+  | _ ->
+      false
+end
+
+let function_return_type = function
+  | Function t _ -> t
+end
+
+(* TODO: check with J *)
+val lvalue_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let lvalue_type_of a_expr =
+  (* TODO: we do a match instead of a let, because of a bug in Lem *)
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Some (AilTypes.LValueType _ ty) ->
+        AilTypesAux.pointer_conversion ty
+  end
+
+
+val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let exp_type_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Some (AilTypes.LValueType _ ty) -> (* unqualify *) ty
+    | Some (AilTypes.RValueType   ty) -> ty
+  end
+
+val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let ctype_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Some (AilTypes.LValueType _ ty) -> ty
+    | Some (AilTypes.RValueType   ty) -> ty
+  end

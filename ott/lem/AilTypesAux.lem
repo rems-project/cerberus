@@ -515,3 +515,20 @@ let pointers_to_compatible_types t1 t2 : bool =
   | (Pointer _ t1, Pointer _ t2) -> compatible t1 t2
   | (_           , _           ) -> false
   end  
+
+
+val is_signed_integer_type: ctype -> bool
+let is_signed_integer_type = function
+  | Basic (Integer it) ->
+      signed_type it
+  | _ ->
+      false
+end
+
+val is_unsigned_integer_type: ctype -> bool
+let is_unsigned_integer_type = function
+  | Basic (Integer it) ->
+      unsigned_type it
+  | _ ->
+      false
+end
