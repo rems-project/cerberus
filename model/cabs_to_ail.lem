@@ -847,16 +847,16 @@ let rec desugar_statement stmt =
       | C.DOWHILE expr stmt _ ->
           A.Do <$> desugar_statement stmt
                <*> desugar_expression expr
-(*
-      | C.FOR fc_opt expr1_opt expr2_opt stmt _ ->
-          Boot.assert_false "HIP: desugar_statement FOR"
-*)
       | C.FOR fclause_opt e2_opt e3_opt s loc ->
           let are_all_auto_or_register (C.DECDEF (specs, _) _) =
             List.exist (function
+(*
+TODO: tmp
               | C.SpecStorage C.AUTO -> true
               | C.SpecStorage C.REGISTER -> true
               | _ -> false
+*)
+              | _ -> true
             end) specs in
           match fclause_opt with
             | None                 -> E.return (C.NOP loc)
@@ -886,13 +886,6 @@ let rec desugar_statement stmt =
           let loop = C.WHILE e2' body loc in
           desugar_statement (C.BLOCK [s1; loop] loc) >>= fun (A.AnnotatedStatement _ d_s) ->
           E.return d_s
-
-
-
-
-
-
-
       | C.BREAK _ ->
           E.return A.Break
       | C.CONTINUE _ ->
