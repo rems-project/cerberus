@@ -324,42 +324,79 @@ let determinate_expr e =
 
 let rec hack x =
   match x with
-  | Core.Etuple es             -> Core.Etuple es
-  | Core.Eskip                 -> Core.Eskip
-  | Core.Econst n              -> Core.Econst n
-  | Core.Eaddr x               -> Core.Eaddr x
-  | Core.Esym _a               -> Core.Esym _a
-  | Core.Eop op e1 e2          -> Core.Eop op e1 e2
-  | Core.Etrue                 -> Core.Etrue
-  | Core.Efalse                -> Core.Efalse
-  | Core.Enot e                -> Core.Enot e
-  | Core.Ectype ty             -> Core.Ectype ty
-  | Core.Elet _a e1 e2         -> Core.Elet _a e1 (hack e2)
-  | Core.Eif e1 e2 e3          -> Core.Eif e1 (hack e2) (hack e3)
-  | Core.Ecall f args          -> Core.Ecall f args
-  | Core.Esame e1 e2           -> Core.Esame e1 e2
-  | Core.Eundef u              -> Core.Eundef u
-  | Core.Eerror                -> Core.Eerror
-  | Core.Eaction pact          -> Core.Eaction pact
-  | Core.Eunseq es             -> Core.Eunseq (List.map hack es)
-  | Core.Ewseq _as e1 e2       -> Core.Ewseq _as (hack e1) (hack e2)
-  | Core.Esseq _as e1 e2       -> Core.Esseq _as (hack e1) (hack e2)
-  (* HACKKKKKKKK *)
-  | Core.Easeq _a_opt act pact ->
-
-      Core.Ewseq [_a_opt] (Core.Eaction (Core.Pos, act))
-                          (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Some x -> x end))
-
-
-
-  | Core.Eindet e              -> hack e
-  | Core.Ebound i e            -> hack e
-  | Core.Esave d a_tys e       -> Core.Esave d a_tys (hack e)
-  | Core.Erun bs d a_vs        -> Core.Erun bs d a_vs
-  | Core.Eret e                -> Core.Eret (hack e)
-  | Core.End es                -> Core.End es
-  | Core.Eshift a e            -> Core.Eshift a e
-  | _ -> x
+    | Core.Enull ->
+        Core.Enull
+    | Core.Etrue ->
+        Core.Etrue
+    | Core.Efalse ->
+        Core.Efalse
+    | Core.Econst cst ->
+        Core.Econst cst
+    | Core.Ectype ty ->
+        Core.Ectype ty
+    | Core.Eaddr addr ->
+        Core.Eaddr addr
+    | Core.Esym a ->
+        Core.Esym a
+    | Core.Eimpl impl ->
+        Core.Eimpl impl
+    | Core.Etuple es ->
+        Core.Etuple (List.map hack es)
+    | Core.Enot e ->
+        Core.Enot (hack e)
+    | Core.Eop bop e1 e2 ->
+        Core.Eop bop (hack e1) (hack e2)
+    | Core.Ecall f es ->
+        Core.Ecall f (List.map hack es)
+    | Core.Eundef ub ->
+        Core.Eundef ub
+    | Core.Eerror ->
+        Core.Eerror
+    | Core.Eskip ->
+        Core.Eskip
+    | Core.Elet a e1 e2 ->
+        Core.Elet a (hack e1) (hack e2)
+    | Core.Eif e1 e2 e3 ->
+        Core.Eif (hack e1) (hack e2) (hack e3)
+    | Core.Eproc bs f es ->
+        Core.Eproc bs f (List.map hack es)
+    | Core.Esame e1 e2 ->
+        Core.Esame (hack e1) (hack e2)
+    | Core.Eaction pa ->
+        Core.Eaction pa
+    | Core.Eunseq es ->
+        Core.Eunseq (List.map hack es)
+    | Core.Ewseq as_opt e1 e2 ->
+        Core.Ewseq as_opt (hack e1) (hack e2)
+    | Core.Esseq as_opt e1 e2 ->
+        Core.Esseq as_opt (hack e1) (hack e2)
+    | Core.Easeq _a_opt act pact ->
+        Core.Ewseq [_a_opt] (Core.Eaction (Core.Pos, act))
+                            (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Some x -> x end))
+    | Core.Eindet e ->
+        hack e
+    | Core.Ebound _ e ->
+        hack e
+    | Core.Esave d a_tys e ->
+        Core.Esave d a_tys (hack e)
+    | Core.Erun bs d a_vs ->
+        Core.Erun bs d a_vs
+    | Core.Eret e ->
+        Core.Eret (hack e)
+    | Core.End es ->
+        Core.End (List.map hack es)
+    | Core.Epar es ->
+        Core.Epar (List.map hack es)
+    | Core.Eshift a e ->
+        Core.Eshift a (hack e)
+    | Core.Eis_scalar e ->
+        Core.Eis_scalar (hack e)
+    | Core.Eis_integer e ->
+        Core.Eis_integer (hack e)
+    | Core.Eis_signed e ->
+        Core.Eis_signed (hack e)
+    | Core.Eis_unsigned e ->
+        Core.Eis_unsigned (hack e)
 end
 
 

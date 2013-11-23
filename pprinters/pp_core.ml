@@ -264,7 +264,7 @@ let rec pp_expr e =
         | Easeq (Some a, act, y) ->
             pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Eindet e ->
-            P.brackets (pp e)
+            (* P.brackets (pp e) *) !^ "INDET"
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
               P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
