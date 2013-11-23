@@ -280,7 +280,8 @@ let f name =
         register_labels s
     | C.DEFAULT s _ ->
         register_labels s
-    | C.LABEL _ s _ ->
+    | C.LABEL l s _ ->
+        E.fresh_label l >>
         register_labels s
     | C.GOTO _ _ ->
         E.return ()
@@ -410,6 +411,7 @@ let desugar_program startup global_defns =
   E.to_program main
 *)
 
+(*
 open O.Operators
 val     desugar_integer_constant_expression: C.expression -> O.t pre_integer_constant
 let rec desugar_integer_constant_expression expr =
@@ -417,7 +419,7 @@ let rec desugar_integer_constant_expression expr =
   match expr with
   | C.UNARY C.MINUS expr ->
       f expr >>= function
-| ImplDefined -> Boot.assert_false "TODO"
+        | ImplDefined -> Boot.assert_false "TODO"
         (* TODO: promotion *)
         | StrictIntegerConstant n -> O.return $ StrictIntegerConstant (Int.neg n)
       end
@@ -501,6 +503,8 @@ let rec desugar_integer_constant_expression expr =
 
     | _ -> None
   end
+*)
+
 
 val desugar_integerConstant: C.atom -> option C.integer_suffix -> A.integerConstant
 let desugar_integerConstant str suff_opt =
@@ -518,10 +522,6 @@ let desugar_integerConstant str suff_opt =
   end
 
 open E.Operators
-
-
-
-
 (*
 val desugar_character_constant: option C.character_prefix -> C.atom -> A.character_constant
 (* TODO: decoding + impl-def independence (and Ail should store an integer, instead of a string) *) 
@@ -551,15 +551,6 @@ let desugar_constant = function
 end
 
 
-
-
-
-
-
-
-
-
-
 val desugar_cvspecs: list C.cvspec -> ATypes.qualifiers
 let desugar_cvspecs =
   List.fold_left (fun qs ->
@@ -583,8 +574,6 @@ let separate_spec_elem_list =
       | C.SpecType    t -> (cs, t :: ts)
       end)
     ([], [])
-
-
 
 
 (* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
@@ -655,8 +644,6 @@ let desugar_basic_type_specifiers specifiers =
       ) in
   E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
               (Map_.find specifiers desugar_map)
-
-(*val desugar_parameter : C.parameter -> E.t (A.identifier * ATypes.qualifiers * ATypes.ctype) *)
 
 
 val desugar_type_specifiers : list C.typeSpecifier -> E.t (ATypes.ctype)
@@ -730,13 +717,6 @@ and desugar_parameters params =
   ) params []
 
 
-
-
-
-
-
-
-
 val desugar_assign_operator: C.binary_operator -> option A.arithmeticOperator
 let desugar_assign_operator = function
   | C.ADD_ASSIGN ->
@@ -762,6 +742,7 @@ let desugar_assign_operator = function
   | _ ->
       None
 end
+
 
 val     desugar_expression: C.expression -> E.t (A.expression unit)
 let rec desugar_expression e =
@@ -828,14 +809,13 @@ let rec desugar_expression e =
   | _ -> E.fail (Errors.OTHER "Some expression Ctors are not yet included in newAil")
 end
 
+
 and desugar_init_expression ie =
   match ie with
   | C.NO_INIT         -> E.return None
   | C.SINGLE_INIT   e -> Some <$> desugar_expression e
   | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
   end
-
-
 
 
 val     desugar_statement : C.statement  -> E.t (A.statement Location.t unit)
@@ -981,8 +961,6 @@ and desugar_declaration (specs, ins) =
                  ) decls
 
 
-
-
 (* TODO: to support VLAs we need to extend the scope of parameters ids *)
 (*  desugar_definition: C.definition -> E.t unit *)
 and desugar_definition def =
@@ -990,6 +968,7 @@ and desugar_definition def =
     | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
         desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
         E.register_name fun_name     >>= fun fun_id   ->
+        register_labels stmt         >>
         (* TODO: storage class *)
         (* starts the function scope *)
         E.create_scope >>
@@ -1003,7 +982,7 @@ and desugar_definition def =
         E.destroy_scope        >>
         E.add_function fun_id ((ty, d_params), d_stmt)
 
-    (* TODO: I think this correspond to the def of a struct/union (typedef?) *)
+    (* This should correspond to the def of a struct/union (typedef?) *)
   | C.DECDEF (specs, []) loc ->
       Boot.assert_false "HIP: desugar_definition DECDEF (case 1)"
   | C.DECDEF ing loc ->
