@@ -195,6 +195,12 @@ memory:
 	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
 
 
+
+install-snapshot:
+	rm -rf ~/public_html/cerberus-pldi/lem
+	mkdir  ~/public_html/cerberus-pldi/lem
+	cp -r * ~/public_html/cerberus-pldi/lem
+
 clean:
 	rm -rf $(OCAML_BUILD_DIR)
 

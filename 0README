@@ -1,15 +1,16 @@
-This directory contains the Coq definitions and proofs for the C type
-system described in the paper
+This directory contains the Lem definitions and proofs for the C semantics
+described in the paper
 
    Cerberus: a semantic basis for sequential and concurrent C11
 
 by Kayvan Memarian, Justus Matthiesen, Kyndylan Nienhuis, Peter Sewell
 
+The main files are:
 
 [The languages]
   * model/cabs0.lem          Parser AST
   * ott/lem/*                Ail syntax and typechecking
-  * mode/core.lem            Core target language
+  * model/core.lem            Core target language
 
 [Elaboration]
   * model/translate.lem
