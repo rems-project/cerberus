@@ -1,27 +1,17 @@
-(* NEW AND FINAL Cabs to Ail translation *)
-
-(* TODO: ignoring locations for now *)
-
-(* TODO: not doing the linkages stuff for now *)
-
-
+(* TODO:
+     * ignoring locations for now
+     * not doing things related to linkages
+*)
 
 open Global
 
 module C = Cabs0
-(* module A = Ail *)
 module A      = AilSyntax
 module ATypes = AilTypes
 
 module O = Option
 
-
-
-
-
 (*
-
-
 val desugar_storages: list C.storage -> E.t (option A.storage_duration)
 let desugar_storages = function
   | []               -> E.return None
@@ -34,6 +24,7 @@ let desugar_storages = function
   | _                -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
 end
 *)
+
 
 val desugar_unary_operator: C.unary_operator -> A.unaryOperator
 let desugar_unary_operator = function
@@ -84,53 +75,42 @@ let desugar_binary_operator = function
 end
 
 
-
-
-
 module Effect = struct
-  
   type state = <|
-    symbol_counter: Symbol.counter;
-    (* table (with stacked scopes) associating C identifiers to symbols *)
-    registered_identifiers: Symbol_table.t string A.identifier;
-    (* registered_labels *)
-    is_inside_switch: bool;
-    
-    fun_defs : A.sigma Location.t unit;
-    
-    id_map : map Symbol.t (ATypes.qualifiers * ATypes.ctype);
-    
-    (* TODO: temporarily not having globals  *)
-(*
-     (* TODO: split off function definition (as in new-Ail) *)
-    fn_map : map Symbol.t (list Symbol.t * A.statement Location.t unit); (* functions map       *)
-*)
+    symbol_counter:         Symbol.counter;
+    registered_identifiers: Symbol_table.t string A.identifier; (* table (with stacked scopes) associating C identifiers to symbols *)
+    registered_labels:      map string Symbol.t;                (* registered_labels *)
+    is_inside_switch:       bool;
+    fun_defs:               A.sigma Location.t unit;
+    id_map:                 map Symbol.t (ATypes.qualifiers * ATypes.ctype);
+    (* TODO: need to bring back globals (add them to newAil) *)
   |>
-
+  
   type t 'a = State_exception.t 'a state Errors.t
-
+  
   val return: forall 'a. 'a -> t 'a
   let return = State_exception.return
-
+  
   val fail: forall 'a. Errors.cause -> t 'a
   let fail err = State_exception.fail (Location.dummy, err)
-
+  
   let of_option err = State_exception.of_option (Location.dummy, err)
-
+  
   val make_program: Symbol.t -> t (A.program Location.t unit)
   let make_program startup =
     State_exception.read (fun st ->
       (startup, st.fun_defs)
     )
-
+  
   val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
   val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM = State_exception.mapM
   let mapM_ = State_exception.mapM_
   
   let foldrM = State_exception.foldrM
-
-
+  
+  let iter = State_exception.iter
+  
   val tryWith: forall 'a. Errors.t -> t 'a -> t 'a
   let tryWith = State_exception.tryWith
 
@@ -158,16 +138,12 @@ module Effect = struct
   val eval: t Symbol.t -> Exception.t (A.program Location.t unit) Errors.t
   let eval m =
     let initial_state : state = <|
-      symbol_counter = Symbol.init;
-      registered_identifiers = Symbol_table.create_scope Symbol_table.empty;
-      is_inside_switch = false;
-      
-      fun_defs= [];
-      id_map= Pmap.empty
-(*      
-      id_map              = Pmap.empty;
-      fn_map              = Pmap.empty
-*)
+      symbol_counter=         Symbol.init;
+      registered_identifiers= Symbol_table.create_scope Symbol_table.empty;
+      registered_labels=      Pmap.empty;
+      is_inside_switch=       false;
+      fun_defs=               [];
+      id_map=                 Pmap.empty
     |> in
     State_exception.eval (m >>= make_program) initial_state
   
@@ -248,7 +224,18 @@ module Effect = struct
     State_exception.update (fun st ->
       <| st with fun_defs = (id, fun_def) :: st.fun_defs |>
     )
-
+  
+  (* Labels related functions *)
+  val return_registered_labels: t (Pmap.map string Symbol.t)
+  let return_registered_labels = fun st ->
+    Exception.return (st.registered_labels, st)
+  
+  let fresh_label name =
+    State_exception.modify (fun st ->
+      let (symbol, symbol_counter') = Symbol.fresh_pretty name st.symbol_counter in
+      (symbol, <| st with  symbol_counter=     symbol_counter';
+                           registered_labels=  Pmap.add name symbol st.registered_labels |>)
+    )
 end
 
 
@@ -256,18 +243,59 @@ module E = Effect
 open E.Operators
 
 
-val register_label: C.atom -> E.t A.identifier
-let register_label l_name =
-  Boot.assert_false "HIP: register_label"
+val     register_labels: C.statement -> E.t unit
+let rec register_labels stmt =
+let f name =
+  E.return_registered_labels >>= fun labels ->
+  if Pmap.mem name labels then E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
+                          else E.fresh_label name in
+  match stmt with
+    | C.NOP _ ->
+        E.return ()
+    | C.COMPUTATION  _ _ ->
+        E.return ()
+    | C.BLOCK ss _ ->
+        E.iter register_labels ss
+    | C.If _ s1 s2_opt _ ->
+        register_labels s1 >>
+        match s2_opt with
+          | Some s2 -> register_labels s2
+          | None    -> E.return ()
+        end
+    | C.WHILE _ s _ ->
+        register_labels s
+    | C.DOWHILE _ s _ ->
+        register_labels s
+    | C.FOR _ _ _ s _ ->
+        register_labels s
+    | C.BREAK _ ->
+        E.return ()
+    | C.CONTINUE _ ->
+        E.return ()
+    | C.RETURN _ _ ->
+        E.return ()
+    | C.SWITCH _ s _ ->
+        register_labels s
+    | C.CASE _ s _ ->
+        register_labels s
+    | C.DEFAULT s _ ->
+        register_labels s
+    | C.LABEL _ s _ ->
+        register_labels s
+    | C.GOTO _ _ ->
+        E.return ()
+    | C.DEFINITION _ ->
+        (* TODO: check *)
+        E.return ()
+(* TODO:    | PAR of list statement * cabsloc *)
+ end
 
-val register_labels: C.statement -> E.t unit
-let register_labels stmt =
-  Boot.assert_false "HIP: register_labels"
 
 val fetch_label: C.atom -> E.t A.identifier
 let fetch_label l_name =
-  Boot.assert_false "HIP: fetch_label"
-
+  E.return_registered_labels >>= fun labels ->
+  if Pmap.mem l_name labels then E.return (Pmap.find l_name labels)
+                            else E.fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER l_name)
 
 (* TODO: better name? *)
 type declarationKind =
@@ -839,8 +867,52 @@ let rec desugar_statement stmt =
       | C.DOWHILE expr stmt _ ->
           A.Do <$> desugar_statement stmt
                <*> desugar_expression expr
+(*
       | C.FOR fc_opt expr1_opt expr2_opt stmt _ ->
           Boot.assert_false "HIP: desugar_statement FOR"
+*)
+      | C.FOR fclause_opt e2_opt e3_opt s loc ->
+          let are_all_auto_or_register (C.DECDEF (specs, _) _) =
+            List.exist (function
+              | C.SpecStorage C.AUTO -> true
+              | C.SpecStorage C.REGISTER -> true
+              | _ -> false
+            end) specs in
+          match fclause_opt with
+            | None                 -> E.return (C.NOP loc)
+            | Some (C.FC_EXP e1)   -> E.return (C.COMPUTATION e1 loc)
+            | Some (C.FC_DECL def) ->
+                if are_all_auto_or_register def then
+                  E.return (C.DEFINITION def)
+                else
+                  E.fail Errors.CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
+          end >>= fun s1 ->
+          let e2' = match e2_opt with
+            | Some e2 -> e2
+              (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+                 statement) an omitted controlling expression is replace by an
+                 unspecified non-zero integer constant. We believe that the choice, as
+                 long as representable, does not matter with respect to the
+                 semantics. Hence, we arbitrarily choose "1" (which can always be
+                 represented as an object of type int). *)
+            | None -> C.CONSTANT (C.CONST_INT "1" None)
+          end in
+          let s3 = match e3_opt with
+            | Some e3 -> C.COMPUTATION e3 loc
+            | None    -> C.NOP loc
+          end in
+          
+          let body = C.BLOCK [s; s3] loc  in
+          let loop = C.WHILE e2' body loc in
+          desugar_statement (C.BLOCK [s1; loop] loc) >>= fun (A.AnnotatedStatement _ d_s) ->
+          E.return d_s
+
+
+
+
+
+
+
       | C.BREAK _ ->
           E.return A.Break
       | C.CONTINUE _ ->

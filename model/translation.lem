@@ -908,23 +908,19 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
       translate_stmt_ s     >>= fun core_s ->
       E.get_visible_objects >>= fun _as    ->
       return (C.Esave (from_Some d_default) [ (a, Caux.proj_ctype $ lookup_type a) | forall (a MEM _as) | true ] core_s)
-
-  
-  
-  (* TODO *)
-  | A.Label l s ->
-      translate_stmt_ s     >>= fun core_s ->
-      E.get_visible_objects >>= fun _as    ->
-      return (C.Esave l [ (a, Caux.proj_ctype $ lookup_type a) | forall (a MEM _as) | true ] core_s)
-  
-  
-  (* TODO *)
-  | A.Goto l ->
-      E.get_visible_objects >>= fun _as ->
-      return (C.Erun {} l [ (a, C.Esym a) | forall (a MEM _as) | true ])
-  
-  
 *)
+  
+  
+    | A.Label l s ->
+        translate_stmt_ s     >>= fun core_s ->
+        E.get_visible_objects >>= fun _as    ->
+        (* TODO: the types of the annotations in Esave are dummy, but this is not observable until we support VLAs *)
+        return (C.Esave l [ (a, C.Void)  | forall (a MEM _as) | true ] core_s)
+    
+    | A.Goto l ->
+        E.get_visible_objects >>= fun _as ->
+        return (C.Erun {} l [ (a, C.Esym a) | forall (a MEM _as) | true ])
+    
     | A.Declaration [] ->
         return C.Eskip
     
