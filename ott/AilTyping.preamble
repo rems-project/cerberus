@@ -1,3 +1,0 @@
-embed {{ coq Require Import Common AilTypesAux AilAux. }}
-embed {{ coq Open Scope gamma_scope. }}
-embed {{ coq Open Scope sigma_scope. }}
