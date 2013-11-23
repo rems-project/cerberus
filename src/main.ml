@@ -73,15 +73,6 @@ let write_graph fname ts =
 (*  let dot = List.fold_left (fun acc (n, (_, t)) -> *)
   let graphs = List.map (fun (i, (_, st)) ->
     Boot.to_plain_string $ Pp_sb.pp i (Sb.simplify $ Sb.extract2 st)
-(*
-    match u_t with
-      | (Undefined.Defined _, st) ->
-          
-      | (Undefined.Undef _, st) ->
-          acc
-      | (Undefined.Error, st) ->
-          acc
-*)
   ) (numerote ts) in
   
   let (tex_name, tex_chan) = Filename.open_temp_file fname ".tex" in
@@ -108,14 +99,6 @@ let write_graph fname ts =
     prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate the pdf for the sb-graph."
   else
     (Sys.remove (fname ^ ".aux"); Sys.remove (fname ^ ".log"))
-
-
-
-
-
-
-
-
 
 
 (* load the Core standard library *)
@@ -168,15 +151,11 @@ let pipeline stdlib impl core_parse file_name =
       >|> Exception.fmap Cparser.Driver.parse
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
-
+      
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
       >|> pass_message "2. Cabs -> Ail completed!"
       >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program)
-
-
-(*      >|> Exception.rbind Ail_typing.annotate *)
-
-
+      
       >|> Exception.rbind (fun z ->
             Exception.of_option (Location.dummy, Errors.CSEM_HIP "Ail Typing error") $
               GenTyping.annotate_program Annotation.concrete_annotation z)
@@ -187,7 +166,7 @@ let pipeline stdlib impl core_parse file_name =
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
       >|> Exception.fmap Core_simpl.simplify
-
+      
       >|> pass_message "5. Core to Core simplication completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     

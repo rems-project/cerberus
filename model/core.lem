@@ -1,17 +1,11 @@
 open Global
 
-(* TODO: this is here because of some stupid cyclic module dependency ...
-
-         Idealy we should have a memory.lem module which would be used by
-         core.lem (just for knowing mem_addr) and by core_run. But we can't
-         because the memory actions have to know about the monad used by
-         core_run.lem. If we had type families, StateT would do the trick *)
 type mem_addr = list Symbol.t * num
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
 type core_base_type =
-  | Integer (* TODO: should have and "Object" type for C arrays/struct ? *)
+  | Integer
   | Boolean
   | Address
   | Ctype
@@ -37,18 +31,12 @@ type ksym = Symbol.t
 
 
 (* C types (this is a simplication of what is need for typechecking) *)
-(* TODO: what about Ail.ATOMIC_Q ? *)
 type ctype =
   | Void
   | Basic of AilTypes.basicType
   | Array of ctype * int
   | Function of ctype * list ctype
   | Pointer of ctype
-(*
-  | STRUCT of Ail.id * list (Ail.id * member)
-  | UNION  of Ail.id * list (Ail.id * member)
-  | ENUM of Ail.id
-*)
   | Atomic of ctype
   | SIZE_T
   | INTPTR_T
@@ -57,7 +45,7 @@ type ctype =
   | CHAR32_T
 
 and member =
-  | MEMBER of (* alignment_specifier * *) ctype
+  | MEMBER of ctype
   | BITFIELD of ctype * int * (option bool)
 
 
@@ -93,7 +81,6 @@ type name =
 type constant =
   | Cint of int
   | Carray of list constant
-(*  | Cstruct *)
   | Cfunction of sym
 
 type expr 'a =
@@ -143,16 +130,16 @@ type expr 'a =
   | Eret of expr 'a
   
   (* Non deterministic choice (resulting from indet expressions) *)
-  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
+  (* NOTE: this only exists for the second stage of dynamics (after core_indet) *)
   | End of list (expr 'a)
   
   (* Parallel composition *)
   | Epar of list (expr 'a)
   
   | Eshift of sym *expr 'a
-
-
-(* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  
+  
+  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
   | Eis_scalar of expr 'a
   | Eis_integer of expr 'a
   | Eis_signed of expr 'a
@@ -254,7 +241,7 @@ let rec is_value e =
     | Ecall _ _ ->
         true
     | Esame _ _ ->
-        false (* TODO: think about it *)
+        false
     | Eundef _ ->
         true
     | Eerror ->
@@ -267,12 +254,6 @@ let rec is_value e =
         is_value e1 && is_value e2
     | Esseq _ e1 e2 ->
         is_value e1 && is_value e2
-    (* TODO: this is assuming that we never use this function before Core_indet *)
-(*
-    | Easeq _ _ _ ->
-    | Eindet _    ->
-    | Ebound _ _  ->
-*)
     | Esave _ _ _ ->
         is_value e
     | Erun _ _ _ ->
@@ -280,7 +261,7 @@ let rec is_value e =
     | Eret e ->
         false
     | End es ->
-        false (* TODO: think about it *)
+        false
     | Eshift a e ->
         false
   end

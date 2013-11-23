@@ -223,14 +223,6 @@ let rec one e =
   | Eerror       -> L.return (NoOrdering, e)
 
 
-(*
-  | Ewseq _as e1 e2
-  | Esseq _as e1 e2
-  | Easeq _a act pact
-  | Eindet e
-*)
-
-
 (* [one] is only called a particular Ebound and on that run ignore the inner Ebounds *)
   | Ebound i e -> one e >>= fun (d, e') -> L.return (d, Ebound i e')
 
@@ -402,23 +394,6 @@ end
 
 
 
-(* TODO: hack *)
-(*  *)
 val order: Core.file zero -> Exception.t (list (num * Core.file zero)) (Errors.t)
 let order (f: Core.file zero) =
-(*  let fbodies' = List.map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
-  
-  
-  
   Exception.return [(1, <| f with Core.funs= Pmap.map (fun (ty, args, body) -> (ty, args, hack body)) f.Core.funs |>)]
-
-(*
-
-
-  Exception.return <| f with fun_map= f.fun_map |>
-  Exception.return (numerote $ List.map export_expr (one (import_expr e))) (* (numerote $ List.map export_expr $ one (import_expr e)) (* [(1, e); (2, e)] *) *)
-  (* Boot.outOfHomeomorphism "hello" *)
-
-
-*)
-

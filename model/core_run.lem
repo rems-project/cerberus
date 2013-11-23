@@ -82,19 +82,12 @@ let apply_cont k e =
     end in
   List.fold_left (fun acc x -> f x acc) e k
 
-
-(*
-val compose_cont: forall 'a. cont 'a -> cont 'a -> cont 'a
-let compose_cont k1 k2 = k1 @ k2
-*)
 (* END: Core continuation ********************************************************************* *)
 
 
 (* TODO: this is part of the "memory model" but need to be before Effect (...) *)
 type mem_value =
-  | Muninit    (* TODO: Kayvan has to check whether we can remove this constructor 
-                  and use the empty list in mem_state to denote a created, but 
-                  uninitialized variable. *) 
+  | Muninit
   | Mbase of constant
   | Mobj of (list Symbol.t * num)
   | Mnull
@@ -163,7 +156,6 @@ end
 
 
 
-(* TODO: doesn't do what it should *)
 val annotate: polarity * taction_id -> list (cont taction_id) -> list (cont taction_id)
 let rec _annotate (p, aid) k =
   match k with
@@ -174,13 +166,7 @@ let rec _annotate (p, aid) k =
     | Ksseq _as e2   :: k' -> Ksseq _as (annotate_expr (p, aid) e2) :: _annotate (p, aid) k'
   end
 let annotate aid ks = List.map (_annotate aid) ks
-(*
-let annotate a ks =
-  match ks with
-    | []       -> []
-    | k :: ks' -> _annotate a k :: ks'
-  end
-*)
+
 
 
 
@@ -257,7 +243,7 @@ module Effect = struct
     | Random
   
   type state = <|
-    execution_mode: execution_mode;                                             (* TODO: it's a bit silly that this is here, since the setting won't change *)
+    execution_mode: execution_mode;                                             
     mem:            mem_state;                                                  (* the memory layout state                            *)
     current_proc:   option sym;                                                 (* the C function whose body we are reducing (if any) *)
     file:           file taction_id;                                            
@@ -292,22 +278,7 @@ module Effect = struct
       | (U.Undef u,   st') -> [(U.Undef u, st')]
       | (U.Error,     st') -> [(U.Error,   st')]
     end) (ms st)
-(*
-  (* TODO: looks fishy *)
-  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-  let bind m f = fun s ->
-    match m s with
-      | U.Defined zs -> List.fold_right (fun (a, s') acc ->
-                          match acc with
-                            | U.Defined y -> match f a s' with U.Defined z' -> U.Defined (z' @ y) | U.Undef us -> U.Undef us | U.Error -> U.Error end
-                            | U.Undef us  -> U.Undef us
-                            | U.Error     -> U.Error
-                          end) zs (U.Defined [])
-      | U.Undef us -> U.Undef us
-      | U.Error    -> U.Error
-    end
-*)
-  
+
   
   (* running a U computation *)
   val runU: forall 'a. U.t 'a -> t 'a
@@ -326,17 +297,6 @@ module Effect = struct
   val mplus: forall 'a. t 'a -> t 'a -> t 'a
   let mplus ma mb = fun st ->
     ma st @ mb st
-(*
-    match (a s, b s) with
-      | (U.Defined x, U.Defined y) -> U.Defined (x @ y)
-      (* TODO: ahem, now this isn't very associative *)
-      (* TODO2: may be better now *)
-      | (U.Undef us1, U.Undef us2) -> U.Undef (us1 @ us2)
-      | (U.Undef us, _)            -> U.Undef us
-      | (_, U.Undef us)            -> U.Undef us
-      | _                          -> U.error
-    end
-*)
   
   
   (* generic functions (that should be moved out once we have type-classes) *)
@@ -347,10 +307,6 @@ module Effect = struct
   
   (* like msum, but the order matter, so it's not a like msum (ahem) *)
   val     dmsum: forall 'a. list (t 'a) -> t 'a
-
-(*
-dmsum :  list (state -> list (U.t 'a * state)) -> (state -> list (U.t 'a * state))
-*)
   let rec dmsum ms =
     fun st ->
       match ms with
@@ -360,16 +316,7 @@ dmsum :  list (state -> list (U.t 'a * state)) -> (state -> list (U.t 'a * state
                       | v  -> v
                     end
       end
-(*
-    fun s ->
-      match ms with
-        | []     -> U.return []
-        | m::ms' -> match m s with
-                      | U.Defined [] -> (dmsum ms') s
-                      | v            -> v
-                    end
-      end
-*)
+
   
   
   val     foldlM: forall 'a 'b. ('a -> 'b -> t 'b) -> list 'a -> 'b -> t 'b
@@ -403,19 +350,7 @@ dmsum :  list (state -> list (U.t 'a * state)) -> (state -> list (U.t 'a * state
   val get_file: t (file taction_id)
   let get_file = fun st ->
     [(U.return st.file, st)]
-  
-(*
-  val get_fun: name -> t (core_type * list (sym * core_base_type) * expr taction_id)
-  let get_fun fname = fun s ->
-    match fname with
-      | Sym  f -> U.return [(Pmap.find f s.funs, s)]
-      | Impl f ->
-          match Pmap.find f s.impl_map with
-            | IFun bty fargs fbody -> U.return [((TyBase bty, fargs, fbody), s)]
-            | _ -> Boot.assert_false "[Core_run.get_fun] found a Def used as  IFun"
-          end
-  end
-*)
+
 
   val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_id)
   let get_proc psym = fun st ->
@@ -439,34 +374,6 @@ dmsum :  list (state -> list (U.t 'a * state)) -> (state -> list (U.t 'a * state
   let get_cont d = fun st ->
     [(U.return $ Pmap.find d (Pmap.find (from_Some st.current_proc) st.cont_map), st)]
 
-
-(*
-  val get_sym: sym -> t (expr taction_id)
-  let get_sym _a =
-    fun s ->
-      if Pmap.mem _a s.sym_map then
-        [ (Pmap.find _a s.sym_map, s) ]
-      else
-        Boot.assert_false "BUG: Core_run.get_sym"
-  
-  val put_sym: sym -> expr taction_id -> t unit
-  let put_sym _a e =
-    fun s -> 
-      [((), <| s with sym_map= Pmap.add _a e s.sym_map |>)]
-*)
-
-
-(*
-      (* TODO: this is disgusting *)
-      let e' = match e with
-                 | Esym _a' -> match Symbol_table.find _a' s.sym_map with
-                                 | None   -> Boot.assert_false "BUG: Core_run.put_sym"
-                                 | Some z -> z
-                               end
-                 | _        -> e
-               end
-      in [((), <| s with sym_map= Symbol_table.add _a e' s.sym_map |>)]
-      *)
 
 val set_execution_mode: execution_mode -> t unit
 let set_execution_mode mode = fun st ->
@@ -505,12 +412,6 @@ let register_sequencing bs aid tid = fun st ->
       else
         (sb_acc, Set.add (b, aid) asw_acc)
 
-(*
-      if Set.exist (fun z -> false && tid_of (Pmap.find z st.tact_map) = tid && accessible z aid $ Set.to_list st.sb) $ Pmap.domain st.tact_map then
-        (sb_acc, asw_acc)
-      else
-        (sb_acc, Set.add (b, aid) asw_acc)
-*)
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
@@ -595,14 +496,6 @@ let to_observable_execution s =
         (to_cmm_relation $ list_to_relation l) union acc
       ) (Pmap.range s.E.mo) {};
 
-(*
-val fold : forall 'a 'b. ('a -> 'b -> 'b) -> set 'a -> 'b -> 'b
-
-
-      Cmm.mo  = Pervasives.bigunion { to_cmm_relation $ list_to_relation l
-                                    | forall (l IN Pmap.range s.E.mo) 
-                                    | true };
-*)
       Cmm.sc  = to_cmm_relation (list_to_relation s.E.sc);
       Cmm.lo  = {};
       Cmm.ao  = {};
@@ -795,11 +688,6 @@ let get_trace = function
   | (<| E.tact_map= tact_map; E.trace= (r, tact_opt) :: _ |> as st) ->
       [(U.return (r, match tact_opt with Some (bs, n) ->
 
-(*
-        if not $ Pmap.mem n tact_map then
-          Boot.assert_false $ ">>>>>" ^ (string_of_num n)
-        else
-*)
 
 
 Some (bs, Pmap.find n tact_map) | None -> None end), st)]
@@ -926,42 +814,6 @@ let pick_one pred l =
   end
 
 
-
-
-
-
-
-
-(* mutate the rule descriptor of the most recent trace element (used by
-   inductive rule after application of their premises) *)
-(*
-val update_rule: (dyn_rule -> dyn_rule) -> E.t unit
-let update_rule f = fun (<| E.trace= t |> as s) ->
-  match t with
-    | []               -> Boot.outOfHomeomorphism "[Core_run.update_rule] empty trace"
-    | (r, bs_a) :: ts  -> [((), <| s with E.trace= (f r, bs_a) :: ts |>)]
-  end
-*)
-
-
-
-
-
-
-
-(*
-val put_syms: list (option sym) -> expr taction_id -> E.t unit
-let put_syms _as v =
-  match (_as, v) with
-    | ([]       , _        ) -> E.return ()
-    | ([None], _           ) -> E.return ()
-    | ([Some _a], _        ) -> E.put_sym _a v
-    | (_        , Etuple vs) -> E.mapM_ (fun (_a_opt, v) -> match _a_opt with Some _a -> E.put_sym _a v| None -> E.return () end) (List.combine _as vs)
-    | (_        , Eunseq vs) -> E.mapM_ (fun (_a_opt, v) -> match _a_opt with Some _a -> E.put_sym _a v| None -> E.return () end) (List.combine _as vs)
-  end 
-*)
-
-
 (* takes the symbolic names of a function, some pure expressions and produce
    the function body where the arguments have been substituted *)
 val call_function: forall 'a. file 'a -> name -> list (expr 'a) -> expr 'a
@@ -990,8 +842,6 @@ let call_proc psym args =
   else
     E.set_current_proc psym >>
     E.return (List.fold_left2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
-
-
 
 
 let rec collect_values v =
@@ -1046,32 +896,15 @@ let rec eval file pe =
     | Ecall f pes -> eval (call_function file f pes)
 
 
-
-(* TODO: this may be very counter-intuitive, but we have it as a hack to remove skips comming from negative actions
-
-==> probably need some trick during typing
-
-*)
     | Eunseq pes ->
         U.mapM eval pes >>= fun vs ->
         U.return
           match (* List.filter (fun (Left v) -> v <> Eskip) $ *) vs with
-            | []  -> Etuple [] (* HACK: better had a Eunit ctor *)
+            | []  -> Etuple [] 
             | [v] -> v
             | vs  -> Etuple vs
           end
 
-(*
-        match List.filter (function Left _ -> false | Right _ -> true end) vs with
-        | [] -> match (* List.filter (fun (Left v) -> v <> Eskip) $ *) vs with
-                  | []       -> Left (Etuple []) (* HACK: better had a Eunit ctor *)
-                  | [Left v] -> Left v
-                  | vs       -> Left (Etuple $ List.map (fun (Left v) -> v) vs)
-                end
-        | vs' -> Right $ List.fold_left (fun acc (Right us) -> us @ acc) [] vs'
-      end
-*)
-    
     | Ewseq _as pe1 pe2 ->
         eval pe1 >>= fun v1 ->
         eval (subst_syms _as v1 pe2)
@@ -1435,17 +1268,6 @@ and red2_ret x =
           E.get_file               >>= fun file ->
           E.runU (eval file pe)    >>= fun v    ->
           E.return (v, tid, _KS)
-
-
-(*
-        if is_value e then
-          eval e                      >>= fun v ->
-          push_trace (Rule_Ret, None) >>
-(*          E.pop_syms >> *)
-          E.return (v, _KS)
-        else 
-          E.mzero
-*)
     | _ -> E.mzero
   end
 
@@ -1474,19 +1296,6 @@ and red2_skip x =
              | [e] -> e
              | es  -> Eunseq es
            end, tid, _KS1 :: _KS2)
-
-(*
-    | (Eskip, ((Kpar es1 es2) :: _KS1) :: _KS2) ->
-        push_trace (Rule_Skip, None) >>
-        E.return
-          (match es1 @ es2 with
-             | []  -> Eskip
-             | [e] -> e
-             | es  -> Epar es
-           end, _KS1 :: _KS2)
-*)
-
-(*    | (Eskip, _K :: _KS) -> push_trace (Rule_Skip, None) >> E.return (apply_cont _K Eskip, _KS) *)
     | _                       -> E.mzero
   end
 
@@ -1498,12 +1307,6 @@ and red2_proc x =
         E.get_file                     >>= fun file    ->
         E.runU (U.mapM (eval file) es) >>= fun vs      ->
         call_proc f vs                 >>= fun f_body  ->
-(*
-Boot.print_debug (Boot.pp_core_expr (Core.Etuple es)) $
-Boot.print_debug (Boot.pp_core_expr f_body) $
-*)
-
-(* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
         E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, tid, [] :: _KS)
     | _ -> E.mzero
   end
@@ -1566,8 +1369,6 @@ and red2_sseq x =
     | _ -> E.mzero
   end
 
-(* TODO: check that rule, nothing fancy should be needed, since we don't allow
-         save/run inside unseq expressions *)
 and red2_unseq x =
   match x with
     | (Eunseq es, tid, _K :: _KS) ->
@@ -1591,7 +1392,6 @@ and red2_run x =
           Ewseq [] (mk_unseq $ List.map (fun e -> pkill e) kill_es)
             (Ewseq (List.map (Some) create_as) (mk_unseq $ List.map (fun ty -> pcreate (Ectype ty) []) create_tys)
                (List.fold_left (fun acc (a, v) -> subst_sym a v acc) e_cont a_vs)) in
-        (* TODO: it seems strange that annotate_expr need to know the polarity *)
         E.return (Set.fold (fun b e -> annotate_expr (Pos, b) e) bs e, tid, [] :: _KS)
     | _ -> E.mzero
   end
@@ -1745,23 +1545,6 @@ let convert_file file = <|
           end) file.impl;
   funs=   Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
  |>
-(* TODO: this version doesn't typecheck (says that 'a should be num), ask the lem people if it is normal *)
-(*
-<| file with
-  impl= Pmap.map (function
-          | Def bty e       -> Def bty (convert_expr e)
-          | IFun bty args e -> IFun bty args (convert_expr e)
-        end) file.impl;
-  funs= Pmap.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
- |>
-*)
-
-
-
-
-(* TODO: make sure that labels symbolic names are unique over a whole program, otherwise
-         we may jump outside of functions ... *)
-(* val     populate_cont_map: sym -> expr taction_id -> E.t unit *)
 
 module St = State
 open St.Operators
@@ -1770,117 +1553,6 @@ type collect_conts_state = <|
   bound_syms: set sym;
   conts: map ksym (list (sym * ctype) * expr taction_id)
 |>
-
-(* val     collect_cont: expr taction_id -> St.t (Pmap.map ksym (expr taction_id * list sym)) (Pmap.map ksym (expr taction_id * list sym)) *)
-
-(*
-val     collect_conts: expr taction_id -> St.t unit collect_conts_state
-let rec collect_conts e =
-  let save_cont d k =
-    St.update (fun s ->
-          <| s with conts= Pmap.add d (* (free_syms e \ s.bound_syms *) k s.conts |>
-        ) in
-(*
-  let save_syms _as =
-    St.update (fun s ->
-          <| s with bound_syms= s.bound_syms union _as |>
-        ) in
-*)
-  match e with
-    (* this is the only place where something actually happens *)
-    | Esave d a_tys e ->
-        save_cont d (a_tys, e) >>
-        collect_conts e
-    | Elet a _ e2 ->
-(*        save_syms {a} >> *)
-        collect_conts e2
-    | Eif _ e2 e3 ->
-        collect_conts e2 >>
-        collect_conts e3
-    | Ewseq _as e1 e2 ->
-(*        save_syms (set_from_options _as) >> *)
-        collect_conts e1 >>
-        collect_conts e2
-    | Esseq _as e1 e2 ->
-(*        save_syms (set_from_options _as) >> *)
-        collect_conts e1 >>
-        collect_conts e2
-    | End es ->
-        St.mapM_ collect_conts es
-    
-    (* by syntactic constraints, we know that under these ctors there can be no labeled
-       continuations *)
-    | Etuple _ ->
-        St.return ()
-    | Enull ->
-        St.return ()
-    | Eskip ->
-        St.return ()
-    | Econst _ ->
-        St.return ()
-    | Eimpl _ ->
-        St.return ()
-    | Eaddr _ ->
-        St.return ()
-    | Esym _ ->
-        St.return ()
-    | Eop _ _ _ ->
-        St.return ()
-    | Etrue ->
-        St.return ()
-    | Efalse ->
-        St.return ()
-    | Enot _ ->
-        St.return ()
-    | Ectype _ ->
-        St.return ()
-    | Ecall _ _ ->
-        St.return ()
-    | Eproc _ _ _ ->
-        St.return ()
-    | Esame _ _ ->
-        St.return ()
-    | Eundef _ ->
-        St.return ()
-    
-    (* TODO: assume that there is name clash among threads *)
-    | Epar es ->
-        St.mapM_ collect_conts es
-    
-    | Eerror ->
-        St.return ()
-    | Eaction _ ->
-        St.return ()
-    | Easeq _ _ _ ->
-        St.return ()
-    | Erun _ _ _ ->
-        St.return ()
-    | Eunseq _ ->
-        St.return ()
-    | Eret _ ->
-        St.return ()
-    
-    (* these ctors should have been removed by Core_indet *)
-    | Eindet _ ->
-        Boot.assert_false "Core_run.collect_conts: the ctor `Eindet' should exists at this stage."
-    | Ebound _ _ ->
-        Boot.assert_false "Core_run.collect_conts: the ctor `Ebound' should exists at this stage."
-
-(* TODO: temporary *)
-    | Eis_scalar _ ->
-        St.return ()
-    | Eis_integer _ ->
-        St.return ()
-    | Eis_signed _ ->
-        St.return ()
-    | Eis_unsigned _ ->
-        St.return ()
-  end
-*)
-
-
-
-
 
 
 
@@ -1984,7 +1656,6 @@ let runE execution_mode file =
   (* collect the continuations in all functions *)
   let cont_map: map sym (map ksym (list (sym * ctype) * expr taction_id)) =
     List.fold_left (fun acc (fname, (_, _, fbody)) ->
-(*      Pmap.add fname (let (_, s) = St.run_impl (collect_conts fbody) <| bound_syms= {}; conts= Pmap.empty |> in s.conts) acc *)
       Pmap.add fname (collect_conts' fbody) acc
     ) Pmap.empty $ Pmap.bindings file.funs in
   let (_, _, main_body) = Pmap.find file.main file.funs in

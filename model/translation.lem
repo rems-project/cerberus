@@ -616,15 +616,6 @@ and translate_expression stdlib program a_expr =
 
 
 
-(* translate_stmt Pmap.empty program program.A.main C.Constants.return s *)
-
-(* TODO[über HACK] `lasts' is the last of symbolic names saving the last statement for each block we are in
-                   we need to remember them to annotate Erun/Esave coming from a C label/goto because these symbols
-                   MAY (the fact it is a may is pretty disgusting) be in the continuations of the generated Esave (...)
-
-RAAAAAAAAHHH: this doesn't work when the label is in a block the goto doesn't belong to ......
-*)
-
 module St = State
 open St.Operators
 

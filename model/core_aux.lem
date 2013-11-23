@@ -9,7 +9,6 @@ let pstore ty x n mo = Eaction (Pos, ({}, Store ty x n mo))
 let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
 
 
-(* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
 let zero : expr zero = Econst (Cint (Int.int 0))
 let one  : expr zero = Econst (Cint (Int.int 1))
 
@@ -17,60 +16,22 @@ let one  : expr zero = Econst (Cint (Int.int 1))
 (* Project an AilTypes.ctype into a Core.ctype *)
 val     proj_ctype: AilTypes.ctype -> Core.ctype
 let rec proj_ctype ty =
-(*
-
-TODO: bring back structs/unions
-
-  let proj_member = function
-    | Ail.MEMBER ty               -> MEMBER (proj_ctype ty)
-    | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
-  end in
-*)
   match ty with
     | AilTypes.Void           -> Void
     | AilTypes.Basic bt       -> Basic bt
     | AilTypes.Array ty n     -> Array (proj_ctype ty) n
     | AilTypes.Function ty ps -> Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps)
     | AilTypes.Pointer qs ty  -> Pointer (proj_ctype ty)
-(*
-    | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.ENUM id              -> ENUM id
-    | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
-    | Ail.TYPEDEF _            -> Boot.assert_false "[Core_aux.proj_ctype] found a A.TYPEDEF"
-    | Ail.SIZE_T               -> SIZE_T
-    | Ail.INTPTR_T             -> INTPTR_T
-    | Ail.WCHAR_T              -> WCHAR_T
-    | Ail.CHAR16_T             -> CHAR16_T
-    | Ail.CHAR32_T             -> CHAR32_T
-*)
 end
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
-(*
-  let unproj_member = function
-    | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
-    | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
-  end in
-*)
   match ty with
     | Void            -> AilTypes.Void
     | Basic bt        -> AilTypes.Basic bt
     | Array ty n      -> AilTypes.Array (unproj_ctype ty) n
     | Function ty tys -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys)
     | Pointer ty      -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
-(*
-    | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | ENUM id            -> Ail.ENUM id
-    | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
-    | SIZE_T             -> Ail.SIZE_T
-    | INTPTR_T           -> Ail.INTPTR_T
-    | WCHAR_T            -> Ail.WCHAR_T
-    | CHAR16_T           -> Ail.CHAR16_T
-    | CHAR32_T           -> Ail.CHAR32_T
-*)
 end
 
 val mk_ctype: forall 'a. AilTypes.ctype -> expr 'a
@@ -316,10 +277,6 @@ let subst_syms _as v e =
     | ([Some _a], _        ) -> subst_sym _a v e
 
     | (_        , Etuple vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
-
-(*
-    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
-*)
   end 
 
 (* Asuming well typed expressions *)
@@ -431,175 +388,6 @@ let rec is_value e =
 end
 
 
-(* TODO: documentation *)
-let rec trailing_actions e =
-  match e with
-  | Etuple _ ->
-      []
-  | Enull ->
-      []
-  | Eskip ->
-      []
-  | Econst _ ->
-      []
-  | Eaddr _ ->
-      []
-  | Esym _ ->
-      []
-  | Eop _ _ _ ->
-      []
-  | Etrue ->
-      []
-  | Efalse ->
-      []
-  | Enot _ ->
-      []
-  | Ectype _ ->
-      []
-  | Elet _ _ e2 ->
-      trailing_actions e2
-  | Eif _ _ e3 ->
-      trailing_actions e3
-  | Eproc _ _ _ ->
-      []
-  | Ecall _ _ ->
-      [] (* TODO: check *)
-  | Esame _ _ ->
-      []
-  | Eundef _ ->
-      []
-  | Eerror ->
-      []
-  | Eaction pact ->
-      [pact]
-  | Eunseq es ->
-      List.concat $ List.map trailing_actions es
-  | Ewseq _ e1 e2 ->
-      [ act | forall (act MEM trailing_actions e1) | is_negative_action act ] @ trailing_actions e2
-  | Esseq _ _ e2 ->
-      trailing_actions e2
-  | Easeq _ act pact ->
-      [pact]
-  | Eindet e ->
-      trailing_actions e (* TODO: check *)
-  | Ebound _ e ->
-      trailing_actions e
-  | Esave _ _ e ->
-      trailing_actions e
-  | Erun _ _ _ ->
-      []
-  | Eret e ->
-      trailing_actions e
-  | End es ->
-      Boot.assert_false "WIP [Core_aux.trailing_actions] End"
-  | Eshift _ e ->
-      trailing_actions e
-end
-
-
-(*
-(* symbolic evaluation *)
-let rec simpl e =
-  match e with
-  | Etuple es ->
-      Etuple $ List.map simpl e
-  | Enull ->
-      Enull
-  | Eskip ->
-      Eskip
-  | Econst n ->
-      Econst n
-  | Eaddr addr ->
-      Eaddr addr
-  | Esym a ->
-      Esym a
-  | Eop bop pe1 pe2 ->
-      match (simpl pe1, simpl pe2) with
-        | (OpAdd, Econst n1,  Econst n2 ) -> Econst (Int.(+) n1 n2)
-        | (OpSub, Econst n1,  Econst n2 ) -> Econst (Int.(-) n1 n2)
-        | (OpMul, Econst n1,  Econst n2 ) -> Econst (Int.( * ) n1 n2)
-        | (OpDiv, Econst n1,  Econst n2 ) -> Econst (Int.(/) n1 n2)
-        | (OpMod, Econst n1,  Econst n2 ) -> Econst (Int.(%) n1 n2)
-        | (OpEq,  Econst n1,  Econst n2 ) -> if n1 = n2 then Etrue else Efalse
-        | (OpEq,  Ectype ty1, Ectype ty2) -> if Ail.ctype_eq ty1 ty2 then Etrue else Efalse
-        | (OpLt,  Econst n1,  Econst n2 ) -> if Int.(<) n1 n2 then Etrue else Efalse
-        | (OpOr,  Efalse,     Efalse    ) -> Efalse
-        | (OpOr,  _,          _         ) -> Etrue
-        | (OpAnd, Etrue,      Etrue     ) -> Etrue
-        | (OpAnd, _,          _         ) -> Efalse
-        | (_,     pe1',         pe2'    ) -> Eop bop pe1' pe2'
-      end
-  | Etrue ->
-      Etrue
-  | Efalse ->
-      Efalse
-  | Enot pe ->
-      match simpl pe with
-        | Etrue  -> Efalse
-        | Efalse -> Etrue
-        | pe'    -> pe'
-      end
-  | Ectype ty ->
-      Ectype ty
-  | Elet a pe1 e2 ->
-      let pe1' = simpl pe1 in
-      if is_value pe1' then
-        simpl (subst_sym a pe1' e2)
-      else
-        Elet a pe1' (simpl e2)
-  | Eif pe1 e2 e3 ->
-      match simpl pe1 with
-        | Etrue  -> simpl e2
-        | Efalse -> simpl e3
-        | pe1'   -> Eif pe1' (simpl e2) (simpl e3)
-  | Eproc bs f pes ->
-      
-  | Ecall f pes ->
-      
-  | Esame pe1 pe2 ->
-      
-  | Eundef u ->
-      Eundef u (* TODO: should use the monad in Undefined *)
-  | Eerror ->
-      Eerror (* TODO: should use the monad in Undefined *)
-  
-  | Eaction pact ->
-      
-  | Eunseq es ->
-      
-
-  | Ewseq _as e1 e2 ->
-      
-  | Esseq _as e1 e2 ->
-      
-  | Easeq a_opt act pact ->
-      
-  | Eindet e ->
-      
-  | Ebound j e ->
-      
-  | Esave d a_tys e ->
-      
-  | Erun bs d a_vs ->
-      
-  | Eret e ->
-      
-  | End es ->
-      
-(*  | Eshift of sym *expr 'a *)
-end
-*)
-
-(*
-let have_simple_race e1 e2 =
-  let are_simple_racy (_, (_, act1)) (_, (_, act2)) =
-    match (act1, act2) with
-      | Load
-
-  | Store of expr 'a * expr 'a * expr 'a
-  | Load of expr 'a * expr 'a
-
-*)
 
 val is_atomic_type: ctype -> bool
 let is_atomic_type t = 

@@ -18,8 +18,7 @@ let const x _ = x
 
 let (-|) f g x = f (g x)
 let (|-) g f x = f (g x)
-(* TODO: ask change in lem to be able to have
-         the traditional |> *)
+
 let (>|>) x f = f x
 let (>?>) x b f g = if b then f x else g x
 
@@ -80,7 +79,6 @@ end
 
 let from_Some = function
   | Some x -> x
-(*  | None   -> Boot.assert_false "[Global.from_Some] found a None" *)
 end
 
 let is_Some = function
@@ -128,7 +126,6 @@ let rec drop n l =
   end
 
 
-(* AHEM *)
 let rec splitAt k l =
   (take k l, drop k l)
 
@@ -151,7 +148,6 @@ let mapUnzip f l =
 
 
 
-(* BEGIN: stolen from cpp *)
 val     map_option: forall 'a 'b. ('a -> option 'b) -> list 'a -> list 'b
 let rec map_option f xs = 
   match xs with 
@@ -194,7 +190,6 @@ let try_to_transitive_reduce rel =
     end
   else
     rel
-(* END: stolen from cpp *)
 
 (* this will blow up on cyclic relations *)
 let step s rel =

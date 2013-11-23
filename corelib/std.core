@@ -6,42 +6,6 @@ fun exp (n: integer, m: integer) : integer :=
     n * exp(n, m - 1)
 
 
-
-
-{-
-fun is_signed (ty: ctype) : boolean :=
-  case ty of
-    | {_} signed _   -> true
-    | {_} unsigned _ -> false
-
-type ctype =
-  | VOID  of qualifiers
-  | BASIC of qualifiers * basic_type
-  (* TODO Need to convert integer constant to an actual value! Otherwise, we
-     cannot compare types! *)
-  | ARRAY of ctype * option int
-(* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
-
-(* NOTE: will need to make up ids for some of the bitfields *)
-  | STRUCT of qualifiers * id * list (id * member)
-  | UNION  of qualifiers * id * list (id * member)
-  | ENUM of id
-  | FUNCTION of ctype * list ctype
-  | POINTER of qualifiers * ctype
-  | ATOMIC of ctype
-  | TYPEDEF of id
-  
-  | SIZE_T
-  | INTPTR_T
-  | WCHAR_T
-  | CHAR16_T
-  | CHAR32_T
--}
-
-
-
-
-
 fun overflow (ty: ctype, n: integer) : integer :=
   n
 
@@ -70,11 +34,6 @@ fun conv_int (ty: ctype, n: integer): integer :=
   -- implementation-defined signal is raised.
   else
     42
-
-
-
-
-
 
 
 -- auxiliary function for the [conv] (see §6.3.1.3#1)
@@ -118,9 +77,6 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
     42 -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
 
 
-
--- fun div_zero (n: integer): integer :=
---  n
 
 
 fun usual_arithmetic (ty: ctype, ty: ctype): ctype :=

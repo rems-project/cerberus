@@ -102,22 +102,10 @@ let rec pp_ctype t =
     | Void                    -> !^ "void"
     | Basic bt                -> Pp_ail.pp_basicType bt
     | Array (ty, n)           -> pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
-(*
-    | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
-*)
     | Function (ty, args_tys) -> pp_ctype ty ^^^
                                  P.parens (comma_list pp_ctype args_tys)
     | Pointer ty              -> pp_ctype ty ^^ P.star
     | Atomic ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
-(*
-    | SIZE_T                  -> !^ "size_t"
-    | INTPTR_T                -> !^ "intptr_t"
-    | WCHAR_T                 -> !^ "wchar_t"
-    | CHAR16_T                -> !^ "char16_t"
-    | CHAR32_T                -> !^ "char32_t"
-*)
 
 and pp_member = function
   | MEMBER ty           -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
@@ -152,7 +140,7 @@ let pp_name = function
 
 let pp_constant = function
   | Cint n ->
-      (* pp_number *) !^ (Num.string_of_num n)
+      !^ (Num.string_of_num n)
   | Carray _ ->
       !^ "ARRAY"
   | Cfunction _ ->
@@ -175,15 +163,14 @@ let rec pp_expr e =
     let pp_wseq (_a, e) =
       match _a with
         | []       -> pp e
-        | [Some a] -> pp_symbol a ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
+        | [Some a] -> pp_symbol a ^^^ !^ "<-" ^^ (pp e)
         | [None]   -> pp e
         | _as      -> let g = function
                         | Some x -> pp_symbol x
                         | None   -> P.underscore
-                      in (P.parens $ P.separate_map P.comma g _as) ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
+                      in (P.parens $ P.separate_map P.comma g _as) ^^^ !^ "<-" ^^ (pp e)
     in
     (if lt_precedence p' p then fun x -> x else P.parens) $
-(*      P.parens $ *)
       match e with
         | Etuple es ->
             P.parens (comma_list pp es)
@@ -227,8 +214,6 @@ let rec pp_expr e =
         | Eerror ->
             pp_keyword "error"
         | Eaction (p, (bs, a)) ->
-          (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
-             P.rangle ^^ P.space) ^^ *)
           pp_polarity p ^^ pp_action a
         | Eunseq [] ->
             !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
@@ -236,35 +221,34 @@ let rec pp_expr e =
             !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
         | Eunseq es ->
             P.brackets $ P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es
-(*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
         | Ewseq ([], e1, e2) ->
             P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2)
         | Ewseq ([Some a], e1, e2) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
+            pp_symbol a ^^^ !^ "<-" ^^^ (pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
         | Ewseq ([None], e1, e2) ->
             pp e1 ^^^ (!^ ">>") ^^ P.break 1 ^^ pp e2
         | Ewseq (_as, e1, e2) ->
             let g = function
               | Some x -> pp_symbol x
               | None   -> P.underscore
-            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
+            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ (pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
         | Esseq ([], e1, e2) ->
             pp e1 ^^^ P.semi ^^ P.break 1 ^^ pp e2
         | Esseq ([Some a], e1, e2) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
+            pp_symbol a ^^^ !^ "<-" ^^^ (pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
         | Esseq ([None], e1, e2) ->
             pp e1 ^^^ P.semi ^^ P.break 1 ^^ pp e2
         | Esseq (_as, e1, e2) ->
             let g = function
               | Some x -> pp_symbol x
               | None   -> P.underscore
-            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
+            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ (pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
         | Easeq (None, act, y) ->
             pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Easeq (Some a, act, y) ->
             pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Eindet e ->
-            (* P.brackets (pp e) *) !^ "INDET"
+            P.brackets (pp e)
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
               P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e

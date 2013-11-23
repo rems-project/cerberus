@@ -72,64 +72,37 @@ let string_of_trace_action tact =
 
 
 let rec string_of_trace tact_map t =
-(*
-  let rec f = function
-    | []      -> ""
-    | [b]     -> string_of_trace_action (Pmap.find b tact_map)
-    | b :: bs -> string_of_trace_action (Pmap.find b tact_map) ^ ", " ^ f bs
-  in *) match t with
-       | [] -> ""
-       | (r, None) :: xs ->
-           Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
-           string_of_trace tact_map xs
-       | (r, Some (bs, a)) :: xs ->
-           Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
-           (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
-           Colour.ansi_format [Colour.Red]  
-           (string_of_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
+  match t with
+    | [] -> ""
+    | (r, None) :: xs ->
+        Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ "\n" ^
+        string_of_trace tact_map xs
+    | (r, Some (bs, a)) :: xs ->
+        Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
+        (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
+        Colour.ansi_format [Colour.Red]
+          (string_of_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
-
-(*
-int, 'a) Exception.t -> (int, 'a) Exception.t
-
-       but an expression was expected of type
-(Core_run.taction_id Core.expr * ((Core_run.taction_id, Core_run.trace_action) Pmap.map * Core_run.E.trace)) list
-
-*)
 
 let pp_traces i_execs =
   List.map (fun (i, u_t) ->
     print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^
     match u_t with
-    | (Undefined.Defined (v, (tact_map, t)), st) ->
-        string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot.to_plain_string $ Pp_core.pp_expr v)
-    | (Undefined.Undef ubs, st) ->
-        "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
-    | (Undefined.Error, st) ->
-        "Error"
+      | (Undefined.Defined (v, (tact_map, t)), st) ->
+          string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot.to_plain_string $ Pp_core.pp_expr v)
+      | (Undefined.Undef ubs, st) ->
+          "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
+      | (Undefined.Error, st) ->
+          "Error"
   ) $ numerote i_execs;
   
   List.map (fun (i, u_t) ->
     print_endline $ "Trace #" ^ string_of_int i ^ " = " ^
     match u_t with
-    | (Undefined.Defined (v, (tact_map, t)), st) ->
-        Boot.to_plain_string $ Pp_core.pp_expr v
-    | (Undefined.Undef ubs, st) ->
-        "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
-    | (Undefined.Error, st) ->
-        "Error"
+      | (Undefined.Defined (v, (tact_map, t)), st) ->
+          Boot.to_plain_string $ Pp_core.pp_expr v
+      | (Undefined.Undef ubs, st) ->
+          "Undef[" ^ (String.concat ", " $ List.map Undefined.string_of_undefined_behaviour ubs) ^ "]"
+      | (Undefined.Error, st) ->
+          "Error"
   ) $ numerote i_execs
-
-
-
-
-(*
-let pp_traces ts =
-  List.map (fun (i, (v, (tact_map, t))) ->
-    print_endline $ "Trace #" ^ string_of_int i ^ ":\n" ^
-    string_of_trace tact_map t ^
-    "\n\nValue: " ^ (Boot.to_plain_string $ Pp_core.pp_expr v)) $ numerote ts;
-  List.map (fun (i, (v, _)) ->
-    print_endline $ "Trace #" ^ string_of_int i ^ " = " ^
-    (Boot.to_plain_string $ Pp_core.pp_expr v)) $ numerote ts
-*)

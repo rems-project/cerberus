@@ -51,17 +51,13 @@ AIL_FILES=\
 
 # TODO: fix this horror
 MODEL_FILES1=\
-  big_int_.lem \
   boot.lem \
   multiset.lem \
   global.lem \
   ord.lem \
-  string_.lem \
   product.lem \
   map_.lem \
-  list_.lem \
   lexing.lem \
-  output.lem \
   location.lem \
   symbol.lem \
   option.lem \
@@ -71,7 +67,7 @@ MODEL_FILES1=\
   pprint_.lem \
   document.lem \
   symbol_table.lem \
-  cabs0.lem \
+  cabs0.lem
 
 MODEL_FILES2=\
   undefined.lem \
@@ -87,7 +83,6 @@ MODEL_FILES2=\
   sb.lem \
   decode.lem \
   cabs_to_ail.lem \
-  range_.lem \
   translation_effect.lem \
   translation_aux.lem \
   translation.lem
@@ -97,15 +92,12 @@ OCAML_LIB=lib/ocaml
 OCAML_LIB_FILES=\
   boot.lem \
   pprint_.lem \
-  output.lem \
   document.lem \
   decode.lem \
-  big_int_.lem
 
 CMM_FILES=\
   cmm.lem
 
-# TODO: would be nice to have a way to tell Lem when a module is spurious
 SPURIOUS_FILES=\
   pprint_.ml \
   lexing.ml \
@@ -124,7 +116,7 @@ CPARSER_FILES=\
 
 PPRINTERS_FILES=\
   colour.ml \
-  pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
+  pp_cabs0.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
 
 FILES=$(MODEL_FILES1) $(AIL_FILES) $(MODEL_FILES2) $(OCAML_LIB_FILES) $(SPURIOUS_FILES) $(CORE_PARSER_FILES) $(CPARSER_FILES) $(PPRINTERS_FILES)

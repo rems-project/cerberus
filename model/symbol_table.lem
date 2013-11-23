@@ -22,10 +22,6 @@ let rec find a t =
         | true  -> Some (Pmap.find a m)
         | false -> find a ms
         end
-(*
-    | m::ms -> if Pmap.mem a m then Some (Pmap.find a m)
-                               else find a ms
-*)
     | []    -> None
   end
 
