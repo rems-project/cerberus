@@ -8,7 +8,6 @@ module Aty  = AilTypes
 
 module C    = Core
 module Caux = Core_aux
-(* module T    = Ail_typing_aux *)
 module U    = Undefined
 
 open Translation_effect
@@ -17,39 +16,23 @@ open Translation_aux
 (* TODO: now everything is mapped to nonatomics. The translation to atomics still
    needs to be defined *)
 
-(* val     translate_lvalue: C.file ->  *)
 val     translate_lvalue: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> t (C.expr zero)
 let rec translate_lvalue stdlib program a_exp =
-  let f = (Boot.assert_false "translate_expr") stdlib program in
-  
+  let f = translate_expression stdlib program in
   if Aaux.null_pointer_constant a_exp then
     return C.Enull
   else
     let A.AnnotatedExpression _ exp = a_exp in
     match exp with
-      | A.Var id -> return (C.Esym id)
+      | A.Var id ->
+          return (C.Esym id)
       
       | A.Unary A.Indirection e ->
           E.fresh_symbol >>= fun a_e    ->
           f e            >>= fun core_e ->
           (* TODO: the checks *)
           return core_e
-
-
-
-    | _ -> Boot.assert_false "Translation.translate_lvalue ==> MIGRATION TO THE NEW AIL"
-(*
-TODO !!!!!!!!
-
-    (* TODO: may be temporary *)
-    | A.NULL -> return C.Enull
-
-    
-    | A.UNARY A.INDIRECTION e ->
-        E.fresh_symbol       >>= fun a_e    ->
-        f e >>= fun core_e ->
-        (* TODO: the checks *)
-        return core_e
+      
 (*
     | A.UNARY A.INDIRECTION e ->
         f e >>= fun (a, m) ->
@@ -64,11 +47,7 @@ TODO !!!!!!!!
         C.fresh >>= fun a ->
         return (a, Me.null)
 *)
-
-
-      *)
-  end 
-
+end
 
 
 and translate_function_designator (A.AnnotatedExpression _ expr) =
@@ -77,17 +56,11 @@ and translate_function_designator (A.AnnotatedExpression _ expr) =
   end
 
 
-
-
-
-
-
-(* ---------------------------------------------------------------------------------------------- *)
-
-and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategory) =
-  let f e = translate_expr stdlib program e in
+(*  translate_expression: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> 
+                          t (C.expr zero) *)
+and translate_expression stdlib program a_expr =
+  let f e = translate_expression stdlib program e in
   let mk_stdcall fname = mk_stdcall stdlib fname in
-  (* TODO: this is silly *)
   let conv             = mk_stdcall "conv"             in
   let conv_int         = mk_stdcall "conv_int"         in
   let overflow         = mk_stdcall "overflow"         in
@@ -95,25 +68,29 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
   let exp              = mk_stdcall "exp"              in
   let is_representable = mk_stdcall "is_representable" in
   let usual_arithmetic = mk_stdcall "usual_arithmetic" in
-  
-  (* TODO: see if this right
-       usual_arithmetic_conv e ty1 ty2 == performed the value conversion on the expression of type ty1 following the usual arith of ty1 and ty2
-   *)
   let usual_arithmetic_conv e ty1 ty2 =
     conv [Caux.mk_ctype ty1; usual_arithmetic [Caux.mk_ctype ty1; Caux.mk_ctype ty2]; e] in
   
   
-  if Aaux.null_pointer_constant a_expr then
+  let A.AnnotatedExpression _ expr = a_expr in
+  (* TODO: we do a match instead of a let, because of a bug in Lem *)
+  let ty = match GenTypesAux.interpret_genTypeCategory tmp_implementation
+                   (Annotation.type_of Annotation.concrete_annotation a_expr) with
+             | Some (AilTypes.LValueType _ z) -> z
+             | Some (AilTypes.RValueType z)   -> z
+           end in
+  
+  if AilTypesAux.pointer ty && Aaux.null_pointer_constant a_expr then
     return C.Enull
   else
-    let A.AnnotatedExpression _ expr = a_expr in
-    (* TODO: check with J *)
-    (* TODO: we do a match instead of a let, because of a bug in Lem *)
-    let ty = match GenTypesAux.interpret_genTypeCategory tmp_implementation
-                     (Annotation.type_of Annotation.concrete_annotation a_expr) with
-               | Some (AilTypes.RValueType z) -> z
-             end in
     match expr with
+        (* NOTE: this is not enought *)
+      | A.Var id ->
+          if AilTypesAux.is_function ty then
+            return (C.Econst (C.Cfunction id))
+          else
+            return $ Caux.pload (Caux.mk_ctype ty) (C.Esym id) Cmm.NA
+      
       | A.Unary A.Plus e ->
           f e >>= fun core_e ->
           return (promote_value core_e)
@@ -146,7 +123,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
             translate_function_designator e
       
       | A.Unary A.Indirection e ->
-          (* TODO: temporary hack  *)
+          (* TODO: temporary  *)
           E.fresh_symbol       >>= fun a_e    ->
           f e >>= fun core_e ->
           (* shouldn't be a real load ? *)
@@ -249,21 +226,15 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
       | A.Binary e1 (A.Arithmetic A.Add) e2 ->
           let ctype_e1 = exp_type_of e1 in
           let ctype_e2 = exp_type_of e2 in
-          E.fresh_symbol          >>= fun a_e1     ->
-          E.fresh_symbol          >>= fun a_e2     ->
-          f e1   >>= fun core_e1  ->
-          f e2   >>= fun core_e2  ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
           
           if AilTypesAux.arithmetic ctype_e1 && AilTypesAux.arithmetic ctype_e2 then
             (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
                           performed on them. *)
-            let common_ty = Option.from_some $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2)
-
-(* assert_false "T.usual_arithmetic (exp_type_of e1) (exp_type_of e2)" *) in
-(*
-            let conv_e1 = conv [Caux.mk_ctype (exp_type_of e1); Caux.mk_ctype (exp_type_of exp); C.Esym a_e1] in
-            let conv_e2 = conv [Caux.mk_ctype (exp_type_of e2); Caux.mk_ctype (exp_type_of exp); C.Esym a_e2] in
-*)
+            let common_ty = Option.from_some $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
             let conv_e1 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e1] in
             let conv_e2 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e2] in
             
@@ -292,7 +263,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                      (C.Esseq [] (C.Esame (C.Esym a_e1) (C.Esym a_shift))
                         (C.Esym a_shift)))
             else
-              Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.ADD) e1 e2 <pointer case>: TODO"
+              Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.ADD) e1 e2 <pointer case>: TODO"
       
       | A.Binary e1 (A.Arithmetic A.Sub) e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -313,7 +284,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
           else (*if T.is_integer_type (Annotate.exp_type_of e2) then*)
             (* Pointer arithmetic. *)
             (* TODO: pointer arith *)
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.SUB) e1 e2 <pointer case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SUB) e1 e2 <pointer case>: TODO"
       
       | A.Binary e1 (A.Arithmetic A.Shl) e2 -> (* DONE (check) *)
           E.fresh_symbol             >>= fun a_e1          ->
@@ -359,16 +330,16 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
             )
       
       | A.Binary e1 (A.Arithmetic A.Shr) e2 -> 
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.SHR) e1 e2: TODO(has an implementation defined case)"
+          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SHR) e1 e2: TODO(has an implementation defined case)"
       
       | A.Binary e1 (A.Arithmetic A.Band) e2 ->
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
+          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
       
       | A.Binary e1 (A.Arithmetic A.Xor) e2 ->
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.XOR) e1 e2: TODO(has an implementation defined case)"
+          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.XOR) e1 e2: TODO(has an implementation defined case)"
       
       | A.Binary e1 (A.Arithmetic A.Bor) e2 ->
-          Boot.assert_false "[Translation.translate_expr] #A.BINARY (A.ARITHMETIC A.BOR) e1 e2: TODO(has an implementation defined case)"
+          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.BOR) e1 e2: TODO(has an implementation defined case)"
       
       | A.Binary e1 A.Comma e2 ->
           f e1 >>= fun core_e1 ->
@@ -409,11 +380,14 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
             E.fresh_symbol >>= fun a_e2    ->
             f e1           >>= fun core_e1 ->
             f e2           >>= fun core_e2 ->
+            let common_ty = Option.from_some $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
+            let conv_e1 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e1] in
+            let conv_e2 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e2] in
             return $
               C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
-                (C.Eif (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
+                (C.Eif (C.Eop C.OpLt conv_e1 conv_e2) Caux.one Caux.zero)
           else
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
       
       | A.Binary e1 A.Gt e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -428,7 +402,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                    Caux.zero
                 )
           else
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LT e1 e2 <pointers case>: TODO"
       
       | A.Binary e1 A.Le e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -443,7 +417,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                        Caux.zero
                 )
           else (* MUST BE: both operands are pointers to qualified or unqualified versions of compatible object types. *)
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.LE e1 e2 <pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LE e1 e2 <pointers case>: TODO"
     
       (* TODO: not doing the typing stuff for now *)
       | A.Binary e1 A.Ge e2 ->
@@ -459,7 +433,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                        Caux.zero
                 )
           else
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.GE e1 e2 <pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.GE e1 e2 <pointers case>: TODO"
       
       | A.Binary e1 A.Eq e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -471,11 +445,11 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
               C.Ewseq [Some a_e1; Some a_e2] (C.Eunseq [core_e1; core_e2])
                 (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
           else if AilTypesAux.pointer (exp_type_of e1) && AilTypesAux.pointer (exp_type_of e2) then
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
           else if Aaux.null_pointer_constant e1 then
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
           else
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
       
       | A.Binary e1 A.Ne e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -490,7 +464,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                        Caux.one
                 )
           else
-            Boot.assert_false "[Translation.translate_expr] #A.BINARY A.NE e1 e2 <not both of arithmetic type>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.NE e1 e2 <not both of arithmetic type>: TODO"
       
       | A.Assign e1 e2 ->
           E.fresh_symbol                     >>= fun a_e1    ->
@@ -532,7 +506,7 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
                        core_e2
                        core_e3)
           else
-            Boot.assert_false "[Translation.translate_expr] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
+            Boot.assert_false "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
       
       | A.Cast qs ty e ->
           E.fresh_symbol >>= fun a_e    ->
@@ -548,206 +522,99 @@ and translate_expr stdlib program (a_expr : A.expression GenTypes.genTypeCategor
       | A.Call e es ->
           E.fresh_symbol >>= fun a_e    ->
           f e            >>= fun core_e ->
-          match es with
-            | [] ->
-                (* if there are no arguments, we don't need all the temporary object creation stuff *)
-                return $ C.Esseq [Some a_e] core_e (C.Eproc {} a_e [])
-            | _ ->
-                Boot.assert_false "TODO"
-          end
-
-
-
-
-      | _ -> Boot.assert_false "Translation.translate_expr ==> MIGRATION TO THE NEW AIL"
-(*
-TODO !!!!!!!!
-
-    | A.STRING_LITERAL lit ->
-        Boot.assert_false "TODO: Translation.translate_expr A.STRING_LITERAL"
-    
-    
-    
-    
-    
-
-    
-    
-    (* ------------------------------------------------------------------------------------------ *)
-    
-
-
-
-
-
-
-
-
-(*
-        match Annotate.exp_of e with
-          | A.VARIABLE fid ->
-              (* if there are no arguments, we don't need all the temporary object creation stuff *)
-              match es with
-                | [] -> return $ C.Eproc {} fid []
-                | _  ->
-    	            match fst $ Pmap.find fid program.A.id_map with
-	              | A.FUNCTION retTy Tys ->
-                          let n = List.length es in
-                          
-                          (* symbolic names for the temporary objects and init value *)
-                          E.replicateM n E.fresh_symbol >>= fun as_tmp  ->
-                          
-                          (* create actions for the temporary objects *)
-                          let core_creates =
-                            List.map (fun ty -> Caux.pcreate (Caux.mk_ctype ty) []) Tys in
-                          
-                          (* their initialisations *)
-                          E.mapM (fun (a, ty, e) ->
-                            E.fresh_symbol       >>= fun a_init ->
-                            f e >>= fun core_e ->
-			    return $
-                              C.Ewseq [Some a_init] core_e
-			        (Caux.pstore (Caux.mk_ctype ty) (C.Esym a) (C.Esym a_init))
-                          ) (zip3 as_tmp Tys es) >>= fun core_inits ->
-                          
-                          (* their kill actions *)
-                          let core_kills = List.map (Caux.pkill -| C.Esym) as_tmp in
-                          
-                          (* symbolic name for the call result *)
-                          E.fresh_symbol >>= fun a_call ->
-
-                          return $
-                            C.Ewseq (List.map Some as_tmp) (Caux.mk_unseq core_creates)
-                              (C.Ewseq [] (Caux.mk_unseq core_inits)
-                                 (C.Ewseq [Some a_call] (C.Eindet $ C.Eproc {} fid (List.map C.Esym as_tmp))
-                                    (C.Ewseq [] (Caux.mk_unseq core_kills)
-                                       (C.Esym a_call)
-                                    )
-                                 )
-                              )
-
-	            end
-	    | _ -> Boot.outOfHomeomorphism "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
-	  end
-
-
-
-
-      | _ ->
-        (* TODO: looks like we need a "null" constant of type address in Core *)
-        Boot.assert_false "[Translation.translate_expr] #A.CALL e es <function pointer>: TODO"
-      end
-*)
-
-    
-    
-    
-    (* *** MEMBEROF *** *)
-    | A.MEMBEROF e x ->
-        Boot.assert_false "[Translation.translate_expr] #A.MEMBEROF e x: TODO"
-    
-    
-    
-    (* *** MEMBEROFPTR *** *)
-    | A.MEMBEROFPTR e x ->
-        Boot.assert_false "[Translation.translate_expr] #A.MEMBEROFPTR e x: TODO"
-    
-    
-    
-    (* ------------------------------------------------------------------------------------------ *)
-    | A.CONSTANT (A.CONST_INT (i, _, _)) -> (* DONE *)
+          match e with
+            | A.AnnotatedExpression _ (A.Var fid) ->
+                if List.length es = 0 then
+                  (* if there are no arguments, we don't need all the temporary object creation stuff *)
+                  return $ C.Eproc {} fid []
+                else
+                  let (return_ty, binds) = fst $ List.assoc fid (snd program) in
+                  let n = List.length es in
+                  
+                  (* symbolic names for the temporary objects and init value *)
+                  E.replicateM n E.fresh_symbol >>= fun as_tmp  ->
+                  
+                  (* create actions for the temporary objects *)
+                  let core_creates =
+                    List.map (fun (_, (_, ty)) -> Caux.pcreate (Caux.mk_ctype ty) []) binds in
+                  
+                  (* their initialisations *)
+                  E.mapM (fun (a, (_, (_, ty)), e) ->
+                    E.fresh_symbol >>= fun a_init ->
+                    f e            >>= fun core_e ->
+		    return $
+                      C.Ewseq [Some a_init] core_e
+		      (Caux.pstore (Caux.mk_ctype ty) (C.Esym a) (C.Esym a_init) Cmm.NA)
+                  ) (zip3 as_tmp binds es) >>= fun core_inits ->
+                  
+                  (* their kill actions *)
+                  let core_kills = List.map (Caux.pkill -| C.Esym) as_tmp in
+                  
+                  (* symbolic name for the call result *)
+                  E.fresh_symbol >>= fun a_call ->
+                  return $
+                    C.Ewseq (List.map Some as_tmp) (Caux.mk_unseq core_creates)
+                    (C.Ewseq [] (Caux.mk_unseq core_inits)
+                       (C.Ewseq [Some a_call] (C.Eindet $ C.Eproc {} fid (List.map C.Esym as_tmp))
+                          (C.Ewseq [] (Caux.mk_unseq core_kills)
+                             (C.Esym a_call)
+                          )
+                       )
+                    )
+	      | _ -> Boot.assert_false "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
+	    end 
+      
+      | A.Constant (A.ConstantInteger (i, _)) ->
           return (C.Econst $ C.Cint i)
-    
-    
-    | A.CONSTANT (A.CONST_FLOAT _) -> Boot.assert_false "[Translation.translate_expr] #A.CONSTANT (A.CONST_FLOAT _): TODO"
-    | A.CONSTANT (A.CONST_CHAR _) -> Boot.assert_false "[Translation.translate_expr] #A.CONSTANT (A.CONST_CHAR _): TODO"
-    | A.CONSTANT (A.CONST_ENUM _)  -> Boot.assert_false "[Translation.translate_expr] #A.CONSTANT (A.CONST_ENUM _): TODO"
-    
-    
-    (* WARNING: this is not enought (DEBUG FOR NOW) *)
-    | A.VARIABLE id ->
-        let (_, t, _) = Pmap.find id program.A.id_map in (* TODO: qualifiers *)
-        if T.is_function_type t then
-          return (C.Econst (C.Cfunction id))
-        else
-          return $ Caux.pload (Caux.mk_ctype (Annotate.lvalue_type_of expr)) (C.Esym id) Cmm.NA
-    
-    (* TODO *)
-    | A.EXPR_SIZEOF e ->
-        return (C.sizeof $ Caux.mk_ctype (Annotate.ctype_of e))
-    
-    | A.SIZEOF (A.BASIC A.CHAR)                           -> return Caux.one
-    | A.SIZEOF (A.BASIC (A.INTEGER (A.SIGNED A.ICHAR)))   -> return Caux.one
-    | A.SIZEOF (A.BASIC (A.INTEGER (A.UNSIGNED A.ICHAR))) -> return Caux.one
-    
-    | A.SIZEOF ty ->
-        return (C.sizeof $ Caux.mk_ctype ty)
-    
-    
-    | A.AlignOf qs ty ->
-        return (C.alignof $ Caux.mk_ctype ty)
-    
-
+      
+      
+      | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> return Caux.one
+      | A.SizeOf qs (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))   -> return Caux.one
+      | A.SizeOf qs (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) -> return Caux.one
+      | A.SizeOf qs ty ->
+          return (C.sizeof $ Caux.mk_ctype ty)
+      
+      | A.AlignOf qs ty ->
+          return (C.alignof $ Caux.mk_ctype ty)
 
 (*
-TODO: need to bring them back to the new Ail
+  TODO: need to bring them back to the new Ail
+      | A.MEMBEROF e x ->
+      | A.MEMBEROFPTR e x ->
 
-    | A.MALLOC e ->
+      | A.EXPR_SIZEOF e ->
+          return (C.sizeof $ Caux.mk_ctype (Annotate.ctype_of e))
+
+    | A.StringLiteral lit ->
+
+    | A.Malloc e ->
         E.fresh_symbol >>= fun a_e    ->
         f e            >>= fun core_e ->
         return $ C.Ewseq [Some a_e] core_e (Caux.palloc (C.Esym a_e) [])
     
-    | A.FREE e ->
+    | A.Free e ->
         E.fresh_symbol >>= fun a_e    ->
         f e            >>= fun core_e ->
         return $ C.Ewseq [Some a_e] core_e (Caux.pkill (C.Esym a_e))
     
-    (* TODO *)
-    | A.MEMCMP e1 e2 e3 ->
-        Boot.assert_false "[Translation.translate_expr] #A.MEMCMP: TODO"
+    | A.Memcmp e1 e2 e3 ->
+    | A.Memcpy e1 e2 e3 ->
     
-    (* TODO *)
-    | A.MEMCPY e1 e2 e3 ->
-        Boot.assert_false "[Translation.translate_expr] #A.MEMCPY: TODO"
-    
-    | A.ASSERT e ->
+    | A.Assert e ->
         E.fresh_symbol >>= fun a_e    ->
         f e            >>= fun core_e ->
         return $
           C.Ewseq [Some a_e] core_e
             (C.Eif (C.Eop C.OpEq (C.Esym a_e) Caux.zero) C.Eerror C.Eskip)
     
-    (* TODO *)
-    | A.CONST_ARRAY es ->
-        Boot.assert_false "[Translation.translate_expr] #A.CONST_ARRAY: TODO"
-    
-    (* TODO *)
-    | A.CONST_STRUCT_UNION field_es ->
-        Boot.assert_false "[Translation.translate_expr] #A.CONST_STRUCT_UNION: TODO"
-    
-    (* TODO *)
-    | A.OFFSETOF ty x ->
-        Boot.assert_false "[Translation.translate_expr] #A.OFFSETOF: TODO"
+    | A.ConstArray es ->
+    | A.ConstStructUnion field_es ->
+    | A.Offsetof ty x ->
 *)
-
-*)
-  end
-
+      | _ -> Boot.assert_false "BOOM"
+    end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-(* -------------------------------------------------------------------------- *)
 
 (* translate_stmt Pmap.empty program program.A.main C.Constants.return s *)
 
@@ -766,50 +633,46 @@ type collect_cases_state = <|
   cases: list AilSyntax.integerConstant
 |>
 
-let rec collect_cases_ (_, stmt) : St.t unit collect_cases_state =
+val     collect_cases_: A.statement Location.t GenTypes.genTypeCategory -> St.t unit collect_cases_state
+let rec collect_cases_ (A.AnnotatedStatement _ stmt) =
   let register_case n =
     St.update (fun s -> <| s with cases= n :: s.cases |>) in
   let register_default =
     St.update (fun s -> <| s with found_default= true |>) in
   match stmt with
-    | _ -> Boot.assert_false "Translation.collect_cases ==> MIGRATION TO THE NEW AIL"
-(*
-TODO !!!!!!!!
-
-    | A.SKIP ->
+    | A.Skip ->
         St.return ()
-    | A.EXPRESSION _ ->
+    | A.Expression _ ->
         St.return ()
-    | A.BLOCK _ ss ->
+    | A.Block _ ss ->
         St.mapM_ collect_cases_ ss
-    | A.IF _ s1 s2 ->
+    | A.If _ s1 s2 ->
         collect_cases_ s1 >> collect_cases_ s2
-    | A.WHILE _ s ->
+    | A.While _ s ->
         collect_cases_ s
-    | A.DO _ s ->
+    | A.Do s _ ->
         collect_cases_ s
-    | A.BREAK ->
+    | A.Break ->
         St.return ()
-    | A.CONTINUE ->
+    | A.Continue ->
         St.return ()
-    | A.RETURN_VOID ->
+    | A.ReturnVoid ->
         St.return ()
-    | A.RETURN_EXPRESSION _ ->
+    | A.Return _ ->
         St.return ()
-    | A.SWITCH _ _ ->
+    | A.Switch _ _ ->
         St.return ()
-    | A.CASE n s ->
+    | A.Case n s ->
         register_case n >> collect_cases_ s
-    | A.DEFAULT s ->
+    | A.Default s ->
         register_default >> collect_cases_ s
-    | A.LABEL _ s ->
+    | A.Label _ s ->
         collect_cases_ s
-    | A.GOTO _ ->
+    | A.Goto _ ->
         St.return ()
-    | A.DECLARATION _ ->
+    | A.Declaration _ ->
         St.return ()
 (*    | PAR of list (statement_l 'a) *)
-      *)
   end
 
 
@@ -828,55 +691,31 @@ val     translate_stmt: C.fun_map zero -> A.program Location.t zero ->
 *)
 let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) : t (C.expr zero) =
   let translate_stmt_ s = translate_stmt stdlib program f d_default d_cases d_loop d_break s in
-  (* val conv: Ail.ctype -> Ail.ctype -> Core.expr zero -> t (Core.expr zero) *)
-  let conv ty1 ty2 core_e =
-    Boot.assert_false
-  "if Ail_typing_aux.eq ty1 ty2 then
-    return core_e
-  else
-    E.fresh_symbol >>= fun a_e ->
-    return $ C.Ewseq [Some a_e] core_e (mk_stdcall stdlib \"conv\" [Caux.mk_ctype ty1; Caux.mk_ctype ty2; C.Esym a_e])" in
-  
-  
-  
-  
-  
-  (* return the type of a given identifier. (TODO: why is this a local function?) *)
-(*
-<<<<<<< local
-  let lookup_type id = Boot.assert_false "fst (Pmap.find id program.A.id_map)" in
-  
-=======
-*)
-  let lookup_type id =
-Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
-    t"
-  in
-(* >>>>>>> other *)
+  let mk_stdcall fname = mk_stdcall stdlib fname   in
+  let conv_int         = mk_stdcall "conv_int" in
   match stmt with
     | A.Skip ->
         return C.Eskip
     | A.Expression e ->
-        translate_expr stdlib program e
-
-(*
-  | A.BLOCK ids ss ->
-      (* retrieve the declarations of these variables *)
-      let decls = [(id, lookup_type id) | forall (id MEM ids) | true] in
-      
-      (* the symbolic names and create actions for the local variables *)
-      let (a_ids, core_creates) =
-        mapUnzip (fun (a, ty) -> (Some a, Caux.pcreate (Caux.mk_ctype ty) [f; a])) decls in
-      
-      E.push_block_objects ids >>
-      
-      (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
-               but it may be nasty to the check.
-               For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
-      (* the kill actions for the local variables *)
-      let (core_kills) =
-        List.map (Caux.pkill -| C.Esym -| fst) decls in
-      
+        translate_expression stdlib program e
+    
+    | A.Block binds ss ->
+        let ids = [id | forall ((id, _) MEM binds) | true] in
+        let decls = [(id,ty) | forall ((id, (qs, ty)) MEM binds) | true] in
+        
+        (* the symbolic names and create actions for the local variables *)
+        let (a_ids, core_creates) =
+          mapUnzip (fun (a, ty) -> (Some a, Caux.pcreate (Caux.mk_ctype ty) [f; a])) decls in
+        
+        E.push_block_objects ids >>
+        
+        (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
+                 but it may be nasty to the check.
+                 For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
+        (* the kill actions for the local variables *)
+        let (core_kills) =
+          List.map (Caux.pkill -| C.Esym -| fst) decls in
+        
 (*
       E.fresh_symbol >>= fun a_last ->
       E.mapWithLastM (fun s -> translate_stmt program f d_loop d_break (a_last :: lasts) s >>= fun core_s ->
@@ -886,15 +725,14 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
                                return ([Some a_last], core_s))
                      ss >>= fun a_opts_core_ss ->
 *)
-      E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> return core_s) ss >>= fun core_ss ->
-      
-      E.pop_block_objects >>
-      
-      return
-        (C.Esseq a_ids (Caux.mk_unseq core_creates)
-           (List.fold_right (fun core_s acc -> C.Esseq [] core_s acc) core_ss (Caux.mk_unseq core_kills))
-        )
-
+        E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> return core_s) ss >>= fun core_ss ->
+        
+        E.pop_block_objects >>
+        
+        return
+          (C.Esseq a_ids (Caux.mk_unseq core_creates)
+             (List.fold_right (fun core_s acc -> C.Esseq [] core_s acc) core_ss (Caux.mk_unseq core_kills))
+          )
 (*
 
 (*      (* add the block local variables to the environment (fresh symbolic names are assigned) *)
@@ -940,14 +778,13 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
 
 *)  
 
-*)
 
 
     | A.If e s1 s2 ->
-        E.fresh_symbol                  >>= fun a_test  ->
-        translate_expr stdlib program e >>= fun core_e  ->
-        translate_stmt_ s1              >>= fun core_s1 ->
-        translate_stmt_ s2              >>= fun core_s2 ->
+        E.fresh_symbol                        >>= fun a_test  ->
+        translate_expression stdlib program e >>= fun core_e  ->
+        translate_stmt_ s1                    >>= fun core_s1 ->
+        translate_stmt_ s2                    >>= fun core_s2 ->
         return $ C.Ewseq [Some a_test] core_e
                    (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_test) Caux.zero)) core_s1 core_s2)
     
@@ -955,31 +792,35 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
         E.fresh_symbol                                                                   >>= fun a_e     ->
         E.fresh_named_symbol "loop"                                                      >>= fun d_loop  ->
         E.fresh_named_symbol "break"                                                     >>= fun d_break ->
-        translate_expr stdlib program e                                                  >>= fun core_e  ->
+        translate_expression stdlib program e                                            >>= fun core_e  ->
         translate_stmt stdlib program f d_default d_cases (Some d_loop) (Some d_break) s >>= fun core_s  ->
         E.get_visible_objects                                                            >>= fun _as     ->
+        (* TODO: the types of the annotations in Esave are dummy, but this is not observable until we support VLAs *)
         return $
-          C.Esave d_loop [ (a, (* TODO: HACK *) C.Void)  | forall (a MEM _as) | true ]
-            (C.Ewseq [Some a_e] core_e
+          C.Esave d_loop [ (a, C.Void)  | forall (a MEM _as) | true ]
+            (C.Esseq [Some a_e] core_e
                (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e) Caux.zero))
-                  (C.Ewseq [] core_s (C.Erun {} d_loop [ (a, C.Esym a) | forall (a MEM _as) | true ]))
-                  (C.Esave d_break [(* TODO *)] C.Eskip)
+                  (C.Esseq [] core_s (C.Erun {} d_loop [ (a, C.Esym a) | forall (a MEM _as) | true ]))
+                  (C.Esave d_break [ (a, C.Void)  | forall (a MEM _as) | true ] C.Eskip)
                )
             )
     
+    (* TODO: add the break *)
     | A.Do s e ->
         E.fresh_symbol                                                                   >>= fun d_loop  ->
         E.fresh_symbol                                                                   >>= fun d_break ->
         translate_stmt stdlib program f d_default d_cases (Some d_loop) (Some d_break) s >>= fun core_s  ->
-        translate_expr stdlib program e                                                  >>= fun core_e  ->
+        translate_expression stdlib program e                                            >>= fun core_e  ->
         E.fresh_symbol                                                                   >>= fun a       ->
+        E.get_visible_objects                                                            >>= fun _as     ->
+        (* TODO: the types of the annotations in Esave are dummy, but this is not observable until we support VLAs *)
         return $
-          C.Esave d_loop [(* TODO *)]
-            (C.Ewseq [] core_s
-               (C.Ewseq [Some a] core_e
+          C.Esave d_loop [ (a, C.Void)  | forall (a MEM _as) | true ]
+            (C.Esseq [] core_s
+               (C.Esseq [Some a] core_e
                   (C.Eif (C.Eop C.OpEq (C.Esym a) Caux.zero)
-                     C.Eskip
-                     (C.Erun {} d_loop [(* TODO *)])
+                     (C.Esave d_break [ (a, C.Void)  | forall (a MEM _as) | true ] C.Eskip)
+                     (C.Erun {} d_loop [ (a, C.Esym a) | forall (a MEM _as) | true ])
                   )
                )
             )
@@ -989,7 +830,8 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
         return (C.Erun {} (from_Some d_break) [ (a, C.Esym a) | forall (a MEM _as) | true ])
     
     | A.Continue ->
-        return (C.Erun {} (from_Some d_loop) [(* TODO *)])
+        E.get_visible_objects >>= fun _as ->
+        return (C.Erun {} (from_Some d_loop) [ (a, C.Esym a) | forall (a MEM _as) | true ])
     
     | A.ReturnVoid ->
         E.get_visible_objects >>= fun _as ->
@@ -997,23 +839,28 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
         return (C.Esseq [] (Caux.mk_unseq core_kills) (C.Eret C.Eskip))
     
     | A.Return e ->
-        translate_expr stdlib program e                       >>= fun core_e      ->
+        translate_expression stdlib program e >>= fun core_e ->
         let A.AnnotatedExpression ty _ = e in
-        conv ty (function_return_type $ lookup_type f) core_e >>= fun core_conv_e ->
-        E.fresh_symbol                                     >>= fun a_e         ->
-        E.get_visible_objects                              >>= fun _as         ->
+        let (return_ty, _) = fst $ List.assoc f (snd program) in
+        E.fresh_symbol           >>= fun a_e ->
+        E.get_visible_objects    >>= fun _as ->
         let (core_kills) = List.map (Caux.pkill -| C.Esym) _as in
         return $
-          C.Esseq [Some a_e] (core_conv_e)
+          C.Esseq [Some a_e] core_e
             (C.Esseq [] (Caux.mk_unseq core_kills)
-               (C.Eret (C.Esym a_e))
+               (C.Eret (conv_int [Caux.mk_ctype return_ty; C.Esym a_e]))
             )
-  
+
+
+
+
+
+
 (*
   
   (* TODO: the promotions *)
   | A.SWITCH e s ->
-      translate_expr stdlib program e >>= fun core_e ->
+      translate_expression stdlib program e >>= fun core_e ->
       E.fresh_symbol       >>= fun a_e    ->
       (* TODO: should properly interpret the integer constants *)
       let ((found_default, ns) : bool * list int) =
@@ -1077,27 +924,30 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
       return (C.Erun {} l [ (a, C.Esym a) | forall (a MEM _as) | true ])
   
   
-  (* ------------------------------------------------------------------------------------------------------ *)
-  | A.DECLARATION []    -> return C.Eskip
-  | A.DECLARATION defns ->
-      (* This pass translate the declarations *)
-      E.mapM (fun (id, e) ->
-        E.fresh_symbol                                        >>= fun a           ->
-        translate_expr stdlib program e                          >>= fun core_e      ->
-        conv (Annotate.exp_type_of e) (lookup_type id) core_e >>= fun core_conv_e ->
-        return $ C.Ewseq [Some a] core_conv_e
-                     (Caux.pstore (Caux.mk_ctype (lookup_type id)) (C.Esym id) (C.Esym a) Cmm.NA) (* TODO: the id is probably wrong *)
-      ) defns >>=
-      
-      (* This pass combine the translated declerations *)
-      E.foldl1M (fun x y -> return  $ Caux.concat_wseq x y)
+*)
+    | A.Declaration [] ->
+        return C.Eskip
+    
+    | A.Declaration defns ->
+        (* This pass translate the declarations *)
+        E.mapM (fun (id, e) ->
+          E.fresh_symbol                        >>= fun a      ->
+          translate_expression stdlib program e >>= fun core_e ->
+          return $ C.Esseq [Some a] core_e
+                       (Caux.pstore (Caux.mk_ctype (exp_type_of e)) (C.Esym id) (conv_int [Caux.mk_ctype (exp_type_of e); C.Esym a]) Cmm.NA)
+        ) defns >>=
+        
+        (* This pass combine the translated declerations *)
+        E.foldl1M (fun x y -> return  $ Caux.concat_sseq x y)
   
+
+(*
+  TODO: need to bring them back to the new Ail
+
   | A.PAR ss ->
       E.mapM (translate_stmt_) ss >>= fun core_ss ->
       return $ C.Eunseq core_ss
 *)
-
-    | _ -> Boot.assert_false "Translation.translate_stmt ==> MIGRATION TO THE NEW AIL"
   end
 
 
@@ -1105,10 +955,15 @@ Boot.assert_false     "let (_, t, _) = Pmap.find id program.A.id_map in
 val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
 let translate_program stdlib program =
   E.foldlM (fun acc (fun_id, ((_, fun_args), fun_body)) ->
+    (* making the argument variables visible *)
+    E.push_block_objects (List.map fst fun_args) >>
+    
     (* translate the body to Core *)
     translate_stmt stdlib program fun_id None None None None fun_body >>= fun core_body ->
+    (* removing the argument variables from the "visibles" *)
+    E.pop_block_objects >>
     (return $ Pmap.add fun_id (
-                                C.TyEffect C.Integer (* TODO: address for pointer type? *),
+                                C.TyEffect C.Integer (* TODO: this should de address for pointer type *),
                                 List.map (fun (arg, _) -> (arg, C.Address (* TODO: check *))) fun_args,
                                 core_body
                                ) acc)
@@ -1118,7 +973,7 @@ let translate_program stdlib program =
 (* This is the entry function (called from main.ml) *)
 val translate: C.fun_map zero -> C.impl zero -> A.program Location.t GenTypes.genTypeCategory -> C.file zero
 let translate stdlib impl prog =
-  (* TODO: this is a hack, we shouldn't expose the internals and properly use the Undefined *)
+  (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   match (translate_program stdlib prog) E.init with
     | U.Defined (cfuns, _) -> <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.funs= cfuns |>
     | _                    -> Boot.assert_false "[Translation.translate #_] TODO"

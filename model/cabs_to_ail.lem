@@ -98,10 +98,11 @@ module Effect = struct
     
     fun_defs : A.sigma Location.t unit;
     
+    id_map : map Symbol.t (ATypes.qualifiers * ATypes.ctype);
     
     (* TODO: temporarily not having globals  *)
 (*
-    id_map : map Symbol.t A.declaration; (* TODO: split off function definition (as in new-Ail) *)
+     (* TODO: split off function definition (as in new-Ail) *)
     fn_map : map Symbol.t (list Symbol.t * A.statement Location.t unit); (* functions map       *)
 *)
   |>
@@ -161,7 +162,8 @@ module Effect = struct
       registered_identifiers = Symbol_table.create_scope Symbol_table.empty;
       is_inside_switch = false;
       
-      fun_defs = []
+      fun_defs= [];
+      id_map= Pmap.empty
 (*      
       id_map              = Pmap.empty;
       fn_map              = Pmap.empty
@@ -230,17 +232,16 @@ module Effect = struct
       end
 
   (* TODO: storage_duration *)
-  val add_declaration : Symbol.t -> (* ATypes.qualifiers -> *) ATypes.ctype -> t unit
-  let add_declaration v (* q *) t =
-    Boot.assert_false "HIP: add_declaration"
-(*
+  val add_declaration : Symbol.t -> ATypes.qualifiers -> ATypes.ctype -> t unit
+  let add_declaration id qs ty =
     State_exception.update (fun st ->
-    <| st with id_map = Pmap.add v (q, t) st.id_map |>)
-*)
+    <| st with id_map = Pmap.add id (qs, ty) st.id_map |>)
   
   val get_declaration: A.identifier -> t (ATypes.qualifiers * ATypes.ctype)
   let get_declaration id =
-    Boot.assert_false "HIP"
+    State_exception.read (fun st ->
+      Pmap.find id st.id_map
+    )
 
   val add_function : A.identifier -> ((ATypes.ctype * A.bindings) * A.statement Location.t unit) -> t unit (* TODO: parameters *)
   let add_function id fun_def =
@@ -708,7 +709,31 @@ and desugar_parameters params =
 
 
 
-
+val desugar_assign_operator: C.binary_operator -> option A.arithmeticOperator
+let desugar_assign_operator = function
+  | C.ADD_ASSIGN ->
+      Some A.Add
+  | C.SUB_ASSIGN ->
+      Some A.Sub
+  | C.MUL_ASSIGN ->
+      Some A.Mul
+  | C.DIV_ASSIGN ->
+      Some A.Div
+  | C.MOD_ASSIGN ->
+      Some A.Mod
+  | C.BAND_ASSIGN ->
+      Some A.Band
+  | C.BOR_ASSIGN ->
+      Some A.Bor
+  | C.XOR_ASSIGN ->
+      Some A.Xor
+  | C.SHL_ASSIGN ->
+      Some A.Shl
+  | C.SHR_ASSIGN ->
+      Some A.Shr
+  | _ ->
+      None
+end
 
 val     desugar_expression: C.expression -> E.t (A.expression unit)
 let rec desugar_expression e =
@@ -716,16 +741,27 @@ let rec desugar_expression e =
   match e with
   | C.UNARY uop e ->
       A.Unary (desugar_unary_operator uop) <$> desugar_expression e
+  | C.BINARY C.ASSIGN e1 e2 ->
+      A.Assign <$> desugar_expression e1 <*> desugar_expression e2
   | C.BINARY bop e1 e2 ->
-      A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
+      match desugar_assign_operator bop with
+        | Some aop ->
+            A.CompoundAssign <$> desugar_expression e1 <*> E.return aop <*> desugar_expression e2
+        | None ->
+            A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
+      end
   | C.QUESTION e1 e2 e3 ->
       A.Conditional <$> desugar_expression e1 <*> desugar_expression e2 <*> desugar_expression e3
   | C.CALL e es ->
       A.Call <$> desugar_expression e <*> E.mapM desugar_expression es
-(*
     (* A CAST can actually be a constructor expression *)
-  | CAST of (list spec_elem * decl_type) * init_expression
+  | C.CAST (specs, decl_ty) ie ->
+      desugar_spec_elem_list specs >>= fun (qs, ty)   ->
+      desugar_decl_type decl_ty    >>= fun mk_ty      ->
+      desugar_init_expression ie   >>= fun (Some d_e) ->
+      E.return $ A.Cast qs ty d_e
 
+(*
   | C11_ATOMIC_INIT of expression * expression
   | C11_ATOMIC_STORE of expression * expression * expression
   | C11_ATOMIC_LOAD of expression * expression
@@ -764,6 +800,12 @@ let rec desugar_expression e =
   | _ -> E.fail (Errors.OTHER "Some expression Ctors are not yet included in newAil")
 end
 
+and desugar_init_expression ie =
+  match ie with
+  | C.NO_INIT         -> E.return None
+  | C.SINGLE_INIT   e -> Some <$> desugar_expression e
+  | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
+  end
 
 
 
@@ -835,20 +877,14 @@ E.fail Errors.CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
 	          <*> desugar_statement stmt
       | C.GOTO lab _ ->
           A.Goto <$> fetch_label lab
+      | C.DEFINITION (C.DECDEF ing _) ->
+      	  A.Declaration <$> desugar_declaration ing
 (*
-      | C.DEFINITION (C.DECDEF ing _) -> (*TODO: location*)
-      	  A.DECLARATION <$> desugar_declaration ing
       | C.PAR stmts _ ->
           A.PAR <$> E.mapM desugar_statement stmts
 *)
   end
 
-and desugar_init_expression ie =
-  match ie with
-  | C.NO_INIT         -> E.return None
-  | C.SINGLE_INIT   e -> Some <$> desugar_expression e
-  | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
-  end
 
 (*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * option (A.expression unit)) *)
 and desugar_init_name iname =
@@ -864,7 +900,7 @@ and desugar_declaration (specs, ins) =
   desugar_spec_elem_list specs >>= fun (qs, ty) ->
   E.mapM desugar_init_name ins >>= fun decls    ->
   filter_opt <$> E.mapM (fun (id, mk_ty, e_opt) ->
-                   E.add_declaration id (* qs *) (mk_ty ty) >>
+                   E.add_declaration id qs (mk_ty ty) >>
                    E.return
                      match e_opt with
                      | Some e -> Some (id, e)

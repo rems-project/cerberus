@@ -91,11 +91,11 @@ end
 
 
 
-let rec concat_wseq e e' =
+let rec concat_sseq e e' =
    match e with
-     | Ewseq _as e1 e2 -> Ewseq _as e1 (concat_wseq e2 e')
+     | Esseq _as e1 e2 -> Esseq _as e1 (concat_sseq e2 e')
      | Eskip           -> e'
-     | _               -> Ewseq [] e e'
+     | _               -> Esseq [] e e'
   end
 
 let is_negative = function
@@ -607,3 +607,10 @@ let is_atomic_type t =
     | Atomic _ -> true
     | _         -> false
   end
+
+
+
+
+
+
+
