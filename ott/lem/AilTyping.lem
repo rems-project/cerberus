@@ -1,65 +1,58 @@
-open Common
-open Context
-open AilTypes
-open AilSyntax
-open AilTypesAux
-open AilSyntaxAux
-open AilWf
-open Implementation
+open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Implementation
 
-open OptionMonad.Operators
+open import OptionMonad
 
-let type_of_constant P (ic : integerConstant) : option integerType =
+let type_of_constant P (ic : integerConstant) : maybe integerType =
   match ic with
-  | (n, None) ->
+  | (n, Nothing) ->
       if in_integer_range P n (Signed Int_) then
-        Some (Signed Int_)
+        Just (Signed Int_)
       else if in_integer_range P n (Signed Long) then
-        Some (Signed Long)
+        Just (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
-        Some (Signed LongLong)
+        Just (Signed LongLong)
       else
-        None
-  | (n, Some U) ->
+        Nothing
+  | (n, Just U) ->
       if in_integer_range P n (Unsigned Int_) then
-        Some (Unsigned Int_)
+        Just (Unsigned Int_)
       else if in_integer_range P n (Unsigned Long) then
-        Some (Unsigned Long)
+        Just (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
-        Some (Unsigned LongLong)
+        Just (Unsigned LongLong)
       else
-        None
-  | (n, Some L) ->
+        Nothing
+  | (n, Just L) ->
       if in_integer_range P n (Signed Long) then
-        Some (Signed Long)
+        Just (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
-        Some (Signed LongLong)
+        Just (Signed LongLong)
       else
-        None
-  | (n, Some UL) ->
+        Nothing
+  | (n, Just UL) ->
       if in_integer_range P n (Unsigned Long) then
-        Some (Unsigned Long)
+        Just (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
-        Some (Unsigned LongLong)
+        Just (Unsigned LongLong)
       else
-        None
-  | (n, Some LL) ->
+        Nothing
+  | (n, Just LL) ->
       if in_integer_range P n (Signed LongLong) then
-        Some (Signed LongLong)
+        Just (Signed LongLong)
       else
-        None
-  | (n, Some ULL) ->
+        Nothing
+  | (n, Just ULL) ->
       if in_integer_range P n (Unsigned LongLong) then
-        Some (Unsigned LongLong)
+        Just (Unsigned LongLong)
       else
-        None
+        Nothing
   end
 
-let type_of_rvalue_aux (type_of_expression : expression 'A -> option typeCategory) e =
+let type_of_rvalue_aux (type_of_expression : expression 'A -> maybe typeCategory) e =
   match type_of_expression e with
-  | Some (RValueType   t) -> Some (pointer_conversion t)
-  | Some (LValueType _ t) -> lvalue_conversion t
-  | None                  -> None
+  | Just (RValueType   t) -> Just (pointer_conversion t)
+  | Just (LValueType _ t) -> lvalue_conversion t
+  | Nothing               -> Nothing
   end
 
 let well_typed_assignment t1 t2 null2 =
@@ -71,11 +64,11 @@ let well_typed_assignment t1 t2 null2 =
   | (_            , _            ) -> arithmetic t1 && arithmetic t2
   end
 
-let assignable_aux (type_of_rvalue : expression 'A -> option ctype) =
+let assignable_aux (type_of_rvalue : expression 'A -> maybe ctype) =
   fun t1 e2 ->
     match type_of_rvalue e2 with
-    | Some t2 -> well_typed_assignment t1 t2 (null_pointer_constant e2)
-    | None    -> false
+    | Just t2 -> well_typed_assignment t1 t2 (null_pointer_constant e2)
+    | Nothing -> false
     end
 
 let well_typed_binary_arithmetic t1 aop t2 : bool =
@@ -114,35 +107,35 @@ let combine_qualifiers_right t1 t2 : ctype =
   | (_           , _            ) -> t2
   end
 
-let composite_pointer t1 t2 : option ctype =
+let composite_pointer t1 t2 : maybe ctype =
   match (t1, t2) with
   | (Pointer q1 t1, Pointer q2 t2) -> if compatible t1 t2
-                                        then option_map (Pointer (combine_qualifiers q1 q2)) (composite t1 t2)
-                                        else None
-  | (_            , _            ) -> None
+                                        then Maybe.map (Pointer (combine_qualifiers q1 q2)) (composite t1 t2)
+                                        else Nothing
+  | (_            , _            ) -> Nothing
   end
 
-let well_typed_conditional P t1 t2 t3 null2 null3 : option typeCategory =
+let well_typed_conditional P t1 t2 t3 null2 null3 : maybe typeCategory =
   if scalar t1 then
     if arithmetic t2 && arithmetic t3 then
-      option_map RValueType (usual_arithmetic P t2 t3)
+      Maybe.map RValueType (usual_arithmetic P t2 t3)
     else
       match composite_pointer t2 t3 with
-      | Some t -> Some (RValueType t)
-      | None   -> if void t2 && void t3 then
-                    Some (RValueType Void)
-                  else if pointer t2 && null3 then
-                    Some (RValueType (combine_qualifiers_left t2 t3))
-                  else if pointer t3 && null2 then
-                    Some (RValueType (combine_qualifiers_right t2 t3))
-                  else if pointer_to_object t2 && pointer_to_void t3 then
-                    Some (RValueType (combine_qualifiers_right t2 t3))
-                  else if pointer_to_object t3 && pointer_to_void t2 then
-                    Some (RValueType (combine_qualifiers_left t2 t3))
-                  else None
+      | Just t  -> Just (RValueType t)
+      | Nothing -> if void t2 && void t3 then
+                     Just (RValueType Void)
+                   else if pointer t2 && null3 then
+                     Just (RValueType (combine_qualifiers_left t2 t3))
+                   else if pointer t3 && null2 then
+                     Just (RValueType (combine_qualifiers_right t2 t3))
+                   else if pointer_to_object t2 && pointer_to_void t3 then
+                     Just (RValueType (combine_qualifiers_right t2 t3))
+                   else if pointer_to_object t3 && pointer_to_void t2 then
+                     Just (RValueType (combine_qualifiers_left t2 t3))
+                   else Nothing
       end
   else
-    None
+    Nothing
 
 let rec well_typed_arguments_aux (assignable : ctype -> expression 'A -> bool) (es : list (expression 'A)) (ps : list (qualifiers * ctype)) : bool =
   match (es, ps) with
@@ -151,243 +144,243 @@ let rec well_typed_arguments_aux (assignable : ctype -> expression 'A -> bool) (
   | (_      , _            ) -> false
   end
 
-let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' 'A) : option typeCategory =
+let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' 'A) : maybe typeCategory =
   let type_of_rvalue       = type_of_rvalue_aux (type_of_expression P S G) in
   let assignable           = assignable_aux type_of_rvalue                 in
   let well_typed_arguments = well_typed_arguments_aux assignable           in
   match e with
   | Var v ->
       match (lookup G v, lookup S v) with
-      | (Some (q, t), None  ) -> Some (LValueType     q t)
-      | (None       , Some p) -> Some (RValueType (type_from_sigma p))
-      | (_          , _     ) -> None
+      | (Just (q, t), Nothing) -> Just (LValueType     q t)
+      | (Nothing    , Just p ) -> Just (RValueType (type_from_sigma p))
+      | (_          , _      ) -> Nothing
       end
   | Binary e1 Comma e2 -> 
      type_of_rvalue e1 >>= fun _  ->
      type_of_rvalue e2 >>= fun t2 ->
-     Some (RValueType t2)
+     Just (RValueType t2)
   | Unary Address e ->
       match type_of_expression P S G e with
-      | Some (LValueType q t)            -> Some (RValueType (Pointer q t))
-      | Some (RValueType (Function t p)) -> Some (RValueType (Pointer no_qualifiers (Function t p)))
-      | _                                -> None
+      | Just (LValueType q t)            -> Just (RValueType (Pointer q t))
+      | Just (RValueType (Function t p)) -> Just (RValueType (Pointer no_qualifiers (Function t p)))
+      | _                                -> Nothing
       end
   | Unary Plus e ->
       type_of_rvalue e >>= fun t ->
       if arithmetic t then
-        option_map RValueType (promotion P t)
+        Maybe.map RValueType (promotion P t)
       else
-        None
+        Nothing
   | Unary Minus e ->
       type_of_rvalue e >>= fun t ->
       if arithmetic t then
-        option_map RValueType (promotion P t)
+        Maybe.map RValueType (promotion P t)
       else
-        None
+        Nothing
   | Unary Bnot e ->
       type_of_rvalue e >>= fun t ->
       if integer t then
-        option_map RValueType (promotion P t)
+        Maybe.map RValueType (promotion P t)
       else
-        None
+        Nothing
   | Unary Indirection e ->
       type_of_rvalue e >>= fun t ->
       match t with
       | Pointer q (Function t p) -> if unqualified q
-                                      then Some (RValueType (Pointer q (Function t p)))
-                                      else None
+                                      then Just (RValueType (Pointer q (Function t p)))
+                                      else Nothing
       | Pointer q t              -> if complete t && object_ t
-                                      then Some (LValueType q t)
-                                      else None
-      | _                        -> None
+                                      then Just (LValueType q t)
+                                      else Nothing
+      | _                        -> Nothing
       end
   | Unary PostfixIncr e ->
       match type_of_expression P S G e with
-      | Some (LValueType q' t') ->
+      | Just (LValueType q' t') ->
           lvalue_conversion t' >>= fun t ->
           if modifiable q' t' && (real t' || pointer t')
-            then Some (RValueType t)
-            else None
-      | _ -> None
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
       end
   | Unary PostfixDecr e ->
       match type_of_expression P S G e with
-      | Some (LValueType q' t') ->
+      | Just (LValueType q' t') ->
           lvalue_conversion t' >>= fun t ->
           if modifiable q' t' && (real t' || pointer t')
-            then Some (RValueType t)
-            else None
-      | _ -> None
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
       end
   | Call e es ->
       match type_of_rvalue e with
-      | Some (Pointer q (Function t ps)) -> if unqualified q && well_typed_arguments es ps
-                                                then Some (RValueType t)
-                                                else None
-      | _                                  -> None
+      | Just (Pointer q (Function t ps)) -> if unqualified q && well_typed_arguments es ps
+                                                then Just (RValueType t)
+                                                else Nothing
+      | _                                  -> Nothing
       end
   | Assign e1 e2 ->
       match type_of_expression P S G e1 with
-      | Some (LValueType q1 t1) ->
+      | Just (LValueType q1 t1) ->
           let t = pointer_conversion t1 in
           if modifiable q1 t1 && assignable t e2
-            then Some (RValueType t)
-            else None
-      | _ -> None
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
       end
   | Binary e1 (Arithmetic (Mul  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Div  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Mod  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Band as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Xor  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Bor  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (usual_arithmetic P t1 t2)
-        else None
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
   | Binary e1 (Arithmetic (Shl  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (promotion P t1)
-        else None
+        then Maybe.map RValueType (promotion P t1)
+        else Nothing
   | Binary e1 (Arithmetic (Shr  as aop)) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_binary_arithmetic t1 aop t2
-        then option_map RValueType (promotion P t1)
-        else None
+        then Maybe.map RValueType (promotion P t1)
+        else Nothing
   | Binary e1 (Arithmetic Add) e2 ->
       type_of_rvalue e1 >>= fun t1 -> 
       type_of_rvalue e2 >>= fun t2 ->
       if pointer_to_complete_object t1 && integer t2 then
-        Some (RValueType t1)
+        Just (RValueType t1)
       else if pointer_to_complete_object t2 && integer t1 then
-        Some (RValueType t2)
+        Just (RValueType t2)
       else if well_typed_binary_arithmetic t1 Add t2 then
-        option_map RValueType (usual_arithmetic P t1 t2)
-      else None
+        Maybe.map RValueType (usual_arithmetic P t1 t2)
+      else Nothing
   | Binary e1 (Arithmetic Sub) e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_complete_objects t1 t2 then
-        Some (RValueType (Basic (Integer P.ptrdiff_t)))
+        Just (RValueType (Basic (Integer P.ptrdiff_t)))
       else if pointer_to_complete_object t1 && integer t2 then
-        Some (RValueType t1)
+        Just (RValueType t1)
       else if well_typed_binary_arithmetic t1 Sub t2 then
-        option_map RValueType (usual_arithmetic P t1 t2)
-      else None
+        Maybe.map RValueType (usual_arithmetic P t1 t2)
+      else Nothing
   | Binary e1 And e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if scalar t1 && scalar t2
-        then Some (RValueType (Basic (Integer (Signed Int_))))
-        else None
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
   | Binary e1 Or  e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if scalar t1 && scalar t2
-        then Some (RValueType (Basic (Integer (Signed Int_))))
-        else None
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
   | Binary e1 Lt e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
+        Just (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
-      else None
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
   | Binary e1 Gt e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
+        Just (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
-      else None
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
   | Binary e1 Le e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
+        Just (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
-      else None
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
   | Binary e1 Ge e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if pointers_to_compatible_objects t1 t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
+        Just (RValueType (Basic (Integer (Signed Int_))))
       else if real t1 && real t2 then
-        Some (RValueType (Basic (Integer (Signed Int_))))
-      else None
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
   | Binary e1 Eq e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (RValueType (Basic (Integer (Signed Int_))))
-        else None
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
   | Binary e1 Ne e2 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
       if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Some (RValueType (Basic (Integer (Signed Int_))))
-        else None
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
   | SizeOf  q t ->
       if wf_lvalue q t && not (is_function t) && not (incomplete t)
-        then Some (RValueType (Basic (Integer P.size_t)))
-        else None
+        then Just (RValueType (Basic (Integer P.size_t)))
+        else Nothing
   | AlignOf q t ->
       if wf_lvalue q t && not (is_function t) && not (incomplete t)
-        then Some (RValueType (Basic (Integer P.size_t)))
-        else None
+        then Just (RValueType (Basic (Integer P.size_t)))
+        else Nothing
   | Cast q Void e ->
       if wf_lvalue q Void then
         match type_of_rvalue e with
-        | Some _ -> Some (RValueType Void)
-        | None   -> None
+        | Just _  -> Just (RValueType Void)
+        | Nothing -> Nothing
         end
       else
-        None
+        Nothing
   | Cast q t e ->
       if wf_lvalue q t then
         match type_of_rvalue e with
-        | Some t' -> if scalar t' && scalar t
-                        then Some (RValueType t)
-                        else None
-        | None     -> None
+        | Just t' -> if scalar t' && scalar t
+                        then Just (RValueType t)
+                        else Nothing
+        | Nothing -> Nothing
         end
       else
-        None
+        Nothing
   | Constant (ConstantInteger ic) ->
       type_of_constant P ic >>= fun it ->
-      Some (RValueType (Basic (Integer it)))
+      Just (RValueType (Basic (Integer it)))
   | Conditional e1 e2 e3 ->
       type_of_rvalue e1 >>= fun t1 ->
       type_of_rvalue e2 >>= fun t2 ->
@@ -395,38 +388,38 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
       well_typed_conditional P t1 t2 t3 (null_pointer_constant e2) (null_pointer_constant e3)
   | CompoundAssign e1 Add e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
-      | (Some (LValueType q t), Some t2) -> 
+      | (Just (LValueType q t), Just t2) -> 
           lvalue_conversion t >>= fun t1 ->
           if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
-            then Some (RValueType t1)
-            else None
-      | (_ , _)  -> None
+            then Just (RValueType t1)
+            else Nothing
+      | (_ , _)  -> Nothing
       end
   | CompoundAssign e1 Sub e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
-      | (Some (LValueType q t), Some t2) -> 
+      | (Just (LValueType q t), Just t2) -> 
           lvalue_conversion t >>= fun t1 ->
           if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
-            then Some (RValueType t1)
-            else None
-      | (_ , _)  -> None
+            then Just (RValueType t1)
+            else Nothing
+      | (_ , _)  -> Nothing
       end
   | CompoundAssign e1 aop e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
-      | (Some (LValueType q t), Some t2) -> 
+      | (Just (LValueType q t), Just t2) -> 
           lvalue_conversion t >>= fun t1 ->
           if modifiable q t && well_typed_binary_arithmetic t1 aop t2
-            then Some (RValueType t1)
-            else None
-      | (_, _)  -> None
+            then Just (RValueType t1)
+            else Nothing
+      | (_, _)  -> Nothing
       end
   end
-and type_of_expression P (S : sigma 'B1 'B2) (G : gamma) (e : expression 'A) : option typeCategory =
+and type_of_expression P (S : sigma 'B1 'B2) (G : gamma) (e : expression 'A) : maybe typeCategory =
   match e with
   | AnnotatedExpression _ e -> type_of_expression' P S G e
   end
 
-let type_of_rvalue P (S : sigma 'B1 'B2) G : expression 'A -> option ctype = 
+let type_of_rvalue P (S : sigma 'B1 'B2) G : expression 'A -> maybe ctype = 
   type_of_rvalue_aux (type_of_expression P S G)
 
 let assignable P (S : sigma 'B1 'B2) G : ctype -> expression 'A -> bool =
@@ -437,8 +430,8 @@ let well_typed_arguments P (S : sigma 'B1 'B2) G : list (expression 'A) -> list 
 
 let typeable P (S : sigma 'B1 'B2) G (e : expression 'A) : bool =
   match type_of_expression P S G e with
-  | Some _ -> true
-  | None   -> false
+  | Just _  -> true
+  | Nothing -> false
   end
 
 let well_formed_binding (b : identifier * (qualifiers * ctype)) =
@@ -454,7 +447,7 @@ let well_typed_block_aux (well_typed_statement : statement 'A1 'A2 -> bool) =
 let well_typed_definition P (S : sigma 'B1 'B2) G (d : identifier * expression 'A) =
   let (v, e) = d in
   match lookup G v with
-  | Some (_, t) -> assignable P S G t e
+  | Just (_, t) -> assignable P S G t e
   | _           -> false
   end
 
@@ -466,29 +459,29 @@ let rec well_typed_statement' P (S : sigma 'B1 'B2) (G : gamma) t_return (s : st
   match s with
   | Label _ s -> well_typed_statement P S G t_return s
   | Case ic s -> match type_of_constant P ic with
-                 | Some _ -> well_typed_statement P S G t_return s 
-                 | None   -> false
+                 | Just _  -> well_typed_statement P S G t_return s 
+                 | Nothing -> false
                  end
   | Default s -> well_typed_statement P S G t_return s
   | Block bs ss -> well_formed_bindings bs && fresh_bindings bs S && well_typed_block bs ss
   | Skip      -> true
   | Expression e -> typeable P S G e
   | If e s1 s2 -> match type_of_rvalue P S G e with
-                  | Some t -> scalar t && well_typed_statement P S G t_return s1
-                                       && well_typed_statement P S G t_return s2
-                  | None   -> false
+                  | Just t  -> scalar t && well_typed_statement P S G t_return s1
+                                        && well_typed_statement P S G t_return s2
+                  | Nothing -> false
                   end
   | Switch e s -> match type_of_rvalue P S G e with
-                  | Some t -> integer t && well_typed_statement P S G t_return s
-                  | None   -> false
+                  | Just t  -> integer t && well_typed_statement P S G t_return s
+                  | Nothing -> false
                   end
   | While e s -> match type_of_rvalue P S G e with
-                 | Some t -> scalar t && well_typed_statement P S G t_return s
-                 | None   -> false
+                 | Just t  -> scalar t && well_typed_statement P S G t_return s
+                 | Nothing -> false
                  end
   | Do s e -> match type_of_rvalue P S G e with
-              | Some t -> scalar t && well_typed_statement P S G t_return s
-              | None   -> false
+              | Just t  -> scalar t && well_typed_statement P S G t_return s
+              | Nothing -> false
               end
   | Goto _    -> true
   | Continue  -> true
@@ -518,7 +511,7 @@ let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
 let well_typed_program P (p:program 'A1 'A2) : bool =
   let (main, S) = p in
   match lookup S main with
-  | Some ((Basic (Integer (Signed Int_)), []), _) -> well_typed_sigma P S
-  | Some _                                       -> false
-  | None                                         -> false
+  | Just ((Basic (Integer (Signed Int_)), []), _) -> well_typed_sigma P S
+  | Just _                                        -> false
+  | Nothing                                       -> false
   end

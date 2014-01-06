@@ -1,3 +1,5 @@
+open Lem_pervasives
+
 open Global
 open AilSyntax
 open AilTypes
@@ -88,7 +90,7 @@ let lt_precedence p1 p2 =
 
 
 
-let pp_id id = !^ (Symbol.to_string_pretty id)
+let pp_id id = !^ (Pp_symbol.to_string_pretty id)
 
 
 let pp_storageDuration = function
@@ -105,9 +107,11 @@ let pp_cond switch str =
     (^^) P.empty
 
 let pp_qualifiers q =
-  pp_cond q.const    "const"    -|
-  pp_cond q.restrict "restrict" -|
-  pp_cond q.volatile "volatile"
+  fun z ->
+    pp_cond q.const    "const"
+      (pp_cond q.restrict "restrict"
+         (pp_cond q.volatile "volatile" z)
+      )
 (*
   pp_cond q.atomic_q "atomic"
 *)
@@ -141,7 +145,7 @@ let pp_basicType = function
 
 
 
-let pp_integer = P.string -| Num.string_of_num
+let pp_integer i = P.string (Big_int.string_of_big_int i)
 
 let rec pp_ctype t =
 (*  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
@@ -225,11 +229,11 @@ let pp_integerSuffix =
     | L   -> "L"
     | LL  -> "LL"
   in
-  P.string -| to_string
+  fun z -> P.string (to_string z)
 
 (* TODO: should reverse the decoding of n *)
 let pp_integerConstant (n, suff_opt) =
-  !^ (Num.string_of_num n) ^^ (P.optional pp_integerSuffix suff_opt)
+  !^ (Big_int.string_of_big_int n) ^^ (P.optional pp_integerSuffix suff_opt)
 
 
 (*
@@ -273,9 +277,9 @@ let pp_string_literal (pref_opt, str) =
 let pp_expression a_expr =
   let rec pp p (AnnotatedExpression (_, expr)) =
     let p' = precedence expr in
-    let pp = P.group -| pp p' in
-    (if lt_precedence p' p then fun z -> z else P.parens) $
-      match expr with
+    let pp z = P.group (pp p' z) in
+    (if lt_precedence p' p then fun z -> z else P.parens)
+      (match expr with
 (*
         | STRING_LITERAL lit ->
             pp_string_literal lit
@@ -335,6 +339,7 @@ let pp_expression a_expr =
         | PRINTF (e1, es) ->
             !^ "printf" ^^ P.parens (pp e1 ^^ P.comma ^^^ comma_list pp es)
 *)
+      )
   in
   pp None a_expr
 
@@ -431,6 +436,6 @@ let pp_function file (id, (args, s)) =
 
 let pp_program (startup, defs) =
   List.fold_left (fun acc (id, ((return_ty, params), body)) ->
-    pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs $ pp_ctype ty) ^^^ pp_id id) params) ^^^
+    pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params) ^^^
     pp_statement body ^^ P.break 1 ^^ acc
   ) P.empty defs

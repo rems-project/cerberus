@@ -1,7 +1,11 @@
 type t = Ocaml.Pprint_.t
 
+
+
+(*
 module Unicode = struct
   val null : t
+  declare ocaml target_rep function null = `Pprint.null`
   let inline {ocaml} null = Ocaml.Pprint_.Unicode.null
   val le : t
   let inline {ocaml} le = Ocaml.Pprint_.Unicode.le
@@ -120,3 +124,4 @@ let inline {ocaml} align = Ocaml.Pprint_.align
 
 val dot: t
 let inline {ocaml} dot = Ocaml.Pprint_.dot
+*)

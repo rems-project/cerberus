@@ -1,7 +1,10 @@
 open Global
-open Cparser.Cabs0
+open Cabs0
 
 open Colour
+
+let ($) f x = f x
+let (-|) f g x = f (g x)
 
 module P = PPrint
 
@@ -412,7 +415,7 @@ and pp_statement = function
  | BLOCK (ss, _) ->
      let block = P.separate_map (P.break 1) pp_statement ss in
      P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
- | If (e, s1, s2_opt, _) ->
+ | If0 (e, s1, s2_opt, _) ->
      pp_keyword "if" ^^^ P.parens (pp_expression None e) ^^^ pp_statement s1 ^^
      P.optional (fun z -> P.space ^^ pp_keyword "else" ^^^ pp_statement z) s2_opt
  | WHILE (e, s, _) ->

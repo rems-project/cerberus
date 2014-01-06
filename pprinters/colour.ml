@@ -34,5 +34,5 @@ let int_fg = function
 
 
 let ansi_format f s =
-  let g f = String.concat ";" (List.map (string_of_int -| int_fg) f) ^ "m" in
+  let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
   "\x1b[" ^ g f ^ s ^ "\x1b[0m" (* TODO: optimize, someday *)

@@ -1,7 +1,5 @@
-open Global
+open import Pervasives Global Range AilTypes
 
-open Range
-open AilTypes
 
 type binaryMode =
   | Two'sComplement
@@ -20,119 +18,121 @@ Suppose precision P (long long int) < precision P (long int). Then ltRank P
 int) (long long int). So P (long int) ≤ precision P (long long int).
 *)
 
-let min_precision ibt : int =
-  Int.int (*TODO remove conversion or switch to nat in Coq development *) match ibt with
+val min_precision: integerBaseType -> nat
+let min_precision = function
   | Ichar    -> 8
   | Short    -> 16
   | Int_     -> 16
   | Long     -> 32
   | LongLong -> 64
-  end
+end
 
 type implementation = <|
-  binary_mode : binaryMode;
-  signed : integerType -> bool;
-  precision : integerType -> int;
-  size_t : integerType;
-  ptrdiff_t : integerType;
+  binary_mode: binaryMode;
+  signed:      integerType -> bool;
+  precision:   integerType -> nat;
+  size_t:      integerType;
+  ptrdiff_t:   integerType;
 |>
 
+val make_implementation: binaryMode -> (integerType -> bool) -> (integerType -> nat) -> integerType -> integerType -> implementation
 let make_implementation binary_mode signed precision size_t ptrdiff_t = <|
-  binary_mode = binary_mode;
-  signed = signed;
-  precision = precision;
-  size_t = size_t;
-  ptrdiff_t = ptrdiff_t
+  binary_mode= binary_mode;
+  signed=      signed;
+  precision=   precision;
+  size_t=      size_t;
+  ptrdiff_t=   ptrdiff_t
 |>
 
+val integer_range: implementation -> integerType -> range
 let integer_range P it =
   let prec = P.precision it in
   if P.signed it then
-    let prec_minus_one = Int.(-) prec (Int.int 1) in
+    let prec_minus_one = prec - 1 in
     match P.binary_mode with
-    | Two'sComplement   -> make_range (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1)))
-                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
-    | One'sComplement   -> make_range (Int.(+) (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1))) (Int.int 1))
-                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
-    | SignPlusMagnitude -> make_range (Int.(+) (Int.( ** )(Int.neg (Int.int 2)) (Int.(-) prec (Int.int 1))) (Int.int 1))
-                                      (Int.(-) (Int.( ** ) (Int.int 2) prec_minus_one) (Int.int 1))
+    | Two'sComplement   -> make_range ((~2) ** (prec - 1))
+                                      ((2 ** prec_minus_one) - 1)
+    | One'sComplement   -> make_range (((~2) ** (prec - 1)) + 1)
+                                      ((2 ** prec_minus_one) - 1)
+    | SignPlusMagnitude -> make_range (((~2) ** (prec - 1)) + 1)
+                                      ((2 ** prec_minus_one) - 1)
     end
   else
-    make_range (Int.int 0) (Int.(-) (Int.( ** )(Int.int 2) prec) (Int.int 1))
+    make_range 0 ((2 ** prec) - 1)
 
+val min_range_unsigned: integerBaseType -> range
 let min_range_unsigned ibt =
   let prec = min_precision ibt in
-  make_range (Int.int 0) (Int.(-) (Int.( ** )(Int.int 2) prec) (Int.int 1))
+  make_range 0 ((2 ** prec) - 1)
 
+val min_range_signed: integerBaseType -> range
 let min_range_signed ibt =
-  let prec = Int.(-) (min_precision ibt) (Int.int 1) in
-  make_range (Int.(+) (Int.neg (Int.( ** ) (Int.int 2) (Int.(-) prec (Int.int 1)))) (Int.int 1))
-             (Int.(-) (Int.( ** ) (Int.int 2) (Int.(-) prec (Int.int 1))) (Int.int 1))
+  let prec = (min_precision ibt) - 1 in
+  make_range ((~(2 ** (prec - 1))) + 1)
+             ((2 ** (prec - 1)) - 1)
 
-let min_integer_range it =
-  match it with
-  | Char         -> make_range (Int.int 0) (Int.(-) (Int.( ** ) (Int.int 2) (Int.(-) (Int.(-) (min_precision Ichar) (Int.int 1)) (Int.int 1))) (Int.int 1))
-  | Bool         -> make_range (Int.int 0) (Int.int 1)
+val min_integer_range: integerType -> range
+let min_integer_range = function
+  | Char         -> make_range 0 ((2 ** ((min_precision Ichar)- 1)) - 1)
+  | Bool         -> make_range 0 1
   | Unsigned ibt -> min_range_unsigned ibt
   | Signed   ibt -> min_range_signed   ibt
-  end
+end
 
-let min_implementation_signed_char : implementation =
+val min_implementation_signed_char: implementation
+let min_implementation_signed_char =
   make_implementation
     SignPlusMagnitude
-    ( fun it ->
-        match it with
+    ( function
         | Char       -> true
 	| Signed   _ -> true
         | Bool       -> false
 	| Unsigned _ -> false
-        end
+      end
     )
-    ( fun it ->
-        Int.int match it with
-        | Char -> 7
-        | Bool -> 1
-        | Signed   Ichar -> 7
-        | Unsigned Ichar -> 8
-        | Signed   Short -> 15
-        | Unsigned Short -> 16
+    ( function
+        | Char              -> 7
+        | Bool              -> 1
+        | Signed   Ichar    -> 7
+        | Unsigned Ichar    -> 8
+        | Signed   Short    -> 15
+        | Unsigned Short    -> 16
         | Signed   Int_     -> 15
         | Unsigned Int_     -> 16
         | Signed   Long     -> 31
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
-        end
+      end
     )
     (Unsigned Long)
     (Signed   Long)
 
-let min_implementation_unsigned_char : implementation =
+val min_implementation_unsigned_char: implementation
+let min_implementation_unsigned_char =
   make_implementation
     SignPlusMagnitude
-    ( fun it ->
-        match it with
+    ( function
         | Signed   _ -> true
         | Char       -> false
 	| Bool       -> false
 	| Unsigned _ -> false
-        end
+      end
     )
-    ( fun it ->
-        Int.int match it with
-        | Char -> 8
-        | Bool -> 1
-        | Signed   Ichar -> 7
-        | Unsigned Ichar -> 8
-        | Signed   Short -> 15
-        | Unsigned Short -> 16
+    ( function
+        | Char              -> 8
+        | Bool              -> 1
+        | Signed   Ichar    -> 7
+        | Unsigned Ichar    -> 8
+        | Signed   Short    -> 15
+        | Unsigned Short    -> 16
         | Signed   Int_     -> 15
         | Unsigned Int_     -> 16
         | Signed   Long     -> 31
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
-        end
+      end
     )
     (Unsigned Long)
     (Signed   Long)

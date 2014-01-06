@@ -1,23 +1,34 @@
-type range = int * int
+open import Pervasives
 
+type range = integer * integer
+
+val min: range -> integer
 let min (r : range) = fst r
+
+val max: range -> integer
 let max (r : range) = snd r
 
+
+val make_range: integer -> integer -> range
 let make_range x y : range = (x, y)
 
-let no_overlap (r1 : range) (r2 : range) : bool =
-  let is_below = Int.(<=) (max r1) (min r2) in
-  let is_above = Int.(<=) (max r2) (min r1) in
-  is_below || is_above
 
-let sub (r1 : range) (r2 : range) : bool =
-  let is_le_max = Int.(<=) (max r1) (max r2) in
-  let is_ge_min = Int.(<=) (min r2) (min r1) in
-  is_le_max && is_ge_min
+val no_overlap: range -> range -> bool
+let no_overlap r1 r2 =
+  (max r1) <= (min r2) || (max r2) <= min r1
 
-let mem w r : bool =
-  let is_le_max = Int.(<=) w ( max r) in
-  let is_ge_min = Int.(<=) (min r) w in
-  is_le_max && is_ge_min
 
-let mem_nat n r : bool = mem (Int.int n) r
+val sub: range -> range -> bool
+let sub r1 r2 =
+  (max r1) <= (max r2) && (min r2) <= (min r1)
+
+
+val mem: integer -> range -> bool
+let mem w r =
+  (min r) <= w && w <= (max r)
+
+
+(*
+let mem_nat n r =
+  mem n r
+*)

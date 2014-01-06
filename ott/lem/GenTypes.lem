@@ -1,7 +1,4 @@
-open Common
-
-open AilTypes
-open AilSyntax
+open import Pervasives Common AilTypes AilSyntax
 
 type genIntegerType [name="git*"] =
  | Concrete of integerType
@@ -33,7 +30,7 @@ let eq_genBasicType gbt1 gbt2 : bool =
 type genType [name="gt*"] =
  | GenVoid
  | GenBasic of genBasicType
- | GenArray of ctype * Int.int
+ | GenArray of ctype * integer
  | GenFunction of ctype * list (qualifiers * ctype)
  | GenPointer of qualifiers * ctype
 

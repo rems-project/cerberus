@@ -1,5 +1,6 @@
 (* Effects for Translation: state + exception *)
-open Global
+open import Pervasives Global
+import Boot Symbol Undefined
 
 type state = <|
   symbol_set: Symbol.counter;               (* counter for Core's symbolic names (all of them) *)
@@ -16,7 +17,7 @@ let return x = fun st ->
   Undefined.return (x, st)
 
 val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let (>>=) m f = fun st ->
+let inline (>>=) m f = fun st ->
   match m st with
     | Undefined.Defined (a, st') ->
         f a st'
@@ -27,7 +28,7 @@ let (>>=) m f = fun st ->
   end
 
 val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
-let (>>) m f = m >>= fun _ -> f
+let inline (>>) m f = m >>= fun _ -> f
 
 
 module E = struct
@@ -45,18 +46,18 @@ module E = struct
      | x::xs -> foldlM f x xs
   end
   
-  let sequence ms = List.fold_right (fun m acc ->
+  let sequence ms = foldr (fun m acc ->
     m   >>= fun x  ->
     acc >>= fun xs ->
-    return (x::xs)) ms (return [])
+    return (x::xs)) (return []) ms
   val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
   let mapM f xs = sequence (List.map f xs)
   
-  let sequence_ ms = List.fold_right (>>) ms (return ())
+  let sequence_ ms = foldr (>>) (return ()) ms
   val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM_ f _as = sequence_ (List.map f _as)
   
-  val replicateM: forall 'a. num -> t 'a -> t (list 'a)
+  val replicateM: forall 'a. nat -> t 'a -> t (list 'a)
   let replicateM n x = sequence (replicate n x)
   (* END: reinventing the wheel *)
   
@@ -72,12 +73,12 @@ module E = struct
   (* returns a fresh Core symbolic name. *)
   val fresh_symbol: t Symbol.t
   let fresh_symbol = fun (<| symbol_set= x |> as st) ->
-    Undefined.return ((x, None), <| st with symbol_set= x+1 |>)
+    Undefined.return ((Symbol.Symbol x Nothing), <| st with symbol_set= x+1 |>)
   
   (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
   val fresh_named_symbol: string -> t Symbol.t
   let fresh_named_symbol name = fun (<| symbol_set= x |> as st) ->
-    Undefined.return ((x, Some $ name ^ "_" ^ string_of_num x), <| st with symbol_set= x+1 |>)
+    Undefined.return ((Symbol.Symbol x (Just $ "TODO[newLem string]" (* name ^ "_" ^ string_of_nat x *))), <| st with symbol_set= x+1 |>)
   
   (* register C objects from block scope. *)
   val push_block_objects: list Symbol.t -> t unit
@@ -96,5 +97,5 @@ module E = struct
   (* returns the list of all the C objects in scope. *)
   val get_visible_objects: t (list Symbol.t)
   let get_visible_objects = fun st ->
-    Undefined.return (List.fold_left (@) [] st.visible_objects, st)
+    Undefined.return (foldl (++) [] st.visible_objects, st)
 end

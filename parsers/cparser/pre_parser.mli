@@ -77,7 +77,7 @@ type token =
   | DEFAULT of (Cabs0.cabsloc)
   | DEC of (Cabs0.cabsloc)
   | CONTINUE of (Cabs0.cabsloc)
-  | CONSTANT of (Cabs0.constant * Cabs0.cabsloc)
+  | CONSTANT of (Cabs0.constant0 * Cabs0.cabsloc)
   | CONST of (Cabs0.cabsloc)
   | COMMA of (Cabs0.cabsloc)
   | COLON of (Cabs0.cabsloc)

@@ -1,3 +1,5 @@
+open import Pervasives
+
 type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
  | Ichar
  | Short
@@ -64,7 +66,7 @@ let eq_basicType bt1 bt2 =
 type ctype [name = "t*"] =  (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)
- | Array of ctype * int (*r array types (\S6.2.5\#20) *)
+ | Array of ctype * integer (*r array types (\S6.2.5\#20) *)
  | Function of ctype * list (qualifiers * ctype) (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
  | Atomic of ctype

@@ -1,31 +1,11 @@
-val option_map : forall 'A 'B. ('A -> 'B) -> option 'A -> option 'B
-let option_map = Option.fmap
-(*let inline {coq} option_map = Coq.option_map*)
+open import Pervasives
 
-val option_bind : forall 'A 'B. option 'A -> ('A -> option 'B) -> option 'B
-let option_bind = 
-  fun o f ->
-    match o with
-    | Some a -> f a
-    | None   -> None
-    end
-
-module OptionMonad = struct
-  type t 'a = option 'a
-  module Operators = struct
-    let return = Some
-    let (>>=) = option_bind
-    let (>>) m f = option_bind m (fun _ -> f)
-    let (<$>) = option_map
-  end
-end
-
-val option_bool : forall 'A. option 'A -> ('A -> bool) -> bool
+val option_bool : forall 'A. maybe 'A -> ('A -> bool) -> bool
 let option_bool =
   fun o f ->
     match o with
-    | Some a -> f a
-    | None   -> false
+    | Just a  -> f a
+    | Nothing -> false
     end
 
 let rec eq_list (eq_A : 'A -> 'A -> bool) l1 l2 : bool =
@@ -47,11 +27,11 @@ let eq_pair (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) : 'A * 'B -> 'A 
     let (a2, b2) = p2 in
     eq_A a1 a2 && eq_B b1 b2
 
-let eq_option (eq_A : 'A -> 'A -> bool) : option 'A -> option 'A -> bool =
+let eq_option (eq_A : 'A -> 'A -> bool) : maybe 'A -> maybe 'A -> bool =
   fun o1 o2 -> 
     match (o1, o2) with
-    | (Some a1, Some a2) -> eq_A a1 a2
-    | (None   , None   ) -> true
+    | (Just a1, Just a2) -> eq_A a1 a2
+    | (Nothing, Nothing) -> true
     | (_      , _      ) -> false
     end
  

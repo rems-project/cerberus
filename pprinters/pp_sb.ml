@@ -3,6 +3,10 @@ open Sb
 
 module P = PPrint
 
+let ($) f x = f x
+let (-|) f g x = f (g x)
+
+
 let (!^ ) = P.(!^)
 let (^^)  = P.(^^)
 
@@ -34,25 +38,25 @@ let string_of_trace_action tact =
   let f o =
     "[\\text{" ^ String.concat "." (List.map Pp_run.string_of_sym $ fst o) ^ "}]" in
   
-  let pp_ctype ty        = escape_underscores $ Boot.to_plain_string (Pp_core.pp_ctype ty) in
-  let pp_memory_order mo = escape_underscores $ Boot.to_plain_string (Pp_core.pp_memory_order mo) in
+  let pp_ctype ty        = escape_underscores $ Boot_ocaml.to_plain_string (Pp_core.pp_ctype ty) in
+  let pp_memory_order mo = escape_underscores $ Boot_ocaml.to_plain_string (Pp_core.pp_memory_order mo) in
   
   match tact with
-    | Core_run.Tcreate (ty, o, tid) ->
+    | Core_run_effect.Tcreate (ty, o, tid) ->
         f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ pp_ctype ty ^ "}}"
-    | Core_run.Talloc (n, o, tid) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Num.string_of_num n ^ "}}"
-    | Core_run.Tkill (o, tid) ->
+    | Core_run_effect.Talloc (n, o, tid) ->
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Big_int.string_of_big_int n ^ "}}"
+    | Core_run_effect.Tkill (o, tid) ->
         "{\\color{red}\\mathbf{K}} " ^ f o
-    | Core_run.Tstore (ty, o, n, mo, tid) ->
+    | Core_run_effect.Tstore (ty, o, n, mo, tid) ->
         "{\\color{red}\\mathbf{S}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^ f o ^
           " := " ^ Pp_run.string_of_mem_value n
-    | Core_run.Tload (ty, o, v, mo, tid) ->
+    | Core_run_effect.Tload (ty, o, v, mo, tid) ->
         "{\\color{red}\\mathbf{L}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^
           f o ^ " = " ^ Pp_run.string_of_mem_value v
-    | Core_run.Trmw (ty ,o, e, d, mo, tid) ->
+    | Core_run_effect.Trmw (ty ,o, e, d, mo, tid) ->
         "{\\color{red}\\mathbf{RMW}_\\text{" ^ pp_ctype ty ^
           ", " ^ pp_memory_order mo ^ "}} " ^
           f o ^ " = " ^ Pp_run.string_of_mem_value e ^
@@ -66,13 +70,13 @@ let string_of_trace_action tact =
 let pp n g =
   let threads =
     List.fold_left (fun acc (aid, act) ->
-      let tid = Core_run.tid_of act in
+      let tid = Core_run_effect.tid_of0 act in
       Pmap.add tid ((aid, act) :: if Pmap.mem tid acc then Pmap.find tid acc else []) acc
-    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings g.actions in
+    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings_list g.actions0 in
   
   let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
-      !^ (string_of_int i) ^^^ !^ "->" ^^^ !^ (string_of_int i') ^^^
+      !^ (Big_int.string_of_big_int i) ^^^ !^ "->" ^^^ !^ (Big_int.string_of_big_int i') ^^^
         P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel ^^ if List.length rel > 0 then P.semi else P.empty in
   
   !^ ("digraph G" ^ string_of_int n) ^^ P.braces
@@ -81,14 +85,14 @@ let pp n g =
         (!^ "label" ^^ P.equals ^^ P.dquotes !^ ("\\mathbf{thread}_{" ^ (Pp_run.string_of_thread_id tid) ^ "}") ^^ P.semi ^^
         !^ "style=filled;color=lightgrey; node [shape=box,style=filled,color=white];" ^^
         P.separate_map P.semi (fun (aid, act) -> 
-          !^ (string_of_int aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (string_of_int aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
+          !^ (Big_int.string_of_big_int aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (Big_int.string_of_big_int aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
         ) acts)
-     ) (Pmap.bindings threads) ^^ P.semi ^^ P.break 1 ^^
+     ) (Pmap.bindings_list threads) ^^ P.semi ^^ P.break 1 ^^
      
-     pp_relation g.sb  "black"       ^^ P.break 1 ^^
-     pp_relation g.asw "DeepPink4"   ^^ P.break 1 ^^
-     pp_relation g.rf  "red"         ^^ P.break 1 ^^
-     pp_relation g.mo  "blue"        ^^ P.break 1 ^^
-     pp_relation g.sc  "orange"      ^^ P.break 1 ^^
+     pp_relation g.sb1  "black"       ^^ P.break 1 ^^
+     pp_relation g.asw1 "DeepPink4"   ^^ P.break 1 ^^
+     pp_relation g.rf1  "red"         ^^ P.break 1 ^^
+     pp_relation g.mo1  "blue"        ^^ P.break 1 ^^
+     pp_relation g.sc1  "orange"      ^^ P.break 1 ^^
      pp_relation g.hb  "ForestGreen"
     )

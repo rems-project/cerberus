@@ -6,16 +6,18 @@ Require Import List.
 
 
 Require Import List.
+Require Import Int31.
 Require Import Syntax.
-Require Import NArith.
 Require Import Tuples.
 Require Import Alphabet.
 Require Grammar.
 Require Automaton.
 
+Unset Elimination Schemes.
+
 Module Import Gram <: Grammar.T.
 
-Inductive terminal' :=
+Inductive terminal' : Set :=
   | ADD_ASSIGN_t
   | ALIGNOF_t
   | AND_t
@@ -119,16 +121,15 @@ Inductive terminal' :=
   | XOR_ASSIGN_t.
 Definition terminal := terminal'.
 
-Open Scope N_scope.
 Program Instance terminalNum : Numbered terminal :=
-  { injN := fun x => match x return _ with | ADD_ASSIGN_t => 0 | ALIGNOF_t => 1 | AND_t => 2 | ANDAND_t => 3 | AND_ASSIGN_t => 4 | ATOMIC_t => 5 | AUTO_t => 6 | BANG_t => 7 | BAR_t => 8 | BARBAR_t => 9 | BARES_t => 10 | BOOL_t => 11 | BREAK_t => 12 | BUILTIN_VA_ARG_t => 13 | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => 14 | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => 15 | C11_ATOMIC_EXCHANGE_t => 16 | C11_ATOMIC_FETCH_KEY_t => 17 | C11_ATOMIC_INIT_t => 18 | C11_ATOMIC_LOAD_t => 19 | C11_ATOMIC_STORE_t => 20 | CASE_t => 21 | CHAR_t => 22 | COLON_t => 23 | COMMA_t => 24 | CONST_t => 25 | CONSTANT_t => 26 | CONTINUE_t => 27 | DEC_t => 28 | DEFAULT_t => 29 | DIV_ASSIGN_t => 30 | DO_t => 31 | DOT_t => 32 | DOUBLE_t => 33 | ELLIPSIS_t => 34 | ELSE_t => 35 | ENUM_t => 36 | EOF_t => 37 | EQ_t => 38 | EQEQ_t => 39 | EXTERN_t => 40 | FLOAT_t => 41 | FOR_t => 42 | GEQ_t => 43 | GOTO_t => 44 | GT_t => 45 | HAT_t => 46 | IF_t => 47 | INC_t => 48 | INLINE_t => 49 | INT_t => 50 | LBRACE_t => 51 | LBRACES_t => 52 | LBRACK_t => 53 | LEFT_t => 54 | LEFT_ASSIGN_t => 55 | LEQ_t => 56 | LONG_t => 57 | LPAREN_t => 58 | LT_t => 59 | MINUS_t => 60 | MOD_ASSIGN_t => 61 | MUL_ASSIGN_t => 62 | NEQ_t => 63 | OFFSETOF_t => 64 | OR_ASSIGN_t => 65 | OTHER_NAME_t => 66 | PERCENT_t => 67 | PLUS_t => 68 | PTR_t => 69 | QUESTION_t => 70 | RBRACE_t => 71 | RBRACES_t => 72 | RBRACK_t => 73 | REGISTER_t => 74 | RESTRICT_t => 75 | RETURN_t => 76 | RIGHT_t => 77 | RIGHT_ASSIGN_t => 78 | RPAREN_t => 79 | SEMICOLON_t => 80 | SHORT_t => 81 | SIGNED_t => 82 | SIZEOF_t => 83 | SLASH_t => 84 | STAR_t => 85 | STATIC_t => 86 | STRUCT_t => 87 | SUB_ASSIGN_t => 88 | SWITCH_t => 89 | THREAD_LOCAL_t => 90 | TILDE_t => 91 | TYPEDEF_t => 92 | TYPEDEF_NAME_t => 93 | UNION_t => 94 | UNSIGNED_t => 95 | VAR_NAME_t => 96 | VOID_t => 97 | VOLATILE_t => 98 | WHILE_t => 99 | XOR_ASSIGN_t => 100 end;
-    surjN := fun n => match n return _ with | 0 => ADD_ASSIGN_t | 1 => ALIGNOF_t | 2 => AND_t | 3 => ANDAND_t | 4 => AND_ASSIGN_t | 5 => ATOMIC_t | 6 => AUTO_t | 7 => BANG_t | 8 => BAR_t | 9 => BARBAR_t | 10 => BARES_t | 11 => BOOL_t | 12 => BREAK_t | 13 => BUILTIN_VA_ARG_t | 14 => C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t | 15 => C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t | 16 => C11_ATOMIC_EXCHANGE_t | 17 => C11_ATOMIC_FETCH_KEY_t | 18 => C11_ATOMIC_INIT_t | 19 => C11_ATOMIC_LOAD_t | 20 => C11_ATOMIC_STORE_t | 21 => CASE_t | 22 => CHAR_t | 23 => COLON_t | 24 => COMMA_t | 25 => CONST_t | 26 => CONSTANT_t | 27 => CONTINUE_t | 28 => DEC_t | 29 => DEFAULT_t | 30 => DIV_ASSIGN_t | 31 => DO_t | 32 => DOT_t | 33 => DOUBLE_t | 34 => ELLIPSIS_t | 35 => ELSE_t | 36 => ENUM_t | 37 => EOF_t | 38 => EQ_t | 39 => EQEQ_t | 40 => EXTERN_t | 41 => FLOAT_t | 42 => FOR_t | 43 => GEQ_t | 44 => GOTO_t | 45 => GT_t | 46 => HAT_t | 47 => IF_t | 48 => INC_t | 49 => INLINE_t | 50 => INT_t | 51 => LBRACE_t | 52 => LBRACES_t | 53 => LBRACK_t | 54 => LEFT_t | 55 => LEFT_ASSIGN_t | 56 => LEQ_t | 57 => LONG_t | 58 => LPAREN_t | 59 => LT_t | 60 => MINUS_t | 61 => MOD_ASSIGN_t | 62 => MUL_ASSIGN_t | 63 => NEQ_t | 64 => OFFSETOF_t | 65 => OR_ASSIGN_t | 66 => OTHER_NAME_t | 67 => PERCENT_t | 68 => PLUS_t | 69 => PTR_t | 70 => QUESTION_t | 71 => RBRACE_t | 72 => RBRACES_t | 73 => RBRACK_t | 74 => REGISTER_t | 75 => RESTRICT_t | 76 => RETURN_t | 77 => RIGHT_t | 78 => RIGHT_ASSIGN_t | 79 => RPAREN_t | 80 => SEMICOLON_t | 81 => SHORT_t | 82 => SIGNED_t | 83 => SIZEOF_t | 84 => SLASH_t | 85 => STAR_t | 86 => STATIC_t | 87 => STRUCT_t | 88 => SUB_ASSIGN_t | 89 => SWITCH_t | 90 => THREAD_LOCAL_t | 91 => TILDE_t | 92 => TYPEDEF_t | 93 => TYPEDEF_NAME_t | 94 => UNION_t | 95 => UNSIGNED_t | 96 => VAR_NAME_t | 97 => VOID_t | 98 => VOLATILE_t | 99 => WHILE_t | 100 => XOR_ASSIGN_t | _ => ADD_ASSIGN_t end;
-  injN_bound := 101 }.
+  { inj := fun x => match x return _ with | ADD_ASSIGN_t => Int31.On | ALIGNOF_t => Int31.In | AND_t => (twice Int31.In) | ANDAND_t => (twice_plus_one Int31.In) | AND_ASSIGN_t => (twice (twice Int31.In)) | ATOMIC_t => (twice_plus_one (twice Int31.In)) | AUTO_t => (twice (twice_plus_one Int31.In)) | BANG_t => (twice_plus_one (twice_plus_one Int31.In)) | BAR_t => (twice (twice (twice Int31.In))) | BARBAR_t => (twice_plus_one (twice (twice Int31.In))) | BARES_t => (twice (twice_plus_one (twice Int31.In))) | BOOL_t => (twice_plus_one (twice_plus_one (twice Int31.In))) | BREAK_t => (twice (twice (twice_plus_one Int31.In))) | BUILTIN_VA_ARG_t => (twice_plus_one (twice (twice_plus_one Int31.In))) | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => (twice (twice_plus_one (twice_plus_one Int31.In))) | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))) | C11_ATOMIC_EXCHANGE_t => (twice (twice (twice (twice Int31.In)))) | C11_ATOMIC_FETCH_KEY_t => (twice_plus_one (twice (twice (twice Int31.In)))) | C11_ATOMIC_INIT_t => (twice (twice_plus_one (twice (twice Int31.In)))) | C11_ATOMIC_LOAD_t => (twice_plus_one (twice_plus_one (twice (twice Int31.In)))) | C11_ATOMIC_STORE_t => (twice (twice (twice_plus_one (twice Int31.In)))) | CASE_t => (twice_plus_one (twice (twice_plus_one (twice Int31.In)))) | CHAR_t => (twice (twice_plus_one (twice_plus_one (twice Int31.In)))) | COLON_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))) | COMMA_t => (twice (twice (twice (twice_plus_one Int31.In)))) | CONST_t => (twice_plus_one (twice (twice (twice_plus_one Int31.In)))) | CONSTANT_t => (twice (twice_plus_one (twice (twice_plus_one Int31.In)))) | CONTINUE_t => (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))) | DEC_t => (twice (twice (twice_plus_one (twice_plus_one Int31.In)))) | DEFAULT_t => (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))) | DIV_ASSIGN_t => (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | DO_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | DOT_t => (twice (twice (twice (twice (twice Int31.In))))) | DOUBLE_t => (twice_plus_one (twice (twice (twice (twice Int31.In))))) | ELLIPSIS_t => (twice (twice_plus_one (twice (twice (twice Int31.In))))) | ELSE_t => (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))) | ENUM_t => (twice (twice (twice_plus_one (twice (twice Int31.In))))) | EOF_t => (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))) | EQ_t => (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | EQEQ_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | EXTERN_t => (twice (twice (twice (twice_plus_one (twice Int31.In))))) | FLOAT_t => (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))) | FOR_t => (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | GEQ_t => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | GOTO_t => (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | GT_t => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | HAT_t => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | IF_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | INC_t => (twice (twice (twice (twice (twice_plus_one Int31.In))))) | INLINE_t => (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))) | INT_t => (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | LBRACE_t => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | LBRACES_t => (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | LBRACK_t => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | LEFT_t => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | LEFT_ASSIGN_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | LEQ_t => (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | LONG_t => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | LPAREN_t => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | LT_t => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | MINUS_t => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | MOD_ASSIGN_t => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | MUL_ASSIGN_t => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | NEQ_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | OFFSETOF_t => (twice (twice (twice (twice (twice (twice Int31.In)))))) | OR_ASSIGN_t => (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))) | OTHER_NAME_t => (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | PERCENT_t => (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | PLUS_t => (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | PTR_t => (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | QUESTION_t => (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | RBRACE_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | RBRACES_t => (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | RBRACK_t => (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | REGISTER_t => (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | RESTRICT_t => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | RETURN_t => (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | RIGHT_t => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | RIGHT_ASSIGN_t => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | RPAREN_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | SEMICOLON_t => (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | SHORT_t => (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | SIGNED_t => (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | SIZEOF_t => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | SLASH_t => (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | STAR_t => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | STATIC_t => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | STRUCT_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | SUB_ASSIGN_t => (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | SWITCH_t => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | THREAD_LOCAL_t => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | TILDE_t => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | TYPEDEF_t => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | TYPEDEF_NAME_t => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | UNION_t => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | UNSIGNED_t => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | VAR_NAME_t => (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | VOID_t => (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | VOLATILE_t => (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | WHILE_t => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | XOR_ASSIGN_t => (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) end;
+    surj := (fun n => match n return _ with | 0 => ADD_ASSIGN_t | 1 => ALIGNOF_t | 2 => AND_t | 3 => ANDAND_t | 4 => AND_ASSIGN_t | 5 => ATOMIC_t | 6 => AUTO_t | 7 => BANG_t | 8 => BAR_t | 9 => BARBAR_t | 10 => BARES_t | 11 => BOOL_t | 12 => BREAK_t | 13 => BUILTIN_VA_ARG_t | 14 => C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t | 15 => C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t | 16 => C11_ATOMIC_EXCHANGE_t | 17 => C11_ATOMIC_FETCH_KEY_t | 18 => C11_ATOMIC_INIT_t | 19 => C11_ATOMIC_LOAD_t | 20 => C11_ATOMIC_STORE_t | 21 => CASE_t | 22 => CHAR_t | 23 => COLON_t | 24 => COMMA_t | 25 => CONST_t | 26 => CONSTANT_t | 27 => CONTINUE_t | 28 => DEC_t | 29 => DEFAULT_t | 30 => DIV_ASSIGN_t | 31 => DO_t | 32 => DOT_t | 33 => DOUBLE_t | 34 => ELLIPSIS_t | 35 => ELSE_t | 36 => ENUM_t | 37 => EOF_t | 38 => EQ_t | 39 => EQEQ_t | 40 => EXTERN_t | 41 => FLOAT_t | 42 => FOR_t | 43 => GEQ_t | 44 => GOTO_t | 45 => GT_t | 46 => HAT_t | 47 => IF_t | 48 => INC_t | 49 => INLINE_t | 50 => INT_t | 51 => LBRACE_t | 52 => LBRACES_t | 53 => LBRACK_t | 54 => LEFT_t | 55 => LEFT_ASSIGN_t | 56 => LEQ_t | 57 => LONG_t | 58 => LPAREN_t | 59 => LT_t | 60 => MINUS_t | 61 => MOD_ASSIGN_t | 62 => MUL_ASSIGN_t | 63 => NEQ_t | 64 => OFFSETOF_t | 65 => OR_ASSIGN_t | 66 => OTHER_NAME_t | 67 => PERCENT_t | 68 => PLUS_t | 69 => PTR_t | 70 => QUESTION_t | 71 => RBRACE_t | 72 => RBRACES_t | 73 => RBRACK_t | 74 => REGISTER_t | 75 => RESTRICT_t | 76 => RETURN_t | 77 => RIGHT_t | 78 => RIGHT_ASSIGN_t | 79 => RPAREN_t | 80 => SEMICOLON_t | 81 => SHORT_t | 82 => SIGNED_t | 83 => SIZEOF_t | 84 => SLASH_t | 85 => STAR_t | 86 => STATIC_t | 87 => STRUCT_t | 88 => SUB_ASSIGN_t | 89 => SWITCH_t | 90 => THREAD_LOCAL_t | 91 => TILDE_t | 92 => TYPEDEF_t | 93 => TYPEDEF_NAME_t | 94 => UNION_t | 95 => UNSIGNED_t | 96 => VAR_NAME_t | 97 => VOID_t | 98 => VOLATILE_t | 99 => WHILE_t | 100 => XOR_ASSIGN_t | _ => ADD_ASSIGN_t end)%int31;
+  inj_bound := 101%int31 }.
 Solve Obligations using (intro x; case x; reflexivity).
 
 Instance TerminalAlph : Alphabet terminal := _.
 
-Inductive nonterminal' :=
+Inductive nonterminal' : Set :=
   | AND_expression_nt
   | abstract_declarator_nt
   | additive_expression_nt
@@ -207,1930 +208,1930 @@ Inductive nonterminal' :=
   | unary_operator_nt.
 Definition nonterminal := nonterminal'.
 
-Open Scope N_scope.
 Program Instance nonterminalNum : Numbered nonterminal :=
-  { injN := fun x => match x return _ with | AND_expression_nt => 0 | abstract_declarator_nt => 1 | additive_expression_nt => 2 | argument_expression_list_nt => 3 | assignment_expression_nt => 4 | assignment_operator_nt => 5 | atomic_operation_nt => 6 | atomic_type_specifier_nt => 7 | block_item_nt => 8 | block_item_list_nt => 9 | c_initializer_nt => 10 | cast_expression_nt => 11 | compound_statement_nt => 12 | conditional_expression_nt => 13 | constant_expression_nt => 14 | declaration_nt => 15 | declaration_specifiers_nt => 16 | declarator_nt => 17 | designation_nt => 18 | designator_nt => 19 | designator_list_nt => 20 | direct_abstract_declarator_nt => 21 | direct_declarator_nt => 22 | enum_specifier_nt => 23 | enumeration_constant_nt => 24 | enumerator_nt => 25 | enumerator_list_nt => 26 | equality_expression_nt => 27 | exclusive_OR_expression_nt => 28 | expression_nt => 29 | expression_statement_nt => 30 | external_declaration_nt => 31 | function_definition_nt => 32 | function_specifier_nt => 33 | inclusive_OR_expression_nt => 34 | init_declarator_nt => 35 | init_declarator_list_nt => 36 | initializer_list_nt => 37 | iteration_statement_statement_dangerous__nt => 38 | iteration_statement_statement_safe__nt => 39 | jump_statement_nt => 40 | labeled_statement_statement_dangerous__nt => 41 | labeled_statement_statement_safe__nt => 42 | logical_AND_expression_nt => 43 | logical_OR_expression_nt => 44 | multiplicative_expression_nt => 45 | par_statement_nt => 46 | par_statement_list_nt => 47 | parameter_declaration_nt => 48 | parameter_list_nt => 49 | parameter_type_list_nt => 50 | pointer_nt => 51 | postfix_expression_nt => 52 | primary_expression_nt => 53 | relational_expression_nt => 54 | selection_statement_dangerous_nt => 55 | selection_statement_safe_nt => 56 | shift_expression_nt => 57 | specifier_qualifier_list_nt => 58 | statement_dangerous_nt => 59 | statement_safe_nt => 60 | storage_class_specifier_nt => 61 | struct_declaration_nt => 62 | struct_declaration_list_nt => 63 | struct_declarator_nt => 64 | struct_declarator_list_nt => 65 | struct_or_union_nt => 66 | struct_or_union_specifier_nt => 67 | translation_unit_nt => 68 | translation_unit_file_nt => 69 | type_name_nt => 70 | type_qualifier_nt => 71 | type_qualifier_list_nt => 72 | type_specifier_nt => 73 | unary_expression_nt => 74 | unary_operator_nt => 75 end;
-    surjN := fun n => match n return _ with | 0 => AND_expression_nt | 1 => abstract_declarator_nt | 2 => additive_expression_nt | 3 => argument_expression_list_nt | 4 => assignment_expression_nt | 5 => assignment_operator_nt | 6 => atomic_operation_nt | 7 => atomic_type_specifier_nt | 8 => block_item_nt | 9 => block_item_list_nt | 10 => c_initializer_nt | 11 => cast_expression_nt | 12 => compound_statement_nt | 13 => conditional_expression_nt | 14 => constant_expression_nt | 15 => declaration_nt | 16 => declaration_specifiers_nt | 17 => declarator_nt | 18 => designation_nt | 19 => designator_nt | 20 => designator_list_nt | 21 => direct_abstract_declarator_nt | 22 => direct_declarator_nt | 23 => enum_specifier_nt | 24 => enumeration_constant_nt | 25 => enumerator_nt | 26 => enumerator_list_nt | 27 => equality_expression_nt | 28 => exclusive_OR_expression_nt | 29 => expression_nt | 30 => expression_statement_nt | 31 => external_declaration_nt | 32 => function_definition_nt | 33 => function_specifier_nt | 34 => inclusive_OR_expression_nt | 35 => init_declarator_nt | 36 => init_declarator_list_nt | 37 => initializer_list_nt | 38 => iteration_statement_statement_dangerous__nt | 39 => iteration_statement_statement_safe__nt | 40 => jump_statement_nt | 41 => labeled_statement_statement_dangerous__nt | 42 => labeled_statement_statement_safe__nt | 43 => logical_AND_expression_nt | 44 => logical_OR_expression_nt | 45 => multiplicative_expression_nt | 46 => par_statement_nt | 47 => par_statement_list_nt | 48 => parameter_declaration_nt | 49 => parameter_list_nt | 50 => parameter_type_list_nt | 51 => pointer_nt | 52 => postfix_expression_nt | 53 => primary_expression_nt | 54 => relational_expression_nt | 55 => selection_statement_dangerous_nt | 56 => selection_statement_safe_nt | 57 => shift_expression_nt | 58 => specifier_qualifier_list_nt | 59 => statement_dangerous_nt | 60 => statement_safe_nt | 61 => storage_class_specifier_nt | 62 => struct_declaration_nt | 63 => struct_declaration_list_nt | 64 => struct_declarator_nt | 65 => struct_declarator_list_nt | 66 => struct_or_union_nt | 67 => struct_or_union_specifier_nt | 68 => translation_unit_nt | 69 => translation_unit_file_nt | 70 => type_name_nt | 71 => type_qualifier_nt | 72 => type_qualifier_list_nt | 73 => type_specifier_nt | 74 => unary_expression_nt | 75 => unary_operator_nt | _ => AND_expression_nt end;
-  injN_bound := 76 }.
+  { inj := fun x => match x return _ with | AND_expression_nt => Int31.On | abstract_declarator_nt => Int31.In | additive_expression_nt => (twice Int31.In) | argument_expression_list_nt => (twice_plus_one Int31.In) | assignment_expression_nt => (twice (twice Int31.In)) | assignment_operator_nt => (twice_plus_one (twice Int31.In)) | atomic_operation_nt => (twice (twice_plus_one Int31.In)) | atomic_type_specifier_nt => (twice_plus_one (twice_plus_one Int31.In)) | block_item_nt => (twice (twice (twice Int31.In))) | block_item_list_nt => (twice_plus_one (twice (twice Int31.In))) | c_initializer_nt => (twice (twice_plus_one (twice Int31.In))) | cast_expression_nt => (twice_plus_one (twice_plus_one (twice Int31.In))) | compound_statement_nt => (twice (twice (twice_plus_one Int31.In))) | conditional_expression_nt => (twice_plus_one (twice (twice_plus_one Int31.In))) | constant_expression_nt => (twice (twice_plus_one (twice_plus_one Int31.In))) | declaration_nt => (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))) | declaration_specifiers_nt => (twice (twice (twice (twice Int31.In)))) | declarator_nt => (twice_plus_one (twice (twice (twice Int31.In)))) | designation_nt => (twice (twice_plus_one (twice (twice Int31.In)))) | designator_nt => (twice_plus_one (twice_plus_one (twice (twice Int31.In)))) | designator_list_nt => (twice (twice (twice_plus_one (twice Int31.In)))) | direct_abstract_declarator_nt => (twice_plus_one (twice (twice_plus_one (twice Int31.In)))) | direct_declarator_nt => (twice (twice_plus_one (twice_plus_one (twice Int31.In)))) | enum_specifier_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))) | enumeration_constant_nt => (twice (twice (twice (twice_plus_one Int31.In)))) | enumerator_nt => (twice_plus_one (twice (twice (twice_plus_one Int31.In)))) | enumerator_list_nt => (twice (twice_plus_one (twice (twice_plus_one Int31.In)))) | equality_expression_nt => (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))) | exclusive_OR_expression_nt => (twice (twice (twice_plus_one (twice_plus_one Int31.In)))) | expression_nt => (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))) | expression_statement_nt => (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | external_declaration_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | function_definition_nt => (twice (twice (twice (twice (twice Int31.In))))) | function_specifier_nt => (twice_plus_one (twice (twice (twice (twice Int31.In))))) | inclusive_OR_expression_nt => (twice (twice_plus_one (twice (twice (twice Int31.In))))) | init_declarator_nt => (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))) | init_declarator_list_nt => (twice (twice (twice_plus_one (twice (twice Int31.In))))) | initializer_list_nt => (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))) | iteration_statement_statement_dangerous__nt => (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | iteration_statement_statement_safe__nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | jump_statement_nt => (twice (twice (twice (twice_plus_one (twice Int31.In))))) | labeled_statement_statement_dangerous__nt => (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))) | labeled_statement_statement_safe__nt => (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | logical_AND_expression_nt => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | logical_OR_expression_nt => (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | multiplicative_expression_nt => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | par_statement_nt => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | par_statement_list_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | parameter_declaration_nt => (twice (twice (twice (twice (twice_plus_one Int31.In))))) | parameter_list_nt => (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))) | parameter_type_list_nt => (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | pointer_nt => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | postfix_expression_nt => (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | primary_expression_nt => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | relational_expression_nt => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | selection_statement_dangerous_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | selection_statement_safe_nt => (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | shift_expression_nt => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | specifier_qualifier_list_nt => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | statement_dangerous_nt => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | statement_safe_nt => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | storage_class_specifier_nt => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | struct_declaration_nt => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | struct_declaration_list_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | struct_declarator_nt => (twice (twice (twice (twice (twice (twice Int31.In)))))) | struct_declarator_list_nt => (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))) | struct_or_union_nt => (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | struct_or_union_specifier_nt => (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | translation_unit_nt => (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | translation_unit_file_nt => (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | type_name_nt => (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | type_qualifier_nt => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | type_qualifier_list_nt => (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | type_specifier_nt => (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | unary_expression_nt => (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | unary_operator_nt => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) end;
+    surj := (fun n => match n return _ with | 0 => AND_expression_nt | 1 => abstract_declarator_nt | 2 => additive_expression_nt | 3 => argument_expression_list_nt | 4 => assignment_expression_nt | 5 => assignment_operator_nt | 6 => atomic_operation_nt | 7 => atomic_type_specifier_nt | 8 => block_item_nt | 9 => block_item_list_nt | 10 => c_initializer_nt | 11 => cast_expression_nt | 12 => compound_statement_nt | 13 => conditional_expression_nt | 14 => constant_expression_nt | 15 => declaration_nt | 16 => declaration_specifiers_nt | 17 => declarator_nt | 18 => designation_nt | 19 => designator_nt | 20 => designator_list_nt | 21 => direct_abstract_declarator_nt | 22 => direct_declarator_nt | 23 => enum_specifier_nt | 24 => enumeration_constant_nt | 25 => enumerator_nt | 26 => enumerator_list_nt | 27 => equality_expression_nt | 28 => exclusive_OR_expression_nt | 29 => expression_nt | 30 => expression_statement_nt | 31 => external_declaration_nt | 32 => function_definition_nt | 33 => function_specifier_nt | 34 => inclusive_OR_expression_nt | 35 => init_declarator_nt | 36 => init_declarator_list_nt | 37 => initializer_list_nt | 38 => iteration_statement_statement_dangerous__nt | 39 => iteration_statement_statement_safe__nt | 40 => jump_statement_nt | 41 => labeled_statement_statement_dangerous__nt | 42 => labeled_statement_statement_safe__nt | 43 => logical_AND_expression_nt | 44 => logical_OR_expression_nt | 45 => multiplicative_expression_nt | 46 => par_statement_nt | 47 => par_statement_list_nt | 48 => parameter_declaration_nt | 49 => parameter_list_nt | 50 => parameter_type_list_nt | 51 => pointer_nt | 52 => postfix_expression_nt | 53 => primary_expression_nt | 54 => relational_expression_nt | 55 => selection_statement_dangerous_nt | 56 => selection_statement_safe_nt | 57 => shift_expression_nt | 58 => specifier_qualifier_list_nt | 59 => statement_dangerous_nt | 60 => statement_safe_nt | 61 => storage_class_specifier_nt | 62 => struct_declaration_nt | 63 => struct_declaration_list_nt | 64 => struct_declarator_nt | 65 => struct_declarator_list_nt | 66 => struct_or_union_nt | 67 => struct_or_union_specifier_nt | 68 => translation_unit_nt | 69 => translation_unit_file_nt | 70 => type_name_nt | 71 => type_qualifier_nt | 72 => type_qualifier_list_nt | 73 => type_specifier_nt | 74 => unary_expression_nt | 75 => unary_operator_nt | _ => AND_expression_nt end)%int31;
+  inj_bound := 76%int31 }.
 Solve Obligations using (intro x; case x; reflexivity).
 
 Instance NonTerminalAlph : Alphabet nonterminal := _.
 
 Include Grammar.Symbol.
 
-Definition symbol_semantic_type (s:symbol) : Type:=
-  match s with
-    | T t =>
-      match t with
-        | XOR_ASSIGN_t =>       (cabsloc)%type
-        | WHILE_t =>       (cabsloc)%type
-        | VOLATILE_t =>       (cabsloc)%type
-        | VOID_t =>       (cabsloc)%type
-        | VAR_NAME_t =>       (atom * cabsloc)%type
-        | UNSIGNED_t =>       (cabsloc)%type
-        | UNION_t =>       (cabsloc)%type
-        | TYPEDEF_NAME_t =>       (atom * cabsloc)%type
-        | TYPEDEF_t =>       (cabsloc)%type
-        | TILDE_t =>       (cabsloc)%type
-        | THREAD_LOCAL_t =>       (cabsloc)%type
-        | SWITCH_t =>       (cabsloc)%type
-        | SUB_ASSIGN_t =>       (cabsloc)%type
-        | STRUCT_t =>       (cabsloc)%type
-        | STATIC_t =>       (cabsloc)%type
-        | STAR_t =>       (cabsloc)%type
-        | SLASH_t =>       (cabsloc)%type
-        | SIZEOF_t =>       (cabsloc)%type
-        | SIGNED_t =>       (cabsloc)%type
-        | SHORT_t =>       (cabsloc)%type
-        | SEMICOLON_t =>       (cabsloc)%type
-        | RPAREN_t =>       (cabsloc)%type
-        | RIGHT_ASSIGN_t =>       (cabsloc)%type
-        | RIGHT_t =>       (cabsloc)%type
-        | RETURN_t =>       (cabsloc)%type
-        | RESTRICT_t =>       (cabsloc)%type
-        | REGISTER_t =>       (cabsloc)%type
-        | RBRACK_t =>       (cabsloc)%type
-        | RBRACES_t =>       (cabsloc)%type
-        | RBRACE_t =>       (cabsloc)%type
-        | QUESTION_t =>       (cabsloc)%type
-        | PTR_t =>       (cabsloc)%type
-        | PLUS_t =>       (cabsloc)%type
-        | PERCENT_t =>       (cabsloc)%type
-        | OTHER_NAME_t =>       (atom * cabsloc)%type
-        | OR_ASSIGN_t =>       (cabsloc)%type
-        | OFFSETOF_t =>       (cabsloc)%type
-        | NEQ_t =>       (cabsloc)%type
-        | MUL_ASSIGN_t =>       (cabsloc)%type
-        | MOD_ASSIGN_t =>       (cabsloc)%type
-        | MINUS_t =>       (cabsloc)%type
-        | LT_t =>       (cabsloc)%type
-        | LPAREN_t =>       (cabsloc)%type
-        | LONG_t =>       (cabsloc)%type
-        | LEQ_t =>       (cabsloc)%type
-        | LEFT_ASSIGN_t =>       (cabsloc)%type
-        | LEFT_t =>       (cabsloc)%type
-        | LBRACK_t =>       (cabsloc)%type
-        | LBRACES_t =>       (cabsloc)%type
-        | LBRACE_t =>       (cabsloc)%type
-        | INT_t =>       (cabsloc)%type
-        | INLINE_t =>       (cabsloc)%type
-        | INC_t =>       (cabsloc)%type
-        | IF_t =>       (cabsloc)%type
-        | HAT_t =>       (cabsloc)%type
-        | GT_t =>       (cabsloc)%type
-        | GOTO_t =>       (cabsloc)%type
-        | GEQ_t =>       (cabsloc)%type
-        | FOR_t =>       (cabsloc)%type
-        | FLOAT_t =>       (cabsloc)%type
-        | EXTERN_t =>       (cabsloc)%type
-        | EQEQ_t =>       (cabsloc)%type
-        | EQ_t =>       (cabsloc)%type
-        | EOF_t => unit%type
-        | ENUM_t =>       (cabsloc)%type
-        | ELSE_t =>       (cabsloc)%type
-        | ELLIPSIS_t =>       (cabsloc)%type
-        | DOUBLE_t =>       (cabsloc)%type
-        | DOT_t =>       (cabsloc)%type
-        | DO_t =>       (cabsloc)%type
-        | DIV_ASSIGN_t =>       (cabsloc)%type
-        | DEFAULT_t =>       (cabsloc)%type
-        | DEC_t =>       (cabsloc)%type
-        | CONTINUE_t =>       (cabsloc)%type
-        | CONSTANT_t =>       (constant * cabsloc)%type
-        | CONST_t =>       (cabsloc)%type
-        | COMMA_t =>       (cabsloc)%type
-        | COLON_t =>       (cabsloc)%type
-        | CHAR_t =>       (cabsloc)%type
-        | CASE_t =>       (cabsloc)%type
-        | C11_ATOMIC_STORE_t =>       (cabsloc)%type
-        | C11_ATOMIC_LOAD_t =>       (cabsloc)%type
-        | C11_ATOMIC_INIT_t =>       (cabsloc)%type
-        | C11_ATOMIC_FETCH_KEY_t =>       (cabsloc)%type
-        | C11_ATOMIC_EXCHANGE_t =>       (cabsloc)%type
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t =>       (cabsloc)%type
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t =>       (cabsloc)%type
-        | BUILTIN_VA_ARG_t =>       (cabsloc)%type
-        | BREAK_t =>       (cabsloc)%type
-        | BOOL_t =>       (cabsloc)%type
-        | BARES_t =>       (cabsloc)%type
-        | BARBAR_t =>       (cabsloc)%type
-        | BAR_t =>       (cabsloc)%type
-        | BANG_t =>       (cabsloc)%type
-        | AUTO_t =>       (cabsloc)%type
-        | ATOMIC_t =>       (cabsloc)%type
-        | AND_ASSIGN_t =>       (cabsloc)%type
-        | ANDAND_t =>       (cabsloc)%type
-        | AND_t =>       (cabsloc)%type
-        | ALIGNOF_t =>       (cabsloc)%type
-        | ADD_ASSIGN_t =>       (cabsloc)%type
-      end
-    | NT nt =>
-      match nt with
-        | unary_operator_nt =>      (unary_operator * cabsloc)%type
-        | unary_expression_nt =>      (expression * cabsloc)%type
-        | type_specifier_nt =>      (typeSpecifier * cabsloc)%type
-        | type_qualifier_list_nt =>      (list cvspec (* Reverse order *))%type
-        | type_qualifier_nt =>      (cvspec * cabsloc)%type
-        | type_name_nt =>      (list spec_elem * decl_type)%type
-        | translation_unit_file_nt =>       (list definition)%type
-        | translation_unit_nt =>      (list definition (* Reverse order *))%type
-        | struct_or_union_specifier_nt =>      (typeSpecifier * cabsloc)%type
-        | struct_or_union_nt =>      ((option atom -> option (list field_group) -> list attribute -> typeSpecifier) * cabsloc)%type
-        | struct_declarator_list_nt =>      (list (option name * option expression) (* Reverse order *))%type
-        | struct_declarator_nt =>      (option name * option expression)%type
-        | struct_declaration_list_nt =>      (list field_group (* Reverse order *))%type
-        | struct_declaration_nt =>      (field_group)%type
-        | storage_class_specifier_nt =>      (storage * cabsloc)%type
-        | statement_safe_nt =>      (statement)%type
-        | statement_dangerous_nt =>      (statement)%type
-        | specifier_qualifier_list_nt =>      (list spec_elem * cabsloc)%type
-        | shift_expression_nt =>      (expression * cabsloc)%type
-        | selection_statement_safe_nt =>      (statement)%type
-        | selection_statement_dangerous_nt =>      (statement)%type
-        | relational_expression_nt =>      (expression * cabsloc)%type
-        | primary_expression_nt =>      (expression * cabsloc)%type
-        | postfix_expression_nt =>      (expression * cabsloc)%type
-        | pointer_nt =>      ((decl_type -> decl_type) * cabsloc)%type
-        | parameter_type_list_nt =>      (list parameter * bool)%type
-        | parameter_list_nt =>      (list parameter (* Reverse order *))%type
-        | parameter_declaration_nt =>      (parameter)%type
-        | par_statement_list_nt =>      (list statement)%type
-        | par_statement_nt =>      (statement)%type
-        | multiplicative_expression_nt =>      (expression * cabsloc)%type
-        | logical_OR_expression_nt =>      (expression * cabsloc)%type
-        | logical_AND_expression_nt =>      (expression * cabsloc)%type
-        | labeled_statement_statement_safe__nt =>      (statement)%type
-        | labeled_statement_statement_dangerous__nt =>      (statement)%type
-        | jump_statement_nt =>      (statement)%type
-        | iteration_statement_statement_safe__nt =>      (statement)%type
-        | iteration_statement_statement_dangerous__nt =>      (statement)%type
-        | initializer_list_nt =>      (list (list initwhat * init_expression) (* Reverse order *))%type
-        | init_declarator_list_nt =>      (list init_name (* Reverse order *))%type
-        | init_declarator_nt =>      (init_name)%type
-        | inclusive_OR_expression_nt =>      (expression * cabsloc)%type
-        | function_specifier_nt =>      (cabsloc)%type
-        | function_definition_nt =>      (definition)%type
-        | external_declaration_nt =>      (definition)%type
-        | expression_statement_nt =>      (statement)%type
-        | expression_nt =>      (expression * cabsloc)%type
-        | exclusive_OR_expression_nt =>      (expression * cabsloc)%type
-        | equality_expression_nt =>      (expression * cabsloc)%type
-        | enumerator_list_nt =>      (list (atom * option expression * cabsloc) (* Reverse order *))%type
-        | enumerator_nt =>      (atom * option expression * cabsloc)%type
-        | enumeration_constant_nt =>      (atom * cabsloc)%type
-        | enum_specifier_nt =>      (typeSpecifier * cabsloc)%type
-        | direct_declarator_nt =>      (name)%type
-        | direct_abstract_declarator_nt =>      (decl_type)%type
-        | designator_list_nt =>      (list initwhat (* Reverse order *))%type
-        | designator_nt =>      (initwhat)%type
-        | designation_nt =>      (list initwhat)%type
-        | declarator_nt =>      (name)%type
-        | declaration_specifiers_nt =>      (list spec_elem * cabsloc)%type
-        | declaration_nt =>      (definition)%type
-        | constant_expression_nt =>      (expression * cabsloc)%type
-        | conditional_expression_nt =>      (expression * cabsloc)%type
-        | compound_statement_nt =>      (statement)%type
-        | cast_expression_nt =>      (expression * cabsloc)%type
-        | c_initializer_nt =>      (init_expression)%type
-        | block_item_list_nt =>      (list statement (* Reverse order *))%type
-        | block_item_nt =>      (statement)%type
-        | atomic_type_specifier_nt =>      (typeSpecifier * cabsloc)%type
-        | atomic_operation_nt =>      (expression * cabsloc)%type
-        | assignment_operator_nt =>      (binary_operator)%type
-        | assignment_expression_nt =>      (expression * cabsloc)%type
-        | argument_expression_list_nt =>      (list expression (* Reverse order *))%type
-        | additive_expression_nt =>      (expression * cabsloc)%type
-        | abstract_declarator_nt =>      (decl_type)%type
-        | AND_expression_nt =>      (expression * cabsloc)%type
-      end
+Definition terminal_semantic_type (t:terminal) : Type:=
+  match t with
+    | XOR_ASSIGN_t =>       (cabsloc)%type
+    | WHILE_t =>       (cabsloc)%type
+    | VOLATILE_t =>       (cabsloc)%type
+    | VOID_t =>       (cabsloc)%type
+    | VAR_NAME_t =>       (atom * cabsloc)%type
+    | UNSIGNED_t =>       (cabsloc)%type
+    | UNION_t =>       (cabsloc)%type
+    | TYPEDEF_NAME_t =>       (atom * cabsloc)%type
+    | TYPEDEF_t =>       (cabsloc)%type
+    | TILDE_t =>       (cabsloc)%type
+    | THREAD_LOCAL_t =>       (cabsloc)%type
+    | SWITCH_t =>       (cabsloc)%type
+    | SUB_ASSIGN_t =>       (cabsloc)%type
+    | STRUCT_t =>       (cabsloc)%type
+    | STATIC_t =>       (cabsloc)%type
+    | STAR_t =>       (cabsloc)%type
+    | SLASH_t =>       (cabsloc)%type
+    | SIZEOF_t =>       (cabsloc)%type
+    | SIGNED_t =>       (cabsloc)%type
+    | SHORT_t =>       (cabsloc)%type
+    | SEMICOLON_t =>       (cabsloc)%type
+    | RPAREN_t =>       (cabsloc)%type
+    | RIGHT_ASSIGN_t =>       (cabsloc)%type
+    | RIGHT_t =>       (cabsloc)%type
+    | RETURN_t =>       (cabsloc)%type
+    | RESTRICT_t =>       (cabsloc)%type
+    | REGISTER_t =>       (cabsloc)%type
+    | RBRACK_t =>       (cabsloc)%type
+    | RBRACES_t =>       (cabsloc)%type
+    | RBRACE_t =>       (cabsloc)%type
+    | QUESTION_t =>       (cabsloc)%type
+    | PTR_t =>       (cabsloc)%type
+    | PLUS_t =>       (cabsloc)%type
+    | PERCENT_t =>       (cabsloc)%type
+    | OTHER_NAME_t =>       (atom * cabsloc)%type
+    | OR_ASSIGN_t =>       (cabsloc)%type
+    | OFFSETOF_t =>       (cabsloc)%type
+    | NEQ_t =>       (cabsloc)%type
+    | MUL_ASSIGN_t =>       (cabsloc)%type
+    | MOD_ASSIGN_t =>       (cabsloc)%type
+    | MINUS_t =>       (cabsloc)%type
+    | LT_t =>       (cabsloc)%type
+    | LPAREN_t =>       (cabsloc)%type
+    | LONG_t =>       (cabsloc)%type
+    | LEQ_t =>       (cabsloc)%type
+    | LEFT_ASSIGN_t =>       (cabsloc)%type
+    | LEFT_t =>       (cabsloc)%type
+    | LBRACK_t =>       (cabsloc)%type
+    | LBRACES_t =>       (cabsloc)%type
+    | LBRACE_t =>       (cabsloc)%type
+    | INT_t =>       (cabsloc)%type
+    | INLINE_t =>       (cabsloc)%type
+    | INC_t =>       (cabsloc)%type
+    | IF_t =>       (cabsloc)%type
+    | HAT_t =>       (cabsloc)%type
+    | GT_t =>       (cabsloc)%type
+    | GOTO_t =>       (cabsloc)%type
+    | GEQ_t =>       (cabsloc)%type
+    | FOR_t =>       (cabsloc)%type
+    | FLOAT_t =>       (cabsloc)%type
+    | EXTERN_t =>       (cabsloc)%type
+    | EQEQ_t =>       (cabsloc)%type
+    | EQ_t =>       (cabsloc)%type
+    | EOF_t => unit%type
+    | ENUM_t =>       (cabsloc)%type
+    | ELSE_t =>       (cabsloc)%type
+    | ELLIPSIS_t =>       (cabsloc)%type
+    | DOUBLE_t =>       (cabsloc)%type
+    | DOT_t =>       (cabsloc)%type
+    | DO_t =>       (cabsloc)%type
+    | DIV_ASSIGN_t =>       (cabsloc)%type
+    | DEFAULT_t =>       (cabsloc)%type
+    | DEC_t =>       (cabsloc)%type
+    | CONTINUE_t =>       (cabsloc)%type
+    | CONSTANT_t =>       (constant * cabsloc)%type
+    | CONST_t =>       (cabsloc)%type
+    | COMMA_t =>       (cabsloc)%type
+    | COLON_t =>       (cabsloc)%type
+    | CHAR_t =>       (cabsloc)%type
+    | CASE_t =>       (cabsloc)%type
+    | C11_ATOMIC_STORE_t =>       (cabsloc)%type
+    | C11_ATOMIC_LOAD_t =>       (cabsloc)%type
+    | C11_ATOMIC_INIT_t =>       (cabsloc)%type
+    | C11_ATOMIC_FETCH_KEY_t =>       (cabsloc)%type
+    | C11_ATOMIC_EXCHANGE_t =>       (cabsloc)%type
+    | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t =>       (cabsloc)%type
+    | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t =>       (cabsloc)%type
+    | BUILTIN_VA_ARG_t =>       (cabsloc)%type
+    | BREAK_t =>       (cabsloc)%type
+    | BOOL_t =>       (cabsloc)%type
+    | BARES_t =>       (cabsloc)%type
+    | BARBAR_t =>       (cabsloc)%type
+    | BAR_t =>       (cabsloc)%type
+    | BANG_t =>       (cabsloc)%type
+    | AUTO_t =>       (cabsloc)%type
+    | ATOMIC_t =>       (cabsloc)%type
+    | AND_ASSIGN_t =>       (cabsloc)%type
+    | ANDAND_t =>       (cabsloc)%type
+    | AND_t =>       (cabsloc)%type
+    | ALIGNOF_t =>       (cabsloc)%type
+    | ADD_ASSIGN_t =>       (cabsloc)%type
   end.
 
-Inductive production' :=
-  | Prod_281
-  | Prod_280
-  | Prod_279
-  | Prod_278
-  | Prod_277
-  | Prod_276
-  | Prod_275
-  | Prod_274
-  | Prod_273
-  | Prod_272
-  | Prod_271
-  | Prod_270
-  | Prod_269
-  | Prod_268
-  | Prod_267
-  | Prod_266
-  | Prod_265
-  | Prod_264
-  | Prod_263
-  | Prod_262
-  | Prod_261
-  | Prod_260
-  | Prod_259
-  | Prod_258
-  | Prod_257
-  | Prod_256
-  | Prod_255
-  | Prod_254
-  | Prod_253
-  | Prod_252
-  | Prod_251
-  | Prod_250
-  | Prod_249
-  | Prod_248
-  | Prod_247
-  | Prod_246
-  | Prod_245
-  | Prod_244
-  | Prod_243
-  | Prod_242
-  | Prod_241
-  | Prod_240
-  | Prod_239
-  | Prod_238
-  | Prod_237
-  | Prod_236
-  | Prod_235
-  | Prod_234
-  | Prod_233
-  | Prod_232
-  | Prod_231
-  | Prod_230
-  | Prod_229
-  | Prod_228
-  | Prod_227
-  | Prod_226
-  | Prod_225
-  | Prod_224
-  | Prod_223
-  | Prod_222
-  | Prod_221
-  | Prod_220
-  | Prod_219
-  | Prod_218
-  | Prod_217
-  | Prod_216
-  | Prod_215
-  | Prod_214
-  | Prod_213
-  | Prod_212
-  | Prod_211
-  | Prod_210
-  | Prod_209
-  | Prod_208
-  | Prod_207
-  | Prod_206
-  | Prod_205
-  | Prod_204
-  | Prod_203
-  | Prod_202
-  | Prod_201
-  | Prod_200
-  | Prod_199
-  | Prod_198
-  | Prod_197
-  | Prod_196
-  | Prod_195
-  | Prod_194
-  | Prod_193
-  | Prod_192
-  | Prod_191
-  | Prod_190
-  | Prod_189
-  | Prod_188
-  | Prod_187
-  | Prod_186
-  | Prod_185
-  | Prod_184
-  | Prod_183
-  | Prod_182
-  | Prod_181
-  | Prod_180
-  | Prod_179
-  | Prod_178
-  | Prod_177
-  | Prod_176
-  | Prod_175
-  | Prod_174
-  | Prod_173
-  | Prod_172
-  | Prod_171
-  | Prod_170
-  | Prod_169
-  | Prod_168
-  | Prod_167
-  | Prod_166
-  | Prod_165
-  | Prod_164
-  | Prod_163
-  | Prod_162
-  | Prod_161
-  | Prod_160
-  | Prod_159
-  | Prod_158
-  | Prod_157
-  | Prod_156
-  | Prod_155
-  | Prod_154
-  | Prod_153
-  | Prod_152
-  | Prod_151
-  | Prod_150
-  | Prod_149
-  | Prod_148
-  | Prod_147
-  | Prod_146
-  | Prod_145
-  | Prod_144
-  | Prod_143
-  | Prod_142
-  | Prod_141
-  | Prod_140
-  | Prod_139
-  | Prod_138
-  | Prod_137
-  | Prod_136
-  | Prod_135
-  | Prod_134
-  | Prod_133
-  | Prod_132
-  | Prod_131
-  | Prod_130
-  | Prod_129
-  | Prod_128
-  | Prod_127
-  | Prod_126
-  | Prod_125
-  | Prod_124
-  | Prod_123
-  | Prod_122
-  | Prod_121
-  | Prod_120
-  | Prod_119
-  | Prod_118
-  | Prod_117
-  | Prod_116
-  | Prod_115
-  | Prod_114
-  | Prod_113
-  | Prod_112
-  | Prod_111
-  | Prod_110
-  | Prod_109
-  | Prod_108
-  | Prod_107
-  | Prod_106
-  | Prod_105
-  | Prod_104
-  | Prod_103
-  | Prod_102
-  | Prod_101
-  | Prod_100
-  | Prod_99
-  | Prod_98
-  | Prod_97
-  | Prod_96
-  | Prod_95
-  | Prod_94
-  | Prod_93
-  | Prod_92
-  | Prod_91
-  | Prod_90
-  | Prod_89
-  | Prod_88
-  | Prod_87
-  | Prod_86
-  | Prod_85
-  | Prod_84
-  | Prod_83
-  | Prod_82
-  | Prod_81
-  | Prod_80
-  | Prod_79
-  | Prod_78
-  | Prod_77
-  | Prod_76
-  | Prod_75
-  | Prod_74
-  | Prod_73
-  | Prod_72
-  | Prod_71
-  | Prod_70
-  | Prod_69
-  | Prod_68
-  | Prod_67
-  | Prod_66
-  | Prod_65
-  | Prod_64
-  | Prod_63
-  | Prod_62
-  | Prod_61
-  | Prod_60
-  | Prod_59
-  | Prod_58
-  | Prod_57
-  | Prod_56
-  | Prod_55
-  | Prod_54
-  | Prod_53
-  | Prod_52
-  | Prod_51
-  | Prod_50
-  | Prod_49
-  | Prod_48
-  | Prod_47
-  | Prod_46
-  | Prod_45
-  | Prod_44
-  | Prod_43
-  | Prod_42
-  | Prod_41
-  | Prod_40
-  | Prod_39
-  | Prod_38
-  | Prod_37
-  | Prod_36
-  | Prod_35
-  | Prod_34
-  | Prod_33
-  | Prod_32
-  | Prod_31
-  | Prod_30
-  | Prod_29
-  | Prod_28
-  | Prod_27
-  | Prod_26
-  | Prod_25
-  | Prod_24
-  | Prod_23
-  | Prod_22
-  | Prod_21
-  | Prod_20
-  | Prod_19
-  | Prod_18
-  | Prod_17
-  | Prod_16
-  | Prod_15
-  | Prod_14
-  | Prod_13
-  | Prod_12
-  | Prod_11
-  | Prod_10
-  | Prod_9
-  | Prod_8
-  | Prod_7
-  | Prod_6
-  | Prod_5
-  | Prod_4
-  | Prod_3
-  | Prod_2
-  | Prod_1.
+Definition nonterminal_semantic_type (nt:nonterminal) : Type:=
+  match nt with
+    | unary_operator_nt =>      (unary_operator * cabsloc)%type
+    | unary_expression_nt =>      (expression * cabsloc)%type
+    | type_specifier_nt =>      (typeSpecifier * cabsloc)%type
+    | type_qualifier_list_nt =>      (list cvspec (* Reverse order *))%type
+    | type_qualifier_nt =>      (cvspec * cabsloc)%type
+    | type_name_nt =>      (list spec_elem * decl_type)%type
+    | translation_unit_file_nt =>       (list definition)%type
+    | translation_unit_nt =>      (list definition (* Reverse order *))%type
+    | struct_or_union_specifier_nt =>      (typeSpecifier * cabsloc)%type
+    | struct_or_union_nt =>      ((option atom -> option (list field_group) -> list attribute -> typeSpecifier) * cabsloc)%type
+    | struct_declarator_list_nt =>      (list (option name * option expression) (* Reverse order *))%type
+    | struct_declarator_nt =>      (option name * option expression)%type
+    | struct_declaration_list_nt =>      (list field_group (* Reverse order *))%type
+    | struct_declaration_nt =>      (field_group)%type
+    | storage_class_specifier_nt =>      (storage * cabsloc)%type
+    | statement_safe_nt =>      (statement)%type
+    | statement_dangerous_nt =>      (statement)%type
+    | specifier_qualifier_list_nt =>      (list spec_elem * cabsloc)%type
+    | shift_expression_nt =>      (expression * cabsloc)%type
+    | selection_statement_safe_nt =>      (statement)%type
+    | selection_statement_dangerous_nt =>      (statement)%type
+    | relational_expression_nt =>      (expression * cabsloc)%type
+    | primary_expression_nt =>      (expression * cabsloc)%type
+    | postfix_expression_nt =>      (expression * cabsloc)%type
+    | pointer_nt =>      ((decl_type -> decl_type) * cabsloc)%type
+    | parameter_type_list_nt =>      (list parameter * bool)%type
+    | parameter_list_nt =>      (list parameter (* Reverse order *))%type
+    | parameter_declaration_nt =>      (parameter)%type
+    | par_statement_list_nt =>      (list statement)%type
+    | par_statement_nt =>      (statement)%type
+    | multiplicative_expression_nt =>      (expression * cabsloc)%type
+    | logical_OR_expression_nt =>      (expression * cabsloc)%type
+    | logical_AND_expression_nt =>      (expression * cabsloc)%type
+    | labeled_statement_statement_safe__nt =>      (statement)%type
+    | labeled_statement_statement_dangerous__nt =>      (statement)%type
+    | jump_statement_nt =>      (statement)%type
+    | iteration_statement_statement_safe__nt =>      (statement)%type
+    | iteration_statement_statement_dangerous__nt =>      (statement)%type
+    | initializer_list_nt =>      (list (list initwhat * init_expression) (* Reverse order *))%type
+    | init_declarator_list_nt =>      (list init_name (* Reverse order *))%type
+    | init_declarator_nt =>      (init_name)%type
+    | inclusive_OR_expression_nt =>      (expression * cabsloc)%type
+    | function_specifier_nt =>      (cabsloc)%type
+    | function_definition_nt =>      (definition)%type
+    | external_declaration_nt =>      (definition)%type
+    | expression_statement_nt =>      (statement)%type
+    | expression_nt =>      (expression * cabsloc)%type
+    | exclusive_OR_expression_nt =>      (expression * cabsloc)%type
+    | equality_expression_nt =>      (expression * cabsloc)%type
+    | enumerator_list_nt =>      (list (atom * option expression * cabsloc) (* Reverse order *))%type
+    | enumerator_nt =>      (atom * option expression * cabsloc)%type
+    | enumeration_constant_nt =>      (atom * cabsloc)%type
+    | enum_specifier_nt =>      (typeSpecifier * cabsloc)%type
+    | direct_declarator_nt =>      (name)%type
+    | direct_abstract_declarator_nt =>      (decl_type)%type
+    | designator_list_nt =>      (list initwhat (* Reverse order *))%type
+    | designator_nt =>      (initwhat)%type
+    | designation_nt =>      (list initwhat)%type
+    | declarator_nt =>      (name)%type
+    | declaration_specifiers_nt =>      (list spec_elem * cabsloc)%type
+    | declaration_nt =>      (definition)%type
+    | constant_expression_nt =>      (expression * cabsloc)%type
+    | conditional_expression_nt =>      (expression * cabsloc)%type
+    | compound_statement_nt =>      (statement)%type
+    | cast_expression_nt =>      (expression * cabsloc)%type
+    | c_initializer_nt =>      (init_expression)%type
+    | block_item_list_nt =>      (list statement (* Reverse order *))%type
+    | block_item_nt =>      (statement)%type
+    | atomic_type_specifier_nt =>      (typeSpecifier * cabsloc)%type
+    | atomic_operation_nt =>      (expression * cabsloc)%type
+    | assignment_operator_nt =>      (binary_operator)%type
+    | assignment_expression_nt =>      (expression * cabsloc)%type
+    | argument_expression_list_nt =>      (list expression (* Reverse order *))%type
+    | additive_expression_nt =>      (expression * cabsloc)%type
+    | abstract_declarator_nt =>      (decl_type)%type
+    | AND_expression_nt =>      (expression * cabsloc)%type
+  end.
+
+Definition symbol_semantic_type (s:symbol) : Type:=
+  match s with
+    | T t => terminal_semantic_type t
+    | NT nt => nonterminal_semantic_type nt
+  end.
+
+Inductive production' : Set :=
+  | Prod_unary_operator_5
+  | Prod_unary_operator_4
+  | Prod_unary_operator_3
+  | Prod_unary_operator_2
+  | Prod_unary_operator_1
+  | Prod_unary_operator_0
+  | Prod_unary_expression_7
+  | Prod_unary_expression_6
+  | Prod_unary_expression_5
+  | Prod_unary_expression_4
+  | Prod_unary_expression_3
+  | Prod_unary_expression_2
+  | Prod_unary_expression_1
+  | Prod_unary_expression_0
+  | Prod_type_specifier_13
+  | Prod_type_specifier_12
+  | Prod_type_specifier_11
+  | Prod_type_specifier_10
+  | Prod_type_specifier_9
+  | Prod_type_specifier_8
+  | Prod_type_specifier_7
+  | Prod_type_specifier_6
+  | Prod_type_specifier_5
+  | Prod_type_specifier_4
+  | Prod_type_specifier_3
+  | Prod_type_specifier_2
+  | Prod_type_specifier_1
+  | Prod_type_specifier_0
+  | Prod_type_qualifier_list_1
+  | Prod_type_qualifier_list_0
+  | Prod_type_qualifier_3
+  | Prod_type_qualifier_2
+  | Prod_type_qualifier_1
+  | Prod_type_qualifier_0
+  | Prod_type_name_1
+  | Prod_type_name_0
+  | Prod_translation_unit_file_0
+  | Prod_translation_unit_1
+  | Prod_translation_unit_0
+  | Prod_struct_or_union_specifier_2
+  | Prod_struct_or_union_specifier_1
+  | Prod_struct_or_union_specifier_0
+  | Prod_struct_or_union_1
+  | Prod_struct_or_union_0
+  | Prod_struct_declarator_list_1
+  | Prod_struct_declarator_list_0
+  | Prod_struct_declarator_2
+  | Prod_struct_declarator_1
+  | Prod_struct_declarator_0
+  | Prod_struct_declaration_list_1
+  | Prod_struct_declaration_list_0
+  | Prod_struct_declaration_1
+  | Prod_struct_declaration_0
+  | Prod_storage_class_specifier_5
+  | Prod_storage_class_specifier_4
+  | Prod_storage_class_specifier_3
+  | Prod_storage_class_specifier_2
+  | Prod_storage_class_specifier_1
+  | Prod_storage_class_specifier_0
+  | Prod_statement_safe_6
+  | Prod_statement_safe_5
+  | Prod_statement_safe_4
+  | Prod_statement_safe_3
+  | Prod_statement_safe_2
+  | Prod_statement_safe_1
+  | Prod_statement_safe_0
+  | Prod_statement_dangerous_6
+  | Prod_statement_dangerous_5
+  | Prod_statement_dangerous_4
+  | Prod_statement_dangerous_3
+  | Prod_statement_dangerous_2
+  | Prod_statement_dangerous_1
+  | Prod_statement_dangerous_0
+  | Prod_specifier_qualifier_list_3
+  | Prod_specifier_qualifier_list_2
+  | Prod_specifier_qualifier_list_1
+  | Prod_specifier_qualifier_list_0
+  | Prod_shift_expression_2
+  | Prod_shift_expression_1
+  | Prod_shift_expression_0
+  | Prod_selection_statement_safe_1
+  | Prod_selection_statement_safe_0
+  | Prod_selection_statement_dangerous_2
+  | Prod_selection_statement_dangerous_1
+  | Prod_selection_statement_dangerous_0
+  | Prod_relational_expression_4
+  | Prod_relational_expression_3
+  | Prod_relational_expression_2
+  | Prod_relational_expression_1
+  | Prod_relational_expression_0
+  | Prod_primary_expression_2
+  | Prod_primary_expression_1
+  | Prod_primary_expression_0
+  | Prod_postfix_expression_11
+  | Prod_postfix_expression_10
+  | Prod_postfix_expression_9
+  | Prod_postfix_expression_8
+  | Prod_postfix_expression_7
+  | Prod_postfix_expression_6
+  | Prod_postfix_expression_5
+  | Prod_postfix_expression_4
+  | Prod_postfix_expression_3
+  | Prod_postfix_expression_2
+  | Prod_postfix_expression_1
+  | Prod_postfix_expression_0
+  | Prod_pointer_3
+  | Prod_pointer_2
+  | Prod_pointer_1
+  | Prod_pointer_0
+  | Prod_parameter_type_list_1
+  | Prod_parameter_type_list_0
+  | Prod_parameter_list_1
+  | Prod_parameter_list_0
+  | Prod_parameter_declaration_2
+  | Prod_parameter_declaration_1
+  | Prod_parameter_declaration_0
+  | Prod_par_statement_list_1
+  | Prod_par_statement_list_0
+  | Prod_par_statement_0
+  | Prod_multiplicative_expression_3
+  | Prod_multiplicative_expression_2
+  | Prod_multiplicative_expression_1
+  | Prod_multiplicative_expression_0
+  | Prod_logical_OR_expression_1
+  | Prod_logical_OR_expression_0
+  | Prod_logical_AND_expression_1
+  | Prod_logical_AND_expression_0
+  | Prod_labeled_statement_statement_safe__2
+  | Prod_labeled_statement_statement_safe__1
+  | Prod_labeled_statement_statement_safe__0
+  | Prod_labeled_statement_statement_dangerous__2
+  | Prod_labeled_statement_statement_dangerous__1
+  | Prod_labeled_statement_statement_dangerous__0
+  | Prod_jump_statement_4
+  | Prod_jump_statement_3
+  | Prod_jump_statement_2
+  | Prod_jump_statement_1
+  | Prod_jump_statement_0
+  | Prod_iteration_statement_statement_safe__13
+  | Prod_iteration_statement_statement_safe__12
+  | Prod_iteration_statement_statement_safe__11
+  | Prod_iteration_statement_statement_safe__10
+  | Prod_iteration_statement_statement_safe__9
+  | Prod_iteration_statement_statement_safe__8
+  | Prod_iteration_statement_statement_safe__7
+  | Prod_iteration_statement_statement_safe__6
+  | Prod_iteration_statement_statement_safe__5
+  | Prod_iteration_statement_statement_safe__4
+  | Prod_iteration_statement_statement_safe__3
+  | Prod_iteration_statement_statement_safe__2
+  | Prod_iteration_statement_statement_safe__1
+  | Prod_iteration_statement_statement_safe__0
+  | Prod_iteration_statement_statement_dangerous__13
+  | Prod_iteration_statement_statement_dangerous__12
+  | Prod_iteration_statement_statement_dangerous__11
+  | Prod_iteration_statement_statement_dangerous__10
+  | Prod_iteration_statement_statement_dangerous__9
+  | Prod_iteration_statement_statement_dangerous__8
+  | Prod_iteration_statement_statement_dangerous__7
+  | Prod_iteration_statement_statement_dangerous__6
+  | Prod_iteration_statement_statement_dangerous__5
+  | Prod_iteration_statement_statement_dangerous__4
+  | Prod_iteration_statement_statement_dangerous__3
+  | Prod_iteration_statement_statement_dangerous__2
+  | Prod_iteration_statement_statement_dangerous__1
+  | Prod_iteration_statement_statement_dangerous__0
+  | Prod_initializer_list_3
+  | Prod_initializer_list_2
+  | Prod_initializer_list_1
+  | Prod_initializer_list_0
+  | Prod_init_declarator_list_1
+  | Prod_init_declarator_list_0
+  | Prod_init_declarator_1
+  | Prod_init_declarator_0
+  | Prod_inclusive_OR_expression_1
+  | Prod_inclusive_OR_expression_0
+  | Prod_function_specifier_0
+  | Prod_function_definition_0
+  | Prod_external_declaration_1
+  | Prod_external_declaration_0
+  | Prod_expression_statement_1
+  | Prod_expression_statement_0
+  | Prod_expression_1
+  | Prod_expression_0
+  | Prod_exclusive_OR_expression_1
+  | Prod_exclusive_OR_expression_0
+  | Prod_equality_expression_2
+  | Prod_equality_expression_1
+  | Prod_equality_expression_0
+  | Prod_enumerator_list_1
+  | Prod_enumerator_list_0
+  | Prod_enumerator_1
+  | Prod_enumerator_0
+  | Prod_enumeration_constant_0
+  | Prod_enum_specifier_4
+  | Prod_enum_specifier_3
+  | Prod_enum_specifier_2
+  | Prod_enum_specifier_1
+  | Prod_enum_specifier_0
+  | Prod_direct_declarator_7
+  | Prod_direct_declarator_6
+  | Prod_direct_declarator_5
+  | Prod_direct_declarator_4
+  | Prod_direct_declarator_3
+  | Prod_direct_declarator_2
+  | Prod_direct_declarator_1
+  | Prod_direct_declarator_0
+  | Prod_direct_abstract_declarator_12
+  | Prod_direct_abstract_declarator_11
+  | Prod_direct_abstract_declarator_10
+  | Prod_direct_abstract_declarator_9
+  | Prod_direct_abstract_declarator_8
+  | Prod_direct_abstract_declarator_7
+  | Prod_direct_abstract_declarator_6
+  | Prod_direct_abstract_declarator_5
+  | Prod_direct_abstract_declarator_4
+  | Prod_direct_abstract_declarator_3
+  | Prod_direct_abstract_declarator_2
+  | Prod_direct_abstract_declarator_1
+  | Prod_direct_abstract_declarator_0
+  | Prod_designator_list_1
+  | Prod_designator_list_0
+  | Prod_designator_1
+  | Prod_designator_0
+  | Prod_designation_0
+  | Prod_declarator_1
+  | Prod_declarator_0
+  | Prod_declaration_specifiers_7
+  | Prod_declaration_specifiers_6
+  | Prod_declaration_specifiers_5
+  | Prod_declaration_specifiers_4
+  | Prod_declaration_specifiers_3
+  | Prod_declaration_specifiers_2
+  | Prod_declaration_specifiers_1
+  | Prod_declaration_specifiers_0
+  | Prod_declaration_1
+  | Prod_declaration_0
+  | Prod_constant_expression_0
+  | Prod_conditional_expression_1
+  | Prod_conditional_expression_0
+  | Prod_compound_statement_1
+  | Prod_compound_statement_0
+  | Prod_cast_expression_1
+  | Prod_cast_expression_0
+  | Prod_c_initializer_2
+  | Prod_c_initializer_1
+  | Prod_c_initializer_0
+  | Prod_block_item_list_1
+  | Prod_block_item_list_0
+  | Prod_block_item_1
+  | Prod_block_item_0
+  | Prod_atomic_type_specifier_0
+  | Prod_atomic_operation_5
+  | Prod_atomic_operation_4
+  | Prod_atomic_operation_3
+  | Prod_atomic_operation_2
+  | Prod_atomic_operation_1
+  | Prod_atomic_operation_0
+  | Prod_assignment_operator_10
+  | Prod_assignment_operator_9
+  | Prod_assignment_operator_8
+  | Prod_assignment_operator_7
+  | Prod_assignment_operator_6
+  | Prod_assignment_operator_5
+  | Prod_assignment_operator_4
+  | Prod_assignment_operator_3
+  | Prod_assignment_operator_2
+  | Prod_assignment_operator_1
+  | Prod_assignment_operator_0
+  | Prod_assignment_expression_1
+  | Prod_assignment_expression_0
+  | Prod_argument_expression_list_1
+  | Prod_argument_expression_list_0
+  | Prod_additive_expression_2
+  | Prod_additive_expression_1
+  | Prod_additive_expression_0
+  | Prod_abstract_declarator_2
+  | Prod_abstract_declarator_1
+  | Prod_abstract_declarator_0
+  | Prod_AND_expression_1
+  | Prod_AND_expression_0.
 Definition production := production'.
 
-Open Scope N_scope.
 Program Instance productionNum : Numbered production :=
-  { injN := fun x => match x return _ with | Prod_281 => 0 | Prod_280 => 1 | Prod_279 => 2 | Prod_278 => 3 | Prod_277 => 4 | Prod_276 => 5 | Prod_275 => 6 | Prod_274 => 7 | Prod_273 => 8 | Prod_272 => 9 | Prod_271 => 10 | Prod_270 => 11 | Prod_269 => 12 | Prod_268 => 13 | Prod_267 => 14 | Prod_266 => 15 | Prod_265 => 16 | Prod_264 => 17 | Prod_263 => 18 | Prod_262 => 19 | Prod_261 => 20 | Prod_260 => 21 | Prod_259 => 22 | Prod_258 => 23 | Prod_257 => 24 | Prod_256 => 25 | Prod_255 => 26 | Prod_254 => 27 | Prod_253 => 28 | Prod_252 => 29 | Prod_251 => 30 | Prod_250 => 31 | Prod_249 => 32 | Prod_248 => 33 | Prod_247 => 34 | Prod_246 => 35 | Prod_245 => 36 | Prod_244 => 37 | Prod_243 => 38 | Prod_242 => 39 | Prod_241 => 40 | Prod_240 => 41 | Prod_239 => 42 | Prod_238 => 43 | Prod_237 => 44 | Prod_236 => 45 | Prod_235 => 46 | Prod_234 => 47 | Prod_233 => 48 | Prod_232 => 49 | Prod_231 => 50 | Prod_230 => 51 | Prod_229 => 52 | Prod_228 => 53 | Prod_227 => 54 | Prod_226 => 55 | Prod_225 => 56 | Prod_224 => 57 | Prod_223 => 58 | Prod_222 => 59 | Prod_221 => 60 | Prod_220 => 61 | Prod_219 => 62 | Prod_218 => 63 | Prod_217 => 64 | Prod_216 => 65 | Prod_215 => 66 | Prod_214 => 67 | Prod_213 => 68 | Prod_212 => 69 | Prod_211 => 70 | Prod_210 => 71 | Prod_209 => 72 | Prod_208 => 73 | Prod_207 => 74 | Prod_206 => 75 | Prod_205 => 76 | Prod_204 => 77 | Prod_203 => 78 | Prod_202 => 79 | Prod_201 => 80 | Prod_200 => 81 | Prod_199 => 82 | Prod_198 => 83 | Prod_197 => 84 | Prod_196 => 85 | Prod_195 => 86 | Prod_194 => 87 | Prod_193 => 88 | Prod_192 => 89 | Prod_191 => 90 | Prod_190 => 91 | Prod_189 => 92 | Prod_188 => 93 | Prod_187 => 94 | Prod_186 => 95 | Prod_185 => 96 | Prod_184 => 97 | Prod_183 => 98 | Prod_182 => 99 | Prod_181 => 100 | Prod_180 => 101 | Prod_179 => 102 | Prod_178 => 103 | Prod_177 => 104 | Prod_176 => 105 | Prod_175 => 106 | Prod_174 => 107 | Prod_173 => 108 | Prod_172 => 109 | Prod_171 => 110 | Prod_170 => 111 | Prod_169 => 112 | Prod_168 => 113 | Prod_167 => 114 | Prod_166 => 115 | Prod_165 => 116 | Prod_164 => 117 | Prod_163 => 118 | Prod_162 => 119 | Prod_161 => 120 | Prod_160 => 121 | Prod_159 => 122 | Prod_158 => 123 | Prod_157 => 124 | Prod_156 => 125 | Prod_155 => 126 | Prod_154 => 127 | Prod_153 => 128 | Prod_152 => 129 | Prod_151 => 130 | Prod_150 => 131 | Prod_149 => 132 | Prod_148 => 133 | Prod_147 => 134 | Prod_146 => 135 | Prod_145 => 136 | Prod_144 => 137 | Prod_143 => 138 | Prod_142 => 139 | Prod_141 => 140 | Prod_140 => 141 | Prod_139 => 142 | Prod_138 => 143 | Prod_137 => 144 | Prod_136 => 145 | Prod_135 => 146 | Prod_134 => 147 | Prod_133 => 148 | Prod_132 => 149 | Prod_131 => 150 | Prod_130 => 151 | Prod_129 => 152 | Prod_128 => 153 | Prod_127 => 154 | Prod_126 => 155 | Prod_125 => 156 | Prod_124 => 157 | Prod_123 => 158 | Prod_122 => 159 | Prod_121 => 160 | Prod_120 => 161 | Prod_119 => 162 | Prod_118 => 163 | Prod_117 => 164 | Prod_116 => 165 | Prod_115 => 166 | Prod_114 => 167 | Prod_113 => 168 | Prod_112 => 169 | Prod_111 => 170 | Prod_110 => 171 | Prod_109 => 172 | Prod_108 => 173 | Prod_107 => 174 | Prod_106 => 175 | Prod_105 => 176 | Prod_104 => 177 | Prod_103 => 178 | Prod_102 => 179 | Prod_101 => 180 | Prod_100 => 181 | Prod_99 => 182 | Prod_98 => 183 | Prod_97 => 184 | Prod_96 => 185 | Prod_95 => 186 | Prod_94 => 187 | Prod_93 => 188 | Prod_92 => 189 | Prod_91 => 190 | Prod_90 => 191 | Prod_89 => 192 | Prod_88 => 193 | Prod_87 => 194 | Prod_86 => 195 | Prod_85 => 196 | Prod_84 => 197 | Prod_83 => 198 | Prod_82 => 199 | Prod_81 => 200 | Prod_80 => 201 | Prod_79 => 202 | Prod_78 => 203 | Prod_77 => 204 | Prod_76 => 205 | Prod_75 => 206 | Prod_74 => 207 | Prod_73 => 208 | Prod_72 => 209 | Prod_71 => 210 | Prod_70 => 211 | Prod_69 => 212 | Prod_68 => 213 | Prod_67 => 214 | Prod_66 => 215 | Prod_65 => 216 | Prod_64 => 217 | Prod_63 => 218 | Prod_62 => 219 | Prod_61 => 220 | Prod_60 => 221 | Prod_59 => 222 | Prod_58 => 223 | Prod_57 => 224 | Prod_56 => 225 | Prod_55 => 226 | Prod_54 => 227 | Prod_53 => 228 | Prod_52 => 229 | Prod_51 => 230 | Prod_50 => 231 | Prod_49 => 232 | Prod_48 => 233 | Prod_47 => 234 | Prod_46 => 235 | Prod_45 => 236 | Prod_44 => 237 | Prod_43 => 238 | Prod_42 => 239 | Prod_41 => 240 | Prod_40 => 241 | Prod_39 => 242 | Prod_38 => 243 | Prod_37 => 244 | Prod_36 => 245 | Prod_35 => 246 | Prod_34 => 247 | Prod_33 => 248 | Prod_32 => 249 | Prod_31 => 250 | Prod_30 => 251 | Prod_29 => 252 | Prod_28 => 253 | Prod_27 => 254 | Prod_26 => 255 | Prod_25 => 256 | Prod_24 => 257 | Prod_23 => 258 | Prod_22 => 259 | Prod_21 => 260 | Prod_20 => 261 | Prod_19 => 262 | Prod_18 => 263 | Prod_17 => 264 | Prod_16 => 265 | Prod_15 => 266 | Prod_14 => 267 | Prod_13 => 268 | Prod_12 => 269 | Prod_11 => 270 | Prod_10 => 271 | Prod_9 => 272 | Prod_8 => 273 | Prod_7 => 274 | Prod_6 => 275 | Prod_5 => 276 | Prod_4 => 277 | Prod_3 => 278 | Prod_2 => 279 | Prod_1 => 280 end;
-    surjN := fun n => match n return _ with | 0 => Prod_281 | 1 => Prod_280 | 2 => Prod_279 | 3 => Prod_278 | 4 => Prod_277 | 5 => Prod_276 | 6 => Prod_275 | 7 => Prod_274 | 8 => Prod_273 | 9 => Prod_272 | 10 => Prod_271 | 11 => Prod_270 | 12 => Prod_269 | 13 => Prod_268 | 14 => Prod_267 | 15 => Prod_266 | 16 => Prod_265 | 17 => Prod_264 | 18 => Prod_263 | 19 => Prod_262 | 20 => Prod_261 | 21 => Prod_260 | 22 => Prod_259 | 23 => Prod_258 | 24 => Prod_257 | 25 => Prod_256 | 26 => Prod_255 | 27 => Prod_254 | 28 => Prod_253 | 29 => Prod_252 | 30 => Prod_251 | 31 => Prod_250 | 32 => Prod_249 | 33 => Prod_248 | 34 => Prod_247 | 35 => Prod_246 | 36 => Prod_245 | 37 => Prod_244 | 38 => Prod_243 | 39 => Prod_242 | 40 => Prod_241 | 41 => Prod_240 | 42 => Prod_239 | 43 => Prod_238 | 44 => Prod_237 | 45 => Prod_236 | 46 => Prod_235 | 47 => Prod_234 | 48 => Prod_233 | 49 => Prod_232 | 50 => Prod_231 | 51 => Prod_230 | 52 => Prod_229 | 53 => Prod_228 | 54 => Prod_227 | 55 => Prod_226 | 56 => Prod_225 | 57 => Prod_224 | 58 => Prod_223 | 59 => Prod_222 | 60 => Prod_221 | 61 => Prod_220 | 62 => Prod_219 | 63 => Prod_218 | 64 => Prod_217 | 65 => Prod_216 | 66 => Prod_215 | 67 => Prod_214 | 68 => Prod_213 | 69 => Prod_212 | 70 => Prod_211 | 71 => Prod_210 | 72 => Prod_209 | 73 => Prod_208 | 74 => Prod_207 | 75 => Prod_206 | 76 => Prod_205 | 77 => Prod_204 | 78 => Prod_203 | 79 => Prod_202 | 80 => Prod_201 | 81 => Prod_200 | 82 => Prod_199 | 83 => Prod_198 | 84 => Prod_197 | 85 => Prod_196 | 86 => Prod_195 | 87 => Prod_194 | 88 => Prod_193 | 89 => Prod_192 | 90 => Prod_191 | 91 => Prod_190 | 92 => Prod_189 | 93 => Prod_188 | 94 => Prod_187 | 95 => Prod_186 | 96 => Prod_185 | 97 => Prod_184 | 98 => Prod_183 | 99 => Prod_182 | 100 => Prod_181 | 101 => Prod_180 | 102 => Prod_179 | 103 => Prod_178 | 104 => Prod_177 | 105 => Prod_176 | 106 => Prod_175 | 107 => Prod_174 | 108 => Prod_173 | 109 => Prod_172 | 110 => Prod_171 | 111 => Prod_170 | 112 => Prod_169 | 113 => Prod_168 | 114 => Prod_167 | 115 => Prod_166 | 116 => Prod_165 | 117 => Prod_164 | 118 => Prod_163 | 119 => Prod_162 | 120 => Prod_161 | 121 => Prod_160 | 122 => Prod_159 | 123 => Prod_158 | 124 => Prod_157 | 125 => Prod_156 | 126 => Prod_155 | 127 => Prod_154 | 128 => Prod_153 | 129 => Prod_152 | 130 => Prod_151 | 131 => Prod_150 | 132 => Prod_149 | 133 => Prod_148 | 134 => Prod_147 | 135 => Prod_146 | 136 => Prod_145 | 137 => Prod_144 | 138 => Prod_143 | 139 => Prod_142 | 140 => Prod_141 | 141 => Prod_140 | 142 => Prod_139 | 143 => Prod_138 | 144 => Prod_137 | 145 => Prod_136 | 146 => Prod_135 | 147 => Prod_134 | 148 => Prod_133 | 149 => Prod_132 | 150 => Prod_131 | 151 => Prod_130 | 152 => Prod_129 | 153 => Prod_128 | 154 => Prod_127 | 155 => Prod_126 | 156 => Prod_125 | 157 => Prod_124 | 158 => Prod_123 | 159 => Prod_122 | 160 => Prod_121 | 161 => Prod_120 | 162 => Prod_119 | 163 => Prod_118 | 164 => Prod_117 | 165 => Prod_116 | 166 => Prod_115 | 167 => Prod_114 | 168 => Prod_113 | 169 => Prod_112 | 170 => Prod_111 | 171 => Prod_110 | 172 => Prod_109 | 173 => Prod_108 | 174 => Prod_107 | 175 => Prod_106 | 176 => Prod_105 | 177 => Prod_104 | 178 => Prod_103 | 179 => Prod_102 | 180 => Prod_101 | 181 => Prod_100 | 182 => Prod_99 | 183 => Prod_98 | 184 => Prod_97 | 185 => Prod_96 | 186 => Prod_95 | 187 => Prod_94 | 188 => Prod_93 | 189 => Prod_92 | 190 => Prod_91 | 191 => Prod_90 | 192 => Prod_89 | 193 => Prod_88 | 194 => Prod_87 | 195 => Prod_86 | 196 => Prod_85 | 197 => Prod_84 | 198 => Prod_83 | 199 => Prod_82 | 200 => Prod_81 | 201 => Prod_80 | 202 => Prod_79 | 203 => Prod_78 | 204 => Prod_77 | 205 => Prod_76 | 206 => Prod_75 | 207 => Prod_74 | 208 => Prod_73 | 209 => Prod_72 | 210 => Prod_71 | 211 => Prod_70 | 212 => Prod_69 | 213 => Prod_68 | 214 => Prod_67 | 215 => Prod_66 | 216 => Prod_65 | 217 => Prod_64 | 218 => Prod_63 | 219 => Prod_62 | 220 => Prod_61 | 221 => Prod_60 | 222 => Prod_59 | 223 => Prod_58 | 224 => Prod_57 | 225 => Prod_56 | 226 => Prod_55 | 227 => Prod_54 | 228 => Prod_53 | 229 => Prod_52 | 230 => Prod_51 | 231 => Prod_50 | 232 => Prod_49 | 233 => Prod_48 | 234 => Prod_47 | 235 => Prod_46 | 236 => Prod_45 | 237 => Prod_44 | 238 => Prod_43 | 239 => Prod_42 | 240 => Prod_41 | 241 => Prod_40 | 242 => Prod_39 | 243 => Prod_38 | 244 => Prod_37 | 245 => Prod_36 | 246 => Prod_35 | 247 => Prod_34 | 248 => Prod_33 | 249 => Prod_32 | 250 => Prod_31 | 251 => Prod_30 | 252 => Prod_29 | 253 => Prod_28 | 254 => Prod_27 | 255 => Prod_26 | 256 => Prod_25 | 257 => Prod_24 | 258 => Prod_23 | 259 => Prod_22 | 260 => Prod_21 | 261 => Prod_20 | 262 => Prod_19 | 263 => Prod_18 | 264 => Prod_17 | 265 => Prod_16 | 266 => Prod_15 | 267 => Prod_14 | 268 => Prod_13 | 269 => Prod_12 | 270 => Prod_11 | 271 => Prod_10 | 272 => Prod_9 | 273 => Prod_8 | 274 => Prod_7 | 275 => Prod_6 | 276 => Prod_5 | 277 => Prod_4 | 278 => Prod_3 | 279 => Prod_2 | 280 => Prod_1 | _ => Prod_281 end;
-  injN_bound := 281 }.
+  { inj := fun x => match x return _ with | Prod_unary_operator_5 => Int31.On | Prod_unary_operator_4 => Int31.In | Prod_unary_operator_3 => (twice Int31.In) | Prod_unary_operator_2 => (twice_plus_one Int31.In) | Prod_unary_operator_1 => (twice (twice Int31.In)) | Prod_unary_operator_0 => (twice_plus_one (twice Int31.In)) | Prod_unary_expression_7 => (twice (twice_plus_one Int31.In)) | Prod_unary_expression_6 => (twice_plus_one (twice_plus_one Int31.In)) | Prod_unary_expression_5 => (twice (twice (twice Int31.In))) | Prod_unary_expression_4 => (twice_plus_one (twice (twice Int31.In))) | Prod_unary_expression_3 => (twice (twice_plus_one (twice Int31.In))) | Prod_unary_expression_2 => (twice_plus_one (twice_plus_one (twice Int31.In))) | Prod_unary_expression_1 => (twice (twice (twice_plus_one Int31.In))) | Prod_unary_expression_0 => (twice_plus_one (twice (twice_plus_one Int31.In))) | Prod_type_specifier_13 => (twice (twice_plus_one (twice_plus_one Int31.In))) | Prod_type_specifier_12 => (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))) | Prod_type_specifier_11 => (twice (twice (twice (twice Int31.In)))) | Prod_type_specifier_10 => (twice_plus_one (twice (twice (twice Int31.In)))) | Prod_type_specifier_9 => (twice (twice_plus_one (twice (twice Int31.In)))) | Prod_type_specifier_8 => (twice_plus_one (twice_plus_one (twice (twice Int31.In)))) | Prod_type_specifier_7 => (twice (twice (twice_plus_one (twice Int31.In)))) | Prod_type_specifier_6 => (twice_plus_one (twice (twice_plus_one (twice Int31.In)))) | Prod_type_specifier_5 => (twice (twice_plus_one (twice_plus_one (twice Int31.In)))) | Prod_type_specifier_4 => (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))) | Prod_type_specifier_3 => (twice (twice (twice (twice_plus_one Int31.In)))) | Prod_type_specifier_2 => (twice_plus_one (twice (twice (twice_plus_one Int31.In)))) | Prod_type_specifier_1 => (twice (twice_plus_one (twice (twice_plus_one Int31.In)))) | Prod_type_specifier_0 => (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))) | Prod_type_qualifier_list_1 => (twice (twice (twice_plus_one (twice_plus_one Int31.In)))) | Prod_type_qualifier_list_0 => (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))) | Prod_type_qualifier_3 => (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | Prod_type_qualifier_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | Prod_type_qualifier_1 => (twice (twice (twice (twice (twice Int31.In))))) | Prod_type_qualifier_0 => (twice_plus_one (twice (twice (twice (twice Int31.In))))) | Prod_type_name_1 => (twice (twice_plus_one (twice (twice (twice Int31.In))))) | Prod_type_name_0 => (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))) | Prod_translation_unit_file_0 => (twice (twice (twice_plus_one (twice (twice Int31.In))))) | Prod_translation_unit_1 => (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))) | Prod_translation_unit_0 => (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | Prod_struct_or_union_specifier_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | Prod_struct_or_union_specifier_1 => (twice (twice (twice (twice_plus_one (twice Int31.In))))) | Prod_struct_or_union_specifier_0 => (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))) | Prod_struct_or_union_1 => (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | Prod_struct_or_union_0 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | Prod_struct_declarator_list_1 => (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | Prod_struct_declarator_list_0 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | Prod_struct_declarator_2 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | Prod_struct_declarator_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | Prod_struct_declarator_0 => (twice (twice (twice (twice (twice_plus_one Int31.In))))) | Prod_struct_declaration_list_1 => (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))) | Prod_struct_declaration_list_0 => (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | Prod_struct_declaration_1 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | Prod_struct_declaration_0 => (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_5 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_4 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_3 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_2 => (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_1 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | Prod_storage_class_specifier_0 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_6 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_5 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_4 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_3 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Prod_statement_safe_1 => (twice (twice (twice (twice (twice (twice Int31.In)))))) | Prod_statement_safe_0 => (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_6 => (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_5 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_4 => (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_3 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_2 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | Prod_statement_dangerous_0 => (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | Prod_specifier_qualifier_list_3 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | Prod_specifier_qualifier_list_2 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | Prod_specifier_qualifier_list_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | Prod_specifier_qualifier_list_0 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Prod_shift_expression_2 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Prod_shift_expression_1 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Prod_shift_expression_0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Prod_selection_statement_safe_1 => (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | Prod_selection_statement_safe_0 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | Prod_selection_statement_dangerous_2 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | Prod_selection_statement_dangerous_1 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | Prod_selection_statement_dangerous_0 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Prod_relational_expression_4 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Prod_relational_expression_3 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Prod_relational_expression_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Prod_relational_expression_1 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_relational_expression_0 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_primary_expression_2 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_primary_expression_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_primary_expression_0 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_postfix_expression_11 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_postfix_expression_10 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_postfix_expression_9 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Prod_postfix_expression_8 => (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_7 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_6 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_5 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_4 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_3 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_2 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Prod_postfix_expression_0 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_pointer_3 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_pointer_2 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_pointer_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_pointer_0 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_parameter_type_list_1 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_parameter_type_list_0 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_parameter_list_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Prod_parameter_list_0 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_parameter_declaration_2 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_parameter_declaration_1 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_parameter_declaration_0 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_par_statement_list_1 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_par_statement_list_0 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_par_statement_0 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_multiplicative_expression_3 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_multiplicative_expression_2 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_multiplicative_expression_1 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_multiplicative_expression_0 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_logical_OR_expression_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_logical_OR_expression_0 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_logical_AND_expression_1 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_logical_AND_expression_0 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_labeled_statement_statement_safe__2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Prod_labeled_statement_statement_safe__1 => (twice (twice (twice (twice (twice (twice (twice Int31.In))))))) | Prod_labeled_statement_statement_safe__0 => (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))) | Prod_labeled_statement_statement_dangerous__2 => (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))) | Prod_labeled_statement_statement_dangerous__1 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))) | Prod_labeled_statement_statement_dangerous__0 => (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Prod_jump_statement_4 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Prod_jump_statement_3 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Prod_jump_statement_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Prod_jump_statement_1 => (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_jump_statement_0 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__13 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__12 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__11 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__10 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__9 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__8 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__7 => (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__6 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__5 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__4 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__3 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__2 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__1 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_safe__0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__13 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__12 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__11 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__10 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__9 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__8 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__7 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__6 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__5 => (twice (twice (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__4 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__3 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__2 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__1 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_iteration_statement_statement_dangerous__0 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_initializer_list_3 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_initializer_list_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Prod_initializer_list_1 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_initializer_list_0 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_init_declarator_list_1 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_init_declarator_list_0 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_init_declarator_1 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_init_declarator_0 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_inclusive_OR_expression_1 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_inclusive_OR_expression_0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Prod_function_specifier_0 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_function_definition_0 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_external_declaration_1 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_external_declaration_0 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_expression_statement_1 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_expression_statement_0 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_expression_1 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_expression_0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_exclusive_OR_expression_1 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_exclusive_OR_expression_0 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_equality_expression_2 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_equality_expression_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_equality_expression_0 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_enumerator_list_1 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_enumerator_list_0 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_enumerator_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Prod_enumerator_0 => (twice (twice (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enumeration_constant_0 => (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enum_specifier_4 => (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enum_specifier_3 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enum_specifier_2 => (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enum_specifier_1 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_enum_specifier_0 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_7 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_6 => (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_5 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_4 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_3 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_2 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_1 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_declarator_0 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_12 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_11 => (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_10 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_9 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_8 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_7 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_6 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_5 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_4 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_3 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_2 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_1 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_direct_abstract_declarator_0 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_designator_list_1 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_designator_list_0 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_designator_1 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_designator_0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Prod_designation_0 => (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declarator_1 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declarator_0 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_7 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_6 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_5 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_4 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_3 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_2 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_1 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_specifiers_0 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_declaration_0 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_constant_expression_0 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_conditional_expression_1 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_conditional_expression_0 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_compound_statement_1 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_compound_statement_0 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_cast_expression_1 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_cast_expression_0 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_c_initializer_2 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_c_initializer_1 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_c_initializer_0 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_block_item_list_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_block_item_list_0 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_block_item_1 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_block_item_0 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_type_specifier_0 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_operation_5 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_operation_4 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_operation_3 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_operation_2 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Prod_atomic_operation_1 => (twice (twice (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_atomic_operation_0 => (twice_plus_one (twice (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_10 => (twice (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_9 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_8 => (twice (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_7 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_6 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_5 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_4 => (twice (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_3 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_2 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_1 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_operator_0 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_expression_1 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_assignment_expression_0 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_argument_expression_list_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Prod_argument_expression_list_0 => (twice (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_additive_expression_2 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_additive_expression_1 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_additive_expression_0 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_abstract_declarator_2 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_abstract_declarator_1 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_abstract_declarator_0 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_AND_expression_1 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Prod_AND_expression_0 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) end;
+    surj := (fun n => match n return _ with | 0 => Prod_unary_operator_5 | 1 => Prod_unary_operator_4 | 2 => Prod_unary_operator_3 | 3 => Prod_unary_operator_2 | 4 => Prod_unary_operator_1 | 5 => Prod_unary_operator_0 | 6 => Prod_unary_expression_7 | 7 => Prod_unary_expression_6 | 8 => Prod_unary_expression_5 | 9 => Prod_unary_expression_4 | 10 => Prod_unary_expression_3 | 11 => Prod_unary_expression_2 | 12 => Prod_unary_expression_1 | 13 => Prod_unary_expression_0 | 14 => Prod_type_specifier_13 | 15 => Prod_type_specifier_12 | 16 => Prod_type_specifier_11 | 17 => Prod_type_specifier_10 | 18 => Prod_type_specifier_9 | 19 => Prod_type_specifier_8 | 20 => Prod_type_specifier_7 | 21 => Prod_type_specifier_6 | 22 => Prod_type_specifier_5 | 23 => Prod_type_specifier_4 | 24 => Prod_type_specifier_3 | 25 => Prod_type_specifier_2 | 26 => Prod_type_specifier_1 | 27 => Prod_type_specifier_0 | 28 => Prod_type_qualifier_list_1 | 29 => Prod_type_qualifier_list_0 | 30 => Prod_type_qualifier_3 | 31 => Prod_type_qualifier_2 | 32 => Prod_type_qualifier_1 | 33 => Prod_type_qualifier_0 | 34 => Prod_type_name_1 | 35 => Prod_type_name_0 | 36 => Prod_translation_unit_file_0 | 37 => Prod_translation_unit_1 | 38 => Prod_translation_unit_0 | 39 => Prod_struct_or_union_specifier_2 | 40 => Prod_struct_or_union_specifier_1 | 41 => Prod_struct_or_union_specifier_0 | 42 => Prod_struct_or_union_1 | 43 => Prod_struct_or_union_0 | 44 => Prod_struct_declarator_list_1 | 45 => Prod_struct_declarator_list_0 | 46 => Prod_struct_declarator_2 | 47 => Prod_struct_declarator_1 | 48 => Prod_struct_declarator_0 | 49 => Prod_struct_declaration_list_1 | 50 => Prod_struct_declaration_list_0 | 51 => Prod_struct_declaration_1 | 52 => Prod_struct_declaration_0 | 53 => Prod_storage_class_specifier_5 | 54 => Prod_storage_class_specifier_4 | 55 => Prod_storage_class_specifier_3 | 56 => Prod_storage_class_specifier_2 | 57 => Prod_storage_class_specifier_1 | 58 => Prod_storage_class_specifier_0 | 59 => Prod_statement_safe_6 | 60 => Prod_statement_safe_5 | 61 => Prod_statement_safe_4 | 62 => Prod_statement_safe_3 | 63 => Prod_statement_safe_2 | 64 => Prod_statement_safe_1 | 65 => Prod_statement_safe_0 | 66 => Prod_statement_dangerous_6 | 67 => Prod_statement_dangerous_5 | 68 => Prod_statement_dangerous_4 | 69 => Prod_statement_dangerous_3 | 70 => Prod_statement_dangerous_2 | 71 => Prod_statement_dangerous_1 | 72 => Prod_statement_dangerous_0 | 73 => Prod_specifier_qualifier_list_3 | 74 => Prod_specifier_qualifier_list_2 | 75 => Prod_specifier_qualifier_list_1 | 76 => Prod_specifier_qualifier_list_0 | 77 => Prod_shift_expression_2 | 78 => Prod_shift_expression_1 | 79 => Prod_shift_expression_0 | 80 => Prod_selection_statement_safe_1 | 81 => Prod_selection_statement_safe_0 | 82 => Prod_selection_statement_dangerous_2 | 83 => Prod_selection_statement_dangerous_1 | 84 => Prod_selection_statement_dangerous_0 | 85 => Prod_relational_expression_4 | 86 => Prod_relational_expression_3 | 87 => Prod_relational_expression_2 | 88 => Prod_relational_expression_1 | 89 => Prod_relational_expression_0 | 90 => Prod_primary_expression_2 | 91 => Prod_primary_expression_1 | 92 => Prod_primary_expression_0 | 93 => Prod_postfix_expression_11 | 94 => Prod_postfix_expression_10 | 95 => Prod_postfix_expression_9 | 96 => Prod_postfix_expression_8 | 97 => Prod_postfix_expression_7 | 98 => Prod_postfix_expression_6 | 99 => Prod_postfix_expression_5 | 100 => Prod_postfix_expression_4 | 101 => Prod_postfix_expression_3 | 102 => Prod_postfix_expression_2 | 103 => Prod_postfix_expression_1 | 104 => Prod_postfix_expression_0 | 105 => Prod_pointer_3 | 106 => Prod_pointer_2 | 107 => Prod_pointer_1 | 108 => Prod_pointer_0 | 109 => Prod_parameter_type_list_1 | 110 => Prod_parameter_type_list_0 | 111 => Prod_parameter_list_1 | 112 => Prod_parameter_list_0 | 113 => Prod_parameter_declaration_2 | 114 => Prod_parameter_declaration_1 | 115 => Prod_parameter_declaration_0 | 116 => Prod_par_statement_list_1 | 117 => Prod_par_statement_list_0 | 118 => Prod_par_statement_0 | 119 => Prod_multiplicative_expression_3 | 120 => Prod_multiplicative_expression_2 | 121 => Prod_multiplicative_expression_1 | 122 => Prod_multiplicative_expression_0 | 123 => Prod_logical_OR_expression_1 | 124 => Prod_logical_OR_expression_0 | 125 => Prod_logical_AND_expression_1 | 126 => Prod_logical_AND_expression_0 | 127 => Prod_labeled_statement_statement_safe__2 | 128 => Prod_labeled_statement_statement_safe__1 | 129 => Prod_labeled_statement_statement_safe__0 | 130 => Prod_labeled_statement_statement_dangerous__2 | 131 => Prod_labeled_statement_statement_dangerous__1 | 132 => Prod_labeled_statement_statement_dangerous__0 | 133 => Prod_jump_statement_4 | 134 => Prod_jump_statement_3 | 135 => Prod_jump_statement_2 | 136 => Prod_jump_statement_1 | 137 => Prod_jump_statement_0 | 138 => Prod_iteration_statement_statement_safe__13 | 139 => Prod_iteration_statement_statement_safe__12 | 140 => Prod_iteration_statement_statement_safe__11 | 141 => Prod_iteration_statement_statement_safe__10 | 142 => Prod_iteration_statement_statement_safe__9 | 143 => Prod_iteration_statement_statement_safe__8 | 144 => Prod_iteration_statement_statement_safe__7 | 145 => Prod_iteration_statement_statement_safe__6 | 146 => Prod_iteration_statement_statement_safe__5 | 147 => Prod_iteration_statement_statement_safe__4 | 148 => Prod_iteration_statement_statement_safe__3 | 149 => Prod_iteration_statement_statement_safe__2 | 150 => Prod_iteration_statement_statement_safe__1 | 151 => Prod_iteration_statement_statement_safe__0 | 152 => Prod_iteration_statement_statement_dangerous__13 | 153 => Prod_iteration_statement_statement_dangerous__12 | 154 => Prod_iteration_statement_statement_dangerous__11 | 155 => Prod_iteration_statement_statement_dangerous__10 | 156 => Prod_iteration_statement_statement_dangerous__9 | 157 => Prod_iteration_statement_statement_dangerous__8 | 158 => Prod_iteration_statement_statement_dangerous__7 | 159 => Prod_iteration_statement_statement_dangerous__6 | 160 => Prod_iteration_statement_statement_dangerous__5 | 161 => Prod_iteration_statement_statement_dangerous__4 | 162 => Prod_iteration_statement_statement_dangerous__3 | 163 => Prod_iteration_statement_statement_dangerous__2 | 164 => Prod_iteration_statement_statement_dangerous__1 | 165 => Prod_iteration_statement_statement_dangerous__0 | 166 => Prod_initializer_list_3 | 167 => Prod_initializer_list_2 | 168 => Prod_initializer_list_1 | 169 => Prod_initializer_list_0 | 170 => Prod_init_declarator_list_1 | 171 => Prod_init_declarator_list_0 | 172 => Prod_init_declarator_1 | 173 => Prod_init_declarator_0 | 174 => Prod_inclusive_OR_expression_1 | 175 => Prod_inclusive_OR_expression_0 | 176 => Prod_function_specifier_0 | 177 => Prod_function_definition_0 | 178 => Prod_external_declaration_1 | 179 => Prod_external_declaration_0 | 180 => Prod_expression_statement_1 | 181 => Prod_expression_statement_0 | 182 => Prod_expression_1 | 183 => Prod_expression_0 | 184 => Prod_exclusive_OR_expression_1 | 185 => Prod_exclusive_OR_expression_0 | 186 => Prod_equality_expression_2 | 187 => Prod_equality_expression_1 | 188 => Prod_equality_expression_0 | 189 => Prod_enumerator_list_1 | 190 => Prod_enumerator_list_0 | 191 => Prod_enumerator_1 | 192 => Prod_enumerator_0 | 193 => Prod_enumeration_constant_0 | 194 => Prod_enum_specifier_4 | 195 => Prod_enum_specifier_3 | 196 => Prod_enum_specifier_2 | 197 => Prod_enum_specifier_1 | 198 => Prod_enum_specifier_0 | 199 => Prod_direct_declarator_7 | 200 => Prod_direct_declarator_6 | 201 => Prod_direct_declarator_5 | 202 => Prod_direct_declarator_4 | 203 => Prod_direct_declarator_3 | 204 => Prod_direct_declarator_2 | 205 => Prod_direct_declarator_1 | 206 => Prod_direct_declarator_0 | 207 => Prod_direct_abstract_declarator_12 | 208 => Prod_direct_abstract_declarator_11 | 209 => Prod_direct_abstract_declarator_10 | 210 => Prod_direct_abstract_declarator_9 | 211 => Prod_direct_abstract_declarator_8 | 212 => Prod_direct_abstract_declarator_7 | 213 => Prod_direct_abstract_declarator_6 | 214 => Prod_direct_abstract_declarator_5 | 215 => Prod_direct_abstract_declarator_4 | 216 => Prod_direct_abstract_declarator_3 | 217 => Prod_direct_abstract_declarator_2 | 218 => Prod_direct_abstract_declarator_1 | 219 => Prod_direct_abstract_declarator_0 | 220 => Prod_designator_list_1 | 221 => Prod_designator_list_0 | 222 => Prod_designator_1 | 223 => Prod_designator_0 | 224 => Prod_designation_0 | 225 => Prod_declarator_1 | 226 => Prod_declarator_0 | 227 => Prod_declaration_specifiers_7 | 228 => Prod_declaration_specifiers_6 | 229 => Prod_declaration_specifiers_5 | 230 => Prod_declaration_specifiers_4 | 231 => Prod_declaration_specifiers_3 | 232 => Prod_declaration_specifiers_2 | 233 => Prod_declaration_specifiers_1 | 234 => Prod_declaration_specifiers_0 | 235 => Prod_declaration_1 | 236 => Prod_declaration_0 | 237 => Prod_constant_expression_0 | 238 => Prod_conditional_expression_1 | 239 => Prod_conditional_expression_0 | 240 => Prod_compound_statement_1 | 241 => Prod_compound_statement_0 | 242 => Prod_cast_expression_1 | 243 => Prod_cast_expression_0 | 244 => Prod_c_initializer_2 | 245 => Prod_c_initializer_1 | 246 => Prod_c_initializer_0 | 247 => Prod_block_item_list_1 | 248 => Prod_block_item_list_0 | 249 => Prod_block_item_1 | 250 => Prod_block_item_0 | 251 => Prod_atomic_type_specifier_0 | 252 => Prod_atomic_operation_5 | 253 => Prod_atomic_operation_4 | 254 => Prod_atomic_operation_3 | 255 => Prod_atomic_operation_2 | 256 => Prod_atomic_operation_1 | 257 => Prod_atomic_operation_0 | 258 => Prod_assignment_operator_10 | 259 => Prod_assignment_operator_9 | 260 => Prod_assignment_operator_8 | 261 => Prod_assignment_operator_7 | 262 => Prod_assignment_operator_6 | 263 => Prod_assignment_operator_5 | 264 => Prod_assignment_operator_4 | 265 => Prod_assignment_operator_3 | 266 => Prod_assignment_operator_2 | 267 => Prod_assignment_operator_1 | 268 => Prod_assignment_operator_0 | 269 => Prod_assignment_expression_1 | 270 => Prod_assignment_expression_0 | 271 => Prod_argument_expression_list_1 | 272 => Prod_argument_expression_list_0 | 273 => Prod_additive_expression_2 | 274 => Prod_additive_expression_1 | 275 => Prod_additive_expression_0 | 276 => Prod_abstract_declarator_2 | 277 => Prod_abstract_declarator_1 | 278 => Prod_abstract_declarator_0 | 279 => Prod_AND_expression_1 | 280 => Prod_AND_expression_0 | _ => Prod_unary_operator_5 end)%int31;
+  inj_bound := 281%int31 }.
 Solve Obligations using (intro x; case x; reflexivity).
 
 Instance ProductionAlph : Alphabet production := _.
 
 Definition prod_contents (p:production) :
   { p:nonterminal * list symbol &
-    arrows (map symbol_semantic_type (snd p))
-      (symbol_semantic_type (NT (fst p))) }
+    arrows_left (map symbol_semantic_type (rev (snd p)))
+                (symbol_semantic_type (NT (fst p))) }
  :=
   let box := existT (fun p =>
-    arrows (map symbol_semantic_type (snd p))
-      (symbol_semantic_type (NT (fst p))))
+    arrows_left (map symbol_semantic_type (rev (snd p)))
+                (symbol_semantic_type (NT (fst p))))
   in
   match p with
-    | Prod_1 => box
+    | Prod_AND_expression_0 => box
       (AND_expression_nt, [NT equality_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_2 => box
-      (AND_expression_nt, [NT AND_expression_nt; T AND_t; NT equality_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_AND_expression_1 => box
+      (AND_expression_nt, [NT equality_expression_nt; T AND_t; NT AND_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY BAND (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_3 => box
+    | Prod_abstract_declarator_0 => box
       (abstract_declarator_nt, [NT pointer_nt])
-      (fun pt => 
+      (fun pt =>
  (fst pt) JUSTBASE 
 )
-    | Prod_4 => box
-      (abstract_declarator_nt, [NT pointer_nt; NT direct_abstract_declarator_nt])
-      (fun pt typ => 
+    | Prod_abstract_declarator_1 => box
+      (abstract_declarator_nt, [NT direct_abstract_declarator_nt; NT pointer_nt])
+      (fun typ pt =>
  (fst pt) typ 
 )
-    | Prod_5 => box
+    | Prod_abstract_declarator_2 => box
       (abstract_declarator_nt, [NT direct_abstract_declarator_nt])
-      (fun typ => 
+      (fun typ =>
  typ 
 )
-    | Prod_6 => box
+    | Prod_additive_expression_0 => box
       (additive_expression_nt, [NT multiplicative_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_7 => box
-      (additive_expression_nt, [NT additive_expression_nt; T PLUS_t; NT multiplicative_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_additive_expression_1 => box
+      (additive_expression_nt, [NT multiplicative_expression_nt; T PLUS_t; NT additive_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY ADD (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_8 => box
-      (additive_expression_nt, [NT additive_expression_nt; T MINUS_t; NT multiplicative_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_additive_expression_2 => box
+      (additive_expression_nt, [NT multiplicative_expression_nt; T MINUS_t; NT additive_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY SUB (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_9 => box
+    | Prod_argument_expression_list_0 => box
       (argument_expression_list_nt, [NT assignment_expression_nt])
-      (fun expr => 
+      (fun expr =>
  [fst expr] 
 )
-    | Prod_10 => box
-      (argument_expression_list_nt, [NT argument_expression_list_nt; T COMMA_t; NT assignment_expression_nt])
-      (fun exprq _2 exprt => 
+    | Prod_argument_expression_list_1 => box
+      (argument_expression_list_nt, [NT assignment_expression_nt; T COMMA_t; NT argument_expression_list_nt])
+      (fun exprt _2 exprq =>
  fst exprt::exprq 
 )
-    | Prod_11 => box
+    | Prod_assignment_expression_0 => box
       (assignment_expression_nt, [NT conditional_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_12 => box
-      (assignment_expression_nt, [NT unary_expression_nt; NT assignment_operator_nt; NT assignment_expression_nt])
-      (fun expr1 op expr2 => 
+    | Prod_assignment_expression_1 => box
+      (assignment_expression_nt, [NT assignment_expression_nt; NT assignment_operator_nt; NT unary_expression_nt])
+      (fun expr2 op expr1 =>
  (BINARY op (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_13 => box
+    | Prod_assignment_operator_0 => box
       (assignment_operator_nt, [T EQ_t])
-      (fun _1 => 
+      (fun _1 =>
  ASSIGN  
 )
-    | Prod_14 => box
+    | Prod_assignment_operator_1 => box
       (assignment_operator_nt, [T MUL_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  MUL_ASSIGN 
 )
-    | Prod_15 => box
+    | Prod_assignment_operator_2 => box
       (assignment_operator_nt, [T DIV_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  DIV_ASSIGN 
 )
-    | Prod_16 => box
+    | Prod_assignment_operator_3 => box
       (assignment_operator_nt, [T MOD_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  MOD_ASSIGN 
 )
-    | Prod_17 => box
+    | Prod_assignment_operator_4 => box
       (assignment_operator_nt, [T ADD_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  ADD_ASSIGN 
 )
-    | Prod_18 => box
+    | Prod_assignment_operator_5 => box
       (assignment_operator_nt, [T SUB_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  SUB_ASSIGN 
 )
-    | Prod_19 => box
+    | Prod_assignment_operator_6 => box
       (assignment_operator_nt, [T LEFT_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  SHL_ASSIGN 
 )
-    | Prod_20 => box
+    | Prod_assignment_operator_7 => box
       (assignment_operator_nt, [T RIGHT_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  SHR_ASSIGN 
 )
-    | Prod_21 => box
+    | Prod_assignment_operator_8 => box
       (assignment_operator_nt, [T XOR_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  XOR_ASSIGN 
 )
-    | Prod_22 => box
+    | Prod_assignment_operator_9 => box
       (assignment_operator_nt, [T OR_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  BOR_ASSIGN 
 )
-    | Prod_23 => box
+    | Prod_assignment_operator_10 => box
       (assignment_operator_nt, [T AND_ASSIGN_t])
-      (fun _1 => 
+      (fun _1 =>
  BAND_ASSIGN 
 )
-    | Prod_24 => box
-      (atomic_operation_nt, [T C11_ATOMIC_INIT_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 obj _4 value _6 => 
+    | Prod_atomic_operation_0 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_INIT_t])
+      (fun _6 value _4 obj _2 loc =>
  (C11_ATOMIC_INIT (fst obj) (fst value), loc) 
 )
-    | Prod_25 => box
-      (atomic_operation_nt, [T C11_ATOMIC_STORE_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 object_ _4 desired _6 order _8 => 
+    | Prod_atomic_operation_1 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_STORE_t])
+      (fun _8 order _6 desired _4 object_ _2 loc =>
  (C11_ATOMIC_STORE (fst object_) (fst desired) (fst order), loc) 
 )
-    | Prod_26 => box
-      (atomic_operation_nt, [T C11_ATOMIC_LOAD_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 object_ _4 order _6 => 
+    | Prod_atomic_operation_2 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_LOAD_t])
+      (fun _6 order _4 object_ _2 loc =>
  (C11_ATOMIC_LOAD (fst object_) (fst order), loc) 
 )
-    | Prod_27 => box
-      (atomic_operation_nt, [T C11_ATOMIC_EXCHANGE_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 object_ _4 desired _6 order _8 => 
+    | Prod_atomic_operation_3 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_EXCHANGE_t])
+      (fun _8 order _6 desired _4 object_ _2 loc =>
  (C11_ATOMIC_EXCHANGE (fst object_) (fst desired) (fst order), loc) 
 )
-    | Prod_28 => box
-      (atomic_operation_nt, [T C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 object_ _4 expected _6 desired _8 success _10 failure _12 => 
+    | Prod_atomic_operation_4 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t])
+      (fun _12 failure _10 success _8 desired _6 expected _4 object_ _2 loc =>
  (C11_ATOMIC_COMPARE_EXCHANGE_STRONG (fst object_) (fst expected) (fst desired) (fst success) (fst failure), loc) 
 )
-    | Prod_29 => box
-      (atomic_operation_nt, [T C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t; T LPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T RPAREN_t])
-      (fun loc _2 object_ _4 expected _6 desired _8 success _10 failure _12 => 
+    | Prod_atomic_operation_5 => box
+      (atomic_operation_nt, [T RPAREN_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T COMMA_t; NT postfix_expression_nt; T LPAREN_t; T C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t])
+      (fun _12 failure _10 success _8 desired _6 expected _4 object_ _2 loc =>
  (C11_ATOMIC_COMPARE_EXCHANGE_WEAK (fst object_) (fst expected) (fst desired) (fst success) (fst failure), loc) 
 )
-    | Prod_30 => box
-      (atomic_type_specifier_nt, [T ATOMIC_t; T LPAREN_t; NT type_name_nt; T RPAREN_t])
-      (fun loc _2 ty _4 => 
+    | Prod_atomic_type_specifier_0 => box
+      (atomic_type_specifier_nt, [T RPAREN_t; NT type_name_nt; T LPAREN_t; T ATOMIC_t])
+      (fun _4 ty _2 loc =>
  (Tatomic ty, loc) 
 )
-    | Prod_31 => box
+    | Prod_block_item_0 => box
       (block_item_nt, [NT declaration_nt])
-      (fun decl => 
+      (fun decl =>
  DEFINITION decl 
 )
-    | Prod_32 => box
+    | Prod_block_item_1 => box
       (block_item_nt, [NT statement_dangerous_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_33 => box
+    | Prod_block_item_list_0 => box
       (block_item_list_nt, [NT block_item_nt])
-      (fun stmt => 
+      (fun stmt =>
  [stmt] 
 )
-    | Prod_34 => box
-      (block_item_list_nt, [NT block_item_list_nt; NT block_item_nt])
-      (fun stmtq stmtt => 
+    | Prod_block_item_list_1 => box
+      (block_item_list_nt, [NT block_item_nt; NT block_item_list_nt])
+      (fun stmtt stmtq =>
  stmtt::stmtq 
 )
-    | Prod_35 => box
+    | Prod_c_initializer_0 => box
       (c_initializer_nt, [NT assignment_expression_nt])
-      (fun expr => 
+      (fun expr =>
  SINGLE_INIT (fst expr) 
 )
-    | Prod_36 => box
-      (c_initializer_nt, [T LBRACE_t; NT initializer_list_nt; T RBRACE_t])
-      (fun _1 init _3 => 
+    | Prod_c_initializer_1 => box
+      (c_initializer_nt, [T RBRACE_t; NT initializer_list_nt; T LBRACE_t])
+      (fun _3 init _1 =>
  COMPOUND_INIT (rev init) 
 )
-    | Prod_37 => box
-      (c_initializer_nt, [T LBRACE_t; NT initializer_list_nt; T COMMA_t; T RBRACE_t])
-      (fun _1 init _3 _4 => 
+    | Prod_c_initializer_2 => box
+      (c_initializer_nt, [T RBRACE_t; T COMMA_t; NT initializer_list_nt; T LBRACE_t])
+      (fun _4 _3 init _1 =>
  COMPOUND_INIT (rev init) 
 )
-    | Prod_38 => box
+    | Prod_cast_expression_0 => box
       (cast_expression_nt, [NT unary_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_39 => box
-      (cast_expression_nt, [T LPAREN_t; NT type_name_nt; T RPAREN_t; NT cast_expression_nt])
-      (fun loc typ _3 expr => 
+    | Prod_cast_expression_1 => box
+      (cast_expression_nt, [NT cast_expression_nt; T RPAREN_t; NT type_name_nt; T LPAREN_t])
+      (fun expr _3 typ loc =>
  (CAST typ (SINGLE_INIT (fst expr)), loc) 
 )
-    | Prod_40 => box
-      (compound_statement_nt, [T LBRACE_t; NT block_item_list_nt; T RBRACE_t])
-      (fun loc lst _3 => 
+    | Prod_compound_statement_0 => box
+      (compound_statement_nt, [T RBRACE_t; NT block_item_list_nt; T LBRACE_t])
+      (fun _3 lst loc =>
  BLOCK (rev lst) loc 
 )
-    | Prod_41 => box
-      (compound_statement_nt, [T LBRACE_t; T RBRACE_t])
-      (fun loc _2 => 
+    | Prod_compound_statement_1 => box
+      (compound_statement_nt, [T RBRACE_t; T LBRACE_t])
+      (fun _2 loc =>
  BLOCK [] loc 
 )
-    | Prod_42 => box
+    | Prod_conditional_expression_0 => box
       (conditional_expression_nt, [NT logical_OR_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_43 => box
-      (conditional_expression_nt, [NT logical_OR_expression_nt; T QUESTION_t; NT expression_nt; T COLON_t; NT conditional_expression_nt])
-      (fun expr1 _2 expr2 _4 expr3 => 
+    | Prod_conditional_expression_1 => box
+      (conditional_expression_nt, [NT conditional_expression_nt; T COLON_t; NT expression_nt; T QUESTION_t; NT logical_OR_expression_nt])
+      (fun expr3 _4 expr2 _2 expr1 =>
  (QUESTION (fst expr1) (fst expr2) (fst expr3), snd expr1) 
 )
-    | Prod_44 => box
+    | Prod_constant_expression_0 => box
       (constant_expression_nt, [NT conditional_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_45 => box
-      (declaration_nt, [NT declaration_specifiers_nt; NT init_declarator_list_nt; T SEMICOLON_t])
-      (fun decspec decls _3 => 
+    | Prod_declaration_0 => box
+      (declaration_nt, [T SEMICOLON_t; NT init_declarator_list_nt; NT declaration_specifiers_nt])
+      (fun _3 decls decspec =>
  DECDEF (fst decspec, rev decls) (snd decspec) 
 )
-    | Prod_46 => box
-      (declaration_nt, [NT declaration_specifiers_nt; T SEMICOLON_t])
-      (fun decspec _2 => 
+    | Prod_declaration_1 => box
+      (declaration_nt, [T SEMICOLON_t; NT declaration_specifiers_nt])
+      (fun _2 decspec =>
  DECDEF (fst decspec, []) (snd decspec) 
 )
-    | Prod_47 => box
-      (declaration_specifiers_nt, [NT storage_class_specifier_nt; NT declaration_specifiers_nt])
-      (fun storage rest => 
+    | Prod_declaration_specifiers_0 => box
+      (declaration_specifiers_nt, [NT declaration_specifiers_nt; NT storage_class_specifier_nt])
+      (fun rest storage =>
  (SpecStorage (fst storage)::fst rest, snd storage) 
 )
-    | Prod_48 => box
+    | Prod_declaration_specifiers_1 => box
       (declaration_specifiers_nt, [NT storage_class_specifier_nt])
-      (fun storage => 
+      (fun storage =>
  ([SpecStorage (fst storage)], snd storage) 
 )
-    | Prod_49 => box
-      (declaration_specifiers_nt, [NT type_specifier_nt; NT declaration_specifiers_nt])
-      (fun typ rest => 
+    | Prod_declaration_specifiers_2 => box
+      (declaration_specifiers_nt, [NT declaration_specifiers_nt; NT type_specifier_nt])
+      (fun rest typ =>
  (SpecType (fst typ)::fst rest, snd typ) 
 )
-    | Prod_50 => box
+    | Prod_declaration_specifiers_3 => box
       (declaration_specifiers_nt, [NT type_specifier_nt])
-      (fun typ => 
+      (fun typ =>
  ([SpecType (fst typ)], snd typ) 
 )
-    | Prod_51 => box
-      (declaration_specifiers_nt, [NT type_qualifier_nt; NT declaration_specifiers_nt])
-      (fun qual rest => 
+    | Prod_declaration_specifiers_4 => box
+      (declaration_specifiers_nt, [NT declaration_specifiers_nt; NT type_qualifier_nt])
+      (fun rest qual =>
  (SpecCV (fst qual)::fst rest, snd qual) 
 )
-    | Prod_52 => box
+    | Prod_declaration_specifiers_5 => box
       (declaration_specifiers_nt, [NT type_qualifier_nt])
-      (fun qual => 
+      (fun qual =>
  ([SpecCV (fst qual)], snd qual) 
 )
-    | Prod_53 => box
-      (declaration_specifiers_nt, [NT function_specifier_nt; NT declaration_specifiers_nt])
-      (fun loc rest => 
+    | Prod_declaration_specifiers_6 => box
+      (declaration_specifiers_nt, [NT declaration_specifiers_nt; NT function_specifier_nt])
+      (fun rest loc =>
  (SpecInline::fst rest, loc) 
 )
-    | Prod_54 => box
+    | Prod_declaration_specifiers_7 => box
       (declaration_specifiers_nt, [NT function_specifier_nt])
-      (fun loc => 
+      (fun loc =>
  ([SpecInline], loc) 
 )
-    | Prod_55 => box
+    | Prod_declarator_0 => box
       (declarator_nt, [NT direct_declarator_nt])
-      (fun decl => 
+      (fun decl =>
  decl 
 )
-    | Prod_56 => box
-      (declarator_nt, [NT pointer_nt; NT direct_declarator_nt])
-      (fun pt decl => 
+    | Prod_declarator_1 => box
+      (declarator_nt, [NT direct_declarator_nt; NT pointer_nt])
+      (fun decl pt =>
  match decl with Name name typ attr _ => 
 	Name name ((fst pt) typ) attr (snd pt) end 
 )
-    | Prod_57 => box
-      (designation_nt, [NT designator_list_nt; T EQ_t])
-      (fun design _2 => 
+    | Prod_designation_0 => box
+      (designation_nt, [T EQ_t; NT designator_list_nt])
+      (fun _2 design =>
  rev design 
 )
-    | Prod_58 => box
-      (designator_nt, [T LBRACK_t; NT constant_expression_nt; T RBRACK_t])
-      (fun _1 expr _3 => 
+    | Prod_designator_0 => box
+      (designator_nt, [T RBRACK_t; NT constant_expression_nt; T LBRACK_t])
+      (fun _3 expr _1 =>
  ATINDEX_INIT (fst expr) 
 )
-    | Prod_59 => box
-      (designator_nt, [T DOT_t; T OTHER_NAME_t])
-      (fun _1 id => 
+    | Prod_designator_1 => box
+      (designator_nt, [T OTHER_NAME_t; T DOT_t])
+      (fun id _1 =>
  INFIELD_INIT (fst id) 
 )
-    | Prod_60 => box
+    | Prod_designator_list_0 => box
       (designator_list_nt, [NT designator_nt])
-      (fun design => 
+      (fun design =>
  [design] 
 )
-    | Prod_61 => box
-      (designator_list_nt, [NT designator_list_nt; NT designator_nt])
-      (fun designq designt => 
+    | Prod_designator_list_1 => box
+      (designator_list_nt, [NT designator_nt; NT designator_list_nt])
+      (fun designt designq =>
  designt::designq 
 )
-    | Prod_62 => box
-      (direct_abstract_declarator_nt, [T LPAREN_t; NT abstract_declarator_nt; T RPAREN_t])
-      (fun _1 typ _3 => 
+    | Prod_direct_abstract_declarator_0 => box
+      (direct_abstract_declarator_nt, [T RPAREN_t; NT abstract_declarator_nt; T LPAREN_t])
+      (fun _3 typ _1 =>
  typ 
 )
-    | Prod_63 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LBRACK_t; NT type_qualifier_list_nt; NT assignment_expression_nt; T RBRACK_t])
-      (fun typ _2 cvspec expr _5 => 
+    | Prod_direct_abstract_declarator_1 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; NT type_qualifier_list_nt; T LBRACK_t; NT direct_abstract_declarator_nt])
+      (fun _5 expr cvspec _2 typ =>
  ARRAY typ cvspec [] (Some (fst expr)) 
 )
-    | Prod_64 => box
-      (direct_abstract_declarator_nt, [T LBRACK_t; NT type_qualifier_list_nt; NT assignment_expression_nt; T RBRACK_t])
-      (fun _1 cvspec expr _4 => 
+    | Prod_direct_abstract_declarator_2 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; NT type_qualifier_list_nt; T LBRACK_t])
+      (fun _4 expr cvspec _1 =>
  ARRAY JUSTBASE cvspec [] (Some (fst expr)) 
 )
-    | Prod_65 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LBRACK_t; NT assignment_expression_nt; T RBRACK_t])
-      (fun typ _2 expr _4 => 
+    | Prod_direct_abstract_declarator_3 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; T LBRACK_t; NT direct_abstract_declarator_nt])
+      (fun _4 expr _2 typ =>
  ARRAY typ [] [] (Some (fst expr)) 
 )
-    | Prod_66 => box
-      (direct_abstract_declarator_nt, [T LBRACK_t; NT assignment_expression_nt; T RBRACK_t])
-      (fun _1 expr _3 => 
+    | Prod_direct_abstract_declarator_4 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; T LBRACK_t])
+      (fun _3 expr _1 =>
  ARRAY JUSTBASE [] [] (Some (fst expr)) 
 )
-    | Prod_67 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LBRACK_t; NT type_qualifier_list_nt; T RBRACK_t])
-      (fun typ _2 cvspec _4 => 
+    | Prod_direct_abstract_declarator_5 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT type_qualifier_list_nt; T LBRACK_t; NT direct_abstract_declarator_nt])
+      (fun _4 cvspec _2 typ =>
  ARRAY typ cvspec [] None 
 )
-    | Prod_68 => box
-      (direct_abstract_declarator_nt, [T LBRACK_t; NT type_qualifier_list_nt; T RBRACK_t])
-      (fun _1 cvspec _3 => 
+    | Prod_direct_abstract_declarator_6 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; NT type_qualifier_list_nt; T LBRACK_t])
+      (fun _3 cvspec _1 =>
  ARRAY JUSTBASE cvspec [] None 
 )
-    | Prod_69 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LBRACK_t; T RBRACK_t])
-      (fun typ _2 _3 => 
+    | Prod_direct_abstract_declarator_7 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; T LBRACK_t; NT direct_abstract_declarator_nt])
+      (fun _3 _2 typ =>
  ARRAY typ [] [] None 
 )
-    | Prod_70 => box
-      (direct_abstract_declarator_nt, [T LBRACK_t; T RBRACK_t])
-      (fun _1 _2 => 
+    | Prod_direct_abstract_declarator_8 => box
+      (direct_abstract_declarator_nt, [T RBRACK_t; T LBRACK_t])
+      (fun _2 _1 =>
  ARRAY JUSTBASE [] [] None 
 )
-    | Prod_71 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LPAREN_t; NT parameter_type_list_nt; T RPAREN_t])
-      (fun typ _2 params _4 => 
+    | Prod_direct_abstract_declarator_9 => box
+      (direct_abstract_declarator_nt, [T RPAREN_t; NT parameter_type_list_nt; T LPAREN_t; NT direct_abstract_declarator_nt])
+      (fun _4 params _2 typ =>
  PROTO typ params 
 )
-    | Prod_72 => box
-      (direct_abstract_declarator_nt, [T LPAREN_t; NT parameter_type_list_nt; T RPAREN_t])
-      (fun _1 params _3 => 
+    | Prod_direct_abstract_declarator_10 => box
+      (direct_abstract_declarator_nt, [T RPAREN_t; NT parameter_type_list_nt; T LPAREN_t])
+      (fun _3 params _1 =>
  PROTO JUSTBASE params 
 )
-    | Prod_73 => box
-      (direct_abstract_declarator_nt, [NT direct_abstract_declarator_nt; T LPAREN_t; T RPAREN_t])
-      (fun typ _2 _3 => 
+    | Prod_direct_abstract_declarator_11 => box
+      (direct_abstract_declarator_nt, [T RPAREN_t; T LPAREN_t; NT direct_abstract_declarator_nt])
+      (fun _3 _2 typ =>
  PROTO typ ([], false) 
 )
-    | Prod_74 => box
-      (direct_abstract_declarator_nt, [T LPAREN_t; T RPAREN_t])
-      (fun _1 _2 => 
+    | Prod_direct_abstract_declarator_12 => box
+      (direct_abstract_declarator_nt, [T RPAREN_t; T LPAREN_t])
+      (fun _2 _1 =>
  PROTO JUSTBASE ([], false) 
 )
-    | Prod_75 => box
+    | Prod_direct_declarator_0 => box
       (direct_declarator_nt, [T VAR_NAME_t])
-      (fun id => 
+      (fun id =>
  Name (fst id) JUSTBASE [] (snd id) 
 )
-    | Prod_76 => box
-      (direct_declarator_nt, [T LPAREN_t; NT declarator_nt; T RPAREN_t])
-      (fun _1 decl _3 => 
+    | Prod_direct_declarator_1 => box
+      (direct_declarator_nt, [T RPAREN_t; NT declarator_nt; T LPAREN_t])
+      (fun _3 decl _1 =>
  decl 
 )
-    | Prod_77 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LBRACK_t; NT type_qualifier_list_nt; NT assignment_expression_nt; T RBRACK_t])
-      (fun decl _2 quallst expr _5 => 
+    | Prod_direct_declarator_2 => box
+      (direct_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; NT type_qualifier_list_nt; T LBRACK_t; NT direct_declarator_nt])
+      (fun _5 expr quallst _2 decl =>
  match decl with Name name typ attr loc =>
 	Name name (ARRAY typ (rev quallst) [] (Some (fst expr))) attr loc end 
 )
-    | Prod_78 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LBRACK_t; NT assignment_expression_nt; T RBRACK_t])
-      (fun decl _2 expr _4 => 
+    | Prod_direct_declarator_3 => box
+      (direct_declarator_nt, [T RBRACK_t; NT assignment_expression_nt; T LBRACK_t; NT direct_declarator_nt])
+      (fun _4 expr _2 decl =>
  match decl with Name name typ attr loc =>
 	Name name (ARRAY typ [] [] (Some (fst expr))) attr loc end 
 )
-    | Prod_79 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LBRACK_t; NT type_qualifier_list_nt; T RBRACK_t])
-      (fun decl _2 quallst _4 => 
+    | Prod_direct_declarator_4 => box
+      (direct_declarator_nt, [T RBRACK_t; NT type_qualifier_list_nt; T LBRACK_t; NT direct_declarator_nt])
+      (fun _4 quallst _2 decl =>
  match decl with Name name typ attr loc =>
 	Name name (ARRAY typ (rev quallst) [] None) attr loc end 
 )
-    | Prod_80 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LBRACK_t; T RBRACK_t])
-      (fun decl _2 _3 => 
+    | Prod_direct_declarator_5 => box
+      (direct_declarator_nt, [T RBRACK_t; T LBRACK_t; NT direct_declarator_nt])
+      (fun _3 _2 decl =>
  match decl with Name name typ attr loc =>
 	Name name (ARRAY typ [] [] None) attr loc end 
 )
-    | Prod_81 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LPAREN_t; NT parameter_type_list_nt; T RPAREN_t])
-      (fun decl _2 params _4 => 
+    | Prod_direct_declarator_6 => box
+      (direct_declarator_nt, [T RPAREN_t; NT parameter_type_list_nt; T LPAREN_t; NT direct_declarator_nt])
+      (fun _4 params _2 decl =>
  match decl with Name name typ attr loc =>
 	Name name (PROTO typ params) attr loc end 
 )
-    | Prod_82 => box
-      (direct_declarator_nt, [NT direct_declarator_nt; T LPAREN_t; T RPAREN_t])
-      (fun decl _2 _3 => 
+    | Prod_direct_declarator_7 => box
+      (direct_declarator_nt, [T RPAREN_t; T LPAREN_t; NT direct_declarator_nt])
+      (fun _3 _2 decl =>
  match decl with Name name typ attr loc =>
         Name name (PROTO typ ([],false)) attr loc end 
 )
-    | Prod_83 => box
-      (enum_specifier_nt, [T ENUM_t; T OTHER_NAME_t; T LBRACE_t; NT enumerator_list_nt; T RBRACE_t])
-      (fun loc name _3 enum_list _5 => 
+    | Prod_enum_specifier_0 => box
+      (enum_specifier_nt, [T RBRACE_t; NT enumerator_list_nt; T LBRACE_t; T OTHER_NAME_t; T ENUM_t])
+      (fun _5 enum_list _3 name loc =>
  (Tenum (Some (fst name)) (Some (rev enum_list)) [], loc) 
 )
-    | Prod_84 => box
-      (enum_specifier_nt, [T ENUM_t; T LBRACE_t; NT enumerator_list_nt; T RBRACE_t])
-      (fun loc _2 enum_list _4 => 
+    | Prod_enum_specifier_1 => box
+      (enum_specifier_nt, [T RBRACE_t; NT enumerator_list_nt; T LBRACE_t; T ENUM_t])
+      (fun _4 enum_list _2 loc =>
  (Tenum None (Some (rev enum_list)) [], loc) 
 )
-    | Prod_85 => box
-      (enum_specifier_nt, [T ENUM_t; T OTHER_NAME_t; T LBRACE_t; NT enumerator_list_nt; T COMMA_t; T RBRACE_t])
-      (fun loc name _3 enum_list _5 _6 => 
+    | Prod_enum_specifier_2 => box
+      (enum_specifier_nt, [T RBRACE_t; T COMMA_t; NT enumerator_list_nt; T LBRACE_t; T OTHER_NAME_t; T ENUM_t])
+      (fun _6 _5 enum_list _3 name loc =>
  (Tenum (Some (fst name)) (Some (rev enum_list)) [], loc) 
 )
-    | Prod_86 => box
-      (enum_specifier_nt, [T ENUM_t; T LBRACE_t; NT enumerator_list_nt; T COMMA_t; T RBRACE_t])
-      (fun loc _2 enum_list _4 _5 => 
+    | Prod_enum_specifier_3 => box
+      (enum_specifier_nt, [T RBRACE_t; T COMMA_t; NT enumerator_list_nt; T LBRACE_t; T ENUM_t])
+      (fun _5 _4 enum_list _2 loc =>
  (Tenum None (Some (rev enum_list)) [], loc) 
 )
-    | Prod_87 => box
-      (enum_specifier_nt, [T ENUM_t; T OTHER_NAME_t])
-      (fun loc name => 
+    | Prod_enum_specifier_4 => box
+      (enum_specifier_nt, [T OTHER_NAME_t; T ENUM_t])
+      (fun name loc =>
  (Tenum (Some (fst name)) None [], loc) 
 )
-    | Prod_88 => box
+    | Prod_enumeration_constant_0 => box
       (enumeration_constant_nt, [T VAR_NAME_t])
-      (fun loc => 
+      (fun loc =>
  loc 
 )
-    | Prod_89 => box
+    | Prod_enumerator_0 => box
       (enumerator_nt, [NT enumeration_constant_nt])
-      (fun atom => 
+      (fun atom =>
  (fst atom, None, snd atom) 
 )
-    | Prod_90 => box
-      (enumerator_nt, [NT enumeration_constant_nt; T EQ_t; NT constant_expression_nt])
-      (fun atom _2 expr => 
+    | Prod_enumerator_1 => box
+      (enumerator_nt, [NT constant_expression_nt; T EQ_t; NT enumeration_constant_nt])
+      (fun expr _2 atom =>
  (fst atom, Some (fst expr), snd atom) 
 )
-    | Prod_91 => box
+    | Prod_enumerator_list_0 => box
       (enumerator_list_nt, [NT enumerator_nt])
-      (fun enum => 
+      (fun enum =>
  [enum] 
 )
-    | Prod_92 => box
-      (enumerator_list_nt, [NT enumerator_list_nt; T COMMA_t; NT enumerator_nt])
-      (fun enumsq _2 enumst => 
+    | Prod_enumerator_list_1 => box
+      (enumerator_list_nt, [NT enumerator_nt; T COMMA_t; NT enumerator_list_nt])
+      (fun enumst _2 enumsq =>
  enumst::enumsq 
 )
-    | Prod_93 => box
+    | Prod_equality_expression_0 => box
       (equality_expression_nt, [NT relational_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_94 => box
-      (equality_expression_nt, [NT equality_expression_nt; T EQEQ_t; NT relational_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_equality_expression_1 => box
+      (equality_expression_nt, [NT relational_expression_nt; T EQEQ_t; NT equality_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY EQ (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_95 => box
-      (equality_expression_nt, [NT equality_expression_nt; T NEQ_t; NT relational_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_equality_expression_2 => box
+      (equality_expression_nt, [NT relational_expression_nt; T NEQ_t; NT equality_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY NE (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_96 => box
+    | Prod_exclusive_OR_expression_0 => box
       (exclusive_OR_expression_nt, [NT AND_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_97 => box
-      (exclusive_OR_expression_nt, [NT exclusive_OR_expression_nt; T HAT_t; NT AND_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_exclusive_OR_expression_1 => box
+      (exclusive_OR_expression_nt, [NT AND_expression_nt; T HAT_t; NT exclusive_OR_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY XOR (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_98 => box
+    | Prod_expression_0 => box
       (expression_nt, [NT assignment_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_99 => box
-      (expression_nt, [NT expression_nt; T COMMA_t; NT assignment_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_expression_1 => box
+      (expression_nt, [NT assignment_expression_nt; T COMMA_t; NT expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY COMMA (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_100 => box
-      (expression_statement_nt, [NT expression_nt; T SEMICOLON_t])
-      (fun expr _2 => 
+    | Prod_expression_statement_0 => box
+      (expression_statement_nt, [T SEMICOLON_t; NT expression_nt])
+      (fun _2 expr =>
  COMPUTATION (fst expr) (snd expr) 
 )
-    | Prod_101 => box
+    | Prod_expression_statement_1 => box
       (expression_statement_nt, [T SEMICOLON_t])
-      (fun loc => 
+      (fun loc =>
  NOP loc 
 )
-    | Prod_102 => box
+    | Prod_external_declaration_0 => box
       (external_declaration_nt, [NT function_definition_nt])
-      (fun def => 
+      (fun def =>
  def 
 )
-    | Prod_103 => box
+    | Prod_external_declaration_1 => box
       (external_declaration_nt, [NT declaration_nt])
-      (fun def => 
+      (fun def =>
  def 
 )
-    | Prod_104 => box
-      (function_definition_nt, [NT declaration_specifiers_nt; NT declarator_nt; NT compound_statement_nt])
-      (fun specs decl stmt => 
+    | Prod_function_definition_0 => box
+      (function_definition_nt, [NT compound_statement_nt; NT declarator_nt; NT declaration_specifiers_nt])
+      (fun stmt decl specs =>
  FUNDEF (fst specs) decl stmt (snd specs) 
 )
-    | Prod_105 => box
+    | Prod_function_specifier_0 => box
       (function_specifier_nt, [T INLINE_t])
-      (fun loc => 
+      (fun loc =>
  loc 
 )
-    | Prod_106 => box
+    | Prod_inclusive_OR_expression_0 => box
       (inclusive_OR_expression_nt, [NT exclusive_OR_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_107 => box
-      (inclusive_OR_expression_nt, [NT inclusive_OR_expression_nt; T BAR_t; NT exclusive_OR_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_inclusive_OR_expression_1 => box
+      (inclusive_OR_expression_nt, [NT exclusive_OR_expression_nt; T BAR_t; NT inclusive_OR_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY BOR (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_108 => box
+    | Prod_init_declarator_0 => box
       (init_declarator_nt, [NT declarator_nt])
-      (fun name => 
+      (fun name =>
  Init_name name NO_INIT 
 )
-    | Prod_109 => box
-      (init_declarator_nt, [NT declarator_nt; T EQ_t; NT c_initializer_nt])
-      (fun name _2 init => 
+    | Prod_init_declarator_1 => box
+      (init_declarator_nt, [NT c_initializer_nt; T EQ_t; NT declarator_nt])
+      (fun init _2 name =>
  Init_name name init 
 )
-    | Prod_110 => box
+    | Prod_init_declarator_list_0 => box
       (init_declarator_list_nt, [NT init_declarator_nt])
-      (fun init => 
+      (fun init =>
  [init] 
 )
-    | Prod_111 => box
-      (init_declarator_list_nt, [NT init_declarator_list_nt; T COMMA_t; NT init_declarator_nt])
-      (fun initq _2 initt => 
+    | Prod_init_declarator_list_1 => box
+      (init_declarator_list_nt, [NT init_declarator_nt; T COMMA_t; NT init_declarator_list_nt])
+      (fun initt _2 initq =>
  initt::initq 
 )
-    | Prod_112 => box
-      (initializer_list_nt, [NT designation_nt; NT c_initializer_nt])
-      (fun design init => 
+    | Prod_initializer_list_0 => box
+      (initializer_list_nt, [NT c_initializer_nt; NT designation_nt])
+      (fun init design =>
  [(design, init)] 
 )
-    | Prod_113 => box
+    | Prod_initializer_list_1 => box
       (initializer_list_nt, [NT c_initializer_nt])
-      (fun init => 
+      (fun init =>
  [([], init)] 
 )
-    | Prod_114 => box
-      (initializer_list_nt, [NT initializer_list_nt; T COMMA_t; NT designation_nt; NT c_initializer_nt])
-      (fun initq _2 design init => 
+    | Prod_initializer_list_2 => box
+      (initializer_list_nt, [NT c_initializer_nt; NT designation_nt; T COMMA_t; NT initializer_list_nt])
+      (fun init design _2 initq =>
  (design, init)::initq 
 )
-    | Prod_115 => box
-      (initializer_list_nt, [NT initializer_list_nt; T COMMA_t; NT c_initializer_nt])
-      (fun initq _2 init => 
+    | Prod_initializer_list_3 => box
+      (initializer_list_nt, [NT c_initializer_nt; T COMMA_t; NT initializer_list_nt])
+      (fun init _2 initq =>
  ([], init)::initq 
 )
-    | Prod_116 => box
-      (iteration_statement_statement_dangerous__nt, [T WHILE_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr _4 stmt => 
+    | Prod_iteration_statement_statement_dangerous__0 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T WHILE_t])
+      (fun stmt _4 expr _2 loc =>
  WHILE (fst expr) stmt loc 
 )
-    | Prod_117 => box
-      (iteration_statement_statement_dangerous__nt, [T DO_t; NT statement_dangerous_nt; T WHILE_t; T LPAREN_t; NT expression_nt; T RPAREN_t; T SEMICOLON_t])
-      (fun loc stmt _3 _4 expr _6 _7 => 
+    | Prod_iteration_statement_statement_dangerous__1 => box
+      (iteration_statement_statement_dangerous__nt, [T SEMICOLON_t; T RPAREN_t; NT expression_nt; T LPAREN_t; T WHILE_t; NT statement_dangerous_nt; T DO_t])
+      (fun _7 _6 expr _4 _3 stmt loc =>
  DOWHILE (fst expr) stmt loc 
 )
-    | Prod_118 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr1 _4 expr2 _6 expr3 _8 stmt => 
+    | Prod_iteration_statement_statement_dangerous__2 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _8 expr3 _6 expr2 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_119 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 decl1 expr2 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_dangerous__3 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 expr2 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_120 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 _3 expr2 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_dangerous__4 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 expr2 _3 _2 loc =>
  FOR None (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_121 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr1 _4 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_dangerous__5 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) None (Some (fst expr3)) stmt loc 
 )
-    | Prod_122 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 decl1 _4 expr3 _6 stmt => 
+    | Prod_iteration_statement_statement_dangerous__6 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 expr3 _4 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) None (Some (fst expr3)) stmt loc 
 )
-    | Prod_123 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 _3 _4 expr3 _6 stmt => 
+    | Prod_iteration_statement_statement_dangerous__7 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _6 expr3 _4 _3 _2 loc =>
  FOR None None (Some (fst expr3)) stmt loc 
 )
-    | Prod_124 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr1 _4 expr2 _6 _7 stmt => 
+    | Prod_iteration_statement_statement_dangerous__8 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 _6 expr2 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) (Some (fst expr2)) None stmt loc 
 )
-    | Prod_125 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 decl1 expr2 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_dangerous__9 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 expr2 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) (Some (fst expr2)) None stmt loc 
 )
-    | Prod_126 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 _3 expr2 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_dangerous__10 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 expr2 _3 _2 loc =>
  FOR None (Some (fst expr2)) None stmt loc 
 )
-    | Prod_127 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr1 _4 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_dangerous__11 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) None None stmt loc 
 )
-    | Prod_128 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 decl1 _4 _5 stmt => 
+    | Prod_iteration_statement_statement_dangerous__12 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _5 _4 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) None None stmt loc 
 )
-    | Prod_129 => box
-      (iteration_statement_statement_dangerous__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; T SEMICOLON_t; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 _3 _4 _5 stmt => 
+    | Prod_iteration_statement_statement_dangerous__13 => box
+      (iteration_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T RPAREN_t; T SEMICOLON_t; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _5 _4 _3 _2 loc =>
  FOR None None None stmt loc 
 )
-    | Prod_130 => box
-      (iteration_statement_statement_safe__nt, [T WHILE_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr _4 stmt => 
+    | Prod_iteration_statement_statement_safe__0 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T WHILE_t])
+      (fun stmt _4 expr _2 loc =>
  WHILE (fst expr) stmt loc 
 )
-    | Prod_131 => box
-      (iteration_statement_statement_safe__nt, [T DO_t; NT statement_dangerous_nt; T WHILE_t; T LPAREN_t; NT expression_nt; T RPAREN_t; T SEMICOLON_t])
-      (fun loc stmt _3 _4 expr _6 _7 => 
+    | Prod_iteration_statement_statement_safe__1 => box
+      (iteration_statement_statement_safe__nt, [T SEMICOLON_t; T RPAREN_t; NT expression_nt; T LPAREN_t; T WHILE_t; NT statement_dangerous_nt; T DO_t])
+      (fun _7 _6 expr _4 _3 stmt loc =>
  DOWHILE (fst expr) stmt loc 
 )
-    | Prod_132 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr1 _4 expr2 _6 expr3 _8 stmt => 
+    | Prod_iteration_statement_statement_safe__2 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _8 expr3 _6 expr2 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_133 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 decl1 expr2 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_safe__3 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 expr2 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_134 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 _3 expr2 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_safe__4 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 expr2 _3 _2 loc =>
  FOR None (Some (fst expr2)) (Some (fst expr3)) stmt loc 
 )
-    | Prod_135 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr1 _4 _5 expr3 _7 stmt => 
+    | Prod_iteration_statement_statement_safe__5 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 expr3 _5 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) None (Some (fst expr3)) stmt loc 
 )
-    | Prod_136 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 decl1 _4 expr3 _6 stmt => 
+    | Prod_iteration_statement_statement_safe__6 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 expr3 _4 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) None (Some (fst expr3)) stmt loc 
 )
-    | Prod_137 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 _3 _4 expr3 _6 stmt => 
+    | Prod_iteration_statement_statement_safe__7 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _6 expr3 _4 _3 _2 loc =>
  FOR None None (Some (fst expr3)) stmt loc 
 )
-    | Prod_138 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr1 _4 expr2 _6 _7 stmt => 
+    | Prod_iteration_statement_statement_safe__8 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _7 _6 expr2 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) (Some (fst expr2)) None stmt loc 
 )
-    | Prod_139 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 decl1 expr2 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_safe__9 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 expr2 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) (Some (fst expr2)) None stmt loc 
 )
-    | Prod_140 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 _3 expr2 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_safe__10 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; NT expression_nt; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 expr2 _3 _2 loc =>
  FOR None (Some (fst expr2)) None stmt loc 
 )
-    | Prod_141 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT expression_nt; T SEMICOLON_t; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr1 _4 _5 _6 stmt => 
+    | Prod_iteration_statement_statement_safe__11 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; T SEMICOLON_t; NT expression_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _6 _5 _4 expr1 _2 loc =>
  FOR (Some (FC_EXP (fst expr1))) None None stmt loc 
 )
-    | Prod_142 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; NT declaration_nt; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 decl1 _4 _5 stmt => 
+    | Prod_iteration_statement_statement_safe__12 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; NT declaration_nt; T LPAREN_t; T FOR_t])
+      (fun stmt _5 _4 decl1 _2 loc =>
  FOR (Some (FC_DECL decl1)) None None stmt loc 
 )
-    | Prod_143 => box
-      (iteration_statement_statement_safe__nt, [T FOR_t; T LPAREN_t; T SEMICOLON_t; T SEMICOLON_t; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 _3 _4 _5 stmt => 
+    | Prod_iteration_statement_statement_safe__13 => box
+      (iteration_statement_statement_safe__nt, [NT statement_safe_nt; T RPAREN_t; T SEMICOLON_t; T SEMICOLON_t; T LPAREN_t; T FOR_t])
+      (fun stmt _5 _4 _3 _2 loc =>
  FOR None None None stmt loc 
 )
-    | Prod_144 => box
-      (jump_statement_nt, [T GOTO_t; T OTHER_NAME_t; T SEMICOLON_t])
-      (fun loc id _3 => 
+    | Prod_jump_statement_0 => box
+      (jump_statement_nt, [T SEMICOLON_t; T OTHER_NAME_t; T GOTO_t])
+      (fun _3 id loc =>
  GOTO (fst id) loc 
 )
-    | Prod_145 => box
-      (jump_statement_nt, [T CONTINUE_t; T SEMICOLON_t])
-      (fun loc _2 => 
+    | Prod_jump_statement_1 => box
+      (jump_statement_nt, [T SEMICOLON_t; T CONTINUE_t])
+      (fun _2 loc =>
  CONTINUE loc 
 )
-    | Prod_146 => box
-      (jump_statement_nt, [T BREAK_t; T SEMICOLON_t])
-      (fun loc _2 => 
+    | Prod_jump_statement_2 => box
+      (jump_statement_nt, [T SEMICOLON_t; T BREAK_t])
+      (fun _2 loc =>
  BREAK loc 
 )
-    | Prod_147 => box
-      (jump_statement_nt, [T RETURN_t; NT expression_nt; T SEMICOLON_t])
-      (fun loc expr _3 => 
+    | Prod_jump_statement_3 => box
+      (jump_statement_nt, [T SEMICOLON_t; NT expression_nt; T RETURN_t])
+      (fun _3 expr loc =>
  RETURN (Some (fst expr)) loc 
 )
-    | Prod_148 => box
-      (jump_statement_nt, [T RETURN_t; T SEMICOLON_t])
-      (fun loc _2 => 
+    | Prod_jump_statement_4 => box
+      (jump_statement_nt, [T SEMICOLON_t; T RETURN_t])
+      (fun _2 loc =>
  RETURN None loc 
 )
-    | Prod_149 => box
-      (labeled_statement_statement_dangerous__nt, [T OTHER_NAME_t; T COLON_t; NT statement_dangerous_nt])
-      (fun lbl _2 stmt => 
+    | Prod_labeled_statement_statement_dangerous__0 => box
+      (labeled_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T COLON_t; T OTHER_NAME_t])
+      (fun stmt _2 lbl =>
  LABEL (fst lbl) stmt (snd lbl) 
 )
-    | Prod_150 => box
-      (labeled_statement_statement_dangerous__nt, [T CASE_t; NT constant_expression_nt; T COLON_t; NT statement_dangerous_nt])
-      (fun loc expr _3 stmt => 
+    | Prod_labeled_statement_statement_dangerous__1 => box
+      (labeled_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T COLON_t; NT constant_expression_nt; T CASE_t])
+      (fun stmt _3 expr loc =>
  CASE (fst expr) stmt loc 
 )
-    | Prod_151 => box
-      (labeled_statement_statement_dangerous__nt, [T DEFAULT_t; T COLON_t; NT statement_dangerous_nt])
-      (fun loc _2 stmt => 
+    | Prod_labeled_statement_statement_dangerous__2 => box
+      (labeled_statement_statement_dangerous__nt, [NT statement_dangerous_nt; T COLON_t; T DEFAULT_t])
+      (fun stmt _2 loc =>
  DEFAULT stmt loc 
 )
-    | Prod_152 => box
-      (labeled_statement_statement_safe__nt, [T OTHER_NAME_t; T COLON_t; NT statement_safe_nt])
-      (fun lbl _2 stmt => 
+    | Prod_labeled_statement_statement_safe__0 => box
+      (labeled_statement_statement_safe__nt, [NT statement_safe_nt; T COLON_t; T OTHER_NAME_t])
+      (fun stmt _2 lbl =>
  LABEL (fst lbl) stmt (snd lbl) 
 )
-    | Prod_153 => box
-      (labeled_statement_statement_safe__nt, [T CASE_t; NT constant_expression_nt; T COLON_t; NT statement_safe_nt])
-      (fun loc expr _3 stmt => 
+    | Prod_labeled_statement_statement_safe__1 => box
+      (labeled_statement_statement_safe__nt, [NT statement_safe_nt; T COLON_t; NT constant_expression_nt; T CASE_t])
+      (fun stmt _3 expr loc =>
  CASE (fst expr) stmt loc 
 )
-    | Prod_154 => box
-      (labeled_statement_statement_safe__nt, [T DEFAULT_t; T COLON_t; NT statement_safe_nt])
-      (fun loc _2 stmt => 
+    | Prod_labeled_statement_statement_safe__2 => box
+      (labeled_statement_statement_safe__nt, [NT statement_safe_nt; T COLON_t; T DEFAULT_t])
+      (fun stmt _2 loc =>
  DEFAULT stmt loc 
 )
-    | Prod_155 => box
+    | Prod_logical_AND_expression_0 => box
       (logical_AND_expression_nt, [NT inclusive_OR_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_156 => box
-      (logical_AND_expression_nt, [NT logical_AND_expression_nt; T ANDAND_t; NT inclusive_OR_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_logical_AND_expression_1 => box
+      (logical_AND_expression_nt, [NT inclusive_OR_expression_nt; T ANDAND_t; NT logical_AND_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY AND (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_157 => box
+    | Prod_logical_OR_expression_0 => box
       (logical_OR_expression_nt, [NT logical_AND_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_158 => box
-      (logical_OR_expression_nt, [NT logical_OR_expression_nt; T BARBAR_t; NT logical_AND_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_logical_OR_expression_1 => box
+      (logical_OR_expression_nt, [NT logical_AND_expression_nt; T BARBAR_t; NT logical_OR_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY OR (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_159 => box
+    | Prod_multiplicative_expression_0 => box
       (multiplicative_expression_nt, [NT cast_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_160 => box
-      (multiplicative_expression_nt, [NT multiplicative_expression_nt; T STAR_t; NT cast_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_multiplicative_expression_1 => box
+      (multiplicative_expression_nt, [NT cast_expression_nt; T STAR_t; NT multiplicative_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY MUL (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_161 => box
-      (multiplicative_expression_nt, [NT multiplicative_expression_nt; T SLASH_t; NT cast_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_multiplicative_expression_2 => box
+      (multiplicative_expression_nt, [NT cast_expression_nt; T SLASH_t; NT multiplicative_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY DIV (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_162 => box
-      (multiplicative_expression_nt, [NT multiplicative_expression_nt; T PERCENT_t; NT cast_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_multiplicative_expression_3 => box
+      (multiplicative_expression_nt, [NT cast_expression_nt; T PERCENT_t; NT multiplicative_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY MOD (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_163 => box
-      (par_statement_nt, [T LBRACES_t; NT par_statement_list_nt; T RBRACES_t])
-      (fun loc ss _3 => 
+    | Prod_par_statement_0 => box
+      (par_statement_nt, [T RBRACES_t; NT par_statement_list_nt; T LBRACES_t])
+      (fun _3 ss loc =>
  PAR ss loc 
 )
-    | Prod_164 => box
+    | Prod_par_statement_list_0 => box
       (par_statement_list_nt, [NT statement_dangerous_nt])
-      (fun s => 
+      (fun s =>
  [s] 
 )
-    | Prod_165 => box
-      (par_statement_list_nt, [NT statement_dangerous_nt; T BARES_t; NT par_statement_list_nt])
-      (fun s _2 ss => 
+    | Prod_par_statement_list_1 => box
+      (par_statement_list_nt, [NT par_statement_list_nt; T BARES_t; NT statement_dangerous_nt])
+      (fun ss _2 s =>
  s :: ss 
 )
-    | Prod_166 => box
-      (parameter_declaration_nt, [NT declaration_specifiers_nt; NT declarator_nt])
-      (fun specs decl => 
+    | Prod_parameter_declaration_0 => box
+      (parameter_declaration_nt, [NT declarator_nt; NT declaration_specifiers_nt])
+      (fun decl specs =>
  match decl with Name name typ attr _ =>
         PARAM (fst specs) (Some name) typ attr (snd specs) end 
 )
-    | Prod_167 => box
-      (parameter_declaration_nt, [NT declaration_specifiers_nt; NT abstract_declarator_nt])
-      (fun specs decl => 
+    | Prod_parameter_declaration_1 => box
+      (parameter_declaration_nt, [NT abstract_declarator_nt; NT declaration_specifiers_nt])
+      (fun decl specs =>
  PARAM (fst specs) None decl [] (snd specs) 
 )
-    | Prod_168 => box
+    | Prod_parameter_declaration_2 => box
       (parameter_declaration_nt, [NT declaration_specifiers_nt])
-      (fun specs => 
+      (fun specs =>
  PARAM (fst specs) None JUSTBASE [] (snd specs) 
 )
-    | Prod_169 => box
+    | Prod_parameter_list_0 => box
       (parameter_list_nt, [NT parameter_declaration_nt])
-      (fun param => 
+      (fun param =>
  [param] 
 )
-    | Prod_170 => box
-      (parameter_list_nt, [NT parameter_list_nt; T COMMA_t; NT parameter_declaration_nt])
-      (fun paramq _2 paramt => 
+    | Prod_parameter_list_1 => box
+      (parameter_list_nt, [NT parameter_declaration_nt; T COMMA_t; NT parameter_list_nt])
+      (fun paramt _2 paramq =>
  paramt::paramq 
 )
-    | Prod_171 => box
+    | Prod_parameter_type_list_0 => box
       (parameter_type_list_nt, [NT parameter_list_nt])
-      (fun lst => 
+      (fun lst =>
  (rev lst, false) 
 )
-    | Prod_172 => box
-      (parameter_type_list_nt, [NT parameter_list_nt; T COMMA_t; T ELLIPSIS_t])
-      (fun lst _2 _3 => 
+    | Prod_parameter_type_list_1 => box
+      (parameter_type_list_nt, [T ELLIPSIS_t; T COMMA_t; NT parameter_list_nt])
+      (fun _3 _2 lst =>
  (rev lst, true) 
 )
-    | Prod_173 => box
+    | Prod_pointer_0 => box
       (pointer_nt, [T STAR_t])
-      (fun loc => 
+      (fun loc =>
  (PTR [] [], loc) 
 )
-    | Prod_174 => box
-      (pointer_nt, [T STAR_t; NT type_qualifier_list_nt])
-      (fun loc quallst => 
+    | Prod_pointer_1 => box
+      (pointer_nt, [NT type_qualifier_list_nt; T STAR_t])
+      (fun quallst loc =>
  (PTR (rev quallst) [], loc) 
 )
-    | Prod_175 => box
-      (pointer_nt, [T STAR_t; NT pointer_nt])
-      (fun loc pt => 
+    | Prod_pointer_2 => box
+      (pointer_nt, [NT pointer_nt; T STAR_t])
+      (fun pt loc =>
  (fun typ => PTR [] [] ((fst pt) typ), loc) 
 )
-    | Prod_176 => box
-      (pointer_nt, [T STAR_t; NT type_qualifier_list_nt; NT pointer_nt])
-      (fun loc quallst pt => 
+    | Prod_pointer_3 => box
+      (pointer_nt, [NT pointer_nt; NT type_qualifier_list_nt; T STAR_t])
+      (fun pt quallst loc =>
  (fun typ => PTR (rev quallst) [] ((fst pt) typ), loc) 
 )
-    | Prod_177 => box
+    | Prod_postfix_expression_0 => box
       (postfix_expression_nt, [NT primary_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_178 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T LBRACK_t; NT expression_nt; T RBRACK_t])
-      (fun expr _2 index _4 => 
+    | Prod_postfix_expression_1 => box
+      (postfix_expression_nt, [T RBRACK_t; NT expression_nt; T LBRACK_t; NT postfix_expression_nt])
+      (fun _4 index _2 expr =>
  (INDEX (fst expr) (fst index), snd expr) 
 )
-    | Prod_179 => box
+    | Prod_postfix_expression_2 => box
       (postfix_expression_nt, [NT atomic_operation_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_180 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T LPAREN_t; NT argument_expression_list_nt; T RPAREN_t])
-      (fun expr _2 args _4 => 
+    | Prod_postfix_expression_3 => box
+      (postfix_expression_nt, [T RPAREN_t; NT argument_expression_list_nt; T LPAREN_t; NT postfix_expression_nt])
+      (fun _4 args _2 expr =>
  (CALL (fst expr) (rev args), snd expr) 
 )
-    | Prod_181 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T LPAREN_t; T RPAREN_t])
-      (fun expr _2 _3 => 
+    | Prod_postfix_expression_4 => box
+      (postfix_expression_nt, [T RPAREN_t; T LPAREN_t; NT postfix_expression_nt])
+      (fun _3 _2 expr =>
  (CALL (fst expr) [], snd expr) 
 )
-    | Prod_182 => box
-      (postfix_expression_nt, [T BUILTIN_VA_ARG_t; T LPAREN_t; NT assignment_expression_nt; T COMMA_t; NT type_name_nt; T RPAREN_t])
-      (fun loc _2 expr _4 ty _6 => 
+    | Prod_postfix_expression_5 => box
+      (postfix_expression_nt, [T RPAREN_t; NT type_name_nt; T COMMA_t; NT assignment_expression_nt; T LPAREN_t; T BUILTIN_VA_ARG_t])
+      (fun _6 ty _4 expr _2 loc =>
  (BUILTIN_VA_ARG (fst expr) ty, loc) 
 )
-    | Prod_183 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T DOT_t; T OTHER_NAME_t])
-      (fun expr _2 mem => 
+    | Prod_postfix_expression_6 => box
+      (postfix_expression_nt, [T OTHER_NAME_t; T DOT_t; NT postfix_expression_nt])
+      (fun mem _2 expr =>
  (MEMBEROF (fst expr) (fst mem), snd expr) 
 )
-    | Prod_184 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T PTR_t; T OTHER_NAME_t])
-      (fun expr _2 mem => 
+    | Prod_postfix_expression_7 => box
+      (postfix_expression_nt, [T OTHER_NAME_t; T PTR_t; NT postfix_expression_nt])
+      (fun mem _2 expr =>
  (MEMBEROFPTR (fst expr) (fst mem), snd expr) 
 )
-    | Prod_185 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T INC_t])
-      (fun expr _2 => 
+    | Prod_postfix_expression_8 => box
+      (postfix_expression_nt, [T INC_t; NT postfix_expression_nt])
+      (fun _2 expr =>
  (UNARY POSINCR (fst expr), snd expr) 
 )
-    | Prod_186 => box
-      (postfix_expression_nt, [NT postfix_expression_nt; T DEC_t])
-      (fun expr _2 => 
+    | Prod_postfix_expression_9 => box
+      (postfix_expression_nt, [T DEC_t; NT postfix_expression_nt])
+      (fun _2 expr =>
  (UNARY POSDECR (fst expr), snd expr) 
 )
-    | Prod_187 => box
-      (postfix_expression_nt, [T LPAREN_t; NT type_name_nt; T RPAREN_t; T LBRACE_t; NT initializer_list_nt; T RBRACE_t])
-      (fun loc typ _3 _4 init _6 => 
+    | Prod_postfix_expression_10 => box
+      (postfix_expression_nt, [T RBRACE_t; NT initializer_list_nt; T LBRACE_t; T RPAREN_t; NT type_name_nt; T LPAREN_t])
+      (fun _6 init _4 _3 typ loc =>
  (CAST typ (COMPOUND_INIT (rev init)), loc) 
 )
-    | Prod_188 => box
-      (postfix_expression_nt, [T LPAREN_t; NT type_name_nt; T RPAREN_t; T LBRACE_t; NT initializer_list_nt; T COMMA_t; T RBRACE_t])
-      (fun loc typ _3 _4 init _6 _7 => 
+    | Prod_postfix_expression_11 => box
+      (postfix_expression_nt, [T RBRACE_t; T COMMA_t; NT initializer_list_nt; T LBRACE_t; T RPAREN_t; NT type_name_nt; T LPAREN_t])
+      (fun _7 _6 init _4 _3 typ loc =>
  (CAST typ (COMPOUND_INIT (rev init)), loc) 
 )
-    | Prod_189 => box
+    | Prod_primary_expression_0 => box
       (primary_expression_nt, [T VAR_NAME_t])
-      (fun var => 
+      (fun var =>
  (VARIABLE (fst var), snd var) 
 )
-    | Prod_190 => box
+    | Prod_primary_expression_1 => box
       (primary_expression_nt, [T CONSTANT_t])
-      (fun cst => 
+      (fun cst =>
  (CONSTANT (fst cst), snd cst) 
 )
-    | Prod_191 => box
-      (primary_expression_nt, [T LPAREN_t; NT expression_nt; T RPAREN_t])
-      (fun loc expr _3 => 
+    | Prod_primary_expression_2 => box
+      (primary_expression_nt, [T RPAREN_t; NT expression_nt; T LPAREN_t])
+      (fun _3 expr loc =>
  (fst expr, loc)
 )
-    | Prod_192 => box
+    | Prod_relational_expression_0 => box
       (relational_expression_nt, [NT shift_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_193 => box
-      (relational_expression_nt, [NT relational_expression_nt; T LT_t; NT shift_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_relational_expression_1 => box
+      (relational_expression_nt, [NT shift_expression_nt; T LT_t; NT relational_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY LT (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_194 => box
-      (relational_expression_nt, [NT relational_expression_nt; T GT_t; NT shift_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_relational_expression_2 => box
+      (relational_expression_nt, [NT shift_expression_nt; T GT_t; NT relational_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY GT (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_195 => box
-      (relational_expression_nt, [NT relational_expression_nt; T LEQ_t; NT shift_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_relational_expression_3 => box
+      (relational_expression_nt, [NT shift_expression_nt; T LEQ_t; NT relational_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY LE (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_196 => box
-      (relational_expression_nt, [NT relational_expression_nt; T GEQ_t; NT shift_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_relational_expression_4 => box
+      (relational_expression_nt, [NT shift_expression_nt; T GEQ_t; NT relational_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY GE (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_197 => box
-      (selection_statement_dangerous_nt, [T IF_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr _4 stmt => 
- If (fst expr) stmt None loc 
+    | Prod_selection_statement_dangerous_0 => box
+      (selection_statement_dangerous_nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T IF_t])
+      (fun stmt _4 expr _2 loc =>
+ If0 (fst expr) stmt None loc 
 )
-    | Prod_198 => box
-      (selection_statement_dangerous_nt, [T IF_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt; T ELSE_t; NT statement_dangerous_nt])
-      (fun loc _2 expr _4 stmt1 _6 stmt2 => 
- If (fst expr) stmt1 (Some stmt2) loc 
+    | Prod_selection_statement_dangerous_1 => box
+      (selection_statement_dangerous_nt, [NT statement_dangerous_nt; T ELSE_t; NT statement_safe_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T IF_t])
+      (fun stmt2 _6 stmt1 _4 expr _2 loc =>
+ If0 (fst expr) stmt1 (Some stmt2) loc 
 )
-    | Prod_199 => box
-      (selection_statement_dangerous_nt, [T SWITCH_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_dangerous_nt])
-      (fun loc _2 expr _4 stmt => 
+    | Prod_selection_statement_dangerous_2 => box
+      (selection_statement_dangerous_nt, [NT statement_dangerous_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T SWITCH_t])
+      (fun stmt _4 expr _2 loc =>
  SWITCH (fst expr) stmt loc 
 )
-    | Prod_200 => box
-      (selection_statement_safe_nt, [T IF_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt; T ELSE_t; NT statement_safe_nt])
-      (fun loc _2 expr _4 stmt1 _6 stmt2 => 
- If (fst expr) stmt1 (Some stmt2) loc 
+    | Prod_selection_statement_safe_0 => box
+      (selection_statement_safe_nt, [NT statement_safe_nt; T ELSE_t; NT statement_safe_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T IF_t])
+      (fun stmt2 _6 stmt1 _4 expr _2 loc =>
+ If0 (fst expr) stmt1 (Some stmt2) loc 
 )
-    | Prod_201 => box
-      (selection_statement_safe_nt, [T SWITCH_t; T LPAREN_t; NT expression_nt; T RPAREN_t; NT statement_safe_nt])
-      (fun loc _2 expr _4 stmt => 
+    | Prod_selection_statement_safe_1 => box
+      (selection_statement_safe_nt, [NT statement_safe_nt; T RPAREN_t; NT expression_nt; T LPAREN_t; T SWITCH_t])
+      (fun stmt _4 expr _2 loc =>
  SWITCH (fst expr) stmt loc 
 )
-    | Prod_202 => box
+    | Prod_shift_expression_0 => box
       (shift_expression_nt, [NT additive_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_203 => box
-      (shift_expression_nt, [NT shift_expression_nt; T LEFT_t; NT additive_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_shift_expression_1 => box
+      (shift_expression_nt, [NT additive_expression_nt; T LEFT_t; NT shift_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY SHL (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_204 => box
-      (shift_expression_nt, [NT shift_expression_nt; T RIGHT_t; NT additive_expression_nt])
-      (fun expr1 _2 expr2 => 
+    | Prod_shift_expression_2 => box
+      (shift_expression_nt, [NT additive_expression_nt; T RIGHT_t; NT shift_expression_nt])
+      (fun expr2 _2 expr1 =>
  (BINARY SHR (fst expr1) (fst expr2), snd expr1) 
 )
-    | Prod_205 => box
-      (specifier_qualifier_list_nt, [NT type_specifier_nt; NT specifier_qualifier_list_nt])
-      (fun typ rest => 
+    | Prod_specifier_qualifier_list_0 => box
+      (specifier_qualifier_list_nt, [NT specifier_qualifier_list_nt; NT type_specifier_nt])
+      (fun rest typ =>
  (SpecType (fst typ)::fst rest, snd typ) 
 )
-    | Prod_206 => box
+    | Prod_specifier_qualifier_list_1 => box
       (specifier_qualifier_list_nt, [NT type_specifier_nt])
-      (fun typ => 
+      (fun typ =>
  ([SpecType (fst typ)], snd typ) 
 )
-    | Prod_207 => box
-      (specifier_qualifier_list_nt, [NT type_qualifier_nt; NT specifier_qualifier_list_nt])
-      (fun qual rest => 
+    | Prod_specifier_qualifier_list_2 => box
+      (specifier_qualifier_list_nt, [NT specifier_qualifier_list_nt; NT type_qualifier_nt])
+      (fun rest qual =>
  (SpecCV (fst qual)::fst rest, snd qual) 
 )
-    | Prod_208 => box
+    | Prod_specifier_qualifier_list_3 => box
       (specifier_qualifier_list_nt, [NT type_qualifier_nt])
-      (fun qual => 
+      (fun qual =>
  ([SpecCV (fst qual)], snd qual) 
 )
-    | Prod_209 => box
+    | Prod_statement_dangerous_0 => box
       (statement_dangerous_nt, [NT labeled_statement_statement_dangerous__nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_210 => box
+    | Prod_statement_dangerous_1 => box
       (statement_dangerous_nt, [NT compound_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_211 => box
+    | Prod_statement_dangerous_2 => box
       (statement_dangerous_nt, [NT expression_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_212 => box
+    | Prod_statement_dangerous_3 => box
       (statement_dangerous_nt, [NT selection_statement_dangerous_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_213 => box
+    | Prod_statement_dangerous_4 => box
       (statement_dangerous_nt, [NT iteration_statement_statement_dangerous__nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_214 => box
+    | Prod_statement_dangerous_5 => box
       (statement_dangerous_nt, [NT jump_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_215 => box
+    | Prod_statement_dangerous_6 => box
       (statement_dangerous_nt, [NT par_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_216 => box
+    | Prod_statement_safe_0 => box
       (statement_safe_nt, [NT labeled_statement_statement_safe__nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_217 => box
+    | Prod_statement_safe_1 => box
       (statement_safe_nt, [NT compound_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_218 => box
+    | Prod_statement_safe_2 => box
       (statement_safe_nt, [NT expression_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_219 => box
+    | Prod_statement_safe_3 => box
       (statement_safe_nt, [NT selection_statement_safe_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_220 => box
+    | Prod_statement_safe_4 => box
       (statement_safe_nt, [NT iteration_statement_statement_safe__nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_221 => box
+    | Prod_statement_safe_5 => box
       (statement_safe_nt, [NT jump_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_222 => box
+    | Prod_statement_safe_6 => box
       (statement_safe_nt, [NT par_statement_nt])
-      (fun stmt => 
+      (fun stmt =>
  stmt 
 )
-    | Prod_223 => box
+    | Prod_storage_class_specifier_0 => box
       (storage_class_specifier_nt, [T TYPEDEF_t])
-      (fun loc => 
+      (fun loc =>
  (TYPEDEF, loc) 
 )
-    | Prod_224 => box
+    | Prod_storage_class_specifier_1 => box
       (storage_class_specifier_nt, [T EXTERN_t])
-      (fun loc => 
+      (fun loc =>
  (EXTERN, loc) 
 )
-    | Prod_225 => box
+    | Prod_storage_class_specifier_2 => box
       (storage_class_specifier_nt, [T STATIC_t])
-      (fun loc => 
+      (fun loc =>
  (STATIC, loc) 
 )
-    | Prod_226 => box
+    | Prod_storage_class_specifier_3 => box
       (storage_class_specifier_nt, [T AUTO_t])
-      (fun loc => 
+      (fun loc =>
  (AUTO, loc) 
 )
-    | Prod_227 => box
+    | Prod_storage_class_specifier_4 => box
       (storage_class_specifier_nt, [T THREAD_LOCAL_t])
-      (fun loc => 
+      (fun loc =>
  (THREAD_LOCAL, loc) 
 )
-    | Prod_228 => box
+    | Prod_storage_class_specifier_5 => box
       (storage_class_specifier_nt, [T REGISTER_t])
-      (fun loc => 
+      (fun loc =>
  (REGISTER, loc) 
 )
-    | Prod_229 => box
-      (struct_declaration_nt, [NT specifier_qualifier_list_nt; NT struct_declarator_list_nt; T SEMICOLON_t])
-      (fun decspec decls _3 => 
+    | Prod_struct_declaration_0 => box
+      (struct_declaration_nt, [T SEMICOLON_t; NT struct_declarator_list_nt; NT specifier_qualifier_list_nt])
+      (fun _3 decls decspec =>
  Field_group (fst decspec) (rev decls) (snd decspec) 
 )
-    | Prod_230 => box
-      (struct_declaration_nt, [NT specifier_qualifier_list_nt; T SEMICOLON_t])
-      (fun decspec _2 => 
+    | Prod_struct_declaration_1 => box
+      (struct_declaration_nt, [T SEMICOLON_t; NT specifier_qualifier_list_nt])
+      (fun _2 decspec =>
  Field_group (fst decspec) [] (snd decspec) 
 )
-    | Prod_231 => box
+    | Prod_struct_declaration_list_0 => box
       (struct_declaration_list_nt, [NT struct_declaration_nt])
-      (fun decl => 
+      (fun decl =>
  [decl] 
 )
-    | Prod_232 => box
-      (struct_declaration_list_nt, [NT struct_declaration_list_nt; NT struct_declaration_nt])
-      (fun qdecls tdecls => 
+    | Prod_struct_declaration_list_1 => box
+      (struct_declaration_list_nt, [NT struct_declaration_nt; NT struct_declaration_list_nt])
+      (fun tdecls qdecls =>
  tdecls::qdecls 
 )
-    | Prod_233 => box
+    | Prod_struct_declarator_0 => box
       (struct_declarator_nt, [NT declarator_nt])
-      (fun decl => 
+      (fun decl =>
  (Some decl, None) 
 )
-    | Prod_234 => box
-      (struct_declarator_nt, [NT declarator_nt; T COLON_t; NT constant_expression_nt])
-      (fun decl _2 expr => 
+    | Prod_struct_declarator_1 => box
+      (struct_declarator_nt, [NT constant_expression_nt; T COLON_t; NT declarator_nt])
+      (fun expr _2 decl =>
  (Some decl, Some (fst expr)) 
 )
-    | Prod_235 => box
-      (struct_declarator_nt, [T COLON_t; NT constant_expression_nt])
-      (fun _1 expr => 
+    | Prod_struct_declarator_2 => box
+      (struct_declarator_nt, [NT constant_expression_nt; T COLON_t])
+      (fun expr _1 =>
  (None, Some (fst expr)) 
 )
-    | Prod_236 => box
+    | Prod_struct_declarator_list_0 => box
       (struct_declarator_list_nt, [NT struct_declarator_nt])
-      (fun decl => 
+      (fun decl =>
  [decl] 
 )
-    | Prod_237 => box
-      (struct_declarator_list_nt, [NT struct_declarator_list_nt; T COMMA_t; NT struct_declarator_nt])
-      (fun declq _2 declt => 
+    | Prod_struct_declarator_list_1 => box
+      (struct_declarator_list_nt, [NT struct_declarator_nt; T COMMA_t; NT struct_declarator_list_nt])
+      (fun declt _2 declq =>
  declt::declq 
 )
-    | Prod_238 => box
+    | Prod_struct_or_union_0 => box
       (struct_or_union_nt, [T STRUCT_t])
-      (fun loc => 
+      (fun loc =>
  (Tstruct, loc) 
 )
-    | Prod_239 => box
+    | Prod_struct_or_union_1 => box
       (struct_or_union_nt, [T UNION_t])
-      (fun loc => 
+      (fun loc =>
  (Tunion, loc) 
 )
-    | Prod_240 => box
-      (struct_or_union_specifier_nt, [NT struct_or_union_nt; T OTHER_NAME_t; T LBRACE_t; NT struct_declaration_list_nt; T RBRACE_t])
-      (fun str_uni id _3 decls _5 => 
+    | Prod_struct_or_union_specifier_0 => box
+      (struct_or_union_specifier_nt, [T RBRACE_t; NT struct_declaration_list_nt; T LBRACE_t; T OTHER_NAME_t; NT struct_or_union_nt])
+      (fun _5 decls _3 id str_uni =>
  ((fst str_uni) (Some (fst id)) (Some (rev decls)) [], snd str_uni) 
 )
-    | Prod_241 => box
-      (struct_or_union_specifier_nt, [NT struct_or_union_nt; T LBRACE_t; NT struct_declaration_list_nt; T RBRACE_t])
-      (fun str_uni _2 decls _4 => 
+    | Prod_struct_or_union_specifier_1 => box
+      (struct_or_union_specifier_nt, [T RBRACE_t; NT struct_declaration_list_nt; T LBRACE_t; NT struct_or_union_nt])
+      (fun _4 decls _2 str_uni =>
  ((fst str_uni) None (Some (rev decls)) [],            snd str_uni) 
 )
-    | Prod_242 => box
-      (struct_or_union_specifier_nt, [NT struct_or_union_nt; T OTHER_NAME_t])
-      (fun str_uni id => 
+    | Prod_struct_or_union_specifier_2 => box
+      (struct_or_union_specifier_nt, [T OTHER_NAME_t; NT struct_or_union_nt])
+      (fun id str_uni =>
  ((fst str_uni) (Some (fst id)) None [],         snd str_uni) 
 )
-    | Prod_243 => box
+    | Prod_translation_unit_0 => box
       (translation_unit_nt, [NT external_declaration_nt])
-      (fun def => 
+      (fun def =>
  [def] 
 )
-    | Prod_244 => box
-      (translation_unit_nt, [NT translation_unit_nt; NT external_declaration_nt])
-      (fun defq deft => 
+    | Prod_translation_unit_1 => box
+      (translation_unit_nt, [NT external_declaration_nt; NT translation_unit_nt])
+      (fun deft defq =>
  deft::defq 
 )
-    | Prod_245 => box
-      (translation_unit_file_nt, [NT translation_unit_nt; T EOF_t])
-      (fun lst _2 => 
+    | Prod_translation_unit_file_0 => box
+      (translation_unit_file_nt, [T EOF_t; NT translation_unit_nt])
+      (fun _2 lst =>
  rev lst 
 )
-    | Prod_246 => box
+    | Prod_type_name_0 => box
       (type_name_nt, [NT specifier_qualifier_list_nt])
-      (fun specqual => 
+      (fun specqual =>
  (fst specqual, JUSTBASE) 
 )
-    | Prod_247 => box
-      (type_name_nt, [NT specifier_qualifier_list_nt; NT abstract_declarator_nt])
-      (fun specqual typ => 
+    | Prod_type_name_1 => box
+      (type_name_nt, [NT abstract_declarator_nt; NT specifier_qualifier_list_nt])
+      (fun typ specqual =>
  (fst specqual, typ) 
 )
-    | Prod_248 => box
+    | Prod_type_qualifier_0 => box
       (type_qualifier_nt, [T CONST_t])
-      (fun loc => 
+      (fun loc =>
  (CV_CONST, loc) 
 )
-    | Prod_249 => box
+    | Prod_type_qualifier_1 => box
       (type_qualifier_nt, [T RESTRICT_t])
-      (fun loc => 
+      (fun loc =>
  (CV_RESTRICT, loc) 
 )
-    | Prod_250 => box
+    | Prod_type_qualifier_2 => box
       (type_qualifier_nt, [T VOLATILE_t])
-      (fun loc => 
+      (fun loc =>
  (CV_VOLATILE, loc) 
 )
-    | Prod_251 => box
+    | Prod_type_qualifier_3 => box
       (type_qualifier_nt, [T ATOMIC_t])
-      (fun loc => 
+      (fun loc =>
  (CV_ATOMIC, loc) 
 )
-    | Prod_252 => box
+    | Prod_type_qualifier_list_0 => box
       (type_qualifier_list_nt, [NT type_qualifier_nt])
-      (fun qual => 
+      (fun qual =>
  [fst qual] 
 )
-    | Prod_253 => box
-      (type_qualifier_list_nt, [NT type_qualifier_list_nt; NT type_qualifier_nt])
-      (fun qualq qualt => 
+    | Prod_type_qualifier_list_1 => box
+      (type_qualifier_list_nt, [NT type_qualifier_nt; NT type_qualifier_list_nt])
+      (fun qualt qualq =>
  fst qualt::qualq 
 )
-    | Prod_254 => box
+    | Prod_type_specifier_0 => box
       (type_specifier_nt, [T VOID_t])
-      (fun loc => 
+      (fun loc =>
  (Tvoid, loc) 
 )
-    | Prod_255 => box
+    | Prod_type_specifier_1 => box
       (type_specifier_nt, [T CHAR_t])
-      (fun loc => 
+      (fun loc =>
  (Tchar, loc) 
 )
-    | Prod_256 => box
+    | Prod_type_specifier_2 => box
       (type_specifier_nt, [T SHORT_t])
-      (fun loc => 
+      (fun loc =>
  (Tshort, loc) 
 )
-    | Prod_257 => box
+    | Prod_type_specifier_3 => box
       (type_specifier_nt, [T INT_t])
-      (fun loc => 
+      (fun loc =>
  (Tint, loc) 
 )
-    | Prod_258 => box
+    | Prod_type_specifier_4 => box
       (type_specifier_nt, [T LONG_t])
-      (fun loc => 
+      (fun loc =>
  (Tlong, loc) 
 )
-    | Prod_259 => box
+    | Prod_type_specifier_5 => box
       (type_specifier_nt, [T FLOAT_t])
-      (fun loc => 
+      (fun loc =>
  (Tfloat, loc) 
 )
-    | Prod_260 => box
+    | Prod_type_specifier_6 => box
       (type_specifier_nt, [T DOUBLE_t])
-      (fun loc => 
+      (fun loc =>
  (Tdouble, loc) 
 )
-    | Prod_261 => box
+    | Prod_type_specifier_7 => box
       (type_specifier_nt, [T SIGNED_t])
-      (fun loc => 
+      (fun loc =>
  (Tsigned, loc) 
 )
-    | Prod_262 => box
+    | Prod_type_specifier_8 => box
       (type_specifier_nt, [T UNSIGNED_t])
-      (fun loc => 
+      (fun loc =>
  (Tunsigned, loc) 
 )
-    | Prod_263 => box
+    | Prod_type_specifier_9 => box
       (type_specifier_nt, [T BOOL_t])
-      (fun loc => 
+      (fun loc =>
  (T_Bool, loc) 
 )
-    | Prod_264 => box
+    | Prod_type_specifier_10 => box
       (type_specifier_nt, [NT atomic_type_specifier_nt])
-      (fun spec => 
+      (fun spec =>
  spec 
 )
-    | Prod_265 => box
+    | Prod_type_specifier_11 => box
       (type_specifier_nt, [NT struct_or_union_specifier_nt])
-      (fun spec => 
+      (fun spec =>
  spec 
 )
-    | Prod_266 => box
+    | Prod_type_specifier_12 => box
       (type_specifier_nt, [NT enum_specifier_nt])
-      (fun spec => 
+      (fun spec =>
  spec 
 )
-    | Prod_267 => box
+    | Prod_type_specifier_13 => box
       (type_specifier_nt, [T TYPEDEF_NAME_t])
-      (fun id => 
+      (fun id =>
  (Tnamed (fst id), snd id) 
 )
-    | Prod_268 => box
+    | Prod_unary_expression_0 => box
       (unary_expression_nt, [NT postfix_expression_nt])
-      (fun expr => 
+      (fun expr =>
  expr 
 )
-    | Prod_269 => box
-      (unary_expression_nt, [T INC_t; NT unary_expression_nt])
-      (fun loc expr => 
+    | Prod_unary_expression_1 => box
+      (unary_expression_nt, [NT unary_expression_nt; T INC_t])
+      (fun expr loc =>
  (UNARY PREINCR (fst expr), loc) 
 )
-    | Prod_270 => box
-      (unary_expression_nt, [T DEC_t; NT unary_expression_nt])
-      (fun loc expr => 
+    | Prod_unary_expression_2 => box
+      (unary_expression_nt, [NT unary_expression_nt; T DEC_t])
+      (fun expr loc =>
  (UNARY PREDECR (fst expr), loc) 
 )
-    | Prod_271 => box
-      (unary_expression_nt, [NT unary_operator_nt; NT cast_expression_nt])
-      (fun op expr => 
+    | Prod_unary_expression_3 => box
+      (unary_expression_nt, [NT cast_expression_nt; NT unary_operator_nt])
+      (fun expr op =>
  (UNARY (fst op) (fst expr), snd op) 
 )
-    | Prod_272 => box
-      (unary_expression_nt, [T SIZEOF_t; NT unary_expression_nt])
-      (fun loc expr => 
+    | Prod_unary_expression_4 => box
+      (unary_expression_nt, [NT unary_expression_nt; T SIZEOF_t])
+      (fun expr loc =>
  (EXPR_SIZEOF (fst expr), loc) 
 )
-    | Prod_273 => box
-      (unary_expression_nt, [T SIZEOF_t; T LPAREN_t; NT type_name_nt; T RPAREN_t])
-      (fun loc _2 typ _4 => 
+    | Prod_unary_expression_5 => box
+      (unary_expression_nt, [T RPAREN_t; NT type_name_nt; T LPAREN_t; T SIZEOF_t])
+      (fun _4 typ _2 loc =>
  (TYPE_SIZEOF typ, loc) 
 )
-    | Prod_274 => box
-      (unary_expression_nt, [T ALIGNOF_t; T LPAREN_t; NT type_name_nt; T RPAREN_t])
-      (fun loc _2 typ _4 => 
+    | Prod_unary_expression_6 => box
+      (unary_expression_nt, [T RPAREN_t; NT type_name_nt; T LPAREN_t; T ALIGNOF_t])
+      (fun _4 typ _2 loc =>
  (ALIGNOF typ, loc) 
 )
-    | Prod_275 => box
-      (unary_expression_nt, [T OFFSETOF_t; T LPAREN_t; NT type_name_nt; T COMMA_t; T OTHER_NAME_t; T RPAREN_t])
-      (fun loc _2 ty _4 member _6 => 
+    | Prod_unary_expression_7 => box
+      (unary_expression_nt, [T RPAREN_t; T OTHER_NAME_t; T COMMA_t; NT type_name_nt; T LPAREN_t; T OFFSETOF_t])
+      (fun _6 member _4 ty _2 loc =>
  (OFFSETOF ty (fst member), loc) 
 )
-    | Prod_276 => box
+    | Prod_unary_operator_0 => box
       (unary_operator_nt, [T AND_t])
-      (fun loc => 
+      (fun loc =>
  (ADDROF, loc) 
 )
-    | Prod_277 => box
+    | Prod_unary_operator_1 => box
       (unary_operator_nt, [T STAR_t])
-      (fun loc => 
+      (fun loc =>
  (MEMOF, loc) 
 )
-    | Prod_278 => box
+    | Prod_unary_operator_2 => box
       (unary_operator_nt, [T PLUS_t])
-      (fun loc => 
+      (fun loc =>
  (PLUS, loc) 
 )
-    | Prod_279 => box
+    | Prod_unary_operator_3 => box
       (unary_operator_nt, [T MINUS_t])
-      (fun loc => 
+      (fun loc =>
  (MINUS, loc) 
 )
-    | Prod_280 => box
+    | Prod_unary_operator_4 => box
       (unary_operator_nt, [T TILDE_t])
-      (fun loc => 
+      (fun loc =>
  (BNOT, loc) 
 )
-    | Prod_281 => box
+    | Prod_unary_operator_5 => box
       (unary_operator_nt, [T BANG_t])
-      (fun loc => 
+      (fun loc =>
  (NOT, loc) 
 )
   end.
 
 Definition prod_lhs (p:production) :=
   fst (projT1 (prod_contents p)).
-Definition prod_rhs (p:production) :=
+Definition prod_rhs_rev (p:production) :=
   snd (projT1 (prod_contents p)).
 Definition prod_action (p:production) :=
   projT2 (prod_contents p).
-
-Definition start_symbol := NT translation_unit_file_nt.
 
 Include Grammar.Defs.
 
@@ -2301,7 +2302,7 @@ Definition first_nterm (nt:nonterminal) : list terminal :=
     | AND_expression_nt => [VAR_NAME_t; TILDE_t; STAR_t; SIZEOF_t; PLUS_t; OFFSETOF_t; MINUS_t; LPAREN_t; INC_t; DEC_t; CONSTANT_t; C11_ATOMIC_STORE_t; C11_ATOMIC_LOAD_t; C11_ATOMIC_INIT_t; C11_ATOMIC_EXCHANGE_t; C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t; C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t; BUILTIN_VA_ARG_t; BANG_t; AND_t; ALIGNOF_t]
   end.
 
-Inductive noninitstate' :=
+Inductive noninitstate' : Set :=
   | Nis_582
   | Nis_581
   | Nis_580
@@ -2522,7 +2523,6 @@ Inductive noninitstate' :=
   | Nis_365
   | Nis_364
   | Nis_363
-  | Nis_362
   | Nis_361
   | Nis_360
   | Nis_359
@@ -2886,11 +2886,10 @@ Inductive noninitstate' :=
   | Nis_1.
 Definition noninitstate := noninitstate'.
 
-Open Scope N_scope.
 Program Instance noninitstateNum : Numbered noninitstate :=
-  { injN := fun x => match x return _ with | Nis_582 => 0 | Nis_581 => 1 | Nis_580 => 2 | Nis_579 => 3 | Nis_578 => 4 | Nis_577 => 5 | Nis_576 => 6 | Nis_575 => 7 | Nis_574 => 8 | Nis_573 => 9 | Nis_572 => 10 | Nis_571 => 11 | Nis_570 => 12 | Nis_569 => 13 | Nis_568 => 14 | Nis_567 => 15 | Nis_566 => 16 | Nis_565 => 17 | Nis_564 => 18 | Nis_563 => 19 | Nis_562 => 20 | Nis_561 => 21 | Nis_560 => 22 | Nis_559 => 23 | Nis_558 => 24 | Nis_557 => 25 | Nis_556 => 26 | Nis_555 => 27 | Nis_554 => 28 | Nis_553 => 29 | Nis_552 => 30 | Nis_551 => 31 | Nis_550 => 32 | Nis_549 => 33 | Nis_548 => 34 | Nis_547 => 35 | Nis_546 => 36 | Nis_545 => 37 | Nis_544 => 38 | Nis_543 => 39 | Nis_542 => 40 | Nis_541 => 41 | Nis_540 => 42 | Nis_539 => 43 | Nis_538 => 44 | Nis_537 => 45 | Nis_536 => 46 | Nis_535 => 47 | Nis_534 => 48 | Nis_533 => 49 | Nis_532 => 50 | Nis_531 => 51 | Nis_530 => 52 | Nis_529 => 53 | Nis_528 => 54 | Nis_527 => 55 | Nis_526 => 56 | Nis_525 => 57 | Nis_524 => 58 | Nis_523 => 59 | Nis_522 => 60 | Nis_521 => 61 | Nis_520 => 62 | Nis_519 => 63 | Nis_518 => 64 | Nis_517 => 65 | Nis_516 => 66 | Nis_515 => 67 | Nis_514 => 68 | Nis_513 => 69 | Nis_512 => 70 | Nis_511 => 71 | Nis_510 => 72 | Nis_509 => 73 | Nis_508 => 74 | Nis_507 => 75 | Nis_506 => 76 | Nis_505 => 77 | Nis_504 => 78 | Nis_503 => 79 | Nis_502 => 80 | Nis_501 => 81 | Nis_500 => 82 | Nis_499 => 83 | Nis_498 => 84 | Nis_497 => 85 | Nis_496 => 86 | Nis_495 => 87 | Nis_494 => 88 | Nis_493 => 89 | Nis_492 => 90 | Nis_491 => 91 | Nis_490 => 92 | Nis_489 => 93 | Nis_488 => 94 | Nis_487 => 95 | Nis_486 => 96 | Nis_485 => 97 | Nis_484 => 98 | Nis_483 => 99 | Nis_482 => 100 | Nis_481 => 101 | Nis_480 => 102 | Nis_479 => 103 | Nis_478 => 104 | Nis_477 => 105 | Nis_476 => 106 | Nis_475 => 107 | Nis_474 => 108 | Nis_473 => 109 | Nis_472 => 110 | Nis_471 => 111 | Nis_470 => 112 | Nis_469 => 113 | Nis_468 => 114 | Nis_467 => 115 | Nis_466 => 116 | Nis_465 => 117 | Nis_464 => 118 | Nis_463 => 119 | Nis_462 => 120 | Nis_461 => 121 | Nis_460 => 122 | Nis_459 => 123 | Nis_458 => 124 | Nis_457 => 125 | Nis_456 => 126 | Nis_455 => 127 | Nis_454 => 128 | Nis_453 => 129 | Nis_452 => 130 | Nis_451 => 131 | Nis_450 => 132 | Nis_449 => 133 | Nis_448 => 134 | Nis_447 => 135 | Nis_446 => 136 | Nis_445 => 137 | Nis_444 => 138 | Nis_443 => 139 | Nis_442 => 140 | Nis_441 => 141 | Nis_440 => 142 | Nis_439 => 143 | Nis_438 => 144 | Nis_437 => 145 | Nis_436 => 146 | Nis_435 => 147 | Nis_434 => 148 | Nis_433 => 149 | Nis_432 => 150 | Nis_431 => 151 | Nis_430 => 152 | Nis_429 => 153 | Nis_428 => 154 | Nis_427 => 155 | Nis_426 => 156 | Nis_425 => 157 | Nis_424 => 158 | Nis_423 => 159 | Nis_422 => 160 | Nis_421 => 161 | Nis_420 => 162 | Nis_419 => 163 | Nis_418 => 164 | Nis_417 => 165 | Nis_416 => 166 | Nis_415 => 167 | Nis_414 => 168 | Nis_413 => 169 | Nis_412 => 170 | Nis_411 => 171 | Nis_410 => 172 | Nis_409 => 173 | Nis_408 => 174 | Nis_407 => 175 | Nis_406 => 176 | Nis_405 => 177 | Nis_404 => 178 | Nis_403 => 179 | Nis_402 => 180 | Nis_401 => 181 | Nis_400 => 182 | Nis_399 => 183 | Nis_398 => 184 | Nis_397 => 185 | Nis_396 => 186 | Nis_395 => 187 | Nis_394 => 188 | Nis_393 => 189 | Nis_392 => 190 | Nis_391 => 191 | Nis_390 => 192 | Nis_389 => 193 | Nis_388 => 194 | Nis_387 => 195 | Nis_386 => 196 | Nis_385 => 197 | Nis_384 => 198 | Nis_383 => 199 | Nis_382 => 200 | Nis_381 => 201 | Nis_380 => 202 | Nis_379 => 203 | Nis_378 => 204 | Nis_377 => 205 | Nis_376 => 206 | Nis_375 => 207 | Nis_374 => 208 | Nis_373 => 209 | Nis_372 => 210 | Nis_371 => 211 | Nis_370 => 212 | Nis_369 => 213 | Nis_368 => 214 | Nis_367 => 215 | Nis_366 => 216 | Nis_365 => 217 | Nis_364 => 218 | Nis_363 => 219 | Nis_362 => 220 | Nis_361 => 221 | Nis_360 => 222 | Nis_359 => 223 | Nis_358 => 224 | Nis_357 => 225 | Nis_356 => 226 | Nis_355 => 227 | Nis_354 => 228 | Nis_353 => 229 | Nis_352 => 230 | Nis_351 => 231 | Nis_350 => 232 | Nis_349 => 233 | Nis_348 => 234 | Nis_347 => 235 | Nis_346 => 236 | Nis_345 => 237 | Nis_344 => 238 | Nis_343 => 239 | Nis_342 => 240 | Nis_341 => 241 | Nis_340 => 242 | Nis_339 => 243 | Nis_338 => 244 | Nis_337 => 245 | Nis_336 => 246 | Nis_335 => 247 | Nis_334 => 248 | Nis_333 => 249 | Nis_332 => 250 | Nis_331 => 251 | Nis_330 => 252 | Nis_329 => 253 | Nis_328 => 254 | Nis_327 => 255 | Nis_326 => 256 | Nis_325 => 257 | Nis_324 => 258 | Nis_323 => 259 | Nis_322 => 260 | Nis_321 => 261 | Nis_320 => 262 | Nis_319 => 263 | Nis_318 => 264 | Nis_317 => 265 | Nis_316 => 266 | Nis_315 => 267 | Nis_314 => 268 | Nis_313 => 269 | Nis_312 => 270 | Nis_311 => 271 | Nis_310 => 272 | Nis_309 => 273 | Nis_308 => 274 | Nis_307 => 275 | Nis_306 => 276 | Nis_305 => 277 | Nis_304 => 278 | Nis_303 => 279 | Nis_302 => 280 | Nis_301 => 281 | Nis_300 => 282 | Nis_299 => 283 | Nis_298 => 284 | Nis_297 => 285 | Nis_296 => 286 | Nis_295 => 287 | Nis_294 => 288 | Nis_293 => 289 | Nis_292 => 290 | Nis_291 => 291 | Nis_290 => 292 | Nis_289 => 293 | Nis_288 => 294 | Nis_287 => 295 | Nis_286 => 296 | Nis_285 => 297 | Nis_284 => 298 | Nis_283 => 299 | Nis_282 => 300 | Nis_281 => 301 | Nis_280 => 302 | Nis_279 => 303 | Nis_278 => 304 | Nis_277 => 305 | Nis_276 => 306 | Nis_275 => 307 | Nis_274 => 308 | Nis_273 => 309 | Nis_272 => 310 | Nis_271 => 311 | Nis_270 => 312 | Nis_269 => 313 | Nis_268 => 314 | Nis_267 => 315 | Nis_266 => 316 | Nis_265 => 317 | Nis_264 => 318 | Nis_263 => 319 | Nis_262 => 320 | Nis_261 => 321 | Nis_260 => 322 | Nis_259 => 323 | Nis_258 => 324 | Nis_257 => 325 | Nis_256 => 326 | Nis_255 => 327 | Nis_254 => 328 | Nis_253 => 329 | Nis_252 => 330 | Nis_251 => 331 | Nis_250 => 332 | Nis_249 => 333 | Nis_248 => 334 | Nis_247 => 335 | Nis_246 => 336 | Nis_245 => 337 | Nis_244 => 338 | Nis_243 => 339 | Nis_242 => 340 | Nis_241 => 341 | Nis_240 => 342 | Nis_239 => 343 | Nis_238 => 344 | Nis_237 => 345 | Nis_236 => 346 | Nis_235 => 347 | Nis_234 => 348 | Nis_233 => 349 | Nis_232 => 350 | Nis_231 => 351 | Nis_230 => 352 | Nis_229 => 353 | Nis_228 => 354 | Nis_227 => 355 | Nis_226 => 356 | Nis_225 => 357 | Nis_224 => 358 | Nis_223 => 359 | Nis_222 => 360 | Nis_221 => 361 | Nis_220 => 362 | Nis_219 => 363 | Nis_218 => 364 | Nis_217 => 365 | Nis_216 => 366 | Nis_215 => 367 | Nis_214 => 368 | Nis_213 => 369 | Nis_212 => 370 | Nis_211 => 371 | Nis_210 => 372 | Nis_209 => 373 | Nis_208 => 374 | Nis_207 => 375 | Nis_206 => 376 | Nis_205 => 377 | Nis_204 => 378 | Nis_203 => 379 | Nis_202 => 380 | Nis_201 => 381 | Nis_200 => 382 | Nis_199 => 383 | Nis_198 => 384 | Nis_197 => 385 | Nis_196 => 386 | Nis_195 => 387 | Nis_194 => 388 | Nis_193 => 389 | Nis_192 => 390 | Nis_191 => 391 | Nis_190 => 392 | Nis_189 => 393 | Nis_188 => 394 | Nis_187 => 395 | Nis_186 => 396 | Nis_185 => 397 | Nis_184 => 398 | Nis_183 => 399 | Nis_182 => 400 | Nis_181 => 401 | Nis_180 => 402 | Nis_179 => 403 | Nis_178 => 404 | Nis_177 => 405 | Nis_176 => 406 | Nis_175 => 407 | Nis_174 => 408 | Nis_173 => 409 | Nis_172 => 410 | Nis_171 => 411 | Nis_170 => 412 | Nis_169 => 413 | Nis_168 => 414 | Nis_167 => 415 | Nis_166 => 416 | Nis_165 => 417 | Nis_164 => 418 | Nis_163 => 419 | Nis_162 => 420 | Nis_161 => 421 | Nis_160 => 422 | Nis_159 => 423 | Nis_158 => 424 | Nis_157 => 425 | Nis_156 => 426 | Nis_155 => 427 | Nis_154 => 428 | Nis_153 => 429 | Nis_152 => 430 | Nis_151 => 431 | Nis_150 => 432 | Nis_149 => 433 | Nis_148 => 434 | Nis_147 => 435 | Nis_146 => 436 | Nis_145 => 437 | Nis_144 => 438 | Nis_143 => 439 | Nis_142 => 440 | Nis_141 => 441 | Nis_140 => 442 | Nis_139 => 443 | Nis_138 => 444 | Nis_137 => 445 | Nis_136 => 446 | Nis_135 => 447 | Nis_134 => 448 | Nis_133 => 449 | Nis_132 => 450 | Nis_131 => 451 | Nis_130 => 452 | Nis_129 => 453 | Nis_128 => 454 | Nis_127 => 455 | Nis_126 => 456 | Nis_125 => 457 | Nis_124 => 458 | Nis_123 => 459 | Nis_122 => 460 | Nis_121 => 461 | Nis_120 => 462 | Nis_119 => 463 | Nis_118 => 464 | Nis_117 => 465 | Nis_116 => 466 | Nis_115 => 467 | Nis_114 => 468 | Nis_113 => 469 | Nis_112 => 470 | Nis_111 => 471 | Nis_110 => 472 | Nis_109 => 473 | Nis_108 => 474 | Nis_107 => 475 | Nis_106 => 476 | Nis_105 => 477 | Nis_104 => 478 | Nis_103 => 479 | Nis_102 => 480 | Nis_101 => 481 | Nis_100 => 482 | Nis_99 => 483 | Nis_98 => 484 | Nis_97 => 485 | Nis_96 => 486 | Nis_95 => 487 | Nis_94 => 488 | Nis_93 => 489 | Nis_92 => 490 | Nis_91 => 491 | Nis_90 => 492 | Nis_89 => 493 | Nis_88 => 494 | Nis_87 => 495 | Nis_86 => 496 | Nis_85 => 497 | Nis_84 => 498 | Nis_83 => 499 | Nis_82 => 500 | Nis_81 => 501 | Nis_80 => 502 | Nis_79 => 503 | Nis_78 => 504 | Nis_77 => 505 | Nis_76 => 506 | Nis_75 => 507 | Nis_74 => 508 | Nis_73 => 509 | Nis_72 => 510 | Nis_71 => 511 | Nis_70 => 512 | Nis_69 => 513 | Nis_68 => 514 | Nis_67 => 515 | Nis_66 => 516 | Nis_65 => 517 | Nis_64 => 518 | Nis_63 => 519 | Nis_62 => 520 | Nis_61 => 521 | Nis_60 => 522 | Nis_59 => 523 | Nis_58 => 524 | Nis_57 => 525 | Nis_56 => 526 | Nis_55 => 527 | Nis_54 => 528 | Nis_53 => 529 | Nis_52 => 530 | Nis_51 => 531 | Nis_50 => 532 | Nis_49 => 533 | Nis_48 => 534 | Nis_47 => 535 | Nis_46 => 536 | Nis_45 => 537 | Nis_44 => 538 | Nis_43 => 539 | Nis_42 => 540 | Nis_41 => 541 | Nis_40 => 542 | Nis_39 => 543 | Nis_38 => 544 | Nis_37 => 545 | Nis_36 => 546 | Nis_35 => 547 | Nis_34 => 548 | Nis_33 => 549 | Nis_32 => 550 | Nis_31 => 551 | Nis_30 => 552 | Nis_29 => 553 | Nis_28 => 554 | Nis_27 => 555 | Nis_26 => 556 | Nis_25 => 557 | Nis_24 => 558 | Nis_23 => 559 | Nis_22 => 560 | Nis_21 => 561 | Nis_20 => 562 | Nis_19 => 563 | Nis_18 => 564 | Nis_17 => 565 | Nis_16 => 566 | Nis_15 => 567 | Nis_14 => 568 | Nis_13 => 569 | Nis_12 => 570 | Nis_11 => 571 | Nis_10 => 572 | Nis_9 => 573 | Nis_8 => 574 | Nis_7 => 575 | Nis_6 => 576 | Nis_5 => 577 | Nis_4 => 578 | Nis_3 => 579 | Nis_2 => 580 | Nis_1 => 581 end;
-    surjN := fun n => match n return _ with | 0 => Nis_582 | 1 => Nis_581 | 2 => Nis_580 | 3 => Nis_579 | 4 => Nis_578 | 5 => Nis_577 | 6 => Nis_576 | 7 => Nis_575 | 8 => Nis_574 | 9 => Nis_573 | 10 => Nis_572 | 11 => Nis_571 | 12 => Nis_570 | 13 => Nis_569 | 14 => Nis_568 | 15 => Nis_567 | 16 => Nis_566 | 17 => Nis_565 | 18 => Nis_564 | 19 => Nis_563 | 20 => Nis_562 | 21 => Nis_561 | 22 => Nis_560 | 23 => Nis_559 | 24 => Nis_558 | 25 => Nis_557 | 26 => Nis_556 | 27 => Nis_555 | 28 => Nis_554 | 29 => Nis_553 | 30 => Nis_552 | 31 => Nis_551 | 32 => Nis_550 | 33 => Nis_549 | 34 => Nis_548 | 35 => Nis_547 | 36 => Nis_546 | 37 => Nis_545 | 38 => Nis_544 | 39 => Nis_543 | 40 => Nis_542 | 41 => Nis_541 | 42 => Nis_540 | 43 => Nis_539 | 44 => Nis_538 | 45 => Nis_537 | 46 => Nis_536 | 47 => Nis_535 | 48 => Nis_534 | 49 => Nis_533 | 50 => Nis_532 | 51 => Nis_531 | 52 => Nis_530 | 53 => Nis_529 | 54 => Nis_528 | 55 => Nis_527 | 56 => Nis_526 | 57 => Nis_525 | 58 => Nis_524 | 59 => Nis_523 | 60 => Nis_522 | 61 => Nis_521 | 62 => Nis_520 | 63 => Nis_519 | 64 => Nis_518 | 65 => Nis_517 | 66 => Nis_516 | 67 => Nis_515 | 68 => Nis_514 | 69 => Nis_513 | 70 => Nis_512 | 71 => Nis_511 | 72 => Nis_510 | 73 => Nis_509 | 74 => Nis_508 | 75 => Nis_507 | 76 => Nis_506 | 77 => Nis_505 | 78 => Nis_504 | 79 => Nis_503 | 80 => Nis_502 | 81 => Nis_501 | 82 => Nis_500 | 83 => Nis_499 | 84 => Nis_498 | 85 => Nis_497 | 86 => Nis_496 | 87 => Nis_495 | 88 => Nis_494 | 89 => Nis_493 | 90 => Nis_492 | 91 => Nis_491 | 92 => Nis_490 | 93 => Nis_489 | 94 => Nis_488 | 95 => Nis_487 | 96 => Nis_486 | 97 => Nis_485 | 98 => Nis_484 | 99 => Nis_483 | 100 => Nis_482 | 101 => Nis_481 | 102 => Nis_480 | 103 => Nis_479 | 104 => Nis_478 | 105 => Nis_477 | 106 => Nis_476 | 107 => Nis_475 | 108 => Nis_474 | 109 => Nis_473 | 110 => Nis_472 | 111 => Nis_471 | 112 => Nis_470 | 113 => Nis_469 | 114 => Nis_468 | 115 => Nis_467 | 116 => Nis_466 | 117 => Nis_465 | 118 => Nis_464 | 119 => Nis_463 | 120 => Nis_462 | 121 => Nis_461 | 122 => Nis_460 | 123 => Nis_459 | 124 => Nis_458 | 125 => Nis_457 | 126 => Nis_456 | 127 => Nis_455 | 128 => Nis_454 | 129 => Nis_453 | 130 => Nis_452 | 131 => Nis_451 | 132 => Nis_450 | 133 => Nis_449 | 134 => Nis_448 | 135 => Nis_447 | 136 => Nis_446 | 137 => Nis_445 | 138 => Nis_444 | 139 => Nis_443 | 140 => Nis_442 | 141 => Nis_441 | 142 => Nis_440 | 143 => Nis_439 | 144 => Nis_438 | 145 => Nis_437 | 146 => Nis_436 | 147 => Nis_435 | 148 => Nis_434 | 149 => Nis_433 | 150 => Nis_432 | 151 => Nis_431 | 152 => Nis_430 | 153 => Nis_429 | 154 => Nis_428 | 155 => Nis_427 | 156 => Nis_426 | 157 => Nis_425 | 158 => Nis_424 | 159 => Nis_423 | 160 => Nis_422 | 161 => Nis_421 | 162 => Nis_420 | 163 => Nis_419 | 164 => Nis_418 | 165 => Nis_417 | 166 => Nis_416 | 167 => Nis_415 | 168 => Nis_414 | 169 => Nis_413 | 170 => Nis_412 | 171 => Nis_411 | 172 => Nis_410 | 173 => Nis_409 | 174 => Nis_408 | 175 => Nis_407 | 176 => Nis_406 | 177 => Nis_405 | 178 => Nis_404 | 179 => Nis_403 | 180 => Nis_402 | 181 => Nis_401 | 182 => Nis_400 | 183 => Nis_399 | 184 => Nis_398 | 185 => Nis_397 | 186 => Nis_396 | 187 => Nis_395 | 188 => Nis_394 | 189 => Nis_393 | 190 => Nis_392 | 191 => Nis_391 | 192 => Nis_390 | 193 => Nis_389 | 194 => Nis_388 | 195 => Nis_387 | 196 => Nis_386 | 197 => Nis_385 | 198 => Nis_384 | 199 => Nis_383 | 200 => Nis_382 | 201 => Nis_381 | 202 => Nis_380 | 203 => Nis_379 | 204 => Nis_378 | 205 => Nis_377 | 206 => Nis_376 | 207 => Nis_375 | 208 => Nis_374 | 209 => Nis_373 | 210 => Nis_372 | 211 => Nis_371 | 212 => Nis_370 | 213 => Nis_369 | 214 => Nis_368 | 215 => Nis_367 | 216 => Nis_366 | 217 => Nis_365 | 218 => Nis_364 | 219 => Nis_363 | 220 => Nis_362 | 221 => Nis_361 | 222 => Nis_360 | 223 => Nis_359 | 224 => Nis_358 | 225 => Nis_357 | 226 => Nis_356 | 227 => Nis_355 | 228 => Nis_354 | 229 => Nis_353 | 230 => Nis_352 | 231 => Nis_351 | 232 => Nis_350 | 233 => Nis_349 | 234 => Nis_348 | 235 => Nis_347 | 236 => Nis_346 | 237 => Nis_345 | 238 => Nis_344 | 239 => Nis_343 | 240 => Nis_342 | 241 => Nis_341 | 242 => Nis_340 | 243 => Nis_339 | 244 => Nis_338 | 245 => Nis_337 | 246 => Nis_336 | 247 => Nis_335 | 248 => Nis_334 | 249 => Nis_333 | 250 => Nis_332 | 251 => Nis_331 | 252 => Nis_330 | 253 => Nis_329 | 254 => Nis_328 | 255 => Nis_327 | 256 => Nis_326 | 257 => Nis_325 | 258 => Nis_324 | 259 => Nis_323 | 260 => Nis_322 | 261 => Nis_321 | 262 => Nis_320 | 263 => Nis_319 | 264 => Nis_318 | 265 => Nis_317 | 266 => Nis_316 | 267 => Nis_315 | 268 => Nis_314 | 269 => Nis_313 | 270 => Nis_312 | 271 => Nis_311 | 272 => Nis_310 | 273 => Nis_309 | 274 => Nis_308 | 275 => Nis_307 | 276 => Nis_306 | 277 => Nis_305 | 278 => Nis_304 | 279 => Nis_303 | 280 => Nis_302 | 281 => Nis_301 | 282 => Nis_300 | 283 => Nis_299 | 284 => Nis_298 | 285 => Nis_297 | 286 => Nis_296 | 287 => Nis_295 | 288 => Nis_294 | 289 => Nis_293 | 290 => Nis_292 | 291 => Nis_291 | 292 => Nis_290 | 293 => Nis_289 | 294 => Nis_288 | 295 => Nis_287 | 296 => Nis_286 | 297 => Nis_285 | 298 => Nis_284 | 299 => Nis_283 | 300 => Nis_282 | 301 => Nis_281 | 302 => Nis_280 | 303 => Nis_279 | 304 => Nis_278 | 305 => Nis_277 | 306 => Nis_276 | 307 => Nis_275 | 308 => Nis_274 | 309 => Nis_273 | 310 => Nis_272 | 311 => Nis_271 | 312 => Nis_270 | 313 => Nis_269 | 314 => Nis_268 | 315 => Nis_267 | 316 => Nis_266 | 317 => Nis_265 | 318 => Nis_264 | 319 => Nis_263 | 320 => Nis_262 | 321 => Nis_261 | 322 => Nis_260 | 323 => Nis_259 | 324 => Nis_258 | 325 => Nis_257 | 326 => Nis_256 | 327 => Nis_255 | 328 => Nis_254 | 329 => Nis_253 | 330 => Nis_252 | 331 => Nis_251 | 332 => Nis_250 | 333 => Nis_249 | 334 => Nis_248 | 335 => Nis_247 | 336 => Nis_246 | 337 => Nis_245 | 338 => Nis_244 | 339 => Nis_243 | 340 => Nis_242 | 341 => Nis_241 | 342 => Nis_240 | 343 => Nis_239 | 344 => Nis_238 | 345 => Nis_237 | 346 => Nis_236 | 347 => Nis_235 | 348 => Nis_234 | 349 => Nis_233 | 350 => Nis_232 | 351 => Nis_231 | 352 => Nis_230 | 353 => Nis_229 | 354 => Nis_228 | 355 => Nis_227 | 356 => Nis_226 | 357 => Nis_225 | 358 => Nis_224 | 359 => Nis_223 | 360 => Nis_222 | 361 => Nis_221 | 362 => Nis_220 | 363 => Nis_219 | 364 => Nis_218 | 365 => Nis_217 | 366 => Nis_216 | 367 => Nis_215 | 368 => Nis_214 | 369 => Nis_213 | 370 => Nis_212 | 371 => Nis_211 | 372 => Nis_210 | 373 => Nis_209 | 374 => Nis_208 | 375 => Nis_207 | 376 => Nis_206 | 377 => Nis_205 | 378 => Nis_204 | 379 => Nis_203 | 380 => Nis_202 | 381 => Nis_201 | 382 => Nis_200 | 383 => Nis_199 | 384 => Nis_198 | 385 => Nis_197 | 386 => Nis_196 | 387 => Nis_195 | 388 => Nis_194 | 389 => Nis_193 | 390 => Nis_192 | 391 => Nis_191 | 392 => Nis_190 | 393 => Nis_189 | 394 => Nis_188 | 395 => Nis_187 | 396 => Nis_186 | 397 => Nis_185 | 398 => Nis_184 | 399 => Nis_183 | 400 => Nis_182 | 401 => Nis_181 | 402 => Nis_180 | 403 => Nis_179 | 404 => Nis_178 | 405 => Nis_177 | 406 => Nis_176 | 407 => Nis_175 | 408 => Nis_174 | 409 => Nis_173 | 410 => Nis_172 | 411 => Nis_171 | 412 => Nis_170 | 413 => Nis_169 | 414 => Nis_168 | 415 => Nis_167 | 416 => Nis_166 | 417 => Nis_165 | 418 => Nis_164 | 419 => Nis_163 | 420 => Nis_162 | 421 => Nis_161 | 422 => Nis_160 | 423 => Nis_159 | 424 => Nis_158 | 425 => Nis_157 | 426 => Nis_156 | 427 => Nis_155 | 428 => Nis_154 | 429 => Nis_153 | 430 => Nis_152 | 431 => Nis_151 | 432 => Nis_150 | 433 => Nis_149 | 434 => Nis_148 | 435 => Nis_147 | 436 => Nis_146 | 437 => Nis_145 | 438 => Nis_144 | 439 => Nis_143 | 440 => Nis_142 | 441 => Nis_141 | 442 => Nis_140 | 443 => Nis_139 | 444 => Nis_138 | 445 => Nis_137 | 446 => Nis_136 | 447 => Nis_135 | 448 => Nis_134 | 449 => Nis_133 | 450 => Nis_132 | 451 => Nis_131 | 452 => Nis_130 | 453 => Nis_129 | 454 => Nis_128 | 455 => Nis_127 | 456 => Nis_126 | 457 => Nis_125 | 458 => Nis_124 | 459 => Nis_123 | 460 => Nis_122 | 461 => Nis_121 | 462 => Nis_120 | 463 => Nis_119 | 464 => Nis_118 | 465 => Nis_117 | 466 => Nis_116 | 467 => Nis_115 | 468 => Nis_114 | 469 => Nis_113 | 470 => Nis_112 | 471 => Nis_111 | 472 => Nis_110 | 473 => Nis_109 | 474 => Nis_108 | 475 => Nis_107 | 476 => Nis_106 | 477 => Nis_105 | 478 => Nis_104 | 479 => Nis_103 | 480 => Nis_102 | 481 => Nis_101 | 482 => Nis_100 | 483 => Nis_99 | 484 => Nis_98 | 485 => Nis_97 | 486 => Nis_96 | 487 => Nis_95 | 488 => Nis_94 | 489 => Nis_93 | 490 => Nis_92 | 491 => Nis_91 | 492 => Nis_90 | 493 => Nis_89 | 494 => Nis_88 | 495 => Nis_87 | 496 => Nis_86 | 497 => Nis_85 | 498 => Nis_84 | 499 => Nis_83 | 500 => Nis_82 | 501 => Nis_81 | 502 => Nis_80 | 503 => Nis_79 | 504 => Nis_78 | 505 => Nis_77 | 506 => Nis_76 | 507 => Nis_75 | 508 => Nis_74 | 509 => Nis_73 | 510 => Nis_72 | 511 => Nis_71 | 512 => Nis_70 | 513 => Nis_69 | 514 => Nis_68 | 515 => Nis_67 | 516 => Nis_66 | 517 => Nis_65 | 518 => Nis_64 | 519 => Nis_63 | 520 => Nis_62 | 521 => Nis_61 | 522 => Nis_60 | 523 => Nis_59 | 524 => Nis_58 | 525 => Nis_57 | 526 => Nis_56 | 527 => Nis_55 | 528 => Nis_54 | 529 => Nis_53 | 530 => Nis_52 | 531 => Nis_51 | 532 => Nis_50 | 533 => Nis_49 | 534 => Nis_48 | 535 => Nis_47 | 536 => Nis_46 | 537 => Nis_45 | 538 => Nis_44 | 539 => Nis_43 | 540 => Nis_42 | 541 => Nis_41 | 542 => Nis_40 | 543 => Nis_39 | 544 => Nis_38 | 545 => Nis_37 | 546 => Nis_36 | 547 => Nis_35 | 548 => Nis_34 | 549 => Nis_33 | 550 => Nis_32 | 551 => Nis_31 | 552 => Nis_30 | 553 => Nis_29 | 554 => Nis_28 | 555 => Nis_27 | 556 => Nis_26 | 557 => Nis_25 | 558 => Nis_24 | 559 => Nis_23 | 560 => Nis_22 | 561 => Nis_21 | 562 => Nis_20 | 563 => Nis_19 | 564 => Nis_18 | 565 => Nis_17 | 566 => Nis_16 | 567 => Nis_15 | 568 => Nis_14 | 569 => Nis_13 | 570 => Nis_12 | 571 => Nis_11 | 572 => Nis_10 | 573 => Nis_9 | 574 => Nis_8 | 575 => Nis_7 | 576 => Nis_6 | 577 => Nis_5 | 578 => Nis_4 | 579 => Nis_3 | 580 => Nis_2 | 581 => Nis_1 | _ => Nis_582 end;
-  injN_bound := 582 }.
+  { inj := fun x => match x return _ with | Nis_582 => Int31.On | Nis_581 => Int31.In | Nis_580 => (twice Int31.In) | Nis_579 => (twice_plus_one Int31.In) | Nis_578 => (twice (twice Int31.In)) | Nis_577 => (twice_plus_one (twice Int31.In)) | Nis_576 => (twice (twice_plus_one Int31.In)) | Nis_575 => (twice_plus_one (twice_plus_one Int31.In)) | Nis_574 => (twice (twice (twice Int31.In))) | Nis_573 => (twice_plus_one (twice (twice Int31.In))) | Nis_572 => (twice (twice_plus_one (twice Int31.In))) | Nis_571 => (twice_plus_one (twice_plus_one (twice Int31.In))) | Nis_570 => (twice (twice (twice_plus_one Int31.In))) | Nis_569 => (twice_plus_one (twice (twice_plus_one Int31.In))) | Nis_568 => (twice (twice_plus_one (twice_plus_one Int31.In))) | Nis_567 => (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))) | Nis_566 => (twice (twice (twice (twice Int31.In)))) | Nis_565 => (twice_plus_one (twice (twice (twice Int31.In)))) | Nis_564 => (twice (twice_plus_one (twice (twice Int31.In)))) | Nis_563 => (twice_plus_one (twice_plus_one (twice (twice Int31.In)))) | Nis_562 => (twice (twice (twice_plus_one (twice Int31.In)))) | Nis_561 => (twice_plus_one (twice (twice_plus_one (twice Int31.In)))) | Nis_560 => (twice (twice_plus_one (twice_plus_one (twice Int31.In)))) | Nis_559 => (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))) | Nis_558 => (twice (twice (twice (twice_plus_one Int31.In)))) | Nis_557 => (twice_plus_one (twice (twice (twice_plus_one Int31.In)))) | Nis_556 => (twice (twice_plus_one (twice (twice_plus_one Int31.In)))) | Nis_555 => (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))) | Nis_554 => (twice (twice (twice_plus_one (twice_plus_one Int31.In)))) | Nis_553 => (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))) | Nis_552 => (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | Nis_551 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))) | Nis_550 => (twice (twice (twice (twice (twice Int31.In))))) | Nis_549 => (twice_plus_one (twice (twice (twice (twice Int31.In))))) | Nis_548 => (twice (twice_plus_one (twice (twice (twice Int31.In))))) | Nis_547 => (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))) | Nis_546 => (twice (twice (twice_plus_one (twice (twice Int31.In))))) | Nis_545 => (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))) | Nis_544 => (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | Nis_543 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))) | Nis_542 => (twice (twice (twice (twice_plus_one (twice Int31.In))))) | Nis_541 => (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))) | Nis_540 => (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | Nis_539 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))) | Nis_538 => (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | Nis_537 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))) | Nis_536 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | Nis_535 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))) | Nis_534 => (twice (twice (twice (twice (twice_plus_one Int31.In))))) | Nis_533 => (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))) | Nis_532 => (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | Nis_531 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))) | Nis_530 => (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | Nis_529 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))) | Nis_528 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | Nis_527 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))) | Nis_526 => (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | Nis_525 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))) | Nis_524 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | Nis_523 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))) | Nis_522 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Nis_521 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Nis_520 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Nis_519 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))) | Nis_518 => (twice (twice (twice (twice (twice (twice Int31.In)))))) | Nis_517 => (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))) | Nis_516 => (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | Nis_515 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))) | Nis_514 => (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | Nis_513 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))) | Nis_512 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | Nis_511 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))) | Nis_510 => (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | Nis_509 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))) | Nis_508 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | Nis_507 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))) | Nis_506 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Nis_505 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Nis_504 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Nis_503 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))) | Nis_502 => (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | Nis_501 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))) | Nis_500 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | Nis_499 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))) | Nis_498 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Nis_497 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Nis_496 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Nis_495 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))) | Nis_494 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_493 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_492 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_491 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_490 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_489 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_488 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_487 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))) | Nis_486 => (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | Nis_485 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))) | Nis_484 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | Nis_483 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))) | Nis_482 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Nis_481 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Nis_480 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Nis_479 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))) | Nis_478 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_477 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_476 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_475 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_474 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_473 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_472 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_471 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))) | Nis_470 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_469 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_468 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_467 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_466 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_465 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_464 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_463 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_462 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_461 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_460 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_459 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_458 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_457 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_456 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_455 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))) | Nis_454 => (twice (twice (twice (twice (twice (twice (twice Int31.In))))))) | Nis_453 => (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))) | Nis_452 => (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))) | Nis_451 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))) | Nis_450 => (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Nis_449 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Nis_448 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Nis_447 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))) | Nis_446 => (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_445 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_444 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_443 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_442 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_441 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_440 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_439 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))) | Nis_438 => (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_437 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_436 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_435 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_434 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_433 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_432 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_431 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In))))))) | Nis_430 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_429 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_428 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_427 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_426 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_425 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_424 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_423 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In))))))) | Nis_422 => (twice (twice (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_421 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_420 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_419 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_418 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_417 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_416 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_415 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In))))))) | Nis_414 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_413 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_412 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_411 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_410 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_409 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_408 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_407 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In))))))) | Nis_406 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_405 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_404 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_403 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_402 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_401 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_400 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_399 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_398 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_397 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_396 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_395 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_394 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_393 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_392 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_391 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In))))))) | Nis_390 => (twice (twice (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_389 => (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_388 => (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_387 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_386 => (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_385 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_384 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_383 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In))))))) | Nis_382 => (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_381 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_380 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_379 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_378 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_377 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_376 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_375 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In))))))) | Nis_374 => (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_373 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_372 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_371 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_370 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_369 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_368 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_367 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_366 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_365 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_364 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_363 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_361 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_360 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_359 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_358 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In))))))) | Nis_357 => (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_356 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_355 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_354 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_353 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_352 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_351 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_350 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_349 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_348 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_347 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_346 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_345 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_344 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_343 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_342 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_341 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_340 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_339 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_338 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_337 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_336 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_335 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_334 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_333 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_332 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_331 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_330 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_329 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_328 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_327 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_326 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In))))))) | Nis_325 => (twice (twice (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_324 => (twice_plus_one (twice (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_323 => (twice (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_322 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_321 => (twice (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_320 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_319 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_318 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In)))))))) | Nis_317 => (twice (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_316 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_315 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_314 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_313 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_312 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_311 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_310 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In)))))))) | Nis_309 => (twice (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_308 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_307 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_306 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_305 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_304 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_303 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_302 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_301 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_300 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_299 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_298 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_297 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_296 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_295 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_294 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In)))))))) | Nis_293 => (twice (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_292 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_291 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_290 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_289 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_288 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_287 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_286 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_285 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_284 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_283 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_282 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_281 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_280 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_279 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_278 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice Int31.In)))))))) | Nis_277 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_276 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_275 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_274 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_273 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_272 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_271 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_270 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_269 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_268 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_267 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_266 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_265 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_264 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_263 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_262 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice Int31.In)))))))) | Nis_261 => (twice (twice (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_260 => (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_259 => (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_258 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_257 => (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_256 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_255 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_254 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_253 => (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_252 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_251 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_250 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_249 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_248 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_247 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_246 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice Int31.In)))))))) | Nis_245 => (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_244 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_243 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_242 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_241 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_240 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_239 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_238 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_237 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_236 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_235 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_234 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_233 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_232 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_231 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_230 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice Int31.In)))))))) | Nis_229 => (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_228 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_227 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_226 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_225 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_224 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_223 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_222 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_221 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_220 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_219 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_218 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_217 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_216 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_215 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_214 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_213 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_212 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_211 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_210 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_209 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_208 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_207 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_206 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_205 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_204 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_203 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_202 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_201 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_200 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_199 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_198 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice Int31.In)))))))) | Nis_197 => (twice (twice (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_196 => (twice_plus_one (twice (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_195 => (twice (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_194 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_193 => (twice (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_192 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_191 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_190 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_189 => (twice (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_188 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_187 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_186 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_185 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_184 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_183 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_182 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one Int31.In)))))))) | Nis_181 => (twice (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_180 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_179 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_178 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_177 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_176 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_175 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_174 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_173 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_172 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_171 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_170 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_169 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_168 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_167 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_166 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one Int31.In)))))))) | Nis_165 => (twice (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_164 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_163 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_162 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_161 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_160 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_159 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_158 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_157 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_156 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_155 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_154 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_153 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_152 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_151 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_150 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_149 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_148 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_147 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_146 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_145 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_144 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_143 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_142 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_141 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_140 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_139 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_138 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_137 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_136 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_135 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_134 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one Int31.In)))))))) | Nis_133 => (twice (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_132 => (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_131 => (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_130 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_129 => (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_128 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_127 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_126 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_125 => (twice (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_124 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_123 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_122 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_121 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_120 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_119 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_118 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_117 => (twice (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_116 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_115 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_114 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_113 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_112 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_111 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_110 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_109 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_108 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_107 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_106 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_105 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_104 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_103 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_102 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_101 => (twice (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_100 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_99 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_98 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_97 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_96 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_95 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_94 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_93 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_92 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_91 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_90 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_89 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_88 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_87 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_86 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_85 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_84 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_83 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_82 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_81 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_80 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_79 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_78 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_77 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_76 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_75 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_74 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_73 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_72 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_71 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_70 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one Int31.In)))))))) | Nis_69 => (twice (twice (twice (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_68 => (twice_plus_one (twice (twice (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_67 => (twice (twice_plus_one (twice (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_66 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_65 => (twice (twice (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_64 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_63 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_62 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_61 => (twice (twice (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_60 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_59 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_58 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_57 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_56 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_55 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_54 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice Int31.In))))))))) | Nis_53 => (twice (twice (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_52 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_51 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_50 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_49 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_48 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_47 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_46 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_45 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_44 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_43 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_42 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_41 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_40 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_39 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_38 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice (twice Int31.In))))))))) | Nis_37 => (twice (twice (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_36 => (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_35 => (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_34 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_33 => (twice (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_32 => (twice_plus_one (twice (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_31 => (twice (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_30 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_29 => (twice (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_28 => (twice_plus_one (twice (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_27 => (twice (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_26 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_25 => (twice (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_24 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_23 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_22 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_21 => (twice (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_20 => (twice_plus_one (twice (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_19 => (twice (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_18 => (twice_plus_one (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_17 => (twice (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_16 => (twice_plus_one (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_15 => (twice (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_14 => (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_13 => (twice (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_12 => (twice_plus_one (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_11 => (twice (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_10 => (twice_plus_one (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_9 => (twice (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_8 => (twice_plus_one (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_7 => (twice (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_6 => (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice_plus_one (twice (twice (twice Int31.In))))))))) | Nis_5 => (twice (twice (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))))) | Nis_4 => (twice_plus_one (twice (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))))) | Nis_3 => (twice (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))))) | Nis_2 => (twice_plus_one (twice_plus_one (twice (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))))) | Nis_1 => (twice (twice (twice_plus_one (twice (twice (twice (twice_plus_one (twice (twice Int31.In))))))))) end;
+    surj := (fun n => match n return _ with | 0 => Nis_582 | 1 => Nis_581 | 2 => Nis_580 | 3 => Nis_579 | 4 => Nis_578 | 5 => Nis_577 | 6 => Nis_576 | 7 => Nis_575 | 8 => Nis_574 | 9 => Nis_573 | 10 => Nis_572 | 11 => Nis_571 | 12 => Nis_570 | 13 => Nis_569 | 14 => Nis_568 | 15 => Nis_567 | 16 => Nis_566 | 17 => Nis_565 | 18 => Nis_564 | 19 => Nis_563 | 20 => Nis_562 | 21 => Nis_561 | 22 => Nis_560 | 23 => Nis_559 | 24 => Nis_558 | 25 => Nis_557 | 26 => Nis_556 | 27 => Nis_555 | 28 => Nis_554 | 29 => Nis_553 | 30 => Nis_552 | 31 => Nis_551 | 32 => Nis_550 | 33 => Nis_549 | 34 => Nis_548 | 35 => Nis_547 | 36 => Nis_546 | 37 => Nis_545 | 38 => Nis_544 | 39 => Nis_543 | 40 => Nis_542 | 41 => Nis_541 | 42 => Nis_540 | 43 => Nis_539 | 44 => Nis_538 | 45 => Nis_537 | 46 => Nis_536 | 47 => Nis_535 | 48 => Nis_534 | 49 => Nis_533 | 50 => Nis_532 | 51 => Nis_531 | 52 => Nis_530 | 53 => Nis_529 | 54 => Nis_528 | 55 => Nis_527 | 56 => Nis_526 | 57 => Nis_525 | 58 => Nis_524 | 59 => Nis_523 | 60 => Nis_522 | 61 => Nis_521 | 62 => Nis_520 | 63 => Nis_519 | 64 => Nis_518 | 65 => Nis_517 | 66 => Nis_516 | 67 => Nis_515 | 68 => Nis_514 | 69 => Nis_513 | 70 => Nis_512 | 71 => Nis_511 | 72 => Nis_510 | 73 => Nis_509 | 74 => Nis_508 | 75 => Nis_507 | 76 => Nis_506 | 77 => Nis_505 | 78 => Nis_504 | 79 => Nis_503 | 80 => Nis_502 | 81 => Nis_501 | 82 => Nis_500 | 83 => Nis_499 | 84 => Nis_498 | 85 => Nis_497 | 86 => Nis_496 | 87 => Nis_495 | 88 => Nis_494 | 89 => Nis_493 | 90 => Nis_492 | 91 => Nis_491 | 92 => Nis_490 | 93 => Nis_489 | 94 => Nis_488 | 95 => Nis_487 | 96 => Nis_486 | 97 => Nis_485 | 98 => Nis_484 | 99 => Nis_483 | 100 => Nis_482 | 101 => Nis_481 | 102 => Nis_480 | 103 => Nis_479 | 104 => Nis_478 | 105 => Nis_477 | 106 => Nis_476 | 107 => Nis_475 | 108 => Nis_474 | 109 => Nis_473 | 110 => Nis_472 | 111 => Nis_471 | 112 => Nis_470 | 113 => Nis_469 | 114 => Nis_468 | 115 => Nis_467 | 116 => Nis_466 | 117 => Nis_465 | 118 => Nis_464 | 119 => Nis_463 | 120 => Nis_462 | 121 => Nis_461 | 122 => Nis_460 | 123 => Nis_459 | 124 => Nis_458 | 125 => Nis_457 | 126 => Nis_456 | 127 => Nis_455 | 128 => Nis_454 | 129 => Nis_453 | 130 => Nis_452 | 131 => Nis_451 | 132 => Nis_450 | 133 => Nis_449 | 134 => Nis_448 | 135 => Nis_447 | 136 => Nis_446 | 137 => Nis_445 | 138 => Nis_444 | 139 => Nis_443 | 140 => Nis_442 | 141 => Nis_441 | 142 => Nis_440 | 143 => Nis_439 | 144 => Nis_438 | 145 => Nis_437 | 146 => Nis_436 | 147 => Nis_435 | 148 => Nis_434 | 149 => Nis_433 | 150 => Nis_432 | 151 => Nis_431 | 152 => Nis_430 | 153 => Nis_429 | 154 => Nis_428 | 155 => Nis_427 | 156 => Nis_426 | 157 => Nis_425 | 158 => Nis_424 | 159 => Nis_423 | 160 => Nis_422 | 161 => Nis_421 | 162 => Nis_420 | 163 => Nis_419 | 164 => Nis_418 | 165 => Nis_417 | 166 => Nis_416 | 167 => Nis_415 | 168 => Nis_414 | 169 => Nis_413 | 170 => Nis_412 | 171 => Nis_411 | 172 => Nis_410 | 173 => Nis_409 | 174 => Nis_408 | 175 => Nis_407 | 176 => Nis_406 | 177 => Nis_405 | 178 => Nis_404 | 179 => Nis_403 | 180 => Nis_402 | 181 => Nis_401 | 182 => Nis_400 | 183 => Nis_399 | 184 => Nis_398 | 185 => Nis_397 | 186 => Nis_396 | 187 => Nis_395 | 188 => Nis_394 | 189 => Nis_393 | 190 => Nis_392 | 191 => Nis_391 | 192 => Nis_390 | 193 => Nis_389 | 194 => Nis_388 | 195 => Nis_387 | 196 => Nis_386 | 197 => Nis_385 | 198 => Nis_384 | 199 => Nis_383 | 200 => Nis_382 | 201 => Nis_381 | 202 => Nis_380 | 203 => Nis_379 | 204 => Nis_378 | 205 => Nis_377 | 206 => Nis_376 | 207 => Nis_375 | 208 => Nis_374 | 209 => Nis_373 | 210 => Nis_372 | 211 => Nis_371 | 212 => Nis_370 | 213 => Nis_369 | 214 => Nis_368 | 215 => Nis_367 | 216 => Nis_366 | 217 => Nis_365 | 218 => Nis_364 | 219 => Nis_363 | 220 => Nis_361 | 221 => Nis_360 | 222 => Nis_359 | 223 => Nis_358 | 224 => Nis_357 | 225 => Nis_356 | 226 => Nis_355 | 227 => Nis_354 | 228 => Nis_353 | 229 => Nis_352 | 230 => Nis_351 | 231 => Nis_350 | 232 => Nis_349 | 233 => Nis_348 | 234 => Nis_347 | 235 => Nis_346 | 236 => Nis_345 | 237 => Nis_344 | 238 => Nis_343 | 239 => Nis_342 | 240 => Nis_341 | 241 => Nis_340 | 242 => Nis_339 | 243 => Nis_338 | 244 => Nis_337 | 245 => Nis_336 | 246 => Nis_335 | 247 => Nis_334 | 248 => Nis_333 | 249 => Nis_332 | 250 => Nis_331 | 251 => Nis_330 | 252 => Nis_329 | 253 => Nis_328 | 254 => Nis_327 | 255 => Nis_326 | 256 => Nis_325 | 257 => Nis_324 | 258 => Nis_323 | 259 => Nis_322 | 260 => Nis_321 | 261 => Nis_320 | 262 => Nis_319 | 263 => Nis_318 | 264 => Nis_317 | 265 => Nis_316 | 266 => Nis_315 | 267 => Nis_314 | 268 => Nis_313 | 269 => Nis_312 | 270 => Nis_311 | 271 => Nis_310 | 272 => Nis_309 | 273 => Nis_308 | 274 => Nis_307 | 275 => Nis_306 | 276 => Nis_305 | 277 => Nis_304 | 278 => Nis_303 | 279 => Nis_302 | 280 => Nis_301 | 281 => Nis_300 | 282 => Nis_299 | 283 => Nis_298 | 284 => Nis_297 | 285 => Nis_296 | 286 => Nis_295 | 287 => Nis_294 | 288 => Nis_293 | 289 => Nis_292 | 290 => Nis_291 | 291 => Nis_290 | 292 => Nis_289 | 293 => Nis_288 | 294 => Nis_287 | 295 => Nis_286 | 296 => Nis_285 | 297 => Nis_284 | 298 => Nis_283 | 299 => Nis_282 | 300 => Nis_281 | 301 => Nis_280 | 302 => Nis_279 | 303 => Nis_278 | 304 => Nis_277 | 305 => Nis_276 | 306 => Nis_275 | 307 => Nis_274 | 308 => Nis_273 | 309 => Nis_272 | 310 => Nis_271 | 311 => Nis_270 | 312 => Nis_269 | 313 => Nis_268 | 314 => Nis_267 | 315 => Nis_266 | 316 => Nis_265 | 317 => Nis_264 | 318 => Nis_263 | 319 => Nis_262 | 320 => Nis_261 | 321 => Nis_260 | 322 => Nis_259 | 323 => Nis_258 | 324 => Nis_257 | 325 => Nis_256 | 326 => Nis_255 | 327 => Nis_254 | 328 => Nis_253 | 329 => Nis_252 | 330 => Nis_251 | 331 => Nis_250 | 332 => Nis_249 | 333 => Nis_248 | 334 => Nis_247 | 335 => Nis_246 | 336 => Nis_245 | 337 => Nis_244 | 338 => Nis_243 | 339 => Nis_242 | 340 => Nis_241 | 341 => Nis_240 | 342 => Nis_239 | 343 => Nis_238 | 344 => Nis_237 | 345 => Nis_236 | 346 => Nis_235 | 347 => Nis_234 | 348 => Nis_233 | 349 => Nis_232 | 350 => Nis_231 | 351 => Nis_230 | 352 => Nis_229 | 353 => Nis_228 | 354 => Nis_227 | 355 => Nis_226 | 356 => Nis_225 | 357 => Nis_224 | 358 => Nis_223 | 359 => Nis_222 | 360 => Nis_221 | 361 => Nis_220 | 362 => Nis_219 | 363 => Nis_218 | 364 => Nis_217 | 365 => Nis_216 | 366 => Nis_215 | 367 => Nis_214 | 368 => Nis_213 | 369 => Nis_212 | 370 => Nis_211 | 371 => Nis_210 | 372 => Nis_209 | 373 => Nis_208 | 374 => Nis_207 | 375 => Nis_206 | 376 => Nis_205 | 377 => Nis_204 | 378 => Nis_203 | 379 => Nis_202 | 380 => Nis_201 | 381 => Nis_200 | 382 => Nis_199 | 383 => Nis_198 | 384 => Nis_197 | 385 => Nis_196 | 386 => Nis_195 | 387 => Nis_194 | 388 => Nis_193 | 389 => Nis_192 | 390 => Nis_191 | 391 => Nis_190 | 392 => Nis_189 | 393 => Nis_188 | 394 => Nis_187 | 395 => Nis_186 | 396 => Nis_185 | 397 => Nis_184 | 398 => Nis_183 | 399 => Nis_182 | 400 => Nis_181 | 401 => Nis_180 | 402 => Nis_179 | 403 => Nis_178 | 404 => Nis_177 | 405 => Nis_176 | 406 => Nis_175 | 407 => Nis_174 | 408 => Nis_173 | 409 => Nis_172 | 410 => Nis_171 | 411 => Nis_170 | 412 => Nis_169 | 413 => Nis_168 | 414 => Nis_167 | 415 => Nis_166 | 416 => Nis_165 | 417 => Nis_164 | 418 => Nis_163 | 419 => Nis_162 | 420 => Nis_161 | 421 => Nis_160 | 422 => Nis_159 | 423 => Nis_158 | 424 => Nis_157 | 425 => Nis_156 | 426 => Nis_155 | 427 => Nis_154 | 428 => Nis_153 | 429 => Nis_152 | 430 => Nis_151 | 431 => Nis_150 | 432 => Nis_149 | 433 => Nis_148 | 434 => Nis_147 | 435 => Nis_146 | 436 => Nis_145 | 437 => Nis_144 | 438 => Nis_143 | 439 => Nis_142 | 440 => Nis_141 | 441 => Nis_140 | 442 => Nis_139 | 443 => Nis_138 | 444 => Nis_137 | 445 => Nis_136 | 446 => Nis_135 | 447 => Nis_134 | 448 => Nis_133 | 449 => Nis_132 | 450 => Nis_131 | 451 => Nis_130 | 452 => Nis_129 | 453 => Nis_128 | 454 => Nis_127 | 455 => Nis_126 | 456 => Nis_125 | 457 => Nis_124 | 458 => Nis_123 | 459 => Nis_122 | 460 => Nis_121 | 461 => Nis_120 | 462 => Nis_119 | 463 => Nis_118 | 464 => Nis_117 | 465 => Nis_116 | 466 => Nis_115 | 467 => Nis_114 | 468 => Nis_113 | 469 => Nis_112 | 470 => Nis_111 | 471 => Nis_110 | 472 => Nis_109 | 473 => Nis_108 | 474 => Nis_107 | 475 => Nis_106 | 476 => Nis_105 | 477 => Nis_104 | 478 => Nis_103 | 479 => Nis_102 | 480 => Nis_101 | 481 => Nis_100 | 482 => Nis_99 | 483 => Nis_98 | 484 => Nis_97 | 485 => Nis_96 | 486 => Nis_95 | 487 => Nis_94 | 488 => Nis_93 | 489 => Nis_92 | 490 => Nis_91 | 491 => Nis_90 | 492 => Nis_89 | 493 => Nis_88 | 494 => Nis_87 | 495 => Nis_86 | 496 => Nis_85 | 497 => Nis_84 | 498 => Nis_83 | 499 => Nis_82 | 500 => Nis_81 | 501 => Nis_80 | 502 => Nis_79 | 503 => Nis_78 | 504 => Nis_77 | 505 => Nis_76 | 506 => Nis_75 | 507 => Nis_74 | 508 => Nis_73 | 509 => Nis_72 | 510 => Nis_71 | 511 => Nis_70 | 512 => Nis_69 | 513 => Nis_68 | 514 => Nis_67 | 515 => Nis_66 | 516 => Nis_65 | 517 => Nis_64 | 518 => Nis_63 | 519 => Nis_62 | 520 => Nis_61 | 521 => Nis_60 | 522 => Nis_59 | 523 => Nis_58 | 524 => Nis_57 | 525 => Nis_56 | 526 => Nis_55 | 527 => Nis_54 | 528 => Nis_53 | 529 => Nis_52 | 530 => Nis_51 | 531 => Nis_50 | 532 => Nis_49 | 533 => Nis_48 | 534 => Nis_47 | 535 => Nis_46 | 536 => Nis_45 | 537 => Nis_44 | 538 => Nis_43 | 539 => Nis_42 | 540 => Nis_41 | 541 => Nis_40 | 542 => Nis_39 | 543 => Nis_38 | 544 => Nis_37 | 545 => Nis_36 | 546 => Nis_35 | 547 => Nis_34 | 548 => Nis_33 | 549 => Nis_32 | 550 => Nis_31 | 551 => Nis_30 | 552 => Nis_29 | 553 => Nis_28 | 554 => Nis_27 | 555 => Nis_26 | 556 => Nis_25 | 557 => Nis_24 | 558 => Nis_23 | 559 => Nis_22 | 560 => Nis_21 | 561 => Nis_20 | 562 => Nis_19 | 563 => Nis_18 | 564 => Nis_17 | 565 => Nis_16 | 566 => Nis_15 | 567 => Nis_14 | 568 => Nis_13 | 569 => Nis_12 | 570 => Nis_11 | 571 => Nis_10 | 572 => Nis_9 | 573 => Nis_8 | 574 => Nis_7 | 575 => Nis_6 | 576 => Nis_5 | 577 => Nis_4 | 578 => Nis_3 | 579 => Nis_2 | 580 => Nis_1 | _ => Nis_582 end)%int31;
+  inj_bound := 581%int31 }.
 Solve Obligations using (intro x; case x; reflexivity).
 
 Instance NonInitStateAlph : Alphabet noninitstate := _.
@@ -3258,7 +3257,6 @@ Definition last_symb_of_non_init_state (noninitstate:noninitstate) : symbol :=
     | Nis_359 => T RBRACE_t
     | Nis_360 => T COMMA_t
     | Nis_361 => T RBRACE_t
-    | Nis_362 => NT translation_unit_file_nt
     | Nis_363 => NT translation_unit_nt
     | Nis_364 => T EOF_t
     | Nis_365 => NT function_definition_nt
@@ -3481,13 +3479,29 @@ Definition last_symb_of_non_init_state (noninitstate:noninitstate) : symbol :=
     | Nis_582 => NT external_declaration_nt
   end.
 
+Inductive initstate' : Set :=
+  | Init_0.
+Definition initstate := initstate'.
+
+Program Instance initstateNum : Numbered initstate :=
+  { inj := fun x => match x return _ with | Init_0 => Int31.On end;
+    surj := (fun n => match n return _ with | 0 => Init_0 | _ => Init_0 end)%int31;
+  inj_bound := 1%int31 }.
+Solve Obligations using (intro x; case x; reflexivity).
+
+Instance InitStateAlph : Alphabet initstate := _.
+
 Include Automaton.Types.
 
-Definition action_table (state:state) :
-    default_action + (forall term:terminal, action term) :=
+Definition start_nt (init:initstate) : nonterminal :=
+  match init with
+    | Init_0 => translation_unit_file_nt
+  end.
+
+Definition action_table (state:state) : action :=
   match state with
-    | Init => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Init Init_0 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -3515,98 +3529,98 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_1 => inl (Default_reduce_act Prod_250)
-    | Ninit Nis_2 => inl (Default_reduce_act Prod_254)
-    | Ninit Nis_3 => inl (Default_reduce_act Prod_262)
-    | Ninit Nis_4 => inl (Default_reduce_act Prod_239)
-    | Ninit Nis_5 => inl (Default_reduce_act Prod_267)
-    | Ninit Nis_6 => inl (Default_reduce_act Prod_223)
-    | Ninit Nis_7 => inl (Default_reduce_act Prod_227)
-    | Ninit Nis_8 => inl (Default_reduce_act Prod_238)
-    | Ninit Nis_9 => inl (Default_reduce_act Prod_225)
-    | Ninit Nis_10 => inl (Default_reduce_act Prod_261)
-    | Ninit Nis_11 => inl (Default_reduce_act Prod_256)
-    | Ninit Nis_12 => inl (Default_reduce_act Prod_249)
-    | Ninit Nis_13 => inl (Default_reduce_act Prod_228)
-    | Ninit Nis_14 => inl (Default_reduce_act Prod_258)
-    | Ninit Nis_15 => inl (Default_reduce_act Prod_257)
-    | Ninit Nis_16 => inl (Default_reduce_act Prod_105)
-    | Ninit Nis_17 => inl (Default_reduce_act Prod_259)
-    | Ninit Nis_18 => inl (Default_reduce_act Prod_224)
-    | Ninit Nis_19 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_1 => Default_reduce_act Prod_type_qualifier_2
+    | Ninit Nis_2 => Default_reduce_act Prod_type_specifier_0
+    | Ninit Nis_3 => Default_reduce_act Prod_type_specifier_8
+    | Ninit Nis_4 => Default_reduce_act Prod_struct_or_union_1
+    | Ninit Nis_5 => Default_reduce_act Prod_type_specifier_13
+    | Ninit Nis_6 => Default_reduce_act Prod_storage_class_specifier_0
+    | Ninit Nis_7 => Default_reduce_act Prod_storage_class_specifier_4
+    | Ninit Nis_8 => Default_reduce_act Prod_struct_or_union_0
+    | Ninit Nis_9 => Default_reduce_act Prod_storage_class_specifier_2
+    | Ninit Nis_10 => Default_reduce_act Prod_type_specifier_7
+    | Ninit Nis_11 => Default_reduce_act Prod_type_specifier_2
+    | Ninit Nis_12 => Default_reduce_act Prod_type_qualifier_1
+    | Ninit Nis_13 => Default_reduce_act Prod_storage_class_specifier_5
+    | Ninit Nis_14 => Default_reduce_act Prod_type_specifier_4
+    | Ninit Nis_15 => Default_reduce_act Prod_type_specifier_3
+    | Ninit Nis_16 => Default_reduce_act Prod_function_specifier_0
+    | Ninit Nis_17 => Default_reduce_act Prod_type_specifier_5
+    | Ninit Nis_18 => Default_reduce_act Prod_storage_class_specifier_1
+    | Ninit Nis_19 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_20 (eq_refl _)
         | LBRACE_t => Shift_act Nis_357 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_20 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | VOLATILE_t => Reduce_act Prod_87
-        | VOID_t => Reduce_act Prod_87
-        | VAR_NAME_t => Reduce_act Prod_87
-        | UNSIGNED_t => Reduce_act Prod_87
-        | UNION_t => Reduce_act Prod_87
-        | TYPEDEF_NAME_t => Reduce_act Prod_87
-        | TYPEDEF_t => Reduce_act Prod_87
-        | THREAD_LOCAL_t => Reduce_act Prod_87
-        | STRUCT_t => Reduce_act Prod_87
-        | STATIC_t => Reduce_act Prod_87
-        | STAR_t => Reduce_act Prod_87
-        | SIGNED_t => Reduce_act Prod_87
-        | SHORT_t => Reduce_act Prod_87
-        | SEMICOLON_t => Reduce_act Prod_87
-        | RPAREN_t => Reduce_act Prod_87
-        | RESTRICT_t => Reduce_act Prod_87
-        | REGISTER_t => Reduce_act Prod_87
-        | LPAREN_t => Reduce_act Prod_87
-        | LONG_t => Reduce_act Prod_87
-        | LBRACK_t => Reduce_act Prod_87
+    | Ninit Nis_20 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | VOLATILE_t => Reduce_act Prod_enum_specifier_4
+        | VOID_t => Reduce_act Prod_enum_specifier_4
+        | VAR_NAME_t => Reduce_act Prod_enum_specifier_4
+        | UNSIGNED_t => Reduce_act Prod_enum_specifier_4
+        | UNION_t => Reduce_act Prod_enum_specifier_4
+        | TYPEDEF_NAME_t => Reduce_act Prod_enum_specifier_4
+        | TYPEDEF_t => Reduce_act Prod_enum_specifier_4
+        | THREAD_LOCAL_t => Reduce_act Prod_enum_specifier_4
+        | STRUCT_t => Reduce_act Prod_enum_specifier_4
+        | STATIC_t => Reduce_act Prod_enum_specifier_4
+        | STAR_t => Reduce_act Prod_enum_specifier_4
+        | SIGNED_t => Reduce_act Prod_enum_specifier_4
+        | SHORT_t => Reduce_act Prod_enum_specifier_4
+        | SEMICOLON_t => Reduce_act Prod_enum_specifier_4
+        | RPAREN_t => Reduce_act Prod_enum_specifier_4
+        | RESTRICT_t => Reduce_act Prod_enum_specifier_4
+        | REGISTER_t => Reduce_act Prod_enum_specifier_4
+        | LPAREN_t => Reduce_act Prod_enum_specifier_4
+        | LONG_t => Reduce_act Prod_enum_specifier_4
+        | LBRACK_t => Reduce_act Prod_enum_specifier_4
         | LBRACE_t => Shift_act Nis_21 (eq_refl _)
-        | INT_t => Reduce_act Prod_87
-        | INLINE_t => Reduce_act Prod_87
-        | FLOAT_t => Reduce_act Prod_87
-        | EXTERN_t => Reduce_act Prod_87
-        | ENUM_t => Reduce_act Prod_87
-        | DOUBLE_t => Reduce_act Prod_87
-        | CONST_t => Reduce_act Prod_87
-        | COMMA_t => Reduce_act Prod_87
-        | COLON_t => Reduce_act Prod_87
-        | CHAR_t => Reduce_act Prod_87
-        | BOOL_t => Reduce_act Prod_87
-        | AUTO_t => Reduce_act Prod_87
-        | ATOMIC_t => Reduce_act Prod_87
+        | INT_t => Reduce_act Prod_enum_specifier_4
+        | INLINE_t => Reduce_act Prod_enum_specifier_4
+        | FLOAT_t => Reduce_act Prod_enum_specifier_4
+        | EXTERN_t => Reduce_act Prod_enum_specifier_4
+        | ENUM_t => Reduce_act Prod_enum_specifier_4
+        | DOUBLE_t => Reduce_act Prod_enum_specifier_4
+        | CONST_t => Reduce_act Prod_enum_specifier_4
+        | COMMA_t => Reduce_act Prod_enum_specifier_4
+        | COLON_t => Reduce_act Prod_enum_specifier_4
+        | CHAR_t => Reduce_act Prod_enum_specifier_4
+        | BOOL_t => Reduce_act Prod_enum_specifier_4
+        | AUTO_t => Reduce_act Prod_enum_specifier_4
+        | ATOMIC_t => Reduce_act Prod_enum_specifier_4
         | _ => Fail_act
       end)
-    | Ninit Nis_21 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_21 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_22 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_22 => inl (Default_reduce_act Prod_88)
-    | Ninit Nis_23 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_22 => Default_reduce_act Prod_enumeration_constant_0
+    | Ninit Nis_23 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACE_t => Shift_act Nis_24 (eq_refl _)
         | COMMA_t => Shift_act Nis_25 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_24 => inl (Default_reduce_act Prod_83)
-    | Ninit Nis_25 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_24 => Default_reduce_act Prod_enum_specifier_0
+    | Ninit Nis_25 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_22 (eq_refl _)
         | RBRACE_t => Shift_act Nis_26 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_26 => inl (Default_reduce_act Prod_85)
-    | Ninit Nis_27 => inl (Default_reduce_act Prod_92)
-    | Ninit Nis_28 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RBRACE_t => Reduce_act Prod_89
+    | Ninit Nis_26 => Default_reduce_act Prod_enum_specifier_2
+    | Ninit Nis_27 => Default_reduce_act Prod_enumerator_list_1
+    | Ninit Nis_28 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RBRACE_t => Reduce_act Prod_enumerator_0
         | EQ_t => Shift_act Nis_29 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_89
+        | COMMA_t => Reduce_act Prod_enumerator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_29 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_29 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -3630,11 +3644,11 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_30 => inl (Default_reduce_act Prod_189)
-    | Ninit Nis_31 => inl (Default_reduce_act Prod_280)
-    | Ninit Nis_32 => inl (Default_reduce_act Prod_277)
-    | Ninit Nis_33 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_30 => Default_reduce_act Prod_primary_expression_0
+    | Ninit Nis_31 => Default_reduce_act Prod_unary_operator_4
+    | Ninit Nis_32 => Default_reduce_act Prod_unary_operator_1
+    | Ninit Nis_33 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -3658,14 +3672,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_34 => inl (Default_reduce_act Prod_278)
-    | Ninit Nis_35 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_34 => Default_reduce_act Prod_unary_operator_2
+    | Ninit Nis_35 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_36 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_36 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_36 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -3686,49 +3700,49 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_37 => inl (Default_reduce_act Prod_260)
-    | Ninit Nis_38 => inl (Default_reduce_act Prod_248)
-    | Ninit Nis_39 => inl (Default_reduce_act Prod_255)
-    | Ninit Nis_40 => inl (Default_reduce_act Prod_263)
-    | Ninit Nis_41 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | VOLATILE_t => Reduce_act Prod_251
-        | VOID_t => Reduce_act Prod_251
-        | VAR_NAME_t => Reduce_act Prod_251
-        | UNSIGNED_t => Reduce_act Prod_251
-        | UNION_t => Reduce_act Prod_251
-        | TYPEDEF_NAME_t => Reduce_act Prod_251
-        | TYPEDEF_t => Reduce_act Prod_251
-        | THREAD_LOCAL_t => Reduce_act Prod_251
-        | STRUCT_t => Reduce_act Prod_251
-        | STATIC_t => Reduce_act Prod_251
-        | STAR_t => Reduce_act Prod_251
-        | SIGNED_t => Reduce_act Prod_251
-        | SHORT_t => Reduce_act Prod_251
-        | SEMICOLON_t => Reduce_act Prod_251
-        | RPAREN_t => Reduce_act Prod_251
-        | RESTRICT_t => Reduce_act Prod_251
-        | REGISTER_t => Reduce_act Prod_251
+    | Ninit Nis_37 => Default_reduce_act Prod_type_specifier_6
+    | Ninit Nis_38 => Default_reduce_act Prod_type_qualifier_0
+    | Ninit Nis_39 => Default_reduce_act Prod_type_specifier_1
+    | Ninit Nis_40 => Default_reduce_act Prod_type_specifier_9
+    | Ninit Nis_41 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | VOLATILE_t => Reduce_act Prod_type_qualifier_3
+        | VOID_t => Reduce_act Prod_type_qualifier_3
+        | VAR_NAME_t => Reduce_act Prod_type_qualifier_3
+        | UNSIGNED_t => Reduce_act Prod_type_qualifier_3
+        | UNION_t => Reduce_act Prod_type_qualifier_3
+        | TYPEDEF_NAME_t => Reduce_act Prod_type_qualifier_3
+        | TYPEDEF_t => Reduce_act Prod_type_qualifier_3
+        | THREAD_LOCAL_t => Reduce_act Prod_type_qualifier_3
+        | STRUCT_t => Reduce_act Prod_type_qualifier_3
+        | STATIC_t => Reduce_act Prod_type_qualifier_3
+        | STAR_t => Reduce_act Prod_type_qualifier_3
+        | SIGNED_t => Reduce_act Prod_type_qualifier_3
+        | SHORT_t => Reduce_act Prod_type_qualifier_3
+        | SEMICOLON_t => Reduce_act Prod_type_qualifier_3
+        | RPAREN_t => Reduce_act Prod_type_qualifier_3
+        | RESTRICT_t => Reduce_act Prod_type_qualifier_3
+        | REGISTER_t => Reduce_act Prod_type_qualifier_3
         | LPAREN_t => Shift_act Nis_42 (eq_refl _)
-        | LONG_t => Reduce_act Prod_251
-        | LBRACK_t => Reduce_act Prod_251
-        | INT_t => Reduce_act Prod_251
-        | INLINE_t => Reduce_act Prod_251
-        | FLOAT_t => Reduce_act Prod_251
-        | EXTERN_t => Reduce_act Prod_251
-        | ENUM_t => Reduce_act Prod_251
-        | DOUBLE_t => Reduce_act Prod_251
-        | CONST_t => Reduce_act Prod_251
-        | COMMA_t => Reduce_act Prod_251
-        | COLON_t => Reduce_act Prod_251
-        | CHAR_t => Reduce_act Prod_251
-        | BOOL_t => Reduce_act Prod_251
-        | AUTO_t => Reduce_act Prod_251
-        | ATOMIC_t => Reduce_act Prod_251
+        | LONG_t => Reduce_act Prod_type_qualifier_3
+        | LBRACK_t => Reduce_act Prod_type_qualifier_3
+        | INT_t => Reduce_act Prod_type_qualifier_3
+        | INLINE_t => Reduce_act Prod_type_qualifier_3
+        | FLOAT_t => Reduce_act Prod_type_qualifier_3
+        | EXTERN_t => Reduce_act Prod_type_qualifier_3
+        | ENUM_t => Reduce_act Prod_type_qualifier_3
+        | DOUBLE_t => Reduce_act Prod_type_qualifier_3
+        | CONST_t => Reduce_act Prod_type_qualifier_3
+        | COMMA_t => Reduce_act Prod_type_qualifier_3
+        | COLON_t => Reduce_act Prod_type_qualifier_3
+        | CHAR_t => Reduce_act Prod_type_qualifier_3
+        | BOOL_t => Reduce_act Prod_type_qualifier_3
+        | AUTO_t => Reduce_act Prod_type_qualifier_3
+        | ATOMIC_t => Reduce_act Prod_type_qualifier_3
         | _ => Fail_act
       end)
-    | Ninit Nis_42 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_42 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -3749,113 +3763,113 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_43 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_43 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_206
+        | VAR_NAME_t => Reduce_act Prod_specifier_qualifier_list_1
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
-        | STAR_t => Reduce_act Prod_206
+        | STAR_t => Reduce_act Prod_specifier_qualifier_list_1
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_206
-        | RPAREN_t => Reduce_act Prod_206
+        | SEMICOLON_t => Reduce_act Prod_specifier_qualifier_list_1
+        | RPAREN_t => Reduce_act Prod_specifier_qualifier_list_1
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_206
+        | LPAREN_t => Reduce_act Prod_specifier_qualifier_list_1
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_206
+        | LBRACK_t => Reduce_act Prod_specifier_qualifier_list_1
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_206
-        | COLON_t => Reduce_act Prod_206
+        | COMMA_t => Reduce_act Prod_specifier_qualifier_list_1
+        | COLON_t => Reduce_act Prod_specifier_qualifier_list_1
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_44 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_44 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_208
+        | VAR_NAME_t => Reduce_act Prod_specifier_qualifier_list_3
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
-        | STAR_t => Reduce_act Prod_208
+        | STAR_t => Reduce_act Prod_specifier_qualifier_list_3
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_208
-        | RPAREN_t => Reduce_act Prod_208
+        | SEMICOLON_t => Reduce_act Prod_specifier_qualifier_list_3
+        | RPAREN_t => Reduce_act Prod_specifier_qualifier_list_3
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_208
+        | LPAREN_t => Reduce_act Prod_specifier_qualifier_list_3
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_208
+        | LBRACK_t => Reduce_act Prod_specifier_qualifier_list_3
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_208
-        | COLON_t => Reduce_act Prod_208
+        | COMMA_t => Reduce_act Prod_specifier_qualifier_list_3
+        | COLON_t => Reduce_act Prod_specifier_qualifier_list_3
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_45 => inl (Default_reduce_act Prod_265)
-    | Ninit Nis_46 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_45 => Default_reduce_act Prod_type_specifier_11
+    | Ninit Nis_46 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_47 (eq_refl _)
         | LBRACE_t => Shift_act Nis_340 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_47 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | VOLATILE_t => Reduce_act Prod_242
-        | VOID_t => Reduce_act Prod_242
-        | VAR_NAME_t => Reduce_act Prod_242
-        | UNSIGNED_t => Reduce_act Prod_242
-        | UNION_t => Reduce_act Prod_242
-        | TYPEDEF_NAME_t => Reduce_act Prod_242
-        | TYPEDEF_t => Reduce_act Prod_242
-        | THREAD_LOCAL_t => Reduce_act Prod_242
-        | STRUCT_t => Reduce_act Prod_242
-        | STATIC_t => Reduce_act Prod_242
-        | STAR_t => Reduce_act Prod_242
-        | SIGNED_t => Reduce_act Prod_242
-        | SHORT_t => Reduce_act Prod_242
-        | SEMICOLON_t => Reduce_act Prod_242
-        | RPAREN_t => Reduce_act Prod_242
-        | RESTRICT_t => Reduce_act Prod_242
-        | REGISTER_t => Reduce_act Prod_242
-        | LPAREN_t => Reduce_act Prod_242
-        | LONG_t => Reduce_act Prod_242
-        | LBRACK_t => Reduce_act Prod_242
+    | Ninit Nis_47 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | VOLATILE_t => Reduce_act Prod_struct_or_union_specifier_2
+        | VOID_t => Reduce_act Prod_struct_or_union_specifier_2
+        | VAR_NAME_t => Reduce_act Prod_struct_or_union_specifier_2
+        | UNSIGNED_t => Reduce_act Prod_struct_or_union_specifier_2
+        | UNION_t => Reduce_act Prod_struct_or_union_specifier_2
+        | TYPEDEF_NAME_t => Reduce_act Prod_struct_or_union_specifier_2
+        | TYPEDEF_t => Reduce_act Prod_struct_or_union_specifier_2
+        | THREAD_LOCAL_t => Reduce_act Prod_struct_or_union_specifier_2
+        | STRUCT_t => Reduce_act Prod_struct_or_union_specifier_2
+        | STATIC_t => Reduce_act Prod_struct_or_union_specifier_2
+        | STAR_t => Reduce_act Prod_struct_or_union_specifier_2
+        | SIGNED_t => Reduce_act Prod_struct_or_union_specifier_2
+        | SHORT_t => Reduce_act Prod_struct_or_union_specifier_2
+        | SEMICOLON_t => Reduce_act Prod_struct_or_union_specifier_2
+        | RPAREN_t => Reduce_act Prod_struct_or_union_specifier_2
+        | RESTRICT_t => Reduce_act Prod_struct_or_union_specifier_2
+        | REGISTER_t => Reduce_act Prod_struct_or_union_specifier_2
+        | LPAREN_t => Reduce_act Prod_struct_or_union_specifier_2
+        | LONG_t => Reduce_act Prod_struct_or_union_specifier_2
+        | LBRACK_t => Reduce_act Prod_struct_or_union_specifier_2
         | LBRACE_t => Shift_act Nis_48 (eq_refl _)
-        | INT_t => Reduce_act Prod_242
-        | INLINE_t => Reduce_act Prod_242
-        | FLOAT_t => Reduce_act Prod_242
-        | EXTERN_t => Reduce_act Prod_242
-        | ENUM_t => Reduce_act Prod_242
-        | DOUBLE_t => Reduce_act Prod_242
-        | CONST_t => Reduce_act Prod_242
-        | COMMA_t => Reduce_act Prod_242
-        | COLON_t => Reduce_act Prod_242
-        | CHAR_t => Reduce_act Prod_242
-        | BOOL_t => Reduce_act Prod_242
-        | AUTO_t => Reduce_act Prod_242
-        | ATOMIC_t => Reduce_act Prod_242
+        | INT_t => Reduce_act Prod_struct_or_union_specifier_2
+        | INLINE_t => Reduce_act Prod_struct_or_union_specifier_2
+        | FLOAT_t => Reduce_act Prod_struct_or_union_specifier_2
+        | EXTERN_t => Reduce_act Prod_struct_or_union_specifier_2
+        | ENUM_t => Reduce_act Prod_struct_or_union_specifier_2
+        | DOUBLE_t => Reduce_act Prod_struct_or_union_specifier_2
+        | CONST_t => Reduce_act Prod_struct_or_union_specifier_2
+        | COMMA_t => Reduce_act Prod_struct_or_union_specifier_2
+        | COLON_t => Reduce_act Prod_struct_or_union_specifier_2
+        | CHAR_t => Reduce_act Prod_struct_or_union_specifier_2
+        | BOOL_t => Reduce_act Prod_struct_or_union_specifier_2
+        | AUTO_t => Reduce_act Prod_struct_or_union_specifier_2
+        | ATOMIC_t => Reduce_act Prod_struct_or_union_specifier_2
         | _ => Fail_act
       end)
-    | Ninit Nis_48 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_48 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -3876,8 +3890,8 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_49 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_49 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -3899,10 +3913,10 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_50 => inl (Default_reduce_act Prod_240)
-    | Ninit Nis_51 => inl (Default_reduce_act Prod_232)
-    | Ninit Nis_52 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_50 => Default_reduce_act Prod_struct_or_union_specifier_0
+    | Ninit Nis_51 => Default_reduce_act Prod_struct_declaration_list_1
+    | Ninit Nis_52 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | SEMICOLON_t => Shift_act Nis_61 (eq_refl _)
@@ -3910,68 +3924,68 @@ Definition action_table (state:state) :
         | COLON_t => Shift_act Nis_329 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_53 => inl (Default_reduce_act Prod_75)
-    | Ninit Nis_54 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_53 => Default_reduce_act Prod_direct_declarator_0
+    | Ninit Nis_54 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_173
+        | VAR_NAME_t => Reduce_act Prod_pointer_0
         | STAR_t => Shift_act Nis_54 (eq_refl _)
-        | RPAREN_t => Reduce_act Prod_173
+        | RPAREN_t => Reduce_act Prod_pointer_0
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_173
-        | LBRACK_t => Reduce_act Prod_173
+        | LPAREN_t => Reduce_act Prod_pointer_0
+        | LBRACK_t => Reduce_act Prod_pointer_0
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_173
+        | COMMA_t => Reduce_act Prod_pointer_0
         | ATOMIC_t => Shift_act Nis_55 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_55 => inl (Default_reduce_act Prod_251)
-    | Ninit Nis_56 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_55 => Default_reduce_act Prod_type_qualifier_3
+    | Ninit Nis_56 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_174
+        | VAR_NAME_t => Reduce_act Prod_pointer_1
         | STAR_t => Shift_act Nis_54 (eq_refl _)
-        | RPAREN_t => Reduce_act Prod_174
+        | RPAREN_t => Reduce_act Prod_pointer_1
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_174
-        | LBRACK_t => Reduce_act Prod_174
+        | LPAREN_t => Reduce_act Prod_pointer_1
+        | LBRACK_t => Reduce_act Prod_pointer_1
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_174
+        | COMMA_t => Reduce_act Prod_pointer_1
         | ATOMIC_t => Shift_act Nis_55 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_57 => inl (Default_reduce_act Prod_253)
-    | Ninit Nis_58 => inl (Default_reduce_act Prod_176)
-    | Ninit Nis_59 => inl (Default_reduce_act Prod_252)
-    | Ninit Nis_60 => inl (Default_reduce_act Prod_175)
-    | Ninit Nis_61 => inl (Default_reduce_act Prod_230)
-    | Ninit Nis_62 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_57 => Default_reduce_act Prod_type_qualifier_list_1
+    | Ninit Nis_58 => Default_reduce_act Prod_pointer_3
+    | Ninit Nis_59 => Default_reduce_act Prod_type_qualifier_list_0
+    | Ninit Nis_60 => Default_reduce_act Prod_pointer_2
+    | Ninit Nis_61 => Default_reduce_act Prod_struct_declaration_1
+    | Ninit Nis_62 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_63 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_63 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_64 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_56
-        | RPAREN_t => Reduce_act Prod_56
+    | Ninit Nis_64 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_declarator_1
+        | RPAREN_t => Reduce_act Prod_declarator_1
         | LPAREN_t => Shift_act Nis_65 (eq_refl _)
         | LBRACK_t => Shift_act Nis_317 (eq_refl _)
-        | LBRACE_t => Reduce_act Prod_56
-        | EQ_t => Reduce_act Prod_56
-        | COMMA_t => Reduce_act Prod_56
-        | COLON_t => Reduce_act Prod_56
+        | LBRACE_t => Reduce_act Prod_declarator_1
+        | EQ_t => Reduce_act Prod_declarator_1
+        | COMMA_t => Reduce_act Prod_declarator_1
+        | COLON_t => Reduce_act Prod_declarator_1
         | _ => Fail_act
       end)
-    | Ninit Nis_65 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_65 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -4000,13 +4014,13 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_66 => inl (Default_reduce_act Prod_82)
-    | Ninit Nis_67 => inl (Default_reduce_act Prod_226)
-    | Ninit Nis_68 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_66 => Default_reduce_act Prod_direct_declarator_7
+    | Ninit Nis_67 => Default_reduce_act Prod_storage_class_specifier_3
+    | Ninit Nis_68 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_50
+        | VAR_NAME_t => Reduce_act Prod_declaration_specifiers_3
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
@@ -4014,16 +4028,16 @@ Definition action_table (state:state) :
         | THREAD_LOCAL_t => Shift_act Nis_7 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
         | STATIC_t => Shift_act Nis_9 (eq_refl _)
-        | STAR_t => Reduce_act Prod_50
+        | STAR_t => Reduce_act Prod_declaration_specifiers_3
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_50
-        | RPAREN_t => Reduce_act Prod_50
+        | SEMICOLON_t => Reduce_act Prod_declaration_specifiers_3
+        | RPAREN_t => Reduce_act Prod_declaration_specifiers_3
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
         | REGISTER_t => Shift_act Nis_13 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_50
+        | LPAREN_t => Reduce_act Prod_declaration_specifiers_3
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_50
+        | LBRACK_t => Reduce_act Prod_declaration_specifiers_3
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | INLINE_t => Shift_act Nis_16 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
@@ -4031,18 +4045,18 @@ Definition action_table (state:state) :
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_50
+        | COMMA_t => Reduce_act Prod_declaration_specifiers_3
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | AUTO_t => Shift_act Nis_67 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_69 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_69 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_52
+        | VAR_NAME_t => Reduce_act Prod_declaration_specifiers_5
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
@@ -4050,16 +4064,16 @@ Definition action_table (state:state) :
         | THREAD_LOCAL_t => Shift_act Nis_7 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
         | STATIC_t => Shift_act Nis_9 (eq_refl _)
-        | STAR_t => Reduce_act Prod_52
+        | STAR_t => Reduce_act Prod_declaration_specifiers_5
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_52
-        | RPAREN_t => Reduce_act Prod_52
+        | SEMICOLON_t => Reduce_act Prod_declaration_specifiers_5
+        | RPAREN_t => Reduce_act Prod_declaration_specifiers_5
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
         | REGISTER_t => Shift_act Nis_13 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_52
+        | LPAREN_t => Reduce_act Prod_declaration_specifiers_5
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_52
+        | LBRACK_t => Reduce_act Prod_declaration_specifiers_5
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | INLINE_t => Shift_act Nis_16 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
@@ -4067,18 +4081,18 @@ Definition action_table (state:state) :
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_52
+        | COMMA_t => Reduce_act Prod_declaration_specifiers_5
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | AUTO_t => Shift_act Nis_67 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_70 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_70 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_48
+        | VAR_NAME_t => Reduce_act Prod_declaration_specifiers_1
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
@@ -4086,16 +4100,16 @@ Definition action_table (state:state) :
         | THREAD_LOCAL_t => Shift_act Nis_7 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
         | STATIC_t => Shift_act Nis_9 (eq_refl _)
-        | STAR_t => Reduce_act Prod_48
+        | STAR_t => Reduce_act Prod_declaration_specifiers_1
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_48
-        | RPAREN_t => Reduce_act Prod_48
+        | SEMICOLON_t => Reduce_act Prod_declaration_specifiers_1
+        | RPAREN_t => Reduce_act Prod_declaration_specifiers_1
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
         | REGISTER_t => Shift_act Nis_13 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_48
+        | LPAREN_t => Reduce_act Prod_declaration_specifiers_1
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_48
+        | LBRACK_t => Reduce_act Prod_declaration_specifiers_1
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | INLINE_t => Shift_act Nis_16 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
@@ -4103,18 +4117,18 @@ Definition action_table (state:state) :
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_48
+        | COMMA_t => Reduce_act Prod_declaration_specifiers_1
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | AUTO_t => Shift_act Nis_67 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_71 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_71 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
-        | VAR_NAME_t => Reduce_act Prod_54
+        | VAR_NAME_t => Reduce_act Prod_declaration_specifiers_7
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
         | UNION_t => Shift_act Nis_4 (eq_refl _)
         | TYPEDEF_NAME_t => Shift_act Nis_5 (eq_refl _)
@@ -4122,16 +4136,16 @@ Definition action_table (state:state) :
         | THREAD_LOCAL_t => Shift_act Nis_7 (eq_refl _)
         | STRUCT_t => Shift_act Nis_8 (eq_refl _)
         | STATIC_t => Shift_act Nis_9 (eq_refl _)
-        | STAR_t => Reduce_act Prod_54
+        | STAR_t => Reduce_act Prod_declaration_specifiers_7
         | SIGNED_t => Shift_act Nis_10 (eq_refl _)
         | SHORT_t => Shift_act Nis_11 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_54
-        | RPAREN_t => Reduce_act Prod_54
+        | SEMICOLON_t => Reduce_act Prod_declaration_specifiers_7
+        | RPAREN_t => Reduce_act Prod_declaration_specifiers_7
         | RESTRICT_t => Shift_act Nis_12 (eq_refl _)
         | REGISTER_t => Shift_act Nis_13 (eq_refl _)
-        | LPAREN_t => Reduce_act Prod_54
+        | LPAREN_t => Reduce_act Prod_declaration_specifiers_7
         | LONG_t => Shift_act Nis_14 (eq_refl _)
-        | LBRACK_t => Reduce_act Prod_54
+        | LBRACK_t => Reduce_act Prod_declaration_specifiers_7
         | INT_t => Shift_act Nis_15 (eq_refl _)
         | INLINE_t => Shift_act Nis_16 (eq_refl _)
         | FLOAT_t => Shift_act Nis_17 (eq_refl _)
@@ -4139,33 +4153,33 @@ Definition action_table (state:state) :
         | ENUM_t => Shift_act Nis_19 (eq_refl _)
         | DOUBLE_t => Shift_act Nis_37 (eq_refl _)
         | CONST_t => Shift_act Nis_38 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_54
+        | COMMA_t => Reduce_act Prod_declaration_specifiers_7
         | CHAR_t => Shift_act Nis_39 (eq_refl _)
         | BOOL_t => Shift_act Nis_40 (eq_refl _)
         | AUTO_t => Shift_act Nis_67 (eq_refl _)
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_72 => inl (Default_reduce_act Prod_266)
-    | Ninit Nis_73 => inl (Default_reduce_act Prod_53)
-    | Ninit Nis_74 => inl (Default_reduce_act Prod_264)
-    | Ninit Nis_75 => inl (Default_reduce_act Prod_47)
-    | Ninit Nis_76 => inl (Default_reduce_act Prod_51)
-    | Ninit Nis_77 => inl (Default_reduce_act Prod_49)
-    | Ninit Nis_78 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_72 => Default_reduce_act Prod_type_specifier_12
+    | Ninit Nis_73 => Default_reduce_act Prod_declaration_specifiers_6
+    | Ninit Nis_74 => Default_reduce_act Prod_type_specifier_10
+    | Ninit Nis_75 => Default_reduce_act Prod_declaration_specifiers_0
+    | Ninit Nis_76 => Default_reduce_act Prod_declaration_specifiers_4
+    | Ninit Nis_77 => Default_reduce_act Prod_declaration_specifiers_2
+    | Ninit Nis_78 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_79 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_79 => inl (Default_reduce_act Prod_81)
-    | Ninit Nis_80 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RPAREN_t => Reduce_act Prod_171
+    | Ninit Nis_79 => Default_reduce_act Prod_direct_declarator_6
+    | Ninit Nis_80 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RPAREN_t => Reduce_act Prod_parameter_type_list_0
         | COMMA_t => Shift_act Nis_81 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_81 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_81 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -4194,20 +4208,20 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_82 => inl (Default_reduce_act Prod_172)
-    | Ninit Nis_83 => inl (Default_reduce_act Prod_170)
-    | Ninit Nis_84 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_82 => Default_reduce_act Prod_parameter_type_list_1
+    | Ninit Nis_83 => Default_reduce_act Prod_parameter_list_1
+    | Ninit Nis_84 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
-        | RPAREN_t => Reduce_act Prod_168
+        | RPAREN_t => Reduce_act Prod_parameter_declaration_2
         | LPAREN_t => Shift_act Nis_85 (eq_refl _)
         | LBRACK_t => Shift_act Nis_87 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_168
+        | COMMA_t => Reduce_act Prod_parameter_declaration_2
         | _ => Fail_act
       end)
-    | Ninit Nis_85 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_85 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
@@ -4240,9 +4254,9 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_86 => inl (Default_reduce_act Prod_74)
-    | Ninit Nis_87 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_86 => Default_reduce_act Prod_direct_abstract_declarator_12
+    | Ninit Nis_87 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -4271,10 +4285,10 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_88 => inl (Default_reduce_act Prod_70)
-    | Ninit Nis_89 => inl (Default_reduce_act Prod_279)
-    | Ninit Nis_90 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_88 => Default_reduce_act Prod_direct_abstract_declarator_8
+    | Ninit Nis_89 => Default_reduce_act Prod_unary_operator_3
+    | Ninit Nis_90 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
@@ -4316,8 +4330,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_91 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_91 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4341,8 +4355,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_92 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_92 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
@@ -4384,8 +4398,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_93 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_93 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4409,14 +4423,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_94 => inl (Default_reduce_act Prod_190)
-    | Ninit Nis_95 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_94 => Default_reduce_act Prod_primary_expression_1
+    | Ninit Nis_95 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_96 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_96 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_96 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4429,13 +4443,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_97 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_97 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_98 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_98 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_98 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4448,13 +4462,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_99 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_99 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_100 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_100 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_100 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4467,13 +4481,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_101 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_101 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_102 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_102 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_102 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4486,13 +4500,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_103 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_103 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_104 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_104 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_104 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4505,13 +4519,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_105 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_105 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_106 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_106 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_106 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -4524,13 +4538,13 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_107 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_107 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_108 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_108 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_108 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4554,15 +4568,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_109 => inl (Default_reduce_act Prod_281)
-    | Ninit Nis_110 => inl (Default_reduce_act Prod_276)
-    | Ninit Nis_111 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_109 => Default_reduce_act Prod_unary_operator_5
+    | Ninit Nis_110 => Default_reduce_act Prod_unary_operator_0
+    | Ninit Nis_111 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_112 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_112 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_112 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -4583,23 +4597,23 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_113 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_113 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_114 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_114 => inl (Default_reduce_act Prod_274)
-    | Ninit Nis_115 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_114 => Default_reduce_act Prod_unary_expression_6
+    | Ninit Nis_115 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | STAR_t => Shift_act Nis_54 (eq_refl _)
-        | RPAREN_t => Reduce_act Prod_246
+        | RPAREN_t => Reduce_act Prod_type_name_0
         | LPAREN_t => Shift_act Nis_116 (eq_refl _)
         | LBRACK_t => Shift_act Nis_87 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_246
+        | COMMA_t => Reduce_act Prod_type_name_0
         | _ => Fail_act
       end)
-    | Ninit Nis_116 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_116 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -4631,24 +4645,24 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_117 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RPAREN_t => Reduce_act Prod_3
+    | Ninit Nis_117 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RPAREN_t => Reduce_act Prod_abstract_declarator_0
         | LPAREN_t => Shift_act Nis_116 (eq_refl _)
         | LBRACK_t => Shift_act Nis_87 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_3
+        | COMMA_t => Reduce_act Prod_abstract_declarator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_118 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RPAREN_t => Reduce_act Prod_4
+    | Ninit Nis_118 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RPAREN_t => Reduce_act Prod_abstract_declarator_1
         | LPAREN_t => Shift_act Nis_119 (eq_refl _)
         | LBRACK_t => Shift_act Nis_124 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_4
+        | COMMA_t => Reduce_act Prod_abstract_declarator_1
         | _ => Fail_act
       end)
-    | Ninit Nis_119 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_119 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -4677,16 +4691,16 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_120 => inl (Default_reduce_act Prod_73)
-    | Ninit Nis_121 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_120 => Default_reduce_act Prod_direct_abstract_declarator_11
+    | Ninit Nis_121 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_122 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_122 => inl (Default_reduce_act Prod_71)
-    | Ninit Nis_123 => inl (Default_reduce_act Prod_169)
-    | Ninit Nis_124 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_122 => Default_reduce_act Prod_direct_abstract_declarator_9
+    | Ninit Nis_123 => Default_reduce_act Prod_parameter_list_0
+    | Ninit Nis_124 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -4715,9 +4729,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_125 => inl (Default_reduce_act Prod_69)
-    | Ninit Nis_126 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_125 => Default_reduce_act Prod_direct_abstract_declarator_7
+    | Ninit Nis_126 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4741,62 +4755,62 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_127 => inl (Default_reduce_act Prod_38)
-    | Ninit Nis_128 => inl (Default_reduce_act Prod_177)
-    | Ninit Nis_129 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | XOR_ASSIGN_t => Reduce_act Prod_268
-        | SUB_ASSIGN_t => Reduce_act Prod_268
-        | STAR_t => Reduce_act Prod_268
-        | SLASH_t => Reduce_act Prod_268
-        | SEMICOLON_t => Reduce_act Prod_268
-        | RPAREN_t => Reduce_act Prod_268
-        | RIGHT_ASSIGN_t => Reduce_act Prod_268
-        | RIGHT_t => Reduce_act Prod_268
-        | RBRACK_t => Reduce_act Prod_268
-        | RBRACE_t => Reduce_act Prod_268
-        | QUESTION_t => Reduce_act Prod_268
+    | Ninit Nis_127 => Default_reduce_act Prod_cast_expression_0
+    | Ninit Nis_128 => Default_reduce_act Prod_postfix_expression_0
+    | Ninit Nis_129 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | XOR_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | SUB_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | STAR_t => Reduce_act Prod_unary_expression_0
+        | SLASH_t => Reduce_act Prod_unary_expression_0
+        | SEMICOLON_t => Reduce_act Prod_unary_expression_0
+        | RPAREN_t => Reduce_act Prod_unary_expression_0
+        | RIGHT_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | RIGHT_t => Reduce_act Prod_unary_expression_0
+        | RBRACK_t => Reduce_act Prod_unary_expression_0
+        | RBRACE_t => Reduce_act Prod_unary_expression_0
+        | QUESTION_t => Reduce_act Prod_unary_expression_0
         | PTR_t => Shift_act Nis_130 (eq_refl _)
-        | PLUS_t => Reduce_act Prod_268
-        | PERCENT_t => Reduce_act Prod_268
-        | OR_ASSIGN_t => Reduce_act Prod_268
-        | NEQ_t => Reduce_act Prod_268
-        | MUL_ASSIGN_t => Reduce_act Prod_268
-        | MOD_ASSIGN_t => Reduce_act Prod_268
-        | MINUS_t => Reduce_act Prod_268
-        | LT_t => Reduce_act Prod_268
+        | PLUS_t => Reduce_act Prod_unary_expression_0
+        | PERCENT_t => Reduce_act Prod_unary_expression_0
+        | OR_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | NEQ_t => Reduce_act Prod_unary_expression_0
+        | MUL_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | MOD_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | MINUS_t => Reduce_act Prod_unary_expression_0
+        | LT_t => Reduce_act Prod_unary_expression_0
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
-        | LEQ_t => Reduce_act Prod_268
-        | LEFT_ASSIGN_t => Reduce_act Prod_268
-        | LEFT_t => Reduce_act Prod_268
+        | LEQ_t => Reduce_act Prod_unary_expression_0
+        | LEFT_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | LEFT_t => Reduce_act Prod_unary_expression_0
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
         | INC_t => Shift_act Nis_212 (eq_refl _)
-        | HAT_t => Reduce_act Prod_268
-        | GT_t => Reduce_act Prod_268
-        | GEQ_t => Reduce_act Prod_268
-        | EQEQ_t => Reduce_act Prod_268
-        | EQ_t => Reduce_act Prod_268
+        | HAT_t => Reduce_act Prod_unary_expression_0
+        | GT_t => Reduce_act Prod_unary_expression_0
+        | GEQ_t => Reduce_act Prod_unary_expression_0
+        | EQEQ_t => Reduce_act Prod_unary_expression_0
+        | EQ_t => Reduce_act Prod_unary_expression_0
         | DOT_t => Shift_act Nis_213 (eq_refl _)
-        | DIV_ASSIGN_t => Reduce_act Prod_268
+        | DIV_ASSIGN_t => Reduce_act Prod_unary_expression_0
         | DEC_t => Shift_act Nis_215 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_268
-        | COLON_t => Reduce_act Prod_268
-        | BARBAR_t => Reduce_act Prod_268
-        | BAR_t => Reduce_act Prod_268
-        | AND_ASSIGN_t => Reduce_act Prod_268
-        | ANDAND_t => Reduce_act Prod_268
-        | AND_t => Reduce_act Prod_268
-        | ADD_ASSIGN_t => Reduce_act Prod_268
+        | COMMA_t => Reduce_act Prod_unary_expression_0
+        | COLON_t => Reduce_act Prod_unary_expression_0
+        | BARBAR_t => Reduce_act Prod_unary_expression_0
+        | BAR_t => Reduce_act Prod_unary_expression_0
+        | AND_ASSIGN_t => Reduce_act Prod_unary_expression_0
+        | ANDAND_t => Reduce_act Prod_unary_expression_0
+        | AND_t => Reduce_act Prod_unary_expression_0
+        | ADD_ASSIGN_t => Reduce_act Prod_unary_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_130 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_130 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_131 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_131 => inl (Default_reduce_act Prod_184)
-    | Ninit Nis_132 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_131 => Default_reduce_act Prod_postfix_expression_7
+    | Ninit Nis_132 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4821,60 +4835,60 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_133 => inl (Default_reduce_act Prod_181)
-    | Ninit Nis_134 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_133 => Default_reduce_act Prod_postfix_expression_4
+    | Ninit Nis_134 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | XOR_ASSIGN_t => Shift_act Nis_135 (eq_refl _)
         | SUB_ASSIGN_t => Shift_act Nis_136 (eq_refl _)
-        | STAR_t => Reduce_act Prod_38
-        | SLASH_t => Reduce_act Prod_38
-        | SEMICOLON_t => Reduce_act Prod_38
-        | RPAREN_t => Reduce_act Prod_38
+        | STAR_t => Reduce_act Prod_cast_expression_0
+        | SLASH_t => Reduce_act Prod_cast_expression_0
+        | SEMICOLON_t => Reduce_act Prod_cast_expression_0
+        | RPAREN_t => Reduce_act Prod_cast_expression_0
         | RIGHT_ASSIGN_t => Shift_act Nis_137 (eq_refl _)
-        | RIGHT_t => Reduce_act Prod_38
-        | RBRACK_t => Reduce_act Prod_38
-        | RBRACE_t => Reduce_act Prod_38
-        | QUESTION_t => Reduce_act Prod_38
-        | PLUS_t => Reduce_act Prod_38
-        | PERCENT_t => Reduce_act Prod_38
+        | RIGHT_t => Reduce_act Prod_cast_expression_0
+        | RBRACK_t => Reduce_act Prod_cast_expression_0
+        | RBRACE_t => Reduce_act Prod_cast_expression_0
+        | QUESTION_t => Reduce_act Prod_cast_expression_0
+        | PLUS_t => Reduce_act Prod_cast_expression_0
+        | PERCENT_t => Reduce_act Prod_cast_expression_0
         | OR_ASSIGN_t => Shift_act Nis_138 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_38
+        | NEQ_t => Reduce_act Prod_cast_expression_0
         | MUL_ASSIGN_t => Shift_act Nis_139 (eq_refl _)
         | MOD_ASSIGN_t => Shift_act Nis_140 (eq_refl _)
-        | MINUS_t => Reduce_act Prod_38
-        | LT_t => Reduce_act Prod_38
-        | LEQ_t => Reduce_act Prod_38
+        | MINUS_t => Reduce_act Prod_cast_expression_0
+        | LT_t => Reduce_act Prod_cast_expression_0
+        | LEQ_t => Reduce_act Prod_cast_expression_0
         | LEFT_ASSIGN_t => Shift_act Nis_141 (eq_refl _)
-        | LEFT_t => Reduce_act Prod_38
-        | HAT_t => Reduce_act Prod_38
-        | GT_t => Reduce_act Prod_38
-        | GEQ_t => Reduce_act Prod_38
-        | EQEQ_t => Reduce_act Prod_38
+        | LEFT_t => Reduce_act Prod_cast_expression_0
+        | HAT_t => Reduce_act Prod_cast_expression_0
+        | GT_t => Reduce_act Prod_cast_expression_0
+        | GEQ_t => Reduce_act Prod_cast_expression_0
+        | EQEQ_t => Reduce_act Prod_cast_expression_0
         | EQ_t => Shift_act Nis_142 (eq_refl _)
         | DIV_ASSIGN_t => Shift_act Nis_143 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_38
-        | COLON_t => Reduce_act Prod_38
-        | BARBAR_t => Reduce_act Prod_38
-        | BAR_t => Reduce_act Prod_38
+        | COMMA_t => Reduce_act Prod_cast_expression_0
+        | COLON_t => Reduce_act Prod_cast_expression_0
+        | BARBAR_t => Reduce_act Prod_cast_expression_0
+        | BAR_t => Reduce_act Prod_cast_expression_0
         | AND_ASSIGN_t => Shift_act Nis_144 (eq_refl _)
-        | ANDAND_t => Reduce_act Prod_38
-        | AND_t => Reduce_act Prod_38
+        | ANDAND_t => Reduce_act Prod_cast_expression_0
+        | AND_t => Reduce_act Prod_cast_expression_0
         | ADD_ASSIGN_t => Shift_act Nis_145 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_135 => inl (Default_reduce_act Prod_21)
-    | Ninit Nis_136 => inl (Default_reduce_act Prod_18)
-    | Ninit Nis_137 => inl (Default_reduce_act Prod_20)
-    | Ninit Nis_138 => inl (Default_reduce_act Prod_22)
-    | Ninit Nis_139 => inl (Default_reduce_act Prod_14)
-    | Ninit Nis_140 => inl (Default_reduce_act Prod_16)
-    | Ninit Nis_141 => inl (Default_reduce_act Prod_19)
-    | Ninit Nis_142 => inl (Default_reduce_act Prod_13)
-    | Ninit Nis_143 => inl (Default_reduce_act Prod_15)
-    | Ninit Nis_144 => inl (Default_reduce_act Prod_23)
-    | Ninit Nis_145 => inl (Default_reduce_act Prod_17)
-    | Ninit Nis_146 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_135 => Default_reduce_act Prod_assignment_operator_8
+    | Ninit Nis_136 => Default_reduce_act Prod_assignment_operator_5
+    | Ninit Nis_137 => Default_reduce_act Prod_assignment_operator_7
+    | Ninit Nis_138 => Default_reduce_act Prod_assignment_operator_9
+    | Ninit Nis_139 => Default_reduce_act Prod_assignment_operator_1
+    | Ninit Nis_140 => Default_reduce_act Prod_assignment_operator_3
+    | Ninit Nis_141 => Default_reduce_act Prod_assignment_operator_6
+    | Ninit Nis_142 => Default_reduce_act Prod_assignment_operator_0
+    | Ninit Nis_143 => Default_reduce_act Prod_assignment_operator_2
+    | Ninit Nis_144 => Default_reduce_act Prod_assignment_operator_10
+    | Ninit Nis_145 => Default_reduce_act Prod_assignment_operator_4
+    | Ninit Nis_146 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4898,32 +4912,32 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_147 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_192
-        | RPAREN_t => Reduce_act Prod_192
+    | Ninit Nis_147 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_relational_expression_0
+        | RPAREN_t => Reduce_act Prod_relational_expression_0
         | RIGHT_t => Shift_act Nis_148 (eq_refl _)
-        | RBRACK_t => Reduce_act Prod_192
-        | RBRACE_t => Reduce_act Prod_192
-        | QUESTION_t => Reduce_act Prod_192
-        | NEQ_t => Reduce_act Prod_192
-        | LT_t => Reduce_act Prod_192
-        | LEQ_t => Reduce_act Prod_192
+        | RBRACK_t => Reduce_act Prod_relational_expression_0
+        | RBRACE_t => Reduce_act Prod_relational_expression_0
+        | QUESTION_t => Reduce_act Prod_relational_expression_0
+        | NEQ_t => Reduce_act Prod_relational_expression_0
+        | LT_t => Reduce_act Prod_relational_expression_0
+        | LEQ_t => Reduce_act Prod_relational_expression_0
         | LEFT_t => Shift_act Nis_163 (eq_refl _)
-        | HAT_t => Reduce_act Prod_192
-        | GT_t => Reduce_act Prod_192
-        | GEQ_t => Reduce_act Prod_192
-        | EQEQ_t => Reduce_act Prod_192
-        | COMMA_t => Reduce_act Prod_192
-        | COLON_t => Reduce_act Prod_192
-        | BARBAR_t => Reduce_act Prod_192
-        | BAR_t => Reduce_act Prod_192
-        | ANDAND_t => Reduce_act Prod_192
-        | AND_t => Reduce_act Prod_192
+        | HAT_t => Reduce_act Prod_relational_expression_0
+        | GT_t => Reduce_act Prod_relational_expression_0
+        | GEQ_t => Reduce_act Prod_relational_expression_0
+        | EQEQ_t => Reduce_act Prod_relational_expression_0
+        | COMMA_t => Reduce_act Prod_relational_expression_0
+        | COLON_t => Reduce_act Prod_relational_expression_0
+        | BARBAR_t => Reduce_act Prod_relational_expression_0
+        | BAR_t => Reduce_act Prod_relational_expression_0
+        | ANDAND_t => Reduce_act Prod_relational_expression_0
+        | AND_t => Reduce_act Prod_relational_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_148 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_148 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -4947,37 +4961,37 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_149 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_149 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | STAR_t => Shift_act Nis_150 (eq_refl _)
         | SLASH_t => Shift_act Nis_153 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_6
-        | RPAREN_t => Reduce_act Prod_6
-        | RIGHT_t => Reduce_act Prod_6
-        | RBRACK_t => Reduce_act Prod_6
-        | RBRACE_t => Reduce_act Prod_6
-        | QUESTION_t => Reduce_act Prod_6
-        | PLUS_t => Reduce_act Prod_6
+        | SEMICOLON_t => Reduce_act Prod_additive_expression_0
+        | RPAREN_t => Reduce_act Prod_additive_expression_0
+        | RIGHT_t => Reduce_act Prod_additive_expression_0
+        | RBRACK_t => Reduce_act Prod_additive_expression_0
+        | RBRACE_t => Reduce_act Prod_additive_expression_0
+        | QUESTION_t => Reduce_act Prod_additive_expression_0
+        | PLUS_t => Reduce_act Prod_additive_expression_0
         | PERCENT_t => Shift_act Nis_155 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_6
-        | MINUS_t => Reduce_act Prod_6
-        | LT_t => Reduce_act Prod_6
-        | LEQ_t => Reduce_act Prod_6
-        | LEFT_t => Reduce_act Prod_6
-        | HAT_t => Reduce_act Prod_6
-        | GT_t => Reduce_act Prod_6
-        | GEQ_t => Reduce_act Prod_6
-        | EQEQ_t => Reduce_act Prod_6
-        | COMMA_t => Reduce_act Prod_6
-        | COLON_t => Reduce_act Prod_6
-        | BARBAR_t => Reduce_act Prod_6
-        | BAR_t => Reduce_act Prod_6
-        | ANDAND_t => Reduce_act Prod_6
-        | AND_t => Reduce_act Prod_6
+        | NEQ_t => Reduce_act Prod_additive_expression_0
+        | MINUS_t => Reduce_act Prod_additive_expression_0
+        | LT_t => Reduce_act Prod_additive_expression_0
+        | LEQ_t => Reduce_act Prod_additive_expression_0
+        | LEFT_t => Reduce_act Prod_additive_expression_0
+        | HAT_t => Reduce_act Prod_additive_expression_0
+        | GT_t => Reduce_act Prod_additive_expression_0
+        | GEQ_t => Reduce_act Prod_additive_expression_0
+        | EQEQ_t => Reduce_act Prod_additive_expression_0
+        | COMMA_t => Reduce_act Prod_additive_expression_0
+        | COLON_t => Reduce_act Prod_additive_expression_0
+        | BARBAR_t => Reduce_act Prod_additive_expression_0
+        | BAR_t => Reduce_act Prod_additive_expression_0
+        | ANDAND_t => Reduce_act Prod_additive_expression_0
+        | AND_t => Reduce_act Prod_additive_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_150 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_150 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5001,10 +5015,10 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_151 => inl (Default_reduce_act Prod_160)
-    | Ninit Nis_152 => inl (Default_reduce_act Prod_179)
-    | Ninit Nis_153 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_151 => Default_reduce_act Prod_multiplicative_expression_1
+    | Ninit Nis_152 => Default_reduce_act Prod_postfix_expression_2
+    | Ninit Nis_153 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5028,9 +5042,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_154 => inl (Default_reduce_act Prod_161)
-    | Ninit Nis_155 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_154 => Default_reduce_act Prod_multiplicative_expression_2
+    | Ninit Nis_155 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5054,36 +5068,36 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_156 => inl (Default_reduce_act Prod_162)
-    | Ninit Nis_157 => inl (Default_reduce_act Prod_159)
-    | Ninit Nis_158 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_204
-        | RPAREN_t => Reduce_act Prod_204
-        | RIGHT_t => Reduce_act Prod_204
-        | RBRACK_t => Reduce_act Prod_204
-        | RBRACE_t => Reduce_act Prod_204
-        | QUESTION_t => Reduce_act Prod_204
+    | Ninit Nis_156 => Default_reduce_act Prod_multiplicative_expression_3
+    | Ninit Nis_157 => Default_reduce_act Prod_multiplicative_expression_0
+    | Ninit Nis_158 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_shift_expression_2
+        | RPAREN_t => Reduce_act Prod_shift_expression_2
+        | RIGHT_t => Reduce_act Prod_shift_expression_2
+        | RBRACK_t => Reduce_act Prod_shift_expression_2
+        | RBRACE_t => Reduce_act Prod_shift_expression_2
+        | QUESTION_t => Reduce_act Prod_shift_expression_2
         | PLUS_t => Shift_act Nis_159 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_204
+        | NEQ_t => Reduce_act Prod_shift_expression_2
         | MINUS_t => Shift_act Nis_161 (eq_refl _)
-        | LT_t => Reduce_act Prod_204
-        | LEQ_t => Reduce_act Prod_204
-        | LEFT_t => Reduce_act Prod_204
-        | HAT_t => Reduce_act Prod_204
-        | GT_t => Reduce_act Prod_204
-        | GEQ_t => Reduce_act Prod_204
-        | EQEQ_t => Reduce_act Prod_204
-        | COMMA_t => Reduce_act Prod_204
-        | COLON_t => Reduce_act Prod_204
-        | BARBAR_t => Reduce_act Prod_204
-        | BAR_t => Reduce_act Prod_204
-        | ANDAND_t => Reduce_act Prod_204
-        | AND_t => Reduce_act Prod_204
+        | LT_t => Reduce_act Prod_shift_expression_2
+        | LEQ_t => Reduce_act Prod_shift_expression_2
+        | LEFT_t => Reduce_act Prod_shift_expression_2
+        | HAT_t => Reduce_act Prod_shift_expression_2
+        | GT_t => Reduce_act Prod_shift_expression_2
+        | GEQ_t => Reduce_act Prod_shift_expression_2
+        | EQEQ_t => Reduce_act Prod_shift_expression_2
+        | COMMA_t => Reduce_act Prod_shift_expression_2
+        | COLON_t => Reduce_act Prod_shift_expression_2
+        | BARBAR_t => Reduce_act Prod_shift_expression_2
+        | BAR_t => Reduce_act Prod_shift_expression_2
+        | ANDAND_t => Reduce_act Prod_shift_expression_2
+        | AND_t => Reduce_act Prod_shift_expression_2
         | _ => Fail_act
       end)
-    | Ninit Nis_159 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_159 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5107,37 +5121,37 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_160 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_160 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | STAR_t => Shift_act Nis_150 (eq_refl _)
         | SLASH_t => Shift_act Nis_153 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_7
-        | RPAREN_t => Reduce_act Prod_7
-        | RIGHT_t => Reduce_act Prod_7
-        | RBRACK_t => Reduce_act Prod_7
-        | RBRACE_t => Reduce_act Prod_7
-        | QUESTION_t => Reduce_act Prod_7
-        | PLUS_t => Reduce_act Prod_7
+        | SEMICOLON_t => Reduce_act Prod_additive_expression_1
+        | RPAREN_t => Reduce_act Prod_additive_expression_1
+        | RIGHT_t => Reduce_act Prod_additive_expression_1
+        | RBRACK_t => Reduce_act Prod_additive_expression_1
+        | RBRACE_t => Reduce_act Prod_additive_expression_1
+        | QUESTION_t => Reduce_act Prod_additive_expression_1
+        | PLUS_t => Reduce_act Prod_additive_expression_1
         | PERCENT_t => Shift_act Nis_155 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_7
-        | MINUS_t => Reduce_act Prod_7
-        | LT_t => Reduce_act Prod_7
-        | LEQ_t => Reduce_act Prod_7
-        | LEFT_t => Reduce_act Prod_7
-        | HAT_t => Reduce_act Prod_7
-        | GT_t => Reduce_act Prod_7
-        | GEQ_t => Reduce_act Prod_7
-        | EQEQ_t => Reduce_act Prod_7
-        | COMMA_t => Reduce_act Prod_7
-        | COLON_t => Reduce_act Prod_7
-        | BARBAR_t => Reduce_act Prod_7
-        | BAR_t => Reduce_act Prod_7
-        | ANDAND_t => Reduce_act Prod_7
-        | AND_t => Reduce_act Prod_7
+        | NEQ_t => Reduce_act Prod_additive_expression_1
+        | MINUS_t => Reduce_act Prod_additive_expression_1
+        | LT_t => Reduce_act Prod_additive_expression_1
+        | LEQ_t => Reduce_act Prod_additive_expression_1
+        | LEFT_t => Reduce_act Prod_additive_expression_1
+        | HAT_t => Reduce_act Prod_additive_expression_1
+        | GT_t => Reduce_act Prod_additive_expression_1
+        | GEQ_t => Reduce_act Prod_additive_expression_1
+        | EQEQ_t => Reduce_act Prod_additive_expression_1
+        | COMMA_t => Reduce_act Prod_additive_expression_1
+        | COLON_t => Reduce_act Prod_additive_expression_1
+        | BARBAR_t => Reduce_act Prod_additive_expression_1
+        | BAR_t => Reduce_act Prod_additive_expression_1
+        | ANDAND_t => Reduce_act Prod_additive_expression_1
+        | AND_t => Reduce_act Prod_additive_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_161 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_161 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5161,37 +5175,37 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_162 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_162 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | STAR_t => Shift_act Nis_150 (eq_refl _)
         | SLASH_t => Shift_act Nis_153 (eq_refl _)
-        | SEMICOLON_t => Reduce_act Prod_8
-        | RPAREN_t => Reduce_act Prod_8
-        | RIGHT_t => Reduce_act Prod_8
-        | RBRACK_t => Reduce_act Prod_8
-        | RBRACE_t => Reduce_act Prod_8
-        | QUESTION_t => Reduce_act Prod_8
-        | PLUS_t => Reduce_act Prod_8
+        | SEMICOLON_t => Reduce_act Prod_additive_expression_2
+        | RPAREN_t => Reduce_act Prod_additive_expression_2
+        | RIGHT_t => Reduce_act Prod_additive_expression_2
+        | RBRACK_t => Reduce_act Prod_additive_expression_2
+        | RBRACE_t => Reduce_act Prod_additive_expression_2
+        | QUESTION_t => Reduce_act Prod_additive_expression_2
+        | PLUS_t => Reduce_act Prod_additive_expression_2
         | PERCENT_t => Shift_act Nis_155 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_8
-        | MINUS_t => Reduce_act Prod_8
-        | LT_t => Reduce_act Prod_8
-        | LEQ_t => Reduce_act Prod_8
-        | LEFT_t => Reduce_act Prod_8
-        | HAT_t => Reduce_act Prod_8
-        | GT_t => Reduce_act Prod_8
-        | GEQ_t => Reduce_act Prod_8
-        | EQEQ_t => Reduce_act Prod_8
-        | COMMA_t => Reduce_act Prod_8
-        | COLON_t => Reduce_act Prod_8
-        | BARBAR_t => Reduce_act Prod_8
-        | BAR_t => Reduce_act Prod_8
-        | ANDAND_t => Reduce_act Prod_8
-        | AND_t => Reduce_act Prod_8
+        | NEQ_t => Reduce_act Prod_additive_expression_2
+        | MINUS_t => Reduce_act Prod_additive_expression_2
+        | LT_t => Reduce_act Prod_additive_expression_2
+        | LEQ_t => Reduce_act Prod_additive_expression_2
+        | LEFT_t => Reduce_act Prod_additive_expression_2
+        | HAT_t => Reduce_act Prod_additive_expression_2
+        | GT_t => Reduce_act Prod_additive_expression_2
+        | GEQ_t => Reduce_act Prod_additive_expression_2
+        | EQEQ_t => Reduce_act Prod_additive_expression_2
+        | COMMA_t => Reduce_act Prod_additive_expression_2
+        | COLON_t => Reduce_act Prod_additive_expression_2
+        | BARBAR_t => Reduce_act Prod_additive_expression_2
+        | BAR_t => Reduce_act Prod_additive_expression_2
+        | ANDAND_t => Reduce_act Prod_additive_expression_2
+        | AND_t => Reduce_act Prod_additive_expression_2
         | _ => Fail_act
       end)
-    | Ninit Nis_163 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_163 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5215,56 +5229,56 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_164 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_203
-        | RPAREN_t => Reduce_act Prod_203
-        | RIGHT_t => Reduce_act Prod_203
-        | RBRACK_t => Reduce_act Prod_203
-        | RBRACE_t => Reduce_act Prod_203
-        | QUESTION_t => Reduce_act Prod_203
+    | Ninit Nis_164 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_shift_expression_1
+        | RPAREN_t => Reduce_act Prod_shift_expression_1
+        | RIGHT_t => Reduce_act Prod_shift_expression_1
+        | RBRACK_t => Reduce_act Prod_shift_expression_1
+        | RBRACE_t => Reduce_act Prod_shift_expression_1
+        | QUESTION_t => Reduce_act Prod_shift_expression_1
         | PLUS_t => Shift_act Nis_159 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_203
+        | NEQ_t => Reduce_act Prod_shift_expression_1
         | MINUS_t => Shift_act Nis_161 (eq_refl _)
-        | LT_t => Reduce_act Prod_203
-        | LEQ_t => Reduce_act Prod_203
-        | LEFT_t => Reduce_act Prod_203
-        | HAT_t => Reduce_act Prod_203
-        | GT_t => Reduce_act Prod_203
-        | GEQ_t => Reduce_act Prod_203
-        | EQEQ_t => Reduce_act Prod_203
-        | COMMA_t => Reduce_act Prod_203
-        | COLON_t => Reduce_act Prod_203
-        | BARBAR_t => Reduce_act Prod_203
-        | BAR_t => Reduce_act Prod_203
-        | ANDAND_t => Reduce_act Prod_203
-        | AND_t => Reduce_act Prod_203
+        | LT_t => Reduce_act Prod_shift_expression_1
+        | LEQ_t => Reduce_act Prod_shift_expression_1
+        | LEFT_t => Reduce_act Prod_shift_expression_1
+        | HAT_t => Reduce_act Prod_shift_expression_1
+        | GT_t => Reduce_act Prod_shift_expression_1
+        | GEQ_t => Reduce_act Prod_shift_expression_1
+        | EQEQ_t => Reduce_act Prod_shift_expression_1
+        | COMMA_t => Reduce_act Prod_shift_expression_1
+        | COLON_t => Reduce_act Prod_shift_expression_1
+        | BARBAR_t => Reduce_act Prod_shift_expression_1
+        | BAR_t => Reduce_act Prod_shift_expression_1
+        | ANDAND_t => Reduce_act Prod_shift_expression_1
+        | AND_t => Reduce_act Prod_shift_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_165 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_93
-        | RPAREN_t => Reduce_act Prod_93
-        | RBRACK_t => Reduce_act Prod_93
-        | RBRACE_t => Reduce_act Prod_93
-        | QUESTION_t => Reduce_act Prod_93
-        | NEQ_t => Reduce_act Prod_93
+    | Ninit Nis_165 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_equality_expression_0
+        | RPAREN_t => Reduce_act Prod_equality_expression_0
+        | RBRACK_t => Reduce_act Prod_equality_expression_0
+        | RBRACE_t => Reduce_act Prod_equality_expression_0
+        | QUESTION_t => Reduce_act Prod_equality_expression_0
+        | NEQ_t => Reduce_act Prod_equality_expression_0
         | LT_t => Shift_act Nis_166 (eq_refl _)
         | LEQ_t => Shift_act Nis_169 (eq_refl _)
-        | HAT_t => Reduce_act Prod_93
+        | HAT_t => Reduce_act Prod_equality_expression_0
         | GT_t => Shift_act Nis_171 (eq_refl _)
         | GEQ_t => Shift_act Nis_173 (eq_refl _)
-        | EQEQ_t => Reduce_act Prod_93
-        | COMMA_t => Reduce_act Prod_93
-        | COLON_t => Reduce_act Prod_93
-        | BARBAR_t => Reduce_act Prod_93
-        | BAR_t => Reduce_act Prod_93
-        | ANDAND_t => Reduce_act Prod_93
-        | AND_t => Reduce_act Prod_93
+        | EQEQ_t => Reduce_act Prod_equality_expression_0
+        | COMMA_t => Reduce_act Prod_equality_expression_0
+        | COLON_t => Reduce_act Prod_equality_expression_0
+        | BARBAR_t => Reduce_act Prod_equality_expression_0
+        | BAR_t => Reduce_act Prod_equality_expression_0
+        | ANDAND_t => Reduce_act Prod_equality_expression_0
+        | AND_t => Reduce_act Prod_equality_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_166 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_166 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5288,58 +5302,58 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_167 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_193
-        | RPAREN_t => Reduce_act Prod_193
+    | Ninit Nis_167 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_relational_expression_1
+        | RPAREN_t => Reduce_act Prod_relational_expression_1
         | RIGHT_t => Shift_act Nis_148 (eq_refl _)
-        | RBRACK_t => Reduce_act Prod_193
-        | RBRACE_t => Reduce_act Prod_193
-        | QUESTION_t => Reduce_act Prod_193
-        | NEQ_t => Reduce_act Prod_193
-        | LT_t => Reduce_act Prod_193
-        | LEQ_t => Reduce_act Prod_193
+        | RBRACK_t => Reduce_act Prod_relational_expression_1
+        | RBRACE_t => Reduce_act Prod_relational_expression_1
+        | QUESTION_t => Reduce_act Prod_relational_expression_1
+        | NEQ_t => Reduce_act Prod_relational_expression_1
+        | LT_t => Reduce_act Prod_relational_expression_1
+        | LEQ_t => Reduce_act Prod_relational_expression_1
         | LEFT_t => Shift_act Nis_163 (eq_refl _)
-        | HAT_t => Reduce_act Prod_193
-        | GT_t => Reduce_act Prod_193
-        | GEQ_t => Reduce_act Prod_193
-        | EQEQ_t => Reduce_act Prod_193
-        | COMMA_t => Reduce_act Prod_193
-        | COLON_t => Reduce_act Prod_193
-        | BARBAR_t => Reduce_act Prod_193
-        | BAR_t => Reduce_act Prod_193
-        | ANDAND_t => Reduce_act Prod_193
-        | AND_t => Reduce_act Prod_193
+        | HAT_t => Reduce_act Prod_relational_expression_1
+        | GT_t => Reduce_act Prod_relational_expression_1
+        | GEQ_t => Reduce_act Prod_relational_expression_1
+        | EQEQ_t => Reduce_act Prod_relational_expression_1
+        | COMMA_t => Reduce_act Prod_relational_expression_1
+        | COLON_t => Reduce_act Prod_relational_expression_1
+        | BARBAR_t => Reduce_act Prod_relational_expression_1
+        | BAR_t => Reduce_act Prod_relational_expression_1
+        | ANDAND_t => Reduce_act Prod_relational_expression_1
+        | AND_t => Reduce_act Prod_relational_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_168 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_202
-        | RPAREN_t => Reduce_act Prod_202
-        | RIGHT_t => Reduce_act Prod_202
-        | RBRACK_t => Reduce_act Prod_202
-        | RBRACE_t => Reduce_act Prod_202
-        | QUESTION_t => Reduce_act Prod_202
+    | Ninit Nis_168 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_shift_expression_0
+        | RPAREN_t => Reduce_act Prod_shift_expression_0
+        | RIGHT_t => Reduce_act Prod_shift_expression_0
+        | RBRACK_t => Reduce_act Prod_shift_expression_0
+        | RBRACE_t => Reduce_act Prod_shift_expression_0
+        | QUESTION_t => Reduce_act Prod_shift_expression_0
         | PLUS_t => Shift_act Nis_159 (eq_refl _)
-        | NEQ_t => Reduce_act Prod_202
+        | NEQ_t => Reduce_act Prod_shift_expression_0
         | MINUS_t => Shift_act Nis_161 (eq_refl _)
-        | LT_t => Reduce_act Prod_202
-        | LEQ_t => Reduce_act Prod_202
-        | LEFT_t => Reduce_act Prod_202
-        | HAT_t => Reduce_act Prod_202
-        | GT_t => Reduce_act Prod_202
-        | GEQ_t => Reduce_act Prod_202
-        | EQEQ_t => Reduce_act Prod_202
-        | COMMA_t => Reduce_act Prod_202
-        | COLON_t => Reduce_act Prod_202
-        | BARBAR_t => Reduce_act Prod_202
-        | BAR_t => Reduce_act Prod_202
-        | ANDAND_t => Reduce_act Prod_202
-        | AND_t => Reduce_act Prod_202
+        | LT_t => Reduce_act Prod_shift_expression_0
+        | LEQ_t => Reduce_act Prod_shift_expression_0
+        | LEFT_t => Reduce_act Prod_shift_expression_0
+        | HAT_t => Reduce_act Prod_shift_expression_0
+        | GT_t => Reduce_act Prod_shift_expression_0
+        | GEQ_t => Reduce_act Prod_shift_expression_0
+        | EQEQ_t => Reduce_act Prod_shift_expression_0
+        | COMMA_t => Reduce_act Prod_shift_expression_0
+        | COLON_t => Reduce_act Prod_shift_expression_0
+        | BARBAR_t => Reduce_act Prod_shift_expression_0
+        | BAR_t => Reduce_act Prod_shift_expression_0
+        | ANDAND_t => Reduce_act Prod_shift_expression_0
+        | AND_t => Reduce_act Prod_shift_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_169 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_169 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5363,32 +5377,32 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_170 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_195
-        | RPAREN_t => Reduce_act Prod_195
+    | Ninit Nis_170 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_relational_expression_3
+        | RPAREN_t => Reduce_act Prod_relational_expression_3
         | RIGHT_t => Shift_act Nis_148 (eq_refl _)
-        | RBRACK_t => Reduce_act Prod_195
-        | RBRACE_t => Reduce_act Prod_195
-        | QUESTION_t => Reduce_act Prod_195
-        | NEQ_t => Reduce_act Prod_195
-        | LT_t => Reduce_act Prod_195
-        | LEQ_t => Reduce_act Prod_195
+        | RBRACK_t => Reduce_act Prod_relational_expression_3
+        | RBRACE_t => Reduce_act Prod_relational_expression_3
+        | QUESTION_t => Reduce_act Prod_relational_expression_3
+        | NEQ_t => Reduce_act Prod_relational_expression_3
+        | LT_t => Reduce_act Prod_relational_expression_3
+        | LEQ_t => Reduce_act Prod_relational_expression_3
         | LEFT_t => Shift_act Nis_163 (eq_refl _)
-        | HAT_t => Reduce_act Prod_195
-        | GT_t => Reduce_act Prod_195
-        | GEQ_t => Reduce_act Prod_195
-        | EQEQ_t => Reduce_act Prod_195
-        | COMMA_t => Reduce_act Prod_195
-        | COLON_t => Reduce_act Prod_195
-        | BARBAR_t => Reduce_act Prod_195
-        | BAR_t => Reduce_act Prod_195
-        | ANDAND_t => Reduce_act Prod_195
-        | AND_t => Reduce_act Prod_195
+        | HAT_t => Reduce_act Prod_relational_expression_3
+        | GT_t => Reduce_act Prod_relational_expression_3
+        | GEQ_t => Reduce_act Prod_relational_expression_3
+        | EQEQ_t => Reduce_act Prod_relational_expression_3
+        | COMMA_t => Reduce_act Prod_relational_expression_3
+        | COLON_t => Reduce_act Prod_relational_expression_3
+        | BARBAR_t => Reduce_act Prod_relational_expression_3
+        | BAR_t => Reduce_act Prod_relational_expression_3
+        | ANDAND_t => Reduce_act Prod_relational_expression_3
+        | AND_t => Reduce_act Prod_relational_expression_3
         | _ => Fail_act
       end)
-    | Ninit Nis_171 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_171 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5412,32 +5426,32 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_172 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_194
-        | RPAREN_t => Reduce_act Prod_194
+    | Ninit Nis_172 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_relational_expression_2
+        | RPAREN_t => Reduce_act Prod_relational_expression_2
         | RIGHT_t => Shift_act Nis_148 (eq_refl _)
-        | RBRACK_t => Reduce_act Prod_194
-        | RBRACE_t => Reduce_act Prod_194
-        | QUESTION_t => Reduce_act Prod_194
-        | NEQ_t => Reduce_act Prod_194
-        | LT_t => Reduce_act Prod_194
-        | LEQ_t => Reduce_act Prod_194
+        | RBRACK_t => Reduce_act Prod_relational_expression_2
+        | RBRACE_t => Reduce_act Prod_relational_expression_2
+        | QUESTION_t => Reduce_act Prod_relational_expression_2
+        | NEQ_t => Reduce_act Prod_relational_expression_2
+        | LT_t => Reduce_act Prod_relational_expression_2
+        | LEQ_t => Reduce_act Prod_relational_expression_2
         | LEFT_t => Shift_act Nis_163 (eq_refl _)
-        | HAT_t => Reduce_act Prod_194
-        | GT_t => Reduce_act Prod_194
-        | GEQ_t => Reduce_act Prod_194
-        | EQEQ_t => Reduce_act Prod_194
-        | COMMA_t => Reduce_act Prod_194
-        | COLON_t => Reduce_act Prod_194
-        | BARBAR_t => Reduce_act Prod_194
-        | BAR_t => Reduce_act Prod_194
-        | ANDAND_t => Reduce_act Prod_194
-        | AND_t => Reduce_act Prod_194
+        | HAT_t => Reduce_act Prod_relational_expression_2
+        | GT_t => Reduce_act Prod_relational_expression_2
+        | GEQ_t => Reduce_act Prod_relational_expression_2
+        | EQEQ_t => Reduce_act Prod_relational_expression_2
+        | COMMA_t => Reduce_act Prod_relational_expression_2
+        | COLON_t => Reduce_act Prod_relational_expression_2
+        | BARBAR_t => Reduce_act Prod_relational_expression_2
+        | BAR_t => Reduce_act Prod_relational_expression_2
+        | ANDAND_t => Reduce_act Prod_relational_expression_2
+        | AND_t => Reduce_act Prod_relational_expression_2
         | _ => Fail_act
       end)
-    | Ninit Nis_173 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_173 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5461,44 +5475,44 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_174 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_196
-        | RPAREN_t => Reduce_act Prod_196
+    | Ninit Nis_174 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_relational_expression_4
+        | RPAREN_t => Reduce_act Prod_relational_expression_4
         | RIGHT_t => Shift_act Nis_148 (eq_refl _)
-        | RBRACK_t => Reduce_act Prod_196
-        | RBRACE_t => Reduce_act Prod_196
-        | QUESTION_t => Reduce_act Prod_196
-        | NEQ_t => Reduce_act Prod_196
-        | LT_t => Reduce_act Prod_196
-        | LEQ_t => Reduce_act Prod_196
+        | RBRACK_t => Reduce_act Prod_relational_expression_4
+        | RBRACE_t => Reduce_act Prod_relational_expression_4
+        | QUESTION_t => Reduce_act Prod_relational_expression_4
+        | NEQ_t => Reduce_act Prod_relational_expression_4
+        | LT_t => Reduce_act Prod_relational_expression_4
+        | LEQ_t => Reduce_act Prod_relational_expression_4
         | LEFT_t => Shift_act Nis_163 (eq_refl _)
-        | HAT_t => Reduce_act Prod_196
-        | GT_t => Reduce_act Prod_196
-        | GEQ_t => Reduce_act Prod_196
-        | EQEQ_t => Reduce_act Prod_196
-        | COMMA_t => Reduce_act Prod_196
-        | COLON_t => Reduce_act Prod_196
-        | BARBAR_t => Reduce_act Prod_196
-        | BAR_t => Reduce_act Prod_196
-        | ANDAND_t => Reduce_act Prod_196
-        | AND_t => Reduce_act Prod_196
+        | HAT_t => Reduce_act Prod_relational_expression_4
+        | GT_t => Reduce_act Prod_relational_expression_4
+        | GEQ_t => Reduce_act Prod_relational_expression_4
+        | EQEQ_t => Reduce_act Prod_relational_expression_4
+        | COMMA_t => Reduce_act Prod_relational_expression_4
+        | COLON_t => Reduce_act Prod_relational_expression_4
+        | BARBAR_t => Reduce_act Prod_relational_expression_4
+        | BAR_t => Reduce_act Prod_relational_expression_4
+        | ANDAND_t => Reduce_act Prod_relational_expression_4
+        | AND_t => Reduce_act Prod_relational_expression_4
         | _ => Fail_act
       end)
-    | Ninit Nis_175 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_42
-        | RPAREN_t => Reduce_act Prod_42
-        | RBRACK_t => Reduce_act Prod_42
-        | RBRACE_t => Reduce_act Prod_42
+    | Ninit Nis_175 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_conditional_expression_0
+        | RPAREN_t => Reduce_act Prod_conditional_expression_0
+        | RBRACK_t => Reduce_act Prod_conditional_expression_0
+        | RBRACE_t => Reduce_act Prod_conditional_expression_0
         | QUESTION_t => Shift_act Nis_176 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_42
-        | COLON_t => Reduce_act Prod_42
+        | COMMA_t => Reduce_act Prod_conditional_expression_0
+        | COLON_t => Reduce_act Prod_conditional_expression_0
         | BARBAR_t => Shift_act Nis_201 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_176 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_176 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5522,21 +5536,21 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_177 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_157
-        | RPAREN_t => Reduce_act Prod_157
-        | RBRACK_t => Reduce_act Prod_157
-        | RBRACE_t => Reduce_act Prod_157
-        | QUESTION_t => Reduce_act Prod_157
-        | COMMA_t => Reduce_act Prod_157
-        | COLON_t => Reduce_act Prod_157
-        | BARBAR_t => Reduce_act Prod_157
+    | Ninit Nis_177 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_logical_OR_expression_0
+        | RPAREN_t => Reduce_act Prod_logical_OR_expression_0
+        | RBRACK_t => Reduce_act Prod_logical_OR_expression_0
+        | RBRACE_t => Reduce_act Prod_logical_OR_expression_0
+        | QUESTION_t => Reduce_act Prod_logical_OR_expression_0
+        | COMMA_t => Reduce_act Prod_logical_OR_expression_0
+        | COLON_t => Reduce_act Prod_logical_OR_expression_0
+        | BARBAR_t => Reduce_act Prod_logical_OR_expression_0
         | ANDAND_t => Shift_act Nis_178 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_178 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_178 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5560,22 +5574,22 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_179 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_156
-        | RPAREN_t => Reduce_act Prod_156
-        | RBRACK_t => Reduce_act Prod_156
-        | RBRACE_t => Reduce_act Prod_156
-        | QUESTION_t => Reduce_act Prod_156
-        | COMMA_t => Reduce_act Prod_156
-        | COLON_t => Reduce_act Prod_156
-        | BARBAR_t => Reduce_act Prod_156
+    | Ninit Nis_179 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_logical_AND_expression_1
+        | RPAREN_t => Reduce_act Prod_logical_AND_expression_1
+        | RBRACK_t => Reduce_act Prod_logical_AND_expression_1
+        | RBRACE_t => Reduce_act Prod_logical_AND_expression_1
+        | QUESTION_t => Reduce_act Prod_logical_AND_expression_1
+        | COMMA_t => Reduce_act Prod_logical_AND_expression_1
+        | COLON_t => Reduce_act Prod_logical_AND_expression_1
+        | BARBAR_t => Reduce_act Prod_logical_AND_expression_1
         | BAR_t => Shift_act Nis_180 (eq_refl _)
-        | ANDAND_t => Reduce_act Prod_156
+        | ANDAND_t => Reduce_act Prod_logical_AND_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_180 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_180 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5599,23 +5613,23 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_181 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_107
-        | RPAREN_t => Reduce_act Prod_107
-        | RBRACK_t => Reduce_act Prod_107
-        | RBRACE_t => Reduce_act Prod_107
-        | QUESTION_t => Reduce_act Prod_107
+    | Ninit Nis_181 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_inclusive_OR_expression_1
+        | RPAREN_t => Reduce_act Prod_inclusive_OR_expression_1
+        | RBRACK_t => Reduce_act Prod_inclusive_OR_expression_1
+        | RBRACE_t => Reduce_act Prod_inclusive_OR_expression_1
+        | QUESTION_t => Reduce_act Prod_inclusive_OR_expression_1
         | HAT_t => Shift_act Nis_182 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_107
-        | COLON_t => Reduce_act Prod_107
-        | BARBAR_t => Reduce_act Prod_107
-        | BAR_t => Reduce_act Prod_107
-        | ANDAND_t => Reduce_act Prod_107
+        | COMMA_t => Reduce_act Prod_inclusive_OR_expression_1
+        | COLON_t => Reduce_act Prod_inclusive_OR_expression_1
+        | BARBAR_t => Reduce_act Prod_inclusive_OR_expression_1
+        | BAR_t => Reduce_act Prod_inclusive_OR_expression_1
+        | ANDAND_t => Reduce_act Prod_inclusive_OR_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_182 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_182 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5639,26 +5653,26 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_183 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_1
-        | RPAREN_t => Reduce_act Prod_1
-        | RBRACK_t => Reduce_act Prod_1
-        | RBRACE_t => Reduce_act Prod_1
-        | QUESTION_t => Reduce_act Prod_1
+    | Ninit Nis_183 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_AND_expression_0
+        | RPAREN_t => Reduce_act Prod_AND_expression_0
+        | RBRACK_t => Reduce_act Prod_AND_expression_0
+        | RBRACE_t => Reduce_act Prod_AND_expression_0
+        | QUESTION_t => Reduce_act Prod_AND_expression_0
         | NEQ_t => Shift_act Nis_184 (eq_refl _)
-        | HAT_t => Reduce_act Prod_1
+        | HAT_t => Reduce_act Prod_AND_expression_0
         | EQEQ_t => Shift_act Nis_186 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_1
-        | COLON_t => Reduce_act Prod_1
-        | BARBAR_t => Reduce_act Prod_1
-        | BAR_t => Reduce_act Prod_1
-        | ANDAND_t => Reduce_act Prod_1
-        | AND_t => Reduce_act Prod_1
+        | COMMA_t => Reduce_act Prod_AND_expression_0
+        | COLON_t => Reduce_act Prod_AND_expression_0
+        | BARBAR_t => Reduce_act Prod_AND_expression_0
+        | BAR_t => Reduce_act Prod_AND_expression_0
+        | ANDAND_t => Reduce_act Prod_AND_expression_0
+        | AND_t => Reduce_act Prod_AND_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_184 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_184 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5682,30 +5696,30 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_185 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_95
-        | RPAREN_t => Reduce_act Prod_95
-        | RBRACK_t => Reduce_act Prod_95
-        | RBRACE_t => Reduce_act Prod_95
-        | QUESTION_t => Reduce_act Prod_95
-        | NEQ_t => Reduce_act Prod_95
+    | Ninit Nis_185 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_equality_expression_2
+        | RPAREN_t => Reduce_act Prod_equality_expression_2
+        | RBRACK_t => Reduce_act Prod_equality_expression_2
+        | RBRACE_t => Reduce_act Prod_equality_expression_2
+        | QUESTION_t => Reduce_act Prod_equality_expression_2
+        | NEQ_t => Reduce_act Prod_equality_expression_2
         | LT_t => Shift_act Nis_166 (eq_refl _)
         | LEQ_t => Shift_act Nis_169 (eq_refl _)
-        | HAT_t => Reduce_act Prod_95
+        | HAT_t => Reduce_act Prod_equality_expression_2
         | GT_t => Shift_act Nis_171 (eq_refl _)
         | GEQ_t => Shift_act Nis_173 (eq_refl _)
-        | EQEQ_t => Reduce_act Prod_95
-        | COMMA_t => Reduce_act Prod_95
-        | COLON_t => Reduce_act Prod_95
-        | BARBAR_t => Reduce_act Prod_95
-        | BAR_t => Reduce_act Prod_95
-        | ANDAND_t => Reduce_act Prod_95
-        | AND_t => Reduce_act Prod_95
+        | EQEQ_t => Reduce_act Prod_equality_expression_2
+        | COMMA_t => Reduce_act Prod_equality_expression_2
+        | COLON_t => Reduce_act Prod_equality_expression_2
+        | BARBAR_t => Reduce_act Prod_equality_expression_2
+        | BAR_t => Reduce_act Prod_equality_expression_2
+        | ANDAND_t => Reduce_act Prod_equality_expression_2
+        | AND_t => Reduce_act Prod_equality_expression_2
         | _ => Fail_act
       end)
-    | Ninit Nis_186 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_186 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5729,46 +5743,46 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_187 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_94
-        | RPAREN_t => Reduce_act Prod_94
-        | RBRACK_t => Reduce_act Prod_94
-        | RBRACE_t => Reduce_act Prod_94
-        | QUESTION_t => Reduce_act Prod_94
-        | NEQ_t => Reduce_act Prod_94
+    | Ninit Nis_187 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_equality_expression_1
+        | RPAREN_t => Reduce_act Prod_equality_expression_1
+        | RBRACK_t => Reduce_act Prod_equality_expression_1
+        | RBRACE_t => Reduce_act Prod_equality_expression_1
+        | QUESTION_t => Reduce_act Prod_equality_expression_1
+        | NEQ_t => Reduce_act Prod_equality_expression_1
         | LT_t => Shift_act Nis_166 (eq_refl _)
         | LEQ_t => Shift_act Nis_169 (eq_refl _)
-        | HAT_t => Reduce_act Prod_94
+        | HAT_t => Reduce_act Prod_equality_expression_1
         | GT_t => Shift_act Nis_171 (eq_refl _)
         | GEQ_t => Shift_act Nis_173 (eq_refl _)
-        | EQEQ_t => Reduce_act Prod_94
-        | COMMA_t => Reduce_act Prod_94
-        | COLON_t => Reduce_act Prod_94
-        | BARBAR_t => Reduce_act Prod_94
-        | BAR_t => Reduce_act Prod_94
-        | ANDAND_t => Reduce_act Prod_94
-        | AND_t => Reduce_act Prod_94
+        | EQEQ_t => Reduce_act Prod_equality_expression_1
+        | COMMA_t => Reduce_act Prod_equality_expression_1
+        | COLON_t => Reduce_act Prod_equality_expression_1
+        | BARBAR_t => Reduce_act Prod_equality_expression_1
+        | BAR_t => Reduce_act Prod_equality_expression_1
+        | ANDAND_t => Reduce_act Prod_equality_expression_1
+        | AND_t => Reduce_act Prod_equality_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_188 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_97
-        | RPAREN_t => Reduce_act Prod_97
-        | RBRACK_t => Reduce_act Prod_97
-        | RBRACE_t => Reduce_act Prod_97
-        | QUESTION_t => Reduce_act Prod_97
-        | HAT_t => Reduce_act Prod_97
-        | COMMA_t => Reduce_act Prod_97
-        | COLON_t => Reduce_act Prod_97
-        | BARBAR_t => Reduce_act Prod_97
-        | BAR_t => Reduce_act Prod_97
-        | ANDAND_t => Reduce_act Prod_97
+    | Ninit Nis_188 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_exclusive_OR_expression_1
+        | RPAREN_t => Reduce_act Prod_exclusive_OR_expression_1
+        | RBRACK_t => Reduce_act Prod_exclusive_OR_expression_1
+        | RBRACE_t => Reduce_act Prod_exclusive_OR_expression_1
+        | QUESTION_t => Reduce_act Prod_exclusive_OR_expression_1
+        | HAT_t => Reduce_act Prod_exclusive_OR_expression_1
+        | COMMA_t => Reduce_act Prod_exclusive_OR_expression_1
+        | COLON_t => Reduce_act Prod_exclusive_OR_expression_1
+        | BARBAR_t => Reduce_act Prod_exclusive_OR_expression_1
+        | BAR_t => Reduce_act Prod_exclusive_OR_expression_1
+        | ANDAND_t => Reduce_act Prod_exclusive_OR_expression_1
         | AND_t => Shift_act Nis_189 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_189 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_189 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5792,77 +5806,77 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_190 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_2
-        | RPAREN_t => Reduce_act Prod_2
-        | RBRACK_t => Reduce_act Prod_2
-        | RBRACE_t => Reduce_act Prod_2
-        | QUESTION_t => Reduce_act Prod_2
+    | Ninit Nis_190 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_AND_expression_1
+        | RPAREN_t => Reduce_act Prod_AND_expression_1
+        | RBRACK_t => Reduce_act Prod_AND_expression_1
+        | RBRACE_t => Reduce_act Prod_AND_expression_1
+        | QUESTION_t => Reduce_act Prod_AND_expression_1
         | NEQ_t => Shift_act Nis_184 (eq_refl _)
-        | HAT_t => Reduce_act Prod_2
+        | HAT_t => Reduce_act Prod_AND_expression_1
         | EQEQ_t => Shift_act Nis_186 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_2
-        | COLON_t => Reduce_act Prod_2
-        | BARBAR_t => Reduce_act Prod_2
-        | BAR_t => Reduce_act Prod_2
-        | ANDAND_t => Reduce_act Prod_2
-        | AND_t => Reduce_act Prod_2
+        | COMMA_t => Reduce_act Prod_AND_expression_1
+        | COLON_t => Reduce_act Prod_AND_expression_1
+        | BARBAR_t => Reduce_act Prod_AND_expression_1
+        | BAR_t => Reduce_act Prod_AND_expression_1
+        | ANDAND_t => Reduce_act Prod_AND_expression_1
+        | AND_t => Reduce_act Prod_AND_expression_1
         | _ => Fail_act
       end)
-    | Ninit Nis_191 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_96
-        | RPAREN_t => Reduce_act Prod_96
-        | RBRACK_t => Reduce_act Prod_96
-        | RBRACE_t => Reduce_act Prod_96
-        | QUESTION_t => Reduce_act Prod_96
-        | HAT_t => Reduce_act Prod_96
-        | COMMA_t => Reduce_act Prod_96
-        | COLON_t => Reduce_act Prod_96
-        | BARBAR_t => Reduce_act Prod_96
-        | BAR_t => Reduce_act Prod_96
-        | ANDAND_t => Reduce_act Prod_96
+    | Ninit Nis_191 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_exclusive_OR_expression_0
+        | RPAREN_t => Reduce_act Prod_exclusive_OR_expression_0
+        | RBRACK_t => Reduce_act Prod_exclusive_OR_expression_0
+        | RBRACE_t => Reduce_act Prod_exclusive_OR_expression_0
+        | QUESTION_t => Reduce_act Prod_exclusive_OR_expression_0
+        | HAT_t => Reduce_act Prod_exclusive_OR_expression_0
+        | COMMA_t => Reduce_act Prod_exclusive_OR_expression_0
+        | COLON_t => Reduce_act Prod_exclusive_OR_expression_0
+        | BARBAR_t => Reduce_act Prod_exclusive_OR_expression_0
+        | BAR_t => Reduce_act Prod_exclusive_OR_expression_0
+        | ANDAND_t => Reduce_act Prod_exclusive_OR_expression_0
         | AND_t => Shift_act Nis_189 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_192 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_106
-        | RPAREN_t => Reduce_act Prod_106
-        | RBRACK_t => Reduce_act Prod_106
-        | RBRACE_t => Reduce_act Prod_106
-        | QUESTION_t => Reduce_act Prod_106
+    | Ninit Nis_192 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_inclusive_OR_expression_0
+        | RPAREN_t => Reduce_act Prod_inclusive_OR_expression_0
+        | RBRACK_t => Reduce_act Prod_inclusive_OR_expression_0
+        | RBRACE_t => Reduce_act Prod_inclusive_OR_expression_0
+        | QUESTION_t => Reduce_act Prod_inclusive_OR_expression_0
         | HAT_t => Shift_act Nis_182 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_106
-        | COLON_t => Reduce_act Prod_106
-        | BARBAR_t => Reduce_act Prod_106
-        | BAR_t => Reduce_act Prod_106
-        | ANDAND_t => Reduce_act Prod_106
+        | COMMA_t => Reduce_act Prod_inclusive_OR_expression_0
+        | COLON_t => Reduce_act Prod_inclusive_OR_expression_0
+        | BARBAR_t => Reduce_act Prod_inclusive_OR_expression_0
+        | BAR_t => Reduce_act Prod_inclusive_OR_expression_0
+        | ANDAND_t => Reduce_act Prod_inclusive_OR_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_193 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_155
-        | RPAREN_t => Reduce_act Prod_155
-        | RBRACK_t => Reduce_act Prod_155
-        | RBRACE_t => Reduce_act Prod_155
-        | QUESTION_t => Reduce_act Prod_155
-        | COMMA_t => Reduce_act Prod_155
-        | COLON_t => Reduce_act Prod_155
-        | BARBAR_t => Reduce_act Prod_155
+    | Ninit Nis_193 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_logical_AND_expression_0
+        | RPAREN_t => Reduce_act Prod_logical_AND_expression_0
+        | RBRACK_t => Reduce_act Prod_logical_AND_expression_0
+        | RBRACE_t => Reduce_act Prod_logical_AND_expression_0
+        | QUESTION_t => Reduce_act Prod_logical_AND_expression_0
+        | COMMA_t => Reduce_act Prod_logical_AND_expression_0
+        | COLON_t => Reduce_act Prod_logical_AND_expression_0
+        | BARBAR_t => Reduce_act Prod_logical_AND_expression_0
         | BAR_t => Shift_act Nis_180 (eq_refl _)
-        | ANDAND_t => Reduce_act Prod_155
+        | ANDAND_t => Reduce_act Prod_logical_AND_expression_0
         | _ => Fail_act
       end)
-    | Ninit Nis_194 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_194 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | COLON_t => Shift_act Nis_198 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_195 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_195 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5886,10 +5900,10 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_196 => inl (Default_reduce_act Prod_11)
-    | Ninit Nis_197 => inl (Default_reduce_act Prod_99)
-    | Ninit Nis_198 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_196 => Default_reduce_act Prod_assignment_expression_0
+    | Ninit Nis_197 => Default_reduce_act Prod_expression_1
+    | Ninit Nis_198 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5913,10 +5927,10 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_199 => inl (Default_reduce_act Prod_43)
-    | Ninit Nis_200 => inl (Default_reduce_act Prod_98)
-    | Ninit Nis_201 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_199 => Default_reduce_act Prod_conditional_expression_1
+    | Ninit Nis_200 => Default_reduce_act Prod_expression_0
+    | Ninit Nis_201 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5940,30 +5954,30 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_202 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_158
-        | RPAREN_t => Reduce_act Prod_158
-        | RBRACK_t => Reduce_act Prod_158
-        | RBRACE_t => Reduce_act Prod_158
-        | QUESTION_t => Reduce_act Prod_158
-        | COMMA_t => Reduce_act Prod_158
-        | COLON_t => Reduce_act Prod_158
-        | BARBAR_t => Reduce_act Prod_158
+    | Ninit Nis_202 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_logical_OR_expression_1
+        | RPAREN_t => Reduce_act Prod_logical_OR_expression_1
+        | RBRACK_t => Reduce_act Prod_logical_OR_expression_1
+        | RBRACE_t => Reduce_act Prod_logical_OR_expression_1
+        | QUESTION_t => Reduce_act Prod_logical_OR_expression_1
+        | COMMA_t => Reduce_act Prod_logical_OR_expression_1
+        | COLON_t => Reduce_act Prod_logical_OR_expression_1
+        | BARBAR_t => Reduce_act Prod_logical_OR_expression_1
         | ANDAND_t => Shift_act Nis_178 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_203 => inl (Default_reduce_act Prod_12)
-    | Ninit Nis_204 => inl (Default_reduce_act Prod_9)
-    | Ninit Nis_205 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_203 => Default_reduce_act Prod_assignment_expression_1
+    | Ninit Nis_204 => Default_reduce_act Prod_argument_expression_list_0
+    | Ninit Nis_205 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_206 (eq_refl _)
         | COMMA_t => Shift_act Nis_207 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_206 => inl (Default_reduce_act Prod_180)
-    | Ninit Nis_207 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_206 => Default_reduce_act Prod_postfix_expression_3
+    | Ninit Nis_207 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -5987,9 +6001,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_208 => inl (Default_reduce_act Prod_10)
-    | Ninit Nis_209 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_208 => Default_reduce_act Prod_argument_expression_list_1
+    | Ninit Nis_209 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6013,24 +6027,24 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_210 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_210 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_211 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_211 => inl (Default_reduce_act Prod_178)
-    | Ninit Nis_212 => inl (Default_reduce_act Prod_185)
-    | Ninit Nis_213 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_211 => Default_reduce_act Prod_postfix_expression_1
+    | Ninit Nis_212 => Default_reduce_act Prod_postfix_expression_8
+    | Ninit Nis_213 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_214 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_214 => inl (Default_reduce_act Prod_183)
-    | Ninit Nis_215 => inl (Default_reduce_act Prod_186)
-    | Ninit Nis_216 => inl (Default_reduce_act Prod_271)
-    | Ninit Nis_217 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_214 => Default_reduce_act Prod_postfix_expression_6
+    | Ninit Nis_215 => Default_reduce_act Prod_postfix_expression_9
+    | Ninit Nis_216 => Default_reduce_act Prod_unary_expression_3
+    | Ninit Nis_217 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -6059,47 +6073,47 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_218 => inl (Default_reduce_act Prod_67)
-    | Ninit Nis_219 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_218 => Default_reduce_act Prod_direct_abstract_declarator_5
+    | Ninit Nis_219 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_220 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_220 => inl (Default_reduce_act Prod_63)
-    | Ninit Nis_221 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_220 => Default_reduce_act Prod_direct_abstract_declarator_1
+    | Ninit Nis_221 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_222 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_222 => inl (Default_reduce_act Prod_65)
-    | Ninit Nis_223 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_222 => Default_reduce_act Prod_direct_abstract_declarator_3
+    | Ninit Nis_223 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_224 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_224 => inl (Default_reduce_act Prod_72)
-    | Ninit Nis_225 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RPAREN_t => Reduce_act Prod_5
+    | Ninit Nis_224 => Default_reduce_act Prod_direct_abstract_declarator_10
+    | Ninit Nis_225 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RPAREN_t => Reduce_act Prod_abstract_declarator_2
         | LPAREN_t => Shift_act Nis_119 (eq_refl _)
         | LBRACK_t => Shift_act Nis_124 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_5
+        | COMMA_t => Reduce_act Prod_abstract_declarator_2
         | _ => Fail_act
       end)
-    | Ninit Nis_226 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_226 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_227 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_227 => inl (Default_reduce_act Prod_62)
-    | Ninit Nis_228 => inl (Default_reduce_act Prod_247)
-    | Ninit Nis_229 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_227 => Default_reduce_act Prod_direct_abstract_declarator_0
+    | Ninit Nis_228 => Default_reduce_act Prod_type_name_1
+    | Ninit Nis_229 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COMMA_t => Shift_act Nis_230 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_230 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_230 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -6120,14 +6134,14 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_231 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_231 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_232 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_232 => inl (Default_reduce_act Prod_182)
-    | Ninit Nis_233 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_232 => Default_reduce_act Prod_postfix_expression_5
+    | Ninit Nis_233 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6137,8 +6151,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_234 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_234 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_234 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6151,8 +6165,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_235 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_235 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6162,8 +6176,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_236 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_236 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_236 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6176,8 +6190,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_237 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_237 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6187,8 +6201,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_238 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_238 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_238 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6201,8 +6215,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_239 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_239 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6212,8 +6226,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_240 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_240 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_240 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6226,8 +6240,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_241 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_241 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_242 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6237,9 +6251,9 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_242 => inl (Default_reduce_act Prod_28)
-    | Ninit Nis_243 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_242 => Default_reduce_act Prod_atomic_operation_4
+    | Ninit Nis_243 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6249,8 +6263,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_244 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_244 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_244 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6263,8 +6277,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_245 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_245 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6274,8 +6288,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_246 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_246 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_246 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6288,8 +6302,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_247 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_247 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6299,8 +6313,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_248 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_248 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_248 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6313,8 +6327,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_249 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_249 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6324,8 +6338,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_250 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_250 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_250 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6338,8 +6352,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_251 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_251 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_252 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6349,9 +6363,9 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_252 => inl (Default_reduce_act Prod_29)
-    | Ninit Nis_253 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_252 => Default_reduce_act Prod_atomic_operation_5
+    | Ninit Nis_253 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6361,8 +6375,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_254 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_254 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_254 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6375,8 +6389,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_255 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_255 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6386,8 +6400,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_256 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_256 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_256 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6400,8 +6414,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_257 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_257 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_258 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6411,9 +6425,9 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_258 => inl (Default_reduce_act Prod_27)
-    | Ninit Nis_259 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_258 => Default_reduce_act Prod_atomic_operation_3
+    | Ninit Nis_259 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6423,8 +6437,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_260 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_260 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_260 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6437,8 +6451,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_261 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_261 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_262 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6448,9 +6462,9 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_262 => inl (Default_reduce_act Prod_24)
-    | Ninit Nis_263 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_262 => Default_reduce_act Prod_atomic_operation_0
+    | Ninit Nis_263 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6460,8 +6474,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_264 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_264 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_264 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6474,8 +6488,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_265 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_265 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_266 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6485,9 +6499,9 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_266 => inl (Default_reduce_act Prod_26)
-    | Ninit Nis_267 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_266 => Default_reduce_act Prod_atomic_operation_2
+    | Ninit Nis_267 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6497,8 +6511,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_268 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_268 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_268 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6511,8 +6525,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_269 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_269 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
         | LBRACK_t => Shift_act Nis_209 (eq_refl _)
@@ -6522,8 +6536,8 @@ Definition action_table (state:state) :
         | COMMA_t => Shift_act Nis_270 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_270 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_270 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | LPAREN_t => Shift_act Nis_92 (eq_refl _)
         | CONSTANT_t => Shift_act Nis_94 (eq_refl _)
@@ -6536,8 +6550,8 @@ Definition action_table (state:state) :
         | BUILTIN_VA_ARG_t => Shift_act Nis_107 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_271 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_271 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_272 (eq_refl _)
         | PTR_t => Shift_act Nis_130 (eq_refl _)
         | LPAREN_t => Shift_act Nis_132 (eq_refl _)
@@ -6547,20 +6561,20 @@ Definition action_table (state:state) :
         | DEC_t => Shift_act Nis_215 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_272 => inl (Default_reduce_act Prod_25)
-    | Ninit Nis_273 => inl (Default_reduce_act Prod_270)
-    | Ninit Nis_274 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_272 => Default_reduce_act Prod_atomic_operation_1
+    | Ninit Nis_273 => Default_reduce_act Prod_unary_expression_2
+    | Ninit Nis_274 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_275 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_275 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_275 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LBRACE_t => Shift_act Nis_276 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_276 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_276 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6587,8 +6601,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_277 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_277 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6612,15 +6626,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_278 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_278 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_279 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_279 => inl (Default_reduce_act Prod_58)
-    | Ninit Nis_280 => inl (Default_reduce_act Prod_44)
-    | Ninit Nis_281 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_279 => Default_reduce_act Prod_designator_0
+    | Ninit Nis_280 => Default_reduce_act Prod_constant_expression_0
+    | Ninit Nis_281 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6647,21 +6661,21 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_282 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_282 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_283 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_283 => inl (Default_reduce_act Prod_59)
-    | Ninit Nis_284 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_283 => Default_reduce_act Prod_designator_1
+    | Ninit Nis_284 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACE_t => Shift_act Nis_285 (eq_refl _)
         | COMMA_t => Shift_act Nis_286 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_285 => inl (Default_reduce_act Prod_36)
-    | Ninit Nis_286 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_285 => Default_reduce_act Prod_c_initializer_1
+    | Ninit Nis_286 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6689,19 +6703,19 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_287 => inl (Default_reduce_act Prod_37)
-    | Ninit Nis_288 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_287 => Default_reduce_act Prod_c_initializer_2
+    | Ninit Nis_288 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LBRACK_t => Shift_act Nis_277 (eq_refl _)
         | EQ_t => Shift_act Nis_289 (eq_refl _)
         | DOT_t => Shift_act Nis_282 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_289 => inl (Default_reduce_act Prod_57)
-    | Ninit Nis_290 => inl (Default_reduce_act Prod_61)
-    | Ninit Nis_291 => inl (Default_reduce_act Prod_60)
-    | Ninit Nis_292 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_289 => Default_reduce_act Prod_designation_0
+    | Ninit Nis_290 => Default_reduce_act Prod_designator_list_1
+    | Ninit Nis_291 => Default_reduce_act Prod_designator_list_0
+    | Ninit Nis_292 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6726,11 +6740,11 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_293 => inl (Default_reduce_act Prod_114)
-    | Ninit Nis_294 => inl (Default_reduce_act Prod_35)
-    | Ninit Nis_295 => inl (Default_reduce_act Prod_115)
-    | Ninit Nis_296 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_293 => Default_reduce_act Prod_initializer_list_2
+    | Ninit Nis_294 => Default_reduce_act Prod_c_initializer_0
+    | Ninit Nis_295 => Default_reduce_act Prod_initializer_list_3
+    | Ninit Nis_296 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6755,17 +6769,17 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_297 => inl (Default_reduce_act Prod_112)
-    | Ninit Nis_298 => inl (Default_reduce_act Prod_113)
-    | Ninit Nis_299 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_297 => Default_reduce_act Prod_initializer_list_0
+    | Ninit Nis_298 => Default_reduce_act Prod_initializer_list_1
+    | Ninit Nis_299 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACE_t => Shift_act Nis_300 (eq_refl _)
         | COMMA_t => Shift_act Nis_301 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_300 => inl (Default_reduce_act Prod_187)
-    | Ninit Nis_301 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_300 => Default_reduce_act Prod_postfix_expression_10
+    | Ninit Nis_301 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6793,22 +6807,22 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_302 => inl (Default_reduce_act Prod_188)
-    | Ninit Nis_303 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_302 => Default_reduce_act Prod_postfix_expression_11
+    | Ninit Nis_303 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_304 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_304 => inl (Default_reduce_act Prod_191)
-    | Ninit Nis_305 => inl (Default_reduce_act Prod_269)
-    | Ninit Nis_306 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_304 => Default_reduce_act Prod_primary_expression_2
+    | Ninit Nis_305 => Default_reduce_act Prod_unary_expression_1
+    | Ninit Nis_306 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_307 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_307 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_307 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -6833,9 +6847,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_308 => inl (Default_reduce_act Prod_39)
-    | Ninit Nis_309 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_308 => Default_reduce_act Prod_cast_expression_1
+    | Ninit Nis_309 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -6864,42 +6878,42 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_310 => inl (Default_reduce_act Prod_68)
-    | Ninit Nis_311 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_310 => Default_reduce_act Prod_direct_abstract_declarator_6
+    | Ninit Nis_311 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_312 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_312 => inl (Default_reduce_act Prod_64)
-    | Ninit Nis_313 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_312 => Default_reduce_act Prod_direct_abstract_declarator_2
+    | Ninit Nis_313 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_314 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_314 => inl (Default_reduce_act Prod_66)
-    | Ninit Nis_315 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_314 => Default_reduce_act Prod_direct_abstract_declarator_4
+    | Ninit Nis_315 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
-        | RPAREN_t => Reduce_act Prod_3
+        | RPAREN_t => Reduce_act Prod_abstract_declarator_0
         | LPAREN_t => Shift_act Nis_85 (eq_refl _)
         | LBRACK_t => Shift_act Nis_87 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_3
+        | COMMA_t => Reduce_act Prod_abstract_declarator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_316 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_55
-        | RPAREN_t => Reduce_act Prod_55
+    | Ninit Nis_316 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_declarator_0
+        | RPAREN_t => Reduce_act Prod_declarator_0
         | LPAREN_t => Shift_act Nis_65 (eq_refl _)
         | LBRACK_t => Shift_act Nis_317 (eq_refl _)
-        | LBRACE_t => Reduce_act Prod_55
-        | EQ_t => Reduce_act Prod_55
-        | COMMA_t => Reduce_act Prod_55
-        | COLON_t => Reduce_act Prod_55
+        | LBRACE_t => Reduce_act Prod_declarator_0
+        | EQ_t => Reduce_act Prod_declarator_0
+        | COMMA_t => Reduce_act Prod_declarator_0
+        | COLON_t => Reduce_act Prod_declarator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_317 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_317 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -6928,9 +6942,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_318 => inl (Default_reduce_act Prod_80)
-    | Ninit Nis_319 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_318 => Default_reduce_act Prod_direct_declarator_5
+    | Ninit Nis_319 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -6959,29 +6973,29 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_320 => inl (Default_reduce_act Prod_79)
-    | Ninit Nis_321 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_320 => Default_reduce_act Prod_direct_declarator_4
+    | Ninit Nis_321 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_322 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_322 => inl (Default_reduce_act Prod_77)
-    | Ninit Nis_323 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_322 => Default_reduce_act Prod_direct_declarator_2
+    | Ninit Nis_323 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACK_t => Shift_act Nis_324 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_324 => inl (Default_reduce_act Prod_78)
-    | Ninit Nis_325 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_324 => Default_reduce_act Prod_direct_declarator_3
+    | Ninit Nis_325 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_326 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_326 => inl (Default_reduce_act Prod_76)
-    | Ninit Nis_327 => inl (Default_reduce_act Prod_166)
-    | Ninit Nis_328 => inl (Default_reduce_act Prod_167)
-    | Ninit Nis_329 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_326 => Default_reduce_act Prod_direct_declarator_1
+    | Ninit Nis_327 => Default_reduce_act Prod_parameter_declaration_0
+    | Ninit Nis_328 => Default_reduce_act Prod_parameter_declaration_1
+    | Ninit Nis_329 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7005,32 +7019,32 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_330 => inl (Default_reduce_act Prod_235)
-    | Ninit Nis_331 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_330 => Default_reduce_act Prod_struct_declarator_2
+    | Ninit Nis_331 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_332 (eq_refl _)
         | COMMA_t => Shift_act Nis_333 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_332 => inl (Default_reduce_act Prod_229)
-    | Ninit Nis_333 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_332 => Default_reduce_act Prod_struct_declaration_0
+    | Ninit Nis_333 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | COLON_t => Shift_act Nis_329 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_334 => inl (Default_reduce_act Prod_237)
-    | Ninit Nis_335 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_233
-        | COMMA_t => Reduce_act Prod_233
+    | Ninit Nis_334 => Default_reduce_act Prod_struct_declarator_list_1
+    | Ninit Nis_335 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_struct_declarator_0
+        | COMMA_t => Reduce_act Prod_struct_declarator_0
         | COLON_t => Shift_act Nis_336 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_336 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_336 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7054,11 +7068,11 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_337 => inl (Default_reduce_act Prod_234)
-    | Ninit Nis_338 => inl (Default_reduce_act Prod_236)
-    | Ninit Nis_339 => inl (Default_reduce_act Prod_231)
-    | Ninit Nis_340 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_337 => Default_reduce_act Prod_struct_declarator_1
+    | Ninit Nis_338 => Default_reduce_act Prod_struct_declarator_list_0
+    | Ninit Nis_339 => Default_reduce_act Prod_struct_declaration_list_0
+    | Ninit Nis_340 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -7079,8 +7093,8 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_341 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_341 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -7102,33 +7116,33 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_342 => inl (Default_reduce_act Prod_241)
-    | Ninit Nis_343 => inl (Default_reduce_act Prod_207)
-    | Ninit Nis_344 => inl (Default_reduce_act Prod_205)
-    | Ninit Nis_345 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_342 => Default_reduce_act Prod_struct_or_union_specifier_1
+    | Ninit Nis_343 => Default_reduce_act Prod_specifier_qualifier_list_2
+    | Ninit Nis_344 => Default_reduce_act Prod_specifier_qualifier_list_0
+    | Ninit Nis_345 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_346 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_346 => inl (Default_reduce_act Prod_30)
-    | Ninit Nis_347 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_346 => Default_reduce_act Prod_atomic_type_specifier_0
+    | Ninit Nis_347 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COMMA_t => Shift_act Nis_348 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_348 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_348 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_349 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_349 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_349 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_350 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_350 => inl (Default_reduce_act Prod_275)
-    | Ninit Nis_351 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_350 => Default_reduce_act Prod_unary_expression_7
+    | Ninit Nis_351 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
@@ -7170,77 +7184,76 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_352 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_352 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_353 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_353 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | XOR_ASSIGN_t => Reduce_act Prod_273
-        | SUB_ASSIGN_t => Reduce_act Prod_273
-        | STAR_t => Reduce_act Prod_273
-        | SLASH_t => Reduce_act Prod_273
-        | SEMICOLON_t => Reduce_act Prod_273
-        | RPAREN_t => Reduce_act Prod_273
-        | RIGHT_ASSIGN_t => Reduce_act Prod_273
-        | RIGHT_t => Reduce_act Prod_273
-        | RBRACK_t => Reduce_act Prod_273
-        | RBRACE_t => Reduce_act Prod_273
-        | QUESTION_t => Reduce_act Prod_273
-        | PLUS_t => Reduce_act Prod_273
-        | PERCENT_t => Reduce_act Prod_273
-        | OR_ASSIGN_t => Reduce_act Prod_273
-        | NEQ_t => Reduce_act Prod_273
-        | MUL_ASSIGN_t => Reduce_act Prod_273
-        | MOD_ASSIGN_t => Reduce_act Prod_273
-        | MINUS_t => Reduce_act Prod_273
-        | LT_t => Reduce_act Prod_273
-        | LEQ_t => Reduce_act Prod_273
-        | LEFT_ASSIGN_t => Reduce_act Prod_273
-        | LEFT_t => Reduce_act Prod_273
+    | Ninit Nis_353 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | XOR_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | SUB_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | STAR_t => Reduce_act Prod_unary_expression_5
+        | SLASH_t => Reduce_act Prod_unary_expression_5
+        | SEMICOLON_t => Reduce_act Prod_unary_expression_5
+        | RPAREN_t => Reduce_act Prod_unary_expression_5
+        | RIGHT_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | RIGHT_t => Reduce_act Prod_unary_expression_5
+        | RBRACK_t => Reduce_act Prod_unary_expression_5
+        | RBRACE_t => Reduce_act Prod_unary_expression_5
+        | QUESTION_t => Reduce_act Prod_unary_expression_5
+        | PLUS_t => Reduce_act Prod_unary_expression_5
+        | PERCENT_t => Reduce_act Prod_unary_expression_5
+        | OR_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | NEQ_t => Reduce_act Prod_unary_expression_5
+        | MUL_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | MOD_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | MINUS_t => Reduce_act Prod_unary_expression_5
+        | LT_t => Reduce_act Prod_unary_expression_5
+        | LEQ_t => Reduce_act Prod_unary_expression_5
+        | LEFT_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | LEFT_t => Reduce_act Prod_unary_expression_5
         | LBRACE_t => Shift_act Nis_276 (eq_refl _)
-        | HAT_t => Reduce_act Prod_273
-        | GT_t => Reduce_act Prod_273
-        | GEQ_t => Reduce_act Prod_273
-        | EQEQ_t => Reduce_act Prod_273
-        | EQ_t => Reduce_act Prod_273
-        | DIV_ASSIGN_t => Reduce_act Prod_273
-        | COMMA_t => Reduce_act Prod_273
-        | COLON_t => Reduce_act Prod_273
-        | BARBAR_t => Reduce_act Prod_273
-        | BAR_t => Reduce_act Prod_273
-        | AND_ASSIGN_t => Reduce_act Prod_273
-        | ANDAND_t => Reduce_act Prod_273
-        | AND_t => Reduce_act Prod_273
-        | ADD_ASSIGN_t => Reduce_act Prod_273
+        | HAT_t => Reduce_act Prod_unary_expression_5
+        | GT_t => Reduce_act Prod_unary_expression_5
+        | GEQ_t => Reduce_act Prod_unary_expression_5
+        | EQEQ_t => Reduce_act Prod_unary_expression_5
+        | EQ_t => Reduce_act Prod_unary_expression_5
+        | DIV_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | COMMA_t => Reduce_act Prod_unary_expression_5
+        | COLON_t => Reduce_act Prod_unary_expression_5
+        | BARBAR_t => Reduce_act Prod_unary_expression_5
+        | BAR_t => Reduce_act Prod_unary_expression_5
+        | AND_ASSIGN_t => Reduce_act Prod_unary_expression_5
+        | ANDAND_t => Reduce_act Prod_unary_expression_5
+        | AND_t => Reduce_act Prod_unary_expression_5
+        | ADD_ASSIGN_t => Reduce_act Prod_unary_expression_5
         | _ => Fail_act
       end)
-    | Ninit Nis_354 => inl (Default_reduce_act Prod_272)
-    | Ninit Nis_355 => inl (Default_reduce_act Prod_90)
-    | Ninit Nis_356 => inl (Default_reduce_act Prod_91)
-    | Ninit Nis_357 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_354 => Default_reduce_act Prod_unary_expression_4
+    | Ninit Nis_355 => Default_reduce_act Prod_enumerator_1
+    | Ninit Nis_356 => Default_reduce_act Prod_enumerator_list_0
+    | Ninit Nis_357 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_22 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_358 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_358 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACE_t => Shift_act Nis_359 (eq_refl _)
         | COMMA_t => Shift_act Nis_360 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_359 => inl (Default_reduce_act Prod_84)
-    | Ninit Nis_360 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_359 => Default_reduce_act Prod_enum_specifier_1
+    | Ninit Nis_360 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_22 (eq_refl _)
         | RBRACE_t => Shift_act Nis_361 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_361 => inl (Default_reduce_act Prod_86)
-    | Ninit Nis_362 => inl Accept_act
-    | Ninit Nis_363 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_361 => Default_reduce_act Prod_enum_specifier_3
+    | Ninit Nis_363 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | UNSIGNED_t => Shift_act Nis_3 (eq_refl _)
@@ -7269,42 +7282,42 @@ Definition action_table (state:state) :
         | ATOMIC_t => Shift_act Nis_41 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_364 => inl (Default_reduce_act Prod_245)
-    | Ninit Nis_365 => inl (Default_reduce_act Prod_102)
-    | Ninit Nis_366 => inl (Default_reduce_act Prod_244)
-    | Ninit Nis_367 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_364 => Default_reduce_act Prod_translation_unit_file_0
+    | Ninit Nis_365 => Default_reduce_act Prod_external_declaration_0
+    | Ninit Nis_366 => Default_reduce_act Prod_translation_unit_1
+    | Ninit Nis_367 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | SEMICOLON_t => Shift_act Nis_368 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_368 => inl (Default_reduce_act Prod_46)
-    | Ninit Nis_369 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_368 => Default_reduce_act Prod_declaration_1
+    | Ninit Nis_369 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_370 (eq_refl _)
         | COMMA_t => Shift_act Nis_371 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_370 => inl (Default_reduce_act Prod_45)
-    | Ninit Nis_371 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_370 => Default_reduce_act Prod_declaration_0
+    | Ninit Nis_371 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_372 => inl (Default_reduce_act Prod_111)
-    | Ninit Nis_373 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_108
+    | Ninit Nis_372 => Default_reduce_act Prod_init_declarator_list_1
+    | Ninit Nis_373 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_init_declarator_0
         | EQ_t => Shift_act Nis_374 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_108
+        | COMMA_t => Reduce_act Prod_init_declarator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_374 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_374 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7329,18 +7342,18 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_375 => inl (Default_reduce_act Prod_109)
-    | Ninit Nis_376 => inl (Default_reduce_act Prod_110)
-    | Ninit Nis_377 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | SEMICOLON_t => Reduce_act Prod_108
+    | Ninit Nis_375 => Default_reduce_act Prod_init_declarator_1
+    | Ninit Nis_376 => Default_reduce_act Prod_init_declarator_list_0
+    | Ninit Nis_377 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | SEMICOLON_t => Reduce_act Prod_init_declarator_0
         | LBRACE_t => Shift_act Nis_378 (eq_refl _)
         | EQ_t => Shift_act Nis_374 (eq_refl _)
-        | COMMA_t => Reduce_act Prod_108
+        | COMMA_t => Reduce_act Prod_init_declarator_0
         | _ => Fail_act
       end)
-    | Ninit Nis_378 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_378 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
@@ -7405,13 +7418,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_379 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_379 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_380 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_380 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_380 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7435,14 +7448,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_381 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_381 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_382 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_382 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_382 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7481,13 +7494,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_383 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_383 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_384 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_384 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_384 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7511,14 +7524,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_385 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_385 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_386 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_386 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_386 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7557,9 +7570,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_387 => inl (Default_reduce_act Prod_101)
-    | Ninit Nis_388 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_387 => Default_reduce_act Prod_expression_statement_1
+    | Ninit Nis_388 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7584,21 +7597,21 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_389 => inl (Default_reduce_act Prod_148)
-    | Ninit Nis_390 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_389 => Default_reduce_act Prod_jump_statement_4
+    | Ninit Nis_390 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_391 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_391 => inl (Default_reduce_act Prod_147)
-    | Ninit Nis_392 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_391 => Default_reduce_act Prod_jump_statement_3
+    | Ninit Nis_392 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_393 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_393 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_393 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7637,8 +7650,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_394 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_394 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7677,13 +7690,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_395 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_395 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_396 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_396 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_396 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7707,14 +7720,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_397 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_397 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_398 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_398 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_398 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7753,13 +7766,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_399 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_399 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_400 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_400 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_400 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7783,14 +7796,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_401 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_401 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_402 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_402 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_402 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7829,13 +7842,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_403 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_403 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_404 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_404 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_404 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7859,14 +7872,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_405 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_405 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_406 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_406 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_406 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7905,13 +7918,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_407 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_407 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_408 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_408 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_408 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -7950,13 +7963,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_409 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_409 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_410 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_410 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_410 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -7980,14 +7993,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_411 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_411 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_412 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_412 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_412 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8026,24 +8039,24 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_413 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_413 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | OTHER_NAME_t => Shift_act Nis_414 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_414 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_414 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_415 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_415 => inl (Default_reduce_act Prod_144)
-    | Ninit Nis_416 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_415 => Default_reduce_act Prod_jump_statement_0
+    | Ninit Nis_416 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_417 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_417 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_417 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
@@ -8093,8 +8106,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_418 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_418 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8119,8 +8132,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_419 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_419 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8145,8 +8158,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_420 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_420 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8185,8 +8198,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_421 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_421 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8225,13 +8238,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_422 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_422 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_423 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_423 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_423 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
@@ -8281,8 +8294,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_424 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_424 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8307,8 +8320,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_425 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_425 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8333,8 +8346,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_426 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_426 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8373,8 +8386,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_427 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_427 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8413,13 +8426,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_428 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_428 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_429 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_429 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_429 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8458,14 +8471,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_430 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_430 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_431 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_431 => inl (Default_reduce_act Prod_145)
-    | Ninit Nis_432 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_431 => Default_reduce_act Prod_jump_statement_1
+    | Ninit Nis_432 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8489,13 +8502,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_433 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_433 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_434 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_434 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_434 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8534,40 +8547,40 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_435 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_435 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_436 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_436 => inl (Default_reduce_act Prod_146)
-    | Ninit Nis_437 => inl (Default_reduce_act Prod_150)
-    | Ninit Nis_438 => inl (Default_reduce_act Prod_212)
-    | Ninit Nis_439 => inl (Default_reduce_act Prod_215)
-    | Ninit Nis_440 => inl (Default_reduce_act Prod_209)
-    | Ninit Nis_441 => inl (Default_reduce_act Prod_214)
-    | Ninit Nis_442 => inl (Default_reduce_act Prod_213)
-    | Ninit Nis_443 => inl (Default_reduce_act Prod_211)
-    | Ninit Nis_444 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_436 => Default_reduce_act Prod_jump_statement_2
+    | Ninit Nis_437 => Default_reduce_act Prod_labeled_statement_statement_dangerous__1
+    | Ninit Nis_438 => Default_reduce_act Prod_statement_dangerous_3
+    | Ninit Nis_439 => Default_reduce_act Prod_statement_dangerous_6
+    | Ninit Nis_440 => Default_reduce_act Prod_statement_dangerous_0
+    | Ninit Nis_441 => Default_reduce_act Prod_statement_dangerous_5
+    | Ninit Nis_442 => Default_reduce_act Prod_statement_dangerous_4
+    | Ninit Nis_443 => Default_reduce_act Prod_statement_dangerous_2
+    | Ninit Nis_444 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_445 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_445 => inl (Default_reduce_act Prod_100)
-    | Ninit Nis_446 => inl (Default_reduce_act Prod_210)
-    | Ninit Nis_447 => inl (Default_reduce_act Prod_151)
-    | Ninit Nis_448 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_445 => Default_reduce_act Prod_expression_statement_0
+    | Ninit Nis_446 => Default_reduce_act Prod_statement_dangerous_1
+    | Ninit Nis_447 => Default_reduce_act Prod_labeled_statement_statement_dangerous__2
+    | Ninit Nis_448 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_449 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_449 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_449 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_450 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_450 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_450 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8591,27 +8604,27 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_451 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_451 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_452 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_452 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_452 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_453 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_453 => inl (Default_reduce_act Prod_117)
-    | Ninit Nis_454 => inl (Default_reduce_act Prod_129)
-    | Ninit Nis_455 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_453 => Default_reduce_act Prod_iteration_statement_statement_dangerous__1
+    | Ninit Nis_454 => Default_reduce_act Prod_iteration_statement_statement_dangerous__13
+    | Ninit Nis_455 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_456 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_456 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_456 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8650,15 +8663,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_457 => inl (Default_reduce_act Prod_123)
-    | Ninit Nis_458 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_457 => Default_reduce_act Prod_iteration_statement_statement_dangerous__7
+    | Ninit Nis_458 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_459 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_459 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_459 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8683,8 +8696,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_460 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_460 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8723,15 +8736,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_461 => inl (Default_reduce_act Prod_126)
-    | Ninit Nis_462 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_461 => Default_reduce_act Prod_iteration_statement_statement_dangerous__10
+    | Ninit Nis_462 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_463 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_463 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_463 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8770,15 +8783,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_464 => inl (Default_reduce_act Prod_120)
-    | Ninit Nis_465 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_464 => Default_reduce_act Prod_iteration_statement_statement_dangerous__4
+    | Ninit Nis_465 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_466 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_466 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_466 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8803,8 +8816,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_467 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_467 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8829,8 +8842,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_468 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_468 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8869,15 +8882,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_469 => inl (Default_reduce_act Prod_127)
-    | Ninit Nis_470 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_469 => Default_reduce_act Prod_iteration_statement_statement_dangerous__11
+    | Ninit Nis_470 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_471 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_471 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_471 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8916,15 +8929,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_472 => inl (Default_reduce_act Prod_121)
-    | Ninit Nis_473 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_472 => Default_reduce_act Prod_iteration_statement_statement_dangerous__5
+    | Ninit Nis_473 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_474 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_474 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_474 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -8949,8 +8962,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_475 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_475 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -8989,15 +9002,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_476 => inl (Default_reduce_act Prod_124)
-    | Ninit Nis_477 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_476 => Default_reduce_act Prod_iteration_statement_statement_dangerous__8
+    | Ninit Nis_477 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_478 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_478 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_478 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9036,17 +9049,17 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_479 => inl (Default_reduce_act Prod_118)
-    | Ninit Nis_480 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_479 => Default_reduce_act Prod_iteration_statement_statement_dangerous__2
+    | Ninit Nis_480 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_53 (eq_refl _)
         | STAR_t => Shift_act Nis_54 (eq_refl _)
         | SEMICOLON_t => Shift_act Nis_368 (eq_refl _)
         | LPAREN_t => Shift_act Nis_62 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_481 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_481 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9071,8 +9084,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_482 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_482 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9097,8 +9110,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_483 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_483 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9137,15 +9150,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_484 => inl (Default_reduce_act Prod_128)
-    | Ninit Nis_485 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_484 => Default_reduce_act Prod_iteration_statement_statement_dangerous__12
+    | Ninit Nis_485 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_486 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_486 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_486 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9184,15 +9197,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_487 => inl (Default_reduce_act Prod_122)
-    | Ninit Nis_488 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_487 => Default_reduce_act Prod_iteration_statement_statement_dangerous__6
+    | Ninit Nis_488 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_489 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_489 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_489 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9217,8 +9230,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_490 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_490 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9257,15 +9270,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_491 => inl (Default_reduce_act Prod_125)
-    | Ninit Nis_492 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_491 => Default_reduce_act Prod_iteration_statement_statement_dangerous__9
+    | Ninit Nis_492 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_493 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_493 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_493 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9304,19 +9317,19 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_494 => inl (Default_reduce_act Prod_119)
-    | Ninit Nis_495 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_494 => Default_reduce_act Prod_iteration_statement_statement_dangerous__3
+    | Ninit Nis_495 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_496 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_496 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_496 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | LPAREN_t => Shift_act Nis_497 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_497 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_497 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9340,93 +9353,93 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_498 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_498 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_499 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_499 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_499 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_500 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_500 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | WHILE_t => Reduce_act Prod_117
-        | VOLATILE_t => Reduce_act Prod_117
-        | VOID_t => Reduce_act Prod_117
-        | VAR_NAME_t => Reduce_act Prod_117
-        | UNSIGNED_t => Reduce_act Prod_117
-        | UNION_t => Reduce_act Prod_117
-        | TYPEDEF_NAME_t => Reduce_act Prod_117
-        | TYPEDEF_t => Reduce_act Prod_117
-        | TILDE_t => Reduce_act Prod_117
-        | THREAD_LOCAL_t => Reduce_act Prod_117
-        | SWITCH_t => Reduce_act Prod_117
-        | STRUCT_t => Reduce_act Prod_117
-        | STATIC_t => Reduce_act Prod_117
-        | STAR_t => Reduce_act Prod_117
-        | SIZEOF_t => Reduce_act Prod_117
-        | SIGNED_t => Reduce_act Prod_117
-        | SHORT_t => Reduce_act Prod_117
-        | SEMICOLON_t => Reduce_act Prod_117
-        | RETURN_t => Reduce_act Prod_117
-        | RESTRICT_t => Reduce_act Prod_117
-        | REGISTER_t => Reduce_act Prod_117
-        | RBRACES_t => Reduce_act Prod_117
-        | RBRACE_t => Reduce_act Prod_117
-        | PLUS_t => Reduce_act Prod_117
-        | OTHER_NAME_t => Reduce_act Prod_117
-        | OFFSETOF_t => Reduce_act Prod_117
-        | MINUS_t => Reduce_act Prod_117
-        | LPAREN_t => Reduce_act Prod_117
-        | LONG_t => Reduce_act Prod_117
-        | LBRACES_t => Reduce_act Prod_117
-        | LBRACE_t => Reduce_act Prod_117
-        | INT_t => Reduce_act Prod_117
-        | INLINE_t => Reduce_act Prod_117
-        | INC_t => Reduce_act Prod_117
-        | IF_t => Reduce_act Prod_117
-        | GOTO_t => Reduce_act Prod_117
-        | FOR_t => Reduce_act Prod_117
-        | FLOAT_t => Reduce_act Prod_117
-        | EXTERN_t => Reduce_act Prod_117
-        | ENUM_t => Reduce_act Prod_117
-        | ELSE_t => Reduce_act Prod_131
-        | DOUBLE_t => Reduce_act Prod_117
-        | DO_t => Reduce_act Prod_117
-        | DEFAULT_t => Reduce_act Prod_117
-        | DEC_t => Reduce_act Prod_117
-        | CONTINUE_t => Reduce_act Prod_117
-        | CONSTANT_t => Reduce_act Prod_117
-        | CONST_t => Reduce_act Prod_117
-        | CHAR_t => Reduce_act Prod_117
-        | CASE_t => Reduce_act Prod_117
-        | C11_ATOMIC_STORE_t => Reduce_act Prod_117
-        | C11_ATOMIC_LOAD_t => Reduce_act Prod_117
-        | C11_ATOMIC_INIT_t => Reduce_act Prod_117
-        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_117
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_117
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_117
-        | BUILTIN_VA_ARG_t => Reduce_act Prod_117
-        | BREAK_t => Reduce_act Prod_117
-        | BOOL_t => Reduce_act Prod_117
-        | BARES_t => Reduce_act Prod_117
-        | BANG_t => Reduce_act Prod_117
-        | AUTO_t => Reduce_act Prod_117
-        | ATOMIC_t => Reduce_act Prod_117
-        | AND_t => Reduce_act Prod_117
-        | ALIGNOF_t => Reduce_act Prod_117
+    | Ninit Nis_500 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | WHILE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | VOLATILE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | VOID_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | VAR_NAME_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | UNSIGNED_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | UNION_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | TYPEDEF_NAME_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | TYPEDEF_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | TILDE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | THREAD_LOCAL_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | SWITCH_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | STRUCT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | STATIC_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | STAR_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | SIZEOF_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | SIGNED_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | SHORT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | SEMICOLON_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | RETURN_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | RESTRICT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | REGISTER_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | RBRACES_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | RBRACE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | PLUS_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | OTHER_NAME_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | OFFSETOF_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | MINUS_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | LPAREN_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | LONG_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | LBRACES_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | LBRACE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | INT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | INLINE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | INC_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | IF_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | GOTO_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | FOR_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | FLOAT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | EXTERN_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | ENUM_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | ELSE_t => Reduce_act Prod_iteration_statement_statement_safe__1
+        | DOUBLE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | DO_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | DEFAULT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | DEC_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | CONTINUE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | CONSTANT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | CONST_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | CHAR_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | CASE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_STORE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_LOAD_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_INIT_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | BUILTIN_VA_ARG_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | BREAK_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | BOOL_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | BARES_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | BANG_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | AUTO_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | ATOMIC_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | AND_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
+        | ALIGNOF_t => Reduce_act Prod_iteration_statement_statement_dangerous__1
         | _ => Fail_act
       end)
-    | Ninit Nis_501 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_501 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_502 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_502 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_502 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9465,8 +9478,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_503 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_503 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9490,13 +9503,13 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_504 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_504 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | COLON_t => Shift_act Nis_505 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_505 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_505 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9535,296 +9548,296 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_506 => inl (Default_reduce_act Prod_153)
-    | Ninit Nis_507 => inl (Default_reduce_act Prod_219)
-    | Ninit Nis_508 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | WHILE_t => Reduce_act Prod_215
-        | VOLATILE_t => Reduce_act Prod_215
-        | VOID_t => Reduce_act Prod_215
-        | VAR_NAME_t => Reduce_act Prod_215
-        | UNSIGNED_t => Reduce_act Prod_215
-        | UNION_t => Reduce_act Prod_215
-        | TYPEDEF_NAME_t => Reduce_act Prod_215
-        | TYPEDEF_t => Reduce_act Prod_215
-        | TILDE_t => Reduce_act Prod_215
-        | THREAD_LOCAL_t => Reduce_act Prod_215
-        | SWITCH_t => Reduce_act Prod_215
-        | STRUCT_t => Reduce_act Prod_215
-        | STATIC_t => Reduce_act Prod_215
-        | STAR_t => Reduce_act Prod_215
-        | SIZEOF_t => Reduce_act Prod_215
-        | SIGNED_t => Reduce_act Prod_215
-        | SHORT_t => Reduce_act Prod_215
-        | SEMICOLON_t => Reduce_act Prod_215
-        | RETURN_t => Reduce_act Prod_215
-        | RESTRICT_t => Reduce_act Prod_215
-        | REGISTER_t => Reduce_act Prod_215
-        | RBRACES_t => Reduce_act Prod_215
-        | RBRACE_t => Reduce_act Prod_215
-        | PLUS_t => Reduce_act Prod_215
-        | OTHER_NAME_t => Reduce_act Prod_215
-        | OFFSETOF_t => Reduce_act Prod_215
-        | MINUS_t => Reduce_act Prod_215
-        | LPAREN_t => Reduce_act Prod_215
-        | LONG_t => Reduce_act Prod_215
-        | LBRACES_t => Reduce_act Prod_215
-        | LBRACE_t => Reduce_act Prod_215
-        | INT_t => Reduce_act Prod_215
-        | INLINE_t => Reduce_act Prod_215
-        | INC_t => Reduce_act Prod_215
-        | IF_t => Reduce_act Prod_215
-        | GOTO_t => Reduce_act Prod_215
-        | FOR_t => Reduce_act Prod_215
-        | FLOAT_t => Reduce_act Prod_215
-        | EXTERN_t => Reduce_act Prod_215
-        | ENUM_t => Reduce_act Prod_215
-        | ELSE_t => Reduce_act Prod_222
-        | DOUBLE_t => Reduce_act Prod_215
-        | DO_t => Reduce_act Prod_215
-        | DEFAULT_t => Reduce_act Prod_215
-        | DEC_t => Reduce_act Prod_215
-        | CONTINUE_t => Reduce_act Prod_215
-        | CONSTANT_t => Reduce_act Prod_215
-        | CONST_t => Reduce_act Prod_215
-        | CHAR_t => Reduce_act Prod_215
-        | CASE_t => Reduce_act Prod_215
-        | C11_ATOMIC_STORE_t => Reduce_act Prod_215
-        | C11_ATOMIC_LOAD_t => Reduce_act Prod_215
-        | C11_ATOMIC_INIT_t => Reduce_act Prod_215
-        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_215
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_215
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_215
-        | BUILTIN_VA_ARG_t => Reduce_act Prod_215
-        | BREAK_t => Reduce_act Prod_215
-        | BOOL_t => Reduce_act Prod_215
-        | BARES_t => Reduce_act Prod_215
-        | BANG_t => Reduce_act Prod_215
-        | AUTO_t => Reduce_act Prod_215
-        | ATOMIC_t => Reduce_act Prod_215
-        | AND_t => Reduce_act Prod_215
-        | ALIGNOF_t => Reduce_act Prod_215
+    | Ninit Nis_506 => Default_reduce_act Prod_labeled_statement_statement_safe__1
+    | Ninit Nis_507 => Default_reduce_act Prod_statement_safe_3
+    | Ninit Nis_508 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | WHILE_t => Reduce_act Prod_statement_dangerous_6
+        | VOLATILE_t => Reduce_act Prod_statement_dangerous_6
+        | VOID_t => Reduce_act Prod_statement_dangerous_6
+        | VAR_NAME_t => Reduce_act Prod_statement_dangerous_6
+        | UNSIGNED_t => Reduce_act Prod_statement_dangerous_6
+        | UNION_t => Reduce_act Prod_statement_dangerous_6
+        | TYPEDEF_NAME_t => Reduce_act Prod_statement_dangerous_6
+        | TYPEDEF_t => Reduce_act Prod_statement_dangerous_6
+        | TILDE_t => Reduce_act Prod_statement_dangerous_6
+        | THREAD_LOCAL_t => Reduce_act Prod_statement_dangerous_6
+        | SWITCH_t => Reduce_act Prod_statement_dangerous_6
+        | STRUCT_t => Reduce_act Prod_statement_dangerous_6
+        | STATIC_t => Reduce_act Prod_statement_dangerous_6
+        | STAR_t => Reduce_act Prod_statement_dangerous_6
+        | SIZEOF_t => Reduce_act Prod_statement_dangerous_6
+        | SIGNED_t => Reduce_act Prod_statement_dangerous_6
+        | SHORT_t => Reduce_act Prod_statement_dangerous_6
+        | SEMICOLON_t => Reduce_act Prod_statement_dangerous_6
+        | RETURN_t => Reduce_act Prod_statement_dangerous_6
+        | RESTRICT_t => Reduce_act Prod_statement_dangerous_6
+        | REGISTER_t => Reduce_act Prod_statement_dangerous_6
+        | RBRACES_t => Reduce_act Prod_statement_dangerous_6
+        | RBRACE_t => Reduce_act Prod_statement_dangerous_6
+        | PLUS_t => Reduce_act Prod_statement_dangerous_6
+        | OTHER_NAME_t => Reduce_act Prod_statement_dangerous_6
+        | OFFSETOF_t => Reduce_act Prod_statement_dangerous_6
+        | MINUS_t => Reduce_act Prod_statement_dangerous_6
+        | LPAREN_t => Reduce_act Prod_statement_dangerous_6
+        | LONG_t => Reduce_act Prod_statement_dangerous_6
+        | LBRACES_t => Reduce_act Prod_statement_dangerous_6
+        | LBRACE_t => Reduce_act Prod_statement_dangerous_6
+        | INT_t => Reduce_act Prod_statement_dangerous_6
+        | INLINE_t => Reduce_act Prod_statement_dangerous_6
+        | INC_t => Reduce_act Prod_statement_dangerous_6
+        | IF_t => Reduce_act Prod_statement_dangerous_6
+        | GOTO_t => Reduce_act Prod_statement_dangerous_6
+        | FOR_t => Reduce_act Prod_statement_dangerous_6
+        | FLOAT_t => Reduce_act Prod_statement_dangerous_6
+        | EXTERN_t => Reduce_act Prod_statement_dangerous_6
+        | ENUM_t => Reduce_act Prod_statement_dangerous_6
+        | ELSE_t => Reduce_act Prod_statement_safe_6
+        | DOUBLE_t => Reduce_act Prod_statement_dangerous_6
+        | DO_t => Reduce_act Prod_statement_dangerous_6
+        | DEFAULT_t => Reduce_act Prod_statement_dangerous_6
+        | DEC_t => Reduce_act Prod_statement_dangerous_6
+        | CONTINUE_t => Reduce_act Prod_statement_dangerous_6
+        | CONSTANT_t => Reduce_act Prod_statement_dangerous_6
+        | CONST_t => Reduce_act Prod_statement_dangerous_6
+        | CHAR_t => Reduce_act Prod_statement_dangerous_6
+        | CASE_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_STORE_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_LOAD_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_INIT_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_statement_dangerous_6
+        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_statement_dangerous_6
+        | BUILTIN_VA_ARG_t => Reduce_act Prod_statement_dangerous_6
+        | BREAK_t => Reduce_act Prod_statement_dangerous_6
+        | BOOL_t => Reduce_act Prod_statement_dangerous_6
+        | BARES_t => Reduce_act Prod_statement_dangerous_6
+        | BANG_t => Reduce_act Prod_statement_dangerous_6
+        | AUTO_t => Reduce_act Prod_statement_dangerous_6
+        | ATOMIC_t => Reduce_act Prod_statement_dangerous_6
+        | AND_t => Reduce_act Prod_statement_dangerous_6
+        | ALIGNOF_t => Reduce_act Prod_statement_dangerous_6
         | _ => Fail_act
       end)
-    | Ninit Nis_509 => inl (Default_reduce_act Prod_216)
-    | Ninit Nis_510 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | WHILE_t => Reduce_act Prod_214
-        | VOLATILE_t => Reduce_act Prod_214
-        | VOID_t => Reduce_act Prod_214
-        | VAR_NAME_t => Reduce_act Prod_214
-        | UNSIGNED_t => Reduce_act Prod_214
-        | UNION_t => Reduce_act Prod_214
-        | TYPEDEF_NAME_t => Reduce_act Prod_214
-        | TYPEDEF_t => Reduce_act Prod_214
-        | TILDE_t => Reduce_act Prod_214
-        | THREAD_LOCAL_t => Reduce_act Prod_214
-        | SWITCH_t => Reduce_act Prod_214
-        | STRUCT_t => Reduce_act Prod_214
-        | STATIC_t => Reduce_act Prod_214
-        | STAR_t => Reduce_act Prod_214
-        | SIZEOF_t => Reduce_act Prod_214
-        | SIGNED_t => Reduce_act Prod_214
-        | SHORT_t => Reduce_act Prod_214
-        | SEMICOLON_t => Reduce_act Prod_214
-        | RETURN_t => Reduce_act Prod_214
-        | RESTRICT_t => Reduce_act Prod_214
-        | REGISTER_t => Reduce_act Prod_214
-        | RBRACES_t => Reduce_act Prod_214
-        | RBRACE_t => Reduce_act Prod_214
-        | PLUS_t => Reduce_act Prod_214
-        | OTHER_NAME_t => Reduce_act Prod_214
-        | OFFSETOF_t => Reduce_act Prod_214
-        | MINUS_t => Reduce_act Prod_214
-        | LPAREN_t => Reduce_act Prod_214
-        | LONG_t => Reduce_act Prod_214
-        | LBRACES_t => Reduce_act Prod_214
-        | LBRACE_t => Reduce_act Prod_214
-        | INT_t => Reduce_act Prod_214
-        | INLINE_t => Reduce_act Prod_214
-        | INC_t => Reduce_act Prod_214
-        | IF_t => Reduce_act Prod_214
-        | GOTO_t => Reduce_act Prod_214
-        | FOR_t => Reduce_act Prod_214
-        | FLOAT_t => Reduce_act Prod_214
-        | EXTERN_t => Reduce_act Prod_214
-        | ENUM_t => Reduce_act Prod_214
-        | ELSE_t => Reduce_act Prod_221
-        | DOUBLE_t => Reduce_act Prod_214
-        | DO_t => Reduce_act Prod_214
-        | DEFAULT_t => Reduce_act Prod_214
-        | DEC_t => Reduce_act Prod_214
-        | CONTINUE_t => Reduce_act Prod_214
-        | CONSTANT_t => Reduce_act Prod_214
-        | CONST_t => Reduce_act Prod_214
-        | CHAR_t => Reduce_act Prod_214
-        | CASE_t => Reduce_act Prod_214
-        | C11_ATOMIC_STORE_t => Reduce_act Prod_214
-        | C11_ATOMIC_LOAD_t => Reduce_act Prod_214
-        | C11_ATOMIC_INIT_t => Reduce_act Prod_214
-        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_214
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_214
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_214
-        | BUILTIN_VA_ARG_t => Reduce_act Prod_214
-        | BREAK_t => Reduce_act Prod_214
-        | BOOL_t => Reduce_act Prod_214
-        | BARES_t => Reduce_act Prod_214
-        | BANG_t => Reduce_act Prod_214
-        | AUTO_t => Reduce_act Prod_214
-        | ATOMIC_t => Reduce_act Prod_214
-        | AND_t => Reduce_act Prod_214
-        | ALIGNOF_t => Reduce_act Prod_214
+    | Ninit Nis_509 => Default_reduce_act Prod_statement_safe_0
+    | Ninit Nis_510 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | WHILE_t => Reduce_act Prod_statement_dangerous_5
+        | VOLATILE_t => Reduce_act Prod_statement_dangerous_5
+        | VOID_t => Reduce_act Prod_statement_dangerous_5
+        | VAR_NAME_t => Reduce_act Prod_statement_dangerous_5
+        | UNSIGNED_t => Reduce_act Prod_statement_dangerous_5
+        | UNION_t => Reduce_act Prod_statement_dangerous_5
+        | TYPEDEF_NAME_t => Reduce_act Prod_statement_dangerous_5
+        | TYPEDEF_t => Reduce_act Prod_statement_dangerous_5
+        | TILDE_t => Reduce_act Prod_statement_dangerous_5
+        | THREAD_LOCAL_t => Reduce_act Prod_statement_dangerous_5
+        | SWITCH_t => Reduce_act Prod_statement_dangerous_5
+        | STRUCT_t => Reduce_act Prod_statement_dangerous_5
+        | STATIC_t => Reduce_act Prod_statement_dangerous_5
+        | STAR_t => Reduce_act Prod_statement_dangerous_5
+        | SIZEOF_t => Reduce_act Prod_statement_dangerous_5
+        | SIGNED_t => Reduce_act Prod_statement_dangerous_5
+        | SHORT_t => Reduce_act Prod_statement_dangerous_5
+        | SEMICOLON_t => Reduce_act Prod_statement_dangerous_5
+        | RETURN_t => Reduce_act Prod_statement_dangerous_5
+        | RESTRICT_t => Reduce_act Prod_statement_dangerous_5
+        | REGISTER_t => Reduce_act Prod_statement_dangerous_5
+        | RBRACES_t => Reduce_act Prod_statement_dangerous_5
+        | RBRACE_t => Reduce_act Prod_statement_dangerous_5
+        | PLUS_t => Reduce_act Prod_statement_dangerous_5
+        | OTHER_NAME_t => Reduce_act Prod_statement_dangerous_5
+        | OFFSETOF_t => Reduce_act Prod_statement_dangerous_5
+        | MINUS_t => Reduce_act Prod_statement_dangerous_5
+        | LPAREN_t => Reduce_act Prod_statement_dangerous_5
+        | LONG_t => Reduce_act Prod_statement_dangerous_5
+        | LBRACES_t => Reduce_act Prod_statement_dangerous_5
+        | LBRACE_t => Reduce_act Prod_statement_dangerous_5
+        | INT_t => Reduce_act Prod_statement_dangerous_5
+        | INLINE_t => Reduce_act Prod_statement_dangerous_5
+        | INC_t => Reduce_act Prod_statement_dangerous_5
+        | IF_t => Reduce_act Prod_statement_dangerous_5
+        | GOTO_t => Reduce_act Prod_statement_dangerous_5
+        | FOR_t => Reduce_act Prod_statement_dangerous_5
+        | FLOAT_t => Reduce_act Prod_statement_dangerous_5
+        | EXTERN_t => Reduce_act Prod_statement_dangerous_5
+        | ENUM_t => Reduce_act Prod_statement_dangerous_5
+        | ELSE_t => Reduce_act Prod_statement_safe_5
+        | DOUBLE_t => Reduce_act Prod_statement_dangerous_5
+        | DO_t => Reduce_act Prod_statement_dangerous_5
+        | DEFAULT_t => Reduce_act Prod_statement_dangerous_5
+        | DEC_t => Reduce_act Prod_statement_dangerous_5
+        | CONTINUE_t => Reduce_act Prod_statement_dangerous_5
+        | CONSTANT_t => Reduce_act Prod_statement_dangerous_5
+        | CONST_t => Reduce_act Prod_statement_dangerous_5
+        | CHAR_t => Reduce_act Prod_statement_dangerous_5
+        | CASE_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_STORE_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_LOAD_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_INIT_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_statement_dangerous_5
+        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_statement_dangerous_5
+        | BUILTIN_VA_ARG_t => Reduce_act Prod_statement_dangerous_5
+        | BREAK_t => Reduce_act Prod_statement_dangerous_5
+        | BOOL_t => Reduce_act Prod_statement_dangerous_5
+        | BARES_t => Reduce_act Prod_statement_dangerous_5
+        | BANG_t => Reduce_act Prod_statement_dangerous_5
+        | AUTO_t => Reduce_act Prod_statement_dangerous_5
+        | ATOMIC_t => Reduce_act Prod_statement_dangerous_5
+        | AND_t => Reduce_act Prod_statement_dangerous_5
+        | ALIGNOF_t => Reduce_act Prod_statement_dangerous_5
         | _ => Fail_act
       end)
-    | Ninit Nis_511 => inl (Default_reduce_act Prod_220)
-    | Ninit Nis_512 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | WHILE_t => Reduce_act Prod_211
-        | VOLATILE_t => Reduce_act Prod_211
-        | VOID_t => Reduce_act Prod_211
-        | VAR_NAME_t => Reduce_act Prod_211
-        | UNSIGNED_t => Reduce_act Prod_211
-        | UNION_t => Reduce_act Prod_211
-        | TYPEDEF_NAME_t => Reduce_act Prod_211
-        | TYPEDEF_t => Reduce_act Prod_211
-        | TILDE_t => Reduce_act Prod_211
-        | THREAD_LOCAL_t => Reduce_act Prod_211
-        | SWITCH_t => Reduce_act Prod_211
-        | STRUCT_t => Reduce_act Prod_211
-        | STATIC_t => Reduce_act Prod_211
-        | STAR_t => Reduce_act Prod_211
-        | SIZEOF_t => Reduce_act Prod_211
-        | SIGNED_t => Reduce_act Prod_211
-        | SHORT_t => Reduce_act Prod_211
-        | SEMICOLON_t => Reduce_act Prod_211
-        | RETURN_t => Reduce_act Prod_211
-        | RESTRICT_t => Reduce_act Prod_211
-        | REGISTER_t => Reduce_act Prod_211
-        | RBRACES_t => Reduce_act Prod_211
-        | RBRACE_t => Reduce_act Prod_211
-        | PLUS_t => Reduce_act Prod_211
-        | OTHER_NAME_t => Reduce_act Prod_211
-        | OFFSETOF_t => Reduce_act Prod_211
-        | MINUS_t => Reduce_act Prod_211
-        | LPAREN_t => Reduce_act Prod_211
-        | LONG_t => Reduce_act Prod_211
-        | LBRACES_t => Reduce_act Prod_211
-        | LBRACE_t => Reduce_act Prod_211
-        | INT_t => Reduce_act Prod_211
-        | INLINE_t => Reduce_act Prod_211
-        | INC_t => Reduce_act Prod_211
-        | IF_t => Reduce_act Prod_211
-        | GOTO_t => Reduce_act Prod_211
-        | FOR_t => Reduce_act Prod_211
-        | FLOAT_t => Reduce_act Prod_211
-        | EXTERN_t => Reduce_act Prod_211
-        | ENUM_t => Reduce_act Prod_211
-        | ELSE_t => Reduce_act Prod_218
-        | DOUBLE_t => Reduce_act Prod_211
-        | DO_t => Reduce_act Prod_211
-        | DEFAULT_t => Reduce_act Prod_211
-        | DEC_t => Reduce_act Prod_211
-        | CONTINUE_t => Reduce_act Prod_211
-        | CONSTANT_t => Reduce_act Prod_211
-        | CONST_t => Reduce_act Prod_211
-        | CHAR_t => Reduce_act Prod_211
-        | CASE_t => Reduce_act Prod_211
-        | C11_ATOMIC_STORE_t => Reduce_act Prod_211
-        | C11_ATOMIC_LOAD_t => Reduce_act Prod_211
-        | C11_ATOMIC_INIT_t => Reduce_act Prod_211
-        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_211
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_211
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_211
-        | BUILTIN_VA_ARG_t => Reduce_act Prod_211
-        | BREAK_t => Reduce_act Prod_211
-        | BOOL_t => Reduce_act Prod_211
-        | BARES_t => Reduce_act Prod_211
-        | BANG_t => Reduce_act Prod_211
-        | AUTO_t => Reduce_act Prod_211
-        | ATOMIC_t => Reduce_act Prod_211
-        | AND_t => Reduce_act Prod_211
-        | ALIGNOF_t => Reduce_act Prod_211
+    | Ninit Nis_511 => Default_reduce_act Prod_statement_safe_4
+    | Ninit Nis_512 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | WHILE_t => Reduce_act Prod_statement_dangerous_2
+        | VOLATILE_t => Reduce_act Prod_statement_dangerous_2
+        | VOID_t => Reduce_act Prod_statement_dangerous_2
+        | VAR_NAME_t => Reduce_act Prod_statement_dangerous_2
+        | UNSIGNED_t => Reduce_act Prod_statement_dangerous_2
+        | UNION_t => Reduce_act Prod_statement_dangerous_2
+        | TYPEDEF_NAME_t => Reduce_act Prod_statement_dangerous_2
+        | TYPEDEF_t => Reduce_act Prod_statement_dangerous_2
+        | TILDE_t => Reduce_act Prod_statement_dangerous_2
+        | THREAD_LOCAL_t => Reduce_act Prod_statement_dangerous_2
+        | SWITCH_t => Reduce_act Prod_statement_dangerous_2
+        | STRUCT_t => Reduce_act Prod_statement_dangerous_2
+        | STATIC_t => Reduce_act Prod_statement_dangerous_2
+        | STAR_t => Reduce_act Prod_statement_dangerous_2
+        | SIZEOF_t => Reduce_act Prod_statement_dangerous_2
+        | SIGNED_t => Reduce_act Prod_statement_dangerous_2
+        | SHORT_t => Reduce_act Prod_statement_dangerous_2
+        | SEMICOLON_t => Reduce_act Prod_statement_dangerous_2
+        | RETURN_t => Reduce_act Prod_statement_dangerous_2
+        | RESTRICT_t => Reduce_act Prod_statement_dangerous_2
+        | REGISTER_t => Reduce_act Prod_statement_dangerous_2
+        | RBRACES_t => Reduce_act Prod_statement_dangerous_2
+        | RBRACE_t => Reduce_act Prod_statement_dangerous_2
+        | PLUS_t => Reduce_act Prod_statement_dangerous_2
+        | OTHER_NAME_t => Reduce_act Prod_statement_dangerous_2
+        | OFFSETOF_t => Reduce_act Prod_statement_dangerous_2
+        | MINUS_t => Reduce_act Prod_statement_dangerous_2
+        | LPAREN_t => Reduce_act Prod_statement_dangerous_2
+        | LONG_t => Reduce_act Prod_statement_dangerous_2
+        | LBRACES_t => Reduce_act Prod_statement_dangerous_2
+        | LBRACE_t => Reduce_act Prod_statement_dangerous_2
+        | INT_t => Reduce_act Prod_statement_dangerous_2
+        | INLINE_t => Reduce_act Prod_statement_dangerous_2
+        | INC_t => Reduce_act Prod_statement_dangerous_2
+        | IF_t => Reduce_act Prod_statement_dangerous_2
+        | GOTO_t => Reduce_act Prod_statement_dangerous_2
+        | FOR_t => Reduce_act Prod_statement_dangerous_2
+        | FLOAT_t => Reduce_act Prod_statement_dangerous_2
+        | EXTERN_t => Reduce_act Prod_statement_dangerous_2
+        | ENUM_t => Reduce_act Prod_statement_dangerous_2
+        | ELSE_t => Reduce_act Prod_statement_safe_2
+        | DOUBLE_t => Reduce_act Prod_statement_dangerous_2
+        | DO_t => Reduce_act Prod_statement_dangerous_2
+        | DEFAULT_t => Reduce_act Prod_statement_dangerous_2
+        | DEC_t => Reduce_act Prod_statement_dangerous_2
+        | CONTINUE_t => Reduce_act Prod_statement_dangerous_2
+        | CONSTANT_t => Reduce_act Prod_statement_dangerous_2
+        | CONST_t => Reduce_act Prod_statement_dangerous_2
+        | CHAR_t => Reduce_act Prod_statement_dangerous_2
+        | CASE_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_STORE_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_LOAD_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_INIT_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_statement_dangerous_2
+        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_statement_dangerous_2
+        | BUILTIN_VA_ARG_t => Reduce_act Prod_statement_dangerous_2
+        | BREAK_t => Reduce_act Prod_statement_dangerous_2
+        | BOOL_t => Reduce_act Prod_statement_dangerous_2
+        | BARES_t => Reduce_act Prod_statement_dangerous_2
+        | BANG_t => Reduce_act Prod_statement_dangerous_2
+        | AUTO_t => Reduce_act Prod_statement_dangerous_2
+        | ATOMIC_t => Reduce_act Prod_statement_dangerous_2
+        | AND_t => Reduce_act Prod_statement_dangerous_2
+        | ALIGNOF_t => Reduce_act Prod_statement_dangerous_2
         | _ => Fail_act
       end)
-    | Ninit Nis_513 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | WHILE_t => Reduce_act Prod_210
-        | VOLATILE_t => Reduce_act Prod_210
-        | VOID_t => Reduce_act Prod_210
-        | VAR_NAME_t => Reduce_act Prod_210
-        | UNSIGNED_t => Reduce_act Prod_210
-        | UNION_t => Reduce_act Prod_210
-        | TYPEDEF_NAME_t => Reduce_act Prod_210
-        | TYPEDEF_t => Reduce_act Prod_210
-        | TILDE_t => Reduce_act Prod_210
-        | THREAD_LOCAL_t => Reduce_act Prod_210
-        | SWITCH_t => Reduce_act Prod_210
-        | STRUCT_t => Reduce_act Prod_210
-        | STATIC_t => Reduce_act Prod_210
-        | STAR_t => Reduce_act Prod_210
-        | SIZEOF_t => Reduce_act Prod_210
-        | SIGNED_t => Reduce_act Prod_210
-        | SHORT_t => Reduce_act Prod_210
-        | SEMICOLON_t => Reduce_act Prod_210
-        | RETURN_t => Reduce_act Prod_210
-        | RESTRICT_t => Reduce_act Prod_210
-        | REGISTER_t => Reduce_act Prod_210
-        | RBRACES_t => Reduce_act Prod_210
-        | RBRACE_t => Reduce_act Prod_210
-        | PLUS_t => Reduce_act Prod_210
-        | OTHER_NAME_t => Reduce_act Prod_210
-        | OFFSETOF_t => Reduce_act Prod_210
-        | MINUS_t => Reduce_act Prod_210
-        | LPAREN_t => Reduce_act Prod_210
-        | LONG_t => Reduce_act Prod_210
-        | LBRACES_t => Reduce_act Prod_210
-        | LBRACE_t => Reduce_act Prod_210
-        | INT_t => Reduce_act Prod_210
-        | INLINE_t => Reduce_act Prod_210
-        | INC_t => Reduce_act Prod_210
-        | IF_t => Reduce_act Prod_210
-        | GOTO_t => Reduce_act Prod_210
-        | FOR_t => Reduce_act Prod_210
-        | FLOAT_t => Reduce_act Prod_210
-        | EXTERN_t => Reduce_act Prod_210
-        | ENUM_t => Reduce_act Prod_210
-        | ELSE_t => Reduce_act Prod_217
-        | DOUBLE_t => Reduce_act Prod_210
-        | DO_t => Reduce_act Prod_210
-        | DEFAULT_t => Reduce_act Prod_210
-        | DEC_t => Reduce_act Prod_210
-        | CONTINUE_t => Reduce_act Prod_210
-        | CONSTANT_t => Reduce_act Prod_210
-        | CONST_t => Reduce_act Prod_210
-        | CHAR_t => Reduce_act Prod_210
-        | CASE_t => Reduce_act Prod_210
-        | C11_ATOMIC_STORE_t => Reduce_act Prod_210
-        | C11_ATOMIC_LOAD_t => Reduce_act Prod_210
-        | C11_ATOMIC_INIT_t => Reduce_act Prod_210
-        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_210
-        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_210
-        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_210
-        | BUILTIN_VA_ARG_t => Reduce_act Prod_210
-        | BREAK_t => Reduce_act Prod_210
-        | BOOL_t => Reduce_act Prod_210
-        | BARES_t => Reduce_act Prod_210
-        | BANG_t => Reduce_act Prod_210
-        | AUTO_t => Reduce_act Prod_210
-        | ATOMIC_t => Reduce_act Prod_210
-        | AND_t => Reduce_act Prod_210
-        | ALIGNOF_t => Reduce_act Prod_210
+    | Ninit Nis_513 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | WHILE_t => Reduce_act Prod_statement_dangerous_1
+        | VOLATILE_t => Reduce_act Prod_statement_dangerous_1
+        | VOID_t => Reduce_act Prod_statement_dangerous_1
+        | VAR_NAME_t => Reduce_act Prod_statement_dangerous_1
+        | UNSIGNED_t => Reduce_act Prod_statement_dangerous_1
+        | UNION_t => Reduce_act Prod_statement_dangerous_1
+        | TYPEDEF_NAME_t => Reduce_act Prod_statement_dangerous_1
+        | TYPEDEF_t => Reduce_act Prod_statement_dangerous_1
+        | TILDE_t => Reduce_act Prod_statement_dangerous_1
+        | THREAD_LOCAL_t => Reduce_act Prod_statement_dangerous_1
+        | SWITCH_t => Reduce_act Prod_statement_dangerous_1
+        | STRUCT_t => Reduce_act Prod_statement_dangerous_1
+        | STATIC_t => Reduce_act Prod_statement_dangerous_1
+        | STAR_t => Reduce_act Prod_statement_dangerous_1
+        | SIZEOF_t => Reduce_act Prod_statement_dangerous_1
+        | SIGNED_t => Reduce_act Prod_statement_dangerous_1
+        | SHORT_t => Reduce_act Prod_statement_dangerous_1
+        | SEMICOLON_t => Reduce_act Prod_statement_dangerous_1
+        | RETURN_t => Reduce_act Prod_statement_dangerous_1
+        | RESTRICT_t => Reduce_act Prod_statement_dangerous_1
+        | REGISTER_t => Reduce_act Prod_statement_dangerous_1
+        | RBRACES_t => Reduce_act Prod_statement_dangerous_1
+        | RBRACE_t => Reduce_act Prod_statement_dangerous_1
+        | PLUS_t => Reduce_act Prod_statement_dangerous_1
+        | OTHER_NAME_t => Reduce_act Prod_statement_dangerous_1
+        | OFFSETOF_t => Reduce_act Prod_statement_dangerous_1
+        | MINUS_t => Reduce_act Prod_statement_dangerous_1
+        | LPAREN_t => Reduce_act Prod_statement_dangerous_1
+        | LONG_t => Reduce_act Prod_statement_dangerous_1
+        | LBRACES_t => Reduce_act Prod_statement_dangerous_1
+        | LBRACE_t => Reduce_act Prod_statement_dangerous_1
+        | INT_t => Reduce_act Prod_statement_dangerous_1
+        | INLINE_t => Reduce_act Prod_statement_dangerous_1
+        | INC_t => Reduce_act Prod_statement_dangerous_1
+        | IF_t => Reduce_act Prod_statement_dangerous_1
+        | GOTO_t => Reduce_act Prod_statement_dangerous_1
+        | FOR_t => Reduce_act Prod_statement_dangerous_1
+        | FLOAT_t => Reduce_act Prod_statement_dangerous_1
+        | EXTERN_t => Reduce_act Prod_statement_dangerous_1
+        | ENUM_t => Reduce_act Prod_statement_dangerous_1
+        | ELSE_t => Reduce_act Prod_statement_safe_1
+        | DOUBLE_t => Reduce_act Prod_statement_dangerous_1
+        | DO_t => Reduce_act Prod_statement_dangerous_1
+        | DEFAULT_t => Reduce_act Prod_statement_dangerous_1
+        | DEC_t => Reduce_act Prod_statement_dangerous_1
+        | CONTINUE_t => Reduce_act Prod_statement_dangerous_1
+        | CONSTANT_t => Reduce_act Prod_statement_dangerous_1
+        | CONST_t => Reduce_act Prod_statement_dangerous_1
+        | CHAR_t => Reduce_act Prod_statement_dangerous_1
+        | CASE_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_STORE_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_LOAD_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_INIT_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_EXCHANGE_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t => Reduce_act Prod_statement_dangerous_1
+        | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t => Reduce_act Prod_statement_dangerous_1
+        | BUILTIN_VA_ARG_t => Reduce_act Prod_statement_dangerous_1
+        | BREAK_t => Reduce_act Prod_statement_dangerous_1
+        | BOOL_t => Reduce_act Prod_statement_dangerous_1
+        | BARES_t => Reduce_act Prod_statement_dangerous_1
+        | BANG_t => Reduce_act Prod_statement_dangerous_1
+        | AUTO_t => Reduce_act Prod_statement_dangerous_1
+        | ATOMIC_t => Reduce_act Prod_statement_dangerous_1
+        | AND_t => Reduce_act Prod_statement_dangerous_1
+        | ALIGNOF_t => Reduce_act Prod_statement_dangerous_1
         | _ => Fail_act
       end)
-    | Ninit Nis_514 => inl (Default_reduce_act Prod_154)
-    | Ninit Nis_515 => inl (Default_reduce_act Prod_143)
-    | Ninit Nis_516 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_514 => Default_reduce_act Prod_labeled_statement_statement_safe__2
+    | Ninit Nis_515 => Default_reduce_act Prod_iteration_statement_statement_safe__13
+    | Ninit Nis_516 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_517 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_517 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_517 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9863,15 +9876,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_518 => inl (Default_reduce_act Prod_137)
-    | Ninit Nis_519 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_518 => Default_reduce_act Prod_iteration_statement_statement_safe__7
+    | Ninit Nis_519 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_520 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_520 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_520 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -9896,8 +9909,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_521 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_521 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9936,15 +9949,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_522 => inl (Default_reduce_act Prod_140)
-    | Ninit Nis_523 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_522 => Default_reduce_act Prod_iteration_statement_statement_safe__10
+    | Ninit Nis_523 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_524 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_524 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_524 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -9983,15 +9996,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_525 => inl (Default_reduce_act Prod_134)
-    | Ninit Nis_526 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_525 => Default_reduce_act Prod_iteration_statement_statement_safe__4
+    | Ninit Nis_526 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_527 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_527 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_527 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10016,8 +10029,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_528 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_528 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10042,8 +10055,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_529 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_529 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10082,15 +10095,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_530 => inl (Default_reduce_act Prod_141)
-    | Ninit Nis_531 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_530 => Default_reduce_act Prod_iteration_statement_statement_safe__11
+    | Ninit Nis_531 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_532 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_532 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_532 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10129,15 +10142,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_533 => inl (Default_reduce_act Prod_135)
-    | Ninit Nis_534 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_533 => Default_reduce_act Prod_iteration_statement_statement_safe__5
+    | Ninit Nis_534 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_535 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_535 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_535 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10162,8 +10175,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_536 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_536 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10202,15 +10215,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_537 => inl (Default_reduce_act Prod_138)
-    | Ninit Nis_538 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_537 => Default_reduce_act Prod_iteration_statement_statement_safe__8
+    | Ninit Nis_538 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_539 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_539 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_539 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10249,9 +10262,9 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_540 => inl (Default_reduce_act Prod_132)
-    | Ninit Nis_541 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_540 => Default_reduce_act Prod_iteration_statement_statement_safe__2
+    | Ninit Nis_541 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10276,8 +10289,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_542 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_542 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10302,8 +10315,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_543 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_543 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10342,15 +10355,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_544 => inl (Default_reduce_act Prod_142)
-    | Ninit Nis_545 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_544 => Default_reduce_act Prod_iteration_statement_statement_safe__12
+    | Ninit Nis_545 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_546 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_546 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_546 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10389,15 +10402,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_547 => inl (Default_reduce_act Prod_136)
-    | Ninit Nis_548 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_547 => Default_reduce_act Prod_iteration_statement_statement_safe__6
+    | Ninit Nis_548 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | SEMICOLON_t => Shift_act Nis_549 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_549 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_549 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
         | STAR_t => Shift_act Nis_32 (eq_refl _)
@@ -10422,8 +10435,8 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_550 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_550 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10462,15 +10475,15 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_551 => inl (Default_reduce_act Prod_139)
-    | Ninit Nis_552 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_551 => Default_reduce_act Prod_iteration_statement_statement_safe__9
+    | Ninit Nis_552 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RPAREN_t => Shift_act Nis_553 (eq_refl _)
         | COMMA_t => Shift_act Nis_195 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_553 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_553 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10509,14 +10522,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_554 => inl (Default_reduce_act Prod_133)
-    | Ninit Nis_555 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_554 => Default_reduce_act Prod_iteration_statement_statement_safe__3
+    | Ninit Nis_555 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | ELSE_t => Shift_act Nis_556 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_556 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_556 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_399 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10555,22 +10568,22 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_557 => inl (Default_reduce_act Prod_200)
-    | Ninit Nis_558 => inl (Default_reduce_act Prod_198)
-    | Ninit Nis_559 => inl (Default_reduce_act Prod_197)
-    | Ninit Nis_560 => inl (Default_reduce_act Prod_152)
-    | Ninit Nis_561 => inl (Default_reduce_act Prod_149)
-    | Ninit Nis_562 => inl (Default_reduce_act Prod_201)
-    | Ninit Nis_563 => inl (Default_reduce_act Prod_199)
-    | Ninit Nis_564 => inl (Default_reduce_act Prod_130)
-    | Ninit Nis_565 => inl (Default_reduce_act Prod_116)
-    | Ninit Nis_566 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_557 => Default_reduce_act Prod_selection_statement_safe_0
+    | Ninit Nis_558 => Default_reduce_act Prod_selection_statement_dangerous_1
+    | Ninit Nis_559 => Default_reduce_act Prod_selection_statement_dangerous_0
+    | Ninit Nis_560 => Default_reduce_act Prod_labeled_statement_statement_safe__0
+    | Ninit Nis_561 => Default_reduce_act Prod_labeled_statement_statement_dangerous__0
+    | Ninit Nis_562 => Default_reduce_act Prod_selection_statement_safe_1
+    | Ninit Nis_563 => Default_reduce_act Prod_selection_statement_dangerous_2
+    | Ninit Nis_564 => Default_reduce_act Prod_iteration_statement_statement_safe__0
+    | Ninit Nis_565 => Default_reduce_act Prod_iteration_statement_statement_dangerous__0
+    | Ninit Nis_566 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | ELSE_t => Shift_act Nis_567 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_567 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_567 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10609,14 +10622,14 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_568 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
-        | RBRACES_t => Reduce_act Prod_164
+    | Ninit Nis_568 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
+        | RBRACES_t => Reduce_act Prod_par_statement_list_0
         | BARES_t => Shift_act Nis_569 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_569 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_569 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VAR_NAME_t => Shift_act Nis_30 (eq_refl _)
         | TILDE_t => Shift_act Nis_31 (eq_refl _)
@@ -10655,18 +10668,18 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_570 => inl (Default_reduce_act Prod_165)
-    | Ninit Nis_571 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_570 => Default_reduce_act Prod_par_statement_list_1
+    | Ninit Nis_571 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | RBRACES_t => Shift_act Nis_572 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_572 => inl (Default_reduce_act Prod_163)
-    | Ninit Nis_573 => inl (Default_reduce_act Prod_41)
-    | Ninit Nis_574 => inl (Default_reduce_act Prod_32)
-    | Ninit Nis_575 => inl (Default_reduce_act Prod_31)
-    | Ninit Nis_576 => inr (fun terminal:terminal =>
-      match terminal return action terminal with
+    | Ninit Nis_572 => Default_reduce_act Prod_par_statement_0
+    | Ninit Nis_573 => Default_reduce_act Prod_compound_statement_1
+    | Ninit Nis_574 => Default_reduce_act Prod_block_item_1
+    | Ninit Nis_575 => Default_reduce_act Prod_block_item_0
+    | Ninit Nis_576 => Lookahead_act (fun terminal:terminal =>
+      match terminal return lookahead_action terminal with
         | WHILE_t => Shift_act Nis_379 (eq_refl _)
         | VOLATILE_t => Shift_act Nis_1 (eq_refl _)
         | VOID_t => Shift_act Nis_2 (eq_refl _)
@@ -10731,30 +10744,29 @@ Definition action_table (state:state) :
         | ALIGNOF_t => Shift_act Nis_111 (eq_refl _)
         | _ => Fail_act
       end)
-    | Ninit Nis_577 => inl (Default_reduce_act Prod_40)
-    | Ninit Nis_578 => inl (Default_reduce_act Prod_34)
-    | Ninit Nis_579 => inl (Default_reduce_act Prod_33)
-    | Ninit Nis_580 => inl (Default_reduce_act Prod_104)
-    | Ninit Nis_581 => inl (Default_reduce_act Prod_103)
-    | Ninit Nis_582 => inl (Default_reduce_act Prod_243)
+    | Ninit Nis_577 => Default_reduce_act Prod_compound_statement_0
+    | Ninit Nis_578 => Default_reduce_act Prod_block_item_list_1
+    | Ninit Nis_579 => Default_reduce_act Prod_block_item_list_0
+    | Ninit Nis_580 => Default_reduce_act Prod_function_definition_0
+    | Ninit Nis_581 => Default_reduce_act Prod_external_declaration_1
+    | Ninit Nis_582 => Default_reduce_act Prod_translation_unit_0
   end.
 
 Definition goto_table (state:state) (nt:nonterminal) :=
-  match state, nt return option { s:noninitstate | last_symb_of_non_init_state s = NT nt } with
-    | Init, type_specifier_nt => Some (exist _ Nis_68 (eq_refl _))
-    | Init, type_qualifier_nt => Some (exist _ Nis_69 (eq_refl _))
-    | Init, translation_unit_file_nt => Some (exist _ Nis_362 (eq_refl _))
-    | Init, translation_unit_nt => Some (exist _ Nis_363 (eq_refl _))
-    | Init, struct_or_union_specifier_nt => Some (exist _ Nis_45 (eq_refl _))
-    | Init, struct_or_union_nt => Some (exist _ Nis_46 (eq_refl _))
-    | Init, storage_class_specifier_nt => Some (exist _ Nis_70 (eq_refl _))
-    | Init, function_specifier_nt => Some (exist _ Nis_71 (eq_refl _))
-    | Init, function_definition_nt => Some (exist _ Nis_365 (eq_refl _))
-    | Init, external_declaration_nt => Some (exist _ Nis_582 (eq_refl _))
-    | Init, enum_specifier_nt => Some (exist _ Nis_72 (eq_refl _))
-    | Init, declaration_specifiers_nt => Some (exist _ Nis_367 (eq_refl _))
-    | Init, declaration_nt => Some (exist _ Nis_581 (eq_refl _))
-    | Init, atomic_type_specifier_nt => Some (exist _ Nis_74 (eq_refl _))
+  match state, nt return option { s:noninitstate | NT nt = last_symb_of_non_init_state s } with
+    | Init Init_0, type_specifier_nt => Some (exist _ Nis_68 (eq_refl _))
+    | Init Init_0, type_qualifier_nt => Some (exist _ Nis_69 (eq_refl _))
+    | Init Init_0, translation_unit_file_nt => None    | Init Init_0, translation_unit_nt => Some (exist _ Nis_363 (eq_refl _))
+    | Init Init_0, struct_or_union_specifier_nt => Some (exist _ Nis_45 (eq_refl _))
+    | Init Init_0, struct_or_union_nt => Some (exist _ Nis_46 (eq_refl _))
+    | Init Init_0, storage_class_specifier_nt => Some (exist _ Nis_70 (eq_refl _))
+    | Init Init_0, function_specifier_nt => Some (exist _ Nis_71 (eq_refl _))
+    | Init Init_0, function_definition_nt => Some (exist _ Nis_365 (eq_refl _))
+    | Init Init_0, external_declaration_nt => Some (exist _ Nis_582 (eq_refl _))
+    | Init Init_0, enum_specifier_nt => Some (exist _ Nis_72 (eq_refl _))
+    | Init Init_0, declaration_specifiers_nt => Some (exist _ Nis_367 (eq_refl _))
+    | Init Init_0, declaration_nt => Some (exist _ Nis_581 (eq_refl _))
+    | Init Init_0, atomic_type_specifier_nt => Some (exist _ Nis_74 (eq_refl _))
     | Ninit Nis_21, enumerator_list_nt => Some (exist _ Nis_23 (eq_refl _))
     | Ninit Nis_21, enumerator_nt => Some (exist _ Nis_356 (eq_refl _))
     | Ninit Nis_21, enumeration_constant_nt => Some (exist _ Nis_28 (eq_refl _))
@@ -13755,7 +13767,7 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_24 => [NT enumerator_list_nt; T LBRACE_t; T OTHER_NAME_t; T ENUM_t]
     | Nis_25 => [NT enumerator_list_nt; T LBRACE_t; T OTHER_NAME_t; T ENUM_t]
     | Nis_26 => [T COMMA_t; NT enumerator_list_nt; T LBRACE_t; T OTHER_NAME_t; T ENUM_t]
-    | Nis_27 => [T COMMA_t; NT enumerator_list_nt; T LBRACE_t]
+    | Nis_27 => [T COMMA_t; NT enumerator_list_nt]
     | Nis_28 => []
     | Nis_29 => [NT enumeration_constant_nt]
     | Nis_30 => []
@@ -13779,7 +13791,7 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_48 => [T OTHER_NAME_t; NT struct_or_union_nt]
     | Nis_49 => [T LBRACE_t; T OTHER_NAME_t; NT struct_or_union_nt]
     | Nis_50 => [NT struct_declaration_list_nt; T LBRACE_t; T OTHER_NAME_t; NT struct_or_union_nt]
-    | Nis_51 => [NT struct_declaration_list_nt; T LBRACE_t]
+    | Nis_51 => [NT struct_declaration_list_nt]
     | Nis_52 => []
     | Nis_53 => []
     | Nis_54 => []
@@ -13808,10 +13820,10 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_77 => [NT type_specifier_nt]
     | Nis_78 => [T LPAREN_t; NT direct_declarator_nt]
     | Nis_79 => [NT parameter_type_list_nt; T LPAREN_t; NT direct_declarator_nt]
-    | Nis_80 => [T LPAREN_t]
-    | Nis_81 => [NT parameter_list_nt; T LPAREN_t]
-    | Nis_82 => [T COMMA_t; NT parameter_list_nt; T LPAREN_t]
-    | Nis_83 => [T COMMA_t; NT parameter_list_nt; T LPAREN_t]
+    | Nis_80 => []
+    | Nis_81 => [NT parameter_list_nt]
+    | Nis_82 => [T COMMA_t; NT parameter_list_nt]
+    | Nis_83 => [T COMMA_t; NT parameter_list_nt]
     | Nis_84 => []
     | Nis_85 => []
     | Nis_86 => [T LPAREN_t]
@@ -13851,7 +13863,7 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_120 => [T LPAREN_t; NT direct_abstract_declarator_nt]
     | Nis_121 => [T LPAREN_t; NT direct_abstract_declarator_nt]
     | Nis_122 => [NT parameter_type_list_nt; T LPAREN_t; NT direct_abstract_declarator_nt]
-    | Nis_123 => [T LPAREN_t]
+    | Nis_123 => []
     | Nis_124 => [NT direct_abstract_declarator_nt]
     | Nis_125 => [T LBRACK_t; NT direct_abstract_declarator_nt]
     | Nis_126 => []
@@ -13863,17 +13875,17 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_132 => [NT postfix_expression_nt]
     | Nis_133 => [T LPAREN_t; NT postfix_expression_nt]
     | Nis_134 => []
-    | Nis_135 => [NT unary_expression_nt]
-    | Nis_136 => [NT unary_expression_nt]
-    | Nis_137 => [NT unary_expression_nt]
-    | Nis_138 => [NT unary_expression_nt]
-    | Nis_139 => [NT unary_expression_nt]
-    | Nis_140 => [NT unary_expression_nt]
-    | Nis_141 => [NT unary_expression_nt]
-    | Nis_142 => [NT unary_expression_nt]
-    | Nis_143 => [NT unary_expression_nt]
-    | Nis_144 => [NT unary_expression_nt]
-    | Nis_145 => [NT unary_expression_nt]
+    | Nis_135 => []
+    | Nis_136 => []
+    | Nis_137 => []
+    | Nis_138 => []
+    | Nis_139 => []
+    | Nis_140 => []
+    | Nis_141 => []
+    | Nis_142 => []
+    | Nis_143 => []
+    | Nis_144 => []
+    | Nis_145 => []
     | Nis_146 => [NT unary_expression_nt]
     | Nis_147 => []
     | Nis_148 => [NT shift_expression_nt]
@@ -13932,11 +13944,11 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_201 => [NT logical_OR_expression_nt]
     | Nis_202 => [T BARBAR_t; NT logical_OR_expression_nt]
     | Nis_203 => [NT assignment_operator_nt; NT unary_expression_nt]
-    | Nis_204 => [T LPAREN_t; NT postfix_expression_nt]
+    | Nis_204 => []
     | Nis_205 => [T LPAREN_t; NT postfix_expression_nt]
     | Nis_206 => [NT argument_expression_list_nt; T LPAREN_t; NT postfix_expression_nt]
-    | Nis_207 => [NT argument_expression_list_nt; T LPAREN_t; NT postfix_expression_nt]
-    | Nis_208 => [T COMMA_t; NT argument_expression_list_nt; T LPAREN_t; NT postfix_expression_nt]
+    | Nis_207 => [NT argument_expression_list_nt]
+    | Nis_208 => [T COMMA_t; NT argument_expression_list_nt]
     | Nis_209 => [NT postfix_expression_nt]
     | Nis_210 => [T LBRACK_t; NT postfix_expression_nt]
     | Nis_211 => [NT expression_nt; T LBRACK_t; NT postfix_expression_nt]
@@ -14020,13 +14032,13 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_289 => [NT designator_list_nt]
     | Nis_290 => [NT designator_list_nt]
     | Nis_291 => []
-    | Nis_292 => [T COMMA_t; NT initializer_list_nt; T LBRACE_t]
-    | Nis_293 => [NT designation_nt; T COMMA_t; NT initializer_list_nt; T LBRACE_t]
+    | Nis_292 => [T COMMA_t; NT initializer_list_nt]
+    | Nis_293 => [NT designation_nt; T COMMA_t; NT initializer_list_nt]
     | Nis_294 => []
-    | Nis_295 => [T COMMA_t; NT initializer_list_nt; T LBRACE_t]
-    | Nis_296 => [T LBRACE_t]
-    | Nis_297 => [NT designation_nt; T LBRACE_t]
-    | Nis_298 => [T LBRACE_t]
+    | Nis_295 => [T COMMA_t; NT initializer_list_nt]
+    | Nis_296 => []
+    | Nis_297 => [NT designation_nt]
+    | Nis_298 => []
     | Nis_299 => [T LBRACE_t; T RPAREN_t; NT type_name_nt; T LPAREN_t]
     | Nis_300 => [NT initializer_list_nt; T LBRACE_t; T RPAREN_t; NT type_name_nt; T LPAREN_t]
     | Nis_301 => [NT initializer_list_nt; T LBRACE_t; T RPAREN_t; NT type_name_nt; T LPAREN_t]
@@ -14061,13 +14073,13 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_330 => [T COLON_t]
     | Nis_331 => [NT specifier_qualifier_list_nt]
     | Nis_332 => [NT struct_declarator_list_nt; NT specifier_qualifier_list_nt]
-    | Nis_333 => [NT struct_declarator_list_nt; NT specifier_qualifier_list_nt]
-    | Nis_334 => [T COMMA_t; NT struct_declarator_list_nt; NT specifier_qualifier_list_nt]
+    | Nis_333 => [NT struct_declarator_list_nt]
+    | Nis_334 => [T COMMA_t; NT struct_declarator_list_nt]
     | Nis_335 => []
     | Nis_336 => [NT declarator_nt]
     | Nis_337 => [T COLON_t; NT declarator_nt]
-    | Nis_338 => [NT specifier_qualifier_list_nt]
-    | Nis_339 => [T LBRACE_t]
+    | Nis_338 => []
+    | Nis_339 => []
     | Nis_340 => [NT struct_or_union_nt]
     | Nis_341 => [T LBRACE_t; NT struct_or_union_nt]
     | Nis_342 => [NT struct_declaration_list_nt; T LBRACE_t; NT struct_or_union_nt]
@@ -14084,13 +14096,12 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_353 => [NT type_name_nt; T LPAREN_t; T SIZEOF_t]
     | Nis_354 => [T SIZEOF_t]
     | Nis_355 => [T EQ_t; NT enumeration_constant_nt]
-    | Nis_356 => [T LBRACE_t]
+    | Nis_356 => []
     | Nis_357 => [T ENUM_t]
     | Nis_358 => [T LBRACE_t; T ENUM_t]
     | Nis_359 => [NT enumerator_list_nt; T LBRACE_t; T ENUM_t]
     | Nis_360 => [NT enumerator_list_nt; T LBRACE_t; T ENUM_t]
     | Nis_361 => [T COMMA_t; NT enumerator_list_nt; T LBRACE_t; T ENUM_t]
-    | Nis_362 => []
     | Nis_363 => []
     | Nis_364 => [NT translation_unit_nt]
     | Nis_365 => []
@@ -14099,12 +14110,12 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_368 => [NT declaration_specifiers_nt]
     | Nis_369 => [NT declaration_specifiers_nt]
     | Nis_370 => [NT init_declarator_list_nt; NT declaration_specifiers_nt]
-    | Nis_371 => [NT init_declarator_list_nt; NT declaration_specifiers_nt]
-    | Nis_372 => [T COMMA_t; NT init_declarator_list_nt; NT declaration_specifiers_nt]
+    | Nis_371 => [NT init_declarator_list_nt]
+    | Nis_372 => [T COMMA_t; NT init_declarator_list_nt]
     | Nis_373 => []
     | Nis_374 => [NT declarator_nt]
     | Nis_375 => [T EQ_t; NT declarator_nt]
-    | Nis_376 => [NT declaration_specifiers_nt]
+    | Nis_376 => []
     | Nis_377 => [NT declaration_specifiers_nt]
     | Nis_378 => []
     | Nis_379 => []
@@ -14306,128 +14317,128 @@ Definition past_symb_of_non_init_state (noninitstate:noninitstate) : list symbol
     | Nis_575 => []
     | Nis_576 => [T LBRACE_t]
     | Nis_577 => [NT block_item_list_nt; T LBRACE_t]
-    | Nis_578 => [NT block_item_list_nt; T LBRACE_t]
-    | Nis_579 => [T LBRACE_t]
+    | Nis_578 => [NT block_item_list_nt]
+    | Nis_579 => []
     | Nis_580 => [NT declarator_nt; NT declaration_specifiers_nt]
     | Nis_581 => []
     | Nis_582 => []
   end.
-Extract Constant past_symb_of_non_init_state => "fun _ -> []".
+Extract Constant past_symb_of_non_init_state => "fun _ -> assert false".
 
 Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) :=
   match s with
     | Nis_1 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_2 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_3 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_4 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_5 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_6 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_7 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_8 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_9 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_10 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_11 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_12 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_13 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_14 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_15 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_16 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_17 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_18 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_19 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_20 =>
@@ -14438,7 +14449,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_21 =>
@@ -14454,7 +14465,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_22 =>
@@ -14481,7 +14492,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_24 =>
@@ -14507,7 +14518,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_25 =>
@@ -14533,7 +14544,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_26 =>
@@ -14564,7 +14575,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_27 =>
@@ -14581,11 +14592,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_21 | Ninit Nis_357 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_19 | Ninit Nis_20 => true
             | _ => false
           end ]
     | Nis_28 =>
@@ -14655,31 +14661,31 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
     | Nis_37 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_38 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_54 | Ninit Nis_56 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_124 | Ninit Nis_217 | Ninit Nis_230 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_39 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_40 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_41 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_42 =>
@@ -14690,7 +14696,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_43 =>
@@ -14708,13 +14714,13 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
     | Nis_45 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_46 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_47 =>
@@ -14725,7 +14731,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_48 =>
@@ -14741,7 +14747,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_49 =>
@@ -14762,7 +14768,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_50 =>
@@ -14788,7 +14794,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_51 =>
@@ -14800,11 +14806,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_48 | Ninit Nis_340 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_46 | Ninit Nis_47 => true
             | _ => false
           end ]
     | Nis_52 =>
@@ -14950,37 +14951,37 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
     | Nis_67 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_68 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_69 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_70 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_71 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_72 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_73 =>
@@ -14991,13 +14992,13 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_74 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_75 =>
@@ -15008,7 +15009,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_76 =>
@@ -15019,7 +15020,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_77 =>
@@ -15030,7 +15031,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_78 =>
@@ -15075,11 +15076,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_65 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_64 | Ninit Nis_84 | Ninit Nis_85 | Ninit Nis_115 | Ninit Nis_116 | Ninit Nis_117 | Ninit Nis_118 | Ninit Nis_225 | Ninit Nis_315 | Ninit Nis_316 => true
-            | _ => false
           end ]
     | Nis_81 =>
       [ fun s:state =>
@@ -15090,11 +15086,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_65 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_64 | Ninit Nis_84 | Ninit Nis_85 | Ninit Nis_115 | Ninit Nis_116 | Ninit Nis_117 | Ninit Nis_118 | Ninit Nis_225 | Ninit Nis_315 | Ninit Nis_316 => true
             | _ => false
           end ]
     | Nis_82 =>
@@ -15112,11 +15103,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_65 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_64 | Ninit Nis_84 | Ninit Nis_85 | Ninit Nis_115 | Ninit Nis_116 | Ninit Nis_117 | Ninit Nis_118 | Ninit Nis_225 | Ninit Nis_315 | Ninit Nis_316 => true
-            | _ => false
           end ]
     | Nis_83 =>
       [ fun s:state =>
@@ -15132,11 +15118,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_65 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_64 | Ninit Nis_84 | Ninit Nis_85 | Ninit Nis_115 | Ninit Nis_116 | Ninit Nis_117 | Ninit Nis_118 | Ninit Nis_225 | Ninit Nis_315 | Ninit Nis_316 => true
             | _ => false
           end ]
     | Nis_84 =>
@@ -15498,11 +15479,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_65 | Ninit Nis_85 | Ninit Nis_116 | Ninit Nis_119 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_64 | Ninit Nis_84 | Ninit Nis_85 | Ninit Nis_115 | Ninit Nis_116 | Ninit Nis_117 | Ninit Nis_118 | Ninit Nis_225 | Ninit Nis_315 | Ninit Nis_316 => true
-            | _ => false
           end ]
     | Nis_124 =>
       [ fun s:state =>
@@ -15620,21 +15596,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_136 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_137 =>
@@ -15642,21 +15608,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_138 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_139 =>
@@ -15664,21 +15620,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_140 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_141 =>
@@ -15686,21 +15632,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_142 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_143 =>
@@ -15708,32 +15644,17 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_144 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_145 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_134 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_176 | Ninit Nis_195 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_146 =>
@@ -16439,16 +16360,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_132 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_129 | Ninit Nis_233 | Ninit Nis_235 | Ninit Nis_237 | Ninit Nis_239 | Ninit Nis_241 | Ninit Nis_243 | Ninit Nis_245 | Ninit Nis_247 | Ninit Nis_249 | Ninit Nis_251 | Ninit Nis_253 | Ninit Nis_255 | Ninit Nis_257 | Ninit Nis_259 | Ninit Nis_261 | Ninit Nis_263 | Ninit Nis_265 | Ninit Nis_267 | Ninit Nis_269 | Ninit Nis_271 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_29 | Ninit Nis_33 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_91 | Ninit Nis_92 | Ninit Nis_93 | Ninit Nis_96 | Ninit Nis_98 | Ninit Nis_100 | Ninit Nis_102 | Ninit Nis_104 | Ninit Nis_106 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_126 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_148 | Ninit Nis_150 | Ninit Nis_153 | Ninit Nis_155 | Ninit Nis_159 | Ninit Nis_161 | Ninit Nis_163 | Ninit Nis_166 | Ninit Nis_169 | Ninit Nis_171 | Ninit Nis_173 | Ninit Nis_176 | Ninit Nis_178 | Ninit Nis_180 | Ninit Nis_182 | Ninit Nis_184 | Ninit Nis_186 | Ninit Nis_189 | Ninit Nis_195 | Ninit Nis_198 | Ninit Nis_201 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_234 | Ninit Nis_236 | Ninit Nis_238 | Ninit Nis_240 | Ninit Nis_244 | Ninit Nis_246 | Ninit Nis_248 | Ninit Nis_250 | Ninit Nis_254 | Ninit Nis_256 | Ninit Nis_260 | Ninit Nis_264 | Ninit Nis_268 | Ninit Nis_270 | Ninit Nis_276 | Ninit Nis_277 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_329 | Ninit Nis_336 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_432 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_503 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_205 =>
       [ fun s:state =>
@@ -16497,16 +16408,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_132 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_129 | Ninit Nis_233 | Ninit Nis_235 | Ninit Nis_237 | Ninit Nis_239 | Ninit Nis_241 | Ninit Nis_243 | Ninit Nis_245 | Ninit Nis_247 | Ninit Nis_249 | Ninit Nis_251 | Ninit Nis_253 | Ninit Nis_255 | Ninit Nis_257 | Ninit Nis_259 | Ninit Nis_261 | Ninit Nis_263 | Ninit Nis_265 | Ninit Nis_267 | Ninit Nis_269 | Ninit Nis_271 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_29 | Ninit Nis_33 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_91 | Ninit Nis_92 | Ninit Nis_93 | Ninit Nis_96 | Ninit Nis_98 | Ninit Nis_100 | Ninit Nis_102 | Ninit Nis_104 | Ninit Nis_106 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_126 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_148 | Ninit Nis_150 | Ninit Nis_153 | Ninit Nis_155 | Ninit Nis_159 | Ninit Nis_161 | Ninit Nis_163 | Ninit Nis_166 | Ninit Nis_169 | Ninit Nis_171 | Ninit Nis_173 | Ninit Nis_176 | Ninit Nis_178 | Ninit Nis_180 | Ninit Nis_182 | Ninit Nis_184 | Ninit Nis_186 | Ninit Nis_189 | Ninit Nis_195 | Ninit Nis_198 | Ninit Nis_201 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_234 | Ninit Nis_236 | Ninit Nis_238 | Ninit Nis_240 | Ninit Nis_244 | Ninit Nis_246 | Ninit Nis_248 | Ninit Nis_250 | Ninit Nis_254 | Ninit Nis_256 | Ninit Nis_260 | Ninit Nis_264 | Ninit Nis_268 | Ninit Nis_270 | Ninit Nis_276 | Ninit Nis_277 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_329 | Ninit Nis_336 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_432 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_503 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_208 =>
       [ fun s:state =>
@@ -16522,16 +16423,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_132 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_129 | Ninit Nis_233 | Ninit Nis_235 | Ninit Nis_237 | Ninit Nis_239 | Ninit Nis_241 | Ninit Nis_243 | Ninit Nis_245 | Ninit Nis_247 | Ninit Nis_249 | Ninit Nis_251 | Ninit Nis_253 | Ninit Nis_255 | Ninit Nis_257 | Ninit Nis_259 | Ninit Nis_261 | Ninit Nis_263 | Ninit Nis_265 | Ninit Nis_267 | Ninit Nis_269 | Ninit Nis_271 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_29 | Ninit Nis_33 | Ninit Nis_87 | Ninit Nis_90 | Ninit Nis_91 | Ninit Nis_92 | Ninit Nis_93 | Ninit Nis_96 | Ninit Nis_98 | Ninit Nis_100 | Ninit Nis_102 | Ninit Nis_104 | Ninit Nis_106 | Ninit Nis_108 | Ninit Nis_124 | Ninit Nis_126 | Ninit Nis_132 | Ninit Nis_146 | Ninit Nis_148 | Ninit Nis_150 | Ninit Nis_153 | Ninit Nis_155 | Ninit Nis_159 | Ninit Nis_161 | Ninit Nis_163 | Ninit Nis_166 | Ninit Nis_169 | Ninit Nis_171 | Ninit Nis_173 | Ninit Nis_176 | Ninit Nis_178 | Ninit Nis_180 | Ninit Nis_182 | Ninit Nis_184 | Ninit Nis_186 | Ninit Nis_189 | Ninit Nis_195 | Ninit Nis_198 | Ninit Nis_201 | Ninit Nis_207 | Ninit Nis_209 | Ninit Nis_217 | Ninit Nis_234 | Ninit Nis_236 | Ninit Nis_238 | Ninit Nis_240 | Ninit Nis_244 | Ninit Nis_246 | Ninit Nis_248 | Ninit Nis_250 | Ninit Nis_254 | Ninit Nis_256 | Ninit Nis_260 | Ninit Nis_264 | Ninit Nis_268 | Ninit Nis_270 | Ninit Nis_276 | Ninit Nis_277 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_309 | Ninit Nis_317 | Ninit Nis_319 | Ninit Nis_329 | Ninit Nis_336 | Ninit Nis_351 | Ninit Nis_374 | Ninit Nis_378 | Ninit Nis_380 | Ninit Nis_382 | Ninit Nis_384 | Ninit Nis_386 | Ninit Nis_388 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_396 | Ninit Nis_398 | Ninit Nis_400 | Ninit Nis_402 | Ninit Nis_404 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_410 | Ninit Nis_412 | Ninit Nis_417 | Ninit Nis_418 | Ninit Nis_419 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_423 | Ninit Nis_424 | Ninit Nis_425 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_432 | Ninit Nis_434 | Ninit Nis_450 | Ninit Nis_456 | Ninit Nis_459 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_466 | Ninit Nis_467 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_474 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_481 | Ninit Nis_482 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_489 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_497 | Ninit Nis_502 | Ninit Nis_503 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_520 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_527 | Ninit Nis_528 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_535 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_541 | Ninit Nis_542 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_549 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_209 =>
@@ -18462,11 +18353,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
-            | _ => false
           end ]
     | Nis_293 =>
       [ fun s:state =>
@@ -18487,11 +18373,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
             | _ => false
           end ]
     | Nis_294 =>
@@ -18515,21 +18396,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
-            | _ => false
           end ]
     | Nis_296 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
             | _ => false
           end ]
     | Nis_297 =>
@@ -18542,21 +18413,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
-            | _ => false
           end ]
     | Nis_298 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_276 | Ninit Nis_281 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_275 | Ninit Nis_276 | Ninit Nis_281 | Ninit Nis_286 | Ninit Nis_292 | Ninit Nis_296 | Ninit Nis_301 | Ninit Nis_307 | Ninit Nis_353 | Ninit Nis_374 => true
             | _ => false
           end ]
     | Nis_299 =>
@@ -19123,11 +18984,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_52 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_340 | Ninit Nis_341 => true
-            | _ => false
           end ]
     | Nis_334 =>
       [ fun s:state =>
@@ -19143,11 +18999,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_52 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_340 | Ninit Nis_341 => true
             | _ => false
           end ]
     | Nis_335 =>
@@ -19188,21 +19039,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_52 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_340 | Ninit Nis_341 => true
-            | _ => false
           end ]
     | Nis_339 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_48 | Ninit Nis_340 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_46 | Ninit Nis_47 => true
             | _ => false
           end ]
     | Nis_340 =>
@@ -19213,7 +19054,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_341 =>
@@ -19229,7 +19070,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_342 =>
@@ -19250,7 +19091,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_343 =>
@@ -19288,7 +19129,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_346 =>
@@ -19309,7 +19150,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_347 =>
@@ -19486,11 +19327,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_21 | Ninit Nis_357 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_19 | Ninit Nis_20 => true
-            | _ => false
           end ]
     | Nis_357 =>
       [ fun s:state =>
@@ -19500,7 +19336,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_358 =>
@@ -19516,7 +19352,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_359 =>
@@ -19537,7 +19373,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_360 =>
@@ -19558,7 +19394,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_361 =>
@@ -19584,19 +19420,13 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
-            | _ => false
-          end ]
-    | Nis_362 =>
-      [ fun s:state =>
-          match s return bool with
-            | Init => true
+            | Init Init_0 | Ninit Nis_36 | Ninit Nis_42 | Ninit Nis_43 | Ninit Nis_44 | Ninit Nis_48 | Ninit Nis_49 | Ninit Nis_65 | Ninit Nis_68 | Ninit Nis_69 | Ninit Nis_70 | Ninit Nis_71 | Ninit Nis_81 | Ninit Nis_85 | Ninit Nis_90 | Ninit Nis_92 | Ninit Nis_112 | Ninit Nis_116 | Ninit Nis_119 | Ninit Nis_230 | Ninit Nis_340 | Ninit Nis_341 | Ninit Nis_351 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_363 =>
       [ fun s:state =>
           match s return bool with
-            | Init => true
+            | Init Init_0 => true
             | _ => false
           end ]
     | Nis_364 =>
@@ -19607,13 +19437,13 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init => true
+            | Init Init_0 => true
             | _ => false
           end ]
     | Nis_365 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 => true
+            | Init Init_0 | Ninit Nis_363 => true
             | _ => false
           end ]
     | Nis_366 =>
@@ -19624,13 +19454,13 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init => true
+            | Init Init_0 => true
             | _ => false
           end ]
     | Nis_367 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 => true
+            | Init Init_0 | Ninit Nis_363 => true
             | _ => false
           end ]
     | Nis_368 =>
@@ -19641,7 +19471,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_369 =>
@@ -19652,7 +19482,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_370 =>
@@ -19668,7 +19498,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
+            | Init Init_0 | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_371 =>
@@ -19680,11 +19510,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_367 | Ninit Nis_480 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_372 =>
@@ -19701,11 +19526,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
         fun s:state =>
           match s return bool with
             | Ninit Nis_367 | Ninit Nis_480 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_373 =>
@@ -19746,11 +19566,6 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_367 | Ninit Nis_480 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Init | Ninit Nis_363 | Ninit Nis_378 | Ninit Nis_417 | Ninit Nis_423 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_377 =>
       [ fun s:state =>
@@ -19760,7 +19575,7 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 => true
+            | Init Init_0 | Ninit Nis_363 => true
             | _ => false
           end ]
     | Nis_378 =>
@@ -23953,21 +23768,11 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           match s return bool with
             | Ninit Nis_378 => true
             | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_377 | Ninit Nis_378 | Ninit Nis_382 | Ninit Nis_386 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_398 | Ninit Nis_402 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_412 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_456 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
-            | _ => false
           end ]
     | Nis_579 =>
       [ fun s:state =>
           match s return bool with
             | Ninit Nis_378 => true
-            | _ => false
-          end;
-        fun s:state =>
-          match s return bool with
-            | Ninit Nis_377 | Ninit Nis_378 | Ninit Nis_382 | Ninit Nis_386 | Ninit Nis_393 | Ninit Nis_394 | Ninit Nis_398 | Ninit Nis_402 | Ninit Nis_406 | Ninit Nis_408 | Ninit Nis_412 | Ninit Nis_420 | Ninit Nis_421 | Ninit Nis_426 | Ninit Nis_427 | Ninit Nis_429 | Ninit Nis_434 | Ninit Nis_456 | Ninit Nis_460 | Ninit Nis_463 | Ninit Nis_468 | Ninit Nis_471 | Ninit Nis_475 | Ninit Nis_478 | Ninit Nis_483 | Ninit Nis_486 | Ninit Nis_490 | Ninit Nis_493 | Ninit Nis_502 | Ninit Nis_505 | Ninit Nis_517 | Ninit Nis_521 | Ninit Nis_524 | Ninit Nis_529 | Ninit Nis_532 | Ninit Nis_536 | Ninit Nis_539 | Ninit Nis_543 | Ninit Nis_546 | Ninit Nis_550 | Ninit Nis_553 | Ninit Nis_556 | Ninit Nis_567 | Ninit Nis_569 | Ninit Nis_576 => true
             | _ => false
           end ]
     | Nis_580 =>
@@ -23983,27 +23788,27 @@ Definition past_state_of_non_init_state (s:noninitstate) : list (state -> bool) 
           end;
         fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 => true
+            | Init Init_0 | Ninit Nis_363 => true
             | _ => false
           end ]
     | Nis_581 =>
       [ fun s:state =>
           match s return bool with
-            | Init | Ninit Nis_363 => true
+            | Init Init_0 | Ninit Nis_363 => true
             | _ => false
           end ]
     | Nis_582 =>
       [ fun s:state =>
           match s return bool with
-            | Init => true
+            | Init Init_0 => true
             | _ => false
           end ]
   end.
 
-Extract Constant past_state_of_non_init_state => "fun _ -> []".
+Extract Constant past_state_of_non_init_state => "fun _ -> assert false".
 
 Definition items_of_state (s:state): list item := [].
-Extract Constant items_of_state => "fun _ -> []".
+Extract Constant items_of_state => "fun _ -> assert false".
 
 End Aut.
 
@@ -24011,17 +23816,17 @@ Require Import Validator_main.
 
 Module Parser := Validator_main.Make Aut.
 Theorem safe:
-  Parser.safe_validator = true.
-Proof eq_refl true<:Parser.safe_validator = true.
+  Parser.safe_validator () = true.
+Proof eq_refl true<:Parser.safe_validator () = true.
 
-Definition parse := Parser.parse safe.
+Definition translation_unit_file := Parser.parse safe Aut.Init_0.
 
-Theorem parse_correct iterator buffer:
-  match parse iterator buffer with
+Theorem translation_unit_file_correct iterator buffer:
+  match translation_unit_file iterator buffer with
     | Parser.Inter.Parsed_pr sem buffer_new =>
       exists word,
         buffer = Parser.Inter.app_str word buffer_new /\
-        Gram.has_semantic_value word sem
+        inhabited (Gram.parse_tree (NT translation_unit_file_nt) word sem)
     | _ => True
   end.
 Proof. apply Parser.parse_correct. Qed.

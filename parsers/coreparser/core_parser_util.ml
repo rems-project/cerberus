@@ -45,7 +45,7 @@ type token =
   | PERCENT
   | OF
   | NOT
-  | NAME of Core.name
+  | NAME of Core.name0
   | MINUS_GT
   | MINUS
   | LT_MINUS
@@ -63,7 +63,7 @@ type token =
   | LBRACE
   | LANGLE
   | KILL
-  | INT_CONST of Num.num
+  | INT_CONST of Big_int.big_int
   | INTPTR_T
   | INTEGER
   | INT

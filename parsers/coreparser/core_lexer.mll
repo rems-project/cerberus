@@ -123,7 +123,7 @@ rule main = parse
   
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
-      { T.INT_CONST (Num.num_of_string integer) }
+      { T.INT_CONST (Big_int.big_int_of_string integer) }
   
   (* binary operators *)
   | '+'   { T.PLUS }

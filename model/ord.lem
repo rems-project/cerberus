@@ -1,3 +1,4 @@
+(* TODO: shouldn't be needed anymore with newLem *)
 open Global
 
 type ordering = Lt | Eq | Gt
@@ -49,11 +50,6 @@ instance forall 'a. (ORD 'a) => (ord 'a)
 end
 *)
 
-let compose o1 o2 =
-  if o1 = Eq then
-    o2
-  else
-    o1
 
 let to_int = function
  | Lt -> Int.neg (Int.int 1)

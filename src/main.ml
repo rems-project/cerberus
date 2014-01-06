@@ -1,5 +1,11 @@
 open Global
 
+let ($) f x = f x
+let (-|) f g x = f (g x)
+let (>|>) x f = f x
+let (>?>) x b f g = if b then f x else g x
+
+
 (* use this to print a halting error message *)
 let error str =
   prerr_endline $ Colour.ansi_format [Colour.Red] ("ERROR: " ^ str);
@@ -24,9 +30,9 @@ let testing = ref false
 
 (* command-line handler *)
 let options = Arg.align [
-  ("--impl",  Arg.Set_string impl_file,   "<name> Select an implementation definition");
-  ("--debug", Arg.Set_int Settings.debug, "       Set the debug noise level (default: 0 = nothing)");
-  ("--test",  Arg.Set testing           , "       Activate Kyndylan's test mode");
+  ("--impl",  Arg.Set_string impl_file          , "<name> Select an implementation definition");
+  ("--debug", Arg.Set_int Boot_ocaml.debug_level, "       Set the debug noise level (default: 0 = nothing)");
+  ("--test",  Arg.Set testing                   , "       Activate Kyndylan's test mode");
   
   (* Core backend options *)
   ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                               "       Do not run the Core typechecker");
@@ -43,21 +49,21 @@ let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
 
 let debug_print str =
-  if !Settings.debug > 0 then
+  if !Boot_ocaml.debug_level > 0 then
     print_endline str
 
 
 (* some block functions used by the pipeline *)
-let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
-let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
-let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_none m         = Exception.bind m (fun _ -> Exception.return None)
-let return_empty m        = Exception.bind m (fun _ -> Exception.return [])
+let pass_through        f = Exception.fmap0 (fun v ->           f v        ; v)
+let pass_through_test b f = Exception.fmap0 (fun v -> if b then f v else (); v)
+let pass_message      m   = Exception.fmap0 (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
+let return_none m         = Exception.bind0 m (fun _ -> Exception.return2 None)
+let return_empty m        = Exception.bind0 m (fun _ -> Exception.return2 [])
 
 
 let catch m =
   match Exception.catch m with
-  | Some msg -> print_endline (Colour.ansi_format [Colour.Red] (Errors.to_string msg))
+  | Some msg -> print_endline (Colour.ansi_format [Colour.Red] (Pp_errors.to_string msg))
   | None     -> ()
 
 
@@ -72,7 +78,7 @@ let write_graph fname ts =
   
 (*  let dot = List.fold_left (fun acc (n, (_, t)) -> *)
   let graphs = List.map (fun (i, (_, st)) ->
-    Boot.to_plain_string $ Pp_sb.pp i (Sb.simplify $ Sb.extract2 st)
+    Boot_ocaml.to_plain_string $ Pp_sb.pp i (Sb.simplify0 $ Sb.extract2 st)
 (*
     match u_t with
       | (Undefined.Defined _, st) ->
@@ -148,7 +154,7 @@ let load_impl core_parse csemlib_path =
       (* TODO: yuck *)
         match core_parse (Input.file iname) with
           | Exception.Result (Core_parser_util.Rimpl z) -> z
-          | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Errors.to_string err
+          | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Pp_errors.to_string err
 
 
 let pipeline stdlib impl core_parse file_name =
@@ -164,8 +170,8 @@ let pipeline stdlib impl core_parse file_name =
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in
-          Exception.return (c_preprocessing m)
-      >|> Exception.fmap Cparser.Driver.parse
+          Exception.return2 (c_preprocessing m)
+      >|> Exception.fmap0 Driver.parse
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
 
@@ -183,17 +189,17 @@ let pipeline stdlib impl core_parse file_name =
       >|> pass_message "3. Ail typechecking completed!"
       
       
-      >|> Exception.fmap (Translation.translate stdlib impl)
+      >|> Exception.fmap0 (Translation.translate stdlib impl)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
-      >|> Exception.fmap Core_simpl.simplify
+      >|> Exception.fmap0 Core_simpl.simplify
 
       >|> pass_message "5. Core to Core simplication completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     
     let core_frontend m =
           core_parse m
-      >|> Exception.fmap (function
+      >|> Exception.fmap0 (function
             | Core_parser_util.Rfile (a_main, funs) ->
               { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.funs= funs }
             | _ -> assert false)
@@ -216,10 +222,10 @@ let pipeline stdlib impl core_parse file_name =
         >|> pass_message "7. Now running:"
 	>?> !testing)
 	  (* TODO: this is ridiculous *)
-	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run !random_mode f)))
+	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run0 !random_mode f)))
 	  (Exception.rbind
              (Exception.map_list
-		(fun (n,f) -> Core_run.run !random_mode f
+		(fun (n,f) -> Core_run.run0 !random_mode f
                               >|> pass_message ("SB order #" ^ string_of_int n)
                               >|> pass_through Pp_run.pp_traces
                               >|> pass_through_test !sb_graph (write_graph file_name)
@@ -268,9 +274,9 @@ let () =
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
   let module Core_parser_base = struct
     include Core_parser.Make (struct
-        let std = List.fold_left (fun acc ((_, Some fname) as fsym, _) ->
+        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some fname)) as fsym, _) ->
           Pmap.add fname fsym acc
-        ) (Pmap.empty compare) $ Pmap.bindings stdlib
+        ) (Pmap.empty compare) $ Pmap.bindings_list stdlib
       end)
     type token = Core_parser_util.token
     type result = Core_parser_util.result
