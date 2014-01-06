@@ -1,7 +1,4 @@
-open Common
-open AilTypes
-open AilSyntax
-open AilTypesAux
+open import Pervasives Common AilTypes AilSyntax AilTypesAux
 
 let adjusted t : bool = not (array t) && not (is_function t)
 

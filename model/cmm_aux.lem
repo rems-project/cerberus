@@ -1,0 +1,50 @@
+open import Pervasives
+import Symbol
+
+(* Thread id *)
+type tid =
+  | Tzero
+  | Tpar of nat * tid
+  | Tseq of tid
+
+val     tid_eq: tid -> tid -> bool
+let rec tid_eq tid1 tid2 =
+  match (tid1, tid2) with
+    | (Tzero, Tzero) ->
+        true
+    | (Tpar n1 tid1', Tpar n2 tid2') ->
+        n1 = n2 && tid_eq tid1' tid2'
+    | (Tseq tid1', _) ->
+        tid_eq tid1' tid2
+    | (_, Tseq tid2') ->
+        tid_eq tid1 tid2'
+    | (_, _) ->
+        false
+end
+
+instance (Eq tid)
+  let (=)  tid1 tid2 = tid_eq tid1 tid2
+  let (<>) tid1 tid2 = not $ tid_eq tid1 tid2
+end
+
+
+(* Memory location *)
+type location = list Symbol.t * natural
+
+
+(* Duplicate of Core.constant (needed to avoid cyclic deps) *)
+type constant =
+  | Cint of integer
+  | Carray of list constant
+  | Cfunction of Symbol.t
+
+(* Memory value *)
+type cvalue =
+  | Muninit    (* TODO: Kayvan has to check whether we can remove this constructor 
+                  and use the empty list in mem_state to denote a created, but 
+                  uninitialized variable. *) 
+  | Mbase of constant
+  | Mobj of (list Symbol.t * natural)
+  | Mnull
+
+type mem_value = cvalue

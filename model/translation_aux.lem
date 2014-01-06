@@ -1,26 +1,27 @@
-open Global
+open import Pervasives Global Translation_effect Symbol
+import Core Core_aux
+import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux Annotation
+import Set_extra
 
 module C    = Core
 module Caux = Core_aux
-
-open Translation_effect
 
 
 
 
 (* this is only used by [mk_stdcall] *)
-val     mk_stdcall_aux: forall 'a. ('a -> bool) -> list 'a -> option 'a
+val     mk_stdcall_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
 let rec mk_stdcall_aux pred xs =
  match xs with
-    | []     -> None
-    | x::xs' -> if pred x then Some x else mk_stdcall_aux pred xs'
+    | []     -> Nothing
+    | x::xs' -> if pred x then Just x else mk_stdcall_aux pred xs'
   end
 
 val mk_stdcall: Core.fun_map zero -> string -> (list (Core.expr zero) -> Core.expr zero)
 let mk_stdcall stdlib fname =
-  match mk_stdcall_aux (function ((_, Some z), _) -> z = fname | _ -> false end) (Pmap.bindings stdlib) with
-    | Some (f, _) -> Core.Ecall (Core.Sym f)
-    | None        -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+  match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Set_extra.toList $ Map.toSet stdlib) with
+    | Just (f, _) -> Core.Ecall (Core.Sym f)
+    | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" (* TODO[newLem] ^ fname ^ "' is not a Core standard function." *)
  end
 
 
@@ -106,8 +107,8 @@ val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let exp_type_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Some (AilTypes.LValueType _ ty) -> (* unqualify *) ty
-    | Some (AilTypes.RValueType   ty) -> ty
+    | Just (AilTypes.LValueType _ ty) -> (* unqualify *) ty
+    | Just (AilTypes.RValueType   ty) -> ty
   end
 
 
@@ -115,6 +116,6 @@ val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Some (AilTypes.LValueType _ ty) -> ty
-    | Some (AilTypes.RValueType   ty) -> ty
+    | Just (AilTypes.LValueType _ ty) -> ty
+    | Just (AilTypes.RValueType   ty) -> ty
   end

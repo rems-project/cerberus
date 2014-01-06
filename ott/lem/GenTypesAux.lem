@@ -1,11 +1,6 @@
-open Common
-open AilTypes
-open AilSyntax
-open Range
-
-open GenTypes
-
-open OptionMonad.Operators
+open import Pervasives Common AilTypes AilSyntax Range OptionMonad
+open import GenTypes
+import AilTypesAux AilTyping
 
 let array gt : bool =
   match gt with
@@ -86,22 +81,22 @@ let pointers_to_compatible_types gt1 gt2 : bool =
   | (_              , _              ) -> false
   end
 
-let composite_pointer gt1 gt2 : option genType =
+let composite_pointer gt1 gt2 : maybe genType =
   match (gt1, gt2) with
   | (GenPointer q1 t1, GenPointer q2 t2) -> if AilTypesAux.compatible t1 t2
-                                             then option_map (GenPointer (AilTypesAux.combine_qualifiers q1 q2)) (AilTypesAux.composite t1 t2)
-                                             else None
-  | (_               , _               ) -> None
+                                             then Maybe.map (GenPointer (AilTypesAux.combine_qualifiers q1 q2)) (AilTypesAux.composite t1 t2)
+                                             else Nothing
+  | (_               , _               ) -> Nothing
   end
 
 (* Sound but not principal. *)
 let integer_promotion git : genIntegerType =
   Promote git
 
-let promotion gt : option genType =
+let promotion gt : maybe genType =
   match gt with
-  | GenBasic (GenInteger git) -> Some (GenBasic (GenInteger (integer_promotion git)))
-  | _                         -> None
+  | GenBasic (GenInteger git) -> Just (GenBasic (GenInteger (integer_promotion git)))
+  | _                         -> Nothing
   end
 
 (* Sound but not principal. *)
@@ -115,46 +110,46 @@ let usual_arithmetic_integer git1 git2 : genIntegerType =
 
 let usual_arithmetic gt1 gt2 =
   match (gt1, gt2) with
-  | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) -> Some (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
-  | (_ , _) -> None
+  | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) -> Just (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
+  | (_ , _) -> Nothing
   end
 
-let rec interpret_genIntegerType P git : option integerType =
+let rec interpret_genIntegerType P git : maybe integerType =
   match git with
-  | Concrete it -> Some it
-  | SizeT -> Some P.Implementation.size_t
-  | PtrdiffT -> Some P.Implementation.ptrdiff_t
+  | Concrete it -> Just it
+  | SizeT -> Just P.Implementation.size_t
+  | PtrdiffT -> Just P.Implementation.ptrdiff_t
   | Unknown ic -> AilTyping.type_of_constant P ic
   | Promote git ->
       interpret_genIntegerType P git >>= fun it ->
-      Some (AilTypesAux.integer_promotion P it)
+      Just (AilTypesAux.integer_promotion P it)
   | Usual git1 git2 ->
       interpret_genIntegerType P git1 >>= fun it1 ->
       interpret_genIntegerType P git2 >>= fun it2 ->
-      Some (AilTypesAux.usual_arithmetic_integer P it1 it2)
+      Just (AilTypesAux.usual_arithmetic_integer P it1 it2)
   end
 
-let interpret_genBasicType P gbt : option basicType =
+let interpret_genBasicType P gbt : maybe basicType =
   match gbt with
   | GenInteger git  -> interpret_genIntegerType P git >>= fun it ->
-                       Some (Integer it)
+                       Just (Integer it)
   end
 
-let interpret_genType P gt : option ctype =
+let interpret_genType P gt : maybe ctype =
   match gt with
-  | GenVoid         -> Some Void
+  | GenVoid         -> Just Void
   | GenBasic gbt    -> interpret_genBasicType P gbt >>= fun bt ->
-                       Some (Basic bt)
-  | GenArray    t n -> Some (Array    t n)
-  | GenFunction t p -> Some (Function t p)
-  | GenPointer  q t -> Some (Pointer  q t)
+                       Just (Basic bt)
+  | GenArray    t n -> Just (Array    t n)
+  | GenFunction t p -> Just (Function t p)
+  | GenPointer  q t -> Just (Pointer  q t)
   end
 
-let interpret_genTypeCategory P gt : option typeCategory =
+let interpret_genTypeCategory P gt : maybe typeCategory =
   match gt with
   | GenRValueType   gt -> interpret_genType P gt >>= fun t ->
-                          Some (RValueType   t)
-  | GenLValueType q t  -> Some (LValueType q t)
+                          Just (RValueType   t)
+  | GenLValueType q t  -> Just (LValueType q t)
   end
 
 let signed_integerSuffix (s : integerSuffix) : bool =
@@ -168,8 +163,8 @@ let signed_integerSuffix (s : integerSuffix) : bool =
 
 let signed_integerConstant (ic : integerConstant) : bool =
   match snd ic with
-  | None   -> true
-  | Some s -> signed_integerSuffix s
+  | Nothing -> true
+  | Just s  -> signed_integerSuffix s
   end
 
 let min_interpret_integerSuffix s =
@@ -183,8 +178,8 @@ let min_interpret_integerSuffix s =
 
 let min_interpret_optionIntegerSuffix os =
   match os with
-  | None   -> Int_
-  | Some s -> min_interpret_integerSuffix s
+  | Nothing -> Int_
+  | Just s  -> min_interpret_integerSuffix s
   end
 
 let min_interpret_integerConstant (ic:integerConstant) =

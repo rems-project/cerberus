@@ -746,15 +746,15 @@ expression_statement:
 (* 6.8.4 *)
 selection_statement_dangerous:
 | loc = IF LPAREN expr = expression RPAREN stmt = statement_dangerous
-    { If (fst expr) stmt None loc }
+    { If0 (fst expr) stmt None loc }
 | loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_dangerous
-    { If (fst expr) stmt1 (Some stmt2) loc }
+    { If0 (fst expr) stmt1 (Some stmt2) loc }
 | loc = SWITCH LPAREN expr = expression RPAREN stmt = statement_dangerous
     { SWITCH (fst expr) stmt loc }
 
 selection_statement_safe:
 | loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_safe
-    { If (fst expr) stmt1 (Some stmt2) loc }
+    { If0 (fst expr) stmt1 (Some stmt2) loc }
 | loc = SWITCH LPAREN expr = expression RPAREN stmt = statement_safe
     { SWITCH (fst expr) stmt loc }
 

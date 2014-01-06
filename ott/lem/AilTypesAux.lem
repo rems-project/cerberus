@@ -1,6 +1,4 @@
-open Common
-open AilTypes
-open Implementation
+open import Pervasives Common AilTypes Implementation
 
 let unqualified qs =
   match qs with
@@ -61,7 +59,7 @@ let le_integer_range P it1 it2 : bool =
   | (Char             , Char             ) -> true
   | (Char             , Signed   Ichar   ) -> P.signed Char
   | (Char             , Signed   ibt     ) -> P.signed Char ||
-                                              Int.(<) (P.precision Char) (P.precision (Signed ibt))
+                                              (P.precision Char) < (P.precision (Signed ibt))
   | (Signed Ichar     , Char             ) -> P.signed Char
   | (Signed ibt       , Char             ) -> P.signed Char &&
                                               P.precision (Signed ibt) = P.precision Char
@@ -72,7 +70,7 @@ let le_integer_range P it1 it2 : bool =
   | (Char             , Bool             ) -> not (P.signed Char) &&
                                               P.precision Char = P.precision Bool
   | (Bool             , Char             ) -> not (P.signed Char) ||
-                                              Int.(<) (P.precision Bool) (P.precision Char)
+                                              (P.precision Bool) < (P.precision Char)
 
   | (Signed   Ichar   , Signed   _       ) -> true
   | (Signed   Short   , Signed   Short   ) -> true
@@ -106,13 +104,13 @@ let le_integer_range P it1 it2 : bool =
   | (Signed   _       , Bool             ) -> false
   | (Signed   _       , Unsigned _       ) -> false
 
-  | (Bool             , Signed   ibt2    ) -> Int.(<) (P.precision Bool) (P.precision (Signed ibt2))
+  | (Bool             , Signed   ibt2    ) -> (P.precision Bool) < (P.precision (Signed ibt2))
   | (Unsigned _       , Signed   Ichar   ) -> false
   | (Unsigned Short   , Signed   Short   ) -> false
   | (Unsigned Int_    , Signed   Int_    ) -> false
   | (Unsigned Long    , Signed   Long    ) -> false
   | (Unsigned LongLong, Signed   LongLong) -> false
-  | (Unsigned ibt1    , Signed   ibt2    ) -> Int.(<) (P.precision (Unsigned ibt1)) (P.precision (Signed ibt2))
+  | (Unsigned ibt1    , Signed   ibt2    ) -> (P.precision (Unsigned ibt1)) < (P.precision (Signed ibt2))
   end
 
 let eq_integer_rank_base it1 it2 : bool =
@@ -133,7 +131,7 @@ let lt_integer_rank_base P it1 it2 : bool =
   | (Signed   Int_, Signed     Long) -> true
   | (Signed Short, Signed      Int_) -> true
   | (Signed Ichar, Signed    Short) -> true
-  | (Signed  ibt1, Signed     ibt2) -> Int.(<) (P.precision (Signed ibt1)) (P.precision (Signed ibt2))
+  | (Signed  ibt1, Signed     ibt2) -> (P.precision (Signed ibt1)) < (P.precision (Signed ibt2))
   | (_           , _              ) -> false
   end
 
@@ -215,10 +213,10 @@ let is_corresponding_unsigned it1 it2 : bool =
   | (_          , _            ) -> false
   end
 
-let corresponding_unsigned it : option integerType =
+let corresponding_unsigned it : maybe integerType =
   match it with
-  | Signed ibt -> Some (Unsigned ibt)
-  | _          -> None
+  | Signed ibt -> Just (Unsigned ibt)
+  | _          -> Nothing
   end
 
 let make_corresponding_unsigned it : integerType =
@@ -258,10 +256,10 @@ let is_promotion P t1 t2 : bool =
   | (_                  , _                  ) -> false
   end
 
-let promotion P t : option ctype =
+let promotion P t : maybe ctype =
   match t with
-  | Basic (Integer it) -> Some (Basic (Integer (integer_promotion P it)))
-  | _                  -> None
+  | Basic (Integer it) -> Just (Basic (Integer (integer_promotion P it)))
+  | _                  -> Nothing
   end
 
 let is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool =
@@ -342,10 +340,10 @@ let is_usual_arithmetic P t1 t2 t3 : bool =
   | (_                  , _                  , _                  ) -> false
   end
 
-let usual_arithmetic P t1 t2 : option ctype =
+let usual_arithmetic P t1 t2 : maybe ctype =
   match (t1, t2) with
-  | (Basic (Integer it1), Basic (Integer it2)) -> Some (Basic (Integer (usual_arithmetic_integer P it1 it2)))
-  | (_                  , _                  ) -> None
+  | (Basic (Integer it1), Basic (Integer it2)) -> Just (Basic (Integer (usual_arithmetic_integer P it1 it2)))
+  | (_                  , _                  ) -> Nothing
   end
 
 let object_ t : bool =
@@ -421,35 +419,35 @@ let rec is_composite t1 t2 t3 : bool =
 
 let is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
 
-let rec composite_params_aux composite p1 p2 : option (list (qualifiers * ctype))=
+let rec composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))=
     match (p1, p2) with
-    | ([]           , []           ) -> Some []
+    | ([]           , []           ) -> Just []
     | ((_, t1) :: p1, (_, t2) :: p2) -> match (composite t1 t2, composite_params_aux composite p1 p2) with
-                                        | (Some t, Some p) -> Some ((no_qualifiers, t) :: p)
-                                        | (_     , _     ) -> None
+                                        | (Just t, Just p) -> Just ((no_qualifiers, t) :: p)
+                                        | (_     , _     ) -> Nothing
                                         end
-    | (_            , _            ) -> None
+    | (_            , _            ) -> Nothing
     end
 
-let rec composite t1 t2 : option ctype =
+let rec composite t1 t2 : maybe ctype =
   let composite_params = composite_params_aux composite in
   match (t1, t2) with
-  | (Void          , Void          ) -> Some Void
+  | (Void          , Void          ) -> Just Void
   | (Basic bt1     , Basic bt2     ) -> if eq_basicType bt1 bt2
-                                          then Some (Basic bt1)
-                                          else None
+                                          then Just (Basic bt1)
+                                          else Nothing
   | (Array t1 n1   , Array t2 n2   ) -> if n1 = n2
-                                          then option_map (fun t -> Array t n1) (composite t1 t2)
-                                          else None
+                                          then Maybe.map (fun t -> Array t n1) (composite t1 t2)
+                                          else Nothing
   | (Function t1 p1, Function t2 p2) ->
       match (composite t1 t2, composite_params p1 p2) with
-      | (Some t, Some p) -> Some (Function t p)
-      | (_     , _     ) -> None
+      | (Just t, Just p) -> Just (Function t p)
+      | (_     , _     ) -> Nothing
       end
   | (Pointer  q1 t1, Pointer  q2 t2) -> if eq_qualifiers q1 q2
-                                          then option_map (Pointer q1) (composite t1 t2)
-                                          else None
-  | (_             , _             ) -> None
+                                          then Maybe.map (Pointer q1) (composite t1 t2)
+                                          else Nothing
+  | (_             , _             ) -> Nothing
   end
 
 let composite_params p1 p2 = composite_params_aux composite p1 p2
@@ -474,11 +472,11 @@ end
 
 let lvalue_convertible t : bool = not (array t) && complete t
 
-let lvalue_conversion t : option ctype =
+let lvalue_conversion t : maybe ctype =
   if lvalue_convertible t then
-    Some (pointer_conversion t)
+    Just (pointer_conversion t)
   else
-    None
+    Nothing
 
 let pointer_to_complete_object t : bool =
   match t with

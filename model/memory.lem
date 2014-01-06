@@ -611,8 +611,8 @@ let wf_pointer_expression_unary pop p =
     
     | Array_offset ty n ->
         match arrayify (outermost_dynamic_type p) with
-          | C.ARRAY elem_ty None -> todo "no array size in the type of p"
-          | C.ARRAY elem_ty (Some size) ->
+          | C.ARRAY elem_ty Nothing -> todo "no array size in the type of p"
+          | C.ARRAY elem_ty (Just size) ->
               todo "...walk over the p (using 'typeof') to find the size of the array and where we are in it already, and the element type ty' ..."
               todo "...check ty and ty' are more-or-less the same"
               todo "...check we're in bounds (or plus one)"
@@ -1242,7 +1242,7 @@ let get_pointer_array_position p =
          let (elem_ty, array_size) = process block in
          MM.return $
            if p_shift < 0 || p_shift > array_size then
-             None (* our pointer doesn't point to an element of [block] (when
+             Nothing (* our pointer doesn't point to an element of [block] (when
                      seen as an array object) *)
            else if p_shift < array_size then
              (* TODO: this is currently wrong. Consider the case where [block] is
@@ -1250,9 +1250,9 @@ let get_pointer_array_position p =
                 (something we can know by looking at the fancy_type of [p]), we
                 may want to consider [p] as not being a pointer to an "array"
                 element of [block] *)
-             Some (bid, Shift_index p_shift)
+             Just (bid, Shift_index p_shift)
            else
-             Some (bid, One_past)
+             Just (bid, One_past)
        ) >>= MM.return -| filter_opt
     | Specified (Function_pointer) ->
         assert_false "[Memory.get_pointer_array_position] called on a function \ 
@@ -1288,8 +1288,8 @@ let pointer_minus_pointer p1 p2 =
         match todo "look if [positions1] and [positions2] share an object" with
             (* [p1] and [p2] do not point within the same object (first version,
                being std-strict) *)
-          | None -> MM.undef
-          | Some (Shift_index i, Shift_index j) ->
+          | Nothing -> MM.undef
+          | Just (Shift_index i, Shift_index j) ->
               if todo "(i - j) doesn't fit in intprt_t" then
                   MM.undef
                 else

@@ -1,5 +1,7 @@
 open Global
 
+let (-|) f g x = f (g x)
+
 module type BASE = sig
   type token
   val main : Lexing.lexbuf -> token

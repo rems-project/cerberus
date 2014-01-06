@@ -1,11 +1,8 @@
-open Common
-open AilTypes
-open AilTypesAux
-open AilSyntax
+open import Pervasives Common AilTypes AilTypesAux AilSyntax
 
 let rec null_pointer_constant' (e : expression' 'A) : bool =
   match e with
-  | Constant (ConstantInteger (n , None)) -> Int.eq n (Int.int 0)
+  | Constant (ConstantInteger (n , None)) -> n = 0
   | Cast q (Pointer q' Void) e            -> null_pointer_constant e && unqualified q && unqualified q'
   | _                                     -> false
   end

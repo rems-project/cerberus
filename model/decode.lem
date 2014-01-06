@@ -1,6 +1,8 @@
-val decode_integer_constant: forall 'a. string -> int * 'a (* Ail.encoding_basis *)
-let inline {ocaml} decode_integer_constant = Ocaml.Decode.decode_integer_constant
+open import Pervasives
 
-val decode_character_constant: string -> int
-let inline {ocaml} decode_character_constant = Ocaml.Decode.decode_character_constant
+val decode_integer_constant: forall 'a. string -> integer (* Ail.encoding_basis *)
+declare ocaml target_rep function decode_integer_constant = `Decode_ocaml.decode_integer_constant`
+
+val decode_character_constant: string -> integer
+declare ocaml target_rep function decode_character_constant = `Decode_ocaml.decode_character_constant`
 

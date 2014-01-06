@@ -1,6 +1,4 @@
-open Global
-open Core
-open Core_aux
+open import Pervasives Global Core Core_aux
 
 (*
 module Effect = struct
@@ -124,7 +122,7 @@ let rec trivialy_pure fun_map exp =
         match Pmap.find f fun_map with
           | (TyBase _, _, _) -> true
           | _                -> false
-        end else Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr None exp)
+        end else Boot.outOfHomeomorphism (Document.to_plain_string $ Core.Print.pp_expr Nothing exp)
     | Kop _ e1 e2 -> trivialy_pure e1 && trivialy_pure e2
 
     (* TODO: asume the first operand is pure (which it should be to typecheck) *)
@@ -176,8 +174,8 @@ let rec simplify_expr fun_map (exp: expr 'a) : E.t (expr 'a) =
           | _  -> let (_as', e1'', sigma) =
                     (List.fold_right2 (fun a e (_as, es, m) ->
                       match a with
-                        | Some a -> if trivialy_pure fun_map e then (_as, es, Pmap.add a e m) else (Some a :: _as, e :: es, m)
-                        | None   -> (a::_as, e::es, m)
+                        | Just a  -> if trivialy_pure fun_map e then (_as, es, Pmap.add a e m) else (Just a :: _as, e :: es, m)
+                        | Nothing -> (a::_as, e::es, m)
                       end
                      ) _as (collapse_unseq e1') ([],[],Pmap.empty)) in
                   subst_symbols e2 sigma >>= simplify_expr >>= fun e2' ->
@@ -329,12 +327,12 @@ let rec simpl e =
     | Eunseq es ->
         Eunseq (List.map simpl es)
 (*    | Ewseq of list (option sym) * expr 'a * expr 'a *)
-    | Ewseq [Some a] e1 e2 ->
+    | Ewseq [Just a] e1 e2 ->
         let e1' = simpl e1 in
         if is_pure e1' then
           simpl (subst_sym a e1' e2)
         else
-          Ewseq [Some a] e1' (simpl e2)
+          Ewseq [Just a] e1' (simpl e2)
     | Ewseq _ Eskip e2 ->
         simpl e2
     | Ewseq _as e1 e2 ->
@@ -359,5 +357,5 @@ let simplify (f: file zero) : file zero =
       main=   f.main;
       stdlib= f.stdlib;
       impl=   f.impl;
-      funs=   Pmap.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.funs
+      funs=   Map.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.funs
   |>

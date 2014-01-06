@@ -1,5 +1,4 @@
-open AilSyntax
-open GenTypes
+open import AilSyntax GenTypes
 
 type annotation 'T1 'T2 =  <|
   add_type : genTypeCategory -> 'T1 -> 'T2;
@@ -15,7 +14,7 @@ let type_of (A : annotation 'A1 'A2) (e : expression 'A2) =
   let (AnnotatedExpression a _) = e in
   A.get_type a
 
-let concrete_annotation : annotation 'A genTypeCategory = <|
+let concrete_annotation : annotation unit genTypeCategory = <|
   add_type = fun gtc _ -> gtc;
   get_type = fun a -> a;
 |>

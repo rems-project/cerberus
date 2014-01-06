@@ -1,9 +1,12 @@
 (* AST type used by Jacques-Henri Jourdan's parser *)
+open import Pervasives
 
 type atom = string
 
 (* Context information. *)
-type cabsloc = int (* Location.t *)
+type cabsloc_ (* TODO(Hack): there should be another way *)
+declare ocaml target_rep type cabsloc_ = `BinPos.positive`
+type cabsloc = cabsloc_ (* Location.t *)
 
 type typeSpecifier = (* Merge all specifiers into one type *)
   | Tvoid                 (* Type specifier ISO 6.7.2 *)
@@ -23,9 +26,9 @@ type typeSpecifier = (* Merge all specifiers into one type *)
    * They also have a list of __attribute__s that appeared between the
    * keyword and the type name (definitions only) *)
   | Tatomic of(list spec_elem * decl_type)
-  | Tstruct of option atom * option (list field_group) * list attribute
-  | Tunion of option atom * option (list field_group) * list attribute
-  | Tenum of option atom * option (list (atom * option expression * cabsloc)) * list attribute
+  | Tstruct of maybe atom * maybe (list field_group) * list attribute
+  | Tunion of maybe atom * maybe (list field_group) * list attribute
+  | Tenum of maybe atom * maybe (list ((atom * maybe expression) * cabsloc)) * list attribute
 
 and storage =
   AUTO | STATIC | EXTERN | THREAD_LOCAL | REGISTER | TYPEDEF
@@ -51,17 +54,17 @@ and spec_elem =
  * declared type) *)
 and decl_type =
  | JUSTBASE
- | ARRAY of decl_type * list cvspec * list attribute * option expression
+ | ARRAY of decl_type * list cvspec * list attribute * maybe expression
  | PTR of list cvspec * list attribute * decl_type
 (* The bool is true for variable length parameters. *)
  | PROTO of decl_type * (list parameter * bool)
 
 and parameter =
-  | PARAM of list spec_elem * option atom * decl_type * list attribute * cabsloc
+  | PARAM of list spec_elem * maybe atom * decl_type * list attribute * cabsloc
 
 (* The optional expression is the bitfield *)
 and field_group =
-  | Field_group of list spec_elem * list (option name * option expression) * cabsloc
+  | Field_group of list spec_elem * list (maybe name * maybe expression) * cabsloc
 
 (* The decl_type is in the order in which they are printed. Only the name of
  * the declared identifier is pulled out. *)
@@ -140,9 +143,9 @@ and encoding_prefix =
 and constant =
   (* The atom is the textual representation of the constant in
      the source code. It does include quotes. *)
-  | CONST_INT of atom * option integer_suffix
+  | CONST_INT of atom * maybe integer_suffix
   | CONST_FLOAT of atom
-  | CONST_CHAR of option character_prefix * atom
+  | CONST_CHAR of maybe character_prefix * atom
   | CONST_STRING of atom (* TODO *)
 
 and init_expression =
@@ -182,13 +185,13 @@ and statement =
  | NOP of cabsloc
  | COMPUTATION of expression * cabsloc
  | BLOCK of list statement * cabsloc
- | If of expression * statement * option statement * cabsloc
+ | If of expression * statement * maybe statement * cabsloc
  | WHILE of expression * statement * cabsloc
  | DOWHILE of expression * statement * cabsloc
- | FOR of option for_clause * option expression * option expression * statement * cabsloc
+ | FOR of maybe for_clause * maybe expression * maybe expression * statement * cabsloc
  | BREAK of cabsloc
  | CONTINUE of cabsloc
- | RETURN of option expression * cabsloc
+ | RETURN of maybe expression * cabsloc
  | SWITCH of expression * statement * cabsloc
  | CASE of expression * statement * cabsloc
  | DEFAULT of statement * cabsloc

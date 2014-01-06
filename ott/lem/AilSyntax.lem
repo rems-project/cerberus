@@ -1,7 +1,7 @@
-open Common
-open AilTypes
-open Context
- 
+open import Pervasives Common AilTypes Context
+import Symbol
+
+
 type identifier = Symbol.t
 let eq_identifier : identifier -> identifier -> bool = (=)
 
@@ -22,7 +22,7 @@ let eq_integerSuffix s1 s2 : bool =
   | (_  , _  ) -> false
   end
 
-type integerConstant (*[name = "ic*"]*) = int * option integerSuffix
+type integerConstant (*[name = "ic*"]*) = integer * maybe integerSuffix
 
 let eq_integerConstant = eq_pair (=) (eq_option eq_integerSuffix)
 
@@ -388,7 +388,7 @@ and equiv_statement (s1 : statement 'A1 'B1) (s2 : statement 'A2 'B2) : bool =
 let equiv_block (ss1 : list (statement 'A1 'B1)) (ss2 : list (statement 'A2 'B2)) = equiv_block_aux equiv_statement ss1 ss2
 
 (* Currently unused.
-let declaration = identifier * option storageDuration.
+let declaration = identifier * maybe storageDuration.
 *)
 
 type sigma 'A 'B = context identifier ((ctype * bindings) * statement 'A 'B)
@@ -438,7 +438,7 @@ let equiv_eq_program (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) =
 (* K Hack *)
 
 (*
-type declaration = qualifiers * ctype (* * option storageDuration *)
+type declaration = qualifiers * ctype (* * maybe storageDuration *)
 
 
 type file 'a = <|

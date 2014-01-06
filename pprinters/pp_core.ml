@@ -1,3 +1,4 @@
+open Lem_pervasives
 open Global
 open Core
 
@@ -75,15 +76,15 @@ let lt_precedence p1 p2 =
 let pp_keyword  w = !^ (ansi_format [Bold; Magenta] w)
 let pp_const    c = !^ (ansi_format [Magenta] c)
 let pp_control  w = !^ (ansi_format [Bold; Blue] w)
-let pp_symbol   a = !^ (ansi_format [Blue] $ Symbol.to_string_pretty a)
+let pp_symbol   a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
 let pp_number   n = !^ (ansi_format [Yellow] n)
-let pp_impl     i = P.angles (!^ (ansi_format [Yellow] $ Implementation_.string_of_implementation_constant i))
+let pp_impl     i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
 
 
 let rec pp_core_base_type = function
-  | Integer       -> !^ "integer"
+  | Integer0       -> !^ "integer"
   | Boolean       -> !^ "boolean"
-  | Address       -> !^ "address"
+  | Address0       -> !^ "address"
   | Ctype         -> !^ "ctype"
   | CFunction     -> !^ "cfunction"
   | Unit          -> !^ "unit"
@@ -99,18 +100,18 @@ let pp_core_type = function
 let rec pp_ctype t =
   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
   match t with
-    | Void                    -> !^ "void"
-    | Basic bt                -> Pp_ail.pp_basicType bt
-    | Array (ty, n)           -> pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
+    | Void0                    -> !^ "void"
+    | Basic0 bt                -> Pp_ail.pp_basicType bt
+    | Array0 (ty, n)           -> pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
 (*
     | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
 *)
-    | Function (ty, args_tys) -> pp_ctype ty ^^^
+    | Function0 (ty, args_tys) -> pp_ctype ty ^^^
                                  P.parens (comma_list pp_ctype args_tys)
-    | Pointer ty              -> pp_ctype ty ^^ P.star
-    | Atomic ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
+    | Pointer0 ty              -> pp_ctype ty ^^ P.star
+    | Atomic1 ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
 (*
     | SIZE_T                  -> !^ "size_t"
     | INTPTR_T                -> !^ "intptr_t"
@@ -151,11 +152,11 @@ let pp_name = function
   | Impl i -> pp_impl i
 
 let pp_constant = function
-  | Cint n ->
-      (* pp_number *) !^ (Num.string_of_num n)
-  | Carray _ ->
+  | Cint0 n ->
+      (* pp_number *) !^ (Big_int.string_of_big_int n)
+  | Carray0 _ ->
       !^ "ARRAY"
-  | Cfunction _ ->
+  | Cfunction0 _ ->
       !^ "FUNCTION"
 
 let pp_memory_order = function
@@ -169,8 +170,8 @@ let pp_memory_order = function
   
 let rec pp_expr e =
   let rec pp p e =
-    let p' = precedence e in
-    let pp = P.group -| pp p' in
+    let p'   = precedence e in
+    let pp z = P.group (pp p' z) in
     let wseq = !^ ">>" in
     let pp_wseq (_a, e) =
       match _a with
@@ -180,11 +181,11 @@ let rec pp_expr e =
         | _as      -> let g = function
                         | Some x -> pp_symbol x
                         | None   -> P.underscore
-                      in (P.parens $ P.separate_map P.comma g _as) ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
+                      in (P.parens (P.separate_map P.comma g _as)) ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
     in
-    (if lt_precedence p' p then fun x -> x else P.parens) $
+    (if lt_precedence p' p then fun x -> x else P.parens)
 (*      P.parens $ *)
-      match e with
+      (match e with
         | Etuple es ->
             P.parens (comma_list pp es)
         | Enull ->
@@ -194,7 +195,7 @@ let rec pp_expr e =
         | Econst c ->
             pp_constant c
         | Eaddr (pref, name) ->
-            P.at ^^ P.braces (pp_prefix pref ^^ !^ (string_of_int name))
+            P.at ^^ P.braces (pp_prefix pref ^^ !^ (Big_int.string_of_big_int name))
         | Esym a ->
             pp_symbol a
         | Eimpl i ->
@@ -223,7 +224,7 @@ let rec pp_expr e =
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | Eundef u ->
-            pp_keyword "undef" ^^ P.brackets (!^ (ansi_format [Magenta] $ Undefined.string_of_undefined_behaviour u))
+            pp_keyword "undef" ^^ P.brackets (!^ (ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)))
         | Eerror ->
             pp_keyword "error"
         | Eaction (p, (bs, a)) ->
@@ -235,7 +236,7 @@ let rec pp_expr e =
         | Eunseq [e] ->
             !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
         | Eunseq es ->
-            P.brackets $ P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es
+            P.brackets (P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es)
 (*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
         | Ewseq ([], e1, e2) ->
             P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2)
@@ -273,9 +274,9 @@ let rec pp_expr e =
         | Eret e ->
             pp_keyword "ret" ^^^ pp e
         | Epar es ->
-            P.enclose !^ "{{{" !^ "}}}" $ P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es
+            P.enclose !^ "{{{" !^ "}}}" (P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es)
         | End es ->
-            P.brackets $ P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es
+            P.brackets (P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es)
         | Eshift (a, e) ->
             pp_keyword "shift" ^^ P.parens (pp_symbol a ^^ P.comma ^^^ pp e)
         
@@ -288,14 +289,15 @@ let rec pp_expr e =
             pp_keyword "is_signed" ^^^ P.parens (pp e)
         | Eis_unsigned e ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp e)
+      )
   in pp None e
 
 and pp_action = function
-  | Create (ty, _)                    -> pp_keyword "create" ^^ P.parens (pp_expr ty)
+  | Create0 (ty, _)                    -> pp_keyword "create" ^^ P.parens (pp_expr ty)
   | Alloc (a, _)                      -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
-  | Kill e                            -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
-  | Store (ty, e1, e2, mo)            -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
-  | Load (ty, e, mo)                  -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
+  | Kill0 e                            -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
+  | Store0 (ty, e1, e2, mo)            -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
+  | Load0 (ty, e, mo)                  -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
   | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
       pp_keyword "compare_exchange_strong" ^^
       P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
@@ -328,6 +330,7 @@ let std = [
 *)
 ]
 
+
 let pp_file file =
   let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype in
   let f acc (fname, (ftype, args, body)) =
@@ -335,5 +338,5 @@ let pp_file file =
       pp_keyword "fun" ^^^ pp_symbol fname ^^^ P.parens (comma_list pp_argument args) ^^ P.colon ^^^ pp_core_type ftype ^^^
       P.colon ^^ P.equals ^^
       P.nest 2 (P.break 1 ^^ pp_expr body) ^^ P.break 1 ^^ P.break 1 in
-  List.fold_left f P.empty (List.filter (function ((_, Some f), _) -> not (List.mem f std) | _ -> true) $
-    Pmap.bindings file.funs) ^^ P.break 1
+  List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
+    (Pset.elements (Pmap.bindings (pairCompare compare compare) file.funs))) ^^ P.break 1

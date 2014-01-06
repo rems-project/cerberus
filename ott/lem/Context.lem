@@ -1,4 +1,4 @@
-open Common
+open import Pervasives Common
 
 type context 'A 'B = list ('A * 'B)
 
@@ -13,20 +13,20 @@ val add : forall 'A 'B. 'A -> 'B -> context 'A 'B -> context 'A 'B
 let add a b C = (a, b) :: C
 
 let add_bindings (bs : list ('A * 'B)) (C : context 'A 'B) =
-  List.fold_left (fun C b -> b :: C) bs C
+  foldl (fun C b -> b :: C) bs C
 
-let rec lookup (eq_A : 'A -> 'A -> bool) (C : context 'A 'B) (a : 'A) : option 'B =
+let rec lookup (eq_A : 'A -> 'A -> bool) (C : context 'A 'B) (a : 'A) : maybe 'B =
   match C with
-  | []          -> None
-  | (x, b) :: C -> if eq_A x a then Some b
+  | []          -> Nothing
+  | (x, b) :: C -> if eq_A x a then Just b
                                else lookup eq_A C a
   end
 
 val mem : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> context 'A 'B -> bool
 let mem eq_A a C =
   match lookup eq_A C a with
-  | Some _ -> true
-  | None   -> false
+  | Just _  -> true
+  | Nothing -> false
   end
 
 let fresh (eq_A : 'A -> 'A -> bool) a (C: context 'A 'B) = not (mem eq_A a C)
@@ -65,8 +65,8 @@ let sub_p eq_A p equiv_B C1 C2 =
   all eq_A (fun a b ->
               if p a
                 then match lookup eq_A C2 a with
-                     | Some b' -> equiv_B a b b'
-                     | None    -> false
+                     | Just b' -> equiv_B a b b'
+                     | Nothing -> false
                      end
                 else true) C1
 
@@ -84,8 +84,8 @@ let rec disjoint eq_A C1 C2 =
   match C1 with
   | []           -> true
   | (a, _) :: C1 -> match lookup eq_A C2 a with
-                    | Some _ -> false
-                    | None   -> disjoint eq_A C1 C2
+                    | Just _  -> false
+                    | Nothing -> disjoint eq_A C1 C2
                     end
   end
 
@@ -99,17 +99,17 @@ let rec disjoint_bindings eq_A xs =
   | (a, _) :: xs -> fresh_in_bindings eq_A a xs && disjoint_bindings eq_A xs
   end
 
-val mapP_linear : forall 'A 'B1 'B2. ('A -> 'B1 -> option 'B2) -> context 'A 'B1 -> option (context 'A 'B2)
+val mapP_linear : forall 'A 'B1 'B2. ('A -> 'B1 -> maybe 'B2) -> context 'A 'B1 -> maybe (context 'A 'B2)
 let rec mapP_linear p C =
   match C with
-  | []           -> Some []
+  | []           -> Just []
   | (a, b1) :: C -> match (p a b1, mapP_linear p C) with
-                    | (Some b2, Some C) -> Some ((a, b2) :: C)
-                    | (_      , _     ) -> None
+                    | (Just b2, Just C) -> Just ((a, b2) :: C)
+                    | (_      , _     ) -> Nothing
                     end
   end
 
-val mapP : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> option 'B2) -> context 'A 'B1 -> option (context 'A 'B2)
+val mapP : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> maybe 'B2) -> context 'A 'B1 -> maybe (context 'A 'B2)
 let mapP eq_A p C =
   mapP_linear p (linearize eq_A C)
 

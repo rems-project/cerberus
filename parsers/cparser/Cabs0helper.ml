@@ -70,13 +70,13 @@ let get_definitionloc (d : definition) : cabsloc =
   | DECDEF(_, l) -> l
   | PRAGMA(_, l) -> l
 
-let get_statementloc (s : statement) : cabsloc =
+let get_statementloc (s : statement0) : cabsloc =
 begin
   match s with
   | NOP(loc) -> loc
   | COMPUTATION(_,loc) -> loc
   | BLOCK(_,loc) -> loc
-  | If(_,_,_,loc) -> loc
+  | If0(_,_,_,loc) -> loc
   | WHILE(_,_,loc) -> loc
   | DOWHILE(_,_,loc) -> loc
   | FOR(_,_,_,_,loc) -> loc

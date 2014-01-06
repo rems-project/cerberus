@@ -1,52 +1,58 @@
 (* Symbols table with stacked scopes *)
-open Global
+open import Pervasives Global Symbol
+import Boot Set_extra
 
-type t 'a 'b = list (map 'a 'b)
+type t 'a = list (map 'a Symbol.t)
 
 (* Return a empty association table (with an opened scope). *)
+val empty: forall 'a. t 'a
 let empty = []
 
 (* Add a symbol  *)
-(* val add: forall 'a 'b. 'a -> 'b -> ('a, 'b) t -> ('a, 'b) t *)
-let add a b t =
-  match t with
-    | t::ts -> Pmap.add a b t :: ts
-    | _     -> Boot.outOfHomeomorphism "`Symbol_table.add' called on a table without any opened scope"
-  end
+val insert: forall 'a. MapKeyType 'a => 'a -> Symbol.t -> t 'a -> t 'a
+let insert a b = function
+  | t::ts -> Map.insert a b t :: ts
+  | _     -> Boot.assert_false "`Symbol_table.insert' called on a table without any opened scope"
+end
 
 (* Return the value associated to a symbol, if it exists (look over all the opened scopes). *)
-(* val     find: forall 'a 'b. 'a -> ('a, 'b) t -> 'b option *)
-let rec find a t =
+val     lookup: forall 'a. MapKeyType 'a => 'a -> t 'a -> maybe Symbol.t
+let rec lookup a t =
   match t with
-    | m::ms -> match Pmap.mem a m with
-        | true  -> Some (Pmap.find a m)
-        | false -> find a ms
+    | m::ms -> 
+        match Map.lookup a m with
+          | Just z  -> Just z
+          | Nothing -> lookup a ms
         end
-(*
-    | m::ms -> if Pmap.mem a m then Some (Pmap.find a m)
-                               else find a ms
-*)
-    | []    -> None
+    | []    -> Nothing
   end
 
-(* val mem: forall 'a 'b. 'a -> ('a, 'b) t -> bool *)
-let mem a t = Option.is_some (find a t)
 
-let symbols t =
-  match t with
-    | m::_ -> Ocaml.Pmap.fold (fun _ b l -> b::l) m []
-  end
+val member: forall 'a. MapKeyType 'a => 'a -> t 'a -> bool
+let member a t = Maybe.isJust (lookup a t)
 
-let create_scope t = Pmap.empty::t
 
-let destroy_scope t =
-  match t with
-    | _::ms -> ms
-  end
+val symbols: forall 'a. MapKeyType 'a, SetType 'a => t 'a -> list Symbol.t
+let symbols = function
+  | m::_ -> map snd $ Set_extra.toList (Map.toSet m)
+end
 
-let return_scope t =
-  match t with
-    | m::_ -> [m]
-  end
 
-let push_table t1 t2 = t1 @ t2
+val create_scope: forall 'a. MapKeyType 'a => t 'a -> t 'a
+let create_scope t = Map.empty :: t
+
+
+val destroy_scope: forall 'a. t 'a -> t 'a
+let destroy_scope = function
+  | _::ms -> ms
+end
+
+
+val return_scope: forall 'a. MapKeyType 'a => t 'a -> t 'a
+let return_scope = function
+  | m::_ -> [m]
+end
+
+
+val push_table: forall 'a. t 'a -> t 'a -> t 'a
+let push_table t1 t2 = t1 ++ t2

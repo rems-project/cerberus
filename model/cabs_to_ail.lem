@@ -3,24 +3,46 @@
      * not doing things related to linkages
 *)
 
-open Global
+open import Pervasives Global
+import Boot Cabs0 Multiset Symbol_table Location State_exception Errors Decode Product
+import AilSyntax AilTypes
 
-module C = Cabs0
+import Cabs_to_ail_effect
+
+module C      = Cabs0
 module A      = AilSyntax
 module ATypes = AilTypes
 
-module O = Option
+
+module E = Cabs_to_ail_effect
+
+let inline (>>=)    = E.bind
+let inline (>>) m f = m >>= fun _ -> f
+let inline (<$>)    = E.fmap
+let inline (<*>)    = E.app
+
+val ifElse: forall 'a. E.t bool -> E.t 'a -> E.t 'a -> E.t 'a
+let ifElse mb m1 m2 =
+  mb >>= function
+    | true  -> m1
+    | false -> m2
+  end
+
+
+
+
+(* module O = Option *)
 
 (*
 val desugar_storages: list C.storage -> E.t (option A.storage_duration)
 let desugar_storages = function
-  | []               -> E.return None
-  | [C.AUTO]         -> E.return (Some A.AUTOMATIC)
-  | [C.STATIC]       -> E.return (Some A.STATIC)
+  | []               -> E.return Nothing
+  | [C.AUTO]         -> E.return (Just A.AUTOMATIC)
+  | [C.STATIC]       -> E.return (Just A.STATIC)
   | [C.EXTERN]       -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
   | [C.THREAD_LOCAL] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class _Thread_local")
   | [C.REGISTER]     -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
-  | [C.TYPEDEF]      -> E.return None (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+  | [C.TYPEDEF]      -> E.return Nothing (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
   | _                -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
 end
 *)
@@ -75,180 +97,18 @@ let desugar_binary_operator = function
 end
 
 
-module Effect = struct
-  type state = <|
-    symbol_counter:         Symbol.counter;
-    registered_identifiers: Symbol_table.t string A.identifier; (* table (with stacked scopes) associating C identifiers to symbols *)
-    registered_labels:      map string Symbol.t;                (* registered_labels *)
-    is_inside_switch:       bool;
-    fun_defs:               A.sigma Location.t unit;
-    id_map:                 map Symbol.t (ATypes.qualifiers * ATypes.ctype);
-    (* TODO: need to bring back globals (add them to newAil) *)
-  |>
-  
-  type t 'a = State_exception.t 'a state Errors.t
-  
-  val return: forall 'a. 'a -> t 'a
-  let return = State_exception.return
-  
-  val fail: forall 'a. Errors.cause -> t 'a
-  let fail err = State_exception.fail (Location.dummy, err)
-  
-  let of_option err = State_exception.of_option (Location.dummy, err)
-  
-  val make_program: Symbol.t -> t (A.program Location.t unit)
-  let make_program startup =
-    State_exception.read (fun st ->
-      (startup, st.fun_defs)
-    )
-  
-  val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-  val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
-  let mapM = State_exception.mapM
-  let mapM_ = State_exception.mapM_
-  
-  let foldrM = State_exception.foldrM
-  
-  let iter = State_exception.iter
-  
-  val tryWith: forall 'a. Errors.t -> t 'a -> t 'a
-  let tryWith = State_exception.tryWith
-
-  module Operators = struct
-    let (>>=)    = State_exception.bind
-    let (>>) m f = m >>= fun _ -> f
-
-    val (<$>): forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
-    val (<*>): forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
-    let (<$>) = State_exception.fmap
-    let (<*>) = State_exception.app
-
-    val ifElse: forall 'a. t bool -> t 'a -> t 'a -> t 'a
-    let ifElse mb m1 m2 =
-      mb >>= function
-	| true  -> m1
-	| false -> m2
-      end
-  end
-
-  open Operators
-
-  (* given a computation producing the symbolic name of the startup function,
-     produce the desugared Ail file *)
-  val eval: t Symbol.t -> Exception.t (A.program Location.t unit) Errors.t
-  let eval m =
-    let initial_state : state = <|
-      symbol_counter=         Symbol.init;
-      registered_identifiers= Symbol_table.create_scope Symbol_table.empty;
-      registered_labels=      Pmap.empty;
-      is_inside_switch=       false;
-      fun_defs=               [];
-      id_map=                 Pmap.empty
-    |> in
-    State_exception.eval (m >>= make_program) initial_state
-  
-  val resolve_identifier: string -> t A.identifier
-  let resolve_identifier name =
-    State_exception.read (fun st -> Symbol_table.find name st.registered_identifiers) >>= function
-      | Some x  -> return x
-      | Nothing -> fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
-    end
-  
-  val is_inside_switch: t bool
-  let is_inside_switch =
-    State_exception.read (fun st -> st.is_inside_switch)
-  
-  val create_scope: t unit
-  let create_scope =
-    State_exception.update (fun st ->
-      <| st with registered_identifiers= Symbol_table.create_scope st.registered_identifiers |>)
-  
-  val destroy_scope: t (list A.identifier)
-  let destroy_scope =
-    State_exception.modify (fun st ->
-      (Symbol_table.symbols st.registered_identifiers,
-       <| st with registered_identifiers= Symbol_table.destroy_scope st.registered_identifiers |>)
-    )
-
-  val fresh : t Symbol.t
-  let fresh =
-    State_exception.modify (fun st ->
-      let (sym, symbol_counter) = Symbol.fresh st.symbol_counter in
-      (sym, <| st with symbol_counter = symbol_counter |>)
-    )
-
-  val fresh_name : string -> t A.identifier
-  let fresh_name name =
-    State_exception.modify (fun st ->
-      let (sym, symbol_counter) = Symbol.fresh_pretty name st.symbol_counter in
-      (sym, <| st with symbol_counter = symbol_counter |>)
-    )
-
-  val register_name_translation : string -> A.identifier -> t unit
-  let register_name_translation name symbol =
-    State_exception.update (fun st ->
-      <| st with registered_identifiers = Symbol_table.add name symbol st.registered_identifiers |>
-    )
-
-  val name_in_scope : string -> t bool
-  let name_in_scope name =
-    State_exception.read (fun st ->
-      Symbol_table.mem name (Symbol_table.return_scope st.registered_identifiers)
-    )
-
-  val register_name : string -> t A.identifier
-  let register_name name =
-    name_in_scope name >>= function
-      | true  ->
-          State_exception.fail (Location.dummy, Errors.CABS_TO_AIL_MULTIPLE_REGISTRATION)
-      | false ->
-          fresh_name name                    >>= fun sym ->
-          register_name_translation name sym >>
-          State_exception.return sym
-      end
-
-  (* TODO: storage_duration *)
-  val add_declaration : Symbol.t -> ATypes.qualifiers -> ATypes.ctype -> t unit
-  let add_declaration id qs ty =
-    State_exception.update (fun st ->
-    <| st with id_map = Pmap.add id (qs, ty) st.id_map |>)
-  
-  val get_declaration: A.identifier -> t (ATypes.qualifiers * ATypes.ctype)
-  let get_declaration id =
-    State_exception.read (fun st ->
-      Pmap.find id st.id_map
-    )
-
-  val add_function : A.identifier -> ((ATypes.ctype * A.bindings) * A.statement Location.t unit) -> t unit (* TODO: parameters *)
-  let add_function id fun_def =
-    State_exception.update (fun st ->
-      <| st with fun_defs = (id, fun_def) :: st.fun_defs |>
-    )
-  
-  (* Labels related functions *)
-  val return_registered_labels: t (Pmap.map string Symbol.t)
-  let return_registered_labels = fun st ->
-    Exception.return (st.registered_labels, st)
-  
-  let fresh_label name =
-    State_exception.modify (fun st ->
-      let (symbol, symbol_counter') = Symbol.fresh_pretty name st.symbol_counter in
-      (symbol, <| st with  symbol_counter=     symbol_counter';
-                           registered_labels=  Pmap.add name symbol st.registered_labels |>)
-    )
-end
 
 
-module E = Effect
-open E.Operators
 
 
 val     register_labels: C.statement -> E.t unit
 let rec register_labels stmt =
 let f name =
   E.return_registered_labels >>= fun labels ->
-  if Pmap.mem name labels then E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
-                          else E.fresh_label name in
+  match Map.lookup name labels with
+    | Just _  -> E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
+    | Nothing -> E.fresh_label name
+  end in
   match stmt with
     | C.NOP _ ->
         E.return ()
@@ -259,8 +119,8 @@ let f name =
     | C.If _ s1 s2_opt _ ->
         register_labels s1 >>
         match s2_opt with
-          | Some s2 -> register_labels s2
-          | None    -> E.return ()
+          | Just s2 -> register_labels s2
+          | Nothing -> E.return ()
         end
     | C.WHILE _ s _ ->
         register_labels s
@@ -295,8 +155,10 @@ let f name =
 val fetch_label: C.atom -> E.t A.identifier
 let fetch_label l_name =
   E.return_registered_labels >>= fun labels ->
-  if Pmap.mem l_name labels then E.return (Pmap.find l_name labels)
-                            else E.fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER l_name)
+  match Map.lookup l_name labels with
+    | Just z  -> E.return z
+    | Nothing -> E.fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER l_name)
+  end
 
 (* TODO: better name? *)
 type declarationKind =
@@ -311,7 +173,7 @@ type scope =
 (*  | FunctionPrototypeScope *)
 
 type pre_integer_constant =
-  | StrictIntegerConstant of int
+  | StrictIntegerConstant of integer
   | ImplDefined (* TODO: arg *)
 
 (* ============================================================================================== *)
@@ -325,14 +187,14 @@ type pre_integer_constant =
 (* TODO: (§6.7.1#3) [...] If _Thread_local appears in any declaration of an object, it shall be present in every declaration of that object. *)
 (* TODO: (§6.7.1#8) f an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects. *)
 
-val desugar_storages: declarationKind -> scope -> list C.storage -> E.t (option ATypes.storageDuration)
+val desugar_storages: declarationKind -> scope -> list C.storage -> E.t (maybe ATypes.storageDuration)
 let desugar_storages kind scope ss =
   (* (§6.7.1#7) The declaration of an identifier for a function that has block
      scope shall have no explicit storage-class specifier other than extern. *)
   if kind = Function && scope = BlockScope then
     match ss with
       | [] ->
-	  E.return None
+	  E.return Nothing
       | [C.EXTERN] ->
 	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
       | _ ->
@@ -349,7 +211,7 @@ let desugar_storages kind scope ss =
 	  else if scope = BlockScope then
 	    E.fail Errors.CABS_TO_AIL_BLOCK_THREAD_LOCAL_ALONE
 	  else
-	    E.return (Some ATypes.Thread)
+	    E.return (Just ATypes.Thread)
       | [C.THREAD_LOCAL; C.STATIC] ->
 	  if kind = Function then
 	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
@@ -372,16 +234,16 @@ let desugar_storages kind scope ss =
 	    E.fail (Errors.CSEM_HIP "desugar_storages: EXTERN + THREAD_LOCAL")
 
       | [] ->
-  	  E.return None
+  	  E.return Nothing
       | [C.AUTO] ->
-	  E.return (Some ATypes.Automatic)
+	  E.return (Just ATypes.Automatic)
       | [C.STATIC] ->
-	  E.return (Some ATypes.Static)
+	  E.return (Just ATypes.Static)
       | [C.REGISTER] ->
 	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
       | [C.EXTERN] ->
 	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
-      | [C.TYPEDEF] -> E.return None  (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+      | [C.TYPEDEF] -> E.return Nothing (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
 
       | _::_::_ -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
     end
@@ -501,12 +363,12 @@ let rec desugar_integer_constant_expression expr =
   | C.OFFSETOF of (list spec_elem * decl_type) * atom
 *)
 
-    | _ -> None
+    | _ -> Nothing
   end
 *)
 
 
-val desugar_integerConstant: C.atom -> option C.integer_suffix -> A.integerConstant
+val desugar_integerConstant: C.atom -> maybe C.integer_suffix -> A.integerConstant
 let desugar_integerConstant str suff_opt =
   let desugar_integerSuffix = function
     | C.SUFFIX_UNSIGNED           -> A.U
@@ -515,15 +377,14 @@ let desugar_integerConstant str suff_opt =
     | C.SUFFIX_LONG               -> A.L
     | C.SUFFIX_LONG_LONG          -> A.LL
   end in
-  let (n, basis) = Decode.decode_integer_constant str in
+  let n = Decode.decode_integer_constant str in
   match suff_opt with
-    | Some suff -> (n, (* basis, *) Some (desugar_integerSuffix suff))
-    | None      -> (n, (* basis, *) None)
+    | Just suff -> (n, (* basis, *) Just (desugar_integerSuffix suff))
+    | Nothing   -> (n, (* basis, *) Nothing)
   end
 
-open E.Operators
 (*
-val desugar_character_constant: option C.character_prefix -> C.atom -> A.character_constant
+val desugar_character_constant: maybe C.character_prefix -> C.atom -> A.character_constant
 (* TODO: decoding + impl-def independence (and Ail should store an integer, instead of a string) *) 
   let desugar_character_constant pref_opt str =
   let desugar_character_prefix = function
@@ -533,8 +394,8 @@ val desugar_character_constant: option C.character_prefix -> C.atom -> A.charact
   end in
   let n = Decode.decode_character_constant str in
   match pref_opt with
-    | Some pref -> (Some (desugar_character_prefix pref), n)
-    | None      -> (None, n)
+    | Just pref -> (Just (desugar_character_prefix pref), n)
+    | Nothing   -> (Nothing, n)
   end
 *)
 
@@ -553,7 +414,7 @@ end
 
 val desugar_cvspecs: list C.cvspec -> ATypes.qualifiers
 let desugar_cvspecs =
-  List.fold_left (fun qs ->
+  foldl (fun qs ->
     function
     | C.CV_CONST    -> <| qs with ATypes.const    = true |>
     | C.CV_RESTRICT -> <| qs with ATypes.restrict = true |>
@@ -564,7 +425,7 @@ let desugar_cvspecs =
 
 val separate_spec_elem_list : list C.spec_elem -> (list C.cvspec) * (list C.typeSpecifier)
 let separate_spec_elem_list =
-  List.fold_left
+  foldl
     (fun (cs, ts) s ->
       match s with
       | C.SpecCV      c -> (c :: cs, ts)
@@ -582,68 +443,68 @@ let separate_spec_elem_list =
 val desugar_basic_type_specifiers: Multiset.t C.typeSpecifier -> E.t (ATypes.basicType)
 let desugar_basic_type_specifiers specifiers =
   let desugar_map =
-    List.fold_left
-      (fun m (x, bty) -> Pmap.add x bty m)
-      (Ocaml.Pmap.empty Multiset.compare_int)
+    foldl
+      (fun m (x, bty) -> Map.insert x bty m)
+      Map.empty
       (
         (* TODO: maybe move that somewhere else *)
           [(Multiset.from_list [C.Tchar], ATypes.Integer ATypes.Char)]
 
-        @ [(Multiset.from_list [C.Tsigned; C.Tchar], ATypes.Integer (ATypes.Signed ATypes.Ichar))]
-        @ [(Multiset.from_list [C.Tunsigned; C.Tchar], ATypes.Integer (ATypes.Unsigned ATypes.Ichar))]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Short)))
-          [ [C.Tshort];
-            [C.Tsigned; C.Tshort];
-            [C.Tshort; C.Tint];
-            [C.Tsigned; C.Tshort; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Short)))
-          [ [C.Tunsigned; C.Tshort];
-            [C.Tunsigned; C.Tshort; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Int_)))
-          [ [C.Tint];
-            [C.Tsigned];
-            [C.Tsigned; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Int_)))
-          [ [C.Tunsigned];
-            [C.Tunsigned; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Long)))
-          [ [C.Tlong];
-            [C.Tsigned; C.Tlong];
-            [C.Tlong; C.Tint];
-            [C.Tsigned; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Long)))
-          [ [C.Tunsigned; C.Tlong];
-            [C.Tunsigned; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.LongLong)))
-          [ [C.Tlong; C.Tlong];
-            [C.Tsigned; C.Tlong; C.Tlong];
-            [C.Tlong; C.Tlong; C.Tint];
-            [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
-          ]
-        @ List.map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.LongLong)))
-          [ [C.Tunsigned; C.Tlong; C.Tlong];
-            [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
-          ]
+        ++ [(Multiset.from_list [C.Tsigned; C.Tchar], ATypes.Integer (ATypes.Signed ATypes.Ichar))]
+        ++ [(Multiset.from_list [C.Tunsigned; C.Tchar], ATypes.Integer (ATypes.Unsigned ATypes.Ichar))]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Short)))
+           [ [C.Tshort];
+             [C.Tsigned; C.Tshort];
+             [C.Tshort; C.Tint];
+             [C.Tsigned; C.Tshort; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Short)))
+           [ [C.Tunsigned; C.Tshort];
+             [C.Tunsigned; C.Tshort; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Int_)))
+           [ [C.Tint];
+             [C.Tsigned];
+             [C.Tsigned; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Int_)))
+           [ [C.Tunsigned];
+             [C.Tunsigned; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Long)))
+           [ [C.Tlong];
+             [C.Tsigned; C.Tlong];
+             [C.Tlong; C.Tint];
+             [C.Tsigned; C.Tlong; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Long)))
+           [ [C.Tunsigned; C.Tlong];
+             [C.Tunsigned; C.Tlong; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.LongLong)))
+           [ [C.Tlong; C.Tlong];
+             [C.Tsigned; C.Tlong; C.Tlong];
+             [C.Tlong; C.Tlong; C.Tint];
+             [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
+           ]
+        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.LongLong)))
+           [ [C.Tunsigned; C.Tlong; C.Tlong];
+             [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
+           ]
 (*
-        @ [(Multiset.from_list [C.Tfloat], ATypes.REAL_FLOATING ATypes.FLOAT)]
-        @ [(Multiset.from_list [C.Tdouble], ATypes.REAL_FLOATING ATypes.DOUBLE)]
-        @ [(Multiset.from_list [C.Tlong; C.Tdouble], ATypes.REAL_FLOATING ATypes.LONG_DOUBLE)]
+        ++ [(Multiset.from_list [C.Tfloat], ATypes.REAL_FLOATING ATypes.FLOAT)]
+        ++ [(Multiset.from_list [C.Tdouble], ATypes.REAL_FLOATING ATypes.DOUBLE)]
+        ++ [(Multiset.from_list [C.Tlong; C.Tdouble], ATypes.REAL_FLOATING ATypes.LONG_DOUBLE)]
 *)
-        @ [(Multiset.from_list [C.T_Bool], ATypes.Integer ATypes.Bool)]
+        ++ [(Multiset.from_list [C.T_Bool], ATypes.Integer ATypes.Bool)]
 (*
-        @ [(Multiset.from_list [C.Tfloat; C.COMPLEX], ATypes.COMPLEX ATypes.FLOAT)]
-        @ [(Multiset.from_list [C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.DOUBLE)]
-        @ [(Multiset.from_list [C.Tlong; C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.LONG_DOUBLE)]
+        ++ [(Multiset.from_list [C.Tfloat; C.COMPLEX], ATypes.COMPLEX ATypes.FLOAT)]
+        ++ [(Multiset.from_list [C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.DOUBLE)]
+        ++ [(Multiset.from_list [C.Tlong; C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.LONG_DOUBLE)]
 *)
       ) in
   E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
-              (Map_.find specifiers desugar_map)
+              (Map.lookup specifiers desugar_map)
 
 
 val desugar_type_specifiers : list C.typeSpecifier -> E.t (ATypes.ctype)
@@ -670,15 +531,15 @@ let rec desugar_decl_type decl_ty =
   | C.JUSTBASE ->
       E.return $ fun ty -> ty
 (*
-  | C.ARRAY dt cvs _ None ->
+  | C.ARRAY dt cvs _ Nothing ->
       fun t ->
         (mk_ctype dt)
-        (A.Array (desugar_cvspecs cvs) t None)
+        (A.Array (desugar_cvspecs cvs) t Nothing)
 *)
-  | C.ARRAY decl_ty' cvs _ (Some (C.CONSTANT (C.CONST_INT n None))) ->
+  | C.ARRAY decl_ty' cvs _ (Just (C.CONSTANT (C.CONST_INT n Nothing))) ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
-      E.return $ fun ty -> mk_ty (ATypes.Array (* (desugar_cvspecs cvs) *) ty (fst (Decode.decode_integer_constant n))) (* TODO: for test purposes only ;) *)
-  | C.ARRAY dt cvs _ (Some (C.CONSTANT e)) ->
+      E.return $ fun ty -> mk_ty (ATypes.Array (* (desugar_cvspecs cvs) *) ty (Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
+  | C.ARRAY dt cvs _ (Just (C.CONSTANT e)) ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
   | C.PTR cvs _ decl_ty' ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
@@ -687,7 +548,7 @@ let rec desugar_decl_type decl_ty =
   | C.PROTO decl_ty' (params, _) ->
       desugar_decl_type decl_ty' >>= fun mk_ty    ->
       desugar_parameters params  >>= fun d_params ->
-      E.return $ fun ty -> mk_ty (ATypes.Function ty $ List.map snd d_params)
+      E.return $ fun ty -> mk_ty (ATypes.Function ty $ map snd d_params)
   end
 
 
@@ -697,15 +558,15 @@ and desugar_parameters params =
     desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
     (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
     if param_ty = ATypes.Void then
-      (if List.length params <> 1 then
+      (if length params <> 1 then
         E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
-      else if param_name_opt <> None then
+      else if param_name_opt <> Nothing then
         E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
       else
         E.return [])
     else
       (* OTHERWISE: the real stuff *)
-      O.option 
+      maybe
         (E.fail (Errors.OTHER "parameter name omitted")) (* TODO: proper message *)
         (fun param_name ->
           E.register_name param_name         >>= fun param_id             ->
@@ -717,30 +578,30 @@ and desugar_parameters params =
   ) params []
 
 
-val desugar_assign_operator: C.binary_operator -> option A.arithmeticOperator
+val desugar_assign_operator: C.binary_operator -> maybe A.arithmeticOperator
 let desugar_assign_operator = function
   | C.ADD_ASSIGN ->
-      Some A.Add
+      Just A.Add
   | C.SUB_ASSIGN ->
-      Some A.Sub
+      Just A.Sub
   | C.MUL_ASSIGN ->
-      Some A.Mul
+      Just A.Mul
   | C.DIV_ASSIGN ->
-      Some A.Div
+      Just A.Div
   | C.MOD_ASSIGN ->
-      Some A.Mod
+      Just A.Mod
   | C.BAND_ASSIGN ->
-      Some A.Band
+      Just A.Band
   | C.BOR_ASSIGN ->
-      Some A.Bor
+      Just A.Bor
   | C.XOR_ASSIGN ->
-      Some A.Xor
+      Just A.Xor
   | C.SHL_ASSIGN ->
-      Some A.Shl
+      Just A.Shl
   | C.SHR_ASSIGN ->
-      Some A.Shr
+      Just A.Shr
   | _ ->
-      None
+      Nothing
 end
 
 
@@ -754,9 +615,9 @@ let rec desugar_expression e =
       A.Assign <$> desugar_expression e1 <*> desugar_expression e2
   | C.BINARY bop e1 e2 ->
       match desugar_assign_operator bop with
-        | Some aop ->
+        | Just aop ->
             A.CompoundAssign <$> desugar_expression e1 <*> E.return aop <*> desugar_expression e2
-        | None ->
+        | Nothing ->
             A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
       end
   | C.QUESTION e1 e2 e3 ->
@@ -767,7 +628,7 @@ let rec desugar_expression e =
   | C.CAST (specs, decl_ty) ie ->
       desugar_spec_elem_list specs >>= fun (qs, ty)   ->
       desugar_decl_type decl_ty    >>= fun mk_ty      ->
-      desugar_init_expression ie   >>= fun (Some d_e) ->
+      desugar_init_expression ie   >>= fun (Just d_e) ->
       E.return $ A.Cast qs ty d_e
 
 (*
@@ -812,8 +673,8 @@ end
 
 and desugar_init_expression ie =
   match ie with
-  | C.NO_INIT         -> E.return None
-  | C.SINGLE_INIT   e -> Some <$> desugar_expression e
+  | C.NO_INIT         -> E.return Nothing
+  | C.SINGLE_INIT   e -> (fun z -> Just z) <$> desugar_expression e
   | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
   end
 
@@ -832,15 +693,15 @@ let rec desugar_statement stmt =
           E.mapM desugar_statement stmts          >>= fun d_stmts ->
           E.destroy_scope                         >>= fun ids     ->
           E.mapM E.get_declaration ids            >>= fun decls   ->
-          E.return $ A.Block (List.map2 Product.make ids decls) d_stmts
+          E.return $ A.Block (Global.map2 Product.make ids decls) d_stmts
 
       | C.If expr stmt1 stmt2_opt _ ->
           (* (§6.8.3#3) allows us to add null operation without changing the
                        semantics of a statement *)
           A.If <$> desugar_expression expr
                <*> desugar_statement stmt1
-               <*> Option.option (E.return $ A.AnnotatedStatement Location.dummy A.Skip)
-                                 desugar_statement stmt2_opt
+               <*> maybe (E.return $ A.AnnotatedStatement Location.dummy A.Skip)
+                         desugar_statement stmt2_opt
       | C.WHILE expr stmt _ ->
           A.While <$> desugar_expression expr
                   <*> desugar_statement stmt
@@ -849,7 +710,7 @@ let rec desugar_statement stmt =
                <*> desugar_expression expr
       | C.FOR fclause_opt e2_opt e3_opt s loc ->
           let are_all_auto_or_register (C.DECDEF (specs, _) _) =
-            List.exist (function
+            any (function
 (*
 TODO: tmp
               | C.SpecStorage C.AUTO -> true
@@ -859,27 +720,27 @@ TODO: tmp
               | _ -> true
             end) specs in
           match fclause_opt with
-            | None                 -> E.return (C.NOP loc)
-            | Some (C.FC_EXP e1)   -> E.return (C.COMPUTATION e1 loc)
-            | Some (C.FC_DECL def) ->
+            | Nothing              -> E.return (C.NOP loc)
+            | Just (C.FC_EXP e1)   -> E.return (C.COMPUTATION e1 loc)
+            | Just (C.FC_DECL def) ->
                 if are_all_auto_or_register def then
                   E.return (C.DEFINITION def)
                 else
                   E.fail Errors.CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
           end >>= fun s1 ->
           let e2' = match e2_opt with
-            | Some e2 -> e2
+            | Just e2 -> e2
               (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
                  statement) an omitted controlling expression is replace by an
                  unspecified non-zero integer constant. We believe that the choice, as
                  long as representable, does not matter with respect to the
                  semantics. Hence, we arbitrarily choose "1" (which can always be
                  represented as an object of type int). *)
-            | None -> C.CONSTANT (C.CONST_INT "1" None)
+            | Nothing -> C.CONSTANT (C.CONST_INT "1" Nothing)
           end in
           let s3 = match e3_opt with
-            | Some e3 -> C.COMPUTATION e3 loc
-            | None    -> C.NOP loc
+            | Just e3 -> C.COMPUTATION e3 loc
+            | Nothing -> C.NOP loc
           end in
           
           let body = C.BLOCK [s; s3] loc  in
@@ -890,9 +751,9 @@ TODO: tmp
           E.return A.Break
       | C.CONTINUE _ ->
           E.return A.Continue
-      | C.RETURN None _ ->
+      | C.RETURN Nothing _ ->
           E.return A.ReturnVoid
-      | C.RETURN (Some expr) _f ->
+      | C.RETURN (Just expr) _f ->
           A.Return <$> desugar_expression expr
       | C.SWITCH expr stmt _ ->
           Boot.assert_false "HIP: desugar_statement  SWITCH"
@@ -931,7 +792,7 @@ E.fail Errors.CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
   end
 
 
-(*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * option (A.expression unit)) *)
+(*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * maybe (A.expression unit)) *)
 and desugar_init_name iname =
   let C.Init_name (C.Name name decl_ty _ _) ie = iname in
   E.register_name name       >>= fun v     ->
@@ -948,8 +809,8 @@ and desugar_declaration (specs, ins) =
                    E.add_declaration id qs (mk_ty ty) >>
                    E.return
                      match e_opt with
-                     | Some e -> Some (id, e)
-                     | None   -> None
+                     | Just e  -> Just (id, e)
+                     | Nothing -> Nothing
                      end
                  ) decls
 

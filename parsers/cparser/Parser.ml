@@ -4461,7 +4461,7 @@ module Gram =
          LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
          Coq_statement_safe_nt)::((T ELSE_t)::((NT
          Coq_statement_safe_nt)::[]))))))))
-         (fun loc _2 expr _4 stmt1 _6 stmt2 -> If ((fst expr), stmt1, (Some
+         (fun loc _2 expr _4 stmt1 _6 stmt2 -> If0 ((fst expr), stmt1, (Some
          stmt2), loc))
      | Prod_199 ->
        Obj.magic box (Coq_selection_statement_dangerous_nt,((T SWITCH_t)::((T
@@ -4473,12 +4473,12 @@ module Gram =
          LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
          Coq_statement_safe_nt)::((T ELSE_t)::((NT
          Coq_statement_dangerous_nt)::[]))))))))
-         (fun loc _2 expr _4 stmt1 _6 stmt2 -> If ((fst expr), stmt1, (Some
+         (fun loc _2 expr _4 stmt1 _6 stmt2 -> If0 ((fst expr), stmt1, (Some
          stmt2), loc))
      | Prod_197 ->
        Obj.magic box (Coq_selection_statement_dangerous_nt,((T IF_t)::((T
          LPAREN_t)::((NT Coq_expression_nt)::((T RPAREN_t)::((NT
-         Coq_statement_dangerous_nt)::[])))))) (fun loc _2 expr _4 stmt -> If
+         Coq_statement_dangerous_nt)::[])))))) (fun loc _2 expr _4 stmt -> If0
          ((fst expr), stmt, None, loc))
      | Prod_196 ->
        Obj.magic box (Coq_relational_expression_nt,((NT

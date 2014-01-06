@@ -1,3 +1,4 @@
+open import Pervasives
 
 type implementation_constant =
   (* J.3.2 Environment *)
@@ -188,7 +189,7 @@ type implementation_constant =
 
 (* TODO: this is for the parsing (a bit disgusting to do it that way *)
 let impl_map =
-  List.fold_left (fun acc (k, v) -> Pmap.add k v acc) Pmap.empty
+  foldl (fun acc (k, v) -> Map.insert k v acc) Map.empty
   [
     ("<bits_in_byte>", Characters__bits_in_byte);
     ("<sizeof>",       Sizeof);

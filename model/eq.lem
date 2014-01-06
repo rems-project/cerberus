@@ -1,3 +1,0 @@
-class (eq 'a)
-  val eq : 'a -> 'a -> bool
-end

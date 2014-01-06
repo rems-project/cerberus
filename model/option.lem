@@ -9,11 +9,11 @@ val (<$): forall 'a 'b. 'a -> t 'b -> t 'a
 
 (* fmap f m = m >>= (return -| f) *)
 let fmap f = function
-  | Some v -> Some $ f v
-  | None   -> None
+  | Just v  -> Just $ f v
+  | Nothing -> Nothing
 end
 
-let (<$) x m = fmap (const x) m
+let inline (<$) x m = fmap (const x) m
 
 
 (* Applicative *)
@@ -21,11 +21,11 @@ val pure:  forall 'a. 'a -> t 'a
 val sapp:  forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
 
 let pure x =
-  Some x
+  Just x
 let sapp fm mx =
   match (fm, mx) with
-    | (Some f, Some x) -> Some $ f x
-    | _                -> None
+    | (Just f, Just x) -> Just $ f x
+    | _                -> Nothing
   end
 
 
@@ -33,61 +33,63 @@ let sapp fm mx =
 val return: forall 'a. 'a -> t 'a
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 
-let return z = Some z
+let return z = Just z
 
 let bind m f =
   match m with
-    | Some z -> f z
-    | None   -> None
+    | Just z  -> f z
+    | Nothing -> Nothing
   end
 
 
 
 (* Alternative *)
 val empty: forall 'a. t 'a
-let empty = None
+let empty = Nothing
 
 
 
   module Operators = struct
-    let (<$>) = fmap
-    let (>>=) = bind
+    let inline (<$>) = fmap
+    let inline (>>=) = bind
     
     val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
-    let (>>) m1 m2 = m1 >>= fun _ -> m2
+    let inline (>>) m1 m2 = m1 >>= fun _ -> m2
     
     val (<*>): forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
-    let (<*>) = sapp
+    let inline (<*>) = sapp
     
     val (|*>): forall 'a 'b. t 'a -> t 'b -> t 'b
-    let (|*>) ma mb = (const id) <$> ma <*> mb
+    let inline (|*>) ma mb = (const id) <$> ma <*> mb
     
     val (<*|): forall 'a 'b. t 'a -> t 'b -> t 'a
-    let (<*|) ma mb = const <$> ma <*> mb
+    let inline (<*|) ma mb = const <$> ma <*> mb
     
     val (<|>): forall 'a. t 'a -> t 'a -> t 'a
-    let (<|>) m1 m2 =
+    let inline (<|>) m1 m2 =
       match m1 with
-	| Some _ -> m1
-	| None   -> m2
+	| Just _  -> m1
+	| Nothing -> m2
       end
 
 
   end
 
-val is_some: forall 'a. t 'a -> bool
-let is_some = function
-  | Some _ -> true
-  | None   -> false
+val isJust: forall 'a. t 'a -> bool
+let isJust = function
+  | Just _  -> true
+  | Nothing -> false
 end
 
 val option: forall 'a 'b. 'b -> ('a -> 'b) -> option 'a -> 'b
 let option z f = function
-  | Some x -> f x
-  | None   -> z
+  | Just x  -> f x
+  | Nothing -> z
 end
 
-val from_some: forall 'a. option 'a -> 'a
-let from_some = function
-  | Some x -> x
+(*
+val fromJust: forall 'a. option 'a -> 'a
+let fromJust = function
+  | Just x -> x
 end
+*)

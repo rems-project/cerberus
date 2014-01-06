@@ -1,5 +1,5 @@
-open Global
-open Core
+open import Pervasives Global Core
+import Boot Product
 
 (* Some aliases for positive actions *)
 let pcreate ty pref  = Eaction (Pos, ({}, Create ty pref ))
@@ -10,8 +10,8 @@ let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
-let zero : expr zero = Econst (Cint (Int.int 0))
-let one  : expr zero = Econst (Cint (Int.int 1))
+let zero : expr zero = Econst (Cint 0)
+let one  : expr zero = Econst (Cint 1)
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
@@ -112,7 +112,7 @@ end
 let rec free_syms e =
   match e with
   | Etuple es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | Enull ->
       {}
   | Eskip ->
@@ -138,9 +138,9 @@ let rec free_syms e =
   | Eif e1 e2 e3 ->
       free_syms e1 union free_syms e2 union free_syms e3
   | Eproc _ _ es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | Ecall _ es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | Esame e1 e2 ->
       free_syms e1 union free_syms e2
   | Eundef _ ->
@@ -150,13 +150,13 @@ let rec free_syms e =
   | Eaction (_, act) ->
       free_syms_action act
   | Eunseq es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | Ewseq _as e1 e2 ->
       free_syms e1 union (free_syms e2 \ (set_from_options _as))
   | Esseq _as e1 e2 ->
       free_syms e1 union (free_syms e2 \ (set_from_options _as))
   | Easeq a_opt act1 (_, act2) ->
-      free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Some a -> {a} | None -> {} end))
+      free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Just a -> {a} | Nothing -> {} end))
   | Esave _ _ e ->
       free_syms e
   | Erun _ _ _ ->
@@ -164,9 +164,9 @@ let rec free_syms e =
   | Eret e ->
       free_syms e
   | Epar es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | End es ->
-      List.fold_left (fun acc e -> free_syms e union acc) {} es
+      foldl (fun acc e -> free_syms e union acc) {} es
   | Eindet e ->
       free_syms e
   | Ebound _ e ->
@@ -201,12 +201,12 @@ end
 
 
 (* check if a symbolic names is part of a pattern *)
-val in_pattern: sym -> list (option sym) -> bool
+val in_pattern: sym -> list (maybe sym) -> bool
 let rec in_pattern a p =
   match p with
     | []             -> false
     | Nothing  :: xs -> in_pattern a xs
-    | Some a'  :: xs -> if a = a' then true else in_pattern a xs
+    | Just a'  :: xs -> if a = a' then true else in_pattern a xs
   end
 
 (* substitute in an expression a symbolic name with a (pure) expression *)
@@ -258,7 +258,7 @@ let rec subst_sym a v e =
     | Esseq _as e1 e2 ->
         Esseq _as (subst_sym a v e1) (if in_pattern a _as then e2 else subst_sym a v e2)
     | Easeq _a act p  ->
-        Easeq _a (subst_sym_action a v act) (if Some a = _a then p else subst_sym_paction a v p)
+        Easeq _a (subst_sym_action a v act) (if Just a = _a then p else subst_sym_paction a v p)
     | Eindet (* i *) e -> (* Eindet (* i *) (subst_sym a v e) *)
         Boot.assert_false "[Core_aux.subst_sym] #Eindet"
     | Ebound i e -> (* Ebound i (subst_sym a v e) *)
@@ -308,17 +308,17 @@ and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
    of the value expression [v] in the expression [e]. This function leads
    to a crash if [v] is not a value or its type doesn't match the symbolic
    pattern *)
-val subst_syms: forall 'a. list (option sym) -> expr 'a -> expr 'a -> expr 'a
+val subst_syms: forall 'a. list (maybe sym) -> expr 'a -> expr 'a -> expr 'a
 let subst_syms _as v e =
   match (_as, v) with
     | ([]       , _        ) -> e
-    | ([None], _           ) -> e
-    | ([Some _a], _        ) -> subst_sym _a v e
+    | ([Nothing], _        ) -> e
+    | ([Just _a], _        ) -> subst_sym _a v e
 
-    | (_        , Etuple vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
+    | (_        , Etuple vs) -> Global.foldl2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
 
 (*
-    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Some _a -> subst_sym _a v acc | None -> acc end) e _as vs
+    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
 *)
   end 
 
@@ -366,9 +366,9 @@ let rec is_pure e =
    | Eaction _ ->
        false
    | Eunseq es ->
-       List.for_all is_pure es
+       all is_pure es
    | Epar es ->
-       false (* List.for_all is_pure es *)
+       false (* all is_pure es *)
    | Ewseq _ e1 e2 ->
        false
        (* is_pure e1 && is_pure e2 *)
@@ -407,7 +407,7 @@ end
 let rec is_value e =
   match e with
    | Etuple pes ->
-       List.for_all is_value pes
+       all is_value pes
    | Enull ->
        true
    | Econst _ ->
@@ -475,7 +475,7 @@ let rec trailing_actions e =
   | Eunseq es ->
       List.concat $ List.map trailing_actions es
   | Ewseq _ e1 e2 ->
-      [ act | forall (act MEM trailing_actions e1) | is_negative_action act ] @ trailing_actions e2
+      [ act | forall (act MEM trailing_actions e1) | is_negative_action act ] ++ trailing_actions e2
   | Esseq _ _ e2 ->
       trailing_actions e2
   | Easeq _ act pact ->

@@ -1,4 +1,4 @@
-open Global
+open import Pervasives Global
 
 type t 'a 'msg =
   | Result of 'a
@@ -24,13 +24,13 @@ val app: forall 'a 'b 'msg. t ('a -> 'b) 'msg -> t 'a 'msg -> t 'b 'msg
 let app mf m = bind mf (fun f -> fmap f m)
 
 let catch = function
-  | Result    _ -> None
-  | Exception m -> Some m
+  | Result    _ -> Nothing
+  | Exception m -> Just m
   end
 
 let of_option m = function
-  | Some a -> return a
-  | None   -> throw  m
+  | Just a  -> return a
+  | Nothing -> throw  m
   end
 
 let to_bool = function
@@ -39,8 +39,8 @@ let to_bool = function
   end
 
 module Operators = struct
-  let (>>=) = bind
-  let (=<<) = rbind
+  let inline (>>=) = bind
+  let inline (=<<) = rbind
 end
 
 open Operators
@@ -50,12 +50,12 @@ let map3 f mx my mz = app (map2 f mx my) mz
 
 val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
 let sequence ms =
-  List.fold_right
+  foldr
     (fun m ms' ->
       m   >>= fun x  ->
       ms' >>= fun xs ->
       return (x::xs)
-    ) ms (return [])
+    ) (return []) ms
 
 val t_list: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
 let t_list t xs = sequence (t xs)
@@ -64,6 +64,8 @@ val map_list: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'ms
 let map_list f = t_list (List.map f)
 
 
+(*
+TODO[not used anymore]
 
 let sequence_map mmap =
   Ocaml.Pmap.fold (fun k m mm->
@@ -73,15 +75,23 @@ let sequence_map mmap =
   ) mmap (return Pmap.empty)
 
 let map_map f m = sequence_map (Ocaml.Pmap.map f m)
+*)
 
 let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
 
+
+(*
+TODO[newLem] should use the Ord class instead
+
+==> Seem unused
+
+*)
 let compare cmp cmp_msg a1 a2 =
   match (a1, a2) with
   | (Result r1, Result r2) -> cmp r1 r2
   | (Exception e1, Exception e2) -> cmp_msg e1 e2
-  | (Result _, _) -> Ord.Lt
-  | (_, Result _) -> Ord.Gt
+  | (Result _, _) -> LT
+  | (_, Result _) -> GT
   end
 
 let bind_exception m k =

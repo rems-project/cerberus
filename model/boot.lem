@@ -1,56 +1,64 @@
+open import Pervasives
+
 (* Error messages for impossible situations *)
 val outOfHomeomorphism: forall 'a. string -> 'a
-let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism
+(* TODO[newLem] let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism *)
 
 val assert_false: forall 'a. string -> 'a
-let inline {ocaml} assert_false = Ocaml.Boot.assert_false
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+(* declare ocaml target_rep function assert_false = specialassert false` *) 
+
+(* TODO[newLem] let inline {ocaml} assert_false = Ocaml.Boot.assert_false *)
 
 
-val debug_level: num
-let inline {ocaml} debug_level = Ocaml.Boot.debug_level
+val debug_level: nat
+declare ocaml target_rep function debug_level = `Boot_ocaml.debug_level`
+declare coq   target_rep function debug_level = `0`
 
 val debug: forall 'a. string -> 'a
-let inline {ocaml} debug = Ocaml.Boot.debug
+(* TODO[newLem] let inline {ocaml} debug = Ocaml.Boot.debug *)
 
 val print_debug: forall 'a. string -> 'a -> 'a
-let inline {ocaml} print_debug = Ocaml.Boot.print_debug
+declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
+(* declare coq   target_rep function print_debug = `fun _ z => z` *)
 
-type char = Ocaml.Boot.char
+type char (* TODO[newLem] = Ocaml.Boot.char *)
 
 val is_digit: char -> bool
-let inline {ocaml} is_digit = Ocaml.Boot.is_digit
+(* TODO[newLem] let inline {ocaml} is_digit = Ocaml.Boot.is_digit *)
 
 val is_quote: char -> bool
-let inline {ocaml} is_quote = Ocaml.Boot.is_quote
+(* TODO[newLem] let inline {ocaml} is_quote = Ocaml.Boot.is_quote *)
 
 val span_string: (char -> bool) -> string -> string * string
-let inline {ocaml} span_string = Ocaml.Boot.span_string
+(* TODO[newLem] let inline {ocaml} span_string = Ocaml.Boot.span_string *)
 
 val unquote_string: string -> string
-let inline {ocaml} unquote_string = Ocaml.Boot.unquote_string
+(* TODO[newLem] let inline {ocaml} unquote_string = Ocaml.Boot.unquote_string *)
 
-val splitAt_string: num -> string -> string * string
-let inline {ocaml} splitAt_string = Ocaml.Boot.splitAt_string
+val splitAt_string: nat -> string -> string * string
+(* TODO[newLem] let inline {ocaml} splitAt_string = Ocaml.Boot.splitAt_string *)
 
-val length_string: string -> num
-let inline {ocaml} length_string = Ocaml.Boot.length_string
+val length_string: string -> nat
+(* TODO[newLem] let inline {ocaml} length_string = Ocaml.Boot.length_string *)
 
 (* HACK for testing *)
 val pickList: forall 'a. list 'a -> list 'a * 'a * list 'a
-let inline {ocaml} pickList = Ocaml.Boot.pickList
+declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 
 
 
 
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
-let inline {ocaml} pp_ail_ctype = Ocaml.Boot.pp_ail_ctype
+(* TODO[newLem] let inline {ocaml} pp_ail_ctype = Ocaml.Boot.pp_ail_ctype *)
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
-let inline {ocaml} pp_ail_expr = Ocaml.Boot.pp_ail_expr
+(* TODO[newLem] let inline {ocaml} pp_ail_expr = Ocaml.Boot.pp_ail_expr *)
 
 val pp_core_expr: forall 'a. 'a (* Core.expr *) -> string
-let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr
+(* TODO[newLem] let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr *)
 
-val num_of_string: string -> num
-let inline {ocaml} num_of_string = Ocaml.Boot.num_of_string
+val nat_of_string: string -> natural
+declare ocaml target_rep function nat_of_string = `Big_int.big_int_of_string`

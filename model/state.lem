@@ -1,4 +1,4 @@
-open Global
+open import Pervasives Global
 
 type t 'a 's = 's -> ('a * 's)
 
@@ -34,14 +34,6 @@ let eval m st = fst (m st)
 val run : forall 'a 's. t 'a 's -> 's -> 'a * 's
 let run t s = t s
 
-module Operators = struct
-  let (>>=) = bind
-  val (>>): forall 'a 'b 's. t 'a 's -> t 'b 's -> t 'b 's
-  let (>>) m f = m >>= fun _ -> f
-end
-
-open Operators
-
-let sequence_ ms = List.fold_right (>>) ms (return ())
+let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
 val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
 let mapM_ f _as = sequence_ (List.map f _as)

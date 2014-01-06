@@ -1,3 +1,5 @@
+open import Pervasives
+
 (* C undefined behaviours *)
 type undefined_behaviour =
   | DUMMY (* TODO: this is a hack before fixing the parser *)
@@ -292,18 +294,20 @@ type t 'a =
 val return: forall 'a. 'a -> t 'a
 let return x = Defined x
 
-val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let (>>=) m f =
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind m f =
   match m with
     | Defined x -> f x
     | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
     | Error     -> Error
-end
+end 
 
-let sequence ms = List.fold_right (fun m acc ->
+let inline (>>=) = bind
+
+let sequence ms = foldr (fun m acc ->
   m   >>= fun x  ->
   acc >>= fun xs ->
-  return (x::xs)) ms (return [])
+  return (x::xs)) (return []) ms
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
 let mapM f xs = sequence (List.map f xs)
 

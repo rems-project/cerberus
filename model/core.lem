@@ -1,4 +1,7 @@
-open Global
+open import Pervasives Global
+import Symbol AilTypes Implementation_ Undefined Cmm_csem
+
+module Cmm = Cmm_csem
 
 (* TODO: this is here because of some stupid cyclic module dependency ...
 
@@ -6,7 +9,7 @@ open Global
          core.lem (just for knowing mem_addr) and by core_run. But we can't
          because the memory actions have to know about the monad used by
          core_run.lem. If we had type families, StateT would do the trick *)
-type mem_addr = list Symbol.t * num
+type mem_addr = list Symbol.t * natural
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
@@ -41,7 +44,7 @@ type ksym = Symbol.t
 type ctype =
   | Void
   | Basic of AilTypes.basicType
-  | Array of ctype * int
+  | Array of ctype * integer
   | Function of ctype * list ctype
   | Pointer of ctype
 (*
@@ -58,7 +61,7 @@ type ctype =
 
 and member =
   | MEMBER of (* alignment_specifier * *) ctype
-  | BITFIELD of ctype * int * (option bool)
+  | BITFIELD of ctype * integer * (maybe bool)
 
 
 
@@ -91,7 +94,7 @@ type name =
 
 
 type constant =
-  | Cint of int
+  | Cint of integer
   | Carray of list constant
 (*  | Cstruct *)
   | Cfunction of sym
@@ -126,13 +129,13 @@ type expr 'a =
   (* sequencing operators *)
   | Eunseq of list (expr 'a)
 
-  | Ewseq of list (option sym) * expr 'a * expr 'a
-  | Esseq of list (option sym) * expr 'a * expr 'a
-  | Easeq of option sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  | Ewseq of list (maybe sym) * expr 'a * expr 'a
+  | Esseq of list (maybe sym) * expr 'a * expr 'a
+  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
   
   (* indeterminately-sequenced expressions and boundary *) 
   | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-  | Ebound of num * expr 'a (* this ctor doesn't exist at runtine *)
+  | Ebound of natural * expr 'a (* this ctor doesn't exist at runtine *)
   
   (* Continuation operators *)
   (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
@@ -262,7 +265,7 @@ let rec is_value e =
     | Eaction _ ->
         false
     | Eunseq es ->
-        List.for_all (is_value) es
+        all (is_value) es
     | Ewseq _ e1 e2 ->
         is_value e1 && is_value e2
     | Esseq _ e1 e2 ->
@@ -273,8 +276,8 @@ let rec is_value e =
     | Eindet _    ->
     | Ebound _ _  ->
 *)
-    | Esave _ _ _ ->
-        is_value e
+    | Esave _ _ e ->
+        is_value e (* TODO: or false ? *)
     | Erun _ _ _ ->
         false
     | Eret e ->

@@ -1,17 +1,19 @@
 %{
+open Lem_pervasives
 open Global
 
+module Cmm = Cmm_csem
 
 type ctype_ =
   | Void_
   | Basic_ of AilTypes.basicType
-  | Array_ of ctype_ * Num.num (* NOTE: if the element type is WILDCARD, we ignore the size, ie. _[n] is the same as _[m] *)
+  | Array_ of ctype_ * Big_int.big_int (* NOTE: if the element type is WILDCARD, we ignore the size, ie. _[n] is the same as _[m] *)
 (*
   | STRUCT_ of Ail.id * (Ail.id * Core.member) list
   | UNION_  of Ail.id * (Ail.id * Core.member) list
   | ENUM_ of Ail.id
 *)
-  | Function_ of Core.ctype * Core.ctype list
+  | Function_ of Core.ctype0 * Core.ctype0 list
   | Pointer_ of ctype_
   | Atomic_ of ctype_
 (*
@@ -26,11 +28,11 @@ type ctype_ =
 
 let rec project_ctype_ = function
   | Void_ ->
-      Core.Void
+      Core.Void0
   | Basic_ bty ->
-      Core.Basic bty
+      Core.Basic0 bty
   | Array_ (ty_, n) ->
-    Core.Array (project_ctype_ ty_, n)
+    Core.Array0 (project_ctype_ ty_, n)
 (*
   | STRUCT_ (x, membrs) ->
       Core.STRUCT (x, membrs)
@@ -40,11 +42,11 @@ let rec project_ctype_ = function
       Core.ENUM id
 *)
   | Function_ (ty, tys) ->
-      Core.Function (ty, tys)
+      Core.Function0 (ty, tys)
   | Pointer_ ty_ ->
-      Core.Pointer (project_ctype_ ty_)
+      Core.Pointer0 (project_ctype_ ty_)
   | Atomic_ ty_ ->
-      Core.Atomic (project_ctype_ ty_)
+      Core.Atomic1 (project_ctype_ ty_)
 (*
   | SIZE_T_ ->
       Core.SIZE_T
@@ -66,7 +68,7 @@ type name =
 
 type expr =
   | Eskip
-  | Econst of Core.constant
+  | Econst of Core.constant2
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
   | Eimpl of Implementation_.implementation_constant
@@ -78,7 +80,7 @@ type expr =
   | Eis_signed of expr
   | Eis_unsigned of expr
   | Enot of expr
-  | Ectype of Core.ctype
+  | Ectype of Core.ctype0
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
   | Ecase of expr * (ctype_ * expr) list (* This is a hackish syntactic sugar, that should really only used to case over ctypes *)
@@ -119,7 +121,7 @@ let convert e arg_syms fsyms =
   let rec f ((count, syms) as st) = function
     | Eskip                     -> Core.Eskip
     | Econst c                  -> Core.Econst c
-    | Esym a                    -> Boot.print_debug ("LOOKING FOR> " ^ a) $ Core.Esym (Pmap.find a syms) (* Error handling *)
+    | Esym a                    -> (* Boot.print_debug ("LOOKING FOR> " ^ a) *) (Core.Esym (Pmap.find a syms)) (* Error handling *)
     | Eimpl i                   -> Core.Eimpl i
     | Eop (binop, e1, e2)       -> Core.Eop (binop, f st e1, f st e2)
     | Etrue                     -> Core.Etrue
@@ -131,7 +133,7 @@ let convert e arg_syms fsyms =
     | Enot e                    -> Core.Enot (f st e)
     | Ectype ty                 -> Core.Ectype ty
     | Elet (a, e1, e2) ->
-        let _a = (count, Some a) in
+        let _a = Symbol.Symbol (count, Some a) in
         Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
 
     | Eif (e1, e2, e3)          -> Core.Eif (f st e1, f st e2, f st e3)
@@ -152,7 +154,7 @@ let convert e arg_syms fsyms =
             try
               Pmap.find func M.std
             with Not_found ->
-              prerr_endline $ Colour.ansi_format [Colour.Red] ("PARSING ERROR: the function `" ^ func ^ "' was not declared.");
+              prerr_endline (Colour.ansi_format [Colour.Red] ("PARSING ERROR: the function `" ^ func ^ "' was not declared."));
               exit 1 in
         Core.Ecall (Core.Sym fsym, List.map (f st) args)
     | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
@@ -164,8 +166,8 @@ let convert e arg_syms fsyms =
     | Ewseq (_as, e1, e2) ->
         let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
           match sym_opt with
-            | Some sym -> let _a = (c, Some sym) in
-                          Boot.print_debug ("ADDING> " ^ sym) (c+1, Some _a :: _as, Pmap.add sym _a syms)
+            | Some sym -> let _a = Symbol.Symbol (c, Some sym) in
+                          (* Boot.print_debug ("ADDING> " ^ sym) *) (c+1, Some _a :: _as, Pmap.add sym _a syms)
             | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
         
         Core.Ewseq (List.rev _as', f st e1, f (count', syms') e2)
@@ -175,8 +177,8 @@ let convert e arg_syms fsyms =
     | Esseq (_as, e1, e2)       ->
         let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
           match sym_opt with
-            | Some sym -> let _a = (c, Some sym) in
-                          Boot.print_debug ("ADDING> " ^ sym) (c+1, Some _a :: _as, Pmap.add sym _a syms)
+            | Some sym -> let _a = Symbol.Symbol (c, Some sym) in
+                          (* Boot.print_debug ("ADDING> " ^ sym) *) (c+1, Some _a :: _as, Pmap.add sym _a syms)
             | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
         
         Core.Esseq (List.rev _as', f st e1, f (count', syms') e2)
@@ -192,8 +194,8 @@ let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
     | Easeq (_a_opt, act, pact) ->
 (
         match _a_opt with
-          | Some _a -> let _a' = (count, Some _a) in
-                       print_endline ("ADDING> " ^ _a);
+          | Some _a -> let _a' = Symbol.Symbol (count, Some _a) in
+                       (* print_endline ("ADDING> " ^ _a); *)
                        Core.Easeq (Some _a', snd (g st (Core.Pos, act)), g (count+1, Pmap.add _a _a' syms) pact)
           | None    -> Core.Easeq (None, snd (g st (Core.Pos, act)), g st pact)
             
@@ -207,11 +209,11 @@ let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
     | Eret e -> Core.Eret (f st e)
   and g st (p, act) =(p,
     match act with
-      | Create e_ty            -> (Pset.empty compare, Core.Create (f st e_ty, []))
+      | Create e_ty            -> (Pset.empty compare, Core.Create0 (f st e_ty, []))
       | Alloc e_n              -> (Pset.empty compare, Core.Alloc (f st e_n, []))
-      | Kill e_o               -> (Pset.empty compare, Core.Kill (f st e_o))
-      | Store (e_ty, e_o, e_n, mo) -> (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n, mo))
-      | Load (e_ty, e_o, mo)       -> (Pset.empty compare, Core.Load (f st e_ty, f st e_o, mo))
+      | Kill e_o               -> (Pset.empty compare, Core.Kill0 (f st e_o))
+      | Store (e_ty, e_o, e_n, mo) -> (Pset.empty compare, Core.Store0 (f st e_ty, f st e_o, f st e_n, mo))
+      | Load (e_ty, e_o, mo)       -> (Pset.empty compare, Core.Load0 (f st e_ty, f st e_o, mo))
       | CompareExchangeStrong (e_ty, e_o, e_e, e_d, mo1, mo2)-> (Pset.empty compare,
                                                                  Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
       | CompareExchangeWeak (e_ty, e_o, e_e, e_d, mo1, mo2) -> (Pset.empty compare,
@@ -232,7 +234,7 @@ let mk_file decls =
             if Pmap.mem fname fsyms then
               failwith ("duplicate definition of `" ^ fname ^ "'")
             else
-              let a_fun = (count, Some fname) in
+              let a_fun = Symbol.Symbol (count, Some fname) in
               ((if fname = "main" then Some a_fun else main),
                count+1,
                Pmap.add fname a_fun fsyms,
@@ -243,7 +245,7 @@ let mk_file decls =
     let fun_map' =
       Pmap.map (fun (coreTy_ret, args, fbody) ->
         let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
-          let _a = (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
+          let _a = Symbol.Symbol (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
           (0, Pmap.empty compare, []) args in
         (coreTy_ret, args', convert fbody arg_syms fsyms)) fun_map in
     match main with
@@ -260,7 +262,7 @@ let mk_file decls =
                 Pmap.add i (Core.Def (bty, convert e (Pmap.empty compare) (Pmap.empty compare))) impl_map
           | IFun_decl (i, (bty, args, fbody)) ->
               let (_, arg_syms, args') = List.fold_left (fun (count, m, args') (x, ty) ->
-                let _a = (count, Some x) in (count+1, Pmap.add x _a m, (_a, ty) :: args'))
+                let _a = Symbol.Symbol (count, Some x) in (count+1, Pmap.add x _a m, (_a, ty) :: args'))
                 (0, Pmap.empty compare, []) args in
               Pmap.add i (Core.IFun (bty, args', convert fbody arg_syms (Pmap.empty compare))) impl_map
           | Fun_decl _ ->
@@ -288,7 +290,7 @@ let subst name =
 %}
 
 %token CREATE ALLOC KILL STORE LOAD COMPARE_EXCHANGE_STRONG COMPARE_EXCHANGE_WEAK
-%token <Num.num> INT_CONST
+%token <Big_int.big_int> INT_CONST
 %token <string> SYM
 %token <Core.name> NAME
 %token <Implementation_.implementation_constant> IMPL
@@ -359,11 +361,11 @@ start:
 
 core_base_type:
 | INTEGER
-    { Core.Integer }
+    { Core.Integer0 }
 | BOOLEAN
     { Core.Boolean }
 | ADDRESS
-    { Core.Address }
+    { Core.Address0 }
 | CTYPE
     { Core.Ctype }
 | UNIT
@@ -593,7 +595,7 @@ expr:
     { Eskip }
 
 | n = INT_CONST
-    { Econst (Core.Cint n) }
+    { Econst (Core.Cint0 n) }
 
 | i = IMPL
     { Eimpl i }
