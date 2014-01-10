@@ -171,7 +171,7 @@ let pipeline stdlib impl core_parse file_name =
           error "the C preprocessor failed";
         Input.file temp_name in
           Exception.return2 (c_preprocessing m)
-      >|> Exception.fmap0 Driver.parse
+      >|> Exception.fmap0 Cparser_driver.parse
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
 

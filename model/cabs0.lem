@@ -28,7 +28,7 @@ type typeSpecifier = (* Merge all specifiers into one type *)
   | Tatomic of(list spec_elem * decl_type)
   | Tstruct of maybe atom * maybe (list field_group) * list attribute
   | Tunion of maybe atom * maybe (list field_group) * list attribute
-  | Tenum of maybe atom * maybe (list ((atom * maybe expression) * cabsloc)) * list attribute
+  | Tenum of maybe atom * maybe (list (atom * maybe expression * cabsloc)) * list attribute
 
 and storage =
   AUTO | STATIC | EXTERN | THREAD_LOCAL | REGISTER | TYPEDEF
