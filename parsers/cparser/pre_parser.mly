@@ -11,24 +11,24 @@
     !declare_typename i
 %}
 
-%token<string * Pre_parser_aux.identifier_type ref * Cabs0.cabsloc> 
+%token<string * Pre_parser_aux.identifier_type ref * Cabs0.cabsloc>
   VAR_NAME TYPEDEF_NAME UNKNOWN_NAME
-%token<Cabs0.constant0 * Cabs0.cabsloc> CONSTANT
+%token<Cabs0.constant0 * Cabs0.cabsloc> CONSTANT_
 %token<string * Cabs0.cabsloc> STRING_LITERAL
 
-%token<Cabs0.cabsloc> SIZEOF ALIGNOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
-  ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
-  COLON AND MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN LEFT_ASSIGN
-  RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN LPAREN RPAREN LBRACK RBRACK 
-  LBRACE RBRACE DOT COMMA SEMICOLON ELLIPSIS TYPEDEF EXTERN STATIC RESTRICT
-  AUTO THREAD_LOCAL ATOMIC REGISTER INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE BOOL
-  CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE SWITCH WHILE DO 
-  FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG OFFSETOF STATIC_ASSERT
+%token<Cabs0.cabsloc> SIZEOF ALIGNOF_ PTR_ INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ_ NEQ LT_ GT_
+  ANDAND BARBAR PLUS_ MINUS_ STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION_
+  COLON AND_ MUL_ASSIGN_ DIV_ASSIGN_ MOD_ASSIGN_ ADD_ASSIGN_ SUB_ASSIGN_ LEFT_ASSIGN
+  RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN_ OR_ASSIGN LPAREN RPAREN LBRACK RBRACK 
+  LBRACE RBRACE DOT COMMA_ SEMICOLON ELLIPSIS TYPEDEF_ EXTERN_ STATIC_ RESTRICT
+  AUTO_ THREAD_LOCAL_ ATOMIC REGISTER_ INLINE CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE BOOL
+  CONST VOLATILE VOID STRUCT UNION ENUM CASE_ DEFAULT_ IF ELSE SWITCH_ WHILE_ DO 
+  FOR_ GOTO_ CONTINUE_ BREAK_ RETURN_ BUILTIN_VA_ARG_ OFFSETOF_ STATIC_ASSERT
   LBRACES BARES RBRACES
 
-%token<Cabs0.cabsloc> C11_ATOMIC_INIT C11_ATOMIC_STORE C11_ATOMIC_LOAD
-  C11_ATOMIC_EXCHANGE C11_ATOMIC_COMPARE_EXCHANGE_STRONG C11_ATOMIC_COMPARE_EXCHANGE_WEAK
-  C11_ATOMIC_FETCH_KEY
+%token<Cabs0.cabsloc> C11_ATOMIC_INIT_ C11_ATOMIC_STORE_ C11_ATOMIC_LOAD_
+  C11_ATOMIC_EXCHANGE_ C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ C11_ATOMIC_COMPARE_EXCHANGE_WEAK_
+  C11_ATOMIC_FETCH_KEY_
 
 
 %token EOF
@@ -91,21 +91,21 @@ declare_typename(nt):
 primary_expression:
 | i = VAR_NAME
     { set_id_type i VarId }
-| CONSTANT
+| CONSTANT_
 | string_literals_list
 | LPAREN expression RPAREN
     {}
 
 (* NOTE: this is not present in the actual C11 syntax *)
 atomic_operation:
-| C11_ATOMIC_INIT LPAREN postfix_expression COMMA postfix_expression RPAREN
-| C11_ATOMIC_STORE LPAREN postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
-| C11_ATOMIC_LOAD LPAREN postfix_expression COMMA postfix_expression RPAREN
-| C11_ATOMIC_EXCHANGE LPAREN postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
-| C11_ATOMIC_COMPARE_EXCHANGE_STRONG LPAREN postfix_expression COMMA postfix_expression COMMA
-  postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
-| C11_ATOMIC_COMPARE_EXCHANGE_WEAK LPAREN postfix_expression COMMA postfix_expression COMMA
-  postfix_expression COMMA postfix_expression COMMA postfix_expression RPAREN
+| C11_ATOMIC_INIT_ LPAREN postfix_expression COMMA_ postfix_expression RPAREN
+| C11_ATOMIC_STORE_ LPAREN postfix_expression COMMA_ postfix_expression COMMA_ postfix_expression RPAREN
+| C11_ATOMIC_LOAD_ LPAREN postfix_expression COMMA_ postfix_expression RPAREN
+| C11_ATOMIC_EXCHANGE_ LPAREN postfix_expression COMMA_ postfix_expression COMMA_ postfix_expression RPAREN
+| C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ LPAREN postfix_expression COMMA_ postfix_expression COMMA_
+  postfix_expression COMMA_ postfix_expression COMMA_ postfix_expression RPAREN
+| C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ LPAREN postfix_expression COMMA_ postfix_expression COMMA_
+  postfix_expression COMMA_ postfix_expression COMMA_ postfix_expression RPAREN
     {}
 
 postfix_expression:
@@ -114,19 +114,19 @@ postfix_expression:
 (* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
 | atomic_operation
 | postfix_expression LPAREN argument_expression_list? RPAREN
-| BUILTIN_VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
+| BUILTIN_VA_ARG_ LPAREN assignment_expression COMMA_ type_name RPAREN
     {}
 | postfix_expression DOT i = general_identifier
-| postfix_expression PTR i = general_identifier
+| postfix_expression PTR_ i = general_identifier
     { set_id_type i OtherId }
 | postfix_expression INC
 | postfix_expression DEC
-| LPAREN type_name RPAREN LBRACE initializer_list COMMA? RBRACE
+| LPAREN type_name RPAREN LBRACE initializer_list COMMA_? RBRACE
     {}
 
 argument_expression_list:
 | assignment_expression
-| argument_expression_list COMMA assignment_expression
+| argument_expression_list COMMA_ assignment_expression
     {}
 
 unary_expression:
@@ -136,18 +136,18 @@ unary_expression:
 | unary_operator cast_expression
 | SIZEOF unary_expression
 | SIZEOF LPAREN type_name RPAREN
-| ALIGNOF LPAREN type_name RPAREN
+| ALIGNOF_ LPAREN type_name RPAREN
     {}
 (* TODO: in GCC the second argument may be more complexe than what we allow for now *)
-| OFFSETOF LPAREN type_name COMMA i = general_identifier RPAREN
+| OFFSETOF_ LPAREN type_name COMMA_ i = general_identifier RPAREN
     { set_id_type i OtherId }
 
 
 unary_operator:
-| AND
+| AND_
 | STAR
-| PLUS
-| MINUS
+| PLUS_
+| MINUS_
 | TILDE
 | BANG
     {}
@@ -166,8 +166,8 @@ multiplicative_expression:
 
 additive_expression:
 | multiplicative_expression
-| additive_expression PLUS multiplicative_expression
-| additive_expression MINUS multiplicative_expression
+| additive_expression PLUS_ multiplicative_expression
+| additive_expression MINUS_ multiplicative_expression
     {}
 
 shift_expression:
@@ -178,8 +178,8 @@ shift_expression:
 
 relational_expression:
 | shift_expression
-| relational_expression LT shift_expression
-| relational_expression GT shift_expression
+| relational_expression LT_ shift_expression
+| relational_expression GT_ shift_expression
 | relational_expression LEQ shift_expression
 | relational_expression GEQ shift_expression
     {}
@@ -192,7 +192,7 @@ equality_expression:
 
 and_expression:
 | equality_expression
-| and_expression AND equality_expression
+| and_expression AND_ equality_expression
     {}
 
 exclusive_or_expression:
@@ -217,7 +217,7 @@ logical_or_expression:
 
 conditional_expression:
 | logical_or_expression
-| logical_or_expression QUESTION expression COLON conditional_expression
+| logical_or_expression QUESTION_ expression COLON conditional_expression
     {}
 
 assignment_expression:
@@ -226,22 +226,22 @@ assignment_expression:
     {}
 
 assignment_operator:
-| EQ
-| MUL_ASSIGN
-| DIV_ASSIGN
-| MOD_ASSIGN
-| ADD_ASSIGN
-| SUB_ASSIGN
+| EQ_
+| MUL_ASSIGN_
+| DIV_ASSIGN_
+| MOD_ASSIGN_
+| ADD_ASSIGN_
+| SUB_ASSIGN_
 | LEFT_ASSIGN
 | RIGHT_ASSIGN
 | AND_ASSIGN
-| XOR_ASSIGN
+| XOR_ASSIGN_
 | OR_ASSIGN
     {}
 
 expression:
 | assignment_expression
-| expression COMMA assignment_expression
+| expression COMMA_ assignment_expression
     {}
 
 constant_expression:
@@ -276,26 +276,26 @@ declaration_specifiers:
     {}
 
 declaration_specifiers_typedef:
-| declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
-| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type?
+| declaration_specifiers_no_type? TYPEDEF_ declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type?
+| declaration_specifiers_no_type? i = TYPEDEF_NAME declaration_specifiers_no_type? TYPEDEF_ declaration_specifiers_no_type?
     { set_id_type i TypedefId }
-| declaration_specifiers_no_type? TYPEDEF declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
-| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type? TYPEDEF_ declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name?
+| declaration_specifiers_no_type? type_specifier_no_typedef_name declaration_specifiers_no_typedef_name? TYPEDEF_ declaration_specifiers_no_typedef_name?
     {}
 
 init_declarator_list:
 | init_declarator
-| init_declarator_list COMMA init_declarator
+| init_declarator_list COMMA_ init_declarator
     {}
 
 init_declarator:
 | declare_varname(fst(declarator))
-| declare_varname(fst(declarator)) EQ c_initializer
+| declare_varname(fst(declarator)) EQ_ c_initializer
     { }
 
 typedef_declarator_list:
 | typedef_declarator
-| typedef_declarator_list COMMA typedef_declarator
+| typedef_declarator_list COMMA_ typedef_declarator
     {}
 
 typedef_declarator:
@@ -303,11 +303,11 @@ typedef_declarator:
     { }
 
 storage_class_specifier_no_typedef:
-| EXTERN
-| STATIC
-| AUTO
-| THREAD_LOCAL
-| REGISTER
+| EXTERN_
+| STATIC_
+| AUTO_
+| THREAD_LOCAL_
+| REGISTER_
     {}
 
 type_specifier_no_typedef_name:
@@ -366,7 +366,7 @@ specifier_qualifier_list_no_typedef_name:
 
 struct_declarator_list:
 | struct_declarator
-| struct_declarator_list COMMA struct_declarator
+| struct_declarator_list COMMA_ struct_declarator
     {}
 
 struct_declarator:
@@ -375,20 +375,20 @@ struct_declarator:
     {}
 
 enum_specifier:
-| ENUM LBRACE enumerator_list COMMA? RBRACE
+| ENUM LBRACE enumerator_list COMMA_? RBRACE
     {}
-| ENUM i = general_identifier LBRACE enumerator_list COMMA? RBRACE
+| ENUM i = general_identifier LBRACE enumerator_list COMMA_? RBRACE
 | ENUM i = general_identifier
     { set_id_type i OtherId }
 
 enumerator_list:
 | declare_varname(enumerator)
-| enumerator_list COMMA declare_varname(enumerator)
+| enumerator_list COMMA_ declare_varname(enumerator)
     {}
 
 enumerator:
 | i = enumeration_constant
-| i = enumeration_constant EQ constant_expression
+| i = enumeration_constant EQ_ constant_expression
     { i }
 
 enumeration_constant:
@@ -444,13 +444,13 @@ type_qualifier_list:
 
 parameter_type_list:
 | l=parameter_list
-| l=parameter_list COMMA ELLIPSIS
+| l=parameter_list COMMA_ ELLIPSIS
     { l }
 
 parameter_list:
 | i=parameter_declaration
     { [i] }
-| l=parameter_list COMMA i=parameter_declaration
+| l=parameter_list COMMA_ i=parameter_declaration
     { i::l }
 
 parameter_declaration:
@@ -464,7 +464,7 @@ parameter_declaration:
 identifier_list: (* 6.7.5.3 3 indicates that this case shall only appears in function definitions. *)
                  (* 6.9.1 6 indicates that there can't be TYPEDEF_NAME here. *)
 | i = non_type_identifier
-| identifier_list COMMA i = non_type_identifier
+| identifier_list COMMA_ i = non_type_identifier
     { set_id_type i VarId }
 *)
 
@@ -488,16 +488,16 @@ direct_abstract_declarator:
 
 c_initializer:
 | assignment_expression
-| LBRACE initializer_list COMMA? RBRACE
+| LBRACE initializer_list COMMA_? RBRACE
     {}
 
 initializer_list:
 | designation? c_initializer
-| initializer_list COMMA designation? c_initializer
+| initializer_list COMMA_ designation? c_initializer
     {}
 
 designation:
-| designator_list EQ
+| designator_list EQ_
     {}
 
 designator_list:
@@ -512,7 +512,7 @@ designator:
 
 (*
 static_assert_declaration:
-| STATIC_ASSERT LPAREN constant_expression COMMA string_literal RPAREN SEMICOLON
+| STATIC_ASSERT LPAREN constant_expression COMMA_ string_literal RPAREN SEMICOLON
     {}
 *)
 
@@ -540,8 +540,8 @@ statement_safe:
 labeled_statement(last_statement):
 | i = general_identifier COLON last_statement
     { set_id_type i OtherId }
-| CASE constant_expression COLON last_statement
-| DEFAULT COLON last_statement
+| CASE_ constant_expression COLON last_statement
+| DEFAULT_ COLON last_statement
     {}
 
 compound_statement:
@@ -564,27 +564,27 @@ expression_statement:
 selection_statement_dangerous:
 | IF LPAREN expression RPAREN statement_dangerous
 | IF LPAREN expression RPAREN statement_safe ELSE statement_dangerous
-| SWITCH LPAREN expression RPAREN statement_dangerous
+| SWITCH_ LPAREN expression RPAREN statement_dangerous
     {}
 
 selection_statement_safe:
 | IF LPAREN expression RPAREN statement_safe ELSE statement_safe
-| SWITCH LPAREN expression RPAREN statement_safe
+| SWITCH_ LPAREN expression RPAREN statement_safe
     {}
 
 iteration_statement(last_statement):
-| WHILE LPAREN expression RPAREN last_statement
-| DO statement_dangerous WHILE LPAREN expression RPAREN SEMICOLON
-| FOR LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
-| FOR LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
+| WHILE_ LPAREN expression RPAREN last_statement
+| DO statement_dangerous WHILE_ LPAREN expression RPAREN SEMICOLON
+| FOR_ LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
+| FOR_ LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
     {}
 
 jump_statement:
-| GOTO i = general_identifier SEMICOLON
+| GOTO_ i = general_identifier SEMICOLON
     { set_id_type i OtherId }
-| CONTINUE SEMICOLON
-| BREAK SEMICOLON
-| RETURN expression? SEMICOLON
+| CONTINUE_ SEMICOLON
+| BREAK_ SEMICOLON
+| RETURN_ expression? SEMICOLON
     {}
 
 (* TODO[non-standard] cppmem thread notation *)

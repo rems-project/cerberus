@@ -20,7 +20,7 @@ type typeSpecifier =
 | Tatomic of (spec_elem list*decl_type)
 | Tstruct of atom option * field_group list option * attribute list
 | Tunion of atom option * field_group list option * attribute list
-| Tenum of atom option * ((atom*expression0 option)*cabsloc) list option
+| Tenum of atom option * (atom*expression0 option*cabsloc) list option
    * attribute list
 and storage =
 | AUTO

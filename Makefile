@@ -104,7 +104,7 @@ PPRINTERS_FILES=\
   pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
 
-default: ocaml_byte
+default: lem_model ocaml_byte
 
 
 # Create the directory where ocamlbuild will be called, and copy the OCaml library files from Lem.
@@ -126,14 +126,16 @@ $(OCAML_BUILD_DIR):
 # 	OCAMLRUNPARAM="" $(LEM) $(foreach D, $(LEMDIRS), -lib $(D)) $(addprefix ott/lem/, $(AIL_FILES))
 
 # Calling Lem on the meat of Cerberus
-lem_model: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
+lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 	@rm -rf _lem/
 	@mkdir _lem/
 	@cp $(CMMDIR)/cmm_csem.lem _lem/
 	@cp $(addprefix model/, $(MODEL_FILES)) _lem/
 	@cp model/cabs0.lem _lem/
 	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
-	OCAMLRUNPARAM="" $(LEM) $(foreach D, $(LEMDIRS), -lib $(D)) $(wildcard _lem/*.lem)
+
+lem_model: lem_model_
+	OCAMLRUNPARAM="" $(LEM) $(wildcard _lem/*.lem)
 
 
 $(OCAML_BUILD_DIR)/%.ml : %.ml | $(OCAML_BUILD_DIR)
@@ -169,6 +171,7 @@ ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_
             $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
 #	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
+	ln -fs _ocaml_generated/main.byte csem
 
 
 

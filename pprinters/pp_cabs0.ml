@@ -138,7 +138,7 @@ let rec pp_typeSpecifier = function
       pp_keyword "enum" ^^
       (P.optional (fun z -> P.space ^^ pp_type z) str_opt) ^^
       P.optional (fun z ->
-        let block = P.separate_map (P.comma ^^ P.break 1) (fun ((str, e_opt), _) ->
+        let block = P.separate_map (P.comma ^^ P.break 1) (fun (str, e_opt, _) ->
           P.space ^^ !^ str ^^
           P.optional (fun z -> P.space ^^ P.equals ^^^ pp_expression None z) e_opt) z in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
