@@ -157,7 +157,6 @@ let get_test (file_name:string)
   
 let get_tests: test list = 
   [(* Core programs *)
-(*
    get_test "tests/concurrency/coherence+rel_rel_acq.core" [1] [];
    get_test "tests/concurrency/coherence+init+rel_acq.core" [1] [];
    get_test "tests/concurrency/datarace+Rna+Rna.core" [0] [];
@@ -185,5 +184,4 @@ let get_tests: test list =
    get_test "tests/concurrency/MP+na_rel+acq_na.c" [1; 2] [];
    get_test "tests/concurrency/LB+acq_rel+acq_rel.c" [0; 1; 2] [];
    get_test "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3] []
-*)
    ]
