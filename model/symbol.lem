@@ -5,6 +5,19 @@ type t =
 
 type counter = nat
 
+instance (Eq t)
+  let (=) sym1 sym2 =
+    let (Symbol n1 str1) = sym1 in
+    let (Symbol n2 str2) = sym2 in
+    n1 = n2
+  let (<>) sym1 sym2 =
+    let (Symbol n1 str1) = sym1 in
+    let (Symbol n2 str2) = sym2 in
+    n1 <> n2
+end
+
+
+
 instance (Ord t)
 (* (TODO: why is lem refusing this?)  let compare (Symbol n1 _) (Symbol n2 _) = compare n1 n2 *)
   let compare sym1 sym2 =

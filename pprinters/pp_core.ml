@@ -154,8 +154,10 @@ let pp_name = function
 let pp_constant = function
   | Cint0 n ->
       (* pp_number *) !^ (Big_int.string_of_big_int n)
+(*
   | Carray0 _ ->
       !^ "ARRAY"
+ *)
   | Cfunction0 _ ->
       !^ "FUNCTION"
 
@@ -168,6 +170,16 @@ let pp_memory_order = function
   | Cmm.Consume -> !^ "Consume"
   | Cmm.Acq_rel -> !^ "Acq_rel"
   
+
+let pp_mem_addr (pref, addr) =
+  let rec pp = function
+  | Cmm_aux.Lbase n          -> Pp_ail.pp_integer n
+  | Cmm_aux.Lshift (addr, n) -> P.braces (pp addr ^^ P.comma ^^^ Pp_ail.pp_integer n)
+  in
+  P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ pp addr)
+
+
+
 let rec pp_expr e =
   let rec pp p e =
     let p'   = precedence e in
@@ -194,8 +206,8 @@ let rec pp_expr e =
             pp_keyword "skip"
         | Econst c ->
             pp_constant c
-        | Eaddr (pref, name) ->
-            P.at ^^ P.braces (pp_prefix pref ^^ !^ (Big_int.string_of_big_int name))
+        | Eaddr addr ->
+            pp_mem_addr addr
         | Esym a ->
             pp_symbol a
         | Eimpl i ->
@@ -277,8 +289,8 @@ let rec pp_expr e =
             P.enclose !^ "{{{" !^ "}}}" (P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es)
         | End es ->
             P.brackets (P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es)
-        | Eshift (a, e) ->
-            pp_keyword "shift" ^^ P.parens (pp_symbol a ^^ P.comma ^^^ pp e)
+        | Eshift (e1, e2) ->
+            pp_keyword "shift" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         
         (* TODO: temporary *)
         | Eis_scalar e ->
@@ -306,7 +318,6 @@ and pp_action = function
       pp_keyword "compare_exchange_weak" ^^
       P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
                 pp_memory_order mo1 ^^^ !^ "|" ^^^ pp_memory_order mo2)
-
 
 
 

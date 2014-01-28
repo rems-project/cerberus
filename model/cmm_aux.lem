@@ -33,13 +33,19 @@ end
 
 
 (* Memory location *)
-type location = list Symbol.t * natural
+type location_ =
+  | Lbase of natural
+  | Lshift of location_ * integer
+
+type location =
+    list Symbol.t * location_
+
 
 
 (* Duplicate of Core.constant (needed to avoid cyclic deps) *)
 type constant =
   | Cint of integer
-  | Carray of list constant
+(*  | Carray of list constant *)
   | Cfunction of Symbol.t
 
 (* Memory value *)
@@ -48,7 +54,21 @@ type cvalue =
                   and use the empty list in mem_state to denote a created, but 
                   uninitialized variable. *) 
   | Mbase of constant
-  | Mobj of (list Symbol.t * natural)
+  | Mobj of location (* (list Symbol.t * natural) *)
+  | Marray of list cvalue
   | Mnull
+
+(*
+instance (Eq cvalue)
+  let (=) v1 v2 =
+    match (v1, v2) with
+      | (Muninit, Munint
+
+
+
+  let (<>) v1 v2
+end
+ *)
+
 
 type mem_value = cvalue

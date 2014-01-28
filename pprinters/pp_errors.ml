@@ -67,6 +67,11 @@ let to_string (loc, c) =
         "FOUND> " ^ id ^
         "\nViolation of constraint 6.7#3 as described by footnote 91 \
          ``..[A]n undeclared identifier is a violation of syntax..``\n"
+    
+    (* TODO: find if there is some relevant text in the std *)
+    | CABS_TO_AIL_UNDECLARED_TYPENAME id ->
+        "Found undeclared typename> " ^ id
+
     | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
         "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
          ``..At most, one storage-class specifier may be given [...]..``\n"

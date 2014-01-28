@@ -109,4 +109,3 @@ type token =
   | VAR_NAME2  of (atom * cabsloc)
   | TYPEDEF_NAME2 of (atom * cabsloc)
   | OTHER_NAME of (atom * cabsloc)
-

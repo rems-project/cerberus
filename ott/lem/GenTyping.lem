@@ -1,3 +1,4 @@
+import Boot
 open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf OptionMonad
 
 open import GenTypes GenTypesAux Annotation
@@ -13,9 +14,9 @@ Local Notation "'do' ( x , y ) <- m ; c" = (m >>= (fun p -> let (x, y) = p in c)
 let annotate_rvalue_aux (A : annotation 'A1 'A2) (annotate_expression : expression 'A1 -> maybe (expression 'A2)) e =
   annotate_expression e >>= fun e ->
   match type_of A e with
-  | GenRValueType   gt -> Just (e, pointer_conversion gt)
-  | GenLValueType _ t  -> AilTypesAux.lvalue_conversion t >>= fun t ->
-                          Just (e, inject_type t)
+  | GenRValueType   gt -> Just (e, rvalue_coercion gt)
+  | GenLValueType _ t  -> AilTypesAux.lvalue_coercion t >>= fun t' ->
+                          Just (e, inject_type t')
   end
 
 let type_of_constant ic : genIntegerType =
@@ -124,7 +125,7 @@ let annotate_assignee_aux (annotate_rvalue : expression 'A1 -> maybe (expression
 let rec annotate_arguments_aux (A : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> maybe (expression 'A2)) es (p : list (qualifiers * _)) : maybe (list (expression 'A2)) =
     match (es, p) with
     | ([]     , []          ) -> Just []
-    | (e :: es, (_, t1) :: p) -> annotate_assignee (AilTypesAux.pointer_conversion t1) e >>= fun e ->
+    | (e :: es, (_, t1) :: p) -> annotate_assignee (AilTypesAux.rvalue_coercion t1) e >>= fun e ->
                                  annotate_arguments_aux A annotate_assignee es p >>= fun es ->
                                  Just (e :: es)
     | (_      , _           ) -> Nothing
@@ -188,7 +189,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_expression A S G e >>= fun e ->
       match type_of A e with
       | GenLValueType q' t' ->
-          AilTypesAux.lvalue_conversion t' >>= fun t ->
+          AilTypesAux.lvalue_coercion t' >>= fun t ->
           if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
             then Just (Unary uop e, GenRValueType (inject_type t))
             else Nothing
@@ -198,7 +199,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_expression A S G e >>= fun e ->
       match type_of A e with
       | GenLValueType q' t' ->
-          AilTypesAux.lvalue_conversion t' >>= fun t ->
+          AilTypesAux.lvalue_coercion t' >>= fun t ->
           if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
             then Just (Unary uop e, GenRValueType (inject_type t))
             else Nothing
@@ -218,7 +219,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       match type_of A e1 with
       | GenLValueType q1 t1 ->
           if AilTypesAux.modifiable q1 t1
-            then let t = AilTypesAux.pointer_conversion t1 in
+            then let t = AilTypesAux.rvalue_coercion t1 in
                  annotate_assignee t e2 >>= fun e2 -> 
                  Just (Assign e1 e2, GenRValueType (inject_type t))
             else Nothing
@@ -391,7 +392,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       match type_of A e1 with
       | GenLValueType q t -> 
-          AilTypesAux.lvalue_conversion t >>= fun t1 ->
+          AilTypesAux.lvalue_coercion t >>= fun t1 ->
           if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
             then Just (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
             else Nothing
@@ -402,7 +403,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       match type_of A e1 with
       | GenLValueType q t -> 
-          AilTypesAux.lvalue_conversion t >>= fun t1 ->
+          AilTypesAux.lvalue_coercion t >>= fun t1 ->
           if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
             then Just (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
             else Nothing
@@ -413,7 +414,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       match type_of A e1 with
       | GenLValueType q t ->
-          AilTypesAux.lvalue_conversion t >>= fun t1 ->
+          AilTypesAux.lvalue_coercion t >>= fun t1 ->
           let gt1 = inject_type t1 in
           if AilTypesAux.modifiable q t && well_typed_binary_arithmetic gt1 aop gt2
             then Just (CompoundAssign e1 aop e2, GenRValueType gt1)

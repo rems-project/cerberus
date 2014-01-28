@@ -9,12 +9,26 @@ module ATypes = AilTypes
 
 
 type state = <|
-  symbol_counter:         Symbol.counter;
-  registered_identifiers: Symbol_table.t string; (* table (with stacked scopes) associating C identifiers to symbols *)
-  registered_labels:      map string Symbol.t;   (* registered_labels *)
+  (* Counter for the symbol generator *)
+  symbol_counter: Symbol.counter;
+  (* table (with stacked scopes) associating C identifiers to symbols *)
+  registered_identifiers: Symbol_table.t string;
+  
+  (* registered_labels *)
+  registered_labels:      map string Symbol.t;
   is_inside_switch:       bool;
+  
   fun_defs:               A.sigma Location.t unit;
   id_map:                 map Symbol.t (ATypes.qualifiers * ATypes.ctype);
+  
+  (* type definitions *)
+  (* TODO[vla]: §6.7.8#2 If a typedef name specifies a variably modified type then it shall have block scope. *)
+  typedef_map: map string (ATypes.qualifiers * ATypes.ctype);
+  
+  (* we save string litterals to be able to do static allocation in the Core *)
+  strings:                map Symbol.t string;
+  
+  
   (* TODO: need to bring back globals (add them to newAil) *)
 |>
 
@@ -65,7 +79,9 @@ let eval m =
     registered_labels=      Map.empty;
     is_inside_switch=       false;
     fun_defs=               [];
-    id_map=                 Map.empty
+    id_map=                 Map.empty;
+    typedef_map=            Map.empty;
+    strings=                Map.empty
   |> in
   State_exception.eval (bind m make_program) initial_state
 
@@ -162,3 +178,22 @@ let fresh_label name =
     (symbol, <| st with  symbol_counter=     symbol_counter';
                          registered_labels=  Map.insert name symbol st.registered_labels |>)
   )
+
+
+
+
+
+
+val register_typedef: string -> ATypes.qualifiers * ATypes.ctype -> t unit
+let register_typedef str qs_ty =
+  State_exception.update (fun st ->
+    <| st with typedef_map= Map.insert str qs_ty st.typedef_map |>
+  )
+
+val get_typedef: string -> t (ATypes.qualifiers * ATypes.ctype)
+let get_typedef str =
+  bind (State_exception.read (fun st -> Map.lookup str st.typedef_map))
+    function
+      | Just qs_ty -> return qs_ty
+      | Nothing    -> fail (Errors.CABS_TO_AIL_UNDECLARED_TYPENAME str)
+    end

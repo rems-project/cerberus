@@ -52,6 +52,7 @@ declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
+declare ocaml target_rep function pp_ail_ctype = `Boot_ocaml.pp_ail_ctype`
 (* TODO[newLem] let inline {ocaml} pp_ail_ctype = Ocaml.Boot.pp_ail_ctype *)
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string

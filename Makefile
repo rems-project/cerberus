@@ -64,6 +64,7 @@ MODEL_FILES=\
   core_typing.lem \
   cabs_to_ail.lem \
   cabs_to_ail_effect.lem \
+  builtins.lem \
   cmm_aux.lem \
   debug.lem \
   decode.lem \
@@ -129,13 +130,18 @@ $(OCAML_BUILD_DIR):
 lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 	@rm -rf _lem/
 	@mkdir _lem/
-	@cp $(CMMDIR)/cmm_csem.lem _lem/
+#	@cp $(CMMDIR)/cmm_csem.lem _lem/
+	@cp model/cmm_csem.lem _lem/
 	@cp $(addprefix model/, $(MODEL_FILES)) _lem/
 	@cp model/cabs0.lem _lem/
 	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
 
 lem_model: lem_model_
 	OCAMLRUNPARAM="" $(LEM) $(wildcard _lem/*.lem)
+	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(OCAML_BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
+	@./hack.sh $(OCAML_BUILD_DIR)
+
+
 
 
 $(OCAML_BUILD_DIR)/%.ml : %.ml | $(OCAML_BUILD_DIR)
