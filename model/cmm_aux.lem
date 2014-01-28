@@ -1,6 +1,10 @@
 open import Pervasives
 import Symbol
 
+type aid = string
+
+type program = int
+
 (* Thread id *)
 type tid =
   | Tzero
