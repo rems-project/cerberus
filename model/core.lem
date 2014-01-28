@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Cmm_csem
+import Symbol AilTypes Implementation_ Undefined Cmm_aux Cmm_csem
 
 module Cmm = Cmm_csem
 
@@ -9,7 +9,8 @@ module Cmm = Cmm_csem
          core.lem (just for knowing mem_addr) and by core_run. But we can't
          because the memory actions have to know about the monad used by
          core_run.lem. If we had type families, StateT would do the trick *)
-type mem_addr = list Symbol.t * natural
+type mem_addr = Cmm_aux.location
+
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
@@ -95,7 +96,7 @@ type name =
 
 type constant =
   | Cint of integer
-  | Carray of list constant
+(*  | Carray of list constant *)
 (*  | Cstruct *)
   | Cfunction of sym
 
@@ -152,7 +153,8 @@ type expr 'a =
   (* Parallel composition *)
   | Epar of list (expr 'a)
   
-  | Eshift of sym *expr 'a
+  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *)
+
 
 
 (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)

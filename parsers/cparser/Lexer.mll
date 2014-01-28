@@ -56,7 +56,8 @@ let init filename channel : Lexing.lexbuf =
       ("_Bool", fun loc -> BOOL loc);
       ("_Thread_local", fun loc -> THREAD_LOCAL_ loc);
       ("_Atomic", fun loc -> ATOMIC loc);
-      
+
+(*      
       ("__c11_atomic_init", fun loc -> C11_ATOMIC_INIT_ loc);
       ("__c11_atomic_store", fun loc -> C11_ATOMIC_STORE_ loc);
       ("__c11_atomic_load", fun loc -> C11_ATOMIC_LOAD_ loc);
@@ -64,6 +65,7 @@ let init filename channel : Lexing.lexbuf =
       ("__c11_atomic_compare_exchange_strong", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ loc);
       ("__c11_atomic_compare_exchange_weak", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ loc);
       ("__c11_atomic_fetch_key", fun loc -> C11_ATOMIC_FETCH_KEY_ loc);
+*)
       
       ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG_ loc);
 (*      ("_Static_assert", fun loc -> STATIC_ASSERT) *)
@@ -90,6 +92,7 @@ let init filename channel : Lexing.lexbuf =
       | t::q -> contexts := (id::t)::q
   end;
 
+(*
   !declare_typename "__builtin_va_list";
   
   !declare_typename "size_t";
@@ -98,7 +101,16 @@ let init filename channel : Lexing.lexbuf =
   !declare_varname "assert";
   !declare_varname "NULL";
   !declare_varname "ULONG_MAX";
+*)
   
+  (* Cerberus built-in types and variables *)
+  List.iter (fun ty ->
+    !declare_typename ty
+  ) Builtins.builtin_typenames;
+  
+  List.iter (fun var ->
+    !declare_varname var
+  ) Builtins.builtin_varnames;
   
   
   let lb = Lexing.from_channel channel in
@@ -150,10 +162,10 @@ let unsigned_suffix = ['u' 'U']
 let long_suffix = ['l' 'L']
 let long_long_suffix = "ll" | "LL"
 let integer_suffix =
-    unsigned_suffix long_suffix? 
-  | unsigned_suffix long_long_suffix 
-  | long_suffix unsigned_suffix?
+    unsigned_suffix long_long_suffix 
+  | unsigned_suffix long_suffix?
   | long_long_suffix unsigned_suffix?
+  | long_suffix unsigned_suffix?
 
 (*
 let integer_constant =
@@ -238,18 +250,28 @@ rule initial = parse
   | whitespace_char               { initial lexbuf }
   | '#'                           { hash lexbuf}
   
+
   | (integer_constant as s) unsigned_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED), currentLoc lexbuf) }
+  
   | (integer_constant as s) unsigned_suffix long_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+  
   | (integer_constant as s) unsigned_suffix long_long_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+  
   | (integer_constant as s) long_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG), currentLoc lexbuf) }
+  
+  | (integer_constant as s) long_long_suffix
+      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG_LONG), currentLoc lexbuf) }
+  
   | (integer_constant as s) long_suffix unsigned_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+  
   | (integer_constant as s) long_long_suffix unsigned_suffix
       { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+  
   | (integer_constant as s)
       { CONSTANT_ (Cabs0.CONST_INT (s, None), currentLoc lexbuf) }
   
@@ -327,7 +349,7 @@ rule initial = parse
             String.sub id 0 (String.length pref) = pref then
               VAR_NAME (id, ref VarId, currentLoc lexbuf)
           else
-            UNKNOWN_NAME(id, ref OtherId, currentLoc lexbuf) }
+            UNKNOWN_NAME(id, ref (OtherId "Lexer.mll"), currentLoc lexbuf) }
 |		eof			{EOF}
   | _                             { 
       Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
@@ -369,176 +391,5 @@ and onelinecomment = parse
 
 
 {
-
-
-  let hack lexbuf =
-    match initial lexbuf with
-(*
-  | STRING_LITERAL (str, loc) ->
-      (* Merge consecutive string literals *)
-      let rec doConcat accu = function
-        | STRING_LITERAL (str, loc)::q -> doConcat (str^accu) q
-        | l                            -> loop l CONSTANT_t (Cabs0.CONST_STRING accu, loc)
-      in
-      doConcat "" (t::q)
-*)
-      
-      | TYPEDEF_NAME (id, typ, loc)
-      | UNKNOWN_NAME (id, typ, loc)
-      | VAR_NAME     (id, typ, loc) ->
-          begin
-            match !typ with
-              | VarId     -> VAR_NAME2 (id, loc)
-              | TypedefId -> TYPEDEF_NAME2 (id, loc)
-              | OtherId   -> OTHER_NAME (id, loc)
-          end
-      | tok -> tok
-
-
-
-(*
-  open Streams
-  open Specif
-  open Parser
-  open Aut.GramDefs
-
-  let tokens_stream lexbuf : token coq_Stream =
-    let tokens = ref [] in
-    let lexer_wraper lexbuf : Pre_parser.token =
-      let res = initial lexbuf in
-      tokens := res::!tokens;
-      res
-    in
-    Pre_parser.translation_unit_file lexer_wraper lexbuf;
-    let rec compute_token_stream accu = 
-      let loop q t v =
-        compute_token_stream
-          (lazy (Cons (Coq_existT (t, Obj.magic v), accu)))
-          q
-      in 
-      function
-      | [] -> accu
-      | t::q ->
-          match t with
-            | ADD_ASSIGN loc -> loop q ADD_ASSIGN_t loc
-            | ALIGNOF loc -> loop q ALIGNOF_t loc
-            | AND loc -> loop q AND_t loc
-            | ANDAND loc -> loop q ANDAND_t loc
-            | AND_ASSIGN loc -> loop q AND_ASSIGN_t loc
-            | AUTO loc -> loop q AUTO_t loc
-            | BANG loc -> loop q BANG_t loc
-            | BAR loc -> loop q BAR_t loc
-            | BARBAR loc -> loop q BARBAR_t loc
-            | BOOL loc -> loop q BOOL_t loc
-            | BREAK loc -> loop q BREAK_t loc
-            | BUILTIN_VA_ARG loc -> loop q BUILTIN_VA_ARG_t loc
-            | CASE loc -> loop q CASE_t loc
-            | CHAR loc -> loop q CHAR_t loc
-            | COLON loc -> loop q COLON_t loc
-            | COMMA loc -> loop q COMMA_t loc
-            | CONST loc -> loop q CONST_t loc
-            | CONSTANT (cst, loc) -> loop q CONSTANT_t (cst, loc)
-            | CONTINUE loc -> loop q CONTINUE_t loc
-            | DEC loc -> loop q DEC_t loc
-            | DEFAULT loc -> loop q DEFAULT_t loc
-            | DIV_ASSIGN loc -> loop q DIV_ASSIGN_t loc
-            | DO loc -> loop q DO_t loc
-            | DOT loc -> loop q DOT_t loc
-            | DOUBLE loc -> loop q DOUBLE_t loc
-            | ELLIPSIS loc -> loop q ELLIPSIS_t loc
-            | ELSE loc -> loop q ELSE_t loc
-            | ENUM loc -> loop q ENUM_t loc
-            | EOF -> loop q EOF_t ()
-            | EQ loc -> loop q EQ_t loc
-            | EQEQ loc -> loop q EQEQ_t loc
-            | EXTERN loc -> loop q EXTERN_t loc
-            | FLOAT loc -> loop q FLOAT_t loc
-            | FOR loc -> loop q FOR_t loc
-            | GEQ loc -> loop q GEQ_t loc
-            | GOTO loc -> loop q GOTO_t loc
-            | GT loc -> loop q GT_t loc
-            | HAT loc -> loop q HAT_t loc
-            | IF loc -> loop q IF_t loc
-            | INC loc -> loop q INC_t loc
-            | INLINE loc -> loop q INLINE_t loc
-            | INT loc -> loop q INT_t loc
-            | LBRACE loc -> loop q LBRACE_t loc
-            | LBRACES loc -> loop q LBRACES_t loc
-            | BARES loc -> loop q BARES_t loc
-            | RBRACES loc -> loop q RBRACES_t loc
-            | LBRACK loc -> loop q LBRACK_t loc
-            | LEFT loc -> loop q LEFT_t loc
-            | LEFT_ASSIGN loc -> loop q LEFT_ASSIGN_t loc
-            | LEQ loc -> loop q LEQ_t loc
-            | LONG loc -> loop q LONG_t loc
-            | LPAREN loc -> loop q LPAREN_t loc
-            | LT loc -> loop q LT_t loc
-            | MINUS loc -> loop q MINUS_t loc
-            | MOD_ASSIGN loc -> loop q MOD_ASSIGN_t loc
-            | MUL_ASSIGN loc -> loop q MUL_ASSIGN_t loc
-            | NEQ loc -> loop q NEQ_t loc
-            | OR_ASSIGN loc -> loop q OR_ASSIGN_t loc
-            | PERCENT loc -> loop q PERCENT_t loc
-            | PLUS loc -> loop q PLUS_t loc
-            | PTR loc -> loop q PTR_t loc
-            | QUESTION loc -> loop q QUESTION_t loc
-            | OFFSETOF loc -> loop q OFFSETOF_t loc
-            | RBRACE loc -> loop q RBRACE_t loc
-            | RBRACK loc -> loop q RBRACK_t loc
-            | REGISTER loc -> loop q REGISTER_t loc
-            | RESTRICT loc -> loop q RESTRICT_t loc
-            | RETURN loc -> loop q RETURN_t loc
-            | RIGHT loc -> loop q RIGHT_t loc
-            | RIGHT_ASSIGN loc -> loop q RIGHT_ASSIGN_t loc
-            | RPAREN loc -> loop q RPAREN_t loc
-            | SEMICOLON loc -> loop q SEMICOLON_t loc
-            | SHORT loc -> loop q SHORT_t loc
-            | SIGNED loc -> loop q SIGNED_t loc
-            | SIZEOF loc -> loop q SIZEOF_t loc
-            | SLASH loc -> loop q SLASH_t loc
-            | STAR loc -> loop q STAR_t loc
-            | STATIC loc -> loop q STATIC_t loc
-(*            | STATIC_ASSERT loc -> loop q STATIC_ASSERT_t loc *)
-            | STRING_LITERAL (str, loc) -> 
-                (* Merge consecutive string literals *)
-                let rec doConcat accu = function
-                  | STRING_LITERAL (str, loc)::q ->
-                      doConcat (str^accu) q
-                  | l -> loop l CONSTANT_t (Cabs0.CONST_STRING accu, loc)
-                in
-                doConcat "" (t::q)
-            | STRUCT loc -> loop q STRUCT_t loc
-            | SUB_ASSIGN loc -> loop q SUB_ASSIGN_t loc
-            | SWITCH loc -> loop q SWITCH_t loc
-            | TILDE loc -> loop q TILDE_t loc
-            | TYPEDEF loc -> loop q TYPEDEF_t loc
-            | TYPEDEF_NAME (id, typ, loc) 
-            | UNKNOWN_NAME (id, typ, loc)
-            | VAR_NAME (id, typ, loc) ->
-                let terminal = match !typ with
-                  | VarId -> VAR_NAME_t
-                  | TypedefId -> TYPEDEF_NAME_t
-                  | OtherId -> OTHER_NAME_t
-                in
-                loop q terminal (id, loc)
-            | UNION loc -> loop q UNION_t loc
-            | UNSIGNED loc -> loop q UNSIGNED_t loc
-            | VOID loc -> loop q VOID_t loc
-            | VOLATILE loc -> loop q VOLATILE_t loc
-            | WHILE loc -> loop q WHILE_t loc
-            | XOR_ASSIGN loc -> loop q XOR_ASSIGN_t loc
-            | THREAD_LOCAL loc -> loop q THREAD_LOCAL_t loc
-            | ATOMIC loc -> loop q ATOMIC_t loc
-            
-            | C11_ATOMIC_INIT loc -> loop q C11_ATOMIC_INIT_t loc
-            | C11_ATOMIC_STORE loc -> loop q C11_ATOMIC_STORE_t loc
-            | C11_ATOMIC_LOAD loc -> loop q C11_ATOMIC_LOAD_t loc
-            | C11_ATOMIC_EXCHANGE loc -> loop q C11_ATOMIC_EXCHANGE_t loc
-            | C11_ATOMIC_COMPARE_EXCHANGE_STRONG loc -> loop q C11_ATOMIC_COMPARE_EXCHANGE_STRONG_t loc
-            | C11_ATOMIC_COMPARE_EXCHANGE_WEAK loc -> loop q C11_ATOMIC_COMPARE_EXCHANGE_WEAK_t loc
-            | C11_ATOMIC_FETCH_KEY loc -> loop q C11_ATOMIC_FETCH_KEY_t loc
-    in
-    compute_token_stream (lazy (assert false)) !tokens
-*)
 
 }

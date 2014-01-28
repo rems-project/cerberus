@@ -138,7 +138,7 @@ and translate_expression stdlib program a_expr =
           E.fresh_symbol                    >>= fun a_load   ->
           translate_lvalue stdlib program e >>= fun core_e   ->
           (* TODO: qualifiers temporarily not dealt with *)
-          let core_ty_e = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e)) in
+          let core_ty_e = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           return $
             C.Ewseq [Just a_lvalue] core_e
               (C.Easeq (Just a_load)
@@ -156,7 +156,7 @@ and translate_expression stdlib program a_expr =
           E.fresh_symbol                    >>= fun a_lvalue ->
           E.fresh_symbol                    >>= fun a_load   ->
           translate_lvalue stdlib program e >>= fun core_e   ->
-          let core_ty_e = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e)) in
+          let core_ty_e = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           return $
             C.Ewseq [Just a_lvalue] core_e
               (C.Ewseq [Just a_load] (Caux.pload core_ty_e (C.Esym a_lvalue) Cmm.NA)
@@ -227,14 +227,14 @@ and translate_expression stdlib program a_expr =
               )
       
       | A.Binary e1 (A.Arithmetic A.Add) e2 ->
-          let ctype_e1 = exp_type_of e1 in
-          let ctype_e2 = exp_type_of e2 in
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
           E.fresh_symbol >>= fun a_e1    ->
           E.fresh_symbol >>= fun a_e2    ->
           f e1           >>= fun core_e1 ->
           f e2           >>= fun core_e2 ->
           
-          if AilTypesAux.arithmetic ctype_e1 && AilTypesAux.arithmetic ctype_e2 then
+          if AilTypesAux.arithmetic ty1 && AilTypesAux.arithmetic ty2 then
             (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
                           performed on them. *)
             let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
@@ -252,12 +252,25 @@ and translate_expression stdlib program a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.Eop C.OpAdd conv_e1 conv_e2])
           else
             (* otherwise, we have some pointer arithmetic *)
-            E.fresh_symbol        >>= fun a_e1    ->
-            E.fresh_symbol        >>= fun a_e2    ->
-            E.fresh_symbol        >>= fun a_shift ->
-            f e1 >>= fun core_e1 ->
-            f e2 >>= fun core_e2 ->
+            (* TODO: check *)
+            E.fresh_symbol >>= fun a_shift ->
+            match (AilTypesAux.lvalue_coercion ty1, AilTypesAux.lvalue_coercion ty2) with
+              | (Just (AilTypes.Pointer _ ty1'), _) ->
+                  return $
+                    C.Ewseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
+                      (C.Eshift (C.Esym a_e1) (C.Esym a_e2))
+(*                      (C.Eshift (C.Esym a_e1) (C.Eop C.OpMul (C.Esym a_e2) (C.sizeof $ Caux.mk_ctype ty1'))) *)
+              | (_, Just (AilTypes.Pointer _ ty2')) ->
+                  return $
+                    C.Ewseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
+                      (C.Eshift (C.Esym a_e2) (C.Esym a_e1))
+(*                      (C.Eshift (C.Esym a_e2) (C.Eop C.OpMul (C.Esym a_e1) (C.sizeof $ Caux.mk_ctype ty2'))) *)
+              | (_, _) ->
+                  Boot.assert_false "WTF" (* "this case implies the expression was ill-typed." *)
+            end
             
+
+(*
             if AilTypesAux.pointer (exp_type_of e1) then
               (* TODO: temporary hack *)
               return $
@@ -266,7 +279,11 @@ and translate_expression stdlib program a_expr =
                      (C.Esseq [] (C.Esame (C.Esym a_e1) (C.Esym a_shift))
                         (C.Esym a_shift)))
             else
-              Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.ADD) e1 e2 <pointer case>: TODO"
+              
+ *)
+
+              
+(*              Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.ADD) e1 e2 <pointer case>: TODO" *)
       
       | A.Binary e1 (A.Arithmetic A.Sub) e2 ->
           if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
@@ -474,7 +491,7 @@ and translate_expression stdlib program a_expr =
           E.fresh_symbol                     >>= fun a_e2    ->
           translate_lvalue stdlib program e1 >>= fun core_e1 ->
           f e2                               >>= fun core_e2 ->
-          let core_ty_e1 = Caux.mk_ctype $ AilTypesAux.pointer_conversion (snd (from_lvalue_type e1)) in
+          let core_ty_e1 = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           return $
             C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store core_ty_e1

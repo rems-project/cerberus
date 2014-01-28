@@ -5,6 +5,7 @@
 
 open import Pervasives Global
 import Boot Cabs0 Multiset Symbol_table Location State_exception Errors Decode Product
+import Builtins
 import AilSyntax AilTypes
 
 import Cabs_to_ail_effect
@@ -405,6 +406,10 @@ let desugar_constant = function
       E.return $ A.ConstantInteger (desugar_integerConstant str suff_opt)
   | C.CONST_FLOAT str ->
       E.fail (Errors.CSEM_NOT_SUPPORTED "float constants")
+  | C.CONST_STRING str ->
+      E.return $ A.ConstantString str (* TODO *)
+  | C.CONST_CHAR _ _ ->
+      Boot.assert_false "CONST_CHAR"
 (*
   | C.CONST_CHAR pref_opt str ->
       E.return $ A.CONST_CHAR (desugar_character_constant pref_opt str)
@@ -423,18 +428,19 @@ let desugar_cvspecs =
     end
   ) ATypes.no_qualifiers
 
-val separate_spec_elem_list : list C.spec_elem -> (list C.cvspec) * (list C.typeSpecifier)
+val separate_spec_elem_list : list C.spec_elem ->
+                              list C.cvspec * list C.attribute * list C.storage * bool * list C.typeSpecifier
 let separate_spec_elem_list =
   foldl
-    (fun (cs, ts) s ->
+    (fun (cs, attrs, sts, is_inline, ts) s ->
       match s with
-      | C.SpecCV      c -> (c :: cs, ts)
-      | C.SpecAttr    _ -> Boot.assert_false "SpecAttr"
-      | C.SpecStorage _ -> Boot.assert_false "SpecStorage"
-      | C.SpecInline    -> Boot.assert_false "SpecInline"
-      | C.SpecType    t -> (cs, t :: ts)
+      | C.SpecCV      c    -> (c :: cs,         attrs,       sts, is_inline,      ts)
+      | C.SpecAttr    attr -> (     cs, attr :: attrs,       sts, is_inline,      ts)
+      | C.SpecStorage st   -> (     cs,         attrs, st :: sts, is_inline,      ts)
+      | C.SpecInline       -> (     cs,         attrs,       sts,      true,      ts)
+      | C.SpecType    t    -> (     cs,         attrs,       sts, is_inline, t :: ts)
       end)
-    ([], [])
+    ([], [], [], false, [])
 
 
 (* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
@@ -513,14 +519,24 @@ let desugar_type_specifiers = function
 (*  | [C.atomic (specs, dt)] ->*)
   | [C.Tvoid] ->
       E.return ATypes.Void
+  | [C.Tnamed str] ->
+      match Builtins.translate_builtin_typenames str with
+        | Just ty ->
+            E.return ty
+        | Nothing ->
+            (* TODO [tmp hack] removing the qualifiers *)
+            E.get_typedef str >>= fun (qs, ty) ->
+            E.return ty
+      end
   | ss ->
       ATypes.Basic <$> desugar_basic_type_specifiers (Multiset.from_list ss)
 end
 
 
-val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype)
+
+val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype) (* (either (ATypes.qualifiers * ATypes.ctype) (ATypes.qualifiers * ATypes.ctype)) *)
 let desugar_spec_elem_list specs =
-  let (cs, ts) = separate_spec_elem_list specs in
+  let (cs, attrs, sts, is_inline, ts) = separate_spec_elem_list specs in
   let q = desugar_cvspecs cs in
   desugar_type_specifiers ts >>= fun t ->
   E.return (q, t)
@@ -839,8 +855,34 @@ and desugar_definition def =
     (* This should correspond to the def of a struct/union (typedef?) *)
   | C.DECDEF (specs, []) loc ->
       Boot.assert_false "HIP: desugar_definition DECDEF (case 1)"
-  | C.DECDEF ing loc ->
-      Boot.assert_false "HIP: desugar_definition DECDEF (case 2)"
+
+  (* TODO: the direct use of `separate_sepec_elem_list' may be temporary. *)
+  | C.DECDEF (specs, init_names) loc ->
+      (* TODO: for now assuming no attributes, nor inline *)
+      let (cs, [], sts, false, tySpecs) = separate_spec_elem_list specs in
+      let d_qs = desugar_cvspecs cs in
+      desugar_type_specifiers tySpecs >>= fun d_ty ->
+      if List.elem C.TYPEDEF sts then
+        let sts = List.delete C.TYPEDEF sts in
+        match init_names with
+          | [C.Init_name (C.Name tyname C.JUSTBASE [] _) NO_INIT] ->
+              E.register_typedef tyname (d_qs, d_ty)
+          | _ ->
+              E.fail (Errors.CSEM_HIP "(TODO msg) found a typedef DECDEF with less/more than one name; or not a JUSTBASE.")
+        end
+      else
+        
+        Boot.assert_false "HIP: DECDEF, not typedef"
+
+(*
+        (* Not dealing with a type definition *)
+        E.mapM (fun (C.Init_name (C.Name tyname decl_ty [] _) iexpr) ->
+          desugar_decl_type decl_ty >>= fun mk_ctype ->
+          
+          KKK
+        ) init_names
+ *)
+
   | C.PRAGMA at loc ->
       E.fail (Errors.CSEM_NOT_SUPPORTED "PRAGMA definitions")
 end

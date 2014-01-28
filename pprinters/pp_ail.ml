@@ -126,10 +126,18 @@ let pp_integerBaseType = function
 
 
 let pp_integerType = function
- | Char         -> !^ "char"
- | Bool         -> !^ "_Bool"
- | Signed ibt   -> !^ "signed"   ^^^ pp_integerBaseType ibt
- | Unsigned ibt -> !^ "unsigned" ^^^ pp_integerBaseType ibt
+ | Char             -> !^ "char"
+ | Bool             -> !^ "_Bool"
+ | Signed Int8_t    -> !^ "int8_t"
+ | Signed Int16_t   -> !^ "int16_t"
+ | Signed Int32_t   -> !^ "int32_t"
+ | Signed Int64_t   -> !^ "int64_t"
+ | Unsigned Int8_t  -> !^ "uint8_t"
+ | Unsigned Int16_t -> !^ "uint16_t"
+ | Unsigned Int32_t -> !^ "uint32_t"
+ | Unsigned Int64_t -> !^ "uint64_t"
+ | Signed ibt       -> !^ "signed"   ^^^ pp_integerBaseType ibt
+ | Unsigned ibt     -> !^ "unsigned" ^^^ pp_integerBaseType ibt
 
 
 (*

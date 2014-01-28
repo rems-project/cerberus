@@ -21,11 +21,26 @@ let equiv_pair (equiv_A : 'A1 -> 'A2 -> bool) (equiv_B : 'B1 -> 'B2 -> bool) : '
     let (a2, b2) = p2 in
     equiv_A a1 a2 && equiv_B b1 b2
 
+let equiv_triple (equiv_A : 'A1 -> 'A2 -> bool) (equiv_B : 'B1 -> 'B2 -> bool) (equiv_C : 'C1 -> 'C2 -> bool) :
+                 'A1 * 'B1 * 'C1 -> 'A2 * 'B2 * 'C2 -> bool =
+  fun p1 p2 -> 
+    let (a1, b1, c1) = p1 in
+    let (a2, b2, c2) = p2 in
+    equiv_A a1 a2 && equiv_B b1 b2 && equiv_C c1 c2
+
 let eq_pair (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) : 'A * 'B -> 'A * 'B -> bool =
   fun p1 p2 -> 
     let (a1, b1) = p1 in
     let (a2, b2) = p2 in
     eq_A a1 a2 && eq_B b1 b2
+
+
+let eq_triple (eq_A : 'A -> 'A -> bool) (eq_B : 'B -> 'B -> bool) (eq_C : 'C -> 'C -> bool) :
+    'A * 'B * 'C -> 'A * 'B * 'C -> bool =
+  fun p1 p2 -> 
+    let (a1, b1, c1) = p1 in
+    let (a2, b2, c2) = p2 in
+    eq_A a1 a2 && eq_B b1 b2 && eq_C c1 c2
 
 let eq_option (eq_A : 'A -> 'A -> bool) : maybe 'A -> maybe 'A -> bool =
   fun o1 o2 -> 

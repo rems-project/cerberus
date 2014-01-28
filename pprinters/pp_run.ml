@@ -34,8 +34,10 @@ let rec string_of_dyn_rule = function
 let rec convert_constant = function
   | Cmm_aux.Cint n ->
       Core.Cint0 n
+(*
   | Cmm_aux.Carray cs ->
       Core.Carray0 (List.map convert_constant cs)
+ *)
   | Cmm_aux.Cfunction sym ->
       Core.Cfunction0 sym
 
@@ -43,7 +45,7 @@ let rec convert_constant = function
 let string_of_mem_value = function
   | Cmm_aux.Muninit     -> "uninit"
   | Cmm_aux.Mbase c     -> Boot_ocaml.to_plain_string (Pp_core.pp_constant (convert_constant c))
-  | Cmm_aux.Mobj (_, x) -> Big_int.string_of_big_int x
+  | Cmm_aux.Mobj addr   -> Boot_ocaml.to_plain_string (Pp_core.pp_mem_addr addr) (* (_, x) -> Big_int.string_of_big_int x *)
   | Cmm_aux.Mnull       -> "NULL"
 
 let string_of_sym = function
@@ -52,8 +54,11 @@ let string_of_sym = function
 
 let string_of_trace_action tact =
   let f o =
+    Boot_ocaml.to_plain_string (Pp_core.pp_mem_addr o) in
+(*
     "[" ^ (Boot_ocaml.to_plain_string (PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o))) ^
       ": @" ^ Big_int.string_of_big_int (snd o) ^ "]" in
+ *)
   match tact with
     | Core_run_effect.Tcreate (ty, o, tid) ->
         f o ^ " <= create {" ^ (Boot_ocaml.to_plain_string (Pp_core.pp_ctype ty)) ^ "}" ^

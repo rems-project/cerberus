@@ -1,7 +1,7 @@
 type identifier_type =
   | VarId
   | TypedefId
-  | OtherId
+  | OtherId of string
 
 let push_context:(unit -> unit) ref= ref (fun () -> assert false)
 let pop_context:(unit -> unit) ref = ref (fun () -> assert false)

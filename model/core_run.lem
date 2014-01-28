@@ -24,7 +24,7 @@ val     to_core_constant: Cmm_aux.constant -> Core.constant
 let rec to_core_constant c =
   match c with
     | Cmm_aux.Cint n      -> Core.Cint n
-    | Cmm_aux.Carray cs   -> Core.Carray $ map to_core_constant cs
+(*    | Cmm_aux.Carray cs   -> Core.Carray $ map to_core_constant cs *)
     | Cmm_aux.Cfunction a -> Core.Cfunction a
   end
 
@@ -32,7 +32,7 @@ val     from_core_constant: Core.constant -> Cmm_aux.constant
 let rec from_core_constant c =
   match c with
     | Core.Cint n      -> Cmm_aux.Cint n
-    | Core.Carray cs   -> Cmm_aux.Carray $ map from_core_constant cs
+(*    | Core.Carray cs   -> Cmm_aux.Carray $ map from_core_constant cs *)
     | Core.Cfunction a -> Cmm_aux.Cfunction a
   end
 
@@ -508,14 +508,19 @@ let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as st) ->
 
 
 (* static object allocation *)
+(* TODO: the array part is some dubious experiment *)
 val create: list Symbol.t -> ctype -> E.taction_id -> E.t mem_addr
 let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
   (* DEBUG *)
 (* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
   (* We update the memory (obviously) and we add information about the location 
      kind to the state *)
-  let o = (pref, i) in
-  [(U.return o, <| st with E.mem= (Map.insert o [(Cmm_aux.Muninit, taid)] m, i+1);
+  let o = (pref, Cmm_aux.Lbase i) in
+  let init = match ty with
+    | Array _ n -> Cmm_aux.Marray (replicate_list Cmm_aux.Muninit n)
+    | _         -> Cmm_aux.Muninit
+  end in
+  [(U.return o, <| st with E.mem= (Map.insert o [(init, taid)] m, i+1);
                            E.lk = Map.insert o (type_to_location_kind ty) lk |>)]
 
 (* TODO: doesn't do anything regarding the size *)
@@ -525,7 +530,7 @@ let alloc pref _ taid = fun (<| E.mem= (m, i) |> as st) ->
   (* We do not know yet what the type is, so we don't know wether it is atomic
      or nonatomic, so we can't update the location kind in the state. When the 
      location kind is not set, it is assumed to be nonatomic *)
-  let o = (pref, i) in
+  let o = (pref, Cmm_aux.Lbase i) in
   [(U.return o, <| st with E.mem= (Map.insert o [(Cmm_aux.Muninit, taid)] m, i+1) |>)]
 
 (* static/dynamic object deallocation *)
@@ -879,9 +884,9 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
    end                                         >>= fun (value, e)  ->
   get_new_taid                                 >>= fun new_taid    ->
   store ty o value new_taid                    >>
-  (* update the state with the new trace action *)                 
-  add_tact new_taid (E.Tstore ty o value mo tid) >> 
-  E.register_sequencing bs new_taid tid        >>
+  (* update the state with the new trace action *)
+  add_tact new_taid (E.Tstore ty o value mo tid) >>
+  E.register_sequencing bs new_taid tid          >>
   is_atomic_location o                         >>= fun is_atomic   ->
   (if is_atomic then
      (if mo = Cmm.Seq_cst then
@@ -1155,6 +1160,12 @@ and red2_ret x =
     | _ -> E.mzero
   end
 
+(*
+and red2_shift x =
+  match x with
+    | (Eshift pe1 pe2, tid, _KS) ->
+        KKK
+*)
 
 and red2_skip x =
   match x with
@@ -1417,6 +1428,7 @@ let rec convert_expr e =
     | Esave k a_tys e     -> Esave k a_tys (convert_expr e)
     | Erun bs k a_vs      -> Erun {} k (List.map (fun (a,v) -> (a, convert_expr v)) a_vs)
     | Eret e              -> Eret (convert_expr e)
+    | Eshift e1 e2        -> Eshift (convert_expr e1) (convert_expr e2)
 
 (* TODO: temporary *)
     | Eis_scalar e   -> Eis_scalar (convert_expr e)
@@ -1672,6 +1684,9 @@ let rec collect_conts' e =
         Boot.assert_false "Core_run.collect_conts': the ctor `Eindet' should exists at this stage."
     | Ebound _ _ ->
         Boot.assert_false "Core_run.collect_conts': the ctor `Ebound' should exists at this stage."
+    
+    | Eshift _ _ ->
+        Map.empty
 
 (* TODO: temporary *)
     | Eis_scalar _ ->

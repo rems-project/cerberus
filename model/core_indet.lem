@@ -68,7 +68,7 @@ type expr =
   | Ebound of natural * expr
   | Esave of Core.ksym * list (Core.sym * Core.ctype) * expr
   | Erun of Core.ksym * list (Core.sym * expr)
-  | Eshift of Core.sym * expr
+  | Eshift of expr * expr
   
   | Ebefore of expr
   | Eafter of expr
@@ -118,7 +118,7 @@ let rec import_expr e =
   | Core.Ebound i e          -> Ebound i (import_expr e)
   | Core.Esave k a_tys e     -> Esave k a_tys (import_expr e)
   | Core.Erun _ k a_vs       -> Erun k (map (fun (a, v) -> (a, import_expr v)) a_vs)
-  | Core.Eshift a e          -> Eshift a (import_expr e)
+  | Core.Eshift e1 e2        -> Eshift (import_expr e1) (import_expr e2)
   end
 
 and import_action (_, act) =
@@ -159,7 +159,7 @@ let rec export_expr e =
   | Ebound i e          -> Core.Ebound i (export_expr e)
   | Esave k a_tys e     -> Core.Esave k a_tys (export_expr e)
   | Erun k a_vs         -> Core.Erun {} k (map (fun (a,v) -> (a, export_expr v)) a_vs)
-  | Eshift a e          -> Core.Eshift a (export_expr e)
+  | Eshift e1 e2        -> Core.Eshift (export_expr e1) (export_expr e2)
   end
 
 and export_action act =

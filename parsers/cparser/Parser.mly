@@ -26,7 +26,7 @@ open List0
 
 %token EOF
 
-%type<Cabs0.expression0 * Cabs0.cabsloc> primary_expression atomic_operation postfix_expression
+%type<Cabs0.expression0 * Cabs0.cabsloc> primary_expression (* atomic_operation *) postfix_expression
   unary_expression cast_expression multiplicative_expression additive_expression
   shift_expression relational_expression equality_expression AND_expression
   exclusive_OR_expression inclusive_OR_expression logical_AND_expression
@@ -97,21 +97,21 @@ primary_expression:
 
 
 (* NOTE: this is not present in the actual C11 syntax *)
-atomic_operation:
-| loc = C11_ATOMIC_INIT_ LPAREN obj = postfix_expression COMMA_ value = postfix_expression RPAREN
-    { (C11_ATOMIC_INIT (fst obj, fst value), loc) }
-| loc = C11_ATOMIC_STORE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN
-    { (C11_ATOMIC_STORE (fst object_, fst desired, fst order), loc) }
-| loc = C11_ATOMIC_LOAD_ LPAREN object_ = postfix_expression COMMA_ order = postfix_expression RPAREN
-    { (C11_ATOMIC_LOAD (fst object_, fst order), loc) }
-| loc = C11_ATOMIC_EXCHANGE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN
-    { (C11_ATOMIC_EXCHANGE (fst object_, fst desired, fst order), loc) }
-| loc = C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_
-  desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN
-    { (C11_ATOMIC_COMPARE_EXCHANGE_STRONG (fst object_, fst expected, fst desired, fst success, fst failure), loc) }
-| loc = C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_
-  desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN
-    { (C11_ATOMIC_COMPARE_EXCHANGE_WEAK (fst object_, fst expected, fst desired, fst success, fst failure), loc) }
+(* atomic_operation: *)
+(* | loc = C11_ATOMIC_INIT_ LPAREN obj = postfix_expression COMMA_ value = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_INIT (fst obj, fst value), loc) } *)
+(* | loc = C11_ATOMIC_STORE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_STORE (fst object_, fst desired, fst order), loc) } *)
+(* | loc = C11_ATOMIC_LOAD_ LPAREN object_ = postfix_expression COMMA_ order = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_LOAD (fst object_, fst order), loc) } *)
+(* | loc = C11_ATOMIC_EXCHANGE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_EXCHANGE (fst object_, fst desired, fst order), loc) } *)
+(* | loc = C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_ *)
+(*   desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_COMPARE_EXCHANGE_STRONG (fst object_, fst expected, fst desired, fst success, fst failure), loc) } *)
+(* | loc = C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_ *)
+(*   desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN *)
+(*     { (C11_ATOMIC_COMPARE_EXCHANGE_WEAK (fst object_, fst expected, fst desired, fst success, fst failure), loc) } *)
 
 
 (* 6.5.2 *)
@@ -121,8 +121,8 @@ postfix_expression:
 | expr = postfix_expression LBRACK index = expression RBRACK
     { (INDEX (fst expr, fst index), snd expr) }
 (* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
-| expr = atomic_operation
-    { expr }
+(* | expr = atomic_operation *)
+(*     { expr } *)
 
 | expr = postfix_expression LPAREN args = argument_expression_list RPAREN
     { (CALL (fst expr, rev args), snd expr) }
@@ -167,8 +167,8 @@ unary_expression:
 | loc = ALIGNOF_ LPAREN typ = type_name RPAREN
     { (ALIGNOF typ, loc) }
 (* K: in truth this is a macro, but we fake it *)
-| loc = OFFSETOF_ LPAREN ty = type_name COMMA_ member = OTHER_NAME RPAREN
-    { (OFFSETOF (ty, fst member), loc) }
+(* | loc = OFFSETOF_ LPAREN ty = type_name COMMA_ member = OTHER_NAME RPAREN *)
+(*     { (OFFSETOF (ty, fst member), loc) } *)
 
 
 unary_operator:
@@ -408,8 +408,8 @@ type_specifier:
     { (Tunsigned, loc) }
 | loc = BOOL
     { (T_Bool, loc) }
-| spec = atomic_type_specifier
-    { spec }
+(* | spec = atomic_type_specifier *)
+(*     { spec } *)
 | spec = struct_or_union_specifier
     { spec }
 | spec = enum_specifier

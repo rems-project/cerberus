@@ -199,3 +199,15 @@ let rec accessible_ s rel =
 
 let accessible a b rel =
   elem b $ accessible_ [a] rel
+
+
+let rec replicate_list_ x (n: integer) acc =
+  if n > 0 then
+    replicate_list_ x (n-1) (x :: acc)
+  else
+    acc
+
+val replicate_list: forall 'a. 'a -> integer -> list 'a
+let replicate_list x n =
+  replicate_list_ x n []
+  

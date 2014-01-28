@@ -166,7 +166,7 @@ let pipeline stdlib impl core_parse file_name =
         let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
         (* TODO: add an command line option for custom include directories, for now
            I hardcode the location of csmith on AddaX *)
-        if Sys.command ("gcc -E -I $CSEMLIB_PATH/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime " ^
+        if Sys.command ("clang -E -I $CSEMLIB_PATH/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime " ^
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in
@@ -209,12 +209,16 @@ let pipeline stdlib impl core_parse file_name =
     else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
                                                     else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
   let core_backend m =
+(*
     ((m
     >?> !skip_core_tcheck)
       (pass_message "5. Skipping Core's typechecking")
       (fun m ->
             Exception.rbind Core_typing.typecheck m
         >|> pass_message "5. Core's typechecking completed!")
+    >?> !execute)
+ *)
+    (m
     >?> !execute)
       (fun m ->
         (pass_message "6. Enumerating indet orders:" m

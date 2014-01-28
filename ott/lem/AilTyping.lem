@@ -50,8 +50,8 @@ let type_of_constant P (ic : integerConstant) : maybe integerType =
 
 let type_of_rvalue_aux (type_of_expression : expression 'A -> maybe typeCategory) e =
   match type_of_expression e with
-  | Just (RValueType   t) -> Just (pointer_conversion t)
-  | Just (LValueType _ t) -> lvalue_conversion t
+  | Just (RValueType   t) -> Just (rvalue_coercion t)
+  | Just (LValueType _ t) -> lvalue_coercion t
   | Nothing               -> Nothing
   end
 
@@ -140,7 +140,7 @@ let well_typed_conditional P t1 t2 t3 null2 null3 : maybe typeCategory =
 let rec well_typed_arguments_aux (assignable : ctype -> expression 'A -> bool) (es : list (expression 'A)) (ps : list (qualifiers * ctype)) : bool =
   match (es, ps) with
   | ([]     , []           ) -> true
-  | (e :: es, (_, t1) :: ps) -> assignable (pointer_conversion t1) e && well_typed_arguments_aux assignable es ps 
+  | (e :: es, (_, t1) :: ps) -> assignable (rvalue_coercion t1) e && well_typed_arguments_aux assignable es ps 
   | (_      , _            ) -> false
   end
 
@@ -197,7 +197,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | Unary PostfixIncr e ->
       match type_of_expression P S G e with
       | Just (LValueType q' t') ->
-          lvalue_conversion t' >>= fun t ->
+          lvalue_coercion t' >>= fun t ->
           if modifiable q' t' && (real t' || pointer t')
             then Just (RValueType t)
             else Nothing
@@ -206,7 +206,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | Unary PostfixDecr e ->
       match type_of_expression P S G e with
       | Just (LValueType q' t') ->
-          lvalue_conversion t' >>= fun t ->
+          lvalue_coercion t' >>= fun t ->
           if modifiable q' t' && (real t' || pointer t')
             then Just (RValueType t)
             else Nothing
@@ -222,7 +222,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | Assign e1 e2 ->
       match type_of_expression P S G e1 with
       | Just (LValueType q1 t1) ->
-          let t = pointer_conversion t1 in
+          let t = rvalue_coercion t1 in
           if modifiable q1 t1 && assignable t e2
             then Just (RValueType t)
             else Nothing
@@ -389,7 +389,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | CompoundAssign e1 Add e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
       | (Just (LValueType q t), Just t2) -> 
-          lvalue_conversion t >>= fun t1 ->
+          lvalue_coercion t >>= fun t1 ->
           if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
             then Just (RValueType t1)
             else Nothing
@@ -398,7 +398,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | CompoundAssign e1 Sub e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
       | (Just (LValueType q t), Just t2) -> 
-          lvalue_conversion t >>= fun t1 ->
+          lvalue_coercion t >>= fun t1 ->
           if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
             then Just (RValueType t1)
             else Nothing
@@ -407,7 +407,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | CompoundAssign e1 aop e2 ->
       match (type_of_expression P S G e1, type_of_rvalue e2) with
       | (Just (LValueType q t), Just t2) -> 
-          lvalue_conversion t >>= fun t1 ->
+          lvalue_coercion t >>= fun t1 ->
           if modifiable q t && well_typed_binary_arithmetic t1 aop t2
             then Just (RValueType t1)
             else Nothing
