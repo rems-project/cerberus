@@ -20,6 +20,8 @@ module U    = Undefined
 
 module Cmm = Cmm_csem
 
+(*
+
 val     translate_lvalue: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> t (C.expr zero)
 let rec translate_lvalue stdlib program a_exp =
   let f = translate_expression stdlib program in
@@ -549,7 +551,8 @@ and translate_expression stdlib program a_expr =
                   (* if there are no arguments, we don't need all the temporary object creation stuff *)
                   return $ C.Eproc {} fid []
                 else
-                  let (return_ty, binds) = fst $ fromJust (List.lookup fid (snd program)) in
+                  (* TODO: variadic case *)
+                  let Left (return_ty, binds, is_variadic) = fst $ fromJust (List.lookup fid (snd program)) in
                   let n = List.length es in
                   
                   (* symbolic names for the temporary objects and init value *)
@@ -860,7 +863,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
     | A.Return e ->
         translate_expression stdlib program e >>= fun core_e ->
         let A.AnnotatedExpression ty _ = e in
-        let (return_ty, _) = fst $ fromJust (List.lookup f (snd program)) in
+        let Left (return_ty, _, _) = fst $ fromJust (List.lookup f (snd program)) in
         E.fresh_symbol           >>= fun a_e ->
         E.get_visible_objects    >>= fun _as ->
         let (core_kills) = List.map (Caux.pkill -| C.Esym) _as in
@@ -951,23 +954,45 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 *)
   end
 
+ *)
+
+
+
+val translate_stmt:
+  C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.identifier ->
+  maybe Symbol.t -> maybe Symbol.t -> maybe Symbol.t -> maybe Symbol.t ->
+  A.statement Location.t GenTypes.genTypeCategory -> t (C.expr zero)
+
+let translate_stmt _ _ _ _ _ _ _ _ = Boot.assert_false "HIP"
+
 
 (* Run the translator on different functions *)
 val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
 let translate_program stdlib program =
-  E.foldlM (fun acc (fun_id, ((_, fun_args), fun_body)) ->
-    (* making the argument variables visible *)
-    E.push_block_objects (List.map fst fun_args) >>
-    
-    (* translate the body to Core *)
-    translate_stmt stdlib program fun_id Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
-    (* removing the argument variables from the "visibles" *)
-    E.pop_block_objects >>
-    (return $ Map.insert fun_id (
-                                C.TyEffect C.Integer (* TODO: this should de address for pointer type *),
-                                List.map (fun (arg, _) -> (arg, C.Address (* TODO: check *))) fun_args,
-                                core_body
-                               ) acc)
+  E.foldlM (fun acc ->
+    function
+      | (fun_id, Left ((_, fun_args, is_variadic), fun_body_opt)) ->
+          match fun_body_opt with
+            | Just fun_body ->
+                (* making the argument variables visible *)
+                E.push_block_objects (List.map fst fun_args) >>
+                
+                (* translate the body to Core *)
+                translate_stmt stdlib program fun_id Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
+                (* removing the argument variables from the "visibles" *)
+                E.pop_block_objects >>
+                (return $ Map.insert fun_id (
+                                            C.TyEffect C.Integer (* TODO: this should de address for pointer type *),
+                                            List.map (fun (arg, _) -> (arg, C.Address (* TODO: check *))) fun_args,
+                                            core_body
+                                           ) acc)
+            | Nothing ->
+                (* TODO: this corresponds to an Ail function a prototype but no implementation ==> std lib function *)
+                return acc
+          end
+      (* TODO: allocate/initialise globals at the beginning of the execution *)
+      | (_, Right (qs, ty, e_opt)) -> return acc
+    end
   ) Map.empty (snd program)
 
 

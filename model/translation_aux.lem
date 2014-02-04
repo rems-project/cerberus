@@ -92,7 +92,7 @@ let is_unsigned_integer_type = function
 end
 
 let function_return_type = function
-  | Function t _ -> t
+  | Function t _ _ -> t
 end
 
 (* TODO: check with J *)

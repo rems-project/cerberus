@@ -31,7 +31,7 @@ type state = <|
   
   
   
-  fun_defs:               A.sigma Location.t unit;
+  definitions:               A.sigma Location.t unit;
   id_map:                 map A.identifier (ATypes.qualifiers * ATypes.ctype);
   
   (* type definitions *)
@@ -69,7 +69,7 @@ let of_option err = State_exception.of_option (Location.dummy, err)
 val make_program: Symbol.t -> t (A.program Location.t unit)
 let make_program startup =
   State_exception.read (fun st ->
-    (startup, st.fun_defs)
+    (startup, st.definitions)
   )
 
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
@@ -102,7 +102,7 @@ let eval m =
     registered_identifiers= Scope_table.create_scope Scope_table.empty;
     registered_labels=      Map.empty;
     is_inside_switch=       false;
-    fun_defs=               [];
+    definitions=            [];
     id_map=                 Map.empty;
     typedef_map=            Map.empty;
     fun_protos=             Map.empty;
@@ -187,20 +187,20 @@ let get_declaration id =
     fromJust $ Map.lookup id st.id_map
   )
 
-val add_function : A.identifier -> ((ATypes.ctype * A.bindings) * A.statement Location.t unit) -> t unit (* TODO: parameters *)
+val add_function : A.identifier -> ((ATypes.ctype * A.bindings * bool) * maybe (A.statement Location.t unit)) -> t unit (* TODO: parameters *)
 let add_function id fun_def =
   State_exception.update (fun st ->
-    <| st with fun_defs = (id, fun_def) :: st.fun_defs |>
+    <| st with definitions = (id, Left fun_def) :: st.definitions |>
   )
 
 val is_defined_function : string -> t bool
 let is_defined_function str =
-  bind (resolve_identifier str) function
-    | (id, Funname) ->
+  bind (State_exception.read (fun st -> Scope_table.lookup str st.registered_identifiers)) function
+    | Just (id, Funname) ->
         State_exception.read (fun st ->
-          match List.lookup id st.fun_defs with
-            | Just _  -> true
-            | Nothing -> false
+          match List.lookup id st.definitions with
+            | Just (Left _)  -> true
+            | _              -> false
           end
         )
     | _ -> return false

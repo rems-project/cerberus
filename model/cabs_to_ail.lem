@@ -561,13 +561,13 @@ let rec desugar_decl_type decl_ty =
       desugar_decl_type decl_ty' >>= fun mk_ty ->
       E.return $ fun ty -> mk_ty (ATypes.Pointer (desugar_cvspecs cvs) ty)
   (* TODO: ignoring variable length parameters for now *)
-  | C.PROTO decl_ty' (params, _) ->
+  | C.PROTO decl_ty' (params, is_variadic) ->
       desugar_decl_type decl_ty' >>= fun mk_ty    ->
       (* TODO: yuck, use brackets instead *)
       E.create_scope >> (* This implements "function protocope scope" *)
         desugar_parameters params  >>= fun d_params ->
       E.destroy_scope >>= fun _ ->
-      E.return $ fun ty -> mk_ty (ATypes.Function ty $ map snd d_params)
+      E.return $ fun ty -> mk_ty (ATypes.Function ty (map snd d_params) is_variadic)
   end
 
 
@@ -853,17 +853,17 @@ and desugar_definition def =
               E.register_name str E.Funname >>= fun fun_id   ->
               register_labels stmt               >>
               (* TODO: storage class *)
-              (* starts the function scope *)
-              E.create_scope >>
               match fun_decl with
-                | C.PROTO _ (params, _) ->
-                    desugar_parameters params
+                | C.PROTO _ (params, is_variadic) ->
+                   (* starts the function scope *)
+                    E.create_scope            >>
+                    desugar_parameters params >>= fun d_params ->
+                    desugar_statement stmt    >>= fun d_stmt   ->
+                    E.destroy_scope           >>
+                    E.add_function fun_id ((ty, d_params, is_variadic), Just d_stmt)
                 | _ ->
                     E.fail (Errors.OTHER "Not a function type.")
-              end >>= fun d_params ->
-              desugar_statement stmt >>= fun d_stmt ->
-              E.destroy_scope        >>
-              E.add_function fun_id ((ty, d_params), d_stmt)
+              end
         end
 
     (* This should correspond to the def of a struct/union (typedef?) *)
