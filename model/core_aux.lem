@@ -27,11 +27,11 @@ TODO: bring back structs/unions
   end in
 *)
   match ty with
-    | AilTypes.Void           -> Core_ctype.Void
-    | AilTypes.Basic bt       -> Core_ctype.Basic bt
-    | AilTypes.Array ty n     -> Core_ctype.Array (proj_ctype ty) n
-    | AilTypes.Function ty ps -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps)
-    | AilTypes.Pointer qs ty  -> Core_ctype.Pointer (proj_ctype ty)
+    | AilTypes.Void             -> Core_ctype.Void
+    | AilTypes.Basic bt         -> Core_ctype.Basic bt
+    | AilTypes.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
+    | AilTypes.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
+    | AilTypes.Pointer qs ty    -> Core_ctype.Pointer (proj_ctype ty)
 (*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
@@ -55,11 +55,11 @@ let rec unproj_ctype ty =
   end in
 *)
   match ty with
-    | Core_ctype.Void            -> AilTypes.Void
-    | Core_ctype.Basic bt        -> AilTypes.Basic bt
-    | Core_ctype.Array ty n      -> AilTypes.Array (unproj_ctype ty) n
-    | Core_ctype.Function ty tys -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys)
-    | Core_ctype.Pointer ty      -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
+    | Core_ctype.Void              -> AilTypes.Void
+    | Core_ctype.Basic bt          -> AilTypes.Basic bt
+    | Core_ctype.Array ty n        -> AilTypes.Array (unproj_ctype ty) n
+    | Core_ctype.Function ty tys b -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys) b
+    | Core_ctype.Pointer ty        -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
 (*
     | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)

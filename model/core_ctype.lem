@@ -7,7 +7,7 @@ type ctype =
   | Void
   | Basic of AilTypes.basicType
   | Array of ctype * integer
-  | Function of ctype * list ctype
+  | Function of ctype * list ctype * bool
   | Pointer of ctype
 (*
   | STRUCT of Ail.id * list (Ail.id * member)

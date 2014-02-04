@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Either
 
 val option_bool : forall 'A. maybe 'A -> ('A -> bool) -> bool
 let option_bool =
@@ -73,8 +73,8 @@ val equiv_either: forall 'A1 'A2 'B1 'B2.
                   bool
 let equiv_either equiv_A equiv_B e1 e2 =
   match (e1, e2) with
-    | (Left  l1, Left  l2) -> equiv_A l1 l2
-    | (Right r1, Right r2) -> equiv_B r1 r2
+    | (Either.Left  l1, Either.Left  l2) -> equiv_A l1 l2
+    | (Either.Right r1, Either.Right r2) -> equiv_B r1 r2
     | (_       , _       ) -> false
   end
 

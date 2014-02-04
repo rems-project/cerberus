@@ -111,8 +111,8 @@ let rec pp_ctype t =
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
 *)
-    | Core_ctype.Function0 (ty, args_tys) ->
-        pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys)
+    | Core_ctype.Function0 (ty, args_tys, is_variadic) ->
+        pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
     | Core_ctype.Pointer0 ty ->
         pp_ctype ty ^^ P.star
     | Core_ctype.Atomic1 ty ->

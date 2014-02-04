@@ -13,7 +13,7 @@ type ctype_ =
   | UNION_  of Ail.id * (Ail.id * Core.member) list
   | ENUM_ of Ail.id
 *)
-  | Function_ of Core_ctype.ctype0 * Core_ctype.ctype0 list
+  | Function_ of Core_ctype.ctype0 * Core_ctype.ctype0 list * bool
   | Pointer_ of ctype_
   | Atomic_ of ctype_
 (*
@@ -41,8 +41,8 @@ let rec project_ctype_ = function
   | ENUM_ id ->
       Core.ENUM id
 *)
-  | Function_ (ty, tys) ->
-      Core_ctype.Function0 (ty, tys)
+  | Function_ (ty, tys, b) ->
+      Core_ctype.Function0 (ty, tys, b)
   | Pointer_ ty_ ->
       Core_ctype.Pointer0 (project_ctype_ ty_)
   | Atomic_ ty_ ->
@@ -453,7 +453,7 @@ ctype_:
     { ENUM_ (subst name) }
 *)
 | ty_= ctype_ tys_= delimited(LPAREN, separated_list(COMMA, ctype_), RPAREN)
-    { Function_ (project_ctype_ ty_, List.map project_ctype_ tys_) }
+    { Function_ (project_ctype_ ty_, List.map project_ctype_ tys_, false) }
 | ty_= ctype_ STAR
     { Pointer_ ty_ }
 (*

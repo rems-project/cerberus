@@ -1,8 +1,10 @@
 open Lem_pervasives
+open Either
 
 open Global
 open AilSyntax
 open AilTypes
+
 
 module P = PPrint
 
@@ -164,8 +166,8 @@ let rec pp_ctype t =
         pp_basicType b
     | Array (ty, n) ->
         pp_ctype ty ^^ P.brackets (pp_integer n)
-    | Function (ty, ps) ->
-        pp_ctype ty ^^^ P.parens (comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps)
+    | Function (ty, ps, is_variadic) ->
+        pp_ctype ty ^^^ P.parens (comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
     | Pointer (qs, ty) ->
         pp_qualifiers qs (pp_ctype ty) ^^ P.star
     | Atomic ty ->
@@ -443,7 +445,12 @@ let pp_function file (id, (args, s)) =
 
 
 let pp_program (startup, defs) =
-  List.fold_left (fun acc (id, ((return_ty, params), body)) ->
-    pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params) ^^^
-    pp_statement body ^^ P.break 1 ^^ acc
+  List.fold_left (fun acc ->
+    function
+      | (id, Left ((return_ty, params, is_variadic), body_opt)) ->
+          pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params) ^^^
+          P.optional pp_statement body_opt ^^ P.break 1 ^^ acc
+      | (id, Right (qs, ty, e_opt)) ->
+          (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id ^^^
+          P.optional (fun e -> P.equals ^^^ pp_expression e) e_opt ^^ P.semi ^^ P.break 1 ^^ acc
   ) P.empty defs
