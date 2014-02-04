@@ -1,4 +1,4 @@
-open import Pervasives Global Core Core_aux
+open import Pervasives Global Core Core_ctype Core_aux
 import Set_helpers
 import State State_operators
 import Exception Errors Undefined
@@ -10,14 +10,10 @@ import Core_run_effect
 module Cmm = Cmm_csem
 module U   = Undefined
 
-val     canonize_tid: Cmm.tid -> Cmm.tid
-let rec canonize_tid tid =
-  match tid with
-    | Cmm_aux.Tzero       -> Cmm_aux.Tzero
-    | Cmm_aux.Tpar n tid' -> Cmm_aux.Tpar n (canonize_tid tid')
-    | Cmm_aux.Tseq tid'   -> (canonize_tid tid')
-end
 
+
+(*
+TODO: not used anymore
 
 (* Conversions between Core and Cmm_aux constants *)
 val     to_core_constant: Cmm_aux.constant -> Core.constant
@@ -35,6 +31,8 @@ let rec from_core_constant c =
 (*    | Core.Carray cs   -> Cmm_aux.Carray $ map from_core_constant cs *)
     | Core.Cfunction a -> Cmm_aux.Cfunction a
   end
+
+*)
 
 
 
@@ -252,14 +250,7 @@ let get_location_kind s x =
      | Just z  -> z
      | Nothing -> Cmm.Non_Atomic
    end
-   
-val is_atomic_location: mem_addr -> E.t bool
-let is_atomic_location o = 
-  fun st -> [(U.return (get_location_kind st o = Cmm.Atomic), st)]
 
-val is_nonatomic_location: mem_addr -> E.t bool
-let is_nonatomic_location o = 
-  fun st -> [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)]
 
 val to_observable_execution: E.state -> Cmm.observable_execution
 let to_observable_execution s = 
@@ -373,24 +364,6 @@ let check_for_dataraces = fun st ->
 
 (* ************************************************************************** *)
 (* TODO: dummy memory model (concrete with isolated objects, ignoring C types) *)
-val initial_state: file E.taction_id -> E.state
-let initial_state file = <|
-  E.execution_mode= E.Exhaustive;
-  E.mem=            (Map.empty, 0);
-  E.current_proc=   Nothing;
-  E.file=           file;
-  E.cont_map=       Map.empty;
-  E.tact_counter=   0;
-  E.tact_map=       Map.empty;
-  E.trace=          [];
-  E.cmm_tact_map=   Map.empty;
-  E.lk=             Map.empty;
-  E.sb=             {};
-  E.asw=            {};
-  E.rf=             {};
-  E.mo=             Map.empty;
-  E.sc=             [];
-|>
   
 (* Reverses the first list, and then appends that list to the second list. *)
 val reverse_and_append: forall 'a. list 'a -> list 'a -> list 'a
@@ -424,7 +397,7 @@ let push_sc_action taid = fun (<|E.sc = sc|> as s) ->
   [(U.return (), <| s with E.sc = taid::sc|>)]
 
 (* Adds a trace_action to the modification order *)
-val push_mod_order: mem_addr -> E.taction_id -> E.t unit
+val push_mod_order: Memory.mem_addr -> E.taction_id -> E.t unit
 let push_mod_order o taid = fun (<|E.mo = mod_order |> as st) ->
   let order_of_o =
     match Map.lookup o mod_order with
@@ -443,7 +416,7 @@ let rec insert_after e new_e l =
     | h::t -> if h = e then new_e::l else e::(insert_after e new_e t)
   end
 
-val mod_order_insert_after: mem_addr -> E.taction_id -> E.taction_id -> E.t unit
+val mod_order_insert_after: Memory.mem_addr -> E.taction_id -> E.taction_id -> E.t unit
 let mod_order_insert_after o taid new_taid = fun (<|E.mo = mod_order |> as st) ->
   let order_of_o =
     match Map.lookup o mod_order with
@@ -509,8 +482,8 @@ let get_fulltrace = fun (<| E.tact_map= tact_map; E.trace= t |> as st) ->
 
 (* static object allocation *)
 (* TODO: the array part is some dubious experiment *)
-val create: list Symbol.t -> ctype -> E.taction_id -> E.t mem_addr
-let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
+val create: list Symbol.t -> ctype -> E.taction_id -> E.t Memory.mem_addr
+let create pref ty taid = fun (<| E.mem_layout= (m, i); E.lk = lk |> as st) ->
   (* DEBUG *)
 (* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
   (* We update the memory (obviously) and we add information about the location 
@@ -520,28 +493,28 @@ let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
     | Array _ n -> Cmm_aux.Marray (replicate_list Cmm_aux.Muninit n)
     | _         -> Cmm_aux.Muninit
   end in
-  [(U.return o, <| st with E.mem= (Map.insert o [(init, taid)] m, i+1);
+  [(U.return o, <| st with E.mem_layout= (Map.insert o [(init, taid)] m, i+1);
                            E.lk = Map.insert o (type_to_location_kind ty) lk |>)]
 
 (* TODO: doesn't do anything regarding the size *)
 (* dynamic object allocation (malloc) *)
-val alloc: list Symbol.t -> integer -> E.taction_id -> E.t mem_addr
-let alloc pref _ taid = fun (<| E.mem= (m, i) |> as st) ->
+val alloc: list Symbol.t -> integer -> E.taction_id -> E.t Memory.mem_addr
+let alloc pref _ taid = fun (<| E.mem_layout= (m, i) |> as st) ->
   (* We do not know yet what the type is, so we don't know wether it is atomic
      or nonatomic, so we can't update the location kind in the state. When the 
      location kind is not set, it is assumed to be nonatomic *)
   let o = (pref, Cmm_aux.Lbase i) in
-  [(U.return o, <| st with E.mem= (Map.insert o [(Cmm_aux.Muninit, taid)] m, i+1) |>)]
+  [(U.return o, <| st with E.mem_layout= (Map.insert o [(Cmm_aux.Muninit, taid)] m, i+1) |>)]
 
 (* static/dynamic object deallocation *)
-val kill: mem_addr -> E.t unit
-let kill o = fun (<| E.mem= (m, i) |> as st) ->
+val kill: Memory.mem_addr -> E.t unit
+let kill o = fun (<| E.mem_layout= (m, i) |> as st) ->
   (* DEBUG *)
 (* TODO[newLem] Boot.print_debug ("[Core_run.kill] @" ^ (string_of_num $ snd o)) *)
-  [(U.return (), <| st with E.mem= (Map.delete o m, i) |> )]
+  [(U.return (), <| st with E.mem_layout= (Map.delete o m, i) |> )]
 
-val store: ctype -> mem_addr -> Cmm.cvalue -> E.taction_id -> E.t unit
-let store _ o v taid = fun (<| E.mem= (m, i) |> as st) ->
+val store: ctype -> Memory.mem_addr -> Cmm.cvalue -> E.taction_id -> E.t unit
+let store _ o v taid = fun (<| E.mem_layout= (m, i) |> as st) ->
   (* DEBUG *)
 (* TODO[newLem]   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o)) $ *)
   let values =
@@ -550,13 +523,13 @@ let store _ o v taid = fun (<| E.mem= (m, i) |> as st) ->
       | Nothing -> []
     end in
   (* We append the new value to the values already present in the memory *)
-  [(U.return (), <| st with E.mem= (Map.insert o ((v, taid)::values) m, i) |>)]
+  [(U.return (), <| st with E.mem_layout= (Map.insert o ((v, taid)::values) m, i) |>)]
 
 (* Loads a value (and the taction_id of the action that stored that value). When
    the location is atomic, it non-deterministically loads from any of the past 
    values. Otherwise it loads the last value. *)
-val load: ctype -> mem_addr -> E.t (Cmm.cvalue * E.taction_id)
-let load ty o = fun (<| E.mem= (m, _) |> as st) ->
+val load: ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)
+let load ty o = fun (<| E.mem_layout= (m, _) |> as st) ->
   match Map.lookup o m with
     | Just values ->
         (* DEBUG *)
@@ -727,14 +700,14 @@ let rec eval file pe =
         eval pe2 >>= fun v2 ->
         U.return
           match (binop, v1, v2) with
-            | (OpAdd, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ n1 + n2)
-            | (OpSub, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ n1 - n2)
-            | (OpMul, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ n1 - n2)
-            | (OpDiv, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ n1 div n2)
-            | (OpMod, Econst (Cint n1), Econst (Cint n2) ) -> Econst (Cint $ n1 mod n2)
-            | (OpEq,  Econst (Cint n1), Econst (Cint n2) ) -> if n1  = n2  then Etrue else Efalse
+            | (OpAdd, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 + n2)
+            | (OpSub, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 - n2)
+            | (OpMul, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 - n2)
+            | (OpDiv, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 div n2)
+            | (OpMod, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 mod n2)
+            | (OpEq,  Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> if n1  = n2  then Etrue else Efalse
             | (OpEq,  Ectype ty1,       Ectype ty2       ) -> if ty1 = ty2 then Etrue else Efalse
-            | (OpLt,  Econst (Cint n1), Econst (Cint n2) ) -> if n1  < n2  then Etrue else Efalse
+            | (OpLt,  Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> if n1  < n2  then Etrue else Efalse
             | (OpOr,  Efalse,           Efalse           ) -> Efalse
             | (OpOr,  _,                _                ) -> Etrue
             | (OpAnd, Etrue,            Etrue            ) -> Etrue
@@ -808,7 +781,7 @@ let rec eval file pe =
   end
 
 
-val get_address: forall 'a. expr 'a -> E.t mem_addr
+val get_address: forall 'a. expr 'a -> E.t Memory.mem_addr
 let get_address = function 
   | Eaddr o -> E.return o
   | _       -> E.runU $ U.undef [Undefined.Lvalue_not_an_object]
@@ -824,7 +797,7 @@ val perform_create: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Sym
 let perform_create bs tid_ pe pref = 
   E.get_file                            >>= fun file        ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the create *)
   E.runU (eval pe)                      >>= fun (Ectype ty) ->
   get_new_taid                          >>= fun new_taid    ->
@@ -839,9 +812,9 @@ val perform_alloc: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symb
 let perform_alloc bs tid_ pe pref = 
   E.get_file                            >>= fun file              ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the alloc *)
-  E.runU (eval pe)                      >>= fun (Econst (Cint n)) ->
+  E.runU (eval pe)                      >>= fun (Econst (Cmm_aux.Cint n)) ->
   get_new_taid                          >>= fun new_taid          ->
   alloc pref n new_taid                 >>= fun o                 ->
   (* update the state with the new trace action *)
@@ -853,7 +826,7 @@ val perform_kill: set E.taction_id -> Cmm.tid -> expr E.taction_id -> E.t (E.tac
 let perform_kill bs tid_ pe = 
   E.get_file                            >>= fun file      ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the kill *)
   E.runU (eval pe)                      >>= fun (Eaddr o) ->
   kill o                                >>
@@ -868,13 +841,13 @@ val perform_store: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.ta
 let perform_store bs tid_ pe1 pe2 pe3 mo = 
   E.get_file                                   >>= fun file        ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the store *)
   E.runU (eval pe1)                            >>= fun (Ectype ty) ->
   E.runU (eval pe2)                            >>= fun (expr)      ->
   get_address expr                             >>= fun o           ->
   E.runU (eval pe3)                            >>= function
-   | Econst c -> E.return (Cmm_aux.Mbase $ from_core_constant c, Enull)
+   | Econst c -> E.return (Cmm_aux.Mbase c, Enull)
    | Eaddr o' -> E.return (Cmm_aux.Mobj o', Enull)
    | Enull    -> E.return (Cmm_aux.Mnull,   Eskip)
    | v        -> Boot.assert_false $
@@ -887,7 +860,7 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
   (* update the state with the new trace action *)
   add_tact new_taid (E.Tstore ty o value mo tid) >>
   E.register_sequencing bs new_taid tid          >>
-  is_atomic_location o                         >>= fun is_atomic   ->
+  E.is_atomic_location o                         >>= fun is_atomic   ->
   (if is_atomic then
      (if mo = Cmm.Seq_cst then
         push_sc_action new_taid
@@ -915,16 +888,16 @@ val perform_load: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.tac
 let perform_load bs tid_ pe1 pe2 mo = 
   E.get_file                                  >>= fun file                ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the load *)
   E.runU (eval pe1)                           >>= fun (Ectype ty)         ->
   E.runU (eval pe2)                           >>= fun (expr)              ->
   get_address expr                            >>= fun o                   ->
   load ty o                                   >>= fun (value, store_taid) ->
   (* update the state with the new trace action *)   
-  get_new_taid                                >>= fun new_taid            -> 
+  get_new_taid                                >>= fun new_taid            ->
   add_tact new_taid (E.Tload ty o value mo tid) >>  
-  is_atomic_location o                        >>= fun is_atomic           ->  
+  E.is_atomic_location o                      >>= fun is_atomic           ->
   (if mo = Cmm.Seq_cst then
      push_sc_action new_taid
    else
@@ -944,10 +917,10 @@ let perform_load bs tid_ pe1 pe2 mo =
   check_for_dataraces                         >> 
   (* Return *)
   match value with
-   | Cmm_aux.Mbase v -> E.return (Econst $ to_core_constant v)
+   | Cmm_aux.Mbase v -> E.return (Econst v)
    | Cmm_aux.Mobj v  -> E.return (Eaddr v)
    | Cmm_aux.Muninit  -> Boot.print_debug "READ AN UNINIT" $
-                        E.return (Econst $ Cint (~ 10))
+                        E.return (Econst $ Cmm_aux.Cint (~ 10))
   end                                         >>= fun e                   ->
   E.return (new_taid, e)
 
@@ -958,11 +931,11 @@ val perform_compare_exchange: (Cmm.cvalue -> Cmm.cvalue -> E.t bool) ->
 let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_succes mo_failure = 
   E.get_file                                                          >>= fun file                       ->
   let eval = eval file in
-  let tid = canonize_tid tid_ in
+  let tid = Cmm_aux.canonize_tid tid_ in
   (* We first load (NA) from pe_expected *)
   perform_load bs tid_ pe_ty pe_expected Cmm.NA                       >>= fun (na_load_taid, expected_e) ->
   let expected_v = match expected_e with
-   | Econst c -> Cmm_aux.Mbase $ from_core_constant c
+   | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
    | Enull    -> Cmm_aux.Mnull
   end in
@@ -972,7 +945,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
   E.runU (eval pe_o)                                                  >>= get_address >>= fun o          ->
   E.runU (eval pe_desired)                                            >>= fun desired_e                  ->
   let desired_v = match desired_e with
-   | Econst c -> Cmm_aux.Mbase $ from_core_constant c
+   | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
    | Enull    -> Cmm_aux.Mnull
   end in
@@ -987,7 +960,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
      (* We omit an RMW event (for the store and the previous load *)
      let tact = E.Trmw atomic_ty o actual_v desired_v mo_succes tid in
      add_tact new_taid tact                                           >>  
-     is_atomic_location o                                             >>= fun is_atomic                  -> 
+     E.is_atomic_location o                                           >>= fun is_atomic                  -> 
      (if is_atomic then 
         (if mo_succes = Cmm.Seq_cst then
            push_sc_action new_taid
@@ -1011,11 +984,11 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
       )                                                               >>
      (* Check for undefined behaviour *)
      check_for_dataraces                                              >> 
-     E.return (new_taid, Econst (Cint 1))
+     E.return (new_taid, Econst (Cmm_aux.Cint 1))
   else
      (* Failure: we omit a load event for the load we just did *)
      add_tact new_taid (E.Tload atomic_ty o actual_v mo_failure tid)    >>  
-     is_atomic_location o                                             >>= fun is_atomic                  ->  
+     E.is_atomic_location o                                             >>= fun is_atomic                  ->  
      (if mo_failure = Cmm.Seq_cst then
         push_sc_action new_taid
       else
@@ -1034,12 +1007,12 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
      check_for_dataraces                                              >> 
      (* We store (NA) the actual value back to pe_expected *)
      let actual_e = match actual_v with
-      | Cmm_aux.Mbase c -> Econst $ to_core_constant c
+      | Cmm_aux.Mbase c -> Econst c
       | Cmm_aux.Mobj o' -> Eaddr o'
       | Cmm_aux.Mnull   -> Enull
      end in
      perform_store {new_taid} tid_ pe_ty pe_expected actual_e  Cmm.NA >>= fun (na_store_aid, _)          ->
-     E.return (na_store_aid, Econst (Cint 0))
+     E.return (na_store_aid, Econst (Cmm_aux.Cint 0))
 
 val perform_compare_exchange_strong: set E.taction_id -> Cmm.tid -> expr E.taction_id ->
                expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> Cmm.memory_order ->
@@ -1733,6 +1706,6 @@ val run: E.execution_mode -> file zero ->
          Exception.t (list (U.t ((Core.expr E.taction_id) * (Map.map E.taction_id E.trace_action * E.trace)) * E.state)) Errors.t
 let run execution_mode file =
   let file' = convert_file file in
-  let execs = runE execution_mode file' $ initial_state file' in
+  let execs = runE execution_mode file' $ E.initial_state file' in
   Boot.print_debug ("NUMBER OF TRACES= " (* TODO[newLem] ^ (string_of_num $ List.length execs) *))
     Exception.return execs

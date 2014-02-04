@@ -1,6 +1,34 @@
 open import Pervasives Common Context AilTypes AilSyntax
 open import GenTypes Annotation OptionMonad
 
+
+val equiv_annotation_global: forall 'A1 'A2 'A2'.
+                             annotation 'A1 'A2 -> annotation 'A1 'A2' ->
+                             qualifiers * ctype * maybe (expression 'A1) -> qualifiers * ctype * maybe (expression 'A2) ->
+                             maybe (qualifiers * ctype * maybe (expression 'A2'))
+
+val equiv_annotation_sigma_map: forall 'A1 'A2 'A2' 'B.
+                                annotation 'A1 'A2 -> annotation 'A1 'A2'                    ->
+                                sigma 'B 'A1                                                 ->
+                                identifier                                                   ->
+                                either ((ctype * bindings * bool) * maybe (statement 'B 'A2))
+                                        (qualifiers * ctype * maybe (expression 'A2))         ->
+                                maybe (either ((ctype * bindings * bool) * maybe (statement 'B 'A2'))
+                                              (qualifiers * ctype * maybe (expression 'A2'))
+                                      )
+
+val equiv_annotation_sigma: forall 'A1 'A2 'A2' 'B.
+                            annotation 'A1 'A2 -> annotation 'A1 'A2' ->
+                            sigma 'B 'A1 -> sigma 'B 'A2              ->
+                            maybe (sigma 'B 'A2')
+
+val equiv_annotation_program: forall 'A1 'A2 'A2' 'B.
+                              annotation 'A1 'A2 -> annotation 'A1 'A2' ->
+                              program 'B 'A1 -> program 'B 'A2          ->
+                              maybe (program 'B 'A2')
+
+(* ======= *)
+
 let rec equiv_annotation_arguments_aux (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') equiv_annotation_expression (a1 : list (expression 'A1)) (a2 : list (expression 'A2)) : maybe (list (expression 'A2')) =
     match (a1, a2) with
     | ([]      , []      ) -> Just []
@@ -181,7 +209,34 @@ and equiv_annotation_statement (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2
 
 let equiv_annotation_block (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (ss1 : list (statement 'B 'A1)) (ss2 : list (statement 'B 'A2)) = equiv_annotation_block_aux A A' (equiv_annotation_statement A A') ss1 ss2
 
+
+
+
+
+
+(*
 let equiv_annotation_function (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (p1 : (_ * _) * statement 'B 'A1) (p2 : (_ * _) * statement 'B 'A2) : maybe ((_ * _) * statement 'B 'A2') =
+ *)
+val equiv_annotation_function: forall 'A1 'A2 'A2' 'B.
+                               annotation 'A1 'A2 -> annotation 'A1 'A2' ->
+                               ((ctype * bindings * bool) * maybe (statement 'B 'A1)) ->
+                               ((ctype * bindings * bool) * maybe (statement 'B 'A2)) ->
+                               maybe (((ctype * bindings * bool) * maybe (statement 'B 'A2')))
+
+let equiv_annotation_function A A' ((ty1, bs1, is_variadic1), s1_opt) ((ty2, bs2, is_variadic2), s2_opt) =
+  if eq_ctype ty1 ty2 && eq_bindings  bs1 bs2 && is_variadic1 = is_variadic2 then
+    match (s1_opt, s2_opt) with
+      | (Just s1, Just s2) -> equiv_annotation_statement A A' s1 s2 >>= fun s ->
+                              Just ((ty1, bs1, is_variadic1), Just s)
+      | (Nothing, Nothing) -> Just ((ty1, bs1, is_variadic1), Nothing)
+      | (_      , _      ) -> Nothing
+    end
+  else
+    Nothing
+(*
+(OLD)
+
+(A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (p1 : (_ * _) * statement 'B 'A1) (p2 : (_ * _) * statement 'B 'A2) : maybe ((_ * _) * statement 'B 'A2') =
   let ((t1, bs1), s1) = p1 in
   let ((t2, bs2), s2) = p2 in
   if eq_ctype t1 t2 && eq_bindings  bs1 bs2 then
@@ -189,17 +244,40 @@ let equiv_annotation_function (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2'
     Just ((t1, bs1), s)
   else
     Nothing
+ *)
 
-let equiv_annotation_sigma_map (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (S1 : sigma 'B 'A1) v (p2 : (_ * _) * statement 'B 'A2) =
-  AilSyntax.lookup S1 v >>= fun p1 -> equiv_annotation_function A A' p1 p2
+(* TODO: check with J *)
+let equiv_annotation_global A A' (qs1, ty1, e1_opt) (qs2, ty2, e2_opt) =
+  if eq_qualifiers qs1 qs2 && eq_ctype ty1 ty2 then
+    match (e1_opt, e2_opt) with
+      | (Just e1, Just e2) ->
+          equiv_annotation_expression A A' e1 e2 >>= fun e ->
+          Just (qs1 ,ty1, Just e)
+      | (Nothing, Nothing) ->
+          Just (qs1, ty1, Nothing)
+      | _ ->
+          Nothing
+    end
+  else
+    Nothing
 
-let equiv_annotation_sigma (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (S1 : sigma 'B 'A1) (S2 : sigma 'B 'A2) : maybe (sigma 'B 'A2') =
+let equiv_annotation_sigma_map A A' S1 v p2 =
+  AilSyntax.lookup S1 v >>= fun p1 ->
+  match (p1, p2) with
+    | (Left f1 , Left f2 ) -> equiv_annotation_function A A' f1 f2 >>= fun f ->
+                              Just (Left f)
+    | (Right g1, Right g2) -> equiv_annotation_global   A A' g1 g2 >>= fun g ->
+                              Just (Right g)
+    | _                    -> Nothing
+  end
+
+let equiv_annotation_sigma A A' S1 S2 =
   if equiv_sigma S1 S2 then
     mapP eq_identifier (equiv_annotation_sigma_map A A' S1) S2
   else
     Nothing
 
-let equiv_annotation_program (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') (p1 : program 'B 'A1) (p2 : program 'B 'A2) =
+let equiv_annotation_program A A' p1 p2 =
   let (v1, S1) = p1 in
   let (v2, S2) = p2 in
   if eq_identifier v1 v2 then

@@ -48,8 +48,37 @@ let eq_option (eq_A : 'A -> 'A -> bool) : maybe 'A -> maybe 'A -> bool =
     | (Just a1, Just a2) -> eq_A a1 a2
     | (Nothing, Nothing) -> true
     | (_      , _      ) -> false
-    end
- 
+end
+
+let equiv_option (equiv_A : 'A1 -> 'A2 -> bool) : maybe 'A1 -> maybe 'A2 -> bool =
+  fun o1 o2 -> 
+    match (o1, o2) with
+    | (Just a1, Just a2) -> equiv_A a1 a2
+    | (Nothing, Nothing) -> true
+    | (_      , _      ) -> false
+end
+
+
+val eq_either: forall 'A 'B. ('A -> 'A -> bool) -> ('B -> 'B -> bool) -> either 'A 'B -> either 'A 'B -> bool
+let eq_either eq_A eq_B e1 e2 =
+  match (e1, e2) with
+    | (Left  l1, Left  l2) -> eq_A l1 l2
+    | (Right r1, Right r2) -> eq_B r1 r2
+    | (_       , _       ) -> false
+  end
+
+val equiv_either: forall 'A1 'A2 'B1 'B2.
+                  ('A1 -> 'A2 -> bool) -> ('B1 -> 'B2 -> bool) ->
+                  either 'A1 'B1 -> either 'A2 'B2 ->
+                  bool
+let equiv_either equiv_A equiv_B e1 e2 =
+  match (e1, e2) with
+    | (Left  l1, Left  l2) -> equiv_A l1 l2
+    | (Right r1, Right r2) -> equiv_B r1 r2
+    | (_       , _       ) -> false
+  end
+
+
 let rec in_list (eq_A : 'A -> 'A -> bool) (a : 'A) (ls : list 'A) : bool =
   match ls with
   | []    -> false

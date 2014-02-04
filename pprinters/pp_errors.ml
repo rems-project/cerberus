@@ -28,7 +28,10 @@ let to_string (loc, c) =
          function-call, or comma operators, except when they are contained \
          within a subexpression that is not evaluated.'\n"
     
-    
+    | CABS_TO_AIL_FUNCTION_REDEFINITION str ->
+         "(TODO msg) redefinition of '" ^ str ^ "'\n"
+
+
     | CABS_TO_AIL_BLOCK_THREAD_LOCAL_ALONE ->
         "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
          ``In the declaration of an object with block scope, if the declaration \
@@ -56,10 +59,12 @@ let to_string (loc, c) =
     | CABS_TO_AIL_NOT_CONSTANT_EXRESSION ->
         "Found a non contant expression in place of a constant one.\n"
     
-    | CABS_TO_AIL_MULTIPLE_REGISTRATION ->
+    | CABS_TO_AIL_MULTIPLE_REGISTRATION str ->
         "Violation of constraint 6.7#3 Declarations, Constraints: ``..If \
          an identifier has no linkage, there shall be no more than one \
-         declaration of the identifier [...]..``\n"
+         declaration of the identifier [...]..``\n \
+         >>> " ^ str ^ "\n"
+    
     | CABS_TO_AIL_DUPLICATED_LABEL ->
       "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
        names shall be unique within a function.``\n"

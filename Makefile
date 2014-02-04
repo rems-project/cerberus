@@ -81,11 +81,14 @@ MODEL_FILES=\
   state_operators.lem \
   state_exception.lem \
   symbol.lem \
-  symbol_table.lem \
+  scope_table.lem \
   translation.lem \
   translation_aux.lem \
   translation_effect.lem \
-  undefined.lem
+  undefined.lem \
+  core_ctype.lem \
+  memory.lem \
+  naive_memory.lem
 
 
 CORE_PARSER_FILES=\

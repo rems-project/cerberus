@@ -10,12 +10,12 @@ let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
-let zero : expr zero = Econst (Cint 0)
-let one  : expr zero = Econst (Cint 1)
+let zero : expr zero = Econst (Cmm_aux.Cint 0)
+let one  : expr zero = Econst (Cmm_aux.Cint 1)
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
-val     proj_ctype: AilTypes.ctype -> Core.ctype
+val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
 let rec proj_ctype ty =
 (*
 
@@ -27,11 +27,11 @@ TODO: bring back structs/unions
   end in
 *)
   match ty with
-    | AilTypes.Void           -> Void
-    | AilTypes.Basic bt       -> Basic bt
-    | AilTypes.Array ty n     -> Array (proj_ctype ty) n
-    | AilTypes.Function ty ps -> Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps)
-    | AilTypes.Pointer qs ty  -> Pointer (proj_ctype ty)
+    | AilTypes.Void           -> Core_ctype.Void
+    | AilTypes.Basic bt       -> Core_ctype.Basic bt
+    | AilTypes.Array ty n     -> Core_ctype.Array (proj_ctype ty) n
+    | AilTypes.Function ty ps -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps)
+    | AilTypes.Pointer qs ty  -> Core_ctype.Pointer (proj_ctype ty)
 (*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
@@ -55,11 +55,11 @@ let rec unproj_ctype ty =
   end in
 *)
   match ty with
-    | Void            -> AilTypes.Void
-    | Basic bt        -> AilTypes.Basic bt
-    | Array ty n      -> AilTypes.Array (unproj_ctype ty) n
-    | Function ty tys -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys)
-    | Pointer ty      -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
+    | Core_ctype.Void            -> AilTypes.Void
+    | Core_ctype.Basic bt        -> AilTypes.Basic bt
+    | Core_ctype.Array ty n      -> AilTypes.Array (unproj_ctype ty) n
+    | Core_ctype.Function ty tys -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys)
+    | Core_ctype.Pointer ty      -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
 (*
     | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
@@ -601,11 +601,11 @@ let have_simple_race e1 e2 =
 
 *)
 
-val is_atomic_type: ctype -> bool
+val is_atomic_type: Core_ctype.ctype -> bool
 let is_atomic_type t = 
   match t with
-    | Atomic _ -> true
-    | _         -> false
+    | Core_ctype.Atomic _ -> true
+    | _                   -> false
   end
 
 

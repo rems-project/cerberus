@@ -203,8 +203,8 @@ let array t : bool =
 (* TODO: should be called "function" *)
 let is_function t : bool =
   match t with
-  | Function _ _ -> true
-  | _            -> false
+  | Function _ _ _ -> true
+  | _              -> false
   end
 
 let is_corresponding_unsigned it1 it2 : bool =
@@ -387,12 +387,12 @@ let rec compatible_params_aux compatible p1 p2 : bool =
 let rec compatible t1 t2 : bool =
   let compatible_params = compatible_params_aux compatible in
   match (t1, t2) with
-  | (Void          , Void          ) -> true
-  | (Basic bt1     , Basic bt2     ) -> eq_basicType bt1 bt2
-  | (Array    t1 n1, Array    t2 n2) -> compatible t1 t2 && n1 = n2
-  | (Function t1 p1, Function t2 p2) -> compatible t1 t2 && compatible_params p1 p2
-  | (Pointer  q1 t1, Pointer  q2 t2) -> compatible t1 t2 && eq_qualifiers q1 q2
-  | (_             , _             ) -> false
+  | (Void             , Void             ) -> true
+  | (Basic bt1        , Basic bt2        ) -> eq_basicType bt1 bt2
+  | (Array    t1 n1   , Array    t2 n2   ) -> compatible t1 t2 && n1 = n2
+  | (Function t1 p1 b1, Function t2 p2 b2) -> compatible t1 t2 && compatible_params p1 p2 && b1 = b2
+  | (Pointer  q1 t1   , Pointer  q2 t2   ) -> compatible t1 t2 && eq_qualifiers q1 q2
+  | (_                , _                ) -> false
   end
 
 let compatible_params p1 p2 = compatible_params_aux compatible p1 p2
@@ -409,12 +409,12 @@ let rec is_composite_params_aux is_composite p1 p2 p3 : bool =
 let rec is_composite t1 t2 t3 : bool =
   let is_composite_params = is_composite_params_aux is_composite in
   match (t1, t2, t3) with
-  | (Void          , Void          , Void          ) -> true
-  | (Basic bt1     , Basic bt2     , Basic bt3     ) -> eq_basicType bt1 bt2 && eq_basicType bt1 bt3
-  | (Array t1 n1   , Array t2 n2   , Array t3 n3   ) -> is_composite t1 t2 t3 && n1 = n2 && n1 = n3
-  | (Function t1 p1, Function t2 p2, Function t3 p3) -> is_composite t1 t2 t3 && is_composite_params p1 p2 p3
-  | (Pointer  q1 t1, Pointer  q2 t2, Pointer  q3 t3) -> is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
-  | (_             , _             , _             ) -> false
+  | (Void            , Void            , Void            ) -> true
+  | (Basic bt1       , Basic bt2       , Basic bt3       ) -> eq_basicType bt1 bt2 && eq_basicType bt1 bt3
+  | (Array t1 n1     , Array t2 n2     , Array t3 n3     ) -> is_composite t1 t2 t3 && n1 = n2 && n1 = n3
+  | (Function t1 p1 _, Function t2 p2 _, Function t3 p3 _) -> is_composite t1 t2 t3 && is_composite_params p1 p2 p3
+  | (Pointer  q1 t1  , Pointer  q2 t2  , Pointer  q3 t3  ) -> is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
+  | (_               , _               , _               ) -> false
   end
 
 let is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
@@ -439,9 +439,9 @@ let rec composite t1 t2 : maybe ctype =
   | (Array t1 n1   , Array t2 n2   ) -> if n1 = n2
                                           then Maybe.map (fun t -> Array t n1) (composite t1 t2)
                                           else Nothing
-  | (Function t1 p1, Function t2 p2) ->
+  | (Function t1 p1 b1, Function t2 p2 b2) ->
       match (composite t1 t2, composite_params p1 p2) with
-      | (Just t, Just p) -> Just (Function t p)
+      | (Just t, Just p) -> if b1 = b2 then Just (Function t p b1) else Nothing
       | (_     , _     ) -> Nothing
       end
   | (Pointer  q1 t1, Pointer  q2 t2) -> if eq_qualifiers q1 q2
@@ -471,8 +471,8 @@ end
 
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
-  | Function ty' qs -> Pointer no_qualifiers (Function ty' qs)
-  | ty              -> ty
+  | Function ty' qs b -> Pointer no_qualifiers (Function ty' qs b)
+  | ty                -> ty
 end
 
 (* following (§6.3.2.1)#2 *)

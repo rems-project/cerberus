@@ -54,11 +54,11 @@ let debug_print str =
 
 
 (* some block functions used by the pipeline *)
-let pass_through        f = Exception.fmap0 (fun v ->           f v        ; v)
-let pass_through_test b f = Exception.fmap0 (fun v -> if b then f v else (); v)
-let pass_message      m   = Exception.fmap0 (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_none m         = Exception.bind0 m (fun _ -> Exception.return2 None)
-let return_empty m        = Exception.bind0 m (fun _ -> Exception.return2 [])
+let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
+let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
+let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
+let return_none m         = Exception.bind m (fun _ -> Exception.return1 None)
+let return_empty m        = Exception.bind m (fun _ -> Exception.return1 [])
 
 
 let catch m =
@@ -170,8 +170,8 @@ let pipeline stdlib impl core_parse file_name =
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in
-          Exception.return2 (c_preprocessing m)
-      >|> Exception.fmap0 Cparser_driver.parse
+          Exception.return1 (c_preprocessing m)
+      >|> Exception.fmap Cparser_driver.parse
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
 
@@ -189,17 +189,17 @@ let pipeline stdlib impl core_parse file_name =
       >|> pass_message "3. Ail typechecking completed!"
       
       
-      >|> Exception.fmap0 (Translation.translate stdlib impl)
+      >|> Exception.fmap (Translation.translate stdlib impl)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
-      >|> Exception.fmap0 Core_simpl.simplify
+      >|> Exception.fmap Core_simpl.simplify
 
       >|> pass_message "5. Core to Core simplication completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     
     let core_frontend m =
           core_parse m
-      >|> Exception.fmap0 (function
+      >|> Exception.fmap (function
             | Core_parser_util.Rfile (a_main, funs) ->
               { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.funs= funs }
             | _ -> assert false)

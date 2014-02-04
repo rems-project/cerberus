@@ -149,12 +149,20 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   let assignable           = assignable_aux type_of_rvalue                 in
   let well_typed_arguments = well_typed_arguments_aux assignable           in
   match e with
-  | Var v ->
-      match (lookup G v, lookup S v) with
-      | (Just (q, t), Nothing) -> Just (LValueType     q t)
-      | (Nothing    , Just p ) -> Just (RValueType (type_from_sigma p))
-      | (_          , _      ) -> Nothing
-      end
+    | Var v ->
+        match (lookup G v, lookup S v) with
+          | (Just (qs, ty), Nothing) ->
+              (* block variable *)
+              Just (LValueType qs ty)
+          | (Nothing, Just (Right (qs, ty, _))) ->
+              (* global variable *)
+              Just (LValueType qs ty)
+          | (Nothing    , Just (Left p)) ->
+              (* function name *)
+              Just (RValueType (type_from_sigma p))
+          | (_, _) ->
+              Nothing
+        end
   | Binary e1 Comma e2 -> 
      type_of_rvalue e1 >>= fun _  ->
      type_of_rvalue e2 >>= fun t2 ->
@@ -162,7 +170,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | Unary Address e ->
       match type_of_expression P S G e with
       | Just (LValueType q t)            -> Just (RValueType (Pointer q t))
-      | Just (RValueType (Function t p)) -> Just (RValueType (Pointer no_qualifiers (Function t p)))
+      | Just (RValueType (Function t p b)) -> Just (RValueType (Pointer no_qualifiers (Function t p b)))
       | _                                -> Nothing
       end
   | Unary Plus e ->
@@ -186,8 +194,8 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
   | Unary Indirection e ->
       type_of_rvalue e >>= fun t ->
       match t with
-      | Pointer q (Function t p) -> if unqualified q
-                                      then Just (RValueType (Pointer q (Function t p)))
+      | Pointer q (Function t p b) -> if unqualified q
+                                      then Just (RValueType (Pointer q (Function t p b)))
                                       else Nothing
       | Pointer q t              -> if complete t && object_ t
                                       then Just (LValueType q t)
@@ -214,7 +222,7 @@ let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' '
       end
   | Call e es ->
       match type_of_rvalue e with
-      | Just (Pointer q (Function t ps)) -> if unqualified q && well_typed_arguments es ps
+      | Just (Pointer q (Function t ps b)) -> if unqualified q && well_typed_arguments es ps
                                                 then Just (RValueType t)
                                                 else Nothing
       | _                                  -> Nothing
@@ -498,20 +506,36 @@ and well_typed_statement P (S : sigma 'B1 'B2) (G : gamma) t_return (s : stateme
 let well_typed_block P (S : sigma 'B1 'B2) G t_return (ss : list (statement 'A1 'A2)) =
   well_typed_block_aux (well_typed_statement P S G t_return) ss
 
-let well_typed_function P (S : sigma 'B1 'B2) (p : (ctype * bindings) * statement 'A1 'A2) =
-  let ((t_return, bs), s) = p in
-  fresh_bindings bs S &&
-  well_formed_bindings bs &&
-  wf_type (Function t_return (parameters_of_bindings bs)) &&
-  well_typed_statement P S (add_bindings bs empty) t_return s
+let well_typed_function P (S : sigma 'B1 'B2) (p : (ctype * bindings * bool) * maybe (statement 'A1 'A2)) =
+  let ((t_return, bs , is_variadic), s_opt) = p in
+     fresh_bindings bs S
+  && well_formed_bindings bs
+  && wf_type (Function t_return (parameters_of_bindings bs) is_variadic)
+  && option_bool s_opt (well_typed_statement P S (add_bindings bs empty) t_return)
+
+
+val well_typed_global: forall 'A1 'A2.
+                       Implementation.implementation                 ->
+                       sigma 'A1 'A2                                 ->
+                       (qualifiers * ctype * maybe (expression 'A2)) ->
+                       bool
+(* TODO: check *)
+let well_typed_global P S (qs, ty, e_opt) =
+     wf_type ty
+  && option_bool e_opt (typeable P S empty)
 
 let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
-  Context.all eq_identifier (fun _ -> well_typed_function P S) S
+  Context.all eq_identifier (fun _ x ->
+    match x with
+      | Left func    -> well_typed_function P S func
+      | Right global -> well_typed_global P S global
+    end) S
 
 let well_typed_program P (p:program 'A1 'A2) : bool =
-  let (main, S) = p in
-  match lookup S main with
-  | Just ((Basic (Integer (Signed Int_)), []), _) -> well_typed_sigma P S
-  | Just _                                        -> false
-  | Nothing                                       -> false
+  let (startup, S) = p in
+  match lookup S startup with
+  (* TODO: this doesn't allow the use of argc, argv ... *)
+  | Just (Left ((Basic (Integer (Signed Int_)), [], _), _)) -> well_typed_sigma P S
+  | Just _                                                  -> false
+  | Nothing                                                 -> false
   end

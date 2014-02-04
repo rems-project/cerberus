@@ -2,21 +2,21 @@
 open import Pervasives Global Symbol
 import Boot Set_extra
 
-type t 'a = list (map 'a Symbol.t)
+type t 'a 'b = list (map 'a 'b)
 
 (* Return a empty association table (with an opened scope). *)
-val empty: forall 'a. t 'a
+val empty: forall 'a 'b. t 'a 'b
 let empty = []
 
 (* Add a symbol  *)
-val insert: forall 'a. MapKeyType 'a => 'a -> Symbol.t -> t 'a -> t 'a
+val insert: forall 'a 'b. MapKeyType 'a => 'a -> 'b -> t 'a 'b -> t 'a 'b
 let insert a b = function
   | t::ts -> Map.insert a b t :: ts
-  | _     -> Boot.assert_false "`Symbol_table.insert' called on a table without any opened scope"
+  | _     -> Boot.assert_false "`Scope_table.insert' called on a table without any opened scope"
 end
 
 (* Return the value associated to a symbol, if it exists (look over all the opened scopes). *)
-val     lookup: forall 'a. MapKeyType 'a => 'a -> t 'a -> maybe Symbol.t
+val     lookup: forall 'a 'b. MapKeyType 'a => 'a -> t 'a 'b -> maybe 'b
 let rec lookup a t =
   match t with
     | m::ms -> 
@@ -28,31 +28,31 @@ let rec lookup a t =
   end
 
 
-val member: forall 'a. MapKeyType 'a => 'a -> t 'a -> bool
+val member: forall 'a 'b. MapKeyType 'a => 'a -> t 'a 'b -> bool
 let member a t = Maybe.isJust (lookup a t)
 
 
-val symbols: forall 'a. MapKeyType 'a, SetType 'a => t 'a -> list Symbol.t
+val symbols: forall 'a 'b. MapKeyType 'a, SetType 'a, SetType 'b => t 'a 'b -> list 'b
 let symbols = function
   | m::_ -> map snd $ Set_extra.toList (Map.toSet m)
 end
 
 
-val create_scope: forall 'a. MapKeyType 'a => t 'a -> t 'a
+val create_scope: forall 'a 'b. MapKeyType 'a => t 'a 'b -> t 'a 'b
 let create_scope t = Map.empty :: t
 
 
-val destroy_scope: forall 'a. t 'a -> t 'a
+val destroy_scope: forall 'a 'b. t 'a 'b -> t 'a 'b
 let destroy_scope = function
   | _::ms -> ms
 end
 
 
-val return_scope: forall 'a. MapKeyType 'a => t 'a -> t 'a
+val return_scope: forall 'a 'b. MapKeyType 'a => t 'a 'b -> t 'a 'b
 let return_scope = function
   | m::_ -> [m]
 end
 
 
-val push_table: forall 'a. t 'a -> t 'a -> t 'a
+val push_table: forall 'a 'b. t 'a 'b -> t 'a 'b -> t 'a 'b
 let push_table t1 t2 = t1 ++ t2

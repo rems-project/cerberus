@@ -1,6 +1,6 @@
 (* Effects for Core_run *)
-open import Pervasives Global Core
-import Cmm_csem Undefined Boot
+open import Pervasives Global Core Core_ctype
+import Cmm_csem Undefined Boot State_exception
 
 module Cmm = Cmm_csem
 module U   = Undefined
@@ -29,7 +29,6 @@ let tid_of = function
 
 type taction_id = natural
 
-type mem_state = Map.map Cmm.location (list (Cmm.cvalue * taction_id)) * natural
 
 
 (* this type represents reduction rules and is used for annotating trace element
@@ -92,22 +91,34 @@ type execution_mode =
   | Random
 
 type state = <|
-  execution_mode: execution_mode;                                             (* TODO: it's a bit silly that this is here, since the setting won't change *)
-  mem:            mem_state;                                                  (* the memory layout state                            *)
-  current_proc:   maybe sym;                                                  (* the C function whose body we are reducing (if any) *)
-  file:           file taction_id;                                            
-  cont_map:       map sym (map ksym (list (sym * ctype) * expr taction_id));  (* maps of labeled continuations (per function)       *)
-  tact_counter:   natural;                                                    (* counter for the trace actions map                  *)
-  tact_map:       Map.map taction_id trace_action;
-  trace:          trace;                                                      (* the execution trace so far (stored in reversed)    *)
+  (* The memory layout state *)
+  mem_layout: Memory.memory_state;
+  
+  (* the execution trace so far (stored in reversed) *)
+  trace: trace;
+  
   (* The following members are named after their counterparts in Cmm. *)
   cmm_tact_map:   Map.map taction_id Cmm.action;
   lk:             Map.map Cmm.location Cmm.location_kind;
   sb:             set (taction_id * taction_id);
   asw:            set (taction_id * taction_id);
   rf:             set (taction_id * taction_id);
-  mo:             Map.map mem_addr (list taction_id);
+  mo:             Map.map Memory.mem_addr (list taction_id);
   sc:             list taction_id;
+  
+  
+  (* The followings have to do with the state of your implementation, not the
+     state of the evaluated Core program *)
+  (* TODO: it's a bit silly that this is here, since the setting won't change *)
+  execution_mode: execution_mode;
+  (* the C function whose body we are reducing (if any) *)
+  current_proc:   maybe sym;
+  file: file taction_id;
+  (* maps of labeled continuations (per function) *)
+  cont_map: map sym (map ksym (list (sym * ctype) * expr taction_id));
+  (* counter for the trace actions map *)
+  tact_counter: natural;
+  tact_map: Map.map taction_id trace_action;
 |>
 
 type t 'a = state -> list (U.t 'a * state)
@@ -344,3 +355,49 @@ let register_sequencing bs aid tid = fun st ->
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
+
+
+
+
+
+
+val initial_state: file taction_id -> state
+let initial_state file = <|
+  execution_mode= Exhaustive;
+  mem_layout=     (Map.empty, 0);
+  current_proc=   Nothing;
+  file=           file;
+  cont_map=       Map.empty;
+  tact_counter=   0;
+  tact_map=       Map.empty;
+  trace=          [];
+  cmm_tact_map=   Map.empty;
+  lk=             Map.empty;
+  sb=             {};
+  asw=            {};
+  rf=             {};
+  mo=             Map.empty;
+  sc=             [];
+|>
+
+
+
+
+
+
+
+
+
+(* Interaction with the memory layout state *)
+val is_atomic_location: Memory.mem_addr -> t bool
+let is_atomic_location o = fun st ->
+  Boot.assert_false "HIP"
+(*
+  let foo = State_exception.eval 
+  fun st -> [(U.return (get_location_kind st o = Cmm.Atomic), st)]
+ *)
+
+val is_nonatomic_location: Memory.mem_addr -> t bool
+let is_nonatomic_location o =
+  Boot.assert_false "HIP"
+  (* fun st -> [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)] *)

@@ -14,6 +14,7 @@ module Aaux = AilSyntaxAux
 module Aty  = AilTypes
 
 module C    = Core
+module Cty  = Core_ctype
 module Caux = Core_aux
 module U    = Undefined
 
@@ -55,7 +56,7 @@ end
 
 and translate_function_designator (A.AnnotatedExpression _ expr) =
   match expr with
-    | A.Var fid -> return $ C.Econst (C.Cfunction fid)
+    | A.Var fid -> return $ C.Econst (Cmm_aux.Cfunction fid)
   end
 
 
@@ -90,7 +91,7 @@ and translate_expression stdlib program a_expr =
         (* NOTE: this is not enought *)
       | A.Var id ->
           if AilTypesAux.is_function ty then
-            return (C.Econst (C.Cfunction id))
+            return (C.Econst (Cmm_aux.Cfunction id))
           else
             return $ Caux.pload (Caux.mk_ctype ty) (C.Esym id) Cmm.NA
       
@@ -328,14 +329,14 @@ and translate_expression stdlib program a_expr =
             (* else [...] *)
                (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                   (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (C.Cint 2); C.Esym a_e2]))
+                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
                                  (C.Eop C.OpAdd (C.ctype_max $ Caux.mk_ctype ty) Caux.one)
                 else (* e1 has a signed type *)
                   (* if a_e2 < 0 then undef *)
                   (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
                      (C.Eundef Undefined.Negative_left_shift)
                      (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                     (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (C.Cint 2); C.Esym a_e2]))
+                     (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
                                                   (C.Eop C.OpAdd (C.ctype_max $ Caux.mk_ctype ty) Caux.one))
                         (* not representable(ty, a_res) then undef *)
                         (C.Eif (C.Enot (is_representable [Caux.mk_ctype ty; C.Esym a_res]))
@@ -585,7 +586,7 @@ and translate_expression stdlib program a_expr =
 	    end 
       
       | A.Constant (A.ConstantInteger (i, _)) ->
-          return (C.Econst $ C.Cint i)
+          return (C.Econst $ Cmm_aux.Cint i)
       
       
       | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> return Caux.one
@@ -816,11 +817,11 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         E.get_visible_objects                                                            >>= fun _as     ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         return $
-          C.Esave d_loop [ (a, C.Void)  | forall (a MEM _as) | true ]
+          C.Esave d_loop [ (a, Cty.Void)  | forall (a MEM _as) | true ]
             (C.Esseq [Just a_e] core_e
                (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e) Caux.zero))
                   (C.Esseq [] core_s (C.Erun {} d_loop [ (a, C.Esym a) | forall (a MEM _as) | true ]))
-                  (C.Esave d_break [ (a, C.Void)  | forall (a MEM _as) | true ] C.Eskip)
+                  (C.Esave d_break [ (a, Cty.Void)  | forall (a MEM _as) | true ] C.Eskip)
                )
             )
     
@@ -833,11 +834,11 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         E.get_visible_objects                                                            >>= fun _as     ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         return $
-          C.Esave d_loop [ (a, C.Void)  | forall (a MEM _as) | true ]
+          C.Esave d_loop [ (a, Cty.Void)  | forall (a MEM _as) | true ]
             (C.Esseq [] core_s
                (C.Esseq [Just a] core_e
                   (C.Eif (C.Eop C.OpEq (C.Esym a) Caux.zero)
-                     (C.Esave d_break [ (a, C.Void)  | forall (a MEM _as) | true ] C.Eskip)
+                     (C.Esave d_break [ (a, Cty.Void)  | forall (a MEM _as) | true ] C.Eskip)
                      (C.Erun {} d_loop [ (a, C.Esym a) | forall (a MEM _as) | true ])
                   )
                )
@@ -892,13 +893,13 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         return $
           C.Ewseq [Just a_e] core_e
             (foldl (fun acc (n, d) ->
-              C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst $ C.Cint n))
+              C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst $ Cmm_aux.Cint n))
                 (C.Erun {} d run_as)
                 acc
              )
                (C.Ewseq [] (C.Erun {} d_default' run_as)
                   (C.Ewseq [] core_s
-                     (C.Esave d_break' [ (a, C.Void) | forall (a MEM _as) | true ] C.Eskip)
+                     (C.Esave d_break' [ (a, Cty.Void) | forall (a MEM _as) | true ] C.Eskip)
                   )
                )
                $ Set_extra.toList (Map.toSet d_cases'))
@@ -908,18 +909,18 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         translate_stmt_ s     >>= fun core_s ->
         E.get_visible_objects >>= fun _as    ->
         (* TODO: should properly interpret the integer constant *)
-        return (C.Esave (fromJust $ Map.lookup ((fun (z, _) -> z) n) (fromJust d_cases)) [ (a, C.Void) | forall (a MEM _as) | true ] core_s)
+        return (C.Esave (fromJust $ Map.lookup ((fun (z, _) -> z) n) (fromJust d_cases)) [ (a, Cty.Void) | forall (a MEM _as) | true ] core_s)
     
     | A.Default s ->
         translate_stmt_ s     >>= fun core_s ->
         E.get_visible_objects >>= fun _as    ->
-        return (C.Esave (fromJust d_default) [ (a, C.Void)  | forall (a MEM _as) | true ] core_s)
+        return (C.Esave (fromJust d_default) [ (a, Cty.Void)  | forall (a MEM _as) | true ] core_s)
     
     | A.Label l s ->
         translate_stmt_ s     >>= fun core_s ->
         E.get_visible_objects >>= fun _as    ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
-        return (C.Esave l [ (a, C.Void)  | forall (a MEM _as) | true ] core_s)
+        return (C.Esave l [ (a, Cty.Void)  | forall (a MEM _as) | true ] core_s)
     
     | A.Goto l ->
         E.get_visible_objects >>= fun _as ->
