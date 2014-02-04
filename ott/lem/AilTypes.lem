@@ -78,7 +78,7 @@ type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)
  | Array of ctype * integer (*r array types (\S6.2.5\#20) *)
- | Function of ctype * list (qualifiers * ctype) (*r function types *)
+ | Function of ctype * list (qualifiers * ctype) * bool (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
  | Atomic of ctype
 
@@ -92,13 +92,13 @@ let rec eq_params_aux eq_ctype p1 p2 : bool =
 let rec eq_ctype t1 t2 =
   let eq_params = eq_params_aux eq_ctype in
   match (t1, t2) with
-  | (Void          , Void          ) -> true
-  | (Basic    bt1  , Basic bt2     ) -> eq_basicType bt1 bt2
-  | (Array    t1 n1, Array    t2 n2) -> eq_ctype t1 t2 && n1 = n2
-  | (Function t1 p1, Function t2 p2) -> eq_ctype t1 t2 && eq_params p1 p2
-  | (Pointer  q1 t1, Pointer  q2 t2) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
-  | (Atomic t1     , Atomic      t2) -> eq_ctype t1 t2
-  | (_             , _             ) -> false
+  | (Void            , Void              ) -> true
+  | (Basic    bt1    , Basic bt2         ) -> eq_basicType bt1 bt2
+  | (Array    t1 n1  , Array    t2 n2    ) -> eq_ctype t1 t2 && n1 = n2
+  | (Function t1 p1 b1, Function t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (Pointer  q1 t1  , Pointer  q2 t2    ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (Atomic t1       , Atomic      t2    ) -> eq_ctype t1 t2
+  | (_               , _                 ) -> false
   end
 
 let eq_params = eq_params_aux eq_ctype

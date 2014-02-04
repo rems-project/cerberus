@@ -63,3 +63,8 @@ val pp_core_expr: forall 'a. 'a (* Core.expr *) -> string
 
 val nat_of_string: string -> natural
 declare ocaml target_rep function nat_of_string = `Big_int.big_int_of_string`
+
+
+
+val pp_cabs0_definition: forall 'a. 'a -> string
+declare ocaml target_rep function pp_cabs0_definition = `Boot_ocaml.pp_cabs0_definition`

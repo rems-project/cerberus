@@ -13,7 +13,7 @@ type ctype_ =
   | UNION_  of Ail.id * (Ail.id * Core.member) list
   | ENUM_ of Ail.id
 *)
-  | Function_ of Core.ctype0 * Core.ctype0 list
+  | Function_ of Core_ctype.ctype0 * Core_ctype.ctype0 list
   | Pointer_ of ctype_
   | Atomic_ of ctype_
 (*
@@ -28,11 +28,11 @@ type ctype_ =
 
 let rec project_ctype_ = function
   | Void_ ->
-      Core.Void0
+      Core_ctype.Void0
   | Basic_ bty ->
-      Core.Basic0 bty
+      Core_ctype.Basic0 bty
   | Array_ (ty_, n) ->
-    Core.Array0 (project_ctype_ ty_, n)
+    Core_ctype.Array0 (project_ctype_ ty_, n)
 (*
   | STRUCT_ (x, membrs) ->
       Core.STRUCT (x, membrs)
@@ -42,11 +42,11 @@ let rec project_ctype_ = function
       Core.ENUM id
 *)
   | Function_ (ty, tys) ->
-      Core.Function0 (ty, tys)
+      Core_ctype.Function0 (ty, tys)
   | Pointer_ ty_ ->
-      Core.Pointer0 (project_ctype_ ty_)
+      Core_ctype.Pointer0 (project_ctype_ ty_)
   | Atomic_ ty_ ->
-      Core.Atomic1 (project_ctype_ ty_)
+      Core_ctype.Atomic1 (project_ctype_ ty_)
 (*
   | SIZE_T_ ->
       Core.SIZE_T
@@ -68,7 +68,7 @@ type name =
 
 type expr =
   | Eskip
-  | Econst of Core.constant2
+  | Econst of Cmm_aux.constant1
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
   | Eimpl of Implementation_.implementation_constant
@@ -80,7 +80,7 @@ type expr =
   | Eis_signed of expr
   | Eis_unsigned of expr
   | Enot of expr
-  | Ectype of Core.ctype0
+  | Ectype of Core_ctype.ctype0
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
   | Ecase of expr * (ctype_ * expr) list (* This is a hackish syntactic sugar, that should really only used to case over ctypes *)
@@ -595,7 +595,7 @@ expr:
     { Eskip }
 
 | n = INT_CONST
-    { Econst (Core.Cint0 n) }
+    { Econst (Cmm_aux.Cint n) }
 
 | i = IMPL
     { Eimpl i }

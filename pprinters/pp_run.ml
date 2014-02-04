@@ -30,21 +30,11 @@ let rec string_of_dyn_rule = function
   | Core_run_effect.Rule_Par       -> "par"
 
 
-(* Cmm_aux.constant -> Core.constant2 *)
-let rec convert_constant = function
-  | Cmm_aux.Cint n ->
-      Core.Cint0 n
-(*
-  | Cmm_aux.Carray cs ->
-      Core.Carray0 (List.map convert_constant cs)
- *)
-  | Cmm_aux.Cfunction sym ->
-      Core.Cfunction0 sym
 
 
 let string_of_mem_value = function
   | Cmm_aux.Muninit     -> "uninit"
-  | Cmm_aux.Mbase c     -> Boot_ocaml.to_plain_string (Pp_core.pp_constant (convert_constant c))
+  | Cmm_aux.Mbase c     -> Boot_ocaml.to_plain_string (Pp_core.pp_constant c)
   | Cmm_aux.Mobj addr   -> Boot_ocaml.to_plain_string (Pp_core.pp_mem_addr addr) (* (_, x) -> Big_int.string_of_big_int x *)
   | Cmm_aux.Mnull       -> "NULL"
 

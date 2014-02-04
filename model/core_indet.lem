@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Cmm_csem Core Exception Errors
+import Cmm_csem Core Memory Exception Errors
 
 module Cmm = Cmm_csem
 
@@ -45,14 +45,14 @@ let inline (>>) m f = L.bind m (fun _ -> f)
 (* TODO: rename *)
 type expr =
   | Eskip
-  | Econst of Core.constant
-  | Eaddr of Core.mem_addr
+  | Econst of Cmm_aux.constant
+  | Eaddr of Memory.mem_addr
   | Esym of Core.sym
   | Eop of Core.binop * expr * expr
   | Etrue
   | Efalse
   | Enot of expr
-  | Ectype of Core.ctype
+  | Ectype of Core_ctype.ctype
   | Elet of Core.sym * expr * expr
   | Eif of expr * expr * expr
   | Ecall of Core.name * list expr
@@ -66,7 +66,7 @@ type expr =
   | Easeq of maybe Core.sym * action * paction
   | Eindet of expr
   | Ebound of natural * expr
-  | Esave of Core.ksym * list (Core.sym * Core.ctype) * expr
+  | Esave of Core.ksym * list (Core.sym * Core_ctype.ctype) * expr
   | Erun of Core.ksym * list (Core.sym * expr)
   | Eshift of expr * expr
   

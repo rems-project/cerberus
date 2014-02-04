@@ -100,18 +100,23 @@ let pp_core_type = function
 let rec pp_ctype t =
   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
   match t with
-    | Void0                    -> !^ "void"
-    | Basic0 bt                -> Pp_ail.pp_basicType bt
-    | Array0 (ty, n)           -> pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
+    | Core_ctype.Void0 ->
+        !^ "void"
+    | Core_ctype.Basic0 bt ->
+        Pp_ail.pp_basicType bt
+    | Core_ctype.Array0 (ty, n) ->
+        pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
 (*
     | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
 *)
-    | Function0 (ty, args_tys) -> pp_ctype ty ^^^
-                                 P.parens (comma_list pp_ctype args_tys)
-    | Pointer0 ty              -> pp_ctype ty ^^ P.star
-    | Atomic1 ty               -> !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
+    | Core_ctype.Function0 (ty, args_tys) ->
+        pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys)
+    | Core_ctype.Pointer0 ty ->
+        pp_ctype ty ^^ P.star
+    | Core_ctype.Atomic1 ty ->
+        !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
 (*
     | SIZE_T                  -> !^ "size_t"
     | INTPTR_T                -> !^ "intptr_t"
@@ -121,8 +126,10 @@ let rec pp_ctype t =
 *)
 
 and pp_member = function
-  | MEMBER ty           -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
-  | BITFIELD (ty, w, _) -> fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.colon ^^^ Pp_ail.pp_integer w ^^ P.semi
+  | Core_ctype.MEMBER ty ->
+      fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
+  | Core_ctype.BITFIELD (ty, w, _) ->
+      fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.colon ^^^ Pp_ail.pp_integer w ^^ P.semi
 
 
 let pp_binop = function
@@ -152,13 +159,13 @@ let pp_name = function
   | Impl i -> pp_impl i
 
 let pp_constant = function
-  | Cint0 n ->
+  | Cmm_aux.Cint n ->
       (* pp_number *) !^ (Big_int.string_of_big_int n)
 (*
   | Carray0 _ ->
       !^ "ARRAY"
  *)
-  | Cfunction0 _ ->
+  | Cmm_aux.Cfunction _ ->
       !^ "FUNCTION"
 
 let pp_memory_order = function

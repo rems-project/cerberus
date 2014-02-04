@@ -1,4 +1,3 @@
-import Boot
 open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf OptionMonad
 
 open import GenTypes GenTypesAux Annotation
@@ -137,11 +136,26 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
   let annotate_arguments = annotate_arguments_aux A annotate_assignee in
   match e with
   | Var v ->
+        match (lookup G v, lookup S v) with
+          | (Just (qs, ty), Nothing) ->
+              (* block variable *)
+              Just (Var v, GenLValueType qs ty)
+          | (Nothing, Just (Right (qs, ty, _))) ->
+              (* global variable *)
+              Just (Var v, GenLValueType qs ty)
+          | (Nothing    , Just (Left p)) ->
+              (* function name *)
+              Just (Var v, GenRValueType (inject_type (type_from_sigma p)))
+          | (_, _) ->
+              Nothing
+        end
+(* (OLD)
       match (lookup G v, lookup S v) with
       | (Just (q, t), Nothing) -> Just (Var v, GenLValueType q t)
       | (Nothing    , Just p ) -> Just (Var v, GenRValueType (inject_type (type_from_sigma p)))
       | (_          , _      ) -> Nothing
       end
+*)
   | Binary e1 Comma e2 -> 
       annotate_rvalue e1 >>= fun (e1, _  ) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
@@ -149,9 +163,9 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
   | Unary Address e ->
       annotate_expression A S G e >>= fun e ->
       match type_of A e with
-      | GenLValueType q t               -> Just (Unary Address e, GenRValueType (GenPointer q t))
-      | GenRValueType (GenFunction t p) -> Just (Unary Address e, GenRValueType (GenPointer no_qualifiers (Function t p)))
-      | _                               -> Nothing
+      | GenLValueType q t                 -> Just (Unary Address e, GenRValueType (GenPointer q t))
+      | GenRValueType (GenFunction t p b) -> Just (Unary Address e, GenRValueType (GenPointer no_qualifiers (Function t p b)))
+      | _                                 -> Nothing
       end
   | Unary (Plus  as uop) e ->
       annotate_rvalue e >>= fun (e, gt) ->
@@ -177,13 +191,13 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
   | Unary Indirection e ->
       annotate_rvalue e >>= fun (e, gt) ->
       match gt with
-      | GenPointer q (Function t p) -> if AilTypesAux.unqualified q
-                                            then Just (Unary Indirection e, GenRValueType (GenPointer q (Function t p)))
-                                            else Nothing
-      | GenPointer q t                 -> if AilTypesAux.complete t && AilTypesAux.object_ t
-                                            then Just (Unary Indirection e, GenLValueType q t)
-                                            else Nothing
-      | _                              -> Nothing
+      | GenPointer q (Function t p b) -> if AilTypesAux.unqualified q
+                                         then Just (Unary Indirection e, GenRValueType (GenPointer q (Function t p b)))
+                                         else Nothing
+      | GenPointer q t                -> if AilTypesAux.complete t && AilTypesAux.object_ t
+                                         then Just (Unary Indirection e, GenLValueType q t)
+                                         else Nothing
+      | _                             -> Nothing
       end
   | Unary (PostfixIncr as uop) e ->
       annotate_expression A S G e >>= fun e ->
@@ -208,7 +222,7 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
   | Call e es ->
       annotate_rvalue e >>= fun (e, gt) ->
       match gt with
-      | GenPointer q (Function t p) -> if AilTypesAux.unqualified q then
+      | GenPointer q (Function t p b) -> if AilTypesAux.unqualified q then
                                          annotate_arguments es p >>= fun es ->
                                          Just (Call e es, GenRValueType (inject_type t))
                                        else Nothing
@@ -518,24 +532,50 @@ and annotate_statement (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) 
 let annotate_block (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) t_return (bs : list (statement 'B 'A1)) =
   annotate_block_aux A (annotate_statement A S G t_return) bs
 
-let annotate_function (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (p : (_ * _) * statement 'B 'A1) =
-  let ((t_return, bs), s) = p in
+let annotate_function (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (p : ((ctype * bindings * bool) * maybe (statement 'B 'A1))) =
+  let ((ty_return, bs, is_variadic), s_opt) = p in
   if fresh_bindings bs S &&
      AilTyping.well_formed_bindings bs &&
-     wf_type (Function t_return (parameters_of_bindings bs))
+     wf_type (Function ty_return (parameters_of_bindings bs) is_variadic)
   then
-    annotate_statement A S (Context.add_bindings bs Context.empty) t_return s >>= fun s ->
-    Just ((t_return, bs), s)
+    match s_opt with
+      | Just s ->  annotate_statement A S (Context.add_bindings bs Context.empty) ty_return s >>= fun s ->
+                   Just ((ty_return, bs, is_variadic), Just s)
+      | Nothing -> Just ((ty_return, bs, is_variadic), Nothing)
+    end
+  else
+    Nothing
+
+val annotate_global: forall 'A1 'A2 'B1 'B2 'B.
+                     annotation 'A1 'A2 ->
+                     sigma 'B1 'B2      ->
+                     qualifiers * ctype * maybe (expression 'A1) ->
+                     maybe (qualifiers * ctype * maybe (expression 'A2))
+(* TODO: check with J *)
+let annotate_global A S (qs, ty, e_opt) =
+  if wf_type ty then
+    match e_opt with
+      | Just e  -> annotate_assignee A S Context.empty ty e >>= fun e ->
+                   Just (qs, ty, Just e)
+      | Nothing -> Just (qs, ty, Nothing)
+    end
   else
     Nothing
 
 let annotate_sigma (A : annotation 'A1 'A2) (S : sigma 'B 'A1) : maybe (sigma 'B 'A2) =
-  Context.mapP eq_identifier (fun _ -> annotate_function A S) S
+  Context.mapP eq_identifier (fun _ ->
+    function
+      | Left  f -> annotate_function A S f >>= fun f ->
+                   Just (Left f)
+      | Right g -> annotate_global   A S g >>= fun g ->
+                   Just (Right g)
+    end
+  ) S
 
 let annotate_program (A : annotation 'A1 'A2) (p:program 'B 'A1) : maybe (program 'B 'A2) =
   let (main, S) = p in
   match lookup S main with
-  | Just ((Basic (Integer (Signed Int_)), []), _) -> annotate_sigma A S >>= fun S -> Just (main, S)
-  | Just _                                        -> Nothing
-  | Nothing                                       -> Nothing
+  | Just (Left ((Basic (Integer (Signed Int_)), [], _), _)) -> annotate_sigma A S >>= fun S -> Just (main, S)
+  | Just _                                                  -> Nothing
+  | Nothing                                                 -> Nothing
   end

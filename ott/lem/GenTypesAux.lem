@@ -10,8 +10,8 @@ let array gt : bool =
 
 let is_function gt : bool =
   match gt with
-  | GenFunction _ _ -> true
-  | _               -> false
+  | GenFunction _ _ _ -> true
+  | _                 -> false
   end
 
 (* following (§6.3.2.1)#3 *)
@@ -22,8 +22,8 @@ let array_coercion = function
 
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
-  | GenFunction ty qs -> GenPointer no_qualifiers (Function ty qs)
-  | gty               -> gty
+  | GenFunction ty qs is_variadic -> GenPointer no_qualifiers (Function ty qs is_variadic)
+  | gty                           -> gty
   end
 
 (* following (§6.3.2.1)#3 and #4 *)
@@ -152,12 +152,12 @@ let interpret_genBasicType P gbt : maybe basicType =
 
 let interpret_genType P gt : maybe ctype =
   match gt with
-  | GenVoid         -> Just Void
-  | GenBasic gbt    -> interpret_genBasicType P gbt >>= fun bt ->
-                       Just (Basic bt)
-  | GenArray    t n -> Just (Array    t n)
-  | GenFunction t p -> Just (Function t p)
-  | GenPointer  q t -> Just (Pointer  q t)
+  | GenVoid           -> Just Void
+  | GenBasic gbt      -> interpret_genBasicType P gbt >>= fun bt ->
+                         Just (Basic bt)
+  | GenArray    t n   -> Just (Array    t n)
+  | GenFunction t p b -> Just (Function t p b)
+  | GenPointer  q t   -> Just (Pointer  q t)
   end
 
 let interpret_genTypeCategory P gt : maybe typeCategory =

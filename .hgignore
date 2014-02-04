@@ -1,0 +1,4 @@
+syntax: glob
+
+_ocaml_generated/**
+_lem/**

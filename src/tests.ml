@@ -91,14 +91,14 @@ let error str =
 type execution_result_full = 
 (
   (
-    (Core_run_effect.taction_id Core.expr * ((Core_run_effect.taction_id, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t1 *
+    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t5 *
     Core_run_effect.state0
   ) list list,
-  Errors.t3
-) Exception.t4
+  Errors.t7
+) Exception.t1
 
 (* The type we use to compare results of executions *) 
-type execution_result = (((Core_run_effect.taction_id Core.expr) Undefined.t1) Pset.set, Errors.t3) Exception.t4
+type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t5) Pset.set, Errors.t7) Exception.t1
 
 (* TODO: proper printing for Undef and error *)
 let pp_execution_result (result:execution_result) : string = 
@@ -123,7 +123,7 @@ let execution_result_equal (left:execution_result) (right:execution_result) : bo
 let simplify_result (result : execution_result_full) : execution_result =
   match result with
     | E.Result [xs] ->
-        E.Result (Pset.from_list Pervasives.compare (List.map (fun (u_x, st) -> Undefined.fmap fst u_x) xs))
+        E.Result (Pset.from_list Pervasives.compare (List.map (fun (u_x, st) -> Undefined.fmap1 fst u_x) xs))
     | E.Result [] ->
         (* TODO: find out why this happens, and restore the error: error "The execution returned no results." *)
         E.Result (Pset.empty Pervasives.compare) 
@@ -132,7 +132,7 @@ let simplify_result (result : execution_result_full) : execution_result =
     | E.Exception s ->
         E.Exception s
 
-type test_result = (unit, string) Exception.t4
+type test_result = (unit, string) Exception.t1
 
 let compare_results (expected:execution_result) (actual_full:execution_result_full) : test_result =
   let actual: execution_result = simplify_result actual_full in
@@ -149,7 +149,7 @@ type test =
 let get_test (file_name:string) 
              (def_results:int list) 
              (undef_results:(Undefined.undefined_behaviour list) list): test = 
-  let def_results2 = List.map (fun x -> Undefined.Defined0 (Econst (Cint0 (Big_int.big_int_of_int x)))) def_results in
+  let def_results2 = List.map (fun x -> Undefined.Defined0 (Econst (Cmm_aux.Cint (Big_int.big_int_of_int x)))) def_results in
   let undef_results2 = List.map (fun x -> Undefined.Undef x) undef_results in
   let results = Pset.from_list Pervasives.compare (def_results2 @ undef_results2) in
   {file_name= file_name; 

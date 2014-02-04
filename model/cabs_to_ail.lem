@@ -4,7 +4,7 @@
 *)
 
 open import Pervasives Global
-import Boot Cabs0 Multiset Symbol_table Location State_exception Errors Decode Product
+            import Boot Cabs0 Multiset Scope_table Location State_exception Errors Decode Product
 import Builtins
 import AilSyntax AilTypes
 
@@ -563,7 +563,10 @@ let rec desugar_decl_type decl_ty =
   (* TODO: ignoring variable length parameters for now *)
   | C.PROTO decl_ty' (params, _) ->
       desugar_decl_type decl_ty' >>= fun mk_ty    ->
-      desugar_parameters params  >>= fun d_params ->
+      (* TODO: yuck, use brackets instead *)
+      E.create_scope >> (* This implements "function protocope scope" *)
+        desugar_parameters params  >>= fun d_params ->
+      E.destroy_scope >>= fun _ ->
       E.return $ fun ty -> mk_ty (ATypes.Function ty $ map snd d_params)
   end
 
@@ -585,9 +588,9 @@ and desugar_parameters params =
       maybe
         (E.fail (Errors.OTHER "parameter name omitted")) (* TODO: proper message *)
         (fun param_name ->
-          E.register_name param_name         >>= fun param_id             ->
-          desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
-          desugar_decl_type param_decl >>= fun mk_ty    ->
+          E.register_name param_name E.Varname >>= fun param_id             ->
+          desugar_spec_elem_list param_specs   >>= fun (param_qs, param_ty) ->
+          desugar_decl_type param_decl         >>= fun mk_ty                ->
           E.return (param_id, (param_qs, mk_ty param_ty))
         ) param_name_opt >>= fun d_param ->
       E.return (d_param :: acc)
@@ -661,7 +664,13 @@ let rec desugar_expression e =
   | C.CONSTANT cst ->
       A.Constant <$> desugar_constant cst
   | C.VARIABLE x ->
-      A.Var <$> E.resolve_identifier x
+      match Builtins.translate_builtin_varnames x with
+        | Just ty ->
+            E.return ty
+        | Nothing ->
+            A.Var <$> (E.resolve_identifier x >>= fun (id, _) -> E.return id)
+      end
+  
   | C.EXPR_SIZEOF e ->
       E.fail (Errors.OTHER "new-Ail does not yet support sizeof(expr)")
   | C.TYPE_SIZEOF (specs, decl_ty) ->
@@ -708,6 +717,7 @@ let rec desugar_statement stmt =
           E.create_scope                          >>
           E.mapM desugar_statement stmts          >>= fun d_stmts ->
           E.destroy_scope                         >>= fun ids     ->
+          let ids = List.map fst ids in
           E.mapM E.get_declaration ids            >>= fun decls   ->
           E.return $ A.Block (Global.map2 Product.make ids decls) d_stmts
 
@@ -811,9 +821,9 @@ E.fail Errors.CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
 (*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * maybe (A.expression unit)) *)
 and desugar_init_name iname =
   let C.Init_name (C.Name name decl_ty _ _) ie = iname in
-  E.register_name name       >>= fun v     ->
-  desugar_init_expression ie >>= fun e_opt ->
-  desugar_decl_type decl_ty  >>= fun mk_ty ->
+  E.register_name name E.Varname >>= fun v     ->
+  desugar_init_expression ie     >>= fun e_opt ->
+  desugar_decl_type decl_ty      >>= fun mk_ty ->
   E.return (v, mk_ty , e_opt)
 
 
@@ -835,22 +845,26 @@ and desugar_declaration (specs, ins) =
 (*  desugar_definition: C.definition -> E.t unit *)
 and desugar_definition def =
   match def with
-    | C.FUNDEF specs (C.Name fun_name fun_decl [] _) stmt _ ->
-        desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
-        E.register_name fun_name     >>= fun fun_id   ->
-        register_labels stmt         >>
-        (* TODO: storage class *)
-        (* starts the function scope *)
-        E.create_scope >>
-        match fun_decl with
-          | C.PROTO _ (params, _) ->
-              desugar_parameters params
-          | _ ->
-              E.fail (Errors.OTHER "Not a function type.")
-        end >>= fun d_params ->
-        desugar_statement stmt >>= fun d_stmt ->
-        E.destroy_scope        >>
-        E.add_function fun_id ((ty, d_params), d_stmt)
+    | C.FUNDEF specs (C.Name str fun_decl [] _) stmt _ ->
+        E.is_defined_function str >>= function
+          | true  -> E.fail (Errors.CABS_TO_AIL_FUNCTION_REDEFINITION str)
+          | false ->
+              desugar_spec_elem_list specs       >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
+              E.register_name str E.Funname >>= fun fun_id   ->
+              register_labels stmt               >>
+              (* TODO: storage class *)
+              (* starts the function scope *)
+              E.create_scope >>
+              match fun_decl with
+                | C.PROTO _ (params, _) ->
+                    desugar_parameters params
+                | _ ->
+                    E.fail (Errors.OTHER "Not a function type.")
+              end >>= fun d_params ->
+              desugar_statement stmt >>= fun d_stmt ->
+              E.destroy_scope        >>
+              E.add_function fun_id ((ty, d_params), d_stmt)
+        end
 
     (* This should correspond to the def of a struct/union (typedef?) *)
   | C.DECDEF (specs, []) loc ->
@@ -863,6 +877,7 @@ and desugar_definition def =
       let d_qs = desugar_cvspecs cs in
       desugar_type_specifiers tySpecs >>= fun d_ty ->
       if List.elem C.TYPEDEF sts then
+        (* Case: type definition *)
         let sts = List.delete C.TYPEDEF sts in
         match init_names with
           | [C.Init_name (C.Name tyname C.JUSTBASE [] _) NO_INIT] ->
@@ -870,9 +885,30 @@ and desugar_definition def =
           | _ ->
               E.fail (Errors.CSEM_HIP "(TODO msg) found a typedef DECDEF with less/more than one name; or not a JUSTBASE.")
         end
-      else
+      else match init_names with
+        | [C.Init_name (C.Name str (C.PROTO decl_type (params, is_variadic)) [] _) C.NO_INIT] ->
+            (* Case: function prototype *)
+            desugar_decl_type decl_type >>= fun mk_ctype ->
+            
+            (* TODO: yuck, use brackets instead *)
+            E.create_scope >> (* This implements "function protocope scope" *)
+              desugar_parameters params   >>= fun d_params ->
+            E.destroy_scope >>
+            
+            (* TODO: d_qs *)
+            E.register_name str E.Funname >>
+            E.register_prototype str (mk_ctype d_ty) d_params is_variadic
+            
+        | [C.Init_name (C.Name str decl_type [] _) ie] ->
+            (* Case: global variable *)
+            desugar_decl_type decl_type   >>= fun mk_ctype ->
+            E.register_name str E.Varname >>= fun id       ->
+            desugar_init_expression ie    >>= fun d_e_opt  ->
+            E.register_global id (mk_ctype d_ty) d_e_opt
         
-        Boot.assert_false "HIP: DECDEF, not typedef"
+        | _ ->
+            Boot.assert_false (*$ Boot.pp_cabs0_definition def *) "HIP: DECDEF, not typedef AND other"
+        end
 
 (*
         (* Not dealing with a type definition *)
@@ -892,5 +928,8 @@ val desugar: C.atom -> C.file -> Exception.t (A.program Location.t unit) Errors.
 let desugar startup defs =
   E.eval (
     E.mapM_ desugar_definition defs >>
-    E.tryWith (Location.dummy, Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve_identifier startup)
+    E.resolve_identifier startup >>= function
+      | (id, Varname) -> E.return id
+      | _             -> E.fail (Errors.CABS_TO_AIL_NO_STARTUP startup)
+    end
   )

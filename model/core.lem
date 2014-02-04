@@ -1,15 +1,10 @@
 open import Pervasives Global
 import Symbol AilTypes Implementation_ Undefined Cmm_aux Cmm_csem
+import Memory
+
+open import Core_ctype
 
 module Cmm = Cmm_csem
-
-(* TODO: this is here because of some stupid cyclic module dependency ...
-
-         Idealy we should have a memory.lem module which would be used by
-         core.lem (just for knowing mem_addr) and by core_run. But we can't
-         because the memory actions have to know about the monad used by
-         core_run.lem. If we had type families, StateT would do the trick *)
-type mem_addr = Cmm_aux.location
 
 
 
@@ -37,37 +32,6 @@ type sym = Symbol.t
 (* Continuation names *)
 type ksym = Symbol.t
 
-
-
-
-(* C types (this is a simplication of what is need for typechecking) *)
-(* TODO: what about Ail.ATOMIC_Q ? *)
-type ctype =
-  | Void
-  | Basic of AilTypes.basicType
-  | Array of ctype * integer
-  | Function of ctype * list ctype
-  | Pointer of ctype
-(*
-  | STRUCT of Ail.id * list (Ail.id * member)
-  | UNION  of Ail.id * list (Ail.id * member)
-  | ENUM of Ail.id
-*)
-  | Atomic of ctype
-  | SIZE_T
-  | INTPTR_T
-  | WCHAR_T
-  | CHAR16_T
-  | CHAR32_T
-
-and member =
-  | MEMBER of (* alignment_specifier * *) ctype
-  | BITFIELD of ctype * integer * (maybe bool)
-
-
-
-
-
 (* Binary operators *)
 type binop =
   (* arithmetic operators *)
@@ -94,20 +58,22 @@ type name =
   | Impl of Implementation_.implementation_constant
 
 
+(*
 type constant =
   | Cint of integer
 (*  | Carray of list constant *)
 (*  | Cstruct *)
   | Cfunction of sym
+ *)
 
 type expr 'a =
   (* pure expressions *)
   | Enull
   | Etrue
   | Efalse
-  | Econst of constant
+  | Econst of Cmm_aux.constant
   | Ectype of ctype
-  | Eaddr of mem_addr
+  | Eaddr of Memory.mem_addr
   | Esym of sym
   | Eimpl of Implementation_.implementation_constant
   | Etuple of list (expr 'a)

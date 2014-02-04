@@ -5,7 +5,7 @@ type aid = string
 
 type program = int
 
-(* Thread id *)
+(* == Thread id ============================================================= *)
 type tid =
   | Tzero
   | Tpar of nat * tid
@@ -31,14 +31,48 @@ instance (Eq tid)
   let (<>) tid1 tid2 = not $ tid_eq tid1 tid2
 end
 
+val     canonize_tid: tid -> tid
+let rec canonize_tid tid =
+  match tid with
+    | Tzero       -> Tzero
+    | Tpar n tid' -> Tpar n (canonize_tid tid')
+    | Tseq tid'   -> (canonize_tid tid')
+end
 
-(* Memory location *)
+
+
+
+
+
+
+(* == Memory location ======================================================= *)
 type location_ =
   | Lbase of natural
   | Lshift of location_ * integer
 
+(*
+let location_eq l1 l2 =
+    match (l1, l2) with
+      | Lbase n -> 
+      | Lshift l1' n ->
+    end
+
+
+instance (Eq location_)
+
+  let (<>) l1 l2 = 
+end
+ *)
+
+instance (Eq location_)
+  let (=) l1 l2 = true
+  let (<>) l1 l2 = false
+end
+
 type location =
     list Symbol.t * location_
+
+
 
 
 

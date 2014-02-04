@@ -31,17 +31,17 @@ type genType [name="gt*"] =
  | GenVoid
  | GenBasic of genBasicType
  | GenArray of ctype * integer
- | GenFunction of ctype * list (qualifiers * ctype)
+ | GenFunction of ctype * list (qualifiers * ctype) * bool
  | GenPointer of qualifiers * ctype
 
 let rec eq_genType gt1 gt2 =
   match (gt1, gt2) with
-  | (GenVoid          , GenVoid          ) -> true
-  | (GenBasic    gbt1 , GenBasic    gbt2 ) -> eq_genBasicType gbt1 gbt2
-  | (GenArray    t1 n1, GenArray    t2 n2) -> eq_ctype t1 t2 && n1 = n2
-  | (GenFunction t1 p1, GenFunction t2 p2) -> eq_ctype t1 t2 && eq_params p1 p2
-  | (GenPointer  q1 t1, GenPointer  q2 t2) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
-  | (_                , _                ) -> false
+  | (GenVoid             , GenVoid             ) -> true
+  | (GenBasic    gbt1    , GenBasic    gbt2    ) -> eq_genBasicType gbt1 gbt2
+  | (GenArray    t1 n1   , GenArray    t2 n2   ) -> eq_ctype t1 t2 && n1 = n2
+  | (GenFunction t1 p1 b1, GenFunction t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (GenPointer  q1 t1   , GenPointer  q2 t2   ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (_                   , _                   ) -> false
   end
 
 type genTypeCategory = 
@@ -64,11 +64,11 @@ let inject_basicType bt : genBasicType =
 
 let inject_type t : genType =
   match t with
-  | Void         -> GenVoid
-  | Basic bt     -> GenBasic (inject_basicType bt)
-  | Pointer  q t -> GenPointer q t
-  | Array    t n -> GenArray t n
-  | Function t p -> GenFunction t p
+  | Void           -> GenVoid
+  | Basic bt       -> GenBasic (inject_basicType bt)
+  | Pointer  q t   -> GenPointer q t
+  | Array    t n   -> GenArray t n
+  | Function t p b -> GenFunction t p b
   end
 
 let inject_typeCategory tc : genTypeCategory =
