@@ -239,17 +239,6 @@ val list_to_relation: forall 'a. Eq 'a, SetType 'a => list 'a -> set ('a * 'a)
 let list_to_relation list = 
   Relation.transitiveClosure (list_to_relation_aux list Nothing)
   
-val get_location_kind: E.state -> Cmm.location -> Cmm.location_kind
-let get_location_kind s x = 
-  (* We use Non_Atomic as the default location_kind. Some locations are not used
-     in the execution (i.e. there are no actions at that location) and then it does
-     not matter which location_kind we specify. But some actions might be used, but 
-     not present in s.E.lk (for example if it has been created with an alloc rather 
-     than a create). In this case the default location_kind does matter. *)
-   match Map.lookup x s.E.lk with
-     | Just z  -> z
-     | Nothing -> Cmm.Non_Atomic
-   end
 
 
 val to_observable_execution: E.state -> Cmm.observable_execution
@@ -260,7 +249,7 @@ let to_observable_execution s =
     <|
       Cmm.actions = Map.range s.E.cmm_tact_map;
       Cmm.threads = Set.map tid_of (Map.range s.E.tact_map);
-      Cmm.lk      = (fun x -> get_location_kind s x);
+      Cmm.lk      = (fun x -> E.get_location_kind s x);
       Cmm.sb      = to_cmm_relation s.E.sb;
       Cmm.asw     = to_cmm_relation s.E.asw;
       Cmm.dd      = {};
@@ -535,7 +524,7 @@ let load ty o = fun (<| E.mem_layout= (m, _) |> as st) ->
         (* DEBUG *)
         (* TODO[newLem]     Boot.print_debug ("[Core_run.load] @" ^ (string_of_num $ snd o)) $ *)
         (* Returns the last value stored in memory *)
-        if get_location_kind st o = Cmm.Atomic then
+        if E.get_location_kind st o = Cmm.Atomic then
           (* load any of the past values *)
           let reads = [(U.return (value, taid), st) | forall ((value, taid) MEM values) | value <> Cmm_aux.Muninit] in
           if reads = [] then

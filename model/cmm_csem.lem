@@ -208,6 +208,7 @@ type action =
 instance (Eq action)
   let (=) act1 act2 =
     match (act1, act2) with
+(*
       | (Lock a1 _ _ _     , Lock a2 _ _ _     ) -> a1 = a2
       | (Unlock a1 _ _     , Unlock a2 _ _     ) -> a1 = a2
       | (Load a1 _ _ _ _   , Load a2 _ _ _ _   ) -> a1 = a2
@@ -217,6 +218,7 @@ instance (Eq action)
       | (Blocked_rmw a1 _ _, Blocked_rmw a2 _ _) -> a1 = a2
       | (Create a1 _ _     , Create a2 _ _     ) -> a1 = a2
       | (Kill a1 _ _       , Kill a2 _ _       ) -> a1 = a2
+ *)
       | _                                        -> false
     end
   let (<>) act1 act2 =

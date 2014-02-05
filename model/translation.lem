@@ -20,9 +20,22 @@ module U    = Undefined
 
 module Cmm = Cmm_csem
 
-(*
 
-val     translate_lvalue: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> t (C.expr zero)
+val translate_lvalue: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> t (C.expr zero)
+val translate_function_designator: A.expression GenTypes.genTypeCategory -> t (C.expr zero)
+val translate_expression: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory ->
+                          t (C.expr zero)
+(* val collect_cases *)
+val translate_stmt:
+  C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.identifier ->
+  maybe Symbol.t -> maybe (map integer Symbol.t) -> maybe Symbol.t -> maybe Symbol.t ->
+  A.statement Location.t GenTypes.genTypeCategory -> t (C.expr zero)
+val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
+val translate: C.fun_map zero -> C.impl zero -> A.program Location.t GenTypes.genTypeCategory -> C.file zero
+
+
+(* ========================================================================== *)
+
 let rec translate_lvalue stdlib program a_exp =
   let f = translate_expression stdlib program in
   if Aaux.null_pointer_constant a_exp then
@@ -62,8 +75,6 @@ and translate_function_designator (A.AnnotatedExpression _ expr) =
   end
 
 
-(*  translate_expression: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory -> 
-                          t (C.expr zero) *)
 and translate_expression stdlib program a_expr =
   let f e = translate_expression stdlib program e in
   let mk_stdcall fname = mk_stdcall stdlib fname in
@@ -552,7 +563,7 @@ and translate_expression stdlib program a_expr =
                   return $ C.Eproc {} fid []
                 else
                   (* TODO: variadic case *)
-                  let Left (return_ty, binds, is_variadic) = fst $ fromJust (List.lookup fid (snd program)) in
+                  let Just (Left ((return_ty, binds, is_variadic), _)) = List.lookup fid (snd program) in
                   let n = List.length es in
                   
                   (* symbolic names for the temporary objects and init value *)
@@ -639,6 +650,11 @@ and translate_expression stdlib program a_expr =
 
 
 
+
+
+
+
+
 (* translate_stmt Pmap.empty program program.A.main C.Constants.return s *)
 
 (* TODO[über HACK] `lasts' is the last of symbolic names saving the last statement for each block we are in
@@ -697,28 +713,21 @@ let rec collect_cases_ (A.AnnotatedStatement _ stmt) =
         St.return ()
 (*    | PAR of list (statement_l 'a) *)
   end
-
-
 let collect_cases s =
   snd $ St.run (collect_cases_ s) <| found_default= false; cases= [] |>
 
 
 
-
 open Translation_effect
 
-(*
-val     translate_stmt: C.fun_map zero -> A.program Location.t zero ->
-                        option Symbol.t -> option Symbol.t -> option Symbol.t -> option Symbol.t ->
-                        A.statement Location.t zero -> t (C.expr zero)
-*)
-let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) : t (C.expr zero) =
+let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) =
   let translate_stmt_ s = translate_stmt stdlib program f d_default d_cases d_loop d_break s in
-  let mk_stdcall fname = mk_stdcall stdlib fname   in
-  let conv_int         = mk_stdcall "conv_int" in
+  let mk_stdcall fname  = mk_stdcall stdlib fname                                            in
+  let conv_int          = mk_stdcall "conv_int"                                              in
   match stmt with
     | A.Skip ->
         return C.Eskip
+    
     | A.Expression e ->
         translate_expression stdlib program e
     
@@ -801,8 +810,6 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 
 *)  
 
-
-
     | A.If e s1 s2 ->
         E.fresh_symbol                        >>= fun a_test  ->
         translate_expression stdlib program e >>= fun core_e  ->
@@ -863,7 +870,8 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
     | A.Return e ->
         translate_expression stdlib program e >>= fun core_e ->
         let A.AnnotatedExpression ty _ = e in
-        let Left (return_ty, _, _) = fst $ fromJust (List.lookup f (snd program)) in
+(*        let Left (return_ty, _, _) = fst $ fromJust (List.lookup f (snd program)) in *)
+        let Just (Left ((return_ty, _, _), _)) = List.lookup f (snd program) in
         E.fresh_symbol           >>= fun a_e ->
         E.get_visible_objects    >>= fun _as ->
         let (core_kills) = List.map (Caux.pkill -| C.Esym) _as in
@@ -952,22 +960,12 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
       E.mapM (translate_stmt_) ss >>= fun core_ss ->
       return $ C.Eunseq core_ss
 *)
+
   end
 
- *)
-
-
-
-val translate_stmt:
-  C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.identifier ->
-  maybe Symbol.t -> maybe Symbol.t -> maybe Symbol.t -> maybe Symbol.t ->
-  A.statement Location.t GenTypes.genTypeCategory -> t (C.expr zero)
-
-let translate_stmt _ _ _ _ _ _ _ _ = Boot.assert_false "HIP"
 
 
 (* Run the translator on different functions *)
-val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
 let translate_program stdlib program =
   E.foldlM (fun acc ->
     function
@@ -997,7 +995,6 @@ let translate_program stdlib program =
 
 
 (* This is the entry function (called from main.ml) *)
-val translate: C.fun_map zero -> C.impl zero -> A.program Location.t GenTypes.genTypeCategory -> C.file zero
 let translate stdlib impl prog =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   match (translate_program stdlib prog) E.init with
