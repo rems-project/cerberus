@@ -262,7 +262,7 @@ val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_i
 let get_proc psym = fun st ->
   match Map.lookup psym st.file.funs with
     | Just z  -> [(U.return z, st)]
-    | Nothing -> Boot.assert_false "HIP" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
+    | Nothing -> Boot.assert_false "HIP: get_proc failure" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
   end
 
 val register_conts: map sym (map ksym (list (sym * ctype) * expr taction_id)) -> t unit
@@ -360,6 +360,22 @@ let register_sequencing bs aid tid = fun st ->
 
 
 
+val get_location_kind: state -> Cmm.location -> Cmm.location_kind
+let get_location_kind s x = 
+  (* We use Non_Atomic as the default location_kind. Some locations are not used
+     in the execution (i.e. there are no actions at that location) and then it does
+     not matter which location_kind we specify. But some actions might be used, but 
+     not present in s.E.lk (for example if it has been created with an alloc rather 
+     than a create). In this case the default location_kind does matter. *)
+   match Map.lookup x s.lk with
+     | Just z  -> z
+     | Nothing -> Cmm.Non_Atomic
+   end
+
+
+
+
+
 
 val initial_state: file taction_id -> state
 let initial_state file = <|
@@ -391,13 +407,13 @@ let initial_state file = <|
 (* Interaction with the memory layout state *)
 val is_atomic_location: Memory.mem_addr -> t bool
 let is_atomic_location o = fun st ->
-  Boot.assert_false "HIP"
+  [(U.return (get_location_kind st o = Cmm.Atomic), st)] (* Boot.assert_false "HIP: is_atomic_location" *)
 (*
   let foo = State_exception.eval 
   fun st -> [(U.return (get_location_kind st o = Cmm.Atomic), st)]
  *)
 
 val is_nonatomic_location: Memory.mem_addr -> t bool
-let is_nonatomic_location o =
-  Boot.assert_false "HIP"
-  (* fun st -> [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)] *)
+let is_nonatomic_location o = fun st ->
+  [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)] (* Boot.assert_false "HIP: is_nonatomic_location" *)
+  (* fun st ->  *)

@@ -30,7 +30,7 @@ type state = <|
   
   
   
-  
+  (* globals, function prototype/definitions *)
   definitions:               A.sigma Location.t unit;
   id_map:                 map A.identifier (ATypes.qualifiers * ATypes.ctype);
   
@@ -43,11 +43,13 @@ type state = <|
   strings:                map A.identifier string;
   
   
+(*
   (* function prototypes: fname -> (return_ty, params, is_variadic) *)
   fun_protos: map string (ATypes.ctype * list (A.identifier * (ATypes.qualifiers * ATypes.ctype)) * bool); (* boolean = "is variadic func?" *)
   
   
   global_map: map A.identifier (ATypes.ctype * maybe (A.expression unit))
+ *)
   
   
   
@@ -105,8 +107,6 @@ let eval m =
     definitions=            [];
     id_map=                 Map.empty;
     typedef_map=            Map.empty;
-    fun_protos=             Map.empty;
-    global_map=             Map.empty;
     strings=                Map.empty
   |> in
   State_exception.eval (bind m make_program) initial_state
@@ -160,6 +160,13 @@ let name_in_scope name =
   State_exception.read (fun st ->
     Scope_table.member name (Scope_table.return_scope st.registered_identifiers)
   )
+
+val lookup_name: string -> t (maybe (A.identifier * symbol_kind))
+let lookup_name str =
+  State_exception.read (fun st ->
+    Scope_table.lookup str (Scope_table.return_scope st.registered_identifiers)
+  )
+
 
 val register_name : string -> symbol_kind -> t A.identifier
 let register_name name kind =
@@ -239,15 +246,16 @@ let get_typedef str =
     end
 
 
-val register_prototype: string -> ATypes.ctype -> list (A.identifier * (ATypes.qualifiers * ATypes.ctype)) -> bool -> t unit
-let register_prototype str ty params is_variadic =
+val register_prototype: A.identifier -> ATypes.ctype -> list (A.identifier * (ATypes.qualifiers * ATypes.ctype)) -> bool -> t unit
+let register_prototype fun_id ty params is_variadic =
   State_exception.update (fun st ->
-    <| st with fun_protos= Map.insert str (ty, params, is_variadic) st.fun_protos |>
+    <| st with definitions= (fun_id, Left ((ty, params, is_variadic), Nothing)) :: st.definitions |>
   )
 
 
+(* TODO: qualifiers *)
 val register_global: A.identifier -> ATypes.ctype -> maybe (A.expression unit) -> t unit
 let register_global id ty e_opt =
   State_exception.update (fun st ->
-    <| st with global_map= Map.insert id (ty, e_opt) st.global_map |>
+    <| st with definitions= (id, Right (ATypes.no_qualifiers, ty, e_opt)) :: st.definitions |>
   )

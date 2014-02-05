@@ -849,8 +849,11 @@ and desugar_definition def =
         E.is_defined_function str >>= function
           | true  -> E.fail (Errors.CABS_TO_AIL_FUNCTION_REDEFINITION str)
           | false ->
-              desugar_spec_elem_list specs       >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
-              E.register_name str E.Funname >>= fun fun_id   ->
+              desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
+              E.lookup_name str            >>= function
+                | Just (fun_id, Funname) -> E.return fun_id
+                | Nothing                -> E.register_name str E.Funname
+              end >>= fun fun_id   ->
               register_labels stmt               >>
               (* TODO: storage class *)
               match fun_decl with
@@ -896,8 +899,8 @@ and desugar_definition def =
             E.destroy_scope >>
             
             (* TODO: d_qs *)
-            E.register_name str E.Funname >>
-            E.register_prototype str (mk_ctype d_ty) d_params is_variadic
+            E.register_name str E.Funname >>= fun fun_id ->
+            E.register_prototype fun_id (mk_ctype d_ty) d_params is_variadic
             
         | [C.Init_name (C.Name str decl_type [] _) ie] ->
             (* Case: global variable *)

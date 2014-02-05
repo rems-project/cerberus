@@ -262,6 +262,7 @@ let pp_character_constant (pref_opt, c) =
 
 let pp_constant = function
   | ConstantInteger ic -> pp_integerConstant ic
+  | ConstantString str -> !^ str
 (*
   | CONST_FLOAT fc -> !^ fc
   | CONST_CHAR cc  -> pp_character_constant cc
