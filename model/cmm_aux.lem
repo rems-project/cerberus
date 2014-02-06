@@ -50,23 +50,36 @@ type location_ =
   | Lbase of natural
   | Lshift of location_ * integer
 
-(*
-let location_eq l1 l2 =
-    match (l1, l2) with
-      | Lbase n -> 
-      | Lshift l1' n ->
-    end
+let rec location_Equal l1 l2 =
+  match (l1, l2) with
+    | (Lbase n1, Lbase n2) ->
+        n1 = n2
+    | (Lshift l1' n1, Lshift l2' n2) ->
+       location_Equal l1' l2' && n1 = n2
+  end
 
 
 instance (Eq location_)
-
-  let (<>) l1 l2 = 
+  let (=)  l1 l2 = location_Equal l1 l2
+  let (<>) l1 l2 = not $ location_Equal l1 l2
 end
- *)
 
-instance (Eq location_)
-  let (=) l1 l2 = true
-  let (<>) l1 l2 = false
+let rec location_Compare l1 l2 =
+  match (l1, l2) with
+    | (Lbase n1, Lbase n2) ->
+        setElemCompare n1 n2
+    | (Lshift l1' n1, Lshift l2' n2) ->
+        match location_Compare l1' l2' with
+          | EQ -> setElemCompare n1 n2
+          | z  -> z
+        end
+    | (Lbase _   , Lshift _ _) -> LT
+    | (Lshift _ _, Lbase _   ) -> GT
+  end
+
+
+instance (SetType location_)
+  let setElemCompare = location_Compare
 end
 
 type location =
@@ -82,6 +95,16 @@ type constant =
 (*  | Carray of list constant *)
   | Cfunction of Symbol.t
 
+instance (SetType constant)
+  let setElemCompare c1 c2 =
+    match (c1, c2) with
+      | (Cint n1     , Cint n2     ) -> setElemCompare n1 n2
+      | (Cfunction f1, Cfunction f2) -> setElemCompare f1 f2
+      | (Cint _      , Cfunction _ )  -> LT
+      | (Cfunction _ , Cint _      )  -> GT
+    end
+end
+
 (* Memory value *)
 type cvalue =
   | Muninit    (* TODO: Kayvan has to check whether we can remove this constructor 
@@ -92,17 +115,32 @@ type cvalue =
   | Marray of list cvalue
   | Mnull
 
-(*
-instance (Eq cvalue)
-  let (=) v1 v2 =
-    match (v1, v2) with
-      | (Muninit, Munint
+let rec setElemCompare_cvalue v1 v2 =
+  match (v1, v2) with
+    | (Muninit     , Muninit     ) -> EQ
+    | (Mbase c1    , Mbase c2    ) -> setElemCompare c1 c2
+    | (Mobj loc1   , Mobj loc2   ) -> setElemCompare loc1 loc2
+    | (Marray vs1  , Marray vs2  ) -> setElemCompare vs1 vs2
+    | (Mnull       , Mnull       ) -> EQ
+    
+    | (Muninit     , _           ) -> LT
+    
+    | (Mbase _     , Muninit     ) -> GT
+    | (Mbase _     , _           ) -> LT
+    
+    | (Mobj _      , Muninit     ) -> GT
+    | (Mobj _      , Mbase _     ) -> GT
+    | (Mobj _      , _           ) -> LT
+    
+    | (Marray _    , Mnull       ) -> LT
+    | (Marray _    , _           ) -> GT
+    | (Mnull       , _           ) -> GT
+  end
 
 
-
-  let (<>) v1 v2
+instance (SetType cvalue)
+  let setElemCompare = setElemCompare_cvalue
 end
- *)
 
 
 type mem_value = cvalue
