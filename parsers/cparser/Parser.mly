@@ -4,7 +4,7 @@ open List0
 %}
 
 %token<Cabs0.atom * Cabs0.cabsloc> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
-%token<Cabs0.constant0 * Cabs0.cabsloc> CONSTANT_
+%token<Cabs0.constant1 * Cabs0.cabsloc> CONSTANT_
 %token<Cabs0.cabsloc> SIZEOF ALIGNOF_ PTR_ INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ_ NEQ LT_ GT_
   ANDAND BARBAR PLUS_ MINUS_ STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION_
   COLON AND_
@@ -46,14 +46,14 @@ open List0
 %type<field_group list (* Reverse order *)> struct_declaration_list
 %type<field_group> struct_declaration
 %type<spec_elem list * Cabs0.cabsloc> specifier_qualifier_list
-%type<(name option * Cabs0.expression0 option) list (* Reverse order *)> struct_declarator_list
-%type<name option * Cabs0.expression0 option> struct_declarator
+%type<(name0 option * Cabs0.expression0 option) list (* Reverse order *)> struct_declarator_list
+%type<name0 option * Cabs0.expression0 option> struct_declarator
 %type<(atom * Cabs0.expression0 option * Cabs0.cabsloc) list (* Reverse order *)> enumerator_list
 %type<atom * Cabs0.expression0 option * Cabs0.cabsloc> enumerator
 %type<atom * Cabs0.cabsloc> enumeration_constant
 %type<cvspec * Cabs0.cabsloc> type_qualifier
 %type<Cabs0.cabsloc> function_specifier
-%type<Cabs0.name> declarator direct_declarator
+%type<Cabs0.name0> declarator direct_declarator
 %type<(Cabs0.decl_type -> Cabs0.decl_type) * Cabs0.cabsloc> pointer
 %type<Cabs0.cvspec list (* Reverse order *)> type_qualifier_list
 %type<Cabs0.parameter list * bool> parameter_type_list

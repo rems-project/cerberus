@@ -177,15 +177,17 @@ let pipeline stdlib impl core_parse file_name =
 
       >|> Exception.rbind (Cabs_to_ail.desugar "main")
       >|> pass_message "2. Cabs -> Ail completed!"
-      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program)
+      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program -| snd)
 
 
 (*      >|> Exception.rbind Ail_typing.annotate *)
 
 
-      >|> Exception.rbind (fun z ->
-            Exception.of_option (Location.dummy, Errors.CSEM_HIP "Ail Typing error") $
-              GenTyping.annotate_program Annotation.concrete_annotation z)
+      >|> Exception.rbind (fun (counter, z) ->
+            Exception.bind (Exception.of_option (Location.dummy, Errors.CSEM_HIP "Ail Typing error")
+                                                (GenTyping.annotate_program Annotation.concrete_annotation z))
+                           (fun z -> Exception.return1 (counter, z))
+          )
       >|> pass_message "3. Ail typechecking completed!"
       
       

@@ -31,7 +31,7 @@ val translate_stmt:
   maybe Symbol.t -> maybe (map integer Symbol.t) -> maybe Symbol.t -> maybe Symbol.t ->
   A.statement Location.t GenTypes.genTypeCategory -> t (C.expr zero)
 val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
-val translate: C.fun_map zero -> C.impl zero -> A.program Location.t GenTypes.genTypeCategory -> C.file zero
+val translate: C.fun_map zero -> C.impl zero -> Symbol.counter * A.program Location.t GenTypes.genTypeCategory -> C.file zero
 
 
 (* ========================================================================== *)
@@ -966,7 +966,71 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 
 
 (* Run the translator on different functions *)
-let translate_program stdlib program =
+let translate_program stdlib ((startup_id, defs) as program) =
+  let (globals, funs) = foldl (fun (gs, fs) (id, def) ->
+    match def with
+      | Left  f -> (           gs, (id, f) :: fs)
+      | Right g -> ((id, g) :: gs,            fs)
+    end
+    ) ([], []) defs in
+  
+  E.foldlM (fun (_as, mk_core_acc) (global_id, (qs, ty, e_opt)) ->
+    let core_create = Caux.pcreate (Caux.mk_ctype ty) [global_id] in
+    match e_opt with
+      | Just e  ->
+          E.fresh_symbol                        >>= fun a_e    ->
+          translate_expression stdlib program e >>= fun core_e ->
+          return $
+            (global_id :: _as,
+             fun z ->
+               C.Esseq [Just global_id] core_create
+                 (C.Esseq [Just a_e] core_e
+                   (C.Esseq [Nothing] (Caux.pstore (Caux.mk_ctype ty) (C.Esym global_id) (C.Esym a_e) Cmm.NA) (* TODO: proper memory order *)
+                      (mk_core_acc z)
+                   )
+                 )
+            )
+      | Nothing ->
+          return $
+            (global_id :: _as, fun z -> C.Esseq [Just global_id] core_create (mk_core_acc z))
+    end
+  ) ([], fun z -> z) (List.reverse globals) >>= fun (globals_ids, mk_core_globals) ->
+  
+  E.push_block_objects globals_ids >>
+  
+  E.foldlM (fun acc (fun_id, ((_, fun_args, is_variadic), fun_body_opt)) ->
+    Boot.print_debug ("translate_function> " ^ Boot.pp_core_expr (C.Esym fun_id : Core.expr zero)) $
+    match fun_body_opt with
+      | Just fun_body ->
+          (* making the argument variables visible *)
+          E.push_block_objects (List.map fst fun_args) >>
+          
+          (* translate the body to Core *)
+          translate_stmt stdlib program fun_id Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
+          (* removing the argument variables from the "visibles" *)
+          E.pop_block_objects >>
+          
+          (* If we are elaborating the startup function, then we add at the beginning of the body
+             the allocations/initialisations of the global variables *)
+          (if fun_id <> startup_id then
+             return core_body
+           else
+             return (mk_core_globals core_body)
+          ) >>= fun core_body ->
+          
+          (return $ Map.insert fun_id (
+                                        C.TyEffect C.Integer (* TODO: this should de address for pointer type *),
+                                        List.map (fun (arg, _) -> (arg, C.Address (* TODO: check *))) fun_args,
+                                        core_body
+                                      ) acc)
+      | Nothing ->
+          (* TODO: this corresponds to an Ail function a prototype but no implementation ==> std lib function *)
+          return acc
+    end
+  ) Map.empty funs
+
+
+(*
   E.foldlM (fun acc ->
     function
       | (fun_id, Left ((_, fun_args, is_variadic), fun_body_opt)) ->
@@ -992,12 +1056,12 @@ let translate_program stdlib program =
       | (_, Right (qs, ty, e_opt)) -> return acc
     end
   ) Map.empty (snd program)
-
+*)
 
 (* This is the entry function (called from main.ml) *)
-let translate stdlib impl prog =
+let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
-  match (translate_program stdlib prog) E.init with
+  match (translate_program stdlib prog) (E.init symbol_counter) with
     | U.Defined (cfuns, _) -> <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.funs= cfuns |>
     | _                    -> Boot.assert_false "[Translation.translate #_] error in the elaboration"
   end

@@ -205,35 +205,41 @@ type action =
   | Create of aid * tid * location (* CSEM *)
   | Kill of aid * tid * location (* CSEM *)
 
+let eq_action act1 act2 =
+  match (act1, act2) with
+    | (Lock a1 _ _ _     , Lock a2 _ _ _     ) -> a1 = a2
+    | (Unlock a1 _ _     , Unlock a2 _ _     ) -> a1 = a2
+    | (Load a1 _ _ _ _   , Load a2 _ _ _ _   ) -> a1 = a2
+    | (Store a1 _ _ _ _  , Store a2 _ _ _ _  ) -> a1 = a2
+    | (RMW a1 _ _ _ _ _  , RMW a2 _ _ _ _ _  ) -> a1 = a2
+    | (Fence a1 _ _      , Fence a2 _ _      ) -> a1 = a2
+    | (Blocked_rmw a1 _ _, Blocked_rmw a2 _ _) -> a1 = a2
+    | (Create a1 _ _     , Create a2 _ _     ) -> a1 = a2
+    | (Kill a1 _ _       , Kill a2 _ _       ) -> a1 = a2
+    | _                                        -> false
+  end
+
+let setElemCompare_action act1 act2 =
+  let aid = function
+    | Lock a _ _ _      -> a
+    | Unlock a _ _      -> a
+    | Load a _ _ _ _    -> a
+    | Store a _ _ _ _   -> a
+    | RMW a _ _ _ _ _   -> a
+    | Fence a _ _       -> a
+    | Blocked_rmw a _ _ -> a
+    | Create a _ _      -> a
+    | Kill a _ _        -> a
+  end in
+  setElemCompare (aid act1) (aid act2)
+
 instance (Eq action)
-  let (=) act1 act2 =
-    match (act1, act2) with
-(*
-      | (Lock a1 _ _ _     , Lock a2 _ _ _     ) -> a1 = a2
-      | (Unlock a1 _ _     , Unlock a2 _ _     ) -> a1 = a2
-      | (Load a1 _ _ _ _   , Load a2 _ _ _ _   ) -> a1 = a2
-      | (Store a1 _ _ _ _  , Store a2 _ _ _ _  ) -> a1 = a2
-      | (RMW a1 _ _ _ _ _  , RMW a2 _ _ _ _ _  ) -> a1 = a2
-      | (Fence a1 _ _      , Fence a2 _ _      ) -> a1 = a2
-      | (Blocked_rmw a1 _ _, Blocked_rmw a2 _ _) -> a1 = a2
-      | (Create a1 _ _     , Create a2 _ _     ) -> a1 = a2
-      | (Kill a1 _ _       , Kill a2 _ _       ) -> a1 = a2
- *)
-      | _                                        -> false
-    end
-  let (<>) act1 act2 =
-    match (act1, act2) with
-      | (Lock a1 _ _ _     , Lock a2 _ _ _     ) -> a1 <> a2
-      | (Unlock a1 _ _     , Unlock a2 _ _     ) -> a1 <> a2
-      | (Load a1 _ _ _ _   , Load a2 _ _ _ _   ) -> a1 <> a2
-      | (Store a1 _ _ _ _  , Store a2 _ _ _ _  ) -> a1 <> a2
-      | (RMW a1 _ _ _ _ _  , RMW a2 _ _ _ _ _  ) -> a1 <> a2
-      | (Fence a1 _ _      , Fence a2 _ _      ) -> a1 <> a2
-      | (Blocked_rmw a1 _ _, Blocked_rmw a2 _ _) -> a1 <> a2
-      | (Create a1 _ _     , Create a2 _ _     ) -> a1 <> a2
-      | (Kill a1 _ _       , Kill a2 _ _       ) -> a1 <> a2
-      | _                                        -> true
-    end
+  let (=) act1 act2  = eq_action act1 act2
+  let (<>) act1 act2 = not (eq_action act1 act2)
+end
+
+instance (SetType action)
+  let setElemCompare act1 act2 = setElemCompare_action act1 act2
 end
 
 

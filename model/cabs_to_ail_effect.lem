@@ -68,10 +68,10 @@ let fail err = State_exception.fail (Location.dummy, err)
 
 let of_option err = State_exception.of_option (Location.dummy, err)
 
-val make_program: Symbol.t -> t (A.program Location.t unit)
+val make_program: Symbol.t -> t (Symbol.counter * A.program Location.t unit)
 let make_program startup =
   State_exception.read (fun st ->
-    (startup, st.definitions)
+    (st.symbol_counter, (startup, st.definitions))
   )
 
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
@@ -97,7 +97,7 @@ let app  = State_exception.app
 
 (* given a computation producing the symbolic name of the startup function,
    produce the desugared Ail file *)
-val eval: t Symbol.t -> Exception.t (A.program Location.t unit) Errors.t
+val eval: t Symbol.t -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
 let eval m =
   let initial_state : state = <|
     symbol_counter=         Symbol.init;

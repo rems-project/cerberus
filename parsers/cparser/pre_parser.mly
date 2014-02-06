@@ -13,7 +13,7 @@
 
 %token<string * Pre_parser_aux.identifier_type ref * Cabs0.cabsloc>
   VAR_NAME TYPEDEF_NAME UNKNOWN_NAME
-%token<Cabs0.constant0 * Cabs0.cabsloc> CONSTANT_
+%token<Cabs0.constant1 * Cabs0.cabsloc> CONSTANT_
 %token<string * Cabs0.cabsloc> STRING_LITERAL
 
 %token<Cabs0.cabsloc> SIZEOF PTR_ INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ_ NEQ LT_ GT_

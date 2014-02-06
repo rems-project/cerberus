@@ -63,9 +63,9 @@ module E = struct
   
   
   (* build an initial state from a given Core standard library *)
-  val init: state
-  let init = <|
-    symbol_set=      Symbol.init;
+  val init: Symbol.counter -> state
+  let init counter = <|
+    symbol_set=      counter;
     visible_objects= [[]];
   |>
   
