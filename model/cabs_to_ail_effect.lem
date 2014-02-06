@@ -206,8 +206,8 @@ let is_defined_function str =
     | Just (id, Funname) ->
         State_exception.read (fun st ->
           match List.lookup id st.definitions with
-            | Just (Left _)  -> true
-            | _              -> false
+            | Just (Left (_, Just _))  -> true
+            | _                        -> false
           end
         )
     | _ -> return false
