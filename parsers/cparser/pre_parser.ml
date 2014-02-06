@@ -20067,7 +20067,7 @@ and _menhir_run63 : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 
 and _menhir_run64 : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 16 "pre_parser.mly"
-      (Cabs0.constant0 * Cabs0.cabsloc)
+      (Cabs0.constant1 * Cabs0.cabsloc)
 # 20072 "pre_parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
@@ -20077,7 +20077,7 @@ and _menhir_run64 : _menhir_env -> 'ttv_tail -> _menhir_state -> (
     let (_menhir_s : _menhir_state) = _menhir_s in
     let (_ : (
 # 16 "pre_parser.mly"
-      (Cabs0.constant0 * Cabs0.cabsloc)
+      (Cabs0.constant1 * Cabs0.cabsloc)
 # 20082 "pre_parser.ml"
     )) = _v in
     ((let _v : 'tv_primary_expression = 

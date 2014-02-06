@@ -927,7 +927,7 @@ and desugar_definition def =
 end
 
 
-val desugar: C.atom -> C.file -> Exception.t (A.program Location.t unit) Errors.t
+val desugar: C.atom -> C.file -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
 let desugar startup defs =
   E.eval (
     E.mapM_ desugar_definition defs >>

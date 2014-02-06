@@ -27,7 +27,7 @@ let eq_integerBaseType ibt1 ibt2 =
   | (_       , _       ) -> false
   end
 
-type integerType [name = "it*\\|size_t\\|ptrdiff_t"] =  (*r integer types (\S6.2.5\#17) *)
+type integerType (* [name = "it*\\|size_t\\|ptrdiff_t"] *) =  (*r integer types (\S6.2.5\#17) *)
  | Char
  | Bool
  | Signed of integerBaseType

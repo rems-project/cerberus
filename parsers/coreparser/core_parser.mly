@@ -68,7 +68,7 @@ type name =
 
 type expr =
   | Eskip
-  | Econst of Cmm_aux.constant1
+  | Econst of Cmm_aux.constant0
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
   | Eimpl of Implementation_.implementation_constant

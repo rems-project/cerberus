@@ -46,8 +46,6 @@ type _cont 'a =
 type cont 'a = list (_cont 'a)
 
 
-(* TODO[newLem]
-
 (* BEGIN: printing stuff for DEBUG *)
 
 val     sepBy: forall 'a. string -> ('a -> string) -> list 'a -> string
@@ -74,7 +72,6 @@ let string_of_cont k =
   end in
   foldl (fun acc x -> f x acc) "\x1b[1;32m[]\x1b[0m" k
 (* END: printing stuff for DEBUG *)
-*)
 
 val apply_cont: forall 'a. cont 'a -> expr 'a -> expr 'a
 let apply_cont k e =
@@ -1197,7 +1194,7 @@ and red2_wseq x =
           if is_pure e1 then
             E.get_file            >>= fun file ->
             E.runU (eval file e1) >>= fun v1      ->
-            Boot.print_debug ("IS_PURE: " (* TODO[newLem] ^ Boot.pp_core_expr v1 *)) $
+            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr v1) $
             E.return (subst_syms _as v1 e2, Cmm_aux.Tseq tid, _KS)
           else match _KS with
             | _K :: _KS -> E.return (e1, Cmm_aux.Tseq tid, (Kwseq _as e2 :: _K) :: _KS)
@@ -1236,7 +1233,7 @@ and red2_sseq x =
           if is_pure e1 then
             E.get_file            >>= fun file ->
             E.runU (eval file e1) >>= fun v1      ->
-            Boot.print_debug ("IS_PURE: " (* TODO[newLem] ^ Boot.pp_core_expr e1 *)) $
+            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
             E.return (subst_syms _as v1 e2, Cmm_aux.Tseq tid, _KS)
           else match _KS with
             | _K :: _KS -> E.return (e1, Cmm_aux.Tseq tid, (Ksseq _as e2 :: _K) :: _KS)
@@ -1251,7 +1248,7 @@ and red2_unseq x =
   match x with
     | (Eunseq es, tid, _K :: _KS) ->
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
-          Boot.print_debug ("ej = " (* TODO[newLem] ^ Boot.pp_core_expr ej *)) $ 
+          Boot.print_debug ("ej = " ^ Boot.pp_core_expr ej) $ 
           push_trace (E.Rule_Unseq, Nothing) >>
           E.return (ej, tid, (Kunseq es1 es2 :: _K) :: _KS)
     | _ -> E.mzero
@@ -1293,7 +1290,7 @@ and red2_par x =
         E.return (Etuple vs, tid, _K :: _KS)
       else
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
-        Boot.print_debug ("ej = " (* TODO[newLem] ^ Boot.pp_core_expr ej *)) $ 
+        Boot.print_debug ("ej = " ^ Boot.pp_core_expr ej) $ 
         E.return (ej, Cmm_aux.Tpar (List.length es1 + 1) tid, (Kpar es1 es2 :: _K) :: _KS)
     | _ -> E.mzero
   end
@@ -1329,10 +1326,13 @@ let rec star_red2 x =
     red2 x >>= fun (e, tid, _K) ->
 (* BEGIN: DEBUG *)
     get_trace >>= fun (r, _) ->
-    Boot.print_debug (E.string_of_rule r (* TODO[newLem] ^ " ==>\nE= " ^
+    Boot.print_debug (E.string_of_rule r ^ " ==>\nE= " ^
                      (Boot.pp_core_expr e) ^ "\nKS= " ^
                      (foldl (fun acc k -> acc ^ string_of_cont k ^ "\n\n") "" $ _K) ^
-                     "\n----------------------------------\n\n" *))
+                     "\n----------------------------------\n\n")
+
+
+
 (* END: DEBUG *)
    star_red2 (e, tid, _K)
 in
@@ -1696,5 +1696,5 @@ val run: E.execution_mode -> file zero ->
 let run execution_mode file =
   let file' = convert_file file in
   let execs = runE execution_mode file' $ E.initial_state file' in
-  Boot.print_debug ("NUMBER OF TRACES= " (* TODO[newLem] ^ (string_of_num $ List.length execs) *))
+  Boot.print_debug "NUMBER OF TRACES= " (*; string_of_num $ List.length execs] *)
     Exception.return execs

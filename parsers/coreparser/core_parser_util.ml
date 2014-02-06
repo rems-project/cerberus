@@ -45,7 +45,7 @@ type token =
   | PERCENT
   | OF
   | NOT
-  | NAME of Core.name0
+  | NAME of Core.name
   | MINUS_GT
   | MINUS
   | LT_MINUS
