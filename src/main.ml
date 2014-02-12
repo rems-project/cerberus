@@ -16,6 +16,7 @@ let error str =
 let files            = ref [] (* TODO: now we seem to only execute single files. *)
 let impl_file        = ref ""
 
+let print_version    = ref false
 let print_cabs       = ref false
 let print_ail        = ref false
 let print_core       = ref false
@@ -30,9 +31,9 @@ let testing = ref false
 
 (* command-line handler *)
 let options = Arg.align [
-  ("--impl",  Arg.Set_string impl_file          , "<name> Select an implementation definition");
-  ("--debug", Arg.Set_int Boot_ocaml.debug_level, "       Set the debug noise level (default: 0 = nothing)");
-  ("--test",  Arg.Set testing                   , "       Activate Kyndylan's test mode");
+  ("--impl",    Arg.Set_string impl_file          , "<name> Select an implementation definition");
+  ("--debug",   Arg.Set_int Boot_ocaml.debug_level, "       Set the debug noise level (default: 0 = nothing)");
+  ("--test",    Arg.Set testing                   , "       Activate Kyndylan's test mode");
   
   (* Core backend options *)
   ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                               "       Do not run the Core typechecker");
@@ -41,9 +42,10 @@ let options = Arg.align [
   ("--sb-graph",         Arg.Set sb_graph,                                       "       Generate dot graphs of the sb orders");
   
   (* printing options *)
-  ("--pcabs", Arg.Set print_cabs, "       Pretty-print the Cabs intermediate representation");
-  ("--pail",  Arg.Set print_ail,  "       Pretty-print the Ail intermediate representation");
-  ("--pcore", Arg.Set print_core, "       Pretty-print the Code generated program")
+  ("--version", Arg.Set print_version, "       Print the mercurial version id");
+  ("--pcabs",   Arg.Set print_cabs   , "       Pretty-print the Cabs intermediate representation");
+  ("--pail",    Arg.Set print_ail    , "       Pretty-print the Ail intermediate representation");
+  ("--pcore",   Arg.Set print_core   , "       Pretty-print the Code generated program")
 ]
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
@@ -260,12 +262,13 @@ let run_test stdlib impl core_parse (test:Tests.test) =
 
 (* the entry point *)
 let () =
-  print_endline "Csem (hg version: <<HG-IDENTITY>>)"; (* this is "sed-out" by the Makefile *)
-  
   (* this is for the random execution selection mode *)
   Random.self_init ();
   
   Arg.parse options (fun x -> files := [x]) usage;
+  
+  if !print_version then print_endline "Csem (hg version: <<HG-IDENTITY>>)"; (* this is "sed-out" by the Makefile *)
+  
   
   let csemlib_path =
     try

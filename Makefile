@@ -179,6 +179,7 @@ $(OCAML_BUILD_DIR)/%.mly : %.mly | $(OCAML_BUILD_DIR)
 ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
             $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
 #	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/main.ml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
 	ln -fs _ocaml_generated/main.byte csem
 
