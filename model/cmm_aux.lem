@@ -31,6 +31,21 @@ instance (Eq tid)
   let (<>) tid1 tid2 = not $ tid_eq tid1 tid2
 end
 
+val     setElemCompare_tid: tid -> tid -> ordering
+let rec setElemCompare_tid tid1 tid2 =
+  match (tid1, tid2) with
+    | (Tseq tid1', _) -> setElemCompare tid1' tid2
+    | (_, Tseq tid2') -> setElemCompare tid1 tid2'
+    | (Tzero, Tzero) -> EQ
+    | (Tpar n1 tid1', Tpar n2 tid2') -> setElemCompare (n1, tid1') (n2, tid2')
+    | (Tzero, _) -> LT
+    | (_, Tzero) -> GT
+  end
+
+instance (SetType tid)
+  let setElemCompare = setElemCompare_tid
+end
+
 val     canonize_tid: tid -> tid
 let rec canonize_tid tid =
   match tid with
