@@ -21,15 +21,14 @@ val from_list: forall 'k. MapKeyType 'k => list 'k -> t 'k
 let from_list ls = foldl (fun m e -> add e m) emp ls
 
 
+val equal_multiset: forall 'a. SetType 'a, MapKeyType 'a => t 'a -> t 'a -> bool
+let equal_multiset ms1 ms2 =
+  let Multiset ms1' = ms1 in
+  let Multiset ms2' = ms2 in
+  Set.all (fun z -> count z ms1 = count z ms2) $ (domain ms1') union (domain ms2')
 
-instance forall 'a. SetType 'a, MapKeyType 'a => (MapKeyType (t 'a))
-  (* val {ocaml;coq} mapKeyCompare : 'a -> 'a -> ordering *)
-  let mapKeyCompare k1 k2 =
-    let Multiset k1' = k1 in
-    let Multiset k2' = k2 in
-    let xs = (domain k1') union (domain k2') in
-    if Set.all (fun x -> count x k1 = count x k2) xs then
-      EQ
-    else
-      mapKeyCompare (domain k1') (domain k2') (* TODO: might return EQ .... *)
+
+instance forall 'a. SetType 'a, MapKeyType 'a => (Eq (t 'a))
+  let (=)  ms1 ms2 = equal_multiset ms1 ms2
+  let (<>) ms1 ms2 = not (equal_multiset ms1 ms2)
 end
