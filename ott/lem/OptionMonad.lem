@@ -1,0 +1,8 @@
+open import Pervasives
+
+type t 'a = maybe 'a
+
+let return z        = Just z
+let inline (>>=)    = Maybe.bind
+let inline (>>) m f = Maybe.bind m (fun _ -> f)
+let inline (<$>)    = Maybe.map

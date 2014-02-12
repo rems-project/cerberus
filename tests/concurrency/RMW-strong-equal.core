@@ -1,0 +1,14 @@
+{- The strong compare_exchange will always succeed if the compared
+values are equal. Hence, the value of x will be 1 at the end of the
+execution and the value of y still 0. An exhaustive execution will
+therefore only return 5. -}
+
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  y <- create(signed int);
+  store(_Atomic(signed int), x, 0);
+  store(signed int, y, 0);
+  success <- compare_exchange_strong(signed int, x, y, 1, seq_cst, seq_cst);
+  a <- load(_Atomic(signed int), x);
+  b <- load(signed int, y);
+  ret a + 2 * b + 4 * success

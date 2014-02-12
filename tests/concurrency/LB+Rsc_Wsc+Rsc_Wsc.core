@@ -1,0 +1,22 @@
+{- LB+Rsc_Wsc+Rsc_Wsc Load Buffering, with sequential consistent
+   atomics the values of a1 and a2 cannot both be 1. An exhaustive
+   execution of this program should therefore return the values 0, 1
+   and 2.  -}
+
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0);
+  y <- create(_Atomic(signed int));
+  store(_Atomic(signed int), y, 0);
+  (a1, a2) <- {{{
+       a1 <- load(_Atomic(signed int), x, seq_cst);
+       store(_Atomic(signed int), y, 1, seq_cst);
+       a1
+  |||
+       a2 <- load(_Atomic(signed int), y, seq_cst);
+       store(_Atomic(signed int), x, 1, seq_cst);
+       a2
+  }}};
+  kill(x);
+  kill(y);
+  ret a1 + (2 * a2)

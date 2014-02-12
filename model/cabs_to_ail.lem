@@ -1,0 +1,911 @@
+(* TODO:
+     * ignoring locations for now
+     * not doing things related to linkages
+*)
+
+open import Pervasives Global
+            import Boot Cabs0 Multiset Scope_table Location State_exception Errors Decode Product
+import Builtins
+import AilSyntax AilTypes
+
+import Cabs_to_ail_effect
+
+module C      = Cabs0
+module A      = AilSyntax
+module ATypes = AilTypes
+
+
+module E = Cabs_to_ail_effect
+
+let inline (>>=)    = E.bind
+let inline (>>) m f = m >>= fun _ -> f
+let inline (<$>)    = E.fmap
+let inline (<*>)    = E.app
+
+val ifElse: forall 'a. E.t bool -> E.t 'a -> E.t 'a -> E.t 'a
+let ifElse mb m1 m2 =
+  mb >>= function
+    | true  -> m1
+    | false -> m2
+  end
+
+
+
+
+(* module O = Option *)
+
+(*
+val desugar_storages: list C.storage -> E.t (option A.storage_duration)
+let desugar_storages = function
+  | []               -> E.return Nothing
+  | [C.AUTO]         -> E.return (Just A.AUTOMATIC)
+  | [C.STATIC]       -> E.return (Just A.STATIC)
+  | [C.EXTERN]       -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
+  | [C.THREAD_LOCAL] -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class _Thread_local")
+  | [C.REGISTER]     -> E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
+  | [C.TYPEDEF]      -> E.return Nothing (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+  | _                -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
+end
+*)
+
+
+val desugar_unary_operator: C.unary_operator -> A.unaryOperator
+let desugar_unary_operator = function
+  | C.MINUS   -> A.Minus
+  | C.PLUS    -> A.Plus
+  | C.BNOT    -> A.Bnot
+  | C.MEMOF   -> A.Indirection
+  | C.ADDROF  -> A.Address
+  | C.POSINCR -> A.PostfixIncr
+  | C.POSDECR -> A.PostfixDecr
+
+  (* These cases cannot occurs since these constructors are translated away. *)
+  | C.NOT     -> Boot.assert_false "[Cabs_to_ail.desugar_unary_operator] NOT"
+  | C.PREINCR -> Boot.assert_false "[Cabs_to_ail.desugar_unary_operator] PREINCR"
+  | C.PREDECR -> Boot.assert_false "[Cabs_to_ail.desugar_unary_operator] PREDECR"
+end
+
+
+val desugar_arithmetic_operator: C.binary_operator -> A.arithmeticOperator
+let desugar_arithmetic_operator = function
+  | C.ADD  -> A.Add
+  | C.SUB  -> A.Sub
+  | C.MUL  -> A.Mul
+  | C.DIV  -> A.Div
+  | C.MOD  -> A.Mod
+  | C.BAND -> A.Band
+  | C.XOR  -> A.Xor
+  | C.BOR  -> A.Bor
+  | C.SHL  -> A.Shl
+  | C.SHR  -> A.Shr
+  | _ -> Boot.assert_false "[Cabs0_to_ail.desugar_arithmetic_operator] should only be called on \
+                            operators allowed for compound assignments [§6.5.16#1]."
+end
+
+
+val desugar_binary_operator: C.binary_operator -> A.binaryOperator
+let desugar_binary_operator = function
+  | C.AND   -> A.And
+  | C.OR    -> A.Or
+  | C.EQ    -> A.Eq
+  | C.NE    -> A.Ne
+  | C.LT    -> A.Lt
+  | C.GT    -> A.Gt
+  | C.LE    -> A.Le
+  | C.GE    -> A.Ge
+  | C.COMMA -> A.Comma
+  | op      -> A.Arithmetic (desugar_arithmetic_operator op)
+end
+
+
+
+
+
+
+val     register_labels: C.statement -> E.t unit
+let rec register_labels stmt =
+let f name =
+  E.return_registered_labels >>= fun labels ->
+  match Map.lookup name labels with
+    | Just _  -> E.fail Errors.CABS_TO_AIL_DUPLICATED_LABEL
+    | Nothing -> E.fresh_label name
+  end in
+  match stmt with
+    | C.NOP _ ->
+        E.return ()
+    | C.COMPUTATION  _ _ ->
+        E.return ()
+    | C.BLOCK ss _ ->
+        E.iter register_labels ss
+    | C.If _ s1 s2_opt _ ->
+        register_labels s1 >>
+        match s2_opt with
+          | Just s2 -> register_labels s2
+          | Nothing -> E.return ()
+        end
+    | C.WHILE _ s _ ->
+        register_labels s
+    | C.DOWHILE _ s _ ->
+        register_labels s
+    | C.FOR _ _ _ s _ ->
+        register_labels s
+    | C.BREAK _ ->
+        E.return ()
+    | C.CONTINUE _ ->
+        E.return ()
+    | C.RETURN _ _ ->
+        E.return ()
+    | C.SWITCH _ s _ ->
+        register_labels s
+    | C.CASE _ s _ ->
+        register_labels s
+    | C.DEFAULT s _ ->
+        register_labels s
+    | C.LABEL l s _ ->
+        E.fresh_label l >>
+        register_labels s
+    | C.GOTO _ _ ->
+        E.return ()
+    | C.DEFINITION _ ->
+        (* TODO: check *)
+        E.return ()
+(* TODO:    | PAR of list statement * cabsloc *)
+ end
+
+
+val fetch_label: C.atom -> E.t A.identifier
+let fetch_label l_name =
+  E.return_registered_labels >>= fun labels ->
+  match Map.lookup l_name labels with
+    | Just z  -> E.return z
+    | Nothing -> E.fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER l_name)
+  end
+
+(* TODO: better name? *)
+type declarationKind =
+  | Object
+  | Function
+
+(* Scopes of identifiers *)
+type scope =
+  | FunctionScope
+  | FileScope
+  | BlockScope
+(*  | FunctionPrototypeScope *)
+
+type pre_integer_constant =
+  | StrictIntegerConstant of integer
+  | ImplDefined (* TODO: arg *)
+
+(* ============================================================================================== *)
+
+(* TODO: relook at this with linkage stuff *)
+
+(* (§6.7.1#2) At most, one storage-class specifier may be given in the
+   declaration specifiers in a declaration, except that _Thread_local may appear
+   with static or extern. 120) *)
+
+(* TODO: (§6.7.1#3) [...] If _Thread_local appears in any declaration of an object, it shall be present in every declaration of that object. *)
+(* TODO: (§6.7.1#8) f an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects. *)
+
+val desugar_storages: declarationKind -> scope -> list C.storage -> E.t (maybe ATypes.storageDuration)
+let desugar_storages kind scope ss =
+  (* (§6.7.1#7) The declaration of an identifier for a function that has block
+     scope shall have no explicit storage-class specifier other than extern. *)
+  if kind = Function && scope = BlockScope then
+    match ss with
+      | [] ->
+	  E.return Nothing
+      | [C.EXTERN] ->
+	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
+      | _ ->
+	  E.fail Errors.CABS_TO_AIL_BLOCK_FUNCTION_STORAGE
+    end
+  else
+    match ss with
+      | [C.THREAD_LOCAL] ->
+          (* (§6.7.1#3) In the declaration of an object with block scope, if the
+             declaration specifiers include _Thread_local, they shall also include
+	     either static or extern. [...] *)
+          if kind = Function then
+	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
+	  else if scope = BlockScope then
+	    E.fail Errors.CABS_TO_AIL_BLOCK_THREAD_LOCAL_ALONE
+	  else
+	    E.return (Just ATypes.Thread)
+      | [C.THREAD_LOCAL; C.STATIC] ->
+	  if kind = Function then
+	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
+	  else
+	    E.fail (Errors.CSEM_HIP "desugar_storages: THREAD_LOCAL + STATIC")
+      | [C.STATIC; C.THREAD_LOCAL] ->
+	  if kind = Function then
+	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
+	  else
+	    E.fail (Errors.CSEM_HIP "desugar_storages: STATIC + THREAD_LOCAL")
+      | [C.THREAD_LOCAL; C.EXTERN] ->
+	  if kind = Function then
+	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
+	  else
+	    E.fail (Errors.CSEM_HIP "desugar_storages: THREAD_LOCAL + EXTERN")
+      | [C.EXTERN; C.THREAD_LOCAL] ->
+	  if kind = Function then
+	    E.fail Errors.CABS_TO_AIL_THREAD_LOCAL_FUNCTION
+	  else
+	    E.fail (Errors.CSEM_HIP "desugar_storages: EXTERN + THREAD_LOCAL")
+
+      | [] ->
+  	  E.return Nothing
+      | [C.AUTO] ->
+	  E.return (Just ATypes.Automatic)
+      | [C.STATIC] ->
+	  E.return (Just ATypes.Static)
+      | [C.REGISTER] ->
+	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class register")
+      | [C.EXTERN] ->
+	  E.fail (Errors.CSEM_NOT_SUPPORTED "storage class extern")
+      | [C.TYPEDEF] -> E.return Nothing (* TODO: typedef is not really a storage class, but should be get the class of the aliased type??? *)
+
+      | _::_::_ -> E.fail Errors.CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
+    end
+
+(*
+  type C.definition =
+  | FUNDEF of list spec_elem * name * statement * cabsloc
+  | DECDEF of init_name_group * cabsloc (* global variable(s), or function prototype *)
+ | PRAGMA of atom * cabsloc
+
+--------------------
+
+type A.file 'a = <|
+  (* the main function name *)
+  main:    id;
+  id_map:  map id declaration;               (* declared identifiers *)
+  globals: list (id * expression_t 'a);      (* *)
+  fn_map:  map id (list id * statement_l 'a) (* functions *)
+|>
+*)
+
+(*
+val desugar_program: string -> list C.g_defn_l -> E.t (Ail.file unit)
+let desugar_program startup global_defns =
+  E.iter (desugar_global_defn initial_desugar_state) global_defns      >>= fun ()   ->
+  E.option (Errors.CABS_TO_AIL_NO_STARTUP startup) (E.resolve startup) >>= fun main ->
+  E.to_program main
+*)
+
+(*
+open O.Operators
+val     desugar_integer_constant_expression: C.expression -> O.t pre_integer_constant
+let rec desugar_integer_constant_expression expr =
+  let f x = desugar_integer_constant_expression x in
+  match expr with
+  | C.UNARY C.MINUS expr ->
+      f expr >>= function
+        | ImplDefined -> Boot.assert_false "TODO"
+        (* TODO: promotion *)
+        | StrictIntegerConstant n -> O.return $ StrictIntegerConstant (Int.neg n)
+      end
+
+  | C.UNARY C.PLUS expr ->
+      f expr >>= function
+        | ImplDefined -> Boot.assert_false "TODO"
+        (* TODO: promotion *)
+        | StrictIntegerConstant n -> O.return $ StrictIntegerConstant n
+      end
+
+  | C.UNARY C.NOT expr ->
+      f expr >>= function
+        | ImplDefined -> Boot.assert_false "TODO"
+        | StrictIntegerConstant n ->
+            O.return $ StrictIntegerConstant
+              (if Int.eq n (Int.int 0) then Int.int 1 else Int.int 0)
+      end
+
+  | C.UNARY C.BNOT expr ->
+      Boot.assert_false "HIP: desugar_integer_constant_expression, UNARY BNOT"
+
+
+  | C.BINARY bop expr1 expr2 ->
+      Boot.assert_false "HIP: desugar_integer_constant_expression, BINARY"
+
+(*
+  | C.QUESTION expr1 expr2 expr3 ->
+      (* when evaluating the test expression, 0 stands for false and
+         any other value for true *)
+      f expr1 >>= function
+        | 0 -> f expr3
+        | _ -> f expr2
+      end
+      <|>
+
+      (* even if the test expression is not constant, the whole conditional is
+         still constant if the two other expressions evaluate to the same value *)
+      f expr2 >>= fun n2 ->
+      f expr3 >>= fun n3 ->
+      if n2 = n3 then
+        O.return n2
+      else
+        O.empty
+
+*)
+
+
+(*
+      | C.CAST of (list spec_elem * decl_type) * init_expression
+
+    (*
+      | C.C11_ATOMIC_INIT expr1 expr2 ->
+
+      | C.C11_ATOMIC_STORE expr1 expr2 expr3 ->
+
+      | C.C11_ATOMIC_LOAD expr1 expr2 ->
+
+      | C.C11_ATOMIC_EXCHANGE expr1 expr2 expr3 ->
+
+      | C.C11_ATOMIC_COMPARE_EXCHANGE_STRONG expr1 expr2 expr3 expr4 expr5 ->
+
+      | C.C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+      | C.C11_ATOMIC_FETCH_KEY of expression * expression * expression
+    *)
+
+  | C.CALL of expression * list expression
+  | C.BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+  | C.CONSTANT of constant
+  | C.VARIABLE of atom
+  | C.EXPR_SIZEOF of expression
+  | C.TYPE_SIZEOF of (list spec_elem * decl_type)
+  | C.ALIGNOF of (list spec_elem * decl_type)
+  | C.INDEX expr1 expr 2->
+  | C.MEMBEROF expr at ->
+
+  | C.MEMBEROFPTR expr at ->
+
+  | C.OFFSETOF of (list spec_elem * decl_type) * atom
+*)
+
+    | _ -> Nothing
+  end
+*)
+
+
+val desugar_integerConstant: C.atom -> maybe C.integer_suffix -> A.integerConstant
+let desugar_integerConstant str suff_opt =
+  let desugar_integerSuffix = function
+    | C.SUFFIX_UNSIGNED           -> A.U
+    | C.SUFFIX_UNSIGNED_LONG      -> A.UL
+    | C.SUFFIX_UNSIGNED_LONG_LONG -> A.ULL
+    | C.SUFFIX_LONG               -> A.L
+    | C.SUFFIX_LONG_LONG          -> A.LL
+  end in
+  let n = Decode.decode_integer_constant str in
+  match suff_opt with
+    | Just suff -> (n, (* basis, *) Just (desugar_integerSuffix suff))
+    | Nothing   -> (n, (* basis, *) Nothing)
+  end
+
+(*
+val desugar_character_constant: maybe C.character_prefix -> C.atom -> A.character_constant
+(* TODO: decoding + impl-def independence (and Ail should store an integer, instead of a string) *) 
+  let desugar_character_constant pref_opt str =
+  let desugar_character_prefix = function
+    | C.PREFIX_L -> A.PREFIX_L
+    | C.PREFIX_u -> A.PREFIX_u
+    | C.PREFIX_U -> A.PREFIX_U
+  end in
+  let n = Decode.decode_character_constant str in
+  match pref_opt with
+    | Just pref -> (Just (desugar_character_prefix pref), n)
+    | Nothing   -> (Nothing, n)
+  end
+*)
+
+val desugar_constant: C.constant -> E.t A.constant
+let desugar_constant = function
+  | C.CONST_INT str suff_opt ->
+      E.return $ A.ConstantInteger (desugar_integerConstant str suff_opt)
+  | C.CONST_FLOAT str ->
+      E.fail (Errors.CSEM_NOT_SUPPORTED "float constants")
+  | C.CONST_STRING str ->
+      E.return $ A.ConstantString str (* TODO *)
+  | C.CONST_CHAR _ _ ->
+      Boot.assert_false "CONST_CHAR"
+(*
+  | C.CONST_CHAR pref_opt str ->
+      E.return $ A.CONST_CHAR (desugar_character_constant pref_opt str)
+*)
+end
+
+
+val desugar_cvspecs: list C.cvspec -> ATypes.qualifiers
+let desugar_cvspecs =
+  foldl (fun qs ->
+    function
+    | C.CV_CONST    -> <| qs with ATypes.const    = true |>
+    | C.CV_RESTRICT -> <| qs with ATypes.restrict = true |>
+    | C.CV_VOLATILE -> <| qs with ATypes.volatile = true |>
+    | C.CV_ATOMIC   -> Boot.assert_false "Cabs_to_ail.desugar_cvspecs [C.CV_ATOMIC]" (* <| qs with ATypes.atomic_q = true |> *)
+    end
+  ) ATypes.no_qualifiers
+
+val separate_spec_elem_list : list C.spec_elem ->
+                              list C.cvspec * list C.attribute * list C.storage * bool * list C.typeSpecifier
+let separate_spec_elem_list =
+  foldl
+    (fun (cs, attrs, sts, is_inline, ts) s ->
+      match s with
+      | C.SpecCV      c    -> (c :: cs,         attrs,       sts, is_inline,      ts)
+      | C.SpecAttr    attr -> (     cs, attr :: attrs,       sts, is_inline,      ts)
+      | C.SpecStorage st   -> (     cs,         attrs, st :: sts, is_inline,      ts)
+      | C.SpecInline       -> (     cs,         attrs,       sts,      true,      ts)
+      | C.SpecType    t    -> (     cs,         attrs,       sts, is_inline, t :: ts)
+      end)
+    ([], [], [], false, [])
+
+
+(* We follow the multiset mapping from §6.7.2#2 (except that `void' is matched in [desugar_type]
+   instead) *)
+(* TODO: structs, enums, etc. *)
+val desugar_basic_type_specifiers: Multiset.t C.typeSpecifier -> E.t (ATypes.basicType)
+let desugar_basic_type_specifiers specs =
+  if      specs = Multiset.from_list [C.Tchar]              then E.return $ ATypes.Integer ATypes.Char
+  else if specs = Multiset.from_list [C.Tsigned; C.Tchar]   then E.return $ ATypes.Integer (ATypes.Signed ATypes.Ichar)
+  else if specs = Multiset.from_list [C.Tunsigned; C.Tchar] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Ichar)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tshort];
+            Multiset.from_list [C.Tsigned; C.Tshort];
+            Multiset.from_list [C.Tshort; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tshort; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Short)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tshort];
+            Multiset.from_list [C.Tunsigned; C.Tshort; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Short)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tint];
+            Multiset.from_list [C.Tsigned];
+            Multiset.from_list [C.Tsigned; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Int_)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned];
+            Multiset.from_list [C.Tunsigned; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Int_)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tlong];
+            Multiset.from_list [C.Tsigned; C.Tlong];
+            Multiset.from_list [C.Tlong; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Long)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tlong];
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Long)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tlong; C.Tlong; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.LongLong)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.LongLong)
+  else
+    E.fail $ Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled."
+
+
+val desugar_type_specifiers : list C.typeSpecifier -> E.t (ATypes.ctype)
+let desugar_type_specifiers = function
+  (* TODO: ignore structs, enums, typedefs, ... *)
+(*  | [C.atomic (specs, dt)] ->*)
+  | [C.Tvoid] ->
+      E.return ATypes.Void
+  | [C.Tnamed str] ->
+      match Builtins.translate_builtin_typenames str with
+        | Just ty ->
+            E.return ty
+        | Nothing ->
+            (* TODO [tmp hack] removing the qualifiers *)
+            E.get_typedef str >>= fun (qs, ty) ->
+            E.return ty
+      end
+  | ss ->
+      ATypes.Basic <$> desugar_basic_type_specifiers (Multiset.from_list ss)
+end
+
+
+
+val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype) (* (either (ATypes.qualifiers * ATypes.ctype) (ATypes.qualifiers * ATypes.ctype)) *)
+let desugar_spec_elem_list specs =
+  let (cs, attrs, sts, is_inline, ts) = separate_spec_elem_list specs in
+  let q = desugar_cvspecs cs in
+  desugar_type_specifiers ts >>= fun t ->
+  E.return (q, t)
+
+val     desugar_decl_type : C.decl_type -> E.t (ATypes.ctype -> ATypes.ctype)
+let rec desugar_decl_type decl_ty =
+  match decl_ty with
+  | C.JUSTBASE ->
+      E.return $ fun ty -> ty
+(*
+  | C.ARRAY dt cvs _ Nothing ->
+      fun t ->
+        (mk_ctype dt)
+        (A.Array (desugar_cvspecs cvs) t Nothing)
+*)
+  | C.ARRAY decl_ty' cvs _ (Just (C.CONSTANT (C.CONST_INT n Nothing))) ->
+      desugar_decl_type decl_ty' >>= fun mk_ty ->
+      E.return $ fun ty -> mk_ty (ATypes.Array (* (desugar_cvspecs cvs) *) ty (Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
+  | C.ARRAY dt cvs _ (Just (C.CONSTANT e)) ->
+      Boot.assert_false "Constant expressions other than integer constant not yet supported."
+  | C.PTR cvs _ decl_ty' ->
+      desugar_decl_type decl_ty' >>= fun mk_ty ->
+      E.return $ fun ty -> mk_ty (ATypes.Pointer (desugar_cvspecs cvs) ty)
+  (* TODO: ignoring variable length parameters for now *)
+  | C.PROTO decl_ty' (params, is_variadic) ->
+      desugar_decl_type decl_ty' >>= fun mk_ty    ->
+      (* TODO: yuck, use brackets instead *)
+      E.create_scope >> (* This implements "function protocope scope" *)
+        desugar_parameters params  >>= fun d_params ->
+      E.destroy_scope >>= fun _ ->
+      E.return $ fun ty -> mk_ty (ATypes.Function ty (map snd d_params) is_variadic)
+  end
+
+
+(*  desugar_parameters : list C.parameter -> E.t (list (A.identifier * (ATypes.qualifiers * ATypes.ctype))) *)
+and desugar_parameters params =
+  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _) acc ->
+    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
+    (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
+    if param_ty = ATypes.Void then
+      (if length params <> 1 then
+        E.fail (Errors.OTHER "void' must be the first and only parameter if specified") (* TODO: proper message *)
+      else if param_name_opt <> Nothing then
+        E.fail (Errors.OTHER "argument may not have 'void' type") (* TODO: proper message *)
+      else
+        E.return [])
+    else
+      (* OTHERWISE: the real stuff *)
+      maybe
+        (E.fail (Errors.OTHER "parameter name omitted")) (* TODO: proper message *)
+        (fun param_name ->
+          E.register_name param_name E.Varname >>= fun param_id             ->
+          desugar_spec_elem_list param_specs   >>= fun (param_qs, param_ty) ->
+          desugar_decl_type param_decl         >>= fun mk_ty                ->
+          E.return (param_id, (param_qs, mk_ty param_ty))
+        ) param_name_opt >>= fun d_param ->
+      E.return (d_param :: acc)
+  ) params []
+
+
+val desugar_assign_operator: C.binary_operator -> maybe A.arithmeticOperator
+let desugar_assign_operator = function
+  | C.ADD_ASSIGN ->
+      Just A.Add
+  | C.SUB_ASSIGN ->
+      Just A.Sub
+  | C.MUL_ASSIGN ->
+      Just A.Mul
+  | C.DIV_ASSIGN ->
+      Just A.Div
+  | C.MOD_ASSIGN ->
+      Just A.Mod
+  | C.BAND_ASSIGN ->
+      Just A.Band
+  | C.BOR_ASSIGN ->
+      Just A.Bor
+  | C.XOR_ASSIGN ->
+      Just A.Xor
+  | C.SHL_ASSIGN ->
+      Just A.Shl
+  | C.SHR_ASSIGN ->
+      Just A.Shr
+  | _ ->
+      Nothing
+end
+
+
+val     desugar_expression: C.expression -> E.t (A.expression unit)
+let rec desugar_expression e =
+  A.AnnotatedExpression () <$>
+  match e with
+  | C.UNARY uop e ->
+      A.Unary (desugar_unary_operator uop) <$> desugar_expression e
+  | C.BINARY C.ASSIGN e1 e2 ->
+      A.Assign <$> desugar_expression e1 <*> desugar_expression e2
+  | C.BINARY bop e1 e2 ->
+      match desugar_assign_operator bop with
+        | Just aop ->
+            A.CompoundAssign <$> desugar_expression e1 <*> E.return aop <*> desugar_expression e2
+        | Nothing ->
+            A.Binary <$> desugar_expression e1 <*> E.return (desugar_binary_operator bop) <*> desugar_expression e2
+      end
+  | C.QUESTION e1 e2 e3 ->
+      A.Conditional <$> desugar_expression e1 <*> desugar_expression e2 <*> desugar_expression e3
+  | C.CALL e es ->
+      A.Call <$> desugar_expression e <*> E.mapM desugar_expression es
+    (* A CAST can actually be a constructor expression *)
+  | C.CAST (specs, decl_ty) ie ->
+      desugar_spec_elem_list specs >>= fun (qs, ty)   ->
+      desugar_decl_type decl_ty    >>= fun mk_ty      ->
+      desugar_init_expression ie   >>= fun (Just d_e) ->
+      E.return $ A.Cast qs ty d_e
+
+(*
+  | C11_ATOMIC_INIT of expression * expression
+  | C11_ATOMIC_STORE of expression * expression * expression
+  | C11_ATOMIC_LOAD of expression * expression
+  | C11_ATOMIC_EXCHANGE of expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
+  | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+
+  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
+*)
+  | C.CONSTANT cst ->
+      A.Constant <$> desugar_constant cst
+  | C.VARIABLE x ->
+      match Builtins.translate_builtin_varnames x with
+        | Just ty ->
+            E.return ty
+        | Nothing ->
+            A.Var <$> (E.resolve_identifier x >>= fun (id, _) -> E.return id)
+      end
+  
+  | C.EXPR_SIZEOF e ->
+      E.fail (Errors.OTHER "new-Ail does not yet support sizeof(expr)")
+  | C.TYPE_SIZEOF (specs, decl_ty) ->
+      desugar_spec_elem_list specs >>= fun (qs, ty) ->
+      desugar_decl_type decl_ty    >>= fun mk_ty    ->
+      E.return $ A.SizeOf qs (mk_ty ty)
+  | C.ALIGNOF (specs, decl_ty) ->
+      desugar_spec_elem_list specs >>= fun (qs, ty) ->
+      desugar_decl_type decl_ty    >>= fun mk_ty    ->
+      E.return $ A.AlignOf qs (mk_ty ty)
+  | C.INDEX e1 e2 ->
+      (* Desugaring as in (§6.5.2.1#2) *)
+      A.Unary A.Indirection <$> (
+        A.AnnotatedExpression () <$>
+          (A.Binary <$> desugar_expression e1 <*> E.return (A.Arithmetic A.Add) <*> desugar_expression e2)
+      )
+(*
+  | MEMBEROF of expression * atom
+  | MEMBEROFPTR of expression * atom
+  | OFFSETOF of (list spec_elem * decl_type) * atom
+*)
+  | _ -> E.fail (Errors.OTHER "Some expression Ctors are not yet included in newAil")
+end
+
+
+and desugar_init_expression ie =
+  match ie with
+  | C.NO_INIT         -> E.return Nothing
+  | C.SINGLE_INIT   e -> (fun z -> Just z) <$> desugar_expression e
+  | C.COMPOUND_INIT _ -> Boot.assert_false "COMPOUND_INIT"
+  end
+
+
+val     desugar_statement : C.statement  -> E.t (A.statement Location.t unit)
+let rec desugar_statement stmt =
+  A.AnnotatedStatement Location.dummy <$>
+    match stmt with
+      | C.NOP _ ->
+          E.return A.Skip
+      | C.COMPUTATION expr _ ->
+          A.Expression <$> desugar_expression expr
+      | C.BLOCK stmts _ ->
+          (* TODO: documentation *)
+          E.create_scope                          >>
+          E.mapM desugar_statement stmts          >>= fun d_stmts ->
+          E.destroy_scope                         >>= fun ids     ->
+          let ids = List.map fst ids in
+          E.mapM E.get_declaration ids            >>= fun decls   ->
+          E.return $ A.Block (Global.map2 Product.make ids decls) d_stmts
+
+      | C.If expr stmt1 stmt2_opt _ ->
+          (* (§6.8.3#3) allows us to add null operation without changing the
+                       semantics of a statement *)
+          A.If <$> desugar_expression expr
+               <*> desugar_statement stmt1
+               <*> maybe (E.return $ A.AnnotatedStatement Location.dummy A.Skip)
+                         desugar_statement stmt2_opt
+      | C.WHILE expr stmt _ ->
+          A.While <$> desugar_expression expr
+                  <*> desugar_statement stmt
+      | C.DOWHILE expr stmt _ ->
+          A.Do <$> desugar_statement stmt
+               <*> desugar_expression expr
+      | C.FOR fclause_opt e2_opt e3_opt s loc ->
+          let are_all_auto_or_register (C.DECDEF (specs, _) _) =
+            any (function
+(*
+TODO: tmp
+              | C.SpecStorage C.AUTO -> true
+              | C.SpecStorage C.REGISTER -> true
+              | _ -> false
+*)
+              | _ -> true
+            end) specs in
+          match fclause_opt with
+            | Nothing              -> E.return (C.NOP loc)
+            | Just (C.FC_EXP e1)   -> E.return (C.COMPUTATION e1 loc)
+            | Just (C.FC_DECL def) ->
+                if are_all_auto_or_register def then
+                  E.return (C.DEFINITION def)
+                else
+                  E.fail Errors.CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
+          end >>= fun s1 ->
+          let e2' = match e2_opt with
+            | Just e2 -> e2
+              (* According to 6.8.5.3#2 (Iteration statements, Semantics - The for
+                 statement) an omitted controlling expression is replace by an
+                 unspecified non-zero integer constant. We believe that the choice, as
+                 long as representable, does not matter with respect to the
+                 semantics. Hence, we arbitrarily choose "1" (which can always be
+                 represented as an object of type int). *)
+            | Nothing -> C.CONSTANT (C.CONST_INT "1" Nothing)
+          end in
+          let s3 = match e3_opt with
+            | Just e3 -> C.COMPUTATION e3 loc
+            | Nothing -> C.NOP loc
+          end in
+          
+          let body = C.BLOCK [s; s3] loc  in
+          let loop = C.WHILE e2' body loc in
+          desugar_statement (C.BLOCK [s1; loop] loc) >>= fun (A.AnnotatedStatement _ d_s) ->
+          E.return d_s
+      | C.BREAK _ ->
+          E.return A.Break
+      | C.CONTINUE _ ->
+          E.return A.Continue
+      | C.RETURN Nothing _ ->
+          E.return A.ReturnVoid
+      | C.RETURN (Just expr) _f ->
+          A.Return <$> desugar_expression expr
+      | C.SWITCH expr stmt _ ->
+          Boot.assert_false "HIP: desugar_statement  SWITCH"
+      | C.CASE expr stmt _ ->
+          (* (§6.8.1#2) "A case label shall appear only in a switch statement." *)
+          ifElse E.is_inside_switch begin
+          (* TODO: for now we only support impl-independent constant
+                   expressions *)
+(*
+           desugar_integer_constant_expression expr >>= function
+             | 
+                 A.CASE <$> 
+
+E.fail Errors.CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
+
+*)	    
+
+	    Boot.assert_false "HIP: desugar_statement CASE"
+	  end (E.fail Errors.DEFAULT_OUTSIDE_SWITCH)
+      | C.DEFAULT stmt _ ->
+          (* (§6.8.1#2) "A default label shall appear only in a switch statement." *)
+	  ifElse E.is_inside_switch
+            (A.Default <$> desugar_statement stmt)
+	    (E.fail Errors.DEFAULT_OUTSIDE_SWITCH)
+      | C.LABEL lab stmt _ ->
+	  A.Label <$> fetch_label lab
+	          <*> desugar_statement stmt
+      | C.GOTO lab _ ->
+          A.Goto <$> fetch_label lab
+      | C.DEFINITION (C.DECDEF ing _) ->
+      	  A.Declaration <$> desugar_declaration ing
+(*
+      | C.PAR stmts _ ->
+          A.PAR <$> E.mapM desugar_statement stmts
+*)
+  end
+
+
+(*  desugar_init_name : C.init_name -> E.t (Symbol.t * (ATypes.ctype -> ATypes.ctype) * maybe (A.expression unit)) *)
+and desugar_init_name iname =
+  let C.Init_name (C.Name name decl_ty _ _) ie = iname in
+  E.register_name name E.Varname >>= fun v     ->
+  desugar_init_expression ie     >>= fun e_opt ->
+  desugar_decl_type decl_ty      >>= fun mk_ty ->
+  E.return (v, mk_ty , e_opt)
+
+
+(*  desugar_declaration: C.init_name_group -> E.t (list (Symbol.t * A.expression unit)) *)
+and desugar_declaration (specs, ins) =
+  desugar_spec_elem_list specs >>= fun (qs, ty) ->
+  E.mapM desugar_init_name ins >>= fun decls    ->
+  filter_opt <$> E.mapM (fun (id, mk_ty, e_opt) ->
+                   E.add_declaration id qs (mk_ty ty) >>
+                   E.return
+                     match e_opt with
+                     | Just e  -> Just (id, e)
+                     | Nothing -> Nothing
+                     end
+                 ) decls
+
+
+(* TODO: to support VLAs we need to extend the scope of parameters ids *)
+(*  desugar_definition: C.definition -> E.t unit *)
+and desugar_definition def =
+  match def with
+    | C.FUNDEF specs (C.Name str fun_decl [] _) stmt _ ->
+        E.is_defined_function str >>= function
+          | true  -> E.fail (Errors.CABS_TO_AIL_FUNCTION_REDEFINITION str)
+          | false ->
+              desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
+              E.lookup_name str            >>= function
+                | Just (fun_id, Funname) -> E.return fun_id
+                | Nothing                -> E.register_name str E.Funname
+              end >>= fun fun_id   ->
+              register_labels stmt               >>
+              (* TODO: storage class *)
+              match fun_decl with
+                | C.PROTO _ (params, is_variadic) ->
+                   (* starts the function scope *)
+                    E.create_scope            >>
+                    desugar_parameters params >>= fun d_params ->
+                    desugar_statement stmt    >>= fun d_stmt   ->
+                    E.destroy_scope           >>
+                    E.add_function fun_id ((ty, d_params, is_variadic), Just d_stmt)
+                | _ ->
+                    E.fail (Errors.OTHER "Not a function type.")
+              end
+        end
+
+    (* This should correspond to the def of a struct/union (typedef?) *)
+  | C.DECDEF (specs, []) loc ->
+      Boot.assert_false "HIP: desugar_definition DECDEF (case 1)"
+
+  (* TODO: the direct use of `separate_sepec_elem_list' may be temporary. *)
+  | C.DECDEF (specs, init_names) loc ->
+      (* TODO: for now assuming no attributes, nor inline *)
+      let (cs, [], sts, false, tySpecs) = separate_spec_elem_list specs in
+      let d_qs = desugar_cvspecs cs in
+      desugar_type_specifiers tySpecs >>= fun d_ty ->
+      if List.elem C.TYPEDEF sts then
+        (* Case: type definition *)
+        let sts = List.delete C.TYPEDEF sts in
+        match init_names with
+          | [C.Init_name (C.Name tyname C.JUSTBASE [] _) NO_INIT] ->
+              E.register_typedef tyname (d_qs, d_ty)
+          | _ ->
+              E.fail (Errors.CSEM_HIP "(TODO msg) found a typedef DECDEF with less/more than one name; or not a JUSTBASE.")
+        end
+      else match init_names with
+        | [C.Init_name (C.Name str (C.PROTO decl_type (params, is_variadic)) [] _) C.NO_INIT] ->
+            (* Case: function prototype *)
+            desugar_decl_type decl_type >>= fun mk_ctype ->
+            
+            (* TODO: yuck, use brackets instead *)
+            E.create_scope >> (* This implements "function protocope scope" *)
+              desugar_parameters params   >>= fun d_params ->
+            E.destroy_scope >>
+            
+            (* TODO: d_qs *)
+            E.register_name str E.Funname >>= fun fun_id ->
+            E.register_prototype fun_id (mk_ctype d_ty) d_params is_variadic
+            
+        | [C.Init_name (C.Name str decl_type [] _) ie] ->
+            (* Case: global variable *)
+            desugar_decl_type decl_type   >>= fun mk_ctype ->
+            E.register_name str E.Varname >>= fun id       ->
+            desugar_init_expression ie    >>= fun d_e_opt  ->
+            E.register_global id (mk_ctype d_ty) d_e_opt
+        
+        | _ ->
+            Boot.assert_false (*$ Boot.pp_cabs0_definition def *) "HIP: DECDEF, not typedef AND other"
+        end
+
+(*
+        (* Not dealing with a type definition *)
+        E.mapM (fun (C.Init_name (C.Name tyname decl_ty [] _) iexpr) ->
+          desugar_decl_type decl_ty >>= fun mk_ctype ->
+          
+          KKK
+        ) init_names
+ *)
+
+  | C.PRAGMA at loc ->
+      E.fail (Errors.CSEM_NOT_SUPPORTED "PRAGMA definitions")
+end
+
+
+val desugar: C.atom -> C.file -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
+let desugar startup defs =
+  E.eval (
+    E.mapM_ desugar_definition defs >>
+    E.resolve_identifier startup >>= function
+      | (id, Varname) -> E.return id
+      | _             -> E.fail (Errors.CABS_TO_AIL_NO_STARTUP startup)
+    end
+  )
