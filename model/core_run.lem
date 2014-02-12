@@ -1036,10 +1036,8 @@ let perform_action bs act tid =
 
 (* NOTE: the assumption is made that an Eunseq cannot directly be the
          subexpression of an another Eunseq *)
-val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
-          E.t (expr E.taction_id * Cmm.tid * list (cont E.taction_id))
 
-let rec red2_pos x =
+let red2_pos x =
   match x with
     | (Eaction (Paction Pos (Action bs a)), tid, _KS) ->
         perform_action bs a tid                       >>= fun (aid, v) ->
@@ -1048,7 +1046,7 @@ let rec red2_pos x =
     | _ -> E.mzero
   end
 
-and red2_neg x =
+let red2_neg x =
   match x with
     | (Eaction (Paction Neg (Action bs a)), tid, _KS) ->
         perform_action bs a tid                       >>= fun (aid, v)   ->
@@ -1057,7 +1055,7 @@ and red2_neg x =
     | _ -> E.mzero
   end 
 
-and red2_pure x =
+let red2_pure x =
   match x with
     | (e, tid, [] :: _KS) ->
         if is_pure e then
@@ -1078,7 +1076,7 @@ and red2_pure x =
     | _ -> E.mzero
   end
 
-and red2_if x =
+let red2_if x =
   match x with
     | (Eif pe e2 e3, tid, _KS) ->
         E.get_file            >>= fun file ->
@@ -1089,7 +1087,7 @@ and red2_if x =
     | _ -> E.mzero
   end
 
-and red2_let x =
+let red2_let x =
   match x with
     | (Elet _a pe1 e2, tid, _KS) ->
         E.get_file               >>= fun file ->
@@ -1098,7 +1096,7 @@ and red2_let x =
     | _ -> E.mzero
   end
 
-and red2_ret x =
+let red2_ret x =
   match x with
     | (Eret pe, tid, _K :: _KS) ->
           push_trace (E.Rule_Ret, Nothing) >>
@@ -1120,13 +1118,13 @@ and red2_ret x =
   end
 
 (*
-and red2_shift x =
+let red2_shift x =
   match x with
     | (Eshift pe1 pe2, tid, _KS) ->
         KKK
 *)
 
-and red2_skip x =
+let red2_skip x =
   match x with
     | (Eskip, tid, [Kwseq _ e2] :: _KS) ->
         push_trace (E.Rule_Skip, Nothing) >>
@@ -1167,7 +1165,7 @@ and red2_skip x =
   end
 
 
-and red2_proc x =
+let red2_proc x =
   match x with
     | (Eproc bs f es, tid, _KS) ->
         push_trace (E.Rule_Proc, Nothing)   >>
@@ -1185,7 +1183,7 @@ Boot.print_debug (Boot.pp_core_expr f_body) $
   end
 
 
-and red2_wseq x =
+let red2_wseq x =
   match x with
     | (Ewseq _ (Eaction (Paction Neg b)) e2, tid, _KS) ->
         E.mzero (* Leaving it to red2_neg_wseq *)
@@ -1203,7 +1201,7 @@ and red2_wseq x =
     | _ -> E.mzero
   end 
 
-and red2_neg_wseq x =
+let red2_neg_wseq x =
   match x with
     | (Ewseq _ (Eaction (Paction Neg b)) e2, tid, _KS) ->
         push_trace (E.Rule_Wseq_Neg, Nothing) >>
@@ -1226,7 +1224,7 @@ and red2_neg_wseq x =
 end
 
 
-and red2_sseq x =
+let red2_sseq x =
   match x with
     | (Esseq _as e1 e2, tid, _KS) ->
         push_trace (E.Rule_Sseq, Nothing) >>
@@ -1244,7 +1242,7 @@ and red2_sseq x =
 
 (* TODO: check that rule, nothing fancy should be needed, since we don't allow
          save/run inside unseq expressions *)
-and red2_unseq x =
+let red2_unseq x =
   match x with
     | (Eunseq es, tid, _K :: _KS) ->
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
@@ -1254,7 +1252,7 @@ and red2_unseq x =
     | _ -> E.mzero
   end
 
-and red2_run x =
+let red2_run x =
   match x with
     | (Erun bs d a_vs, tid, _K :: _KS) ->
         E.get_cont d >>= fun (a_tys, e_cont) ->
@@ -1272,7 +1270,7 @@ and red2_run x =
     | _ -> E.mzero
   end
 
-and red2_save x =
+let red2_save x =
   match x with
     | (Esave _ _ e, tid, _KS) ->
         push_trace (E.Rule_Save, Nothing) >>
@@ -1280,7 +1278,7 @@ and red2_save x =
     | _ -> E.mzero
   end
 
-and red2_par x =
+let red2_par x =
   match x with
     | (Epar es, tid, _K :: _KS) ->
       push_trace (E.Rule_Par, Nothing) >>
@@ -1295,7 +1293,7 @@ and red2_par x =
     | _ -> E.mzero
   end
 
-and red2_nd x =
+let red2_nd x =
   match x with
     | (End es, tid, _KS) ->
         pick_one (fun _ -> true) es >>= fun (_, ej, _) ->
@@ -1304,7 +1302,9 @@ and red2_nd x =
     | _ -> E.mzero
   end
 
-and red2 e =
+val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
+          E.t (expr E.taction_id * Cmm.tid * list (cont E.taction_id))
+let red2 e =
   E.dmsum [
     red2_pure e; red2_skip e;
     E.msum [
