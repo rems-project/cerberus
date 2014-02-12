@@ -56,6 +56,7 @@ type polarity =
 type name =
   | Sym of sym
   | Impl of Implementation_.implementation_constant
+declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
 
 
 (*
@@ -183,6 +184,7 @@ type file 'a = <|
   impl   : impl 'a;
   funs   : fun_map 'a;
 |>
+declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 
 
