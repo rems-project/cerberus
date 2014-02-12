@@ -830,7 +830,7 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the store *)
   E.runU (eval pe1)                            >>= fun (Ectype ty) ->
-  E.runU (eval pe2)                            >>= fun (expr)      ->
+  E.runU (eval pe2)                            >>= fun expr        ->
   get_address expr                             >>= fun o           ->
   E.runU (eval pe3)                            >>= function
    | Econst c -> E.return (Cmm_aux.Mbase c, Enull)
@@ -877,7 +877,7 @@ let perform_load bs tid_ pe1 pe2 mo =
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the load *)
   E.runU (eval pe1)                           >>= fun (Ectype ty)         ->
-  E.runU (eval pe2)                           >>= fun (expr)              ->
+  E.runU (eval pe2)                           >>= fun expr                ->
   get_address expr                            >>= fun o                   ->
   load ty o                                   >>= fun (value, store_taid) ->
   (* update the state with the new trace action *)   
