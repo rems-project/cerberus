@@ -447,70 +447,43 @@ let separate_spec_elem_list =
    instead) *)
 (* TODO: structs, enums, etc. *)
 val desugar_basic_type_specifiers: Multiset.t C.typeSpecifier -> E.t (ATypes.basicType)
-let desugar_basic_type_specifiers specifiers =
-  let desugar_map =
-    foldl
-      (fun m (x, bty) -> Map.insert x bty m)
-      Map.empty
-      (
-        (* TODO: maybe move that somewhere else *)
-          [(Multiset.from_list [C.Tchar], ATypes.Integer ATypes.Char)]
-
-        ++ [(Multiset.from_list [C.Tsigned; C.Tchar], ATypes.Integer (ATypes.Signed ATypes.Ichar))]
-        ++ [(Multiset.from_list [C.Tunsigned; C.Tchar], ATypes.Integer (ATypes.Unsigned ATypes.Ichar))]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Short)))
-           [ [C.Tshort];
-             [C.Tsigned; C.Tshort];
-             [C.Tshort; C.Tint];
-             [C.Tsigned; C.Tshort; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Short)))
-           [ [C.Tunsigned; C.Tshort];
-             [C.Tunsigned; C.Tshort; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Int_)))
-           [ [C.Tint];
-             [C.Tsigned];
-             [C.Tsigned; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Int_)))
-           [ [C.Tunsigned];
-             [C.Tunsigned; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.Long)))
-           [ [C.Tlong];
-             [C.Tsigned; C.Tlong];
-             [C.Tlong; C.Tint];
-             [C.Tsigned; C.Tlong; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.Long)))
-           [ [C.Tunsigned; C.Tlong];
-             [C.Tunsigned; C.Tlong; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Signed ATypes.LongLong)))
-           [ [C.Tlong; C.Tlong];
-             [C.Tsigned; C.Tlong; C.Tlong];
-             [C.Tlong; C.Tlong; C.Tint];
-             [C.Tsigned; C.Tlong; C.Tlong; C.Tint]
-           ]
-        ++ map (fun s -> (Multiset.from_list s, ATypes.Integer (ATypes.Unsigned ATypes.LongLong)))
-           [ [C.Tunsigned; C.Tlong; C.Tlong];
-             [C.Tunsigned; C.Tlong; C.Tlong; C.Tint]
-           ]
-(*
-        ++ [(Multiset.from_list [C.Tfloat], ATypes.REAL_FLOATING ATypes.FLOAT)]
-        ++ [(Multiset.from_list [C.Tdouble], ATypes.REAL_FLOATING ATypes.DOUBLE)]
-        ++ [(Multiset.from_list [C.Tlong; C.Tdouble], ATypes.REAL_FLOATING ATypes.LONG_DOUBLE)]
-*)
-        ++ [(Multiset.from_list [C.T_Bool], ATypes.Integer ATypes.Bool)]
-(*
-        ++ [(Multiset.from_list [C.Tfloat; C.COMPLEX], ATypes.COMPLEX ATypes.FLOAT)]
-        ++ [(Multiset.from_list [C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.DOUBLE)]
-        ++ [(Multiset.from_list [C.Tlong; C.Tdouble; C.COMPLEX], ATypes.COMPLEX ATypes.LONG_DOUBLE)]
-*)
-      ) in
-  E.of_option (Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled.")
-              (Map.lookup specifiers desugar_map)
+let desugar_basic_type_specifiers specs =
+  if      specs = Multiset.from_list [C.Tchar]              then E.return $ ATypes.Integer ATypes.Char
+  else if specs = Multiset.from_list [C.Tsigned; C.Tchar]   then E.return $ ATypes.Integer (ATypes.Signed ATypes.Ichar)
+  else if specs = Multiset.from_list [C.Tunsigned; C.Tchar] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Ichar)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tshort];
+            Multiset.from_list [C.Tsigned; C.Tshort];
+            Multiset.from_list [C.Tshort; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tshort; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Short)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tshort];
+            Multiset.from_list [C.Tunsigned; C.Tshort; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Short)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tint];
+            Multiset.from_list [C.Tsigned];
+            Multiset.from_list [C.Tsigned; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Int_)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned];
+            Multiset.from_list [C.Tunsigned; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Int_)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tlong];
+            Multiset.from_list [C.Tsigned; C.Tlong];
+            Multiset.from_list [C.Tlong; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.Long)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tlong];
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Long)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tlong; C.Tlong; C.Tint];
+            Multiset.from_list [C.Tsigned; C.Tlong; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Signed ATypes.LongLong)
+  else if List.any (fun z -> specs = z) [
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tlong];
+            Multiset.from_list [C.Tunsigned; C.Tlong; C.Tlong; C.Tint] ] then E.return $ ATypes.Integer (ATypes.Unsigned ATypes.LongLong)
+  else
+    E.fail $ Errors.OTHER "[Cabs_to_ail.desugar_specifier] found a Cabs type that we don't yet handled."
 
 
 val desugar_type_specifiers : list C.typeSpecifier -> E.t (ATypes.ctype)
