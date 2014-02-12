@@ -773,7 +773,7 @@ let replace_read_value a v =
 val downclosed : forall . set (action) -> set (action * action) -> bool
 let {hol; isabelle; tex}
     downclosed A R = forall a b. b IN A && (a,b) IN R --> a IN A
-let {ocaml}
+let {coq; ocaml}
     downclosed A R = true
 
 let is_prefix opsem p Xo A =
@@ -792,7 +792,7 @@ let {hol; isabelle; tex}
             ((x,a) IN R && (x <> a) && (y = a')) ||
             ((a,a) IN R && (x = a') && (y = a'))
   }
-let {ocaml}
+let {coq; ocaml}
     relation_plug R a a' = {}
 
 
@@ -817,7 +817,7 @@ let same_prefix Xo1 Xo2 A =
 
 (* For all subsets of actions in a pre_execution, If there is an sb minimal read, just outside the set, then we can rewrite its value if it is a read, and then find another pre_execution containing the set of actions, with the modified read still minimal and in the same thread. *)
 val receptiveness : forall. (program -> pre_execution -> bool) -> bool
-let {ocaml}
+let {coq; ocaml}
     receptiveness opsem = true
 let {hol; isabelle; tex}
     receptiveness opsem =
@@ -845,7 +845,7 @@ let holds_over_prefix opsem p Xo A P =
 
 
 val extends_prefix : forall. pre_execution -> set (action) -> set (action) -> bool
-let {ocaml}
+let {coq; ocaml}
     extends_prefix Xo A A' = true
 let {hol; isabelle; tex}
     extends_prefix Xo A A' =
@@ -864,7 +864,7 @@ The above requires the fringe_set to be finite for tot_consistency and for induc
 *)
 
 val produce_well_formed_threads : forall. (program -> pre_execution -> bool) -> bool
-let {ocaml}
+let {coq; ocaml}
     produce_well_formed_threads opsem = true
 let {hol; isabelle; tex}
     produce_well_formed_threads opsem =
@@ -885,7 +885,7 @@ let {hol; isabelle; tex} finite_action_set_has_finite_fringe opsem =
 
 
 val bounded_executions : forall. (program -> pre_execution -> bool) -> bool
-let {ocaml}
+let {coq; ocaml}
     bounded_executions opsem = true
 let {hol; isabelle; tex} bounded_executions opsem =
   exists N. forall Xo p.
