@@ -1593,12 +1593,12 @@ let rec collect_conts' e =
         Map.(union) (Map.map (fun (a_tys, k) -> (a_tys, Esseq _as k e2)) ks1) (collect_conts' e2)
     | End es ->
         (* foldl (fun acc e -> Ocaml.Pmap.fold (fun k v acc -> Map.insert k v acc) (collect_conts' e) acc) Pmap.empty es *)
-        Map.unions $ List.map collect_conts' es
+        Map.unions (List.map collect_conts' es)
     
     (* TODO: assume that there is name clash among threads *)
     | Epar es ->
         (* foldl (fun acc e -> Ocaml.Pmap.fold (fun k v acc -> Map.insert k v acc) (collect_conts' e) acc) Pmap.empty es *)
-        Map.unions $ List.map collect_conts' es
+        Map.unions (List.map collect_conts' es)
     
     (* by syntactic constraints, we know that under these ctors there can be no labeled
        continuations *)
