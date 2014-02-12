@@ -190,6 +190,22 @@ type memory_order =
   | Consume
   | Acq_rel
 
+val mo_to_nat : memory_order -> nat
+let mo_to_nat mo =
+  match mo with
+    | NA -> 0
+    | Seq_cst -> 1
+    | Relaxed -> 2
+    | Release -> 3
+    | Acquire -> 4
+    | Consume -> 5
+    | Acq_rel -> 6
+ end
+
+instance (SetType memory_order)
+  let setElemCompare mo1 mo2 = setElemCompare (mo_to_nat mo1) (mo_to_nat mo2)
+end
+
 type lock_outcome =
     Locked
   | Blocked

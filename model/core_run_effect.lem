@@ -15,6 +15,30 @@ type trace_action =
   | Tload   of ctype   * Cmm.location * Cmm.cvalue              * Cmm.memory_order * Cmm.tid (* the argument Cmm.cvalue is the read value *)
   | Trmw    of ctype   * Cmm.location * Cmm.cvalue * Cmm.cvalue * Cmm.memory_order * Cmm.tid
 
+val trace_action_kind_to_nat : trace_action -> nat
+let trace_action_kind_to_nat a =
+  match a with
+    | Tcreate _ _ _ -> 0
+    | Talloc _ _ _ -> 1
+    | Tkill _ _ -> 2
+    | Tstore _ _ _ _ _ -> 3
+    | Tload _ _ _ _ _ -> 4
+    | Trmw _ _ _ _ _ _ -> 5
+  end
+
+instance (SetType trace_action)
+  let setElemCompare a1 a2 =
+    match (a1, a2) with
+      | (Tcreate ct1 l1 t1, Tcreate ct2 l2 t2) -> setElemCompare (ct1, l1, t1) (ct2, l2, t2)
+      | (Talloc i1 l1 t1, Talloc i2 l2 t2) -> setElemCompare (i1, l1, t1) (i2, l2, t2)
+      | (Tkill l1 t1, Tkill l2 t2) -> setElemCompare (l1, t1) (l2, t2)
+      | (Tstore ct1 l1 cv1 mo1 t1, Tstore ct2 l2 cv2 mo2 t2) -> setElemCompare (ct1, l1, cv1, mo1, t1) (ct2, l2, cv2, mo2, t2)
+      | (Tload ct1 l1 cv1 mo1 t1, Tload ct2 l2 cv2 mo2 t2) -> setElemCompare (ct1, l1, cv1, mo1, t1) (ct2, l2, cv2, mo2, t2)
+      | (Trmw ct1 l1 cv1 cv1' mo1 t1, Trmw ct2 l2 cv2 cv2' mo2 t2) -> setElemCompare (ct1, l1, cv1, cv1', mo1, t1) (ct2, l2, cv2, cv2', mo2, t2)
+      | (_, _) -> setElemCompare (trace_action_kind_to_nat a1) (trace_action_kind_to_nat a2)
+    end
+end
+
 type trace_paction = polarity * trace_action
 
 val tid_of: trace_action -> Cmm.tid
