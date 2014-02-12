@@ -6,6 +6,11 @@ open Colour
 
 module P = PPrint
 
+let isatty = ref true
+
+
+
+
 let (!^ ) = P.(!^)
 let (^^)  = P.(^^)
 let (^/^) = P.(^/^)
@@ -73,18 +78,19 @@ let lt_precedence p1 p2 =
     | (None   , _      ) -> false
 
 
-let pp_keyword  w = !^ (ansi_format [Bold; Magenta] w)
-let pp_const    c = !^ (ansi_format [Magenta] c)
-let pp_control  w = !^ (ansi_format [Bold; Blue] w)
-let pp_symbol   a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
-let pp_number   n = !^ (ansi_format [Yellow] n)
-let pp_impl     i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
+let pp_keyword w = !^ (if !isatty then ansi_format [Bold; Magenta] w else w)
+let pp_const   c = !^ (if !isatty then ansi_format [Magenta] c else c)
+let pp_control w = !^ (if !isatty then ansi_format [Bold; Blue] w else w)
+let pp_symbol  a = !^ (if !isatty then ansi_format [Blue] (Pp_symbol.to_string_pretty a) else (Pp_symbol.to_string_pretty a))
+let pp_number  n = !^ (if !isatty then ansi_format [Yellow] n else n)
+let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)
+                                            else Implementation_.string_of_implementation_constant i))
 
 
 let rec pp_core_base_type = function
-  | Integer0       -> !^ "integer"
+  | Integer0      -> !^ "integer"
   | Boolean       -> !^ "boolean"
-  | Address0       -> !^ "address"
+  | Address0      -> !^ "address"
   | Ctype         -> !^ "ctype"
   | CFunction     -> !^ "cfunction"
   | Unit          -> !^ "unit"
@@ -243,7 +249,9 @@ let rec pp_expr e =
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | Eundef u ->
-            pp_keyword "undef" ^^ P.brackets (!^ (ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)))
+            pp_keyword "undef" ^^ P.brackets (!^ (
+              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
+                         else Undefined.string_of_undefined_behaviour u))
         | Eerror ->
             pp_keyword "error"
         | Eaction (Paction (p, (Action (bs, a)))) ->
@@ -348,8 +356,8 @@ let std = [
 *)
 ]
 
-
 let pp_file file =
+  isatty := Unix.isatty Unix.stdout;
   let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype in
   let f acc (fname, (ftype, args, body)) =
     acc ^^
