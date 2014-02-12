@@ -12,6 +12,7 @@ let pload ty x mo    = Eaction (Paction Pos (Action {} (Load ty x mo   )))
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
 let zero : expr zero = Econst (Cmm_aux.Cint 0)
 let one  : expr zero = Econst (Cmm_aux.Cint 1)
+declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)

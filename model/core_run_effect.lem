@@ -120,6 +120,9 @@ type state = <|
   tact_counter: natural;
   tact_map: Map.map taction_id trace_action;
 |>
+declare {coq} rename type execution_mode = execution_mode_ (* workaround for Lem issue #74 *)
+declare {coq} rename type file = file_ (* workaround for Lem issue #74 *)
+declare {coq} rename type trace = trace_ (* workaround for Lem issue #74 *)
 
 type t 'a = state -> list (U.t 'a * state)
 
