@@ -156,11 +156,11 @@ and translate_expression stdlib program a_expr =
           return $
             C.Ewseq [Just a_lvalue] core_e
               (C.Easeq (Just a_load)
-                 ({}, C.Load core_ty_e (C.Esym a_lvalue) Cmm.NA)
-                 (C.Neg, ({}, C.Store core_ty_e
+                 (C.Action {} (C.Load core_ty_e (C.Esym a_lvalue) Cmm.NA))
+                 (C.Paction C.Neg (C.Action {} (C.Store core_ty_e
                                         (C.Esym a_lvalue)
                                         (conv_int [Caux.mk_ctype (exp_type_of e); (C.Eop C.OpAdd (C.Esym a_load) Caux.one)])
-                                        Cmm.NA
+                                        Cmm.NA)
                                       )
                  )
               )
@@ -508,10 +508,10 @@ and translate_expression stdlib program a_expr =
           let core_ty_e1 = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           return $
             C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Ewseq [] (C.Eaction (C.Pos, ({}, C.Store core_ty_e1
+              (C.Ewseq [] (C.Eaction (C.Paction C.Pos (C.Action {} (C.Store core_ty_e1
                                                 (C.Esym a_e1)
                                                 (conv [Caux.mk_ctype (exp_type_of e1); Caux.mk_ctype (exp_type_of e2); C.Esym a_e2])
-                                                Cmm.NA
+                                                Cmm.NA)
                                              )
                                      )
                           )

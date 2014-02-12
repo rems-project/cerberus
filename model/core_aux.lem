@@ -2,11 +2,11 @@ open import Pervasives Global Core
 import Boot Product
 
 (* Some aliases for positive actions *)
-let pcreate ty pref  = Eaction (Pos, ({}, Create ty pref ))
-let palloc e pref    = Eaction (Pos, ({}, Alloc e pref   ))
-let pkill x          = Eaction (Pos, ({}, Kill x         ))
-let pstore ty x n mo = Eaction (Pos, ({}, Store ty x n mo))
-let pload ty x mo    = Eaction (Pos, ({}, Load ty x mo   ))
+let pcreate ty pref  = Eaction (Paction Pos (Action {} (Create ty pref )))
+let palloc e pref    = Eaction (Paction Pos (Action {} (Alloc e pref   )))
+let pkill x          = Eaction (Paction Pos (Action {} (Kill x         )))
+let pstore ty x n mo = Eaction (Paction Pos (Action {} (Store ty x n mo)))
+let pload ty x mo    = Eaction (Paction Pos (Action {} (Load ty x mo   )))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
@@ -99,12 +99,12 @@ let rec concat_sseq e e' =
   end
 
 let is_negative = function
-  | Eaction (Neg, _) -> true
+  | Eaction (Paction Neg _) -> true
   | _ -> false
 end
 
 let is_negative_action = function
-  | (Neg, _) -> true
+  | (Paction Neg _) -> true
   | _ -> false
 end
 
@@ -147,7 +147,7 @@ let rec free_syms e =
       {}
   | Eerror ->
       {}
-  | Eaction (_, act) ->
+  | Eaction (Paction _ act) ->
       free_syms_action act
   | Eunseq es ->
       foldl (fun acc e -> free_syms e union acc) {} es
@@ -155,7 +155,7 @@ let rec free_syms e =
       free_syms e1 union (free_syms e2 \ (set_from_options _as))
   | Esseq _as e1 e2 ->
       free_syms e1 union (free_syms e2 \ (set_from_options _as))
-  | Easeq a_opt act1 (_, act2) ->
+  | Easeq a_opt act1 (Paction _ act2) ->
       free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Just a -> {a} | Nothing -> {} end))
   | Esave _ _ e ->
       free_syms e
@@ -185,18 +185,20 @@ let rec free_syms e =
       free_syms e
 end
 
-and free_syms_action (_, act_) =
-  match act_ with
-    | Create ty _ ->
-        free_syms ty
-    | Alloc n _ ->
-        free_syms n
-    | Kill o ->
-        free_syms o
-    | Store ty o n _ ->
-        free_syms ty union free_syms o union free_syms n
-    | Load ty o _ ->
-        free_syms ty union free_syms o
+and free_syms_action a =
+  match a with (Action _ act_) ->
+    match act_ with
+      | Create ty _ ->
+          free_syms ty
+      | Alloc n _ ->
+          free_syms n
+      | Kill o ->
+          free_syms o
+      | Store ty o n _ ->
+          free_syms ty union free_syms o union free_syms n
+      | Load ty o _ ->
+          free_syms ty union free_syms o
+  end
 end
 
 
@@ -299,8 +301,14 @@ and subst_sym_action_ a v act =
     | CompareExchangeWeak e_ty e_obj e_expected e_desired mo1 mo2 ->
         CompareExchangeWeak (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
   end
-and subst_sym_action a  v (bs, act) = (bs, subst_sym_action_ a v act)
-and subst_sym_paction a v (p,  act) = (p,  subst_sym_action  a v act)
+and subst_sym_action a v act =
+  match act with
+    | Action bs act_ -> Action bs (subst_sym_action_ a v act_)
+  end
+and subst_sym_paction a v pa =
+  match pa with
+    | Paction p act -> Paction p (subst_sym_action  a v act)
+  end
 
 
 
