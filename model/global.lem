@@ -190,17 +190,6 @@ let step s rel =
       acc
   ) s rel
 
-let rec accessible_ s rel =
-  let s' = step s rel in
-  if s = s' then
-    s
-  else
-    accessible_ s' rel
-
-let accessible a b rel =
-  elem b $ accessible_ [a] rel
-
-
 let rec replicate_list_ x (n: integer) acc =
   if n > 0 then
     replicate_list_ x (n-1) (x :: acc)
