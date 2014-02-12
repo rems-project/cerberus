@@ -121,7 +121,7 @@ let rec import_expr e =
   | Core.Eshift e1 e2        -> Eshift (import_expr e1) (import_expr e2)
   end
 
-and import_action (_, act) =
+and import_action (Core.Action _ act) =
   match act with
     | Core.Create e_ty pref      -> Create (import_expr e_ty) pref
     | Core.Alloc e_n pref        -> Alloc (import_expr e_n) pref
@@ -129,7 +129,7 @@ and import_action (_, act) =
     | Core.Store e_ty e_o e_n mo -> Store (import_expr e_ty) (import_expr e_o) (import_expr e_n) mo
     | Core.Load e_ty e_o mo      -> Load (import_expr e_ty) (import_expr e_o) mo
   end
-and import_paction (p, act) = (p, import_action act)
+and import_paction (Core.Paction p act) = (p, import_action act)
 
 
 val     export_expr: expr -> Core.expr zero
@@ -163,7 +163,7 @@ let rec export_expr e =
   end
 
 and export_action act =
-  ({},
+  Core.Action {} (
   match act with
     | Create e_ty pref   -> Core.Create (export_expr e_ty) pref
     | Alloc e_n pref     -> Core.Alloc (export_expr e_n) pref
@@ -171,7 +171,7 @@ and export_action act =
     | Store e_ty e_o e_n mo -> Core.Store (export_expr e_ty) (export_expr e_o) (export_expr e_n) mo
     | Load e_ty e_o mo      -> Core.Load (export_expr e_ty) (export_expr e_o) mo
   end)
-and export_paction (p, act) = (p, export_action act)
+and export_paction (p, act) = Core.Paction p (export_action act)
 
 
 
@@ -371,7 +371,7 @@ let rec hack x =
     | Core.Esseq as_opt e1 e2 ->
         Core.Esseq as_opt (hack e1) (hack e2)
     | Core.Easeq _a_opt act pact ->
-        Core.Ewseq [_a_opt] (Core.Eaction (Core.Pos, act))
+        Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
                             (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Just x -> x end))
     | Core.Eindet e ->
         hack e

@@ -337,17 +337,17 @@ let rec _check expected_type e =
           +  -------------------------- (create)     ----------------------- (alloc)
           +  Γ ⊢ create{ty} ↑ [address]              Γ ⊢ alloc e ↑ [address]
           *)
-          | Eaction (Pos, (_, Create ty _)) -> _check (TyBase Ctype) ty   >> guard_expected (TyEffect Address)
-          | Eaction (Neg, (_, Create ty _)) -> _check (TyBase Ctype) ty   >> guard_expected (TyEffect Unit)
-          | Eaction (Pos, (_, Alloc n _))   -> _check (TyBase Integer) n  >> guard_expected (TyEffect Address)
-          | Eaction (Neg, (_, Alloc n _))   -> _check (TyBase Integer) n  >> guard_expected (TyEffect Unit)
+          | Eaction (Paction Pos (Action _ (Create ty _))) -> _check (TyBase Ctype) ty   >> guard_expected (TyEffect Address)
+          | Eaction (Paction Neg (Action _ (Create ty _))) -> _check (TyBase Ctype) ty   >> guard_expected (TyEffect Unit)
+          | Eaction (Paction Pos (Action _ (Alloc n _)))   -> _check (TyBase Integer) n  >> guard_expected (TyEffect Address)
+          | Eaction (Paction Neg (Action _ (Alloc n _)))   -> _check (TyBase Integer) n  >> guard_expected (TyEffect Unit)
           
          (*
           +    Γ ⊢ e ↑ address
           +  ------------------- (kill)
           +  Γ ⊢ kill e ↑ [unit]
           *)
-          | Eaction (_, (_, Kill e)) -> _check (TyBase Address) e >>
+          | Eaction (Paction _ (Action _ (Kill e))) -> _check (TyBase Address) e >>
                                         guard_expected (TyEffect Unit)
           
           
@@ -361,12 +361,12 @@ let rec _check expected_type e =
           +                 Γ ⊢ load{ty} e ↑ [integer]
 
           *)
-          | Eaction (_, (_, Store ty e1 e2 _)) -> _check (TyBase Ctype)     ty >>
+          | Eaction (Paction _ (Action _ (Store ty e1 e2 _))) -> _check (TyBase Ctype)     ty >>
                                                   _check (TyBase Address)   e1 >>
                                                   _check (TyBase Integer)   e2 >>
                                                   guard_expected (TyEffect Unit)
-          | Eaction (Pos, (_, Load ty e _))    -> _check (TyBase Address) e >> guard_expected (TyEffect Integer)
-          | Eaction (Neg, (_, Load ty e _))    -> _check (TyBase Address) e >> guard_expected (TyEffect Unit)
+          | Eaction (Paction Pos (Action _ (Load ty e _)))    -> _check (TyBase Address) e >> guard_expected (TyEffect Integer)
+          | Eaction (Paction Neg (Action _ (Load ty e _)))    -> _check (TyBase Address) e >> guard_expected (TyEffect Unit)
 
          (*
           +  Γ ⊢ a1 ↑ address     Γ ⊢ a2 ↑ address
@@ -638,9 +638,9 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  ------------------------ (create)
     +  Γ ⊢ create{τ} : address*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (Pos, (_, Create ty _)) -> E.return (TyEffect Address)
+    | Eaction (Paction Pos (Action _ (Create ty _))) -> E.return (TyEffect Address)
     
-    | Eaction (Neg, (_, Create ty _)) -> E.return (TyEffect Unit)
+    | Eaction (Paction Neg (Action _ (Create ty _))) -> E.return (TyEffect Unit)
     
     
    (*
@@ -648,11 +648,11 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  ---------------------- (alloc)
     +  Γ ⊢ alloc e : address*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (Pos, (_, Alloc e _)) ->
+    | Eaction (Paction Pos (Action _ (Alloc e _))) ->
         _check (TyBase Integer) e >>
         E.return (TyEffect Address)
     
-    | Eaction (Neg, (_, Alloc e _)) ->
+    | Eaction (Paction Neg (Action _ (Alloc e _))) ->
         _check (TyBase Integer) e >>
         E.return (TyEffect Unit)
     
@@ -662,7 +662,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  ------------------ (kill)
     +  Γ ⊢ kill e : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (_, (_, Kill e)) ->
+    | Eaction (Paction _ (Action _ (Kill e))) ->
         _check (TyBase Address) e >>
         E.return (TyEffect Unit)
     
@@ -672,7 +672,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  -------------------------------------- (store)
     +      Γ ⊢ store{τ} e1 e2 : unit*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (_, (_, Store ty e1 e2 _)) ->
+    | Eaction (Paction _ (Action _ (Store ty e1 e2 _))) ->
         _check (TyBase Address)   e1 >>
         _check (TyBase Integer)   e2 >>
         E.return (TyEffect Unit)
@@ -683,11 +683,11 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
     +  ------------------------ (load)
     +  Γ ⊢ load{τ} e : integer*
     ----------------------------------------------------------------------------------------------*)
-    | Eaction (Pos, (_, Load ty e _)) ->
+    | Eaction (Paction Pos (Action _ (Load ty e _))) ->
         _check (TyBase Address) e >>
         E.return (TyEffect Integer)
     
-    | Eaction (Neg, (_, Load ty e _)) ->
+    | Eaction (Paction Neg (Action _ (Load ty e _))) ->
         _check (TyBase Address) e >>
         E.return (TyEffect Unit)
     
@@ -720,7 +720,7 @@ E.mapM (function TyBase b   -> E.fail (Errors.CORE_TYPECHECK_UNSEQ_PURE $ Core.s
 
 
     (* TODO: check *)
-    | Easeq _a_opt act pact -> infer (Eaction (Pos, act))
+    | Easeq _a_opt act pact -> infer (Eaction (Paction Pos act))
     
     
     

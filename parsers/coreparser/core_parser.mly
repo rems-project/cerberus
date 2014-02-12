@@ -160,7 +160,9 @@ let convert e arg_syms fsyms =
     | Esame (e1, e2)            -> Core.Esame (f st e1, f st e2)
     | Eundef                    -> Core.Eundef Undefined.DUMMY
     | Eerror                    -> Core.Eerror
-    | Eaction pact              -> Core.Eaction (g st pact)
+    | Eaction pact              ->
+        let (p, (s, act)) = g st pact in
+        Core.Eaction (Core.Paction (p, Core.Action (s, act)))
     | Eunseq es                 -> Core.Eunseq (List.map (f st) es)
     | Epar    es                 -> Core.Epar (List.map (f st) es)
     | Ewseq (_as, e1, e2) ->
@@ -196,8 +198,12 @@ let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
         match _a_opt with
           | Some _a -> let _a' = Symbol.Symbol (count, Some _a) in
                        (* print_endline ("ADDING> " ^ _a); *)
-                       Core.Easeq (Some _a', snd (g st (Core.Pos, act)), g (count+1, Pmap.add _a _a' syms) pact)
-          | None    -> Core.Easeq (None, snd (g st (Core.Pos, act)), g st pact)
+                       let (_, (s1, act1)) = g st (Core.Pos, act) in
+                       let (p2, (s2, act2)) = g (count+1, Pmap.add _a _a' syms) pact in
+                       Core.Easeq (Some _a', Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, act2)))
+          | None    -> let (_, (s1, act1)) = g st (Core.Pos, act) in
+                       let (p2, (s2, pact2)) = g st pact in
+                       Core.Easeq (None, Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, pact2)))
             
 )            
             

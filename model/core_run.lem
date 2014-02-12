@@ -160,7 +160,7 @@ let rec annotate_expr p_aid e =
   match e with
   | Elet a e1 e2         -> Elet a e1 (annotate_expr p_aid e2)
   | Eif e1 e2 e3         -> Eif e1 (annotate_expr p_aid e2) (annotate_expr p_aid e3)
-  | Eaction (p, (bs, a)) -> Eaction (p, ({snd p_aid} union bs, a))
+  | Eaction (Paction p (Action bs a)) -> Eaction (Paction p (Action ({snd p_aid} union bs) a))
   | Eunseq es            -> Eunseq (List.map (annotate_expr p_aid) es)
   | Epar es              -> Epar (List.map (annotate_expr p_aid) es)
   | Ewseq _as e1 e2      -> Ewseq _as (annotate_expr p_aid e1) (match fst p_aid with Pos -> annotate_expr p_aid e2 | Neg -> e2 end)
@@ -1041,7 +1041,7 @@ val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
 
 let rec red2_pos x =
   match x with
-    | (Eaction (Pos, (bs, a)), tid, _KS) ->
+    | (Eaction (Paction Pos (Action bs a)), tid, _KS) ->
         perform_action bs a tid                       >>= fun (aid, v) ->
         push_trace (E.Rule_Pos, Just (bs, aid)) >>
         E.return (v, tid, annotate (Pos, aid) _KS)
@@ -1050,7 +1050,7 @@ let rec red2_pos x =
 
 and red2_neg x =
   match x with
-    | (Eaction (Neg, (bs, a)), tid, _KS) ->
+    | (Eaction (Paction Neg (Action bs a)), tid, _KS) ->
         perform_action bs a tid                       >>= fun (aid, v)   ->
         push_trace (E.Rule_Neg, Just (bs, aid)) >>
         E.return (v, tid, annotate (Neg, aid) _KS)
@@ -1187,7 +1187,7 @@ Boot.print_debug (Boot.pp_core_expr f_body) $
 
 and red2_wseq x =
   match x with
-    | (Ewseq _ (Eaction (Neg, b)) e2, tid, _KS) ->
+    | (Ewseq _ (Eaction (Paction Neg b)) e2, tid, _KS) ->
         E.mzero (* Leaving it to red2_neg_wseq *)
     | (Ewseq _as e1 e2, tid, _KS) ->
         push_trace (E.Rule_Wseq, Nothing) >>
@@ -1205,20 +1205,20 @@ and red2_wseq x =
 
 and red2_neg_wseq x =
   match x with
-    | (Ewseq _ (Eaction (Neg, b)) e2, tid, _KS) ->
+    | (Ewseq _ (Eaction (Paction Neg b)) e2, tid, _KS) ->
         push_trace (E.Rule_Wseq_Neg, Nothing) >>
         E.return match e2 with
-          | Eunseq e2's -> (Eunseq $ (Eaction (Neg, b)) :: e2's, Cmm_aux.Tseq tid, _KS)
-          | _           -> (Eunseq [Eaction (Neg, b); e2], Cmm_aux.Tseq tid, _KS)
+          | Eunseq e2's -> (Eunseq $ (Eaction (Paction Neg b)) :: e2's, Cmm_aux.Tseq tid, _KS)
+          | _           -> (Eunseq [Eaction (Paction Neg b); e2], Cmm_aux.Tseq tid, _KS)
         end
     | (Ewseq _as (Eunseq es) e2, tid, _KS) ->
         pick_one (is_negative) es >>= function
                (* TODO: there is a hack here: the symbol corresponding to ej should be dropped from ej, instead of adding a skip dans the first unseq (...) *)
-          | (es1, Eaction (Neg, b), es2) ->
+          | (es1, Eaction (Paction Neg b), es2) ->
               push_trace (E.Rule_Wseq_Neg, Nothing) >>
               E.return match e2 with
-                | Eunseq e2's -> (Ewseq _as (Eunseq $ es1 ++ (Eskip :: es2)) (Eunseq $ Eaction (Neg, b) :: e2's), Cmm_aux.Tseq tid, _KS)
-                | _           -> (Ewseq _as (Eunseq $ es1 ++ (Eskip :: es2)) (Eunseq [Eaction (Neg, b); e2]), Cmm_aux.Tseq tid, _KS)
+                | Eunseq e2's -> (Ewseq _as (Eunseq $ es1 ++ (Eskip :: es2)) (Eunseq $ Eaction (Paction Neg b) :: e2's), Cmm_aux.Tseq tid, _KS)
+                | _           -> (Ewseq _as (Eunseq $ es1 ++ (Eskip :: es2)) (Eunseq [Eaction (Paction Neg b); e2]), Cmm_aux.Tseq tid, _KS)
               end
           | _ -> Boot.assert_false "[Core_run.red2_neg_wseq] impossible"
         end
@@ -1399,10 +1399,16 @@ let rec convert_expr e =
     | Eis_unsigned e -> Eis_unsigned (convert_expr e)
   end
 
-
-and convert_paction (p, a) = (p, convert_action a)
-and convert_action (_, a) =
-  ({}, match a with
+and convert_paction pa =
+  match pa with
+    | Paction p a -> Paction p (convert_action a)
+  end
+and convert_action a =
+  match a with
+    | Action _ a_ -> Action {} (convert_action_ a_)
+  end
+and convert_action_ a =
+  match a with
     | Create ty pref  -> Create (convert_expr ty) pref
     | Alloc n pref    -> Alloc (convert_expr n) pref
     | Kill e          -> Kill (convert_expr e)
@@ -1412,7 +1418,7 @@ and convert_action (_, a) =
         CompareExchangeStrong (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
     | CompareExchangeWeak ty obj expected desired mo1 mo2 ->
         CompareExchangeWeak (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
-  end)
+  end
 
 
 val convert_file: forall 'a. file 'a -> file E.taction_id

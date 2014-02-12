@@ -144,8 +144,8 @@ and action_ 'a =
   | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
   | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
 
-and action 'a  = set 'a * action_ 'a
-and paction 'a = polarity * action 'a
+and action 'a  = Action of set 'a * action_ 'a
+and paction 'a = Paction of polarity * action 'a
 
 
 

@@ -246,7 +246,7 @@ let rec pp_expr e =
             pp_keyword "undef" ^^ P.brackets (!^ (ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)))
         | Eerror ->
             pp_keyword "error"
-        | Eaction (p, (bs, a)) ->
+        | Eaction (Paction (p, (Action (bs, a)))) ->
           (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
              P.rangle ^^ P.space) ^^ *)
           pp_polarity p ^^ pp_action a
@@ -280,9 +280,9 @@ let rec pp_expr e =
               | None   -> P.underscore
             in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
         | Easeq (None, act, y) ->
-            pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
+            pp (Eaction (Paction (Pos, act))) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Easeq (Some a, act, y) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Pos, act)) ^^^ !^ "|>" ^^^ pp (Eaction y)
+            pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Paction (Pos, act))) ^^^ !^ "|>" ^^^ pp (Eaction y)
         | Eindet e ->
             (* P.brackets (pp e) *) !^ "INDET"
         | Esave (l, a_ty_s, e) ->
