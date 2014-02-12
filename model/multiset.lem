@@ -1,0 +1,35 @@
+open import Pervasives
+import Map
+
+type t 'k =
+  Multiset of Map.map 'k nat
+
+val emp: forall 'k. MapKeyType 'k => t 'k
+let emp = Multiset $ Map.empty
+
+val count: forall 'k. MapKeyType 'k => 'k -> t 'k -> nat
+let count e (Multiset m) =
+  Map.findWithDefault e 0 m
+
+val mem: forall 'k. MapKeyType 'k => 'k -> t 'k -> bool
+let mem e m = (count e m > 0)
+
+val add: forall 'k. MapKeyType 'k => 'k -> t 'k -> t 'k
+let add e (Multiset m) = Multiset $ Map.insert e (1 + count e (Multiset m)) m
+
+val from_list: forall 'k. MapKeyType 'k => list 'k -> t 'k
+let from_list ls = foldl (fun m e -> add e m) emp ls
+
+
+
+instance forall 'a. SetType 'a, MapKeyType 'a => (MapKeyType (t 'a))
+  (* val {ocaml;coq} mapKeyCompare : 'a -> 'a -> ordering *)
+  let mapKeyCompare k1 k2 =
+    let Multiset k1' = k1 in
+    let Multiset k2' = k2 in
+    let xs = (domain k1') union (domain k2') in
+    if Set.all (fun x -> count x k1 = count x k2) xs then
+      EQ
+    else
+      mapKeyCompare (domain k1') (domain k2') (* TODO: might return EQ .... *)
+end

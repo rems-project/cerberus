@@ -1,0 +1,26 @@
+open import Pervasives
+import AilTypes
+
+(* C types (this is a simplication of what is need for typechecking) *)
+(* TODO: what about Ail.ATOMIC_Q ? *)
+type ctype =
+  | Void
+  | Basic of AilTypes.basicType
+  | Array of ctype * integer
+  | Function of ctype * list ctype * bool
+  | Pointer of ctype
+(*
+  | STRUCT of Ail.id * list (Ail.id * member)
+  | UNION  of Ail.id * list (Ail.id * member)
+  | ENUM of Ail.id
+*)
+  | Atomic of ctype
+  | SIZE_T
+  | INTPTR_T
+  | WCHAR_T
+  | CHAR16_T
+  | CHAR32_T
+
+and member =
+  | MEMBER of (* alignment_specifier * *) ctype
+  | BITFIELD of ctype * integer * (maybe bool)

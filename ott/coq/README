@@ -1,0 +1,75 @@
+This directory contains the Coq definitions and proofs for the C type
+system described in the paper
+
+   Cerberus: a semantic basis for sequential and concurrent C11
+
+by Kayvan Memarian, Justus Matthiesen, Kyndylan Nienhuis, Peter Sewell
+
+
+
+
+Ail syntax
+
+  AilSyntaxAux_defns.v
+  AilSyntaxAux_proof.v
+  AilSyntaxAux.v
+  AilSyntax_defns.v
+  AilSyntax_proof.v
+  AilSyntax.v
+  AilTypes.v
+  AilTypes_proof.v
+
+
+Ail well-formedness
+
+  AilWf_defns.v
+  AilWf_proof.v
+  AilWf.v
+
+Specification of implementation-defined properties
+
+  Implementation.v
+
+Typing contexts
+
+  Context_defns.v
+  Context_proof.v
+  Context.v
+
+Ail implementation-dependent type system
+
+  AilTypesAux_defns.v
+  AilTypesAux_proof.v
+  AilTypesAux.v
+  AilTyping_defns.v
+  AilTyping_proof.v
+  AilTyping.v
+
+Implementation-indepenent type system
+
+  Annotation.v
+  GenSyntax_defns.v
+  GenSyntax_proof.v
+  GenSyntax.v
+  GenTypesAux_defns.v
+  GenTypesAux_proof.v
+  GenTypesAux.v
+  GenTypes_proof.v
+  GenTypes.v
+  GenTyping_defns.v
+  GenTyping_proof.v
+  GenTyping.v
+
+Example showing associativity fails in general
+
+  Associativity.v
+
+Common utilities
+
+  Common.v
+
+Integer ranges
+
+  Range_defns.v
+  Range_proof.v
+  Range.v

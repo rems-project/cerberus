@@ -1,0 +1,76 @@
+open import Pervasives Global Core_ctype
+import Cmm_aux Symbol State_exception
+
+module Cmm = Cmm_aux
+
+(* TODO *)
+type taction_id = natural
+
+
+module E = State_exception
+
+
+type memory_error =
+  | MemErr_TODO
+
+type memory_state =
+  Map.map Cmm.location (list (Cmm.cvalue * taction_id)) * natural
+
+
+(* Memory effect *)
+type t 'a =
+  E.t 'a memory_state memory_error
+
+
+type mem_addr =
+  Cmm.location
+
+
+
+
+
+
+let create pref ty taid =
+  E.modify (fun (m, i) ->
+    let o = (pref, Cmm_aux.Lbase i) in
+    let init = match ty with
+      | Array _ n -> Cmm_aux.Marray (replicate_list Cmm_aux.Muninit n)
+      | _         -> Cmm_aux.Muninit
+    end in
+    (o, (Map.insert o [(init, taid)] m, i+1))
+  )
+
+
+(*
+let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
+  (* DEBUG *)
+(* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
+  (* We update the memory (obviously) and we add information about the location 
+     kind to the state *)
+  let o = (pref, Cmm_aux.Lbase i) in
+  let init = match ty with
+    | Array _ n -> Cmm_aux.Marray (replicate_list Cmm_aux.Muninit n)
+    | _         -> Cmm_aux.Muninit
+  end in
+  [(U.return o, <| st with E.mem= (Map.insert o [(init, taid)] m, i+1);
+                           E.lk = Map.insert o (type_to_location_kind ty) lk |>)]
+
+ *)
+
+
+
+
+
+(* TODO *)
+let store ty addr n tact_id =
+  E.return ()
+
+
+(* TODO *)
+let load ty addr =
+  E.fail MemErr_TODO
+
+
+(* TODO *)
+let kill addr =
+  E.return ()

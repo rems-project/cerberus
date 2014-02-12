@@ -1,0 +1,231 @@
+defns
+JwfLvalue :: '' ::=
+
+defn
+wfLvalue qualifiers type :: :: wfLvalueType :: WfLvalueType by
+
+wfLvalue qs ty
+isObject ty
+---------------------- :: PointerObject
+wfLvalue qs' (qs ty *)
+
+wfLvalue qs ty
+not (isObject ty)
+not (restrict in qs')
+---------------------- :: PointerOther
+wfLvalue qs' (qs ty *)
+
+not (restrict in qs)
+---------------------- :: BasicType
+wfLvalue qs basicType
+
+not (restrict in qs)
+-------------------- :: Void
+wfLvalue qs void
+
+wfLvalue qs ty
+not (isIncomplete ty)
+not (isFunction ty)
+--------------------- :: Array
+wfLvalue qs (ty [n])
+
+wf ty
+wfLvalue qs1 ty1 .. wfLvalue qsk tyk
+% After "adjustment"
+not(isIncomplete ty1) .. not(isIncomplete tyk)
+not(isFunction ty1) .. not(isFunction tyk)
+---------------------------------------------- :: Function
+wfLvalue [] (ty (qs1 ty1, .., qsk tyk))
+
+defn
+wf type :: :: wfType :: WfType
+{{ com nested types }}
+by
+
+wfLvalue qs ty
+-------------- :: PointerObject
+wf (qs ty *)
+
+------------ :: BasicType
+wf basicType
+
+------- :: Void
+wf void
+
+defns
+JwfE :: '' ::=
+
+defn
+G ; S |- wf e :: :: wfE :: WfE by
+
+G; S |- wf e
+------------------------------ :: Unary
+G; S |- wf (unaryOperator e)
+
+G; S |- wf e1
+G; S |- wf e2
+------------------------------------- :: Binary
+G; S |- wf (e1 binaryOperator e2)
+
+G; S |- wf e1
+G; S |- wf e2
+------------------------ :: Assign
+G; S |- wf (e1 = e2)
+
+G; S |- wf e1
+G; S |- wf e2
+------------------------------------------- :: CompoundAssign
+G; S |- wf (e1 arithmeticOperator = e2)
+
+G; S |- wf e1
+G; S |- wf e2
+G; S |- wf e3
+------------------------------- :: Conditional
+G; S |- wf (e1 ? e2 : e3)
+
+wfLvalue qs ty
+G; S |- wf e
+--------------------- :: Cast
+G; S |- wf ((qs ty) e)
+
+G; S |- wf e
+G; S |- wf e1 .. G; S |- wf ek
+---------------------------------- :: Call
+G; S |- wf (e (e1, .., ek))
+
+------------------- :: Constant
+G; S |- wf constant
+
+id : qs ty in G
+--------------- :: Variable
+G; S |- wf id
+
+id : ty = s in S
+----------------- :: Function
+G; S |- wf id
+
+wfLvalue qs ty
+------------------------- :: SizeOf
+G; S |- wf (sizeof qs ty)
+
+wfLvalue qs ty
+-------------------------- :: AlignOf
+G; S |- wf (alignof qs ty)
+
+
+defns
+JwfS :: '' ::=
+
+defn
+G ; S ; ty ; b |- wf s :: :: wfS :: WfS by
+
+------------------- :: Skip
+G; S; ty; b |- wf ;
+
+G; S |- wf e
+--------------------- :: Expression
+G; S; ty; b |- wf (e;)
+
+wf G'
+(G' @ G); S; ty; b |- wf s1 .. (G' @ G); S; ty; b |- wf sk
+-------------------------------------------------------------- :: Block
+G; S; ty; b |- wf ({ G' | s1 .. sk })
+
+G; S |- wf e
+G; S; ty; b |- wf s1
+G; S; ty; b |- wf s2
+------------------------------------------- :: If
+G; S; ty; b |- wf (if (e) s1 else s2)
+
+G; S |- wf e
+G; S; ty; true |- wf s
+----------------------------------- :: While
+G; S; ty; b |- wf (while (e) s)
+
+G; S |- wf e
+G; S; ty; true |- wf s
+--------------------------------------- :: Do
+G; S; ty; b |- wf (do s while (e);)
+
+----------------------------- :: Break
+G; S; ty; true |- wf (break;)
+
+-------------------------------- :: Continue
+G; S; ty; true |- wf (continue;)
+
+isVoid ty
+------------------------------------------ :: ReturnVoid
+G; S; ty (ty1, .., tyk); b |- wf (return;)
+
+not (isVoid ty)
+G; S |- wf e
+---------------------------------------------- :: Return
+G; S; ty (ty1, .., tyk); b |- wf (return e;)
+
+% TODO (switch (e) s) :: Switch
+% TODO (case integerConstant : s) :: Case
+% TODO (default : s) :: Default
+% TODO (id : s) :: Label
+% TODO (goto id;) :: Goto
+
+G; S |- wf definition1 .. G; S |- wf definitionk
+------------------------------------------------- :: Declaration
+G; S; ty; b |- wf (definition1, .., definitionk;)
+
+defns
+JwfDefinition :: '' ::=
+
+defn
+G ; S |- wf definition :: :: wfDefinition :: WfDefinition by
+
+id : qs ty in G
+G; S |- wf e
+------------------- :: Def
+G; S |- wf id = e
+
+defns
+JwfGamma :: '' ::=
+
+defn
+wf G :: :: wfGamma :: WfGamma by
+
+wf G
+wfLvalue qs ty
+not (isFunction ty)
+isComplete ty
+% Technically, this is a semantic constraint (c.f. 6.7#7).
+-------------------- :: Ctx
+wf (G, id : qs ty)
+
+-------- :: Empty
+wf empty
+
+defns
+JwfSigma :: '' ::=
+
+defn
+S |- wf S' :: :: wfSigma :: WfSigma by
+
+% FIXME:
+% - function argument identifiers
+% - indentifiers must be unique
+S |- wf S'
+wfLvalue [] ty
+isFunction ty
+empty; S; ty; false |- wf s
+----------------------------- :: Ctx
+S |- wf S', id : ty = s
+
+------------- :: Empty
+S |- wf empty
+
+defns
+JwfProgram :: '' ::=
+
+defn
+wf program :: :: wfProgram :: WfProgram by
+
+S |- wf S
+id : ty = s in S
+---------------- :: Def
+wf id S

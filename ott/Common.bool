@@ -1,0 +1,6 @@
+  {{ phantom }}
+  {{ coq bool }}
+  | true :: M :: True
+     {{ coq true }}
+  | false :: M :: False
+     {{ coq false }}
