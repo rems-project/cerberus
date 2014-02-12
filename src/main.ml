@@ -196,10 +196,11 @@ let pipeline stdlib impl core_parse file_name =
       >|> Exception.fmap (Translation.translate stdlib impl)
       >|> pass_message "4. Translation to Core completed!"
       >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
+(*
       >|> Exception.fmap Core_simpl.simplify
 
       >|> pass_message "5. Core to Core simplication completed!"
-      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *) in
     
     let core_frontend m =
           core_parse m
