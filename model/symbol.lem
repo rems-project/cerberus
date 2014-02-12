@@ -42,6 +42,10 @@ instance (Ord t)
     n1 >= n2
 end
 
+instance (SetType t)
+  let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+end
+
 val fresh : counter -> t * counter 
 let fresh c =
   (Symbol c Nothing, c + 1)
