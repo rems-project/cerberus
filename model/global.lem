@@ -159,7 +159,7 @@ let transitive_reduction r =
   (* a partial check for cycles *)
   if any (fun (a1,a2) -> a1=a2) (r ++ transitive_pairs) then 
     Nothing
-  else Just $ List.filter (fun (a1,a2) -> not (elem (a1,a2) transitive_pairs)) r 
+  else Just (List.filter (fun (a1,a2) -> not (elem (a1,a2) transitive_pairs)) r)
 
 val is_transitive: forall 'a. Eq 'a => list ('a * 'a) -> bool
 let is_transitive r =
