@@ -1372,8 +1372,7 @@ let red2 e =
   ]
 
 val star_red2:       expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
-               E.t ((expr E.taction_id * Cmm.tid * list (cont E.taction_id)) *
-                       (Map.map E.taction_id E.trace_action * E.trace))
+               E.t (expr E.taction_id * (Map.map E.taction_id E.trace_action * E.trace))
 let rec star_red2 x =
   let continue =
     red2 x >>= fun (e, tid, _K) ->
@@ -1393,7 +1392,7 @@ in
     | (e, tid, []) ->
         if is_value e then
           get_fulltrace        >>= fun (tact_map, t) ->
-          E.return ((e, tid, []), (tact_map, t))
+          E.return (e, (tact_map, reverse t))
         else
           continue
     
@@ -1723,35 +1722,22 @@ let rec collect_conts' e =
 
 open Operators
 
-val runE: E.execution_mode -> file E.taction_id -> E.t (Core.expr E.taction_id * (Map.map E.taction_id E.trace_action * E.trace))
-let runE execution_mode file =
+val initial_expr_and_state : E.execution_mode -> file zero -> (Core.expr E.taction_id * Cmm.tid * list (cont E.taction_id)) * E.state
+let initial_expr_and_state execution_mode file =
+  let file = convert_file file in
   (* collect the continuations in all functions *)
-  let cont_map: map sym (map ksym (list (sym * ctype) * expr E.taction_id)) =
-    (* TODO[newLem] maybe we should add mapWithKey to lem's Map *)
-    Set_helpers.fold (fun (fname, (_, _, fbody)) acc ->
-      Map.insert fname (collect_conts' fbody) acc
-    ) (Map.toSet file.funs) Map.empty in
-(*
-    foldl (fun acc (fname, (_, _, fbody)) ->
-(*      Pmap.add fname (let (_, s) = St.run_impl (collect_conts fbody) <| bound_syms= {}; conts= Pmap.empty |> in s.conts) acc *)
-      Map.insert fname (collect_conts' fbody) acc
-    ) Map.empty $ Pmap.bindings file.funs in
-*)
+  let cont_map = Set_helpers.fold
+    (fun (fname, (_, _, fbody)) acc -> Map.insert fname (collect_conts' fbody) acc)
+    (Map.toSet file.funs)
+    Map.empty in
+  let state = E.initial_state execution_mode file cont_map in
   let (_, _, main_body) = fromJust $ Map.lookup file.main file.funs in
-  
-(*  (_DEBUG 2 (print_cont_map cont_map)) *)
-  
-  E.set_execution_mode execution_mode    >>
-  E.set_current_proc file.main           >>
-  E.register_conts cont_map              >>
-  star_red2 (main_body, Cmm_aux.Tzero, [(* Khole *)[]]) >>= fun ((value, _, _), (tact_map, trace)) ->
-  E.return (value, (tact_map, reverse trace))
-
+  ((main_body, Cmm_aux.Tzero, [[]]), state)
 
 val run: E.execution_mode -> file zero ->
          Exception.t (list (U.t ((Core.expr E.taction_id) * (Map.map E.taction_id E.trace_action * E.trace)) * E.state)) Errors.t
 let run execution_mode file =
-  let file' = convert_file file in
-  let execs = runE execution_mode file' $ E.initial_state file' in
+  let (e, state) = initial_expr_and_state execution_mode file in
+  let execs = star_red2 e state in
   Boot.print_debug "NUMBER OF TRACES= " (*; string_of_num $ List.length execs] *)
     Exception.return execs
