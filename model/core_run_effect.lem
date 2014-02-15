@@ -387,13 +387,13 @@ let get_location_kind s x =
 
 
 
-val initial_state: file taction_id -> state
-let initial_state file = <|
-  execution_mode= Exhaustive;
+val initial_state: execution_mode -> file taction_id -> map sym (map ksym (list (sym * ctype) * expr taction_id)) -> state
+let initial_state execution_mode file cont_map = <|
+  execution_mode= execution_mode;
   mem_layout=     (Map.empty, 0);
-  current_proc=   Nothing;
+  current_proc=   Just file.main;
   file=           file;
-  cont_map=       Map.empty;
+  cont_map=       cont_map;
   tact_counter=   0;
   tact_map=       Map.empty;
   trace=          [];
