@@ -673,7 +673,11 @@ let rec collect_values v =
 
 
 (* evaluation of pure epxressions (will crash on ill-typed and/or non pure
-   expressions) *)
+   expressions).  Note that this evaluation may be partial; that is, the
+   result of eval may be another unevaluated expression rather than a value.
+   This is to ensure that the eval function will always terminate (which is
+   important for the Coq backend).  To fully evaluate a pure expression,
+   it is necessary to call eval repeatedly until is_value returns True. *)
 open U
 val     eval: forall 'a. file 'a -> expr 'a -> U.t (expr 'a)
 let rec eval file pe =
@@ -707,13 +711,13 @@ let rec eval file pe =
         end
     | Elet _a pe1 pe2 ->
         eval pe1 >>= fun v1 ->
-        eval (subst_sym _a v1 pe2)
+        U.return (subst_sym _a v1 pe2) (* We do not immediately call eval on the result of subst_sym, as that could lead to non-termination. *)
     | Eif pe1 pe2 pe3 ->
         eval pe1 >>= function
           | Etrue  -> eval pe2
           | Efalse -> eval pe3
         end
-    | Ecall f pes -> eval (call_function file f pes)
+    | Ecall f pes -> U.return (call_function file f pes)  (* We do not immediately call eval on the result of call_function, as that could lead to non-termination. *)
 
 
 
@@ -744,7 +748,7 @@ let rec eval file pe =
     
     | Ewseq _as pe1 pe2 ->
         eval pe1 >>= fun v1 ->
-        eval (subst_syms _as v1 pe2)
+        U.return (subst_syms _as v1 pe2) (* We do not immediately call eval on the result of subst_syms, as that could lead to non-termination. *)
     
     
 (* TODO: temporary *)
@@ -781,11 +785,9 @@ open Operators
 val perform_create: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symbol.t ->
                     E.t (E.taction_id * expr E.taction_id)
 let perform_create bs tid_ pe pref = 
-  E.get_file                            >>= fun file        ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the create *)
-  E.runU (eval pe)                      >>= fun (Ectype ty) ->
+  E.return pe                           >>= fun (Ectype ty) ->
   get_new_taid                          >>= fun new_taid    ->
   create pref ty new_taid               >>= fun o           ->
   (* update the state with the new trace action *)
@@ -796,11 +798,9 @@ let perform_create bs tid_ pe pref =
 val perform_alloc: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symbol.t ->
                    E.t (E.taction_id * expr E.taction_id)
 let perform_alloc bs tid_ pe pref = 
-  E.get_file                            >>= fun file              ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the alloc *)
-  E.runU (eval pe)                      >>= fun (Econst (Cmm_aux.Cint n)) ->
+  E.return pe                           >>= fun (Econst (Cmm_aux.Cint n)) ->
   get_new_taid                          >>= fun new_taid          ->
   alloc pref n new_taid                 >>= fun o                 ->
   (* update the state with the new trace action *)
@@ -810,11 +810,9 @@ let perform_alloc bs tid_ pe pref =
 
 val perform_kill: set E.taction_id -> Cmm.tid -> expr E.taction_id -> E.t (E.taction_id * expr E.taction_id)
 let perform_kill bs tid_ pe = 
-  E.get_file                            >>= fun file      ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the kill *)
-  E.runU (eval pe)                      >>= fun (Eaddr o) ->
+  E.return pe                           >>= fun (Eaddr o) ->
   kill o                                >>
   (* update the state with the new trace action *)
   get_new_taid                          >>= fun new_taid  ->
@@ -825,14 +823,12 @@ let perform_kill bs tid_ pe =
 val perform_store: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> 
                    Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_store bs tid_ pe1 pe2 pe3 mo = 
-  E.get_file                                   >>= fun file        ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the store *)
-  E.runU (eval pe1)                            >>= fun (Ectype ty) ->
-  E.runU (eval pe2)                            >>= fun expr        ->
+  E.return pe1                                 >>= fun (Ectype ty) ->
+  E.return pe2                                 >>= fun expr        ->
   get_address expr                             >>= fun o           ->
-  E.runU (eval pe3)                            >>= function
+  E.return pe3                                 >>= function
    | Econst c -> E.return (Cmm_aux.Mbase c, Enull)
    | Eaddr o' -> E.return (Cmm_aux.Mobj o', Enull)
    | Enull    -> E.return (Cmm_aux.Mnull,   Eskip)
@@ -872,12 +868,10 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
 val perform_load: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.taction_id -> 
                    Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_load bs tid_ pe1 pe2 mo = 
-  E.get_file                                  >>= fun file                ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the load *)
-  E.runU (eval pe1)                           >>= fun (Ectype ty)         ->
-  E.runU (eval pe2)                           >>= fun expr                ->
+  E.return pe1                                >>= fun (Ectype ty)         ->
+  E.return pe2                                >>= fun expr                ->
   get_address expr                            >>= fun o                   ->
   load ty o                                   >>= fun (value, store_taid) ->
   (* update the state with the new trace action *)   
@@ -915,8 +909,6 @@ val perform_compare_exchange: (Cmm.cvalue -> Cmm.cvalue -> E.t bool) ->
                expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_succes mo_failure = 
-  E.get_file                                                          >>= fun file                       ->
-  let eval = eval file in
   let tid = Cmm_aux.canonize_tid tid_ in
   (* We first load (NA) from pe_expected *)
   perform_load bs tid_ pe_ty pe_expected Cmm.NA                       >>= fun (na_load_taid, expected_e) ->
@@ -926,10 +918,10 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
    | Enull    -> Cmm_aux.Mnull
   end in
   (* We (atomically load from the object *)
-  E.runU (eval pe_ty)                                                 >>= fun (Ectype ty)                ->
+  E.return pe_ty                                                      >>= fun (Ectype ty)                ->
   let atomic_ty = Atomic ty in
-  E.runU (eval pe_o)                                                  >>= get_address >>= fun o          ->
-  E.runU (eval pe_desired)                                            >>= fun desired_e                  ->
+  E.return pe_o                                                       >>= get_address >>= fun o          ->
+  E.return pe_desired                                                 >>= fun desired_e                  ->
   let desired_v = match desired_e with
    | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
@@ -1018,91 +1010,141 @@ let perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2 =
     [(U.return false, st)] in
   perform_compare_exchange cmp bs tid pe1 pe2 pe3 pe4 mo1 mo2
 
-val perform_action: set E.taction_id -> action_ E.taction_id -> Cmm.tid -> E.t (E.taction_id * expr E.taction_id)
-let perform_action bs act tid =
-  match act with
-    | Create pe pref                                -> perform_create bs tid pe pref
-    | Alloc pe pref                                 -> perform_alloc bs tid pe pref
-    | Kill pe                                       -> perform_kill bs tid pe
-    | Store pe1 pe2 pe3 mo                          -> perform_store bs tid pe1 pe2 pe3 mo
-    | Load pe1 pe2 mo                               -> perform_load bs tid pe1 pe2 mo
-    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 -> 
-          perform_compare_exchange_strong bs tid pe1 pe2 pe3 pe4 mo1 mo2
-    | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2   -> 
-          perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2
-  end
-
 
 
 (* NOTE: the assumption is made that an Eunseq cannot directly be the
          subexpression of an another Eunseq *)
 
-let red2_pos x =
+let red2_action x =
   match x with
-    | (Eaction (Paction Pos (Action bs a)), tid, _KS) ->
-        perform_action bs a tid                       >>= fun (aid, v) ->
-        push_trace (E.Rule_Pos, Just (bs, aid)) >>
-        E.return (v, tid, annotate (Pos, aid) _KS)
+    | (Eaction (Paction p (Action bs a)), tid, _KS) ->
+      let continue (aid, v) =
+        push_trace (if p = Pos then E.Rule_Pos else E.Rule_Neg, Just (bs, aid)) >> E.return (v, tid, annotate (p, aid) _KS) in
+      match a with
+        | Create pe pref ->
+          if is_value pe then
+            perform_create bs tid pe pref >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe) >>= fun pe' ->
+            E.return (Eaction (Paction p (Action bs (Create pe' pref))), tid, _KS)
+        | Alloc pe pref ->
+          if is_value pe then
+            perform_alloc bs tid pe pref >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe) >>= fun pe' ->
+            E.return (Eaction (Paction p (Action bs (Alloc pe' pref))), tid, _KS)
+        | Kill pe ->
+          if is_value pe then
+            perform_kill bs tid pe >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe) >>= fun pe' ->
+            E.return (Eaction (Paction p (Action bs (Kill pe'))), tid, _KS)
+        | Store pe1 pe2 pe3 mo ->
+          if is_value pe1 && is_value pe2 && is_value pe3 then
+            perform_store bs tid pe1 pe2 pe3 mo >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe1) >>= fun pe1' ->
+            E.runU (eval file pe2) >>= fun pe2' ->
+            E.runU (eval file pe3) >>= fun pe3' ->
+            E.return (Eaction (Paction p (Action bs (Store pe1' pe2' pe3' mo))), tid, _KS)
+        | Load pe1 pe2 mo ->
+          if is_value pe1 && is_value pe2 then
+            perform_load bs tid pe1 pe2 mo >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe1) >>= fun pe1' ->
+            E.runU (eval file pe2) >>= fun pe2' ->
+            E.return (Eaction (Paction p (Action bs (Load pe1' pe2' mo))), tid, _KS)
+        | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+          if is_value pe1 && is_value pe2 && is_value pe3 && is_value pe4 then
+            perform_compare_exchange_strong bs tid pe1 pe2 pe3 pe4 mo1 mo2 >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe1) >>= fun pe1' ->
+            E.runU (eval file pe2) >>= fun pe2' ->
+            E.runU (eval file pe3) >>= fun pe3' ->
+            E.runU (eval file pe4) >>= fun pe4' ->
+            E.return (Eaction (Paction p (Action bs (CompareExchangeStrong pe1' pe2' pe3' pe4' mo1 mo2))), tid, _KS)
+        | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
+          if is_value pe1 && is_value pe2 && is_value pe3 && is_value pe4 then
+            perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2 >>= continue
+          else
+            E.get_file >>= fun file ->
+            E.runU (eval file pe1) >>= fun pe1' ->
+            E.runU (eval file pe2) >>= fun pe2' ->
+            E.runU (eval file pe3) >>= fun pe3' ->
+            E.runU (eval file pe4) >>= fun pe4' ->
+            E.return (Eaction (Paction p (Action bs (CompareExchangeWeak pe1' pe2' pe3' pe4' mo1 mo2))), tid, _KS)
+      end
     | _ -> E.mzero
   end
 
-let red2_neg x =
-  match x with
-    | (Eaction (Paction Neg (Action bs a)), tid, _KS) ->
-        perform_action bs a tid                       >>= fun (aid, v)   ->
-        push_trace (E.Rule_Neg, Just (bs, aid)) >>
-        E.return (v, tid, annotate (Neg, aid) _KS)
-    | _ -> E.mzero
-  end 
-
-let red2_pure x =
+let red2_value x =
   match x with
     | (e, tid, [] :: _KS) ->
-        if is_pure e then
-          push_trace (E.Rule_Pure_Hole, Nothing) >>
-          E.get_file                     >>= fun file ->
-          E.runU (eval file e)           >>= fun v    ->
-          E.return (v, Cmm_aux.Tzero, _KS)
+        if is_value e then
+          push_trace (E.Rule_Pure_Hole, Nothing) >> E.return (e, Cmm_aux.Tzero, _KS)
         else
           E.mzero
     | (e, tid, _K :: _KS) ->
-        if is_pure e then
-          push_trace (E.Rule_Pure, Nothing) >>
-          E.get_file                >>= fun file ->
-          E.runU (eval file e)      >>= fun v    ->
-          E.return (apply_cont _K v, Cmm_aux.Tzero, [] :: _KS)
+        if is_value e then
+          push_trace (E.Rule_Pure, Nothing) >> E.return (apply_cont _K e, Cmm_aux.Tzero, [] :: _KS)
         else
           E.mzero
     | _ -> E.mzero
+  end
+
+let red2_pure x =
+  match x with
+    | (e, tid, _KS) ->
+        if is_pure e then
+          E.get_file                     >>= fun file ->
+          E.runU (eval file e)           >>= fun e'    ->
+          E.return (e', tid, _KS)
+        else
+          E.mzero
   end
 
 let red2_if x =
   match x with
     | (Eif pe e2 e3, tid, _KS) ->
-        E.get_file            >>= fun file ->
-        E.runU (eval file pe) >>= function
-          | Etrue  -> push_trace (E.Rule_If, Nothing) >> E.return (e2, tid, _KS)
-          | Efalse -> push_trace (E.Rule_If, Nothing) >> E.return (e3, tid, _KS)
-        end
-    | _ -> E.mzero
+        if is_value pe then
+          match pe with
+            | Etrue  -> push_trace (E.Rule_If, Nothing) >> E.return (e2, tid, _KS)
+            | Efalse -> push_trace (E.Rule_If, Nothing) >> E.return (e3, tid, _KS)
+          end
+        else
+          E.get_file            >>= fun file ->
+          E.runU (eval file pe) >>= fun pe' ->
+          E.return (Eif pe' e2 e3, tid, _KS)
+      | _ -> E.mzero
   end
 
 let red2_let x =
   match x with
     | (Elet _a pe1 e2, tid, _KS) ->
-        E.get_file               >>= fun file ->
-        E.runU (eval file pe1)   >>= fun v1      ->
-        push_trace (E.Rule_Let, Nothing) >> E.return (subst_sym _a v1 e2, tid, _KS)
+        if is_value pe1 then
+          push_trace (E.Rule_Let, Nothing) >> E.return (subst_sym _a pe1 e2, tid, _KS)
+        else
+          E.get_file               >>= fun file ->
+          E.runU (eval file pe1)   >>= fun pe1'      ->
+          E.return (Elet _a pe1' e2, tid, _KS)
     | _ -> E.mzero
   end
 
 let red2_ret x =
   match x with
     | (Eret pe, tid, _K :: _KS) ->
-          push_trace (E.Rule_Ret, Nothing) >>
-          E.get_file               >>= fun file ->
-          E.runU (eval file pe)    >>= fun v    ->
-          E.return (v, tid, _KS)
+          if is_value pe then
+            push_trace (E.Rule_Ret, Nothing) >> E.return (pe, tid, _KS)
+          else
+            E.get_file               >>= fun file ->
+            E.runU (eval file pe)    >>= fun pe'  ->
+            E.return (Eret pe', tid, _K :: _KS)
 
 
 (*
@@ -1168,17 +1210,20 @@ let red2_skip x =
 let red2_proc x =
   match x with
     | (Eproc bs f es, tid, _KS) ->
-        push_trace (E.Rule_Proc, Nothing)   >>
-        E.get_file                     >>= fun file    ->
-        E.runU (U.mapM (eval file) es) >>= fun vs      ->
-        call_proc f vs                 >>= fun f_body  ->
+        if all is_value es then
+          push_trace (E.Rule_Proc, Nothing)   >>
+(* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+          call_proc f es                 >>= fun f_body  ->
+          E.return (Set_helpers.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, tid, [] :: _KS)
+        else
+          E.get_file                     >>= fun file    ->
+          E.runU (U.mapM (eval file) es) >>= fun es'     ->
+          E.return (Eproc bs f es', tid, _KS)
 (*
 Boot.print_debug (Boot.pp_core_expr (Core.Etuple es)) $
 Boot.print_debug (Boot.pp_core_expr f_body) $
 *)
 
-(* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-        E.return (Set_helpers.fold (fun b e -> annotate_expr (Pos, b) e) bs f_body, tid, [] :: _KS)
     | _ -> E.mzero
   end
 
@@ -1188,13 +1233,16 @@ let red2_wseq x =
     | (Ewseq _ (Eaction (Paction Neg b)) e2, tid, _KS) ->
         E.mzero (* Leaving it to red2_neg_wseq *)
     | (Ewseq _as e1 e2, tid, _KS) ->
-        push_trace (E.Rule_Wseq, Nothing) >>
-          if is_pure e1 then
+          if is_value e1 then
+            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
+            push_trace (E.Rule_Wseq, Nothing) >> E.return (subst_syms _as e1 e2, Cmm_aux.Tseq tid, _KS)
+          else if is_pure e1 then
             E.get_file            >>= fun file ->
-            E.runU (eval file e1) >>= fun v1      ->
-            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr v1) $
-            E.return (subst_syms _as v1 e2, Cmm_aux.Tseq tid, _KS)
-          else match _KS with
+            E.runU (eval file e1) >>= fun e1'  ->
+            E.return (Ewseq _as e1' e2, tid, _KS)
+          else
+            push_trace (E.Rule_Wseq, Nothing) >>
+            match _KS with
             | _K :: _KS -> E.return (e1, Cmm_aux.Tseq tid, (Kwseq _as e2 :: _K) :: _KS)
             | []        -> E.return (e1, Cmm_aux.Tseq tid, [[Kwseq _as e2]])
           end
@@ -1227,13 +1275,16 @@ end
 let red2_sseq x =
   match x with
     | (Esseq _as e1 e2, tid, _KS) ->
-        push_trace (E.Rule_Sseq, Nothing) >>
-          if is_pure e1 then
-            E.get_file            >>= fun file ->
-            E.runU (eval file e1) >>= fun v1      ->
+          if is_value e1 then
             Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
-            E.return (subst_syms _as v1 e2, Cmm_aux.Tseq tid, _KS)
-          else match _KS with
+            push_trace (E.Rule_Sseq, Nothing) >> E.return (subst_syms _as e1 e2, Cmm_aux.Tseq tid, _KS)
+          else if is_pure e1 then
+            E.get_file            >>= fun file ->
+            E.runU (eval file e1) >>= fun e1'  ->
+            E.return (Esseq _as e1' e2, tid, _KS)
+          else
+            push_trace (E.Rule_Sseq, Nothing) >>
+            match _KS with
             | _K :: _KS -> E.return (e1, Cmm_aux.Tseq tid, (Ksseq _as e2 :: _K) :: _KS)
             | []        -> E.return (e1, Cmm_aux.Tseq tid, [[Ksseq _as e2]])
           end
@@ -1281,12 +1332,14 @@ let red2_save x =
 let red2_par x =
   match x with
     | (Epar es, tid, _K :: _KS) ->
-      push_trace (E.Rule_Par, Nothing) >>
-      if all is_pure es then
+      if all is_value es then
+        push_trace (E.Rule_Par, Nothing) >> E.return (Etuple es, tid, _K :: _KS)
+      else if all is_pure es then
         E.get_file                     >>= fun file ->
-        E.runU (U.mapM (eval file) es) >>= fun vs   ->
-        E.return (Etuple vs, tid, _K :: _KS)
+        E.runU (U.mapM (eval file) es) >>= fun es'  ->
+        E.return (Epar es', tid, _K :: _KS)
       else
+        push_trace (E.Rule_Par, Nothing) >>
         pick_one (not -| is_pure) es >>= fun (es1, ej, es2) ->
         Boot.print_debug ("ej = " ^ Boot.pp_core_expr ej) $ 
         E.return (ej, Cmm_aux.Tpar (List.length es1 + 1) tid, (Kpar es1 es2 :: _K) :: _KS)
@@ -1306,9 +1359,9 @@ val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
           E.t (expr E.taction_id * Cmm.tid * list (cont E.taction_id))
 let red2 e =
   E.dmsum [
-    red2_pure e; red2_skip e;
+    red2_value e; red2_pure e; red2_skip e;
     E.msum [
-      red2_pos e; red2_neg e; red2_unseq e;
+      red2_action e; red2_unseq e;
       red2_if e; red2_let e; red2_ret e;
       red2_proc e;
       red2_wseq e; red2_neg_wseq e;
@@ -1338,11 +1391,9 @@ let rec star_red2 x =
 in
   match x with
     | (e, tid, []) ->
-        if is_pure e then
+        if is_value e then
           get_fulltrace        >>= fun (tact_map, t) ->
-          E.get_file           >>= fun file          ->
-          E.runU (eval file e) >>= fun v             ->
-          E.return ((v, tid, []), (tact_map, t))
+          E.return ((e, tid, []), (tact_map, t))
         else
           continue
     
