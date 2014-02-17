@@ -599,8 +599,14 @@ end
 
 val     desugar_expression: C.expression -> E.t (A.expression unit)
 let rec desugar_expression e =
+  let one = A.AnnotatedExpression () (A.Constant (A.ConstantInteger (1, Nothing))) in
   A.AnnotatedExpression () <$>
   match e with
+  (* following (§6.5.3.1#2) *)
+  | C.UNARY C.PREINCR e ->
+      A.CompoundAssign <$> desugar_expression e <*> E.return A.Add <*> E.return one
+  | C.UNARY C.PREDECR e ->
+      A.CompoundAssign <$> desugar_expression e <*> E.return A.Sub <*> E.return one
   | C.UNARY uop e ->
       A.Unary (desugar_unary_operator uop) <$> desugar_expression e
   | C.BINARY C.ASSIGN e1 e2 ->
