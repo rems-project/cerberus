@@ -683,58 +683,92 @@ val     eval: forall 'a. file 'a -> expr 'a -> U.t (expr 'a)
 let rec eval file pe =
   let eval = eval file in
   match pe with
-    | Eundef u -> U.undef [u]
-    | Eerror   -> U.error
-    | Eop binop pe1 pe2 ->
-        eval pe1 >>= fun v1 ->
-        eval pe2 >>= fun v2 ->
-        U.return
-          match (binop, v1, v2) with
-            | (OpAdd, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 + n2)
-            | (OpSub, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 - n2)
-            | (OpMul, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 - n2)
-            | (OpDiv, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 div n2)
-            | (OpMod, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> Econst (Cmm_aux.Cint $ n1 mod n2)
-            | (OpEq,  Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> if n1  = n2  then Etrue else Efalse
-            | (OpEq,  Ectype ty1,       Ectype ty2       ) -> if ty1 = ty2 then Etrue else Efalse
-            | (OpLt,  Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2) ) -> if n1  < n2  then Etrue else Efalse
-            | (OpOr,  Efalse,           Efalse           ) -> Efalse
-            | (OpOr,  _,                _                ) -> Etrue
-            | (OpAnd, Etrue,            Etrue            ) -> Etrue
-            | (OpAnd, _,                _                ) -> Efalse
-            | (_,     v1,               v2               ) -> Boot.assert_false $ "[Core_run.eval] unmatched Eop: " (* TODO[newLem] ^ Boot.pp_core_expr (Eop binop v1 v2) *)
-          end
-    | Enot pe ->
-        eval pe >>= function
-          | Etrue  -> U.return Efalse
-          | Efalse -> U.return Etrue
+    | Eundef u ->
+        U.undef [u]
+    | Eerror ->
+        U.error
+    | Eop binop pe1 pe2 -> do U
+        pe1' <- eval pe1;
+        pe2' <- eval pe2; in
+          U.return $
+            if is_value pe1' && is_value pe2' then
+              match (binop, pe1', pe2') with
+                | (OpAdd, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    Econst (Cmm_aux.Cint $ n1 + n2)
+                | (OpSub, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    Econst (Cmm_aux.Cint $ n1 - n2)
+                | (OpMul, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    Econst (Cmm_aux.Cint $ n1 - n2)
+                | (OpDiv, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    Econst (Cmm_aux.Cint $ n1 div n2)
+                | (OpMod, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    Econst (Cmm_aux.Cint $ n1 mod n2)
+                | (OpEq,  Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    if n1 = n2 then Etrue else Efalse
+                | (OpEq, Ectype ty1, Ectype ty2) ->
+                    if ty1 = ty2 then Etrue else Efalse
+                | (OpLt, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
+                    if n1 < n2 then Etrue else Efalse
+                | (OpOr, Efalse, Efalse) ->
+                    Efalse
+                | (OpOr, _, _) ->
+                    Etrue
+                | (OpAnd, Etrue, Etrue ) ->
+                    Etrue
+                | (OpAnd, _, _) ->
+                    Efalse
+                | (_, _, _) ->
+                    Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eop binop pe1' pe2')
+              end
+            else
+              Eop binop pe1' pe2'
         end
-    | Elet _a pe1 pe2 ->
-        eval pe1 >>= fun v1 ->
-        U.return (subst_sym _a v1 pe2) (* We do not immediately call eval on the result of subst_sym, as that could lead to non-termination. *)
-    | Eif pe1 pe2 pe3 ->
-        eval pe1 >>= function
-          | Etrue  -> eval pe2
-          | Efalse -> eval pe3
+    | Enot pe -> do U
+        pe' <- eval pe; in
+          if is_value pe' then
+            match pe' with
+              | Etrue  -> U.return Efalse
+              | Efalse -> U.return Etrue
+              | _      -> Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Enot pe')
+            end
+          else
+            U.return (Enot pe')
         end
-    | Ecall f pes -> U.return (call_function file f pes)  (* We do not immediately call eval on the result of call_function, as that could lead to non-termination. *)
-
-
-
+    | Elet _a pe1 pe2 -> do U
+        pe1' <- eval pe1; in
+          if is_value pe1' then
+            U.return (subst_sym _a pe1' pe2) (* We do not immediately call eval on the result of subst_sym, as that could lead to non-termination. *)
+          else
+            U.return (Elet _a pe1' pe2)
+        end
+    | Eif pe1 pe2 pe3 -> do U
+        pe1' <- eval pe1; in
+          if is_value pe1' then
+            match pe1' with
+              | Etrue  -> eval pe2
+              | Efalse -> eval pe3
+              | _      -> Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eif pe1' pe2 pe3)
+            end
+          else
+            U.return (Eif pe1' pe2 pe3)
+        end
+    | Ecall f pes ->
+        U.return (call_function file f pes)  (* We do not immediately call eval on the result of call_function, as that could lead to non-termination. *)
 (* TODO: this may be very counter-intuitive, but we have it as a hack to remove skips comming from negative actions
-
 ==> probably need some trick during typing
-
 *)
-    | Eunseq pes ->
-        U.mapM eval pes >>= fun vs ->
-        U.return
-          match (* List.filter (fun (Left v) -> v <> Eskip) $ *) vs with
-            | []  -> Etuple [] (* HACK: better had a Eunit ctor *)
-            | [v] -> v
-            | vs  -> Etuple vs
+    | Eunseq pes -> do U
+        pes' <- U.mapM eval pes; in
+          U.return $
+            if all is_value pes' then
+              match (* List.filter (fun (Left v) -> v <> Eskip) $ *) pes' with
+                | []  -> Etuple [] (* HACK: better had a Eunit ctor *)
+                | [v] -> v
+                | vs  -> Etuple vs
+              end
+            else
+              Eunseq pes'
           end
-
 (*
         match List.filter (function Left _ -> false | Right _ -> true end) vs with
         | [] -> match (* List.filter (fun (Left v) -> v <> Eskip) $ *) vs with
@@ -746,28 +780,72 @@ let rec eval file pe =
       end
 *)
     
-    | Ewseq _as pe1 pe2 ->
-        eval pe1 >>= fun v1 ->
-        U.return (subst_syms _as v1 pe2) (* We do not immediately call eval on the result of subst_syms, as that could lead to non-termination. *)
-    
+    | Ewseq _as pe1 pe2 -> do U
+        pe1' <- eval pe1; in
+          U.return $
+            if is_value pe1' then
+              (subst_syms _as pe1' pe2) (* We do not immediately call eval on the result of subst_syms, as that could lead to non-termination. *)
+            else
+              Ewseq _as pe1' pe2
+        end
     
 (* TODO: temporary *)
-  | Eis_scalar pe ->
-      eval pe >>= fun (Ectype ty) ->
-      U.return (if AilTypesAux.scalar (unproj_ctype ty) then Etrue else Efalse)
-  | Eis_integer pe ->
-      eval pe >>= fun (Ectype ty) ->
-      U.return (if AilTypesAux.integer (unproj_ctype ty) then Etrue else Efalse)
-  | Eis_signed pe ->
-      eval pe >>= fun (Ectype ty) ->
-      U.return (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
-  | Eis_unsigned pe ->
-      eval pe >>= fun (Ectype ty) ->
-      U.return (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
-    
+  | Eis_scalar pe -> do U
+      pe' <- eval pe; in
+        if is_value pe' then
+          match pe' with
+            | Ectype ty ->
+                U.return (if AilTypesAux.scalar (unproj_ctype ty) then Etrue else Efalse)
+            | _ ->
+                Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eis_scalar pe')
+          end
+        else
+          U.return (Eis_scalar pe')
+      end
+
+  | Eis_integer pe -> do U
+      pe' <- eval pe; in
+        if is_value pe' then
+          match pe' with
+            | Ectype ty ->
+                U.return (if AilTypesAux.integer (unproj_ctype ty) then Etrue else Efalse)
+            | _ ->
+                Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eis_integer pe')
+          end
+        else
+          U.return (Eis_integer pe')
+      end
+  | Eis_signed pe -> do U
+      pe' <- eval pe; in
+        if is_value pe' then
+          match pe' with
+            | Ectype ty ->
+                U.return (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
+            | _ ->
+                Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eis_signed pe')
+          end
+        else
+          U.return (Eis_signed pe')
+      end
+  | Eis_unsigned pe -> do U
+      pe' <- eval pe; in
+        if is_value pe' then
+          match pe' with
+            | Ectype ty ->
+                U.return (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
+            | _ ->
+                Boot.assert_false $ "[Core_run.eval] the expression looks ill-typed: " ^ Boot.pp_core_expr (Eis_unsigned pe')
+          end
+        else
+          U.return (Eis_unsigned pe')
+      end
     
     (* If [pe] is not pure this is wrong, we should crash instead *)
-    | _ -> if is_value pe then U.return pe else Boot.assert_false $ "[Core_run.eval] found an impure expression or a symbol: " (* TODO[newLem] ^ Boot.pp_core_expr pe *)
+    | _ ->
+        if is_value pe then
+          U.return pe
+        else
+          Boot.assert_false $ "[Core_run.eval] found an impure expression or a symbol: " ^ Boot.pp_core_expr pe
   end
 
 
