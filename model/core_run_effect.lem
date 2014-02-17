@@ -29,13 +29,23 @@ let trace_action_kind_to_nat a =
 instance (SetType trace_action)
   let setElemCompare a1 a2 =
     match (a1, a2) with
-      | (Tcreate ct1 l1 t1, Tcreate ct2 l2 t2) -> setElemCompare (ct1, l1, t1) (ct2, l2, t2)
-      | (Talloc i1 l1 t1, Talloc i2 l2 t2) -> setElemCompare (i1, l1, t1) (i2, l2, t2)
-      | (Tkill l1 t1, Tkill l2 t2) -> setElemCompare (l1, t1) (l2, t2)
-      | (Tstore ct1 l1 cv1 mo1 t1, Tstore ct2 l2 cv2 mo2 t2) -> setElemCompare (ct1, l1, cv1, mo1, t1) (ct2, l2, cv2, mo2, t2)
-      | (Tload ct1 l1 cv1 mo1 t1, Tload ct2 l2 cv2 mo2 t2) -> setElemCompare (ct1, l1, cv1, mo1, t1) (ct2, l2, cv2, mo2, t2)
-      | (Trmw ct1 l1 cv1 cv1' mo1 t1, Trmw ct2 l2 cv2 cv2' mo2 t2) -> setElemCompare (ct1, l1, cv1, cv1', mo1, t1) (ct2, l2, cv2, cv2', mo2, t2)
-      | (_, _) -> setElemCompare (trace_action_kind_to_nat a1) (trace_action_kind_to_nat a2)
+      | (Tcreate ct1 l1 t1, Tcreate ct2 l2 t2) ->
+          tripleCompare setElemCompare setElemCompare setElemCompare (ct1, l1, t1) (ct2, l2, t2)
+      | (Talloc i1 l1 t1, Talloc i2 l2 t2) ->
+          tripleCompare setElemCompare setElemCompare setElemCompare (i1, l1, t1) (i2, l2, t2)
+      | (Tkill l1 t1, Tkill l2 t2) ->
+          pairCompare setElemCompare setElemCompare (l1, t1) (l2, t2)
+      | (Tstore ct1 l1 cv1 mo1 t1, Tstore ct2 l2 cv2 mo2 t2) ->
+          pairCompare (pairCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1), (cv1, mo1, t1)) ((ct2, l2), (cv2, mo2, t2))
+      | (Tload ct1 l1 cv1 mo1 t1, Tload ct2 l2 cv2 mo2 t2) ->
+          pairCompare (pairCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1), (cv1, mo1, t1)) ((ct2, l2), (cv2, mo2, t2))
+      | (Trmw ct1 l1 cv1 cv1' mo1 t1, Trmw ct2 l2 cv2 cv2' mo2 t2) ->
+          pairCompare (tripleCompare setElemCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1, cv1), (cv1', mo1, t1)) ((ct2, l2, cv2), (cv2', mo2, t2))
+      | (_, _) ->
+          setElemCompare (trace_action_kind_to_nat a1) (trace_action_kind_to_nat a2)
     end
 end
 
