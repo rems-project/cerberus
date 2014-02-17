@@ -698,7 +698,7 @@ let rec eval file pe =
                 | (OpSub, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
                     Econst (Cmm_aux.Cint $ n1 - n2)
                 | (OpMul, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
-                    Econst (Cmm_aux.Cint $ n1 - n2)
+                    Econst (Cmm_aux.Cint $ n1 * n2)
                 | (OpDiv, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
                     Econst (Cmm_aux.Cint $ n1 div n2)
                 | (OpMod, Econst (Cmm_aux.Cint n1), Econst (Cmm_aux.Cint n2)) ->
@@ -1455,9 +1455,11 @@ let rec star_red2 x =
   let continue =
     red2 x >>= fun (e, tid, _K) ->
 (* BEGIN: DEBUG *)
+(* TODO:
     get_trace >>= fun (r, _) ->
-    Boot.print_debug (E.string_of_rule r ^ " ==>\nE= " ^
-                     (Boot.pp_core_expr e) ^ "\nKS= " ^
+ *)
+    Boot.print_debug ((* E.string_of_rule r ^ *) " ==>\nE= " ^
+                     (Boot.pp_core_expr e) ^ "\nKS= "  ^
                      (foldl (fun acc k -> acc ^ string_of_cont k ^ "\n\n") "" $ _K) ^
                      "\n----------------------------------\n\n")
 
