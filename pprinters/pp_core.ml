@@ -90,7 +90,7 @@ let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implement
 let rec pp_core_base_type = function
   | Integer0      -> !^ "integer"
   | Boolean       -> !^ "boolean"
-  | Address0      -> !^ "address"
+  | Address       -> !^ "address"
   | Ctype         -> !^ "ctype"
   | CFunction     -> !^ "cfunction"
   | Unit          -> !^ "unit"

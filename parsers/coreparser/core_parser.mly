@@ -12,7 +12,7 @@ type expr =
   | Enull
   | Etrue
   | Efalse
-  | Econst of Cmm_aux.constant0
+  | Econst of Cmm_aux.constant
   | Ectype of Core_ctype.ctype0
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
@@ -646,7 +646,7 @@ core_base_type:
 | BOOLEAN
     { Core.Boolean }
 | ADDRESS
-    { Core.Address0 }
+    { Core.Address }
 | CTYPE
     { Core.Ctype }
 | UNIT

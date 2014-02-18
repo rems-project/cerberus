@@ -59,8 +59,8 @@ let debug_print str =
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
 let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_none m         = Exception.bind m (fun _ -> Exception.return1 None)
-let return_empty m        = Exception.bind m (fun _ -> Exception.return1 [])
+let return_none m         = Exception.bind m (fun _ -> Exception.return0 None)
+let return_empty m        = Exception.bind m (fun _ -> Exception.return0 [])
 
 
 let catch m =
@@ -173,7 +173,7 @@ let pipeline stdlib impl core_parse file_name =
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in
-          Exception.return1 (c_preprocessing m)
+          Exception.return0 (c_preprocessing m)
       >|> Exception.fmap Cparser_driver.parse
       >|> pass_message "1. Parsing completed!"
       >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
@@ -187,9 +187,8 @@ let pipeline stdlib impl core_parse file_name =
 
 
       >|> Exception.rbind (fun (counter, z) ->
-            Exception.bind (Exception.of_option (Location.dummy, Errors.CSEM_HIP "Ail Typing error")
-                                                (GenTyping.annotate_program Annotation.concrete_annotation z))
-                           (fun z -> Exception.return1 (counter, z))
+            Exception.bind (ErrorMonad.to_exception (GenTyping.annotate_program Annotation.concrete_annotation z))
+                           (fun z -> Exception.return0 (counter, z))
           )
       >|> pass_message "3. Ail typechecking completed!"
       

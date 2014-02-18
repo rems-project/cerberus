@@ -1,4 +1,4 @@
-open import Pervasives Common AilTypes AilSyntax Range OptionMonad
+open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
 open import GenTypes
 import AilTypesAux AilTyping
 
@@ -129,42 +129,42 @@ let usual_arithmetic gt1 gt2 =
   | (_ , _) -> Nothing
   end
 
-let rec interpret_genIntegerType P git : maybe integerType =
+let rec interpret_genIntegerType P git : errorM integerType =
   match git with
-  | Concrete it -> Just it
-  | SizeT -> Just P.Implementation.size_t
-  | PtrdiffT -> Just P.Implementation.ptrdiff_t
+  | Concrete it -> return it
+  | SizeT -> return P.Implementation.size_t
+  | PtrdiffT -> return P.Implementation.ptrdiff_t
   | Unknown ic -> AilTyping.type_of_constant P ic
   | Promote git ->
       interpret_genIntegerType P git >>= fun it ->
-      Just (AilTypesAux.integer_promotion P it)
+      return (AilTypesAux.integer_promotion P it)
   | Usual git1 git2 ->
       interpret_genIntegerType P git1 >>= fun it1 ->
       interpret_genIntegerType P git2 >>= fun it2 ->
-      Just (AilTypesAux.usual_arithmetic_integer P it1 it2)
+      return (AilTypesAux.usual_arithmetic_integer P it1 it2)
   end
 
-let interpret_genBasicType P gbt : maybe basicType =
+let interpret_genBasicType P gbt : errorM basicType =
   match gbt with
   | GenInteger git  -> interpret_genIntegerType P git >>= fun it ->
-                       Just (Integer it)
+                       return (Integer it)
   end
 
-let interpret_genType P gt : maybe ctype =
+let interpret_genType P gt : errorM ctype =
   match gt with
-  | GenVoid           -> Just Void
+  | GenVoid           -> return Void
   | GenBasic gbt      -> interpret_genBasicType P gbt >>= fun bt ->
-                         Just (Basic bt)
-  | GenArray    t n   -> Just (Array    t n)
-  | GenFunction t p b -> Just (Function t p b)
-  | GenPointer  q t   -> Just (Pointer  q t)
+                         return (Basic bt)
+  | GenArray    t n   -> return (Array    t n)
+  | GenFunction t p b -> return (Function t p b)
+  | GenPointer  q t   -> return (Pointer  q t)
   end
 
-let interpret_genTypeCategory P gt : maybe typeCategory =
+let interpret_genTypeCategory P gt : errorM typeCategory =
   match gt with
   | GenRValueType   gt -> interpret_genType P gt >>= fun t ->
-                          Just (RValueType   t)
-  | GenLValueType q t  -> Just (LValueType q t)
+                          return (RValueType   t)
+  | GenLValueType q t  -> return (LValueType q t)
   end
 
 let signed_integerSuffix (s : integerSuffix) : bool =

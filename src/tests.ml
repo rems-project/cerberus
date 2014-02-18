@@ -91,14 +91,14 @@ let error str =
 type execution_result_full = 
 (
   (
-    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t5 *
+    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t4 *
     Core_run_effect.state0
   ) list list,
-  Errors.t7
-) Exception.t1
+  Errors.t6
+) Exception.t0
 
 (* The type we use to compare results of executions *) 
-type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t5) Pset.set, Errors.t7) Exception.t1
+type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t4) Pset.set, Errors.t6) Exception.t0
 
 (* TODO: proper printing for Undef and error *)
 let pp_execution_result (result:execution_result) : string = 
@@ -132,7 +132,7 @@ let simplify_result (result : execution_result_full) : execution_result =
     | E.Exception s ->
         E.Exception s
 
-type test_result = (unit, string) Exception.t1
+type test_result = (unit, string) Exception.t0
 
 let compare_results (expected:execution_result) (actual_full:execution_result_full) : test_result =
   let actual: execution_result = simplify_result actual_full in

@@ -1,4 +1,4 @@
-open import Pervasives Global Range AilTypes
+open import Pervasives Common Global Range AilTypes
 
 
 type binaryMode =
@@ -25,6 +25,11 @@ let min_precision = function
   | Int_     -> 16
   | Long     -> 32
   | LongLong -> 64
+  (* TODO: check the following *)
+  | Int8_t   -> 8
+  | Int16_t  -> 16
+  | Int32_t  -> 32
+  | Int64_t  -> 64
 end
 
 type implementation = <|
@@ -103,6 +108,15 @@ let min_implementation_signed_char =
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
+
+        | Signed Int8_t     -> assert_false "TODO"
+        | Signed Int16_t    -> assert_false "TODO"
+        | Signed Int32_t    -> assert_false "TODO"
+        | Signed Int64_t    -> assert_false "TODO"
+        | Unsigned Int8_t   -> assert_false "TODO"
+        | Unsigned Int16_t  -> assert_false "TODO"
+        | Unsigned Int32_t  -> assert_false "TODO"
+        | Unsigned Int64_t  -> assert_false "TODO"
       end
     )
     (Unsigned Long)
@@ -132,6 +146,15 @@ let min_implementation_unsigned_char =
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
+        
+        | Signed Int8_t     -> assert_false "TODO"
+        | Signed Int16_t    -> assert_false "TODO"
+        | Signed Int32_t    -> assert_false "TODO"
+        | Signed Int64_t    -> assert_false "TODO"
+        | Unsigned Int8_t   -> assert_false "TODO"
+        | Unsigned Int16_t  -> assert_false "TODO"
+        | Unsigned Int32_t  -> assert_false "TODO"
+        | Unsigned Int64_t  -> assert_false "TODO"
       end
     )
     (Unsigned Long)

@@ -1,4 +1,4 @@
-open import Pervasives Common
+open import Pervasives Common ErrorMonad
 
 type context 'A 'B = list ('A * 'B)
 
@@ -99,17 +99,18 @@ let rec disjoint_bindings eq_A xs =
   | (a, _) :: xs -> fresh_in_bindings eq_A a xs && disjoint_bindings eq_A xs
   end
 
-val mapP_linear : forall 'A 'B1 'B2. ('A -> 'B1 -> maybe 'B2) -> context 'A 'B1 -> maybe (context 'A 'B2)
+val mapP_linear : forall 'A 'B1 'B2. ('A -> 'B1 -> errorM 'B2) -> context 'A 'B1 -> errorM (context 'A 'B2)
 let rec mapP_linear p C =
   match C with
-  | []           -> Just []
-  | (a, b1) :: C -> match (p a b1, mapP_linear p C) with
-                    | (Just b2, Just C) -> Just ((a, b2) :: C)
-                    | (_      , _     ) -> Nothing
-                    end
+    | [] ->
+        return []
+    | (a, b1) :: C ->
+        p a b1          >>= fun b2 ->
+        mapP_linear p C >>= fun C  ->
+        return ((a, b2) :: C)
   end
 
-val mapP : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> maybe 'B2) -> context 'A 'B1 -> maybe (context 'A 'B2)
+val mapP : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> errorM 'B2) -> context 'A 'B1 -> errorM (context 'A 'B2)
 let mapP eq_A p C =
   mapP_linear p (linearize eq_A C)
 
