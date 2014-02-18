@@ -1,10 +1,20 @@
 -- Math utilities
+
+
+-- TODO: diverges if m < 0
 fun exp (n: integer, m: integer) : integer :=
   if m = 0 then
     1
   else
     n * exp(n, m - 1)
 
+
+-- TODO: assumes n >= 0
+fun quot (n: integer, m: integer) : integer :=
+  if n < m then
+    0
+  else
+    1 + quot(n-m, m)
 
 
 
@@ -49,7 +59,7 @@ fun overflow (ty: ctype, n: integer) : integer :=
 fun conv_int (ty: ctype, n: integer): integer :=
   -- (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
   -- equal to 0; otherwise, the result is 1.
-  if ty = bool then
+  if ty = "_Bool" then
     if n = 0 then 0 else 1
   
   -- (§6.3.1.3#1) When a value with integer type is converted to another integer
@@ -97,7 +107,7 @@ fun conv_aux (ty: ctype, n: integer) : integer :=
 fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
   -- (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
   -- equal to 0; otherwise, the result is 1.
-  if is_scalar(ty1) /\ ty2 = bool then
+  if is_scalar(ty1) /\ ty2 = "_Bool" then
     if n = 0 then 0 else 1
   -- (§6.3.1.3#1) When a value with integer type is converted to another integer type other
   -- than _Bool, if the value can be represented by the new type, it is unchanged.
@@ -123,8 +133,8 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
 --  n
 
 
-fun usual_arithmetic (ty: ctype, ty: ctype): ctype :=
-  ty
+fun usual_arithmetic (ty1: ctype, ty2: ctype): ctype :=
+  ty1
 
 fun ctype_width (ty: ctype): integer :=
   <sizeof>(ty) * <bits_in_byte>
