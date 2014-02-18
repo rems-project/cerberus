@@ -7,33 +7,106 @@ def <bits_in_byte> : integer :=
 fun <ctype_min> (ty: ctype) : integer :=
   if ty = "char" then
     -128
-  else if ty = "_Bool" then
-    0 -- TODO: check
-  else if ty = "signed ichar" then
-    -128
-  else if ty = "unsigned ichar" then
-    0
-  else if ty = "signed short" then
-    -32768
-  else if ty = "unsigned short" then
-    0
-  else if ty = "signed int" then
-    -2147483648
-  else if ty = "unsigned int" then
-    0
-  else if ty = "signed long" then
-    -9223372036854775808
-  else if ty = "unsigned long" then
-    0
-  else if ty = "signed long_long" then
-    -9223372036854775808
-  else if ty = "unsigned long_long" then
-    0
   else
-    error -- TODO
-
+    if ty = "_Bool" then
+      0 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        -128
+      else
+        if ty = "unsigned ichar" then
+          0
+        else
+          if ty = "signed short" then
+            -32768
+          else
+            if ty = "unsigned short" then
+              0
+            else
+              if ty = "signed int" then
+                -2147483648
+              else
+                if ty = "unsigned int" then
+                  0
+                else
+                  if ty = "signed long" then
+                    -9223372036854775808
+                  else
+                    if ty = "unsigned long" then
+                      0
+                    else
+                      if ty = "signed long_long" then
+                        -9223372036854775808
+                      else
+                        if ty = "unsigned long_long" then
+                          0
+                        else
+                          error -- TODO
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
 
 fun <ctype_max> (ty: ctype) : integer :=
+  if ty = "char" then
+    127
+  else
+    if ty = "_Bool" then
+      1 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        127
+      else
+        if ty = "unsigned ichar" then
+          255
+        else
+          if ty = "signed short" then
+            32767
+          else
+            if ty = "unsigned short" then
+              65535
+            else
+              if ty = "signed int" then
+                2147483647
+              else
+                if ty = "unsigned int" then
+                  4294967295
+                else
+                  if ty = "signed long" then
+                    9223372036854775807
+                  else
+                    if ty = "unsigned long" then
+                      18446744073709551615
+                    else
+                      if ty = "signed long_long" then
+                        9223372036854775807
+                      else
+                        if ty = "unsigned long_long" then
+                          18446744073709551615
+                        else
+                          error -- TODO
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+{-
   if ty = "char" then
     127
   else if ty = "_Bool" then
@@ -60,38 +133,60 @@ fun <ctype_max> (ty: ctype) : integer :=
     18446744073709551615
   else
     error -- TODO
+-}
 
 
 fun <sizeof> (ty: ctype) : integer :=
   if ty = "char" then
     1
-  else if ty = "_Bool" then
-    1
-  else if ty = "signed ichar" then
-    1
-  else if ty = "unsigned ichar" then
-    1
-  else if ty = "signed short" then
-    2
-  else if ty = "unsigned short" then
-    2
-  else if ty = "signed int" then
-    4
-  else if ty = "unsigned int" then
-    4
-  else if ty = "signed long" then
-    8
-  else if ty = "unsigned long" then
-    8
-  else if ty = "signed long_long" then
-    8
-  else if ty = "unsigned long_long" then
-    8
   else
-    error -- TODO
-
-
-fun <alignof> (ty: ctype) : integer :=
+    if ty = "_Bool" then
+      1
+    else
+      if ty = "signed ichar" then
+        1
+      else
+        if ty = "unsigned ichar" then
+          1
+        else
+          if ty = "signed short" then
+            2
+          else
+            if ty = "unsigned short" then
+              2
+            else
+              if ty = "signed int" then
+                4
+              else
+                if ty = "unsigned int" then
+                  4
+                else
+                  if ty = "signed long" then
+                    8
+                  else
+                    if ty = "unsigned long" then
+                      8
+                    else
+                      if ty = "signed long_long" then
+                        8
+                      else
+                        if ty = "unsigned long_long" then
+                          8
+                        else
+                          error -- TODO
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+{-
   if ty = "char" then
     1
   else if ty = "_Bool" then
@@ -118,6 +213,87 @@ fun <alignof> (ty: ctype) : integer :=
     8
   else
     error -- TODO
+-}
+
+
+fun <alignof> (ty: ctype) : integer :=
+  if ty = "char" then
+    1
+  else
+    if ty = "_Bool" then
+      1
+    else
+      if ty = "signed ichar" then
+        1
+      else
+        if ty = "unsigned ichar" then
+          1
+        else
+          if ty = "signed short" then
+            2
+          else
+            if ty = "unsigned short" then
+              2
+            else
+              if ty = "signed int" then
+                4
+              else
+                if ty = "unsigned int" then
+                  4
+                else
+                  if ty = "signed long" then
+                    8
+                  else
+                    if ty = "unsigned long" then
+                      8
+                    else
+                      if ty = "signed long_long" then
+                        8
+                      else
+                        if ty = "unsigned long_long" then
+                          8
+                        else
+                          error -- TODO
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+{-
+  if ty = "char" then
+    1
+  else if ty = "_Bool" then
+    1
+  else if ty = "signed ichar" then
+    1
+  else if ty = "unsigned ichar" then
+    1
+  else if ty = "signed short" then
+    2
+  else if ty = "unsigned short" then
+    2
+  else if ty = "signed int" then
+    4
+  else if ty = "unsigned int" then
+    4
+  else if ty = "signed long" then
+    8
+  else if ty = "unsigned long" then
+    8
+  else if ty = "signed long_long" then
+    8
+  else if ty = "unsigned long_long" then
+    8
+  else
+    error -- TODO
+-}
 
 
 {-
