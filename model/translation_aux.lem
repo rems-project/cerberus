@@ -119,3 +119,15 @@ let ctype_of a_expr =
     | Just (AilTypes.LValueType _ ty) -> ty
     | Just (AilTypes.RValueType   ty) -> ty
   end
+
+
+val is_defined_ail_function: forall 'A 'B. AilSyntax.identifier -> AilSyntax.program 'A 'B -> bool
+let is_defined_ail_function id (_, defs) =
+  match List.lookup id defs with
+    | Nothing ->
+        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a non-declared identifier."
+    | Just (Right _) ->
+        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a global variable."
+    | Just (Left (_, s_opt)) ->
+        isJust s_opt
+  end

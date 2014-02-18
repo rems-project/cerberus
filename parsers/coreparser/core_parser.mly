@@ -26,7 +26,7 @@ type expr =
   | Eskip
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
-  | Eproc of string * expr list
+  | Eproc of name * expr list
 (* HIP
   | Ecase of expr *
              (expr * (* void *)
@@ -179,8 +179,10 @@ let convert_expr e arg_syms fsyms =
         Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
     | Eif (e1, e2, e3) ->
         Core.Eif (f st e1, f st e2, f st e3)
-    | Eproc (func, args) ->
-        Core.Eproc (Pset.empty compare, Pmap.find func fsyms, List.map (f st) args)
+    | Eproc (Impl func, args) ->
+        Core.Eproc (Pset.empty compare, Core.Impl func, List.map (f st) args)
+    | Eproc (Sym func, args) ->
+        Core.Eproc (Pset.empty compare, Core.Sym (Pmap.find func fsyms), List.map (f st) args)
     | Esame (e1, e2) ->
         Core.Esame (f st e1, f st e2)
     | Eaction pact ->
@@ -825,7 +827,7 @@ expr:
 | CASE_TY e= expr OF rs= case_rules END
     { Ecase (e, rs) }
 *)
-| f= SYM es= delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
+| f= name es= delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
     { Eproc (f, es) }
 (* HIP
   | Esame of expr 'a * expr 'a

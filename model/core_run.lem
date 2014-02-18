@@ -652,16 +652,20 @@ let call_function file fname args =
     (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
 
 
-val call_proc: sym -> list (expr E.taction_id) -> E.t (expr E.taction_id)
-let call_proc psym args =
-  E.get_proc psym >>= fun (_, params, fbody) ->
-  if List.length params <> List.length args then
-    Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
-  else
-    E.set_current_proc psym >>
-    E.return (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
-
-
+val call_proc: name -> list (expr E.taction_id) -> E.t (expr E.taction_id)
+let call_proc pname args =
+  match pname with
+    | Sym psym ->
+        E.get_proc psym >>= fun (_, params, fbody) ->
+        if List.length params <> List.length args then
+          Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
+        else
+          E.set_current_proc psym >>
+          E.return (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
+(*
+    | Impl (Implementation_.StdFunction "printf") ->
+ *)
+  end
 
 
 let rec collect_values v =
