@@ -449,9 +449,15 @@ let pp_program (startup, defs) =
   List.fold_left (fun acc ->
     function
       | (id, Left ((return_ty, params, is_variadic), body_opt)) ->
-          pp_ctype return_ty ^^^ pp_id id ^^ P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params) ^^^
-          P.optional pp_statement body_opt ^^ P.break 1 ^^ acc
+          pp_ctype return_ty ^^^ pp_id id ^^
+            P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params ^^
+              if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty
+            ) ^^
+          (match body_opt with
+             | Some body -> P.space ^^ pp_statement body
+             | None      -> P.semi
+          ) ^^ P.break 1 ^^ P.hardline ^^ acc
       | (id, Right (qs, ty, e_opt)) ->
           (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id ^^^
-          P.optional (fun e -> P.equals ^^^ pp_expression e) e_opt ^^ P.semi ^^ P.break 1 ^^ acc
+          P.optional (fun e -> P.equals ^^^ pp_expression e) e_opt ^^ P.semi ^^ P.break 1 ^^ P.hardline ^^ acc
   ) P.empty defs
