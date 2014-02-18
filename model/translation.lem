@@ -83,6 +83,7 @@ and translate_expression stdlib program a_expr =
   let overflow         = mk_stdcall "overflow"         in
   let ctype_width      = mk_stdcall "ctype_width"      in
   let exp              = mk_stdcall "exp"              in
+  let quot             = mk_stdcall "quot"             in
   let is_representable = mk_stdcall "is_representable" in
   let usual_arithmetic = mk_stdcall "usual_arithmetic" in
   let usual_arithmetic_conv e ty1 ty2 =
@@ -363,8 +364,27 @@ and translate_expression stdlib program a_expr =
             )
             )
       
-      | A.Binary e1 (A.Arithmetic A.Shr) e2 -> 
-          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SHR) e1 e2: TODO(has an implementation defined case)"
+      (* see §6.5.7#5 *)
+      | A.Binary e1 (A.Arithmetic A.Shr) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          E.fresh_symbol >>= fun a_res   ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+              (let expr = quot [C.Esym a_e1; exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]] in
+               if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                 (* If E1 has an unsigned type *)
+                 expr
+               else
+                 (* or if E1 has a signed type and a nonnegative value [...]
+                    If E1 has a signed type and a negative value, the resulting
+                    value is implementation-defined. *)
+                 C.Eif (C.Eop C.OpLt (C.Esym a_e1) Caux.zero)
+                   (C.Ecall (C.Impl Implementation_.SHR_signed_negative) [C.Esym a_e1; C.Esym a_e2])
+                   expr)
       
       | A.Binary e1 (A.Arithmetic A.Band) e2 ->
           Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
@@ -607,6 +627,9 @@ and translate_expression stdlib program a_expr =
       
       | A.Constant (A.ConstantInteger (i, _)) ->
           return (C.Econst $ Cmm_aux.Cint i)
+
+      | A.Constant (A.ConstantString str) ->
+          return (C.Econst $ Cmm_aux.Cint 0) (* TODO!!!!!!!! *)
       
       
       | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> return Caux.one
@@ -1003,7 +1026,6 @@ let translate_program stdlib ((startup_id, defs) as program) =
   E.foldlM (fun acc (fun_id, ((_, fun_args, is_variadic), fun_body_opt)) ->
     match fun_body_opt with
       | Just fun_body ->
-          Boot.print_debug ("translate_function> " ^ Boot.pp_core_expr (C.Esym fun_id : Core.expr zero)) $
           (* making the argument variables visible *)
           E.push_block_objects (List.map fst fun_args) >>
           
