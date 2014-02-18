@@ -15,7 +15,7 @@ let keywords =
       ("int",         T.INT);
       ("long",        T.LONG);
       ("long_long",   T.LONG_LONG);
-      ("bool",        T.BOOL);
+      ("_Bool",       T.BOOL);
       ("signed",      T.SIGNED);
       ("unsigned",    T.UNSIGNED);
       ("float",       T.FLOAT);
@@ -34,37 +34,68 @@ let keywords =
       ("char16_t",    T.CHAR16_T);
       ("char32_t",    T.CHAR32_T);
       
-      ("def",     T.DEF     ); (* for implementation files only *)
-      ("integer", T.INTEGER );
-      ("boolean", T.BOOLEAN );
-      ("address", T.ADDRESS );
-      ("ctype",   T.CTYPE   );
-      ("unit",    T.UNIT    );
-      ("skip",    T.SKIP    );
-      ("not",     T.NOT     );
-      ("true",    T.TRUE    );
-      ("false",   T.FALSE   );
-      ("let",     T.LET     );
-      ("in",      T.IN      );
-      ("fun",     T.FUN     );
-      ("proc",    T.FUN     );
-      ("end",     T.END     );
-      ("create",  T.CREATE  );
-      ("alloc",   T.ALLOC   );
-      ("kill",    T.KILL    );
-      ("store",   T.STORE   );
-      ("load",    T.LOAD    );
+      (* for Core.core_base_type *)
+      ("integer",  T.INTEGER  );
+      ("boolean",  T.BOOLEAN  );
+      ("address",  T.ADDRESS  );
+      ("ctype",    T.CTYPE    );
+      ("unit",     T.UNIT     );
+      ("function", T.FUNCTION );
+(*    | Tuple of list core_base_type *)
+      
+      (* for Core.expr *)
+      ("null",   T.NULL     );
+      ("true",   T.TRUE);
+      ("false",  T.FALSE);
+(*  | Econst of Cmm_aux.constant *)
+(*  | Ectype of ctype *)
+(*  | Eaddr of Memory.mem_addr *)
+(*  | Esym of sym *)
+(*  | Eimpl of Implementation_.implementation_constant *)
+(*  | Etuple of list (expr 'a) *)
+      ("not", T.NOT);
+(*  | Eop of binop * expr 'a * expr 'a *)
+(*  | Ecall of name * list (expr 'a) *)
+      ("undef", T.UNDEF);
+      ("error", T.ERROR);
+      ("skip", T.SKIP);
+      ("let", T.LET);
+      ("in", T.IN);
+      ("if", T.IF);
+      ("then", T.THEN);
+      ("else", T.ELSE);
+(*  | Eproc of set 'a * name * list (expr 'a) *)
+(*  | Eaction of paction 'a *)
+(*  | Eunseq of list (expr 'a) *)
+      ("weak", T.WEAK);
+      ("strong", T.STRONG);
+      ("atom", T.ATOM);
+      ("save", T.SAVE);
+      ("run", T.RUN);
+      ("indet", T.INDET);
+      ("return", T.RETURN);
+  
+(*  | End of list (expr 'a) *)
+(*  | Epar of list (expr 'a) *)
+
+      
+      (* for Core.action_ *)
+      ("create",                  T.CREATE                 );
+      ("alloc",                   T.ALLOC                  );
+      ("kill",                    T.KILL                   );
+      ("store",                   T.STORE                  );
+      ("load",                    T.LOAD                   );
       ("compare_exchange_strong", T.COMPARE_EXCHANGE_STRONG);
-      ("compare_exchange_weak",   T.COMPARE_EXCHANGE_WEAK);
-      ("same",    T.SAME    );
-      ("undef",   T.UNDEF   );
-      ("error",   T.ERROR   );
-      ("if",      T.IF      );
-      ("then",    T.THEN    );
-      ("else",    T.ELSE    );
-      ("ret",     T.RET     );
-      ("save",    T.SAVE    );
-      ("run",     T.RUN     );
+      ("compare_exchange_weak",   T.COMPARE_EXCHANGE_WEAK  );
+
+      
+      
+      ("def",     T.DEF     ); (* for implementation files only *)
+      ("fun",     T.FUN     );
+      ("proc",    T.PROC     );
+      
+      
+      ("end",     T.END     );
       ("case",    T.CASE    );
       ("of",      T.OF      );
       ("seq_cst", T.SEQ_CST );
@@ -73,6 +104,14 @@ let keywords =
       ("acquire", T.ACQUIRE );
       ("consume", T.CONSUME );
       ("acq_rel", T.ACQ_REL );
+
+      ("case_ty",   T.CASE_TY         );
+      ("Signed",    T.SIGNED_PATTERN  );
+      ("Unsigned",  T.UNSIGNED_PATTERN);
+      ("Array",     T.ARRAY_PATTERN   );
+      ("Pointer",   T.POINTER_PATTERN );
+      ("Atomic",    T.ATOMIC_PATTERN  );
+
 
 (* TODO: temporary *)
       ("is_scalar",   T.IS_SCALAR  );
@@ -94,6 +133,16 @@ let scan_impl lexbuf =
     T.IMPL (Pmap.find id Implementation_.impl_map)
   with Not_found ->
     failwith "Found an invalid impl_name."
+
+let scan_ub lexbuf =
+  let id = Lexing.lexeme lexbuf in
+  try
+    T.UB (Pmap.find id Undefined.ub_map)
+  with Not_found ->
+    failwith "Found an invalid undefined-behaviour."
+
+
+
 
 let lex_comment remainder lexbuf =
   let ch = Lexing.lexeme_char lexbuf 0 in
@@ -140,19 +189,13 @@ rule main = parse
   (* negative action *)
   | '~' { T.TILDE }
   
-  (* sequencing operators *)
   | "||"  { T.PIPE_PIPE }
-  | ';'   { T.SEMICOLON }
-  | ">>"  { T.GT_GT }
-  | "|>"  { T.PIPE_GT }
-  
   | "|||"  { T.PIPES }
   
   (* pattern symbols *)
   | "_"  { T.UNDERSCORE }
   
   | "| "  { T.PIPE }
-  | "<- " { T.LT_MINUS }
   | "-> " { T.MINUS_GT }
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
@@ -165,9 +208,14 @@ rule main = parse
   | '<'	  { T.LANGLE }
   | '>'	  { T.RANGLE }
   | '.'   { T.DOT }
+  | "..." { T.DOTS }
   | ','   { T.COMMA }
   | ':'   { T.COLON }
   | ":="  { T.COLON_EQ }
+  | "\""  { T.DQUOTE }
+  
+  | "=> " { T.EQ_GT }
+
 
   | impl_name { scan_impl lexbuf }
   | symbolic_name { scan_sym lexbuf }

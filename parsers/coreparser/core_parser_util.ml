@@ -7,50 +7,142 @@ type result =
   | Rimpl of zero Core.impl
 
 
-type token = 
-  | WCHAR_T
-  | VOID
+type token =
+  | ATOMIC
+  | SHORT
+  | INT
+  | LONG
+  | LONG_LONG
+  | BOOL
+  | SIGNED
   | UNSIGNED
-  | UNIT
+  | FLOAT
+  | DOUBLE
+  | LONG_DOUBLE
+  | CHAR
+  | ICHAR
+  | VOID
+  | STRUCT
   | UNION
+  | ENUM
+  | SIZE_T
+  | INTPTR_T
+  | WCHAR_T
+  | CHAR16_T
+  | CHAR32_T
+  | INTEGER
+  | BOOLEAN
+  | ADDRESS
+  | CTYPE
+  | UNIT
+  | FUNCTION
+  | NULL
+  | TRUE
+  | FALSE
+  | NOT
+  | UNDEF
+  | ERROR
+  | SKIP
+  | LET
+  | IN
+  | IF
+  | THEN
+  | ELSE
+  | WEAK
+  | STRONG
+  | ATOM
+  | SAVE
+  | RUN
+  | RETURN
+  | INDET
+  | CREATE
+  | ALLOC
+  | KILL
+  | STORE
+  | LOAD
+  | COMPARE_EXCHANGE_STRONG
+  | COMPARE_EXCHANGE_WEAK
+  | DEF
+  | FUN
+  | PROC
+  | END
+  | CASE
+  | OF
+  | SEQ_CST
+  | RELAXED
+  | RELEASE
+  | ACQUIRE
+  | CONSUME
+  | ACQ_REL
+  | IS_SCALAR
+  | IS_INTEGER
+  | IS_SIGNED
+  | IS_UNSIGNED
+
+  | SYM of string
+  | IMPL of Implementation_.implementation_constant
+  | UB of Undefined.undefined_behaviour
+  | INT_CONST of Big_int.big_int
+  
+  | DQUOTE
+  
+  | CASE_TY
+  | SIGNED_PATTERN
+  | UNSIGNED_PATTERN
+  | ARRAY_PATTERN
+  | POINTER_PATTERN
+  | ATOMIC_PATTERN
+  | EQ_GT
+
+  | PLUS
+  | MINUS
+  | STAR
+  | SLASH
+  | PERCENT
+  | EQ
+  | LT
+  | LE
+  | SLASH_BACKSLASH
+  | BACKSLASH_SLASH
+  | TILDE
+  | PIPES
   | UNDERSCORE
+  | PIPE
+  | MINUS_GT
+  | LPAREN
+  | RPAREN
+  | LBRACE
+  | RBRACE
+  | LBRACES
+  | RBRACES
+  | LBRACKET
+  | RBRACKET
+  | LANGLE
+  | RANGLE
+  | DOT
+  | DOTS
+  | COMMA
+  | COLON
+  | COLON_EQ
+  | EOF
+  | SEMICOLON
+  | PIPE_PIPE
+
+
+(*
+  | UNION
   | UNDEF
   | TRUE
-  | TILDE
   | THEN
-  | SYM of string
   | STRUCT
   | STORE
-  | STAR
-  | SLASH_BACKSLASH
-  | SLASH
   | SKIP
   | SIZE_T
   | SIGNED
   | SHORT
-  | SEMICOLON
-  | SAVE
-  | SAME
-  | RUN
-  | RPAREN
-  | RET
-  | RBRACKET
-  | RBRACE
-  | RANGLE
-  | PROC
-  | PLUS
-  | PIPE_PIPE
-  | PIPE_GT
-  | PIPE
-  | PERCENT
   | OF
   | NOT
   | NAME of Core.name
-  | MINUS_GT
-  | MINUS
-  | LT_MINUS
-  | LT
-  | LPAREN
   | LONG_LONG
   | LONG_DOUBLE
   | LONG
@@ -58,59 +150,28 @@ type token =
   | COMPARE_EXCHANGE_STRONG
   | COMPARE_EXCHANGE_WEAK
   | LET
-  | LE
-  | LBRACKET
-  | LBRACE
-  | LANGLE
   | KILL
-  | INT_CONST of Big_int.big_int
-  | INTPTR_T
-  | INTEGER
   | INT
   | IN
-  | IMPL of Implementation_.implementation_constant
   | IF
   | ICHAR
-  | GT_GT
   | FUN
-  | FLOAT
-  | FALSE
   | EXCLAM
   | ERROR
-  | EQ
-  | EOF
   | ENUM
   | END
   | ELSE
   | DOUBLE
-  | DOT
   | DEF
   | CTYPE
   | CREATE
   | COMPLEX
-  | COMMA
-  | COLON_EQ
-  | COLON
   | CHAR32_T
   | CHAR16_T
   | CHAR
   | CASE
   | BOOLEAN
   | BOOL
-  | BACKSLASH_SLASH
-  | ATOMIC
   | ALLOC
   | ADDRESS
-  | IS_SCALAR
-  | IS_INTEGER
-  | IS_SIGNED
-  | IS_UNSIGNED
-  | SEQ_CST
-  | RELAXED
-  | RELEASE
-  | ACQUIRE
-  | CONSUME
-  | ACQ_REL
-  | LBRACES
-  | RBRACES
-  | PIPES
+ *)
