@@ -407,7 +407,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 %left PLUS MINUS
 %left STAR SLASH PERCENT
 
-%right ELSE (* TODO: CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(* %right ELSE (* TODO: CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *) *)
 
 
 (* HIP
@@ -821,7 +821,7 @@ expr:
     { Eskip }
 | LET a= SYM EQ e1= expr IN e2= expr END
     { Elet (a, e1, e2) }
-| IF b= expr THEN e1= expr ELSE e2= expr
+| IF b= expr THEN e1= expr ELSE e2= expr END
     { Eif (b, e1, e2) }
 (* HIP
 | CASE_TY e= expr OF rs= case_rules END
