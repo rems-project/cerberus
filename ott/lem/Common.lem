@@ -1,5 +1,10 @@
 open import Pervasives Either
 
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
 val option_bool : forall 'A. maybe 'A -> ('A -> bool) -> bool
 let option_bool =
   fun o f ->

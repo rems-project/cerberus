@@ -27,6 +27,10 @@ val equiv_annotation_program: forall 'A1 'A2 'A2' 'B.
                               program 'B 'A1 -> program 'B 'A2          ->
                               maybe (program 'B 'A2')
 
+(* TODO
+
+
+
 (* ======= *)
 
 let rec equiv_annotation_arguments_aux (A : annotation 'A1 'A2) (A' : annotation 'A1 'A2') equiv_annotation_expression (a1 : list (expression 'A1)) (a2 : list (expression 'A2)) : maybe (list (expression 'A2')) =
@@ -285,3 +289,9 @@ let equiv_annotation_program A A' p1 p2 =
     Just (v1, S)
   else
     Nothing
+
+
+
+
+
+ *)

@@ -1,4 +1,4 @@
-open import Pervasives Common AilTypes Implementation
+open import Pervasives Common AilTypes Implementation ErrorMonad TypingError
 
 let unqualified qs =
   match qs with
@@ -384,6 +384,7 @@ let rec compatible_params_aux compatible p1 p2 : bool =
   | (_            , _            ) -> false
   end
 
+(* (§6.2.7) Compatible type *)
 let rec compatible t1 t2 : bool =
   let compatible_params = compatible_params_aux compatible in
   match (t1, t2) with
@@ -429,6 +430,7 @@ let rec composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))
     | (_            , _            ) -> Nothing
     end
 
+(* (§6.2.7#3) composite type *)
 let rec composite t1 t2 : maybe ctype =
   let composite_params = composite_params_aux composite in
   match (t1, t2) with
@@ -480,13 +482,13 @@ let lvalue_convertible ty : bool =
   not (array ty) && complete ty
 
 (* following (§6.3.2.1)#2 and #3 *)
-let lvalue_coercion ty : maybe ctype =
+let lvalue_coercion ty : errorM ctype =
   if lvalue_convertible ty then
-    Just ty
+    return ty
   else if array ty then
-    Just (array_coercion ty)
+    return (array_coercion ty)
   else
-    Nothing
+    fail (TError_TODO 1)
 
 (* following (§6.3.2.1)#3 and #4 *)
 let rvalue_coercion ty : ctype =

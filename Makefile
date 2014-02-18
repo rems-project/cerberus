@@ -38,6 +38,8 @@ CMM_FILE=\
 AIL_FILES=\
   Common.lem \
   OptionMonad.lem \
+  TypingError.lem \
+  ErrorMonad.lem \
   Range.lem \
   AilTypes.lem \
   Implementation.lem \

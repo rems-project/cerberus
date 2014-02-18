@@ -1,4 +1,4 @@
-open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf OptionMonad
+open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf ErrorMonad TypingError
 
 open import GenTypes GenTypesAux Annotation
 
@@ -10,15 +10,119 @@ Local Notation "'do' ( x , y ) <- m ; c" = (m >>= (fun p -> let (x, y) = p in c)
     (at level 60, right associativity, x ident, y ident).
 *)
 
-let annotate_rvalue_aux (A : annotation 'A1 'A2) (annotate_expression : expression 'A1 -> maybe (expression 'A2)) e =
+
+
+val annotate_rvalue_aux: forall 'A1 'A2.
+                         annotation 'A1 'A2 -> (expression 'A1 -> errorM (expression 'A2)) ->
+                         expression 'A1                                                    ->
+                         errorM (expression 'A2 * genType)
+
+val type_of_constant: integerConstant -> genIntegerType
+
+
+val annotate_assignee_aux: forall 'A1 'A2.
+                           (expression 'A1 -> errorM (expression 'A2 * genType)) ->
+                           ctype -> expression 'A1 ->
+                           errorM (expression 'A2)
+
+
+
+
+
+
+
+val annotate_expression': forall 'A1 'A2 'B1 'B2.
+                          annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                          expression' 'A1                              ->
+                          errorM (expression' 'A2 * genTypeCategory)
+
+val annotate_expression: forall 'A1 'A2 'B1 'B2.
+                         annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                         expression 'A1                               ->
+                         errorM (expression 'A2)
+
+val annotate_rvalue: forall 'A1 'A2 'B1 'B2.
+                     annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                     expression 'A1                               ->
+                     errorM (expression 'A2 * genType)
+
+val annotate_assignee: forall 'A1 'A2 'B1 'B2.
+                       annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                       ctype -> expression 'A1                      ->
+                       errorM (expression 'A2)
+
+val annotate_arguments: forall 'A1 'A2 'B1 'B2.
+                        annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma       ->
+                        bool                                               ->
+                        list (expression 'A1) -> list (qualifiers * ctype) ->
+                        errorM (list (expression 'A2))
+
+val annotate_block_aux: forall 'A1 'A2 'B.
+                        annotation 'A1 'A2                              ->
+                        (statement 'B 'A1 -> errorM (statement 'B 'A2)) ->
+                        list (statement 'B 'A1)                         ->
+                        errorM (list (statement 'B 'A2))
+
+val annotate_definition: forall 'A1 'A2 'B1 'B2.
+                         annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                         identifier * expression 'A1                  ->
+                         errorM (identifier * expression 'A2)
+
+val annotate_definitions: forall 'A1 'A2 'B1 'B2.
+                          annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma ->
+                          list (identifier * (expression 'A1))         ->
+                          errorM (list (identifier * expression 'A2))
+
+val annotate_statement': forall 'A1 'A2 'B1 'B2 'B.
+                         annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma -> ctype ->
+                         statement' 'B 'A1                                     ->
+                         errorM (statement' 'B 'A2)
+
+val annotate_statement: forall 'A1 'A2 'B1 'B2 'B.
+                        annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma -> ctype ->
+                        statement 'B 'A1                                      ->
+                        errorM (statement 'B 'A2)
+
+val annotate_block: forall 'A1 'A2 'B1 'B2 'B.
+                    annotation 'A1 'A2 -> sigma 'B1 'B2 -> gamma -> ctype ->
+                    list (statement 'B 'A1)                               ->
+                    errorM (list (statement 'B 'A2))
+
+val annotate_function: forall 'A1 'A2 'B1 'B2 'B.
+                       annotation 'A1 'A2 ->
+                       sigma 'B1 'B2 ->
+                       (ctype * bindings * bool) * maybe (statement 'B 'A1) ->
+                       errorM ((ctype * bindings * bool) * maybe (statement 'B 'A2))
+
+val annotate_global: forall 'A1 'A2 'B1 'B2 'B.
+                     annotation 'A1 'A2 ->
+                     sigma 'B1 'B2      ->
+                     qualifiers * ctype * maybe (expression 'A1) ->
+                     errorM (qualifiers * ctype * maybe (expression 'A2))
+
+val annotate_sigma: forall 'A1 'A2 'B.
+                    annotation 'A1 'A2 -> sigma 'B 'A1 ->
+                    errorM (sigma 'B 'A2)
+
+val annotate_program: forall 'A1 'A2 'B.
+                      annotation 'A1 'A2 -> program 'B 'A1 ->
+                      errorM (program 'B 'A2)
+
+
+(* ============== *)
+
+let annotate_rvalue_aux A annotate_expression e =
   annotate_expression e >>= fun e ->
   match type_of A e with
-  | GenRValueType   gt -> Just (e, rvalue_coercion gt)
-  | GenLValueType _ t  -> AilTypesAux.lvalue_coercion t >>= fun t' ->
-                          Just (e, inject_type t')
+    | GenRValueType gty ->
+        return (e, rvalue_coercion gty)
+    | GenLValueType _ ty ->
+        AilTypesAux.lvalue_coercion ty >>= fun ty' ->
+        return (e, inject_type ty')
   end
 
-let type_of_constant ic : genIntegerType =
+
+let type_of_constant ic =
   match ic with
   | (n, Nothing) ->
       if AilTypesAux.in_min_integer_range n (Signed Int_) then
@@ -44,16 +148,24 @@ let type_of_constant ic : genIntegerType =
       Concrete (Signed LongLong)
   | (_, Just ULL) ->
       Concrete (Unsigned LongLong)
-  end
+end
+
 
 let well_typed_assignment t1 gt2 null2 =
   match (t1, gt2) with
-  | (Pointer q1 t1, GenPointer q2 t2) -> null2 ||
-                                       AilTypesAux.sub_qualifiers q2 q1 && (AilTypesAux.compatible t1 t2 || AilTypesAux.void t1 && AilTypesAux.object_ t2 || AilTypesAux.void t2 && AilTypesAux.object_ t1)
-  | (Pointer _  _ , _               ) -> null2
-  | (_            , GenPointer _  _ ) -> AilTypesAux.boolean t1
-  | (_            , _               ) -> AilTypesAux.arithmetic t1 && arithmetic gt2
+    | (Pointer q1 t1, GenPointer q2 t2) ->
+           null2
+        || AilTypesAux.sub_qualifiers q2 q1 && (   AilTypesAux.compatible t1 t2
+                                                || AilTypesAux.void t1 && AilTypesAux.object_ t2
+                                                || AilTypesAux.void t2 && AilTypesAux.object_ t1)
+    | (Pointer _  _, _) ->
+        null2
+    | (_, GenPointer _  _) ->
+        AilTypesAux.boolean t1
+    | (_, _) ->
+        AilTypesAux.arithmetic t1 && arithmetic gt2
   end
+
 
 let well_typed_equality gt1 gt2 is_null1 is_null2 : bool =
      pointer gt1 && is_null2
@@ -63,91 +175,152 @@ let well_typed_equality gt1 gt2 is_null1 is_null2 : bool =
   || pointers_to_compatible_types gt1 gt2
   || arithmetic gt1 && arithmetic gt2
 
+
 let well_typed_binary_arithmetic gt1 aop gt2 : bool =
   match aop with
-  | Mul  -> arithmetic gt1 && arithmetic gt2
-  | Div  -> arithmetic gt1 && arithmetic gt2
-  | Mod  -> integer    gt1 && integer    gt2
-  | Add  -> arithmetic gt1 && arithmetic gt2
-  | Sub  -> arithmetic gt1 && arithmetic gt2
-  | Shl  -> integer    gt1 && integer    gt2
-  | Shr  -> integer    gt1 && integer    gt2
-  | Band -> integer    gt1 && integer    gt2
-  | Xor  -> integer    gt1 && integer    gt2
-  | Bor  -> integer    gt1 && integer    gt2
+    | Mul  -> arithmetic gt1 && arithmetic gt2
+    | Div  -> arithmetic gt1 && arithmetic gt2
+    | Mod  -> integer    gt1 && integer    gt2
+    | Add  -> arithmetic gt1 && arithmetic gt2
+    | Sub  -> arithmetic gt1 && arithmetic gt2
+    | Shl  -> integer    gt1 && integer    gt2
+    | Shr  -> integer    gt1 && integer    gt2
+    | Band -> integer    gt1 && integer    gt2
+    | Xor  -> integer    gt1 && integer    gt2
+    | Bor  -> integer    gt1 && integer    gt2
   end
+
 
 let combine_qualifiers_left gt1 gt2 : genType =
   match (gt1, gt2) with
-  | (GenPointer q1 t1, GenPointer q2 _) -> GenPointer (AilTypesAux.combine_qualifiers q1 q2) t1
-  | (GenPointer _  _ , _              ) -> gt1
-  | (_               , _              ) -> gt1
+    | (GenPointer q1 t1, GenPointer q2 _) -> GenPointer (AilTypesAux.combine_qualifiers q1 q2) t1
+    | (GenPointer _  _ , _              ) -> gt1
+    | (_               , _              ) -> gt1
   end
+
 
 let combine_qualifiers_right gt1 gt2 : genType =
   match (gt1, gt2) with
-  | (GenPointer q1 _, GenPointer q2 t2) -> GenPointer (AilTypesAux.combine_qualifiers q1 q2) t2
-  | (_              , GenPointer _   _) -> gt2
-  | (_              , _               ) -> gt2
+    | (GenPointer q1 _, GenPointer q2 t2) -> GenPointer (AilTypesAux.combine_qualifiers q1 q2) t2
+    | (_              , GenPointer _   _) -> gt2
+    | (_              , _               ) -> gt2
   end
 
-let well_typed_conditional gt1 gt2 gt3 null2 null3 : maybe genTypeCategory =
+
+let well_typed_conditional gt1 gt2 gt3 null2 null3 : errorM genTypeCategory =
   if scalar gt1 then
     if arithmetic gt2 && arithmetic gt3 then
-      usual_arithmetic gt2 gt3 >>= fun gt ->
-      Just (GenRValueType gt)
+      match usual_arithmetic gt2 gt3 with
+        | Just gt -> return (GenRValueType gt)
+        | Nothing -> fail (TError_TODO 8)
+      end
     else
       match composite_pointer gt2 gt3 with
-      | Just gt -> Just (GenRValueType gt)
-      | Nothing -> if void gt2 && void gt3 then
-                     Just (GenRValueType GenVoid)
-                   else if pointer gt2 && null3 then
-                     Just (GenRValueType (combine_qualifiers_left gt2 gt3))
-                   else if pointer gt3 && null2 then
-                     Just (GenRValueType (combine_qualifiers_right gt2 gt3))
-                   else if pointer_to_object gt2 && pointer_to_void gt3 then
-                     Just (GenRValueType (combine_qualifiers_right gt2 gt3))
-                   else if pointer_to_object gt3 && pointer_to_void gt2 then
-                     Just (GenRValueType (combine_qualifiers_left gt2 gt3))
-                   else Nothing
+        | Just gt -> return (GenRValueType gt)
+        | Nothing -> if void gt2 && void gt3 then
+                       return (GenRValueType GenVoid)
+                     else if pointer gt2 && null3 then
+                       return (GenRValueType (combine_qualifiers_left gt2 gt3))
+                     else if pointer gt3 && null2 then
+                       return (GenRValueType (combine_qualifiers_right gt2 gt3))
+                     else if pointer_to_object gt2 && pointer_to_void gt3 then
+                       return (GenRValueType (combine_qualifiers_right gt2 gt3))
+                     else if pointer_to_object gt3 && pointer_to_void gt2 then
+                       return (GenRValueType (combine_qualifiers_left gt2 gt3))
+                     else fail (TError_TODO 9)
       end
   else
-    Nothing
+    fail (TError_TODO 10)
 
-let annotate_assignee_aux (annotate_rvalue : expression 'A1 -> maybe (expression 'A2 * genType)) =
+
+let annotate_assignee_aux (annotate_rvalue : expression 'A1 -> errorM (expression 'A2 * genType)) =
   fun t1 e2 ->
     annotate_rvalue e2 >>= fun (e2, gt2) ->
     if well_typed_assignment t1 gt2 (null_pointer_constant e2)
-      then Just e2
-      else Nothing
+      then return e2
+      else fail (TError_TODO 11)
 
-let rec annotate_arguments_aux (A : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> maybe (expression 'A2)) es (p : list (qualifiers * _)) : maybe (list (expression 'A2)) =
-    match (es, p) with
-    | ([]     , []          ) -> Just []
-    | (e :: es, (_, t1) :: p) -> annotate_assignee (AilTypesAux.rvalue_coercion t1) e >>= fun e ->
-                                 annotate_arguments_aux A annotate_assignee es p >>= fun es ->
-                                 Just (e :: es)
-    | (_      , _           ) -> Nothing
-    end
 
-let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) (e : expression' 'A1) : maybe (expression' 'A2 * genTypeCategory) =
-  let annotate_rvalue = annotate_rvalue_aux A (annotate_expression A S G) in
-  let annotate_assignee = annotate_assignee_aux annotate_rvalue in
-  let annotate_arguments = annotate_arguments_aux A annotate_assignee in
+val annotate_arguments_aux: forall 'A1 'A2.
+                            annotation 'A1 'A2                                   ->
+                            (expression 'A1 -> errorM (expression 'A2))          ->
+                            (ctype -> expression 'A1 -> errorM (expression 'A2)) ->
+                            bool                                                 ->
+                            list (expression 'A1)                                ->
+                            list (qualifiers * ctype)                            ->
+                            errorM (list (expression 'A2))
+
+
+
+(* let rec annotate_arguments_aux (A : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> errorM (expression 'A2)) es (p : list (qualifiers * _)) : errorM (list (expression 'A2)) = *)
+let rec annotate_arguments_aux A annotate_expression annotate_assignee is_variadic es p =
+  match (es, p) with
+    | ([], []) ->
+        return []
+    | (e :: es, (_, t1) :: p) ->
+        annotate_assignee (AilTypesAux.rvalue_coercion t1) e                            >>= fun e  ->
+        annotate_arguments_aux A annotate_expression annotate_assignee is_variadic es p >>= fun es ->
+        return (e :: es)
+    | (_, []) ->
+        (* This case must correspond to a call to a variadic function *)
+        if not is_variadic then
+          fail (TError_TODO 68)
+        else
+          (* following (§6.5.2.2#7) *)
+          (* TODO: check *)
+          mapM annotate_expression es
+    | (_, _) ->
+        fail (TError_TODO 12)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let rec annotate_expression' A S G e =
+  let annotate_rvalue    = annotate_rvalue_aux A (annotate_expression A S G)                      in
+  let annotate_assignee  = annotate_assignee_aux annotate_rvalue                                  in
+  let annotate_arguments = annotate_arguments_aux A (annotate_expression A S G) annotate_assignee in
   match e with
-  | Var v ->
+    | Var v ->
+(* TODO(clean)
+        tryM (lookup G v)
+          (* block variable *)
+          (fun (qs, ty) -> return (Var v, GenLValueType qs ty))
+          (lookup S v >>= function
+            | Right (qs, ty, _) ->
+                (* global variable *)
+                return (Var v, GenLValueType qs ty)
+            | Left p ->
+                (* function name *)
+                return (Var v, GenRValueType (inject_type (type_from_sigma p)))
+          end)
+*)
         match (lookup G v, lookup S v) with
           | (Just (qs, ty), Nothing) ->
-              (* block variable *)
-              Just (Var v, GenLValueType qs ty)
+              return (Var v, GenLValueType qs ty)
           | (Nothing, Just (Right (qs, ty, _))) ->
               (* global variable *)
-              Just (Var v, GenLValueType qs ty)
-          | (Nothing    , Just (Left p)) ->
+              return (Var v, GenLValueType qs ty)
+          | (Nothing, Just (Left p)) ->
               (* function name *)
-              Just (Var v, GenRValueType (inject_type (type_from_sigma p)))
+              return (Var v, GenRValueType (inject_type (type_from_sigma p)))
           | (_, _) ->
-              Nothing
+              fail (TError_TODO 13)
         end
 (* (OLD)
       match (lookup G v, lookup S v) with
@@ -156,78 +329,89 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       | (_          , _      ) -> Nothing
       end
 *)
-  | Binary e1 Comma e2 -> 
-      annotate_rvalue e1 >>= fun (e1, _  ) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      Just (Binary e1 Comma e2, GenRValueType gt2)
-  | Unary Address e ->
-      annotate_expression A S G e >>= fun e ->
-      match type_of A e with
-      | GenLValueType q t                 -> Just (Unary Address e, GenRValueType (GenPointer q t))
-      | GenRValueType (GenFunction t p b) -> Just (Unary Address e, GenRValueType (GenPointer no_qualifiers (Function t p b)))
-      | _                                 -> Nothing
-      end
-  | Unary (Plus  as uop) e ->
-      annotate_rvalue e >>= fun (e, gt) ->
-      if arithmetic gt then
-        promotion gt >>= fun gt ->
-        Just (Unary uop e, GenRValueType gt)
-      else
-        Nothing
-  | Unary (Minus as uop) e ->
-      annotate_rvalue e >>= fun (e, gt) ->
-      if arithmetic gt then
-        promotion gt >>= fun gt ->
-        Just (Unary uop e, GenRValueType gt)
-      else
-        Nothing
-  | Unary Bnot e ->
-      annotate_rvalue e >>= fun (e, gt) ->
-      if integer gt then
-        promotion gt >>= fun gt ->
-        Just (Unary Bnot e, GenRValueType gt)
-      else
-        Nothing
-  | Unary Indirection e ->
-      annotate_rvalue e >>= fun (e, gt) ->
-      match gt with
-      | GenPointer q (Function t p b) -> if AilTypesAux.unqualified q
-                                         then Just (Unary Indirection e, GenRValueType (GenPointer q (Function t p b)))
-                                         else Nothing
-      | GenPointer q t                -> if AilTypesAux.complete t && AilTypesAux.object_ t
-                                         then Just (Unary Indirection e, GenLValueType q t)
-                                         else Nothing
-      | _                             -> Nothing
-      end
-  | Unary (PostfixIncr as uop) e ->
-      annotate_expression A S G e >>= fun e ->
-      match type_of A e with
-      | GenLValueType q' t' ->
-          AilTypesAux.lvalue_coercion t' >>= fun t ->
-          if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
-            then Just (Unary uop e, GenRValueType (inject_type t))
-            else Nothing
-      | _ -> Nothing
-      end
-  | Unary (PostfixDecr as uop) e ->
-      annotate_expression A S G e >>= fun e ->
-      match type_of A e with
-      | GenLValueType q' t' ->
-          AilTypesAux.lvalue_coercion t' >>= fun t ->
-          if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
-            then Just (Unary uop e, GenRValueType (inject_type t))
-            else Nothing
-      | _ -> Nothing
-      end
-  | Call e es ->
-      annotate_rvalue e >>= fun (e, gt) ->
-      match gt with
-      | GenPointer q (Function t p b) -> if AilTypesAux.unqualified q then
-                                         annotate_arguments es p >>= fun es ->
-                                         Just (Call e es, GenRValueType (inject_type t))
-                                       else Nothing
-      | _                           -> Nothing
-      end
+    | Binary e1 Comma e2 -> 
+        annotate_rvalue e1 >>= fun (e1, _  ) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        return (Binary e1 Comma e2, GenRValueType gt2)
+    | Unary Address e ->
+        annotate_expression A S G e >>= fun e ->
+        match type_of A e with
+          | GenLValueType q t                 -> return (Unary Address e, GenRValueType (GenPointer q t))
+          | GenRValueType (GenFunction t p b) -> return (Unary Address e, GenRValueType (GenPointer no_qualifiers (Function t p b)))
+          | _                                 -> fail (TError_TODO 14)
+        end
+    | Unary (Plus  as uop) e ->
+        annotate_rvalue e >>= fun (e, gt) ->
+        if arithmetic gt then
+          match promotion gt with
+            | Nothing -> assert_false "promotion failed on an arithmetic genType"
+            | Just gt -> return (Unary uop e, GenRValueType gt)
+          end
+        else
+          fail (TError_TODO 15)
+    | Unary (Minus as uop) e ->
+        annotate_rvalue e >>= fun (e, gt) ->
+        if arithmetic gt then
+          match promotion gt with
+            | Nothing -> assert_false "promotion failed on an arithmetic genType"
+            | Just gt -> return (Unary uop e, GenRValueType gt)
+          end
+        else
+          fail (TError_TODO 16)
+    | Unary Bnot e ->
+        annotate_rvalue e >>= fun (e, gt) ->
+        if integer gt then
+          match promotion gt with
+            | Nothing -> assert_false "promotion failed on an arithmetic genType"
+            | Just gt -> return (Unary Bnot e, GenRValueType gt)
+          end
+        else
+          fail (TError_TODO 17)
+    | Unary Indirection e ->
+        annotate_rvalue e >>= fun (e, gt) ->
+        match gt with
+          | GenPointer q (Function t p b) ->
+              if AilTypesAux.unqualified q
+              then return (Unary Indirection e, GenRValueType (GenPointer q (Function t p b)))
+              else fail (TError_TODO 18)
+          | GenPointer q t ->
+              if AilTypesAux.complete t && AilTypesAux.object_ t
+              then return (Unary Indirection e, GenLValueType q t)
+              else fail (TError_TODO 19)
+          | _ ->
+              fail (TError_TODO 20)
+        end
+    | Unary (PostfixIncr as uop) e ->
+        annotate_expression A S G e >>= fun e ->
+        match type_of A e with
+          | GenLValueType q' t' ->
+              AilTypesAux.lvalue_coercion t' >>= fun t ->
+              if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
+              then return (Unary uop e, GenRValueType (inject_type t))
+              else fail (TError_TODO 21)
+          | _ -> fail (TError_TODO 22)
+        end
+    | Unary (PostfixDecr as uop) e ->
+        annotate_expression A S G e >>= fun e ->
+        match type_of A e with
+          | GenLValueType q' t' ->
+              AilTypesAux.lvalue_coercion t' >>= fun t ->
+              if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
+              then return (Unary uop e, GenRValueType (inject_type t))
+              else fail (TError_TODO 23)
+          | _ -> fail (TError_TODO 24)
+        end
+    | Call e es ->
+        annotate_rvalue e >>= fun (e, gt) ->
+        match gt with
+          | GenPointer q (Function t p is_variadic) ->
+              if AilTypesAux.unqualified q then
+                annotate_arguments is_variadic es p >>= fun es ->
+                return (Call e es, GenRValueType (inject_type t))
+              else fail (TError_TODO 25)
+          | _ ->
+              fail (TError_TODO 26)
+        end
   | Assign e1 e2 ->
       annotate_expression A S G e1 >>= fun e1 ->
       match type_of A e1 with
@@ -235,172 +419,192 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
           if AilTypesAux.modifiable q1 t1
             then let t = AilTypesAux.rvalue_coercion t1 in
                  annotate_assignee t e2 >>= fun e2 -> 
-                 Just (Assign e1 e2, GenRValueType (inject_type t))
-            else Nothing
-      | _ -> Nothing
+                 return (Assign e1 e2, GenRValueType (inject_type t))
+            else fail (TError_TODO 27)
+      | _ -> fail (TError_TODO 28)
       end
-  | Binary e1 (Arithmetic (Mul  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Div  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Mod  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Band as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Xor  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Bor  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2
-        then usual_arithmetic gt1 gt2 >>= fun gt ->
-             Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-        else Nothing
-  | Binary e1 (Arithmetic (Shl  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2 then
-        promotion gt1 >>= fun gt ->
-        Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-      else Nothing
-  | Binary e1 (Arithmetic (Shr  as aop)) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if well_typed_binary_arithmetic gt1 aop gt2 then
-        promotion gt1 >>= fun gt ->
-        Just (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
-      else Nothing
-  | Binary e1 (Arithmetic Add) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if pointer_to_complete_object gt1 && integer gt2 then
-        Just (Binary e1 (Arithmetic Add) e2, GenRValueType gt1)
-      else if pointer_to_complete_object gt2 && integer gt1 then
-        Just (Binary e1 (Arithmetic Add) e2, GenRValueType gt2)
-      else if well_typed_binary_arithmetic gt1 Add gt2 then
-        usual_arithmetic gt1 gt2 >>= fun gt ->
-        Just (Binary e1 (Arithmetic Add) e2, GenRValueType gt)
-      else Nothing
-  | Binary e1 (Arithmetic Sub) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if pointers_to_compatible_complete_objects gt1 gt2 then
-        Just (Binary e1 (Arithmetic Sub) e2, GenRValueType (GenBasic (GenInteger PtrdiffT)))
-      else if pointer_to_complete_object gt1 && integer gt2 then
-        Just (Binary e1 (Arithmetic Sub) e2, GenRValueType gt1)
-      else if well_typed_binary_arithmetic gt1 Sub gt2 then
-        usual_arithmetic gt1 gt2 >>= fun gt ->
-        Just (Binary e1 (Arithmetic Sub) e2, GenRValueType gt)
-      else Nothing
-  | Binary e1 (And as bop) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if scalar gt1 && scalar gt2
-        then Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else Nothing
-  | Binary e1 (Or  as bop) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if scalar gt1 && scalar gt2
-        then Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else Nothing
-  | Binary e1 (Lt as bop) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if pointers_to_compatible_objects gt1 gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else if real gt1 && real gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else Nothing
-  | Binary e1 (Gt as bop) e2 ->
-      annotate_rvalue e1 >>= fun (e1, gt1) ->
-      annotate_rvalue e2 >>= fun (e2, gt2) ->
-      if pointers_to_compatible_objects gt1 gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else if real gt1 && real gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else Nothing
+    | Binary e1 (Arithmetic (Mul  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 29)
+    | Binary e1 (Arithmetic (Div  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 30)
+    | Binary e1 (Arithmetic (Mod  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 31)
+    | Binary e1 (Arithmetic (Band as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 32)
+    | Binary e1 (Arithmetic (Xor  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 33)
+    | Binary e1 (Arithmetic (Bor  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2
+          then match usual_arithmetic gt1 gt2 with
+                 | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+                 | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+               end
+          else fail (TError_TODO 34)
+    | Binary e1 (Arithmetic (Shl  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2 then
+          match promotion gt1 with
+            | Nothing -> assert_false "promotion failed on well typed binary arithmetic."
+            | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+          end
+        else fail (TError_TODO 35)
+    | Binary e1 (Arithmetic (Shr  as aop)) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if well_typed_binary_arithmetic gt1 aop gt2 then
+          match promotion gt1 with
+            | Nothing -> assert_false "promotion failed on well typed binary arithmetic."
+            | Just gt -> return (Binary e1 (Arithmetic aop) e2, GenRValueType gt)
+          end
+        else fail (TError_TODO 36)
+    | Binary e1 (Arithmetic Add) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if pointer_to_complete_object gt1 && integer gt2 then
+          return (Binary e1 (Arithmetic Add) e2, GenRValueType gt1)
+        else if pointer_to_complete_object gt2 && integer gt1 then
+          return (Binary e1 (Arithmetic Add) e2, GenRValueType gt2)
+        else if well_typed_binary_arithmetic gt1 Add gt2 then
+          match usual_arithmetic gt1 gt2 with
+            | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+            | Just gt -> return (Binary e1 (Arithmetic Add) e2, GenRValueType gt)
+          end
+        else fail (TError_TODO 37)
+    | Binary e1 (Arithmetic Sub) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if pointers_to_compatible_complete_objects gt1 gt2 then
+          return (Binary e1 (Arithmetic Sub) e2, GenRValueType (GenBasic (GenInteger PtrdiffT)))
+        else if pointer_to_complete_object gt1 && integer gt2 then
+          return (Binary e1 (Arithmetic Sub) e2, GenRValueType gt1)
+        else if well_typed_binary_arithmetic gt1 Sub gt2 then
+          match usual_arithmetic gt1 gt2 with
+            | Nothing -> assert_false "usual_arithmetic failed on two valid genTypes."
+            | Just gt -> return (Binary e1 (Arithmetic Sub) e2, GenRValueType gt)
+          end
+        else fail (TError_TODO 38)
+    | Binary e1 (And as bop) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if scalar gt1 && scalar gt2
+        then return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 39)
+    | Binary e1 (Or  as bop) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if scalar gt1 && scalar gt2
+        then return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 40)
+    | Binary e1 (Lt as bop) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if pointers_to_compatible_objects gt1 gt2 then
+          return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else if real gt1 && real gt2 then
+          return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 41)
+    | Binary e1 (Gt as bop) e2 ->
+        annotate_rvalue e1 >>= fun (e1, gt1) ->
+        annotate_rvalue e2 >>= fun (e2, gt2) ->
+        if pointers_to_compatible_objects gt1 gt2 then
+          return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else if real gt1 && real gt2 then
+          return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 42)
   | Binary e1 (Le as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else Nothing
+        return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+      else fail (TError_TODO 43)
   | Binary e1 (Ge as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if pointers_to_compatible_objects gt1 gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else if real gt1 && real gt2 then
-        Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else Nothing
+        return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+      else fail (TError_TODO 44)
   | Binary e1 (Eq as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if well_typed_equality gt1 gt2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else Nothing
+        then return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 45)
   | Binary e1 (Ne as bop) e2 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       if well_typed_equality gt1 gt2 (null_pointer_constant e1) (null_pointer_constant e2)
-        then Just (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else Nothing
+        then return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+        else fail (TError_TODO 46)
   | SizeOf  q t ->
       if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.incomplete t)
-        then Just (SizeOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
-        else Nothing
+        then return (SizeOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
+        else fail (TError_TODO 47)
   | AlignOf q t ->
       if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.incomplete t)
-        then Just (AlignOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
-        else Nothing
+        then return (AlignOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
+        else fail (TError_TODO 48)
   | Cast q Void e ->
       if wf_lvalue q Void then
         annotate_rvalue e >>= fun (e, _) ->
-        Just (Cast q Void e, GenRValueType GenVoid)
+        return (Cast q Void e, GenRValueType GenVoid)
       else
-        Nothing
+        fail (TError_TODO 49)
   | Cast q t e ->
       if wf_lvalue q t then
         annotate_rvalue e >>= fun (e, gt) ->
         if scalar gt && AilTypesAux.scalar t
-          then Just (Cast q t e, GenRValueType (inject_type t))
-          else Nothing
+          then return (Cast q t e, GenRValueType (inject_type t))
+          else fail (TError_TODO 50)
       else
-        Nothing
+        fail (TError_TODO 51)
   | Conditional e1 e2 e3 ->
       annotate_rvalue e1 >>= fun (e1, gt1) ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
       annotate_rvalue e3 >>= fun (e3, gt3) ->
       well_typed_conditional gt1 gt2 gt3 (null_pointer_constant e2) (null_pointer_constant e3) >>= fun gtc ->
-      Just (Conditional e1 e2 e3, gtc)
+      return (Conditional e1 e2 e3, gtc)
   | CompoundAssign e1 (Add as aop) e2 ->
       annotate_expression A S G e1 >>= fun e1 ->
       annotate_rvalue e2 >>= fun (e2, gt2) ->
@@ -408,9 +612,9 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       | GenLValueType q t -> 
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
           if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
-            then Just (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
-            else Nothing
-      | _  -> Nothing
+            then return (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
+            else fail (TError_TODO 52)
+      | _  -> fail (TError_TODO 53)
       end
   | CompoundAssign e1 (Sub as aop) e2 ->
       annotate_expression A S G e1 >>= fun e1 ->
@@ -419,9 +623,9 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
       | GenLValueType q t -> 
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
           if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
-            then Just (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
-            else Nothing
-      | _  -> Nothing
+            then return (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
+            else fail (TError_TODO 54)
+      | _  -> fail (TError_TODO 55)
       end
   | CompoundAssign e1 aop e2 ->
       annotate_expression A S G e1 >>= fun e1        ->
@@ -431,151 +635,183 @@ let rec annotate_expression' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : g
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
           let gt1 = inject_type t1 in
           if AilTypesAux.modifiable q t && well_typed_binary_arithmetic gt1 aop gt2
-            then Just (CompoundAssign e1 aop e2, GenRValueType gt1)
-            else Nothing
-      | _  -> Nothing
+            then return (CompoundAssign e1 aop e2, GenRValueType gt1)
+            else fail (TError_TODO 56)
+      | _  -> fail (TError_TODO 57)
       end
   | Constant (ConstantInteger ic) ->
-      Just (Constant (ConstantInteger ic), GenRValueType (GenBasic (GenInteger (type_of_constant ic))))
+      return (Constant (ConstantInteger ic), GenRValueType (GenBasic (GenInteger (type_of_constant ic))))
+  (* TODO: check *)
+  | Constant (ConstantString str) ->
+      return (Constant (ConstantString str), GenRValueType (GenArray (Basic (Integer Char))
+                                                                     (integerFromNatural (naturalFromNat (List.length $ String.toCharList str)))
+                                                           ))
   end
-and annotate_expression (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) (e : expression 'A1) : maybe (expression 'A2) =
-  let (AnnotatedExpression a e) = e in
-  annotate_expression' A S G e >>= fun (e, gt) ->
-  Just (AnnotatedExpression (A.Annotation.add_type gt a) e)
+and annotate_expression A S G (AnnotatedExpression a e) =
+  annotate_expression' A S G e >>= fun (e, gty) ->
+  return (AnnotatedExpression (A.Annotation.add_type gty a) e)
 
-let annotate_rvalue (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) : expression 'A1 -> maybe (expression 'A2 * genType) =
+let annotate_rvalue A S G =
   annotate_rvalue_aux A (annotate_expression A S G)
 
-let annotate_assignee (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) : ctype -> expression 'A1 -> maybe (expression 'A2) =
+let annotate_assignee A S G =
   annotate_assignee_aux (annotate_rvalue A S G)
 
-let annotate_arguments (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) : list (expression 'A1) -> list (qualifiers * ctype) -> maybe (list (expression 'A2)) =
-  annotate_arguments_aux A (annotate_assignee A S G)
+let annotate_arguments A S G =
+  annotate_arguments_aux A (annotate_expression A S G) (annotate_assignee A S G)
 
-let rec annotate_block_aux (A : annotation 'A1 'A2) (annotate_statement : statement 'B 'A1 -> maybe (statement 'B 'A2)) (ss : list (statement 'B 'A1)) : maybe (list (statement 'B 'A2)) =
-    match ss with
-    | []      -> Just []
-    | s :: ss -> annotate_statement s >>= fun s ->
-                 annotate_block_aux A annotate_statement ss >>= fun ss ->
-                 Just (s :: ss)
-    end
 
-let annotate_definition (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) (d : identifier * expression 'A1) =
-  let (v, e) = d in
+let rec annotate_block_aux A annotate_statement = function
+  | [] ->
+      return []
+  | s :: ss ->
+      annotate_statement s                       >>= fun s  ->
+      annotate_block_aux A annotate_statement ss >>= fun ss ->
+      return (s :: ss)
+end
+
+
+let annotate_definition A S G (v, e) =
   match lookup G v with
-  | (Just (_, t)) -> annotate_assignee A S G t e >>= fun e ->
-                   Just (v, e)
-  | _           -> Nothing
+    | Just (_, ty) ->
+        annotate_assignee A S G ty e >>= fun e ->
+        return (v, e)
+    | Nothing ->
+        fail (TError_TODO 58) (* TODO: I think this error shouldn't be possible
+                                  coming from Cabs_to_ail *)
   end
 
-let rec annotate_definitions (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) ds =
-  match ds with
-  | []      -> Just []
-  | d :: ds -> annotate_definition  A S G d >>= fun d  ->
-               annotate_definitions A S G ds >>= fun ds ->
-               Just (d :: ds)
-  end
+let rec annotate_definitions A S G = function
+  | [] ->
+      return []
+  | d :: ds ->
+      annotate_definition  A S G d  >>= fun d  ->
+      annotate_definitions A S G ds >>= fun ds ->
+      return (d :: ds)
+end
 
-let rec annotate_statement' (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) t_return (s : statement' 'B 'A1) : maybe (statement' 'B 'A2) =
+
+let rec annotate_statement' A S G t_return s =
   let annotate_block bs = annotate_block_aux A (annotate_statement A S (Context.add_bindings bs G) t_return) in
   match s with
-  | Label l s -> annotate_statement A S G t_return s >>= fun s -> Just (Label l s)
-  | Case ic s -> annotate_statement A S G t_return s >>= fun s -> Just (Case ic s)
-  | Default s -> annotate_statement A S G t_return s >>= fun s -> Just (Default s)
-  | Block bs ss -> if AilTyping.well_formed_bindings bs && fresh_bindings bs S then
-                     annotate_block bs ss >>= fun ss ->
-                     Just (Block bs ss)
-                   else
-                     Nothing
-  | Skip      -> Just Skip
-  | Expression e -> annotate_expression A S G e >>= fun e -> Just (Expression e)
-  | If e s1 s2 -> annotate_rvalue A S G e >>= fun (e, gt) ->
-                  if scalar gt then
-                    annotate_statement A S G t_return s1 >>= fun s1 ->
-                    annotate_statement A S G t_return s2 >>= fun s2 ->
-                    Just (If e s1 s2)
-                  else
-                    Nothing
-  | Switch e s -> annotate_rvalue A S G e >>= fun (e, gt) ->
-                  if integer gt then
-                    annotate_statement A S G t_return s >>= fun s ->
-                    Just (Switch e s)
-                  else
-                    Nothing
-  | While e s -> annotate_rvalue A S G e >>= fun (e, gt) ->
-                 if scalar gt then
-                   annotate_statement A S G t_return s >>= fun s ->
-                   Just (While e s)
-                 else
-                   Nothing
-  | Do s e -> annotate_rvalue A S G e >>= fun (e, gt) ->
-              if scalar gt then
-                annotate_statement A S G t_return s >>= fun s ->
-                Just (Do s e)
-              else
-                Nothing
-  | Goto v    -> Just (Goto v)
-  | Continue  -> Just Continue
-  | Break     -> Just Break
-  | ReturnVoid -> if eq_ctype t_return Void
-                    then Just ReturnVoid
-                    else Nothing
-  | Return e   -> annotate_assignee A S G t_return e >>= fun e ->
-                  Just (Return e)
-  | Declaration ds -> annotate_definitions A S G ds >>= fun ds -> Just (Declaration ds)
+    | Label l s ->
+        annotate_statement A S G t_return s >>= fun s ->
+        return (Label l s)
+    | Case ic s ->
+        annotate_statement A S G t_return s >>= fun s ->
+        return (Case ic s)
+    | Default s ->
+        annotate_statement A S G t_return s >>= fun s ->
+        return (Default s)
+    | Block bs ss ->
+        if AilTyping.well_formed_bindings bs && fresh_bindings bs S then
+          annotate_block bs ss >>= fun ss ->
+          return (Block bs ss)
+        else
+          fail (TError_TODO 59)
+    | Skip ->
+        return Skip
+    | Expression e ->
+        annotate_expression A S G e >>= fun e ->
+        return (Expression e)
+    | If e s1 s2 ->
+        annotate_rvalue A S G e >>= fun (e, gt) ->
+        if scalar gt then
+          annotate_statement A S G t_return s1 >>= fun s1 ->
+          annotate_statement A S G t_return s2 >>= fun s2 ->
+          return (If e s1 s2)
+        else
+          fail (TError_TODO 60)
+    | Switch e s ->
+        annotate_rvalue A S G e >>= fun (e, gt) ->
+        if integer gt then
+          annotate_statement A S G t_return s >>= fun s ->
+          return (Switch e s)
+        else
+          fail (TError_TODO 61)
+    | While e s ->
+        annotate_rvalue A S G e >>= fun (e, gt) ->
+        if scalar gt then
+          annotate_statement A S G t_return s >>= fun s ->
+          return (While e s)
+        else
+          fail (TError_TODO 62)
+    | Do s e ->
+        annotate_rvalue A S G e >>= fun (e, gt) ->
+        if scalar gt then
+          annotate_statement A S G t_return s >>= fun s ->
+          return (Do s e)
+        else
+          fail (TError_TODO 63)
+    | Goto v ->
+        return (Goto v)
+    | Continue ->
+        return Continue
+    | Break ->
+        return Break
+    | ReturnVoid ->
+        if eq_ctype t_return Void then
+          return ReturnVoid
+        else
+          fail (TError_TODO 64)
+    | Return e ->
+        annotate_assignee A S G t_return e >>= fun e ->
+        return (Return e)
+    | Declaration ds ->
+        annotate_definitions A S G ds >>= fun ds ->
+        return (Declaration ds)
   end
-and annotate_statement (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) t_return (s : statement 'B 'A1) : maybe (statement 'B 'A2) =
-  let (AnnotatedStatement b s) = s in
-  annotate_statement' A S G t_return s >>= fun s ->
-  Just (AnnotatedStatement b s)
 
-let annotate_block (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (G : gamma) t_return (bs : list (statement 'B 'A1)) =
+and annotate_statement A S G t_return (AnnotatedStatement b s) =
+  annotate_statement' A S G t_return s >>= fun s ->
+  return (AnnotatedStatement b s)
+
+
+let annotate_block A S G t_return bs =
   annotate_block_aux A (annotate_statement A S G t_return) bs
 
-let annotate_function (A : annotation 'A1 'A2) (S : sigma 'B1 'B2) (p : ((ctype * bindings * bool) * maybe (statement 'B 'A1))) =
+
+let annotate_function A S p =
   let ((ty_return, bs, is_variadic), s_opt) = p in
   if fresh_bindings bs S &&
-     AilTyping.well_formed_bindings bs &&
+     (* AilTyping.well_formed_bindings bs && *)
      wf_type (Function ty_return (parameters_of_bindings bs) is_variadic)
   then
     match s_opt with
       | Just s ->  annotate_statement A S (Context.add_bindings bs Context.empty) ty_return s >>= fun s ->
-                   Just ((ty_return, bs, is_variadic), Just s)
-      | Nothing -> Just ((ty_return, bs, is_variadic), Nothing)
+                   return ((ty_return, bs, is_variadic), Just s)
+      | Nothing -> return ((ty_return, bs, is_variadic), Nothing)
     end
   else
-    Nothing
+    fail (TError_TODO 65)
 
-val annotate_global: forall 'A1 'A2 'B1 'B2 'B.
-                     annotation 'A1 'A2 ->
-                     sigma 'B1 'B2      ->
-                     qualifiers * ctype * maybe (expression 'A1) ->
-                     maybe (qualifiers * ctype * maybe (expression 'A2))
+
 (* TODO: check with J *)
 let annotate_global A S (qs, ty, e_opt) =
   if wf_type ty then
     match e_opt with
       | Just e  -> annotate_assignee A S Context.empty ty e >>= fun e ->
-                   Just (qs, ty, Just e)
-      | Nothing -> Just (qs, ty, Nothing)
+                   return (qs, ty, Just e)
+      | Nothing -> return (qs, ty, Nothing)
     end
   else
-    Nothing
+    fail (TError_TODO 66)
 
-let annotate_sigma (A : annotation 'A1 'A2) (S : sigma 'B 'A1) : maybe (sigma 'B 'A2) =
-  Context.mapP eq_identifier (fun _ ->
-    function
-      | Left  f -> annotate_function A S f >>= fun f ->
-                   Just (Left f)
-      | Right g -> annotate_global   A S g >>= fun g ->
-                   Just (Right g)
-    end
-  ) S
 
-let annotate_program (A : annotation 'A1 'A2) (p:program 'B 'A1) : maybe (program 'B 'A2) =
-  let (main, S) = p in
-  match lookup S main with
-  | Just (Left ((Basic (Integer (Signed Int_)), [], _), _)) -> annotate_sigma A S >>= fun S -> Just (main, S)
-  | Just _                                                  -> Nothing
-  | Nothing                                                 -> Nothing
+let annotate_sigma A S =
+  Context.mapP eq_identifier (fun _ -> function
+    | Left  f -> annotate_function A S f >>= fun f ->
+                 return (Left f)
+    | Right g -> annotate_global   A S g >>= fun g ->
+                 return (Right g)
+  end) S
+
+
+let annotate_program A (startup, S) =
+  match lookup S startup with
+    | Just (Left ((Basic (Integer (Signed Int_)), [], _), _)) ->
+        annotate_sigma A S >>= fun S ->
+        return (startup, S)
+    | _ ->
+        fail (TError_TODO 67) (* TODO: this is not realy a type error, but more an csem internal one. *)
   end

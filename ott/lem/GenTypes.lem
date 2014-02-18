@@ -69,6 +69,7 @@ let inject_type t : genType =
   | Pointer  q t   -> GenPointer q t
   | Array    t n   -> GenArray t n
   | Function t p b -> GenFunction t p b
+  | Atomic _       -> assert_false "TODO"
   end
 
 let inject_typeCategory tc : genTypeCategory =

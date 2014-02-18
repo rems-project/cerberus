@@ -225,7 +225,7 @@ let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus
   | Bnot        -> P.tilde
-  | Address     -> P.ampersand
+  | Address0    -> P.ampersand
   | Indirection -> P.star
   | PostfixIncr -> P.plus ^^ P.plus
   | PostfixDecr -> P.minus ^^ P.minus

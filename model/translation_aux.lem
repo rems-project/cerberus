@@ -107,8 +107,8 @@ val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let exp_type_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Just (AilTypes.LValueType _ ty) -> (* unqualify *) ty
-    | Just (AilTypes.RValueType   ty) -> ty
+    | Right (AilTypes.LValueType _ ty) -> (* unqualify *) ty
+    | Right (AilTypes.RValueType   ty) -> ty
   end
 
 
@@ -116,8 +116,8 @@ val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Just (AilTypes.LValueType _ ty) -> ty
-    | Just (AilTypes.RValueType   ty) -> ty
+    | Right (AilTypes.LValueType _ ty) -> ty
+    | Right (AilTypes.RValueType   ty) -> ty
   end
 
 

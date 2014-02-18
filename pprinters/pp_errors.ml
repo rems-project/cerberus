@@ -1,4 +1,5 @@
 open Errors
+open TypingError
 
 let location_to_string  = function
   | Some p ->
@@ -85,6 +86,14 @@ let to_string (loc, c) =
          Constraints: ..The declaration part of a for statement \
          shall only declare identifiers for objects having storage \
          class auto or register.. in\n"
+
+
+    | AIL_TYPING (TError_TODO n) ->
+        "Ail typing error (TODO " ^ string_of_int n ^ ")"
+
+
+(*
+
     | AIL_TYPECHECK_CALL_RETURN ->
         "Violation of constraint 6.5.2.2#1 Function calls, Constraints: ``The \
          expression that denotes the function shall have type pointer to \
@@ -454,6 +463,8 @@ let to_string (loc, c) =
     | AIL_TYPECHECK_UNSUPPORTED s ->
       "[Unsupported feature by Ail typecheck] " ^ s
     
+ *)
+
     | CASE_OUTSIDE_SWITCH ->
         "[Violation of 6.8.1#1] Labeled statements, Constraints: ``A \
          case [...] label shall appear only in a switch statement.``"

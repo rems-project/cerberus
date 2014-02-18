@@ -1,58 +1,68 @@
 open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Implementation
 
-open import OptionMonad
+open import ErrorMonad TypingError
 
-let type_of_constant P (ic : integerConstant) : maybe integerType =
+
+let type_of_constant P (ic : integerConstant) : errorM integerType =
   match ic with
   | (n, Nothing) ->
       if in_integer_range P n (Signed Int_) then
-        Just (Signed Int_)
+        return (Signed Int_)
       else if in_integer_range P n (Signed Long) then
-        Just (Signed Long)
+        return (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
-        Just (Signed LongLong)
+        return (Signed LongLong)
       else
-        Nothing
+        fail (TError_TODO 2)
   | (n, Just U) ->
       if in_integer_range P n (Unsigned Int_) then
-        Just (Unsigned Int_)
+        return (Unsigned Int_)
       else if in_integer_range P n (Unsigned Long) then
-        Just (Unsigned Long)
+        return (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
-        Just (Unsigned LongLong)
+        return (Unsigned LongLong)
       else
-        Nothing
+        fail (TError_TODO 3)
   | (n, Just L) ->
       if in_integer_range P n (Signed Long) then
-        Just (Signed Long)
+        return (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
-        Just (Signed LongLong)
+        return (Signed LongLong)
       else
-        Nothing
+        fail (TError_TODO 4)
   | (n, Just UL) ->
       if in_integer_range P n (Unsigned Long) then
-        Just (Unsigned Long)
+        return (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
-        Just (Unsigned LongLong)
+        return (Unsigned LongLong)
       else
-        Nothing
+        fail (TError_TODO 5)
   | (n, Just LL) ->
       if in_integer_range P n (Signed LongLong) then
-        Just (Signed LongLong)
+        return (Signed LongLong)
       else
-        Nothing
+        fail (TError_TODO 6)
   | (n, Just ULL) ->
       if in_integer_range P n (Unsigned LongLong) then
-        Just (Unsigned LongLong)
+        return (Unsigned LongLong)
       else
-        Nothing
+        fail (TError_TODO 7)
   end
 
-let type_of_rvalue_aux (type_of_expression : expression 'A -> maybe typeCategory) e =
-  match type_of_expression e with
-  | Just (RValueType   t) -> Just (rvalue_coercion t)
-  | Just (LValueType _ t) -> lvalue_coercion t
-  | Nothing               -> Nothing
+(*
+
+  TODO(dead code)
+
+
+
+
+
+let type_of_rvalue_aux (type_of_expression : expression 'A -> errorM typeCategory) e =
+  type_of_expression e >>= function
+    | RValueType   ty ->
+        return (rvalue_coercion ty)
+    | LValueType _ ty ->
+        lvalue_coercion ty
   end
 
 let well_typed_assignment t1 t2 null2 =
@@ -64,9 +74,8 @@ let well_typed_assignment t1 t2 null2 =
   | (_            , _            ) -> arithmetic t1 && arithmetic t2
   end
 
-let assignable_aux (type_of_rvalue : expression 'A -> maybe ctype) =
-  fun t1 e2 ->
-    match type_of_rvalue e2 with
+let assignable_aux (type_of_rvalue : expression 'A -> maybe ctype) t1 e2 =
+    match runM (type_of_rvalue e2) with
     | Just t2 -> well_typed_assignment t1 t2 (null_pointer_constant e2)
     | Nothing -> false
     end
@@ -107,15 +116,15 @@ let combine_qualifiers_right t1 t2 : ctype =
   | (_           , _            ) -> t2
   end
 
-let composite_pointer t1 t2 : maybe ctype =
+let composite_pointer t1 t2 : optionM ctype =
   match (t1, t2) with
   | (Pointer q1 t1, Pointer q2 t2) -> if compatible t1 t2
                                         then Maybe.map (Pointer (combine_qualifiers q1 q2)) (composite t1 t2)
-                                        else Nothing
-  | (_            , _            ) -> Nothing
+                                        else fail
+  | (_            , _            ) -> fail
   end
 
-let well_typed_conditional P t1 t2 t3 null2 null3 : maybe typeCategory =
+let well_typed_conditional P t1 t2 t3 null2 null3 : optionM typeCategory =
   if scalar t1 then
     if arithmetic t2 && arithmetic t3 then
       Maybe.map RValueType (usual_arithmetic P t2 t3)
@@ -442,12 +451,28 @@ let typeable P (S : sigma 'B1 'B2) G (e : expression 'A) : bool =
   | Nothing -> false
   end
 
+
+
+ *)
+
+
+
+
+
 let well_formed_binding (b : identifier * (qualifiers * ctype)) =
   let (_, (q, t)) = b in
   wf_lvalue q t
 
 let well_formed_bindings bs =
   all_list well_formed_binding bs && disjoint_bindings eq_identifier bs
+
+
+
+
+
+
+(* TODO
+
 
 let well_typed_block_aux (well_typed_statement : statement 'A1 'A2 -> bool) =
   all_list well_typed_statement
@@ -531,6 +556,7 @@ let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
       | Right global -> well_typed_global P S global
     end) S
 
+
 let well_typed_program P (p:program 'A1 'A2) : bool =
   let (startup, S) = p in
   match lookup S startup with
@@ -539,3 +565,5 @@ let well_typed_program P (p:program 'A1 'A2) : bool =
   | Just _                                                  -> false
   | Nothing                                                 -> false
   end
+
+ *)

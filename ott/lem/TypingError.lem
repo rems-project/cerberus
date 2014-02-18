@@ -1,0 +1,3 @@
+type typing_error =
+  | TError_lvalue_coercion
+  | TError_TODO of nat

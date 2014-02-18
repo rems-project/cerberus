@@ -93,8 +93,8 @@ and translate_expression stdlib program a_expr =
   (* TODO: we do a match instead of a let, because of a bug in Lem *)
   let ty = match GenTypesAux.interpret_genTypeCategory tmp_implementation
                    (Annotation.type_of Annotation.concrete_annotation a_expr) with
-             | Just (AilTypes.LValueType _ z) -> z
-             | Just (AilTypes.RValueType z)   -> z
+             | Right (AilTypes.LValueType _ z) -> z
+             | Right (AilTypes.RValueType z)   -> z
            end in
   
   if AilTypesAux.pointer ty && Aaux.null_pointer_constant a_expr then
@@ -269,12 +269,12 @@ and translate_expression stdlib program a_expr =
             (* TODO: check *)
             E.fresh_symbol >>= fun a_shift ->
             match (AilTypesAux.lvalue_coercion ty1, AilTypesAux.lvalue_coercion ty2) with
-              | (Just (AilTypes.Pointer _ ty1'), _) ->
+              | (Right (AilTypes.Pointer _ ty1'), _) ->
                   return $
                     C.Ewseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
                       (C.Eshift (C.Esym a_e1) (C.Esym a_e2))
 (*                      (C.Eshift (C.Esym a_e1) (C.Eop C.OpMul (C.Esym a_e2) (C.sizeof $ Caux.mk_ctype ty1'))) *)
-              | (_, Just (AilTypes.Pointer _ ty2')) ->
+              | (_, Right (AilTypes.Pointer _ ty2')) ->
                   return $
                     C.Ewseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
                       (C.Eshift (C.Esym a_e2) (C.Esym a_e1))
