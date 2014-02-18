@@ -514,25 +514,24 @@ let desugar_spec_elem_list specs =
   desugar_type_specifiers ts >>= fun t ->
   E.return (q, t)
 
-val     desugar_decl_type : C.decl_type -> E.t (ATypes.ctype -> ATypes.ctype)
+val     desugar_decl_type : C.decl_type -> E.t (ATypes.qualifiers -> ATypes.ctype -> ATypes.qualifiers * ATypes.ctype)
 let rec desugar_decl_type decl_ty =
   match decl_ty with
   | C.JUSTBASE ->
-      E.return $ fun ty -> ty
+      E.return (fun qs ty -> (qs, ty))
 (*
   | C.ARRAY dt cvs _ Nothing ->
-      fun t ->
-        (mk_ctype dt)
-        (A.Array (desugar_cvspecs cvs) t Nothing)
+      fun qs ty ->
+        (mk_ctype dt (desugar_cvspecs cvs) (A.Array qs ty Nothing)
 *)
   | C.ARRAY decl_ty' cvs _ (Just (C.CONSTANT (C.CONST_INT n Nothing))) ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
-      E.return $ fun ty -> mk_ty (ATypes.Array (* (desugar_cvspecs cvs) *) ty (Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
+      E.return $ fun qs ty -> mk_ty (desugar_cvspecs cvs) (ATypes.Array (*qs*) ty (Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
   | C.ARRAY dt cvs _ (Just (C.CONSTANT e)) ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
   | C.PTR cvs _ decl_ty' ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
-      E.return $ fun ty -> mk_ty (ATypes.Pointer (desugar_cvspecs cvs) ty)
+      E.return $ fun qs ty -> mk_ty (desugar_cvspecs cvs) (ATypes.Pointer qs ty)
   (* TODO: ignoring variable length parameters for now *)
   | C.PROTO decl_ty' (params, is_variadic) ->
       desugar_decl_type decl_ty' >>= fun mk_ty    ->
@@ -540,7 +539,7 @@ let rec desugar_decl_type decl_ty =
       E.create_scope >> (* This implements "function protocope scope" *)
         desugar_parameters params  >>= fun d_params ->
       E.destroy_scope >>= fun _ ->
-      E.return $ fun ty -> mk_ty (ATypes.Function ty (map snd d_params) is_variadic)
+      E.return $ fun qs ty -> mk_ty qs (ATypes.Function ty (map snd d_params) is_variadic)
   end
 
 
@@ -564,11 +563,16 @@ and desugar_parameters params =
           E.register_name param_name E.Varname >>= fun param_id             ->
           desugar_spec_elem_list param_specs   >>= fun (param_qs, param_ty) ->
           desugar_decl_type param_decl         >>= fun mk_ty                ->
-          E.return (param_id, (param_qs, mk_ty param_ty))
+          E.return (param_id, (mk_ty param_qs param_ty))
         ) param_name_opt >>= fun d_param ->
       E.return (d_param :: acc)
   ) params []
 
+val desugar_spec_elem_list_and_decl_type : list C.spec_elem -> C.decl_type -> E.t (ATypes.qualifiers * ATypes.ctype)
+let desugar_spec_elem_list_and_decl_type specs decl_ty =
+  desugar_spec_elem_list specs >>= fun (qs, ty) ->
+  desugar_decl_type decl_ty    >>= fun mk_ty    ->
+  E.return $ mk_ty qs ty
 
 val desugar_assign_operator: C.binary_operator -> maybe A.arithmeticOperator
 let desugar_assign_operator = function
@@ -653,13 +657,11 @@ let rec desugar_expression e =
   | C.EXPR_SIZEOF e ->
       E.fail (Errors.OTHER "new-Ail does not yet support sizeof(expr)")
   | C.TYPE_SIZEOF (specs, decl_ty) ->
-      desugar_spec_elem_list specs >>= fun (qs, ty) ->
-      desugar_decl_type decl_ty    >>= fun mk_ty    ->
-      E.return $ A.SizeOf qs (mk_ty ty)
+      desugar_spec_elem_list_and_decl_type specs decl_ty >>= fun (qs, ty) ->
+      E.return $ A.SizeOf qs ty
   | C.ALIGNOF (specs, decl_ty) ->
-      desugar_spec_elem_list specs >>= fun (qs, ty) ->
-      desugar_decl_type decl_ty    >>= fun mk_ty    ->
-      E.return $ A.AlignOf qs (mk_ty ty)
+      desugar_spec_elem_list_and_decl_type specs decl_ty >>= fun (qs, ty) ->
+      E.return $ A.AlignOf qs ty
   | C.INDEX e1 e2 ->
       (* Desugaring as in (§6.5.2.1#2) *)
       A.Unary A.Indirection <$> (
@@ -811,7 +813,7 @@ and desugar_declaration (specs, ins) =
   desugar_spec_elem_list specs >>= fun (qs, ty) ->
   E.mapM desugar_init_name ins >>= fun decls    ->
   filter_opt <$> E.mapM (fun (id, mk_ty, e_opt) ->
-                   E.add_declaration id qs (mk_ty ty) >>
+                   E.add_declaration id (mk_ty qs ty) >>
                    E.return
                      match e_opt with
                      | Just e  -> Just (id, e)
@@ -879,14 +881,14 @@ and desugar_definition def =
             
             (* TODO: d_qs *)
             E.register_name str E.Funname >>= fun fun_id ->
-            E.register_prototype fun_id (mk_ctype d_ty) d_params is_variadic
+            E.register_prototype fun_id (snd $ mk_ctype d_qs d_ty) d_params is_variadic
             
         | [C.Init_name (C.Name str decl_type [] _) ie] ->
             (* Case: global variable *)
             desugar_decl_type decl_type   >>= fun mk_ctype ->
             E.register_name str E.Varname >>= fun id       ->
             desugar_init_expression ie    >>= fun d_e_opt  ->
-            E.register_global id (mk_ctype d_ty) d_e_opt
+            E.register_global id (snd $ mk_ctype d_qs d_ty) d_e_opt
         
         | _ ->
             Boot.assert_false (*$ Boot.pp_cabs0_definition def *) "HIP: DECDEF, not typedef AND other"

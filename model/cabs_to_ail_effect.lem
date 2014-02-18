@@ -183,10 +183,11 @@ let register_name name kind =
     end
 
 (* TODO: storage_duration *)
-val add_declaration : Symbol.t -> ATypes.qualifiers -> ATypes.ctype -> t unit
-let add_declaration id qs ty =
+val add_declaration : Symbol.t -> ATypes.qualifiers * ATypes.ctype -> t unit
+let add_declaration id q_ty =
   State_exception.update (fun st ->
-    <| st with id_map = Map.insert id (qs, ty) st.id_map |>)
+    <| st with id_map = Map.insert id q_ty st.id_map |>
+  )
 
 val get_declaration: A.identifier -> t (ATypes.qualifiers * ATypes.ctype)
 let get_declaration id =
