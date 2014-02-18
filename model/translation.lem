@@ -558,9 +558,15 @@ and translate_expression stdlib program a_expr =
           f e            >>= fun core_e ->
           match e with
             | A.AnnotatedExpression _ (A.Var fid) ->
+                (* If the function is just declared in a prototype but not defined,
+                   assume it is provided by the implementation. *)
+                let fname = if is_defined_ail_function fid program
+                            then C.Sym fid
+                            else C.Impl (Implementation_.StdFunction "printf") in (* TODO: meta hack *)
+                
                 if List.length es = 0 then
                   (* if there are no arguments, we don't need all the temporary object creation stuff *)
-                  return $ C.Eproc {} fid []
+                  return $ C.Eproc {} fname []
                 else
                   (* TODO: variadic case *)
                   let Just (Left ((return_ty, binds, is_variadic), _)) = List.lookup fid (snd program) in
@@ -590,7 +596,7 @@ and translate_expression stdlib program a_expr =
                   return $
                     C.Ewseq (List.map (fun z -> Just z) as_tmp) (Caux.mk_unseq core_creates)
                     (C.Ewseq [] (Caux.mk_unseq core_inits)
-                       (C.Ewseq [Just a_call] (C.Eindet $ C.Eproc {} fid (List.map C.Esym as_tmp))
+                       (C.Ewseq [Just a_call] (C.Eindet $ C.Eproc {} fname (List.map C.Esym as_tmp))
                           (C.Ewseq [] (Caux.mk_unseq core_kills)
                              (C.Esym a_call)
                           )

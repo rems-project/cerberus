@@ -90,7 +90,7 @@ type expr 'a =
   | Eskip
   | Elet of sym * expr 'a * expr 'a
   | Eif of expr 'a * expr 'a * expr 'a
-  | Eproc of set 'a * sym * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Eproc of set 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
   | Esame of expr 'a * expr 'a
   | Eaction of paction 'a
   

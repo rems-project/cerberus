@@ -185,6 +185,9 @@ type implementation_constant =
 (* TODO: PRESENT BETTER *)
   | Ctype_min
   | Ctype_max
+  
+  (* Standard library functions *)
+  | StdFunction of string
 
 
 (* TODO: this is for the parsing (a bit disgusting to do it that way *)
@@ -250,6 +253,8 @@ let string_of_implementation_constant = function
       "ctype_min"
   | Ctype_max ->
       "ctype_max"
+  | StdFunction fname ->
+       "std_function_" ^ fname
 end
 
 

@@ -241,7 +241,7 @@ let rec pp_expr e =
             P.nest 2 (P.break 1 ^^ pp e1) ^^ P.break 1 ^^
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1
         | Eproc (_, fname, es) ->
-            pp_symbol fname ^^ P.braces (comma_list pp es)
+            pp_name fname ^^ P.braces (comma_list pp es)
         | Ecall (fname, es) ->
             pp_name fname ^^ P.parens (comma_list pp es)
         | Esame (e1, e2) ->
