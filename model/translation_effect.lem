@@ -78,7 +78,7 @@ module E = struct
   (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
   val fresh_named_symbol: string -> t Symbol.t
   let fresh_named_symbol name = fun (<| symbol_set= x |> as st) ->
-    Undefined.return ((Symbol.Symbol x (Just $ "TODO[newLem string]" (* name ^ "_" ^ string_of_nat x *))), <| st with symbol_set= x+1 |>)
+    Undefined.return ((Symbol.Symbol x (Just $ name ^ "_" ^ string_of_natural (naturalFromNat x))), <| st with symbol_set= x+1 |>)
   
   (* register C objects from block scope. *)
   val push_block_objects: list Symbol.t -> t unit

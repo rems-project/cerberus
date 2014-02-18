@@ -176,12 +176,12 @@ let pp_constant = function
 
 let pp_memory_order = function
   | Cmm.NA      -> !^ "NA"
-  | Cmm.Seq_cst -> !^ "Seq_cst"
-  | Cmm.Relaxed -> !^ "Relaxed"
-  | Cmm.Release -> !^ "Release"
-  | Cmm.Acquire -> !^ "Acquire"
-  | Cmm.Consume -> !^ "Consume"
-  | Cmm.Acq_rel -> !^ "Acq_rel"
+  | Cmm.Seq_cst -> pp_keyword "seq_cst"
+  | Cmm.Relaxed -> pp_keyword "relaxed"
+  | Cmm.Release -> pp_keyword "release"
+  | Cmm.Acquire -> pp_keyword "acquire"
+  | Cmm.Consume -> pp_keyword "consume"
+  | Cmm.Acq_rel -> pp_keyword "acq_rel"
   
 
 let pp_mem_addr (pref, addr) =
@@ -193,23 +193,21 @@ let pp_mem_addr (pref, addr) =
 
 
 
+let pp_pattern _as =
+  let g = function
+    | Some x -> pp_symbol x
+    | None   -> P.underscore in
+  match _as with
+    | []   -> P.lparen ^^ P.rparen
+    | [_a] -> g _a
+    | _    -> P.parens (comma_list g _as)
+
+
 let rec pp_expr e =
   let rec pp p e =
     let p'   = precedence e in
     let pp z = P.group (pp p' z) in
-    let wseq = !^ ">>" in
-    let pp_wseq (_a, e) =
-      match _a with
-        | []       -> pp e
-        | [Some a] -> pp_symbol a ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
-        | [None]   -> pp e
-        | _as      -> let g = function
-                        | Some x -> pp_symbol x
-                        | None   -> P.underscore
-                      in (P.parens (P.separate_map P.comma g _as)) ^^^ !^ "<-" ^^ ((* P.align $ *) pp e)
-    in
     (if lt_precedence p' p then fun x -> x else P.parens)
-(*      P.parens $ *)
       (match e with
         | Etuple es ->
             P.parens (comma_list pp es)
@@ -232,12 +230,12 @@ let rec pp_expr e =
         | Efalse ->
             pp_const "false"
         | Enot e ->
-            pp_keyword "not" ^^^ pp e
+            pp_keyword "not" ^^^ P.parens (pp e)
         | Ectype ty ->
-            pp_ctype ty
+            P.dquotes (pp_ctype ty)
         | Elet (a, e1, e2) ->
             pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^
-            ((* P.align $ *) pp e1) ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2
+            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
         | Eif (b, e1, e2) ->
             pp_control "if" ^^^ pp b ^^^ pp_control "then" ^^
             P.nest 2 (P.break 1 ^^ pp e1) ^^ P.break 1 ^^
@@ -264,42 +262,51 @@ let rec pp_expr e =
             !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
         | Eunseq es ->
             P.brackets (P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es)
+
+
+(*
 (*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
         | Ewseq ([], e1, e2) ->
-            P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2)
+            pp_control "let" ^^^ pp_control "weak" ^^ P.lparen ^^ P.rparen ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+(*            P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2) *)
         | Ewseq ([Some a], e1, e2) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
+            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^
+            pp e2  ^^^ pp_control "end"
         | Ewseq ([None], e1, e2) ->
-            pp e1 ^^^ (!^ ">>") ^^ P.break 1 ^^ pp e2
+            pp e1 ^^^ (!^ ">>") ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
         | Ewseq (_as, e1, e2) ->
             let g = function
               | Some x -> pp_symbol x
-              | None   -> P.underscore
-            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^ pp e2
-        | Esseq ([], e1, e2) ->
-            pp e1 ^^^ P.semi ^^ P.break 1 ^^ pp e2
-        | Esseq ([Some a], e1, e2) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
-        | Esseq ([None], e1, e2) ->
-            pp e1 ^^^ P.semi ^^ P.break 1 ^^ pp e2
+              | None   -> P.underscore in
+            
+            pp_control "let" ^^^ pp_control "weak" ^^^ P.parens (comma_list g _as) ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+ *)
+        | Ewseq (_as, e1, e2) ->
+            pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
+            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
         | Esseq (_as, e1, e2) ->
-            let g = function
-              | Some x -> pp_symbol x
-              | None   -> P.underscore
-            in (P.parens (comma_list g _as)) ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ P.semi ^^ P.break 1 ^^ pp e2
+            pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
+            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
         | Easeq (None, act, y) ->
-            pp (Eaction (Paction (Pos, act))) ^^^ !^ "|>" ^^^ pp (Eaction y)
+            pp_control "let" ^^^ pp_control "atom" ^^^ P.lparen ^^ P.rparen ^^^ P.equals ^^^
+            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
         | Easeq (Some a, act, y) ->
-            pp_symbol a ^^^ !^ "<-" ^^^ pp (Eaction (Paction (Pos, act))) ^^^ !^ "|>" ^^^ pp (Eaction y)
+            pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol a ^^^ P.equals ^^^
+            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
         | Eindet e ->
-            (* P.brackets (pp e) *) !^ "INDET"
+            pp_control "indet" ^^ P.parens (pp e)
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
-              P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^ P.dot ^^^ pp e
+            P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^
+            P.dot ^^^ pp e ^^^ pp_control "end"
         | Erun (_, l, es) ->
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
         | Eret e ->
-            pp_keyword "ret" ^^^ pp e
+            pp_keyword "return" ^^^ pp e
         | Epar es ->
             P.enclose !^ "{{{" !^ "}}}" (P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es)
         | End es ->
@@ -319,20 +326,30 @@ let rec pp_expr e =
       )
   in pp None e
 
-and pp_action = function
-  | Create0 (ty, _)                    -> pp_keyword "create" ^^ P.parens (pp_expr ty)
-  | Alloc (a, _)                      -> pp_keyword "alloc"  ^^ P.parens (pp_expr a)
-  | Kill0 e                            -> pp_keyword "kill"   ^^ P.parens (pp_expr e)
-  | Store0 (ty, e1, e2, mo)            -> pp_keyword "store"  ^^ P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^^ pp_memory_order mo)
-  | Load0 (ty, e, mo)                  -> pp_keyword "load"   ^^ P.parens (pp_expr ty ^^ P.comma  ^^^ pp_expr e ^^^ pp_memory_order mo)
-  | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
-      pp_keyword "compare_exchange_strong" ^^
-      P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
-                pp_memory_order mo1 ^^^ !^ "|" ^^^ pp_memory_order mo2)
-  | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
-      pp_keyword "compare_exchange_weak" ^^
-      P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^ pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^^
-                pp_memory_order mo1 ^^^ !^ "|" ^^^ pp_memory_order mo2)
+and pp_action act =
+  let pp_args args mo =
+    P.parens (comma_list pp_expr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+  match act with
+    | Create0 (ty, _) ->
+        pp_keyword "create" ^^ P.parens (pp_expr ty)
+    | Alloc (a, _) ->
+        pp_keyword "alloc" ^^ P.parens (pp_expr a)
+    | Kill0 e ->
+        pp_keyword "kill" ^^ P.parens (pp_expr e)
+    | Store0 (ty, e1, e2, mo) ->
+       pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
+    | Load0 (ty, e, mo) ->
+       pp_keyword "load" ^^ pp_args [ty; e] mo
+    | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_strong" ^^
+        P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
+                  pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_weak" ^^
+        P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
+                  pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
 
 
 

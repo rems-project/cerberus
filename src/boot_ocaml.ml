@@ -5,9 +5,14 @@ let assert_false str =
 
 let debug_level = ref 0
 
+
+let dprint str =
+  if !debug_level > 0 then
+    Pervasives.output_string Pervasives.stderr ("\x1b[31m" ^ str ^ "\x1b[0m\n")
+
 let print_debug str k =
   if !debug_level > 0 then
-    let _ = Pervasives.print_endline ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m") in k
+    let _ = Pervasives.output_string Pervasives.stderr ("\x1b[31mDEBUG: " ^ str ^ "\x1b[0m\n") in k
   else
     k
 

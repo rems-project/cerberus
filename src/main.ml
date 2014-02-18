@@ -132,6 +132,7 @@ let load_stdlib csemlib_path =
   if not (Sys.file_exists fname) then
     error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "'."
   else
+    Boot_ocaml.dprint ("reading Core stdlib from `"^ fname ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_parser_base = struct
       include Core_parser.Make (struct let std = Pmap.empty compare end)
