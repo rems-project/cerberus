@@ -194,11 +194,12 @@ type implementation_constant =
 let impl_map =
   foldl (fun acc (k, v) -> Map.insert k v acc) Map.empty
   [
-    ("<bits_in_byte>", Characters__bits_in_byte);
-    ("<sizeof>",       Sizeof);
-    ("<alignof>",      Alignof);
-    ("<ctype_min>",    Ctype_min);
-    ("<ctype_max>",    Ctype_max);
+    ("<bits_in_byte>",        Characters__bits_in_byte);
+    ("<sizeof>",              Sizeof);
+    ("<alignof>",             Alignof);
+    ("<ctype_min>",           Ctype_min);
+    ("<ctype_max>",           Ctype_max);
+    ("<SHR_signed_negative>", SHR_signed_negative);
   ]
 
 

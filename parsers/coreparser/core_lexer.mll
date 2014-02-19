@@ -132,14 +132,14 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation_.impl_map)
   with Not_found ->
-    failwith "Found an invalid impl_name."
+    failwith ("Found an invalid impl_name: " ^ id)
 
 let scan_ub lexbuf =
   let id = Lexing.lexeme lexbuf in
   try
     T.UB (Pmap.find id Undefined.ub_map)
   with Not_found ->
-    failwith "Found an invalid undefined-behaviour."
+    failwith ("Found an invalid undefined-behaviour: " ^ id)
 
 
 
@@ -153,6 +153,7 @@ let lex_comment remainder lexbuf =
 }
 
 
+let ub_name = "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
 let impl_name = '<' ['A'-'Z' 'a'-'z' '_']* '>'
 let symbolic_name = ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
@@ -217,6 +218,7 @@ rule main = parse
   | "=> " { T.EQ_GT }
 
 
+  | ub_name { scan_ub lexbuf }
   | impl_name { scan_impl lexbuf }
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}

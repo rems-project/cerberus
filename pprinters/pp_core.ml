@@ -247,9 +247,9 @@ let rec pp_expr e =
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | Eundef u ->
-            pp_keyword "undef" ^^ P.brackets (!^ (
+            pp_keyword "undef" ^^ P.angles (P.angles (!^ (
               if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
-                         else Undefined.string_of_undefined_behaviour u))
+                         else Undefined.string_of_undefined_behaviour u)))
         | Eerror ->
             pp_keyword "error"
         | Eaction (Paction (p, (Action (bs, a)))) ->
