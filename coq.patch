@@ -1,0 +1,485 @@
+This patch file works around various issues with the generated Coq code.
+
+1.  Add return type annotations to various function defintions (workaround for Lem issue #78).
+2.  Add "Implicit Arguments" for polymorphic constructors (workaround for Lem issue #70).
+3.  Add missing "Module foo := bar." for module renamings (workaround for Lem issue #60).
+4.  Remove "Program" from "Program Fixpoint" definition of some recursive functions, because Program Fixpoint:
+    a.  sometimes results in unsatisfied obligations
+    b.  sometimes appears to cause Coq to hang
+    c.  sometimes can't determine termination of functions that plain Fixpoint can.
+5.  Rewrite some functions to help Coq determine termination.
+6.  Work around some bool/Prop issues in core_run_inductive.v.
+
+--- _coq-orig/ailTypes.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/ailTypes.v	2014-02-19 21:21:57.000000000 +0000
+@@ -97,14 +97,14 @@
+  | Atomic:  ctype  -> ctype .
+ Definition ctype_default: ctype  := Void.
+ 
+-Program Fixpoint eq_params_aux {a b : Type}  (eq_ctype0 : b -> a -> bool ) (p1 : list ((qualifiers *b) % type)) (p2 : list ((qualifiers *a) % type))   :  bool := 
++Definition eq_params_aux {a b : Type}  (eq_ctype0 : b -> a -> bool ) := fix eq_params_aux (p1 : list ((qualifiers *b) % type)) (p2 : list ((qualifiers *a) % type))   :  bool := 
+   match ( (p1,  p2)) with 
+   | ([]           ,  [])            => true
+-  | ((q1, t10) :: p1,  (q2, t20) :: p2) => eq_qualifiers q1 q2 && (eq_ctype0 t10 t20 && eq_params_aux eq_ctype0 p1 p2)
++  | ((q1, t10) :: p1,  (q2, t20) :: p2) => eq_qualifiers q1 q2 && (eq_ctype0 t10 t20 && eq_params_aux p1 p2)
+   | (_            ,  _)             => false
+   end.
+ 
+-Program Fixpoint eq_ctype  (t10 : ctype ) (t20 : ctype ) := 
++Fixpoint eq_ctype  (t10 : ctype ) (t20 : ctype ) := 
+   let  eq_params0  :=  eq_params_aux eq_ctype in 
+   match ( (t10,  t20)) with 
+   | (Void            ,  Void)               => true
+--- _coq-orig/cmm_aux.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/cmm_aux.v	2014-02-19 21:21:57.000000000 +0000
+@@ -30,7 +30,7 @@
+ Definition tid_default: tid  := Tzero.
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint tid_eq  (tid1 : tid ) (tid2 : tid ) := 
++Fixpoint tid_eq  (tid1 : tid ) := fix tid_eq1 (tid2 : tid ) := 
+   match ( (tid1,  tid2)) with 
+     | (Tzero,  Tzero) =>
+         true
+@@ -39,7 +39,7 @@
+     | (Tseq tid1',  _) =>
+         tid_eq tid1' tid2
+     | (_,  Tseq tid2') =>
+-        tid_eq tid1 tid2'
++        tid_eq1 tid2'
+     | (_,  _) =>
+         false
+ end.
+@@ -51,12 +51,17 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint setElemCompare_tid  (tid1 : tid ) (tid2 : tid ) := 
++Fixpoint setElemCompare_tid  (tid1 : tid ) := fix setElemCompare_tid' (tid2 : tid ) := 
+   match ( (tid1,  tid2)) with 
+     | (Tseq tid1',  _) => setElemCompare_tid tid1' tid2
+-    | (_,  Tseq tid2') => setElemCompare_tid tid1 tid2'
++    | (_,  Tseq tid2') => setElemCompare_tid' tid2'
+     | (Tzero,  Tzero) => EQ
+-    | (Tpar n1 tid1',  Tpar n2 tid2') => (pairCompare (genericCompare nat_ltb classical_boolean_equivalence) setElemCompare_tid (n1,  tid1') (n2,  tid2'))
++    | (Tpar n1 tid1',  Tpar n2 tid2') =>
++      match (genericCompare nat_ltb classical_boolean_equivalence) n1 n2 with
++        | LT => LT
++        | GT => GT
++        | EQ => setElemCompare_tid tid1' tid2'
++      end
+     | (Tzero,  _) => LT
+     | (_,  Tzero) => GT
+   end.
+@@ -159,7 +164,7 @@
+   | Mnull: cvalue .
+ Definition cvalue_default: cvalue  := Muninit.
+ 
+-Program Fixpoint setElemCompare_cvalue  (v1 : cvalue ) (v2 : cvalue ) := 
++Fixpoint setElemCompare_cvalue  (v1 : cvalue ) (v2 : cvalue ) := 
+   match ( (v1,  v2)) with 
+     | (Muninit     ,  Muninit)      => EQ
+     | (Mbase c1    ,  Mbase c2)     => match ( (c1,  c2)) with 
+@@ -169,7 +174,19 @@
+       | (Cfunction _ ,  Cint _)        => GT
+     end
+     | (Mobj loc1   ,  Mobj loc2)    => (pairCompare (lexicographicCompareBy (fun (sym1 : symbol.t ) (sym2 : symbol.t )=>ordCompare sym1 sym2)) location_Compare loc1 loc2)
+-    | (Marray vs1  ,  Marray vs2)   => (lexicographicCompareBy setElemCompare_cvalue vs1 vs2)
++    | (Marray vs1  ,  Marray vs2)   =>
++      (fix cmp vs1 vs2 :=
++         match (vs1, vs2) with
++           | ([], []) => EQ
++           | ([], _) => LT
++           | (_, []) => GT
++           | (x::xs, y::ys) =>
++             match (setElemCompare_cvalue x y) with
++               | LT => LT
++               | GT => GT
++               | EQ => cmp xs ys
++             end
++         end) vs1 vs2
+     | (Mnull       ,  Mnull)        => EQ
+     
+     | (Muninit     ,  _)            => LT
+--- _coq-orig/cmm_csem.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/cmm_csem.v	2014-02-19 21:21:57.000000000 +0000
+@@ -962,7 +962,7 @@
+ (* [?]: removed value specification. *)
+ 
+ Definition
+-    relation_plug  (R : set ((action *action ) % type)) (a : action ) (a' : action ) :=  [].
++    relation_plug  (R : set ((action *action ) % type)) (a : action ) (a' : action ) : set (action * action) :=  [].
+ 
+ 
+ 
+--- _coq-orig/common.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/common.v	2014-02-19 21:21:57.000000000 +0000
+@@ -25,7 +25,7 @@
+     | None => false
+     end.
+ 
+-Program Fixpoint eq_list {A : Type}   (eq_A : A ->  A ->  bool ) (l1 : list A) (l2 : list A)   :  bool := 
++Fixpoint eq_list {A : Type}   (eq_A : A ->  A ->  bool ) (l1 : list A) (l2 : list A)   :  bool := 
+     match ( (l1,  l2)) with 
+     | ([]      ,  [])       => true
+     | (a1 :: l1,  a2 :: l2) => eq_A a1 a2 && eq_list eq_A l1 l2
+--- _coq-orig/core.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/core.v	2014-02-19 21:21:57.000000000 +0000
+@@ -34,6 +34,7 @@
+ Require Import  core_ctype.
+ Require Export  core_ctype.
+ 
++Module cmm := cmm_csem.
+ 
+ 
+ 
+@@ -182,6 +183,55 @@
+ 
+ with action0 (a : Type) : Type :=   Action:  set  a ->  action_  a -> action0 a
+ with paction (a : Type) : Type :=  Paction:  polarity  ->  action0  a -> paction a.
++
++Implicit Arguments Enull [[a]].
++Implicit Arguments Etrue [[a]].
++Implicit Arguments Efalse [[a]].
++Implicit Arguments Econst [[a]].
++Implicit Arguments Ectype [[a]].
++Implicit Arguments Eaddr [[a]].
++Implicit Arguments Esym [[a]].
++Implicit Arguments Eimpl [[a]].
++Implicit Arguments Etuple [[a]].
++Implicit Arguments Enot [[a]].
++Implicit Arguments Eop [[a]].
++Implicit Arguments Ecall [[a]].
++Implicit Arguments Eundef [[a]].
++Implicit Arguments Eerror [[a]].
++Implicit Arguments Eskip [[a]].
++Implicit Arguments Elet [[a]].
++Implicit Arguments Eif [[a]].
++Implicit Arguments Eproc [[a]].
++Implicit Arguments Esame [[a]].
++Implicit Arguments Eaction [[a]].
++Implicit Arguments Eunseq [[a]].
++Implicit Arguments Ewseq [[a]].
++Implicit Arguments Esseq [[a]].
++Implicit Arguments Easeq [[a]].
++Implicit Arguments Eindet [[a]].
++Implicit Arguments Ebound [[a]].
++Implicit Arguments Esave [[a]].
++Implicit Arguments Erun [[a]].
++Implicit Arguments Eret [[a]].
++Implicit Arguments End [[a]].
++Implicit Arguments Epar [[a]].
++Implicit Arguments Eshift [[a]].
++Implicit Arguments Eis_scalar [[a]].
++Implicit Arguments Eis_integer [[a]].
++Implicit Arguments Eis_signed [[a]].
++Implicit Arguments Eis_unsigned [[a]].
++
++Implicit Arguments Create0 [[a]].
++Implicit Arguments Alloc [[a]].
++Implicit Arguments Kill0 [[a]].
++Implicit Arguments Store0 [[a]].
++Implicit Arguments Load0 [[a]].
++Implicit Arguments CompareExchangeStrong [[a]].
++Implicit Arguments CompareExchangeWeak [[a]].
++
++Implicit Arguments Action [[a]].
++Implicit Arguments Paction [[a]].
++
+ Definition expr_default{a: Type} : expr a := Enull.
+ Definition action__default{a: Type} : action_ a := Create0 expr_default list_default.
+ Definition action0_default{a: Type} : action0 a := Action set_default action__default.
+@@ -209,6 +259,10 @@
+ Inductive impl_decl (a : Type) : Type := 
+   | Def:   core_base_type  ->  expr  a -> impl_decl a
+   | IFun:  core_base_type  ->  list  ((sym  * core_base_type ) % type) ->  expr  a -> impl_decl a.
++
++Implicit Arguments Def [[a]].
++Implicit Arguments IFun [[a]].
++
+ Definition impl_decl_default{a: Type} : impl_decl a := Def core_base_type_default expr_default.
+ Definition impl_ (a: Type) : Type :=  fmap  implementation_.implementation_constant   (impl_decl  a).
+ Definition impl__default{a: Type} : impl_ a := fmap_default.
+@@ -223,6 +277,10 @@
+   impl:    impl_  a;
+   funs:    fun_map  a
+ }.
++Implicit Arguments main [[a]].
++Implicit Arguments stdlib [[a]].
++Implicit Arguments impl [[a]].
++Implicit Arguments funs [[a]].
+ Notation "{[ r 'with' 'main' := e ]}" := ({| main := e; stdlib := stdlib r; impl := impl r; funs := funs r |}).
+ Notation "{[ r 'with' 'stdlib' := e ]}" := ({| stdlib := e; main := main r; impl := impl r; funs := funs r |}).
+ Notation "{[ r 'with' 'impl' := e ]}" := ({| impl := e; main := main r; stdlib := stdlib r; funs := funs r |}).
+--- _coq-orig/core_aux.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/core_aux.v	2014-02-19 21:21:57.000000000 +0000
+@@ -113,7 +113,7 @@
+ 
+ Definition mk_ctype {a : Type}  (ty : ailTypes.ctype )  : expr a:=  Ectype (proj_ctype ty).
+ 
+-Program Fixpoint mk_wseq {a : Type}  (a_opts_es : list ((list (option (sym ) )*expr a) % type))  : expr a:= 
++Fixpoint mk_wseq {a : Type}  (a_opts_es : list ((list (option (sym ) )*expr a) % type))  : expr a:= 
+   match ( a_opts_es) with 
+     | []               => Eskip
+     | [(_,  e)]         => e
+@@ -126,7 +126,7 @@
+ 
+ 
+ 
+-Program Fixpoint concat_sseq {a : Type}  (e : expr a) (e' : expr a)  : expr a:= 
++Fixpoint concat_sseq {a : Type}  (e : expr a) (e' : expr a)  : expr a:= 
+    match ( e) with 
+      | Esseq _as e1 e2 => Esseq _as e1 (concat_sseq e2 e')
+      | Eskip           => e'
+@@ -560,7 +560,7 @@
+ end.
+ 
+ 
+-Program Fixpoint is_value0 {a : Type}  (e : expr a) := 
++Fixpoint is_value0 {a : Type}  (e : expr a) := 
+   match ( e) with 
+    | Etuple pes =>
+        List.forallb is_value0 pes
+--- _coq-orig/core_run.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/core_run.v	2014-02-19 21:21:57.000000000 +0000
+@@ -80,6 +80,12 @@
+   | Kpar:  list  (expr  a) ->  list  (expr  a) -> _cont a
+   | Kwseq:  list  (option  sym  ) ->  expr  a -> _cont a
+   | Ksseq:  list  (option  sym  ) ->  expr  a -> _cont a.
++
++Implicit Arguments Kunseq [[a]].
++Implicit Arguments Kpar [[a]].
++Implicit Arguments Kwseq [[a]].
++Implicit Arguments Ksseq [[a]].
++
+ Definition _cont_default{a: Type} : _cont a := Kunseq list_default list_default.
+ 
+ Definition cont (a: Type) : Type :=  list  (_cont  a).
+@@ -153,6 +159,7 @@
+   Definition bind5 {a b : Type}  ( m : list a) ( f : a -> list b)  : list b:=  List.fold_right (fun (x : a) (y : list b) =>  (@ List.app _)(f x) y) [] m.
+ End L.
+ 
++Module e := core_run_effect.
+ Module Operators.  
+ (* [?]: removed top-level value definition. *)
+ (* [?]: removed top-level value definition. *)
+@@ -163,7 +170,7 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint annotate_expr  (p_aid : (polarity *nat ) % type) (e : expr (nat )) := 
++Fixpoint annotate_expr  (p_aid : (polarity *nat ) % type) (e : expr (nat )) := 
+   match ( e) with 
+   | Elet a e1 e2         => Elet a e1 (annotate_expr p_aid e2)
+   | Eif e1 e2 e3         => Eif e1 (annotate_expr p_aid e2) (annotate_expr p_aid e3)
+@@ -741,7 +748,7 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint eval1 {a : Type}  (file0 : file_ a) (pe : expr a)  : t4 (expr a):= 
++Fixpoint eval1 {a : Type}  (file0 : file_ a) (pe : expr a)  : t4 (expr a):= 
+   let  eval2   :=  eval1 file0 in 
+   match ( pe) with 
+     | Eundef u =>
+@@ -910,7 +917,7 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_create  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) (pref : list (symbol.t )) :=  
++Definition perform_create  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) (pref : list (symbol.t )) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                            e.bind3  
+ (
+   (* perform the create *)e.return5 pe) 
+@@ -1001,7 +1008,7 @@
+      end).
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_alloc  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) (pref : list (symbol.t )) :=  
++Definition perform_alloc  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) (pref : list (symbol.t )) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                            e.bind3  
+ (
+   (* perform the alloc *)e.return5 pe) 
+@@ -1094,7 +1101,7 @@
+      end).
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_kill  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) :=  
++Definition perform_kill  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe : expr (nat )) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                            e.bind3  
+ (
+   (* perform the kill *)e.return5 pe) 
+@@ -1182,7 +1189,7 @@
+      end).
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_store  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe1 : expr (nat )) (pe2 : expr (nat )) (pe3 : expr (nat )) (mo1 : cmm_csem.memory_order ) :=  
++Definition perform_store  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe1 : expr (nat )) (pe2 : expr (nat )) (pe3 : expr (nat )) (mo1 : cmm_csem.memory_order ) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                                  e.bind3  
+ (
+   (* perform the store *)e.return5 pe1) 
+@@ -1323,7 +1330,7 @@
+      end).
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_load  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe1 : expr (nat )) (pe2 : expr (nat )) (mo1 : cmm_csem.memory_order ) :=  
++Definition perform_load  (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe1 : expr (nat )) (pe2 : expr (nat )) (mo1 : cmm_csem.memory_order ) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                                 e.bind3  
+ (
+   (* perform the load *)e.return5 pe1) 
+@@ -1475,7 +1482,7 @@
+      end).
+ (* [?]: removed value specification. *)
+ 
+-Definition perform_compare_exchange  (cmp : cmm_aux.cvalue  -> cmm_aux.cvalue  -> core_run_effect.state  -> list ((t4 (bool )*core_run_effect.state ) % type)) (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe_ty : expr (core_run_effect.taction_id1 )) (pe_o : expr (nat )) (pe_expected : expr (core_run_effect.taction_id1 )) (pe_desired : expr (nat )) (mo_succes : cmm_csem.memory_order ) (mo_failure : cmm_csem.memory_order ) :=  
++Definition perform_compare_exchange  (cmp : cmm_aux.cvalue  -> cmm_aux.cvalue  -> core_run_effect.state  -> list ((t4 (bool )*core_run_effect.state ) % type)) (bs : set (core_run_effect.taction_id1 )) (tid_ : cmm_aux.tid ) (pe_ty : expr (core_run_effect.taction_id1 )) (pe_o : expr (nat )) (pe_expected : expr (core_run_effect.taction_id1 )) (pe_desired : expr (nat )) (mo_succes : cmm_csem.memory_order ) (mo_failure : cmm_csem.memory_order ) : core_run_effect.t7 (core_run_effect.taction_id1 * expr core_run_effect.taction_id1) :=  
+   let  tid1  :=  cmm_aux.canonize_tid tid_ in                        e.bind3  
+ (
+   (* We first load (NA) from pe_expected *)perform_load bs tid_ pe_ty pe_expected cmm.NA) 
+@@ -2445,7 +2452,7 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint convert_expr {a : Type}  (e : expr a) := 
++Program Fixpoint convert_expr {a : Type}  (e : expr a) : expr taction_id := 
+   match ( e) with 
+     | Eskip               => Eskip
+     | Etuple es           => Etuple (List.map convert_expr es)
+@@ -2637,7 +2644,7 @@
+ 
+ (* [?]: removed value specification. *)
+ 
+-Definition initial_expr_and_state  (execution_mode0 : core_run_effect.execution_mode_ ) (file0 : file_ (zero )) := 
++Definition initial_expr_and_state  (execution_mode0 : core_run_effect.execution_mode_ ) (file0 : file_ (zero )) : ((expr core_run_effect.taction_id1 * cmm_aux.tid * list (cont core_run_effect.taction_id1)) * e.state) := 
+   let  file0  :=  convert_file file0 in 
+   (* collect the continuations in all functions *)
+   let  cont_map0  :=  set_fold
+--- _coq-orig/core_run_effect.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/core_run_effect.v	2014-02-19 21:21:57.000000000 +0000
+@@ -28,6 +28,8 @@
+ Require Import  state_exception.
+ Require Export  state_exception.
+ 
++Module cmm := cmm_csem.
++Module u := undefined.
+ 
+ 
+ (* Fully evaluated description of an action *)
+--- _coq-orig/core_run_inductive.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/core_run_inductive.v	2014-02-19 21:21:57.000000000 +0000
+@@ -20,12 +20,12 @@
+ 
+ Inductive red2_ind: ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> Prop :=
+   | red2_intro: forall e1 e2 s1 s2, (
+-  lem_list.elem (Defined0 e2,  s2) (red2 e1 s1): Prop) -> red2_ind   (e1,  s1)  (e2,  s2).
++  In (Defined0 e2,  s2) (red2 e1 s1): Prop) -> red2_ind   (e1,  s1)  (e2,  s2).
+ Inductive star_red2_ind: ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> Prop :=
+   | star_red2_zero: forall e1 s1, (
+   true: Prop) -> star_red2_ind   (e1,  s1)  (e1,  s1)
+   | star_red2_step: forall e1 e2 e3 s1 s2 s3, (
+-  red2_ind (e1,  s1) (e2,  s2) &&
++  red2_ind (e1,  s1) (e2,  s2) /\
+   star_red2_ind (e2,  s2) (e3,  s3): Prop) -> star_red2_ind   (e1,  s1)  (e3,  s3).
+ 
+ (*
+--- _coq-orig/errorMonad.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/errorMonad.v	2014-02-19 21:21:57.000000000 +0000
+@@ -56,7 +56,7 @@
+       exception.Result z end.
+ (* [?]: removed value specification. *)
+ 
+-Program Fixpoint mapM1 {a b : Type}  (f : a -> sum (typing_error ) b) (ys : list a)  : sum (typing_error ) (list b):= 
++Fixpoint mapM1 {a b : Type}  (f : a -> sum (typing_error ) b) (ys : list a)  : sum (typing_error ) (list b):= 
+   match ( ys) with 
+   | []      => return4 []
+   |( x::xs) =>       match ( f x) with 
+--- _coq-orig/exception.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/exception.v	2014-02-19 21:21:57.000000000 +0000
+@@ -18,6 +18,8 @@
+ Inductive t0 (a : Type) (msg : Type) : Type := 
+   | Result:  a -> t0 a msg
+   | Exception:  msg -> t0 a msg.
++Implicit Arguments Result [[a] [msg]].
++Implicit Arguments Exception [[a] [msg]].
+ Definition t0_default {a: Type} {msg: Type} : t0 a msg := Result DAEMON.
+ 
+ Definition bind0 {a b c : Type}  (m : t0 a b) (k : a -> t0 c b)  : t0 c b:= 
+--- _coq-orig/global.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/global.v	2014-02-19 21:21:57.000000000 +0000
+@@ -195,15 +195,15 @@
+     if elem a0 s && negb (elem b acc) then b :: acc else acc end
+   ) rel0 s.
+ 
+-Program Fixpoint replicate_list_ {a : Type}  (x : a)  (n: Z ) (acc : list a)  : list a:= 
+-  if int_gtb n((Zpos (P_of_succ_nat 0))) then
+-    replicate_list_ x (Coq.ZArith.BinInt.Zminus n((Zpos (P_of_succ_nat 1)))) (x :: acc)
+-  else
+-    acc.
++Program Fixpoint replicate_list_ {a : Type}  (x : a)  (n: nat ) (acc : list a)  : list a:= 
++   match n with
++     | S n' => replicate_list_ x n' (x :: acc)
++     | O => acc
++   end.
+ (* [?]: removed value specification. *)
+ 
+ Definition replicate_list {a : Type}  (x : a) (n : Z )  : list a:= 
+-  replicate_list_ x n [].
++  replicate_list_ x (Z.to_nat n) [].
+   
+ 
+ (*
+--- _coq-orig/location.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/location.v	2014-02-19 21:21:57.000000000 +0000
+@@ -39,7 +39,7 @@
+ Definition t5_default: t5  := maybe_default.
+ (* [?]: removed value specification. *)
+ 
+-Definition unknowned  :=  None.
++Definition unknowned : t5 :=  None.
+ (* [?]: removed value specification. *)
+ 
+ Definition dummy  := 
+--- _coq-orig/memory.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/memory.v	2014-02-19 21:21:57.000000000 +0000
+@@ -65,10 +65,10 @@
+ 
+ 
+ 
+-Definition create0  (pref : list (symbol.t )) (ty : core_ctype.ctype0 ) (taid : nat )    :=  naive_memory.create pref ty taid.
+-Definition store0  (pref : core_ctype.ctype0 ) (addr : (list (symbol.t )*cmm_aux.location_ ) % type) (n : cmm_aux.cvalue ) (taid : nat ) :=  naive_memory.store pref addr n taid.
+-Definition load0  (ty : core_ctype.ctype0 ) (addr : (list (symbol.t )*cmm_aux.location_ ) % type)           :=  naive_memory.load ty addr.
+-Definition kill0  (addr : (list (symbol.t )*cmm_aux.location_ ) % type)              :=  naive_memory.kill addr.
++Definition create0  (pref : list (symbol.t )) (ty : core_ctype.ctype0 ) (taid : nat ) : t3 mem_addr   :=  naive_memory.create pref ty taid.
++Definition store0  (pref : core_ctype.ctype0 ) (addr : (list (symbol.t )*cmm_aux.location_ ) % type) (n : cmm_aux.cvalue ) (taid : nat ) : t3 unit :=  naive_memory.store pref addr n taid.
++Definition load0  (ty : core_ctype.ctype0 ) (addr : (list (symbol.t )*cmm_aux.location_ ) % type) : t3 (cmm.cvalue * nat)          :=  naive_memory.load ty addr.
++Definition kill0  (addr : (list (symbol.t )*cmm_aux.location_ ) % type) : t3 unit             :=  naive_memory.kill addr.
+ 
+ (*
+ *** Local Variables: ***
+--- _coq-orig/naive_memory.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/naive_memory.v	2014-02-19 21:21:57.000000000 +0000
+@@ -23,11 +23,13 @@
+ Require Import  state_exception.
+ Require Export  state_exception.
+ 
++Module cmm := cmm_aux.
+ 
+ (* TODO *)
+ Definition taction_id : Type :=  nat .
+ Definition taction_id_default: taction_id  := nat_default.
+ 
++Module e := state_exception.
+ 
+ Inductive memory_error : Type := 
+   | MemErr_TODO: memory_error .
+--- _coq-orig/undefined.v	2014-02-19 21:21:57.000000000 +0000
++++ _coq-patched/undefined.v	2014-02-19 21:21:57.000000000 +0000
+@@ -275,6 +275,9 @@
+   | Defined0:  a -> t4 a
+   | Undef:  list  undefined_behaviour  -> t4 a
+   | Error: t4 a.
++Implicit Arguments Defined0 [[a]].
++Implicit Arguments Undef [[a]].
++Implicit Arguments Error [[a]].
+ Definition t4_default{a: Type} : t4 a := Defined0 DAEMON.
+ (* [?]: removed value specification. *)
+ 

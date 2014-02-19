@@ -2,3 +2,6 @@ syntax: glob
 
 _ocaml_generated/**
 _lem/**
+_coq/**
+_coq-orig/**
+_coq-patched/**

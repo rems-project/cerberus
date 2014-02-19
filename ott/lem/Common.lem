@@ -3,6 +3,7 @@ open import Pervasives Either
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+declare coq   target_rep function assert_false = `DAEMON`
 
 
 val option_bool : forall 'A. maybe 'A -> ('A -> bool) -> bool

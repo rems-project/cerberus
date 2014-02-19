@@ -45,7 +45,8 @@ end
 
 
 val     mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
-let rec mapM f = function
+let rec mapM f ys =
+  match ys with
   | []      -> return []
   | (x::xs) -> f x       >>= fun z  ->
                mapM f xs >>= fun zs ->
