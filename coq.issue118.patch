@@ -1,0 +1,269 @@
+This patch file works around Lem issue #118 (missing space in generated code for parenthesised
+record access).
+
+--- _coq-patched/ailTypesAux.v	2014-02-19 21:33:46.000000000 +0000
++++ _coq/ailTypesAux.v	2014-02-19 21:33:46.000000000 +0000
+@@ -24,7 +24,7 @@
+ 
+ 
+ Definition unqualified  (qs : qualifiers ) :=  
+-  match (((constqs), (restrictqs), (volatileqs))) with
++  match (((const qs), (restrict qs), (volatile qs))) with
+       ( false,  false,  false) => true | ( _,  _,  _) => false end.
+ 
+ Definition integer  (t9 : ctype ) := 
+@@ -52,7 +52,7 @@
+   end.
+ 
+ Definition unsigned  (P : implementation ) (it : integerType )   :  bool := 
+-  negb ((signedP) it).
++  negb ((signed P) it).
+ 
+ Definition signed_type  (it : integerType )   :  bool := 
+   match ( it) with 
+@@ -78,18 +78,18 @@
+   | (Char             ,  Char)              => true
+   | (Char             ,  Signed   Ichar)    =>(signed P) Char
+   | (Char             ,  Signed   ibt)      =>(signed P) Char || nat_ltb
+-                                              ((precisionP) Char) ((precisionP) (Signed ibt))
++                                              ((precision P) Char) ((precision P) (Signed ibt))
+   | (Signed Ichar     ,  Char)              =>(signed P) Char
+   | (Signed ibt       ,  Char)              =>(signed P) Char && classical_boolean_equivalence                                              
+-((precisionP) (Signed ibt)) ((precisionP) Char)
+-  | (Unsigned Ichar   ,  Char)              => negb ((signedP) Char)
+-  | (Unsigned ibt     ,  Char)              => negb ((signedP) Char) && classical_boolean_equivalence                                              
+-((precisionP) (Unsigned ibt)) ((precisionP) Char)
+-  | (Char             ,  Unsigned _)        => negb ((signedP) Char)
+-  | (Char             ,  Bool)              => negb ((signedP) Char) && classical_boolean_equivalence                                              
+-((precisionP) Char) ((precisionP) Bool)
+-  | (Bool             ,  Char)              => negb ((signedP) Char) || nat_ltb
+-                                              ((precisionP) Bool) ((precisionP) Char)
++((precision P) (Signed ibt)) ((precision P) Char)
++  | (Unsigned Ichar   ,  Char)              => negb ((signed P) Char)
++  | (Unsigned ibt     ,  Char)              => negb ((signed P) Char) && classical_boolean_equivalence                                              
++((precision P) (Unsigned ibt)) ((precision P) Char)
++  | (Char             ,  Unsigned _)        => negb ((signed P) Char)
++  | (Char             ,  Bool)              => negb ((signed P) Char) && classical_boolean_equivalence                                              
++((precision P) Char) ((precision P) Bool)
++  | (Bool             ,  Char)              => negb ((signed P) Char) || nat_ltb
++                                              ((precision P) Bool) ((precision P) Char)
+ 
+   | (Signed   Ichar   ,  Signed   _)        => true
+   | (Signed   Short   ,  Signed   Short)    => true
+@@ -102,7 +102,7 @@
+   | (Signed   Long    ,  Signed   Long)     => true
+   | (Signed   Long    ,  Signed   LongLong) => true
+   | (Signed   LongLong,  Signed   LongLong) => true
+-  | (Signed   ibt1    ,  Signed   ibt2)     => classical_boolean_equivalence ((precisionP) (Signed ibt1)) ((precisionP) (Signed ibt2))
++  | (Signed   ibt1    ,  Signed   ibt2)     => classical_boolean_equivalence ((precision P) (Signed ibt1)) ((precision P) (Signed ibt2))
+ 
+   | (Bool             ,  Bool)              => true
+   | (Bool             ,  Unsigned _)        => true
+@@ -117,19 +117,19 @@
+   | (Unsigned Long    ,  Unsigned Long)     => true
+   | (Unsigned Long    ,  Unsigned LongLong) => true
+   | (Unsigned LongLong,  Unsigned LongLong) => true
+-  | (Unsigned ibt     ,  Bool)              => classical_boolean_equivalence ((precisionP) (Unsigned ibt)) ((precisionP) Bool)
+-  | (Unsigned ibt1    ,  Unsigned   ibt2)   => classical_boolean_equivalence ((precisionP) (Unsigned ibt1)) ((precisionP) (Unsigned ibt2))
++  | (Unsigned ibt     ,  Bool)              => classical_boolean_equivalence ((precision P) (Unsigned ibt)) ((precision P) Bool)
++  | (Unsigned ibt1    ,  Unsigned   ibt2)   => classical_boolean_equivalence ((precision P) (Unsigned ibt1)) ((precision P) (Unsigned ibt2))
+ 
+   | (Signed   _       ,  Bool)              => false
+   | (Signed   _       ,  Unsigned _)        => false
+ 
+-  | (Bool             ,  Signed   ibt2)     => nat_ltb ((precisionP) Bool) ((precisionP) (Signed ibt2))
++  | (Bool             ,  Signed   ibt2)     => nat_ltb ((precision P) Bool) ((precision P) (Signed ibt2))
+   | (Unsigned _       ,  Signed   Ichar)    => false
+   | (Unsigned Short   ,  Signed   Short)    => false
+   | (Unsigned Int_    ,  Signed   Int_)     => false
+   | (Unsigned Long    ,  Signed   Long)     => false
+   | (Unsigned LongLong,  Signed   LongLong) => false
+-  | (Unsigned ibt1    ,  Signed   ibt2)     => nat_ltb ((precisionP) (Unsigned ibt1)) ((precisionP) (Signed ibt2))
++  | (Unsigned ibt1    ,  Signed   ibt2)     => nat_ltb ((precision P) (Unsigned ibt1)) ((precision P) (Signed ibt2))
+   end.
+ 
+ Definition eq_integer_rank_base  (it1 : integerType ) (it2 : integerType )   :  bool := 
+@@ -150,7 +150,7 @@
+   | (Signed   Int_,  Signed     Long) => true
+   | (Signed Short,  Signed      Int_) => true
+   | (Signed Ichar,  Signed    Short) => true
+-  | (Signed  ibt1,  Signed     ibt2) => nat_ltb ((precisionP) (Signed ibt1)) ((precisionP) (Signed ibt2))
++  | (Signed  ibt1,  Signed     ibt2) => nat_ltb ((precision P) (Signed ibt1)) ((precision P) (Signed ibt2))
+   | (_           ,  _)               => false
+   end.
+ 
+@@ -392,15 +392,15 @@
+   object_ t9 &&  
+ (negb (array t9) &&  
+ (negb (incomplete t9) &&
+-  negb ((constq)))).
++  negb ((const q)))).
+ 
+ Definition real  (t9 : ctype )   :  bool :=  integer t9.
+ 
+-Definition combine_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers ) :=  {|const    :=  ((constqs1)    ||(const qs2))   ;restrict :=  ((restrictqs1) ||(restrict qs2));volatile :=  ((volatileqs1) ||(volatile qs2))
++Definition combine_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers ) :=  {|const    :=  ((const qs1)    ||(const qs2))   ;restrict :=  ((restrict qs1) ||(restrict qs2));volatile :=  ((volatile qs1) ||(volatile qs2))
+ |}.
+ 
+-Definition sub_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers ) :=     ((negb(const qs1)) || ((negb ((constqs2)
+-  &&(restrict qs1))) || ((negb ((restrictqs2)
++Definition sub_qualifiers  (qs1 : qualifiers ) (qs2 : qualifiers ) :=     ((negb(const qs1)) || ((negb ((const qs2)
++  &&(restrict qs1))) || ((negb ((restrict qs2)
+   &&(volatile qs1))) ||(volatile qs2)))).
+ 
+ (* following (Â§6.3.2.1)#3 *)
+--- _coq-patched/cmm_csem.v	2014-02-19 21:33:46.000000000 +0000
++++ _coq/cmm_csem.v	2014-02-19 21:33:46.000000000 +0000
+@@ -875,7 +875,7 @@
+       (actions Xo))(actions Xo).
+ 
+ 
+-Definition sbasw  (Xo : pre_execution ) :=  (set_tc (fun (act1 : action ) (act2 : action )=>eq_action act1 act2) ( (set_union_by (pairCompare (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2) (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2))(sbXo)(asw Xo)))).
++Definition sbasw  (Xo : pre_execution ) :=  (set_tc (fun (act1 : action ) (act2 : action )=>eq_action act1 act2) ( (set_union_by (pairCompare (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2) (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2))(sb Xo)(asw Xo)))).
+ 
+ (* 7.22.3 p1 "Each such allocation shall yield a pointer to an object disjoint from any other object."  (* CSEM *)
+    When we are going to make a distinction between regions and objects we have to revise this           (* CSEM *)
+@@ -958,7 +958,7 @@
+   opsem p Xo && ((set_subset_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2) A(actions Xo)) && (downclosed A (sbasw Xo) && true)).
+ 
+ 
+-Definition fringe_set  (Xo : pre_execution ) (A : set (action )) :=  minimal_elements ( (set_diff_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2)(actionsXo) A)) (sbasw Xo).
++Definition fringe_set  (Xo : pre_execution ) (A : set (action )) :=  minimal_elements ( (set_diff_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2)(actions Xo) A)) (sbasw Xo).
+ (* [?]: removed value specification. *)
+ 
+ Definition
+@@ -967,7 +967,7 @@
+ 
+ 
+ Definition pre_execution_plug  (Xo : pre_execution ) (a : action ) (a' : action ) := 
+-  {|actions :=  (set_union_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2) ( (set_diff_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2)(actionsXo) [a])) [a']);threads := (threads Xo);lk      := (lk Xo);sb      :=  (relation_plug(sb Xo) a a');asw     :=  (relation_plug(asw Xo) a a');dd      :=  (relation_plug(dd Xo) a a')
++  {|actions :=  (set_union_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2) ( (set_diff_by (fun (act1 : action ) (act2 : action )=>setElemCompare_action act1 act2)(actions Xo) [a])) [a']);threads := (threads Xo);lk      := (lk Xo);sb      :=  (relation_plug(sb Xo) a a');asw     :=  (relation_plug(asw Xo) a a');dd      :=  (relation_plug(dd Xo) a a')
+   |}.
+ 
+ 
+@@ -1266,7 +1266,7 @@
+            (fun (a : action ) =>
+               ( cmm_aux.tid_eq (tid_of a) (tid_of b)) &&
+               match ( (loc_of a)) with None => false | Some l =>
+-                ( classical_boolean_equivalence ((lkXo) l) Non_Atomic) end)
++                ( classical_boolean_equivalence ((lk Xo) l) Non_Atomic) end)
+            (actions Xo)) (actions Xo) end.
+ 
+ 
+@@ -1587,7 +1587,7 @@
+          match ( (loc_of a)) with None => false | Some l =>
+            ( (set_member_by
+                 (fun (x : location_kind ) (y : location_kind )=> EQ)
+-                ((lkXo) l) [Mutex; Non_Atomic])) end) (actions Xo) end.
++                ((lk Xo) l) [Mutex; Non_Atomic])) end) (actions Xo) end.
+ 
+ 
+ Definition locks_only_memory_model  := 
+@@ -1909,7 +1909,7 @@
+                                    setElemCompare_action act1 act2)
+                                 (fun (act1 : action ) (act2 : action )=>
+                                    setElemCompare_action act1 act2)) 
+-                           (sbXo) (asw Xo)))))) && negb (is_NA_store b))))
++                           (sb Xo) (asw Xo)))))) && negb (is_NA_store b))))
+            (actions Xo)) (actions Xo) end.
+ (* [?]: removed value specification. *)
+ 
+@@ -3211,7 +3211,7 @@
+                                    setElemCompare_action act1 act2)
+                                 (fun (act1 : action ) (act2 : action )=>
+                                    setElemCompare_action act1 act2)) 
+-                           (sbXo) (asw Xo)))))) && negb (is_NA_store b))))
++                           (sb Xo) (asw Xo)))))) && negb (is_NA_store b))))
+            (actions Xo)) (actions Xo) end.
+ (* [?]: removed value specification. *)
+ 
+--- _coq-patched/core_run.v	2014-02-19 21:33:46.000000000 +0000
++++ _coq/core_run.v	2014-02-19 21:33:46.000000000 +0000
+@@ -532,7 +532,7 @@
+ 
+ Definition get_trace  :=  
+   fun (x : core_run_effect.state ) =>
+-    match (((tracex), (tact_mapx))) with ( [],  _) =>
++    match (((trace x), (tact_map x))) with ( [],  _) =>
+       DAEMON "[Core_run.get_trace] empty trace"
+       | ( (r,  tact_opt) :: _,  _) =>
+       let tact_map0  := (tact_map x) in [(u.return3
+@@ -562,7 +562,7 @@
+ 
+ Definition create1  (pref : list (symbol.t )) (ty : ctype0 ) (taid : nat ) :=  
+   fun (s : core_run_effect.state ) =>
+-    match (((mem_layouts), (lk0s))) with ( (m,  i),  _) =>
++    match (((mem_layout s), (lk0 s))) with ( (m,  i),  _) =>
+       let lk1  := (lk0 s) in  (* DEBUG *)
+     (* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
+     (* We update the memory (obviously) and we add information about the location 
+@@ -579,7 +579,7 @@
+ 
+ Definition alloc  (pref : list (symbol.t ))  (_ : Z ) (taid : nat ) :=  
+   fun (s : core_run_effect.state ) =>
+-    match ((mem_layouts)) with (m,  i) =>
++    match ((mem_layout s)) with (m,  i) =>
+       let  o  :=  (pref,  cmm_aux.Lbase i) in 
+     [(u.return3 o,  {[ s with mem_layout:=  (fmap_add o
+                                                [(cmm_aux.Muninit,  taid)] 
+@@ -589,7 +589,7 @@
+ 
+ Definition kill1  (o : (list (symbol.t )*cmm_aux.location_ ) % type) :=  
+   fun (s : core_run_effect.state ) =>
+-    match ((mem_layouts)) with (m,  i) =>
++    match ((mem_layout s)) with (m,  i) =>
+       [(u.return3 tt,  {[ s with mem_layout:=  ((fmap_delete_by
+                                                    (pairCompare
+                                                       (lexicographicCompareBy
+@@ -602,7 +602,7 @@
+ 
+ Definition store1   (_ : ctype0 ) (o : (list (symbol.t )*cmm_aux.location_ ) % type) (v : cmm_aux.cvalue ) (taid : nat ) :=  
+   fun (s : core_run_effect.state ) =>
+-    match ((mem_layouts)) with (m,  i) => let  values  := 
++    match ((mem_layout s)) with (m,  i) => let  values  := 
+     match ( (fmap_lookup_by
+                (pairCompare
+                   (lexicographicCompareBy
+@@ -617,7 +617,7 @@
+ 
+ Definition load1  (ty : ctype0 ) (o : (list (symbol.t )*cmm_aux.location_ ) % type) :=  
+   fun (s : core_run_effect.state ) =>
+-    match ((mem_layouts)) with (m,  _) =>
++    match ((mem_layout s)) with (m,  _) =>
+       match ( (fmap_lookup_by
+                  (pairCompare
+                     (lexicographicCompareBy
+--- _coq-patched/core_run_effect.v	2014-02-19 21:33:46.000000000 +0000
++++ _coq/core_run_effect.v	2014-02-19 21:33:46.000000000 +0000
+@@ -328,7 +328,7 @@
+       else
+         (sb_acc, Set.insert (b, aid) asw_acc)
+ *)
+-              ) bs ((sb0st), (asw0 st))) with (sb_,  asw_) =>
++              ) bs ((sb0 st), (asw0 st))) with (sb_,  asw_) =>
+       [(u.return3 tt,  {[ {[ st with asw0:=  asw_  ]} with sb0:=  sb_  ]})]
+     end.
+ (* [?]: removed value specification. *)
+--- _coq-patched/location.v	2014-02-19 21:33:46.000000000 +0000
++++ _coq/location.v	2014-02-19 21:33:46.000000000 +0000
+@@ -49,13 +49,13 @@
+ 
+ Definition make  (s : position ) (e : position ) :=  Some {|start :=  s;stop :=  e|}.
+ 
+-Definition name  (l : loc ) :=  let s  := (start l) in (pos_fnames).
+-Definition first_line  (l : loc ) :=  let s  := (start l) in (pos_lnums).
+-Definition last_line  (l : loc ) :=  let e  := (stop l) in (pos_lnume).
+-Definition first_line_offset  (l : loc ) :=  let s  := (start l) in (pos_lnums).
+-Definition last_line_offset  (l : loc ) :=  let e  := (stop l) in (pos_lnume).
+-Definition first_char  (l : loc ) :=  let s  := (start l) in (pos_cnums).
+-Definition last_char  (l : loc ) :=  let e  := (stop l) in (pos_cnume).
++Definition name  (l : loc ) :=  let s  := (start l) in (pos_fname s).
++Definition first_line  (l : loc ) :=  let s  := (start l) in (pos_lnum s).
++Definition last_line  (l : loc ) :=  let e  := (stop l) in (pos_lnum e).
++Definition first_line_offset  (l : loc ) :=  let s  := (start l) in (pos_lnum s).
++Definition last_line_offset  (l : loc ) :=  let e  := (stop l) in (pos_lnum e).
++Definition first_char  (l : loc ) :=  let s  := (start l) in (pos_cnum s).
++Definition last_char  (l : loc ) :=  let e  := (stop l) in (pos_cnum e).
+ 
+ 
+ 

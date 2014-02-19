@@ -377,7 +377,7 @@ let modifiable q t : bool =
 
 let real t : bool = integer t
 
-let rec compatible_params_aux compatible p1 p2 : bool =
+let rec ~{coq} compatible_params_aux compatible p1 p2 : bool =
   match (p1, p2) with
   | ([]           , []           ) -> true
   | ((_, t1) :: p1, (_, t2) :: p2) -> compatible t1 t2 && compatible_params_aux compatible p1 p2
@@ -385,7 +385,7 @@ let rec compatible_params_aux compatible p1 p2 : bool =
   end
 
 (* (§6.2.7) Compatible type *)
-let rec compatible t1 t2 : bool =
+let rec ~{coq} compatible t1 t2 : bool =
   let compatible_params = compatible_params_aux compatible in
   match (t1, t2) with
   | (Void             , Void             ) -> true
@@ -396,9 +396,9 @@ let rec compatible t1 t2 : bool =
   | (_                , _                ) -> false
   end
 
-let compatible_params p1 p2 = compatible_params_aux compatible p1 p2
+let ~{coq} compatible_params p1 p2 = compatible_params_aux compatible p1 p2
 
-let rec is_composite_params_aux is_composite p1 p2 p3 : bool =
+let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 : bool =
   match (p1, p2, p3) with
   | ([]           , []           , []            ) -> true
   | ((_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3) -> unqualified q3 &&
@@ -407,7 +407,7 @@ let rec is_composite_params_aux is_composite p1 p2 p3 : bool =
   | (_            , _            , _             ) -> false
   end
 
-let rec is_composite t1 t2 t3 : bool =
+let rec ~{coq} is_composite t1 t2 t3 : bool =
   let is_composite_params = is_composite_params_aux is_composite in
   match (t1, t2, t3) with
   | (Void            , Void            , Void            ) -> true
@@ -418,9 +418,9 @@ let rec is_composite t1 t2 t3 : bool =
   | (_               , _               , _               ) -> false
   end
 
-let is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
+let ~{coq} is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
 
-let rec composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))=
+let rec ~{coq} composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))=
     match (p1, p2) with
     | ([]           , []           ) -> Just []
     | ((_, t1) :: p1, (_, t2) :: p2) -> match (composite t1 t2, composite_params_aux composite p1 p2) with
@@ -431,7 +431,7 @@ let rec composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))
     end
 
 (* (§6.2.7#3) composite type *)
-let rec composite t1 t2 : maybe ctype =
+let rec ~{coq} composite t1 t2 : maybe ctype =
   let composite_params = composite_params_aux composite in
   match (t1, t2) with
   | (Void          , Void          ) -> Just Void
@@ -452,7 +452,7 @@ let rec composite t1 t2 : maybe ctype =
   | (_             , _             ) -> Nothing
   end
 
-let composite_params p1 p2 = composite_params_aux composite p1 p2
+let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
 
 let combine_qualifiers qs1 qs2 = <|
   const    = qs1.const    || qs2.const   ;
@@ -505,13 +505,13 @@ let pointer_to_complete_object t : bool =
   | _           -> false
   end
 
-let pointers_to_compatible_complete_objects t1 t2 : bool =
+let ~{coq} pointers_to_compatible_complete_objects t1 t2 : bool =
   match (t1, t2) with
   | (Pointer _ t1, Pointer _ t2) -> complete t1 && complete t2 && compatible t1 t2
   | (_           , _           ) -> false
   end  
 
-let pointers_to_compatible_objects t1 t2 : bool =
+let ~{coq} pointers_to_compatible_objects t1 t2 : bool =
   match (t1, t2) with
   | (Pointer _ t1, Pointer _ t2) -> object_ t1 && object_ t2 && compatible t1 t2
   | (_           , _           ) -> false
@@ -529,7 +529,7 @@ let pointer_to_void t : bool =
   | _              -> false
   end
 
-let pointers_to_compatible_types t1 t2 : bool =
+let ~{coq} pointers_to_compatible_types t1 t2 : bool =
   match (t1, t2) with
   | (Pointer _ t1, Pointer _ t2) -> compatible t1 t2
   | (_           , _           ) -> false
