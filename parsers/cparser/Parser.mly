@@ -1,6 +1,6 @@
 %{
 open Cabs0
-open List0
+(* open List0 *)
 %}
 
 %token<Cabs0.atom * Cabs0.cabsloc> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
@@ -125,7 +125,7 @@ postfix_expression:
 (*     { expr } *)
 
 | expr = postfix_expression LPAREN args = argument_expression_list RPAREN
-    { (CALL (fst expr, rev args), snd expr) }
+    { (CALL (fst expr, List.rev args), snd expr) }
 | expr = postfix_expression LPAREN RPAREN
     { (CALL (fst expr, []), snd expr) }
 | loc = BUILTIN_VA_ARG_ LPAREN expr = assignment_expression COMMA_ ty = type_name RPAREN
@@ -139,9 +139,9 @@ postfix_expression:
 | expr = postfix_expression DEC
     { (UNARY (POSDECR, fst expr), snd expr) }
 | loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list RBRACE
-    { (CAST (typ, COMPOUND_INIT (rev init)), loc) }
+    { (CAST (typ, COMPOUND_INIT (List.rev init)), loc) }
 | loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list COMMA_ RBRACE
-    { (CAST (typ, COMPOUND_INIT (rev init)), loc) }
+    { (CAST (typ, COMPOUND_INIT (List.rev init)), loc) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:
@@ -332,7 +332,7 @@ constant_expression:
 (* 6.7 *)
 declaration:
 | decspec = declaration_specifiers decls = init_declarator_list SEMICOLON
-    { DECDEF ((fst decspec, rev decls), snd decspec) }
+    { DECDEF ((fst decspec, List.rev decls), snd decspec) }
 | decspec = declaration_specifiers SEMICOLON
     { DECDEF ((fst decspec, []), snd decspec) }
 (* TODO
@@ -420,9 +420,9 @@ type_specifier:
 (* 6.7.2.1 *)
 struct_or_union_specifier:
 | str_uni = struct_or_union id = OTHER_NAME LBRACE decls = struct_declaration_list RBRACE
-    { ((fst str_uni) (Some (fst id)) (Some (rev decls)) [], snd str_uni) }
+    { ((fst str_uni) (Some (fst id)) (Some (List.rev decls)) [], snd str_uni) }
 | str_uni = struct_or_union LBRACE decls = struct_declaration_list RBRACE
-    { ((fst str_uni) None (Some (rev decls)) [],            snd str_uni) }
+    { ((fst str_uni) None (Some (List.rev decls)) [],            snd str_uni) }
 | str_uni = struct_or_union id = OTHER_NAME
     { ((fst str_uni) (Some (fst id)) None [],         snd str_uni) }
 
@@ -440,7 +440,7 @@ struct_declaration_list:
 
 struct_declaration:
 | decspec = specifier_qualifier_list decls = struct_declarator_list SEMICOLON
-    { Field_group (fst decspec, rev decls, snd decspec) }
+    { Field_group (fst decspec, List.rev decls, snd decspec) }
 (* Extension to C99 grammar needed to parse some GNU header files. *)
 | decspec = specifier_qualifier_list SEMICOLON
     { Field_group (fst decspec, [], snd decspec) }
@@ -481,13 +481,13 @@ struct_declarator:
 (* 6.7.2.2 *)
 enum_specifier:
 | loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum (Some (fst name), Some (rev enum_list), []), loc) }
+    { (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) }
 | loc = ENUM LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum (None, Some (rev enum_list), []), loc) }
+    { (Tenum (None, Some (List.rev enum_list), []), loc) }
 | loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list COMMA_ RBRACE
-    { (Tenum (Some (fst name), Some (rev enum_list), []), loc) }
+    { (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) }
 | loc = ENUM LBRACE enum_list = enumerator_list COMMA_ RBRACE
-    { (Tenum (None, Some (rev enum_list), []), loc) }
+    { (Tenum (None, Some (List.rev enum_list), []), loc) }
 | loc = ENUM name = OTHER_NAME
     { (Tenum (Some (fst name), None, []), loc) }
 
@@ -538,13 +538,13 @@ direct_declarator:
     { decl }
 | decl = direct_declarator LBRACK quallst = type_qualifier_list expr = assignment_expression RBRACK
     { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, rev quallst, [], Some (fst expr)), attr, loc) }
+	Name (name, ARRAY (typ, List.rev quallst, [], Some (fst expr)), attr, loc) }
 | decl = direct_declarator LBRACK expr = assignment_expression RBRACK
     { match decl with Name (name, typ, attr, loc) ->
 	Name (name, ARRAY (typ, [], [], Some (fst expr)), attr, loc) }
 | decl = direct_declarator LBRACK quallst = type_qualifier_list RBRACK
     { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, rev quallst, [], None), attr, loc) }
+	Name (name, ARRAY (typ, List.rev quallst, [], None), attr, loc) }
 | decl = direct_declarator LBRACK RBRACK
     { match decl with Name (name, typ, attr, loc) ->
 	Name (name, ARRAY (typ, [], [], None), attr, loc) }
@@ -564,11 +564,11 @@ pointer:
 | loc = STAR
     { ((fun z -> PTR ([], [], z)), loc) }
 | loc = STAR quallst = type_qualifier_list
-    { ((fun z -> PTR (rev quallst, [], z)), loc) }
+    { ((fun z -> PTR (List.rev quallst, [], z)), loc) }
 | loc = STAR pt = pointer
     { ((fun typ -> PTR ([], [], (fst pt) typ)), loc) }
 | loc = STAR quallst = type_qualifier_list pt = pointer
-    { ((fun typ -> PTR (rev quallst, [], (fst pt) typ)), loc) }
+    { ((fun typ -> PTR (List.rev quallst, [], (fst pt) typ)), loc) }
 
 type_qualifier_list:
 | qual = type_qualifier
@@ -578,9 +578,9 @@ type_qualifier_list:
 
 parameter_type_list:
 | lst = parameter_list
-    { (rev lst, false) }
+    { (List.rev lst, false) }
 | lst = parameter_list COMMA_ ELLIPSIS
-    { (rev lst, true) }
+    { (List.rev lst, true) }
 
 parameter_list:
 | param = parameter_declaration
@@ -655,9 +655,9 @@ c_initializer:
 | expr = assignment_expression
     { SINGLE_INIT (fst expr) }
 | LBRACE init = initializer_list RBRACE
-    { COMPOUND_INIT (rev init) }
+    { COMPOUND_INIT (List.rev init) }
 | LBRACE init = initializer_list COMMA_ RBRACE
-    { COMPOUND_INIT (rev init) }
+    { COMPOUND_INIT (List.rev init) }
 
 initializer_list:
 | design = designation init = c_initializer
@@ -671,7 +671,7 @@ initializer_list:
 
 designation:
 | design = designator_list EQ_
-    { rev design }
+    { List.rev design }
 
 designator_list:
 | design = designator
@@ -718,7 +718,7 @@ labeled_statement(last_statement):
 (* 6.8.2 *)
 compound_statement:
 | loc = LBRACE lst = block_item_list RBRACE
-    { BLOCK (rev lst, loc) }
+    { BLOCK (List.rev lst, loc) }
 | loc = LBRACE RBRACE
     { BLOCK ([], loc) }
 
@@ -815,7 +815,7 @@ par_statement_list:
 (* 6.9 *)
 translation_unit_file:
 | lst = translation_unit EOF
-    { rev lst }
+    { List.rev lst }
 
 translation_unit:
 | def = external_declaration

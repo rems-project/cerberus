@@ -2,11 +2,15 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-open Cabs0helper
+(* open Cabs0helper *)
 
 module SMap = Map.Make(String)
 
 open Tokens
+
+
+(* TODO: hack *)
+let currentLoc _ = 0
 
 
 let contexts : string list list ref = ref []

@@ -182,7 +182,7 @@ and _menhir_state =
 # 1 "Parser.mly"
   
 open Cabs0
-open List0
+(* open List0 *)
 
 # 188 "Parser.ml"
 let _eRR =
@@ -330,7 +330,7 @@ let rec _menhir_goto_initializer_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 # 331 "Parser.ml"
                 ) = 
 # 660 "Parser.mly"
-    ( COMPOUND_INIT (rev init) )
+    ( COMPOUND_INIT (List.rev init) )
 # 335 "Parser.ml"
                  in
                 _menhir_goto_c_initializer _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2550)) : 'freshtv2552)
@@ -385,7 +385,7 @@ let rec _menhir_goto_initializer_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 # 386 "Parser.ml"
             ) = 
 # 658 "Parser.mly"
-    ( COMPOUND_INIT (rev init) )
+    ( COMPOUND_INIT (List.rev init) )
 # 390 "Parser.ml"
              in
             _menhir_goto_c_initializer _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2558)) : 'freshtv2560)
@@ -610,7 +610,7 @@ let rec _menhir_goto_initializer_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 # 611 "Parser.ml"
                 ) = 
 # 144 "Parser.mly"
-    ( (CAST (typ, COMPOUND_INIT (rev init)), loc) )
+    ( (CAST (typ, COMPOUND_INIT (List.rev init)), loc) )
 # 615 "Parser.ml"
                  in
                 _menhir_goto_postfix_expression _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2568)) : 'freshtv2570)
@@ -689,7 +689,7 @@ let rec _menhir_goto_initializer_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 # 690 "Parser.ml"
             ) = 
 # 142 "Parser.mly"
-    ( (CAST (typ, COMPOUND_INIT (rev init)), loc) )
+    ( (CAST (typ, COMPOUND_INIT (List.rev init)), loc) )
 # 694 "Parser.ml"
              in
             _menhir_goto_postfix_expression _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2576)) : 'freshtv2578)
@@ -1179,7 +1179,7 @@ and _menhir_goto_argument_expression_list : _menhir_env -> 'ttv_tail -> _menhir_
 # 1180 "Parser.ml"
         ) = 
 # 128 "Parser.mly"
-    ( (CALL (fst expr, rev args), snd expr) )
+    ( (CALL (fst expr, List.rev args), snd expr) )
 # 1184 "Parser.ml"
          in
         _menhir_goto_postfix_expression _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2518)) : 'freshtv2520)
@@ -8739,7 +8739,7 @@ and _menhir_goto_assignment_expression : _menhir_env -> 'ttv_tail -> _menhir_sta
             ) = 
 # 540 "Parser.mly"
     ( match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, rev quallst, [], Some (fst expr)), attr, loc) )
+	Name (name, ARRAY (typ, List.rev quallst, [], Some (fst expr)), attr, loc) )
 # 8744 "Parser.ml"
              in
             _menhir_goto_direct_declarator _menhir_env _menhir_stack _menhir_s _v) : 'freshtv2096)) : 'freshtv2098)
@@ -14611,7 +14611,7 @@ and _menhir_goto_init_declarator_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 # 14612 "Parser.ml"
         ) = 
 # 335 "Parser.mly"
-    ( DECDEF ((fst decspec, rev decls), snd decspec) )
+    ( DECDEF ((fst decspec, List.rev decls), snd decspec) )
 # 14616 "Parser.ml"
          in
         _menhir_goto_declaration _menhir_env _menhir_stack _menhir_s _v) : 'freshtv1578)) : 'freshtv1580)
@@ -14689,7 +14689,7 @@ and _menhir_goto_designator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 14690 "Parser.ml"
         ) = 
 # 674 "Parser.mly"
-    ( rev design )
+    ( List.rev design )
 # 14694 "Parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
@@ -16914,7 +16914,7 @@ and _menhir_goto_struct_declarator_list : _menhir_env -> 'ttv_tail -> _menhir_st
 # 16915 "Parser.ml"
         ) = 
 # 443 "Parser.mly"
-    ( Field_group (fst decspec, rev decls, snd decspec) )
+    ( Field_group (fst decspec, List.rev decls, snd decspec) )
 # 16919 "Parser.ml"
          in
         _menhir_goto_struct_declaration _menhir_env _menhir_stack _menhir_s _v) : 'freshtv1422)) : 'freshtv1424)
@@ -17323,7 +17323,7 @@ and _menhir_goto_translation_unit : _menhir_env -> 'ttv_tail -> _menhir_state ->
 # 17324 "Parser.ml"
         ) = 
 # 818 "Parser.mly"
-    ( rev lst )
+    ( List.rev lst )
 # 17328 "Parser.ml"
          in
         let (_menhir_env : _menhir_env) = _menhir_env in
@@ -17530,7 +17530,7 @@ and _menhir_goto_block_item_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 17531 "Parser.ml"
         ) = 
 # 721 "Parser.mly"
-    ( BLOCK (rev lst, loc) )
+    ( BLOCK (List.rev lst, loc) )
 # 17535 "Parser.ml"
          in
         _menhir_goto_compound_statement _menhir_env _menhir_stack _menhir_s _v) : 'freshtv1364)) : 'freshtv1366)
@@ -23345,7 +23345,7 @@ and _menhir_goto_struct_declaration_list : _menhir_env -> 'ttv_tail -> _menhir_s
 # 23346 "Parser.ml"
             ) = 
 # 423 "Parser.mly"
-    ( ((fst str_uni) (Some (fst id)) (Some (rev decls)) [], snd str_uni) )
+    ( ((fst str_uni) (Some (fst id)) (Some (List.rev decls)) [], snd str_uni) )
 # 23350 "Parser.ml"
              in
             _menhir_goto_struct_or_union_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv872)) : 'freshtv874)
@@ -23471,7 +23471,7 @@ and _menhir_goto_struct_declaration_list : _menhir_env -> 'ttv_tail -> _menhir_s
 # 23472 "Parser.ml"
             ) = 
 # 425 "Parser.mly"
-    ( ((fst str_uni) None (Some (rev decls)) [],            snd str_uni) )
+    ( ((fst str_uni) None (Some (List.rev decls)) [],            snd str_uni) )
 # 23476 "Parser.ml"
              in
             _menhir_goto_struct_or_union_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv880)) : 'freshtv882)
@@ -24167,7 +24167,7 @@ and _menhir_goto_parameter_list : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 24168 "Parser.ml"
             ) = 
 # 583 "Parser.mly"
-    ( (rev lst, true) )
+    ( (List.rev lst, true) )
 # 24172 "Parser.ml"
              in
             _menhir_goto_parameter_type_list _menhir_env _menhir_stack _menhir_s _v) : 'freshtv824)) : 'freshtv826)
@@ -24227,7 +24227,7 @@ and _menhir_goto_parameter_list : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 24228 "Parser.ml"
         ) = 
 # 581 "Parser.mly"
-    ( (rev lst, false) )
+    ( (List.rev lst, false) )
 # 24232 "Parser.ml"
          in
         _menhir_goto_parameter_type_list _menhir_env _menhir_stack _menhir_s _v) : 'freshtv832)
@@ -24442,7 +24442,7 @@ and _menhir_goto_enumerator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 24443 "Parser.ml"
                 ) = 
 # 488 "Parser.mly"
-    ( (Tenum (Some (fst name), Some (rev enum_list), []), loc) )
+    ( (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) )
 # 24447 "Parser.ml"
                  in
                 _menhir_goto_enum_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv786)) : 'freshtv788)
@@ -24507,7 +24507,7 @@ and _menhir_goto_enumerator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 24508 "Parser.ml"
             ) = 
 # 484 "Parser.mly"
-    ( (Tenum (Some (fst name), Some (rev enum_list), []), loc) )
+    ( (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) )
 # 24512 "Parser.ml"
              in
             _menhir_goto_enum_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv794)) : 'freshtv796)
@@ -24666,7 +24666,7 @@ and _menhir_goto_enumerator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 24667 "Parser.ml"
                 ) = 
 # 490 "Parser.mly"
-    ( (Tenum (None, Some (rev enum_list), []), loc) )
+    ( (Tenum (None, Some (List.rev enum_list), []), loc) )
 # 24671 "Parser.ml"
                  in
                 _menhir_goto_enum_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv804)) : 'freshtv806)
@@ -24723,7 +24723,7 @@ and _menhir_goto_enumerator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 24724 "Parser.ml"
             ) = 
 # 486 "Parser.mly"
-    ( (Tenum (None, Some (rev enum_list), []), loc) )
+    ( (Tenum (None, Some (List.rev enum_list), []), loc) )
 # 24728 "Parser.ml"
              in
             _menhir_goto_enum_specifier _menhir_env _menhir_stack _menhir_s _v) : 'freshtv812)) : 'freshtv814)
@@ -25222,7 +25222,7 @@ and _menhir_goto_pointer : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 25223 "Parser.ml"
         ) = 
 # 571 "Parser.mly"
-    ( ((fun typ -> PTR (rev quallst, [], (fst pt) typ)), loc) )
+    ( ((fun typ -> PTR (List.rev quallst, [], (fst pt) typ)), loc) )
 # 25227 "Parser.ml"
          in
         _menhir_goto_pointer _menhir_env _menhir_stack _menhir_s _v) : 'freshtv724)) : 'freshtv726)
@@ -27404,7 +27404,7 @@ and _menhir_goto_type_qualifier_list : _menhir_env -> 'ttv_tail -> _menhir_state
 # 27405 "Parser.ml"
             ) = 
 # 567 "Parser.mly"
-    ( ((fun z -> PTR (rev quallst, [], z)), loc) )
+    ( ((fun z -> PTR (List.rev quallst, [], z)), loc) )
 # 27409 "Parser.ml"
              in
             _menhir_goto_pointer _menhir_env _menhir_stack _menhir_s _v) : 'freshtv548)
@@ -27755,7 +27755,7 @@ and _menhir_goto_type_qualifier_list : _menhir_env -> 'ttv_tail -> _menhir_state
             ) = 
 # 546 "Parser.mly"
     ( match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, rev quallst, [], None), attr, loc) )
+	Name (name, ARRAY (typ, List.rev quallst, [], None), attr, loc) )
 # 27760 "Parser.ml"
              in
             _menhir_goto_direct_declarator _menhir_env _menhir_stack _menhir_s _v) : 'freshtv570)) : 'freshtv572)
