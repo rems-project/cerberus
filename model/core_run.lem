@@ -48,8 +48,8 @@ type cont 'a = list (_cont 'a)
 
 (* BEGIN: printing stuff for DEBUG *)
 
-val     sepBy: forall 'a. string -> ('a -> string) -> list 'a -> string
-let rec sepBy sep f xs =
+val sepBy: forall 'a. string -> ('a -> string) -> list 'a -> string
+let rec ~{coq} sepBy sep f xs =
   match xs with
     | []     -> ""
     | [x]    -> f x
@@ -57,7 +57,7 @@ let rec sepBy sep f xs =
   end
 
 val string_of_cont: forall 'a. cont 'a -> string
-let string_of_cont k =
+let ~{coq} string_of_cont k =
   let f = function
     | Kunseq [] es2 -> fun x -> "[ " ^ x ^ " || " ^ sepBy " || " Boot.pp_core_expr es2 ^ " ]"
     | Kunseq es1 [] -> fun x -> "[ " ^ sepBy " || " Boot.pp_core_expr es1 ^ " || " ^ x ^ " ]"
@@ -549,14 +549,15 @@ let load ty o = fun (<| E.mem_layout= (m, _) |> as st) ->
    list. (e.g. pick_one [1,2,3] = [ ([],1,[2; 3]); ([1],2,[3]); ([1; 2],3,[]) ])
  *)
 (* EXHAUSTIVE MODE *)
-let rec _pick_one_exhaustive pred acc = function
-  | []    -> []
-  | x::xs -> (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pick_one_exhaustive pred (x::acc) xs
-end
+let rec _pick_one_exhaustive pred acc mylist =
+  match mylist with
+    | []    -> []
+    | x::xs -> (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pick_one_exhaustive pred (x::acc) xs
+  end
 let pick_one_exhaustive pred l = E.msum $ map E.return (_pick_one_exhaustive pred [] l)
 
 (* RANDOM MODE *)
-let rec _pick_one_random pred = function
+let rec ~{coq} _pick_one_random pred = function
   | [] -> Nothing
   | l  -> let (xs, y, zs) = Boot.pickList l in
           if pred y then
@@ -576,18 +577,19 @@ let rec _pick_one_random pred = function
                   Nothing
             end
 end
-let pick_one_random pred l = fun s ->
+let ~{coq} pick_one_random pred l = fun s ->
   match _pick_one_random pred l with
     | Just x  -> [(U.return x, s)]
     | Nothing -> []
   end
 
 val pick_one: forall 'a. ('a -> bool) -> list 'a -> E.t (list 'a * 'a * list 'a)
-let pick_one pred l =
+let ~{coq} pick_one pred l =
   E.get_execution_mode >>= function
     | E.Exhaustive -> pick_one_exhaustive pred l
     | E.Random     -> pick_one_random pred l
   end
+let {coq} pick_one = pick_one_exhaustive
 
 
 
@@ -1455,7 +1457,7 @@ let red2 e =
 
 val star_red2:       expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
                E.t (expr E.taction_id * (Map.map E.taction_id E.trace_action * E.trace))
-let rec star_red2 x =
+let rec ~{coq} star_red2 x =
   let continue =
     red2 x >>= fun (e, tid, _K) ->
 (* BEGIN: DEBUG *)
@@ -1820,7 +1822,7 @@ let initial_expr_and_state execution_mode file =
 
 val run: E.execution_mode -> file zero ->
          Exception.t (list (U.t ((Core.expr E.taction_id) * (Map.map E.taction_id E.trace_action * E.trace)) * E.state)) Errors.t
-let run execution_mode file =
+let ~{coq} run execution_mode file =
   let (e, state) = initial_expr_and_state execution_mode file in
   let execs = star_red2 e state in
   Boot.print_debug "NUMBER OF TRACES= " (*; string_of_num $ List.length execs] *)

@@ -62,6 +62,7 @@ MODEL_FILES=\
   core_indet.lem \
   core_run.lem \
   core_run_effect.lem \
+  core_run_inductive.lem \
   core_simpl.lem \
   core_typing.lem \
   cabs_to_ail.lem \
@@ -191,9 +192,70 @@ ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_
 memory:
 	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
 
+.PHONY: coq coq-lem coq-coqc
+
+LEM_FILES = \
+ AilTypes.lem \
+ AilTypesAux.lem \
+ boot.lem \
+ cmm_aux.lem \
+ cmm_csem.lem \
+ Common.lem \
+ core.lem \
+ core_aux.lem \
+ core_ctype.lem \
+ core_run.lem \
+ core_run_effect.lem \
+ core_run_inductive.lem \
+ errors.lem \
+ ErrorMonad.lem \
+ exception.lem \
+ global.lem \
+ Implementation.lem \
+ implementation_.lem \
+ location.lem \
+ memory.lem \
+ naive_memory.lem \
+ product.lem \
+ Range.lem \
+ state.lem \
+ state_exception.lem \
+ state_operators.lem \
+ symbol.lem \
+ TypingError.lem \
+ undefined.lem
+
+COQ_FILES := $(shell echo $(LEM_FILES:%.lem=%.v) | python -c $$'import sys\nfor word in sys.stdin.read().split(): sys.stdout.write(word[0].lower() + word[1:] + " ")')
+
+LEM_DIR_FILES = $(addprefix _lem/,$(LEM_FILES))
+COQ_DIR_FILES = $(addprefix _coq/,$(COQ_FILES))
+
+coq-lem: lem_model_ coq.patch coq.issue118.patch
+	mkdir -p _coq
+	$(LEMDIR)/lem -outdir _coq -coq -auxiliary_level none -only_changed_output $(LEM_DIR_FILES)
+	sed -E -i '' '/Require (Import|Export)  operators./d' _coq/*.v # Workaround for Lem issue #84.
+	for f in _coq/*.v; do echo $$'\n(*\n*** Local Variables: ***\n*** coq-prog-name: "coqtop" ***\n*** coq-prog-args: ("-emacs-U" "-require" "coqharness" "-R" "." "Csem" "-I" "~/lem/coq-lib") ***\n*** End: ***\n*)' >> $$f; done
+	rm -rf _coq-orig
+	mkdir _coq-orig
+	cp _coq/*.v _coq-orig/
+	patch -d _coq -p1 < coq.patch
+	rm -rf _coq-patched
+	mkdir _coq-patched
+	cp _coq/*.v _coq-patched/
+	patch -d _coq -p1 < coq.issue118.patch
+
+Makefile.coq: $(COQ_DIR_FILES)
+	coq_makefile -arg "-require coqharness" -I $(LEMDIR)/coq-lib -R _coq Csem -install none $(COQ_DIR_FILES) -o Makefile.coq
+
+coq-coqc: Makefile.coq
+	$(MAKE) -f Makefile.coq
+
+coq: coq-lem coq-coqc
 
 clean:
-	rm -rf $(OCAML_BUILD_DIR) _lem
+	rm -rf $(OCAML_BUILD_DIR) _lem _coq
+	rm -f csem
+	rm -f Makefile.coq
 
 clear:
 	$(MAKE) clean
