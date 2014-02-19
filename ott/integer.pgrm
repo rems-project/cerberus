@@ -1,0 +1,4 @@
+wholeNumber, w :: WholeNumber ::=
+% int and integer are already used in varies places :(
+  {{ phantom }}
+  {{ coq Z }}

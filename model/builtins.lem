@@ -1,0 +1,192 @@
+open import Pervasives
+import AilTypes AilSyntax
+(* Things needed to model in a implementation independant way,
+   types and constant the std library defines. *)
+
+module A      = AilSyntax
+module ATypes = AilTypes
+
+
+let builtin_typenames = [
+  (* from stddef.h (§7.19) *)
+  "__cerb_ptrdiff_t";
+  "__cerb_size_t";
+  "__cerb_max_align_t";
+  "__cerb_wchar_t";
+  
+  (* from stdint.h (§7.20) *)
+  "__cerb_int8_t";
+  "__cerb_int16_t";
+  "__cerb_int32_t";
+  "__cerb_int64_t";
+  "__cerb_uint8_t";
+  "__cerb_uint16_t";
+  "__cerb_uint32_t";
+  "__cerb_uint64_t";
+  "__cerb_int_least8_t";
+  "__cerb_int_least16_t";
+  "__cerb_int_least32_t";
+  "__cerb_int_least64_t";
+  "__cerb_uint_least8_t";
+  "__cerb_uint_least16_t";
+  "__cerb_uint_least32_t";
+  "__cerb_uint_least64_t";
+  "__cerb_int_fast8_t";
+  "__cerb_int_fast16_t";
+  "__cerb_int_fast32_t";
+  "__cerb_int_fast64_t";
+  "__cerb_uint_fast8_t";
+  "__cerb_uint_fast16_t";
+  "__cerb_uint_fast32_t";
+  "__cerb_uint_fast64_t";
+  "__cerb_intptr_t"; (* optional *)
+  "__cerb_uintptr_t"; (* optional *)
+  "__cerb_intmax_t";
+  "__cerb_uintmax_t";
+  
+  (* from stdio.h (§7.21) *)
+(*  "__cerb_size_t"; (TODO: already defined in stddef.h) *)
+(*  "__cerb_FILE"; *)
+(*  "__cerb_fpos_t"; *)
+]
+
+let builtin_varnames = [
+  (* from stddef.h (§7.19) *)
+  "__cerb_NULL";
+  
+  (* from stdint.h (§7.20) *)
+  "__cerb_INT8_MIN";
+  "__cerb_INT16_MIN";
+  "__cerb_INT32_MIN";
+  "__cerb_INT64_MIN";
+  "__cerb_INT8_MAX";
+  "__cerb_INT16_MAX";
+  "__cerb_INT32_MAX";
+  "__cerb_INT64_MAX";
+  "__cerb_UINT8_MAX";
+  "__cerb_UINT16_MAX";
+  "__cerb_UINT32_MAX";
+  "__cerb_UINT64_MAX";
+  "__cerb_INT_LEAST8_MIN";
+  "__cerb_INT_LEAST16_MIN";
+  "__cerb_INT_LEAST32_MIN";
+  "__cerb_INT_LEAST64_MIN";
+  "__cerb_INT_LEAST8_MAX";
+  "__cerb_INT_LEAST16_MAX";
+  "__cerb_INT_LEAST32_MAX";
+  "__cerb_INT_LEAST64_MAX";
+  "__cerb_UINT_LEAST8_MAX";
+  "__cerb_UINT_LEAST16_MAX";
+  "__cerb_UINT_LEAST32_MAX";
+  "__cerb_UINT_LEAST64_MAX";
+  "__cerb_INT_FAST8_MIN";
+  "__cerb_INT_FAST16_MIN";
+  "__cerb_INT_FAST32_MIN";
+  "__cerb_INT_FAST64_MIN";
+  "__cerb_INT_FAST8_MAX";
+  "__cerb_INT_FAST16_MAX";
+  "__cerb_INT_FAST32_MAX";
+  "__cerb_INT_FAST64_MAX";
+  "__cerb_UINT_FAST8_MAX";
+  "__cerb_UINT_FAST16_MAX";
+  "__cerb_UINT_FAST32_MAX";
+  "__cerb_UINT_FAST64_MAX";
+  "__cerb_INTPTR_MIN";
+  "__cerb_INTPTR_MAX";
+  "__cerb_UINTPTR_MAX";
+  "__cerb_INTMAX_MIN";
+  "__cerb_INTMAX_MAX";
+  "__cerb_UINTMAX_MAX";
+
+  "__cerb_PTRDIFF_MIN";
+  "__cerb_PTRDIFF_MAX";
+  "__cerb_SIG_ATOMIC_MIN";
+  "__cerb_SIG_ATOMIC_MAX";
+  "__cerb_SIZE_MAX";
+  "__cerb_WCHAR_MIN";
+  "__cerb_WCHAR_MAX";
+  "__cerb_WINT_MIN";
+  "__cerb_WINT_MAX";
+  
+  (* from stdio.h (§7.21) *)
+  "__cerb_NULL";
+(*  "__cerb__IOLBF"; *)
+(*  "__cerb__IONBF"; *)
+(*  "__cerb__IOFBF"; *)
+(*  "__cerb_BUFFSIZ"; *)
+(*  "__cerb_EOF"; *)
+(*  "__cerb_FOPEN_MAX"; *)
+(*  "__cerb_FILENAME_MAX"; *)
+(*  "__cerb_L_tmpnam"; *)
+(*  "__cerb_SEEK_CUR"; *)
+(*  "__cerb_SEEK_END"; *)
+(*  "__cerb_SEEK_SET"; *)
+(*  "__cerb_TMP_MAX"; *)
+(*  "__cerb_stderr"; *)
+(*  "__cerb_stdin"; *)
+(*  "__cerb_stdout"; *)
+]
+
+
+val translate_builtin_typenames: string -> maybe ATypes.ctype
+let translate_builtin_typenames = function
+  | "__cerb_ptrdiff_t"      -> Nothing
+  | "__cerb_size_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerb_max_align_t"    -> Nothing
+  | "__cerb_wchar_t"        -> Nothing
+  | "__cerb_int8_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int8_t))
+  | "__cerb_int16_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int16_t))
+  | "__cerb_int32_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int32_t))
+  | "__cerb_int64_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int64_t))
+  | "__cerb_uint8_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t))
+  | "__cerb_uint16_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t))
+  | "__cerb_uint32_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t))
+  | "__cerb_uint64_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t))
+
+  | "__cerb_int_least8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerb_int_least16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerb_int_least32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerb_int_least64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerb_uint_least8_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerb_uint_least16_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerb_uint_least32_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerb_uint_least64_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerb_int_fast8_t"    -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerb_int_fast16_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerb_int_fast32_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerb_int_fast64_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerb_uint_fast8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerb_uint_fast16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerb_uint_fast32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerb_uint_fast64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  
+  | "__cerb_intptr_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerb_uintptr_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerb_intmax_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerb_uintmax_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  
+  | _                       -> Nothing
+end
+
+
+val translate_builtin_varnames: string -> maybe (A.expression' unit)
+let translate_builtin_varnames = function
+  | "__cerb_NULL"       -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT8_MIN"   -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT16_MIN"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT32_MIN"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT64_MIN"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT8_MAX"   -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT16_MAX"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT32_MAX"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_INT64_MAX"  -> Just $ A.Constant (A.ConstantInteger (0, Nothing)) (* TODO: hack *)
+  | "__cerb_UINT8_MIN"  -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT16_MIN" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT32_MIN" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT64_MIN" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT8_MAX"  -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT16_MAX" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT32_MAX" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | "__cerb_UINT64_MAX" -> Just $ A.Constant (A.ConstantInteger (0, Just A.U)) (* TODO: hack *)
+  | _                   -> Nothing
+end

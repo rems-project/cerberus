@@ -1,0 +1,116 @@
+open import Pervasives Common ErrorMonad
+
+type context 'A 'B = list ('A * 'B)
+
+val empty : forall 'A 'B. context 'A 'B
+let empty = []
+
+val eq_context : forall 'A 'B. ('A -> 'A -> bool) -> ('B -> 'B -> bool) -> context 'A 'B -> context 'A 'B -> bool
+let eq_context eq_A eq_B =
+  eq_list (eq_pair eq_A eq_B)
+
+val add : forall 'A 'B. 'A -> 'B -> context 'A 'B -> context 'A 'B
+let add a b C = (a, b) :: C
+
+let add_bindings (bs : list ('A * 'B)) (C : context 'A 'B) =
+  foldl (fun C b -> b :: C) bs C
+
+let rec lookup (eq_A : 'A -> 'A -> bool) (C : context 'A 'B) (a : 'A) : maybe 'B =
+  match C with
+  | []          -> Nothing
+  | (x, b) :: C -> if eq_A x a then Just b
+                               else lookup eq_A C a
+  end
+
+val mem : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> context 'A 'B -> bool
+let mem eq_A a C =
+  match lookup eq_A C a with
+  | Just _  -> true
+  | Nothing -> false
+  end
+
+let fresh (eq_A : 'A -> 'A -> bool) a (C: context 'A 'B) = not (mem eq_A a C)
+
+val fresh_bindings : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> list ('A * 'B2) -> context 'A 'B1 -> bool
+let fresh_bindings eq_A bs C = all_list (fun b -> fresh eq_A (fst b) C) bs
+
+val remove_var : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> context 'A 'B -> context 'A 'B
+let rec remove_var eq_A a C =
+  match C with
+  | []            -> []
+  | (a', b') :: C -> if eq_A a a' 
+                       then remove_var eq_A a C
+                       else (a', b') :: remove_var eq_A a C
+  end
+
+val linearize : forall 'A 'B. ('A -> 'A -> bool) -> context 'A 'B -> context 'A 'B
+let rec linearize eq_A C =
+  match C with
+  | []          -> []
+  | (a, b) :: C -> (a, b) :: remove_var eq_A a (linearize eq_A C)
+  end
+
+val all_linear : forall 'A 'B. ('A -> 'B -> bool) -> context 'A 'B -> bool
+let rec all_linear p C =
+  match C with
+  | []          -> true
+  | (a, b) :: C -> p a b && all_linear p C
+  end
+
+val all : forall 'A 'B. ('A -> 'A -> bool) -> ('A -> 'B -> bool) -> context 'A 'B -> bool
+let all eq_A p C = all_linear p (linearize eq_A C)
+
+val sub_p : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> bool) -> ('A -> 'B1 -> 'B2 -> bool) -> context 'A 'B1 -> context 'A 'B2 -> bool
+let sub_p eq_A p equiv_B C1 C2 =
+  all eq_A (fun a b ->
+              if p a
+                then match lookup eq_A C2 a with
+                     | Just b' -> equiv_B a b b'
+                     | Nothing -> false
+                     end
+                else true) C1
+
+val sub : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> 'B2 -> bool) -> context 'A 'B1 -> context 'A 'B2 -> bool
+let sub eq_A equiv_B = sub_p eq_A (fun _ -> true) equiv_B
+
+val equiv_p : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> bool) -> ('A -> 'B1 -> 'B2 -> bool) -> context 'A 'B1 -> context 'A 'B2 -> bool
+let equiv_p eq_A p equiv_B C1 C2 = sub_p eq_A p equiv_B C1 C2 && sub_p eq_A p (fun a x y -> equiv_B a y x) C2 C1
+
+val equiv : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> 'B2 -> bool) -> context 'A 'B1 -> context 'A 'B2 -> bool
+let equiv eq_A equiv_B C1 C2 = sub eq_A equiv_B C1 C2 && sub eq_A (fun a x y -> equiv_B a y x) C2 C1
+
+val disjoint : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> context 'A 'B1 -> context 'A 'B2 -> bool
+let rec disjoint eq_A C1 C2 =
+  match C1 with
+  | []           -> true
+  | (a, _) :: C1 -> match lookup eq_A C2 a with
+                    | Just _  -> false
+                    | Nothing -> disjoint eq_A C1 C2
+                    end
+  end
+
+val fresh_in_bindings : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> list ('A * 'B) -> bool
+let fresh_in_bindings eq_A a xs = all_list (fun x -> not (eq_A a (fst x))) xs
+
+val disjoint_bindings : forall 'A 'B. ('A -> 'A -> bool) -> list ('A * 'B) -> bool
+let rec disjoint_bindings eq_A xs =
+  match xs with
+  | []           -> true
+  | (a, _) :: xs -> fresh_in_bindings eq_A a xs && disjoint_bindings eq_A xs
+  end
+
+val mapP_linear : forall 'A 'B1 'B2. ('A -> 'B1 -> errorM 'B2) -> context 'A 'B1 -> errorM (context 'A 'B2)
+let rec mapP_linear p C =
+  match C with
+    | [] ->
+        return []
+    | (a, b1) :: C ->
+        p a b1          >>= fun b2 ->
+        mapP_linear p C >>= fun C  ->
+        return ((a, b2) :: C)
+  end
+
+val mapP : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> ('A -> 'B1 -> errorM 'B2) -> context 'A 'B1 -> errorM (context 'A 'B2)
+let mapP eq_A p C =
+  mapP_linear p (linearize eq_A C)
+

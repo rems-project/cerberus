@@ -1,0 +1,259 @@
+open import Pervasives Global
+import Symbol AilTypes Implementation_ Undefined Cmm_aux Cmm_csem
+import Memory
+
+open import Core_ctype
+
+module Cmm = Cmm_csem
+
+
+
+(* -- Syntax ---------------------------------------------------------------- *)
+type core_base_type =
+  | Integer (* TODO: should have and "Object" type for C arrays/struct ? *)
+  | Boolean
+  | Address
+  | Ctype
+  | CFunction
+  | Unit
+  | Tuple of list core_base_type
+  | Wildcard
+
+(* Types discriminate between pure (TyBase) and effectful
+   expressions (TyEffect) *)
+type core_type =
+  | TyBase   of core_base_type
+  | TyEffect of core_base_type
+
+
+(* Symbolic names *)
+type sym = Symbol.t
+
+(* Continuation names *)
+type ksym = Symbol.t
+
+(* Binary operators *)
+type binop =
+  (* arithmetic operators *)
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpMod
+  (* relational operators *)
+  | OpEq
+  | OpLt
+  (* logical connectives *)
+  | OpAnd
+  | OpOr
+
+
+(* Polarity for actions *)
+type polarity =
+  | Pos
+  | Neg
+
+type name =
+  | Sym of sym
+  | Impl of Implementation_.implementation_constant
+declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
+
+
+(*
+type constant =
+  | Cint of integer
+(*  | Carray of list constant *)
+(*  | Cstruct *)
+  | Cfunction of sym
+ *)
+
+type expr 'a =
+  (* pure expressions *)
+  | Enull
+  | Etrue
+  | Efalse
+  | Econst of Cmm_aux.constant
+  | Ectype of ctype
+  | Eaddr of Memory.mem_addr
+  | Esym of sym
+  | Eimpl of Implementation_.implementation_constant
+  | Etuple of list (expr 'a)
+  | Enot of expr 'a
+  | Eop of binop * expr 'a * expr 'a
+  | Ecall of name * list (expr 'a)
+  
+  (* undefined behaviour and late static error / failed assert *)
+  | Eundef of Undefined.undefined_behaviour
+  | Eerror
+  
+  (* potentialy effectful *)
+  | Eskip
+  | Elet of sym * expr 'a * expr 'a
+  | Eif of expr 'a * expr 'a * expr 'a
+  | Eproc of set 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Esame of expr 'a * expr 'a
+  | Eaction of paction 'a
+  
+  (* sequencing operators *)
+  | Eunseq of list (expr 'a)
+
+  | Ewseq of list (maybe sym) * expr 'a * expr 'a
+  | Esseq of list (maybe sym) * expr 'a * expr 'a
+  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  
+  (* indeterminately-sequenced expressions and boundary *) 
+  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of natural * expr 'a (* this ctor doesn't exist at runtine *)
+  
+  (* Continuation operators *)
+  (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
+  | Esave of ksym * list (sym * ctype) * expr 'a
+  | Erun of set 'a * ksym * list (sym * expr 'a)
+    (* TODO: need more for VLAs *)
+  
+  | Eret of expr 'a
+  
+  (* Non deterministic choice (resulting from indet expressions) *)
+  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
+  | End of list (expr 'a)
+  
+  (* Parallel composition *)
+  | Epar of list (expr 'a)
+  
+  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *)
+
+
+
+(* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  | Eis_scalar of expr 'a
+  | Eis_integer of expr 'a
+  | Eis_signed of expr 'a
+  | Eis_unsigned of expr 'a
+
+
+
+
+
+
+(* the qualification prefixes are for pprint *)
+and action_ 'a =
+  | Create of expr 'a * list Symbol.t
+  | Alloc of expr 'a * list Symbol.t
+  | Kill of expr 'a
+  | Store of expr 'a * expr 'a * expr 'a * Cmm.memory_order
+  | Load of expr 'a * expr 'a * Cmm.memory_order
+  | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+
+and action 'a  = Action of set 'a * action_ 'a
+and paction 'a = Paction of polarity * action 'a
+
+
+
+
+val sizeof: expr zero -> expr zero
+let sizeof e = Ecall (Impl Implementation_.Sizeof) [e]
+
+val alignof: expr zero -> expr zero
+let alignof e = Ecall (Impl Implementation_.Alignof) [e]
+
+val ctype_min: expr zero -> expr zero
+let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
+
+val ctype_max: expr zero -> expr zero
+let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
+
+val bitwise_complement: expr zero -> expr zero
+let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
+
+
+
+
+
+type impl_decl 'a =
+  | Def  of core_base_type * expr 'a
+  | IFun of core_base_type * list (sym * core_base_type) * expr 'a
+type impl 'a = map Implementation_.implementation_constant (impl_decl 'a)
+
+type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
+
+(* a Core file is just a set of named functions *)
+type file 'a = <|
+  main   : sym;
+  stdlib : fun_map 'a;
+  impl   : impl 'a;
+  funs   : fun_map 'a;
+|>
+declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
+
+
+
+
+
+(* NOTE: we assume that the expression is well typed *)
+val is_value: forall 'a. expr 'a -> bool
+let rec is_value e =
+  match e with
+    | Etuple es ->
+        true
+    | Enull ->
+        true
+    | Eskip ->
+        false
+    | Econst _ ->
+        true
+    | Eaddr _ ->
+        true
+    | Esym _ ->
+        true
+    | Eimpl _ ->
+        true
+    | Eop _ _ _ ->
+        true
+    | Etrue ->
+        true
+    | Efalse ->
+        true
+    | Enot _ ->
+        true
+    | Ectype _ ->
+        true
+    | Elet _ _ e2 ->
+        is_value e2
+    | Eif _ e2 e3 ->
+        is_value e2 && is_value e3
+    | Eproc _ _ _ ->
+        false
+    | Ecall _ _ ->
+        true
+    | Esame _ _ ->
+        false (* TODO: think about it *)
+    | Eundef _ ->
+        true
+    | Eerror ->
+        true
+    | Eaction _ ->
+        false
+    | Eunseq es ->
+        all (is_value) es
+    | Ewseq _ e1 e2 ->
+        is_value e1 && is_value e2
+    | Esseq _ e1 e2 ->
+        is_value e1 && is_value e2
+    (* TODO: this is assuming that we never use this function before Core_indet *)
+(*
+    | Easeq _ _ _ ->
+    | Eindet _    ->
+    | Ebound _ _  ->
+*)
+    | Esave _ _ e ->
+        is_value e (* TODO: or false ? *)
+    | Erun _ _ _ ->
+        false
+    | Eret e ->
+        false
+    | End es ->
+        false (* TODO: think about it *)
+    | Eshift a e ->
+        false
+  end
