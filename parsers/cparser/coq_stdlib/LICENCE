@@ -1,5 +1,0 @@
-The .ml and .mli files in this directory are extracted from the standard library
-of Coq 8.4 (see http://coq.inria.fr/)
-
-Their Coq sources are distributed under the the terms of the GNU Lesser General
-Public License Version 2.1

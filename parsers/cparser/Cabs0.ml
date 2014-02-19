@@ -1,9 +1,8 @@
-open BinPos
 open String
 
 type atom = string
 
-type cabsloc = positive
+type cabsloc = int
 
 type typeSpecifier =
   | Tvoid

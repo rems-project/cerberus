@@ -14,7 +14,6 @@
 (* *********************************************************************)
 
 open Cabs0
-open BinPos
 
 let loc_hashtbl = Hashtbl.create 12
 let next_loc = ref Coq_xH

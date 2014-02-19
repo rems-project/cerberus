@@ -5,7 +5,7 @@ type atom = string
 
 (* Context information. *)
 type cabsloc_ (* TODO(Hack): there should be another way *)
-declare ocaml target_rep type cabsloc_ = `BinPos.positive`
+declare ocaml target_rep type cabsloc_ = `int`
 type cabsloc = cabsloc_ (* Location.t *)
 
 type typeSpecifier = (* Merge all specifiers into one type *)
