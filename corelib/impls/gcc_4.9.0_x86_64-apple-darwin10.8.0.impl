@@ -330,7 +330,7 @@ fun <sizeof> (ty: ctype) : integer :=
 
 -- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
 
--- fun <shr_signed_negative> (n: integer, m: integer) : integer :=
+-- fun <SHR_signed_negative> (n: integer, m: integer) : integer :=
 --  42
 -}
 
