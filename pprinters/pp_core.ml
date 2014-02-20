@@ -306,7 +306,7 @@ let rec pp_expr e =
         | Erun (_, l, es) ->
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
         | Eret e ->
-            pp_keyword "return" ^^^ pp e
+            pp_keyword "return" ^^^ P.parens (pp e)
         | Epar es ->
             P.enclose !^ "{{{" !^ "}}}" (P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es)
         | End es ->
