@@ -103,25 +103,57 @@ let pp_core_type = function
   | TyEffect baseTy -> P.brackets (pp_core_base_type baseTy)
 
 
+let pp_integer_base_ctype ibty =
+  let open AilTypes in
+  match ibty with
+    | Ichar    -> !^ "ichar"
+    | Short    -> !^ "short"
+    | Int_     -> !^ "int"
+    | Long     -> !^ "long"
+    | LongLong -> !^ "long_long"
+
+let pp_integer_ctype ity =
+  let open AilTypes in
+  match ity with
+    | Char             -> !^ "char"
+    | Bool             -> !^ "_Bool"
+    | Signed Int8_t    -> !^ "int8_t"
+    | Signed Int16_t   -> !^ "int16_t"
+    | Signed Int32_t   -> !^ "int32_t"
+    | Signed Int64_t   -> !^ "int64_t"
+    | Unsigned Int8_t  -> !^ "uint8_t"
+    | Unsigned Int16_t -> !^ "uint16_t"
+    | Unsigned Int32_t -> !^ "uint32_t"
+    | Unsigned Int64_t -> !^ "uint64_t"
+    | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
+    | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
+
+let pp_basic_ctype bty =
+  let open AilTypes in
+  match bty with
+    | Integer ity -> pp_integer_ctype ity
+
+
 let rec pp_ctype t =
   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
+  let open Core_ctype in
   match t with
-    | Core_ctype.Void0 ->
+    | Void0 ->
         !^ "void"
-    | Core_ctype.Basic0 bt ->
-        Pp_ail.pp_basicType bt
-    | Core_ctype.Array0 (ty, n) ->
+    | Basic0 bty ->
+        pp_basic_ctype bty
+    | Array0 (ty, n) ->
         pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
 (*
     | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
 *)
-    | Core_ctype.Function0 (ty, args_tys, is_variadic) ->
+    | Function0 (ty, args_tys, is_variadic) ->
         pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
-    | Core_ctype.Pointer0 ty ->
+    | Pointer0 ty ->
         pp_ctype ty ^^ P.star
-    | Core_ctype.Atomic1 ty ->
+    | Atomic1 ty ->
         !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
 (*
     | SIZE_T                  -> !^ "size_t"
