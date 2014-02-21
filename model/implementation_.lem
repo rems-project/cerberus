@@ -194,15 +194,32 @@ type implementation_constant =
 let impl_map =
   foldl (fun acc (k, v) -> Map.insert k v acc) Map.empty
   [
-    ("<bits_in_byte>",        Characters__bits_in_byte);
-    ("<sizeof>",              Sizeof);
-    ("<alignof>",             Alignof);
-    ("<ctype_min>",           Ctype_min);
-    ("<ctype_max>",           Ctype_max);
-    ("<SHR_signed_negative>", SHR_signed_negative);
+    ("<Environment.startup_name>"                  , Environment__startup_name);
+    ("<Environment.startup_type>"                  , Environment__startup_type);
+    ("<Characters.bits_in_byte>"                   , Characters__bits_in_byte);
+    ("<Characters.execution_character_set_values>" , Characters__execution_character_set_values);
+    ("<Characters.TODO1>"                          , Characters__TODO1);
+    ("<Characters.TODO2>"                          , Characters__TODO2);
+    ("<Characters.plain_char_sign>"                , Characters__plain_char_sign);
+    ("<Characters.TODO3>"                          , Characters__TODO3);
+    ("<Characters.TODO4>"                          , Characters__TODO4);
+    ("<Characters.TODO5>"                          , Characters__TODO5);
+    ("<Characters.TODO6>"                          , Characters__TODO5);
+    ("<Characters.TODO7>"                          , Characters__TODO6);
+    ("<Characters.TODO8>"                          , Characters__TODO8);
+    ("<Characters.TODO9>"                          , Characters__TODO9);
+    ("<Characters.TODO10>"                         , Characters__TODO10);
+    ("<sizeof>"                                    , Sizeof);
+    ("<alignof>"                                   , Alignof);
+    ("<bits_in_byte>"                              , Characters__bits_in_byte);
+    ("<SHR_signed_negative>"                       , SHR_signed_negative);
+    ("<Bitwise_complement>"                        , Bitwise_complement);
+    ("<Plain_bitfield_sign>"                       , Plain_bitfield_sign);
+    ("<Bitfield_other_types>"                      , Bitfield_other_types);
+    ("<Atomic_bitfield_permitted>"                 , Atomic_bitfield_permitted);
+    ("<ctype_min>"                                 , Ctype_min);
+    ("<ctype_max>"                                 , Ctype_max);
   ]
-
-
 
 
 let string_of_implementation_constant = function

@@ -154,7 +154,7 @@ let lex_comment remainder lexbuf =
 
 
 let ub_name = "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
-let impl_name = '<' ['A'-'Z' 'a'-'z' '_']* '>'
+let impl_name = '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
 let symbolic_name = ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
 
