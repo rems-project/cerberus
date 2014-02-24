@@ -119,6 +119,11 @@ type implementation_constant =
      ones’ complement, and whether the extraordinary value is a trap representation or an ordinary
      value (6.2.6.2). *)
   (* TODO: I guess this is going to be flag of the memory model, but never used in a Core.Eimpl *)
+  (* TODO: we may not use these anymore once we use a real memory model *)
+  | Integer__encode (* function taking an integer type and an integer and returning a non-negative integer
+                       modeling the proper binary representation *)
+  | Integer__decode (* the other way around *)
+
   
   (* The rank of any extended integer type relative to another extended integer type with the same
      precision (6.3.1.1). *)
@@ -209,6 +214,8 @@ let impl_map =
     ("<Characters.TODO8>"                          , Characters__TODO8);
     ("<Characters.TODO9>"                          , Characters__TODO9);
     ("<Characters.TODO10>"                         , Characters__TODO10);
+    ("<Integer.encode>"                            , Integer__encode);
+    ("<Integer.decode>"                            , Integer__decode);
     ("<sizeof>"                                    , Sizeof);
     ("<alignof>"                                   , Alignof);
     ("<bits_in_byte>"                              , Characters__bits_in_byte);
@@ -253,6 +260,10 @@ let string_of_implementation_constant = function
       "Characters.TODO9"
   | Characters__TODO10 ->
       "Characters.TODO10"
+  | Integer__encode ->
+      "Integer.encode"
+  | Integer__decode ->
+      "Integer.decode"
   | Sizeof ->
       "sizeof"
   | Alignof ->

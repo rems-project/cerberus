@@ -635,6 +635,14 @@ let call_function file fname args =
   let (_, params, fbody) =
     match fname with
       | Sym  f ->
+(* KKK
+
+          (* TODO: uber hack *)
+          let (Symbol _ str_opt) = f in
+          if str_opt = Just "exp" then
+            e
+
+ *)
           match Map.lookup f file.stdlib with
             | Just z  -> z
             | Nothing -> fromJust $ Map.lookup f file.funs
@@ -689,6 +697,11 @@ val     eval: forall 'a. file 'a -> expr 'a -> U.t (expr 'a)
 let rec eval file pe =
   let eval = eval file in
   match pe with
+    | Eimpl i ->
+        match Map.lookup i file.impl with
+          | Just (Def _ e) -> U.return e
+          | Nothing        -> Boot.assert_false (Boot.pp_core_expr pe) (* U.error (* TODO: check *) *)
+        end
     | Eundef u ->
         U.undef [u]
     | Eerror ->
@@ -758,8 +771,13 @@ let rec eval file pe =
           else
             U.return (Eif pe1' pe2 pe3)
         end
-    | Ecall f pes ->
-        U.return (call_function file f pes)  (* We do not immediately call eval on the result of call_function, as that could lead to non-termination. *)
+    | Ecall f pes -> do U
+        pes' <- U.mapM eval pes; in
+          if all is_value pes' then
+            U.return (call_function file f pes')  (* We do not immediately call eval on the result of call_function, as that could lead to non-termination. *)
+          else
+            U.return (Ecall f pes')
+        end
 (* TODO: this may be very counter-intuitive, but we have it as a hack to remove skips comming from negative actions
 ==> probably need some trick during typing
 *)
