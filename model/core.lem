@@ -151,6 +151,20 @@ and paction 'a = Paction of polarity * action 'a
 
 
 
+val sizeof: expr zero -> expr zero
+let sizeof e = Ecall (Impl Implementation_.Sizeof) [e]
+
+val alignof: expr zero -> expr zero
+let alignof e = Ecall (Impl Implementation_.Alignof) [e]
+
+val ctype_min: expr zero -> expr zero
+let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
+
+val ctype_max: expr zero -> expr zero
+let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
+
+val bitwise_complement: expr zero -> expr zero
+let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
 
 
 

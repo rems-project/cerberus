@@ -1,33 +1,6 @@
 open import Pervasives Global Core
 import Boot Product
 
-
-val sizeof: expr zero -> expr zero
-let sizeof e = Ecall (Impl Implementation_.Sizeof) [e]
-
-val alignof: expr zero -> expr zero
-let alignof e = Ecall (Impl Implementation_.Alignof) [e]
-
-val ctype_min: expr zero -> expr zero
-let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
-
-val ctype_max: expr zero -> expr zero
-let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
-
-val bitwise_complement: expr zero -> expr zero
-let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
-
-val integer_encode: expr zero -> expr zero -> expr zero
-let integer_encode e1 e2 =
-  Ecall (Impl Implementation_.Integer__encode) [e1; e2]
-
-val integer_decode: expr zero -> expr zero -> expr zero
-let integer_decode e1 e2 =
-  Ecall (Impl Implementation_.Integer__decode) [e1; e2]
-
-
-
-
 (* Some aliases for positive actions *)
 let pcreate ty pref  = Eaction (Paction Pos (Action {} (Create ty pref )))
 let palloc e pref    = Eaction (Paction Pos (Action {} (Alloc e pref   )))
