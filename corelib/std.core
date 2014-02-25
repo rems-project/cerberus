@@ -190,6 +190,23 @@ fun decodeTwos (ty: ctype, n: integer) : integer :=
     end
   end
 
+-- bitwise complement of a two's complement encoded integer
+fun complementTwos_aux (n: integer, w: integer) : integer :=
+  if w = 0 then
+    n
+  else
+    let n_ = n / 2 in
+      (1 - (n % 2)) + 2 * complementTwos_aux(n_, w - 1)
+    end
+  end
+
+fun complementTwos (ty:ctype, n: integer) : integer :=
+  complementTwos_aux(n, ctype_width(ty))
+
+
+
+
+
 
 -- ones_prefix(0, k, width) returns an positive integer whose binary
 -- representation is 1    ...   1 0      ...       0
