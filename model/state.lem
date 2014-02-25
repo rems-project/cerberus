@@ -1,0 +1,39 @@
+open import Pervasives Global
+
+type t 'a 's = 's -> ('a * 's)
+
+val return : forall 'a 's. 'a -> t 'a 's
+let return a = fun s -> (a, s)
+
+val bind : forall 'a 'b 's. t 'a 's -> ('a -> t 'b 's) -> t 'b 's
+let bind m f =
+  fun s ->
+    let (a, s') = m s in
+    f a s'
+
+let join m = bind m (fun x -> x)
+
+val map : forall 'a 'b 's. ('a -> 'b) -> t 'a 's -> t 'b 's
+let map f m = bind m (return -| f)
+
+val app : forall 'a 'b 's. t ('a -> 'b) 's -> t 'a 's -> t 'b 's
+let app mf m = bind mf (fun f -> map f m)
+
+val update : forall 'a 's. ('s -> 's) -> t unit 's
+let update f = fun s -> ((), f s)
+
+val modify : forall 'a 's. ('s -> 'a * 's) -> t 'a 's
+let modify f = fun s -> f s
+
+val read : forall 'a 's. ('s -> 'a) -> t 'a 's
+let read   f = fun s -> (f s, s)
+
+val eval : forall 'a 's. t 'a 's -> 's -> 'a
+let eval m st = fst (m st)
+
+val run : forall 'a 's. t 'a 's -> 's -> 'a * 's
+let run t s = t s
+
+let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
+val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
+let mapM_ f _as = sequence_ (List.map f _as)

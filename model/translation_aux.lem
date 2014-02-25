@@ -1,0 +1,133 @@
+open import Pervasives Global Translation_effect Symbol
+import Core Core_aux
+import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux Annotation
+import Set_extra
+
+module C    = Core
+module Caux = Core_aux
+
+
+
+
+(* this is only used by [mk_stdcall] *)
+val     mk_stdcall_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
+let rec mk_stdcall_aux pred xs =
+ match xs with
+    | []     -> Nothing
+    | x::xs' -> if pred x then Just x else mk_stdcall_aux pred xs'
+  end
+
+val mk_stdcall: Core.fun_map zero -> string -> (list (Core.expr zero) -> Core.expr zero)
+let mk_stdcall stdlib fname =
+  match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Set_extra.toList $ Map.toSet stdlib) with
+    | Just (f, _) -> Core.Ecall (Core.Sym f)
+    | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+ end
+
+
+
+(* TODO: the third argument shouldn't be a computation *)
+
+
+
+(* (integer) promotion for values. (cf. §6.3.1.1#2) *)
+(* this should be a function from pure Core expr to pure Core expr (I think ...) *)
+let promote_value (e: C.expr 'b ) : C.expr 'b = e (* TODO !!!! *)
+
+
+
+
+
+
+
+(*
+(* NOTE: assume that [e] is a pure expression *)
+val conv A.ctype -> A.ctype -> C.expr zero -> t (C.expr zero)
+let conv ty1 ty2 e =
+  
+    (* (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value
+                    compares equal to 0; otherwise, the result is 1. *)
+    if T.is_scalar ty && is_bool ty2 then
+      C.Eif (C.Eop (C.OpEq) e (C.Econst 0))
+        (C.Econst 0) (C.Econst 1)
+    
+    (* (§6.3.1.3#1) When a value with integer type is converted to another integer type other
+                    than _Bool, if the value can be represented by the new type, it is unchanged. *)
+    else if is_integer  ty1 && is_integer ty2 then
+      E.fresh_symbol       >>= fun a_e    ->
+      C.Elet a_e e $
+        C.Eif (is_presentable [e; Caux.mk_ctype ty2])
+        
+      if is_representable(n, ty2) then
+      n
+    -- (§6.3.1.3#1) Otherwise, if the new type is unsigned, the value is converted by repeatedly
+    -- adding or subtracting one more than the maximum value that can be represented in the new type
+    -- until the value is in the range of the new type.
+    else if is_unsigned(ty2) then
+      conv_aux(ty2, n)
+    
+    -- (§6.3.1.3#1) Otherwise, the new type is signed and the value cannot be represented in it;
+    -- either the result is implementation-defined or an implementation-defined signal is raised.
+    else
+      error -- TODO
+  else
+    error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
+*)
+
+open Implementation
+(* TODO: emporary *)
+val tmp_implementation: implementation
+let tmp_implementation =
+  min_implementation_signed_char
+
+
+
+open AilTypes
+val is_unsigned_integer_type: ctype -> bool
+let is_unsigned_integer_type = function
+  | Basic (Integer it) ->
+      AilTypesAux.unsigned_type it
+  | _ ->
+      false
+end
+
+let function_return_type = function
+  | Function t _ _ -> t
+end
+
+(* TODO: check with J *)
+
+
+val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
+let from_lvalue_type (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _) =
+  (qs, ty)
+
+
+val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let exp_type_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Right (AilTypes.LValueType _ ty) -> (* unqualify *) ty
+    | Right (AilTypes.RValueType   ty) -> ty
+  end
+
+
+val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let ctype_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Right (AilTypes.LValueType _ ty) -> ty
+    | Right (AilTypes.RValueType   ty) -> ty
+  end
+
+
+val is_defined_ail_function: forall 'A 'B. AilSyntax.identifier -> AilSyntax.program 'A 'B -> bool
+let is_defined_ail_function id (_, defs) =
+  match List.lookup id defs with
+    | Nothing ->
+        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a non-declared identifier."
+    | Just (Right _) ->
+        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a global variable."
+    | Just (Left (_, s_opt)) ->
+        isJust s_opt
+  end
