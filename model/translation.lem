@@ -78,6 +78,11 @@ and translate_function_designator (A.AnnotatedExpression _ expr) =
 and translate_expression stdlib program a_expr =
   let f e = translate_expression stdlib program e in
   let mk_stdcall fname = mk_stdcall stdlib fname in
+  let bitwise_AND      = mk_stdcall "bitwise_AND"      in
+  let bitwise_XOR      = mk_stdcall "bitwise_XOR"      in
+  let bitwise_OR       = mk_stdcall "bitwise_OR"       in
+  
+  let conv             = mk_stdcall "conv"             in
   let conv             = mk_stdcall "conv"             in
   let conv_int         = mk_stdcall "conv_int"         in
   let overflow         = mk_stdcall "overflow"         in
@@ -90,29 +95,20 @@ and translate_expression stdlib program a_expr =
     conv [Caux.mk_ctype ty1; usual_arithmetic [Caux.mk_ctype ty1; Caux.mk_ctype ty2]; e] in
   
   
-  let A.AnnotatedExpression _ expr = a_expr in
   (* TODO: we do a match instead of a let, because of a bug in Lem *)
-  let ty = match GenTypesAux.interpret_genTypeCategory tmp_implementation
-                   (Annotation.type_of Annotation.concrete_annotation a_expr) with
-             | Right (AilTypes.LValueType _ z) -> z
-             | Right (AilTypes.RValueType z)   -> z
-           end in
+  let result_ty = ctype_of a_expr in
   
-  if AilTypesAux.pointer ty && Aaux.null_pointer_constant a_expr then
+  if AilTypesAux.pointer result_ty && Aaux.null_pointer_constant a_expr then
     return C.Enull
   else
+    let A.AnnotatedExpression _ expr = a_expr in
     match expr with
-        (* NOTE: this is not enought *)
-      | A.Var id ->
-          if AilTypesAux.is_function ty then
-            return (C.Econst (Cmm_aux.Cfunction id))
-          else
-            return $ Caux.pload (Caux.mk_ctype ty) (C.Esym id) Cmm.NA
-      
+      (* TODO: integer promotion *)
       | A.Unary A.Plus e ->
           f e >>= fun core_e ->
           return (promote_value core_e)
       
+      (* TODO: integer promotion *)
       | A.Unary A.Minus e ->
           E.fresh_symbol >>= fun a_e    ->
           f e            >>= fun core_e ->
@@ -120,34 +116,19 @@ and translate_expression stdlib program a_expr =
             C.Ewseq [Just a_e] core_e
               (C.Eop C.OpSub Caux.zero (promote_value $ C.Esym a_e))
       
+      (* TODO: integer promotion *)
       | A.Unary A.Bnot e ->
           E.fresh_symbol >>= fun a_e    ->
           f e            >>= fun core_e ->
           return $
             C.Ewseq [Just a_e] core_e (
-              if is_unsigned_integer_type ty then
-                C.Eop C.OpSub (C.ctype_max $ Caux.mk_ctype ty) (promote_value $ C.Esym a_e)
+              if is_unsigned_integer_type result_ty then
+                C.Eop C.OpSub (Caux.ctype_max $ Caux.mk_ctype result_ty) (promote_value $ C.Esym a_e)
               else
-                C.bitwise_complement (promote_value $ C.Esym a_e)
+                Caux.bitwise_complement (promote_value $ C.Esym a_e)
             )
       
-      | A.Unary A.Address (A.AnnotatedExpression _ (A.Unary A.Indirection e)) ->
-          f e
-      
-      | A.Unary A.Address e ->
-          if AilTypesAux.object_ ty then
-            translate_lvalue stdlib program e
-          else
-            translate_function_designator e
-      
-      | A.Unary A.Indirection e ->
-          (* TODO: temporary  *)
-          E.fresh_symbol       >>= fun a_e    ->
-          f e >>= fun core_e ->
-          (* shouldn't be a real load ? *)
-          return $ C.Ewseq [Just a_e] core_e
-                     (Caux.pload (Caux.mk_ctype ty) (C.Esym a_e) Cmm.NA)
-      
+      (* TODO: promotion? + atomicity *)
       | A.Unary A.PostfixIncr e ->
           E.fresh_symbol                    >>= fun a_lvalue ->
           E.fresh_symbol                    >>= fun a_load   ->
@@ -166,7 +147,7 @@ and translate_expression stdlib program a_expr =
                  )
               )
       
-      (* TODO: "atomicity" of the load-store pair *)
+      (* TODO: promotion? + atomicity *)
       | A.Unary A.PostfixDecr e ->
           E.fresh_symbol                    >>= fun a_lvalue ->
           E.fresh_symbol                    >>= fun a_load   ->
@@ -184,12 +165,13 @@ and translate_expression stdlib program a_expr =
                  )
               )
       
+      (* TODO: check conversion *)
       | A.Binary e1 (A.Arithmetic A.Mul) e2 ->
-          E.fresh_symbol        >>= fun a_e1     ->
-          E.fresh_symbol        >>= fun a_e2     ->
-          f e1 >>= fun core_e1  ->
-          f e2 >>= fun core_e2  ->
-          E.fresh_symbol        >>= fun a_mul    ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          E.fresh_symbol >>= fun a_mul   ->
           let mul_ctx x =
             C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
               (C.Elet a_mul (C.Eop C.OpMul (C.Esym a_e1) (C.Esym a_e2))
@@ -240,6 +222,156 @@ and translate_expression stdlib program a_expr =
                  (C.Eundef Undefined.Modulo_by_zero)
                  (C.Eop C.OpMod core_e1' core_e2')
               )
+      
+      (* DONE (check promotion stuff) *)
+      | A.Binary e1 (A.Arithmetic A.Shl) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          E.fresh_symbol >>= fun a_res   ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+            (* (§6.5.7#2) if a_e2 < 0 then undef *)
+            (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
+               (C.Eundef Undefined.Negative_shift)
+            
+            (* if width{ty} <= a_e2 then undef *)
+            (* TODO: [ty] should be the promoted type of [e1] *)
+            (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (ctype_width [Caux.mk_ctype result_ty]) (C.Esym a_e2))
+                                 (C.Eop C.OpEq (ctype_width [Caux.mk_ctype result_ty]) (C.Esym a_e2))) (* TODO: check the test about the width *)
+               (C.Eundef Undefined.Shift_too_large)
+            
+            (* else [...] *)
+               (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                  (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
+                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
+                                 (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one)
+                else (* e1 has a signed type *)
+                  (* if a_e2 < 0 then undef *)
+                  (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
+                     (C.Eundef Undefined.Negative_left_shift)
+                     (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
+                     (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
+                                                  (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
+                        (* not representable(ty, a_res) then undef *)
+                        (C.Eif (C.Enot (is_representable [Caux.mk_ctype result_ty; C.Esym a_res]))
+                           (C.Eundef Undefined.Negative_left_shift)
+                        (* else  *)
+                           (C.Esym a_res)
+                        )
+                     )
+                  )
+               )
+            )
+            )
+      
+      (* DONE (check promotion stuff) *)
+      (* see §6.5.7#5 *)
+      | A.Binary e1 (A.Arithmetic A.Shr) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+            (* (§6.5.7#2) if a_e2 < 0 then undef *)
+            (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
+               (C.Eundef Undefined.Negative_shift)
+            
+            (* if width{ty} <= a_e2 then undef *)
+            (* TODO: [ty] should be the promoted type of [e1], so result_ty should be fine *)
+            (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (ctype_width [Caux.mk_ctype result_ty]) (C.Esym a_e2))
+                                 (C.Eop C.OpEq (ctype_width [Caux.mk_ctype result_ty]) (C.Esym a_e2))) (* TODO: check the test about the width *)
+               (C.Eundef Undefined.Shift_too_large)
+            
+            (* else [...] *)
+            (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]) in
+             if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+               (* If E1 has an unsigned type *)
+               expr
+             else
+               (* or if E1 has a signed type and a nonnegative value [...]
+                  If E1 has a signed type and a negative value, the resulting
+                 value is implementation-defined. *)
+               C.Eif (C.Eop C.OpLt (C.Esym a_e1) Caux.zero)
+                 (C.Ecall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ctype (ctype_of e1) ; C.Esym a_e1; C.Esym a_e2])
+                 expr)
+            ))
+      
+      (* DONE (check promotion stuff) *)
+      | A.Binary e1 (A.Arithmetic A.Band) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+            (bitwise_AND [Caux.mk_ctype result_ty; C.Esym a_e1; C.Esym a_e2])
+      
+      (* DONE (check promotion stuff) *)
+      | A.Binary e1 (A.Arithmetic A.Xor) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+            (bitwise_XOR [Caux.mk_ctype result_ty; C.Esym a_e1; C.Esym a_e2])
+      
+      (* DONE (check promotion stuff) *)
+      | A.Binary e1 (A.Arithmetic A.Bor) e2 ->
+          E.fresh_symbol >>= fun a_e1    ->
+          E.fresh_symbol >>= fun a_e2    ->
+          f e1           >>= fun core_e1 ->
+          f e2           >>= fun core_e2 ->
+          
+          return $
+            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+            (bitwise_OR [Caux.mk_ctype result_ty; C.Esym a_e1; C.Esym a_e2])
+
+
+
+
+
+
+
+
+(* ============= CLEAN up to here ============= *)
+
+
+        (* NOTE: this is not enought *)
+      | A.Var id ->
+          if AilTypesAux.is_function result_ty then
+            return (C.Econst (Cmm_aux.Cfunction id))
+          else
+            return $ Caux.pload (Caux.mk_ctype result_ty) (C.Esym id) Cmm.NA
+      
+      
+      
+      
+      | A.Unary A.Address (A.AnnotatedExpression _ (A.Unary A.Indirection e)) ->
+          f e
+      
+      | A.Unary A.Address e ->
+          if AilTypesAux.object_ result_ty then
+            translate_lvalue stdlib program e
+          else
+            translate_function_designator e
+      
+      | A.Unary A.Indirection e ->
+          (* TODO: temporary  *)
+          E.fresh_symbol       >>= fun a_e    ->
+          f e >>= fun core_e ->
+          (* shouldn't be a real load ? *)
+          return $ C.Ewseq [Just a_e] core_e
+                     (Caux.pload (Caux.mk_ctype result_ty) (C.Esym a_e) Cmm.NA)
+      
+
       
       | A.Binary e1 (A.Arithmetic A.Add) e2 ->
           let ty1 = exp_type_of e1 in
@@ -321,93 +453,9 @@ and translate_expression stdlib program a_expr =
             (* TODO: pointer arith *)
             Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SUB) e1 e2 <pointer case>: TODO"
       
-      | A.Binary e1 (A.Arithmetic A.Shl) e2 -> (* DONE (check promotion stuff) *)
-          E.fresh_symbol >>= fun a_e1    ->
-          E.fresh_symbol >>= fun a_e2    ->
-          E.fresh_symbol >>= fun a_res   ->
-          f e1           >>= fun core_e1 ->
-          f e2           >>= fun core_e2 ->
-          
-          return $
-            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-            (* (§6.5.7#2) if a_e2 < 0 then undef *)
-            (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
-               (C.Eundef Undefined.Negative_shift)
-            
-            (* if width{ty} <= a_e2 then undef *)
-            (* TODO: [ty] should be the promoted type of [e1] *)
-            (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (ctype_width [Caux.mk_ctype ty]) (C.Esym a_e2))
-                                 (C.Eop C.OpEq (ctype_width [Caux.mk_ctype ty]) (C.Esym a_e2))) (* TODO: check the test about the width *)
-               (C.Eundef Undefined.Shift_too_large)
-            
-            (* else [...] *)
-               (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                  (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                   C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
-                                 (C.Eop C.OpAdd (C.ctype_max $ Caux.mk_ctype ty) Caux.one)
-                else (* e1 has a signed type *)
-                  (* if a_e2 < 0 then undef *)
-                  (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
-                     (C.Eundef Undefined.Negative_left_shift)
-                     (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                     (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
-                                                  (C.Eop C.OpAdd (C.ctype_max $ Caux.mk_ctype ty) Caux.one))
-                        (* not representable(ty, a_res) then undef *)
-                        (C.Eif (C.Enot (is_representable [Caux.mk_ctype ty; C.Esym a_res]))
-                           (C.Eundef Undefined.Negative_left_shift)
-                        (* else  *)
-                           (C.Esym a_res)
-                        )
-                     )
-                  )
-               )
-            )
-            )
       
-      (* see §6.5.7#5 *)
-      | A.Binary e1 (A.Arithmetic A.Shr) e2 ->
-          E.fresh_symbol >>= fun a_e1    ->
-          E.fresh_symbol >>= fun a_e2    ->
-          E.fresh_symbol >>= fun a_res   ->
-          f e1           >>= fun core_e1 ->
-          f e2           >>= fun core_e2 ->
-          
-          return $
-            C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-              (* (§6.5.7#2) if a_e2 < 0 then undef *)
-(*
-              (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
-                 (C.Eundef Undefined.Negative_shift)
-TODO: KKK
-
- *)
-
-
-
-
-
-
-(*              (let expr = quot [C.Esym a_e1; exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]] in *)
-              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]) in
-               if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                 (* If E1 has an unsigned type *)
-                 expr
-               else
-                 (* or if E1 has a signed type and a nonnegative value [...]
-                    If E1 has a signed type and a negative value, the resulting
-                    value is implementation-defined. *)
-                 C.Eif (C.Eop C.OpLt (C.Esym a_e1) Caux.zero)
-                   (C.Ecall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ctype (ctype_of e1) ; C.Esym a_e1; C.Esym a_e2])
-                   expr)
       
-      | A.Binary e1 (A.Arithmetic A.Band) e2 ->
-          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.BAND) e1 e2: TODO(has an implementation defined case)"
       
-      | A.Binary e1 (A.Arithmetic A.Xor) e2 ->
-          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.XOR) e1 e2: TODO(has an implementation defined case)"
-      
-      | A.Binary e1 (A.Arithmetic A.Bor) e2 ->
-          Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.BOR) e1 e2: TODO(has an implementation defined case)"
       
       | A.Binary e1 A.Comma e2 ->
           f e1 >>= fun core_e1 ->
@@ -650,10 +698,10 @@ TODO: KKK
       | A.SizeOf qs (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))   -> return Caux.one
       | A.SizeOf qs (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) -> return Caux.one
       | A.SizeOf qs ty ->
-          return (C.sizeof $ Caux.mk_ctype ty)
+          return (Caux.sizeof $ Caux.mk_ctype ty)
       
       | A.AlignOf qs ty ->
-          return (C.alignof $ Caux.mk_ctype ty)
+          return (Caux.alignof $ Caux.mk_ctype ty)
 
 (*
   TODO: need to bring them back to the new Ail
