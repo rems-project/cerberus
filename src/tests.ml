@@ -1,9 +1,7 @@
-open Global
+open Global_ocaml
 open Core
 module E = Exception
 
-let ($) f x = f x
-let (-|) f g x = f (g x)
 
 
 (* TODO: temporary *)

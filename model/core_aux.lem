@@ -216,42 +216,44 @@ let rec in_pattern a p =
 val     subst_sym: forall 'a. sym -> expr 'a -> expr 'a -> expr 'a
 let rec subst_sym a v e =
   match e with
-    | Etuple es ->
-        Etuple $ List.map (subst_sym a v) es
     | Enull ->
         Enull
-    | Eskip ->
-        Eskip
+    | Etrue ->
+        Etrue
+    | Efalse ->
+        Efalse
     | Econst n ->
         Econst n
+    | Ectype ty ->
+        Ectype ty
     | Eaddr o ->
         Eaddr o
     | Esym a' ->
         if a = a' then v else e
-    | Eop binop e1 e2 ->
-        Eop binop (subst_sym a v e1) (subst_sym a v e2)
-    | Etrue ->
-        Etrue
-    | Efalse ->
-      Efalse
+    | Eimpl i ->
+        Eimpl i
+    | Etuple es ->
+        Etuple $ List.map (subst_sym a v) es
     | Enot e ->
         Enot (subst_sym a v e)
-    | Ectype ty ->
-        Ectype ty
+    | Eop binop e1 e2 ->
+        Eop binop (subst_sym a v e1) (subst_sym a v e2)
+    | Ecall f args ->
+        Ecall f (List.map (subst_sym a v) args)
+    | Eundef u ->
+        Eundef u
+    | Eerror ->
+        Eerror
+    | Eskip ->
+        Eskip
     | Elet _a e1 e2 ->
         Elet _a (subst_sym a v e1) (if a = _a then e2 else subst_sym a v e2)
     | Eif e1 e2 e3 ->
         Eif (subst_sym a v e1) (subst_sym a v e2) (subst_sym a v e3)
     | Eproc bs f args ->
         Eproc bs f (List.map (subst_sym a v) args)
-    | Ecall f args ->
-        Ecall f (List.map (subst_sym a v) args)
     | Esame e1 e2 ->
         Esame (subst_sym a v e1) (subst_sym a v e2)
-    | Eundef u ->
-        Eundef u
-    | Eerror ->
-        Eerror
     | Eaction p ->
         Eaction (subst_sym_paction a v p)
     | Eunseq es ->
@@ -266,16 +268,16 @@ let rec subst_sym a v e =
         Boot.assert_false "[Core_aux.subst_sym] #Eindet"
     | Ebound i e -> (* Ebound i (subst_sym a v e) *)
         Boot.assert_false "[Core_aux.subst_sym] #Ebound"
-    | Erun bs k a_vs ->
-        Erun bs k (* ((a,v) :: a_vs) *) $ list_update a v a_vs
     | Esave k a_tys e ->
         Esave k a_tys (subst_sym a v e)
+    | Erun bs k a_vs ->
+        Erun bs k (* ((a,v) :: a_vs) *) $ list_update a v a_vs
     | Eret e ->
         Eret (subst_sym a v e)
-    | Epar es ->
-        Epar $ List.map (subst_sym a v) es
     | End es ->
         End $ List.map (subst_sym a v) es
+    | Epar es ->
+        Epar $ List.map (subst_sym a v) es
     | Eshift a' e ->
         Eshift a' (subst_sym a v e)
 
