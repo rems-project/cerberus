@@ -67,7 +67,7 @@ Definition le_integer_range P it1 it2 : bool :=
   | Char             , Char              => true
   | Char             , Signed   Ichar    => signed P Char
   | Char             , Signed   ibt      => signed P Char ||
-                                            lt_Z (precision P Char) (precision P (Signed ibt))
+                                            le_Z (precision P Char) (precision P (Signed ibt))
   | Signed Ichar     , Char              => signed P Char
   | Signed ibt       , Char              => signed P Char &&
                                             eq_Z (precision P (Signed ibt)) (precision P Char)
@@ -78,7 +78,7 @@ Definition le_integer_range P it1 it2 : bool :=
   | Char             , Bool              => negb (signed P Char) &&
                                             eq_Z (precision P Char) (precision P Bool)
   | Bool             , Char              => negb (signed P Char) ||
-                                            lt_Z (precision P Bool) (precision P Char)
+                                            le_Z (precision P Bool) (precision P Char)
 
   | Signed   Ichar   , Signed   _        => true
   | Signed   Short   , Signed   Short    => true
@@ -92,7 +92,7 @@ Definition le_integer_range P it1 it2 : bool :=
   | Signed   Long    , Signed   LongLong => true
   | Signed   LongLong, Signed   LongLong => true
   | Signed   ibt1    , Signed   ibt2     => eq_Z (precision P (Signed ibt1))
-                                                  (precision P (Signed ibt2))
+                                                 (precision P (Signed ibt2))
 
   | Bool             , Bool              => true
   | Bool             , Unsigned _        => true
@@ -108,21 +108,43 @@ Definition le_integer_range P it1 it2 : bool :=
   | Unsigned Long    , Unsigned LongLong => true
   | Unsigned LongLong, Unsigned LongLong => true
   | Unsigned ibt     , Bool              => eq_Z (precision P (Unsigned ibt))
-                                                  (precision P Bool)
+                                                 (precision P Bool)
   | Unsigned ibt1    , Unsigned   ibt2   => eq_Z (precision P (Unsigned ibt1))
-                                                  (precision P (Unsigned ibt2))
+                                                 (precision P (Unsigned ibt2))
 
   | Signed   _       , Bool              => false
   | Signed   _       , Unsigned _        => false
 
-  | Bool             , Signed   ibt2     => lt_Z (precision P Bool)
+  | Bool             , Signed   ibt2     => le_Z (precision P Bool)
                                                  (precision P (Signed ibt2))
-  | Unsigned _       , Signed   Ichar    => false
-  | Unsigned Short   , Signed   Short    => false
-  | Unsigned Int     , Signed   Int      => false
-  | Unsigned Long    , Signed   Long     => false
-  | Unsigned LongLong, Signed   LongLong => false
-  | Unsigned ibt1    , Signed   ibt2     => lt_Z (precision P (Unsigned ibt1))
+  | Unsigned ibt1    , Signed   Ichar    => eq_Z (precision P (Unsigned ibt1))
+                                                 (precision P (Signed   Ichar))
+
+  | Unsigned Short   , Signed   Short    => eq_Z (precision P (Unsigned Short))
+                                                 (precision P (Signed   Short))
+  | Unsigned Int     , Signed   Short    => eq_Z (precision P (Unsigned Int))
+                                                 (precision P (Signed   Short))
+  | Unsigned Long    , Signed   Short    => eq_Z (precision P (Unsigned Long))
+                                                 (precision P (Signed   Short))
+  | Unsigned LongLong, Signed   Short    => eq_Z (precision P (Unsigned LongLong))
+                                                 (precision P (Signed   Short))
+
+  | Unsigned Int     , Signed   Int      => eq_Z (precision P (Unsigned Int))
+                                                 (precision P (Signed   Int))
+  | Unsigned Long    , Signed   Int      => eq_Z (precision P (Unsigned Long))
+                                                 (precision P (Signed   Int))
+  | Unsigned LongLong, Signed   Int      => eq_Z (precision P (Unsigned LongLong))
+                                                 (precision P (Signed   Int))
+
+  | Unsigned Long    , Signed   Long     => eq_Z (precision P (Unsigned Long))
+                                                 (precision P (Signed   Long))
+  | Unsigned LongLong, Signed   Long     => eq_Z (precision P (Unsigned LongLong))
+                                                 (precision P (Signed   Long))
+
+  | Unsigned LongLong, Signed   LongLong => eq_Z (precision P (Unsigned LongLong))
+                                                 (precision P (Signed   LongLong))
+
+  | Unsigned ibt1    , Signed   ibt2     => le_Z (precision P (Unsigned ibt1))
                                                  (precision P (Signed   ibt2))
   end.
 
