@@ -212,16 +212,18 @@ let implementation_constant_to_nat x =
     | Characters__TODO8 -> 12
     | Characters__TODO9 -> 13
     | Characters__TODO10 -> 14
-    | Sizeof -> 15
-    | Alignof -> 16
-    | SHR_signed_negative -> 17
-    | Bitwise_complement -> 18
-    | Plain_bitfield_sign -> 19
-    | Bitfield_other_types -> 20
-    | Atomic_bitfield_permitted -> 21
-    | Ctype_min -> 22
-    | Ctype_max -> 23
-    | StdFunction _ -> 24
+    | Integer__encode -> 15
+    | Integer__decode -> 16
+    | Sizeof -> 17
+    | Alignof -> 18
+    | SHR_signed_negative -> 19
+    | Bitwise_complement -> 20
+    | Plain_bitfield_sign -> 21
+    | Bitfield_other_types -> 22
+    | Atomic_bitfield_permitted -> 23
+    | Ctype_min -> 24
+    | Ctype_max -> 25
+    | StdFunction _ -> 26
   end
 
 let implementation_constant_equal x y =
