@@ -1,4 +1,16 @@
-open Global_ocaml
+open Global
+
+let ($) f x = f x
+let (-|) f g x = f (g x)
+let (>|>) x f = f x
+let (>?>) x b f g = if b then f x else g x
+
+
+(* use this to print a halting error message *)
+let error str =
+  prerr_endline $ Colour.ansi_format [Colour.Red] ("ERROR: " ^ str);
+  exit 1
+
 
 (* command-line options *)
 let files            = ref [] (* TODO: now we seem to only execute single files. *)
@@ -38,6 +50,9 @@ let options = Arg.align [
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
 
+let debug_print str =
+  if !Boot_ocaml.debug_level > 0 then
+    print_endline str
 
 
 (* some block functions used by the pipeline *)
@@ -75,12 +90,12 @@ let write_graph fname ts =
       | (Undefined.Error, st) ->
           acc
 *)
-  ) (Global.numerote ts) in
+  ) (numerote ts) in
   
   let (tex_name, tex_chan) = Filename.open_temp_file fname ".tex" in
   
   output_string tex_chan
-    "\\documentclass{article}\n\\usepackage[x11names,rgb,svgnames]{xcolor}\n\\usepackage[utf8]{inputenc}\n\\usepackage{tikz}\n\\usetikzlibrary{snakes,arrows,shapes}\n\\usepackage{amsmath}\n\\usepackage[active,tightpage]{preview}\n\\PreviewEnvironment{tikzpicture}\n\\setlength\\PreviewBorder{0pt}\n\\begin{document}\n\\pagestyle{empty}\n";
+    "\\documentclass{article}\n\\usepackage[x11names,rgb,svgnames]{xcolor}\n\\usepackage[utf8]{inputenc}\n\\usepackage{tikz}\n\\usetikzlibrary{snakes,arrows,shapes}\n\\usepackage{amsmath}\n\\usepackage[active,tightpage]{preview}\n\\PreviewEnvironment{tikzpicture}\n\\setlength\PreviewBorder{0pt}\n\\begin{document}\n\\pagestyle{empty}\n";
   close_out tex_chan;
   
   List.iter (fun g ->
@@ -94,7 +109,7 @@ let write_graph fname ts =
   ) graphs;
   
   let tex_chan = open_out_gen [Open_append] 0 tex_name in
-  output_string tex_chan "\\end{document}\n";
+  output_string tex_chan "\end{document}\n";
   close_out tex_chan;
   
   if Sys.command ("pdflatex -halt-on-error --jobname=" ^ fname ^ " " ^ tex_name ^ " > /dev/null") <> 0 then
@@ -106,7 +121,7 @@ let write_graph fname ts =
 
 
 
-let core_sym_counter = ref Symbol.init
+
 
 
 
@@ -119,18 +134,15 @@ let load_stdlib csemlib_path =
   else
     Boot_ocaml.dprint ("reading Core stdlib from `"^ fname ^ "'.");
     (* An preliminary instance of the Core parser *)
-    let module Core_std_parser_base = struct
-      include Core_parser.Make (struct
-                                 let sym_counter = core_sym_counter
-                                 let std = Pmap.empty compare
-                               end)
+    let module Core_parser_base = struct
+      include Core_parser.Make (struct let std = Pmap.empty compare end)
       type token = Core_parser_util.token
       type result = Core_parser_util.result
     end in
-    let module Core_std_parser =
-      Parser_util.Make (Core_std_parser_base) (Lexer_util.Make (Core_lexer)) in
+    let module Core_parser =
+      Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
     (* TODO: yuck *)
-    match Core_std_parser.parse (Input.file fname) with
+    match Core_parser.parse (Input.file fname) with
       | Exception.Result (Core_parser_util.Rstd z) -> z
       | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib."
 
@@ -162,42 +174,42 @@ let pipeline stdlib impl core_parse file_name =
           error "the C preprocessor failed";
         Input.file temp_name in
           Exception.return0 (c_preprocessing m)
-      |> Exception.fmap Cparser_driver.parse
-      |> pass_message "1. Parsing completed!"
-      |> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
+      >|> Exception.fmap Cparser_driver.parse
+      >|> pass_message "1. Parsing completed!"
+      >|> pass_through_test !print_cabs (run_pp -| Pp_cabs0.pp_file)
 
-      |> Exception.rbind (Cabs_to_ail.desugar "main")
-      |> pass_message "2. Cabs -> Ail completed!"
-      |> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program -| snd)
-
-
-(*      |> Exception.rbind Ail_typing.annotate *)
+      >|> Exception.rbind (Cabs_to_ail.desugar "main")
+      >|> pass_message "2. Cabs -> Ail completed!"
+      >|> pass_through_test !print_ail (run_pp -| Pp_ail.pp_program -| snd)
 
 
-      |> Exception.rbind (fun (counter, z) ->
+(*      >|> Exception.rbind Ail_typing.annotate *)
+
+
+      >|> Exception.rbind (fun (counter, z) ->
             Exception.bind (ErrorMonad.to_exception (GenTyping.annotate_program Annotation.concrete_annotation z))
                            (fun z -> Exception.return0 (counter, z))
           )
-      |> pass_message "3. Ail typechecking completed!"
+      >|> pass_message "3. Ail typechecking completed!"
       
       
-      |> Exception.fmap (Translation.translate stdlib impl)
-      |> pass_message "4. Translation to Core completed!"
-      |> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
+      >|> Exception.fmap (Translation.translate stdlib impl)
+      >|> pass_message "4. Translation to Core completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
 (*
-      |> Exception.fmap Core_simpl.simplify
+      >|> Exception.fmap Core_simpl.simplify
 
-      |> pass_message "5. Core to Core simplication completed!"
-      |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *) in
+      >|> pass_message "5. Core to Core simplication completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *) in
     
     let core_frontend m =
           core_parse m
-      |> Exception.fmap (function
+      >|> Exception.fmap (function
             | Core_parser_util.Rfile (a_main, funs) ->
               { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.funs= funs }
             | _ -> assert false)
-      |> pass_message "1-4. Parsing completed!"
-      |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
+      >|> pass_message "1-4. Parsing completed!"
+      >|> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     if      Filename.check_suffix file_name ".c"    then (debug_print "Cmulator mode"    ; c_frontend    m)
     else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
                                                     else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
@@ -208,25 +220,25 @@ let pipeline stdlib impl core_parse file_name =
       (pass_message "5. Skipping Core's typechecking")
       (fun m ->
             Exception.rbind Core_typing.typecheck m
-        |> pass_message "5. Core's typechecking completed!")
+        >|> pass_message "5. Core's typechecking completed!")
     >?> !execute)
  *)
     (m
     >?> !execute)
       (fun m ->
         (pass_message "6. Enumerating indet orders:" m
-        |> Exception.rbind Core_indet.order
-        |> pass_message "7. Now running:"
+        >|> Exception.rbind Core_indet.order
+        >|> pass_message "7. Now running:"
 	>?> !testing)
 	  (* TODO: this is ridiculous *)
 	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run0 !random_mode f)))
 	  (Exception.rbind
              (Exception.map_list
 		(fun (n,f) -> Core_run.run0 !random_mode f
-                              |> pass_message ("SB order #" ^ string_of_int n)
-                              |> pass_through Pp_run.pp_traces
-                              |> pass_through_test !sb_graph (write_graph file_name)
-                              |> return_empty
+                              >|> pass_message ("SB order #" ^ string_of_int n)
+                              >|> pass_through Pp_run.pp_traces
+                              >|> pass_through_test !sb_graph (write_graph file_name)
+                              >|> return_empty
 		)
 	     )
 	  )
@@ -234,9 +246,9 @@ let pipeline stdlib impl core_parse file_name =
       return_empty in
   
   file_name
-  |> Input.file
-  |> frontend
-  |> core_backend
+  >|> Input.file
+  >|> frontend
+  >|> core_backend
   
   
 
@@ -272,7 +284,6 @@ let () =
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
   let module Core_parser_base = struct
     include Core_parser.Make (struct
-        let sym_counter = core_sym_counter
         let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some fname)) as fsym, _) ->
           Pmap.add fname fsym acc
         ) (Pmap.empty compare) $ Pmap.bindings_list stdlib

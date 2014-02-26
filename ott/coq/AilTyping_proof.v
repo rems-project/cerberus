@@ -710,7 +710,7 @@ Proof.
       end.
   - left; repeat constructor.
     + unfold_integer_range;
-      eapply Implementation.integer_range_positive;
+      eapply Implementation.integer_range_signed_upper;
       eapply Implementation.precision_ge_one.
     + unfold_integer_range;
       solve [eapply Implementation.integer_range_signed_lower1; eapply Implementation.precision_ge_one

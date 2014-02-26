@@ -61,9 +61,9 @@ This patch file works around various issues with the generated Coq code.
 -    | (_,  Tseq tid2') => setElemCompare_tid tid1 tid2'
 +    | (_,  Tseq tid2') => setElemCompare_tid' tid2'
      | (Tzero,  Tzero) => EQ
--    | (Tpar n1 tid1',  Tpar n2 tid2') => (pairCompare (genericCompare nat_ltb classical_boolean_equivalence) setElemCompare_tid (n1,  tid1') (n2,  tid2'))
+-    | (Tpar n1 tid1',  Tpar n2 tid2') => (pairCompare (genericCompare nat_ltb beq_nat) setElemCompare_tid (n1,  tid1') (n2,  tid2'))
 +    | (Tpar n1 tid1',  Tpar n2 tid2') =>
-+      match (genericCompare nat_ltb classical_boolean_equivalence) n1 n2 with
++      match (genericCompare nat_ltb beq_nat) n1 n2 with
 +        | LT => LT
 +        | GT => GT
 +        | EQ => setElemCompare_tid tid1' tid2'
@@ -364,8 +364,8 @@ This patch file works around various issues with the generated Coq code.
  
  
  (* Fully evaluated description of an action *)
---- _coq-orig/core_run_inductive.v	2014-02-19 21:21:57.000000000 +0000
-+++ _coq-patched/core_run_inductive.v	2014-02-19 21:21:57.000000000 +0000
+--- _coq-orig/core_run_inductive.v	2014-02-25 15:16:01.000000000 +0000
++++ _coq-patched/core_run_inductive.v	2014-02-25 15:48:19.000000000 +0000
 @@ -20,12 +20,12 @@
  
  Inductive red2_ind: ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> Prop :=
@@ -374,7 +374,8 @@ This patch file works around various issues with the generated Coq code.
 +  In (Defined0 e2,  s2) (red2 e1 s1): Prop) -> red2_ind   (e1,  s1)  (e2,  s2).
  Inductive star_red2_ind: ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> ((((expr (core_run_effect.taction_id1)*cmm_csem.tid0*list (cont (core_run_effect.taction_id1))) % type)*core_run_effect.state) % type) -> Prop :=
    | star_red2_zero: forall e1 s1, (
-   true: Prop) -> star_red2_ind   (e1,  s1)  (e1,  s1)
+-  true: Prop) -> star_red2_ind   (e1,  s1)  (e1,  s1)
++  True: Prop) -> star_red2_ind   (e1,  s1)  (e1,  s1)
    | star_red2_step: forall e1 e2 e3 s1 s2 s3, (
 -  red2_ind (e1,  s1) (e2,  s2) &&
 +  red2_ind (e1,  s1) (e2,  s2) /\
@@ -483,3 +484,35 @@ This patch file works around various issues with the generated Coq code.
  Definition t4_default{a: Type} : t4 a := Defined0 DAEMON.
  (* [?]: removed value specification. *)
  
+--- _coq-orig/core_ctype.v	2014-02-25 16:37:30.000000000 +0000
++++ _coq/core_ctype.v	2014-02-25 16:42:22.000000000 +0000
+@@ -42,12 +42,27 @@
+ Definition ctype0_default: ctype0  := Void0.
+ Definition member_default: member  := MEMBER ctype0_default.
+ 
+-Program Fixpoint ctype_eq  (t10 : ctype0 ) (t20 : ctype0 ) := 
++Fixpoint ctype_eq  (t10 : ctype0 ) (t20 : ctype0 ) := 
+   match ( (t10,  t20)) with 
+     | (Void0,  Void0) => true
+     | (Basic0 bt1,  Basic0 bt2) => ailTypes.eq_basicType bt1 bt2
+     | (Array0 a1 i1,  Array0 a2 i2) => ( ctype_eq a1 a2) && ( Z.eqb i1 i2)
+-    | (Function0 ct1 ts1 b1,  Function0 ct2 ts2 b2) => ( ctype_eq ct1 ct2) && (( (list_equal_by ctype_eq ts1 ts2)) && ( eqb b1 b2))
++    | (Function0 ct1 ts1 b1,  Function0 ct2 ts2 b2) =>
++      (ctype_eq ct1 ct2) &&
++      ((fix cmp left right :=
++          match left with
++            | [] =>
++              match right with
++                | [] => true
++                | _  => false
++              end
++            | x::xs =>
++              match right with
++                | []    => false
++                | y::ys => andb (ctype_eq x y) (cmp xs ys)
++              end
++          end) ts1 ts2) &&
++      (eqb b1 b2)
+     | (Pointer0 ct1,  Pointer0 ct2) => ( ctype_eq ct1 ct2)
+     | (Atomic1 ct1,  Atomic1 ct2) => ( ctype_eq ct1 ct2)
+     | (SIZE_T,  SIZE_T) => true

@@ -256,21 +256,21 @@ Inductive usualArithmeticPromotedInteger : implementation -> integerType -> inte
       ~ (   it1  =  it2   )  ->
      unsignedType it1 ->
      signedType it2 ->
-     ~ leIntegerRank P it2 it1 ->
+     leIntegerRank P it1 it2 ->
      leIntegerRange P it1 it2 ->
      usualArithmeticPromotedInteger P it1 it2 it2
  | UsualArithmeticPromotedInteger_GtSigned : forall (P:implementation) (it1 it2 :integerType),
       ~ (   it1  =  it2   )  ->
-     signedType   it1 ->
+     signedType it1 ->
      unsignedType it2 ->
-     ~ leIntegerRank P it1 it2 ->
+     leIntegerRank P it2 it1 ->
      leIntegerRange P it2 it1 ->
      usualArithmeticPromotedInteger P it1 it2 it1
  | UsualArithmeticPromotedInteger_LtSigned' : forall (P:implementation) (it1 it2 it2':integerType),
       ~ (   it1  =  it2   )  ->
      unsignedType it1 ->
      signedType it2 ->
-     ~ leIntegerRank P it2 it1 ->
+     leIntegerRank P it1 it2 ->
       ~ (  leIntegerRange P it1 it2  )  ->
      correspondingUnsigned it2 it2' ->
      usualArithmeticPromotedInteger P it1 it2 it2'
@@ -278,7 +278,7 @@ Inductive usualArithmeticPromotedInteger : implementation -> integerType -> inte
       ~ (   it1  =  it2   )  ->
      signedType it1 ->
      unsignedType it2 ->
-     ~ leIntegerRank P it1 it2 ->
+     leIntegerRank P it2 it1 ->
       ~ (  leIntegerRange P it2 it1  )  ->
      correspondingUnsigned it1 it1' ->
      usualArithmeticPromotedInteger P it1 it2 it1'.

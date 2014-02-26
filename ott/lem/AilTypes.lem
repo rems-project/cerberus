@@ -74,6 +74,11 @@ let eq_basicType bt1 bt2 =
   | (Integer it1, Integer it2) -> eq_integerType it1 it2
   end
 
+instance (Eq basicType)
+  let (=) = eq_basicType
+  let (<>) bt1 bt2 = not (eq_basicType bt1 bt2)
+end
+
 type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)

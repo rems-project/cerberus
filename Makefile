@@ -29,7 +29,7 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 
 # Where and how ocamlbuild will be called
 OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package pprint -libs nums,unix
 
 
 CMM_FILE=\

@@ -77,7 +77,7 @@ type declaration =
 
 
 let register_cont_symbols e =
-  let rec f st = function
+  let rec f ((count, syms) as st) = function
     | Enull
     | Etrue
     | Efalse
@@ -117,14 +117,12 @@ let register_cont_symbols e =
     | Ebound (_, e) ->
        f st e
     | Esave (k, _, e) ->
-        let sym_n = !M.sym_counter in
-        M.sym_counter := sym_n + 1;
-        f (Pmap.add k (Symbol.Symbol (sym_n, Some k)) st) e
+        f (count+1, Pmap.add k (Symbol.Symbol (count, Some k)) syms) e
     | End es
     | Epar es ->
         List.fold_left f st es
   
-  in f (Pmap.empty compare) e
+  in f (0, Pmap.empty compare) e
 
 
 (*  convert_expr: expr -> .. -> .. -> Core.expr 'a *)
@@ -138,7 +136,7 @@ let convert_expr e arg_syms fsyms =
                raise e
     end in
   
-  let rec f st = function
+  let rec f ((count, syms) as st) = function
     | Enull ->
         Core.Enull
     | Etrue ->
@@ -150,7 +148,7 @@ let convert_expr e arg_syms fsyms =
     | Ectype ty ->
         Core.Ectype ty
     | Esym a ->
-        Core.Esym (lookup_symbol a st)
+        Core.Esym (lookup_symbol a syms)
     | Eimpl ic ->
         Core.Eimpl ic
     | Etuple es ->
@@ -177,10 +175,8 @@ let convert_expr e arg_syms fsyms =
     | Eskip ->
         Core.Eskip
     | Elet (a, e1, e2) ->
-        let sym_n = !M.sym_counter in
-        let _a = Symbol.Symbol (sym_n, Some a) in
-        M.sym_counter := sym_n + 1;
-        Core.Elet (_a, f st e1, f (Pmap.add a _a st) e2)
+        let _a = Symbol.Symbol (count, Some a) in
+        Core.Elet (_a, f st e1, f (count+1, Pmap.add a _a syms) e2)
     | Eif (e1, e2, e3) ->
         Core.Eif (f st e1, f st e2, f st e3)
     | Eproc (Impl func, args) ->
@@ -195,67 +191,36 @@ let convert_expr e arg_syms fsyms =
     | Eunseq es ->
         Core.Eunseq (List.map (f st) es)
     | Ewseq (_as, e1, e2) ->
-        let (_as', st') = List.fold_left (fun (_as, st) sym_opt ->
-          match sym_opt with
-            | Some sym ->
-                let sym_n = !M.sym_counter in
-                let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := sym_n + 1;
-                (Some _a :: _as, Pmap.add sym _a st)
-            | None ->
-                (None :: _as, st)
-        ) ([], st) _as in
-        Core.Ewseq (List.rev _as', f st e1, f st' e2)
-(*
         let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
           match sym_opt with
             | Some sym -> let _a = Symbol.Symbol (c, Some sym) in
                           (c+1, Some _a :: _as, Pmap.add sym _a syms)
             | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
         Core.Ewseq (List.rev _as', f st e1, f (count', syms') e2)
-*)
     | Esseq (_as, e1, e2) ->
-        let (_as', st') = List.fold_left (fun (_as, st) sym_opt ->
-          match sym_opt with
-            | Some sym ->
-                let sym_n = !M.sym_counter in
-                let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := sym_n + 1;
-                (Some _a :: _as, Pmap.add sym _a st)
-            | None ->
-                (None :: _as, st)
-        ) ([], st) _as in
-        Core.Esseq (List.rev _as', f st e1, f st' e2)
-
-(*
         let (count', _as', syms') = List.fold_left (fun (c, _as, syms) sym_opt ->
           match sym_opt with
             | Some sym -> let _a = Symbol.Symbol (c, Some sym) in
                           (c+1, Some _a :: _as, Pmap.add sym _a syms)
             | None     -> (c+1, None :: _as, syms)) (count, [], syms) _as in
         Core.Esseq (List.rev _as', f st e1, f (count', syms') e2)
- *)
     | Easeq (_a_opt, act, pact) ->
         begin match _a_opt with
-                | Some _a ->
-                    let sym_n = !M.sym_counter in
-                    let _a' = Symbol.Symbol (sym_n, Some _a) in
-                    M.sym_counter := sym_n + 1;
-                    let (_, (s1, act1)) = g st (Core.Pos, act) in
-                    let (p2, (s2, act2)) = g (Pmap.add _a _a' st) pact in
-                    Core.Easeq (Some _a', Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, act2)))
-                | None ->
-                    let (_, (s1, act1)) = g st (Core.Pos, act) in
-                    let (p2, (s2, pact2)) = g st pact in
-                    Core.Easeq (None, Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, pact2)))
+                | Some _a -> let _a' = Symbol.Symbol (count, Some _a) in
+                             let (_, (s1, act1)) = g st (Core.Pos, act) in
+                             let (p2, (s2, act2)) = g (count+1, Pmap.add _a _a' syms) pact in
+                             Core.Easeq (Some _a', Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, act2)))
+                | None    -> let (_, (s1, act1)) = g st (Core.Pos, act) in
+                             let (p2, (s2, pact2)) = g st pact in
+                             Core.Easeq (None, Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, pact2)))
         end
     | Eindet e ->
         Core.Eindet (f st e)
     | Ebound (j, e) ->
         failwith "[Core_parser.convert_expr] #Ebound: TODO"
     | Esave (k, a_tys, e) ->
-        let a_tys' = List.map (fun (a, ty) -> (lookup_symbol a st, ty)) a_tys in
-        Core.Esave (lookup_symbol k st, a_tys', f st e)
+        let a_tys' = List.map (fun (a, ty) -> (lookup_symbol a syms, ty)) a_tys in
+        Core.Esave (lookup_symbol k syms, a_tys', f st e)
 (* HIP
         let (st', a_tys') = List.fold_left (fun ((count, syms) as st, acc) (a, ty) ->
           let _a = Symbol.Symbol (count, Some a) in
@@ -264,8 +229,8 @@ let convert_expr e arg_syms fsyms =
         Core.Esave (lookup_symbol k syms, List.rev a_tys', f st' e)
  *)
     | Erun (k, a_es) ->
-        let a_es' = List.map (fun (a, e) -> (lookup_symbol a st, f st e)) a_es in
-        Core.Erun (Pset.empty compare, lookup_symbol k st, a_es')
+        let a_es' = List.map (fun (a, e) -> (lookup_symbol a syms, f st e)) a_es in
+        Core.Erun (Pset.empty compare, lookup_symbol k syms, a_es')
     | Eret e ->
         Core.Eret (f st e)
     | End es ->
@@ -301,8 +266,8 @@ let convert_expr e arg_syms fsyms =
           (Pset.empty compare, Core.CompareExchangeWeak (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
     )
   in
-  let conts = register_cont_symbols e in
-  f (Pmap.union arg_syms conts) e
+  let (count, conts) = register_cont_symbols e in
+  f (count, Pmap.union arg_syms conts) e
 
 
 (* TODO: clean up this mess *)
@@ -498,10 +463,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
  *)
 
 %start <Core_parser_util.result>start
-%parameter <M : sig
-                  val sym_counter: Symbol.counter ref
-                  val std: (string, Core.sym) Pmap.map
-                end>
+%parameter <M : sig val std : (string, Core.sym) Pmap.map end>
 
 %%
 

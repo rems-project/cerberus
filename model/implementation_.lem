@@ -119,11 +119,6 @@ type implementation_constant =
      ones’ complement, and whether the extraordinary value is a trap representation or an ordinary
      value (6.2.6.2). *)
   (* TODO: I guess this is going to be flag of the memory model, but never used in a Core.Eimpl *)
-  (* TODO: we may not use these anymore once we use a real memory model *)
-  | Integer__encode (* function taking an integer type and an integer and returning a non-negative integer
-                       modeling the proper binary representation *)
-  | Integer__decode (* the other way around *)
-
   
   (* The rank of any extended integer type relative to another extended integer type with the same
      precision (6.3.1.1). *)
@@ -194,39 +189,70 @@ type implementation_constant =
   (* Standard library functions *)
   | StdFunction of string
 
+val implementation_constant_to_nat : implementation_constant -> nat
+let implementation_constant_to_nat x =
+  match x with
+    | Environment__startup_name -> 0
+    | Environment__startup_type -> 1
+    | Characters__bits_in_byte -> 2
+    | Characters__execution_character_set_values -> 3
+    | Characters__TODO1 -> 4
+    | Characters__TODO2 -> 5
+    | Characters__plain_char_sign -> 6
+    | Characters__TODO3 -> 7
+    | Characters__TODO4 -> 8
+    | Characters__TODO5 -> 9
+    | Characters__TODO6 -> 10
+    | Characters__TODO7 -> 11
+    | Characters__TODO8 -> 12
+    | Characters__TODO9 -> 13
+    | Characters__TODO10 -> 14
+    | Sizeof -> 15
+    | Alignof -> 16
+    | SHR_signed_negative -> 17
+    | Bitwise_complement -> 18
+    | Plain_bitfield_sign -> 19
+    | Bitfield_other_types -> 20
+    | Atomic_bitfield_permitted -> 21
+    | Ctype_min -> 22
+    | Ctype_max -> 23
+    | StdFunction _ -> 24
+  end
+
+let implementation_constant_equal x y =
+  match (x, y) with
+    | (StdFunction name1, StdFunction name2) -> (name1 = name2)
+    | _ -> (implementation_constant_to_nat x = implementation_constant_to_nat y)
+  end
+
+instance (Eq implementation_constant)
+  let (=) = implementation_constant_equal
+  let (<>) x y = not (implementation_constant_equal x y)
+end
+
+let implementation_constant_compare x y =
+  match (x, y) with
+    | (StdFunction name1, StdFunction name2) -> setElemCompare name1 name2
+    | _ -> setElemCompare (implementation_constant_to_nat x) (implementation_constant_to_nat y)
+  end 
+
+instance (SetType implementation_constant)
+  let setElemCompare = implementation_constant_compare
+end
 
 (* TODO: this is for the parsing (a bit disgusting to do it that way *)
 let impl_map =
   foldl (fun acc (k, v) -> Map.insert k v acc) Map.empty
   [
-    ("<Environment.startup_name>"                  , Environment__startup_name);
-    ("<Environment.startup_type>"                  , Environment__startup_type);
-    ("<Characters.bits_in_byte>"                   , Characters__bits_in_byte);
-    ("<Characters.execution_character_set_values>" , Characters__execution_character_set_values);
-    ("<Characters.TODO1>"                          , Characters__TODO1);
-    ("<Characters.TODO2>"                          , Characters__TODO2);
-    ("<Characters.plain_char_sign>"                , Characters__plain_char_sign);
-    ("<Characters.TODO3>"                          , Characters__TODO3);
-    ("<Characters.TODO4>"                          , Characters__TODO4);
-    ("<Characters.TODO5>"                          , Characters__TODO5);
-    ("<Characters.TODO6>"                          , Characters__TODO5);
-    ("<Characters.TODO7>"                          , Characters__TODO6);
-    ("<Characters.TODO8>"                          , Characters__TODO8);
-    ("<Characters.TODO9>"                          , Characters__TODO9);
-    ("<Characters.TODO10>"                         , Characters__TODO10);
-    ("<Integer.encode>"                            , Integer__encode);
-    ("<Integer.decode>"                            , Integer__decode);
-    ("<sizeof>"                                    , Sizeof);
-    ("<alignof>"                                   , Alignof);
-    ("<bits_in_byte>"                              , Characters__bits_in_byte);
-    ("<SHR_signed_negative>"                       , SHR_signed_negative);
-    ("<Bitwise_complement>"                        , Bitwise_complement);
-    ("<Plain_bitfield_sign>"                       , Plain_bitfield_sign);
-    ("<Bitfield_other_types>"                      , Bitfield_other_types);
-    ("<Atomic_bitfield_permitted>"                 , Atomic_bitfield_permitted);
-    ("<ctype_min>"                                 , Ctype_min);
-    ("<ctype_max>"                                 , Ctype_max);
+    ("<bits_in_byte>",        Characters__bits_in_byte);
+    ("<sizeof>",              Sizeof);
+    ("<alignof>",             Alignof);
+    ("<ctype_min>",           Ctype_min);
+    ("<ctype_max>",           Ctype_max);
+    ("<SHR_signed_negative>", SHR_signed_negative);
   ]
+
+
 
 
 let string_of_implementation_constant = function
@@ -260,10 +286,6 @@ let string_of_implementation_constant = function
       "Characters.TODO9"
   | Characters__TODO10 ->
       "Characters.TODO10"
-  | Integer__encode ->
-      "Integer.encode"
-  | Integer__decode ->
-      "Integer.decode"
   | Sizeof ->
       "sizeof"
   | Alignof ->

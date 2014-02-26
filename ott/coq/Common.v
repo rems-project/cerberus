@@ -38,18 +38,6 @@ Ltac boolSpec_destruct :=
       end
   end.
 
-Ltac boolSpec_destruct_hyp H :=
-  match H with
-  | boolSpec ?b _ =>
-      match b with
-      | true  => fail 1
-      | false => fail 1
-      | _     =>
-          let Heq := fresh in
-          case_eq b; intros Heq; rewrite Heq in *; clear Heq; simpl in H
-      end
-  end.
-
 Ltac or_destruct :=
   match goal with
   | [|- _ \/ _ -> _] =>
@@ -861,13 +849,4 @@ Proof.
   case_eq (lt_Z x y); intros Heq.
   + exact (proj1 (Z.ltb_lt  _ _) Heq).
   + exact (proj1 (Z.ltb_nlt _ _) Heq).
-Qed.
-
-Definition le_Z := Z.leb.
-
-Lemma le_Z_correct x y : boolSpec (le_Z x y) (x <= y)%Z.
-Proof.
-  case_eq (le_Z x y); intros Heq.
-  + exact (proj1 (Z.leb_le  _ _) Heq).
-  + exact (proj1 (Z.leb_nle _ _) Heq).
 Qed.

@@ -137,6 +137,7 @@ Proof.
   | [ H : Range.max (_ _ ?it1) <= Range.max (_ _ ?it2) |- _] =>
       unfold_integer_range_hyp H;
       apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1)) in H;
+      apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1));
       apply (Z.pow_le_mono_r_iff 2); omega
   end.
 Qed.
@@ -205,12 +206,12 @@ Proof.
       unfold_integer_range_hyp H
   end;
   match goal with
-  | [ H : 0 <= - 2 ^ (precision P ?it) |- _] =>
+  | [ H : 0 <= - 2 ^ (precision P ?it - 1) |- _] =>
       rewrite <- Z.opp_0  in H;
       apply Z.opp_le_mono in H;
-      set (integer_range_positive (precision_ge_one P it));
+      set (integer_range_signed_upper (precision_ge_one P it));
       omega
-  | [ H : 0 <= - 2 ^ (precision P _) + 1 |- _] =>
+  | [ H : 0 <= - 2 ^ (precision P _ - 1) + 1 |- _] =>
       apply (Z.sub_le_mono_r _ _ 1)     in H;
       rewrite <- Z.add_sub_assoc        in H;
       rewrite Z.sub_diag                in H;
@@ -227,7 +228,7 @@ Qed.
 Lemma integer_range_precision_unsigned_signed {P} {it1} {it2} :
   D.unsigned P it1 ->
   D.signed   P it2 ->
-  precision P it1 <= precision P it2 ->
+  precision P it1 < precision P it2 ->
   sub (integer_range P it1) (integer_range P it2).
 Proof.
   inversion 1;
@@ -246,9 +247,9 @@ Lemma integer_range_precision_unsigned_signed_inv {P} {it1} {it2} :
   D.unsigned P it1 ->
   D.signed   P it2 ->
   sub (integer_range P it1) (integer_range P it2) ->
-  precision P it1 <= precision P it2.
+  precision P it1 < precision P it2.
 Proof.
-  set ((proj2 (Z.lt_pred_le _ _)) (precision_ge_one P it2)).
+  set (precision_ge_one P it2).
   inversion 1;
   inversion 1;
   inversion 1; subst;
@@ -256,8 +257,20 @@ Proof.
   | [H : Range.max _ <= Range.max _|- _] =>
     unfold_integer_range_hyp H;
     apply (proj2 (Z.sub_le_mono_r _ _ 1)) in H;
+    apply Z.lt_le_pred;
+    rewrite <- Z.sub_1_r;
     apply (Z.pow_le_mono_r_iff 2); omega
   end.
+Qed.
+
+Lemma integer_range_precision_Unsigned_Signed_eq {P} {ibt} :
+  ~ precision P (Unsigned ibt) = precision P (Signed ibt) ->
+  ~ sub (integer_range P (Unsigned ibt)) (integer_range P (Signed ibt)).
+Proof.
+  intros Hneq HleRange.
+  assert (~ precision P (Unsigned ibt) < precision P (Signed ibt)) as Hnlt
+  by apply (Zle_not_lt _ _ (le_precision_Signed_Unsigned P ibt)).
+  exact (Hnlt (integer_range_precision_unsigned_signed_inv (D.Unsigned_Int P ibt) (D.Signed_Int P ibt) HleRange)).
 Qed.
 
 Lemma in_integer_range_correct P n it : boolSpec (in_integer_range P n it) (D.inIntegerRange P n it).
@@ -297,6 +310,7 @@ Proof.
   end;
   unfold min_integer_range;
   unfold min_range_signed;
+  unfold integer_range_signed_upper;
   unfold min_range_unsigned;
   repeat match goal with
   | |- context[binary_mode P] => destruct (binary_mode P)
@@ -319,7 +333,7 @@ Proof.
       apply Z.pow_le_mono; [omega|];
       exact (precision_Bool P)
   | |- 0 <= 0 => omega
-  | |- - 2 ^ (precision P Char) <= 0 =>
+  | |- - 2 ^ (precision P Char - 1) <= 0 =>
       assert (0 = -0)%Z as Heq by reflexivity;
       rewrite Heq;
       apply (proj1 (Z.opp_le_mono _ _));
@@ -327,7 +341,7 @@ Proof.
       assert (1 = 2^0)%Z as Heq' by reflexivity;
       rewrite Heq' at 1;
       apply Z.pow_le_mono_r; omega
-  | |- - 2 ^ (precision P Char) + 1 <= 0 =>
+  | |- - 2 ^ (precision P Char - 1) + 1 <= 0 =>
       apply (Z.le_le_sub_lt 1 1 _ _ (Z.le_refl 1));
       rewrite <- Z.add_sub_assoc;
       rewrite Zplus_0_r;
@@ -335,14 +349,14 @@ Proof.
       assert (1 = 2^0)%Z as Heq' by reflexivity;
       rewrite Heq' at 1;
       apply Z.pow_le_mono_r; omega
-  | |- - 2 ^ (precision _ (Signed ?ibt)) <= _ =>
-      apply (Z.le_trans _ (- 2 ^ (min_precision ibt - 1))); [|simpl; omega];
+  | |- - 2 ^ (precision _ (Signed ?ibt) - 1) <= _ =>
+      apply (Z.le_trans _ (- 2 ^ (min_precision ibt - 1 - 1))); [|simpl; omega];
       apply (proj1 (Z.opp_le_mono _ _));
       apply Z.pow_le_mono_r; omega
-  | |- - 2 ^ (precision _ (Signed _)) + 1 <= _ =>
-      apply Z.add_le_mono_r;
+  | |- - 2 ^ (precision _ (Signed _) - 1) + 1 <= _ =>
+      apply Z.add_le_mono; [|omega];
       apply (proj1 (Z.opp_le_mono _ _));
-      apply Z.pow_le_mono_r; omega
+      apply Z.pow_le_mono_r; simpl in *; omega
   end.
 Qed.
 
@@ -406,24 +420,18 @@ Proof.
       intros Heq; repeat rewrite Heq in *
   | _ => idtac
   end; simpl;
-
   match goal with
   | [|- context[lt_Z ?x ?y] ] =>
       let Heq := fresh in
       set (lt_Z_correct x y);
       case_eq (lt_Z x y); intros Heq; rewrite Heq in *; clear Heq
-  | [|- context[le_Z ?x ?y] ] =>
-      let Heq := fresh in
-      set (le_Z_correct x y);
-      case_eq (le_Z x y); intros Heq; rewrite Heq in *; clear Heq
   | [|- context[eq_Z ?x ?y] ] =>
       let Heq := fresh in
       set (eq_Z_correct x y);
       case_eq (eq_Z x y); intros Heq; rewrite Heq in *; clear Heq
   | _ => idtac
   end; boolSpec_simpl; simpl;
-
-  try match goal with
+  match goal with
   | [|- D.leIntegerRange _ ?it ?it ] =>
       constructor; constructor; apply Z.le_refl
   | [ Hunsigned1 : D.unsigned ?P ?it1, Hunsigned2 : D.unsigned ?P ?it2 |- D.leIntegerRange ?P ?it1 ?it2 ] =>
@@ -488,14 +496,10 @@ Proof.
       set (le_precision_Unsigned_Short_Int     P);
       set (le_precision_Unsigned_Ichar_Short   P);
       set (le_precision_Unsigned_Bool_Ichar    P);
-      set (le_precision_Signed_Long_LongLong   P);
-      set (le_precision_Signed_Int_Long        P);
-      set (le_precision_Signed_Short_Int       P);
-      set (le_precision_Signed_Ichar_Short     P);
       solve [ contradiction | omega]
   | [ Hunsigned1 : D.unsigned ?P ?it1, Hsigned2 : D.signed ?P ?it2 |- D.leIntegerRange ?P ?it1 ?it2 ] =>
       constructor;
-      apply (integer_range_precision_unsigned_signed Hunsigned1 Hsigned2); omega
+      apply (integer_range_precision_unsigned_signed Hunsigned1 Hsigned2); assumption
   end.
 Qed.
 
@@ -1072,19 +1076,6 @@ Proof.
   congruence.
 Qed.
 
-
-Ltac boolSpec_destruct_hyp H :=
-  match H with
-  | boolSpec ?b _ =>
-      match b with
-      | true  => fail 1
-      | false => fail 1
-      | _     =>
-          let Heq := fresh in
-          case_eq b; intros Heq; rewrite Heq in *; clear Heq; simpl in H
-      end
-  end.
-
 Lemma is_usual_arithmetic_promoted_integer_correct P it1 it2 it3 :
   D.promoted it1 ->
   D.promoted it2 ->
@@ -1101,12 +1092,12 @@ Proof.
   inversion 1;
   inversion 1;
   subst;
-  try abstract (
+  abstract (
     simpl in *;
     match goal with
-    | |- context[le_Z (precision P ?it1) (precision P ?it2)] =>
+    | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
            let Heq := fresh in
-           case_eq (le_Z (precision P it1) (precision P it2));
+           case_eq (lt_Z (precision P it1) (precision P it2));
            intros Heq; rewrite_all Heq; clear Heq
     | _ => idtac
     end;
@@ -1138,9 +1129,9 @@ Proof.
   abstract (
     simpl in *;
     match goal with
-    | |- context[le_Z (precision P ?it1) (precision P ?it2)] =>
+    | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
            let Heq := fresh in
-           case_eq (le_Z (precision P it1) (precision P it2));
+           case_eq (lt_Z (precision P it1) (precision P it2));
            intros Heq; rewrite_all Heq; clear Heq
     | _ => idtac
     end;
@@ -1175,9 +1166,9 @@ Proof.
   subst; simpl in *;
   repeat match goal with
   | H : D.correspondingUnsigned _ ?it |- _ => is_var it; inversion_clear H
-  | |- context[le_Z (precision P ?it1) (precision P ?it2)] =>
+  | |- context[lt_Z (precision P ?it1) (precision P ?it2)] =>
       let Heq := fresh in
-      case_eq (le_Z (precision P it1) (precision P it2));
+      case_eq (lt_Z (precision P it1) (precision P it2));
       intros Heq; rewrite_all Heq; clear Heq
   | _ => solve [congruence|contradiction]
   end.

@@ -21,7 +21,7 @@ val mk_stdcall: Core.fun_map zero -> string -> (list (Core.expr zero) -> Core.ex
 let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Set_extra.toList $ Map.toSet stdlib) with
     | Just (f, _) -> Core.Ecall (Core.Sym f)
-    | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+    | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" (* TODO[newLem] ^ fname ^ "' is not a Core standard function." *)
  end
 
 

@@ -83,7 +83,7 @@ and translate_expression stdlib program a_expr =
   let overflow         = mk_stdcall "overflow"         in
   let ctype_width      = mk_stdcall "ctype_width"      in
   let exp              = mk_stdcall "exp"              in
-(*  let quot             = mk_stdcall "quot"             in *)
+  let quot             = mk_stdcall "quot"             in
   let is_representable = mk_stdcall "is_representable" in
   let usual_arithmetic = mk_stdcall "usual_arithmetic" in
   let usual_arithmetic_conv e ty1 ty2 =
@@ -321,16 +321,16 @@ and translate_expression stdlib program a_expr =
             (* TODO: pointer arith *)
             Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SUB) e1 e2 <pointer case>: TODO"
       
-      | A.Binary e1 (A.Arithmetic A.Shl) e2 -> (* DONE (check promotion stuff) *)
-          E.fresh_symbol >>= fun a_e1    ->
-          E.fresh_symbol >>= fun a_e2    ->
-          E.fresh_symbol >>= fun a_res   ->
-          f e1           >>= fun core_e1 ->
-          f e2           >>= fun core_e2 ->
+      | A.Binary e1 (A.Arithmetic A.Shl) e2 -> (* DONE (check) *)
+          E.fresh_symbol             >>= fun a_e1          ->
+          E.fresh_symbol             >>= fun a_e2          ->
+          E.fresh_symbol             >>= fun a_res         ->
+          f e1      >>= fun core_e1       ->
+          f e2      >>= fun core_e2       ->
           
           return $
             C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-            (* (§6.5.7#2) if a_e2 < 0 then undef *)
+            (* if a_e2 < 0 then undef *)
             (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
                (C.Eundef Undefined.Negative_shift)
             
@@ -371,24 +371,10 @@ and translate_expression stdlib program a_expr =
           E.fresh_symbol >>= fun a_res   ->
           f e1           >>= fun core_e1 ->
           f e2           >>= fun core_e2 ->
-          
+
           return $
             C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-              (* (§6.5.7#2) if a_e2 < 0 then undef *)
-(*
-              (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
-                 (C.Eundef Undefined.Negative_shift)
-TODO: KKK
-
- *)
-
-
-
-
-
-
-(*              (let expr = quot [C.Esym a_e1; exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]] in *)
-              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]) in
+              (let expr = quot [C.Esym a_e1; exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]] in
                if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                  (* If E1 has an unsigned type *)
                  expr
@@ -397,7 +383,7 @@ TODO: KKK
                     If E1 has a signed type and a negative value, the resulting
                     value is implementation-defined. *)
                  C.Eif (C.Eop C.OpLt (C.Esym a_e1) Caux.zero)
-                   (C.Ecall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ctype (ctype_of e1) ; C.Esym a_e1; C.Esym a_e2])
+                   (C.Ecall (C.Impl Implementation_.SHR_signed_negative) [C.Esym a_e1; C.Esym a_e2])
                    expr)
       
       | A.Binary e1 (A.Arithmetic A.Band) e2 ->

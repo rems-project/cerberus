@@ -3,7 +3,7 @@ INSTALLATION
    packages may work just fine)
   
   First install:
-    * ocaml (at least 4.00.0)
+    * ocaml (4.0.1)
     * ott (svn)
     * opam
   

@@ -1,25 +1,21 @@
 -- Math utilities
 
 
-fun exp_aux(n: integer, m: integer, acc: integer) : integer :=
-  if m = 0 then
-    acc
-  else
-    exp_aux(n, m - 1, n * acc)
-  end
-
-
 -- TODO: diverges if m < 0
 fun exp (n: integer, m: integer) : integer :=
-  exp_aux(n, m, 1)
-{-
   if m = 0 then
     1
   else
     n * exp(n, m - 1)
   end
--}
 
+-- TODO: assumes n >= 0
+fun quot (n: integer, m: integer) : integer :=
+  if n < m then
+    0
+  else
+    1 + quot(n-m, m)
+  end
 
 
 {-
@@ -156,49 +152,3 @@ fun ctype_width (ty: ctype): integer :=
 fun is_representable (n: integer, ty: ctype): boolean :=
   <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
 
-
-
-
--- encode an element of Z into an element of N following the
--- two's complement encoding
-fun encodeTwos (ty : ctype, n: integer) : integer :=
-  -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
-    if (n < 0 - exp(2, width - 1)) \/ (exp(2, width - 1) - 1 < n) then
-      error
-    else
-      if 0 <= n then
-        n
-      else
-        exp(2, width) + n
-      end
-    end
-  end
-
--- the inverse of the previous function
-fun decodeTwos (ty: ctype, n: integer) : integer :=
-  -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
-    if (n < 0) \/ (exp(2, width) <= n) then
-      error
-    else
-      if n <= exp(2, width - 1) - 1 then
-        n
-      else
-        n - exp(2, width)
-      end
-    end
-  end
-
-
--- ones_prefix(0, k, width) returns an positive integer whose binary
--- representation is 1    ...   1 0      ...       0
---                     k times     width - k times
-fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
-  if (0 <= i) /\ (i < k) then
-    exp(2, width - 1 - i) + ones_prefix(i + 1, k, width)
-  else
-    0
-  end
--- gccSHR_Twos n m =
---  quot n (2^m) + (sum $ map (\i -> 2^(width - 1 - i)) [0..m-1])

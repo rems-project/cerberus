@@ -1,10 +1,9 @@
+Require Import ZArith.
+
 Require Import Common.
 Require Import Implementation.
 Require Import AilTypes.
 Require Import AilTypesAux.
-
-Require Import ZArith.
-Open Local Scope Z.
 
 Definition counter : implementation.
   make_implementation_tac
@@ -35,12 +34,5 @@ Definition counter : implementation.
     (Signed   Long).
 Defined.
 
-Lemma non_assoc :
-  exists P it1 it2 it3,
-    usual_arithmetic_promoted_integer P it1 (usual_arithmetic_promoted_integer P it2 it3) 
-     <>
-    usual_arithmetic_promoted_integer P (usual_arithmetic_promoted_integer P it1 it2) it3.
-Proof.
-  exists counter, (Signed Long), (Unsigned Int), (Signed LongLong).
-  discriminate.
-Qed.
+Eval compute in usual_arithmetic_promoted_integer counter (Signed Long) (usual_arithmetic_promoted_integer counter (Unsigned Int) (Signed LongLong)).
+Eval compute in usual_arithmetic_promoted_integer counter (usual_arithmetic_promoted_integer counter (Signed Long) (Unsigned Int)) (Signed LongLong).

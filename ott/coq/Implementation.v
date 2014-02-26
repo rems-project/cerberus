@@ -102,7 +102,7 @@ Proof.
     omega.
 Qed.
 
-Definition integer_range_positive {p} : 1 <= p -> 0 <= 2^p - 1.
+Definition integer_range_unsigned {p} : 1 <= p -> 0 <= 2^p - 1.
 Proof.
   intros.
   assert (0 <= p) as Hge_zero by omega.
@@ -110,34 +110,42 @@ Proof.
   omega.
 Qed.
 
-Definition integer_range_signed_lower1 {p} : 1 <= p -> -2^p <= 0.
+Definition integer_range_signed_upper {p} : 1 <= p -> 0 <= 2^(p-1) - 1.
 Proof.
   intros.
-  assert (0 <= p) as Hge_zero by omega.
+  assert (0 <= p - 1) as Hge_zero by omega.
+  set (two_p_ge_one Hge_zero).
+  omega.
+Defined.
+
+Definition integer_range_signed_lower1 {p} : 1 <= p -> -2^(p-1) <= 0.
+Proof.
+  intros.
+  assert (0 <= p - 1) as Hge_zero by omega.
   set (two_p_ge_one Hge_zero).
   omega.
 Qed.
 
-Definition integer_range_signed_lower2 {p} : 1 <= p -> -2^p + 1 <= 0.
+Definition integer_range_signed_lower2 {p} : 1 <= p -> -2^(p-1) + 1 <= 0.
 Proof.
   intros.
-  assert (0 <= p) as Hge_zero by omega.
+  assert (0 <= p - 1) as Hge_zero by omega.
   set (two_p_ge_one Hge_zero).
   omega.
 Qed.
 
-Definition integer_range_signed1 {p} : 1 <= p -> -2^p <= 2^p - 1.
+Definition integer_range_signed1 {p} : 1 <= p -> -2^(p-1) <= 2^(p-1) - 1.
 Proof.
   intros Hge_one.
-  set (integer_range_positive  Hge_one).
+  set (integer_range_signed_upper  Hge_one).
   set (integer_range_signed_lower1 Hge_one).
   apply (Z.le_trans _ 0 _); assumption.
 Qed.
 
-Definition integer_range_signed2 {p} : 1 <= p -> -2^p + 1 <= 2^p - 1.
+Definition integer_range_signed2 {p} : 1 <= p -> -2^(p-1) + 1 <= 2^(p-1) - 1.
 Proof.
   intros Hge_one.
-  set (integer_range_positive  Hge_one).
+  set (integer_range_signed_upper  Hge_one).
   set (integer_range_signed_lower2 Hge_one).
   apply (Z.le_trans _ 0 _); assumption.
 Qed.
@@ -146,12 +154,12 @@ Definition integer_range P it :=
   let prec := precision P it in
   if signed P it then
     match binary_mode P with
-    | Two'sComplement   => @make_range (-2^prec)     (2^prec - 1) (integer_range_signed1 (precision_ge_one P _))
-    | One'sComplement   => @make_range (-2^prec + 1) (2^prec - 1) (integer_range_signed2 (precision_ge_one P _))
-    | SignPlusMagnitude => @make_range (-2^prec + 1) (2^prec - 1) (integer_range_signed2 (precision_ge_one P _))
+    | Two'sComplement   => @make_range (-2^(prec - 1))     (2^(prec - 1) - 1) (integer_range_signed1 (precision_ge_one P _))
+    | One'sComplement   => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (precision_ge_one P _))
+    | SignPlusMagnitude => @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (precision_ge_one P _))
     end
   else
-    @make_range 0 (2^prec - 1) (integer_range_positive (precision_ge_one P _)).
+    @make_range 0 (2^prec - 1) (integer_range_unsigned (precision_ge_one P _)).
 
 Lemma le_one_min_precision ibt : 1 <= min_precision ibt.
 Proof. destruct ibt; simpl; omega. Qed.
@@ -161,15 +169,15 @@ Proof. destruct ibt; simpl; omega. Qed.
 
 Definition min_range_unsigned ibt :=
   let prec := min_precision ibt in
-  @make_range 0 (2^prec - 1) (integer_range_positive (le_one_min_precision ibt)).
+  @make_range 0 (2^prec - 1) (integer_range_unsigned (le_one_min_precision ibt)).
 
 Definition min_range_signed ibt :=
   let prec := min_precision ibt - 1 in
-  @make_range (-2^prec + 1) (2^prec - 1) (integer_range_signed2 (le_one_min_precision_sub_one ibt)). 
+  @make_range (-2^(prec - 1) + 1) (2^(prec - 1) - 1) (integer_range_signed2 (le_one_min_precision_sub_one ibt)). 
 
 Definition min_integer_range it :=
   match it with
-  | Char         => make_range (integer_range_positive (le_one_min_precision_sub_one Ichar))
+  | Char         => make_range (integer_range_signed_upper (le_one_min_precision_sub_one Ichar))
   | Bool         => make_range Z.le_0_1
   | Unsigned ibt => min_range_unsigned ibt
   | Signed   ibt => min_range_signed   ibt

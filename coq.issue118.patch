@@ -28,22 +28,22 @@ record access).
 -                                              ((precisionP) Char) ((precisionP) (Signed ibt))
 +                                              ((precision P) Char) ((precision P) (Signed ibt))
    | (Signed Ichar     ,  Char)              =>(signed P) Char
-   | (Signed ibt       ,  Char)              =>(signed P) Char && classical_boolean_equivalence                                              
+   | (Signed ibt       ,  Char)              =>(signed P) Char && beq_nat                                              
 -((precisionP) (Signed ibt)) ((precisionP) Char)
 -  | (Unsigned Ichar   ,  Char)              => negb ((signedP) Char)
--  | (Unsigned ibt     ,  Char)              => negb ((signedP) Char) && classical_boolean_equivalence                                              
+-  | (Unsigned ibt     ,  Char)              => negb ((signedP) Char) && beq_nat                                              
 -((precisionP) (Unsigned ibt)) ((precisionP) Char)
 -  | (Char             ,  Unsigned _)        => negb ((signedP) Char)
--  | (Char             ,  Bool)              => negb ((signedP) Char) && classical_boolean_equivalence                                              
+-  | (Char             ,  Bool)              => negb ((signedP) Char) && beq_nat                                              
 -((precisionP) Char) ((precisionP) Bool)
 -  | (Bool             ,  Char)              => negb ((signedP) Char) || nat_ltb
 -                                              ((precisionP) Bool) ((precisionP) Char)
 +((precision P) (Signed ibt)) ((precision P) Char)
 +  | (Unsigned Ichar   ,  Char)              => negb ((signed P) Char)
-+  | (Unsigned ibt     ,  Char)              => negb ((signed P) Char) && classical_boolean_equivalence                                              
++  | (Unsigned ibt     ,  Char)              => negb ((signed P) Char) && beq_nat                                              
 +((precision P) (Unsigned ibt)) ((precision P) Char)
 +  | (Char             ,  Unsigned _)        => negb ((signed P) Char)
-+  | (Char             ,  Bool)              => negb ((signed P) Char) && classical_boolean_equivalence                                              
++  | (Char             ,  Bool)              => negb ((signed P) Char) && beq_nat                                              
 +((precision P) Char) ((precision P) Bool)
 +  | (Bool             ,  Char)              => negb ((signed P) Char) || nat_ltb
 +                                              ((precision P) Bool) ((precision P) Char)
@@ -54,8 +54,8 @@ record access).
    | (Signed   Long    ,  Signed   Long)     => true
    | (Signed   Long    ,  Signed   LongLong) => true
    | (Signed   LongLong,  Signed   LongLong) => true
--  | (Signed   ibt1    ,  Signed   ibt2)     => classical_boolean_equivalence ((precisionP) (Signed ibt1)) ((precisionP) (Signed ibt2))
-+  | (Signed   ibt1    ,  Signed   ibt2)     => classical_boolean_equivalence ((precision P) (Signed ibt1)) ((precision P) (Signed ibt2))
+-  | (Signed   ibt1    ,  Signed   ibt2)     => beq_nat ((precisionP) (Signed ibt1)) ((precisionP) (Signed ibt2))
++  | (Signed   ibt1    ,  Signed   ibt2)     => beq_nat ((precision P) (Signed ibt1)) ((precision P) (Signed ibt2))
  
    | (Bool             ,  Bool)              => true
    | (Bool             ,  Unsigned _)        => true
@@ -63,10 +63,10 @@ record access).
    | (Unsigned Long    ,  Unsigned Long)     => true
    | (Unsigned Long    ,  Unsigned LongLong) => true
    | (Unsigned LongLong,  Unsigned LongLong) => true
--  | (Unsigned ibt     ,  Bool)              => classical_boolean_equivalence ((precisionP) (Unsigned ibt)) ((precisionP) Bool)
--  | (Unsigned ibt1    ,  Unsigned   ibt2)   => classical_boolean_equivalence ((precisionP) (Unsigned ibt1)) ((precisionP) (Unsigned ibt2))
-+  | (Unsigned ibt     ,  Bool)              => classical_boolean_equivalence ((precision P) (Unsigned ibt)) ((precision P) Bool)
-+  | (Unsigned ibt1    ,  Unsigned   ibt2)   => classical_boolean_equivalence ((precision P) (Unsigned ibt1)) ((precision P) (Unsigned ibt2))
+-  | (Unsigned ibt     ,  Bool)              => beq_nat ((precisionP) (Unsigned ibt)) ((precisionP) Bool)
+-  | (Unsigned ibt1    ,  Unsigned   ibt2)   => beq_nat ((precisionP) (Unsigned ibt1)) ((precisionP) (Unsigned ibt2))
++  | (Unsigned ibt     ,  Bool)              => beq_nat ((precision P) (Unsigned ibt)) ((precision P) Bool)
++  | (Unsigned ibt1    ,  Unsigned   ibt2)   => beq_nat ((precision P) (Unsigned ibt1)) ((precision P) (Unsigned ibt2))
  
    | (Signed   _       ,  Bool)              => false
    | (Signed   _       ,  Unsigned _)        => false
