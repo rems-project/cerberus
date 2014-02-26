@@ -1,0 +1,1 @@
+embed {{ coq Require Import AilSyntax. }}

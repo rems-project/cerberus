@@ -1,0 +1,262 @@
+(* Effects for Cabs_to_ail: state *)
+open import Pervasives Global
+import Symbol Scope_table Location State_exception Errors
+import Cabs0 AilSyntax AilTypes
+
+module C      = Cabs0
+module A      = AilSyntax
+module ATypes = AilTypes
+
+
+(* TODO: the version in AilSyntax *)
+type symbol_kind =
+  | Varname
+  | Typename
+  | Funname
+
+type state = <|
+  (* Counter for the symbol generator *)
+  symbol_counter: Symbol.counter;
+  (* table (with stacked scopes) associating C identifiers to symbols *)
+  registered_identifiers: Scope_table.t string (A.identifier * symbol_kind);
+  
+  (* registered_labels *)
+  registered_labels:      map string A.identifier;
+  is_inside_switch:       bool;
+  
+  
+  
+  
+  
+  
+  
+  (* globals, function prototype/definitions *)
+  definitions:               A.sigma Location.t unit;
+  id_map:                 map A.identifier (ATypes.qualifiers * ATypes.ctype);
+  
+  (* type definitions *)
+  (* TODO[vla]: §6.7.8#2 If a typedef name specifies a variably modified type then it shall have block scope. *)
+  typedef_map: map string (ATypes.qualifiers * ATypes.ctype);
+  
+  (* we save string litterals to be able to do static allocation in the Core *)
+  (* TODO: merge with globals *)
+  strings:                map A.identifier string;
+  
+  
+(*
+  (* function prototypes: fname -> (return_ty, params, is_variadic) *)
+  fun_protos: map string (ATypes.ctype * list (A.identifier * (ATypes.qualifiers * ATypes.ctype)) * bool); (* boolean = "is variadic func?" *)
+  
+  
+  global_map: map A.identifier (ATypes.ctype * maybe (A.expression unit))
+ *)
+  
+  
+  
+  
+  
+  (* TODO: need to bring back globals (add them to newAil) *)
+|>
+
+type t 'a = State_exception.t 'a state Errors.t
+
+val return: forall 'a. 'a -> t 'a
+let return = State_exception.return
+
+val fail: forall 'a. Errors.cause -> t 'a
+let fail err = State_exception.fail (Location.dummy, err)
+
+let of_option err = State_exception.of_option (Location.dummy, err)
+
+val make_program: Symbol.t -> t (Symbol.counter * A.program Location.t unit)
+let make_program startup =
+  State_exception.read (fun st ->
+    (st.symbol_counter, (startup, st.definitions))
+  )
+
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+let mapM = State_exception.mapM
+let mapM_ = State_exception.mapM_
+
+let foldrM = State_exception.foldrM
+
+let iter = State_exception.iter
+
+val tryWith: forall 'a. Errors.t -> t 'a -> t 'a
+let tryWith = State_exception.tryWith
+
+
+let bind = State_exception.bind
+let fmap = State_exception.fmap
+let app  = State_exception.app
+
+
+
+(*  open Operators *)
+
+(* given a computation producing the symbolic name of the startup function,
+   produce the desugared Ail file *)
+val eval: t Symbol.t -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
+let eval m =
+  let initial_state : state = <|
+    symbol_counter=         Symbol.init;
+    registered_identifiers= Scope_table.create_scope Scope_table.empty;
+    registered_labels=      Map.empty;
+    is_inside_switch=       false;
+    definitions=            [];
+    id_map=                 Map.empty;
+    typedef_map=            Map.empty;
+    strings=                Map.empty
+  |> in
+  State_exception.eval (bind m make_program) initial_state
+
+val resolve_identifier: string -> t (A.identifier * symbol_kind)
+let resolve_identifier name =
+  bind (State_exception.read (fun st -> Scope_table.lookup name st.registered_identifiers))
+    function
+      | Just x  -> return x
+      | Nothing -> fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
+    end
+
+val is_inside_switch: t bool
+let is_inside_switch =
+  State_exception.read (fun st -> st.is_inside_switch)
+
+val create_scope: t unit
+let create_scope =
+  State_exception.update (fun st ->
+    <| st with registered_identifiers= Scope_table.create_scope st.registered_identifiers |>)
+
+val destroy_scope: t (list (A.identifier * symbol_kind))
+let destroy_scope =
+  State_exception.modify (fun st ->
+    (Scope_table.symbols st.registered_identifiers,
+     <| st with registered_identifiers= Scope_table.destroy_scope st.registered_identifiers |>)
+  )
+
+val fresh : t Symbol.t
+let fresh =
+  State_exception.modify (fun st ->
+    let (sym, symbol_counter) = Symbol.fresh st.symbol_counter in
+    (sym, <| st with symbol_counter = symbol_counter |>)
+  )
+
+val fresh_name : string -> t A.identifier
+let fresh_name name =
+  State_exception.modify (fun st ->
+    let (sym, symbol_counter) = Symbol.fresh_pretty name st.symbol_counter in
+    (sym, <| st with symbol_counter = symbol_counter |>)
+  )
+
+val register_name_translation : string -> A.identifier -> symbol_kind -> t unit
+let register_name_translation name symbol kind =
+  State_exception.update (fun st ->
+    <| st with registered_identifiers = Scope_table.insert name (symbol, kind) st.registered_identifiers |>
+  )
+
+val name_in_scope : string -> t bool
+let name_in_scope name =
+  State_exception.read (fun st ->
+    Scope_table.member name (Scope_table.return_scope st.registered_identifiers)
+  )
+
+val lookup_name: string -> t (maybe (A.identifier * symbol_kind))
+let lookup_name str =
+  State_exception.read (fun st ->
+    Scope_table.lookup str (Scope_table.return_scope st.registered_identifiers)
+  )
+
+
+val register_name : string -> symbol_kind -> t A.identifier
+let register_name name kind =
+  bind (name_in_scope name)
+    function
+      | true  ->
+          State_exception.fail (Location.dummy, Errors.CABS_TO_AIL_MULTIPLE_REGISTRATION name)
+      | false ->
+          bind (fresh_name name)
+            (fun sym ->
+              bind (register_name_translation name sym kind)
+                (fun _ ->
+                  State_exception.return sym))
+    end
+
+(* TODO: storage_duration *)
+val add_declaration : Symbol.t -> ATypes.qualifiers * ATypes.ctype -> t unit
+let add_declaration id q_ty =
+  State_exception.update (fun st ->
+    <| st with id_map = Map.insert id q_ty st.id_map |>
+  )
+
+val get_declaration: A.identifier -> t (ATypes.qualifiers * ATypes.ctype)
+let get_declaration id =
+  State_exception.read (fun st ->
+    fromJust $ Map.lookup id st.id_map
+  )
+
+val add_function : A.identifier -> ((ATypes.ctype * A.bindings * bool) * maybe (A.statement Location.t unit)) -> t unit (* TODO: parameters *)
+let add_function id fun_def =
+  State_exception.update (fun st ->
+    <| st with definitions = (id, Left fun_def) :: st.definitions |>
+  )
+
+val is_defined_function : string -> t bool
+let is_defined_function str =
+  bind (State_exception.read (fun st -> Scope_table.lookup str st.registered_identifiers)) function
+    | Just (id, Funname) ->
+        State_exception.read (fun st ->
+          match List.lookup id st.definitions with
+            | Just (Left (_, Just _))  -> true
+            | _                        -> false
+          end
+        )
+    | _ -> return false
+  end
+
+
+(* Labels related functions *)
+val return_registered_labels: t (Map.map string Symbol.t)
+let return_registered_labels = fun st ->
+  Exception.return (st.registered_labels, st)
+
+let fresh_label name =
+  State_exception.modify (fun st ->
+    let (symbol, symbol_counter') = Symbol.fresh_pretty name st.symbol_counter in
+    (symbol, <| st with  symbol_counter=     symbol_counter';
+                         registered_labels=  Map.insert name symbol st.registered_labels |>)
+  )
+
+
+
+
+
+
+val register_typedef: string -> ATypes.qualifiers * ATypes.ctype -> t unit
+let register_typedef str qs_ty =
+  State_exception.update (fun st ->
+    <| st with typedef_map= Map.insert str qs_ty st.typedef_map |>
+  )
+
+val get_typedef: string -> t (ATypes.qualifiers * ATypes.ctype)
+let get_typedef str =
+  bind (State_exception.read (fun st -> Map.lookup str st.typedef_map))
+    function
+      | Just qs_ty -> return qs_ty
+      | Nothing    -> fail (Errors.CABS_TO_AIL_UNDECLARED_TYPENAME str)
+    end
+
+
+val register_prototype: A.identifier -> ATypes.ctype -> list (A.identifier * (ATypes.qualifiers * ATypes.ctype)) -> bool -> t unit
+let register_prototype fun_id ty params is_variadic =
+  State_exception.update (fun st ->
+    <| st with definitions= (fun_id, Left ((ty, params, is_variadic), Nothing)) :: st.definitions |>
+  )
+
+
+(* TODO: qualifiers *)
+val register_global: A.identifier -> ATypes.ctype -> maybe (A.expression unit) -> t unit
+let register_global id ty e_opt =
+  State_exception.update (fun st ->
+    <| st with definitions= (id, Right (ATypes.no_qualifiers, ty, e_opt)) :: st.definitions |>
+  )

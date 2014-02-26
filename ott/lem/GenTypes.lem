@@ -1,0 +1,79 @@
+open import Pervasives Common AilTypes AilSyntax
+
+type genIntegerType [name="git*"] =
+ | Concrete of integerType
+ | SizeT
+ | PtrdiffT
+ | Unknown of integerConstant
+ | Promote of genIntegerType
+ | Usual of genIntegerType * genIntegerType
+
+let rec eq_genIntegerType git1 git2 : bool =
+  match (git1, git2) with
+  | (Concrete it1, Concrete it2) -> eq_integerType it1 it2
+  | (SizeT, SizeT) -> true
+  | (PtrdiffT, PtrdiffT) -> true
+  | (Unknown ic1, Unknown ic2) -> eq_integerConstant ic1 ic2
+  | (Promote git1, Promote git2) -> eq_genIntegerType git1 git2
+  | (Usual git1_1 git2_1, Usual git1_2 git2_2) -> eq_genIntegerType git1_1 git1_2 && eq_genIntegerType git2_1 git2_2
+  | (_, _) -> false
+  end
+
+type genBasicType [name="gbt"] =
+ | GenInteger of genIntegerType
+
+let eq_genBasicType gbt1 gbt2 : bool =
+  match (gbt1, gbt2) with
+  | (GenInteger git1, GenInteger git2) -> eq_genIntegerType git1 git2
+  end
+
+type genType [name="gt*"] =
+ | GenVoid
+ | GenBasic of genBasicType
+ | GenArray of ctype * integer
+ | GenFunction of ctype * list (qualifiers * ctype) * bool
+ | GenPointer of qualifiers * ctype
+
+let rec eq_genType gt1 gt2 =
+  match (gt1, gt2) with
+  | (GenVoid             , GenVoid             ) -> true
+  | (GenBasic    gbt1    , GenBasic    gbt2    ) -> eq_genBasicType gbt1 gbt2
+  | (GenArray    t1 n1   , GenArray    t2 n2   ) -> eq_ctype t1 t2 && n1 = n2
+  | (GenFunction t1 p1 b1, GenFunction t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (GenPointer  q1 t1   , GenPointer  q2 t2   ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (_                   , _                   ) -> false
+  end
+
+type genTypeCategory = 
+ | GenLValueType of qualifiers * ctype
+ | GenRValueType of genType
+
+let eq_genTypeCategory x y : bool =
+  match (x, y) with
+  | (GenLValueType q1 t1 , GenLValueType q2 t2 ) -> eq_ctype t1 t2 && eq_qualifiers q1 q2
+  | (GenRValueType    gt1, GenRValueType    gt2) -> eq_genType gt1 gt2
+  | (_                   , _                   ) -> false
+  end
+
+let inject_integerType it : genIntegerType = Concrete it
+
+let inject_basicType bt : genBasicType =
+  match bt with
+  | Integer it -> GenInteger (inject_integerType it)
+  end
+
+let inject_type t : genType =
+  match t with
+  | Void           -> GenVoid
+  | Basic bt       -> GenBasic (inject_basicType bt)
+  | Pointer  q t   -> GenPointer q t
+  | Array    t n   -> GenArray t n
+  | Function t p b -> GenFunction t p b
+  | Atomic _       -> assert_false "TODO"
+  end
+
+let inject_typeCategory tc : genTypeCategory =
+  match tc with
+  | LValueType q t -> GenLValueType q t
+  | RValueType   t -> GenRValueType   (inject_type t)
+  end

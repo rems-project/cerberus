@@ -1,0 +1,13 @@
+{- In every execution the non-atomic load races with the non-atomic
+write.  -}
+
+fun main () : [integer] :=
+  x <- create(signed int);
+  store(signed int, x, 0);
+  {{{
+       load(signed int, x)
+  |||
+       store(signed int, x, 1)
+  }}};
+  kill(x);
+  ret 0
