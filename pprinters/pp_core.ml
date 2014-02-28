@@ -266,12 +266,13 @@ let rec pp_expr e =
         | Ectype ty ->
             P.dquotes (pp_ctype ty)
         | Elet (a, e1, e2) ->
-            pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+            (P.prefix 2 1 (pp_control "let" ^^^ pp_symbol a ^^^ P.equals)
+                          (pp e1 ^^^ pp_control "in")) ^^
+            P.break 1 ^^ pp e2 ^^^ pp_control "end"
         | Eif (b, e1, e2) ->
-            pp_control "if" ^^^ pp b ^^^ pp_control "then" ^^
-            P.nest 2 (P.break 1 ^^ pp e1) ^^ P.break 1 ^^
-            pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^^ pp_control "end"
+            pp_control "if" ^^^ pp b ^^
+              P.break 1 ^^ pp_control "then" ^^^ pp e1 ^^
+              P.break 1 ^^ pp_control "else" ^^^ pp e2 ^^^ pp_control "end"
         | Eproc (_, fname, es) ->
             pp_name fname ^^ P.braces (comma_list pp es)
         | Ecall (fname, es) ->
@@ -316,19 +317,21 @@ let rec pp_expr e =
             pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
  *)
         | Ewseq (_as, e1, e2) ->
-            pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
+            (P.prefix 2 1 (pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals)
+                          (pp e1 ^^^ pp_control "in")) ^^
+            P.break 1 ^^ pp e2 ^^^ pp_control "end"
         | Esseq (_as, e1, e2) ->
-            pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
+            (P.prefix 2 1 (pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals)
+                          (pp e1 ^^^ pp_control "in")) ^^
+            P.break 1 ^^ pp e2 ^^^ pp_control "end"
         | Easeq (None, act, y) ->
-            pp_control "let" ^^^ pp_control "atom" ^^^ P.lparen ^^ P.rparen ^^^ P.equals ^^^
-            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
+            (P.prefix 2 1 (pp_control "let" ^^^ pp_control "atom" ^^^ P.lparen ^^ P.rparen ^^^ P.equals)
+                          (pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in")) ^^
+            P.break 1 ^^ pp (Eaction y) ^^^ pp_control "end"
         | Easeq (Some a, act, y) ->
-            pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol a ^^^ P.equals ^^^
-            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
+            (P.prefix 2 1 (pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol a ^^^ P.equals)
+                          (pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in")) ^^
+             P.break 1 ^^ pp (Eaction y) ^^^ pp_control "end"
         | Eindet e ->
             pp_control "indet" ^^ P.parens (pp e)
         | Esave (l, a_ty_s, e) ->
