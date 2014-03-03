@@ -22,6 +22,16 @@ type token =
   | CHAR
   | ICHAR
   | VOID
+  
+  | INT8_T
+  | INT16_T
+  | INT32_T
+  | INT64_T
+  | UINT8_T
+  | UINT16_T
+  | UINT32_T
+  | UINT64_T
+  
   | STRUCT
   | UNION
   | ENUM

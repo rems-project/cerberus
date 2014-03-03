@@ -8,7 +8,7 @@ else
 endif
 
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=$(LEMDIR)/lem -wl ign -wl_rename warn -lib $(LEMLIB_DIR) -outdir $(OCAML_BUILD_DIR) -only_changed_output -add_loc_annots -ocaml
+LEM=$(LEMDIR)/lem -wl ign  -wl_rename warn -lib $(LEMLIB_DIR)
 
 # The directory of Mark's axiomatic model of concurrency in C11
 CMMDIR=../../rsem/cpp/axiomatic/ntc
@@ -64,7 +64,6 @@ MODEL_FILES=\
   core_run_effect.lem \
   core_run_inductive.lem \
   core_simpl.lem \
-  core_typing.lem \
   cabs_to_ail.lem \
   cabs_to_ail_effect.lem \
   builtins.lem \
@@ -143,10 +142,13 @@ lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
 
 lem_model: lem_model_
-	OCAMLRUNPARAM="" $(LEM) $(wildcard _lem/*.lem)
+	OCAMLRUNPARAM="" $(LEM) -outdir $(OCAML_BUILD_DIR) -only_changed_output -add_loc_annots -ocaml $(wildcard _lem/*.lem)
 	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(OCAML_BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
 	@./hack.sh $(OCAML_BUILD_DIR)
 
+
+lem_check:
+	$(LEM) $(addprefix model/, $(MODEL_FILES)) $(addprefix ott/lem/, $(AIL_FILES))
 
 
 
@@ -185,6 +187,14 @@ ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_
 	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/main.ml
 	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
 	ln -fs _ocaml_generated/main.byte csem
+
+
+ocaml_native: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
+            $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
+#	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.native
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/main.ml
+	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.native
+	ln -fs _ocaml_generated/main.native csem
 
 
 
