@@ -13,7 +13,7 @@ let type_of_constant P (ic : integerConstant) : errorM integerType =
       else if in_integer_range P n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail (TError_TODO 2)
+        fail (TError_integerConstant_too_large n)
   | (n, Just U) ->
       if in_integer_range P n (Unsigned Int_) then
         return (Unsigned Int_)
@@ -22,31 +22,31 @@ let type_of_constant P (ic : integerConstant) : errorM integerType =
       else if in_integer_range P n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail (TError_TODO 3)
+        fail (TError_integerConstant_too_large n)
   | (n, Just L) ->
       if in_integer_range P n (Signed Long) then
         return (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail (TError_TODO 4)
+        fail (TError_integerConstant_too_large n)
   | (n, Just UL) ->
       if in_integer_range P n (Unsigned Long) then
         return (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail (TError_TODO 5)
+        fail (TError_integerConstant_too_large n)
   | (n, Just LL) ->
       if in_integer_range P n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail (TError_TODO 6)
+        fail (TError_integerConstant_too_large n)
   | (n, Just ULL) ->
       if in_integer_range P n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail (TError_TODO 7)
+        fail (TError_integerConstant_too_large n)
   end
 
 (*

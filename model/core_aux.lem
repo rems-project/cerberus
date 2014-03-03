@@ -60,6 +60,7 @@ TODO: bring back structs/unions
     | AilTypes.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
     | AilTypes.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
     | AilTypes.Pointer qs ty    -> Core_ctype.Pointer (proj_ctype ty)
+    | AilTypes.Atomic ty        -> Core_ctype.Atomic (proj_ctype ty)
 (*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
@@ -88,6 +89,7 @@ let rec unproj_ctype ty =
     | Core_ctype.Array ty n        -> AilTypes.Array (unproj_ctype ty) n
     | Core_ctype.Function ty tys b -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys) b
     | Core_ctype.Pointer ty        -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
+    | Core_ctype.Atomic ty         -> AilTypes.Atomic (unproj_ctype ty)
 (*
     | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
@@ -141,6 +143,8 @@ let rec free_syms e =
   match e with
   | Etuple es ->
       foldl (fun acc e -> free_syms e union acc) {} es
+  | Eunit ->
+      {}
   | Enull ->
       {}
   | Eskip ->
@@ -151,6 +155,8 @@ let rec free_syms e =
       {}
   | Esym a ->
       {a}
+  | Eimpl _ ->
+      {}
   | Eop _ e1 e2 ->
       free_syms e1 union free_syms e2
   | Etrue ->
@@ -226,6 +232,10 @@ and free_syms_action a =
           free_syms ty union free_syms o union free_syms n
       | Load ty o _ ->
           free_syms ty union free_syms o
+      | CompareExchangeStrong e1 e2 e3 e4 _ _ ->
+          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
+      | CompareExchangeWeak e1 e2 e3 e4 _ _ ->
+          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
   end
 end
 
@@ -243,6 +253,8 @@ let rec in_pattern a p =
 val     subst_sym: forall 'a. sym -> expr 'a -> expr 'a -> expr 'a
 let rec subst_sym a v e =
   match e with
+    | Eunit ->
+        Eunit
     | Enull ->
         Enull
     | Etrue ->
@@ -358,11 +370,17 @@ let subst_syms _as v e =
 (*
     | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
 *)
+(* TODO: lem non termination bug *)
+(*
+    | _ -> Boot.assert_false "[Core_aux.subst_syms] impossible case"
+*)
   end 
 
 (* Asuming well typed expressions *)
 let rec is_pure e =
   match e with
+   | Eunit ->
+       true
    | Enull ->
        true
    | Etrue ->
@@ -446,6 +464,8 @@ let rec is_value e =
   match e with
    | Etuple pes ->
        all is_value pes
+   | Eunit ->
+       true
    | Enull ->
        true
    | Econst _ ->
@@ -470,9 +490,12 @@ end
 
 
 (* TODO: documentation *)
+(*
 let rec trailing_actions e =
   match e with
   | Etuple _ ->
+      []
+  | Eunit ->
       []
   | Enull ->
       []
@@ -533,7 +556,7 @@ let rec trailing_actions e =
   | Eshift _ e ->
       trailing_actions e
 end
-
+ *)
 
 (*
 (* symbolic evaluation *)
