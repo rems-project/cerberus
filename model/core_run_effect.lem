@@ -1,5 +1,5 @@
 (* Effects for Core_run *)
-open import Pervasives Global Core Core_ctype
+open import Pervasives Global Core Core_aux Core_ctype
 import Cmm_csem Undefined Boot State_exception
 
 module Cmm = Cmm_csem
@@ -437,3 +437,22 @@ val is_nonatomic_location: Memory.mem_addr -> t bool
 let is_nonatomic_location o = fun st ->
   [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)] (* Boot.assert_false "HIP: is_nonatomic_location" *)
   (* fun st ->  *)
+
+
+
+
+(* substitute a symbol by a Core value in all the function bodies and continuations *)
+val subst_inAll: Core.sym -> Core.expr taction_id -> t unit
+let subst_inAll _a v = fun st ->
+  let st' = <| st with
+    file=     <| st.file with Core.funs= Map.map  (fun (f_Ty, f_args, f_body) -> (f_Ty, f_args, Core_aux.subst_sym _a v f_body)) st.file.Core.funs;
+                              Core.defs= List.map (fun (g_a, g_bTy, g_e) ->
+(* Boot.print_debug ("substs in " ^ (let (Symbol.Symbol _ (Just foo)) = g_a in foo)) *)
+
+Boot.print_debug ("substs >>> " ^ Boot.pp_core_expr (Core_aux.subst_sym _a v g_e))
+
+
+(g_a, g_bTy, Core_aux.subst_sym _a v g_e)) st.file.Core.defs |>;
+    cont_map= Map.map (Map.map (fun (xs, e) -> (xs, Core_aux.subst_sym _a v e))) st.cont_map
+  |> in
+  [(U.return (), st')]

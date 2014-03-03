@@ -675,6 +675,7 @@ let call_proc pname args =
 (*
     | Impl (Implementation_.StdFunction "printf") ->
  *)
+    | _ -> Boot.assert_false "[Core_run.call_proc] impossible case: TODO move to Exception.t"
   end
 
 
@@ -701,6 +702,7 @@ let rec eval file pe =
         match Map.lookup i file.impl with
           | Just (Def _ e) -> U.return e
           | Nothing        -> Boot.assert_false (Boot.pp_core_expr pe) (* U.error (* TODO: check *) *)
+          | _ -> Boot.assert_false "[Core_run.eval] impossible case: TODO move to Exception.t"
         end
     | Eundef u ->
         U.undef [u]
@@ -889,7 +891,11 @@ val perform_create: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Sym
 let perform_create bs tid_ pe pref = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the create *)
-  E.return pe                           >>= fun (Ectype ty) ->
+  E.return pe >>= fun ty_ ->
+  let ty = match ty_ with
+    | Ectype ty -> ty
+    | _         -> Boot.assert_false "[Core_run.perform_create] impossible case: TODO move to Exception.t"
+  end in
   get_new_taid                          >>= fun new_taid    ->
   create pref ty new_taid               >>= fun o           ->
   (* update the state with the new trace action *)
@@ -902,7 +908,11 @@ val perform_alloc: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symb
 let perform_alloc bs tid_ pe pref = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the alloc *)
-  E.return pe                           >>= fun (Econst (Cmm_aux.Cint n)) ->
+  E.return pe >>= fun n_ ->
+  let n = match n_ with
+    | Econst (Cmm_aux.Cint n) -> n
+    | _ -> Boot.assert_false "[Core_run.perform_alloc] impossible case: TODO move to Exception.t"
+  end in
   get_new_taid                          >>= fun new_taid          ->
   alloc pref n new_taid                 >>= fun o                 ->
   (* update the state with the new trace action *)
@@ -914,11 +924,15 @@ val perform_kill: set E.taction_id -> Cmm.tid -> expr E.taction_id -> E.t (E.tac
 let perform_kill bs tid_ pe = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the kill *)
-  E.return pe                           >>= fun (Eaddr o) ->
+  E.return pe >>= fun o_ ->
+  let o = match o_ with
+    | Eaddr o -> o
+    | _ -> Boot.assert_false "[Core_run.perform_kill] impossible case: TODO move to Exception.t"
+  end in
   kill o                                >>
   (* update the state with the new trace action *)
   get_new_taid                          >>= fun new_taid  ->
-  add_tact new_taid (E.Tkill o tid)       >>
+  add_tact new_taid (E.Tkill o tid)     >>
   E.register_sequencing bs new_taid tid >>
   E.return (new_taid, Enull)
 
@@ -927,7 +941,12 @@ val perform_store: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.ta
 let perform_store bs tid_ pe1 pe2 pe3 mo = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the store *)
-  E.return pe1                                 >>= fun (Ectype ty) ->
+  E.return pe1 >>= fun ty_ ->
+  let ty = match ty_ with
+    | Ectype ty -> ty
+    | _ -> Boot.assert_false "[Core_run.perform_store] impossible case: TODO move to Exception.t"
+  end in
+
   E.return pe2                                 >>= fun expr        ->
   get_address expr                             >>= fun o           ->
   E.return pe3                                 >>= function
@@ -972,7 +991,11 @@ val perform_load: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.tac
 let perform_load bs tid_ pe1 pe2 mo = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the load *)
-  E.return pe1                                >>= fun (Ectype ty)         ->
+  E.return pe1 >>= fun ty_ ->
+  let ty = match ty_ with
+    | Ectype ty -> ty
+    | _ -> Boot.assert_false "[Core_run.perform_load] impossible case: TODO move to Exception.t"
+  end in
   E.return pe2                                >>= fun expr                ->
   get_address expr                            >>= fun o                   ->
   load ty o                                   >>= fun (value, store_taid) ->
@@ -1003,6 +1026,7 @@ let perform_load bs tid_ pe1 pe2 mo =
    | Cmm_aux.Mobj v  -> E.return (Eaddr v)
    | Cmm_aux.Muninit  -> Boot.print_debug "READ AN UNINIT" $
                         E.return (Econst $ Cmm_aux.Cint (~ 10))
+   | _ -> Boot.assert_false "[Core_run.perform_load] impossible case: TODO move to Exception.t"
   end                                         >>= fun e                   ->
   E.return (new_taid, e)
 
@@ -1018,9 +1042,14 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
    | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
    | Enull    -> Cmm_aux.Mnull
+   | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
   end in
   (* We (atomically load from the object *)
-  E.return pe_ty                                                      >>= fun (Ectype ty)                ->
+  E.return pe_ty >>= fun ty_ ->
+  let ty = match ty_ with
+    | Ectype ty -> ty
+    | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
+  end in
   let atomic_ty = Atomic ty in
   E.return pe_o                                                       >>= get_address >>= fun o          ->
   E.return pe_desired                                                 >>= fun desired_e                  ->
@@ -1028,6 +1057,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
    | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
    | Enull    -> Cmm_aux.Mnull
+   | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
   end in
   (* The new_taid will be the taid of RMW if it succeeds and of the load otherwise *)
   get_new_taid                                                        >>= fun new_taid                   -> 
@@ -1090,6 +1120,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
       | Cmm_aux.Mbase c -> Econst c
       | Cmm_aux.Mobj o' -> Eaddr o'
       | Cmm_aux.Mnull   -> Enull
+      | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
      end in
      perform_store {new_taid} tid_ pe_ty pe_expected actual_e  Cmm.NA >>= fun (na_store_aid, _)          ->
      E.return (na_store_aid, Econst (Cmm_aux.Cint 0))
@@ -1218,6 +1249,7 @@ let red2_if x =
           match pe with
             | Etrue  -> push_trace (E.Rule_If, Nothing) >> E.return (e2, tid, _KS)
             | Efalse -> push_trace (E.Rule_If, Nothing) >> E.return (e3, tid, _KS)
+            | _ -> Boot.assert_false "[Core_run.red2_if] impossible case: TODO move to Exception.t"
           end
         else
           E.get_file            >>= fun file ->
@@ -1515,6 +1547,7 @@ let rec convert_expr e =
   match e with
     | Eskip               -> Eskip
     | Etuple es           -> Etuple (List.map convert_expr es)
+    | Eunit               -> Eunit
     | Enull               -> Enull
     | Econst c            -> Econst c
     | Eimpl i             -> Eimpl i
@@ -1583,6 +1616,7 @@ let convert_file file = <|
             | Def bty e       -> Def bty (convert_expr e)
             | IFun bty args e -> IFun bty args (convert_expr e)
           end) file.impl;
+  defs=   List.map (fun (_a, bTy, e) -> (_a, bTy, convert_expr e)) file.defs;
   funs=   Map.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
  |>
 (* TODO: this version doesn't typecheck (says that 'a should be num), ask the lem people if it is normal *)
@@ -1758,6 +1792,8 @@ let rec collect_conts' e =
        continuations *)
     | Etuple _ ->
         Map.empty
+    | Eunit ->
+        Map.empty
     | Enull ->
         Map.empty
     | Eskip ->
@@ -1826,6 +1862,7 @@ let rec collect_conts' e =
 
 open Operators
 
+
 val initial_expr_and_state : E.execution_mode -> file zero -> (Core.expr E.taction_id * Cmm.tid * list (cont E.taction_id)) * E.state
 let initial_expr_and_state execution_mode file =
   let file = convert_file file in
@@ -1834,14 +1871,56 @@ let initial_expr_and_state execution_mode file =
     (fun (fname, (_, _, fbody)) acc -> Map.insert fname (collect_conts' fbody) acc)
     (Map.toSet file.funs)
     Map.empty in
+  
   let state = E.initial_state execution_mode file cont_map in
+  
   let (_, _, main_body) = fromJust $ Map.lookup file.main file.funs in
   ((main_body, Cmm_aux.Tzero, [[]]), state)
+
+
+val initial_state: E.execution_mode -> file zero -> E.state
+let initial_state execution_mode file =
+  let file = convert_file file in
+  (* collect the continuations in all functions *)
+  let cont_map = Set_helpers.fold
+    (fun (fname, (_, _, fbody)) acc -> Map.insert fname (collect_conts' fbody) acc)
+    (Map.toSet file.funs)
+    Map.empty in
+  E.initial_state execution_mode file cont_map
+
+
+(* the double update of the defs bodies is hackish, E.state shouldn't have Core.file as field, just the relevant portion *)
+val run_program: E.t (expr E.taction_id * (Map.map E.taction_id E.trace_action * E.trace))
+let run_program =
+  E.get_file >>= fun <| Core.main= main; Core.defs= defs |> ->
+  E.foldlM (fun (_a, bTy, e) substs ->
+    let e' = List.foldl (fun z (_a, v) -> Core_aux.subst_sym _a v z) e substs in
+    (* run the allocation and initialisation of the global *)
+    star_red2 (e', Cmm_aux.Tzero, [[]]) >>= fun (v, tr) -> (* TODO: do something with the trace *)
+    (* update the rest of the program *)
+    E.subst_inAll _a v >>
+    E.return ((_a, v) :: substs)
+  ) defs [] >>
+(*
+  E.mapM_ (fun (_a, bTy, e) ->
+    (* run the allocation and initialisation of the global *)
+    star_red2 (e, Cmm_aux.Tzero, [[]]) >>= fun (v, tr) -> (* TODO: do something with the trace *)
+    (* update the rest of the program *)
+    E.subst_inAll _a v
+  ) defs          >>
+*)
+  E.get_proc main >>= fun (_, _, main_body) ->
+  star_red2 (main_body, Cmm_aux.Tzero, [[]])
+
 
 val run: E.execution_mode -> file zero ->
          Exception.t (list (U.t ((Core.expr E.taction_id) * (Map.map E.taction_id E.trace_action * E.trace)) * E.state)) Errors.t
 let ~{coq} run execution_mode file =
+(*
   let (e, state) = initial_expr_and_state execution_mode file in
   let execs = star_red2 e state in
-  Boot.print_debug "NUMBER OF TRACES= " (*; string_of_num $ List.length execs] *)
+ *)
+  let state = initial_state execution_mode file in
+  let execs = run_program state in
+  Boot.print_debug ("NUMBER OF TRACES= " ^ (string_of_natural (naturalFromNat $ List.length execs)))
     Exception.return execs

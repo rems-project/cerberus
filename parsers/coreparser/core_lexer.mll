@@ -34,6 +34,17 @@ let keywords =
       ("char16_t",    T.CHAR16_T);
       ("char32_t",    T.CHAR32_T);
       
+      ("int8_t",    T.INT8_T);
+      ("int16_t",   T.INT16_T);
+      ("int32_t",   T.INT32_T);
+      ("int64_t",   T.INT64_T);
+      ("uint8_t",   T.UINT8_T);
+      ("uint16_t",  T.UINT16_T);
+      ("uint32_t",  T.UINT32_T);
+      ("uint64_t",  T.UINT64_T);
+      
+      
+      
       (* for Core.core_base_type *)
       ("integer",  T.INTEGER  );
       ("boolean",  T.BOOLEAN  );

@@ -9,6 +9,7 @@ type name =
   | Impl of Implementation_.implementation_constant
 
 type expr =
+  | Eunit
   | Enull
   | Etrue
   | Efalse
@@ -78,6 +79,7 @@ type declaration =
 
 let register_cont_symbols e =
   let rec f st = function
+    | Eunit
     | Enull
     | Etrue
     | Efalse
@@ -139,6 +141,8 @@ let convert_expr e arg_syms fsyms =
     end in
   
   let rec f st = function
+    | Eunit ->
+        Core.Eunit
     | Enull ->
         Core.Enull
     | Etrue ->
@@ -381,6 +385,7 @@ let subst name =
 %token VOID ATOMIC SIZE_T INTPTR_T WCHAR_T CHAR16_T CHAR32_T (* DOTS *)
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
+%token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
 
 (* C11 memory orders *)
 %token SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
@@ -637,6 +642,22 @@ integer_type:
     { AilTypes.Char }
 | BOOL
     { AilTypes.Bool }
+| INT8_T
+    { AilTypes.Signed AilTypes.Int8_t }
+| INT16_T
+    { AilTypes.Signed AilTypes.Int16_t }
+| INT32_T
+    { AilTypes.Signed AilTypes.Int32_t }
+| INT64_T
+    { AilTypes.Signed AilTypes.Int64_t }
+| UINT8_T
+    { AilTypes.Unsigned AilTypes.Int8_t }
+| UINT16_T
+    { AilTypes.Unsigned AilTypes.Int16_t }
+| UINT32_T
+    { AilTypes.Unsigned AilTypes.Int32_t }
+| UINT64_T
+    { AilTypes.Unsigned AilTypes.Int64_t }
 | SIGNED ibt= integer_base_type
     { AilTypes.Signed ibt }
 | UNSIGNED ibt= integer_base_type
@@ -822,6 +843,8 @@ pattern:
 expr:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
+| LPAREN RPAREN
+    { Eunit }
 | NULL
     { Enull }
 | TRUE

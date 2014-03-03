@@ -30,7 +30,7 @@ val translate_stmt:
   C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> A.identifier ->
   maybe Symbol.t -> maybe (map integer Symbol.t) -> maybe Symbol.t -> maybe Symbol.t ->
   A.statement Location.t GenTypes.genTypeCategory -> t (C.expr zero)
-val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (C.fun_map zero)
+val translate_program: C.fun_map zero -> A.program Location.t GenTypes.genTypeCategory -> t (list (C.sym * C.core_base_type * C.expr zero) * C.fun_map zero)
 val translate: C.fun_map zero -> C.impl zero -> Symbol.counter * A.program Location.t GenTypes.genTypeCategory -> C.file zero
 
 
@@ -66,12 +66,14 @@ let rec translate_lvalue stdlib program a_exp =
         C.fresh >>= fun a ->
         return (a, Me.null)
 *)
+  | _ -> Boot.assert_false "[Translation.translate_lvalue] wildcard case"
 end
 
 
 and translate_function_designator (A.AnnotatedExpression _ expr) =
   match expr with
     | A.Var fid -> return $ C.Econst (Cmm_aux.Cfunction fid)
+    | _ -> Boot.assert_false "[Translation.translate_function_designator] wildcard case"
   end
 
 
@@ -101,7 +103,7 @@ and translate_expression stdlib program a_expr =
   if AilTypesAux.pointer result_ty && Aaux.null_pointer_constant a_expr then
     return C.Enull
   else
-    let A.AnnotatedExpression _ expr = a_expr in
+    let A.AnnotatedExpression annot expr = a_expr in
     match expr with
       (* TODO: integer promotion *)
       | A.Unary A.Plus e ->
@@ -256,7 +258,7 @@ and translate_expression stdlib program a_expr =
                      (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
                                                   (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
                         (* not representable(ty, a_res) then undef *)
-                        (C.Eif (C.Enot (is_representable [Caux.mk_ctype result_ty; C.Esym a_res]))
+                        (C.Eif (C.Enot (is_representable [C.Esym a_res; Caux.mk_ctype result_ty]))
                            (C.Eundef Undefined.Negative_left_shift)
                         (* else  *)
                            (C.Esym a_res)
@@ -599,13 +601,19 @@ and translate_expression stdlib program a_expr =
                           )
                          (C.Esym a_e2))
       
-      (* TODO: yes this is morally reprehensible.
-         
+      (*
          (std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
          expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
          to an indeterminately-sequenced function call, the operation of a compound) *)
       | A.CompoundAssign e1 aop e2 ->
-          Boot.assert_false "f (Annotate.type_of expr, A.Assign e1 (Annotate.type_of e2, A.Binary (A.Arithmetic aop) e1 e2))"
+          Boot.assert_false $ "TODO: compound assign: " ^ (Boot.pp_ail_expr a_expr)
+(*
+          (* TODO: this is a TEMPORARY HACK *)
+          let A.AnnotatedExpression annot2 _ = e2 in
+          f $ A.AnnotatedExpression annot (A.Assign e1 (A.AnnotatedExpression annot2 (A.Binary e1 (A.Arithmetic aop) e2)))
+*)
+
+
       
       (* TODO: conv_int on e2 and e2 !!!!!!! *)
       | A.Conditional e1 e2 e3 ->
@@ -651,7 +659,11 @@ and translate_expression stdlib program a_expr =
                   return $ C.Eproc {} fname []
                 else
                   (* TODO: variadic case *)
-                  let Just (Left ((return_ty, binds, is_variadic), _)) = List.lookup fid (snd program) in
+                  let (return_ty, binds, is_variadic) =
+                    match List.lookup fid (snd program) with
+                      | Just (Left (z, _)) -> z
+                      | _                  -> Boot.assert_false "[Translate] impossible error: TODO move to Exception.t"
+                  end in
                   let n = List.length es in
                   
                   (* symbolic names for the temporary objects and init value *)
@@ -690,8 +702,11 @@ and translate_expression stdlib program a_expr =
       | A.Constant (A.ConstantInteger (i, _)) ->
           return (C.Econst $ Cmm_aux.Cint i)
 
+(* TODO: lem non termination bug *)
+(*
       | A.Constant (A.ConstantString str) ->
-          return (C.Econst $ Cmm_aux.Cint 0) (* TODO!!!!!!!! *)
+          return (C.Econst $ Cmm_aux.Cstring str) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
+*)
       
       
       | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> return Caux.one
@@ -822,6 +837,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
     | A.Expression e ->
         translate_expression stdlib program e
     
+
     | A.Block binds ss ->
         let ids = [id | forall ((id, _) MEM binds) | true] in
         let decls = [(id,ty) | forall ((id, (qs, ty)) MEM binds) | true] in
@@ -854,7 +870,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         
         return
           (C.Esseq a_ids (Caux.mk_unseq core_creates)
-             (foldr (fun core_s acc -> C.Esseq [] core_s acc) (Caux.mk_unseq core_kills) core_ss)
+             (foldr (fun core_s acc -> C.Esseq [] core_s acc) (C.Esseq [] (C.Eret C.Eunit) (Caux.mk_unseq core_kills)) core_ss)
           )
 (*
 
@@ -956,13 +972,17 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
     | A.ReturnVoid ->
         E.get_visible_objects >>= fun _as ->
         let (core_kills) = List.map (Caux.pkill -| C.Esym) _as in
-        return (C.Esseq [] (Caux.mk_unseq core_kills) (C.Eret C.Eskip))
+        return (C.Esseq [] (Caux.mk_unseq core_kills) (C.Eret C.Eunit))
     
     | A.Return e ->
         translate_expression stdlib program e >>= fun core_e ->
         let A.AnnotatedExpression ty _ = e in
 (*        let Left (return_ty, _, _) = fst $ fromJust (List.lookup f (snd program)) in *)
-        let Just (Left ((return_ty, _, _), _)) = List.lookup f (snd program) in
+        let return_ty =
+          match List.lookup f (snd program) with
+            | Just (Left ((z, _, _), _)) -> z
+            | _                          -> Boot.assert_false "[Translation.translate_expression A.Return] impossible error: TODO move to Exception.t"
+          end in
         E.fresh_symbol           >>= fun a_e ->
         E.get_visible_objects    >>= fun _as ->
         let (core_kills) = List.map (Caux.pkill -| C.Esym) _as in
@@ -1058,13 +1078,17 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 
 (* Run the translator on different functions *)
 let translate_program stdlib ((startup_id, defs) as program) =
-  let (globals, funs) = foldl (fun (gs, fs) (id, def) ->
+  let (global_ids, globals, funs) = foldl (fun (ids, gs, fs) (id, def) ->
     match def with
-      | Left  f -> (           gs, (id, f) :: fs)
-      | Right g -> ((id, g) :: gs,            fs)
+      | Left  f -> (     ids,            gs, (id, f) :: fs)
+      | Right g -> (id ::ids, (id, g) :: gs,            fs)
     end
-    ) ([], []) defs in
+    ) ([], [], []) defs in
   
+(*
+
+(* ALTERNATIVE globals *)
+
   E.foldlM (fun mk_core_acc (global_id, (qs, ty, e_opt)) ->
     let core_create = Caux.pcreate (Caux.mk_ctype ty) [global_id] in
     match e_opt with
@@ -1084,6 +1108,29 @@ let translate_program stdlib ((startup_id, defs) as program) =
             fun z -> C.Esseq [Just global_id] core_create (mk_core_acc z)
     end
   ) (fun z -> z) (List.reverse globals) >>= fun mk_core_globals ->
+ *)
+  
+  E.foldlM (fun acc (global_id, (qs, ty, e_opt)) ->
+    let core_create = Caux.pcreate (Caux.mk_ctype ty) [global_id] in
+    match e_opt with
+      | Just e ->
+          E.fresh_symbol                        >>= fun a_global ->
+          E.fresh_symbol                        >>= fun a_e      ->
+          translate_expression stdlib program e >>= fun core_e   ->
+          return $
+            (global_id, C.Address,
+             C.Esseq [Just a_global] core_create
+               (C.Esseq [Just a_e] core_e
+                 (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) (C.Esym a_e) Cmm.NA) (* TODO: proper memory order *)
+                   (C.Esym a_global)
+                 )
+               )
+            ) :: acc
+      | Nothing ->
+          E.fresh_symbol >>= fun a_global ->
+          return $ (global_id, C.Address, C.Esseq [Just a_global] core_create (C.Esym a_global)) :: acc
+    end
+  ) [] (List.reverse globals) >>= fun cdefs ->
   
   E.foldlM (fun acc (fun_id, ((_, fun_args, is_variadic), fun_body_opt)) ->
     match fun_body_opt with
@@ -1098,11 +1145,15 @@ let translate_program stdlib ((startup_id, defs) as program) =
           
           (* If we are elaborating the startup function, then we add at the beginning of the body
              the allocations/initialisations of the global variables *)
+(*
+(* ALTERNATIVE globals *)
+
           (if fun_id <> startup_id then
              return core_body
            else
              return (mk_core_globals core_body)
           ) >>= fun core_body ->
+*)
           
           (return $ Map.insert fun_id (
                                         C.TyEffect C.Integer (* TODO: this should de address for pointer type *),
@@ -1113,7 +1164,8 @@ let translate_program stdlib ((startup_id, defs) as program) =
           (* TODO: this corresponds to an Ail function a prototype but no implementation ==> std lib function *)
           return acc
     end
-  ) Map.empty funs
+  ) Map.empty funs >>= fun cfuns ->
+  return (cdefs, cfuns)
 
 
 (*
@@ -1148,6 +1200,8 @@ let translate_program stdlib ((startup_id, defs) as program) =
 let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   match (translate_program stdlib prog) (E.init symbol_counter) with
-    | U.Defined (cfuns, _) -> <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.funs= cfuns |>
-    | _                    -> Boot.assert_false "[Translation.translate #_] error in the elaboration"
+    | U.Defined ((cdefs, cfuns), _) ->
+        <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.defs= cdefs; C.funs= cfuns |>
+    | _ ->
+        Boot.assert_false "[Translation.translate #_] error in the elaboration"
   end

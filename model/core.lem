@@ -69,6 +69,7 @@ type constant =
 
 type expr 'a =
   (* pure expressions *)
+  | Eunit
   | Enull
   | Etrue
   | Efalse
@@ -168,6 +169,7 @@ type file 'a = <|
   main   : sym;
   stdlib : fun_map 'a;
   impl   : impl 'a;
+  defs   : list (sym * core_base_type * expr 'a);
   funs   : fun_map 'a;
 |>
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
@@ -181,6 +183,8 @@ val is_value: forall 'a. expr 'a -> bool
 let rec is_value e =
   match e with
     | Etuple es ->
+        true
+    | Eunit ->
         true
     | Enull ->
         true
@@ -242,4 +246,21 @@ let rec is_value e =
         false (* TODO: think about it *)
     | Eshift a e ->
         false
+    
+    | Easeq _ _ _ ->
+        false
+    | Eindet _ ->
+        false
+    | Ebound _ _ ->
+        false
+    | Epar _ ->
+        false
+    | Eis_scalar _ ->
+        true
+    | Eis_integer _ ->
+        true
+    | Eis_signed _ ->
+        true
+    | Eis_unsigned _ ->
+        true
   end

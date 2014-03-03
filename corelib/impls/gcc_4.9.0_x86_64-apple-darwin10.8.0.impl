@@ -41,7 +41,39 @@ fun <ctype_min> (ty: ctype) : integer :=
                         if ty = "unsigned long_long" then
                           0
                         else
-                          error -- TODO
+                          if ty = "int8_t" then
+                            -128
+                          else
+                            if ty = "int16_t" then
+                              -32768
+                            else
+                              if ty = "int32_t" then
+                                -2147483648
+                              else
+                                if ty = "int64_t" then
+                                  -9223372036854775808
+                                else
+                                  if ty = "uint8_t" then
+                                    0
+                                  else
+                                    if ty = "uint16_t" then
+                                      0
+                                    else
+                                      if ty = "uint32_t" then
+                                        0
+                                      else
+                                        if ty = "uint64_t" then
+                                          0
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
                         end
                       end
                     end
@@ -92,7 +124,39 @@ fun <ctype_max> (ty: ctype) : integer :=
                         if ty = "unsigned long_long" then
                           18446744073709551615
                         else
-                          error -- TODO
+                          if ty = "int8_t" then
+                            127
+                          else
+                            if ty = "int16_t" then
+                              32767
+                            else
+                              if ty = "int32_t" then
+                                2147483647
+                              else
+                                if ty = "int64_t" then
+                                  9223372036854775807
+                                else
+                                  if ty = "uint8_t" then
+                                    255
+                                  else
+                                    if ty = "uint16_t" then
+                                      65535
+                                    else
+                                      if ty = "uint32_t" then
+                                        4294967295
+                                      else
+                                        if ty = "uint64_t" then
+                                          18446744073709551615
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
                         end
                       end
                     end
@@ -173,7 +237,39 @@ fun <sizeof> (ty: ctype) : integer :=
                         if ty = "unsigned long_long" then
                           8
                         else
-                          error -- TODO
+                          if ty = "int8_t" then
+                            1
+                          else
+                            if ty = "int16_t" then
+                              2
+                            else
+                              if ty = "int32_t" then
+                                4
+                              else
+                                if ty = "int64_t" then
+                                  8
+                                else
+                                  if ty = "uint8_t" then
+                                    1
+                                  else
+                                    if ty = "uint16_t" then
+                                      2
+                                    else
+                                      if ty = "uint32_t" then
+                                        4
+                                      else
+                                        if ty = "uint64_t" then
+                                          8
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
                         end
                       end
                     end
@@ -253,7 +349,39 @@ fun <alignof> (ty: ctype) : integer :=
                         if ty = "unsigned long_long" then
                           8
                         else
-                          error -- TODO
+                          if ty = "int8_t" then
+                            1
+                          else
+                            if ty = "int16_t" then
+                              2
+                            else
+                              if ty = "int32_t" then
+                                4
+                              else
+                                if ty = "int64_t" then
+                                  8
+                                else
+                                  if ty = "uint8_t" then
+                                    1
+                                  else
+                                    if ty = "uint16_t" then
+                                      2
+                                    else
+                                      if ty = "uint32_t" then
+                                        4
+                                      else
+                                        if ty = "uint64_t" then
+                                          8
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
                         end
                       end
                     end

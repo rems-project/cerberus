@@ -357,5 +357,6 @@ let simplify (f: file zero) : file zero =
       main=   f.main;
       stdlib= f.stdlib;
       impl=   f.impl;
+      defs=   List.map (fun (_a, bTy, e) -> (_a, bTy, simpl e)) f.defs;
       funs=   Map.map (fun (ftype, fargs, fbody) -> (ftype, fargs, simpl fbody)) f.funs
   |>
