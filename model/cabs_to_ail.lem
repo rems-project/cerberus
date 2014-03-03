@@ -149,7 +149,8 @@ let f name =
     | C.DEFINITION _ ->
         (* TODO: check *)
         E.return ()
-(* TODO:    | PAR of list statement * cabsloc *)
+    | C.PAR _ _ ->
+        Boot.assert_false "[Cabs_to_ail.register_labels PAR case] TODO"
  end
 
 
@@ -527,7 +528,7 @@ let rec desugar_decl_type decl_ty =
   | C.ARRAY decl_ty' cvs _ (Just (C.CONSTANT (C.CONST_INT n Nothing))) ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
       E.return $ fun qs ty -> mk_ty (desugar_cvspecs cvs) (ATypes.Array (*qs*) ty (Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
-  | C.ARRAY dt cvs _ (Just (C.CONSTANT e)) ->
+  | C.ARRAY dt cvs _ _ ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
   | C.PTR cvs _ decl_ty' ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
@@ -545,7 +546,7 @@ let rec desugar_decl_type decl_ty =
 
 (*  desugar_parameters : list C.parameter -> E.t (list (A.identifier * (ATypes.qualifiers * ATypes.ctype))) *)
 and desugar_parameters params =
-  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl [] _) acc ->
+  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl attrs _) acc ->
     desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
     (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
     if param_ty = ATypes.Void then
@@ -558,7 +559,7 @@ and desugar_parameters params =
     else
       (* OTHERWISE: the real stuff *)
       maybe
-        (E.fail (Errors.OTHER "parameter name omitted")) (* TODO: proper message *)
+        (E.fail (Errors.OTHER "[Cabs_to_ail] parameter name omitted")) (* TODO: proper message *)
         (fun param_name ->
           E.register_name param_name E.Varname >>= fun param_id             ->
           desugar_spec_elem_list param_specs   >>= fun (param_qs, param_ty) ->
@@ -603,6 +604,7 @@ end
 
 val     desugar_expression: C.expression -> E.t (A.expression unit)
 let rec desugar_expression e =
+  let zero = A.AnnotatedExpression () (A.Constant (A.ConstantInteger (0, Nothing))) in
   let one = A.AnnotatedExpression () (A.Constant (A.ConstantInteger (1, Nothing))) in
   A.AnnotatedExpression () <$>
   match e with
@@ -611,6 +613,9 @@ let rec desugar_expression e =
       A.CompoundAssign <$> desugar_expression e <*> E.return A.Add <*> E.return one
   | C.UNARY C.PREDECR e ->
       A.CompoundAssign <$> desugar_expression e <*> E.return A.Sub <*> E.return one
+  (* following (§6.5.3.3#5) *)
+  | C.UNARY C.NOT e ->
+      A.Binary <$> E.return zero <*> E.return A.Eq <*> desugar_expression e
   | C.UNARY uop e ->
       A.Unary (desugar_unary_operator uop) <$> desugar_expression e
   | C.BINARY C.ASSIGN e1 e2 ->
@@ -630,8 +635,10 @@ let rec desugar_expression e =
   | C.CAST (specs, decl_ty) ie ->
       desugar_spec_elem_list specs >>= fun (qs, ty)   ->
       desugar_decl_type decl_ty    >>= fun mk_ty      ->
-      desugar_init_expression ie   >>= fun (Just d_e) ->
-      E.return $ A.Cast qs ty d_e
+      desugar_init_expression ie   >>= function
+        | Just d_e -> E.return $ A.Cast qs ty d_e
+        | Nothing  -> Boot.assert_false "[Cabs_to_ail.desugar_expression CAST] the init_expression is not constant, TODO better"
+      end
 
 (*
   | C11_ATOMIC_INIT of expression * expression
@@ -716,7 +723,11 @@ let rec desugar_statement stmt =
           A.Do <$> desugar_statement stmt
                <*> desugar_expression expr
       | C.FOR fclause_opt e2_opt e3_opt s loc ->
-          let are_all_auto_or_register (C.DECDEF (specs, _) _) =
+          let are_all_auto_or_register def =
+            let specs = match def with
+              | (C.DECDEF (specs, _) _) -> specs
+              | _                       -> Boot.assert_false "[Cabs_to_ail.desugar_statement FOR are_all_auto_or_register] TODO"
+            end in
             any (function
 (*
 TODO: tmp
@@ -796,6 +807,12 @@ E.fail Errors.CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
       | C.PAR stmts _ ->
           A.PAR <$> E.mapM desugar_statement stmts
 *)
+      | C.DEFINITION _ ->
+         Boot.assert_false "[Cabs_to_ail.desugar_statement DEFINITION other then DECDEF] TODO"
+
+
+  | C.PAR _ _ ->
+      Boot.assert_false "[Cabs_to_ail.desugar_statement PAR] TODO"
   end
 
 
@@ -826,7 +843,7 @@ and desugar_declaration (specs, ins) =
 (*  desugar_definition: C.definition -> E.t unit *)
 and desugar_definition def =
   match def with
-    | C.FUNDEF specs (C.Name str fun_decl [] _) stmt _ ->
+    | C.FUNDEF specs (C.Name str fun_decl attrs _) stmt _ ->
         E.is_defined_function str >>= function
           | true  -> E.fail (Errors.CABS_TO_AIL_FUNCTION_REDEFINITION str)
           | false ->
@@ -856,8 +873,7 @@ and desugar_definition def =
 
   (* TODO: the direct use of `separate_sepec_elem_list' may be temporary. *)
   | C.DECDEF (specs, init_names) loc ->
-      (* TODO: for now assuming no attributes, nor inline *)
-      let (cs, [], sts, false, tySpecs) = separate_spec_elem_list specs in
+      let (cs, attrs, sts, is_inline, tySpecs) = separate_spec_elem_list specs in
       let d_qs = desugar_cvspecs cs in
       desugar_type_specifiers tySpecs >>= fun d_ty ->
       if List.elem C.TYPEDEF sts then

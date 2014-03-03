@@ -1,6 +1,12 @@
 open import Pervasives
 import Map
 
+(*
+(* TODO: hack *)
+val assert_false_: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false_ = `Boot_ocaml.assert_false`
+*)
+
 
 (* empty type *)
 type zero
@@ -77,6 +83,7 @@ let rec foldl2 f z xs ys =
         z
     | (a::xs', b::ys') ->
         foldl2 f (f z a b) xs' ys'
+    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
   end
 
 
@@ -88,12 +95,13 @@ let rec map2_ f xs ys acc =
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
         acc
+    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
   end
 let map2 f xs ys = map2_ f xs ys []
 
 let fromJust = function
   | Just x -> x
-(*  | Nothing   -> Boot.assert_false "[Global.fromJust] found a Nothing" *)
+  (* | Nothing   -> assert_false_ "[Global.fromJust] found a Nothing" *)
 end
 
 

@@ -53,14 +53,22 @@ val integer_range: implementation -> integerType -> range
 let integer_range P it =
   let prec = P.precision it in
   if P.signed it then
-    let prec_minus_one = prec - 1 in
+(*    let prec_minus_one = prec - 1 in *)
     match P.binary_mode with
-    | Two'sComplement   -> make_range ((~2) ** (prec - 1))
-                                      ((2 ** prec_minus_one) - 1)
-    | One'sComplement   -> make_range (((~2) ** (prec - 1)) + 1)
-                                      ((2 ** prec_minus_one) - 1)
-    | SignPlusMagnitude -> make_range (((~2) ** (prec - 1)) + 1)
-                                      ((2 ** prec_minus_one) - 1)
+(*
+    | Two'sComplement   -> make_range (~(2 ** (prec - 1)))
+                                      ((2 ** (prec - 1)) - 1)
+    | One'sComplement   -> make_range (~((2 ** (prec - 1)) + 1))
+                                      ((2 ** (prec - 1)) - 1)
+    | SignPlusMagnitude -> make_range (~((2 ** (prec - 1)) + 1))
+                                      ((2 ** (prec - 1)) - 1)
+*)
+    | Two'sComplement   -> make_range (~(2 ** prec))
+                                      ((2 ** prec) - 1)
+    | One'sComplement   -> make_range (~((2 ** prec)) + 1)
+                                      ((2 ** prec) - 1)
+    | SignPlusMagnitude -> make_range (~((2 ** prec)) + 1)
+                                      ((2 ** prec) - 1)
     end
   else
     make_range 0 ((2 ** prec) - 1)
@@ -109,14 +117,14 @@ let min_implementation_signed_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
 
-        | Signed Int8_t     -> assert_false "TODO"
-        | Signed Int16_t    -> assert_false "TODO"
-        | Signed Int32_t    -> assert_false "TODO"
-        | Signed Int64_t    -> assert_false "TODO"
-        | Unsigned Int8_t   -> assert_false "TODO"
-        | Unsigned Int16_t  -> assert_false "TODO"
-        | Unsigned Int32_t  -> assert_false "TODO"
-        | Unsigned Int64_t  -> assert_false "TODO"
+        | Signed Int8_t     -> 7
+        | Signed Int16_t    -> 15
+        | Signed Int32_t    -> 31
+        | Signed Int64_t    -> 63
+        | Unsigned Int8_t   -> 8
+        | Unsigned Int16_t  -> 16
+        | Unsigned Int32_t  -> 32
+        | Unsigned Int64_t  -> 64
       end
     )
     (Unsigned Long)
