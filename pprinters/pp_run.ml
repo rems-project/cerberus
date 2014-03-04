@@ -11,23 +11,24 @@ let rec string_of_thread_id = function
       string_of_thread_id tid
 
 let rec string_of_dyn_rule = function
-  | Core_run_effect.Rule_Pos       -> "POS"
-  | Core_run_effect.Rule_Neg       -> "NEG"
-  | Core_run_effect.Rule_Pure_Hole -> "PURE_HOLE"
-  | Core_run_effect.Rule_Pure      -> "PURE"
-  | Core_run_effect.Rule_If        -> "IF"
-  | Core_run_effect.Rule_Let       -> "LET"
-  | Core_run_effect.Rule_Ret       -> "RET"
-  | Core_run_effect.Rule_Skip      -> "SKIP"
-  | Core_run_effect.Rule_Proc      -> "== PROC =="
-  | Core_run_effect.Rule_Wseq      -> "WSEQ"
-  | Core_run_effect.Rule_Wseq_Neg  -> "WSEQ_NEG"
-  | Core_run_effect.Rule_Sseq      -> "SSEQ"
-  | Core_run_effect.Rule_Run       -> "RUN"
-  | Core_run_effect.Rule_Save      -> "SAVE"
-  | Core_run_effect.Rule_Unseq     -> "unseq"
-  | Core_run_effect.Rule_ND        -> "nd"
-  | Core_run_effect.Rule_Par       -> "par"
+  | Core_run_effect.Rule_Pos        -> "POS"
+  | Core_run_effect.Rule_Neg        -> "NEG"
+  | Core_run_effect.Rule_Pure_Hole  -> "PURE_HOLE"
+  | Core_run_effect.Rule_Pure       -> "PURE"
+  | Core_run_effect.Rule_If         -> "IF"
+  | Core_run_effect.Rule_Let        -> "LET"
+  | Core_run_effect.Rule_Ret        -> "RET"
+  | Core_run_effect.Rule_Skip       -> "SKIP"
+  | Core_run_effect.Rule_Proc       -> "== PROC =="
+  | Core_run_effect.Rule_Wseq       -> "WSEQ"
+  | Core_run_effect.Rule_Wseq_Neg   -> "WSEQ_NEG"
+  | Core_run_effect.Rule_Sseq       -> "SSEQ"
+  | Core_run_effect.Rule_Run        -> "RUN"
+  | Core_run_effect.Rule_Save       -> "SAVE"
+  | Core_run_effect.Rule_Unseq      -> "unseq"
+  | Core_run_effect.Rule_ND         -> "nd"
+  | Core_run_effect.Rule_Par        -> "par"
+  | Core_run_effect.Rule_Output str -> "output: " ^ String.escaped str
 
 
 

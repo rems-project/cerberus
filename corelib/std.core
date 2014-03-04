@@ -231,7 +231,7 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
   else
     let n1_ = n1 / 2 in
       let n2_ = n2 / 2 in
-        (if (n1%2) * (n1%2) = 0 /\ not((n1%2) + (n1%2) = 0) then 1 else 0 end) + 2 * bitwise_XOR_aux(n1_, n2_, w - 1)
+        (if (n1%2) * (n2%2) = 0 /\ not((n1%2) + (n2%2) = 0) then 1 else 0 end) + 2 * bitwise_XOR_aux(n1_, n2_, w - 1)
       end
     end
   end
