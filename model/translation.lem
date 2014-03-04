@@ -1113,9 +1113,14 @@ let translate_program stdlib ((startup_id, defs) as program) =
                       (mk_core_acc z)
                    )
                  )
+      (* globals are initialised to zero *)
       | Nothing ->
           return $
-            fun z -> C.Esseq [Just global_id] core_create (mk_core_acc z)
+            fun z ->
+               C.Esseq [Just global_id] core_create
+                 (C.Esseq [Nothing] (Caux.pstore (Caux.mk_ctype ty) (C.Esym global_id) (Caux.zero) Cmm.NA) (* TODO: proper memory order *)
+                    (mk_core_acc z)
+                 )
     end
   ) (fun z -> z) (List.reverse globals) >>= fun mk_core_globals ->
  *)
@@ -1138,7 +1143,13 @@ let translate_program stdlib ((startup_id, defs) as program) =
             ) :: acc
       | Nothing ->
           E.fresh_symbol >>= fun a_global ->
-          return $ (global_id, C.Address, C.Esseq [Just a_global] core_create (C.Esym a_global)) :: acc
+          return $
+            (global_id, C.Address,
+             C.Esseq [Just a_global] core_create
+               (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) Caux.zero Cmm.NA) (* TODO: proper memory order *)
+                 (C.Esym a_global)
+               )
+            ) :: acc
     end
   ) [] (List.reverse globals) >>= fun cdefs ->
   
