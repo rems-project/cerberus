@@ -175,6 +175,8 @@ let rec free_syms e =
       foldl (fun acc e -> free_syms e union acc) {} es
   | Ecall _ es ->
       foldl (fun acc e -> free_syms e union acc) {} es
+  | Eoutput _ ->
+      {}
   | Esame e1 e2 ->
       free_syms e1 union free_syms e2
   | Eundef _ ->
@@ -279,6 +281,8 @@ let rec subst_sym a v e =
         Eop binop (subst_sym a v e1) (subst_sym a v e2)
     | Ecall f args ->
         Ecall f (List.map (subst_sym a v) args)
+    | Eoutput str ->
+        Eoutput str
     | Eundef u ->
         Eundef u
     | Eerror ->
@@ -405,6 +409,8 @@ let rec is_pure e =
        true
    | Ecall _ _ ->
        true
+   | Eoutput _ ->
+       false
    | Eundef _ ->
        true
    | Eerror ->

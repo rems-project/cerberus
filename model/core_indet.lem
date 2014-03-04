@@ -416,6 +416,8 @@ let rec hack x =
         Core.Eop bop (hack e1) (hack e2)
     | Core.Ecall f es ->
         Core.Ecall f (map hack es)
+    | Core.Eoutput str ->
+        Core.Eoutput str
     | Core.Eundef ub ->
         Core.Eundef ub
     | Core.Eerror ->
