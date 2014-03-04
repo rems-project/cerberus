@@ -14,6 +14,8 @@ type trace_action =
   | Tstore  of ctype   * Cmm.location * Cmm.cvalue              * Cmm.memory_order * Cmm.tid
   | Tload   of ctype   * Cmm.location * Cmm.cvalue              * Cmm.memory_order * Cmm.tid (* the argument Cmm.cvalue is the read value *)
   | Trmw    of ctype   * Cmm.location * Cmm.cvalue * Cmm.cvalue * Cmm.memory_order * Cmm.tid
+  (* TODO: this may be hackish *)
+  | Toutput of string
 
 val trace_action_kind_to_nat : trace_action -> nat
 let trace_action_kind_to_nat a =
@@ -124,12 +126,22 @@ type execution_mode =
   | Exhaustive
   | Random
 
+(*
+type io_state = <|
+  stdout: string;
+|>
+ *)
+
+
 type state = <|
   (* The memory layout state *)
   mem_layout: Memory.memory_state;
   
   (* the execution trace so far (stored in reversed) *)
   trace: trace;
+  
+  (* IO (TODO: hackish for now) *)
+(*  io: io_state; *)
   
   (* The following members are named after their counterparts in Cmm. *)
   cmm_tact_map:   Map.map taction_id Cmm.action;

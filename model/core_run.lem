@@ -672,9 +672,9 @@ let call_proc pname args =
         else
           E.set_current_proc psym >>
           E.return (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
-(*
     | Impl (Implementation_.StdFunction "printf") ->
- *)
+        Boot.assert_false "[Core_run.call_proc] found printf!!"
+
     | _ -> Boot.assert_false "[Core_run.call_proc] impossible case: TODO move to Exception.t"
   end
 

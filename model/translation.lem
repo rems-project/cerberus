@@ -702,11 +702,8 @@ and translate_expression stdlib program a_expr =
       | A.Constant (A.ConstantInteger (i, _)) ->
           return (C.Econst $ Cmm_aux.Cint i)
 
-(* TODO: lem non termination bug *)
-(*
       | A.Constant (A.ConstantString str) ->
           return (C.Econst $ Cmm_aux.Cstring str) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
-*)
       
       
       | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> return Caux.one
