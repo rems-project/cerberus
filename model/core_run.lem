@@ -673,7 +673,19 @@ let call_proc pname args =
           E.set_current_proc psym >>
           E.return (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) fbody params args)
     | Impl (Implementation_.StdFunction "printf") ->
-        Boot.assert_false "[Core_run.call_proc] found printf!!"
+        (* TODO: uber hack *)
+        match args with
+          | Eaddr o :: args' ->
+              (* TODO: the types are obviously a hack *)
+              load Core_ctype.Void o >>= fun (Cmm_aux.Mbase (Cmm_aux.Cstring str), taid) ->
+              
+              E.mapM (fun (Eaddr o) ->
+                load Core_ctype.Void o >>= fun (Cmm_aux.Mbase c, taid) ->
+                E.return c
+              ) args' >>= fun csts ->
+              E.return $ Eoutput (Boot.fake_printf str csts)
+          | _ -> Boot.assert_false "[Core_run.call_proc] printf is very hackish for now"
+        end
 
     | _ -> Boot.assert_false "[Core_run.call_proc] impossible case: TODO move to Exception.t"
   end
@@ -1487,7 +1499,17 @@ let red2_nd x =
         push_trace (E.Rule_ND, Nothing)  >>
         E.return (ej, tid, _KS)
     | _ -> E.mzero
+end
+
+
+let red2_output x =
+  match x with
+    | (Eoutput str, tid, _KS) ->
+        E.put_stdout str >>
+        E.return (Eunit, tid, _KS)
+    | _ -> E.mzero
   end
+
 
 val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
           E.t (expr E.taction_id * Cmm.tid * list (cont E.taction_id))
@@ -1501,7 +1523,8 @@ let red2 e =
       red2_wseq e; red2_neg_wseq e;
       red2_sseq e;
       red2_run e; red2_save e;
-      red2_par e; red2_nd e
+      red2_par e; red2_nd e;
+      red2_output e
     ]
   ]
 

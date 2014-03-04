@@ -83,6 +83,9 @@ type expr 'a =
   | Eop of binop * expr 'a * expr 'a
   | Ecall of name * list (expr 'a)
   
+  (* I/O operations *)
+  | Eoutput of string
+  
   (* undefined behaviour and late static error / failed assert *)
   | Eundef of Undefined.undefined_behaviour
   | Eerror
@@ -216,6 +219,8 @@ let rec is_value e =
         false
     | Ecall _ _ ->
         true
+    | Eoutput _ ->
+        false
     | Esame _ _ ->
         false (* TODO: think about it *)
     | Eundef _ ->

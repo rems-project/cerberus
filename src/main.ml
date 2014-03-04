@@ -13,6 +13,8 @@ let random_mode      = ref Core_run.E.Exhaustive
 let sb_graph         = ref false
 let skip_core_tcheck = ref false (* TODO: this is temporary, until I fix the typechecker (...) *)
 
+let print_trace = ref false
+
 (* Test mode of Kyndylan *)
 let testing = ref false
 
@@ -33,7 +35,8 @@ let options = Arg.align [
   ("--version", Arg.Set print_version, "       Print the mercurial version id");
   ("--pcabs",   Arg.Set print_cabs   , "       Pretty-print the Cabs intermediate representation");
   ("--pail",    Arg.Set print_ail    , "       Pretty-print the Ail intermediate representation");
-  ("--pcore",   Arg.Set print_core   , "       Pretty-print the Code generated program")
+  ("--pcore",   Arg.Set print_core   , "       Pretty-print the Code generated program");
+  ("--trace",   Arg.Set print_trace  , "       Print the execute trace at the end")
 ]
 let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 
@@ -224,7 +227,7 @@ let pipeline stdlib impl core_parse file_name =
              (Exception.map_list
 		(fun (n,f) -> Core_run.run0 !random_mode f
                               |> pass_message ("SB order #" ^ string_of_int n)
-                              |> pass_through Pp_run.pp_traces
+                              |> pass_through (Pp_run.pp_traces !print_trace)
                               |> pass_through_test !sb_graph (write_graph file_name)
                               |> return_empty
 		)

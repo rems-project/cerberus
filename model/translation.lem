@@ -671,12 +671,25 @@ and translate_expression stdlib program a_expr =
                   
                   (* create actions for the temporary objects *)
                   let core_creates =
-                    List.map (fun (_, (_, ty)) -> Caux.pcreate (Caux.mk_ctype ty) []) binds in
+                    if is_variadic then
+                      (* TODO: check the std *)
+                      List.map (fun e -> Caux.pcreate (Caux.mk_ctype (ctype_of e)) []) es
+                    else
+                      List.map (fun (_, (_, ty)) -> Caux.pcreate (Caux.mk_ctype ty) []) binds in
+                  
+                  (* the list of "Nothing" is empty if the function is not variadic *)
+                  let binds =
+                    List.map (fun z -> Just z) binds ++ (List.replicate (n - List.length binds) Nothing) in
+                  
                   
                   (* their initialisations *)
-                  E.mapM (fun (a, (_, (_, ty)), e) ->
+                  E.mapM (fun (a, bind_opt, e) ->
                     E.fresh_symbol >>= fun a_init ->
                     f e            >>= fun core_e ->
+                    let ty = match bind_opt with
+                      | Just (_, (_, ty)) -> ty
+                      | Nothing           -> ctype_of e (* TODO: check the std *)
+                    end in
 		    return $
                       C.Ewseq [Just a_init] core_e
 		      (Caux.pstore (Caux.mk_ctype ty) (C.Esym a) (C.Esym a_init) Cmm.NA)

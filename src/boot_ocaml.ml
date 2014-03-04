@@ -39,3 +39,34 @@ let pp_core_expr e = to_plain_string (Pp_core.pp_expr e)
 
 
 let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def)
+
+
+
+(* TODO: this is massive hack, just to make csmith programs work *)
+let fake_printf str args =
+  match (str, args) with
+  | ("\"%d\"", [Cmm_aux.Cint n]) ->
+      Big_int.string_of_big_int n
+
+  | ("\"checksum = %x\\n\"", [Cmm_aux.Cint n]) ->
+      Printf.sprintf "checksum = %x\n" (Big_int.int_of_big_int n)
+
+  | ("\"checksum = %X\\n\"", [Cmm_aux.Cint n]) ->
+      Printf.sprintf "checksum = %X\n" (Big_int.int_of_big_int n)
+
+  | ("\"...checksum after hashing %s : %X\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
+      Printf.sprintf "...checksum after hashing %s : %X\n" str (Big_int.int_of_big_int n)
+
+  | ("\"...checksum after hashing %s : %lX\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
+      Printf.sprintf "...checksum after hashing %s : %lX\n" str (Big_int.int32_of_big_int n)
+
+  | ("\"%s %d\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
+      Printf.sprintf "%s %d\n" str (Big_int.int_of_big_int n)
+
+  | (str, []) ->
+      str
+  | _ ->
+      print_endline "TODO: error in Boot_ocaml.fake_printf";
+      Printf.printf "str= %s\n" str;
+      Printf.printf "|args|= %d\n" (List.length args);
+      exit 1

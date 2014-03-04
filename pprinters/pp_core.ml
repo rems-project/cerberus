@@ -42,6 +42,7 @@ let precedence = function
   | Esame _           -> Some 2
   | Eproc _           -> Some 2
   | Ecall _           -> Some 2
+  | Eoutput _         -> Some 2
   | Eshift _          -> Some 2
   | Eop (OpMul, _, _) -> Some 3
   | Eop (OpDiv, _, _) -> Some 3
@@ -281,6 +282,8 @@ let rec pp_expr e =
             pp_name fname ^^ P.braces (comma_list pp es)
         | Ecall (fname, es) ->
             pp_name fname ^^ P.parens (comma_list pp es)
+        | Eoutput str ->
+            pp_keyword "output" ^^ P.parens (!^ str) (* TODO: the string should be quoted and escaped *)
         | Esame (e1, e2) ->
             pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | Eundef u ->

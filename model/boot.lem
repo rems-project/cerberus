@@ -52,6 +52,15 @@ declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 
 
 
+(* TODO: this is massive hack, just to make csmith programs work *)
+val fake_printf: string -> list (Cmm_aux.constant) -> string
+declare ocaml target_rep function fake_printf = `Boot_ocaml.fake_printf`
+
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `print_string`
+
+
+
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
 declare ocaml target_rep function pp_ail_ctype = `Boot_ocaml.pp_ail_ctype`

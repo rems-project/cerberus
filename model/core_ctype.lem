@@ -26,14 +26,23 @@ and member =
   | BITFIELD of ctype * integer * (maybe bool)
 *)
 
-let rec ctype_eq t1 t2 =
-  match (t1, t2) with
-    | (Void, Void) -> true
-    | (Basic bt1, Basic bt2) -> bt1 = bt2
-    | (Array a1 i1, Array a2 i2) -> (a1 = a2) && (i1 = i2)
-    | (Function ct1 ts1 b1, Function ct2 ts2 b2) -> (ct1 = ct2) && (ts1 = ts2) && (b1 = b2)
-    | (Pointer ct1, Pointer ct2) -> (ct1 = ct2)
-    | (Atomic ct1, Atomic ct2) -> (ct1 = ct2)
+let rec ctypeEquality ty1 ty2 =
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        ctypeEquality ty1 ty2 && n1 = n2
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        ctypeEquality ty1 ty2 &&
+        List.all (fun (x, y) -> ctypeEquality x y) (zip tys1 tys2) &&
+        b1 = b2
+    | (Pointer ty1, Pointer ty2) ->
+        ctypeEquality ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+        ctypeEquality ty1 ty2
+
 (*
     | (SIZE_T, SIZE_T) -> true
     | (INTPTR_T, INTPTR_T) -> true
@@ -45,6 +54,41 @@ let rec ctype_eq t1 t2 =
   end
 
 instance (Eq ctype)
-  let (=) = ctype_eq
-  let (<>) x y = not (ctype_eq x y)
+  let (=) = ctypeEquality
+  let (<>) x y = not (ctypeEquality x y)
+end
+
+
+val ctype_to_nat : ctype -> nat
+let ctype_to_nat = function
+ | Void           -> 0
+ | Basic _        -> 1
+ | Array _ _      -> 2
+ | Function _ _ _ -> 3
+ | Pointer _      -> 4
+ | Atomic _       -> 5
+end
+
+let rec setElemCompare_ctype ty1 ty2 =
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        EQ
+    | (Basic bty1, Basic bty2) ->
+        setElemCompare bty1 bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        pairCompare setElemCompare_ctype setElemCompare (ty1, n1) (ty2, n2)
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        pairCompare setElemCompare_ctype (pairCompare (lexicographicCompareBy setElemCompare_ctype) setElemCompare)
+          (ty1, (tys1, b1)) (ty2, (tys2, b2))
+    | (Pointer ty1, Pointer ty2) ->
+        setElemCompare_ctype ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+         setElemCompare_ctype ty1 ty2
+    | (_, _) ->
+        setElemCompare (ctype_to_nat ty1) (ctype_to_nat ty2)
+  end
+
+
+instance (SetType ctype)
+  let setElemCompare = setElemCompare_ctype
 end

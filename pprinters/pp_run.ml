@@ -104,31 +104,46 @@ int, 'a) Exception.t -> (int, 'a) Exception.t
 
 *)
 
-let pp_traces i_execs =
-  List.map (fun (i, u_t) ->
+let pp_traces verbose i_execs =
+  List.iter (fun (i, u_t) ->
+    if verbose then (
+      print_endline ("Trace #" ^ string_of_int i ^ ":");
+      print_endline (match u_t with
+        | (Undefined.Defined0 (v, (tact_map, t)), st) ->
+            string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot_ocaml.to_plain_string (Pp_core.pp_expr v))
+        | (Undefined.Undef ubs, st) ->
+            "Undef[" ^ (String.concat ", " (List.map Undefined.string_of_undefined_behaviour ubs)) ^ "]"
+        | (Undefined.Error, st) ->
+            "Error"
+    ));
+    let (_, st) = u_t in
+    print_string st.Core_run_effect.io.Core_run_effect.stdout
+    
+  ) (numerote i_execs)
+
+
+(*
     print_endline ("Trace #" ^ string_of_int i ^ ":\n" ^
     match u_t with
-    | (Undefined.Defined0 (v, (tact_map, t)), st) ->
-        string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot_ocaml.to_plain_string (Pp_core.pp_expr v))
-    | (Undefined.Undef ubs, st) ->
-        "Undef[" ^ (String.concat ", " (List.map Undefined.string_of_undefined_behaviour ubs)) ^ "]"
-    | (Undefined.Error, st) ->
-        "Error"
-    )) (numerote i_execs);
+      | (Undefined.Defined0 (v, (tact_map, t)), st) ->
+          string_of_trace tact_map t ^ "\n\nValue: " ^ (Boot_ocaml.to_plain_string (Pp_core.pp_expr v))
+      | (Undefined.Undef ubs, st) ->
+          "Undef[" ^ (String.concat ", " (List.map Undefined.string_of_undefined_behaviour ubs)) ^ "]"
+      | (Undefined.Error, st) ->
+          "Error"
+  )) (numerote i_execs);
   
   List.map (fun (i, u_t) ->
     print_endline ("Trace #" ^ string_of_int i ^ " = " ^
     match u_t with
-    | (Undefined.Defined0 (v, (tact_map, t)), st) ->
-        Boot_ocaml.to_plain_string (Pp_core.pp_expr v)
-    | (Undefined.Undef ubs, st) ->
-        "Undef[" ^ (String.concat ", " (List.map Undefined.string_of_undefined_behaviour ubs)) ^ "]"
-    | (Undefined.Error, st) ->
-        "Error"
+      | (Undefined.Defined0 (v, (tact_map, t)), st) ->
+          Boot_ocaml.to_plain_string (Pp_core.pp_expr v)
+      | (Undefined.Undef ubs, st) ->
+          "Undef[" ^ (String.concat ", " (List.map Undefined.string_of_undefined_behaviour ubs)) ^ "]"
+      | (Undefined.Error, st) ->
+          "Error"
     )) (numerote i_execs)
-
-
-
+ *)
 
 (*
 let pp_traces ts =

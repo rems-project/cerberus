@@ -37,7 +37,7 @@ let rec setElemCompare_tid tid1 tid2 =
     | (Tseq tid1', _) -> setElemCompare tid1' tid2
     | (_, Tseq tid2') -> setElemCompare tid1 tid2'
     | (Tzero, Tzero) -> EQ
-    | (Tpar n1 tid1', Tpar n2 tid2') -> setElemCompare (n1, tid1') (n2, tid2')
+    | (Tpar n1 tid1', Tpar n2 tid2') -> pairCompare setElemCompare setElemCompare (n1, tid1') (n2, tid2')
     | (Tzero, _) -> LT
     | (_, Tzero) -> GT
   end
@@ -118,7 +118,7 @@ let rec setElemCompare_constant c1 c2 =
     | (Cint n1     , Cint n2     ) -> setElemCompare n1 n2
     | (Cfunction f1, Cfunction f2) -> setElemCompare f1 f2
     | (Carray cs1  , Carray cs2  ) -> setElemCompare cs1 cs2
-    | (Cstring str1, Cstring str2) -> setElemCompare str1 str2
+    | (Cstring str1, Cstring str2) -> if str1 = str2 then EQ else setElemCompare (stringLength str1) (stringLength str2)
 
     | (Cint _      , Carray _    ) -> LT
     | (Cint _      , Cfunction _ ) -> LT
@@ -152,7 +152,7 @@ type cvalue =
 let rec setElemCompare_cvalue v1 v2 =
   match (v1, v2) with
     | (Muninit     , Muninit     ) -> EQ
-    | (Mbase c1    , Mbase c2    ) -> setElemCompare c1 c2
+    | (Mbase c1    , Mbase c2    ) -> setElemCompare_constant c1 c2
     | (Mobj loc1   , Mobj loc2   ) -> setElemCompare loc1 loc2
     | (Marray vs1  , Marray vs2  ) -> setElemCompare vs1 vs2
     | (Mnull       , Mnull       ) -> EQ
