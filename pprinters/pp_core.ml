@@ -136,7 +136,7 @@ let pp_basic_ctype bty =
 
 
 let rec pp_ctype t =
-  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in
+(*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
   let open Core_ctype in
   match t with
     | Void0 ->
@@ -164,11 +164,13 @@ let rec pp_ctype t =
     | CHAR32_T                -> !^ "char32_t"
 *)
 
+(*
 and pp_member = function
   | Core_ctype.MEMBER ty ->
       fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
   | Core_ctype.BITFIELD (ty, w, _) ->
       fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.colon ^^^ Pp_ail.pp_integer w ^^ P.semi
+ *)
 
 
 let pp_binop = function
@@ -199,13 +201,13 @@ let pp_name = function
 
 let pp_constant = function
   | Cmm_aux.Cint n ->
-      (* pp_number *) !^ (Big_int.string_of_big_int n)
-(*
-  | Carray0 _ ->
-      !^ "ARRAY"
- *)
-  | Cmm_aux.Cfunction _ ->
-      !^ "FUNCTION"
+      !^ (Big_int.string_of_big_int n)
+  | Cmm_aux.Carray cs ->
+      !^ "TODO: ARRAY"
+  | Cmm_aux.Cfunction f ->
+      !^ "TODO: FUNCTION"
+  | Cmm_aux.Cstring str ->
+      P.dquotes (!^ str)
 
 let pp_memory_order = function
   | Cmm.NA      -> !^ "NA"

@@ -685,6 +685,7 @@ ctype:
     { Core_ctype.Pointer0 ty }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
     { Core_ctype.Atomic1 ty }
+(*
 | SIZE_T
     { Core_ctype.SIZE_T }
 | INTPTR_T
@@ -695,6 +696,7 @@ ctype:
     { Core_ctype.CHAR16_T }
 | CHAR32_T
     { Core_ctype.CHAR32_T }
+ *)
 ;
 (* END Ail types *)
 

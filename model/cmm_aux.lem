@@ -70,7 +70,9 @@ let rec location_Equal l1 l2 =
     | (Lbase n1, Lbase n2) ->
         n1 = n2
     | (Lshift l1' n1, Lshift l2' n2) ->
-       location_Equal l1' l2' && n1 = n2
+        location_Equal l1' l2' && n1 = n2
+    | _ ->
+        false
   end
 
 
@@ -107,17 +109,34 @@ type location =
 (* Duplicate of Core.constant (needed to avoid cyclic deps) *)
 type constant =
   | Cint of integer
-(*  | Carray of list constant *)
+  | Carray of list constant
   | Cfunction of Symbol.t
+  | Cstring of string (* TODO: temporary hack *)
+
+let rec setElemCompare_constant c1 c2 =
+  match (c1, c2) with
+    | (Cint n1     , Cint n2     ) -> setElemCompare n1 n2
+    | (Cfunction f1, Cfunction f2) -> setElemCompare f1 f2
+    | (Carray cs1  , Carray cs2  ) -> setElemCompare cs1 cs2
+    | (Cstring str1, Cstring str2) -> setElemCompare str1 str2
+
+    | (Cint _      , Carray _    ) -> LT
+    | (Cint _      , Cfunction _ ) -> LT
+    | (Cint _      , Cstring _   ) -> LT
+    | (Carray _    , Cint _      ) -> GT
+    | (Carray _    , Cfunction _ ) -> LT
+    | (Carray _    , Cstring _   ) -> LT
+    | (Cfunction _ , Cint _      ) -> GT
+    | (Cfunction _ , Carray _    ) -> GT
+    | (Cfunction _ , Cstring _   ) -> LT
+    | (Cstring _   , Cint _      ) -> GT
+    | (Cstring _   , Carray _    ) -> GT
+    | (Cstring _   , Cfunction _ ) -> GT
+  end
+
 
 instance (SetType constant)
-  let setElemCompare c1 c2 =
-    match (c1, c2) with
-      | (Cint n1     , Cint n2     ) -> setElemCompare n1 n2
-      | (Cfunction f1, Cfunction f2) -> setElemCompare f1 f2
-      | (Cint _      , Cfunction _ )  -> LT
-      | (Cfunction _ , Cint _      )  -> GT
-    end
+  let setElemCompare c1 c2 = setElemCompare_constant c1 c2
 end
 
 (* Memory value *)
