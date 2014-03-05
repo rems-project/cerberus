@@ -1088,6 +1088,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 
 (* Run the translator on different functions *)
 let translate_program stdlib ((startup_id, defs) as program) =
+  let conv_int         = mk_stdcall stdlib "conv_int"         in
   let (global_ids, globals, funs) = foldl (fun (ids, gs, fs) (id, def) ->
     match def with
       | Left  f -> (     ids,            gs, (id, f) :: fs)
@@ -1136,7 +1137,8 @@ let translate_program stdlib ((startup_id, defs) as program) =
             (global_id, C.Address,
              C.Esseq [Just a_global] core_create
                (C.Esseq [Just a_e] core_e
-                 (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) (C.Esym a_e) Cmm.NA) (* TODO: proper memory order *)
+                 (* TODO: proper memory order *)
+                 (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) (conv_int [Caux.mk_ctype ty; C.Esym a_e]) Cmm.NA)
                    (C.Esym a_global)
                  )
                )
@@ -1146,7 +1148,8 @@ let translate_program stdlib ((startup_id, defs) as program) =
           return $
             (global_id, C.Address,
              C.Esseq [Just a_global] core_create
-               (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) Caux.zero Cmm.NA) (* TODO: proper memory order *)
+                 (* TODO: proper memory order *)
+               (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) Caux.zero Cmm.NA)
                  (C.Esym a_global)
                )
             ) :: acc
