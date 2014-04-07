@@ -104,118 +104,174 @@ let pp_number   n = !^ (ansi_format [Yellow] n)
 
 
 
+
+
+
+
+
+
+let pp_list pp zs =
+  let rec f = function
+    | []    -> P.empty
+    | [z]   -> pp z
+    | z::zs -> pp z ^^ P.semi ^^^ f zs in
+  P.brackets (f zs)
+
+let pp_option pp = function
+  | Some z -> !^ "Some" ^^^ pp z
+  | None   -> !^ "None"
+
+let pp_bool = function
+  | true  -> !^ "true"
+  | false -> !^ "false"
+
+let pp_atom str =
+  P.dquotes $ P.string str
+
+let pp_highlight z =
+  P.parens (!^ "\x1b[31m" ^^ z ^^ !^ "\x1b[0m")
+
+
 let rec pp_typeSpecifier = function
-  | Tvoid      -> pp_type "void"
-  | Tchar      -> pp_type "char"
-  | Tshort     -> pp_type "short"
-  | Tint       -> pp_type "int"
-  | Tlong      -> pp_type "long"
-  | Tfloat     -> pp_type "float"
-  | Tdouble    -> pp_type "double"
-  | Tsigned    -> pp_type "signed"
-  | Tunsigned  -> pp_type "unsigned"
-  | T_Bool     -> pp_type "_Bool"
-  | Tnamed str -> pp_type str
+  | Tvoid ->
+      !^ "Tvoid"
+  | Tchar ->
+      !^ "Tchar"
+  | Tshort ->
+      !^ "Tshort"
+  | Tint ->
+      !^ "Tint"
+  | Tlong ->
+      !^ "Tlong"
+  | Tfloat ->
+      !^ "Tfloat"
+  | Tdouble ->
+      !^ "Tdouble"
+  | Tsigned ->
+      !^ "Tsigned"
+  | Tunsigned ->
+      !^ "Tunsigned"
+  | T_Bool ->
+      !^ "T_Bool"
+  | Tnamed str ->
+      !^ "Tnamed" ^^^ pp_atom str
+
   | Tatomic (spec_elems, decl_t) ->
-    pp_type "_Atomic" ^^
-    P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems)
+    !^ "Tatomic" ^^^ P.parens (
+      pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+      pp_decl_type decl_t
+    )
   
   | Tstruct (str_opt, fg_opt, []) -> 
-      pp_keyword "struct" ^^
-      (P.optional (fun z -> P.space ^^ pp_type z) str_opt) ^^
-      P.optional (fun z ->
-        let block = P.separate_map (P.semi ^^ P.break 1) pp_field_group z in
-        P.space ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
-      ) fg_opt
+      !^ "Tstruct" ^^^ P.parens (
+        pp_option pp_atom str_opt ^^ P.comma ^^^
+        pp_option (pp_list pp_field_group) fg_opt ^^ P.comma ^^^
+        (* TODO *)
+        !^ "[]"
+      )
   | Tunion (str_opt, fg_opt, []) ->
-      pp_keyword "union" ^^
-      (P.optional (fun z -> P.space ^^ pp_type z) str_opt) ^^
-      P.optional (fun z ->
-        let block = P.separate_map (P.semi ^^ P.break 1) pp_field_group z in
-        P.space ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
-      ) fg_opt
+      !^ "Tunion" ^^^ P.parens (
+        pp_option pp_atom str_opt ^^ P.comma ^^^
+        pp_option (pp_list pp_field_group) fg_opt ^^ P.comma ^^^
+        (* TODO *)
+        !^ "[]"
+      )
   | Tenum (str_opt, xs_opt, []) ->
-      pp_keyword "enum" ^^
-      (P.optional (fun z -> P.space ^^ pp_type z) str_opt) ^^
-      P.optional (fun z ->
-        let block = P.separate_map (P.comma ^^ P.break 1) (fun (str, e_opt, _) ->
-          P.space ^^ !^ str ^^
-          P.optional (fun z -> P.space ^^ P.equals ^^^ pp_expression None z) e_opt) z in
-        P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
-      ) xs_opt
+      (* TODO *)
+      !^ "Tenum[TODO]"
 
 
 and pp_storage = function
-  | AUTO         -> pp_keyword "auto"
-  | STATIC       -> pp_keyword "static"
-  | EXTERN       -> pp_keyword "extern"
-  | REGISTER     -> pp_keyword "register"
-  | THREAD_LOCAL -> pp_keyword "_Thread_local"
-  | TYPEDEF      -> pp_keyword "typedef"
+  | AUTO ->
+      !^ "AUTO"
+  | STATIC ->
+      !^ "STATIC"
+  | EXTERN ->
+      !^ "EXTERN"
+  | REGISTER ->
+      !^ "REGISTER"
+  | THREAD_LOCAL ->
+      !^ "THREAD_LOCAL"
+  | TYPEDEF ->
+      !^ "TYPEDEF"
 
 
 and pp_cvspec = function
-  | CV_CONST    -> pp_keyword "const"
-  | CV_VOLATILE -> pp_keyword "volatile"
-  | CV_RESTRICT -> pp_keyword "restrict"
-  | CV_ATOMIC   -> pp_keyword "_Atomic"
-
+  | CV_CONST ->
+      !^ "CV_CONST"
+  | CV_VOLATILE ->
+      !^ "CV_VOLATILE"
+  | CV_RESTRICT ->
+      !^ "CV_RESTRICT"
+  | CV_ATOMIC ->
+      !^ "CV_ATOMIC"
 
 and pp_spec_elem = function
-  | SpecCV spec    -> pp_cvspec spec
-(*  | SpecAttr attr  -> pp_attribute attr *)
-  | SpecStorage st -> pp_storage st
-  | SpecInline     -> pp_keyword "inline"
-  | SpecType tSpec -> pp_typeSpecifier tSpec
+  | SpecCV spec ->
+      !^ "SpecCV" ^^^ pp_cvspec spec
+  | SpecAttr attr ->
+      !^ "SpecAttr" ^^^ pp_attribute attr
+  | SpecStorage st ->
+      !^ "SpecStorage" ^^^ pp_storage st
+  | SpecInline ->
+      !^ "SpecInline"
+  | SpecType tSpec ->
+      !^ "SpecType" ^^^ P.parens (pp_typeSpecifier tSpec)
 
 
 and pp_decl_type = function
  | JUSTBASE ->
-     fun z -> z
- | ARRAY (decl_t, specs, [], e_opt) ->
-     fun z ->
-       pp_decl_type decl_t z ^^
-         P.brackets (
-           P.separate_map P.space pp_cvspec specs ^^^
-           P.optional (pp_expression None) e_opt
-         )
- | PTR (specs, [], decl_t) ->
-     fun z ->
-       pp_decl_type decl_t $ P.parens (P.star ^^^ P.separate_map P.space pp_cvspec specs ^^^ z)
-
-
-
+     !^ "JUSTBASE"
+ | ARRAY (decl_t, specs, attrs, e_opt) ->
+     !^ "ARRAY" ^^^ P.parens (
+       pp_decl_type decl_t ^^ P.comma ^^^
+       pp_list pp_cvspec specs ^^ P.comma ^^^
+       pp_list pp_attribute attrs ^^ P.comma ^^^
+       pp_option (pp_expression None) e_opt
+      )
+ | PTR (specs, attrs, decl_t) ->
+     !^ "PTR" ^^^ P.parens (
+       pp_list pp_cvspec specs ^^ P.comma ^^^
+       pp_list pp_attribute attrs ^^ P.comma ^^^
+       pp_decl_type decl_t
+     )
  | PROTO (decl_t, (params, is_va)) ->
-     fun z->
-       pp_decl_type decl_t z ^^
-       P.parens (comma_list pp_parameter params ^^
-                 if is_va then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-                          else P.empty)
+     !^ "PROTO" ^^^ P.parens (
+       pp_decl_type decl_t ^^ P.comma ^^^
+       P.parens (pp_list pp_parameter params ^^ P.comma ^^^ pp_bool is_va)
+     )
 
 
-and pp_parameter (PARAM (spec_elems, str_opt, decl_t, [], _)) =
-  P.separate_map P.space pp_spec_elem spec_elems ^^^
-  pp_decl_type decl_t
-    (P.optional P.string str_opt)
+and pp_parameter (PARAM (spec_elems, str_opt, decl_t, attrs, _)) =
+  !^ "PARAM" ^^^ P.parens (
+    pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+    pp_option pp_atom str_opt ^^ P.comma ^^^
+    pp_decl_type decl_t  ^^ P.comma ^^^
+    pp_list pp_attribute attrs
+  )
 
 
 and pp_field_group (Field_group (spec_elems, xs, _)) =
-  P.separate_map P.space pp_spec_elem spec_elems ^^^
-  comma_list (function
-    | (Some n, None)   -> pp_name n
-    | (Some n, Some e) -> pp_name n ^^ P.colon ^^^ pp_expression None e
-    | (None, Some e)   -> P.colon ^^^ pp_expression None e
-  ) xs
+  !^ "Field_group" ^^^ P.parens (
+    pp_list pp_spec_elem spec_elems ^^ P.comma ^^^ 
+    pp_list (fun (x,y) -> P.parens (pp_option pp_name x ^^ P.comma ^^^
+                                    pp_option (pp_expression None) y)) xs
+  )
 
 
-and pp_name (Name (str, decl_t, [], _)) =
-  pp_decl_type decl_t (!^ str)
+and pp_name (Name (str, decl_t, attrs, _)) =
+  !^ "Name" ^^^ P.parens (
+    pp_atom str ^^ P.comma ^^^
+    pp_decl_type decl_t  ^^ P.comma ^^^
+    pp_list pp_attribute attrs
+  )
 
 
-and pp_init_name = function
-  | Init_name (n, NO_INIT) -> pp_name n
-  | Init_name (n, ie)      -> pp_name n ^^^ P.equals ^^^ pp_init_expression ie
-
+and pp_init_name (Init_name (n, ie)) =
+  !^ "Init_name" ^^^ P.parens (
+    pp_name n ^^ P.comma ^^^
+    pp_init_expression ie
+  )
 
 and pp_binary_operator = function
   | ADD         -> P.plus
@@ -278,9 +334,13 @@ and pp_expression p expr =
       | QUESTION (e1, e2, e3) ->
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
       | CAST ((spec_elems, decl_t), ie) ->
-          P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems) ^^
-          pp_init_expression ie
-      
+          pp_highlight $
+            !^ "CAST" ^^^ P.parens (
+              P.parens (
+                pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+                pp_decl_type decl_t
+              ) ^^ P.comma ^^^ pp_init_expression ie
+            )
       | C11_ATOMIC_INIT (e1, e2) ->
           !^ "__c11_atomic_init" ^^
           P.parens (f e1 ^^ P.comma ^^^ f e2)
@@ -313,11 +373,17 @@ and pp_expression p expr =
       | EXPR_SIZEOF e ->
           pp_keyword "sizeof" ^^^ f e
       | TYPE_SIZEOF (spec_elems, decl_t) ->
-          pp_keyword "sizeof"  ^^
-          P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems)
+          pp_highlight $
+            !^ "TYPE_SIZEOF" ^^^ P.parens (
+              pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+              pp_decl_type decl_t
+            )
       | ALIGNOF (spec_elems, decl_t) ->
-          pp_keyword "_Alignof" ^^
-          P.parens (pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems)
+          pp_highlight $
+            !^ "ALIGNOF" ^^^ P.parens (
+              pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+              pp_decl_type decl_t
+            )
       | INDEX (e1 ,e2) ->
           f e1 ^^ P.brackets (f e2)
       | MEMBEROF (e, str) ->
@@ -325,10 +391,7 @@ and pp_expression p expr =
       | MEMBEROFPTR (e, str) ->
           f e ^^ (!^ "->") ^^ (!^ str)
       | OFFSETOF ((spec_elems, decl_t), str) ->
-          !^ "offsetof" ^^ P.parens (
-            pp_decl_type decl_t $ P.separate_map P.space pp_spec_elem spec_elems ^^ P.comma ^^^
-            !^ str
-          )
+          !^ "OFFSEOF[TODO]"
 
 
 and pp_integer_suffix = function
@@ -382,15 +445,20 @@ and pp_initwhat = function
       P.brackets (pp_expression None e)
 
 
-(*
 and pp_attribute (ATTR (str, es)) =
-  assert false
-*)
+  !^ "ATTR" ^^^ P.parens (
+    pp_atom str ^^ P.comma ^^^
+    pp_list (pp_expression None) es
+  )
 
 
 let pp_init_name_group (spec_elems, ins) =
-  P.separate_map P.space pp_spec_elem spec_elems ^^^
-  comma_list pp_init_name ins
+  P.parens (
+    pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
+    pp_list pp_init_name ins
+  )
+
+
 
 
 let pp_name_group (spec_elems, ns) =
@@ -403,7 +471,7 @@ let rec pp_definition = function
      !^ (ansi_format [Bold; Red] "FUNDEF:") ^^^ P.separate_map P.space pp_spec_elem spec_elems ^^^
      pp_name n ^^^ pp_statement s
  | DECDEF (ing, _) ->
-     !^ (ansi_format [Bold; Red] "DECDEF:") ^^^ pp_init_name_group ing
+     !^ "DECDEF" ^^^ pp_init_name_group ing
 (* | PRAGMA (str, _) -> assert false *)
 
 

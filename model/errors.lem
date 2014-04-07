@@ -7,6 +7,18 @@ type cause =
 			  but that does not work yet *)
   
   (* Cabs0_to_ail *)
+  | Cabs_to_ail__empty_type_specifier_list   (* STD §6.7.2#2, sentence 1 *)
+  | Cabs_to_ail__invalid_type_specifier_list (* STD §6.7.2#2, sentence 2 *)
+
+
+
+
+
+
+
+
+
+
   | CONSTRAINT_6_6__3
   
   | CABS_TO_AIL_FUNCTION_REDEFINITION of string

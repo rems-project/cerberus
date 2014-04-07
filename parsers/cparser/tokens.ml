@@ -1,8 +1,62 @@
 open Cabs0
 
 type token = 
-  | XOR_ASSIGN_ of cabsloc
-  | WHILE_ of cabsloc
+    (* (§6.4.1) keywords *)
+  | AUTO
+  | BREAK
+  | CASE
+  | CHAR
+  | CONST
+  | CONTINUE
+  | DEFAULT
+  | DO
+  | DOUBLE
+  | ELSE
+  | ENUM
+  | EXTERN
+  | FLOAT
+  | FOR
+  | GOTO
+  | IF
+  | INLINE
+  | INT
+  | LONG
+  | REGISTER
+  | RESTRICT
+  | RETURN
+  | SHORT
+  | SIGNED
+  | SIZEOF
+  | STATIC
+  | STRUCT
+  | SWITCH
+  | TYPEDEF
+  | UNION
+  | UNSIGNED
+  | VOID
+  | VOLATILE
+  | WHILE
+  | ALIGNAS
+  | ALIGNOF
+  | ATOMIC
+  | BOOL
+  | COMPLEX
+  | GENERIC
+  | IMAGINARY
+  | NORETURN
+  | STATIC_ASSERT
+  | THREAD_LOCAL
+
+
+
+
+
+
+(*
+
+
+  | XOR_ASSIGN of cabsloc
+  | WHILE of cabsloc
   | VOLATILE of cabsloc
   | VOID of cabsloc
   | VAR_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
@@ -10,15 +64,15 @@ type token =
   | UNKNOWN_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
   | UNION of cabsloc
   | TYPEDEF_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
-  | TYPEDEF_ of cabsloc
+  | TYPEDEF of cabsloc
   | TILDE of cabsloc
-  | THREAD_LOCAL_ of cabsloc
-  | SWITCH_ of cabsloc
-  | SUB_ASSIGN_ of cabsloc
+  | THREAD_LOCAL of cabsloc
+  | SWITCH of cabsloc
+  | SUB_ASSIGN of cabsloc
   | STRUCT of cabsloc
   | STRING_LITERAL of (string * cabsloc)
   | STATIC_ASSERT of cabsloc
-  | STATIC_ of cabsloc
+  | STATIC of cabsloc
   | STAR of cabsloc
   | SLASH of cabsloc
   | SIZEOF of cabsloc
@@ -28,23 +82,23 @@ type token =
   | RPAREN of cabsloc
   | RIGHT_ASSIGN of cabsloc
   | RIGHT of cabsloc
-  | RETURN_ of cabsloc
+  | RETURN of cabsloc
   | RESTRICT of cabsloc
-  | REGISTER_ of cabsloc
+  | REGISTER of cabsloc
   | RBRACK of cabsloc
   | RBRACES of cabsloc
   | RBRACE of cabsloc
-  | QUESTION_ of cabsloc
-  | PTR_ of cabsloc
-  | PLUS_ of cabsloc
+  | QUESTION of cabsloc
+  | PTR of cabsloc
+  | PLUS of cabsloc
   | PERCENT of cabsloc
   | OR_ASSIGN of cabsloc
-  | OFFSETOF_ of cabsloc
+  | OFFSETOF of cabsloc
   | NEQ of cabsloc
-  | MUL_ASSIGN_ of cabsloc
-  | MOD_ASSIGN_ of cabsloc
-  | MINUS_ of cabsloc
-  | LT_ of cabsloc
+  | MUL_ASSIGN of cabsloc
+  | MOD_ASSIGN of cabsloc
+  | MINUS of cabsloc
+  | LT of cabsloc
   | LPAREN of cabsloc
   | LONG of cabsloc
   | LEQ of cabsloc
@@ -58,14 +112,14 @@ type token =
   | INC of cabsloc
   | IF of cabsloc
   | HAT of cabsloc
-  | GT_ of cabsloc
-  | GOTO_ of cabsloc
+  | GT of cabsloc
+  | GOTO of cabsloc
   | GEQ of cabsloc
-  | FOR_ of cabsloc
+  | FOR of cabsloc
   | FLOAT of cabsloc
-  | EXTERN_ of cabsloc
+  | EXTERN of cabsloc
   | EQEQ of cabsloc
-  | EQ_ of cabsloc
+  | EQ of cabsloc
   | EOF
   | ENUM of cabsloc
   | ELSE of cabsloc
@@ -73,39 +127,42 @@ type token =
   | DOUBLE of cabsloc
   | DOT of cabsloc
   | DO of cabsloc
-  | DIV_ASSIGN_ of cabsloc
-  | DEFAULT_ of cabsloc
+  | DIV_ASSIGN of cabsloc
+  | DEFAULT of cabsloc
   | DEC of cabsloc
-  | CONTINUE_ of cabsloc
-  | CONSTANT_ of (constant1 * cabsloc)
+  | CONTINUE of cabsloc
+  | CONSTANT of (constant0 * cabsloc)
   | CONST of cabsloc
-  | COMMA_ of cabsloc
+  | COMMA of cabsloc
   | COLON of cabsloc
   | CHAR of cabsloc
-  | CASE_ of cabsloc
-  | C11_ATOMIC_STORE_ of cabsloc
-  | C11_ATOMIC_LOAD_ of cabsloc
-  | C11_ATOMIC_INIT_ of cabsloc
-  | C11_ATOMIC_FETCH_KEY_ of cabsloc
-  | C11_ATOMIC_EXCHANGE_ of cabsloc
-  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ of cabsloc
-  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ of cabsloc
-  | BUILTIN_VA_ARG_ of cabsloc
-  | BREAK_ of cabsloc
+  | CASE of cabsloc
+  | C11_ATOMIC_STORE of cabsloc
+  | C11_ATOMIC_LOAD of cabsloc
+  | C11_ATOMIC_INIT of cabsloc
+  | C11_ATOMIC_FETCH_KEY of cabsloc
+  | C11_ATOMIC_EXCHANGE of cabsloc
+  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of cabsloc
+  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of cabsloc
+  | BUILTIN_VA_ARG of cabsloc
+  | BREAK of cabsloc
   | BOOL of cabsloc
   | BARES of cabsloc
   | BARBAR of cabsloc
   | BAR of cabsloc
   | BANG of cabsloc
-  | AUTO_ of cabsloc
   | ATOMIC of cabsloc
+  | GENERIC of cabsloc
   | AND_ASSIGN of cabsloc
   | ANDAND of cabsloc
-  | AND_ of cabsloc
-  | ALIGNOF_ of cabsloc
-  | ADD_ASSIGN_ of cabsloc
+  | AND of cabsloc
+  | ALIGNOF of cabsloc
+  | ADD_ASSIGN of cabsloc
   
   (* Parser.mly specifics *)
   | VAR_NAME2  of (atom * cabsloc)
   | TYPEDEF_NAME2 of (atom * cabsloc)
   | OTHER_NAME of (atom * cabsloc)
+
+
+ *)

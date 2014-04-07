@@ -111,14 +111,14 @@ type constant =
   | Cint of integer
   | Carray of list constant
   | Cfunction of Symbol.t
-  | Cstring of string (* TODO: temporary hack *)
+  | Cstring of list char (* TODO: temporary hack *)
 
 let rec setElemCompare_constant c1 c2 =
   match (c1, c2) with
     | (Cint n1     , Cint n2     ) -> setElemCompare n1 n2
     | (Cfunction f1, Cfunction f2) -> setElemCompare f1 f2
     | (Carray cs1  , Carray cs2  ) -> setElemCompare cs1 cs2
-    | (Cstring str1, Cstring str2) -> if str1 = str2 then EQ else setElemCompare (stringLength str1) (stringLength str2)
+    | (Cstring str1, Cstring str2) -> setElemCompare str1 str2 (* if str1 = str2 then EQ else setElemCompare (length str1) (length str2) *)
 
     | (Cint _      , Carray _    ) -> LT
     | (Cint _      , Cfunction _ ) -> LT

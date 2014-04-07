@@ -3,18 +3,36 @@ open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAu
 open import ErrorMonad TypingError
 
 
+(* following the table from (§6.4.4.1#5) *)
 let type_of_constant P (ic : integerConstant) : errorM integerType =
   match ic with
-  | (n, Nothing) ->
-      if in_integer_range P n (Signed Int_) then
-        return (Signed Int_)
-      else if in_integer_range P n (Signed Long) then
-        return (Signed Long)
-      else if in_integer_range P n (Signed LongLong) then
-        return (Signed LongLong)
-      else
-        fail (TError_integerConstant_too_large n)
-  | (n, Just U) ->
+    | (n, Decimal, Nothing) ->
+        if in_integer_range P n (Signed Int_) then
+          return (Signed Int_)
+        else if in_integer_range P n (Signed Long) then
+          return (Signed Long)
+        else if in_integer_range P n (Signed LongLong) then
+          return (Signed LongLong)
+        else
+          fail (TError_integerConstant_too_large n)
+    (* Octal or Hexadecimal *)
+    | (n, _, Nothing) ->
+       if in_integer_range P n (Signed Int_) then
+         return (Signed Int_)
+       else if in_integer_range P n (Unsigned Int_) then
+         return (Unsigned Int_)
+       else if in_integer_range P n (Signed Long) then
+         return (Signed Long)
+       else if in_integer_range P n (Unsigned Long) then
+         return (Unsigned Long)
+       else if in_integer_range P n (Signed LongLong) then
+         return (Signed LongLong)
+       else if in_integer_range P n (Unsigned LongLong) then
+         return (Unsigned LongLong)
+       else
+         fail (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | (n, _, Just U) ->
       if in_integer_range P n (Unsigned Int_) then
         return (Unsigned Int_)
       else if in_integer_range P n (Unsigned Long) then
@@ -23,26 +41,48 @@ let type_of_constant P (ic : integerConstant) : errorM integerType =
         return (Unsigned LongLong)
       else
         fail (TError_integerConstant_too_large n)
-  | (n, Just L) ->
+  | (n, Decimal, Just L) ->
       if in_integer_range P n (Signed Long) then
         return (Signed Long)
       else if in_integer_range P n (Signed LongLong) then
         return (Signed LongLong)
       else
         fail (TError_integerConstant_too_large n)
-  | (n, Just UL) ->
+  (* Octal or Hexadecimal *)
+  | (n, _, Just L) ->
+      if in_integer_range P n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range P n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range P n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range P n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | (n, _, Just UL) ->
       if in_integer_range P n (Unsigned Long) then
         return (Unsigned Long)
       else if in_integer_range P n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
         fail (TError_integerConstant_too_large n)
-  | (n, Just LL) ->
+  | (n, Decimal, Just LL) ->
       if in_integer_range P n (Signed LongLong) then
         return (Signed LongLong)
       else
         fail (TError_integerConstant_too_large n)
-  | (n, Just ULL) ->
+  (* Octal or Hexadecimal *)
+  | (n, _, Just LL) ->
+      if in_integer_range P n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range P n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | (n, _, Just ULL) ->
       if in_integer_range P n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else

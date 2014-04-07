@@ -1,7 +1,6 @@
 open Global_ocaml
 
 (* command-line options *)
-let files            = ref [] (* TODO: now we seem to only execute single files. *)
 let impl_file        = ref ""
 
 let print_version    = ref false
@@ -9,7 +8,7 @@ let print_cabs       = ref false
 let print_ail        = ref false
 let print_core       = ref false
 let execute          = ref false
-let random_mode      = ref Core_run.E.Exhaustive
+let execution_mode   = ref Core_run.E.Exhaustive
 let sb_graph         = ref false
 let skip_core_tcheck = ref false (* TODO: this is temporary, until I fix the typechecker (...) *)
 
@@ -26,10 +25,10 @@ let options = Arg.align [
   ("--test",    Arg.Set testing                   , "       Activate Kyndylan's test mode");
   
   (* Core backend options *)
-  ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                               "       Do not run the Core typechecker");
-  ("--execute",          Arg.Set execute,                                        "       Execute the Core program");
-  ("-r",                 Arg.Unit (fun () -> random_mode := Core_run.E.Random ), "       Randomly choose a single execution path"); 
-  ("--sb-graph",         Arg.Set sb_graph,                                       "       Generate dot graphs of the sb orders");
+  ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                                  "       Do not run the Core typechecker");
+  ("--execute",          Arg.Set execute,                                           "       Execute the Core program");
+  ("-r",                 Arg.Unit (fun () -> execution_mode := Core_run.E.Random ), "       Randomly choose a single execution path"); 
+  ("--sb-graph",         Arg.Set sb_graph,                                          "       Generate dot graphs of the sb orders");
   
   (* printing options *)
   ("--version", Arg.Set print_version, "       Print the mercurial version id");
@@ -50,11 +49,18 @@ let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_fo
 let return_none m         = Exception.bind m (fun _ -> Exception.return0 None)
 let return_empty m        = Exception.bind m (fun _ -> Exception.return0 [])
 
+let return_value m        = Exception.bind m (fun _ -> Exception.return0 [])
 
-let catch m =
-  match Exception.catch m with
-  | Some msg -> print_endline (Colour.ansi_format [Colour.Red] (Pp_errors.to_string msg))
-  | None     -> ()
+
+let catch_result m =
+  match m with
+  | Exception.Result [[(Undefined.Defined0 (Core.Econst (Cmm_aux.Cint n), _), _)]] ->
+      exit (Big_int.int_of_big_int n)
+  | Exception.Result _ ->
+     debug_print "[Main.catch_result] returning a fake return code";
+     exit 0
+  | Exception.Exception msg ->
+      print_endline (Colour.ansi_format [Colour.Red] (Pp_errors.to_string msg))
 
 
 (* use this when calling a pretty printer *)
@@ -160,7 +166,7 @@ let pipeline stdlib impl core_parse file_name =
         let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
         (* TODO: add an command line option for custom include directories, for now
            I hardcode the location of csmith on AddaX *)
-        if Sys.command ("clang -DCSMITH_MINIMAL -E -I $CSEMLIB_PATH/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime " ^
+        if Sys.command ("gcc-4.8 -DCSMITH_MINIMAL -E -I $CSEMLIB_PATH/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime " ^
                            Input.name f ^ " > " ^ temp_name) <> 0 then
           error "the C preprocessor failed";
         Input.file temp_name in
@@ -222,14 +228,14 @@ let pipeline stdlib impl core_parse file_name =
         |> pass_message "7. Now running:"
 	>?> !testing)
 	  (* TODO: this is ridiculous *)
-	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run0 !random_mode f)))
+	  (Exception.rbind (Exception.map_list (fun (_,f) -> Core_run.run0 !execution_mode f)))
 	  (Exception.rbind
              (Exception.map_list
-		(fun (n,f) -> Core_run.run0 !random_mode f
+		(fun (n,f) -> Core_run.run0 !execution_mode f
                               |> pass_message ("SB order #" ^ string_of_int n)
                               |> pass_through (Pp_run.pp_traces !print_trace)
                               |> pass_through_test !sb_graph (write_graph file_name)
-                              |> return_empty
+(*                              |> return_empty *)
 		)
 	     )
 	  )
@@ -257,7 +263,9 @@ let () =
   (* this is for the random execution selection mode *)
   Random.self_init ();
   
-  Arg.parse options (fun x -> files := [x]) usage;
+  (* TODO: yuck *)
+  let file = ref "" in
+  Arg.parse options (fun z -> file := z) usage;
   
   if !print_version then print_endline "Csem (hg version: <<HG-IDENTITY>>)"; (* this is "sed-out" by the Makefile *)
   
@@ -292,5 +300,5 @@ let () =
   
   if !testing then
     List.iter (run_test stdlib impl Core_parser.parse) Tests.get_tests
-  else 
-    List.iter (catch -| pipeline stdlib impl Core_parser.parse) !files;
+  else
+    (catch_result -| pipeline stdlib impl Core_parser.parse) !file;

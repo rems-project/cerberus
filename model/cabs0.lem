@@ -5,36 +5,48 @@ type atom = string
 
 (* Context information. *)
 type cabsloc_ (* TODO(Hack): there should be another way *)
-declare ocaml target_rep type cabsloc_ = `int`
+declare ocaml target_rep type cabsloc_ = `Lexing.position`
 type cabsloc = cabsloc_ (* Location.t *)
 
-type typeSpecifier = (* Merge all specifiers into one type *)
-  | Tvoid                 (* Type specifier ISO 6.7.2 *)
-  | Tchar
-  | Tshort
-  | Tint
-  | Tlong
-  | Tfloat
-  | Tdouble
-  | Tsigned
-  | Tunsigned
+(* §6.7.2 #1 *)
+type type_specifier = (* Merge all specifiers into one type *)
+  | T_void
+  | T_char
+  | T_short
+  | T_int
+  | T_long
+  | T_float
+  | T_double
+  | T_signed
+  | T_unsigned
   | T_Bool
-  | Tnamed of atom
+(*  | T_Complex *)
+  | T_atomic of(list spec_elem * decl_type)
   (* each of the following three kinds of specifiers contains a field
    * or list item iff it corresponds to a definition (as opposed to
    * a forward declaration or simple reference to the type).
    * They also have a list of __attribute__s that appeared between the
    * keyword and the type name (definitions only) *)
-  | Tatomic of(list spec_elem * decl_type)
-  | Tstruct of maybe atom * maybe (list field_group) * list attribute
-  | Tunion of maybe atom * maybe (list field_group) * list attribute
-  | Tenum of maybe atom * maybe (list (atom * maybe expression * cabsloc)) * list attribute
+  | T_struct of maybe atom * maybe (list field_group) * list attribute
+  | T_union of maybe atom * maybe (list field_group) * list attribute
+  | T_enum of maybe atom * maybe (list (atom * maybe expression * cabsloc)) * list attribute
+  
+  | T_named of atom
 
-and storage =
-  AUTO | STATIC | EXTERN | THREAD_LOCAL | REGISTER | TYPEDEF
+(* §6.7.1 #1 *)
+and storage_class_specifier =
+  | SC_typedef
+  | SC_extern
+  | SC_static
+  | SC_Thread_local
+  | SC_auto
+  | SC_register
 
-and cvspec =
-  CV_CONST | CV_VOLATILE | CV_RESTRICT | CV_ATOMIC
+and type_qualifier =
+  | Q_const
+  | Q_restrict
+  | Q_volatile
+  | Q_Atomic
 
 (* Type specifier elements. These appear at the start of a declaration *)
 (* Everywhere they appear in this file, they appear as a 'list spec_elem', *)
@@ -42,11 +54,11 @@ and cvspec =
 (* on to the compiler.  Thus, we can represent e.g. 'int long float x' even *)
 (* though the compiler will of course choke. *)
 and spec_elem =
-  | SpecCV of cvspec            (* const/volatile *)
+  | SpecQualifier of type_qualifier
   | SpecAttr of attribute
-  | SpecStorage of storage
+  | SpecStorage of storage_class_specifier
   | SpecInline
-  | SpecType of typeSpecifier
+  | SpecType of type_specifier
 
 (* Declarator type. They modify the base type given in the specifier. Keep
  * them in the order as they are printed (this means that the top level
@@ -54,8 +66,8 @@ and spec_elem =
  * declared type) *)
 and decl_type =
  | JUSTBASE
- | ARRAY of decl_type * list cvspec * list attribute * maybe expression
- | PTR of list cvspec * list attribute * decl_type
+ | ARRAY of decl_type * list type_qualifier * list attribute * maybe expression
+ | PTR of list type_qualifier * list attribute * decl_type
 (* The bool is true for variable length parameters. *)
  | PROTO of decl_type * (list parameter * bool)
 
@@ -81,27 +93,28 @@ and init_name =
 ** Expressions
 *)
 and binary_operator =
-  | ADD | SUB | MUL | DIV | MOD
-  | AND | OR
-  | BAND | BOR | XOR | SHL | SHR
-  | EQ | NE | LT | GT | LE | GE
-  | ASSIGN
-  | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN
-  | BAND_ASSIGN | BOR_ASSIGN | XOR_ASSIGN | SHL_ASSIGN | SHR_ASSIGN
-  | COMMA
+  | Add | Sub | Mul | Div | Mod
+  | And | Or
+  | Band | Bor | Xor | Shl | Shr
+  | Eq | Ne | Lt | Gt | Le | Ge
+  | Assign
+  | Add_assign | Sub_assign | Mul_assign | Div_assign | Mod_assign
+  | Band_assign | Bor_assign | Xor_assign | Shl_assign | Shr_assign
+  | Comma
 
 and unary_operator =
-  | MINUS | PLUS | NOT | BNOT | MEMOF | ADDROF
-  | PREINCR | PREDECR | POSINCR | POSDECR
+  | Minus | Plus | Not | Bnot | Indirection | Address
+  | PrefixIncr | PrefixDecr | PostfixIncr | PostfixDecr
 
 and expression =
-  | UNARY of unary_operator * expression
-  | BINARY of binary_operator * expression * expression
-  | QUESTION of expression * expression * expression
+  | Eunary of unary_operator * expression
+  | Ebinary of binary_operator * expression * expression
+  | Econditional of expression * expression * expression
 
     (* A CAST can actually be a constructor expression *)
-  | CAST of (list spec_elem * decl_type) * init_expression
+  | Ecast of (list spec_elem * decl_type) * init_expression
 
+(*
   | C11_ATOMIC_INIT of expression * expression
   | C11_ATOMIC_STORE of expression * expression * expression
   | C11_ATOMIC_LOAD of expression * expression
@@ -109,18 +122,19 @@ and expression =
   | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of expression * expression * expression * expression * expression
   | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of expression * expression * expression * expression * expression
   | C11_ATOMIC_FETCH_KEY of expression * expression * expression
+*)
 
-  | CALL of expression * list expression
-  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type)
-  | CONSTANT of constant
-  | VARIABLE of atom
-  | EXPR_SIZEOF of expression
-  | TYPE_SIZEOF of (list spec_elem * decl_type)
-  | ALIGNOF of (list spec_elem * decl_type)
-  | INDEX of expression * expression
-  | MEMBEROF of expression * atom
-  | MEMBEROFPTR of expression * atom
-  | OFFSETOF of (list spec_elem * decl_type) * atom
+  | Ecall of expression * list expression
+(*  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type) *)
+  | Econstant of constant
+  | Evariable of atom
+  | Eexpr_sizeof of expression
+  | Etype_sizeof of (list spec_elem * decl_type)
+  | Ealignof of (list spec_elem * decl_type)
+  | Esubscript of expression * expression
+  | Ememberof of expression * atom
+  | Ememberofptr of expression * atom
+  | Eoffsetof of (list spec_elem * decl_type) * atom
 
 and integer_suffix =
   | SUFFIX_UNSIGNED
@@ -182,23 +196,23 @@ type definition =
 *)
 
 and statement =
- | NOP of cabsloc
- | COMPUTATION of expression * cabsloc
- | BLOCK of list statement * cabsloc
- | If of expression * statement * maybe statement * cabsloc
- | WHILE of expression * statement * cabsloc
- | DOWHILE of expression * statement * cabsloc
- | FOR of maybe for_clause * maybe expression * maybe expression * statement * cabsloc
- | BREAK of cabsloc
- | CONTINUE of cabsloc
- | RETURN of maybe expression * cabsloc
- | SWITCH of expression * statement * cabsloc
- | CASE of expression * statement * cabsloc
- | DEFAULT of statement * cabsloc
- | LABEL of atom * statement * cabsloc
- | GOTO of atom * cabsloc
- | DEFINITION of definition (*definition or declaration of a variable or type*)
- | PAR of list statement * cabsloc
+ | Sskip of cabsloc
+ | Sexpression of expression * cabsloc
+ | Sblock of list statement * cabsloc
+ | Sif of expression * statement * maybe statement * cabsloc
+ | Swhile of expression * statement * cabsloc
+ | Sdo of expression * statement * cabsloc
+ | Sfor of maybe for_clause * maybe expression * maybe expression * statement * cabsloc
+ | Sbreak of cabsloc
+ | Scontinue of cabsloc
+ | Sreturn of maybe expression * cabsloc
+ | Sswitch of expression * statement * cabsloc
+ | Scase of expression * statement * cabsloc
+ | Sdefault of statement * cabsloc
+ | Slabel of atom * statement * cabsloc
+ | Sgoto of atom * cabsloc
+ | Sdefinition of definition (*definition or declaration of a variable or type*)
+ | Spar of list statement * cabsloc
 
 and for_clause =
  | FC_EXP of expression

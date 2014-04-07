@@ -176,11 +176,14 @@ let signed_integerSuffix (s : integerSuffix) : bool =
   | ULL -> false
   end
 
+(* TODO: this dead and incorrect code
+
 let signed_integerConstant (ic : integerConstant) : bool =
   match snd ic with
   | Nothing -> true
   | Just s  -> signed_integerSuffix s
   end
+*)
 
 let min_interpret_integerSuffix s =
   match s with
@@ -197,5 +200,5 @@ let min_interpret_optionIntegerSuffix os =
   | Just s  -> min_interpret_integerSuffix s
   end
 
-let min_interpret_integerConstant (ic:integerConstant) =
-  min_interpret_optionIntegerSuffix (snd ic)
+let min_interpret_integerConstant ((_, _, suff):integerConstant) =
+  min_interpret_optionIntegerSuffix suff

@@ -466,6 +466,19 @@ fun <Integer.decode> (ty: ctype, n: integer) : integer :=
   decodeTwos(ty, n)
 
 
+-- "For conversion to a type of width N, the value is reduced modulo 2^N to be
+--  within range of the type; no signal is raised."
+
+
+-- fun foo_aux(
+
+fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
+--  n % exp(2, ctype_width(ty))
+  let n = encodeTwos("unsigned long", n) in
+    <Integer.decode>(ty, n % exp(2, ctype_width(ty)))
+  end
+
+
 -- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
 fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
   let n = encodeTwos(ty, n) in

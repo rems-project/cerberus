@@ -16,8 +16,8 @@ val return: forall 'a. 'a -> t 'a
 let return x = fun st ->
   Undefined.return (x, st)
 
-val (>>=): forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let inline (>>=) m f = fun st ->
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind m f = fun st ->
   match m st with
     | Undefined.Defined (a, st') ->
         f a st'
@@ -27,75 +27,75 @@ let inline (>>=) m f = fun st ->
         Undefined.Error
   end
 
-val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
-let inline (>>) m f = m >>= fun _ -> f
 
 
-module E = struct
-  (* BEGIN: reinventing the wheel (lots of things shamelessly taken from GHC) *)
-  val     foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
-  let rec foldlM f z0 xs =
-    match xs with
-      | []     -> return z0
-      | x::xs' -> f z0 x >>= fun z -> foldlM f z xs'
-    end
-  
-  val foldl1M: forall 'a. ('a -> 'a -> t 'a) -> list 'a -> t 'a
-  let foldl1M f = function
-     | []    -> Boot.assert_false "[Translation_effect.E.foldl1M] called on an empty list"
-     | x::xs -> foldlM f x xs
+(* BEGIN: reinventing the wheel (lots of things shamelessly taken from GHC) *)
+val     foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+let rec foldlM f z0 xs =
+  match xs with
+    | []     -> return z0
+    | x::xs' -> bind (f z0 x) (fun z -> foldlM f z xs')
   end
-  
-  let sequence ms = foldr (fun m acc ->
-    m   >>= fun x  ->
-    acc >>= fun xs ->
-    return (x::xs)) (return []) ms
-  val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-  let mapM f xs = sequence (List.map f xs)
-  
-  let sequence_ ms = foldr (>>) (return ()) ms
-  val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
-  let mapM_ f _as = sequence_ (List.map f _as)
-  
-  val replicateM: forall 'a. nat -> t 'a -> t (list 'a)
-  let replicateM n x = sequence (replicate n x)
-  (* END: reinventing the wheel *)
-  
-  
-  (* build an initial state from a given Core standard library *)
-  val init: Symbol.counter -> state
-  let init counter = <|
-    symbol_set=      counter;
-    visible_objects= [[]];
-  |>
-  
-  
-  (* returns a fresh Core symbolic name. *)
-  val fresh_symbol: t Symbol.t
-  let fresh_symbol = fun (<| symbol_set= x |> as st) ->
-    Undefined.return ((Symbol.Symbol x Nothing), <| st with symbol_set= x+1 |>)
-  
-  (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
-  val fresh_named_symbol: string -> t Symbol.t
-  let fresh_named_symbol name = fun (<| symbol_set= x |> as st) ->
-    Undefined.return ((Symbol.Symbol x (Just $ name ^ "_" ^ string_of_natural (naturalFromNat x))), <| st with symbol_set= x+1 |>)
-  
-  (* register C objects from block scope. *)
-  val push_block_objects: list Symbol.t -> t unit
-  let push_block_objects _as = fun st ->
-    Undefined.return ((), <| st with visible_objects= _as :: st.visible_objects |>)
-  
-  (* forget C objects from the most recent block. *)
-  val pop_block_objects: t unit
-  let pop_block_objects = fun st ->
-    Undefined.return ((), <| st with visible_objects=
-        match st.visible_objects with
-          | _ :: xs -> xs
-          | _       -> Boot.assert_false "[Translation.E.pop_block_objects] found an ill-formed scope stack."
-        end |>)
-  
-  (* returns the list of all the C objects in scope. *)
-  val get_visible_objects: t (list Symbol.t)
-  let get_visible_objects = fun st ->
-    Undefined.return (foldl (++) [] st.visible_objects, st)
+
+val foldl1M: forall 'a. ('a -> 'a -> t 'a) -> list 'a -> t 'a
+let foldl1M f = function
+  | []    -> Boot.assert_false "[Translation_effect.E.foldl1M] called on an empty list"
+  | x::xs -> foldlM f x xs
 end
+
+let sequence ms =
+  foldr (fun m acc ->
+    bind m (fun x  ->
+      bind acc (fun xs ->
+        return (x::xs)
+      )
+    )
+  ) (return []) ms
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+let mapM f xs = sequence (List.map f xs)
+
+let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
+val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+let mapM_ f _as = sequence_ (List.map f _as)
+
+val replicateM: forall 'a. nat -> t 'a -> t (list 'a)
+let replicateM n x = sequence (replicate n x)
+(* END: reinventing the wheel *)
+
+
+(* build an initial state from a given Core standard library *)
+val init: Symbol.counter -> state
+let init counter = <|
+  symbol_set=      counter;
+  visible_objects= [[]];
+|>
+
+
+(* returns a fresh Core symbolic name. *)
+val fresh_symbol: t Symbol.t
+let fresh_symbol = fun (<| symbol_set= x |> as st) ->
+  Undefined.return ((Symbol.Symbol x Nothing), <| st with symbol_set= x+1 |>)
+
+(* returns a fresh Core symbolic name with a specified name for pretty printing. *)
+val fresh_named_symbol: string -> t Symbol.t
+let fresh_named_symbol name = fun (<| symbol_set= x |> as st) ->
+  Undefined.return ((Symbol.Symbol x (Just $ name ^ "_" ^ string_of_natural (naturalFromNat x))), <| st with symbol_set= x+1 |>)
+
+(* register C objects from block scope. *)
+val push_block_objects: list Symbol.t -> t unit
+let push_block_objects _as = fun st ->
+  Undefined.return ((), <| st with visible_objects= _as :: st.visible_objects |>)
+
+(* forget C objects from the most recent block. *)
+val pop_block_objects: t unit
+let pop_block_objects = fun st ->
+  Undefined.return ((), <| st with visible_objects=
+      match st.visible_objects with
+        | _ :: xs -> xs
+        | _       -> Boot.assert_false "[Translation.E.pop_block_objects] found an ill-formed scope stack."
+      end |>)
+
+(* returns the list of all the C objects in scope. *)
+val get_visible_objects: t (list Symbol.t)
+let get_visible_objects = fun st ->
+  Undefined.return (foldl (++) [] st.visible_objects, st)

@@ -6,6 +6,8 @@ import Cmm_csem Cmm_aux
 import AilTypesAux
 
 import Core_run_effect
+import Output
+
 
 module Cmm = Cmm_csem
 module U   = Undefined
@@ -677,13 +679,17 @@ let call_proc pname args =
         match args with
           | Eaddr o :: args' ->
               (* TODO: the types are obviously a hack *)
-              load Core_ctype.Void o >>= fun (Cmm_aux.Mbase (Cmm_aux.Cstring str), taid) ->
+              load Core_ctype.Void o >>= fun (Cmm_aux.Mbase (Cmm_aux.Cstring fmrt), taid) ->
               
+              Output.printf load fmrt (List.map (fun (Eaddr o) -> o) args')
+
+(*
               E.mapM (fun (Eaddr o) ->
                 load Core_ctype.Void o >>= fun (Cmm_aux.Mbase c, taid) ->
                 E.return c
               ) args' >>= fun csts ->
               E.return $ Eoutput (Boot.fake_printf str csts)
+ *)
           | _ -> Boot.assert_false "[Core_run.call_proc] printf is very hackish for now"
         end
 
