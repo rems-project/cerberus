@@ -2,77 +2,177 @@
 open Lexing
 open Pre_parser
 open Pre_parser_aux
-(* open Cabs0helper *)
 
 module SMap = Map.Make(String)
 
 open Tokens
 
 
+
+(* (§6.4.1) keywords *)
+let keyword_table =
+  let tbl = Hashtbl.create 100 in
+  List.iter (fun (key, tk) -> Hashtbl.add tbl key tk) [
+    "auto"           , AUTO;
+    "break"          , BREAK;
+    "case"           , CASE;
+    "char"           , CHAR;
+    "const"          , CONST;
+    "continue"       , CONTINUE;
+    "default"        , DEFAULT;
+    "do"             , DO;
+    "double"         , DOUBLE;
+    "else"           , ELSE;
+    "enum"           , ENUM;
+    "extern"         , EXTERN;
+    "float"          , FLOAT;
+    "for"            , FOR;
+    "goto"           , GOTO;
+    "if"             , IF;
+    "inline"         , INLINE;
+    "int"            , INT;
+    "long"           , LONG;
+    "register"       , REGISTER;
+    "restrict"       , RESTRICT;
+    "return"         , RETURN;
+    "short"          , SHORT;
+    "signed"         , SIGNED;
+    "sizeof"         , SIZEOF;
+    "static"         , STATIC;
+    "struct"         , STRUCT;
+    "switch"         , SWITCH;
+    "typedef"        , TYPEDEF;
+    "union"          , UNION;
+    "unsigned"       , UNSIGNED;
+    "void"           , VOID;
+    "volatile"       , VOLATILE;
+    "while"          , WHILE;
+    "_Alignas"       , ALIGNAS;
+    "_Alignof"       , ALIGNOF;
+    "_Atomic"        , ATOMIC;
+    "_Bool"          , BOOL;
+    "_Complex"       , COMPLEX;
+    "_Generic"       , GENERIC;
+    "_Imaginary"     , IMAGINARY;
+    "_Noreturn"      , NORETURN;
+    "_Static_assert" , STATIC_ASSERT;
+    "_Thread_local"  , THREAD_LOCAL;
+  ]
+
+
+
+
+
+
+let contexts: string list list ref =
+  ref []
+
+
+}
+
+
+
+rule initial = parse
+  | _ { assert false }
+
+
+
+{
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+(* OLD ====================================================================== *)
+
+
+(*
+
 (* TODO: hack *)
-let currentLoc _ = 0
+let currentLoc lexbuf =
+  lexbuf.lex_curr_p
 
 
 let contexts : string list list ref = ref []
-let lexicon : (string, Cabs0.cabsloc -> token) Hashtbl.t = Hashtbl.create 0
+let lexicon : (string, token) Hashtbl.t = Hashtbl.create 0
 
 let init filename channel : Lexing.lexbuf =
   assert (!contexts = []);
   Hashtbl.clear lexicon;
   List.iter 
     (fun (key, builder) -> Hashtbl.add lexicon key builder)
-    [ ("auto", fun loc -> AUTO_ loc);
-      ("break", fun loc -> BREAK_ loc);
-      ("case", fun loc -> CASE_ loc);
-      ("char", fun loc -> CHAR loc);
-      ("const", fun loc -> CONST loc);
-      ("continue", fun loc -> CONTINUE_ loc);
-      ("default", fun loc -> DEFAULT_ loc);
-      ("do", fun loc -> DO loc);
-      ("double", fun loc -> DOUBLE loc);
-      ("else", fun loc -> ELSE loc);
-      ("enum", fun loc -> ENUM loc);
-      ("extern", fun loc -> EXTERN_ loc);
-      ("float", fun loc -> FLOAT loc);
-      ("for", fun loc -> FOR_ loc);
-      ("goto", fun loc -> GOTO_ loc);
-      ("if", fun loc -> IF loc);
-      ("inline", fun loc -> INLINE loc);
-      ("int", fun loc -> INT loc);
-      ("long", fun loc -> LONG loc);
-      ("offsetof", fun loc -> OFFSETOF_ loc);
-      ("register", fun loc -> REGISTER_ loc);
-      ("restrict", fun loc -> RESTRICT loc);
-      ("return", fun loc -> RETURN_ loc);
-      ("short", fun loc -> SHORT loc);
-      ("signed", fun loc -> SIGNED loc);
-      ("sizeof", fun loc -> SIZEOF loc);
-      ("static", fun loc -> STATIC_ loc);
-      ("struct", fun loc -> STRUCT loc);
-      ("switch", fun loc -> SWITCH_ loc);
-      ("typedef", fun loc -> TYPEDEF_ loc);
-      ("union", fun loc -> UNION loc);
-      ("unsigned", fun loc -> UNSIGNED loc);
-      ("void", fun loc -> VOID loc);
-      ("volatile", fun loc -> VOLATILE loc);
-      ("while", fun loc -> WHILE_ loc);
-      ("_Alignof", fun loc -> ALIGNOF_ loc);
-      ("_Bool", fun loc -> BOOL loc);
-      ("_Thread_local", fun loc -> THREAD_LOCAL_ loc);
-      ("_Atomic", fun loc -> ATOMIC loc);
+    (* (§6.4.1) keywords *)
+    [ ("auto"           , AUTO          );
+      ("break"          , BREAK         );
+      ("case"           , CASE          );
+      ("char"           , CHAR          );
+      ("const"          , CONST         );
+      ("continue"       , CONTINUE      );
+      ("default"        , DEFAULT       );
+      ("do"             , DO            );
+      ("double"         , DOUBLE        );
+      ("else"           , ELSE          );
+      ("enum"           , ENUM          );
+      ("extern"         , EXTERN        );
+      ("float"          , FLOAT         );
+      ("for"            , FOR           );
+      ("goto"           , GOTO          );
+      ("if"             , IF            );
+      ("inline"         , INLINE        );
+      ("int"            , INT           );
+      ("long"           , LONG          );
+      ("register"       , REGISTER      );
+      ("restrict"       , RESTRICT      );
+      ("return"         , RETURN        );
+      ("short"          , SHORT         );
+      ("signed"         , SIGNED        );
+      ("sizeof"         , SIZEOF        );
+      ("static"         , STATIC        );
+      ("struct"         , STRUCT        );
+      ("switch"         , SWITCH        );
+      ("typedef"        , TYPEDEF       );
+      ("union"          , UNION         );
+      ("unsigned"       , UNSIGNED      );
+      ("void"           , VOID          );
+      ("volatile"       , VOLATILE      );
+      ("while"          , WHILE         );
+      ("_Alignas"       , ALIGNAS       );
+      ("_Alignof"       , ALIGNOF       );
+      ("_Atomic"        , ATOMIC        );
+      ("_Bool"          , BOOL          );
+      ("_Complex"       , COMPLEX       );
+      ("_Generic"       , GENERIC       );
+      ("_Imaginary"     , IMAGINARY     );
+      ("_Noreturn"      , NORETURN      );
+      ("_Static_assert" , STATIC_ASSERT );
+      ("_Thread_local"  , THREAD_LOCAL  );
+
+
+
 
 (*      
-      ("__c11_atomic_init", fun loc -> C11_ATOMIC_INIT_ loc);
-      ("__c11_atomic_store", fun loc -> C11_ATOMIC_STORE_ loc);
-      ("__c11_atomic_load", fun loc -> C11_ATOMIC_LOAD_ loc);
-      ("__c11_atomic_exchange", fun loc -> C11_ATOMIC_EXCHANGE_ loc);
-      ("__c11_atomic_compare_exchange_strong", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ loc);
-      ("__c11_atomic_compare_exchange_weak", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ loc);
-      ("__c11_atomic_fetch_key", fun loc -> C11_ATOMIC_FETCH_KEY_ loc);
+      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG loc);
+      ("offsetof", fun loc -> OFFSETOF loc);
+ *)
+
+(*      
+      ("__c11_atomic_init", fun loc -> C11_ATOMIC_INIT loc);
+      ("__c11_atomic_store", fun loc -> C11_ATOMIC_STORE loc);
+      ("__c11_atomic_load", fun loc -> C11_ATOMIC_LOAD loc);
+      ("__c11_atomic_exchange", fun loc -> C11_ATOMIC_EXCHANGE loc);
+      ("__c11_atomic_compare_exchange_strong", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_STRONG loc);
+      ("__c11_atomic_compare_exchange_weak", fun loc -> C11_ATOMIC_COMPARE_EXCHANGE_WEAK loc);
+      ("__c11_atomic_fetch_key", fun loc -> C11_ATOMIC_FETCH_KEY loc);
 *)
-      
-      ("__builtin_va_arg", fun loc -> BUILTIN_VA_ARG_ loc);
-(*      ("_Static_assert", fun loc -> STATIC_ASSERT) *)
     ];
 
   push_context := begin fun () -> contexts := []::!contexts end;
@@ -256,53 +356,53 @@ rule initial = parse
   
 
   | (integer_constant as s) unsigned_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED), currentLoc lexbuf) }
   
   | (integer_constant as s) unsigned_suffix long_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s) unsigned_suffix long_long_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s) long_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s) long_long_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_LONG_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s) long_suffix unsigned_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s) long_long_suffix unsigned_suffix
-      { CONSTANT_ (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, Some Cabs0.SUFFIX_UNSIGNED_LONG_LONG), currentLoc lexbuf) }
   
   | (integer_constant as s)
-      { CONSTANT_ (Cabs0.CONST_INT (s, None), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_INT (s, None), currentLoc lexbuf) }
   
-  | floating_constant as s        { CONSTANT_ (Cabs0.CONST_FLOAT s,
+  | floating_constant as s        { CONSTANT (Cabs0.CONST_FLOAT s,
                                               currentLoc lexbuf) }
 
 
   |     "'" (character_constant as s) "'"
-      { CONSTANT_ (Cabs0.CONST_CHAR (None, s), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_CHAR (None, s), currentLoc lexbuf) }
   | "L'" (character_constant as s) "'"
-      { CONSTANT_ (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_L, s), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_L, s), currentLoc lexbuf) }
   | "u'" (character_constant as s) "'"
-      { CONSTANT_ (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_u, s), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_u, s), currentLoc lexbuf) }
   | "U'" (character_constant as s) "'"
-      { CONSTANT_ (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_U, s), currentLoc lexbuf) }
+      { CONSTANT (Cabs0.CONST_CHAR (Some Cabs0.PREFIX_U, s), currentLoc lexbuf) }
 
 
   | string_literal as s           { STRING_LITERAL (s, currentLoc lexbuf) }
   | "..."                         { ELLIPSIS(currentLoc lexbuf) }
-  | "+="                          { ADD_ASSIGN_(currentLoc lexbuf) }
-  | "-="                          { SUB_ASSIGN_(currentLoc lexbuf) }
-  | "*="                          { MUL_ASSIGN_(currentLoc lexbuf) }
-  | "/="                          { DIV_ASSIGN_(currentLoc lexbuf) }
-  | "%="                          { MOD_ASSIGN_(currentLoc lexbuf) }
+  | "+="                          { ADD_ASSIGN (currentLoc lexbuf) }
+  | "-="                          { SUB_ASSIGN (currentLoc lexbuf) }
+  | "*="                          { MUL_ASSIGN (currentLoc lexbuf) }
+  | "/="                          { DIV_ASSIGN (currentLoc lexbuf) }
+  | "%="                          { MOD_ASSIGN (currentLoc lexbuf) }
   | "|="                          { OR_ASSIGN(currentLoc lexbuf) }
   | "&="                          { AND_ASSIGN(currentLoc lexbuf) }
-  | "^="                          { XOR_ASSIGN_(currentLoc lexbuf) }
+  | "^="                          { XOR_ASSIGN (currentLoc lexbuf) }
   | "<<="                         { LEFT_ASSIGN(currentLoc lexbuf) }
   | ">>="                         { RIGHT_ASSIGN(currentLoc lexbuf) }
   | "<<"                          { LEFT(currentLoc lexbuf) }
@@ -311,24 +411,24 @@ rule initial = parse
   | "!="                          { NEQ(currentLoc lexbuf) }
   | "<="                          { LEQ(currentLoc lexbuf) }
   | ">="                          { GEQ(currentLoc lexbuf) }
-  | "="                           { EQ_(currentLoc lexbuf) }
-  | "<"                           { LT_(currentLoc lexbuf) }
-  | ">"                           { GT_(currentLoc lexbuf) }
+  | "="                           { EQ (currentLoc lexbuf) }
+  | "<"                           { LT (currentLoc lexbuf) }
+  | ">"                           { GT (currentLoc lexbuf) }
   | "++"                          { INC(currentLoc lexbuf) }
   | "--"                          { DEC(currentLoc lexbuf) }
-  | "->"                          { PTR_(currentLoc lexbuf) }
-  | "+"                           { PLUS_(currentLoc lexbuf) }
-  | "-"                           { MINUS_(currentLoc lexbuf) }
+  | "->"                          { PTR (currentLoc lexbuf) }
+  | "+"                           { PLUS (currentLoc lexbuf) }
+  | "-"                           { MINUS (currentLoc lexbuf) }
   | "*"                           { STAR(currentLoc lexbuf) }
   | "/"                           { SLASH(currentLoc lexbuf) }
   | "%"                           { PERCENT(currentLoc lexbuf) }
   | "!"                           { BANG(currentLoc lexbuf) }
   | "&&"                          { ANDAND(currentLoc lexbuf) }
   | "||"                          { BARBAR(currentLoc lexbuf) }
-  | "&"                           { AND_(currentLoc lexbuf) }
+  | "&"                           { AND (currentLoc lexbuf) }
   | "|"                           { BAR(currentLoc lexbuf) }
   | "^"                           { HAT(currentLoc lexbuf) }
-  | "?"                           { QUESTION_(currentLoc lexbuf) }
+  | "?"                           { QUESTION (currentLoc lexbuf) }
   | ":"                           { COLON(currentLoc lexbuf) }
   | "~"                           { TILDE(currentLoc lexbuf) }
   | "{"|"<%"                      { LBRACE(currentLoc lexbuf) }
@@ -338,7 +438,7 @@ rule initial = parse
   | "("                           { LPAREN(currentLoc lexbuf) }
   | ")"                           { RPAREN(currentLoc lexbuf) }
   | ";"                           { SEMICOLON(currentLoc lexbuf) }
-  | ","                           { COMMA_(currentLoc lexbuf) }
+  | ","                           { COMMA (currentLoc lexbuf) }
   | "."                           { DOT(currentLoc lexbuf) }
   
   | "{{{"                         { LBRACES(currentLoc lexbuf) }
@@ -397,3 +497,7 @@ and onelinecomment = parse
 {
 
 }
+
+
+
+ *)

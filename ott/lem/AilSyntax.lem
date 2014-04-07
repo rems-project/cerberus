@@ -12,7 +12,12 @@ type integerSuffix =
  | L
  | LL
 
-type integerConstant (*[name = "ic*"]*) = integer * maybe integerSuffix
+type basis =
+  | Octal
+  | Decimal
+  | Hexadecimal
+
+type integerConstant (*[name = "ic*"]*) = integer * basis * maybe integerSuffix
 
 type arithmeticOperator [name = "aop*"] =  (*r 6.5.5 Multiplicative operators *)
  | Mul
@@ -198,6 +203,14 @@ val eq_program: forall 'A 'B.
 let eq_identifier =
   (=)
 
+let eq_basis b1 b2 =
+  match (b1, b2) with
+    | (Octal      , Octal      ) -> true
+    | (Decimal    , Decimal    ) -> true
+    | (Hexadecimal, Hexadecimal) -> true
+    | (_          , _          ) -> false
+  end
+
 let eq_integerSuffix s1 s2 =
   match (s1, s2) with
     | (U  , U  ) -> true
@@ -209,7 +222,7 @@ let eq_integerSuffix s1 s2 =
   end
 
 let eq_integerConstant =
-  eq_pair (=) (eq_option eq_integerSuffix)
+  eq_triple (=) (eq_basis) (eq_option eq_integerSuffix)
 
 let eq_arithmeticOperator aop1 aop2 =
   match (aop1, aop2) with

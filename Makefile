@@ -90,7 +90,8 @@ MODEL_FILES=\
   undefined.lem \
   core_ctype.lem \
   memory.lem \
-  naive_memory.lem
+  naive_memory.lem \
+  output.lem
 
 
 CORE_PARSER_FILES=\
@@ -144,7 +145,8 @@ lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 lem_model: lem_model_
 	OCAMLRUNPARAM="" $(LEM) -outdir $(OCAML_BUILD_DIR) -only_changed_output -add_loc_annots -ocaml $(wildcard _lem/*.lem)
 	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(OCAML_BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
-	@./hack.sh $(OCAML_BUILD_DIR)
+#	@./hack.sh $(OCAML_BUILD_DIR)
+	@sed -i"" -e "s/let <|>/let (<|>)/" $(OCAML_BUILD_DIR)/output.ml
 
 
 lem_check:

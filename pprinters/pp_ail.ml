@@ -241,10 +241,59 @@ let pp_integerSuffix =
   in
   fun z -> P.string (to_string z)
 
-(* TODO: should reverse the decoding of n *)
-let pp_integerConstant (n, suff_opt) =
-  !^ (Big_int.string_of_big_int n) ^^ (P.optional pp_integerSuffix suff_opt)
+(*
+let rec string_of_octal_big_int n =
+  let (n', r) = Big_int.quomod_big_int n in
+  match r with
+    | 
+ *)
 
+let string_of_big_int_with_basis n b =
+  let char_of_digit = function
+      | 15 -> 'f'
+      | 14 -> 'e'
+      | 13 -> 'd'
+      | 12 -> 'c'
+      | 11 -> 'b'
+      | 10 -> 'a'
+      | r  -> char_of_int (r + 48) in
+  let rec f n acc =
+    let (n', r) = Big_int.quomod_big_int n b in
+    let c = char_of_digit (Big_int.int_of_big_int r) in
+    if Big_int.eq_big_int n' Big_int.zero_big_int then
+      c :: acc
+    else
+      f n' (c :: acc) in
+  f n []
+
+let string_of_octal_big_int n =
+  let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 8) in
+  let ret = String.create (List.length l+1) in
+  ret.[0] <- '0';
+  List.iteri (fun i c ->
+    ret.[i+1] <- c
+  ) l;
+  ret
+
+let string_of_hexadecimal_big_int n =
+  let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 16) in
+  let ret = String.create (List.length l + 2) in
+  ret.[0] <- '0';
+  ret.[1] <- 'x';
+  List.iteri (fun i c ->
+    ret.[i+2] <- c
+  ) l;
+  ret
+
+
+
+(* TODO: should reverse the decoding of n *)
+let pp_integerConstant (n, basis, suff_opt) =
+  !^ (match basis with
+    | Octal       -> string_of_octal_big_int n
+    | Decimal     -> Big_int.string_of_big_int n
+    | Hexadecimal -> string_of_hexadecimal_big_int n
+  )  ^^ (P.optional pp_integerSuffix suff_opt)
 
 (*
 let pp_character_prefix =

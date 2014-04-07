@@ -1,0 +1,645 @@
+(* TODO: A negative precision argument is taken as if the precision were omitted. *)
+
+
+open import Pervasives
+import String_extra
+
+import Cmm_aux Core_run_effect Memory
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `Boot_ocaml.output_string`
+
+
+
+(* BEGIN: Monadic parsing (see "Monadic Parsing in Haskell" from Hutton & Meijer) *)
+type parser 'a =
+ | Parser of (list char -> list ('a * list char))
+
+
+val parse: forall 'a. parser 'a -> list char -> list ('a * list char)
+let parse (Parser p) = p
+
+
+module P = struct
+  type t 'a = parser 'a
+  val return: forall 'a.    'a -> t 'a
+  val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let return a = Parser (fun cs -> [(a, cs)])
+  let bind p f = Parser (fun cs ->
+    List.concatMap (fun (a, cs') -> parse (f a) cs') (parse p cs)
+  )
+  
+  val mzero: forall 'a. t 'a
+  val mplus: forall 'a. t 'a -> t 'a -> t 'a
+  let mzero       = Parser (fun _ -> [])
+  let mplus p1 p2 = Parser (fun cs -> parse p1 cs ++ parse p2 cs)
+  
+  val liftM: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+  let liftM f p = Parser (fun cs ->
+    map (fun (a, cs') -> (f a, cs')) $ parse p cs
+  )
+end
+
+let inline (>>=)    = P.bind
+let inline (>>) m f = P.bind m (fun _ -> f)
+
+
+val item: parser char
+let item =
+  Parser (fun cs -> match cs with
+    | []      -> []
+    | (c::cs) -> [(c, cs)]
+  end)
+
+
+val (<|>): forall 'a. parser 'a -> parser 'a -> parser 'a
+let (<|>) p1 p2 =
+  Parser (fun cs -> match parse (P.mplus p1 p2) cs with
+    | []     -> []
+    | (x::_) -> [x]
+  end)
+
+
+val option: forall 'a. 'a -> parser 'a -> parser 'a
+let option x p = p <|> P.return x
+
+
+val optionMaybe: forall 'a. parser 'a -> parser (maybe 'a)
+let optionMaybe p =
+  option Nothing (P.liftM (fun z -> Just z) p) 
+
+
+val sat: (char -> bool) -> parser char
+let sat pred = do P
+  c <- item; in
+    if pred c then P.return c else P.mzero
+  end
+
+
+val char: char -> parser char
+let char c =
+  sat (fun z -> c = z)
+
+
+val anyChar: parser char
+let anyChar =
+  sat (fun _ -> true)
+
+
+val string: list char -> parser (list char)
+let rec string cs =
+  match cs with
+    | []      -> P.return []
+    | (c::cs') -> do P
+        _ <- char c;
+        _ <- string cs'; in
+          P.return (c::cs')
+        end
+  end
+
+
+val     many:  forall 'a. parser 'a -> parser (list 'a)
+val     many1: forall 'a. parser 'a -> parser (list 'a)
+let rec many p = many1 p <|> P.return []
+and     many1 p = do P
+  a   <- p;
+  _as <- many p; in
+    P.return (a::_as)
+  end
+(* END: Monadic parsring *)
+
+
+(* BEGIN: definitions for the format argument *)
+type flags = <|
+  flag_minus: bool;
+  flag_plus:  bool;
+  flag_space: bool;
+  flag_hash:  bool;
+  flag_zero:  bool
+|>
+
+type field_width =
+  | FW_num of nat
+  | FW_asterisk
+
+
+type precision =
+  | P_num of nat
+  | P_asterisk
+
+type length_modifier =
+  | LM_hh
+  | LM_h
+  | LM_l
+  | LM_ll
+  | LM_j
+  | LM_z
+  | LM_t
+  | LM_L
+
+type conversion_specifier =
+  | CS_di
+  | CS_o
+  | CS_u
+  | CS_x
+  | CS_X
+  | CS_c
+  | CS_s
+  | CS_p
+  | CS_n
+  | CS_percent
+(* TODO: deriving Eq *)
+
+type conversion_specification = <|
+  cp_flags:                flags;
+  cp_field_width:          maybe field_width;
+  cp_precision:            maybe precision;
+  cp_length_modifier:      maybe length_modifier;
+  cp_conversion_specifier: conversion_specifier
+|>
+
+type format_ =
+  | F_text of list char
+  | F_conv of conversion_specification
+type format = list format_
+(* END: definitions for the format argument *)
+
+
+(* BEGIN: parsing of format strings *)
+val nonzero: parser char
+let nonzero =
+  sat (function
+    | #'1' -> true
+    | #'2' -> true
+    | #'3' -> true
+    | #'4' -> true
+    | #'5' -> true
+    | #'6' -> true
+    | #'7' -> true
+    | #'8' -> true
+    | #'9' -> true
+    | _    -> false
+  end)
+
+
+val digit: parser char
+let digit =
+  char #'0' <|> nonzero
+
+
+val nonnegativeDecimalInteger: parser nat
+let nonnegativeDecimalInteger = do P
+  c  <- nonzero;
+  cs <- many digit; in
+    P.return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) (c::cs))
+  end
+
+
+(* TODO: clang/gcc seems to allow 0, ie. this is not like a "C decimal integer constant" *)
+val decimalInteger: parser nat
+let decimalInteger = do P
+  cs <- many digit; in
+    P.return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) cs)
+  end
+
+
+val flags: parser flags
+let flags = do P
+  xs <- many (char #'-' <|> char #'+' <|> char #' ' <|> char #'#' <|> char #'0'); in
+    P.return <|
+      flag_minus= elem #'-' xs; flag_plus= elem #'+' xs;
+      flag_space= elem #' ' xs; flag_hash= elem #'#' xs;
+      flag_zero=  elem #'0' xs
+    |>
+  end
+
+
+val fieldWidth: parser field_width
+let fieldWidth =
+  (char #'*' >> P.return FW_asterisk) <|>
+  (nonnegativeDecimalInteger >>= fun n -> P.return $ FW_num n)
+
+
+val precision: parser precision
+let precision =
+      (char #'.' >> char #'*' >> P.return P_asterisk)
+  <|> (char #'.' >> decimalInteger >>= fun n -> P.return $ P_num n)
+  <|> (char #'.' >> P.return (P_num 0))
+
+
+val lengthModifier: parser length_modifier
+let lengthModifier =
+      (string [#'h'; #'h'] >> P.return LM_hh)
+  <|> (char #'h'           >> P.return LM_h)
+  <|> (char #'l'           >> P.return LM_l)
+  <|> (string [#'l'; #'l'] >> P.return LM_l)
+  <|> (char #'j'           >> P.return LM_j)
+  <|> (char #'z'           >> P.return LM_z)
+  <|> (char #'t'           >> P.return LM_t)
+  <|> (char #'L'           >> P.return LM_L)
+
+
+val conversionSpecifier: parser conversion_specifier
+let conversionSpecifier =
+      (char #'d' <|> char #'i' >> P.return CS_di)
+  <|> (char #'o' >> P.return CS_o)
+  <|> (char #'u' >> P.return CS_u)
+  <|> (char #'x' >> P.return CS_x)
+  <|> (char #'X' >> P.return CS_X)
+  <|> (char #'c' >> P.return CS_c)
+  <|> (char #'s' >> P.return CS_s)
+  <|> (char #'p' >> P.return CS_p)
+  <|> (char #'n' >> P.return CS_n)
+  <|> (char #'%' >> P.return CS_percent)
+
+
+val conversionSpecification: parser conversion_specification
+let conversionSpecification = do P
+  _      <- char #'%';
+  fs     <- flags;
+  fw_opt <- optionMaybe fieldWidth;
+  p_opt  <- optionMaybe precision;
+  lm_opt <- optionMaybe lengthModifier;
+  cs     <- conversionSpecifier; in
+    P.return <|
+      cp_flags=                fs;
+      cp_field_width=          fw_opt;
+      cp_precision=            p_opt;
+      cp_length_modifier=      lm_opt;
+      cp_conversion_specifier= cs
+    |>
+  end
+
+
+val format: parser format
+let format =
+  many (
+        (many1 (sat (fun z -> z <> #'%')) >>= fun str -> P.return (F_text str))
+    <|> (conversionSpecification >>= fun cs -> P.return (F_conv cs))
+  )
+
+(* END: parsing of format strings *)
+
+
+(* BEGIN: actual implementation of printf *)
+(*
+module E = struct
+  type printf_error = string
+  
+  type t 'a = either printf_error 'a
+  val return: forall 'a.    'a -> t 'a
+  val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let return a = Right a
+  let bind m f = match m with
+    | Left err -> Left err
+    | Right a  -> f a
+  end
+  
+  val fail: forall 'a. printf_error -> t 'a
+  let fail err = Left err
+(*  val liftM: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b *)
+end
+ *)
+module E = Core_run_effect
+
+
+
+(* if the given flags require it, prefix the given result of the conversion with
+   a sign or space or convert it to an "alternative form".
+   This correspond to the flags: + space # *)
+val expand: flags -> list char -> list char
+let expand fs str =
+  if isPrefixOf [#'-'] str then
+    str
+  else if fs.flag_plus then
+      #'+' :: str
+  else if fs.flag_space then
+    #' ' :: str
+  else
+    str
+(* TODO # flag *)
+
+
+(* justify the result of a conversion.
+   This correspond to the flag: - 0
+   ASSUMES that length str < fw *)
+val justify: maybe precision -> conversion_specifier -> flags -> nat -> list char -> list char
+let justify p_opt cspec fs fw str =
+  let d = fw - length str in
+  (* see (§7.21.6.1#6 flag 0) *)
+  let j = if elem cspec [CS_di; CS_o; CS_u; CS_x; CS_X] then
+            if fs.flag_zero && not (fs.flag_minus) && isNothing p_opt then #'0' else #' '
+          else
+            #' ' in
+  if fs.flag_minus then
+    str ++ replicate d j
+  else
+    replicate d j ++ str
+
+
+(*
+(*
+val justify2: maybe precision -> conversion_specifier -> flags -> nat -> list char -> list char
+let justify2 p_opt cspec fs fw str =
+ *)
+val justify2: conversion_specification -> list char -> list char
+let justify2 cp str =
+  (* length of the conversion once the flags '+' 'space' '#' are applied *)
+  let l = length str + (if cp.cp_flags.flag_plus || cp.cp_flags.flag_space then 1 else 0) in
+  
+  (* the amount of justification that will be needed *)
+  let d = match cp.cp_field_width with
+    | Nothing          -> 0
+    | Just (FW_num fw) -> if l < fw then fw - l else 0
+    | Just FW_asterisk -> assert_false "TODO"
+  end in
+  
+  (* the character used for the justification (see §7.21.6.1#6 flag 0) *)
+  let j = if elem cp.cp_conversion_specifier [CS_di; CS_o; CS_u; CS_x; CS_X] then
+            if cp.cp_flags.flag_zero && not (cp.cp_flags.flag_minus) && isNothing cp.cp_precision then #'0' else #' '
+          else
+            #' ' in
+  if cp.cp_flags.flag_minus then
+    expand cp.cp_flags (str ++ replicate d j)
+  else
+    (* TODO: find a better way *)
+    match (j, str) with
+      | (#'0', #'-' :: str') -> #'-' :: replicate d j ++ str'
+      | _            ->         replicate d j ++ str
+    end
+
+*)
+
+val isSignedConversion: conversion_specifier -> bool
+let isSignedConversion = function
+  | CS_di      -> true
+  | CS_o       -> false
+  | CS_u       -> false
+  | CS_x       -> false
+  | CS_X       -> false
+  | CS_c       -> false
+  | CS_s       -> false (* TODO: check *)
+  | CS_p       -> false
+  | CS_n       -> false (* TODO: check *)
+  | CS_percent -> false
+end
+
+val applyFlagsAndPadding: bool -> flags -> maybe field_width -> list char -> list char
+let applyFlagsAndPadding isSignedConversion fs fw_opt str =
+  assert_false "TODO: WIP"
+
+
+
+val charFromDigit: bool -> natural -> char
+let charFromDigit useUpper = function
+  | 0  -> #'0'
+  | 1  -> #'1'
+  | 2  -> #'2'
+  | 3  -> #'3'
+  | 4  -> #'4'
+  | 5  -> #'5'
+  | 6  -> #'6'
+  | 7  -> #'7'
+  | 8  -> #'8'
+  | 9  -> #'9'
+  | 10 -> if useUpper then #'A' else #'a'
+  | 11 -> if useUpper then #'B' else #'b'
+  | 12 -> if useUpper then #'C' else #'c'
+  | 13 -> if useUpper then #'D' else #'d'
+  | 14 -> if useUpper then #'E' else #'e'
+  | 15 -> if useUpper then #'F' else #'f'
+end
+
+
+let rec showNonNegativeWithBasis_aux acc useUpper b n =
+  let (r,d) = (n / b, n mod b) in
+  if r = 0 then
+    charFromDigit useUpper d :: acc
+  else
+    showNonNegativeWithBasis_aux (charFromDigit useUpper d :: acc) useUpper b r
+
+val showNonNegativeWithBasis: bool -> natural -> natural -> E.t (list char)
+let showNonNegativeWithBasis useUpper b n =
+  if n < 0 then
+    assert_false "showNonNegativeWithBasis expects an non-negative integer"
+  else
+    E.return $ showNonNegativeWithBasis_aux [] useUpper b n
+
+
+
+(* TODO: hack *)
+open Core_ctype
+import Cmm_csem
+module Cmm = Cmm_csem
+
+
+(* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
+(* TODO: the first argument (load) is a bit silly but avoid module cycle *)
+val convert: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+             maybe precision -> conversion_specifier -> list Memory.mem_addr -> E.t (list char * list Memory.mem_addr)
+let convert load p_opt cspec args =
+  match cspec with
+    | CS_di ->
+        (* see (§7.21.6.1#8 d,i) *)
+        let p = match p_opt with
+          | Just (P_num p)    -> p
+          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_)))) arg; in
+                if p = 0 && n = 0 then
+                  E.return ([], args')
+                else do E
+                  str <- showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n); in
+                    E.return ((if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (p - length str) #'0' ++ str, args')
+                  end
+              end
+          | _ -> assert_false "found no argument to convert a %d or %i"
+        end
+    
+    | CS_o ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        let p = match p_opt with
+          | Just (P_num p)    -> p
+          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+                if p = 0 && n = 0 then
+                  E.return ([], args')
+                else do E
+                  (* TODO: conversion (n is unsigned int here) *)
+                  str <- showNonNegativeWithBasis false 8 (naturalFromInteger n); in
+                    E.return (replicate (p - length str) #'0' ++ str, args')
+                  end
+              end
+          | _ -> assert_false "found no argument to convert an %o"
+        end
+    
+    | CS_u ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        let p = match p_opt with
+          | Just (P_num p)    -> p
+          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+                if p = 0 && n = 0 then
+                  E.return ([], args')
+                else do E
+                  (* TODO: conversion (n is unsigned int here) *)
+                  str <- showNonNegativeWithBasis false 10 (naturalFromInteger n); in
+                    E.return (replicate (p - length str) #'0' ++ str, args')
+                  end
+              end
+          | _ -> assert_false "found no argument to convert an %u"
+        end
+    
+    | CS_x ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        let p = match p_opt with
+          | Just (P_num p)    -> p
+          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+                if p = 0 && n = 0 then
+                  E.return ([], args')
+                else do E
+                  (* TODO: conversion (n is unsigned int here) *)
+                  str <- showNonNegativeWithBasis false 16 (naturalFromInteger n); in
+                    E.return (replicate (p - length str) #'0' ++ str, args')
+                  end
+              end
+          | _ -> assert_false "found no argument to convert an %x"
+        end
+    
+    | CS_X ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        let p = match p_opt with
+          | Just (P_num p)    -> p
+          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+                if p = 0 && n = 0 then
+                  E.return ([], args')
+                else do E
+                  (* TODO: conversion (n is unsigned int here) *)
+                  str <- showNonNegativeWithBasis true 16 (naturalFromInteger n); in
+                    E.return (replicate (p - length str) #'0' ++ str, args')
+                  end
+              end
+          | _ -> assert_false "found no argument to convert an %X"
+        end
+    
+    | CS_c ->
+        (* see (§7.21.6.1#8 c) *)
+        assert_false "WIP: CS_c" (* Need to look at lengthModifier *)
+    
+    | CS_s ->
+        (* see (§7.21.6.1#8 s) *)
+        (* TODO: ignoring lengthModifier for now *)
+        match args with
+          | arg :: args' -> do E
+              (Cmm_aux.Mbase (Cmm_aux.Cstring str), _) <- load (Pointer (Basic (AilTypes.Integer (AilTypes.Char)))) arg; in
+              (* TODO: should fix the lexing of C string instead of hacking here *)
+              E.return (take (length str - 2) $ drop 1 str, args')
+            end
+          | _ -> assert_false "found no argument to convert an %s"
+        end
+    
+    | CS_p ->
+        (* see (§7.21.6.1#8 p) *)
+        assert_false "WIP: CS_p" (* Implementation defined *)
+    
+    | CS_n ->
+        (* see (§7.21.6.1#8 n) *)
+        assert_false "WIP: CS_n"
+    
+    | CS_percent ->
+        (* see (§7.21.6.1#8 %) *)
+        E.return ([#'%'], args)
+  end
+
+
+(* TODO asterisks *)
+val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+                         list char -> format -> list Memory.mem_addr -> E.t (list char)
+let rec formatted_print_aux load acc fs ns =
+  match (fs, ns) with
+    | ([], []) ->
+        E.return acc
+    | (F_text str :: fs, ns) ->
+        formatted_print_aux load (acc ++ str) fs ns
+    | (F_conv cp :: fs, ns) -> do E
+        (str, ns') <- convert load cp.cp_precision cp.cp_conversion_specifier ns; in
+
+          let expanded  = expand cp.cp_flags str in
+          let justified = match cp.cp_field_width with
+            | Nothing ->
+                expanded
+            | Just (FW_num fw) ->
+                if length expanded < fw then
+                  justify cp.cp_precision cp.cp_conversion_specifier cp.cp_flags fw expanded
+                else
+                  expanded
+            | Just FW_asterisk ->
+                assert_false "TODO"
+          end in
+          formatted_print_aux load (acc ++ justified) fs ns'
+
+(*
+
+TODO: new
+
+          let padded_str = applyFlagsAndPadding (isSignedConversion cp.cp_conversion_specifier) cp.cp_flags cp.cp_field_width str in
+          formatted_print_aux load (acc ++ padded_str) fs ns'
+ *)
+        end
+    | _ ->
+        assert_false $ "formatted_print_aux, " ^ string_of_natural (naturalFromNat $ length fs) ^ " conv and " ^
+                       string_of_natural (naturalFromNat $ length ns) ^ " arguments remaining"
+  end
+
+
+val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+                     list char -> list Memory.mem_addr -> E.t (list char)
+let formatted_print load fmrt args =
+  match parse format fmrt with
+    | [(fs, [])] ->
+        formatted_print_aux load [] fs args
+    | _ ->
+      assert_false "failed to parse the format"
+  end
+
+(* END: actual implementation of printf *)
+
+
+val printf: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+            list char -> list Memory.mem_addr -> E.t (Core.expr E.taction_id)
+let printf load frmt args =
+  (* TODO: should fix the lexing of C string instead of hacking here *)
+  let frmt = take (length frmt - 2) $ drop 1 frmt in
+  do E
+    str <- formatted_print load frmt args; in
+      let str = String.toString str in
+(*      let ()  = output_string str   in *)
+      E.return $ Core.Eoutput str
+    end
+
+
+

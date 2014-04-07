@@ -14,17 +14,16 @@ let decode_integer_constant str =
     if str.[0] = '0' then
       let l = String.length str in
       if String.length str > 1 && (str.[1] = 'x' || str.[1] = 'X') then
-        (String.sub str 2 (l-2), 16, () (* Ail.HEXADECIMAL *))
+        (String.sub str 2 (l-2), 16, AilSyntax.Hexadecimal)
       else
-        (String.sub str 1 (l-1), 8, () (* Ail.OCTAL *))
+        (String.sub str 1 (l-1), 8, AilSyntax.Octal)
     else
-      (str, 10, () (* Ail.DECIMAL *)) in
+      (str, 10, AilSyntax.Decimal) in
   let l = String.length str in
   let ret = ref (Big_int.big_int_of_int 0) in
   String.iteri (fun i c ->
     ret := Big_int.add_big_int (Big_int.mult_big_int (Big_int.big_int_of_int (read_digit c)) (Big_int.power_int_positive_int basisN ((l - i - 1)))) !ret) str;
-  (* (!ret, basis) *)
-  !ret
+  (basis, !ret)
 
 
 

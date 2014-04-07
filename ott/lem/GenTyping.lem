@@ -122,31 +122,32 @@ let annotate_rvalue_aux A annotate_expression e =
   end
 
 
+(* TODO: check if something needs to done regarding the basis *)
 let type_of_constant ic =
   match ic with
-  | (n, Nothing) ->
+  | (n, _, Nothing) ->
       if AilTypesAux.in_min_integer_range n (Signed Int_) then
         Concrete (Signed Int_)
       else
         Unknown ic
-  | (n, Just U) ->
+  | (n, _, Just U) ->
       if AilTypesAux.in_min_integer_range n (Unsigned Int_) then
         Concrete (Unsigned Int_)
       else
         Unknown ic
-  | (n, Just L) ->
+  | (n, _, Just L) ->
       if AilTypesAux.in_min_integer_range n (Signed Long) then
         Concrete (Signed Long)
       else
         Unknown ic
-  | (n, Just UL) ->
+  | (n, _, Just UL) ->
       if AilTypesAux.in_min_integer_range n (Unsigned Long) then
         Concrete (Unsigned Long)
       else
         Unknown ic
-  | (_, Just LL) ->
+  | (_, _, Just LL) ->
       Concrete (Signed LongLong)
-  | (_, Just ULL) ->
+  | (_, _, Just ULL) ->
       Concrete (Unsigned LongLong)
 end
 

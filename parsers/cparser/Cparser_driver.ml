@@ -52,7 +52,7 @@ let parse input : Cabs0.definition list =
           match (str_acc, tk) with
             | (Some (str, loc), STRING_LITERAL (str', loc')) -> (Some (str' ^ str, loc'), acc)
             | (None           , STRING_LITERAL (str, loc)  ) -> (Some (str, loc), acc)
-            | (Some (str, loc), _                          ) -> (None, modify tk :: CONSTANT_ (Cabs0.CONST_STRING str, loc) :: acc)
+            | (Some (str, loc), _                          ) -> (None, modify tk :: CONSTANT (Cabs0.CONST_STRING str, loc) :: acc)
             | (None           , _                          ) -> (None, modify tk :: acc)
         ) (None, []) !saved_tokens in
       saved_tokens := tks' in

@@ -118,7 +118,7 @@ let pp_traces verbose i_execs =
             "Error"
     ));
     let (_, st) = u_t in
-    print_string st.Core_run_effect.io.Core_run_effect.stdout
+    print_string (Scanf.unescaped st.Core_run_effect.io.Core_run_effect.stdout)
     
   ) (numerote i_execs)
 

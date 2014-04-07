@@ -42,6 +42,11 @@ let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def)
 
 
 
+let output_string str =
+  print_string (Scanf.unescaped str)
+
+
+
 (* TODO: this is massive hack, just to make csmith programs work *)
 let fake_printf str args =
   match (str, args) with
@@ -55,26 +60,30 @@ let fake_printf str args =
       Printf.sprintf "checksum = %X\n" (Big_int.int_of_big_int n)
 
   | ("\"...checksum after hashing %s : %X\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "...checksum after hashing %s : %X\n" str (Big_int.int_of_big_int n)
+      Printf.sprintf "...checksum after hashing %s : %X\n" (Xstring.implode str) (Big_int.int_of_big_int n)
 
   | ("\"...checksum after hashing %s : %lX\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "...checksum after hashing %s : %LX\n" str (Big_int.int64_of_big_int n)
+      Printf.sprintf "...checksum after hashing %s : %LX\n" (Xstring.implode str) (Big_int.int64_of_big_int n)
 
   | ("\"%s %d\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "%s %d\n" str (Big_int.int_of_big_int n)
+      Printf.sprintf "%s %ld\n" (Xstring.implode str) (Big_int.int32_of_big_int n)
 
+  (* --- *)
+
+  | ("\"DEBUG> %ld\\n\"", [Cmm_aux.Cint n]) ->
+      Printf.sprintf "DEBUG> %Ld\n" (Big_int.int64_of_big_int n)
 
   | ("\"DEBUG> %d\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %d\n" (Big_int.int_of_big_int n)
+      Printf.sprintf "DEBUG> %ld\n" (Big_int.int32_of_big_int n)
 
   | ("\"DEBUG> %u\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %u\n" (Big_int.int_of_big_int n)
+      Printf.sprintf "DEBUG> %lu\n" (Big_int.int32_of_big_int n)
 
   | ("\"DEBUG> %lu\\n\"", [Cmm_aux.Cint n]) ->
       Printf.sprintf "DEBUG> %Lu\n" (Big_int.int64_of_big_int n)
 
   | (str, []) ->
-      str
+      Scanf.unescaped (String.sub str 1 (String.length str - 2))
   | _ ->
       print_endline "TODO: error in Boot_ocaml.fake_printf";
       Printf.printf "str= %s\n" str;

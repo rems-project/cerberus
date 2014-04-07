@@ -207,8 +207,8 @@ let pp_constant = function
       !^ "TODO: ARRAY"
   | Cmm_aux.Cfunction f ->
       !^ "TODO: FUNCTION"
-  | Cmm_aux.Cstring str ->
-      P.dquotes (!^ str)
+  | Cmm_aux.Cstring cs ->
+      P.dquotes (!^ (Xstring.implode cs))
 
 let pp_memory_order = function
   | Cmm.NA      -> !^ "NA"

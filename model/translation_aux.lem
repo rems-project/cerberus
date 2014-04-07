@@ -1,11 +1,11 @@
 open import Pervasives Global Translation_effect Symbol
 import Core Core_aux
-import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux Annotation
+import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
 import Set_extra
 
 module C    = Core
 module Caux = Core_aux
-
+module Aty  = AilTypes
 
 
 
@@ -75,10 +75,44 @@ let conv ty1 ty2 e =
 *)
 
 open Implementation
-(* TODO: emporary *)
+(* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
 val tmp_implementation: implementation
 let tmp_implementation =
-  min_implementation_signed_char
+  make_implementation
+    Two'sComplement
+    ( function
+        | Aty.Char       -> true (* Check that *)
+	| Aty.Signed   _ -> true
+        | Aty.Bool       -> false
+	| Aty.Unsigned _ -> false
+      end
+    )
+    ( function
+        | Aty.Char                  -> 7 (* check *)
+        | Aty.Bool                  -> 1 (* check *)
+        | Aty.Signed   Aty.Ichar    -> 7
+        | Aty.Unsigned Aty.Ichar    -> 8
+        | Aty.Signed   Aty.Short    -> 15
+        | Aty.Unsigned Aty.Short    -> 16
+        | Aty.Signed   Aty.Int_     -> 31
+        | Aty.Unsigned Aty.Int_     -> 32
+        | Aty.Signed   Aty.Long     -> 63
+        | Aty.Unsigned Aty.Long     -> 64
+        | Aty.Signed   Aty.LongLong -> 63
+        | Aty.Unsigned Aty.LongLong -> 64
+
+        | Aty.Signed Aty.Int8_t     -> 7
+        | Aty.Signed Aty.Int16_t    -> 15
+        | Aty.Signed Aty.Int32_t    -> 31
+        | Aty.Signed Aty.Int64_t    -> 63
+        | Aty.Unsigned Aty.Int8_t   -> 8
+        | Aty.Unsigned Aty.Int16_t  -> 16
+        | Aty.Unsigned Aty.Int32_t  -> 32
+        | Aty.Unsigned Aty.Int64_t  -> 64
+      end
+    )
+    (Aty.Unsigned Aty.Long)
+    (Aty.Signed   Aty.Long)
 
 
 

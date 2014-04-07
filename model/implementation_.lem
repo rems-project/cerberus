@@ -131,7 +131,7 @@ type implementation_constant =
   
   (* The result of, or the signal raised by, converting an integer to a signed integer type when the
      value cannot be represented in an object of that type (6.3.1.3). *)
-  (* TODO: not sure how to do it for now *)
+  | Integer__conv_nonrepresentable_signed_integer
   
   (* The results of some bitwise operations on signed integers (6.5). *)
   (* TODO: will have several Ctors *)
@@ -214,16 +214,17 @@ let implementation_constant_to_nat x =
     | Characters__TODO10 -> 14
     | Integer__encode -> 15
     | Integer__decode -> 16
-    | Sizeof -> 17
-    | Alignof -> 18
-    | SHR_signed_negative -> 19
-    | Bitwise_complement -> 20
-    | Plain_bitfield_sign -> 21
-    | Bitfield_other_types -> 22
-    | Atomic_bitfield_permitted -> 23
-    | Ctype_min -> 24
-    | Ctype_max -> 25
-    | StdFunction _ -> 26
+    | Integer__conv_nonrepresentable_signed_integer -> 17
+    | Sizeof -> 18
+    | Alignof -> 19
+    | SHR_signed_negative -> 20
+    | Bitwise_complement -> 21
+    | Plain_bitfield_sign -> 22
+    | Bitfield_other_types -> 23
+    | Atomic_bitfield_permitted -> 24
+    | Ctype_min -> 25
+    | Ctype_max -> 26
+    | StdFunction _ -> 27
   end
 
 let implementation_constant_equal x y =
@@ -251,33 +252,34 @@ end
 let impl_map =
   foldl (fun acc (k, v) -> Map.insert k v acc) Map.empty
   [
-    ("<Environment.startup_name>"                  , Environment__startup_name);
-    ("<Environment.startup_type>"                  , Environment__startup_type);
-    ("<Characters.bits_in_byte>"                   , Characters__bits_in_byte);
-    ("<Characters.execution_character_set_values>" , Characters__execution_character_set_values);
-    ("<Characters.TODO1>"                          , Characters__TODO1);
-    ("<Characters.TODO2>"                          , Characters__TODO2);
-    ("<Characters.plain_char_sign>"                , Characters__plain_char_sign);
-    ("<Characters.TODO3>"                          , Characters__TODO3);
-    ("<Characters.TODO4>"                          , Characters__TODO4);
-    ("<Characters.TODO5>"                          , Characters__TODO5);
-    ("<Characters.TODO6>"                          , Characters__TODO5);
-    ("<Characters.TODO7>"                          , Characters__TODO6);
-    ("<Characters.TODO8>"                          , Characters__TODO8);
-    ("<Characters.TODO9>"                          , Characters__TODO9);
-    ("<Characters.TODO10>"                         , Characters__TODO10);
-    ("<Integer.encode>"                            , Integer__encode);
-    ("<Integer.decode>"                            , Integer__decode);
-    ("<sizeof>"                                    , Sizeof);
-    ("<alignof>"                                   , Alignof);
-    ("<bits_in_byte>"                              , Characters__bits_in_byte);
-    ("<SHR_signed_negative>"                       , SHR_signed_negative);
-    ("<Bitwise_complement>"                        , Bitwise_complement);
-    ("<Plain_bitfield_sign>"                       , Plain_bitfield_sign);
-    ("<Bitfield_other_types>"                      , Bitfield_other_types);
-    ("<Atomic_bitfield_permitted>"                 , Atomic_bitfield_permitted);
-    ("<ctype_min>"                                 , Ctype_min);
-    ("<ctype_max>"                                 , Ctype_max);
+    ("<Environment.startup_name>"                     , Environment__startup_name);
+    ("<Environment.startup_type>"                     , Environment__startup_type);
+    ("<Characters.bits_in_byte>"                      , Characters__bits_in_byte);
+    ("<Characters.execution_character_set_values>"    , Characters__execution_character_set_values);
+    ("<Characters.TODO1>"                             , Characters__TODO1);
+    ("<Characters.TODO2>"                             , Characters__TODO2);
+    ("<Characters.plain_char_sign>"                   , Characters__plain_char_sign);
+    ("<Characters.TODO3>"                             , Characters__TODO3);
+    ("<Characters.TODO4>"                             , Characters__TODO4);
+    ("<Characters.TODO5>"                             , Characters__TODO5);
+    ("<Characters.TODO6>"                             , Characters__TODO5);
+    ("<Characters.TODO7>"                             , Characters__TODO6);
+    ("<Characters.TODO8>"                             , Characters__TODO8);
+    ("<Characters.TODO9>"                             , Characters__TODO9);
+    ("<Characters.TODO10>"                            , Characters__TODO10);
+    ("<Integer.encode>"                               , Integer__encode);
+    ("<Integer.decode>"                               , Integer__decode);
+    ("<Integer.conv_nonrepresentable_signed_integer>" , Integer__conv_nonrepresentable_signed_integer);
+    ("<sizeof>"                                       , Sizeof);
+    ("<alignof>"                                      , Alignof);
+    ("<bits_in_byte>"                                 , Characters__bits_in_byte);
+    ("<SHR_signed_negative>"                          , SHR_signed_negative);
+    ("<Bitwise_complement>"                           , Bitwise_complement);
+    ("<Plain_bitfield_sign>"                          , Plain_bitfield_sign);
+    ("<Bitfield_other_types>"                         , Bitfield_other_types);
+    ("<Atomic_bitfield_permitted>"                    , Atomic_bitfield_permitted);
+    ("<ctype_min>"                                    , Ctype_min);
+    ("<ctype_max>"                                    , Ctype_max);
   ]
 
 
@@ -316,6 +318,8 @@ let string_of_implementation_constant = function
       "Integer.encode"
   | Integer__decode ->
       "Integer.decode"
+  | Integer__conv_nonrepresentable_signed_integer ->
+      "Integer.conv_nonrepresentable_signed_integer"
   | Sizeof ->
       "sizeof"
   | Alignof ->
@@ -511,6 +515,7 @@ module Integers = struct
   (* The result of, or the signal raised by, converting an integer to a signed integer type when the
      value cannot be represented in an object of that type (6.3.1.3). *)
   (* TODO: not sure how to do it for now (inside Core?) *)
+
   
   (* The results of some bitwise operations on signed integers (6.5). *)
   (* TODO: hacked away in Core for now *)
