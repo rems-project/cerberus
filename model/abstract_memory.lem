@@ -190,7 +190,10 @@ type symbolic_address_constraint =
 type address = symbolic_address_id
 
 
-
+(* PS-N23: now all core values will be potentially symbolic, so we don't
+need or want separate types for all these symbolic_ foo.  Is the type
+"address" used below just of core (potentially symbolic) values or
+something else? *)
 
 
 
@@ -358,6 +361,11 @@ type pointer_address =   (* "address" is not a great name, as it's likely to be 
   | Function_pointer (* TODO *)
 *)
 
+(* PS-N23: the above type should maybe be a bit elaborated into a
+record type, so that we can maintain *both* a block_path and a
+symbolic address if we have both.  Or be null or a function pointer.
+*)
+
 (* it's a bit odd that a pointer_address (in the Block_path case)
 remembers the history of operations on the pointer *except* the casts,
 which live in the fancy_type.  We're not sure if we should be writing
@@ -381,6 +389,11 @@ type pointer_value =   <|
 |>
 *)
 
+(* PS-N23: should fancy_type be part of the record type above? (under the lift_value constructor) or not *)
+
+(* PS-N23: I don't see a description anyplace of just what fancy types
+are supposed to do? *)
+
 (* not completely happy with this - it seems counter to "C programmer
 intuition" to treat p.f different from (type_of_f) ( (char* )(&p) +
 offsetof(f)) *)
@@ -397,6 +410,8 @@ offsetof(f)) *)
 (* On the path to integrating what we actually need about fancy_type
 with the rest, what is the free type of pointer-constructing
 operations, exactly? This: *)
+
+(* PS-N23: how does the following relate to what actually happens in Core? (and do we really need to do the nullary and unary thing, or can we just have one type?)*)
 
 type block = | HACK (* it is defined after *)
 
