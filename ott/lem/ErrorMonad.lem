@@ -1,0 +1,55 @@
+open import Pervasives TypingError
+import Location Exception Errors
+
+type errorM 'a = either typing_error 'a
+
+val return: forall 'a. 'a -> errorM 'a
+let return z         = Right z
+
+val fail: forall 'a. typing_error -> errorM 'a
+let fail err = Left err
+
+val        (>>=): forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
+let inline (>>=) m f =
+  match m with
+    | Left l  -> Left l
+    | Right r -> f r
+  end
+
+let inline (>>) m f = m >>= (fun _ -> f)
+
+let inline (<$>) f = function
+  | Left  z -> Left z
+  | Right z -> Right (f z)
+end
+
+
+val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
+let tryM m f errCase =
+  match m with
+    | Left err -> errCase
+    | Right z  -> f z
+  end
+
+val runM: forall 'a. errorM 'a -> maybe 'a
+let runM = function
+  | Left _  -> Nothing
+  | Right z -> Just z
+end
+
+val to_exception: forall 'a. errorM 'a -> Exception.t 'a (Errors.t)
+let to_exception = function
+  | Left err -> Exception.Exception (Location.dummy, Errors.AIL_TYPING err)
+  | Right z  -> Exception.Result z
+end
+
+
+val     mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
+let rec mapM f ys =
+  match ys with
+  | []      -> return []
+  | (x::xs) -> f x       >>= fun z  ->
+               mapM f xs >>= fun zs ->
+               return (z::zs)
+end
+

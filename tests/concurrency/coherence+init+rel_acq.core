@@ -1,0 +1,18 @@
+{- The coherence axioms CoWW and CoWR forbid that the load reads from
+   the first write.  The only allowed outcome is therefore 1. The
+   diference with the test coherence+rel_rel_acq is that a thread is
+   created between the first and second write, and the test will only
+   succeed if the operational semantics creates the correct asw edges.
+   -}
+
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0, release);
+  (a, b) <- {{{
+      store(_Atomic(signed int), x, 1, release);
+      load(_Atomic(signed int), x, acquire)
+  |||
+      0
+  }}};
+  kill(x);
+  ret a

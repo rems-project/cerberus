@@ -1,0 +1,26 @@
+open import Pervasives
+import Exception Undefined
+
+
+type memory_error
+
+
+
+type t 's 'a = 's -> Exception.t (Undefined.t 'a * 's) memory_error
+
+
+
+(* monadic operations *)
+val return: forall 's 'a. 'a -> t 's 'a
+let return x =
+  fun st -> Exception.return (Undefined.return x, st)
+
+
+(*
+val bind: forall 's 'a 'b. t 's 'a -> ('a -> t 's 'b) -> t 's 'b
+let bind m f = fun st ->
+  Undefined.bind (m st) (fun (x, st') ->
+    let (a, st'') = f x st' in
+    (Undefined.return a, st'')
+  )
+*)
