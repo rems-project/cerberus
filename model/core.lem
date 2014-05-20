@@ -70,7 +70,8 @@ type constant =
 type expr 'a =
   (* pure expressions *)
   | Eunit
-  | Enull
+  | Enull of ctype
+  | Ecast_ptr of ctype * exp 'a
   | Etrue
   | Efalse
   | Econst of Cmm_aux.constant

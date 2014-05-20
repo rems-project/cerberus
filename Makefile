@@ -91,6 +91,7 @@ MODEL_FILES=\
   core_ctype.lem \
   memory.lem \
   naive_memory.lem \
+  new_memory.lem \
   output.lem
 
 
@@ -201,8 +202,13 @@ ocaml_native: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(COR
 
 
 # Temporary rule while memory.lem is WIP
-memory:
-	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
+# memory:
+# 	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
+
+
+check_memory:
+	OCAMLRUNPARAM=b $(LEM) -lib ott/lem model/new_memory.lem
+
 
 .PHONY: coq coq-lem coq-coqc
 
