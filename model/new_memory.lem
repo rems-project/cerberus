@@ -1,3 +1,38 @@
+
+
+(*
+  STUFF WE NEED
+
+  * given two writes Ky wants to know if they overlap
+  * the same given a write and a read request
+  
+  
+  * given a list of (address, 
+
+
+
+
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 open import Pervasives
 import New_memory_effect Symbolic State_exception AilTypes
 
@@ -10,7 +45,7 @@ module E = New_memory_effect
 module Operators = struct
   let inline (>>=)    = E.bind
   let inline (>>) m f = E.bind m (fun _ -> f)
-  let inline tid_of   = E.tid_of
+(*  let inline tid_of   = E.tid_of *)
 end
 
 open Operators
@@ -40,24 +75,33 @@ type mem_region_id = Symbolic.symbol
 type mem_object_id = Symbolic.symbol
 
 type mem_object = <|
-  obj_effective_type: maybe AilTypes.ctype;
-  obj_address:        address;
-  (* value ? *)
+  obj_original_type: maybe AilTypes.ctype;
+  obj_address:       address;
+  (* and maybe a size for VLAs and flexible array member (otherwise the size) *)
 |>
 
 
 type memory_write
 
+(*
+(* TODO: we may need to allow region sizes and offsets to be symbolic ? *)
+type mem_region = <|
+  region_size:    nat; (* in bytes *)
+  region_objects: list (mem_object_id * nat); (* objects and their offsets from the beginning of the region *)
+|>
+*)
+
 
 type memory_state = <|
   mem_object_id_counter: Symbolic.counter;
-  
   mem_symbol_counter: Symbolic.counter;
 
-  mem_objects: map mem_object_id mem_object;
+(*
+  mem_regions: map mem_region_id mem_region;
   mem_writes:  list memory_write;
+*)
 
-
+  mem_objects: map mem_object_id mem_object;
 |>
 
 
@@ -73,19 +117,43 @@ type t 'a = E.t memory_state 'a
 
 
 
-(* TODO: REGIONS !!!!!!!!! *)
+
+
 
 type pointer_value =
   | Pointer_null of AilTypes.ctype
+  | Pointer_other of pointer_other
+
+
+type pointer_provenance =
+  (* the `ctype' below is the original declared type of the object (which will
+     be equal to the effective type of the object, if those are turned on)  *)
+  | Prov_obj of AilTypes.ctype * mem_object_id
   
+  (* pointer to a malloc'd region, similarly the whole one *) 
+  | Prov_region of mem_region_id
   
+  (* this case is only here for casts that taint-tracking doesn't discover a
+     good original object for (so it will never be used in standard C *)
+  (* the `ctype' saves the original type cast when creating that pointer *)
+  | Prov_intcast of AilTypes.ctype * mem_object_value
+
+
+type pointer_path =
+  | Path_base
+  | Path_array  of nat * pointer_path
+  | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) * pointer_path
+
+
+type pointer_other = <|
+  ptr_provenance:      pointer_provenance;
+  ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast.  and when you do a shift. *)
+  ptr_abstract_offset: maybe pointer_abstract_path; (* the position in the original object, represented as an abstract access path  *)
+  ptr_numeric_offset:  Symbolic.t;(* the position in the original object, represented with (possibly symbolic) address arithmetic *)
+|>
 
 
 
-  | Pointer_object of mem_object_id
-  | Pointer_cast of AilTypes.ctype * pointer_value
-  | Pointer_alloc of address * size
-(*  | Pointer_intcast of  *)
 
 
 
@@ -124,36 +192,6 @@ and we lift all that when stored in an object  (to add unspecified values )
 
 
 
-val     is_null_pointer: pointer_value -> bool
-let rec is_null_pointer ptr =
-  match ptr with
-    | Pointer_null _ ->
-        true
-    | Pointer_object _ ->
-        false
-    | Pointer_cast _ ptr' ->
-        (* STD §6.3.2.3#4, sentence 1 *)
-        is_null_pointer ptr'
-    | Pointer_alloc _ _ ->
-        false
-  end
-
-
-(* TODO: not sure if we want to use this *)
-(* TODO: complete *)
-val     normalize_pointer: pointer_value -> pointer_value
-let rec normalize_pointer ptr =
-  match ptr with
-    | Pointer_null ty ->
-        Pointer_null ty
-    | Pointer_object obj_id ->
-        Pointer_object obj_id
-    | Pointer_cast ty (Pointer_null _) ->
-        (* STD §6.3.2.3#4, sentence 1 *)
-        Pointer_null ty
-    | Pointer_cast ty1 (Pointer_cast _ ptr') ->
-        normalize_pointer (Pointer_cast ty1 ptr')
-  end
 
 
 
@@ -161,10 +199,7 @@ let rec normalize_pointer ptr =
 
 
 
-
-
-
-type object_value =
+type mem_object_value =
   | Obj_pointer of pointer_value
 
   | Obj_unspecified of AilTypes.ctype
@@ -178,6 +213,7 @@ val initial_memory: memory_state
 let initial_memory = <|
   mem_object_id_counter= Symbolic.init;
   mem_symbol_counter=    Symbolic.init;
+  mem_regions=           Map.empty;
   mem_objects=           Map.empty;
   mem_writes =           [];
 |>
