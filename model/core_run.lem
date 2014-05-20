@@ -952,7 +952,7 @@ let perform_kill bs tid_ pe =
   get_new_taid                          >>= fun new_taid  ->
   add_tact new_taid (E.Tkill o tid)     >>
   E.register_sequencing bs new_taid tid >>
-  E.return (new_taid, Enull)
+  E.return (new_taid, Eunit) (* TODO: Check whether it's correct to return Eunit instead of Enull ty *)
 
 val perform_store: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> 
                    Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
@@ -968,9 +968,9 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
   E.return pe2                                 >>= fun expr        ->
   get_address expr                             >>= fun o           ->
   E.return pe3                                 >>= function
-   | Econst c -> E.return (Cmm_aux.Mbase c, Enull)
-   | Eaddr o' -> E.return (Cmm_aux.Mobj o', Enull)
-   | Enull    -> E.return (Cmm_aux.Mnull,   Eskip)
+   | Econst c -> E.return (Cmm_aux.Mbase c, Eunit)
+   | Eaddr o' -> E.return (Cmm_aux.Mobj o', Eunit)
+   | Enull _  -> E.return (Cmm_aux.Mnull,   Eskip)
    | v        -> Boot.assert_false $
                  "[Core_run.perform_action, Kstore] " (* TODO[newLem] ^
                  (Boot.pp_core_expr pe3) ^
@@ -1059,7 +1059,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
   let expected_v = match expected_e with
    | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
-   | Enull    -> Cmm_aux.Mnull
+   | Enull _  -> Cmm_aux.Mnull
    | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
   end in
   (* We (atomically load from the object *)
@@ -1074,7 +1074,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
   let desired_v = match desired_e with
    | Econst c -> Cmm_aux.Mbase c
    | Eaddr o' -> Cmm_aux.Mobj o'
-   | Enull    -> Cmm_aux.Mnull
+   | Enull _  -> Cmm_aux.Mnull
    | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
   end in
   (* The new_taid will be the taid of RMW if it succeeds and of the load otherwise *)
@@ -1137,7 +1137,7 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
      let actual_e = match actual_v with
       | Cmm_aux.Mbase c -> Econst c
       | Cmm_aux.Mobj o' -> Eaddr o'
-      | Cmm_aux.Mnull   -> Enull
+      | Cmm_aux.Mnull   -> Enull Core_ctype.Void (* TODO: use the correct type in Enull. *)
       | _ -> Boot.assert_false "[Core_run.perform_compare_exchange] impossible case: TODO move to Exception.t"
      end in
      perform_store {new_taid} tid_ pe_ty pe_expected actual_e  Cmm.NA >>= fun (na_store_aid, _)          ->
@@ -1577,7 +1577,7 @@ let rec convert_expr e =
     | Eskip               -> Eskip
     | Etuple es           -> Etuple (List.map convert_expr es)
     | Eunit               -> Eunit
-    | Enull               -> Enull
+    | Enull ty            -> Enull ty
     | Econst c            -> Econst c
     | Eimpl i             -> Eimpl i
     | Eaddr o             -> Eaddr o
@@ -1715,7 +1715,7 @@ let rec collect_conts e =
        continuations *)
     | Etuple _ ->
         St.return ()
-    | Enull ->
+    | Enull _ ->
         St.return ()
     | Eskip ->
         St.return ()
@@ -1823,7 +1823,7 @@ let rec collect_conts' e =
         Map.empty
     | Eunit ->
         Map.empty
-    | Enull ->
+    | Enull _ ->
         Map.empty
     | Eskip ->
         Map.empty

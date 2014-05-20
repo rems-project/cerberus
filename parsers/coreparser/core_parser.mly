@@ -144,7 +144,7 @@ let convert_expr e arg_syms fsyms =
     | Eunit ->
         Core.Eunit
     | Enull ->
-        Core.Enull
+        Core.Enull Core_ctype.Void (* TODO *)
     | Etrue ->
         Core.Etrue
     | Efalse ->
