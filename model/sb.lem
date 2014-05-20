@@ -4,6 +4,12 @@ import Cmm_csem Cmm_aux
 
 module Cmm = Cmm_csem
 
+(* This file is commented out, becuase the state (Core_effect.state)
+   does not contain the Cmm.relations anymore (sb, asw, rf, mo, sc,
+   lo, hb). *)
+
+(*
+
 (* Temporary hack *)
 type graph' = <|
   actions' : Map.map Core_run_effect.taction_id Core_run_effect.trace_action;
@@ -191,4 +197,6 @@ let simplify g =
 (*
   let edges' = List.concat (List.map (fun (a, bs) -> List.map (fun b -> (a,b)) bs) $ Pmap.bindings sb.edges') in
   <| actions= sb.actions'; edges= List.filter (fun (x,y) -> not $ exists_path x y (delete (=) (x,y) edges')) edges' |>
+*)
+
 *)

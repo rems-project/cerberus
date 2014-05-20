@@ -146,17 +146,7 @@ type state = <|
   
   (* IO (TODO: hackish for now) *)
   io: io_state;
-  
-  (* The following members are named after their counterparts in Cmm. *)
-  cmm_tact_map:   Map.map taction_id Cmm.action;
-  lk:             Map.map Cmm.location Cmm.location_kind;
-  sb:             set (taction_id * taction_id);
-  asw:            set (taction_id * taction_id);
-  rf:             set (taction_id * taction_id);
-  mo:             Map.map Memory.mem_addr (list taction_id);
-  sc:             list taction_id;
-  
-  
+    
   (* The followings have to do with the state of your implementation, not the
      state of the evaluated Core program *)
   (* TODO: it's a bit silly that this is here, since the setting won't change *)
@@ -371,6 +361,7 @@ let get_execution_mode = fun st ->
   [(U.return st.execution_mode, st)]
 
 
+(* KN: probably not needed anymore
 val register_sequencing: set taction_id -> taction_id -> Cmm.tid -> t unit
 let register_sequencing bs aid tid = fun st ->
   let (sb_, asw_) = Set_helpers.fold (fun b (sb_acc, asw_acc) ->
@@ -391,22 +382,11 @@ let register_sequencing bs aid tid = fun st ->
   ) bs (st.sb, st.asw) in
   
   [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
+*)
 
 
 
 
-
-val get_location_kind: state -> Cmm.location -> Cmm.location_kind
-let get_location_kind s x = 
-  (* We use Non_Atomic as the default location_kind. Some locations are not used
-     in the execution (i.e. there are no actions at that location) and then it does
-     not matter which location_kind we specify. But some actions might be used, but 
-     not present in s.E.lk (for example if it has been created with an alloc rather 
-     than a create). In this case the default location_kind does matter. *)
-   match Map.lookup x s.lk with
-     | Just z  -> z
-     | Nothing -> Cmm.Non_Atomic
-   end
 
 
 
@@ -427,13 +407,6 @@ let initial_state execution_mode file cont_map = <|
   tact_map=       Map.empty;
   trace=          [];
   io=             initial_io_state;
-  cmm_tact_map=   Map.empty;
-  lk=             Map.empty;
-  sb=             {};
-  asw=            {};
-  rf=             {};
-  mo=             Map.empty;
-  sc=             [];
 |>
 
 
@@ -446,21 +419,6 @@ let put_stdout str = fun st ->
 
 
 
-
-
-(* Interaction with the memory layout state *)
-val is_atomic_location: Memory.mem_addr -> t bool
-let is_atomic_location o = fun st ->
-  [(U.return (get_location_kind st o = Cmm.Atomic), st)] (* Boot.assert_false "HIP: is_atomic_location" *)
-(*
-  let foo = State_exception.eval 
-  fun st -> [(U.return (get_location_kind st o = Cmm.Atomic), st)]
- *)
-
-val is_nonatomic_location: Memory.mem_addr -> t bool
-let is_nonatomic_location o = fun st ->
-  [(U.return (get_location_kind st o = Cmm.Non_Atomic), st)] (* Boot.assert_false "HIP: is_nonatomic_location" *)
-  (* fun st ->  *)
 
 
 
