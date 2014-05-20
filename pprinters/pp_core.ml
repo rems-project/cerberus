@@ -22,7 +22,7 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 let precedence = function
   | Etuple _          -> Some 0
   | Eunit             -> Some 0
-  | Enull             -> Some 0
+  | Enull _           -> Some 0
   | Econst _          -> Some 0
   | Eaddr _           -> Some 0
   | Esym _            -> Some 0
@@ -249,8 +249,8 @@ let rec pp_expr e =
             P.parens (comma_list pp es)
         | Eunit ->
             pp_const "unit"
-        | Enull ->
-            pp_const "null"
+        | Enull _ ->
+            pp_const "null" (* TODO *)
         | Eskip ->
             pp_keyword "skip"
         | Econst c ->

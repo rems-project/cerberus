@@ -71,7 +71,7 @@ type expr 'a =
   (* pure expressions *)
   | Eunit
   | Enull of ctype
-  | Ecast_ptr of ctype * exp 'a
+  | Ecast_ptr of ctype * expr 'a
   | Etrue
   | Efalse
   | Econst of Cmm_aux.constant

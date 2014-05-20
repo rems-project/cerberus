@@ -91,7 +91,6 @@ MODEL_FILES=\
   core_ctype.lem \
   memory.lem \
   naive_memory.lem \
-  new_memory.lem \
   output.lem
 
 

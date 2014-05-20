@@ -49,7 +49,7 @@ let inline (>>) m f = L.bind m (fun _ -> f)
 (* TODO: rename *)
 type expr =
   | Eunit
-  | Enull
+  | Enull of AilTypes.ctype
   | Eimpl of Implementation_.implementation_constant
 
   | Etuple of list expr
@@ -116,7 +116,7 @@ val     import_expr: Core.expr zero -> expr
 let rec import_expr e =
   match e with
   | Core.Eunit            -> Eunit
-  | Core.Enull            -> Enull
+  | Core.Enull ty         -> Enull ty
   | Core.Eimpl i          -> Eimpl i
   | Core.Etuple es        -> Etuple (List.map import_expr es)
   | Core.Eproc _ p es     -> Eproc p (map import_expr es)
@@ -173,7 +173,7 @@ val     export_expr: expr -> Core.expr zero
 let rec export_expr e =
   match e with
   | Eunit -> Core.Eunit
-  | Enull -> Core.Enull
+  | Enull ty -> Core.Enull ty
   | Eimpl i -> Core.Eimpl i
   | Etuple es -> Core.Etuple (List.map export_expr es)
   | Eproc p es -> Core.Eproc {} p (List.map export_expr es)
@@ -392,8 +392,8 @@ let rec hack x =
   match x with
     | Core.Eunit ->
         Core.Eunit
-    | Core.Enull ->
-        Core.Enull
+    | Core.Enull ty ->
+        Core.Enull ty
     | Core.Etrue ->
         Core.Etrue
     | Core.Efalse ->
