@@ -10,12 +10,8 @@ endif
 LEMLIB_DIR=$(LEMDIR)/library
 LEM=$(LEMDIR)/lem -wl ign  -wl_rename warn -lib $(LEMLIB_DIR)
 
-# The directory of Mark's axiomatic model of concurrency in C11
-CMMDIR=../../rsem/cpp/axiomatic/ntc
-
 
 # Source directories
-# LEMDIRS= model $(CMMDIR) ott/lem
 LEMDIRS= model ott/lem
 MLDIRS=\
   lib/ocaml/src \
@@ -31,9 +27,6 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 OCAML_BUILD_DIR=_ocaml_generated
 OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
 
-
-CMM_FILE=\
-  cmm_csem.lem
 
 AIL_FILES=\
   Common.lem \
@@ -123,11 +116,6 @@ $(OCAML_BUILD_DIR):
 	@cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
 
 
-# # Calling Lem on the C++11 concurrency model
-# lem_cmm: $(CMM_FILES) | $(OCAML_BUILD_DIR)
-# 	@echo LEM $^
-# 	@OCAMLRUNPARAM="" $(LEM) $(foreach D, $(LEMDIRS), -lib $(D)) $(addprefix $(CMMDIR)/, $(CMM_FILES))
-
 # # Calling Lem on the Ail syntax and typing
 # lem_ail : $(AIL_FILES) | $(OCAML_BUILD_DIR)
 # 	@echo LEM $^
@@ -137,8 +125,6 @@ $(OCAML_BUILD_DIR):
 lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 	@rm -rf _lem/
 	@mkdir _lem/
-#	@cp $(CMMDIR)/cmm_csem.lem _lem/
-#	@cp model/cmm_csem.lem _lem/
 	@cp $(addprefix model/, $(MODEL_FILES)) _lem/
 	@cp model/cabs0.lem _lem/
 	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
