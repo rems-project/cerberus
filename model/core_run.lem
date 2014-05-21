@@ -2,14 +2,14 @@ open import Pervasives Global Core Core_ctype Core_aux
 import Set_helpers
 import State State_operators
 import Exception Errors Undefined
-import Cmm_csem Cmm_aux
+import Cmm_aux Memory_order
 import AilTypesAux
 
 import Core_run_effect
 import Output
 
 
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 module U   = Undefined
 
 
@@ -304,7 +304,7 @@ let kill o = fun (<| E.mem_layout= (m, i) |> as st) ->
 (* TODO[newLem] Boot.print_debug ("[Core_run.kill] @" ^ (string_of_num $ snd o)) *)
   [(U.return (), <| st with E.mem_layout= (Map.delete o m, i) |> )]
 
-val store: ctype -> Memory.mem_addr -> Cmm.cvalue -> E.taction_id -> E.t unit
+val store: ctype -> Memory.mem_addr -> Cmm_aux.cvalue -> E.taction_id -> E.t unit
 let store _ o v taid = fun (<| E.mem_layout= (m, i) |> as st) ->
   (* DEBUG *)
 (* TODO[newLem]   Boot.print_debug ("[Core_run.store] @" ^ (string_of_num $ snd o)) $ *)
@@ -319,7 +319,7 @@ let store _ o v taid = fun (<| E.mem_layout= (m, i) |> as st) ->
 (* Loads a value (and the taction_id of the action that stored that value). When
    the location is atomic, it non-deterministically loads from any of the past 
    values. Otherwise it loads the last value. *)
-val load: ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)
+val load: ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)
 let load ty o = fun (<| E.mem_layout= (m, _) |> as st) ->
   match Map.lookup o m with
     | Just values ->
@@ -698,7 +698,7 @@ let get_address = function
          particular memory model *)
 open Operators
 
-val perform_create: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symbol.t ->
+val perform_create: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id -> list Symbol.t ->
                     E.t (E.taction_id * expr E.taction_id)
 let perform_create bs tid_ pe pref = 
   let tid = Cmm_aux.canonize_tid tid_ in
@@ -714,7 +714,7 @@ let perform_create bs tid_ pe pref =
   add_tact new_taid (E.Tcreate ty o tid)  >>
   E.return (new_taid, Eaddr o)
 
-val perform_alloc: set E.taction_id -> Cmm.tid -> expr E.taction_id -> list Symbol.t ->
+val perform_alloc: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id -> list Symbol.t ->
                    E.t (E.taction_id * expr E.taction_id)
 let perform_alloc bs tid_ pe pref = 
   let tid = Cmm_aux.canonize_tid tid_ in
@@ -730,7 +730,7 @@ let perform_alloc bs tid_ pe pref =
   add_tact new_taid (E.Talloc n o tid)    >>
   E.return (new_taid, Eaddr o)
 
-val perform_kill: set E.taction_id -> Cmm.tid -> expr E.taction_id -> E.t (E.taction_id * expr E.taction_id)
+val perform_kill: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id -> E.t (E.taction_id * expr E.taction_id)
 let perform_kill bs tid_ pe = 
   let tid = Cmm_aux.canonize_tid tid_ in
   (* perform the kill *)
@@ -745,7 +745,7 @@ let perform_kill bs tid_ pe =
   add_tact new_taid (E.Tkill o tid)     >>
   E.return (new_taid, Eunit) (* TODO: Check whether it's correct to return Eunit instead of Enull ty *)
 
-val perform_store: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> 
+val perform_store: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> 
                    Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_store bs tid_ pe1 pe2 pe3 mo = 
   let tid = Cmm_aux.canonize_tid tid_ in
@@ -773,7 +773,7 @@ let perform_store bs tid_ pe1 pe2 pe3 mo =
   add_tact new_taid (E.Tstore ty o value mo tid) >>
   E.return (new_taid, e)
 
-val perform_load: set E.taction_id -> Cmm.tid -> expr E.taction_id -> expr E.taction_id -> 
+val perform_load: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id -> expr E.taction_id -> 
                    Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_load bs tid_ pe1 pe2 mo = 
   let tid = Cmm_aux.canonize_tid tid_ in
@@ -799,8 +799,8 @@ let perform_load bs tid_ pe1 pe2 mo =
   end                                         >>= fun e                   ->
   E.return (new_taid, e)
 
-val perform_compare_exchange: (Cmm.cvalue -> Cmm.cvalue -> E.t bool) ->
-               set E.taction_id -> Cmm.tid -> expr E.taction_id ->
+val perform_compare_exchange: (Cmm_aux.cvalue -> Cmm_aux.cvalue -> E.t bool) ->
+               set E.taction_id -> Cmm_aux.tid -> expr E.taction_id ->
                expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_succes mo_failure = 
@@ -853,14 +853,14 @@ let perform_compare_exchange cmp bs tid_ pe_ty pe_o pe_expected pe_desired mo_su
      perform_store {new_taid} tid_ pe_ty pe_expected actual_e  Cmm.NA >>= fun (na_store_aid, _)          ->
      E.return (na_store_aid, Econst (Cmm_aux.Cint 0))
 
-val perform_compare_exchange_strong: set E.taction_id -> Cmm.tid -> expr E.taction_id ->
+val perform_compare_exchange_strong: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id ->
                expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_compare_exchange_strong bs tid pe1 pe2 pe3 pe4 mo1 mo2 = 
   let cmp v1 v2 = E.return (v1 = v2) in
   perform_compare_exchange cmp bs tid pe1 pe2 pe3 pe4 mo1 mo2
   
-val perform_compare_exchange_weak: set E.taction_id -> Cmm.tid -> expr E.taction_id ->
+val perform_compare_exchange_weak: set E.taction_id -> Cmm_aux.tid -> expr E.taction_id ->
                expr E.taction_id -> expr E.taction_id -> expr E.taction_id -> Cmm.memory_order ->
                Cmm.memory_order -> E.t (E.taction_id * expr E.taction_id)
 let perform_compare_exchange_weak bs tid pe1 pe2 pe3 pe4 mo1 mo2 = 
@@ -1227,8 +1227,8 @@ let red2_output x =
   end
 
 
-val red2:      expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
-          E.t (expr E.taction_id * Cmm.tid * list (cont E.taction_id))
+val red2:      expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id) ->
+          E.t (expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id))
 let red2 e =
   E.dmsum [
     red2_value e; red2_pure e; red2_skip e;
@@ -1244,7 +1244,7 @@ let red2 e =
     ]
   ]
 
-val star_red2:       expr E.taction_id * Cmm.tid * list (cont E.taction_id) ->
+val star_red2:       expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id) ->
                E.t (expr E.taction_id * (Map.map E.taction_id E.trace_action * E.trace))
 let rec ~{coq} star_red2 x =
   let continue =
@@ -1602,7 +1602,7 @@ let rec collect_conts' e =
 open Operators
 
 
-val initial_expr_and_state : E.execution_mode -> file zero -> (Core.expr E.taction_id * Cmm.tid * list (cont E.taction_id)) * E.state
+val initial_expr_and_state : E.execution_mode -> file zero -> (Core.expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id)) * E.state
 let initial_expr_and_state execution_mode file =
   let file = convert_file file in
   (* collect the continuations in all functions *)

@@ -57,6 +57,8 @@ AIL_FILES=\
 
 MODEL_FILES=\
   boot.lem \
+  cmm_aux.lem \
+  memory_order.lem \
   core.lem \
   core_aux.lem \
   core_indet.lem \
@@ -67,7 +69,6 @@ MODEL_FILES=\
   cabs_to_ail.lem \
   cabs_to_ail_effect.lem \
   builtins.lem \
-  cmm_aux.lem \
   debug.lem \
   decode.lem \
   errors.lem \
@@ -137,7 +138,7 @@ lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
 	@rm -rf _lem/
 	@mkdir _lem/
 #	@cp $(CMMDIR)/cmm_csem.lem _lem/
-	@cp model/cmm_csem.lem _lem/
+#	@cp model/cmm_csem.lem _lem/
 	@cp $(addprefix model/, $(MODEL_FILES)) _lem/
 	@cp model/cabs0.lem _lem/
 	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
@@ -216,7 +217,6 @@ LEM_FILES = \
  AilTypesAux.lem \
  boot.lem \
  cmm_aux.lem \
- cmm_csem.lem \
  Common.lem \
  core.lem \
  core_aux.lem \

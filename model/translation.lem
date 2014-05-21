@@ -4,7 +4,7 @@
 open import Pervasives Global Implementation_ Location
 import State State_operators Translation_effect
 open import Translation_aux
-import Cmm_csem
+import Memory_order
 
 import AilSyntax AilSyntaxAux AilTypes
 import Core Core_aux Undefined
@@ -18,7 +18,7 @@ module Cty  = Core_ctype
 module Caux = Core_aux
 module U    = Undefined
 
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 
 
 module E = Translation_effect

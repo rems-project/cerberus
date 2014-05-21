@@ -1,14 +1,17 @@
-open import Pervasives Global
-import Set_extra Set_helpers Core_run
-import Cmm_csem Cmm_aux
-
-module Cmm = Cmm_csem
+import Pervasives
 
 (* This file is commented out, becuase the state (Core_effect.state)
    does not contain the Cmm.relations anymore (sb, asw, rf, mo, sc,
    lo, hb). *)
 
 (*
+
+open import Pervasives Global
+import Set_extra Set_helpers Core_run
+import Cmm_csem Cmm_aux
+
+module Cmm = Cmm_csem
+
 
 (* Temporary hack *)
 type graph' = <|
