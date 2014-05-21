@@ -4,7 +4,7 @@
 open import Pervasives
 import String_extra
 
-import Cmm_aux Core_run_effect Memory
+import Cmm_aux_old Core_run_effect Memory
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
@@ -438,7 +438,7 @@ module Cmm = Memory_order
 
 (* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
 (* TODO: the first argument (load) is a bit silly but avoid module cycle *)
-val convert: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
+val convert: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
              maybe precision -> conversion_specifier -> list Memory.mem_addr -> E.t (list char * list Memory.mem_addr)
 let convert load p_opt cspec args =
   match cspec with
@@ -451,7 +451,7 @@ let convert load p_opt cspec args =
         end in
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_)))) arg; in
                 if p = 0 && n = 0 then
                   E.return ([], args')
                 else do E
@@ -471,7 +471,7 @@ let convert load p_opt cspec args =
         end in
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
                 if p = 0 && n = 0 then
                   E.return ([], args')
                 else do E
@@ -492,7 +492,7 @@ let convert load p_opt cspec args =
         end in
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
                 if p = 0 && n = 0 then
                   E.return ([], args')
                 else do E
@@ -513,7 +513,7 @@ let convert load p_opt cspec args =
         end in
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
                 if p = 0 && n = 0 then
                   E.return ([], args')
                 else do E
@@ -534,7 +534,7 @@ let convert load p_opt cspec args =
         end in
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
                 if p = 0 && n = 0 then
                   E.return ([], args')
                 else do E
@@ -555,7 +555,7 @@ let convert load p_opt cspec args =
         (* TODO: ignoring lengthModifier for now *)
         match args with
           | arg :: args' -> do E
-              (Cmm_aux.Mbase (Cmm_aux.Cstring str), _) <- load (Pointer (Basic (AilTypes.Integer (AilTypes.Char)))) arg; in
+              (Cmm_aux_old.Mbase (Cmm_aux_old.Cstring str), _) <- load (Pointer (Basic (AilTypes.Integer (AilTypes.Char)))) arg; in
               (* TODO: should fix the lexing of C string instead of hacking here *)
               E.return (take (length str - 2) $ drop 1 str, args')
             end
@@ -577,7 +577,7 @@ let convert load p_opt cspec args =
 
 
 (* TODO asterisks *)
-val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
+val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
                          list char -> format -> list Memory.mem_addr -> E.t (list char)
 let rec formatted_print_aux load acc fs ns =
   match (fs, ns) with
@@ -616,7 +616,7 @@ TODO: new
   end
 
 
-val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
+val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
                      list char -> list Memory.mem_addr -> E.t (list char)
 let formatted_print load fmrt args =
   match parse format fmrt with
@@ -629,7 +629,7 @@ let formatted_print load fmrt args =
 (* END: actual implementation of printf *)
 
 
-val printf: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
+val printf: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
             list char -> list Memory.mem_addr -> E.t (Core.expr E.taction_id)
 let printf load frmt args =
   (* TODO: should fix the lexing of C string instead of hacking here *)

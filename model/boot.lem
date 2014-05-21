@@ -53,7 +53,7 @@ declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 
 
 (* TODO: this is massive hack, just to make csmith programs work *)
-val fake_printf: string -> list (Cmm_aux.constant) -> string
+val fake_printf: string -> list (Cmm_aux_old.constant) -> string
 declare ocaml target_rep function fake_printf = `Boot_ocaml.fake_printf`
 
 val output_string: string -> unit

@@ -1,6 +1,6 @@
 (* Effects for Core_run *)
 open import Pervasives Global Core Core_aux Core_ctype
-import Undefined Boot State_exception Memory_order Cmm_aux
+import Undefined Boot State_exception Memory_order Cmm_aux_old
 
 module Cmm = Memory_order
 module U   = Undefined
@@ -8,14 +8,14 @@ module U   = Undefined
 
 (* Fully evaluated description of an action *)
 type trace_action =
-  | Tcreate of ctype   * Cmm_aux.location * Cmm_aux.tid (* the second argument is the created object *)
-  | Talloc  of integer * Cmm_aux.location * Cmm_aux.tid (* TODO: nat *) (* the second argument is the created object *)
-  | Tkill   of           Cmm_aux.location * Cmm_aux.tid
-  | Tstore  of ctype   * Cmm_aux.location * Cmm_aux.cvalue              * Cmm.memory_order * Cmm_aux.tid
-  | Tload   of ctype   * Cmm_aux.location * Cmm_aux.cvalue              * Cmm.memory_order * Cmm_aux.tid (* the argument Cmm.cvalue is the read value *)
-  | Trmw    of ctype   * Cmm_aux.location * Cmm_aux.cvalue * Cmm_aux.cvalue * Cmm.memory_order * Cmm_aux.tid
+  | Tcreate of ctype   * Cmm_aux_old.location * Cmm_aux_old.tid (* the second argument is the created object *)
+  | Talloc  of integer * Cmm_aux_old.location * Cmm_aux_old.tid (* TODO: nat *) (* the second argument is the created object *)
+  | Tkill   of           Cmm_aux_old.location * Cmm_aux_old.tid
+  | Tstore  of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue              * Cmm.memory_order * Cmm_aux_old.tid
+  | Tload   of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue              * Cmm.memory_order * Cmm_aux_old.tid (* the argument Cmm.cvalue is the read value *)
+  | Trmw    of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue * Cmm_aux_old.cvalue * Cmm.memory_order * Cmm_aux_old.tid
   (* TODO: this may be hackish *)
-  | Toutput of string * Cmm_aux.tid
+  | Toutput of string * Cmm_aux_old.tid
 
 val trace_action_kind_to_nat : trace_action -> nat
 let trace_action_kind_to_nat a =
@@ -56,7 +56,7 @@ end
 
 type trace_paction = polarity * trace_action
 
-val tid_of: trace_action -> Cmm_aux.tid
+val tid_of: trace_action -> Cmm_aux_old.tid
 let tid_of = function
   | Tcreate _ _ tid    -> tid
   | Talloc _ _ tid     -> tid
@@ -362,7 +362,7 @@ let get_execution_mode = fun st ->
 
 
 (* KN: probably not needed anymore
-val register_sequencing: set taction_id -> taction_id -> Cmm_aux.tid -> t unit
+val register_sequencing: set taction_id -> taction_id -> Cmm_aux_old.tid -> t unit
 let register_sequencing bs aid tid = fun st ->
   let (sb_, asw_) = Set_helpers.fold (fun b (sb_acc, asw_acc) ->
     if tid = tid_of (fromJust $ Map.lookup b st.tact_map) then

@@ -1,10 +1,10 @@
 open import Pervasives Undefined Core Core_run
-import Cmm_aux
+import Cmm_aux_old
 
 (* An inductive relation equivalent of the red2 function. *)
 indreln
-[red2_ind: ((expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id)) * E.state) ->
-           ((expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id)) * E.state) ->
+[red2_ind: ((expr E.taction_id * Cmm_aux_old.tid * list (cont E.taction_id)) * E.state) ->
+           ((expr E.taction_id * Cmm_aux_old.tid * list (cont E.taction_id)) * E.state) ->
            bool]
 
 red2_intro: forall e1 e2 s1 s2.
@@ -14,8 +14,8 @@ red2_intro: forall e1 e2 s1 s2.
 
 (* An inductive relation equivalent of the star_red2 function. *)
 indreln
-[star_red2_ind: ((expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id)) * E.state) ->
-                ((expr E.taction_id * Cmm_aux.tid * list (cont E.taction_id)) * E.state) ->
+[star_red2_ind: ((expr E.taction_id * Cmm_aux_old.tid * list (cont E.taction_id)) * E.state) ->
+                ((expr E.taction_id * Cmm_aux_old.tid * list (cont E.taction_id)) * E.state) ->
                 bool]
 
 star_red2_zero: forall e1 s1.
