@@ -1,10 +1,10 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Cmm_aux Cmm_csem
+import Symbol AilTypes Implementation_ Undefined Cmm_aux Memory_order
 import Memory
 
 open import Core_ctype
 
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 
 
 

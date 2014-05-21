@@ -1,11 +1,11 @@
 open import Pervasives Global
-import Cmm_csem Core Memory Exception Errors Boot
+import Core Memory Exception Errors Boot Memory_order
 
 
 (* TODO: lem non termination bug *)
 (*
 
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 
 type ordering = Before | After | NoOrdering
 

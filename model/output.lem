@@ -432,13 +432,13 @@ let showNonNegativeWithBasis useUpper b n =
 
 (* TODO: hack *)
 open Core_ctype
-import Cmm_csem
-module Cmm = Cmm_csem
+import Memory_order
+module Cmm = Memory_order
 
 
 (* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
 (* TODO: the first argument (load) is a bit silly but avoid module cycle *)
-val convert: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+val convert: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
              maybe precision -> conversion_specifier -> list Memory.mem_addr -> E.t (list char * list Memory.mem_addr)
 let convert load p_opt cspec args =
   match cspec with
@@ -577,7 +577,7 @@ let convert load p_opt cspec args =
 
 
 (* TODO asterisks *)
-val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
                          list char -> format -> list Memory.mem_addr -> E.t (list char)
 let rec formatted_print_aux load acc fs ns =
   match (fs, ns) with
@@ -616,7 +616,7 @@ TODO: new
   end
 
 
-val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
                      list char -> list Memory.mem_addr -> E.t (list char)
 let formatted_print load fmrt args =
   match parse format fmrt with
@@ -629,7 +629,7 @@ let formatted_print load fmrt args =
 (* END: actual implementation of printf *)
 
 
-val printf: (ctype -> Memory.mem_addr -> E.t (Cmm.cvalue * E.taction_id)) ->
+val printf: (ctype -> Memory.mem_addr -> E.t (Cmm_aux.cvalue * E.taction_id)) ->
             list char -> list Memory.mem_addr -> E.t (Core.expr E.taction_id)
 let printf load frmt args =
   (* TODO: should fix the lexing of C string instead of hacking here *)
