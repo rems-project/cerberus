@@ -50,7 +50,7 @@ AIL_FILES=\
 
 MODEL_FILES=\
   boot.lem \
-  cmm_aux.lem \
+  cmm_aux_old.lem \
   memory_order.lem \
   core.lem \
   core_aux.lem \
@@ -202,7 +202,7 @@ LEM_FILES = \
  AilTypes.lem \
  AilTypesAux.lem \
  boot.lem \
- cmm_aux.lem \
+ cmm_aux_old.lem \
  Common.lem \
  core.lem \
  core_aux.lem \

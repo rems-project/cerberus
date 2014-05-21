@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Cmm_aux Memory_order
+import Symbol AilTypes Implementation_ Undefined Cmm_aux_old Memory_order
 import Memory
 
 open import Core_ctype
@@ -74,7 +74,7 @@ type expr 'a =
   | Ecast_ptr of ctype * expr 'a
   | Etrue
   | Efalse
-  | Econst of Cmm_aux.constant
+  | Econst of Cmm_aux_old.constant
   | Ectype of ctype
   | Eaddr of Memory.mem_addr
   | Esym of sym

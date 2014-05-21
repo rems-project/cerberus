@@ -1,10 +1,10 @@
 (* Switch module for the memory layout model *)
 open import Pervasives
 import Symbol State_exception
-import Core_ctype Cmm_aux
+import Core_ctype Cmm_aux_old
 import Naive_memory
 
-module Cmm = Cmm_aux
+module Cmm = Cmm_aux_old
 
 (* TODO *)
 type taction_id = natural

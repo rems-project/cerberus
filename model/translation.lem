@@ -101,7 +101,7 @@ end
 
 and translate_function_designator (A.AnnotatedExpression _ expr) =
   match expr with
-    | A.Var fid -> E.return $ C.Econst (Cmm_aux.Cfunction fid)
+    | A.Var fid -> E.return $ C.Econst (Cmm_aux_old.Cfunction fid)
     | _ -> Boot.assert_false "[Translation.translate_function_designator] wildcard case"
   end
 
@@ -284,14 +284,14 @@ and translate_expression stdlib program a_expr =
               (* else [...] *)
                  (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                     (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                     C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
+                     C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux_old.Cint 2); C.Esym a_e2]))
                                    (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one)
                   else (* e1 has a signed type *)
                     (* if a_e2 < 0 then undef *)
                     (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
                        (C.Eundef Undefined.Negative_left_shift)
                        (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                       (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]))
+                       (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [C.Econst (Cmm_aux_old.Cint 2); C.Esym a_e2]))
                                                     (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
                           (* not representable(ty, a_res) then undef *)
                           (C.Eif (C.Enot (is_representable [C.Esym a_res; Caux.mk_ctype result_ty]))
@@ -326,7 +326,7 @@ and translate_expression stdlib program a_expr =
                  (C.Eundef Undefined.Shift_too_large)
               
               (* else [...] *)
-              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [C.Econst (Cmm_aux.Cint 2); C.Esym a_e2]) in
+              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [C.Econst (Cmm_aux_old.Cint 2); C.Esym a_e2]) in
                if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                  (* If E1 has an unsigned type *)
                  expr
@@ -385,7 +385,7 @@ and translate_expression stdlib program a_expr =
         (* NOTE: this is not enought *)
       | A.Var id ->
           if AilTypesAux.is_function result_ty then
-            E.return (C.Econst (Cmm_aux.Cfunction id))
+            E.return (C.Econst (Cmm_aux_old.Cfunction id))
           else
             E.return $ Caux.pload (Caux.mk_ctype result_ty) (C.Esym id) Cmm.NA
       
@@ -758,10 +758,10 @@ and translate_expression stdlib program a_expr =
           end
       
       | A.Constant (A.ConstantInteger (i, _, _)) ->
-          E.return (C.Econst $ Cmm_aux.Cint i)
+          E.return (C.Econst $ Cmm_aux_old.Cint i)
 
       | A.Constant (A.ConstantString str) ->
-          E.return (C.Econst $ Cmm_aux.Cstring (String.toCharList str)) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
+          E.return (C.Econst $ Cmm_aux_old.Cstring (String.toCharList str)) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
       
       
       | A.SizeOf qs (Aty.Basic (Aty.Integer Aty.Char))                 -> E.return Caux.one
@@ -1075,7 +1075,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         E.return $
           C.Ewseq [Just a_e] core_e
             (foldl (fun acc (n, d) ->
-              C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst $ Cmm_aux.Cint n))
+              C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst $ Cmm_aux_old.Cint n))
                 (C.Erun {} d run_as)
                 acc
              )
