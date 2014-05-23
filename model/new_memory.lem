@@ -6,32 +6,8 @@
   * given two writes Ky wants to know if they overlap
   * the same given a write and a read request
   
-  
   * given a list of (address, 
-
-
-
-
 *)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 open import Pervasives
 import New_memory_effect Symbolic State_exception AilTypes
@@ -68,17 +44,6 @@ type lifted_value 'a =
   | Indeterminate_value of AilTypes.ctype
 
 
-
-(* Ids for dynamically allocated regions *)
-type mem_region_id = Symbolic.symbol
-
-type mem_object_id = Symbolic.symbol
-
-type mem_object = <|
-  obj_original_type: maybe AilTypes.ctype;
-  obj_address:       address;
-  (* and maybe a size for VLAs and flexible array member (otherwise the size) *)
-|>
 
 
 type memory_write
@@ -126,30 +91,33 @@ type pointer_value =
 
 
 type pointer_provenance =
-  (* the `ctype' below is the original declared type of the object (which will
-     be equal to the effective type of the object, if those are turned on)  *)
-  | Prov_obj of AilTypes.ctype * mem_object_id
+   (* a statically allocated object *)
+  | Prov_sao of sao_id
   
-  (* pointer to a malloc'd region, similarly the whole one *) 
-  | Prov_region of mem_region_id
-  
+  (* pointer to a malloc'd region *) 
+  | Prov_das of das_id
+
+
+(*the metadata associated with those ids is kept in the driver_state *)
+
   (* this case is only here for casts that taint-tracking doesn't discover a
      good original object for (so it will never be used in standard C *)
-  (* the `ctype' saves the original type cast when creating that pointer *)
+  (* the `ctype' saves the original type used for the cast that creates this pointer from an integer*)
   | Prov_intcast of AilTypes.ctype * mem_object_value
 
 
 type pointer_path =
   | Path_base
-  | Path_array  of nat * pointer_path
+  | Path_array  of Symbolic.symbolic (* the index *) * pointer_path
   | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) * pointer_path
 
 
 type pointer_other = <|
   ptr_provenance:      pointer_provenance;
   ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast.  and when you do a shift. *)
-  ptr_abstract_offset: maybe pointer_abstract_path; (* the position in the original object, represented as an abstract access path  *)
-  ptr_numeric_offset:  Symbolic.t;(* the position in the original object, represented with (possibly symbolic) address arithmetic *)
+  ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path  *)
+  ptr_numeric_offset:  Symbolic.t;(* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field?) *)
+  ptr_numeric_address: Symbolic.t (* the address in memory *)
 |>
 
 
@@ -220,7 +188,7 @@ let initial_memory = <|
 
 
 
-
+type t = Exception.t  (* to represent failure cases *)
 
 (* The memory layout API *)
 val create:        AilTypes.ctype -> t pointer_value
@@ -229,15 +197,23 @@ val kill:          pointer_value -> t unit
 val load:          AilTypes.ctype -> pointer_value -> t object_value
 val store:         AilTypes.ctype -> pointer_value -> object_value -> t unit
 (* val same: address -> address -> t bool *)
-val pointer_shift: pointer_value -> pointer_value -> t pointer_value
+val pointer_arithmetic: pointer_value -> Symbolic.symbolic  -> t pointer_value
+val pointer_member_offset: pointer_value -> Symbolic.sym  -> t pointer_value
+val cast_pointer_to_pointer:  pointer_value -> ctype -> t pointer_value
+val cast_pointer_to_integer: pointer_value -> integerType -> t object_value
+val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
 val pointer_diff:  pointer_value -> pointer_value -> t object_value
-val pointer_lt:    pointer_value -> pointer_value -> t bool
-val pointer_gt:    pointer_value -> pointer_value -> t bool
-val pointer_le:    pointer_value -> pointer_value -> t bool
-val pointer_ge:    pointer_value -> pointer_value -> t bool
-val pointer_eq:    pointer_value -> pointer_value -> t bool
-val pointer_neq:   pointer_value -> pointer_value -> t bool
-(* val pointer_value:  *)
+
+type compare_operator = Lt | Gt | Ge | Le | Eq | Neq
+val pointer_compare:  compare_operator->  pointer_value -> pointer_value -> t bool
+
+
+(* TODO: add overlap and containment checking *)
+(* TODO: and functions to assemble a read value from a hb-partial-order of overlapping writes *)
+(* TODO: ...including reading representation bytes from an object etc. *)
+
+
+(*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
 
 
 
