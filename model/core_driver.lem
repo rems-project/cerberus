@@ -64,3 +64,12 @@ type driver_state = <|
 |>
 
 
+val initial_driver_state: driver_state
+let initial_driver_state = <|
+  sao_counter= UniqueId.init;
+  das_counter=  UniqueId.init;
+  sao_map=           Map.empty;
+  das_map=           Map.empty;
+|>
+
+
