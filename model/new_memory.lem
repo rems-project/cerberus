@@ -5,8 +5,7 @@
 
   * given two writes Ky wants to know if they overlap
   * the same given a write and a read request
-  
-  * given a list of (address, 
+
 *)
 
 open import Pervasives
@@ -17,15 +16,23 @@ val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
-module E = New_memory_effect
-module Operators = struct
-  let inline (>>=)    = E.bind
-  let inline (>>) m f = E.bind m (fun _ -> f)
-(*  let inline tid_of   = E.tid_of *)
-end
+(*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
+(* module E = New_memory_effect *)
+(* module Operators = struct *)
+(*   let inline (>>=)    = E.bind *)
+(*   let inline (>>) m f = E.bind m (fun _ -> f) *)
+(* (\*  let inline tid_of   = E.tid_of *\) *)
+(* end *)
 
-open Operators
+(* open Operators *)
 
+(* (\* Memory effect *\) *)
+(* type t 'a = E.t memory_state 'a *)
+(* 
+type memory_error
+*)
+
+type t = Exception.t  (* to represent failure cases *)
 
 
 
@@ -34,9 +41,6 @@ type address (* =
   | Addr_symbolic of Symbolic.symbolic
   | Addr_con
 *)
-
-
-
 
 type lifted_value 'a =
   | Specified of 'a
@@ -48,125 +52,55 @@ type lifted_value 'a =
 
 type memory_write
 
-(*
-(* TODO: we may need to allow region sizes and offsets to be symbolic ? *)
-type mem_region = <|
-  region_size:    nat; (* in bytes *)
-  region_objects: list (mem_object_id * nat); (* objects and their offsets from the beginning of the region *)
-|>
-*)
-
-
-type memory_state = <|
-  mem_object_id_counter: Symbolic.counter;
-  mem_symbol_counter: Symbolic.counter;
-
-(*
-  mem_regions: map mem_region_id mem_region;
-  mem_writes:  list memory_write;
-*)
-
-  mem_objects: map mem_object_id mem_object;
-|>
-
-
-type memory_error
-
-
-(* size of dynamically allocated regions *)
-type size
-
-
-(* Memory effect *)
-type t 'a = E.t memory_state 'a
 
 
 
 
 
 
-type pointer_value =
-  | Pointer_null of AilTypes.ctype
-  | Pointer_other of pointer_other
+
+
+
 
 
 type pointer_provenance =
-   (* a statically allocated object *)
+  (* pointer to a statically allocated object *)
+  (*the metadata associated with those ids is kept in the driver_state *)
   | Prov_sao of sao_id
   
-  (* pointer to a malloc'd region *) 
+  (* pointer to a dynamically allocated space (from malloc etc.) *) 
   | Prov_das of das_id
 
-
-(*the metadata associated with those ids is kept in the driver_state *)
-
-  (* this case is only here for casts that taint-tracking doesn't discover a
-     good original object for (so it will never be used in standard C *)
-  (* the `ctype' saves the original type used for the cast that creates this pointer from an integer*)
+  (* pointer formed by casting from an integer, in the case where the
+     integer provenance-tracking machinery doesn't discover a good
+     original object for (so this case will never be used in standard
+     C. The `ctype' records the type used for the creating cast. *)
   | Prov_intcast of AilTypes.ctype * mem_object_value
 
 
-type pointer_path =
-  | Path_base
-  | Path_array  of Symbolic.symbolic (* the index *) * pointer_path
-  | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) * pointer_path
+type pointer_path_element =
+  | Path_array  of Symbolic.symbolic (* the index *) 
+  | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) 
 
+type pointer_path = list pointer_path_element
 
-type pointer_other = <|
+type pointer_nonnull = <|
   ptr_provenance:      pointer_provenance;
-  ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast.  and when you do a shift. *)
-  ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path  *)
-  ptr_numeric_offset:  Symbolic.t;(* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field?) *)
-  ptr_numeric_address: Symbolic.t (* the address in memory *)
+  ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast or a shift. *)
+  ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path, where that makes sense  *)
+  ptr_numeric_offset:  Symbolic.t; (* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field) *)
+  ptr_numeric_address: Symbolic.t  (* the address in memory *)
 |>
 
+type pointer_value =
+  | Pointer_null of AilTypes.ctype
+  | Pointer_nonnull of pointer_nonnull
 
 
 
 
 
-(*
-type pointer_value2 = <|
-null  of ctype
-+
-(
-
-  (  obj_id: mem_object_id; (* originally pointer to the original whole statically allocated object (eg for &(s.f) the object id of s) *)
-  + region_id:             (* pointer to a malloc'd region, similarly the whole one *) 
-  + cast_from_integer    (* this case is only here for casts that taint-tracking doesn't discover a good original object for (so it will never be used in standard c *)
-
- )
-
-plus, in the obj_id case, the original declared type of the object (which will be equal to the effective type of the object, if those are turned on)
-
-
-the "view type" of the pointer - this will change when you do a cast.  and when you do a shift.
-
-
-the position in the original object, represented with (possibly symbolic) address arithmetic
-
-the position in the original object, represented as an abstract access path 
-)
-
-
-and we lift all that when stored in an object  (to add unspecified values )
-
-
-
- 
-|>
-*)
-
-
-
-
-
-
-
-
-
-
-
+(* PS: not sure what this is for - why do we lift *pointer values* rather than general values? *)
 type mem_object_value =
   | Obj_pointer of pointer_value
 
@@ -177,18 +111,8 @@ type mem_object_value =
 
 
 
-val initial_memory: memory_state
-let initial_memory = <|
-  mem_object_id_counter= Symbolic.init;
-  mem_symbol_counter=    Symbolic.init;
-  mem_regions=           Map.empty;
-  mem_objects=           Map.empty;
-  mem_writes =           [];
-|>
 
 
-
-type t = Exception.t  (* to represent failure cases *)
 
 (* The memory layout API *)
 val create:        AilTypes.ctype -> t pointer_value
