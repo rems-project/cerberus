@@ -88,7 +88,7 @@ type pointer_nonnull = <|
   ptr_provenance:      pointer_provenance;
   ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast or a shift. *)
   ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path, where that makes sense  *)
-  ptr_numeric_offset:  Symbolic.t; (* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field) *)
+  ptr_numeric_offset:  maybe Symbolic.t; (* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field), where that makes sense *)
   ptr_numeric_address: Symbolic.t  (* the address in memory *)
 |>
 
@@ -117,7 +117,7 @@ type mem_object_value =
 (** The memory layout API *)
 
 
-val create:        AilTypes.ctype -> t pointer_value
+val create_sao:        AilTypes.ctype -> t pointer_value
 (*
 let create typ = 
     - create a new unique id 
@@ -162,13 +162,14 @@ let create typ =
     - someone synthesises a concurrency-model Create event with the address and size
 *)
 
-val alloc:         Symbolic.symbolic -> t pointer value
-(* similar to create except constructing a dynamically allocated space *)
+val create_das:         Symbolic.symbolic -> t pointer value
+(* similar to create_sao except constructing a dynamically allocated space *)
 (* for calloc, core will also have to generate an initialisation write (of a char array of zeros *)
 (* there's an implementation-defined choice in 7.22.3 of what to do when a zero-sized allocation is requested; that can be done in core *)
 
 
-val kill:          pointer_value -> t unit
+val kill_sao:          pointer_value -> t unit
+val free_das:          pointer_value -> t unit
 
 (* for objects with automatic or thread storage duration (c.f. 6.2.4),
 this will presumably be called with the pointer returned by create,
@@ -225,6 +226,44 @@ arbitrary pointer value. Do we want the same API call for both? *)
 
 val load:          AilTypes.ctype -> pointer_value -> t object_value
 
+(* in the Standard semantics:
+
+   - check non-null
+
+   - either (reading a representation byte from an sao or das)
+  
+      - the ctype is char
+      - according to the ptr_numeric_offset and ptr_numeric_address the pointer points to somewhere in the footprint (padding included) of the original object (sao or das) (from the ptr_provenance)
+     
+   - or (reading a normal subobject member from a statically allocated object)
+    
+      - the ptr_provenance is an sao
+
+      - according to the ptr_abstract_offset the pointer points to the
+         original object or a subobject thereof (and not one of those
+         one-past things), which matches the ptr_view_type and the
+         ctype
+
+   - or (reading a not-necessarily-char from a dynamically allocated space)
+
+      - the ptr_provenance is a das
+
+      - some check wrt its ptr_view_type ? 
+
+      - according to the ptr_numeric_offset, the pointer points to
+         somewhere within the das (far enough from the end to fit the
+         ctype)
+
+      - all other checking is left to the effective type
+         checking below
+
+   in the Concrete semantics:
+
+    - check non-null
+
+    - nothing more, beyond the effective-type checking below?  (and modulate that by only looking at the leaf types and by optionally allowing representation casts)?
+*)
+
 (*When we do a (nonatomic) read, we expect the concurrency model to
 calculate the set of hb-most-recent writes (do I really mean hb?)
 that overlap the read location.  Presumably any of those writes that
@@ -261,9 +300,9 @@ lifetime check (w.r.t. *all* the writes we read from).
 val store:         AilTypes.ctype -> pointer_value -> object_value -> t unit
 
 (* This is relatively straightforward: we basically just synthesise a Write
-event.  
+event, after some checks similar to the load.  
 
-In the Standard semnatics we can look at the pointer_value to
+In the Standard semantics we can look at the pointer_value to
 determined if we're writing to a statically allocated object (in which
 case the lvalue type should be suitably compatible with that) or to
 within a dynamically allocated space, in which case we use the
@@ -272,8 +311,65 @@ supplied lvalue type as the effective type of the write.
 
 
 (* val same: address -> address -> t bool *)
-val pointer_arithmetic: pointer_value -> Symbolic.symbolic  -> t pointer_value
-val pointer_member_offset: pointer_value -> Symbolic.sym  -> t pointer_value
+
+val pointer_member_offset: AilTypes.ctype (* static type of the pointer*) 
+                        -> pointer_value 
+                        -> Symbolic.sym (* the member id *) 
+                        -> t pointer_value
+
+(* - check the static type is a struct or union with that member
+      (otherwise the static type system should have told us, but we
+      should check dynamically too, absent a type soundness proof)
+
+   - check the pointer_value is non-null
+
+   - in the Standard semantics: 
+      check the ptr_view_type is more-or-less equal (TODO?) to the static type
+   - in the Concrete semantics:   the same check?? 
+
+
+   - if the ptr_abstract_offset is non-Nothing, append the member id
+
+   - look up the (symbolic) offset for the member in this static type
+
+   - add it to the ptr_numeric_offset
+
+   - add it to the ptr_numeric_address
+
+*)
+
+val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*) -> pointer_value -> Symbolic.symbolic  -> t pointer_value
+
+(*
+   - the actual offset is determined by the static type and the symbolic value
+
+   - in the Standard semantics:
+
+
+   - check that either
+      -- the static type is a struct or union with that member
+      (otherwise the static type system should have told us, but we
+      should check dynamically too, absent a type soundness proof)
+
+   - check the pointer_value is non-null
+
+   - in the Standard semantics: 
+      check the ptr_view_type is more-or-less equal (TODO?) to the static type
+   - in the Concrete semantics:   the same check?? 
+
+
+   - if the ptr_abstract_offset is non-Nothing, append the member id
+
+   - look up the (symbolic) offset for the member in this static type
+
+   - add it to the ptr_numeric_offset
+
+   - add it to the ptr_numeric_address
+
+*)
+
+
+
 val cast_pointer_to_pointer:  pointer_value -> ctype -> t pointer_value
 val cast_pointer_to_integer: pointer_value -> integerType -> t object_value
 val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
