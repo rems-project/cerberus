@@ -1,14 +1,16 @@
 # Looking for Lem
-ifneq ($(wildcard $(PWD)/../lem-csem/lem),)
-  LEMDIR=$(PWD)/../lem-csem
-else ifdef LEM_PATH
-  LEMDIR=$(LEM_PATH)
-else
-  $(error could not find lem (please set the variable LEM_PATH))
-endif
+#ifneq ($(wildcard $(PWD)/../lem-csem/lem),)
+#  LEMDIR=$(PWD)/../lem-csem
+#else ifdef LEM_PATH
+#  LEMDIR=$(LEM_PATH)
+#else
+#  $(error could not find lem (please set the variable LEM_PATH))
+#endif
 
+
+LEMDIR=~/bitbucket/lem
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=$(LEMDIR)/lem -wl ign  -wl_rename warn -lib $(LEMLIB_DIR)
+LEM=lem -wl ign  -wl_rename warn 
 
 
 # Source directories
@@ -263,3 +265,7 @@ clean:
 clear:
 	$(MAKE) clean
 	rm -rf csem
+
+
+dot:
+	cd $(OCAML_BUILD_DIR) ;  ocamldoc -dot `ocamldep -sort *.ml *.mli`

@@ -37,10 +37,11 @@ type t = Exception.t  (* to represent failure cases *)
 
 
 
-type address (* =
-  | Addr_symbolic of Symbolic.symbolic
-  | Addr_con
-*)
+type address = Symbolic.symbolic
+type size = Symbolic.symbolic
+
+
+
 
 type lifted_value 'a =
   | Specified of 'a
@@ -142,7 +143,7 @@ let create typ =
              the deallocating function, and before any such access by
              the allocating function.",   which matches what I was
              saying the other day:  we do have to make up new sw edges.    
-
+             Kyndylan will have to do this in his free()....
           - a completely concrete next-address allocator (with no
              reuse on free)
 
@@ -166,6 +167,95 @@ let create typ =
         |>      
     - someone synthesises a concurrency-model Create event with the address and size
 *)
+
+
+(* Here E is the state-and-exception monad for the layout model.  Its
+state contains:
+- the sao and das symbol generators and maps
+- the allocator (a tag of 
+- the concurrency_model state
+*)
+
+type allocator = 
+  | Semantically_general of list (address*size)   (* the addresses in which we can allocate *)
+  | Trivial of address (* the next free address *)
+
+
+let create_sao tid ty ty_size ty_alignment = do E 
+
+  (* we pass in ty_size and ty_alignment here because calculating them
+  involves executing core functions (from the implementation file),
+  and in this module we don't have access to the core_run interpreter
+  *)
+
+  (* create a new unique id *)
+  sao_id <- E.fresh_sao_id;
+  
+  (* call the allocator to construct a new address *)
+  (address, new_allocator) <- do E 
+    allocator <- E.get_allocator; in
+    match allocator with
+    (* a completely concrete next-address allocator (with no reuse on free)*)
+    | Trivial next_address -> 
+        let next_address' = assert_false "...round up next_address modulo ty_align" in
+        E.return (next_address', Trivial (next_address' + ty_size))
+
+    (* the most semantically general allocator: taking a new
+    symbolic variable with constraints that the new allocation
+    doesn't overlap the currently allocated (in some sense TBD) things*)
+    | Semantically_general allocatable_space-> do E
+        (* create a new symbolic variable*)
+        address <- E.fresh_symbolic_variable;
+        (* build constraints *)
+        st <- E.get_concurrency_model_state; in
+        let current_footprints : list (address * size)= Concurrency_model.hb_live_footprints st in
+        let new_constraints = 
+          (mk_constraint "address mod ty_size = 0") ::
+          (mk_constraint "(address,ty_size) inside allocatable_space ") ::
+          List.map (function (address',size') -> mk_constraint "(address,size) doesn't overlap (address',size')" ) current_footprints in do E
+          (* update the existing constraint set *)
+          E.add_constraints new_constraints;        
+          (* check satisfiable and fail if not *)
+          b <- E.check_constraints_satisfiable; in
+          if b then 
+            E.return (address, allocator)
+          else
+            E.fail (tag "run out of memory")
+            (* in fact an implementation might fail earlier than this
+            - so this allocator cannot match *all* behaviours of some
+            reasonable C implementations *)
+
+         end ;
+   E.set_allocator new_allocator ; 
+
+
+   let sao_metadata = <| obj_original_type = ty; obj_address = address |> in 
+
+   ... update with   Map.insert sao_id sao_metadata sao_map 
+
+   let ptr_val = 
+     Pointer_nonnull <|
+       ptr_provenance = Prov_sao sao_id;
+       ptr_view_type = ty;
+       ptr_abstract_offset = Just []; 
+       ptr_numeric_offset = Symbolic.zero;
+       ptr_numeric_address = address; 
+     |> in
+
+
+   st <- E.get_concurrency_model_state; in
+   let st' = Concurrency_model.create st tid ty ptr_val in
+
+   E.set_concurrency_model_state st'
+
+
+   E.return ptr_val
+
+
+
+
+
+
 
 val create_das:         Symbolic.symbolic -> t pointer value
 (* similar to create_sao except constructing a dynamically allocated space *)
