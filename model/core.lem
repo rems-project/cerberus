@@ -69,8 +69,11 @@ type constant =
 
 type expr 'a =
   (* pointer stuff *)
-  | Epointer of New_memory.mem_pointer_value
+(*  | Epointer of New_memory.mem_pointer_value
   | Epointer_byte of nat * New_memory.mem_pointer_value
+HACK TO BUILD*)
+  | Enull of ctype (*HACK*)
+  
   | Econcat_bytes of list (expr 'a) (* non empty list please *)
 
 
