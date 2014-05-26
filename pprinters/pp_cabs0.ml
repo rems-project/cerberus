@@ -17,12 +17,13 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 
 let precedence = function
-  | VARIABLE _
-  | CONSTANT _
-  | OFFSETOF _ -> Some 0
+  | Evariable _
+  | Econstant _
+  | Eoffsetof _ -> Some 0
   
-  | INDEX _
+  | Esubscript _
   
+(*
   | C11_ATOMIC_INIT _
   | C11_ATOMIC_STORE _
   | C11_ATOMIC_LOAD _
@@ -30,62 +31,63 @@ let precedence = function
   | C11_ATOMIC_COMPARE_EXCHANGE_STRONG _
   | C11_ATOMIC_COMPARE_EXCHANGE_WEAK _
   | C11_ATOMIC_FETCH_KEY _
+*)
   
-  | CALL _
-  | MEMBEROF _
-  | MEMBEROFPTR _
-  | UNARY (POSINCR, _)
-  | UNARY (POSDECR, _) -> Some 1
+  | Ecall0 _
+  | Ememberof _
+  | Ememberofptr _
+  | Eunary (PostfixIncr0, _)
+  | Eunary (PostfixDecr0, _) -> Some 1
   
-  | UNARY _
-  | CAST _
-  | EXPR_SIZEOF _
-  | TYPE_SIZEOF _
-  | ALIGNOF _ -> Some 2
+  | Eunary _
+  | Ecast _
+  | Eexpr_sizeof _
+  | Etype_sizeof _
+  | Ealignof _ -> Some 2
   
-  | BINARY (MUL, _, _)
-  | BINARY (DIV, _, _)
-  | BINARY (MOD, _, _) -> Some 3
+  | Ebinary (Mul0, _, _)
+  | Ebinary (Div0, _, _)
+  | Ebinary (Mod0, _, _) -> Some 3
   
-  | BINARY (ADD, _, _)
-  | BINARY (SUB, _, _) -> Some 4
+  | Ebinary (Add0, _, _)
+  | Ebinary (Sub0, _, _) -> Some 4
   
-  | BINARY (SHL, _, _)
-  | BINARY (SHR, _, _) -> Some 5
+  | Ebinary (Shl0, _, _)
+  | Ebinary (Shr0, _, _) -> Some 5
   
-  | BINARY (LT, _, _)
-  | BINARY (GT, _, _)
-  | BINARY (LE, _, _)
-  | BINARY (GE, _, _) -> Some 6
+  | Ebinary (Lt0, _, _)
+  | Ebinary (Gt0, _, _)
+  | Ebinary (Le0, _, _)
+  | Ebinary (Ge0, _, _) -> Some 6
   
-  | BINARY (EQ, _, _)
-  | BINARY (NE, _, _) -> Some 7
+  | Ebinary (Eq0, _, _)
+  | Ebinary (Ne0, _, _) -> Some 7
   
-  | BINARY (BAND, _, _) -> Some 8
+  | Ebinary (Band0, _, _) -> Some 8
   
-  | BINARY (XOR, _, _) -> Some 9
+  | Ebinary (Xor0, _, _) -> Some 9
   
-  | BINARY (BOR, _, _) -> Some 10
+  | Ebinary (Bor0, _, _) -> Some 10
   
-  | BINARY (AND, _, _) -> Some 11
+  | Ebinary (And0, _, _) -> Some 11
   
-  | BINARY (OR, _, _) -> Some 12
+  | Ebinary (Or0, _, _) -> Some 12
   
-  | QUESTION _ -> Some 13
+  | Econditional _ -> Some 13
   
-  | BINARY (ASSIGN, _, _)
-  | BINARY (ADD_ASSIGN, _, _)
-  | BINARY (SUB_ASSIGN, _, _)
-  | BINARY (MUL_ASSIGN, _, _)
-  | BINARY (DIV_ASSIGN, _, _)
-  | BINARY (MOD_ASSIGN, _, _)
-  | BINARY (BAND_ASSIGN, _, _)
-  | BINARY (BOR_ASSIGN, _, _)
-  | BINARY (XOR_ASSIGN, _, _)
-  | BINARY (SHL_ASSIGN, _, _)
-  | BINARY (SHR_ASSIGN, _, _) -> Some 14
+  | Ebinary (Assign0, _, _)
+  | Ebinary (Add_assign, _, _)
+  | Ebinary (Sub_assign, _, _)
+  | Ebinary (Mul_assign, _, _)
+  | Ebinary (Div_assign, _, _)
+  | Ebinary (Mod_assign, _, _)
+  | Ebinary (Band_assign, _, _)
+  | Ebinary (Bor_assign, _, _)
+  | Ebinary (Xor_assign, _, _)
+  | Ebinary (Shl_assign, _, _)
+  | Ebinary (Shr_assign, _, _) -> Some 14
   
-  | BINARY (COMMA, _, _) -> Some 15
+  | Ebinary (Comma0, _, _) -> Some 15
   
   (* | BUILTIN_VA_ARG _ *)
 
@@ -133,82 +135,82 @@ let pp_highlight z =
 
 
 let rec pp_typeSpecifier = function
-  | Tvoid ->
+  | T_void ->
       !^ "Tvoid"
-  | Tchar ->
+  | T_char ->
       !^ "Tchar"
-  | Tshort ->
+  | T_short ->
       !^ "Tshort"
-  | Tint ->
+  | T_int ->
       !^ "Tint"
-  | Tlong ->
+  | T_long ->
       !^ "Tlong"
-  | Tfloat ->
+  | T_float ->
       !^ "Tfloat"
-  | Tdouble ->
+  | T_double ->
       !^ "Tdouble"
-  | Tsigned ->
+  | T_signed ->
       !^ "Tsigned"
-  | Tunsigned ->
+  | T_unsigned ->
       !^ "Tunsigned"
   | T_Bool ->
       !^ "T_Bool"
-  | Tnamed str ->
+  | T_named str ->
       !^ "Tnamed" ^^^ pp_atom str
 
-  | Tatomic (spec_elems, decl_t) ->
+  | T_atomic (spec_elems, decl_t) ->
     !^ "Tatomic" ^^^ P.parens (
       pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
       pp_decl_type decl_t
     )
   
-  | Tstruct (str_opt, fg_opt, []) -> 
+  | T_struct (str_opt, fg_opt, []) -> 
       !^ "Tstruct" ^^^ P.parens (
         pp_option pp_atom str_opt ^^ P.comma ^^^
         pp_option (pp_list pp_field_group) fg_opt ^^ P.comma ^^^
         (* TODO *)
         !^ "[]"
       )
-  | Tunion (str_opt, fg_opt, []) ->
+  | T_union (str_opt, fg_opt, []) ->
       !^ "Tunion" ^^^ P.parens (
         pp_option pp_atom str_opt ^^ P.comma ^^^
         pp_option (pp_list pp_field_group) fg_opt ^^ P.comma ^^^
         (* TODO *)
         !^ "[]"
       )
-  | Tenum (str_opt, xs_opt, []) ->
+  | T_enum (str_opt, xs_opt, []) ->
       (* TODO *)
       !^ "Tenum[TODO]"
 
 
 and pp_storage = function
-  | AUTO ->
+  | SC_auto ->
       !^ "AUTO"
-  | STATIC ->
+  | SC_static ->
       !^ "STATIC"
-  | EXTERN ->
+  | SC_extern ->
       !^ "EXTERN"
-  | REGISTER ->
+  | SC_register ->
       !^ "REGISTER"
-  | THREAD_LOCAL ->
+  | SC_Thread_local ->
       !^ "THREAD_LOCAL"
-  | TYPEDEF ->
+  | SC_typedef ->
       !^ "TYPEDEF"
 
 
-and pp_cvspec = function
-  | CV_CONST ->
+and pp_type_qualifier = function
+  | Q_const ->
       !^ "CV_CONST"
-  | CV_VOLATILE ->
+  | Q_volatile ->
       !^ "CV_VOLATILE"
-  | CV_RESTRICT ->
+  | Q_restrict ->
       !^ "CV_RESTRICT"
-  | CV_ATOMIC ->
+  | Q_Atomic ->
       !^ "CV_ATOMIC"
 
 and pp_spec_elem = function
-  | SpecCV spec ->
-      !^ "SpecCV" ^^^ pp_cvspec spec
+  | SpecQualifier qual ->
+      !^ "SpecCV" ^^^ pp_type_qualifier qual
   | SpecAttr attr ->
       !^ "SpecAttr" ^^^ pp_attribute attr
   | SpecStorage st ->
@@ -222,16 +224,16 @@ and pp_spec_elem = function
 and pp_decl_type = function
  | JUSTBASE ->
      !^ "JUSTBASE"
- | ARRAY (decl_t, specs, attrs, e_opt) ->
+ | ARRAY (decl_t, quals, attrs, e_opt) ->
      !^ "ARRAY" ^^^ P.parens (
        pp_decl_type decl_t ^^ P.comma ^^^
-       pp_list pp_cvspec specs ^^ P.comma ^^^
+       pp_list pp_type_qualifier quals ^^ P.comma ^^^
        pp_list pp_attribute attrs ^^ P.comma ^^^
        pp_option (pp_expression None) e_opt
       )
- | PTR (specs, attrs, decl_t) ->
+ | PTR (quals, attrs, decl_t) ->
      !^ "PTR" ^^^ P.parens (
-       pp_list pp_cvspec specs ^^ P.comma ^^^
+       pp_list pp_type_qualifier quals ^^ P.comma ^^^
        pp_list pp_attribute attrs ^^ P.comma ^^^
        pp_decl_type decl_t
      )
@@ -274,49 +276,49 @@ and pp_init_name (Init_name (n, ie)) =
   )
 
 and pp_binary_operator = function
-  | ADD         -> P.plus
-  | SUB         -> P.minus
-  | MUL         -> P.star
-  | DIV         -> P.slash
-  | MOD         -> P.percent
-  | AND         -> P.ampersand ^^ P.ampersand
-  | OR          -> P.bar ^^ P.bar
-  | BAND        -> P.ampersand
-  | BOR         -> P.bar
-  | XOR         -> P.caret
-  | SHL         -> P.langle ^^ P.langle
-  | SHR         -> P.rangle ^^ P.rangle
-  | EQ          -> P.equals ^^ P.equals
-  | NE          -> P.bang   ^^ P.equals
-  | LT          -> P.langle
-  | GT          -> P.rangle
-  | LE          -> P.langle ^^ P.equals
-  | GE          -> P.rangle ^^ P.equals
-  | ASSIGN      -> P.equals
-  | ADD_ASSIGN  -> P.equals ^^ P.plus
-  | SUB_ASSIGN  -> P.equals ^^ P.minus
-  | MUL_ASSIGN  -> P.equals ^^ P.star
-  | DIV_ASSIGN  -> P.equals ^^ P.slash
-  | MOD_ASSIGN  -> P.equals ^^ P.percent
-  | BAND_ASSIGN -> P.equals ^^ P.ampersand
-  | BOR_ASSIGN  -> P.equals ^^ P.bar
-  | XOR_ASSIGN  -> P.equals ^^ P.caret
-  | SHL_ASSIGN  -> P.equals ^^ P.langle ^^ P.langle
-  | SHR_ASSIGN  -> P.equals ^^ P.rangle ^^ P.rangle
-  | COMMA       -> P.comma
+  | Add0         -> P.plus
+  | Sub0         -> P.minus
+  | Mul0         -> P.star
+  | Div0         -> P.slash
+  | Mod0         -> P.percent
+  | And0         -> P.ampersand ^^ P.ampersand
+  | Or0          -> P.bar ^^ P.bar
+  | Band0        -> P.ampersand
+  | Bor0         -> P.bar
+  | Xor0         -> P.caret
+  | Shl0         -> P.langle ^^ P.langle
+  | Shr0         -> P.rangle ^^ P.rangle
+  | Eq0          -> P.equals ^^ P.equals
+  | Ne0          -> P.bang   ^^ P.equals
+  | Lt0          -> P.langle
+  | Gt0          -> P.rangle
+  | Le0          -> P.langle ^^ P.equals
+  | Ge0          -> P.rangle ^^ P.equals
+  | Assign0      -> P.equals
+  | Add_assign  -> P.equals ^^ P.plus
+  | Sub_assign  -> P.equals ^^ P.minus
+  | Mul_assign  -> P.equals ^^ P.star
+  | Div_assign  -> P.equals ^^ P.slash
+  | Mod_assign  -> P.equals ^^ P.percent
+  | Band_assign -> P.equals ^^ P.ampersand
+  | Bor_assign  -> P.equals ^^ P.bar
+  | Xor_assign  -> P.equals ^^ P.caret
+  | Shl_assign  -> P.equals ^^ P.langle ^^ P.langle
+  | Shr_assign  -> P.equals ^^ P.rangle ^^ P.rangle
+  | Comma0       -> P.comma
 
 
 and pp_unary_operator = function
-  | MINUS   -> P.minus
-  | PLUS    -> P.plus
-  | NOT     -> P.bang
-  | BNOT    -> P.tilde
-  | MEMOF   -> P.star
-  | ADDROF  -> P.ampersand
-  | PREINCR -> P.plus ^^ P.plus
-  | PREDECR -> P.minus ^^ P.minus
-  | POSINCR -> P.plus ^^ P.plus
-  | POSDECR -> P.minus ^^ P.minus
+  | Minus0   -> P.minus
+  | Plus0    -> P.plus
+  | Not     -> P.bang
+  | Bnot0    -> P.tilde
+  | Indirection0   -> P.star
+  | Address1  -> P.ampersand
+  | PrefixIncr -> P.plus ^^ P.plus
+  | PrefixDecr -> P.minus ^^ P.minus
+  | PostfixIncr0 -> P.plus ^^ P.plus
+  | PostfixDecr0 -> P.minus ^^ P.minus
 
 
 and pp_expression p expr =
@@ -324,16 +326,16 @@ and pp_expression p expr =
   let f = P.group -| pp_expression p' in
   (if lt_precedence p' p then fun x -> x else P.parens) $
     match expr with
-      | UNARY (POSINCR as uop, e)
-      | UNARY (POSDECR as uop, e) ->
+      | Eunary (PostfixIncr0 as uop, e)
+      | Eunary (PostfixDecr0 as uop, e) ->
           f e ^^ pp_unary_operator uop
-      | UNARY (uop, e) ->
+      | Eunary (uop, e) ->
           pp_unary_operator uop ^^ f e
-      | BINARY (bop, e1, e2) ->
+      | Ebinary (bop, e1, e2) ->
           f e1 ^^^ pp_binary_operator bop ^^^ f e2
-      | QUESTION (e1, e2, e3) ->
+      | Econditional (e1, e2, e3) ->
           P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
-      | CAST ((spec_elems, decl_t), ie) ->
+      | Ecast ((spec_elems, decl_t), ie) ->
           pp_highlight $
             !^ "CAST" ^^^ P.parens (
               P.parens (
@@ -341,6 +343,7 @@ and pp_expression p expr =
                 pp_decl_type decl_t
               ) ^^ P.comma ^^^ pp_init_expression ie
             )
+(*
       | C11_ATOMIC_INIT (e1, e2) ->
           !^ "__c11_atomic_init" ^^
           P.parens (f e1 ^^ P.comma ^^^ f e2)
@@ -362,35 +365,36 @@ and pp_expression p expr =
       | C11_ATOMIC_FETCH_KEY (e1, e2, e3) ->
           !^ "__c11_atomic_fetch_key" ^^
           P.parens (f e1 ^^ P.comma ^^^ f e2 ^^ P.comma ^^^ f e3)
+*)
       
-      | CALL (e, es) ->
+      | Ecall0 (e, es) ->
           f e ^^ P.parens (comma_list f es)
 (*  | BUILTIN_VA_ARG of expression * (list spec_elem * decl_type) *)
-      | CONSTANT c ->
+      | Econstant c ->
           pp_constant c
-      | VARIABLE str ->
+      | Evariable str ->
           !^ str
-      | EXPR_SIZEOF e ->
+      | Eexpr_sizeof e ->
           pp_keyword "sizeof" ^^^ f e
-      | TYPE_SIZEOF (spec_elems, decl_t) ->
+      | Etype_sizeof (spec_elems, decl_t) ->
           pp_highlight $
             !^ "TYPE_SIZEOF" ^^^ P.parens (
               pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
               pp_decl_type decl_t
             )
-      | ALIGNOF (spec_elems, decl_t) ->
+      | Ealignof (spec_elems, decl_t) ->
           pp_highlight $
             !^ "ALIGNOF" ^^^ P.parens (
               pp_list pp_spec_elem spec_elems ^^ P.comma ^^^
               pp_decl_type decl_t
             )
-      | INDEX (e1 ,e2) ->
+      | Esubscript (e1 ,e2) ->
           f e1 ^^ P.brackets (f e2)
-      | MEMBEROF (e, str) ->
+      | Ememberof (e, str) ->
           f e ^^ P.dot ^^ (!^ str)
-      | MEMBEROFPTR (e, str) ->
+      | Ememberofptr (e, str) ->
           f e ^^ (!^ "->") ^^ (!^ str)
-      | OFFSETOF ((spec_elems, decl_t), str) ->
+      | Eoffsetof ((spec_elems, decl_t), str) ->
           !^ "OFFSEOF[TODO]"
 
 
@@ -476,46 +480,46 @@ let rec pp_definition = function
 
 
 and pp_statement = function
- | NOP _ ->
+ | Sskip _ ->
      P.semi
- | COMPUTATION (e, _) ->
+ | Sexpression (e, _) ->
      pp_expression None e ^^ P.semi
- | BLOCK (ss, _) ->
+ | Sblock (ss, _) ->
      let block = P.separate_map (P.break 1) pp_statement ss in
      P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
- | If0 (e, s1, s2_opt, _) ->
+ | Sif (e, s1, s2_opt, _) ->
      pp_keyword "if" ^^^ P.parens (pp_expression None e) ^^^ pp_statement s1 ^^
      P.optional (fun z -> P.space ^^ pp_keyword "else" ^^^ pp_statement z) s2_opt
- | WHILE (e, s, _) ->
+ | Swhile (e, s, _) ->
      pp_keyword "while" ^^^ P.parens (pp_expression None e) ^/^ pp_statement s
- | DOWHILE (e, s, _) ->
+ | Sdo (e, s, _) ->
      pp_keyword "do" ^/^ pp_statement s ^/^
        pp_keyword "while" ^^^ P.parens (pp_expression None e)
- | FOR (fc_opt, e2_opt, e3_opt, s, _) ->
+ | Sfor (fc_opt, e2_opt, e3_opt, s, _) ->
      pp_keyword "for" ^^^
      P.parens (P.optional pp_for_clause fc_opt ^^ P.semi ^^^
                P.optional (pp_expression None) e2_opt ^^ P.semi ^^^
                P.optional (pp_expression None) e3_opt) ^/^ pp_statement s
- | BREAK _ ->
+ | Sbreak _ ->
      pp_keyword "break" ^^ P.semi
- | CONTINUE _ ->
+ | Scontinue _ ->
      pp_keyword "continue" ^^ P.semi
- | RETURN (e_opt, _) ->
+ | Sreturn (e_opt, _) ->
      pp_keyword "return" ^^
      P.optional (fun z -> P.space ^^ pp_expression None z) e_opt ^^ P.semi
- | SWITCH (e, s, _) ->
+ | Sswitch (e, s, _) ->
      pp_keyword "switch" ^^^ P.parens (pp_expression None e) ^/^ pp_statement s
- | CASE (e, s, _) ->
+ | Scase (e, s, _) ->
      pp_expression None e ^^ P.colon ^^^ pp_statement s
- | DEFAULT (s, _) ->
+ | Sdefault (s, _) ->
      pp_keyword "default" ^^ P.colon ^^^ pp_statement s
- | LABEL (str, s, _) ->
+ | Slabel (str, s, _) ->
      !^ str ^^ P.colon ^^^ pp_statement s
- | GOTO (str, _) ->
+ | Sgoto (str, _) ->
      pp_keyword "goto" ^^^ !^ str ^^ P.semi
- | DEFINITION def ->
+ | Sdefinition def ->
      pp_definition def
- | PAR (ss, _) ->
+ | Spar (ss, _) ->
      let threads = P.separate_map (P.space ^^ P.bar ^^ P.bar ^^ P.bar ^^ P.space)
                                   (fun s -> P.nest 2 (pp_statement s)) ss in
      P.lbrace ^^ P.lbrace ^^ P.lbrace ^^^

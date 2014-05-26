@@ -3,6 +3,7 @@ open import Pervasives
 type symbol = nat
 
 type symbolic =
+  | Symbol_zero
   | Sym_base of symbol
   | Sym_eq of symbolic * symbolic
 
@@ -28,3 +29,9 @@ let init = 0
 val fresh_symbol: counter -> symbolic * counter
 let fresh_symbol n =
   (Sym_base n, n+1)
+
+
+
+val zero: symbolic
+let zero =
+  Symbol_zero

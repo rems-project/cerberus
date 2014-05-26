@@ -390,10 +390,12 @@ let determinate_expr e =
 
 let rec hack x =
   match x with
+    | Core.Epointer_byte n ptr ->
+        Core.Epointer_byte n ptr
+    | Core.Econcat_bytes es ->
+        Core.Econcat_bytes es
     | Core.Eunit ->
         Core.Eunit
-    | Core.Enull ty ->
-        Core.Enull ty
     | Core.Etrue ->
         Core.Etrue
     | Core.Efalse ->
@@ -402,8 +404,6 @@ let rec hack x =
         Core.Econst cst
     | Core.Ectype ty ->
         Core.Ectype ty
-    | Core.Eaddr addr ->
-        Core.Eaddr addr
     | Core.Esym a ->
         Core.Esym a
     | Core.Eimpl impl ->
@@ -430,8 +430,6 @@ let rec hack x =
         Core.Eif (hack e1) (hack e2) (hack e3)
     | Core.Eproc bs f es ->
         Core.Eproc bs f (map hack es)
-    | Core.Esame e1 e2 ->
-        Core.Esame (hack e1) (hack e2)
     | Core.Eaction pa ->
         Core.Eaction pa
     | Core.Eunseq es ->

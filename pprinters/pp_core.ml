@@ -155,7 +155,7 @@ let rec pp_ctype t =
         pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
     | Pointer0 ty ->
         pp_ctype ty ^^ P.star
-    | Atomic1 ty ->
+    | Atomic0 ty ->
         !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
 (*
     | SIZE_T                  -> !^ "size_t"
@@ -201,13 +201,13 @@ let pp_name = function
   | Impl i -> pp_impl i
 
 let pp_constant = function
-  | Cmm_aux.Cint n ->
+  | Cmm_aux_old.Cint n ->
       !^ (Big_int.string_of_big_int n)
-  | Cmm_aux.Carray cs ->
+  | Cmm_aux_old.Carray cs ->
       !^ "TODO: ARRAY"
-  | Cmm_aux.Cfunction f ->
+  | Cmm_aux_old.Cfunction f ->
       !^ "TODO: FUNCTION"
-  | Cmm_aux.Cstring cs ->
+  | Cmm_aux_old.Cstring cs ->
       P.dquotes (!^ (Xstring.implode cs))
 
 let pp_memory_order = function
@@ -222,8 +222,8 @@ let pp_memory_order = function
 
 let pp_mem_addr (pref, addr) =
   let rec pp = function
-  | Cmm_aux.Lbase n          -> Pp_ail.pp_integer n
-  | Cmm_aux.Lshift (addr, n) -> P.braces (pp addr ^^ P.comma ^^^ Pp_ail.pp_integer n)
+  | Cmm_aux_old.Lbase n          -> Pp_ail.pp_integer n
+  | Cmm_aux_old.Lshift (addr, n) -> P.braces (pp addr ^^ P.comma ^^^ Pp_ail.pp_integer n)
   in
   P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ pp addr)
 
@@ -370,15 +370,15 @@ and pp_action act =
   let pp_args args mo =
     P.parens (comma_list pp_expr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
-    | Create0 (ty, _) ->
+    | Create (ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_expr ty)
     | Alloc (a, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_expr a)
-    | Kill0 e ->
+    | Kill e ->
         pp_keyword "kill" ^^ P.parens (pp_expr e)
-    | Store0 (ty, e1, e2, mo) ->
+    | Store (ty, e1, e2, mo) ->
        pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
-    | Load0 (ty, e, mo) ->
+    | Load (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_strong" ^^
@@ -429,4 +429,4 @@ let pp_file file =
   
   List.fold_left g P.empty file.defs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
-    (Pset.elements (Pmap.bindings (pairCompare compare compare) file.funs))) ^^ P.break 1
+    (Pset.elements (Pmap.bindings (pairCompare compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1

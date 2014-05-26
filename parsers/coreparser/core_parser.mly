@@ -2,7 +2,6 @@
 open Lem_pervasives
 open Global
 
-module Cmm = Cmm_csem
 
 type name =
   | Sym of string
@@ -13,7 +12,7 @@ type expr =
   | Enull
   | Etrue
   | Efalse
-  | Econst of Cmm_aux.constant
+  | Econst of Cmm_aux_old.constant
   | Ectype of Core_ctype.ctype0
 (*  | Eaddr of Core.mem_addr *)
   | Esym of string
@@ -64,10 +63,10 @@ and action =
   | Create of expr
   | Alloc of expr
   | Kill of expr
-  | Store of expr * expr * expr * Cmm.memory_order
-  | Load of expr * expr * Cmm.memory_order
-  | CompareExchangeStrong of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
-  | CompareExchangeWeak of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+  | Store of expr * expr * expr * Memory_order.memory_order
+  | Load of expr * expr * Memory_order.memory_order
+  | CompareExchangeStrong of expr * expr * expr * expr * Memory_order.memory_order * Memory_order.memory_order
+  | CompareExchangeWeak of expr * expr * expr * expr * Memory_order.memory_order * Memory_order.memory_order
 and paction = Core.polarity * action
 
 type declaration =
@@ -144,7 +143,7 @@ let convert_expr e arg_syms fsyms =
     | Eunit ->
         Core.Eunit
     | Enull ->
-        Core.Enull Core_ctype.Void (* TODO *)
+        Core.Enull Core_ctype.Void0 (* TODO *)
     | Etrue ->
         Core.Etrue
     | Efalse ->
@@ -290,15 +289,15 @@ let convert_expr e arg_syms fsyms =
   and g st (p, act) =(p,
     match act with
       | Create e_ty ->
-          (Pset.empty compare, Core.Create0 (f st e_ty, []))
+          (Pset.empty compare, Core.Create (f st e_ty, []))
       | Alloc e_n ->
           (Pset.empty compare, Core.Alloc (f st e_n, []))
       | Kill e_o ->
-          (Pset.empty compare, Core.Kill0 (f st e_o))
+          (Pset.empty compare, Core.Kill (f st e_o))
       | Store (e_ty, e_o, e_n, mo) ->
-          (Pset.empty compare, Core.Store0 (f st e_ty, f st e_o, f st e_n, mo))
+          (Pset.empty compare, Core.Store (f st e_ty, f st e_o, f st e_n, mo))
       | Load (e_ty, e_o, mo) ->
-          (Pset.empty compare, Core.Load0 (f st e_ty, f st e_o, mo))
+          (Pset.empty compare, Core.Load (f st e_ty, f st e_o, mo))
       | CompareExchangeStrong (e_ty, e_o, e_e, e_d, mo1, mo2) ->
           (Pset.empty compare, Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
       | CompareExchangeWeak (e_ty, e_o, e_e, e_d, mo1, mo2) ->
@@ -684,7 +683,7 @@ ctype:
 | ty= ctype STAR
     { Core_ctype.Pointer0 ty }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
-    { Core_ctype.Atomic1 ty }
+    { Core_ctype.Atomic0 ty }
 (*
 | SIZE_T
     { Core_ctype.SIZE_T }
@@ -793,12 +792,12 @@ case_rules:
 
 
 memory_order:
-| SEQ_CST { Cmm.Seq_cst }
-| RELAXED { Cmm.Relaxed }
-| RELEASE { Cmm.Release }
-| ACQUIRE { Cmm.Acquire }
-| CONSUME { Cmm.Consume }
-| ACQ_REL { Cmm.Acq_rel }
+| SEQ_CST { Memory_order.Seq_cst }
+| RELAXED { Memory_order.Relaxed }
+| RELEASE { Memory_order.Release }
+| ACQUIRE { Memory_order.Acquire }
+| CONSUME { Memory_order.Consume }
+| ACQ_REL { Memory_order.Acq_rel }
 ;
 
 action:
@@ -809,9 +808,9 @@ action:
 | KILL e= delimited(LPAREN, expr, RPAREN)
     { Kill e }
 | STORE LPAREN e1= expr COMMA e2= expr COMMA e3= expr RPAREN
-    { Store (e1, e2, e3, Cmm.NA) }
+    { Store (e1, e2, e3, Memory_order.NA) }
 | LOAD LPAREN e1= expr COMMA e2= expr RPAREN
-    { Load (e1, e2, Cmm.NA) }
+    { Load (e1, e2, Memory_order.NA) }
 | STORE LPAREN e1= expr COMMA e2= expr COMMA e3= expr COMMA mo= memory_order RPAREN
     { Store (e1, e2, e3, mo) }
 | LOAD LPAREN e1= expr COMMA e2= expr COMMA mo= memory_order RPAREN
@@ -855,7 +854,7 @@ expr:
     { Efalse }
 (* TODO: other constants *)
 | n= INT_CONST
-    { Econst (Cmm_aux.Cint n) }
+    { Econst (Cmm_aux_old.Cint n) }
 | ty= delimited(DQUOTE, ctype, DQUOTE)
     { Ectype ty }
 (* TODO

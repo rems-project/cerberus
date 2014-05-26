@@ -1138,7 +1138,7 @@ let red2_sseq x =
   match x with
     | (Esseq _as e1 e2, tid, _KS) ->
           if is_value e1 then
-            Boot.print_debug ("IS_PURE: " ^ Boot.pp_core_expr e1) $
+            Boot.print_debug ("red2_sseq IS_PURE: " ^ Boot.pp_core_expr e1) $
             push_trace (E.Rule_Sseq, Nothing) >> E.return (subst_syms _as e1 e2, Cmm_aux_old.Tseq tid, _KS)
           else if is_pure e1 then
             E.get_file            >>= fun file ->

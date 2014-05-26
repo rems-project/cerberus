@@ -1,6 +1,6 @@
 open import Pervasives Global
 import Symbol AilTypes Implementation_ Undefined Cmm_aux_old Memory_order
-import Memory
+import New_memory Memory
 
 open import Core_ctype
 
@@ -68,28 +68,27 @@ type constant =
  *)
 
 type expr 'a =
-  (* pointer stuff *)
-(*  | Epointer of New_memory.mem_pointer_value
-  | Epointer_byte of nat * New_memory.mem_pointer_value
-HACK TO BUILD*)
-  | Enull of ctype (*HACK*)
-  
-  | Econcat_bytes of list (expr 'a) (* non empty list please *)
-
-
+(*
+  (* TODO: made obsolete by Epointer, but keep for now for Core_run.lem *)
+  | Enull of Core_ctype.ctype
+  | Eaddr of Memory.mem_addr
+*)
   (* pure expressions *)
   | Eunit
   | Etrue
   | Efalse
   | Econst of Cmm_aux_old.constant
+  | Epointer of New_memory.pointer_value
+  | Epointer_byte of nat * New_memory.pointer_value
+  | Econcat_bytes of list (expr 'a) (* non empty list please *)
   | Ectype of ctype
-  | Eaddr of Memory.mem_addr
   | Esym of sym
   | Eimpl of Implementation_.implementation_constant
   | Etuple of list (expr 'a)
   | Enot of expr 'a
   | Eop of binop * expr 'a * expr 'a
   | Ecall of name * list (expr 'a)
+  
   
   (* I/O operations *)
   | Eoutput of string
@@ -103,7 +102,7 @@ HACK TO BUILD*)
   | Elet of sym * expr 'a * expr 'a
   | Eif of expr 'a * expr 'a * expr 'a
   | Eproc of set 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
-  | Esame of expr 'a * expr 'a
+(*  | Esame of expr 'a * expr 'a *)
   | Eaction of paction 'a
   
   (* sequencing operators *)
@@ -187,7 +186,7 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 
 
-
+(*
 
 (* NOTE: we assume that the expression is well typed *)
 val is_value: forall 'a. expr 'a -> bool
@@ -277,3 +276,5 @@ let rec is_value e =
     | Eis_unsigned _ ->
         true
   end
+
+*)

@@ -27,7 +27,9 @@ VPATH=$(LEMDIRS) $(MLDIRS)
 
 # Where and how ocamlbuild will be called
 OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
+
+# menhir --external-tokens Core_parser_util
 
 
 AIL_FILES=\
@@ -57,9 +59,9 @@ MODEL_FILES=\
   core.lem \
   core_aux.lem \
   core_indet.lem \
-  core_run.lem \
-  core_run_effect.lem \
-  core_run_inductive.lem \
+  core_run2.lem \
+  core_run2_aux.lem \
+  core_run2_effect.lem \
   core_simpl.lem \
   cabs_to_ail.lem \
   cabs_to_ail_effect.lem \
@@ -87,6 +89,9 @@ MODEL_FILES=\
   core_ctype.lem \
   memory.lem \
   naive_memory.lem \
+  new_memory.lem \
+  new_memory_effect.lem \
+  symbolic.lem \
   output.lem
 
 
@@ -196,6 +201,25 @@ ocaml_native: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(COR
 
 check_memory:
 	OCAMLRUNPARAM=b $(LEM) -lib ott/lem model/new_memory.lem
+
+
+
+
+
+
+cerbcore_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
+               $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
+#	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/cerbcore.ml
+	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) cerbcore.byte
+	ln -fs _ocaml_generated/cerbcore.byte cerbcore
+
+
+
+
+
+
+
 
 
 .PHONY: coq coq-lem coq-coqc

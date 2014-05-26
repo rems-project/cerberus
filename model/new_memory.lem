@@ -9,7 +9,7 @@
 *)
 
 open import Pervasives
-import New_memory_effect Symbolic State_exception AilTypes
+import New_memory_effect Symbolic State_exception AilTypes Core_ctype
 
 (* TODO: temporary hack *)
 val assert_false: forall 'a. string -> 'a
@@ -31,8 +31,9 @@ declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 (* 
 type memory_error
 *)
+type memory_error
 
-type t = Exception.t  (* to represent failure cases *)
+type t 'a = Exception.t 'a memory_error   (* to represent failure cases *)
 
 
 
@@ -45,8 +46,8 @@ type size = Symbolic.symbolic
 
 type lifted_value 'a =
   | Specified of 'a
-  | Unspecified of AilTypes.ctype
-  | Indeterminate_value of AilTypes.ctype
+  | Unspecified of Core_ctype.ctype
+  | Indeterminate_value of Core_ctype.ctype
 
 
 
@@ -110,8 +111,6 @@ pointer type, which doesn't. *)
 type mem_object_value =
   | Obj_pointer of pointer_value
 
-  | Obj_unspecified of AilTypes.ctype
-(*  | Indeterminate_value of AilTypes.ctype *) (* TODO: we don't have trap value, so `Unspecified' is sufficient *)
 
 
 
@@ -119,6 +118,8 @@ type mem_object_value =
 
 
 
+(* TODO *)
+type object_value
 
 (** The memory layout API *)
 
@@ -181,7 +182,7 @@ type allocator =
   | Trivial of address (* the next free address *)
 
 
-let create_sao tid ty ty_size ty_alignment = do E 
+let create_sao tid ty ty_size ty_alignment = do E
 
   (* we pass in ty_size and ty_alignment here because calculating them
   involves executing core functions (from the implementation file),
@@ -192,65 +193,66 @@ let create_sao tid ty ty_size ty_alignment = do E
   sao_id <- E.fresh_sao_id;
   
   (* call the allocator to construct a new address *)
-  (address, new_allocator) <- do E 
-    allocator <- E.get_allocator; in
-    match allocator with
+  (address, new_allocator) <- E.get_allocator >>= function
     (* a completely concrete next-address allocator (with no reuse on free)*)
     | Trivial next_address -> 
         let next_address' = assert_false "...round up next_address modulo ty_align" in
         E.return (next_address', Trivial (next_address' + ty_size))
-
+    
     (* the most semantically general allocator: taking a new
-    symbolic variable with constraints that the new allocation
-    doesn't overlap the currently allocated (in some sense TBD) things*)
-    | Semantically_general allocatable_space-> do E
+       symbolic variable with constraints that the new allocation
+       doesn't overlap the currently allocated (in some sense TBD) things*)
+    | (Semantically_general allocatable_space as allocator) -> do E
         (* create a new symbolic variable*)
         address <- E.fresh_symbolic_variable;
         (* build constraints *)
         st <- E.get_concurrency_model_state; in
-        let current_footprints : list (address * size)= Concurrency_model.hb_live_footprints st in
-        let new_constraints = 
-          (mk_constraint "address mod ty_size = 0") ::
-          (mk_constraint "(address,ty_size) inside allocatable_space ") ::
-          List.map (function (address',size') -> mk_constraint "(address,size) doesn't overlap (address',size')" ) current_footprints in do E
+          let current_footprints : list (address * size)= Concurrency_model.hb_live_footprints st in
+          let new_constraints = 
+            (mk_constraint "address mod ty_size = 0") ::
+            (mk_constraint "(address,ty_size) inside allocatable_space ") ::
+            List.map (function (address',size') ->
+              mk_constraint "(address,size) doesn't overlap (address',size')"
+            end) current_footprints in do E
           (* update the existing constraint set *)
-          E.add_constraints new_constraints;        
+          () <- E.add_constraints new_constraints;
           (* check satisfiable and fail if not *)
           b <- E.check_constraints_satisfiable; in
-          if b then 
-            E.return (address, allocator)
-          else
-            E.fail (tag "run out of memory")
-            (* in fact an implementation might fail earlier than this
-            - so this allocator cannot match *all* behaviours of some
-            reasonable C implementations *)
-
-         end ;
-   E.set_allocator new_allocator ; 
-
-
-   let sao_metadata = <| obj_original_type = ty; obj_address = address |> in 
-
-   ... update with   Map.insert sao_id sao_metadata sao_map 
-
-   let ptr_val = 
-     Pointer_nonnull <|
-       ptr_provenance = Prov_sao sao_id;
-       ptr_view_type = ty;
-       ptr_abstract_offset = Just []; 
-       ptr_numeric_offset = Symbolic.zero;
-       ptr_numeric_address = address; 
+            if b then 
+              E.return (address, allocator)
+            else
+              E.fail (tag "run out of memory")
+                (* in fact an implementation might fail earlier than this
+                   - so this allocator cannot match *all* behaviours of some
+                   reasonable C implementations *)
+          end
+        end
+  end ;
+  () <- E.set_allocator new_allocator; in
+  
+  assert_false "
+  let sao_metadata = <| obj_original_type = ty; obj_address = address |> in 
+    
+  assert_false \"WIP: ... update with   Map.insert sao_id sao_metadata sao_map\"
+  
+  let ptr_val = 
+    Pointer_nonnull <|
+      ptr_provenance=      Prov_sao sao_id;
+      ptr_view_type=       ty;
+      ptr_abstract_offset= Just [];
+      ptr_numeric_offset=  Symbolic.zero;
+      ptr_numeric_address= address;
      |> in
+  
+  st <- E.get_concurrency_model_state; in
+  let st' = Concurrency_model.create st tid ty ptr_val in
+  
+  E.set_concurrency_model_state st'
+  
+  
+  E.return ptr_val"
 
-
-   st <- E.get_concurrency_model_state; in
-   let st' = Concurrency_model.create st tid ty ptr_val in
-
-   E.set_concurrency_model_state st'
-
-
-   E.return ptr_val
-
+end
 
 
 
@@ -585,9 +587,11 @@ val pointer_compare:  compare_operator->  ctype -> pointer_value -> ctype -> poi
 
 
 (* these might be special-cased in the memory layout model so probably belong in this API? *)
+(* K: yes *)
+(*
 val memcpy 
 val memcmp
-
+*)
 
 
 
@@ -595,7 +599,10 @@ val memcmp
 (* TODO: and functions to assemble a read value from a hb-partial-order of overlapping writes *)
 (* TODO: ...including reading representation bytes from an object etc. *)
 
-
+(* The `ctype' for the shift operator is the static type of the original pointer.
+e.g.     when elaborating     s.f     (s is a field, and this is a memberof)
+         the `ctype' is the static type of s.
+ *)
 (*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
 
 
@@ -604,26 +611,29 @@ val memcmp
 (* ========= *)
 (* internal operations *)
 
+(*
 val gen_symbolic_address: t address
 let gen_symbolic_address =
   assert_false "WIP"
+*)
 (*
   State_exception.modify (fun st ->
     (st.mem_symbol_counter, <| st with mem_symbol_counter= st.mem_symbol_counter + 1 |>)
   )
 *)
 
+(*
 val gen_mem_object_id: t mem_object_id
 let gen_mem_object_id =
   assert_false "WIP"
+*)
 
 
 
 
 
 
-
-
+(*
 let create ty =
   gen_symbolic_address >>= fun addr   ->
   gen_mem_object_id    >>= fun obj_id ->
@@ -631,7 +641,19 @@ let create ty =
     let obj = <| obj_effective_type= Just ty; obj_address= addr |> in
     (Pointer_object obj_id, <| st with mem_objects= Map.insert obj_id obj st.mem_objects |>)
   )
+*)
 
+(*
+let create ty obj_id =
+  (* TODO: actual object creation *)
+  E.return $
+    Pointer_other <|
+      ptr_provenance=      Prov_sao obj_id;
+      ptr_view_type=       ty;
+      ptr_abstract_offset= Nothing;
+      ptr_numeric_offset=  Symbolic.zero;
+    |>
+ *)
 
 
 
@@ -647,6 +669,7 @@ let load ty ptr =
 
 
 
+(*
 let pointer_eq ptr1 ptr2 =
   if is_null_pointer ptr1 && is_null_pointer ptr2 then
     (* STD §6.3.2.3#4, sentence 2 *)
@@ -656,3 +679,13 @@ let pointer_eq ptr1 ptr2 =
     E.return false
   else
     assert_false "WIP"
+*)
+
+
+
+
+
+
+val null_pointer: Core_ctype.ctype -> pointer_value
+let null_pointer ty =
+  Pointer_null ty

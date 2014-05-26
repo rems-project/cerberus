@@ -66,7 +66,7 @@ val translate:
 let rec translate_lvalue stdlib program a_exp =
   let translate_expression = translate_expression stdlib program in
   if Aaux.null_pointer_constant a_exp then
-    E.return $ (C.Enull (Caux.proj_ctype (ctype_of a_exp)))
+    E.return $ (C.Epointer (New_memory.null_pointer (Caux.proj_ctype (ctype_of a_exp))))
   else
     let A.AnnotatedExpression _ exp = a_exp in
     match exp with
@@ -130,7 +130,7 @@ and translate_expression stdlib program a_expr =
   let result_ty = ctype_of a_expr in
   
   if AilTypesAux.pointer result_ty && Aaux.null_pointer_constant a_expr then
-    E.return $ C.Enull (Caux.proj_ctype result_ty)
+    E.return $ C.Epointer (New_memory.null_pointer (Caux.proj_ctype result_ty))
   else
     let A.AnnotatedExpression annot expr = a_expr in
     match expr with

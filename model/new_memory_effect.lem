@@ -16,11 +16,17 @@ let return x =
   fun st -> Exception.return (Undefined.return x, st)
 
 
+
+(* TODO: rewrite *)
 val bind: forall 's 'a 'b. t 's 'a -> ('a -> t 's 'b) -> t 's 'b
-(*
 let bind m f = fun st ->
-  Undefined.bind (m st) (fun (x, st') ->
-    let (a, st'') = f x st' in
-    (Undefined.return a, st'')
-  )
-*)
+  match m st with
+    | Exception.Result (Undefined.Defined x, st') ->
+        f x st'
+    | Exception.Result (Undefined.Undef ub, st') ->
+        Exception.Result (Undefined.Undef ub, st')
+    | Exception.Result (Undefined.Error, st') ->
+        Exception.Result (Undefined.Error, st')
+    | Exception.Exception err ->
+        Exception.Exception err
+  end

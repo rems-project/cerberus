@@ -10,6 +10,9 @@ type ctype =
  | Function of ctype * list ctype * bool
  | Pointer of ctype
  | Atomic of ctype
+(*  | Struct of  *)
+
+
 (*
   | STRUCT of Ail.id * list (Ail.id * member)
   | UNION  of Ail.id * list (Ail.id * member)
