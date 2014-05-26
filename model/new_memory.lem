@@ -96,6 +96,11 @@ type pointer_value =
   | Pointer_null of AilTypes.ctype
   | Pointer_nonnull of pointer_nonnull
 
+(* I wasn't completely sure about whether we should have this split
+here, instead of regarding a null pointer as a Prov_intcast 0.  But
+6.3.2.3p3 distinguishes between a null pointer constant (which has
+particular properties) and an arbitrary 0-valued integer cast to a
+pointer type, which doesn't. *)
 
 
 
@@ -232,7 +237,8 @@ val load:          AilTypes.ctype -> pointer_value -> t object_value
 
    - either (reading a representation byte from an sao or das)
   
-      - the ctype is char
+      - the ctype is char  (or char*, depending how this is set up)
+
       - according to the ptr_numeric_offset and ptr_numeric_address the pointer points to somewhere in the footprint (padding included) of the original object (sao or das) (from the ptr_provenance)
      
    - or (reading a normal subobject member from a statically allocated object)
@@ -261,7 +267,10 @@ val load:          AilTypes.ctype -> pointer_value -> t object_value
 
     - check non-null
 
-    - nothing more, beyond the effective-type checking below?  (and modulate that by only looking at the leaf types and by optionally allowing representation casts)?
+    - nothing more, beyond the effective-type checking below?  (and
+       modulate that by only looking at the leaf types and by
+       optionally allowing representation casts)?
+
 *)
 
 (*When we do a (nonatomic) read, we expect the concurrency model to
@@ -282,6 +291,12 @@ abstract thing (i.e. not just as a char array), we should *not* be
 reading the padding, and should not get rf edges from padding writes
 etc.
 
+Moreover, in the Standard semantics (where padding always contains
+undefined values), the reassembly process (for any representation
+read) has to introduce those in the right places - to match compiler
+behaviour, presumably those should be determined by the static type of
+the load.
+
 In the Standard semantics, we also need to do effective-type checking:
 checking for each of the pieces of that reassembly that the type of
 the write is suitably compatible with the lvalue type of the load.
@@ -299,8 +314,9 @@ lifetime check (w.r.t. *all* the writes we read from).
 
 val store:         AilTypes.ctype -> pointer_value -> object_value -> t unit
 
-(* This is relatively straightforward: we basically just synthesise a Write
-event, after some checks similar to the load.  
+(* This is relatively straightforward: we basically just synthesise a
+Write event, after some checks similar to the load (abstract those
+out).
 
 In the Standard semantics we can look at the pointer_value to
 determined if we're writing to a statically allocated object (in which
@@ -321,12 +337,14 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
       (otherwise the static type system should have told us, but we
       should check dynamically too, absent a type soundness proof)
 
-   - check the pointer_value is non-null
+   - check the pointer_value is non-null (only in the standard semantics?)
 
    - in the Standard semantics: 
-      check the ptr_view_type is more-or-less equal (TODO?) to the static type
-   - in the Concrete semantics:   the same check?? 
+      check the ptr_view_type is more-or-less equal (TODO?) to the
+      static type
 
+   - in the Concrete semantics:   
+      the same check?? 
 
    - if the ptr_abstract_offset is non-Nothing, append the member id
 
@@ -338,45 +356,149 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
 
 *)
 
-val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*) -> pointer_value -> Symbolic.symbolic  -> t pointer_value
+val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*) 
+                       -> pointer_value 
+                       -> Symbolic.symbolic  
+                       -> t pointer_value
 
 (*
    - the actual offset is determined by the static type and the symbolic value
 
    - in the Standard semantics:
+      allow only within an array (or one-past), remembering that
+      almost anything is considered an array of size 1.  We do this by
+      looking at the end of the ptr_abstract_offset, and mutate that.
 
+   - in the Concrete semantics:
+      allow any arithmetic (updating the ptr_abstract_offset if it
+      makes sense, otherwise zapping it)
 
-   - check that either
-      -- the static type is a struct or union with that member
-      (otherwise the static type system should have told us, but we
-      should check dynamically too, absent a type soundness proof)
+   - add the offset to the ptr_numeric_offset
 
-   - check the pointer_value is non-null
-
-   - in the Standard semantics: 
-      check the ptr_view_type is more-or-less equal (TODO?) to the static type
-   - in the Concrete semantics:   the same check?? 
-
-
-   - if the ptr_abstract_offset is non-Nothing, append the member id
-
-   - look up the (symbolic) offset for the member in this static type
-
-   - add it to the ptr_numeric_offset
-
-   - add it to the ptr_numeric_address
+   - add the offset to the ptr_numeric_address
 
 *)
 
 
+(* See 6.3.2.3 for casts involving pointers *)
 
-val cast_pointer_to_pointer:  pointer_value -> ctype -> t pointer_value
+val cast_pointer_to_pointer:  ctype (* the static type of the pointer *)
+                           -> pointer_value
+                           -> ctype (* the type specified in the cast *)
+                           -> t pointer_value
+
+(* 
+
+ - in the Standard semantics:
+
+     - casting a pointer "to an object type" (what's the force of 
+        that - not a function pointer?) to void* : this always succeeds
+        (6.3.2.3p1); it gives the same pointer value except for the
+        view type which we change to void?
+
+     - casting a pointer to void to a pointer "to an object type":
+        always succeeds, and again we just futz with the view type.
+        (say you have a pointer &s.f, cast to void*, and cast back to
+        float*, can it be used to access f ?  not in the standard,
+        anyhow)
+
+     - casts that add qualifiers just futz with the view type:
+        6.3.2.3p2 "For any qualifier q, a pointer to a non-q-qualified
+        type may be converted to a pointer to the q-qualified version
+        of the type; the values stored in the original and converted
+        pointers shall compare equal."
+
+     - casting of an "integer constant expression with the value 0"
+       (6.3.2.3p3) to a pointer type gives the Pointer_null value  
+
+     - casting the Pointer_null value to any pointer type leaves it
+       unchanged (6.3.2.3p3,4)
+
+     - casting to a pointer to a character type leaves the pointer
+       value unchanged except for the view type?  Maybe we need to
+       leave a marker in the ptr_abstract_offset too, so that we know
+       we can legally do char array arithmetic after that.
+
+       (6.3.2.3p7: "When a pointer to an object is converted to a
+       pointer to a character type, the result points to the lowest
+       addressed byte of the object. Successive increments of the
+       result, up to the size of the object, yield pointers to the
+       remaining bytes of the object."
+
+     - casting to another object type checks the alignment (undefined
+       if the result is not correctly aligned) then futz's with the
+       view type (maybe we don't need to do any more, if we are
+       checking that the view type is legal before doing any
+       accesses).  This will allow slightly more liberal roundtrips
+       than the standard, but not much.
+
+       (6.3.2.3p7: "A pointer to an object type may be converted to a
+       pointer to a different object type. If the resulting pointer is
+       not correctly aligned68) for the referenced type, the behavior
+       is undefined. Otherwise, when converted back again, the result
+       shall compare equal to the original pointer.")
+
+     - casts of function pointers to function pointers just futz with
+       the view type
+
+     - otherwise it's undefined behaviour (or unspecified value?)
+
+ - in the Concrete semantics:
+
+     - this pretty much always works, futzing with the view type,
+       except for alignment and object-pointer vs function-pointer stuff?
+
+  *)
+
+
 val cast_pointer_to_integer: pointer_value -> integerType -> t object_value
+
+(*  - for Pointer_null, take zero
+
+    - for Pointer_nonnull, take the ptr_numeric_address 
+
+    - record the pointer_value (or just its ptr_provenance?) in the
+      provenance tracking data of the resulting object_value
+
+    (and union up those taints in the core semantics with the
+    following - lift out the manipulation of this stuff)
+
+    the above is too liberal wrt the standard - 6.3.2.3p6 leaves this
+    implementation-defined: "Any pointer type may be converted to an
+    integer type. Except as previously specified, the result is
+    implementation-defined. If the result cannot be represented in the
+    integer type, the behavior is undefined. The result need not be in
+    the range of values of any integer type."
+
+ *)
+
+type provenance_tracking_data = list pointer_value
+val combine_provenance_data : list provenance_tracking_data -> provenance_tracking_data
+
+
 val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
-val pointer_diff:  pointer_value -> pointer_value -> t object_value
+
+(*
+
+  - in the Standard semantics:
+
+
+  - in the Concrete semantics:
+     this always works
+
+*)
+
+val pointer_diff:  ctype -> pointer_value -> ctype -> pointer_value -> t object_value
 
 type compare_operator = Lt | Gt | Ge | Le | Eq | Neq
-val pointer_compare:  compare_operator->  pointer_value -> pointer_value -> t bool
+val pointer_compare:  compare_operator->  ctype -> pointer_value -> ctype -> pointer_value -> t bool
+
+
+(* these might be special-cased in the memory layout model so probably belong in this API? *)
+val memcpy 
+val memcmp
+
+
 
 
 (* TODO: add overlap and containment checking *)
