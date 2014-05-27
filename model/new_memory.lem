@@ -173,26 +173,25 @@ let create typ =
 (* Here E is the state-and-exception monad for the layout model.  Its
 state contains:
 - the sao and das symbol generators and maps
-- the allocator (a tag of 
+- the allocator (a tag indicating which to use and any internal state it requires)
 - the concurrency_model state
 *)
 
 type allocator = 
-  | Semantically_general of list (address*size)   (* the addresses in which we can allocate *)
   | Trivial of address (* the next free address *)
+  | Semantically_general of list (address*size)   (* the allocatable space - the address ranges in which we can allocate *)
 
 
 let create_sao tid ty ty_size ty_alignment = do E
 
   (* we pass in ty_size and ty_alignment here because calculating them
   involves executing core functions (from the implementation file),
-  and in this module we don't have access to the core_run interpreter
-  *)
+  and in this module we don't have access to the core_run interpreter*)
 
   (* create a new unique id *)
   sao_id <- E.fresh_sao_id;
   
-  (* call the allocator to construct a new address *)
+  (* invoke the allocator to construct a new address *)
   (address, new_allocator) <- E.get_allocator >>= function
     (* a completely concrete next-address allocator (with no reuse on free)*)
     | Trivial next_address -> 
@@ -207,27 +206,42 @@ let create_sao tid ty ty_size ty_alignment = do E
         address <- E.fresh_symbolic_variable;
         (* build constraints *)
         st <- E.get_concurrency_model_state; in
-          let current_footprints : list (address * size)= Concurrency_model.hb_live_footprints st in
+          let live_footprints : list (address * size)= Concurrency_model.live_footprints st in
+          (* TODO: the simple thing to do for live_footprints is
+          return all those "currently" (in abstract-machine execution
+          time) allocated; we can do that for now.  But for a
+          multi-threaded allocator, it's conceivable that that will
+          lose some concurrency w.r.t. real implementations, so one
+          might thing of taking just the hb-live allocations - but
+          that could lead to deadlocks when other extant overlapping
+          allocations become hb-visible. *)
           let new_constraints = 
+            (* constraint: this allocation is aligned *)
             (mk_constraint "address mod ty_size = 0") ::
+            (* constraint: this allocation is inside the allocatable space*)
             (mk_constraint "(address,ty_size) inside allocatable_space ") ::
+            (* constraints: this allocation doesn't overlap pre-existing ones*)
             List.map (function (address',size') ->
               mk_constraint "(address,size) doesn't overlap (address',size')"
-            end) current_footprints in do E
+            end) live_footprints in do E
           (* update the existing constraint set *)
           () <- E.add_constraints new_constraints;
-          (* check satisfiable and fail if not *)
+          (* check constraint set satisfiable, and fail if not *)
           b <- E.check_constraints_satisfiable; in
             if b then 
               E.return (address, allocator)
             else
               E.fail (tag "run out of memory")
-                (* in fact an implementation might fail earlier than this
-                   - so this allocator cannot match *all* behaviours of some
-                   reasonable C implementations *)
+                (* in fact an implementation might fail earlier than
+                this - so this allocator cannot match *all* behaviours
+                of some reasonable C implementations. To do so, we'd
+                have to allow the allocator to use some space for its
+                metadata, or just allow nondeterministic failure.  *)
+
           end
         end
   end ;
+  (* update the allocator state *)
   () <- E.set_allocator new_allocator; in
   
   assert_false "
