@@ -145,6 +145,21 @@ let create typ =
              the allocating function.",   which matches what I was
              saying the other day:  we do have to make up new sw edges.    
              Kyndylan will have to do this in his free()....
+
+             See also Defect Report #403,
+             http://www.open-std.org/jtc1/sc22/wg14/www/docs/dr_403.htm,
+             in which Mark proposed "Calls to these functions that
+             allocate or deallocate a particular region of memory
+             shall occur in a single total order, and each such
+             deallocation call shall synchronise with the next
+             allocation (if any) in this order."  The Feb 2012 meeting
+             proposed a Technical Corrigendum to replace the last two
+             sentences of 7.22.3p2 with that - but re-reading it, it
+             seems much too strong.  Implementations may do some
+             thread-local allocation, which wouldn't give rise to this
+             synchronisation.   So we should make a new Defect Report, ahem.
+
+
           - a completely concrete next-address allocator (with no
              reuse on free)
 
