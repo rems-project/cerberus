@@ -301,7 +301,9 @@ val free_das:          pointer_value -> t unit
 this will presumably be called with the pointer returned by create,
 and we could plumb the statically_allocated_object_id directly to here
 (returning it from create).  OTOH, free() might be called with an
-arbitrary pointer value. Do we want the same API call for both? *)
+arbitrary pointer value. Do we want the same API call for both?
+Probably not - we shouldn't have to check all the same things?  Not
+sure how goto and longjmp play with this, though *)
 
 (* for the automatic (or thread) storage-duration case: 
 
@@ -346,8 +348,7 @@ arbitrary pointer value. Do we want the same API call for both? *)
 
    - Then we use that address and size to synthesise a Kill event. 
 
-   - In the Standard semantics with -pointer_lifetime_end_zap true, we
-      synthesise undefined-value writes as above.
+
 *)
 
 val load:          AilTypes.ctype -> pointer_value -> t object_value
