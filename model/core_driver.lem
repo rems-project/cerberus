@@ -2,74 +2,82 @@
 type address = Symbolic.symbolic   (* the type of symbolic integers *)
 
 
-(* Ids for dynamically allocated regions *)
-type statically_allocated_object_id = Symbolic.symbol   (* a type of unique-over-time ids *)
 
-type dynamically_allocated_space_id = Symbolic.symbol
+type allocated_object_id = Symbolic.symbol   (* a type of unique-over-time ids *)
+type allocated_space_id = Symbolic.symbol
 
 
-(* we have:
+(* we have two kinds of allocation:
 
-- statically allocated objects, including globals, block-scoped
-  variables, function parameters, un-named objects (from compound
-  literals and string constants).  All these have a static type from
+- an "allocated object", including a global, a block-scoped
+  variable, a function parameter, an un-named object (from compound
+  literals and a string constant).  All these have a static type from
   the program source.
 
-- dynamically allocated space, coming from malloc etc., which may or
+- an "allocated space", coming from malloc etc., which may or
   may not yet have been written into.
 
 BTW, The standard's usage of "object" is confusing (or confused?) here:
 it's unclear whether a malloc'd space is an "object" before you've
-written into it, for example.  So we avoid the word.  We don't treat
-malloc'd space as a char array, either.
+written into it, for example.  
 
-This metadata is immutable, and we keep extend-only maps from the ids
-(here in the driver).
+In our semantics, writes into dynamically allocated space do *not*
+create new "objects" inside that space; they just exist in the set of
+writes maintained by the concurrency model.
+
+One might thing that malloc'd space should be treated as a char array,
+but that wouldn't be correct w.r.t. the standard, e.g. because their
+behaviour w.r.t. strong update is different.
+
+As far as the concurrency model is concerned, though, I don't think it
+has to distinguish between the two kinds.  It can just have single
+Allocate and Deallocate actions (we should rename from the former
+Create and Kill for clarity).
+
 
 *)
 
 
-(* for "statically allocated" objects, we have: *)
+(* There is immutable metadata for both kinds of allocations, and
+thread through extend-only maps from the ids recording it. *)
 
-type statically_allocated_object_metadata = <|
-  obj_original_type: Core.ctype;
-  obj_address:       address;
-  (* the size is determined by the ctype *)
-  
-  (* and maybe a size for VLAs and flexible array member
+type allocated_object_metadata = <|
+  ao_original_type: Core.ctype;
+  ao_address:       address;
+  ao_size:          Symbolic.symbolic;
+  (*ao_alignment:     Symbolic.symbolic;*)
+
+(* the size is determined by the ctype, but as that is via a Core
+  program, to calculate the implementation-defined things, it's
+  convenient to record it here.  The alignment is likewise determined
+  but I think we won't need to use it after the address is created*)
+
+  (* and maybe a size for VLAs and flexible array members
     (for f.a.m., you're not supposed to have any statically allocated f.a.m.'s; for VLAs we're not sure) 
   *)
 |>
 
-(* for dynamically allocated space *)
-
-type dynamically_allocated_space_metadata = <|
-  space_address:  address;
-  space_size: Symbolic.symbolic;
+type allocated_space_metadata = <|
+  as_address:  address;
+  as_size: Symbolic.symbolic;
 |>
 
-(* for calloc, you create a write (of a char array literal of zeros)
-just after creation time *)
-
-(* writes into dynamically allocated space do *not* create new
-"objects" inside that space; they just exist in the set of writes
-maintained by the concurrency model *)
 
 
 type driver_state = <|
-  sao_counter : UniqueId.counter;
-  das_counter : UniqueId.counter;
-  sao_map : bmap sao_id sao_metadata;
-  das_map : map das_id das_metadata;
+  ao_counter : UniqueId.counter;
+  as_counter : UniqueId.counter;
+  ao_map : bmap allocated_object_id allocated_object_metadata;
+  as_map : map allocated_space_id allocated_space_metadata;
 |>
 
 
 val initial_driver_state: driver_state
 let initial_driver_state = <|
-  sao_counter= UniqueId.init;
-  das_counter=  UniqueId.init;
-  sao_map=           Map.empty;
-  das_map=           Map.empty;
+  ao_counter= UniqueId.init;
+  as_counter=  UniqueId.init;
+  ao_map=           Map.empty;
+  as_map=           Map.empty;
 |>
 
 

@@ -1,4 +1,6 @@
-
+(* TODO: claim motivation: not just identify standard and de facto C,
+but also basis for semantics for Cs that do more checking, eg CHERI
+(softbound?) *)
 
 (*
   STUFF WE NEED
@@ -66,32 +68,46 @@ type memory_write
 
 
 type pointer_provenance =
-  (* pointer to a statically allocated object *)
-  (*the metadata associated with those ids is kept in the driver_state *)
-  | Prov_sao of sao_id
+
+  (* pointer to an allocated object (with static, thread, or automatic
+      storage duration) *)
+  | Prov_allocated_object of allocated_object_id
   
-  (* pointer to a dynamically allocated space (from malloc etc.) *) 
-  | Prov_das of das_id
+  (* pointer to a dynamically allocated space (from malloc etc., with
+      allocated storage duration) *)
+  | Prov_allocated_space of allocated_space_id
 
   (* pointer formed by casting from an integer, in the case where the
-     integer provenance-tracking machinery doesn't discover a good
-     original object for (so this case will never be used in standard
-     C. The `ctype' records the type used for the creating cast. *)
+      integer provenance-tracking machinery doesn't discover a good
+      original object for it (so this case will never be used in standard
+      C. The ctype records the type used for the creating cast. *)
   | Prov_intcast of AilTypes.ctype * mem_object_value
 
 
 type pointer_path_element =
-  | Path_array  of Symbolic.symbolic (* the index *) 
+  | Path_array  of Symbolic.symbolic (* the array index *) 
   | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) 
 
 type pointer_path = list pointer_path_element
 
 type pointer_nonnull = <|
   ptr_provenance:      pointer_provenance;
-  ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast or a shift. *)
-  ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path, where that makes sense  *)
-  ptr_numeric_offset:  maybe Symbolic.t; (* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field), where that makes sense *)
-  ptr_numeric_address: Symbolic.t  (* the address in memory *)
+  ptr_view_type:       AilTypes.ctype; 
+   (* the "view type" of the pointer - this will change when you do a
+       cast or a member shift. *)
+  ptr_abstract_offset: maybe pointer_path; 
+   (* the position in the original allocated_object, represented as an
+       abstract access path (where that makes sense and Nothing
+       otherwise - eg if this pointer has been cast to a char type and
+       then subject to pointer arithmetic?), or Nothing if the
+       provenance is an allocated_space *)
+  ptr_numeric_offset:  maybe Symbolic.t; 
+   (* the position in the original object, represented with (possibly
+       symbolic) address arithmetic (as an offset from the base
+       address determined by the ptr_provenance field), where that
+       makes sense *)
+  ptr_numeric_address: Symbolic.t  
+   (* the address in memory *)
 |>
 
 type pointer_value =
@@ -124,9 +140,9 @@ type object_value
 (** The memory layout API *)
 
 
-val create_sao:        AilTypes.ctype -> t pointer_value
+
 (*
-let create typ = 
+let allocate_object typ = 
     - create a new unique id 
     - calculate the size of typ
     - call the allocator to construct a new address.  
@@ -197,7 +213,14 @@ type allocator =
   | Semantically_general of list (address*size)   (* the allocatable space - the address ranges in which we can allocate *)
 
 
-let create_sao tid ty ty_size ty_alignment = do E
+
+val allocate_object:    thread_id          (* the allocating thread *)
+                     -> AilTypes.ctype     (* type of the allocation *)
+                     -> Symbolic.symbolic  (* size of that type *)
+                     -> Symbolic.symbolc   (* alignment of that type *)
+                     -> t pointer_value
+
+let allocate_object tid ty ty_size ty_alignment = do E
 
   (* we pass in ty_size and ty_alignment here because calculating them
   involves executing core functions (from the implementation file),
@@ -260,13 +283,13 @@ let create_sao tid ty ty_size ty_alignment = do E
   () <- E.set_allocator new_allocator; in
   
   assert_false "
-  let sao_metadata = <| obj_original_type = ty; obj_address = address |> in 
+  let ao_metadata = <| ao_original_type = ty; ao_address = address; ao_size = ty_size |> in 
     
-  assert_false \"WIP: ... update with   Map.insert sao_id sao_metadata sao_map\"
+  assert_false \"WIP: ... update with   Map.insert ao_id ao_metadata ao_map\"
   
   let ptr_val = 
     Pointer_nonnull <|
-      ptr_provenance=      Prov_sao sao_id;
+      ptr_provenance=      Prov_allocated_object ao_id;
       ptr_view_type=       ty;
       ptr_abstract_offset= Just [];
       ptr_numeric_offset=  Symbolic.zero;
@@ -288,41 +311,52 @@ end
 
 
 
-val create_das:         Symbolic.symbolic -> t pointer value
-(* similar to create_sao except constructing a dynamically allocated space *)
-(* for calloc, core will also have to generate an initialisation write (of a char array of zeros *)
-(* there's an implementation-defined choice in 7.22.3 of what to do when a zero-sized allocation is requested; that can be done in core *)
+val allocate_space:     Symbolic.symbolic  (* the number of bytes required*)
+                     -> Symbolic.symbolic  (* the most general fundamental alignment *)
+                     -> t pointer value
+
+(* similar to allocate_object except constructing an allocated space
+rather than an allocated object*)
+
+(* for calloc, core will also have to generate an initialisation write
+(of a char array of zeros *)
+
+(* there's an implementation-defined choice in 7.22.3 of what to do
+when a zero-sized allocation is requested; that can be done in
+core. There's also some defect report about this *)
 
 
-val kill_sao:          pointer_value -> t unit
-val free_das:          pointer_value -> t unit
+val deallocate_object:       allocated_object_id -> t unit
+val deallocate_space:        pointer_value -> t unit
 
 (* for objects with automatic or thread storage duration (c.f. 6.2.4),
-this will presumably be called with the pointer returned by create,
-and we could plumb the statically_allocated_object_id directly to here
-(returning it from create).  OTOH, free() might be called with an
-arbitrary pointer value. Do we want the same API call for both?
-Probably not - we shouldn't have to check all the same things?  Not
-sure how goto and longjmp play with this, though *)
+we can plumb the allocated_object_id from allocate_object directly to here.
+OTOH, free() might be called with an arbitrary pointer value. *)
 
-(* for the automatic (or thread) storage-duration case: 
+(* for deallocate_object (the automatic and thread storage-duration case):
 
-   - someone synthesises a concurrency-model Kill event with the
-      address and size
+   - we ask the concurrency model to synthesise a deallocate event with the
+      address and size 
 
    - in the Standard semantics, with -pointer_lifetime_end_zap true,
-      someone finds all memory locations containing a pointer with the
-      same unique id (or a projected byte thereof) and for each
-      synthesises a concurrency-model Write event to the Undefined
-      value.
-   - in the Standard semantics with -pointer_lifetime_end_zap false,
+      we need to arrange for all memory locations containing a pointer
+      with the same unique id (or a projected byte thereof) to take on
+      the Undefined value (and for there to be races if those
+      locations are accessed concurrently to this).  That could be
+      done in the concurrency model either by synthesising a
+      concurrency-model Write event to the Undefined value for each,
+      or (perhaps?) by adding special machinery to the read-value
+      assembly and race definitions.
+
+   - in the Standard semantics modified with -pointer_lifetime_end_zap false,
       we don't do that (we rely on the concurrency model liveness
       checking wrt Create and Kill events to check accesses using the
       pointer are legal)
+
    - in the Concrete semantics, we don't do that (likewise relying on
       access-time checking)
 
-   for the free() case:
+   for deallocate_space (the free() case):
 
    - we have to check the pointer matches "a pointer earlier returned
       by a memory management function" (7.22.3.3p2) and that it hasn't
@@ -336,51 +370,64 @@ sure how goto and longjmp play with this, though *)
          ptr_numeric_offset  ... check equal a symbolic zero ?
          ptr_numeric_address ... check equal to the address from the driver metadata for the id of the pointer ? 
 
-       then we use the size from that type
+       then we use the size from the allocated_object_metadata
   
       - in the Concrete semantics:  
 
          we just use the ptr_numeric_address: there should be an
-         hb-visible Create with that address (and no hb-intervening or
-         hb-unordered Kill on it)
+         hb-visible Allocate with that address (and no hb-intervening or
+         hb-unordered Deallocate on it)
 
-       then we use the size from that Create
+       then we use the size from the allocated_space_metadata
 
-   - Then we use that address and size to synthesise a Kill event. 
+   - Then we use that address and size to ask the concurrency model to
+      synthesise a Deallocate event.
 
 
 *)
 
-val load:          AilTypes.ctype -> pointer_value -> t object_value
+val load:          AilTypes.ctype
+                -> Symbolic.symbolic (* the size of that type *) 
+                -> pointer_value 
+                -> t object_value
 
-(* in the Standard semantics:
+let load ty ty_size ptr_val = assert_false "..."
+
+(* I feed in the type size, for consistency with the allocate_* calls,
+but we will need to know the whole layout of the ctype for the
+assembly of the read value *)
+
+(* First some checks on the pointer value.  In the Standard semantics:
 
    - check non-null
 
-   - either (reading a representation byte from an sao or das)
+   - either (reading a representation byte from an allocated_object or allocated_space)
   
-      - the ctype is char  (or char*, depending how this is set up)
+      - the ctype is a character type (or pointer to one, depending how this is set up)
 
-      - according to the ptr_numeric_offset and ptr_numeric_address the pointer points to somewhere in the footprint (padding included) of the original object (sao or das) (from the ptr_provenance)
-     
-   - or (reading a normal subobject member from a statically allocated object)
-    
-      - the ptr_provenance is an sao
+      - according to the ptr_numeric_offset and ptr_numeric_address
+         the pointer points to somewhere in the footprint (internal padding
+         included) of the original object (allocated_object or
+         allocated_space) from the ptr_provenance
+
+   - or (reading a normal subobject member from an allocated object) 
+
+      - the ptr_provenance is an allocated_space
 
       - according to the ptr_abstract_offset the pointer points to the
          original object or a subobject thereof (and not one of those
          one-past things), which matches the ptr_view_type and the
          ctype
 
-   - or (reading a not-necessarily-char from a dynamically allocated space)
+   - or (reading a not-necessarily-char from an allocated space)
 
-      - the ptr_provenance is a das
+      - the ptr_provenance is an allocated_space
 
-      - some check wrt its ptr_view_type ? 
+      - the ctype matches the ptr_view_type 
 
       - according to the ptr_numeric_offset, the pointer points to
-         somewhere within the das (far enough from the end to fit the
-         ctype)
+         somewhere within the allocated_space (far enough from the end
+         to fit the ctype)
 
       - all other checking is left to the effective type
          checking below
@@ -393,43 +440,44 @@ val load:          AilTypes.ctype -> pointer_value -> t object_value
        modulate that by only looking at the leaf types and by
        optionally allowing representation casts)?
 
-*)
+   Then we expect the concurrency model to calculate the set of
+   hb-most-recent writes (do I really mean hb?)  that overlap the read
+   location.  In the entirely non-atomic case, presumably any of those
+   writes that pairwise-overlap each other are themselves hb-related,
+   otherwise we'd have already found a data race (but there might be a
+   struct write and an hb-later member write, or an abstract value
+   write and an hb-later representation-byte write, for example).  And
+   in the atomic case, there might be some "races", but there should
+   be mo edges among those.  Then we need to reassemble the read value
+   from that partial order of write values.  (which may be tricky if
+   many things are symbolic...)
 
-(*When we do a (nonatomic) read, we expect the concurrency model to
-calculate the set of hb-most-recent writes (do I really mean hb?)
-that overlap the read location.  Presumably any of those writes that
-pairwise-overlap each other are themselves hb-related, otherwise we'd
-have already found a data race (but there might be a struct write and
-an hb-later member write, or an abstract value write and an hb-later
-representation-byte write, for example).  Then we need to reassemble
-the read value from that partial order of write values.  (which may be
-tricky if many things are symbolic...)
+   What does "overlap the read location" really mean?  I've been
+   imagining it was just overlap of (address,size) intervals
+   (computing the size from the lvalue type and taking the address
+   from the pointer value), but that's wrong: if we're reading a
+   compound value as an abstract thing (i.e. not just as a char
+   array), we should *not* be reading the padding, and should not get
+   rf edges from padding writes etc.
 
-What does "overlap the read location" really mean?  I've been
-imagining it was just overlap of (address,size) intervals (computing
-the size from the lvalue type and taking the address from the pointer
-value), but that's wrong: if we're reading a compound value as an
-abstract thing (i.e. not just as a char array), we should *not* be
-reading the padding, and should not get rf edges from padding writes
-etc.
+   Moreover, in the Standard semantics (where padding always contains
+   undefined values), the reassembly process (for any representation
+   read) has to introduce those in the right places - to match
+   compiler behaviour, presumably those should be determined by the
+   static type of the load.
 
-Moreover, in the Standard semantics (where padding always contains
-undefined values), the reassembly process (for any representation
-read) has to introduce those in the right places - to match compiler
-behaviour, presumably those should be determined by the static type of
-the load.
+   In the Standard semantics, we also need to do effective-type
+   checking: checking for each of the pieces of that reassembly that
+   the type of the write is suitably compatible with the lvalue type
+   of the load.
 
-In the Standard semantics, we also need to do effective-type checking:
-checking for each of the pieces of that reassembly that the type of
-the write is suitably compatible with the lvalue type of the load.
+   In the Concrete semantics, do we do any type checking?  At least
+   that we're not reading from non-allocated memory - but that follows
+   from the concurrency model?
 
-In the Concrete semantics, do we do any type checking?  At least that
-we're not reading from non-allocated memory - but that follows from
-the concurrency model?
-
-Then someone has to synthesise a read event (or however this works in
-Kyndylan's current interface), and we rely on the concurrency model
-lifetime check (w.r.t. *all* the writes we read from).
+   Then someone has to synthesise a read event (or however this works
+   in Kyndylan's current interface), and we rely on the concurrency
+   model lifetime check (w.r.t. *all* the writes we read from).
 
 *)
 
@@ -441,9 +489,9 @@ Write event, after some checks similar to the load (abstract those
 out).
 
 In the Standard semantics we can look at the pointer_value to
-determined if we're writing to a statically allocated object (in which
+determined if we're writing to an allocated object (in which
 case the lvalue type should be suitably compatible with that) or to
-within a dynamically allocated space, in which case we use the
+within an allocated space, in which case we use the
 supplied lvalue type as the effective type of the write.
 *)
 
@@ -454,6 +502,10 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
                         -> pointer_value 
                         -> Symbolic.sym (* the member id *) 
                         -> t pointer_value
+
+(* The ctype here is the static type of the original pointer.  e.g.
+    when elaborating s.f, the ctype is the static type of s.  *)
+
 
 (* - check the static type is a struct or union with that member
       (otherwise the static type system should have told us, but we
@@ -472,9 +524,9 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
 
    - look up the (symbolic) offset for the member in this static type
 
-   - add it to the ptr_numeric_offset
+     - add it to the ptr_numeric_offset
 
-   - add it to the ptr_numeric_address
+     - add it to the ptr_numeric_address
 
 *)
 
@@ -684,6 +736,8 @@ val pointer_compare:  compare_operator->  ctype -> pointer_value -> ctype -> poi
 (* K: yes *)
 (*
 val memcpy 
+ - in the standard semantics we make this copy the last-written values (without passing via bytes)
+
 val memcmp
 *)
 
@@ -693,13 +747,108 @@ val memcmp
 (* TODO: and functions to assemble a read value from a hb-partial-order of overlapping writes *)
 (* TODO: ...including reading representation bytes from an object etc. *)
 
-(* The `ctype' for the shift operator is the static type of the original pointer.
-e.g.     when elaborating     s.f     (s is a field, and this is a memberof)
-         the `ctype' is the static type of s.
- *)
 (*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
 
 
+
+(*  Now we run through notes14 
+
+PR.1.*:   
+  standard semantics: no.  We make it illegal to construct a pointer
+   (let alone use it) more than one-past the original object.  In these
+   examples the cast back to int* fails; in the original examples, using
+   pointer arithmetic instead of this integer arithmetic, the pointer
+   arithmetic could succeed, as it's only one-past, but the load fails,
+   as it's not from the original object as kept in the provenance.
+  concrete semantics: yes
+
+PR.2.a:
+  standard semantics: yes (by special-casing memcpy to copy the whole values)
+  concrete semantics: yes (in the same way or by copying
+   representation bytes; shouldn't matter which)
+
+PR.2.b:
+  standard semantics: no (this just copies the representation bytes -
+   and notice that here we *don't need* the
+   symbolic-byte-N-of-pointer-value thing; we just take byte-N of the
+   ptr_numeric_address.  We'd only need that for intermediate semantics.)
+  concrete semantics: yes (just copying byte-N of the ptr_numeric_address)
+
+PR.3:
+  standard semantics: no (we do pointer_lifetime_end_zap one way or another)
+  concrete semantics: yes (in the concrete semantics we should only
+   ever inspect the ptr_numeric_address)
+
+PR.4,5:
+  standard semantics: no (by pointer_lifetime_end_zap)
+  concrete semantics: yes, but maybe there's an intermediate point
+   (for free()) of just nulling the pointer being freed, not all
+   pointers to the object.
+
+PC.1,2:
+  standard semantics: no (by checking provenance inside pointer_compare)
+  concrete semantics: yes  (though Hans has his middle-of-address-space thing)
+
+PC.3:
+  standard semantics: no (as a consequence of the pointer lifetime end zap)
+  concrete semantics: yes (though Hans wibbles about a different answer for an allocated_object)
+
+CPI.1:
+  standard semantics: in general casts between pointers and integers
+   are impl-defined, but if intptr_t is provided, roundtrips via that
+   have to compare equal to the original.  We interpret "compare
+   equal" here as "equal in all senses", and we make that work by
+   integer provenance tracking, checking on a cast_integer_to_pointer
+   that there is exactly one original pointer and that we hit its
+   value exactly.
+  concrete semantics: yes 
+
+  Do we have, for concrete and optionally for standard, the GCC rules
+  for the arithmetic of these casts?
+
+CPI.2:
+  standard semantics: yes if you've hit exactly the original value
+  concrete semantics: yes
+
+CPI.3:
+  standard semantics: yes if you've hit exactly the original value
+  concrete semantics: yes
+  
+CPR.1: 
+  standard semantics: yes, if the numeric pointer value was aligned ok
+   for all the intermediate types (taking the standard's special-casing
+   of size-two roundtrips to just be a mistake)
+  concrete semantics: yes
+
+SC.1,2: 
+  standard semantics: no  (check in cast_pointer_to_pointer)
+  concrete semantics: yes 
+
+SC.3:
+  standard semantics: yes
+  concrete semantics: yes
+
+SC.4:
+  standard semantics: no  (fails on the cast back to a non-char pointer)
+  concrete semantics: yes
+
+SC.5:
+  standard semantics: no
+  concrete semantics: yes
+
+COCL.1: 
+  
+
+TODO
+
+*)
+
+(* 
+Now we run through ~/rsem/csem/notes/notes23-2014-05-15-layout-redux.txt
+
+TODO
+
+*)
 
 
 (* ========= *)
