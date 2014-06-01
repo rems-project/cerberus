@@ -386,7 +386,8 @@ OTOH, free() might be called with an arbitrary pointer value. *)
 
 *)
 
-val load:          AilTypes.ctype
+val load:       (*TODO: union declaration data -> *)
+                -> AilTypes.ctype
                 -> Symbolic.symbolic (* the size of that type *) 
                 -> pointer_value 
                 -> t object_value
@@ -417,7 +418,10 @@ assembly of the read value *)
       - according to the ptr_abstract_offset the pointer points to the
          original object or a subobject thereof (and not one of those
          one-past things), which matches the ptr_view_type and the
-         ctype
+         ctype.  With special magic for the 6.5.2.3p{6,9}
+         legitimisation of reading from a union with a common prefix
+         in scope.  That means this function needs to be told the
+         in-scope union declarations.
 
    - or (reading a not-necessarily-char from an allocated space)
 
@@ -451,6 +455,9 @@ assembly of the read value *)
    be mo edges among those.  Then we need to reassemble the read value
    from that partial order of write values.  (which may be tricky if
    many things are symbolic...)
+
+   In the concrete semantics, read-value assembly has to permit
+   RC.1-like represenetation casts between various types.
 
    What does "overlap the read location" really mean?  I've been
    imagining it was just overlap of (address,size) intervals
@@ -493,6 +500,20 @@ determined if we're writing to an allocated object (in which
 case the lvalue type should be suitably compatible with that) or to
 within an allocated space, in which case we use the
 supplied lvalue type as the effective type of the write.
+
+
+TODO: how do we deal with these?: 
+
+  6.2.6.1p6 says that when we write to a struct or union, the padding
+  takes on unspecified values.
+
+  6.2.6.1p7 says that when we write to a union, the spare bytes, if any
+  (there for the maximally sized member) likewise take on unspecified
+  values
+
+In the standard semantics, those are just by definition unspecified values;
+that can be built into the read-value-assembly machinery?
+
 *)
 
 
@@ -604,7 +625,7 @@ val cast_pointer_to_pointer:  ctype (* the static type of the pointer *)
        view type (maybe we don't need to do any more, if we are
        checking that the view type is legal before doing any
        accesses).  This will allow slightly more liberal roundtrips
-       than the standard, but not much.
+       than the standard, but not much.  6.2.5p28 constrains pointer alignment constraints. 
 
        (6.3.2.3p7: "A pointer to an object type may be converted to a
        pointer to a different object type. If the resulting pointer is
@@ -750,8 +771,23 @@ val memcmp
 (*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
 
 
+(* TODO: How are we going to model 6.2.4p8 "Any attempt to modify an
+object with temporary lifetime results in undefined behavior." ?  In
+the same way as we model "const" things, whatever that is?  A flag
+attached to the allocation event and a check in the concurrency model?
+(6.3.2.1p1 talks about "modifiable lvalue"s)
+*)
+
+(* TODO: how do we model the type abstraction of unions?  I.e., do the
+values in read/write actions contain the relevant union tag, that we
+can check against the view type of the pointer? *)
+
 
 (*  Now we run through notes14 
+
+Here "standard semantics" refers to our proposed "standard" semantics,
+not to the standard itself.
+
 
 PR.1.*:   
   standard semantics: no.  We make it illegal to construct a pointer
@@ -796,8 +832,8 @@ PC.3:
 CPI.1:
   standard semantics: in general casts between pointers and integers
    are impl-defined, but if intptr_t is provided, roundtrips via that
-   have to compare equal to the original.  We interpret "compare
-   equal" here as "equal in all senses", and we make that work by
+   have to compare equal to the original.  We interpret this usage of "compare
+   equal" as "equal in all senses", and we make that work by
    integer provenance tracking, checking on a cast_integer_to_pointer
    that there is exactly one original pointer and that we hit its
    value exactly.
@@ -837,18 +873,109 @@ SC.5:
   concrete semantics: yes
 
 COCL.1: 
-  
+  standard semantics: no, but
+    6.5.2.3p6, with example in p9, says something about *inspecting*
+    the common part of a union of structs where the union type is
+    visible.  That's not a cast, but how will we deal with it -
+    special magic in the load?
+  concrete semantics: yes, we just allow more-or-less any cast and
+   check leaf-type stuff at read/write time
 
-TODO
+COCL.2: 
+  both: yes (though for actual-C we later have to add packing flag data to
+   ctypes somehow, to accomodate the usage that Josh Berdine sees)
+
+COCL.3:
+  both: yes
+
+OM.1:
+  both: yes
+
+OM.2: 
+  both: yes  (it's *not* contrary to the effective types, contrary to notes14)
+
+OM.3:
+  both: yes (not clear that the question really makes sense)
+
+ET.1: 
+  standard semantics: (iii) (but then we have some relaxed
+   compatibility checking that allows them to be glued together, and
+   the "Semantics" discussion of (iii) in notes14 is outdated)
+  concrete semantics: no effective types
+
+RC.1:
+  standard semantics: no
+  concrete semantics: yes
+
+RC.2:
+  standard semantics: in the standard we can't do any of these intra-union or intra-struct casts, I think
+  concrete semantics: yes
+
+UV.1:
+  standard semantics: no, we treat unspecified values strictly (and
+   give undefined behaviour if you use them for I/O or in library
+   calls or something - cf the committee response to Robbert+Freek)
+
+  concrete semantics: in the concrete semantics we have fewer
+   unspecified values because padding isn't, but we still treat them
+   strictly - then make a nondeterministic choice of an actual number
+   as late as possible (on an I/O (or library?) call).  So this isn't
+   a completely concrete semantics, note.
+
+UV.2:
+  standard semantics: yes
+  concrete semantics: yes
+
+UV.3:
+  standard semantics: yes  (consistent with the "strict" semantics)
+  concrete semantics: yes
+
+UV.4:
+  standard semantics: yes - well, really here this question is moot 
+   because they by definition *always* contain unspecified values
+  concrete semantics: no, according to David, as modern compilers just
+   write the right amount?  (needs more checking) Or maybe they write
+   a zero value?  Paul suggested these optimisations happen with
+   vector instructions.  The padding_*.c examples (two
+   chars,padding,float, and char,padding,float) show that gcc can't
+   trivially be made to write over padding.  But OTOH it also doesn't
+   zero padding for block-scoped structs (consistent with what he said). 
+
+TR.1:
+  both: we assume that no types have trap representations
+
+MR.1: 
+  both: we assume this only happens for floats, which we don't support
+
+MR.2,3,4:  n/a, given the answer to MR.1
+
+REP.1:
+  both: yes
+
+REP.2:
+  both: yes
+
+REP.3:
+  both: no
+
+REP.4:
+  standard semantics:  no
+  concrete semantics: yes except between data and function pointers
+   (which you can determine from the concrete address)
 
 *)
 
 (* 
 Now we run through ~/rsem/csem/notes/notes23-2014-05-15-layout-redux.txt
-
 TODO
-
 *)
+
+
+(*
+Now we run through the standard text...
+TODO
+*)
+
 
 
 (* ========= *)
