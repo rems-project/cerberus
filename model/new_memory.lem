@@ -790,6 +790,44 @@ attached to the allocation event and a check in the concurrency model?
 values in read/write actions contain the relevant union tag, that we
 can check against the view type of the pointer? *)
 
+(* TODO: how are we going to treat thread-local objects, per 6.2.4p4 ?
+Is Core going to issue allocations and initialisation writes for all
+of them at thread creation time? 
+  And 6.2.4p4,5 say, for these and for automatic storage duration
+objects, "The result of attempting to indirectly access an object with
+thread storage duration from a thread other than the one with which
+the object is associated is implementation-defined.", which suggests
+we have to be able to check the original and current thread.  Keep the
+original in the allocated_object metadata and pass the current thread
+into the layout model API?   What are the GCC and Clang impl definitions? *)
+
+
+(*
+6.2.6.1p4 "Two values (other than NaNs) with the same object representation compare equal" appears to directly contradict DR260CR. 
+
+6.2.6.1p4 suggests that trap representations are *all* the
+representations that don't encode a value - a different sense from
+what we've been imagining...  (eg enum types will typically have lots,
+even in mainstream implementations) But consistent with the idea that
+trap-representation-ness is determined by the bit pattern.
+
+6.2.6.1p9 "Loads and stores of objects with atomic types are done with
+memory_order_seq_cst semantics." - something for Core to do (for
+vanilla loads and stores).  (How about initialisation of such?)
+
+6.2.6.1p8f52 "Furthermore, x == y does not necessarily imply that x
+and y have the same value; other operations on values of type T may
+distinguish between them." - what are they thinking of?
+
+
+
+
+
+
+*)
+
+
+(* ****************************************************************** *)
 
 (*  Now we run through notes14 
 
