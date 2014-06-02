@@ -354,7 +354,8 @@ OTOH, free() might be called with an arbitrary pointer value. *)
       pointer are legal)
 
    - in the Concrete semantics, we don't do that (likewise relying on
-      access-time checking)
+      access-time checking) (here it doesn't seem that there is a
+      sensible lifetime-end-zap semantic option?)
 
    for deallocate_space (the free() case):
 
@@ -729,9 +730,16 @@ val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
      this works for null pointers and if intptr_t is present works for
      roundtrips (so we have to check equality of the integer and the
      address of a unique pointer_value in its
-     provenance_tracking_data).  Beyond that it's
-     implementation-defined, so the most conservative implementation
-     would give undefined behaviour (or an unspecified value?)
+     provenance_tracking_data).  What if that pointer has hit its
+     lifetime end?  We should give an undefined value at the cast
+     point, but I'm not sure how we tell.  Perhaps add another
+     concurrency_model action "Pointer_lifetime_check of bool" ?  (If
+     we do that, we could/should use it uniformly in all usages of the
+     pointer that don't already involve a concurrency model action.)
+
+     Beyond that it's implementation-defined, so the most conservative
+     implementation would give undefined behaviour (or an unspecified
+     value?)
 
   - in the Concrete semantics:
 
@@ -829,15 +837,27 @@ PC.3:
   standard semantics: no (as a consequence of the pointer lifetime end zap)
   concrete semantics: yes (though Hans wibbles about a different answer for an allocated_object)
 
+In the standard, pointer comparison within a struct or whatever
+is more constrained than we thought in Notes14: you can compare
+pointers to two members of the same aggregate object, but we think you
+can't eg compare pointers to s.f and s.g.x.  Plus some wackiness for
+anonymous struct members.  Allow more general intra-object pointer
+comparison with -subobject_pointer_comparison {true|false} ?
+
+
+
 CPI.1:
+
   standard semantics: in general casts between pointers and integers
    are impl-defined, but if intptr_t is provided, roundtrips via that
-   have to compare equal to the original.  We interpret this usage of "compare
-   equal" as "equal in all senses", and we make that work by
+   have to compare equal to the original.  We interpret this usage of
+   "compare equal" as "equal in all senses", and we make that work by
    integer provenance tracking, checking on a cast_integer_to_pointer
    that there is exactly one original pointer and that we hit its
-   value exactly.
-  concrete semantics: yes 
+   value exactly. One could liberalise that a bit by allowing multiple
+   original pointers, or more by dynamically checking at cast time
+   that we hit *some* legal pointer.
+  concrete semantics: yes  
 
   Do we have, for concrete and optionally for standard, the GCC rules
   for the arithmetic of these casts?
@@ -849,6 +869,13 @@ CPI.2:
 CPI.3:
   standard semantics: yes if you've hit exactly the original value
   concrete semantics: yes
+
+In the concrete semantics, assume that non-function pointers all have
+the same alignment constraints, and inter-casting is fine, and that
+there might optionally be a distinct subset of the numeric pointer
+values which are function pointers, picking nondeterministic values
+for casts between the two sets?
+
   
 CPR.1: 
   standard semantics: yes, if the numeric pointer value was aligned ok
@@ -858,6 +885,7 @@ CPR.1:
 
 SC.1,2: 
   standard semantics: no  (check in cast_pointer_to_pointer)
+   We could have a -subobject_casts switch to allow this?
   concrete semantics: yes 
 
 SC.3:
