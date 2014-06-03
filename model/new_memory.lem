@@ -3,6 +3,10 @@ but also basis for semantics for Cs that do more checking, eg CHERI
 (softbound?).  And also for better (closer to practice?)
 well-definedness checking for differential testing? *)
 
+(* for reference
+c types: core_ctype.lem
+c values: the old thing is in cmm_aux_old.lem (type cvalue)
+*)
 
 open import Pervasives
 import New_memory_effect Symbolic State_exception AilTypes Core_ctype
@@ -215,6 +219,10 @@ val allocate_object:    thread_id          (* the allocating thread *)
                      -> t pointer_value
 
 let allocate_object tid ty ty_size ty_alignment = do E
+
+  (*TODO: record const-ness (and friends) in the metadata (needs a new
+  argument, because for string literals and objects with temporary
+  lifetime, you can't get the constness just from the type*)
 
   (* we pass in ty_size and ty_alignment here because calculating them
   involves executing core functions (from the implementation file),
@@ -496,6 +504,39 @@ assembly of the read value *)
    having no declared type, the effective type of the object is simply
    the type of the lvalue used for the access."
 
+   (for arrays, just write the effective type of each array element)
+   Effective type creation and propagation (6.5p6):
+
+     - for an object with a declared type: Core knows at allocation
+        time and tells the concurrency model to include it in the
+        allocate action.
+
+     - for a write to an object with a declared type: Core knows the
+        lvalue type, which [we check against the effective type from
+        the allocation action OR we check against the ao_original_type
+        from the allocated_object_metadata (don't think it matters which)].
+
+     - for a value stored into a malloc'd space through a non-char
+        lvalue: Core knows the type of the lvalue and tells the
+        concurrency model to include it in the Write action
+
+     - when we read from a malloc'd space though a non-char lvalue:
+        Core knows the type of the lvalue and we check that against
+        the type from the Write action(s) that the concurrency model
+        gives us.
+
+     - for a value read from either an object with a declared type or
+        from a malloc'd space through a char lvalue, the value we read
+        has to be annotated with the effective type data attached to it, so that
+        when we write a char to a malloc'd region, it can be recorded
+        in the Write action.
+
+        This annotation is plumbed around like the pointer-set
+        annotation.  Except that this gets zapped when you do any
+        operation on the char (as the standard doesn't give you any
+        more guarantee).
+
+
    In the Concrete semantics, do we do any type checking?  At least
    that we're not reading from non-allocated memory - but that follows
    from the concurrency model?
@@ -550,6 +591,8 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
       (otherwise the static type system should have told us, but we
       should check dynamically too, absent a type soundness proof)
 
+      (really "with that member" for unions?)
+
    - check the pointer_value is non-null (only in the standard semantics?)
 
    - in the Standard semantics: 
@@ -566,6 +609,9 @@ val pointer_member_offset: AilTypes.ctype (* static type of the pointer*)
      - add it to the ptr_numeric_offset
 
      - add it to the ptr_numeric_address
+
+(* TODO: the above has to check the lvalue - and the effective type? -
+isn't an atomic struct type*)
 
 *)
 
@@ -815,11 +861,37 @@ object with temporary lifetime results in undefined behavior." ?  In
 the same way as we model "const" things, whatever that is?  A flag
 attached to the allocation event and a check in the concurrency model?
 (6.3.2.1p1 talks about "modifiable lvalue"s)
+
+6.7.3p6 talks about modifying an object defined with a const-qualified type.
+
+In the metadata of an allocated object with a declared type, we can
+record whether it's writable (we can't just look at the effective
+type, because we have string literals - which aren't const, but you
+still can't write on them.  Also because in the concrete semantics,
+without effective types, this should still be forbidden. 
+
+BTW, there seems to be no way to write a "const" object into a malloc'd space.  If one says:
+
+#include <stdlib.h>
+int main(void) {
+  char *p = malloc(sizeof(int));
+  *p = (const int)5;
+  return 0;
+}
+
+then const-ness isn't meaningful for non-lvalues, and *((const int* )p)
+= (const int)5; doesn't typecheck.
+
+
+
 *)
 
-(* TODO: how do we model the type abstraction of unions?  I.e., do the
+
+
+(* How do we model the type abstraction of unions?  I.e., do the
 values in read/write actions contain the relevant union tag, that we
-can check against the view type of the pointer? *)
+can check against the view type of the pointer? No.  It's allowed to
+read the wrong member.*)
 
 (* TODO: how are we going to treat thread-local objects, per 6.2.4p4 ?
 Is Core going to issue allocations and initialisation writes for all
@@ -832,19 +904,26 @@ we have to be able to check the original and current thread.  Keep the
 original in the allocated_object metadata and pass the current thread
 into the layout model API?   What are the GCC and Clang impl definitions? *)
 
+(* maybe punt on this, as it might be a nontrivial change to elaboration*)
 
-(*
-6.2.6.1p4 "Two values (other than NaNs) with the same object representation compare equal" appears to directly contradict DR260CR. 
 
-6.2.6.1p4 suggests that trap representations are *all* the
+
+(* 6.2.6.1p4 "Two values (other than NaNs) with the same object
+representation compare equal" appears to directly contradict DR260CR.
+
+6.2.6.1p5 suggests that trap representations are *all* the
 representations that don't encode a value - a different sense from
-what we've been imagining...  (eg enum types will typically have lots,
-even in mainstream implementations) But consistent with the idea that
-trap-representation-ness is determined by the bit pattern.
+what we've been imagining...  But consistent with the idea that
+trap-representation-ness is determined by the bit pattern.  But we can
+still fairly reasonably assume that there are no trap reps (at least
+following gcc and clang)
 
 6.2.6.1p9 "Loads and stores of objects with atomic types are done with
 memory_order_seq_cst semantics." - something for Core to do (for
-vanilla loads and stores).  (How about initialisation of such?)
+vanilla loads and stores).  (How about initialisation of such?  (if
+you say "atomic int x = 0", then Core should ask the concurrency model
+to do an atomic initialisation write) (the only place where
+initialisation differs from a plain store, for amusement)
 
 6.2.6.1p8f52 "Furthermore, x == y does not necessarily imply that x
 and y have the same value; other operations on values of type T may
@@ -855,22 +934,21 @@ distinguish between them." - what are they thinking of?
 
 atomic structs and unions - 6.5.2.3p5 and f97 say that you just can't
 access their members; all you can do is assign to or from an atomic
-object.  How do we model?
+object.  How do we model?  A constraint in pointer_member_offset()
 
 
 Are union values abstract, containing their member names (and checked
-on reads)?  I'm not sure.  Surprisingly to me, 6.5.2.3p3f95 says "If
-the member used to read the contents of a union object is not the same
-as the member last used to store a value in the object, the
-appropriate part of the object representation of the value is
-reinterpreted as an object representation in the new type as described
-in 6.2.6 (a process sometimes called ‘‘type punning’’). This might be
-a trap representation.".  But 6.2.6 just gives constraints on the
-representation - suggesting that it's legal to read a union as a
+on reads)?  I wasn't sure, but now we say "NO".  Surprisingly to me,
+6.5.2.3p3f95 says "If the member used to read the contents of a union
+object is not the same as the member last used to store a value in the
+object, the appropriate part of the object representation of the value
+is reinterpreted as an object representation in the new type as
+described in 6.2.6 (a process sometimes called ‘‘type punning’’). This
+might be a trap representation.".  But 6.2.6 just gives constraints on
+the representation - suggesting that it's legal to read a union as a
 different member so long as one doesn't get a trap representation.
 This is much more liberal than the inter-type munging that one is
-allowed to do elsewhere.  
-  The effective-type stuff in 6.5p7 is very
+allowed to do elsewhere.  The effective-type stuff in 6.5p7 is very
 vague on this, saying only "...or... an aggregate or union type that
 includes one of the aforementioned types among its members".
 
@@ -881,6 +959,10 @@ const-qualified types, need not designate distinct objects.101)".  To
 model this, the semantics has to make some nondeterministic choice
 across all possible overlap patterns... 
 
+(* maybe punt *) (* strange that they say const-qualified - why not
+allow the others to be overlapping too, given that you can't write to
+them anyway? *)
+
 
 Are all the constraints of "6.5.16.1 Simple assignment" handled by
 Core?  Is the 6.5.16.1p3 "If the value being stored in an object is
@@ -889,6 +971,28 @@ first object, then the overlap shall be exact and the two objects
 shall have qualified or unqualified versions of a compatible type;
 otherwise, the behavior is undefined." handled by our existing
 indeterminate-race detection?
+
+E.g.
+
+  char* p=malloc(6)
+  *((int32_t* )p)=42
+  *((int32_t* )(p+2)) = *((int32_t* )p) + 1
+
+It's not handled by indeterminate-race detection, because there is an
+sb edge in the last line from the read to the write (6.5.16p3).  So
+Core has to save up all the footprints used in (?) reads in the
+evaluation (more carefully, "in the value computation"?) of the rhs of
+the assignment and compare them with the footprint it wants to use for
+the write?
+
+(it's a bit odd in that if there is some overlap between two of the reads in the read-set, we're allowed to write to either of those footprints)
+
+  char* p=malloc(6)
+  *((int32_t* )p)=42
+  *((int32_t* )(p+2)) = *((int32_t* )p) + (*((int32_t* )(p+2))=43, *((int32_t* )(p+2)) )
+
+  but that's got an indeterminate race anyhow)
+
 
 
 6.7.1 Storage-class specifiers - do we deal with these? 
@@ -899,14 +1003,18 @@ flexible array members - I've not so far paid attention to those.
 
 6.7.2.2 Enumeration specifiers - the types have to be compatible with
 char or some integer type - which might mean that there aren't any
-extra trap representations?
+extra trap representations? - the question is nonsense, as they are
+really just some integer types.
+
+[BTW, for now, as we have only one translation unit, we believe it
+sound to handle enums by desugaring.  We'll do that]
 
 6.7.3f132 "The implementation may place a const object that is not
 volatile in a read-only region of storage. Moreover, the
 implementation need not allocate storage for such an object if its
-address is never used." - but we'll punt on this for now. 
+address is never used." - but we'll punt on the latter for now. 
 
-Are we dealing with "restrict"?   6.7.3p8 "An object that is accessed
+Are we dealing with "restrict"?  NO 6.7.3p8 "An object that is accessed
 through a restrict-qualified pointer has a special association with
 that pointer. This association, defined in 6.7.3.1 below, requires
 that all accesses to that object use, directly or indirectly, the
@@ -918,7 +1026,8 @@ not change its meaning (i.e., observable behavior)."
 Expanded in the delightfully named "6.7.3.1 Formal definition of restrict". 
 Which I have not read. 
 
-6.7.9p9 "Unnamed members of structure objects have indeterminate value even after initialization."
+6.7.9p9 "Unnamed members of structure objects have indeterminate value
+even after initialization."
 
 6.7.9 has some stuff about the order of initialisation. 
 
@@ -954,8 +1063,15 @@ PR.2.a:
 PR.2.b:
   standard semantics: no (this just copies the representation bytes -
    and notice that here we *don't need* the
-   symbolic-byte-N-of-pointer-value thing; we just take byte-N of the
-   ptr_numeric_address.  We'd only need that for intermediate semantics.)
+   symbolic-byte-M-of-N-of-pointer-value thing; we just take byte-M of the
+   ptr_numeric_address.  We'd only need that for intermediate
+   semantics.)  
+
+   LATER: this is debatable - cf the stuff about effective types for
+   copying via a char array.  We now interpret the standard as
+   allowing user-memcpy of pointers.  So we do need the
+   symbolic-byte-M-of-N-of-pointer.
+
   concrete semantics: yes (just copying byte-N of the ptr_numeric_address)
 
 PR.3:
@@ -977,11 +1093,12 @@ PC.3:
   standard semantics: no (as a consequence of the pointer lifetime end zap)
   concrete semantics: yes (though Hans wibbles about a different answer for an allocated_object)
 
-In the standard, pointer comparison within a struct or whatever
-is more constrained than we thought in Notes14: you can compare
-pointers to two members of the same aggregate object, but we think you
-can't eg compare pointers to s.f and s.g.x.  Plus some wackiness for
-anonymous struct members.  Allow more general intra-object pointer
+In the standard, pointer comparison within a struct or whatever is
+more constrained than we thought in Notes14: you can compare pointers
+to two members of the same aggregate object, but we think you can't eg
+compare pointers to s.f and s.g.x.  We check this in the standard
+semantics by looking at the ptr_abstract_object.  Plus some wackiness
+for anonymous struct members.  Allow more general intra-object pointer
 comparison with -subobject_pointer_comparison {true|false} ?
 
 
@@ -1031,7 +1148,8 @@ SC.1,2:
     pointer to a structure object, suitably converted, points to its
     initial member (or if that member is a bit-field, then to the unit
     in which it resides), and vice versa.".  And likewise for unions,
-    in p16.  Does this mean that if a function is handed a pointer to
+    in p16 (additions to what it says in 6.3.2.3 about pointer
+    casts). Does this mean that if a function is handed a pointer to
     an int that happens to be the first member of a struct, it can
     cast to the super-object?  I think so.
 
@@ -1043,6 +1161,10 @@ SC.3:
 
 SC.4:
   standard semantics: no  (fails on the cast back to a non-char pointer)
+   (the standard writers might believe that this is allowed by casting
+   via void*, but 6.3.2.3, while it says those casts are allowed,
+   doesn't tell you very much about the pointer value you get)
+
   concrete semantics: yes
 
 SC.5:
@@ -1055,6 +1177,21 @@ COCL.1:
     the common part of a union of structs where the union type is
     visible.  That's not a cast, but how will we deal with it -
     special magic in the load?
+
+    6.5.2.3p5f95 implies that union values do contain their member id,
+    and we check that on a load.  But if it's not equal, we don't just
+    fail; instead we use what we know from 6.2.6 about representations
+    to reinterpret the representation according to our lvalue type. 
+
+    6.5.2.3p6 seems to imply that the layouts of structs with a common
+    initial sequence that occur within a union type are identical
+    within that common part.  Are we going to model that? (eg by
+    looking at all the union types and adding a bunch of constraints
+    about offset symbolic values).  Or are we (in our standard
+    semantics) going to assume the ABI rules on deterministic layout
+    (which is much stronger)?  (We'll certainly assume the ABI rules
+    in our concrete semantics anyway).
+
   concrete semantics: yes, we just allow more-or-less any cast and
    check leaf-type stuff at read/write time
 
@@ -1078,14 +1215,25 @@ ET.1:
   standard semantics: (iii) (but then we have some relaxed
    compatibility checking that allows them to be glued together, and
    the "Semantics" discussion of (iii) in notes14 is outdated)
+
+   If you write s1.s2 (where s1 has a member which is a structure s2)
+   and s2 has members i:int, f:float, then we could still choose
+   whether to have "struct s2" or ["int","float"] as the effective
+   type of the Write.  I don't think it matters, as the load-time
+   check should accept either.
+
   concrete semantics: no effective types
 
 RC.1:
-  standard semantics: no
+  standard semantics: no  (unless you're in a union, but that's different)
   concrete semantics: yes
 
 RC.2:
-  standard semantics: in the standard we can't do any of these intra-union or intra-struct casts, I think
+
+  standard semantics: in the standard we can't do any of these
+   intra-union or intra-struct casts, I think ^H^H^H NO: in the
+   standard, we can cast from one union member to the union type and
+   then to the other union member, so this should be allowed.
   concrete semantics: yes
 
 UV.1:
@@ -1098,6 +1246,11 @@ UV.1:
    strictly - then make a nondeterministic choice of an actual number
    as late as possible (on an I/O (or library?) call).  So this isn't
    a completely concrete semantics, note.
+
+  what abstraction does our concrete semantics have?  Not much, but it
+   does have the above. Is our concrete semantics memory safe?  I
+   think so, because the concurrency model is properly checking
+   lifetimes.
 
 UV.2:
   standard semantics: yes
