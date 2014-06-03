@@ -570,8 +570,10 @@ TODO: how do we deal with these?:
   (there for the maximally sized member) likewise take on unspecified
   values
 
-In the standard semantics, those are just by definition unspecified values;
-that can be built into the read-value-assembly machinery?
+In the standard semantics, those are just by definition unspecified
+values; that can be built into the read-value-assembly machinery?
+LATER: that still seems ok for structs, but for unions we have to
+explicitly write unspecified-value padding.
 
 *)
 
