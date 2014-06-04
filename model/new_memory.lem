@@ -1225,6 +1225,19 @@ comparison."
 7.26 Threads <threads.h>
 
 
+--------------------------
+For Kayvan:
+
+J.5 Common extensions
+J.5.5 Writable string literals
+"String literals are modifiable (in which case, identical string
+literals should denote distinct objects) (6.4.5)"
+
+
+Annex K (normative) Bounds-checking interfaces - do people use this?
+
+
+
 *)
 
 
