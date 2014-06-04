@@ -1033,8 +1033,196 @@ even after initialization."
 
 6.7.9 has some stuff about the order of initialisation. 
 
+---------------2014-06-04---------------
 
 
+This 6.8p3 "The initializers of objects that have automatic storage
+duration, and the variable length array declarators of ordinary
+identifiers with block scope, are evaluated and the values are stored
+in the objects ***(including storing an indeterminate value in objects
+without an initializer)*** each time the declaration is reached in the
+order of execution, as if it were a statement, and within each
+declaration in the order that declarators appear."  suggests that Core
+needs to make an explicit write (of the unspecified value if there
+isn't an initializer) at each such point.
+
+6.8.5p6 has the thing about nonterminating loops: "An iteration
+statement whose controlling expression is not a constant
+expression,156) that performs no input/output operations, does not
+access volatile objects, and performs no synchronization or atomic
+operations in its body, controlling expression, or (in the case of a
+for statement) its expression-3, may be assumed by the implementation
+to terminate.157) 157) This is intended to allow compiler
+transformations such as removal of empty loops even when termination
+cannot be proven.".  IIRC this should be read as saying that a program
+containing such a loop has undefined behaviour - but no executable
+semantics can ever soundly and completely check that; we have to document
+it as a divergence from C11.
+
+
+Which bits of the library are relevant to us (a "YES" here doesn't
+mean we aim to cover *all* of that section, though)?
+
+YES    7.1 Introduction
+?      7.2 Diagnostics <assert.h> 
+no     7.3 Complex arithmetic <complex.h> 
+?      7.4 Character handling <ctype.h>   (BTW NOTE CLASH OF ctype ?)
+?      7.5 Errors <errno.h> 
+no     7.6 Floating-point environment <fenv.h> 
+no     7.7 Characteristics of floating types <float.h> 
+?      7.8 Format conversion of integer types <inttypes.h>
+?      7.9 Alternative spellings <iso646.h>
+YES    7.10 Sizes of integer types <limits.h>
+no     7.11 Localization <locale.h>
+no     7.12 Mathematics <math.h>
+no     7.13 Nonlocal jumps <setjmp.h>
+no     7.14 Signal handling <signal.h>
+YES    7.15 Alignment <stdalign.h>
+?      7.16 Variable arguments <stdarg.h>
+YES    7.17 Atomics <stdatomic.h>
+?      7.18 Boolean type and values <stdbool.h>
+YES    7.19 Common definitions <stddef.h>
+YES    7.20 Integer types <stdint.h>
+no     7.21 Input/output <stdio.h>
+?      7.22 General utilities <stdlib.h>
+no?         7.22.1 Numeric conversion functions
+no?         7.22.2 Pseudo-random sequence generation functions
+YES         7.22.3 Memory management functions
+no?         7.22.4 Communication with the environment  (except exit()?)
+no          7.22.5 Searching and sorting utilities
+no          7.22.6 Integer arithmetic functions
+no         7.22.7 Multibyte/wide character conversion functions
+no         7.22.8 Multibyte/wide string conversion functions
+no     7.23 _Noreturn <stdnoreturn.h>
+YES    7.24 String handling <string.h>  (for memcpy, memmove, memcmp only)
+no     7.25 Type-generic math <tgmath.h>
+YES    7.26 Threads <threads.h>
+               7.26.1 Introduction   (just thrd_t and mtx_t ?)
+               7.26.2 Initialization functions
+no             7.26.3 Condition variable functions
+YES            7.26.4 Mutex functions  (just mtx_plain and the associated API ?)
+YES            7.26.5 Thread functions  (just thrd_create ?  also join and exit??)
+no             7.26.6 Thread-specific storage functions
+no     7.27 Date and time <time.h>
+no     7.28 Unicode utilities <uchar.h>
+no     7.29 Extended multibyte and wide character utilities <wchar.h>
+no     7.30 Wide character classification and mapping utilities <wctype.h>
+
+
+For amusement wrt library races (but no impact on us right now, AFAICS): 
+   7.14 (signal handling) "4 The functions in the standard library are not
+   guaranteed to be reentrant and may modify objects with static or
+   thread storage duration.188)
+
+   5 Unless explicitly stated otherwise in the detailed descriptions that
+    follow, library functions shall prevent data races as follows: A
+    library function shall not directly or indirectly access objects
+    accessible by threads other than the current thread unless the
+    objects are accessed directly or indirectly via the function’s
+    arguments. A library function shall not directly or indirectly modify
+    objects accessible by threads other than the current thread unless
+    the objects are accessed directly or indirectly via the function’s
+    non-const arguments.189) Implementations may share their own internal
+    objects between threads if the objects are not visible to users and
+    are protected against data races.
+
+    189) This means, for example, that an implementation is not
+    permitted to use a static object for internal purposes without
+    synchronization because it could cause a data race even in
+    programs that do not explicitly share objects between
+    threads. Similarly, an implementation of memcpy is not permitted
+    to copy bytes beyond the specified length of the destination
+    object and then restore the original values because it could cause
+    a data race if the program shared those bytes between threads.
+
+   6 Unless otherwise specified, library functions shall perform all
+      operations solely within the current thread if those operations
+      have effects that are visible to users.190
+   "  
+
+
+7.5p2 "errno which expands to a modifiable lvalue201) that has type
+int and thread local storage duration" - so we have to cover
+thread-local storage duration for any significant part of the library.
+
+
+
+------
+
+
+7.17 Atomics <stdatomic.h>
+
+We have to be clear exactly what of this we're supporting. All?
+Kyndylan should read this section...
+
+7.17.3p13 has the bogus no-thin-air condition from C++11: "An atomic
+store shall only store a value that has been computed from constants
+and program input values by a finite sequence of program evaluations,
+such that each evaluation observes the values of variables as computed
+by the last prior assignment in the sequence...."  which we have to
+remark on.
+
+7.17.3p16 has some handwaving at a progress property: "Implementations
+should make atomic stores visible to atomic loads within a reasonable
+amount of time."  I don't think we can model this.  We could have a
+liveness property in the axiomatic model, or some kind of early
+nondeterministic choice of an upper bound (in terms of abstract
+machine steps maybe) in the operational one.  But better to just skip
+for now.
+
+7.17.3.1 The kill_dependency macro - are we supporting this?  (are we
+supporting consume? if not, then no need for this)
+
+---
+7.19 Common definitions <stddef.h>
+
+this has size_t, ptrdiff_t, offsetof, ...
+
+7.19p3 has "...and offsetof(type, member-designator) which expands to
+an integer constant expression that has type size_t, the value of
+which is the offset in bytes, to the structure member (designated by
+member-designator), from the beginning of its structure (designated by
+type)."  and one could argue from that that the standard semantics
+should support SC.4, but there's still nothing saying that the pointer
+cast back gives something sensible.  Though IIRC that's impl-defined.
+
+---
+
+7.20 Integer types <stdint.h>
+
+among many other things, this has intptr_t and uintptr_t, with the
+following not-very-useful guarantee:
+
+7.20.1.4 Integer types capable of holding object pointers "The
+following type designates a signed integer type with the property that
+any valid pointer to void can be converted to this type, then
+converted back to pointer to void, and the result will compare equal
+to the original pointer: intptr_t"
+
+---
+
+7.22.3 Memory management functions
+
+For aligned_alloc, calloc, malloc, and realloc:
+
+ 7.22.3p2 "...These functions may, however, visibly
+ modify the storage that they allocate or deallocate."
+
+I think that's invisible in both our semantics, as they are memory-safe.
+
+---
+
+
+7.24.4.1 The memcmp function
+
+"310) The contents of ‘‘holes’’ used as padding for purposes of
+alignment within structure objects are indeterminate. Strings shorter
+than their allocated space and unions may also cause problems in
+comparison."
+
+---
+
+7.26 Threads <threads.h>
 
 
 *)
