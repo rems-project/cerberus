@@ -23,12 +23,7 @@ let fmap f m = bind m (return -| f)
 val app: forall 'a 'b 'msg. t ('a -> 'b) 'msg -> t 'a 'msg -> t 'b 'msg
 let app mf m = bind mf (fun f -> fmap f m)
 
-let catch = function
-  | Result    _ -> Nothing
-  | Exception m -> Just m
-  end
-
-let of_option m = function
+let of_maybe m = function
   | Just a  -> return a
   | Nothing -> throw  m
   end
@@ -39,8 +34,9 @@ let to_bool = function
   end
 
 module Operators = struct
-  let inline (>>=) = bind
-  let inline (=<<) = rbind
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+  let inline (=<<)      = rbind
 end
 
 open Operators
@@ -57,11 +53,16 @@ let sequence ms =
       return (x::xs)
     ) (return []) ms
 
-val t_list: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
-let t_list t xs = sequence (t xs)
+val listM: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
+let listM t xs = sequence (t xs)
 
-val map_list: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
-let map_list f = t_list (List.map f)
+val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+let mapM f = listM (List.map f)
+
+
+
+
+
 
 
 (*
@@ -101,3 +102,24 @@ let bind_exception m k =
   end
 
 let rbind_exception k m = bind_exception m k
+
+
+
+
+val guard: forall 'msg. bool -> 'msg -> t unit 'msg
+let guard pred err =
+  if pred then
+    return ()
+  else
+    fail err
+
+
+
+val onException: forall 'a 'msg. t 'a 'msg -> t 'a 'msg -> t 'a 'msg
+let onException m1 m2 =
+  match m1 with
+    | Result z    -> Result z
+    | Exception z -> m2
+  end
+
+

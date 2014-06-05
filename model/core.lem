@@ -1,6 +1,6 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Cmm_aux_old Memory_order
-import New_memory Memory
+import Symbol AilTypes Implementation_ Undefined Memory_order
+import New_memory
 
 open import Core_ctype
 
@@ -10,14 +10,15 @@ module Cmm = Memory_order
 
 (* -- Syntax ---------------------------------------------------------------- *)
 type core_base_type =
-  | Integer (* TODO: should have and "Object" type for C arrays/struct ? *)
-  | Boolean
-  | Address
-  | Ctype
-  | CFunction
-  | Unit
-  | Tuple of list core_base_type
-  | Wildcard
+  | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
+  | BTy_boolean
+  | BTy_pointer
+  | BTy_ctype
+  | BTy_cfunction
+  | BTy_unit
+  | BTy_list of core_base_type
+  | BTy_tuple of list core_base_type
+  | BTy_any
 
 (* Types discriminate between pure (TyBase) and effectful
    expressions (TyEffect) *)
@@ -67,6 +68,16 @@ type constant =
   | Cfunction of sym
  *)
 
+
+type constant =
+  | ConstInt of integer
+(*
+  | Carray of list constant
+  | Cfunction of Symbol.t
+  | Cstring of list char (* TODO: temporary hack *)
+*)
+
+
 type expr 'a =
 (*
   (* TODO: made obsolete by Epointer, but keep for now for Core_run.lem *)
@@ -83,6 +94,7 @@ type expr 'a =
   | Epointer_byte of nat * nat * New_memory.pointer_value
   | Econcat_bytes of list (expr 'a) (* non empty list please *)
 *)
+  | Elist of list (expr 'a) (* This is for variadic functions *)
   | Ectype of ctype
   | Esym of sym
   | Eimpl of Implementation_.implementation_constant
@@ -133,7 +145,7 @@ type expr 'a =
   (* Parallel composition *)
   | Epar of list (expr 'a)
   
-  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *)
+(*  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *) *)
 
 
 
@@ -188,95 +200,24 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 
 
-(*
 
-(* NOTE: we assume that the expression is well typed *)
-val is_value: forall 'a. expr 'a -> bool
-let rec is_value e =
-  match e with
-    | Etuple es ->
-        true
-    | Eunit ->
-        true
-    | Enull ->
-        true
-    | Eskip ->
-        false
-    | Econst _ ->
-        true
-    | Eaddr _ ->
-        true
-    | Esym _ ->
-        true
-    | Eimpl _ ->
-        true
-    | Eop _ _ _ ->
-        true
-    | Etrue ->
-        true
-    | Efalse ->
-        true
-    | Enot _ ->
-        true
-    | Ectype _ ->
-        true
-    | Elet _ _ e2 ->
-        is_value e2
-    | Eif _ e2 e3 ->
-        is_value e2 && is_value e3
-    | Eproc _ _ _ ->
-        false
-    | Ecall _ _ ->
-        true
-    | Eoutput _ ->
-        false
-    | Esame _ _ ->
-        false (* TODO: think about it *)
-    | Eundef _ ->
-        true
-    | Eerror ->
-        true
-    | Eaction _ ->
-        false
-    | Eunseq es ->
-        all (is_value) es
-    | Ewseq _ e1 e2 ->
-        is_value e1 && is_value e2
-    | Esseq _ e1 e2 ->
-        is_value e1 && is_value e2
-    (* TODO: this is assuming that we never use this function before Core_indet *)
-(*
-    | Easeq _ _ _ ->
-    | Eindet _    ->
-    | Ebound _ _  ->
-*)
-    | Esave _ _ e ->
-        is_value e (* TODO: or false ? *)
-    | Erun _ _ _ ->
-        false
-    | Eret e ->
-        false
-    | End es ->
-        false (* TODO: think about it *)
-    | Eshift a e ->
-        false
-    
-    | Easeq _ _ _ ->
-        false
-    | Eindet _ ->
-        false
-    | Ebound _ _ ->
-        false
-    | Epar _ ->
-        false
-    | Eis_scalar _ ->
-        true
-    | Eis_integer _ ->
-        true
-    | Eis_signed _ ->
-        true
-    | Eis_unsigned _ ->
-        true
-  end
 
-*)
+
+
+
+
+(* runtime stuff *)
+
+type _continuation 'a =
+  | Kunseq of list (expr 'a) * list (expr 'a)
+  | Kpar   of list (expr 'a) * list (expr 'a)
+  | Kwseq  of list (maybe sym) * expr 'a
+  | Ksseq  of list (maybe sym) * expr 'a
+
+type continuation 'a = list (_continuation 'a)
+
+
+type labeled_continuation 'a = list (sym * ctype) * expr 'a
+
+
+type stack 'a = list (continuation 'a)

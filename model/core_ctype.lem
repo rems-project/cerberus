@@ -1,10 +1,17 @@
 open import Pervasives
-import AilTypes
+import Symbol Symbolic AilTypes
+
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
 
 (* C types (this is a simplication of what is need for typechecking) *)
 (* TODO: what about Ail.ATOMIC_Q ? *)
 
-type member_id = Core.sym
+type struct_tag = Symbol.t
+type union_tag  = Symbol.t
+type member_id  = Symbol.t
 
 
 
@@ -18,9 +25,11 @@ type ctype_aux =
  | Atomic of ctype
  | Struct of struct_tag * list (member_id * ctype)
  | Union  of union_tag * list (member_id * ctype)
+ | Intptr_t
+ | Ptrdiff_t
 
 and 
-  ctype = <| t : ctype_aux; alignment : Symbolic.sym |>
+  ctype = <| t : ctype_aux; alignment : Symbolic.symbol |>
   (* this alignment is the default for the type unless overridden by
   _Alignas, eg "_Alignas(int32_t) int16_t i", in which case it's that *)
 
@@ -47,27 +56,7 @@ For the latter, we have to add more stuff into ctype.
 
 
 
-
-
-(*  | Struct of  *)
-
-
 (*
-  | STRUCT of Ail.id * list (Ail.id * member)
-  | UNION  of Ail.id * list (Ail.id * member)
-  | ENUM of Ail.id
-  | Atomic of ctype
-  | SIZE_T
-  | INTPTR_T
-  | WCHAR_T
-  | CHAR16_T
-  | CHAR32_T
-
-and member =
-  | MEMBER of (* alignment_specifier * *) ctype
-  | BITFIELD of ctype * integer * (maybe bool)
-*)
-
 let rec ctypeEquality ty1 ty2 =
   match (ty1, ty2) with
     | (Void, Void) ->
@@ -85,6 +74,10 @@ let rec ctypeEquality ty1 ty2 =
     | (Atomic ty1, Atomic ty2) ->
         ctypeEquality ty1 ty2
 
+    | (Intptr_t, Intrptr_t) ->
+        true
+    | (Ptrdiff_t, Ptrdiff_t) ->
+        true
 (*
     | (SIZE_T, SIZE_T) -> true
     | (INTPTR_T, INTPTR_T) -> true
@@ -94,6 +87,10 @@ let rec ctypeEquality ty1 ty2 =
  *)
     | _ -> false
   end
+*)
+
+let ctypeEquality _ _ =
+  assert_false "WIP: equality function for Core_ctype.ctype"
 
 instance (Eq ctype)
   let (=) = ctypeEquality
@@ -101,6 +98,7 @@ instance (Eq ctype)
 end
 
 
+(*
 val ctype_to_nat : ctype -> nat
 let ctype_to_nat = function
  | Void           -> 0
@@ -129,6 +127,10 @@ let rec setElemCompare_ctype ty1 ty2 =
     | (_, _) ->
         setElemCompare (ctype_to_nat ty1) (ctype_to_nat ty2)
   end
+*)
+
+let setElemCompare_ctype _ _ =
+  assert_false "WIP: comparition function for Core_ctype.ctype"
 
 
 instance (SetType ctype)

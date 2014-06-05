@@ -9,7 +9,7 @@ c values: the old thing is in cmm_aux_old.lem (type cvalue)
 *)
 
 open import Pervasives
-import New_memory_effect Symbolic State_exception AilTypes Core_ctype
+import Driver_util Core_driver New_memory_effect Symbolic State_exception AilTypes Core_ctype
 
 (* TODO: temporary hack *)
 val assert_false: forall 'a. string -> 'a
@@ -17,23 +17,50 @@ declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
 (*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
-(* module E = New_memory_effect *)
-(* module Operators = struct *)
-(*   let inline (>>=)    = E.bind *)
-(*   let inline (>>) m f = E.bind m (fun _ -> f) *)
-(* (\*  let inline tid_of   = E.tid_of *\) *)
-(* end *)
+(* K: don't we also need state ? *)
 
-(* open Operators *)
+(*
+module E = New_memory_effect
+module Operators = struct
+  let inline (>>=)    = E.bind
+  let inline (>>) m f = E.bind m (fun _ -> f)
+(*  let inline tid_of   = E.tid_of *)
+end
 
-(* (\* Memory effect *\) *)
-(* type t 'a = E.t memory_state 'a *)
-(* 
-type memory_error
+open Operators
+
+(* Memory effect *)
 *)
-type memory_error
 
-type t 'a = Exception.t 'a memory_error   (* to represent failure cases *)
+
+type memory_state (* TODO *)
+type memory_error (* TODO *)
+
+(* We need this indirection to be able to use the do notation *)
+module E = struct
+  type t 'a =  State_exception.t 'a memory_state memory_error
+  
+  val return: forall 'a. 'a -> t 'a
+  let return = State_exception.return
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind = State_exception.bind
+  
+  val fresh_sao_id: t Symbolic.symbol
+  let fresh_sao_id =
+    assert_false "WIP"
+  
+(*
+E.get_allocator
+E.fresh_symbolic_variable: t address
+E.get_concurrency_model_state
+E.add_constraints: constraints -> t unit
+E.check_constraints_satisfiable: t bool
+E.fail
+E.set_allocator: allocator -> t unit*)
+end
+
+let inline (>>=) = E.bind
 
 
 
@@ -58,16 +85,15 @@ type memory_write
 
 
 
-
 type pointer_provenance =
 
   (* pointer to an allocated object (with static, thread, or automatic
       storage duration) *)
-  | Prov_allocated_object of allocated_object_id
+  | Prov_allocated_object of Core_driver.allocated_object_id
   
   (* pointer to a dynamically allocated space (from malloc etc., with
       allocated storage duration) *)
-  | Prov_allocated_space of allocated_space_id
+  | Prov_allocated_space of Core_driver.allocated_space_id
 
   (* pointer formed by casting from an integer, in the case where the
       integer provenance-tracking machinery doesn't discover a good
@@ -76,13 +102,13 @@ type pointer_provenance =
   | Prov_intcast of AilTypes.ctype * mem_value
 
 
-type pointer_path_element =
+and pointer_path_element =
   | Path_array  of Symbolic.symbolic (* the array index *) 
-  | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) 
+  | Path_member of Symbolic.symbol (* struct/union id *) * Symbolic.symbol (* member id *) 
 
-type pointer_path = list pointer_path_element
+and pointer_path = list pointer_path_element
 
-type pointer_nonnull = <|
+and pointer_nonnull = <|
   ptr_provenance:      pointer_provenance;
   ptr_view_type:       AilTypes.ctype; 
    (* the "view type" of the pointer - this will change when you do a
@@ -93,19 +119,19 @@ type pointer_nonnull = <|
        otherwise - eg if this pointer has been cast to a char type and
        then subject to pointer arithmetic?), or Nothing if the
        provenance is an allocated_space *)
-  ptr_numeric_offset:  maybe Symbolic.t; 
+  ptr_numeric_offset:  maybe Symbolic.symbolic; 
    (* the position in the original object, represented with (possibly
        symbolic) address arithmetic (as an offset from the base
        address determined by the ptr_provenance field), where that
        makes sense *)
-  ptr_numeric_address: Symbolic.t  
+  ptr_numeric_address: Symbolic.symbolic
    (* the address in memory *)
 |>
 
-type pointer_value =
-  | Pointer_null of AilTypes.ctype
+and pointer_value =
+  | Pointer_null of Core_ctype.ctype
   | Pointer_nonnull of pointer_nonnull
-  | Pointer_function of Core.sym
+  | Pointer_function of Symbol.t
 
 (* I wasn't completely sure about whether we should have this split
 here, instead of regarding a null pointer as a Prov_intcast 0.  But
@@ -117,12 +143,12 @@ pointer type, which doesn't. *)
 
 
 (* the values that can appear in a write or read action *)
-type mem_value =
+and mem_value =
   | MV_pointer of pointer_value
   | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
   | MV_array of list mem_value
-  | MV_struct of list (Core.sym * mem_value)
-  | MV_union of Core.sym * mem_value
+  | MV_struct of list (Symbol.t * mem_value)
+  | MV_union of Symbol.t * mem_value
   | MV_pointer_byte of nat * nat * pointer_value 
   | MV_unspecified of Core_ctype.ctype
 
@@ -224,13 +250,15 @@ type allocator =
 
 
 
-val allocate_object:    thread_id          (* the allocating thread *)
-                     -> AilTypes.ctype     (* type of the allocation *)
-                     -> Symbolic.symbolic  (* size of that type *)
-                     -> Symbolic.symbolc   (* alignment of that type *)
-                     -> t pointer_value
+val allocate_object:    Driver_util.thread_id (* the allocating thread *)
+                     -> AilTypes.ctype        (* type of the allocation *)
+                     -> Symbolic.symbolic     (* size of that type *)
+                     -> Symbolic.symbolic     (* alignment of that type *)
+                     -> E.t pointer_value
 
-let allocate_object tid ty ty_size ty_alignment = do E
+let allocate_object tid ty ty_size ty_alignment = (* do E *)
+
+assert_false "
 
   (*TODO: record const-ness (and friends) in the metadata (needs a new
   argument, because for string literals and objects with temporary
@@ -250,7 +278,7 @@ let allocate_object tid ty ty_size ty_alignment = do E
   (address, new_allocator) <- E.get_allocator >>= function
     (* a completely concrete next-address allocator (with no reuse on free)*)
     | Trivial next_address -> 
-        let next_address' = assert_false "...round up next_address modulo ty_align" in
+        let next_address' = assert_false \"...round up next_address modulo ty_align\" in
         E.return (next_address', Trivial (next_address' + ty_size))
     
     (* the most semantically general allocator: taking a new
@@ -263,7 +291,7 @@ let allocate_object tid ty ty_size ty_alignment = do E
         st <- E.get_concurrency_model_state; in
           let live_footprints : list (address * size)= Concurrency_model.live_footprints st in
           (* TODO: the simple thing to do for live_footprints is
-          return all those "currently" (in abstract-machine execution
+          return all those \"currently\" (in abstract-machine execution
           time) allocated; we can do that for now.  But for a
           multi-threaded allocator, it's conceivable that that will
           lose some concurrency w.r.t. real implementations, so one
@@ -272,12 +300,12 @@ let allocate_object tid ty ty_size ty_alignment = do E
           allocations become hb-visible. *)
           let new_constraints = 
             (* constraint: this allocation is aligned *)
-            (mk_constraint "address mod ty_size = 0") ::
+            (mk_constraint \"address mod ty_size = 0\") ::
             (* constraint: this allocation is inside the allocatable space*)
-            (mk_constraint "(address,ty_size) inside allocatable_space ") ::
+            (mk_constraint \"(address,ty_size) inside allocatable_space \") ::
             (* constraints: this allocation doesn't overlap pre-existing ones*)
             List.map (function (address',size') ->
-              mk_constraint "(address,size) doesn't overlap (address',size')"
+              mk_constraint \"(address,size) doesn't overlap (address',size')\"
             end) live_footprints in do E
           (* update the existing constraint set *)
           () <- E.add_constraints new_constraints;
@@ -286,7 +314,7 @@ let allocate_object tid ty ty_size ty_alignment = do E
             if b then 
               E.return (address, allocator)
             else
-              E.fail (tag "run out of memory")
+              E.fail (tag \"run out of memory\")
                 (* in fact an implementation might fail earlier than
                 this - so this allocator cannot match *all* behaviours
                 of some reasonable C implementations. To do so, we'd
@@ -299,7 +327,6 @@ let allocate_object tid ty ty_size ty_alignment = do E
   (* update the allocator state *)
   () <- E.set_allocator new_allocator; in
   
-  assert_false "
   let ao_metadata = <| ao_original_type = ty; ao_address = address; ao_size = ty_size |> in 
     
   assert_false \"WIP: ... update with   Map.insert ao_id ao_metadata ao_map\"
@@ -319,9 +346,10 @@ let allocate_object tid ty ty_size ty_alignment = do E
   E.set_concurrency_model_state st'
   
   
-  E.return ptr_val"
+  E.return ptr_val
 
 end
+"
 
 
 
@@ -330,7 +358,7 @@ end
 
 val allocate_space:     Symbolic.symbolic  (* the number of bytes required*)
                      -> Symbolic.symbolic  (* the most general fundamental alignment *)
-                     -> t pointer value
+                     -> E.t pointer_value
 
 (* similar to allocate_object except constructing an allocated space
 rather than an allocated object*)
@@ -343,8 +371,8 @@ when a zero-sized allocation is requested; that can be done in
 core. There's also some defect report about this *)
 
 
-val deallocate_object:       allocated_object_id -> t unit
-val deallocate_space:        pointer_value -> t unit
+val deallocate_object:       Core_driver.allocated_object_id -> E.t unit
+val deallocate_space:        pointer_value -> E.t unit
 
 (* for objects with automatic or thread storage duration (c.f. 6.2.4),
 we can plumb the allocated_object_id from allocate_object directly to here.
@@ -405,10 +433,10 @@ OTOH, free() might be called with an arbitrary pointer value. *)
 *)
 
 val load:       (*TODO: union declaration data -> *)
-                -> AilTypes.ctype
+                   AilTypes.ctype
                 -> Symbolic.symbolic (* the size of that type *) 
                 -> pointer_value 
-                -> t object_value
+                -> E.t mem_value
 
 let load ty ty_size ptr_val = assert_false "..."
 
@@ -563,7 +591,7 @@ assembly of the read value *)
 *)
 
 
-val store:         AilTypes.ctype -> pointer_value -> object_value -> t unit
+val store:         Core_ctype.ctype -> pointer_value -> mem_value -> E.t unit
 
 (* This is relatively straightforward: we basically just synthesise a
 Write event, after some checks similar to the load (abstract those
@@ -595,10 +623,10 @@ explicitly write unspecified-value padding.
 
 (* val same: address -> address -> t bool *)
 
-val pointer_member_offset: AilTypes.ctype (* static type of the pointer*) 
+val pointer_member_offset: Core_ctype.ctype (* static type of the pointer*) 
                         -> pointer_value 
-                        -> Symbolic.sym (* the member id *) 
-                        -> t pointer_value
+                        -> Symbolic.symbol (* the member id *) 
+                        -> E.t pointer_value
 
 (* The ctype here is the static type of the original pointer.  e.g.
     when elaborating s.f, the ctype is the static type of s.  *)
@@ -632,10 +660,10 @@ isn't an atomic struct type*)
 
 *)
 
-val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*) 
+val pointer_arithmetic: Core_ctype.ctype (* static type of the pointer*) 
                        -> pointer_value 
                        -> Symbolic.symbolic  
-                       -> t pointer_value
+                       -> E.t pointer_value
 
 (*
    - the actual offset is determined by the static type and the symbolic value
@@ -658,10 +686,10 @@ val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*)
 
 (* See 6.3.2.3 for casts involving pointers *)
 
-val cast_pointer_to_pointer:  ctype (* the static type of the pointer *)
+val cast_pointer_to_pointer:  Core_ctype.ctype (* the static type of the pointer *)
                            -> pointer_value
-                           -> ctype (* the type specified in the cast *)
-                           -> t pointer_value
+                           -> Core_ctype.ctype (* the type specified in the cast *)
+                           -> E.t pointer_value
 
 (* 
 
@@ -727,14 +755,14 @@ val cast_pointer_to_pointer:  ctype (* the static type of the pointer *)
   *)
 
 
-val cast_pointer_to_integer: pointer_value -> integerType -> t object_value
+val cast_pointer_to_integer: pointer_value -> AilTypes.integerType -> E.t mem_value
 
 (*  - for Pointer_null, take zero
 
     - for Pointer_nonnull, take the ptr_numeric_address 
 
     - record the pointer_value (or just its ptr_provenance?) in the
-      provenance tracking data of the resulting object_value
+      provenance tracking data of the resulting mem_value
 
     (and union up those taints in the core semantics with the
     following - lift out the manipulation of this stuff)
@@ -801,7 +829,7 @@ type provenance_tracking_data = list pointer_value
 val combine_provenance_data : list provenance_tracking_data -> provenance_tracking_data
 
 
-val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
+val cast_integer_to_pointer: mem_value -> Core_ctype.ctype -> E.t pointer_value
 
 (*
 
@@ -835,10 +863,10 @@ val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
 
 *)
 
-val pointer_diff:  ctype -> pointer_value -> ctype -> pointer_value -> t object_value
+val pointer_diff:  Core_ctype.ctype -> pointer_value -> Core_ctype.ctype -> pointer_value -> E.t mem_value
 
-type compare_operator = Lt | Gt | Ge | Le | Eq | Neq
-val pointer_compare:  compare_operator->  ctype -> pointer_value -> ctype -> pointer_value -> t bool
+type compare_operator = PtrLt | PtrGt | PtrGe | PtrLe | PtrEq | PtrNeq
+val pointer_compare:  compare_operator->  Core_ctype.ctype -> pointer_value -> Core_ctype.ctype -> pointer_value -> E.t bool
 
 (* For "Equality Operators" (but not for Relational Operators), note
 the amusing parenthesis in 6.5.9p6: "Two pointers compare equal if and
@@ -1018,7 +1046,7 @@ https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Type-punning
 
               int f() {
                 double d = 3.0;
-                return ((union a_union *) &d)->i;
+                return ((union a_union * ) &d)->i;
               }
 
 
@@ -1059,7 +1087,7 @@ the write?
 
   char* p=malloc(6)
   *((int32_t* )p)=42
-  *((int32_t* )(p+2)) = *((int32_t* )p) + (*((int32_t* )(p+2))=43, *((int32_t* )(p+2)) )
+  *((int32_t* )(p+2)) = *((int32_t* )p) + ( *((int32_t* )(p+2))=43, *((int32_t* )(p+2)) )
 
   but that's got an indeterminate race anyhow)
 

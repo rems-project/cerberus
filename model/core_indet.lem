@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Core Memory Exception Errors Boot Memory_order
+import Core Exception Errors Boot Memory_order
 
 
 (* TODO: lem non termination bug *)
@@ -87,7 +87,6 @@ type expr =
   | Ebound of natural * expr
   | Esave of Core.ksym * list (Core.sym * Core_ctype.ctype) * expr
   | Erun of Core.ksym * list (Core.sym * expr)
-  | Eshift of expr * expr
   
   | Ebefore of expr
   | Eafter of expr
@@ -151,7 +150,6 @@ let rec import_expr e =
   | Core.Ebound i e       -> Ebound i (import_expr e)
   | Core.Esave k a_tys e  -> Esave k a_tys (import_expr e)
   | Core.Erun _ k a_vs    -> Erun k (map (fun (a, v) -> (a, import_expr v)) a_vs)
-  | Core.Eshift e1 e2     -> Eshift (import_expr e1) (import_expr e2)
   end
 
 and import_action (Core.Action _ act) =
@@ -211,7 +209,6 @@ let rec export_expr e =
   | Ebound i e          -> Core.Ebound i (export_expr e)
   | Esave k a_tys e     -> Core.Esave k a_tys (export_expr e)
   | Erun k a_vs         -> Core.Erun {} k (map (fun (a,v) -> (a, export_expr v)) a_vs)
-  | Eshift e1 e2        -> Core.Eshift (export_expr e1) (export_expr e2)
   end
 
 and export_action act =
@@ -390,10 +387,6 @@ let determinate_expr e =
 
 let rec hack x =
   match x with
-    | Core.Epointer_byte n ptr ->
-        Core.Epointer_byte n ptr
-    | Core.Econcat_bytes es ->
-        Core.Econcat_bytes es
     | Core.Eunit ->
         Core.Eunit
     | Core.Etrue ->
@@ -464,8 +457,6 @@ let rec hack x =
         Core.End (map hack es)
     | Core.Epar es ->
         Core.Epar (map hack es)
-    | Core.Eshift a e ->
-        Core.Eshift a (hack e)
     | Core.Eis_scalar e ->
         Core.Eis_scalar (hack e)
     | Core.Eis_integer e ->

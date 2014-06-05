@@ -1,3 +1,11 @@
+open import Pervasives
+import Symbolic
+import Core_ctype
+
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
 
 type address = Symbolic.symbolic   (* the type of symbolic integers *)
 
@@ -42,7 +50,7 @@ Create and Kill for clarity).
 thread through extend-only maps from the ids recording it. *)
 
 type allocated_object_metadata = <|
-  ao_original_type: Core.ctype;
+  ao_original_type: Core_ctype.ctype;
   ao_address:       address;
   ao_size:          Symbolic.symbolic;
   (*ao_alignment:     Symbolic.symbolic;*)
@@ -64,10 +72,18 @@ type allocated_space_metadata = <|
 
 
 
+(* TODO *)
+module UniqueId = struct
+  type counter
+  val init: counter
+  let init = assert_false "WIP"
+end
+
+
 type driver_state = <|
   ao_counter : UniqueId.counter;
   as_counter : UniqueId.counter;
-  ao_map : bmap allocated_object_id allocated_object_metadata;
+  ao_map : map allocated_object_id allocated_object_metadata;
   as_map : map allocated_space_id allocated_space_metadata;
 |>
 
