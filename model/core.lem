@@ -77,10 +77,12 @@ type expr 'a =
   | Eunit
   | Etrue
   | Efalse
-  | Econst of Cmm_aux_old.constant
+  | Econst of New_memory.mem_value
+(* these are folded into New_memory.mem_value
   | Epointer of New_memory.pointer_value
-  | Epointer_byte of nat * New_memory.pointer_value
+  | Epointer_byte of nat * nat * New_memory.pointer_value
   | Econcat_bytes of list (expr 'a) (* non empty list please *)
+*)
   | Ectype of ctype
   | Esym of sym
   | Eimpl of Implementation_.implementation_constant

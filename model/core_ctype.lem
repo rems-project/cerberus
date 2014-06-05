@@ -3,13 +3,52 @@ import AilTypes
 
 (* C types (this is a simplication of what is need for typechecking) *)
 (* TODO: what about Ail.ATOMIC_Q ? *)
-type ctype =
+
+type member_id = Core.sym
+
+
+
+
+type ctype_aux =
  | Void
  | Basic of AilTypes.basicType
  | Array of ctype * integer
- | Function of ctype * list ctype * bool
+ | Function of ctype * list ctype * bool (*true for variadic*)
  | Pointer of ctype
  | Atomic of ctype
+ | Struct of struct_tag * list (member_id * ctype)
+ | Union  of union_tag * list (member_id * ctype)
+
+and 
+  ctype = <| t : ctype_aux; alignment : Symbolic.sym |>
+  (* this alignment is the default for the type unless overridden by
+  _Alignas, eg "_Alignas(int32_t) int16_t i", in which case it's that *)
+
+
+(* choice: do we have a layout environment or do we duplicate the info
+in every ctype? For the former:
+
+
+-  somewhere for every base type, there has to be the default (maybe impl-def) alignment and size 
+
+type layout_environment = 
+  (* for every structure member_id, the offset *)
+  
+
+then given those, we should be able to define a Lem function from ctype to calculate:
+
+- its alignment
+- its size
+- its footprint (a list of offset,size pairs)
+
+
+For the latter, we have to add more stuff into ctype.
+*)
+
+
+
+
+
 (*  | Struct of  *)
 
 

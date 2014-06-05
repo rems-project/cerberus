@@ -44,12 +44,6 @@ type size = Symbolic.symbolic
 
 
 
-type lifted_value 'a =
-  | Specified of 'a
-  | Unspecified of Core_ctype.ctype
-  | Indeterminate_value of Core_ctype.ctype
-
-
 
 
 type memory_write
@@ -79,7 +73,7 @@ type pointer_provenance =
       integer provenance-tracking machinery doesn't discover a good
       original object for it (so this case will never be used in standard
       C. The ctype records the type used for the creating cast. *)
-  | Prov_intcast of AilTypes.ctype * mem_object_value
+  | Prov_intcast of AilTypes.ctype * mem_value
 
 
 type pointer_path_element =
@@ -111,6 +105,7 @@ type pointer_nonnull = <|
 type pointer_value =
   | Pointer_null of AilTypes.ctype
   | Pointer_nonnull of pointer_nonnull
+  | Pointer_function of Core.sym
 
 (* I wasn't completely sure about whether we should have this split
 here, instead of regarding a null pointer as a Prov_intcast 0.  But
@@ -121,19 +116,36 @@ pointer type, which doesn't. *)
 
 
 
-(* PS: not sure what this is for - why do we lift *pointer values* rather than general values? *)
-type mem_object_value =
-  | Obj_pointer of pointer_value
+(* the values that can appear in a write or read action *)
+type mem_value =
+  | MV_pointer of pointer_value
+  | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
+  | MV_array of list mem_value
+  | MV_struct of list (Core.sym * mem_value)
+  | MV_union of Core.sym * mem_value
+  | MV_pointer_byte of nat * nat * pointer_value 
+  | MV_unspecified of Core_ctype.ctype
+
+(* We don't have trap values, so we don't have
+  | MV_indeterminate_value of Core_ctype.ctype *)
+
+  (* for abstract types from libc, such as thrd_t, there is an
+  implementation-defined size (sizeof(thrd_t)), so we can take their
+  values to be MV_array of MV_integer's containing fresh symbolic
+  values (with a uniqueness clause on the combination). So we don't
+  add constructors for them here *)
 
 
 
 
+(* TODO: resolve the cycle between pointer_value and mem_value  - think about whether 
+  | Prov_intcast of AilTypes.ctype * mem_value
+has to have a mem_value
+*)
 
 
 
 
-(* TODO *)
-type object_value
 
 (** The memory layout API *)
 
@@ -956,6 +968,59 @@ This is much more liberal than the inter-type munging that one is
 allowed to do elsewhere.  The effective-type stuff in 6.5p7 is very
 vague on this, saying only "...or... an aggregate or union type that
 includes one of the aforementioned types among its members".
+
+
+GCC pays attention to more of the lvalue than just the lvalue type:
+https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Type-punning
+
+   -fstrict-aliasing
+
+    Allow the compiler to assume the strictest aliasing rules
+    applicable to the language being compiled. For C (and C++), this
+    activates optimizations based on the type of expressions. In
+    particular, an object of one type is assumed never to reside at
+    the same address as an object of a different type, unless the
+    types are almost the same. For example, an unsigned int can alias
+    an int, but not a void* or a double. A character type may alias
+    any other type.
+
+    Pay special attention to code like this:
+
+              union a_union {
+                int i;
+                double d;
+              };
+              
+              int f() {
+                union a_union t;
+                t.d = 3.0;
+                return t.i;
+              }
+
+    The practice of reading from a different union member than the one
+    most recently written to (called “type-punning”) is common. Even
+    with -fstrict-aliasing, type-punning is allowed, provided the
+    memory is accessed through the union type. So, the code above
+    works as expected. See Structures unions enumerations and
+    bit-fields implementation. However, this code might not:
+
+              int f() {
+                union a_union t;
+                int* ip;
+                t.d = 3.0;
+                ip = &t.i;
+                return *ip;
+              }
+
+    Similarly, access by taking the address, casting the resulting
+    pointer and dereferencing the result has undefined behavior, even
+    if the cast uses a union type, e.g.:
+
+              int f() {
+                double d = 3.0;
+                return ((union a_union *) &d)->i;
+              }
+
 
 
 As Kayvan mentioned before (but all compound literals, not just string
