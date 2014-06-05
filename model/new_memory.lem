@@ -226,7 +226,10 @@ let allocate_object tid ty ty_size ty_alignment = do E
 
   (* we pass in ty_size and ty_alignment here because calculating them
   involves executing core functions (from the implementation file),
-  and in this module we don't have access to the core_run interpreter*)
+  and in this module we don't have access to the core_run interpreter.  
+
+  Really we need not just ty_size but the whole layout, which we can use for
+  footprint-overlap and value assembly calculations *)
 
   (* create a new unique id *)
   sao_id <- E.fresh_sao_id;
