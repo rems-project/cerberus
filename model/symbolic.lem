@@ -1,0 +1,37 @@
+open import Pervasives
+
+type symbol = nat
+
+type symbolic =
+  | Symbol_zero
+  | Sym_base of symbol
+  | Sym_eq of symbolic * symbolic
+
+type counter = nat
+
+(*
+instance (Eq t)
+  let (=) sym1 sym2 =
+    match (sym1, sym2) with
+      | (Sym_base n1, Sym_base n2) ->
+          n1 = n2
+      | (Sym_eq sym11 sym12, Sym_eq sym21 sym22) ->
+          sym_eq
+
+  let (<>) sym1 sym2 =
+end
+*)
+
+val init: counter
+let init = 0
+
+
+val fresh_symbol: counter -> symbolic * counter
+let fresh_symbol n =
+  (Sym_base n, n+1)
+
+
+
+val zero: symbolic
+let zero =
+  Symbol_zero

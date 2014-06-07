@@ -1,0 +1,135 @@
+open import Pervasives
+
+type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
+ | Ichar
+ | Short
+ | Int_
+ | Long
+ | LongLong
+   (* Things defined in the standard libraries *)
+ | Int8_t
+ | Int16_t
+ | Int32_t
+ | Int64_t
+
+
+let eq_integerBaseType ibt1 ibt2 =
+  match (ibt1, ibt2) with
+  | (Ichar   , Ichar   ) -> true
+  | (Short   , Short   ) -> true
+  | (Int_    , Int_    ) -> true
+  | (Long    , Long    ) -> true
+  | (LongLong, LongLong) -> true
+  | (Int8_t  , Int8_t  ) -> true
+  | (Int16_t , Int16_t ) -> true
+  | (Int32_t , Int32_t ) -> true
+  | (Int64_t , Int64_t ) -> true
+  | (_       , _       ) -> false
+  end
+
+type integerType (* [name = "it*\\|size_t\\|ptrdiff_t"] *) =  (*r integer types (\S6.2.5\#17) *)
+ | Char
+ | Bool
+ | Signed of integerBaseType
+ | Unsigned of integerBaseType
+ (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
+
+let eq_integerType it1 it2 =
+  match (it1, it2) with
+  | (Char         , Char         ) -> true
+  | (Bool         , Bool         ) -> true
+  | (Signed   ibt1, Signed   ibt2) -> eq_integerBaseType ibt1 ibt2
+  | (Unsigned ibt1, Unsigned ibt2) -> eq_integerBaseType ibt1 ibt2
+  | (_            , _            ) -> false
+  end
+
+type qualifiers [name = "q*"] = <|
+  const    : bool;
+  restrict : bool;
+  volatile : bool
+|>
+
+let make_qualifiers c r v = <|
+  const    = c;
+  restrict = r;
+  volatile = v
+|>
+
+let no_qualifiers = <|
+  const    = false;
+  restrict = false;
+  volatile = false 
+|>
+
+let eq_qualifiers q1 q2 = 
+     q1.const    = q2.const
+  && q1.restrict = q2.restrict
+  && q1.volatile = q2.volatile
+
+type basicType [name = "bt*"] =  (*r basic types (\S6.2.5\#14) *)
+ | Integer of integerType
+
+let eq_basicType bt1 bt2 =
+  match (bt1, bt2) with
+  | (Integer it1, Integer it2) -> eq_integerType it1 it2
+  end
+
+instance (Eq basicType)
+  let (=) = eq_basicType
+  let (<>) bt1 bt2 = not (eq_basicType bt1 bt2)
+end
+
+type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
+ | Void (*r \texttt{void} type (\S6.2.5\#19) *)
+ | Basic of basicType (*r basic types (\S6.2.5\#14) *)
+ | Array of ctype * integer (*r array types (\S6.2.5\#20) *)
+ | Function of ctype * list (qualifiers * ctype) * bool (*r function types *)
+ | Pointer of qualifiers * ctype (*r pointer types *)
+ | Atomic of ctype
+
+let rec eq_params_aux eq_ctype p1 p2 : bool =
+  match (p1, p2) with
+  | ([]           , []           ) -> true
+  | ((q1,t1) :: p1, (q2,t2) :: p2) -> eq_qualifiers q1 q2 && eq_ctype t1 t2 && eq_params_aux eq_ctype p1 p2
+  | (_            , _            ) -> false
+  end
+
+let rec eq_ctype t1 t2 =
+  let eq_params = eq_params_aux eq_ctype in
+  match (t1, t2) with
+  | (Void            , Void              ) -> true
+  | (Basic    bt1    , Basic bt2         ) -> eq_basicType bt1 bt2
+  | (Array    t1 n1  , Array    t2 n2    ) -> eq_ctype t1 t2 && n1 = n2
+  | (Function t1 p1 b1, Function t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (Pointer  q1 t1  , Pointer  q2 t2    ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (Atomic t1       , Atomic      t2    ) -> eq_ctype t1 t2
+  | (_               , _                 ) -> false
+  end
+
+let eq_params = eq_params_aux eq_ctype
+
+type typeCategory [name = "tc*"] = 
+ | LValueType of qualifiers * ctype
+ | RValueType of ctype
+
+let eq_typeCategory tc1 tc2 : bool =
+  match (tc1, tc2) with
+  | (LValueType q1 t1, LValueType q2 t2) -> eq_ctype t1 t2 && eq_qualifiers q1 q2
+  | (RValueType    t1, RValueType    t2) -> eq_ctype t1 t2
+  | (_               , _               ) -> false
+  end
+
+type storageDuration [name = "sd*"] =  (*r storage duration (\S6.2.4\#1) *)
+ | Static
+ | Thread
+ | Automatic
+ | Allocated
+
+let eq_storageDuration sd1 sd2 : bool = 
+  match (sd1, sd2) with
+  | (Static   , Static   ) -> true
+  | (Thread   , Thread   ) -> true
+  | (Automatic, Automatic) -> true
+  | (Allocated, Allocated) -> true
+  | (_        , _        ) -> false
+  end

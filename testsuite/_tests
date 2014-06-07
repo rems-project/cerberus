@@ -1,0 +1,48 @@
+N elaboration/globals1.c
+D test the visibility of global variables in (at least) main
+R 42
+
+N elaboration/globals2.c
+D test the visibility of global variables in non-startup functions
+R 42
+
+N elaboration/globals3.c
+D test the visibility of global variables in the initialisation of other global variables
+R 44
+
+N elaboration/noreturn1.c
+D test the proper returning of a void function lacking a return statement (case of empty body).
+R 10
+
+N elaboration/noreturn2.c
+D test the proper returning of a void function lacking a return statement (case of nonempty body).
+R 10
+
+N elaboration/while1.c
+D a simple while loop
+R 10
+
+N elaboration/fact1.c
+D a simple factorial using a recursive function
+R 120
+
+N elaboration/fact2.c
+D a simple factorial using a while loop
+R 120
+
+N elaboration/conditional1.c
+D sanity-check for the conditional operator (true case)
+R 42
+
+N elaboration/conditional2.c
+D sanity-check for the conditional operator (false case)
+R 42
+
+
+N promotions/band1.c
+D simple check for the bitwise AND operator
+R 8
+
+N promotions/bor1.c
+D simple check for the bitwise OR operator
+R 138

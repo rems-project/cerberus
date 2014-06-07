@@ -1,0 +1,492 @@
+-- auto-generated implementation file for: `gcc_4.9.0_x86_64-apple-darwin10.8.0'
+
+def <bits_in_byte> : integer :=
+  8
+
+
+fun <ctype_min> (ty: ctype) : integer :=
+  if ty = "char" then
+    -128
+  else
+    if ty = "_Bool" then
+      0 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        -128
+      else
+        if ty = "unsigned ichar" then
+          0
+        else
+          if ty = "signed short" then
+            -32768
+          else
+            if ty = "unsigned short" then
+              0
+            else
+              if ty = "signed int" then
+                -2147483648
+              else
+                if ty = "unsigned int" then
+                  0
+                else
+                  if ty = "signed long" then
+                    -9223372036854775808
+                  else
+                    if ty = "unsigned long" then
+                      0
+                    else
+                      if ty = "signed long_long" then
+                        -9223372036854775808
+                      else
+                        if ty = "unsigned long_long" then
+                          0
+                        else
+                          if ty = "int8_t" then
+                            -128
+                          else
+                            if ty = "int16_t" then
+                              -32768
+                            else
+                              if ty = "int32_t" then
+                                -2147483648
+                              else
+                                if ty = "int64_t" then
+                                  -9223372036854775808
+                                else
+                                  if ty = "uint8_t" then
+                                    0
+                                  else
+                                    if ty = "uint16_t" then
+                                      0
+                                    else
+                                      if ty = "uint32_t" then
+                                        0
+                                      else
+                                        if ty = "uint64_t" then
+                                          0
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+fun <ctype_max> (ty: ctype) : integer :=
+  if ty = "char" then
+    127
+  else
+    if ty = "_Bool" then
+      1 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        127
+      else
+        if ty = "unsigned ichar" then
+          255
+        else
+          if ty = "signed short" then
+            32767
+          else
+            if ty = "unsigned short" then
+              65535
+            else
+              if ty = "signed int" then
+                2147483647
+              else
+                if ty = "unsigned int" then
+                  4294967295
+                else
+                  if ty = "signed long" then
+                    9223372036854775807
+                  else
+                    if ty = "unsigned long" then
+                      18446744073709551615
+                    else
+                      if ty = "signed long_long" then
+                        9223372036854775807
+                      else
+                        if ty = "unsigned long_long" then
+                          18446744073709551615
+                        else
+                          if ty = "int8_t" then
+                            127
+                          else
+                            if ty = "int16_t" then
+                              32767
+                            else
+                              if ty = "int32_t" then
+                                2147483647
+                              else
+                                if ty = "int64_t" then
+                                  9223372036854775807
+                                else
+                                  if ty = "uint8_t" then
+                                    255
+                                  else
+                                    if ty = "uint16_t" then
+                                      65535
+                                    else
+                                      if ty = "uint32_t" then
+                                        4294967295
+                                      else
+                                        if ty = "uint64_t" then
+                                          18446744073709551615
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+{-
+  if ty = "char" then
+    127
+  else if ty = "_Bool" then
+    1 -- TODO: check
+  else if ty = "signed ichar" then
+    127
+  else if ty = "unsigned ichar" then
+    255
+  else if ty = "signed short" then
+    32767
+  else if ty = "unsigned short" then
+    65535
+  else if ty = "signed int" then
+    2147483647
+  else if ty = "unsigned int" then
+    4294967295
+  else if ty = "signed long" then
+    9223372036854775807
+  else if ty = "unsigned long" then
+    18446744073709551615
+  else if ty = "signed long_long" then
+    9223372036854775807
+  else if ty = "unsigned long_long" then
+    18446744073709551615
+  else
+    error -- TODO
+-}
+
+
+fun <sizeof> (ty: ctype) : integer :=
+  if ty = "char" then
+    1
+  else
+    if ty = "_Bool" then
+      1
+    else
+      if ty = "signed ichar" then
+        1
+      else
+        if ty = "unsigned ichar" then
+          1
+        else
+          if ty = "signed short" then
+            2
+          else
+            if ty = "unsigned short" then
+              2
+            else
+              if ty = "signed int" then
+                4
+              else
+                if ty = "unsigned int" then
+                  4
+                else
+                  if ty = "signed long" then
+                    8
+                  else
+                    if ty = "unsigned long" then
+                      8
+                    else
+                      if ty = "signed long_long" then
+                        8
+                      else
+                        if ty = "unsigned long_long" then
+                          8
+                        else
+                          if ty = "int8_t" then
+                            1
+                          else
+                            if ty = "int16_t" then
+                              2
+                            else
+                              if ty = "int32_t" then
+                                4
+                              else
+                                if ty = "int64_t" then
+                                  8
+                                else
+                                  if ty = "uint8_t" then
+                                    1
+                                  else
+                                    if ty = "uint16_t" then
+                                      2
+                                    else
+                                      if ty = "uint32_t" then
+                                        4
+                                      else
+                                        if ty = "uint64_t" then
+                                          8
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+{-
+  if ty = "char" then
+    1
+  else if ty = "_Bool" then
+    1
+  else if ty = "signed ichar" then
+    1
+  else if ty = "unsigned ichar" then
+    1
+  else if ty = "signed short" then
+    2
+  else if ty = "unsigned short" then
+    2
+  else if ty = "signed int" then
+    4
+  else if ty = "unsigned int" then
+    4
+  else if ty = "signed long" then
+    8
+  else if ty = "unsigned long" then
+    8
+  else if ty = "signed long_long" then
+    8
+  else if ty = "unsigned long_long" then
+    8
+  else
+    error -- TODO
+-}
+
+
+fun <alignof> (ty: ctype) : integer :=
+  if ty = "char" then
+    1
+  else
+    if ty = "_Bool" then
+      1
+    else
+      if ty = "signed ichar" then
+        1
+      else
+        if ty = "unsigned ichar" then
+          1
+        else
+          if ty = "signed short" then
+            2
+          else
+            if ty = "unsigned short" then
+              2
+            else
+              if ty = "signed int" then
+                4
+              else
+                if ty = "unsigned int" then
+                  4
+                else
+                  if ty = "signed long" then
+                    8
+                  else
+                    if ty = "unsigned long" then
+                      8
+                    else
+                      if ty = "signed long_long" then
+                        8
+                      else
+                        if ty = "unsigned long_long" then
+                          8
+                        else
+                          if ty = "int8_t" then
+                            1
+                          else
+                            if ty = "int16_t" then
+                              2
+                            else
+                              if ty = "int32_t" then
+                                4
+                              else
+                                if ty = "int64_t" then
+                                  8
+                                else
+                                  if ty = "uint8_t" then
+                                    1
+                                  else
+                                    if ty = "uint16_t" then
+                                      2
+                                    else
+                                      if ty = "uint32_t" then
+                                        4
+                                      else
+                                        if ty = "uint64_t" then
+                                          8
+                                        else
+                                          error -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+{-
+  if ty = "char" then
+    1
+  else if ty = "_Bool" then
+    1
+  else if ty = "signed ichar" then
+    1
+  else if ty = "unsigned ichar" then
+    1
+  else if ty = "signed short" then
+    2
+  else if ty = "unsigned short" then
+    2
+  else if ty = "signed int" then
+    4
+  else if ty = "unsigned int" then
+    4
+  else if ty = "signed long" then
+    8
+  else if ty = "unsigned long" then
+    8
+  else if ty = "signed long_long" then
+    8
+  else if ty = "unsigned long_long" then
+    8
+  else
+    error -- TODO
+-}
+
+
+{-
+
+fun <sizeof> (ty: ctype) : integer :=
+  case_ty ty of
+    | "void"               => error
+    | "char"               => 1
+    | "_Bool"              => 1
+    | Signed   "ichar"     => 1
+    | Signed   "short"     => 2
+    | Signed   "int"       => 4
+    | Signed   "long"      => 8
+    | Signed   "long long" => 8
+    | Signed   "int8_t"    => 1
+    | Signed   "int16_t"   => 2
+    | Signed   "int32_t"   => 4
+    | Signed   "int64_t"   => 8
+    | Unsigned "ichar"     => 1
+    | Unsigned "short"     => 2
+    | Unsigned "int"       => 4
+    | Unsigned "long"      => 8
+    | Unsigned "long long" => 8
+    | Unsigned "int8_t"    => 1
+    | Unsigned "int16_t"   => 2
+    | Unsigned "int32_t"   => 4
+    | Unsigned "int64_t"   => 8
+    | Array ty_ n          => n * <sizeof>(ty_)
+--    | Function             => __sizeof_function
+    | Pointer ty_          => 8
+    | Atomic  ty_          => <sizeof>(ty_)-- TODO
+  end
+-}
+
+
+
+-- GCC uses the two's complement representation with no padding bits
+fun <Integer.encode> (ty: ctype, n: integer) : integer :=
+  encodeTwos(ty, n)
+
+fun <Integer.decode> (ty: ctype, n: integer) : integer :=
+  decodeTwos(ty, n)
+
+
+-- "For conversion to a type of width N, the value is reduced modulo 2^N to be
+--  within range of the type; no signal is raised."
+
+
+-- fun foo_aux(
+
+fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
+--  n % exp(2, ctype_width(ty))
+  let n = encodeTwos("unsigned long", n) in
+    <Integer.decode>(ty, n % exp(2, ctype_width(ty)))
+  end
+
+
+-- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
+fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
+  let n = encodeTwos(ty, n) in
+    decodeTwos(ty, (n / exp(2, m)) + ones_prefix(0, m, ctype_width(ty)))
+  end
+
+-- implementation of the ~ operator (only used in the signed case)
+fun <Bitwise_complement> (ty: ctype, n: integer) : integer :=
+  let n = encodeTwos(ty, n) in
+    decodeTwos(ty, complementTwos(ty, n))
+  end

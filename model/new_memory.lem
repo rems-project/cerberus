@@ -1,0 +1,1730 @@
+(* TODO: claim motivation: not just identify standard and de facto C,
+but also basis for semantics for Cs that do more checking, eg CHERI
+(softbound?).  And also for better (closer to practice?)
+well-definedness checking for differential testing? *)
+
+(* for reference
+c types: core_ctype.lem
+c values: the old thing is in cmm_aux_old.lem (type cvalue)
+*)
+
+open import Pervasives
+import Driver_util Core_driver New_memory_effect Symbolic State_exception AilTypes Core_ctype
+
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+(*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
+(* K: don't we also need state ? *)
+
+(*
+module E = New_memory_effect
+module Operators = struct
+  let inline (>>=)    = E.bind
+  let inline (>>) m f = E.bind m (fun _ -> f)
+(*  let inline tid_of   = E.tid_of *)
+end
+
+open Operators
+
+(* Memory effect *)
+*)
+
+
+type memory_state (* TODO *)
+type memory_error (* TODO *)
+
+(* We need this indirection to be able to use the do notation *)
+module E = struct
+  type t 'a =  State_exception.t 'a memory_state memory_error
+  
+  val return: forall 'a. 'a -> t 'a
+  let return = State_exception.return
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind = State_exception.bind
+  
+  val fresh_sao_id: t Symbolic.symbol
+  let fresh_sao_id =
+    assert_false "WIP"
+  
+(*
+E.get_allocator
+E.fresh_symbolic_variable: t address
+E.get_concurrency_model_state
+E.add_constraints: constraints -> t unit
+E.check_constraints_satisfiable: t bool
+E.fail
+E.set_allocator: allocator -> t unit*)
+end
+
+let inline (>>=) = E.bind
+
+
+
+
+type address = Symbolic.symbolic
+type size = Symbolic.symbolic
+
+
+
+
+
+
+type memory_write
+
+
+
+
+
+
+
+
+
+
+
+type pointer_provenance =
+
+  (* pointer to an allocated object (with static, thread, or automatic
+      storage duration) *)
+  | Prov_allocated_object of Core_driver.allocated_object_id
+  
+  (* pointer to a dynamically allocated space (from malloc etc., with
+      allocated storage duration) *)
+  | Prov_allocated_space of Core_driver.allocated_space_id
+
+  (* pointer formed by casting from an integer, in the case where the
+      integer provenance-tracking machinery doesn't discover a good
+      original object for it (so this case will never be used in standard
+      C. The ctype records the type used for the creating cast. *)
+  | Prov_intcast of AilTypes.ctype * mem_value
+
+
+and pointer_path_element =
+  | Path_array  of Symbolic.symbolic (* the array index *) 
+  | Path_member of Symbolic.symbol (* struct/union id *) * Symbolic.symbol (* member id *) 
+
+and pointer_path = list pointer_path_element
+
+and pointer_nonnull = <|
+  ptr_provenance:      pointer_provenance;
+  ptr_view_type:       AilTypes.ctype; 
+   (* the "view type" of the pointer - this will change when you do a
+       cast or a member shift. *)
+  ptr_abstract_offset: maybe pointer_path; 
+   (* the position in the original allocated_object, represented as an
+       abstract access path (where that makes sense and Nothing
+       otherwise - eg if this pointer has been cast to a char type and
+       then subject to pointer arithmetic?), or Nothing if the
+       provenance is an allocated_space *)
+  ptr_numeric_offset:  maybe Symbolic.symbolic; 
+   (* the position in the original object, represented with (possibly
+       symbolic) address arithmetic (as an offset from the base
+       address determined by the ptr_provenance field), where that
+       makes sense *)
+  ptr_numeric_address: Symbolic.symbolic
+   (* the address in memory *)
+|>
+
+and pointer_value =
+  | Pointer_null of Core_ctype.ctype
+  | Pointer_nonnull of pointer_nonnull
+  | Pointer_function of Symbol.t
+
+(* I wasn't completely sure about whether we should have this split
+here, instead of regarding a null pointer as a Prov_intcast 0.  But
+6.3.2.3p3 distinguishes between a null pointer constant (which has
+particular properties) and an arbitrary 0-valued integer cast to a
+pointer type, which doesn't. *)
+
+
+
+
+(* the values that can appear in a write or read action *)
+and mem_value =
+  | MV_pointer of pointer_value
+  | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
+  | MV_array of list mem_value
+  | MV_struct of list (Symbol.t * mem_value)
+  | MV_union of Symbol.t * mem_value
+  | MV_pointer_byte of nat * nat * pointer_value 
+  | MV_unspecified of Core_ctype.ctype
+
+(* We don't have trap values, so we don't have
+  | MV_indeterminate_value of Core_ctype.ctype *)
+
+  (* for abstract types from libc, such as thrd_t, there is an
+  implementation-defined size (sizeof(thrd_t)), so we can take their
+  values to be MV_array of MV_integer's containing fresh symbolic
+  values (with a uniqueness clause on the combination). So we don't
+  add constructors for them here *)
+
+
+
+
+(* TODO: resolve the cycle between pointer_value and mem_value  - think about whether 
+  | Prov_intcast of AilTypes.ctype * mem_value
+has to have a mem_value
+*)
+
+
+
+
+
+(** The memory layout API *)
+
+
+
+(*
+let allocate_object typ = 
+    - create a new unique id 
+    - calculate the size of typ
+    - call the allocator to construct a new address.  
+        We'll want a choice of several allocators, including:
+
+          - the most semantically general allocator: taking a new
+             symbolic variable with constraints that the new allocation
+             doesn't overlap the currently allocated (in some sense
+             TBD) things
+
+             WRT that, note 7.22.3p2 "A call to free or realloc that
+             deallocates a region p of memory synchronizes with any
+             allocation call that allocates all or part of the region
+             p. This synchronization occurs after any access of p by
+             the deallocating function, and before any such access by
+             the allocating function.",   which matches what I was
+             saying the other day:  we do have to make up new sw edges.    
+             Kyndylan will have to do this in his free()....
+
+             See also Defect Report #403,
+             http://www.open-std.org/jtc1/sc22/wg14/www/docs/dr_403.htm,
+             in which Mark proposed "Calls to these functions that
+             allocate or deallocate a particular region of memory
+             shall occur in a single total order, and each such
+             deallocation call shall synchronise with the next
+             allocation (if any) in this order."  The Feb 2012 meeting
+             proposed a Technical Corrigendum to replace the last two
+             sentences of 7.22.3p2 with that - but re-reading it, it
+             seems much too strong.  Implementations may do some
+             thread-local allocation, which wouldn't give rise to this
+             synchronisation.   So we should make a new Defect Report, ahem.
+
+
+          - a completely concrete next-address allocator (with no
+             reuse on free)
+
+        This has (somehow) to refer to and update the driver's current
+        constraint set and to the concurrency model's notion of the
+        currently allocated things.
+
+        Allocation can fail if the allocator runs out of memory.  For
+        create, that should give a whole-semantics failure(?) whereas
+        for malloc etc the call should return null.
+
+    - construct an updated driver memory metadata state, adding a maplet
+       from the unique id to the type and address
+    - construct a pointer_value from the statically_allocated_object_metadata:
+        Pointer_nonnull <|
+          ptr_provenance = Prov_sao (*resp. Prov_das*) of the unique id
+          ptr_view_type = typ
+          ptr_abstract_offset = Just [] (*resp. Nothing *)
+          ptr_numeric_offset =   a symbolic zero 
+          ptr_numeric_address = address injected into Symbolic.t  
+        |>      
+    - someone synthesises a concurrency-model Create event with the address and size
+*)
+
+
+(* Here E is the state-and-exception monad for the layout model.  Its
+state contains:
+- the sao and das symbol generators and maps
+- the allocator (a tag indicating which to use and any internal state it requires)
+- the concurrency_model state
+*)
+
+type allocator = 
+  | Trivial of address (* the next free address *)
+  | Semantically_general of list (address*size)   (* the allocatable space - the address ranges in which we can allocate *)
+
+
+
+val allocate_object:    Driver_util.thread_id (* the allocating thread *)
+                     -> AilTypes.ctype        (* type of the allocation *)
+                     -> Symbolic.symbolic     (* size of that type *)
+                     -> Symbolic.symbolic     (* alignment of that type *)
+                     -> E.t pointer_value
+
+let allocate_object tid ty ty_size ty_alignment = (* do E *)
+
+assert_false "
+
+  (*TODO: record const-ness (and friends) in the metadata (needs a new
+  argument, because for string literals and objects with temporary
+  lifetime, you can't get the constness just from the type*)
+
+  (* we pass in ty_size and ty_alignment here because calculating them
+  involves executing core functions (from the implementation file),
+  and in this module we don't have access to the core_run interpreter.  
+
+  Really we need not just ty_size but the whole layout, which we can use for
+  footprint-overlap and value assembly calculations *)
+
+  (* create a new unique id *)
+  sao_id <- E.fresh_sao_id;
+  
+  (* invoke the allocator to construct a new address *)
+  (address, new_allocator) <- E.get_allocator >>= function
+    (* a completely concrete next-address allocator (with no reuse on free)*)
+    | Trivial next_address -> 
+        let next_address' = assert_false \"...round up next_address modulo ty_align\" in
+        E.return (next_address', Trivial (next_address' + ty_size))
+    
+    (* the most semantically general allocator: taking a new
+       symbolic variable with constraints that the new allocation
+       doesn't overlap the currently allocated (in some sense TBD) things*)
+    | (Semantically_general allocatable_space as allocator) -> do E
+        (* create a new symbolic variable*)
+        address <- E.fresh_symbolic_variable;
+        (* build constraints *)
+        st <- E.get_concurrency_model_state; in
+          let live_footprints : list (address * size)= Concurrency_model.live_footprints st in
+          (* TODO: the simple thing to do for live_footprints is
+          return all those \"currently\" (in abstract-machine execution
+          time) allocated; we can do that for now.  But for a
+          multi-threaded allocator, it's conceivable that that will
+          lose some concurrency w.r.t. real implementations, so one
+          might thing of taking just the hb-live allocations - but
+          that could lead to deadlocks when other extant overlapping
+          allocations become hb-visible. *)
+          let new_constraints = 
+            (* constraint: this allocation is aligned *)
+            (mk_constraint \"address mod ty_size = 0\") ::
+            (* constraint: this allocation is inside the allocatable space*)
+            (mk_constraint \"(address,ty_size) inside allocatable_space \") ::
+            (* constraints: this allocation doesn't overlap pre-existing ones*)
+            List.map (function (address',size') ->
+              mk_constraint \"(address,size) doesn't overlap (address',size')\"
+            end) live_footprints in do E
+          (* update the existing constraint set *)
+          () <- E.add_constraints new_constraints;
+          (* check constraint set satisfiable, and fail if not *)
+          b <- E.check_constraints_satisfiable; in
+            if b then 
+              E.return (address, allocator)
+            else
+              E.fail (tag \"run out of memory\")
+                (* in fact an implementation might fail earlier than
+                this - so this allocator cannot match *all* behaviours
+                of some reasonable C implementations. To do so, we'd
+                have to allow the allocator to use some space for its
+                metadata, or just allow nondeterministic failure.  *)
+
+          end
+        end
+  end ;
+  (* update the allocator state *)
+  () <- E.set_allocator new_allocator; in
+  
+  let ao_metadata = <| ao_original_type = ty; ao_address = address; ao_size = ty_size |> in 
+    
+  assert_false \"WIP: ... update with   Map.insert ao_id ao_metadata ao_map\"
+  
+  let ptr_val = 
+    Pointer_nonnull <|
+      ptr_provenance=      Prov_allocated_object ao_id;
+      ptr_view_type=       ty;
+      ptr_abstract_offset= Just [];
+      ptr_numeric_offset=  Symbolic.zero;
+      ptr_numeric_address= address;
+     |> in
+  
+  st <- E.get_concurrency_model_state; in
+  let st' = Concurrency_model.create st tid ty ptr_val in
+  
+  E.set_concurrency_model_state st'
+  
+  
+  E.return ptr_val
+
+end
+"
+
+
+
+
+
+
+val allocate_space:     Symbolic.symbolic  (* the number of bytes required*)
+                     -> Symbolic.symbolic  (* the most general fundamental alignment *)
+                     -> E.t pointer_value
+
+(* similar to allocate_object except constructing an allocated space
+rather than an allocated object*)
+
+(* for calloc, core will also have to generate an initialisation write
+(of a char array of zeros *)
+
+(* there's an implementation-defined choice in 7.22.3 of what to do
+when a zero-sized allocation is requested; that can be done in
+core. There's also some defect report about this *)
+
+
+val deallocate_object:       Core_driver.allocated_object_id -> E.t unit
+val deallocate_space:        pointer_value -> E.t unit
+
+(* for objects with automatic or thread storage duration (c.f. 6.2.4),
+we can plumb the allocated_object_id from allocate_object directly to here.
+OTOH, free() might be called with an arbitrary pointer value. *)
+
+(* for deallocate_object (the automatic and thread storage-duration case):
+
+   - we ask the concurrency model to synthesise a deallocate event with the
+      address and size 
+
+   - in the Standard semantics, with -pointer_lifetime_end_zap true,
+      we need to arrange for all memory locations containing a pointer
+      with the same unique id (or a projected byte thereof) to take on
+      the Undefined value (and for there to be races if those
+      locations are accessed concurrently to this).  That could be
+      done in the concurrency model either by synthesising a
+      concurrency-model Write event to the Undefined value for each,
+      or (perhaps?) by adding special machinery to the read-value
+      assembly and race definitions.
+
+   - in the Standard semantics modified with -pointer_lifetime_end_zap false,
+      we don't do that (we rely on the concurrency model liveness
+      checking wrt Create and Kill events to check accesses using the
+      pointer are legal)
+
+   - in the Concrete semantics, we don't do that (likewise relying on
+      access-time checking) (here it doesn't seem that there is a
+      sensible lifetime-end-zap semantic option?)
+
+   for deallocate_space (the free() case):
+
+   - we have to check the pointer matches "a pointer earlier returned
+      by a memory management function" (7.22.3.3p2) and that it hasn't
+      been free'd (or realloc'd).  The latter is done by the
+      concurrency model liveness check.  For the former, 
+
+      - in the Standard semantics:
+
+         ptr_view_type       ... check equal to the type from driver metadata for the id of the pointer ?
+         ptr_abstract_offset ... check IN {Just [], Nothing}  ?
+         ptr_numeric_offset  ... check equal a symbolic zero ?
+         ptr_numeric_address ... check equal to the address from the driver metadata for the id of the pointer ? 
+
+       then we use the size from the allocated_object_metadata
+  
+      - in the Concrete semantics:  
+
+         we just use the ptr_numeric_address: there should be an
+         hb-visible Allocate with that address (and no hb-intervening or
+         hb-unordered Deallocate on it)
+
+       then we use the size from the allocated_space_metadata
+
+   - Then we use that address and size to ask the concurrency model to
+      synthesise a Deallocate event.
+
+
+*)
+
+val load:       (*TODO: union declaration data -> *)
+                   AilTypes.ctype
+                -> Symbolic.symbolic (* the size of that type *) 
+                -> pointer_value 
+                -> E.t mem_value
+
+let load lvalue_ty ptr_val = assert_false "..."
+
+(* I feed in the type size, for consistency with the allocate_* calls,
+but we will need to know the whole layout of the ctype for the
+assembly of the read value *)
+
+(* First some checks on the pointer value.  In the Standard semantics:
+
+   (* check non-null and non-function-pointer *)
+   match ptr_val with
+   | Pointer_null _ -> E.fail (tag "load from null pointer")
+   | Pointer_function _ -> E.fail (tag "load from function pointer")
+   | Pointer_nonnull pn ->
+
+       match lvalue_ty with 
+  
+       (* check the lvalue type is a (possibly qualified) pointer to
+       (signed or unsigned?) char *)
+         | Pointer (Basic IChar) -> 
+
+           (* reading a representation byte or a char subobject from
+           an allocated_object or allocated_space *)
+
+
+           (* check the pointer view type is also char *)
+           E.assert (pn.ptr_view_type = Basic IChar) "load with lvalue char type with non-char pointer view type";
+
+           (* check that, according to the ptr_numeric_offset and
+           ptr_numeric_address, the pointer points to somewhere in the
+           footprint (internal padding included) of the original
+           object (allocated_object or allocated_space) from the
+           ptr_provenance *)
+
+           let (prov_address, prov_size) = 
+             match pn.ptr_provenance with
+             | Prov_allocated_object ao_id ->  
+                let aom = map.lookup ds.ao_map  ao_id in 
+                  (aom.ao_address, aom.ao_size)
+             | Prov_allocated_space as_id -> 
+                let asm = map.lookup ds.ao_map  as_id in
+                  (asm.as_address, asm.as_size)
+             | Prov_intcast _ -> E.fail "load from Prov_intcast pointer cannot happen in Standard semantics"
+             end in
+         
+          E.assert 
+            (pn.ptr_numeric_address >= prov_address && 
+              pn.ptr_numeric_address < prov_address + prov_size)  
+            "load with lvalue char from outside the footprint of the original allocation of the pointer"  
+(*these assert and fail messages should all reference the std where possible*)
+
+        
+       | 
+
+  end
+
+
+
+  
+      - the ctype is a character type (or pointer to one, depending how this is set up)
+
+
+   - or (reading a normal subobject member from an allocated object) 
+
+      - the ptr_provenance is an allocated_space
+
+      - according to the ptr_abstract_offset the pointer points to the
+         original object or a subobject thereof (and not one of those
+         one-past things), which matches the ptr_view_type and the
+         ctype.  With special magic for the 6.5.2.3p{6,9}
+         legitimisation of reading from a union with a common prefix
+         in scope.  That means this function needs to be told the
+         in-scope union declarations.
+
+   - or (reading a not-necessarily-char from an allocated space)
+
+      - the ptr_provenance is an allocated_space
+
+      - the ctype matches the ptr_view_type 
+
+      - according to the ptr_numeric_offset, the pointer points to
+         somewhere within the allocated_space (far enough from the end
+         to fit the ctype)
+
+      - all other checking is left to the effective type
+         checking below
+
+   in the Concrete semantics:
+
+    - check non-null
+
+    - nothing more, beyond the effective-type checking below?  (and
+       modulate that by only looking at the leaf types and by
+       optionally allowing representation casts)?
+
+   Then we expect the concurrency model to calculate the set of
+   hb-most-recent writes (do I really mean hb?)  that overlap the read
+   location.  In the entirely non-atomic case, presumably any of those
+   writes that pairwise-overlap each other are themselves hb-related,
+   otherwise we'd have already found a data race (but there might be a
+   struct write and an hb-later member write, or an abstract value
+   write and an hb-later representation-byte write, for example).  And
+   in the atomic case, there might be some "races", but there should
+   be mo edges among those.  Then we need to reassemble the read value
+   from that partial order of write values.  (which may be tricky if
+   many things are symbolic...)
+
+   In the concrete semantics, read-value assembly has to permit
+   RC.1-like represenetation casts between various types.
+
+   What does "overlap the read location" really mean?  I've been
+   imagining it was just overlap of (address,size) intervals
+   (computing the size from the lvalue type and taking the address
+   from the pointer value), but that's wrong: if we're reading a
+   compound value as an abstract thing (i.e. not just as a char
+   array), we should *not* be reading the padding, and should not get
+   rf edges from padding writes etc.
+
+   Moreover, in the Standard semantics (where padding always contains
+   undefined values), the reassembly process (for any representation
+   read) has to introduce those in the right places - to match
+   compiler behaviour, presumably those should be determined by the
+   static type of the load.
+
+   In the Standard semantics, we also need to do effective-type
+   checking: checking for each of the pieces of that reassembly that
+   the type of the write is suitably compatible with the lvalue type
+   of the load, per 6.5p7.
+
+   How are we going to handle this ***'d part of 6.5p6?
+
+    "If a value is copied into an object having no declared type using
+     memcpy or memmove, ***or is copied as an array of character
+     type***, then the effective type of the modified object for that
+     access and for subsequent accesses that do not modify the value
+     is the effective type of the object from which the value is
+     copied, if it has one."
+
+   First, note that this implicitly contradicts our current "no"
+   position on PR.2.b "can a pointer value be copied by copying its
+   representation bytes", suggesting that memcpy and user-memcpy are
+   equivalent.  If we're going to model the ***'d part, I guess we
+   have to have a "byte m of n of ctype" effective type, and be able
+   to recombine lists of them in the effective-type-on-access check.
+   Then those byte writes have to somehow have both the "byte" type
+   and that type.  How?  And then (just as for pointer values) if you
+   do that, what if you encrypt/decrypt the bytes on the way?  The
+   standard gives no guarantees in such a case, so maybe the last
+   clause of 6.5p6 takes effect: "For all other accesses to an object
+   having no declared type, the effective type of the object is simply
+   the type of the lvalue used for the access."
+
+   (for arrays, just write the effective type of each array element)
+   Effective type creation and propagation (6.5p6):
+
+     - for an object with a declared type: Core knows at allocation
+        time and tells the concurrency model to include it in the
+        allocate action.
+
+     - for a write to an object with a declared type: Core knows the
+        lvalue type, which [we check against the effective type from
+        the allocation action OR we check against the ao_original_type
+        from the allocated_object_metadata (don't think it matters which)].
+
+     - for a value stored into a malloc'd space through a non-char
+        lvalue: Core knows the type of the lvalue and tells the
+        concurrency model to include it in the Write action
+
+     - when we read from a malloc'd space though a non-char lvalue:
+        Core knows the type of the lvalue and we check that against
+        the type from the Write action(s) that the concurrency model
+        gives us.
+
+     - for a value read from either an object with a declared type or
+        from a malloc'd space through a char lvalue, the value we read
+        has to be annotated with the effective type data attached to it, so that
+        when we write a char to a malloc'd region, it can be recorded
+        in the Write action.
+
+        This annotation is plumbed around like the pointer-set
+        annotation.  Except that this gets zapped when you do any
+        operation on the char (as the standard doesn't give you any
+        more guarantee).
+
+
+   In the Concrete semantics, do we do any type checking?  At least
+   that we're not reading from non-allocated memory - but that follows
+   from the concurrency model?
+
+   Then someone has to synthesise a read event (or however this works
+   in Kyndylan's current interface), and we rely on the concurrency
+   model lifetime check (w.r.t. *all* the writes we read from).
+
+*)
+
+
+val store:         Core_ctype.ctype -> pointer_value -> mem_value -> E.t unit
+
+(* This is relatively straightforward: we basically just synthesise a
+Write event, after some checks similar to the load (abstract those
+out).
+
+In the Standard semantics we can look at the pointer_value to
+determined if we're writing to an allocated object (in which
+case the lvalue type should be suitably compatible with that) or to
+within an allocated space, in which case we use the
+supplied lvalue type as the effective type of the write.
+
+
+TODO: how do we deal with these?: 
+
+  6.2.6.1p6 says that when we write to a struct or union, the padding
+  takes on unspecified values.
+
+  6.2.6.1p7 says that when we write to a union, the spare bytes, if any
+  (there for the maximally sized member) likewise take on unspecified
+  values
+
+In the standard semantics, those are just by definition unspecified
+values; that can be built into the read-value-assembly machinery?
+LATER: that still seems ok for structs, but for unions we have to
+explicitly write unspecified-value padding.
+
+*)
+
+
+(* val same: address -> address -> t bool *)
+
+val pointer_member_offset: Core_ctype.ctype (* static type of the pointer*) 
+                        -> pointer_value 
+                        -> Symbolic.symbol (* the member id *) 
+                        -> E.t pointer_value
+
+(* The ctype here is the static type of the original pointer.  e.g.
+    when elaborating s.f, the ctype is the static type of s.  *)
+
+
+(* - check the static type is a struct or union with that member
+      (otherwise the static type system should have told us, but we
+      should check dynamically too, absent a type soundness proof)
+
+      (really "with that member" for unions?)
+
+   - check the pointer_value is non-null (only in the standard semantics?)
+
+   - in the Standard semantics: 
+      check the ptr_view_type is more-or-less equal (TODO?) to the
+      static type
+
+   - in the Concrete semantics:   
+      the same check?? 
+
+   - if the ptr_abstract_offset is non-Nothing, append the member id
+
+   - look up the (symbolic) offset for the member in this static type
+
+     - add it to the ptr_numeric_offset
+
+     - add it to the ptr_numeric_address
+
+(* TODO: the above has to check the lvalue - and the effective type? -
+isn't an atomic struct type*)
+
+*)
+
+val pointer_arithmetic: Core_ctype.ctype (* static type of the pointer*) 
+                       -> pointer_value 
+                       -> Symbolic.symbolic  
+                       -> E.t pointer_value
+
+(*
+   - the actual offset is determined by the static type and the symbolic value
+
+   - in the Standard semantics:
+      allow only within an array (or one-past), remembering that
+      almost anything is considered an array of size 1.  We do this by
+      looking at the end of the ptr_abstract_offset, and mutate that.
+
+   - in the Concrete semantics:
+      allow any arithmetic (updating the ptr_abstract_offset if it
+      makes sense, otherwise zapping it)
+
+   - add the offset to the ptr_numeric_offset
+
+   - add the offset to the ptr_numeric_address
+
+*)
+
+
+(* See 6.3.2.3 for casts involving pointers *)
+
+val cast_pointer_to_pointer:  Core_ctype.ctype (* the static type of the pointer *)
+                           -> pointer_value
+                           -> Core_ctype.ctype (* the type specified in the cast *)
+                           -> E.t pointer_value
+
+(* 
+
+ - in the Standard semantics:
+
+     - casting a pointer "to an object type" (what's the force of 
+        that - not a function pointer?) to void* : this always succeeds
+        (6.3.2.3p1); it gives the same pointer value except for the
+        view type which we change to void?
+
+     - casting a pointer to void to a pointer "to an object type":
+        always succeeds, and again we just futz with the view type.
+        (say you have a pointer &s.f, cast to void*, and cast back to
+        float*, can it be used to access f ?  not in the standard,
+        anyhow)
+
+     - casts that add qualifiers just futz with the view type:
+        6.3.2.3p2 "For any qualifier q, a pointer to a non-q-qualified
+        type may be converted to a pointer to the q-qualified version
+        of the type; the values stored in the original and converted
+        pointers shall compare equal."
+
+     - casting of an "integer constant expression with the value 0"
+       (6.3.2.3p3) to a pointer type gives the Pointer_null value  
+
+     - casting the Pointer_null value to any pointer type leaves it
+       unchanged (6.3.2.3p3,4)
+
+     - casting to a pointer to a character type leaves the pointer
+       value unchanged except for the view type?  Maybe we need to
+       leave a marker in the ptr_abstract_offset too, so that we know
+       we can legally do char array arithmetic after that.
+
+       (6.3.2.3p7: "When a pointer to an object is converted to a
+       pointer to a character type, the result points to the lowest
+       addressed byte of the object. Successive increments of the
+       result, up to the size of the object, yield pointers to the
+       remaining bytes of the object."
+
+     - casting to another object type checks the alignment (undefined
+       if the result is not correctly aligned) then futz's with the
+       view type (maybe we don't need to do any more, if we are
+       checking that the view type is legal before doing any
+       accesses).  This will allow slightly more liberal roundtrips
+       than the standard, but not much.  6.2.5p28 constrains pointer alignment constraints. 
+
+       (6.3.2.3p7: "A pointer to an object type may be converted to a
+       pointer to a different object type. If the resulting pointer is
+       not correctly aligned68) for the referenced type, the behavior
+       is undefined. Otherwise, when converted back again, the result
+       shall compare equal to the original pointer.")
+
+     - casts of function pointers to function pointers just futz with
+       the view type
+
+     - otherwise it's undefined behaviour (or unspecified value?)
+
+ - in the Concrete semantics:
+
+     - this pretty much always works, futzing with the view type,
+       except for alignment and object-pointer vs function-pointer stuff?
+
+  *)
+
+
+val cast_pointer_to_integer: pointer_value -> AilTypes.integerType -> E.t mem_value
+
+(*  - for Pointer_null, take zero
+
+    - for Pointer_nonnull, take the ptr_numeric_address 
+
+    - record the pointer_value (or just its ptr_provenance?) in the
+      provenance tracking data of the resulting mem_value
+
+    (and union up those taints in the core semantics with the
+    following - lift out the manipulation of this stuff)
+
+    The above is too liberal wrt the standard - 6.3.2.3p6 leaves this
+    implementation-defined: "Any pointer type may be converted to an
+    integer type. Except as previously specified, the result is
+    implementation-defined. If the result cannot be represented in the
+    integer type, the behavior is undefined. The result need not be in
+    the range of values of any integer type."
+
+    So we should have a "most conservative" implementation and a "gcc"
+    implementation; the former giving undefined values except for that
+    zero-cast case (and maybe also casts to intptr_t? though intptr_t
+    is optional so not needed in the most-conservative) and the latter
+    following the algorithm that gcc specifies.  Gcc
+    implementation-defined behaviour is specified
+    https://gcc.gnu.org/onlinedocs/gcc-4.9.0/gcc/C-Implementation.html
+    and specifically
+    https://gcc.gnu.org/onlinedocs/gcc-4.9.0/gcc/Arrays-and-pointers-implementation.html#Arrays-and-pointers-implementation
+    says
+
+       4.7 Arrays and pointers
+
+       -- The result of converting a pointer to an integer or vice versa
+       (C90 6.3.4, C99 and C11 6.3.2.3).
+
+       A cast from pointer to integer discards most-significant bits if
+       the pointer representation is larger than the integer type,
+       sign-extends1 if the pointer representation is smaller than the
+       integer type, otherwise the bits are unchanged.
+
+       A cast from integer to pointer discards most-significant bits if
+       the pointer representation is smaller than the integer type,
+       extends according to the signedness of the integer type if the
+       pointer representation is larger than the integer type, otherwise
+       the bits are unchanged.
+
+       When casting from pointer to integer and back again, the resulting
+       pointer must reference the same object as the original pointer,
+       otherwise the behavior is undefined. That is, one may not use
+       integer arithmetic to avoid the undefined behavior of pointer
+       arithmetic as proscribed in C99 and C11 6.5.6/8.
+
+       -- The size of the result of subtracting two pointers to elements
+          of the same array (C90 6.3.6, C99 and C11 6.5.6).
+
+       The value is as specified in the standard and the type is
+       determined by the ABI.
+
+       [1] Future versions of GCC may zero-extend, or use a
+       target-defined ptr_extend pattern. Do not rely on sign extension.
+
+    I can't see any Clang analogue - maybe their aim of Gcc compatibility
+    is in play?
+
+
+    How are implementation-defined choices plumbed in Cerberus through
+    to here?
+
+ *)
+
+type provenance_tracking_data = list pointer_value
+val combine_provenance_data : list provenance_tracking_data -> provenance_tracking_data
+
+
+val cast_integer_to_pointer: mem_value -> Core_ctype.ctype -> E.t pointer_value
+
+(*
+
+  - in the Standard semantics:
+
+     this works for null pointers and if intptr_t is present works for
+     roundtrips (so we have to check equality of the integer and the
+     address of a unique pointer_value in its
+     provenance_tracking_data).  What if that pointer has hit its
+     lifetime end?  We should give an undefined value at the cast
+     point, but I'm not sure how we tell.  Perhaps add another
+     concurrency_model action "Pointer_lifetime_check of bool" ?  (If
+     we do that, we could/should use it uniformly in all usages of the
+     pointer that don't already involve a concurrency model action.)
+
+     Beyond that it's implementation-defined, so the most conservative
+     implementation would give undefined behaviour (or an unspecified
+     value?)
+
+  - in the Concrete semantics:
+
+     this always works.  Do we want to try to reconstruct the
+     ptr_provenance, ptr_abstract_offset and ptr_numeric_offset based
+     on whether we've hit an existing object, or just build a
+     prov_intcast with Nothing and 0 ?
+
+  - in the GCC semantics (is that the Standard semantics with an
+    implementation choice, or the Concrete semantics with some flag?)
+    - like the Concrete semantics but checking the provenance tracking
+    data
+
+*)
+
+val pointer_diff:  Core_ctype.ctype -> pointer_value -> Core_ctype.ctype -> pointer_value -> E.t mem_value
+
+type compare_operator = PtrLt | PtrGt | PtrGe | PtrLe | PtrEq | PtrNeq
+val pointer_compare:  compare_operator->  Core_ctype.ctype -> pointer_value -> Core_ctype.ctype -> pointer_value -> E.t bool
+
+(* For "Equality Operators" (but not for Relational Operators), note
+the amusing parenthesis in 6.5.9p6: "Two pointers compare equal if and
+only if both are null pointers, both are pointers to the same object
+(including a pointer to an object and a subobject at its beginning)".
+*)
+
+
+
+
+
+(* these might be special-cased in the memory layout model so probably belong in this API? *)
+(* K: yes *)
+(*
+val memcpy 
+ - in the standard semantics we make this copy the last-written values (without passing via bytes)
+
+val memcmp
+*)
+
+
+
+(* ****************************************************************************** *)
+
+(* OPEN QUESTIONS *)
+
+
+(* TODO: add overlap and containment checking *)
+(* TODO: and functions to assemble a read value from a hb-partial-order of overlapping writes *)
+(* TODO: ...including reading representation bytes from an object etc. *)
+
+(*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
+
+
+(* TODO: How are we going to model 6.2.4p8 "Any attempt to modify an
+object with temporary lifetime results in undefined behavior." ?  In
+the same way as we model "const" things, whatever that is?  A flag
+attached to the allocation event and a check in the concurrency model?
+(6.3.2.1p1 talks about "modifiable lvalue"s)
+
+6.7.3p6 talks about modifying an object defined with a const-qualified type.
+
+In the metadata of an allocated object with a declared type, we can
+record whether it's writable (we can't just look at the effective
+type, because we have string literals - which aren't const, but you
+still can't write on them.  Also because in the concrete semantics,
+without effective types, this should still be forbidden. 
+
+BTW, there seems to be no way to write a "const" object into a malloc'd space.  If one says:
+
+#include <stdlib.h>
+int main(void) {
+  char *p = malloc(sizeof(int));
+  *p = (const int)5;
+  return 0;
+}
+
+then const-ness isn't meaningful for non-lvalues, and *((const int* )p)
+= (const int)5; doesn't typecheck.
+
+
+
+*)
+
+
+
+(* How do we model the type abstraction of unions?  I.e., do the
+values in read/write actions contain the relevant union tag, that we
+can check against the view type of the pointer? No.  It's allowed to
+read the wrong member.*)
+
+(* TODO: how are we going to treat thread-local objects, per 6.2.4p4 ?
+Is Core going to issue allocations and initialisation writes for all
+of them at thread creation time? 
+  And 6.2.4p4,5 say, for these and for automatic storage duration
+objects, "The result of attempting to indirectly access an object with
+thread storage duration from a thread other than the one with which
+the object is associated is implementation-defined.", which suggests
+we have to be able to check the original and current thread.  Keep the
+original in the allocated_object metadata and pass the current thread
+into the layout model API?   What are the GCC and Clang impl definitions? *)
+
+(* maybe punt on this, as it might be a nontrivial change to elaboration*)
+
+
+
+(* 6.2.6.1p4 "Two values (other than NaNs) with the same object
+representation compare equal" appears to directly contradict DR260CR.
+
+6.2.6.1p5 suggests that trap representations are *all* the
+representations that don't encode a value - a different sense from
+what we've been imagining...  But consistent with the idea that
+trap-representation-ness is determined by the bit pattern.  But we can
+still fairly reasonably assume that there are no trap reps (at least
+following gcc and clang)
+
+6.2.6.1p9 "Loads and stores of objects with atomic types are done with
+memory_order_seq_cst semantics." - something for Core to do (for
+vanilla loads and stores).  (How about initialisation of such?  (if
+you say "atomic int x = 0", then Core should ask the concurrency model
+to do an atomic initialisation write) (the only place where
+initialisation differs from a plain store, for amusement)
+
+6.2.6.1p8f52 "Furthermore, x == y does not necessarily imply that x
+and y have the same value; other operations on values of type T may
+distinguish between them." - what are they thinking of?
+
+
+
+
+atomic structs and unions - 6.5.2.3p5 and f97 say that you just can't
+access their members; all you can do is assign to or from an atomic
+object.  How do we model?  A constraint in pointer_member_offset()
+
+
+Are union values abstract, containing their member names (and checked
+on reads)?  I wasn't sure, but now we say "NO".  Surprisingly to me,
+6.5.2.3p3f95 says "If the member used to read the contents of a union
+object is not the same as the member last used to store a value in the
+object, the appropriate part of the object representation of the value
+is reinterpreted as an object representation in the new type as
+described in 6.2.6 (a process sometimes called ‘‘type punning’’). This
+might be a trap representation.".  But 6.2.6 just gives constraints on
+the representation - suggesting that it's legal to read a union as a
+different member so long as one doesn't get a trap representation.
+This is much more liberal than the inter-type munging that one is
+allowed to do elsewhere.  The effective-type stuff in 6.5p7 is very
+vague on this, saying only "...or... an aggregate or union type that
+includes one of the aforementioned types among its members".
+
+
+GCC pays attention to more of the lvalue than just the lvalue type:
+https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Type-punning
+
+   -fstrict-aliasing
+
+    Allow the compiler to assume the strictest aliasing rules
+    applicable to the language being compiled. For C (and C++), this
+    activates optimizations based on the type of expressions. In
+    particular, an object of one type is assumed never to reside at
+    the same address as an object of a different type, unless the
+    types are almost the same. For example, an unsigned int can alias
+    an int, but not a void* or a double. A character type may alias
+    any other type.
+
+    Pay special attention to code like this:
+
+              union a_union {
+                int i;
+                double d;
+              };
+              
+              int f() {
+                union a_union t;
+                t.d = 3.0;
+                return t.i;
+              }
+
+    The practice of reading from a different union member than the one
+    most recently written to (called “type-punning”) is common. Even
+    with -fstrict-aliasing, type-punning is allowed, provided the
+    memory is accessed through the union type. So, the code above
+    works as expected. See Structures unions enumerations and
+    bit-fields implementation. However, this code might not:
+
+              int f() {
+                union a_union t;
+                int* ip;
+                t.d = 3.0;
+                ip = &t.i;
+                return *ip;
+              }
+
+    Similarly, access by taking the address, casting the resulting
+    pointer and dereferencing the result has undefined behavior, even
+    if the cast uses a union type, e.g.:
+
+              int f() {
+                double d = 3.0;
+                return ((union a_union * ) &d)->i;
+              }
+
+
+
+As Kayvan mentioned before (but all compound literals, not just string
+literals) 6.5.2.5p7 says "String literals, and compound literals with
+const-qualified types, need not designate distinct objects.101)".  To
+model this, the semantics has to make some nondeterministic choice
+across all possible overlap patterns... 
+
+(* maybe punt *) (* strange that they say const-qualified - why not
+allow the others to be overlapping too, given that you can't write to
+them anyway? *)
+
+
+Are all the constraints of "6.5.16.1 Simple assignment" handled by
+Core?  Is the 6.5.16.1p3 "If the value being stored in an object is
+read from another object that overlaps in any way the storage of the
+first object, then the overlap shall be exact and the two objects
+shall have qualified or unqualified versions of a compatible type;
+otherwise, the behavior is undefined." handled by our existing
+indeterminate-race detection?
+
+E.g.
+
+  char* p=malloc(6)
+  *((int32_t* )p)=42
+  *((int32_t* )(p+2)) = *((int32_t* )p) + 1
+
+It's not handled by indeterminate-race detection, because there is an
+sb edge in the last line from the read to the write (6.5.16p3).  So
+Core has to save up all the footprints used in (?) reads in the
+evaluation (more carefully, "in the value computation"?) of the rhs of
+the assignment and compare them with the footprint it wants to use for
+the write?
+
+(it's a bit odd in that if there is some overlap between two of the reads in the read-set, we're allowed to write to either of those footprints)
+
+  char* p=malloc(6)
+  *((int32_t* )p)=42
+  *((int32_t* )(p+2)) = *((int32_t* )p) + ( *((int32_t* )(p+2))=43, *((int32_t* )(p+2)) )
+
+  but that's got an indeterminate race anyhow)
+
+
+
+6.7.1 Storage-class specifiers - do we deal with these? 
+
+
+6.7.2.1p25 has some funky stuff about assignments to structs with
+flexible array members - I've not so far paid attention to those.
+
+6.7.2.2 Enumeration specifiers - the types have to be compatible with
+char or some integer type - which might mean that there aren't any
+extra trap representations? - the question is nonsense, as they are
+really just some integer types.
+
+[BTW, for now, as we have only one translation unit, we believe it
+sound to handle enums by desugaring.  We'll do that]
+
+6.7.3f132 "The implementation may place a const object that is not
+volatile in a read-only region of storage. Moreover, the
+implementation need not allocate storage for such an object if its
+address is never used." - but we'll punt on the latter for now. 
+
+Are we dealing with "restrict"?  NO 6.7.3p8 "An object that is accessed
+through a restrict-qualified pointer has a special association with
+that pointer. This association, defined in 6.7.3.1 below, requires
+that all accesses to that object use, directly or indirectly, the
+value of that particular pointer.135) The intended use of the restrict
+qualifier (like the register storage class) is to promote
+optimization, and deleting all instances of the qualifier from all
+preprocessing translation units composing a conforming program does
+not change its meaning (i.e., observable behavior)."
+Expanded in the delightfully named "6.7.3.1 Formal definition of restrict". 
+Which I have not read. 
+
+6.7.9p9 "Unnamed members of structure objects have indeterminate value
+even after initialization."
+
+6.7.9 has some stuff about the order of initialisation. 
+
+---------------2014-06-04---------------
+
+
+This 6.8p3 "The initializers of objects that have automatic storage
+duration, and the variable length array declarators of ordinary
+identifiers with block scope, are evaluated and the values are stored
+in the objects ***(including storing an indeterminate value in objects
+without an initializer)*** each time the declaration is reached in the
+order of execution, as if it were a statement, and within each
+declaration in the order that declarators appear."  suggests that Core
+needs to make an explicit write (of the unspecified value if there
+isn't an initializer) at each such point.
+
+6.8.5p6 has the thing about nonterminating loops: "An iteration
+statement whose controlling expression is not a constant
+expression,156) that performs no input/output operations, does not
+access volatile objects, and performs no synchronization or atomic
+operations in its body, controlling expression, or (in the case of a
+for statement) its expression-3, may be assumed by the implementation
+to terminate.157) 157) This is intended to allow compiler
+transformations such as removal of empty loops even when termination
+cannot be proven.".  IIRC this should be read as saying that a program
+containing such a loop has undefined behaviour - but no executable
+semantics can ever soundly and completely check that; we have to document
+it as a divergence from C11.
+
+
+Which bits of the library are relevant to us (a "YES" here doesn't
+mean we aim to cover *all* of that section, though)?
+
+YES    7.1 Introduction
+?      7.2 Diagnostics <assert.h> 
+no     7.3 Complex arithmetic <complex.h> 
+?      7.4 Character handling <ctype.h>   (BTW NOTE CLASH OF ctype ?)
+?      7.5 Errors <errno.h> 
+no     7.6 Floating-point environment <fenv.h> 
+no     7.7 Characteristics of floating types <float.h> 
+?      7.8 Format conversion of integer types <inttypes.h>
+?      7.9 Alternative spellings <iso646.h>
+YES    7.10 Sizes of integer types <limits.h>
+no     7.11 Localization <locale.h>
+no     7.12 Mathematics <math.h>
+no     7.13 Nonlocal jumps <setjmp.h>
+no     7.14 Signal handling <signal.h>
+YES    7.15 Alignment <stdalign.h>
+?      7.16 Variable arguments <stdarg.h>
+YES    7.17 Atomics <stdatomic.h>
+?      7.18 Boolean type and values <stdbool.h>
+YES    7.19 Common definitions <stddef.h>
+YES    7.20 Integer types <stdint.h>
+no     7.21 Input/output <stdio.h>
+?      7.22 General utilities <stdlib.h>
+no?         7.22.1 Numeric conversion functions
+no?         7.22.2 Pseudo-random sequence generation functions
+YES         7.22.3 Memory management functions
+no?         7.22.4 Communication with the environment  (except exit()?)
+no          7.22.5 Searching and sorting utilities
+no          7.22.6 Integer arithmetic functions
+no         7.22.7 Multibyte/wide character conversion functions
+no         7.22.8 Multibyte/wide string conversion functions
+no     7.23 _Noreturn <stdnoreturn.h>
+YES    7.24 String handling <string.h>  (for memcpy, memmove, memcmp only)
+no     7.25 Type-generic math <tgmath.h>
+YES    7.26 Threads <threads.h>
+               7.26.1 Introduction   (just thrd_t and mtx_t ?)
+               7.26.2 Initialization functions
+no             7.26.3 Condition variable functions
+YES            7.26.4 Mutex functions  (just mtx_plain and the associated API ?)
+YES            7.26.5 Thread functions  (just thrd_create ?  also join and exit??)
+no             7.26.6 Thread-specific storage functions
+no     7.27 Date and time <time.h>
+no     7.28 Unicode utilities <uchar.h>
+no     7.29 Extended multibyte and wide character utilities <wchar.h>
+no     7.30 Wide character classification and mapping utilities <wctype.h>
+
+
+For amusement wrt library races (but no impact on us right now, AFAICS): 
+   7.14 (signal handling) "4 The functions in the standard library are not
+   guaranteed to be reentrant and may modify objects with static or
+   thread storage duration.188)
+
+   5 Unless explicitly stated otherwise in the detailed descriptions that
+    follow, library functions shall prevent data races as follows: A
+    library function shall not directly or indirectly access objects
+    accessible by threads other than the current thread unless the
+    objects are accessed directly or indirectly via the function’s
+    arguments. A library function shall not directly or indirectly modify
+    objects accessible by threads other than the current thread unless
+    the objects are accessed directly or indirectly via the function’s
+    non-const arguments.189) Implementations may share their own internal
+    objects between threads if the objects are not visible to users and
+    are protected against data races.
+
+    189) This means, for example, that an implementation is not
+    permitted to use a static object for internal purposes without
+    synchronization because it could cause a data race even in
+    programs that do not explicitly share objects between
+    threads. Similarly, an implementation of memcpy is not permitted
+    to copy bytes beyond the specified length of the destination
+    object and then restore the original values because it could cause
+    a data race if the program shared those bytes between threads.
+
+   6 Unless otherwise specified, library functions shall perform all
+      operations solely within the current thread if those operations
+      have effects that are visible to users.190
+   "  
+
+
+7.5p2 "errno which expands to a modifiable lvalue201) that has type
+int and thread local storage duration" - so we have to cover
+thread-local storage duration for any significant part of the library.
+
+
+
+------
+
+
+7.17 Atomics <stdatomic.h>
+
+We have to be clear exactly what of this we're supporting. All?
+Kyndylan should read this section...
+
+7.17.3p13 has the bogus no-thin-air condition from C++11: "An atomic
+store shall only store a value that has been computed from constants
+and program input values by a finite sequence of program evaluations,
+such that each evaluation observes the values of variables as computed
+by the last prior assignment in the sequence...."  which we have to
+remark on.
+
+7.17.3p16 has some handwaving at a progress property: "Implementations
+should make atomic stores visible to atomic loads within a reasonable
+amount of time."  I don't think we can model this.  We could have a
+liveness property in the axiomatic model, or some kind of early
+nondeterministic choice of an upper bound (in terms of abstract
+machine steps maybe) in the operational one.  But better to just skip
+for now.
+
+7.17.3.1 The kill_dependency macro - are we supporting this?  (are we
+supporting consume? if not, then no need for this)
+
+---
+7.19 Common definitions <stddef.h>
+
+this has size_t, ptrdiff_t, offsetof, ...
+
+7.19p3 has "...and offsetof(type, member-designator) which expands to
+an integer constant expression that has type size_t, the value of
+which is the offset in bytes, to the structure member (designated by
+member-designator), from the beginning of its structure (designated by
+type)."  and one could argue from that that the standard semantics
+should support SC.4, but there's still nothing saying that the pointer
+cast back gives something sensible.  Though IIRC that's impl-defined.
+
+---
+
+7.20 Integer types <stdint.h>
+
+among many other things, this has intptr_t and uintptr_t, with the
+following not-very-useful guarantee:
+
+7.20.1.4 Integer types capable of holding object pointers "The
+following type designates a signed integer type with the property that
+any valid pointer to void can be converted to this type, then
+converted back to pointer to void, and the result will compare equal
+to the original pointer: intptr_t"
+
+---
+
+7.22.3 Memory management functions
+
+For aligned_alloc, calloc, malloc, and realloc:
+
+ 7.22.3p2 "...These functions may, however, visibly
+ modify the storage that they allocate or deallocate."
+
+I think that's invisible in both our semantics, as they are memory-safe.
+
+---
+
+
+7.24.4.1 The memcmp function
+
+"310) The contents of ‘‘holes’’ used as padding for purposes of
+alignment within structure objects are indeterminate. Strings shorter
+than their allocated space and unions may also cause problems in
+comparison."
+
+---
+
+7.26 Threads <threads.h>
+
+
+--------------------------
+For Kayvan:
+
+J.5 Common extensions
+J.5.5 Writable string literals
+"String literals are modifiable (in which case, identical string
+literals should denote distinct objects) (6.4.5)"
+
+
+Annex K (normative) Bounds-checking interfaces - do people use this?
+
+
+
+*)
+
+
+(* ****************************************************************** *)
+
+(*  Now we run through notes14 
+
+Here "standard semantics" refers to our proposed "standard" semantics,
+not to the standard itself.
+
+
+PR.1.*:   
+  standard semantics: no.  We make it illegal to construct a pointer
+   (let alone use it) more than one-past the original object.  In these
+   examples the cast back to int* fails; in the original examples, using
+   pointer arithmetic instead of this integer arithmetic, the pointer
+   arithmetic could succeed, as it's only one-past, but the load fails,
+   as it's not from the original object as kept in the provenance.
+  concrete semantics: yes
+
+PR.2.a:
+  standard semantics: yes (by special-casing memcpy to copy the whole values)
+  concrete semantics: yes (in the same way or by copying
+   representation bytes; shouldn't matter which)
+
+PR.2.b:
+  standard semantics: no (this just copies the representation bytes -
+   and notice that here we *don't need* the
+   symbolic-byte-M-of-N-of-pointer-value thing; we just take byte-M of the
+   ptr_numeric_address.  We'd only need that for intermediate
+   semantics.)  
+
+   LATER: this is debatable - cf the stuff about effective types for
+   copying via a char array.  We now interpret the standard as
+   allowing user-memcpy of pointers.  So we do need the
+   symbolic-byte-M-of-N-of-pointer.
+
+  concrete semantics: yes (just copying byte-N of the ptr_numeric_address)
+
+PR.3:
+  standard semantics: no (we do pointer_lifetime_end_zap one way or another)
+  concrete semantics: yes (in the concrete semantics we should only
+   ever inspect the ptr_numeric_address)
+
+PR.4,5:
+  standard semantics: no (by pointer_lifetime_end_zap)
+  concrete semantics: yes, but maybe there's an intermediate point
+   (for free()) of just nulling the pointer being freed, not all
+   pointers to the object.
+
+PC.1,2:
+  standard semantics: no (by checking provenance inside pointer_compare)
+  concrete semantics: yes  (though Hans has his middle-of-address-space thing)
+
+PC.3:
+  standard semantics: no (as a consequence of the pointer lifetime end zap)
+  concrete semantics: yes (though Hans wibbles about a different answer for an allocated_object)
+
+In the standard, pointer comparison within a struct or whatever is
+more constrained than we thought in Notes14: you can compare pointers
+to two members of the same aggregate object, but we think you can't eg
+compare pointers to s.f and s.g.x.  We check this in the standard
+semantics by looking at the ptr_abstract_object.  Plus some wackiness
+for anonymous struct members.  Allow more general intra-object pointer
+comparison with -subobject_pointer_comparison {true|false} ?
+
+
+
+CPI.1:
+
+  standard semantics: in general casts between pointers and integers
+   are impl-defined, but if intptr_t is provided, roundtrips via that
+   have to compare equal to the original.  We interpret this usage of
+   "compare equal" as "equal in all senses", and we make that work by
+   integer provenance tracking, checking on a cast_integer_to_pointer
+   that there is exactly one original pointer and that we hit its
+   value exactly. One could liberalise that a bit by allowing multiple
+   original pointers, or more by dynamically checking at cast time
+   that we hit *some* legal pointer.
+  concrete semantics: yes  
+
+  Do we have, for concrete and optionally for standard, the GCC rules
+  for the arithmetic of these casts?
+
+CPI.2:
+  standard semantics: yes if you've hit exactly the original value
+  concrete semantics: yes
+
+CPI.3:
+  standard semantics: yes if you've hit exactly the original value
+  concrete semantics: yes
+
+In the concrete semantics, assume that non-function pointers all have
+the same alignment constraints, and inter-casting is fine, and that
+there might optionally be a distinct subset of the numeric pointer
+values which are function pointers, picking nondeterministic values
+for casts between the two sets?
+
+  
+CPR.1: 
+  standard semantics: yes, if the numeric pointer value was aligned ok
+   for all the intermediate types (taking the standard's special-casing
+   of size-two roundtrips to just be a mistake)
+  concrete semantics: yes
+
+SC.1,2: 
+  standard semantics: no^H^Hyes  (check in cast_pointer_to_pointer)
+   We could have a -subobject_casts switch to allow this?
+
+   No, we were wrong: SC.1 is allowed by the standard: 6.7.2.1p15 "A
+    pointer to a structure object, suitably converted, points to its
+    initial member (or if that member is a bit-field, then to the unit
+    in which it resides), and vice versa.".  And likewise for unions,
+    in p16 (additions to what it says in 6.3.2.3 about pointer
+    casts). Does this mean that if a function is handed a pointer to
+    an int that happens to be the first member of a struct, it can
+    cast to the super-object?  I think so.
+
+  concrete semantics: yes 
+
+SC.3:
+  standard semantics: yes
+  concrete semantics: yes
+
+SC.4:
+  standard semantics: no  (fails on the cast back to a non-char pointer)
+   (the standard writers might believe that this is allowed by casting
+   via void*, but 6.3.2.3, while it says those casts are allowed,
+   doesn't tell you very much about the pointer value you get)
+
+  concrete semantics: yes
+
+SC.5:
+  standard semantics: no
+  concrete semantics: yes
+
+COCL.1: 
+  standard semantics: no, but
+    6.5.2.3p6, with example in p9, says something about *inspecting*
+    the common part of a union of structs where the union type is
+    visible.  That's not a cast, but how will we deal with it -
+    special magic in the load?
+
+    6.5.2.3p5f95 implies that union values do contain their member id,
+    and we check that on a load.  But if it's not equal, we don't just
+    fail; instead we use what we know from 6.2.6 about representations
+    to reinterpret the representation according to our lvalue type. 
+
+    6.5.2.3p6 seems to imply that the layouts of structs with a common
+    initial sequence that occur within a union type are identical
+    within that common part.  Are we going to model that? (eg by
+    looking at all the union types and adding a bunch of constraints
+    about offset symbolic values).  Or are we (in our standard
+    semantics) going to assume the ABI rules on deterministic layout
+    (which is much stronger)?  (We'll certainly assume the ABI rules
+    in our concrete semantics anyway).
+
+  concrete semantics: yes, we just allow more-or-less any cast and
+   check leaf-type stuff at read/write time
+
+COCL.2: 
+  both: yes (though for actual-C we later have to add packing flag data to
+   ctypes somehow, to accomodate the usage that Josh Berdine sees)
+
+COCL.3:
+  both: yes
+
+OM.1:
+  both: yes
+
+OM.2: 
+  both: yes  (it's *not* contrary to the effective types, contrary to notes14)
+
+OM.3:
+  both: yes (not clear that the question really makes sense)
+
+ET.1: 
+  standard semantics: (iii) (but then we have some relaxed
+   compatibility checking that allows them to be glued together, and
+   the "Semantics" discussion of (iii) in notes14 is outdated)
+
+   If you write s1.s2 (where s1 has a member which is a structure s2)
+   and s2 has members i:int, f:float, then we could still choose
+   whether to have "struct s2" or ["int","float"] as the effective
+   type of the Write.  I don't think it matters, as the load-time
+   check should accept either.
+
+  concrete semantics: no effective types
+
+RC.1:
+  standard semantics: no  (unless you're in a union, but that's different)
+  concrete semantics: yes
+
+RC.2:
+
+  standard semantics: in the standard we can't do any of these
+   intra-union or intra-struct casts, I think ^H^H^H NO: in the
+   standard, we can cast from one union member to the union type and
+   then to the other union member, so this should be allowed.
+  concrete semantics: yes
+
+UV.1:
+  standard semantics: no, we treat unspecified values strictly (and
+   give undefined behaviour if you use them for I/O or in library
+   calls or something - cf the committee response to Robbert+Freek)
+
+  concrete semantics: in the concrete semantics we have fewer
+   unspecified values because padding isn't, but we still treat them
+   strictly - then make a nondeterministic choice of an actual number
+   as late as possible (on an I/O (or library?) call).  So this isn't
+   a completely concrete semantics, note.
+
+  what abstraction does our concrete semantics have?  Not much, but it
+   does have the above. Is our concrete semantics memory safe?  I
+   think so, because the concurrency model is properly checking
+   lifetimes.
+
+UV.2:
+  standard semantics: yes
+  concrete semantics: yes
+
+UV.3:
+  standard semantics: yes  (consistent with the "strict" semantics)
+  concrete semantics: yes
+
+UV.4:
+  standard semantics: yes - well, really here this question is moot 
+   because they by definition *always* contain unspecified values
+  concrete semantics: no, according to David, as modern compilers just
+   write the right amount?  (needs more checking) Or maybe they write
+   a zero value?  Paul suggested these optimisations happen with
+   vector instructions.  The padding_*.c examples (two
+   chars,padding,float, and char,padding,float) show that gcc can't
+   trivially be made to write over padding.  But OTOH it also doesn't
+   zero padding for block-scoped structs (consistent with what he said). 
+
+TR.1:
+  both: we assume that no types have trap representations
+
+MR.1: 
+  both: we assume this only happens for floats, which we don't support
+
+MR.2,3,4:  n/a, given the answer to MR.1
+
+REP.1:
+  both: yes
+
+REP.2:
+  both: yes
+
+REP.3:
+  both: no
+
+REP.4:
+  standard semantics:  no
+  concrete semantics: yes except between data and function pointers
+   (which you can determine from the concrete address)
+
+*)
+
+(* Now we run through ~/rsem/csem/notes/notes23-2014-05-15-layout-redux.txt - done. *)
+
+
+
+
+(* ************************************************************************** *)
+
+
+
+
+
+(* ========= *)
+(* internal operations *)
+
+(*
+val gen_symbolic_address: t address
+let gen_symbolic_address =
+  assert_false "WIP"
+*)
+(*
+  State_exception.modify (fun st ->
+    (st.mem_symbol_counter, <| st with mem_symbol_counter= st.mem_symbol_counter + 1 |>)
+  )
+*)
+
+(*
+val gen_mem_object_id: t mem_object_id
+let gen_mem_object_id =
+  assert_false "WIP"
+*)
+
+
+
+
+
+
+(*
+let create ty =
+  gen_symbolic_address >>= fun addr   ->
+  gen_mem_object_id    >>= fun obj_id ->
+  State_exception.modify (fun st ->
+    let obj = <| obj_effective_type= Just ty; obj_address= addr |> in
+    (Pointer_object obj_id, <| st with mem_objects= Map.insert obj_id obj st.mem_objects |>)
+  )
+*)
+
+(*
+let create ty obj_id =
+  (* TODO: actual object creation *)
+  E.return $
+    Pointer_other <|
+      ptr_provenance=      Prov_sao obj_id;
+      ptr_view_type=       ty;
+      ptr_abstract_offset= Nothing;
+      ptr_numeric_offset=  Symbolic.zero;
+    |>
+ *)
+
+
+
+let store ty ptr v =
+  assert_false "WIP"
+
+
+
+(*
+let load ty ptr =
+  
+*)
+
+
+
+(*
+let pointer_eq ptr1 ptr2 =
+  if is_null_pointer ptr1 && is_null_pointer ptr2 then
+    (* STD §6.3.2.3#4, sentence 2 *)
+    E.return true
+  else if is_null_pointer ptr1 || is_null_pointer ptr2 then
+    (* STD §6.3.2.3#3, sentence 2 *)
+    E.return false
+  else
+    assert_false "WIP"
+*)
+
+
+
+
+
+
+val null_pointer: Core_ctype.ctype -> pointer_value
+let null_pointer ty =
+  Pointer_null ty

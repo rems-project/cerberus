@@ -1,0 +1,14 @@
+{- The two non-atomic loads do *not* race. The only allowed result
+    is 0.
+-}
+
+fun main () : [integer] :=
+  x <- create(signed int);
+  store(signed int, x, 0);
+  {{{
+       load(signed int, x)
+  |||
+       load(signed int, x)
+  }}};
+  kill(x);
+  ret 0

@@ -1,0 +1,6 @@
+open import Pervasives
+
+type typing_error =
+  | TError_lvalue_coercion
+  | TError_TODO of nat
+  | TError_integerConstant_too_large of integer (* AilSyntax.integerConstant *)

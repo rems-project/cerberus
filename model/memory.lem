@@ -1,0 +1,76 @@
+(* Switch module for the memory layout model *)
+open import Pervasives
+import Symbol State_exception
+import Core_ctype Cmm_aux_old
+import Naive_memory
+
+module Cmm = Cmm_aux_old
+
+(* TODO *)
+type taction_id = natural
+
+
+module E = State_exception
+
+
+
+(* Memory errors *)
+type memory_error = Naive_memory.memory_error
+
+(* Memory state *)
+type memory_state = Naive_memory.memory_state
+
+
+
+(* Memory effect *)
+type t 'a = E.t 'a memory_state memory_error
+
+
+
+type mem_addr = Naive_memory.mem_addr
+
+val is_atomic_location:    mem_addr -> t bool
+val is_nonatomic_location: mem_addr -> t bool
+
+
+
+
+
+
+
+
+
+(** Create: starts the lifetime of a statically allocation object *)
+val create:
+  list Symbol.t    -> (* (FOR PPRINT ONLY) identifier provenance in the source code *)
+  Core_ctype.ctype -> (* effective type of the object                               *)
+  taction_id       -> (* corresponding trace action id                              *)
+  (* the memory location pointing to the beginning of the allocated object          *)
+  t mem_addr
+
+(** Store *)
+val store:
+  Core_ctype.ctype -> (* C type of the corresponding Lvalue *)
+  mem_addr         -> (* memory location of the store       *)
+  Cmm.cvalue       -> (* value to be stored                 *)
+  taction_id       -> (* corresponding trace action id      *)
+  t unit
+
+(** Load *)
+val load:
+  Core_ctype.ctype -> (* C type of the corresponding Lvalue                  *)
+  mem_addr         -> (* memory location of the load                         *)
+  (* the read value and the trace action id of the store action we read from *)
+  t (Cmm.cvalue * taction_id)
+
+
+(** Kill: ends the lifetime of an object (either statically or dynamic allocated) *)
+val kill:
+  mem_addr -> (* memory location of the kill *)
+  t unit
+
+
+let create pref ty taid    = Naive_memory.create pref ty taid
+let store pref addr n taid = Naive_memory.store pref addr n taid
+let load ty addr           = Naive_memory.load ty addr
+let kill addr              = Naive_memory.kill addr

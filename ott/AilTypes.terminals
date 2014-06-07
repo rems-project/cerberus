@@ -1,0 +1,22 @@
+  | static :: :: Static
+  | thread :: :: Thread
+  | automatic :: :: Automatic
+  | allocated :: :: Allocated % TODO: look at (§7.22.3)
+  | char :: :: Char
+  | short :: :: Short
+  | int :: :: Int
+  | long :: :: Long
+  | bool :: :: Bool
+  | unsigned :: :: Unsigned
+  | signed :: :: Signed
+  | const :: :: Const
+  | restrict :: :: Restrict
+  | volatile :: :: Volatile
+  | [ :: :: Rbracket
+  | ] :: :: Lbracket
+  | ( :: :: Lparen
+  | ) :: :: Rparen
+  | promote :: :: Promote
+  | usualArithmetic
+  | lvalueT :: :: LvalueT
+  | expressionT :: :: ExpressionT
