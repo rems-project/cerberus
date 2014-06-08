@@ -162,8 +162,8 @@ type expr 'a =
 
 (* the qualification prefixes are for pprint *)
 and action_ 'a =
-  | Create of expr 'a * list Symbol.t
-  | Alloc of expr 'a * list Symbol.t
+  | Create of expr 'a * expr 'a * list Symbol.t (* the expr arguments are: alignment requirement, effective type *)
+  | Alloc of expr 'a * expr 'a * list Symbol.t  (* the expr arguments are: alignment requirement, space size *)
   | Kill of expr 'a
   | Store of expr 'a * expr 'a * expr 'a * Cmm.memory_order
   | Load of expr 'a * expr 'a * Cmm.memory_order
