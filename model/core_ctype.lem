@@ -16,20 +16,17 @@ type member_id  = Symbol.t
 
 
 
-type ctype_aux =
+type ctype =
  | Void
  | Basic of AilTypes.basicType
  | Array of ctype * integer
- | Function of ctype * list ctype * bool (*true for variadic*)
- | Pointer of ctype
+ | Function of ctype * list (qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of qualifiers * ctype
  | Atomic of ctype
  | Struct of struct_tag * list (member_id * ctype)
  | Union  of union_tag * list (member_id * ctype)
- | Intptr_t
- | Ptrdiff_t
 
-and 
-  ctype = <| t : ctype_aux; alignment : Symbolic.symbol |>
+
   (* this alignment is the default for the type unless overridden by
   _Alignas, eg "_Alignas(int32_t) int16_t i", in which case it's that *)
 
