@@ -20,11 +20,11 @@ type ctype =
  | Void
  | Basic of AilTypes.basicType
  | Array of ctype * integer
- | Function of ctype * list (qualifiers * ctype) * bool (*true for variadic*)
- | Pointer of qualifiers * ctype
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of AilTypes.qualifiers * ctype
  | Atomic of ctype
- | Struct of struct_tag * list (member_id * ctype)
- | Union  of union_tag * list (member_id * ctype)
+ | Struct of struct_tag * list (member_id * AilTypes.qualifiers * ctype)
+ | Union  of union_tag * list (member_id * AilTypes.qualifiers * ctype)
 
 
   (* this alignment is the default for the type unless overridden by
