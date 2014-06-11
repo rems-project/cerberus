@@ -1,5 +1,9 @@
 open import Pervasives Common Global Range AilTypes
 
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
 
 type binaryMode =
   | Two'sComplement
@@ -20,16 +24,26 @@ int) (long long int). So P (long int) ≤ precision P (long long int).
 
 val min_precision: integerBaseType -> nat
 let min_precision = function
-  | Ichar    -> 8
-  | Short    -> 16
-  | Int_     -> 16
-  | Long     -> 32
-  | LongLong -> 64
+  | Ichar         -> 8
+  | Short         -> 16
+  | Int_          -> 16
+  | Long          -> 32
+  | LongLong      -> 64
   (* TODO: check the following *)
-  | Int8_t   -> 8
-  | Int16_t  -> 16
-  | Int32_t  -> 32
-  | Int64_t  -> 64
+  | Intptr_t      -> assert_false "Implementation.min_precision Intptr_t"
+  | Intmax_t      -> assert_false "Implementation.min_precision Intmax_t"
+  | Int8_t        -> 8
+  | Int16_t       -> 16
+  | Int32_t       -> 32
+  | Int64_t       -> 64
+  | Int_least8_t  -> 8
+  | Int_least16_t -> 16
+  | Int_least32_t -> 32
+  | Int_least64_t -> 64
+  | Int_fast8_t   -> 8
+  | Int_fast16_t  -> 16
+  | Int_fast32_t  -> 32
+  | Int_fast64_t  -> 64
 end
 
 type implementation = <|
@@ -90,6 +104,11 @@ let min_integer_range = function
   | Bool         -> make_range 0 1
   | Unsigned ibt -> min_range_unsigned ibt
   | Signed   ibt -> min_range_signed   ibt
+  | Wchar_t      -> assert_false "Implementation.min_integer_range: Wchar_t"
+  | Char16_t     -> assert_false "Implementation.min_integer_range: Char16_t"
+  | Char32_t     -> assert_false "Implementation.min_integer_range: Char32_t"
+  | Size_t       -> assert_false "Implementation.min_integer_range: Size_t"
+  | Ptrdiff_t    -> assert_false "Implementation.min_integer_range: Ptrdiff_t"
 end
 
 val min_implementation_signed_char: implementation
@@ -101,6 +120,11 @@ let min_implementation_signed_char =
 	| Signed   _ -> true
         | Bool       -> false
 	| Unsigned _ -> false
+        | Wchar_t    -> assert_false "Implementation.min_implementation_signed_char: signedness of Wchar_t"
+        | Char16_t   -> false
+        | Char32_t   -> false
+        | Size_t     -> false
+        | Ptrdiff_t  -> true
       end
     )
     ( function
@@ -125,6 +149,8 @@ let min_implementation_signed_char =
         | Unsigned Int16_t  -> 16
         | Unsigned Int32_t  -> 32
         | Unsigned Int64_t  -> 64
+        
+        | _ -> assert_false "Implementation.min_implementation_signed_char: precision on standard types"
       end
     )
     (Unsigned Long)
@@ -139,6 +165,11 @@ let min_implementation_unsigned_char =
         | Char       -> false
 	| Bool       -> false
 	| Unsigned _ -> false
+        | Wchar_t    -> assert_false "Implementation.min_implementation_unsigned_char: signedness of Wchar_t"
+        | Char16_t   -> false
+        | Char32_t   -> false
+        | Size_t     -> false
+        | Ptrdiff_t  -> true
       end
     )
     ( function
@@ -155,14 +186,7 @@ let min_implementation_unsigned_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
         
-        | Signed Int8_t     -> assert_false "TODO"
-        | Signed Int16_t    -> assert_false "TODO"
-        | Signed Int32_t    -> assert_false "TODO"
-        | Signed Int64_t    -> assert_false "TODO"
-        | Unsigned Int8_t   -> assert_false "TODO"
-        | Unsigned Int16_t  -> assert_false "TODO"
-        | Unsigned Int32_t  -> assert_false "TODO"
-        | Unsigned Int64_t  -> assert_false "TODO"
+        | _ -> assert_false "Implementation.min_implementation_unsigned_char: precision on standard types"
       end
     )
     (Unsigned Long)

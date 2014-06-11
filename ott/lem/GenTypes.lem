@@ -33,6 +33,9 @@ type genType [name="gt*"] =
  | GenArray of ctype * integer
  | GenFunction of ctype * list (qualifiers * ctype) * bool
  | GenPointer of qualifiers * ctype
+   (* TODO: check *)
+ | GenStruct of identifier * list (identifier * qualifiers * ctype)
+ | GenUnion of identifier * list (identifier * qualifiers * ctype)
 
 let rec eq_genType gt1 gt2 =
   match (gt1, gt2) with
@@ -62,15 +65,25 @@ let inject_basicType bt : genBasicType =
   | Integer it -> GenInteger (inject_integerType it)
   end
 
-let inject_type t : genType =
-  match t with
-  | Void           -> GenVoid
-  | Basic bt       -> GenBasic (inject_basicType bt)
-  | Pointer  q t   -> GenPointer q t
-  | Array    t n   -> GenArray t n
-  | Function t p b -> GenFunction t p b
-  | Atomic _       -> assert_false "TODO"
-  end
+val inject_type: ctype -> genType
+let inject_type = function
+  | Void ->
+      GenVoid
+  | Basic bty ->
+      GenBasic (inject_basicType bty)
+  | Pointer qs ty ->
+      GenPointer qs ty
+  | Array ty n ->
+      GenArray ty n
+  | Function ty params is_variadic ->
+      GenFunction ty params is_variadic
+  | Atomic _ ->
+      assert_false "TODO"
+  | Struct tag membrs ->
+      GenStruct tag membrs
+  | Union tag membrs ->
+      GenUnion tag membrs
+end
 
 let inject_typeCategory tc : genTypeCategory =
   match tc with

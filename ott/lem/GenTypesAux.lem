@@ -1,5 +1,5 @@
 open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
-open import GenTypes
+open import GenTypes Implementation
 import AilTypesAux AilTyping
 
 let array gt : bool =
@@ -150,15 +150,23 @@ let interpret_genBasicType P gbt : errorM basicType =
                        return (Integer it)
   end
 
-let interpret_genType P gt : errorM ctype =
-  match gt with
-  | GenVoid           -> return Void
-  | GenBasic gbt      -> interpret_genBasicType P gbt >>= fun bt ->
-                         return (Basic bt)
-  | GenArray    t n   -> return (Array    t n)
-  | GenFunction t p b -> return (Function t p b)
-  | GenPointer  q t   -> return (Pointer  q t)
-  end
+val interpret_genType: implementation -> genType -> errorM ctype
+let interpret_genType P = function
+  | GenVoid ->
+      return Void
+  | GenBasic gbt ->
+      interpret_genBasicType P gbt >>= fun bt ->
+      return (Basic bt)
+  | GenArray t n -> return (Array    t n)
+  | GenFunction t p b ->
+      return (Function t p b)
+  | GenPointer  q t ->
+      return (Pointer  q t)
+  | GenStruct tag membrs ->
+      return (Struct tag membrs)
+  | GenUnion tag membrs ->
+      return (Union tag membrs)
+end
 
 let interpret_genTypeCategory P gt : errorM typeCategory =
   match gt with

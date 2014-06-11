@@ -41,17 +41,30 @@ let integer_decode e1 e2 =
 
 
 (* Some aliases for positive actions *)
-let pcreate ty pref  = Eaction (Paction Pos (Action {} (Create ty pref )))
-let palloc e pref    = Eaction (Paction Pos (Action {} (Alloc e pref   )))
-let pkill x          = Eaction (Paction Pos (Action {} (Kill x         )))
-let pstore ty x n mo = Eaction (Paction Pos (Action {} (Store ty x n mo)))
-let pload ty x mo    = Eaction (Paction Pos (Action {} (Load ty x mo   )))
+let pcreate al ty pref = Eaction (Paction Pos (Action {} (Create al ty pref )))
+let palloc al e pref   = Eaction (Paction Pos (Action {} (Alloc al e pref   )))
+let pkill x            = Eaction (Paction Pos (Action {} (Kill x         )))
+let pstore ty x n mo   = Eaction (Paction Pos (Action {} (Store ty x n mo)))
+let pload ty x mo      = Eaction (Paction Pos (Action {} (Load ty x mo   )))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
 let zero : expr zero = Econst (Memory.MV_integer (Symbolic.constant 0))
 let one  : expr zero = Econst (Memory.MV_integer (Symbolic.constant 1))
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
+
+val integer_const: integer -> expr zero
+let integer_const n =
+  Econst (Memory.MV_integer (Symbolic.constant n))
+
+val cfunction_const: Symbol.t -> expr zero
+let cfunction_const fsym =
+  Econst (Memory.MV_pointer (Memory.Pointer_function fsym))
+
+val array_const: list Memory.mem_value -> expr zero
+let array_const vs =
+  Econst (Memory.MV_array vs)
+
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
@@ -352,8 +365,8 @@ let rec subst_sym a v e =
 
 and subst_sym_action_ a v act =
   match act with
-    | Create e_ty pref      -> Create (subst_sym a v e_ty) pref
-    | Alloc e_n   pref      -> Alloc (subst_sym a v e_n) pref
+    | Create al e_ty pref   -> Create (subst_sym a v al) (subst_sym a v e_ty) pref
+    | Alloc al e_n pref     -> Alloc (subst_sym a v al) (subst_sym a v e_n) pref
     | Kill e_o              -> Kill (subst_sym a v e_o)
     | Store e_ty e_o e_v mo -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v) mo
     | Load e_ty e_o mo      -> Load (subst_sym a v e_ty) (subst_sym a v e_o) mo

@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Global
 import Symbol Symbolic AilTypes
 
 (* TODO: temporary hack *)
@@ -15,7 +15,11 @@ type member_id  = Symbol.t
 
 
 
+type modifiable =
+  | Modifiable_yes
+  | Modifiable_no
 
+(* TODO: no volatile for now *)
 type ctype =
  | Void
  | Basic of AilTypes.basicType
@@ -23,8 +27,8 @@ type ctype =
  | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
  | Pointer of AilTypes.qualifiers * ctype
  | Atomic of ctype
- | Struct of struct_tag * list (member_id * AilTypes.qualifiers * ctype)
- | Union  of union_tag * list (member_id * AilTypes.qualifiers * ctype)
+ | Struct of struct_tag * list (member_id * modifiable * ctype)
+ | Union  of union_tag * list (member_id * modifiable * ctype)
 
 
   (* this alignment is the default for the type unless overridden by
@@ -53,7 +57,6 @@ For the latter, we have to add more stuff into ctype.
 
 
 
-(*
 let rec ctypeEquality ty1 ty2 =
   match (ty1, ty2) with
     | (Void, Void) ->
@@ -64,30 +67,29 @@ let rec ctypeEquality ty1 ty2 =
         ctypeEquality ty1 ty2 && n1 = n2
     | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
         ctypeEquality ty1 ty2 &&
-        List.all (fun (x, y) -> ctypeEquality x y) (zip tys1 tys2) &&
+        List.all (uncurry $ eq_pair AilTypes.eq_qualifiers ctypeEquality) (zip tys1 tys2) &&
         b1 = b2
-    | (Pointer ty1, Pointer ty2) ->
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        AilTypes.eq_qualifiers qs1 qs2 &&
         ctypeEquality ty1 ty2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEquality ty1 ty2
-
-    | (Intptr_t, Intrptr_t) ->
-        true
-    | (Ptrdiff_t, Ptrdiff_t) ->
-        true
-(*
-    | (SIZE_T, SIZE_T) -> true
-    | (INTPTR_T, INTPTR_T) -> true
-    | (WCHAR_T, WCHAR_T) -> true
-    | (CHAR16_T, CHAR16_T) -> true
-    | (CHAR32_T, CHAR32_T) -> true
- *)
+    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEquality ty1 ty2
+        ) (zip membrs1 membrs2)
+    | (Union tag1 membrs1, Union tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEquality ty1 ty2
+        ) (zip membrs1 membrs2)
     | _ -> false
   end
-*)
-
-let ctypeEquality _ _ =
-  assert_false "WIP: equality function for Core_ctype.ctype"
 
 instance (Eq ctype)
   let (=) = ctypeEquality

@@ -27,7 +27,7 @@ end
 val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
 let tryM m f errCase =
   match m with
-    | Left err -> errCase
+    | Left _ -> errCase
     | Right z  -> f z
   end
 

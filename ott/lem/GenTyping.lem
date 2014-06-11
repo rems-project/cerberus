@@ -387,7 +387,7 @@ let rec annotate_expression' A S G e =
         match type_of A e with
           | GenLValueType q' t' ->
               AilTypesAux.lvalue_coercion t' >>= fun t ->
-              if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
+              if AilTypesAux.isModifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
               then return (Unary uop e, GenRValueType (inject_type t))
               else fail (TError_TODO 21)
           | _ -> fail (TError_TODO 22)
@@ -397,7 +397,7 @@ let rec annotate_expression' A S G e =
         match type_of A e with
           | GenLValueType q' t' ->
               AilTypesAux.lvalue_coercion t' >>= fun t ->
-              if AilTypesAux.modifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
+              if AilTypesAux.isModifiable q' t' && (AilTypesAux.real t' || AilTypesAux.pointer t')
               then return (Unary uop e, GenRValueType (inject_type t))
               else fail (TError_TODO 23)
           | _ -> fail (TError_TODO 24)
@@ -413,17 +413,24 @@ let rec annotate_expression' A S G e =
           | _ ->
               fail (TError_TODO 26)
         end
-  | Assign e1 e2 ->
-      annotate_expression A S G e1 >>= fun e1 ->
-      match type_of A e1 with
-      | GenLValueType q1 t1 ->
-          if AilTypesAux.modifiable q1 t1
-            then let t = AilTypesAux.rvalue_coercion t1 in
-                 annotate_assignee t e2 >>= fun e2 -> 
-                 return (Assign e1 e2, GenRValueType (inject_type t))
-            else fail (TError_TODO 27)
-      | _ -> fail (TError_TODO 28)
+    
+    | Assign e1 e2 ->
+        annotate_expression A S G e1 >>= fun a_e1 ->
+        match type_of A a_e1 with
+          | GenLValueType qs1 ty1 ->
+              (* STD §6.5.16#2 *)
+              if AilTypesAux.isModifiable qs1 ty1 then
+                let ty = AilTypesAux.rvalue_coercion ty1 in
+                annotate_assignee ty e2 >>= fun a_e2 ->
+                (* STD §6.5.16#3, sentence 2 *)
+                (* STD §6.5.16#3, sentence 3 *)
+                return (Assign a_e1 a_e2, GenRValueType (inject_type ty))
+              else
+                fail (TError_TODO 27) (* left operand is not a modifiable lvalue *)
+          | _ ->
+              fail (TError_TODO 28) (* left operand is not a lvalue *)
       end
+  
     | Binary e1 (Arithmetic (Mul  as aop)) e2 ->
         annotate_rvalue e1 >>= fun (e1, gt1) ->
         annotate_rvalue e2 >>= fun (e2, gt2) ->
@@ -579,11 +586,11 @@ let rec annotate_expression' A S G e =
         then return (Binary e1 bop e2, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else fail (TError_TODO 46)
   | SizeOf  q t ->
-      if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.incomplete t)
+      if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.isIncomplete t)
         then return (SizeOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
         else fail (TError_TODO 47)
   | AlignOf q t ->
-      if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.incomplete t)
+      if wf_lvalue q t && not (AilTypesAux.is_function t) && not (AilTypesAux.isIncomplete t)
         then return (AlignOf q t, GenRValueType (GenBasic (GenInteger (SizeT))))
         else fail (TError_TODO 48)
   | Cast q Void e ->
@@ -612,7 +619,7 @@ let rec annotate_expression' A S G e =
       match type_of A e1 with
       | GenLValueType q t -> 
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
-          if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
+          if AilTypesAux.isModifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
             then return (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
             else fail (TError_TODO 52)
       | _  -> fail (TError_TODO 53)
@@ -623,7 +630,7 @@ let rec annotate_expression' A S G e =
       match type_of A e1 with
       | GenLValueType q t -> 
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
-          if AilTypesAux.modifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
+          if AilTypesAux.isModifiable q t && (AilTypesAux.arithmetic t1 && arithmetic gt2 || AilTypesAux.pointer_to_complete_object t && integer gt2)
             then return (CompoundAssign e1 aop e2, GenRValueType (inject_type t1))
             else fail (TError_TODO 54)
       | _  -> fail (TError_TODO 55)
@@ -635,7 +642,7 @@ let rec annotate_expression' A S G e =
       | GenLValueType q t ->
           AilTypesAux.lvalue_coercion t >>= fun t1 ->
           let gt1 = inject_type t1 in
-          if AilTypesAux.modifiable q t && well_typed_binary_arithmetic gt1 aop gt2
+          if AilTypesAux.isModifiable q t && well_typed_binary_arithmetic gt1 aop gt2
             then return (CompoundAssign e1 aop e2, GenRValueType gt1)
             else fail (TError_TODO 56)
       | _  -> fail (TError_TODO 57)

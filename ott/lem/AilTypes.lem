@@ -1,4 +1,5 @@
-open import Pervasives
+open import Pervasives Common
+import Symbol
 
 type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
  | Ichar
@@ -7,10 +8,22 @@ type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2
  | Long
  | LongLong
    (* Things defined in the standard libraries *)
+ | Intptr_t
+ | Intmax_t
  | Int8_t
  | Int16_t
  | Int32_t
  | Int64_t
+ | Int_least8_t
+ | Int_least16_t
+ | Int_least32_t
+ | Int_least64_t
+ | Int_fast8_t
+ | Int_fast16_t
+ | Int_fast32_t
+ | Int_fast64_t
+
+
 
 
 let eq_integerBaseType ibt1 ibt2 =
@@ -32,7 +45,13 @@ type integerType (* [name = "it*\\|size_t\\|ptrdiff_t"] *) =  (*r integer types 
  | Bool
  | Signed of integerBaseType
  | Unsigned of integerBaseType
- (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
+ (* Things defined in the standard libraries *)
+ | Wchar_t
+ | Char16_t
+ | Char32_t
+ | Size_t
+ | Ptrdiff_t
+
 
 let eq_integerType it1 it2 =
   match (it1, it2) with
@@ -46,27 +65,31 @@ let eq_integerType it1 it2 =
 type qualifiers [name = "q*"] = <|
   const    : bool;
   restrict : bool;
-  volatile : bool
+  volatile : bool;
+  _Atomic  : bool;
 |>
 
-let make_qualifiers c r v = <|
+let make_qualifiers c r v a = <|
   const    = c;
   restrict = r;
-  volatile = v
+  volatile = v;
+  _Atomic  = a;
 |>
 
 let no_qualifiers = <|
   const    = false;
   restrict = false;
-  volatile = false 
+  volatile = false;
+  _Atomic  = false;
 |>
 
 let eq_qualifiers q1 q2 = 
      q1.const    = q2.const
   && q1.restrict = q2.restrict
   && q1.volatile = q2.volatile
+  && q1._Atomic  = q2._Atomic
 
-type basicType [name = "bt*"] =  (*r basic types (\S6.2.5\#14) *)
+type basicType (* [name = ".+_bty$\\|bty[0-9 ']*$"] *) =  (*r basic types (\S6.2.5\#14) *)
  | Integer of integerType
 
 let eq_basicType bt1 bt2 =
@@ -79,13 +102,19 @@ instance (Eq basicType)
   let (<>) bt1 bt2 = not (eq_basicType bt1 bt2)
 end
 
-type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
+type identifier = Symbol.t
+
+type ctype (* [name = ".+_ty$\\|ty[0-9 ']*$"] *) = (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)
  | Array of ctype * integer (*r array types (\S6.2.5\#20) *)
  | Function of ctype * list (qualifiers * ctype) * bool (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
  | Atomic of ctype
+  (* TODO: check *)
+ | Struct of identifier * list (identifier * qualifiers * ctype)
+ | Union  of identifier * list (identifier * qualifiers * ctype)
+
 
 let rec eq_params_aux eq_ctype p1 p2 : bool =
   match (p1, p2) with
@@ -97,13 +126,24 @@ let rec eq_params_aux eq_ctype p1 p2 : bool =
 let rec eq_ctype t1 t2 =
   let eq_params = eq_params_aux eq_ctype in
   match (t1, t2) with
-  | (Void            , Void              ) -> true
-  | (Basic    bt1    , Basic bt2         ) -> eq_basicType bt1 bt2
-  | (Array    t1 n1  , Array    t2 n2    ) -> eq_ctype t1 t2 && n1 = n2
-  | (Function t1 p1 b1, Function t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
-  | (Pointer  q1 t1  , Pointer  q2 t2    ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
-  | (Atomic t1       , Atomic      t2    ) -> eq_ctype t1 t2
-  | (_               , _                 ) -> false
+  | (Void, Void) ->
+      true
+  | (Basic bt1, Basic bt2) ->
+      eq_basicType bt1 bt2
+  | (Array t1 n1, Array t2 n2) ->
+      eq_ctype t1 t2 && n1 = n2
+  | (Function t1 p1 b1, Function t2 p2 b2) ->
+      eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (Pointer q1 t1, Pointer  q2 t2) ->
+      eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (Atomic t1, Atomic t2) ->
+      eq_ctype t1 t2
+  | (Struct tag1 membrs1, Struct tag2 membrs2) ->
+      tag1 = tag2 && eq_list (eq_triple (=) eq_qualifiers eq_ctype) membrs1 membrs2
+  | (Union  tag1 membrs1, Union tag2 membrs2) ->
+      tag1 = tag2 && eq_list (eq_triple (=) eq_qualifiers eq_ctype) membrs1 membrs2
+  | (_, _) ->
+      false
   end
 
 let eq_params = eq_params_aux eq_ctype

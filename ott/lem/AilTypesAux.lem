@@ -1,11 +1,18 @@
 open import Pervasives Common AilTypes Implementation ErrorMonad TypingError
 
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+
 let unqualified qs =
   match qs with
   | <| const    = false;
        restrict = false;
-       volatile = false |> -> true
-  | _                      -> false
+       volatile = false;
+       _Atomic  = false; |> -> true
+  | _                       -> false
   end
 
 let integer t =
@@ -111,6 +118,8 @@ let le_integer_range P it1 it2 : bool =
   | (Unsigned Long    , Signed   Long    ) -> false
   | (Unsigned LongLong, Signed   LongLong) -> false
   | (Unsigned ibt1    , Signed   ibt2    ) -> (P.precision (Unsigned ibt1)) < (P.precision (Signed ibt2))
+  
+  | _ -> assert_false "WIP: AilTypesAux.le_integer_range called on std types"
   end
 
 let eq_integer_rank_base it1 it2 : bool =
@@ -146,6 +155,7 @@ let lt_integer_rank_congruence P it1 it2 : bool =
   | (Unsigned ibt1, Unsigned ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
   | (Unsigned ibt1, it2          ) -> lt_integer_rank_base P (Signed  ibt1) it2
   | (it1          , Unsigned ibt2) -> lt_integer_rank_base P it1            (Signed ibt2)
+  | _ -> assert_false "WIP: AilTypesAux.lt_integer_rank_congruence called on std types"
   end
 
 let lt_integer_rank it1 it2 : bool =
@@ -194,11 +204,13 @@ let arithmetic t : bool = integer t
 
 let scalar t : bool = pointer t || arithmetic t
 
-let array t : bool =
-  match t with
-  | Array _ _ -> true
-  | _         -> false
-  end
+val isArray: ctype -> bool
+let isArray = function
+  | Array _ _ ->
+      true
+  | _ ->
+      false
+end
 
 (* TODO: should be called "function" *)
 let is_function t : bool =
@@ -363,17 +375,23 @@ let complete t : bool =
   | _ -> false
   end
 
-let incomplete t : bool =
-  match t with
-  | Void -> true
-  | _ -> false
-  end
 
-let modifiable q t : bool =
-  object_ t &&
-  not (array t) &&
-  not (incomplete t) &&
-  not (q.const)
+val isIncomplete: ctype -> bool
+let isIncomplete = function
+  | Void ->
+      true
+  | _ ->
+      false (* TODO: struct/union/ .... *)
+end
+
+
+(* The type part of the `modifiable lvalue' (see §6.3.2.1#1) *)
+val isModifiable: qualifiers -> ctype -> bool
+let isModifiable qs ty =
+     object_ ty
+  && not (isArray ty)
+  && not (isIncomplete ty)
+  && not (qs.const)
 
 let real t : bool = integer t
 
@@ -457,13 +475,15 @@ let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
 let combine_qualifiers qs1 qs2 = <|
   const    = qs1.const    || qs2.const   ;
   restrict = qs1.restrict || qs2.restrict;
-  volatile = qs1.volatile || qs2.volatile
+  volatile = qs1.volatile || qs2.volatile;
+  _Atomic  = qs1._Atomic  || qs2._Atomic ;
 |>
 
 let sub_qualifiers qs1 qs2 =
      qs1.const    --> qs2.const
   && qs1.restrict --> qs2.restrict
   && qs1.volatile --> qs2.volatile
+  && qs1._Atomic  --> qs2._Atomic
 
 (* following (§6.3.2.1)#3 *)
 let array_coercion = function
@@ -479,20 +499,20 @@ end
 
 (* following (§6.3.2.1)#2 *)
 let lvalue_convertible ty : bool =
-  not (array ty) && complete ty
+  not (isArray ty) && complete ty
 
 (* following (§6.3.2.1)#2 and #3 *)
 let lvalue_coercion ty : errorM ctype =
   if lvalue_convertible ty then
     return ty
-  else if array ty then
+  else if isArray ty then
     return (array_coercion ty)
   else
     fail (TError_TODO 1)
 
 (* following (§6.3.2.1)#3 and #4 *)
 let rvalue_coercion ty : ctype =
-  if array ty then
+  if isArray ty then
     array_coercion ty
   else if is_function ty then
     function_coercion ty

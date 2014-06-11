@@ -3,7 +3,7 @@ open import Pervasives Common AilTypes AilSyntax AilTypesAux
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
 
-let adjusted t : bool = not (array t) && not (is_function t)
+let adjusted t : bool = not (isArray t) && not (is_function t)
 
 let wf_lvalue_aux q t : bool =
   match t with
@@ -16,7 +16,7 @@ let wf_lvalue_aux q t : bool =
 let rec wf_parameters_aux wf_type p : bool =
   match p with
   | []          -> true
-  | (q, t) :: p -> adjusted t && not (incomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
+  | (q, t) :: p -> adjusted t && not (isIncomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
   end
 
 let rec wf_type t : bool =
@@ -25,9 +25,11 @@ let rec wf_type t : bool =
   | Void -> true
   | Basic _ -> true
   | Array t _ -> complete t && wf_type t
-  | Function t p _ -> not (array  t) && not (is_function t) && wf_type  t && wf_parameters p
+  | Function t p _ -> not (isArray  t) && not (is_function t) && wf_type  t && wf_parameters p
   | Pointer q t -> wf_type t && wf_lvalue_aux q t
   | Atomic _ -> assert_false "TODO"
+  | Struct _ _ -> assert_false "TODO"
+  | Union _ _ -> assert_false "TODO"
   end
 
 let wf_lvalue q t : bool =
