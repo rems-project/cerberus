@@ -19,6 +19,17 @@ declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 (*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
 (* K: don't we also need state ? *)
 
+(* state threaded through here:
+
+- object allocation metadata
+- allocator state
+- concurrency model state
+- constraint set state
+
+*)
+
+
+
 (*
 module E = New_memory_effect
 module Operators = struct
