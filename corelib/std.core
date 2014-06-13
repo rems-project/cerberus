@@ -98,7 +98,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
 fun conv_aux (ty: ctype, n: integer) : integer :=
   let n2 =
     if <ctype_max>(ty) < n then
-      n - <ctype_max>(ty) + 1
+      n - (<ctype_max>(ty) + 1)
     else
       n + <ctype_max>(ty) + 1
     end in
