@@ -1,0 +1,47 @@
+open import Pervasives
+import Exception Undefined
+
+type t 'a 'msg = Exception.t (Undefined.t 'a) 'msg
+
+val return: forall 'a 'b 'msg. 'a -> t 'a 'msg
+let return z =
+  Exception.return (Undefined.return z)
+
+val bind: forall 'a 'b 'msg. t 'a 'msg -> ('a -> t 'b 'msg) -> t 'b 'msg
+let bind m f =
+  match m with
+    | Exception.Result (Undefined.Defined z) ->
+        f z
+    | Exception.Result (Undefined.Undef ubs) ->
+        Exception.return (Undefined.undef ubs)
+    | Exception.Result Undefined.Error ->
+        Exception.return Undefined.error
+    | Exception.Exception err ->
+        Exception.fail err
+  end
+
+
+(*
+val ubind: forall 'a 'b 'msg. Undefined.t 'a -> ('a -> Exception.t (Undefined.t 'b) 'msg) -> Exception.t (Undefined.t 'b) 'msg
+let ubind m f =
+  match m with
+    | Undefined.Defined z ->
+        f z
+    | Undefined.Undef ubs ->
+        Exception.return (Undefined.Undef ubs)
+    | Undefined.Error ->
+        Exception.return Undefined.Error
+  end
+*)
+
+
+val     mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+let rec mapM f xs =
+  Exception.bind (Exception.mapM f xs)
+    (fun us -> Exception.return $ Undefined.mapM id us)
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end

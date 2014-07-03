@@ -2,25 +2,24 @@ open import Pervasives
 
 type symbol = nat
 
+type operator =
+  | Add
+  | Sub
+  | Mul
+  | Div
+  | Mod
+
 type symbolic =
-  | Symbol_zero
-  | Sym_base of symbol
-  | Sym_eq of symbolic * symbolic
+  | Symbolic_constant of integer
+  | Symbolic_symbol of symbol
+  | Symbolic_equal of symbolic * symbolic
+  | Symbolic_op of operator * symbolic * symbolic
 
 type counter = nat
 
-(*
-instance (Eq t)
-  let (=) sym1 sym2 =
-    match (sym1, sym2) with
-      | (Sym_base n1, Sym_base n2) ->
-          n1 = n2
-      | (Sym_eq sym11 sym12, Sym_eq sym21 sym22) ->
-          sym_eq
 
-  let (<>) sym1 sym2 =
-end
-*)
+
+
 
 val init: counter
 let init = 0
@@ -28,10 +27,44 @@ let init = 0
 
 val fresh_symbol: counter -> symbolic * counter
 let fresh_symbol n =
-  (Sym_base n, n+1)
+  (Symbolic_symbol n, n+1)
 
 
 
-val zero: symbolic
-let zero =
-  Symbol_zero
+val constant: integer -> symbolic
+let constant n =
+  Symbolic_constant n
+
+
+
+
+val operator: operator -> symbolic -> symbolic -> symbolic
+let operator op sym1 sym2 =
+  match (sym1, sym2) with
+    | (Symbolic_constant n1, Symbolic_constant n2) ->
+        Symbolic_constant
+          match op with
+            | Add -> n1 + n2
+            | Sub -> n1 - n2
+            | Mul -> n1 * n2
+            | Div -> n1 / n2
+            | Mod -> n1 mod n2
+          end
+    | _ ->
+        Symbolic_op op sym1 sym2
+  end
+
+
+
+
+(*
+type symbolic_constraint
+
+(* symbolic computation producing an 'a *)
+type t 'a =
+  | Sym_base of 'a
+  | Sym_cond of 
+
+
+val return: forall 'a. 'a -> t 'a
+*)

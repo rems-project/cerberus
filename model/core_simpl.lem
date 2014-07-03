@@ -352,7 +352,8 @@ let rec simpl e =
 end
 
 
-let simplify (f: file zero) : file zero =
+val simplify: forall 'a. file 'a -> file 'a
+let simplify f =
   <|
       main=   f.main;
       stdlib= f.stdlib;

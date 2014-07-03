@@ -48,12 +48,12 @@ let precedence = function
   | SizeOf _
   | AlignOf _     -> Some 2
   
-  | Binary (_, Arithmetic Mul, _)
-  | Binary (_, Arithmetic Div, _)
-  | Binary (_, Arithmetic Mod, _) -> Some 3
+  | Binary (_, Arithmetic Mul0, _)
+  | Binary (_, Arithmetic Div0, _)
+  | Binary (_, Arithmetic Mod0, _) -> Some 3
   
-  | Binary (_, Arithmetic Add, _)
-  | Binary (_, Arithmetic Sub, _) -> Some 4
+  | Binary (_, Arithmetic Add0, _)
+  | Binary (_, Arithmetic Sub0, _) -> Some 4
   
   | Binary (_, Arithmetic Shl, _)
   | Binary (_, Arithmetic Shr, _) -> Some 5
@@ -196,11 +196,11 @@ and pp_member = function
 
 
 let pp_arithmeticOperator = function
-  | Mul  -> P.star
-  | Div  -> P.slash
-  | Mod  -> P.percent
-  | Add  -> P.plus
-  | Sub  -> P.minus
+  | Mul0 -> P.star
+  | Div0 -> P.slash
+  | Mod0 -> P.percent
+  | Add0 -> P.plus
+  | Sub0 -> P.minus
   | Shl  -> P.langle ^^ P.langle
   | Shr  -> P.rangle ^^ P.rangle
   | Band -> P.ampersand
@@ -225,7 +225,7 @@ let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus
   | Bnot        -> P.tilde
-  | Address0    -> P.ampersand
+  | Address     -> P.ampersand
   | Indirection -> P.star
   | PostfixIncr -> P.plus ^^ P.plus
   | PostfixDecr -> P.minus ^^ P.minus

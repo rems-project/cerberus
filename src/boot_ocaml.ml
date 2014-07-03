@@ -1,7 +1,8 @@
 open Global
 
 let assert_false str =
-  Pervasives.failwith ("[Impossible error>\n" ^ str)
+  print_endline ("ERROR>\n" ^ str);
+  exit (-1)
 
 let debug_level = ref 0
 
@@ -31,6 +32,7 @@ let output_string str =
 
 
 
+(*
 (* TODO: this is massive hack, just to make csmith programs work *)
 let fake_printf str args =
   match (str, args) with
@@ -73,3 +75,4 @@ let fake_printf str args =
       Printf.printf "str= %s\n" str;
       Printf.printf "|args|= %d\n" (List.length args);
       exit 1
+*)

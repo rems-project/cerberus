@@ -1,11 +1,11 @@
 (* Effects for Translation: state + exception *)
 open import Pervasives Global
-import Boot Symbol Undefined
+import Boot UniqueId Symbol Undefined
 
 type state = <|
-  symbol_set: Symbol.counter;               (* counter for Core's symbolic names (all of them) *)
-  visible_objects: list (list Symbol.t); (* visible C objects with scoping (used to properly
-                                            annotate Esave/Erun ctors) *)
+  symbol_supply:   UniqueId.supply Symbol.t; (* counter for Core's symbolic names (all of them) *)
+  visible_objects: list (list Symbol.t);     (* visible C objects with scoping (used to properly
+                                                annotate Esave/Erun ctors) *)
 |>
 
 
@@ -64,22 +64,24 @@ let replicateM n x = sequence (replicate n x)
 
 
 (* build an initial state from a given Core standard library *)
-val init: Symbol.counter -> state
-let init counter = <|
-  symbol_set=      counter;
+val init: UniqueId.supply Symbol.t -> state
+let init suppl = <|
+  symbol_supply=   suppl;
   visible_objects= [[]];
 |>
 
 
 (* returns a fresh Core symbolic name. *)
 val fresh_symbol: t Symbol.t
-let fresh_symbol = fun (<| symbol_set= x |> as st) ->
-  Undefined.return ((Symbol.Symbol x Nothing), <| st with symbol_set= x+1 |>)
+let fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
+  let (sym, suppl') = State.run Symbol.fresh suppl in
+  Undefined.return (sym, <| st with symbol_supply= suppl' |>)
 
 (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
 val fresh_named_symbol: string -> t Symbol.t
-let fresh_named_symbol name = fun (<| symbol_set= x |> as st) ->
-  Undefined.return ((Symbol.Symbol x (Just $ name ^ "_" ^ string_of_natural (naturalFromNat x))), <| st with symbol_set= x+1 |>)
+let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
+  let (sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> name ^ "_" ^ string_of_natural x)) suppl in
+  Undefined.return (sym, <| st with symbol_supply= suppl' |>)
 
 (* register C objects from block scope. *)
 val push_block_objects: list Symbol.t -> t unit

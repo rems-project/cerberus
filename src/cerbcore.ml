@@ -1,12 +1,15 @@
 open Global_ocaml
 
+module Mem = Naive_memory
+
+
 (* command-line options *)
 let impl_file        = ref ""
 
 let print_version    = ref false
 let print_core       = ref false
 let execute          = ref false
-let execution_mode   = ref Core_run2.E.Exhaustive
+(* TODO: let execution_mode   = ref Core_run2.E.Exhaustive *)
 let sb_graph         = ref false
 let skip_core_tcheck = ref false (* TODO: this is temporary, until I fix the typechecker (...) *)
 
@@ -21,7 +24,7 @@ let options = Arg.align [
   (* Core backend options *)
   ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                                  "       Do not run the Core typechecker");
   ("--execute",          Arg.Set execute,                                           "       Execute the Core program");
-  ("-r",                 Arg.Unit (fun () -> execution_mode := Core_run2.E.Random ), "       Randomly choose a single execution path"); 
+(* TODO:   ("-r",                 Arg.Unit (fun () -> execution_mode := Core_run2.E.Random ), "       Randomly choose a single execution path");  *)
   ("--sb-graph",         Arg.Set sb_graph,                                          "       Generate dot graphs of the sb orders");
   
   (* printing options *)
@@ -38,15 +41,15 @@ let usage = "Usage: cerbcore [OPTIONS]... [FILE]...\n"
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
 let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_none m         = Exception.bind m (fun _ -> Exception.return0 None)
-let return_empty m        = Exception.bind m (fun _ -> Exception.return0 [])
+let return_none m         = Exception.bind0 m (fun _ -> Exception.return0 None)
+let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
-let return_value m        = Exception.bind m (fun _ -> Exception.return0 [])
+let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
 
 let catch_result m =
   match m with
-  | Exception.Result [[(Undefined.Defined (Core.Econst (Cmm_aux_old.Cint n), _), _)]] ->
+  | Exception.Result [[(Undefined.Defined (Core.Econst (Mem.MV_integer (Symbolic.Symbolic_constant n)), _), _)]] ->
       exit (Big_int.int_of_big_int n)
   | Exception.Result _ ->
      debug_print "[Main.catch_result] returning a fake return code";
@@ -62,7 +65,7 @@ let run_pp =
 
 
 
-let core_sym_counter = ref Symbol.init
+let core_sym_counter = ref Big_int.zero_big_int
 
 
 
@@ -73,7 +76,7 @@ let load_stdlib corelib_path =
   if not (Sys.file_exists fname) then
     error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "'."
   else
-    Boot_ocaml.dprint ("reading Core stdlib from `"^ fname ^ "'.");
+    Boot_ocaml.dprint ("reading Core stdlib from `" ^ fname ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
       include Core_parser.Make (struct
@@ -118,11 +121,9 @@ let pipeline stdlib impl core_parse file_name =
   |> Exception.rbind Core_indet.order
   |> pass_message "7. Now running:"
   |> Exception.rbind
-      (Exception.map_list
-	 (fun (n,f) -> Core_run2.run0 !execution_mode f
-                       |> pass_message ("SB order #" ^ string_of_int n)
-                       |> pass_through (Pp_run.pp_traces !print_trace)
-(*                              |> return_empty *)
+      (Exception.mapM0
+	 (fun (n,file) ->
+           Interactive_driver.drive file
          )
       )
 
@@ -168,4 +169,5 @@ let () =
   let impl = load_impl Core_parser.parse corelib_path in
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   
-  (catch_result -| pipeline stdlib impl Core_parser.parse) !file;
+  ((* TODO: catch_result -| *) pipeline stdlib impl Core_parser.parse) !file;
+  ()

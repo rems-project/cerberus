@@ -8,9 +8,14 @@
 #endif
 
 
-LEMDIR=~/bitbucket/lem
+ifdef LEM_PATH
+  LEMDIR=$(LEM_PATH)
+else
+  LEMDIR=~/bitbucket/lem
+endif
+
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=lem -wl ign  -wl_rename warn 
+LEM=lem -wl ign  -wl_rename warn -wl_unused_vars err
 
 
 # Source directories
@@ -53,8 +58,8 @@ AIL_FILES=\
   GenTyping.lem
 
 MODEL_FILES=\
-  boot.lem \
   cmm_aux_old.lem \
+  boot.lem \
   memory_order.lem \
   core.lem \
   core_aux.lem \
@@ -87,13 +92,20 @@ MODEL_FILES=\
   translation_effect.lem \
   undefined.lem \
   core_ctype.lem \
-  memory.lem \
   naive_memory.lem \
   new_memory.lem \
   new_memory_effect.lem \
   symbolic.lem \
-  output.lem
-
+  output.lem \
+  driver_util.lem \
+  driver.lem \
+  core_driver.lem \
+  exception_undefined.lem \
+  state_exception_undefined.lem \
+  nondeterminism.lem \
+  thread.lem \
+  uniqueId.lem \
+  enum.lem
 
 CORE_PARSER_FILES=\
   core_parser_util.ml \
@@ -141,6 +153,8 @@ lem_model: lem_model_
 	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(OCAML_BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
 #	@./hack.sh $(OCAML_BUILD_DIR)
 	@sed -i"" -e "s/let <|>/let (<|>)/" $(OCAML_BUILD_DIR)/output.ml
+	@sed -i"" -e "s/open Operators//" $(OCAML_BUILD_DIR)/core_run2.ml
+	@sed -i"" -e "s/open Operators//" $(OCAML_BUILD_DIR)/naive_memory.ml
 
 
 lem_check:

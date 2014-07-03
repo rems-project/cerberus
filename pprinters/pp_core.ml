@@ -19,47 +19,63 @@ let (^^^) x y = x ^^ P.space ^^ y
 let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 
+
+module Mem = Naive_memory
+
+
 let precedence = function
-  | Etuple _          -> Some 0
-  | Eunit             -> Some 0
-  | Enull _           -> Some 0
-  | Econst _          -> Some 0
-  | Eaddr _           -> Some 0
-  | Esym _            -> Some 0
-  | Eimpl _           -> Some 0
-  | Etrue             -> Some 0
-  | Efalse            -> Some 0
-  | Ectype _          -> Some 0
-  | Eundef _          -> Some 0
-  | Eerror            -> Some 0
-  | Eskip             -> Some 0
+  | Eunit
+  | Etrue
+  | Efalse
+  | Econst _
+  | Elist _
+  | Ectype _
+  | Esym _
+  | Eimpl _
+  | Etuple _
+  | Eundef _
+  | Eerror
+  | Eskip
   | Erun _            -> Some 0
-  | Enot _            -> Some 1
-  | Esave _           -> Some 1
-  | Eret _            -> Some 1
+  
+  | Enot _
+  | Esave _
+  | Eret _
   | Eindet _          -> Some 1
-  | Eaction _         -> Some 2
-  | Esame _           -> Some 2
-  | Eproc _           -> Some 2
-  | Ecall _           -> Some 2
+  
+  | Eaction _
+  | Eproc _
+  | Ecall _
   | Eoutput _         -> Some 2
-  | Eshift _          -> Some 2
-  | Eop (OpMul, _, _) -> Some 3
-  | Eop (OpDiv, _, _) -> Some 3
+  
+  | Eop (OpMul, _, _)
+  | Eop (OpDiv, _, _)
   | Eop (OpMod, _, _) -> Some 3
-  | Eop (OpAdd, _, _) -> Some 4
+  
+  | Eop (OpAdd, _, _)
   | Eop (OpSub, _, _) -> Some 4
+  
   | Eop (OpLt,  _, _) -> Some 5
+  
   | Eop (OpEq,  _, _) -> Some 6
+  
   | Eop (OpAnd, _, _) -> Some 7
+  
   | Eop (OpOr,  _, _) -> Some 8
+  
   | Eif _             -> Some 9
+  
   | Elet _            -> Some 10
+  
   | Easeq _           -> Some 11
+  
   | Ewseq _           -> Some 12
+  
   | Esseq _           -> Some 13
+  
   | Eunseq _          -> Some 14
   | Epar _            -> None
+  | Ewait _           -> None
   | Etuple _          -> None (* shouldn't be needed *)
   | Ebound _          -> None (* shouldn't be needed *)
 (* TODO: hack *)
@@ -83,21 +99,22 @@ let lt_precedence p1 p2 =
 let pp_keyword w = !^ (if !isatty then ansi_format [Bold; Magenta] w else w)
 let pp_const   c = !^ (if !isatty then ansi_format [Magenta] c else c)
 let pp_control w = !^ (if !isatty then ansi_format [Bold; Blue] w else w)
-let pp_symbol  a = !^ (if !isatty then ansi_format [Blue] (Pp_symbol.to_string_pretty a) else (Pp_symbol.to_string_pretty a))
+let pp_symbol  a = !^ (if !isatty then ansi_format [Blue] (Pp_symbol.to_string a) else (Pp_symbol.to_string a))
 let pp_number  n = !^ (if !isatty then ansi_format [Yellow] n else n)
 let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)
                                             else Implementation_.string_of_implementation_constant i))
 
 
 let rec pp_core_base_type = function
-  | Integer0      -> !^ "integer"
-  | Boolean       -> !^ "boolean"
-  | Address       -> !^ "address"
-  | Ctype         -> !^ "ctype"
-  | CFunction     -> !^ "cfunction"
-  | Unit          -> !^ "unit"
-  | Wildcard      -> !^ "wildcard"
-  | Tuple baseTys -> P.parens (P.separate_map P.comma pp_core_base_type baseTys)
+  | BTy_integer    -> !^ "integer"
+  | BTy_boolean    -> !^ "boolean"
+  | BTy_pointer    -> !^ "pointer"
+  | BTy_ctype      -> !^ "ctype"
+  | BTy_cfunction  -> !^ "cfunction"
+  | BTy_unit       -> !^ "unit"
+  | BTy_list bTys  -> !^ "TODO(BTy_list)"
+  | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
+  | BTy_any        -> !^ "any"
 
 
 let pp_core_type = function
@@ -152,18 +169,14 @@ let rec pp_ctype t =
     | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
 *)
     | Function0 (ty, args_tys, is_variadic) ->
-        pp_ctype ty ^^^ P.parens (comma_list pp_ctype args_tys ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
-    | Pointer0 ty ->
-        pp_ctype ty ^^ P.star
+        pp_ctype ty ^^^ P.parens (
+          comma_list (fun (qs, ty) -> Pp_ail.pp_qualifiers qs (pp_ctype ty)) args_tys ^^
+          (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+        )
+    | Pointer0 (qs, ty) ->
+        Pp_ail.pp_qualifiers qs (pp_ctype ty) ^^ P.star
     | Atomic0 ty ->
         !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
-(*
-    | SIZE_T                  -> !^ "size_t"
-    | INTPTR_T                -> !^ "intptr_t"
-    | WCHAR_T                 -> !^ "wchar_t"
-    | CHAR16_T                -> !^ "char16_t"
-    | CHAR32_T                -> !^ "char32_t"
-*)
 
 (*
 and pp_member = function
@@ -200,15 +213,27 @@ let pp_name = function
   | Sym a  -> pp_symbol a
   | Impl i -> pp_impl i
 
-let pp_constant = function
-  | Cmm_aux_old.Cint n ->
+let rec pp_constant = function
+  | Mem.MV_pointer (Mem.Pointer_function f) ->
+      !^ "TODO(MV_pointer(function))"
+  | Mem.MV_pointer ptr_val ->
+      !^ "TODO(MV_pointer)" 
+  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
       !^ (Big_int.string_of_big_int n)
-  | Cmm_aux_old.Carray cs ->
-      !^ "TODO: ARRAY"
-  | Cmm_aux_old.Cfunction f ->
-      !^ "TODO: FUNCTION"
-  | Cmm_aux_old.Cstring cs ->
-      P.dquotes (!^ (Xstring.implode cs))
+  | Mem.MV_integer sym ->
+      !^ "TODO(MV_integer(symbolic))"
+(*
+  | Mem.MV_array vs ->
+      pp_const "array" ^^ P.parens (comma_list pp_constant vs)
+  | Mem.MV_struct _ ->
+      !^ "TODO(MV_struct)"
+  | Mem.MV_union _ ->
+      !^ "TODO(MV_union)"
+  | Mem.MV_pointer_byte _ ->
+      !^ "TODO(MV_pointer_byte)"
+  | Mem.MV_unspecified ty ->
+      !^ "unspecified" ^^ P.parens (pp_ctype ty)
+*)
 
 let pp_memory_order = function
   | Cmm.NA      -> !^ "NA"
@@ -221,12 +246,18 @@ let pp_memory_order = function
   
 
 let pp_mem_addr (pref, addr) =
+(*
   let rec pp = function
   | Cmm_aux_old.Lbase n          -> Pp_ail.pp_integer n
   | Cmm_aux_old.Lshift (addr, n) -> P.braces (pp addr ^^ P.comma ^^^ Pp_ail.pp_integer n)
   in
   P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ pp addr)
+*)
+  P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ (!^ "TODO"))
 
+
+let pp_thread_id n =
+  !^ ("th_" ^ Big_int.string_of_big_int n)
 
 
 let pp_pattern _as =
@@ -245,32 +276,41 @@ let rec pp_expr e =
     let pp z = P.group (pp p' z) in
     (if lt_precedence p' p then fun x -> x else P.parens)
       (match e with
-        | Etuple es ->
-            P.parens (comma_list pp es)
         | Eunit ->
             pp_const "unit"
-        | Enull _ ->
-            pp_const "null" (* TODO *)
-        | Eskip ->
-            pp_keyword "skip"
-        | Econst c ->
-            pp_constant c
-        | Eaddr addr ->
-            pp_mem_addr addr
-        | Esym a ->
-            pp_symbol a
-        | Eimpl i ->
-            pp_impl i
-        | Eop (op, e1, e2) ->
-            pp e1 ^^^ pp_binop op ^^^ pp e2
         | Etrue ->
             pp_const "true"
         | Efalse ->
             pp_const "false"
-        | Enot e ->
-            pp_keyword "not" ^^^ P.parens (pp e)
+        | Econst c ->
+            pp_constant c
+        | Elist pes ->
+            P.brackets (comma_list pp pes)
         | Ectype ty ->
             P.dquotes (pp_ctype ty)
+        | Esym sym ->
+            pp_symbol sym
+        | Eimpl i ->
+            pp_impl i
+        | Etuple pes ->
+            P.parens (comma_list pp pes)
+        | Enot e ->
+            pp_keyword "not" ^^^ P.parens (pp e)
+        | Eop (op, e1, e2) ->
+            pp e1 ^^^ pp_binop op ^^^ pp e2
+        | Ecall (fname, es) ->
+            pp_name fname ^^ P.parens (comma_list pp es)
+        | Eoutput str ->
+            (* TODO: the string should be quoted and escaped *)
+            pp_keyword "output" ^^ P.parens (!^ str)
+        | Eundef u ->
+            pp_keyword "undef" ^^ P.angles (P.angles (!^ (
+              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
+                         else Undefined.string_of_undefined_behaviour u)))
+        | Eerror ->
+            pp_keyword "error"
+        | Eskip ->
+            pp_keyword "skip"
         | Elet (a, e1, e2) ->
             pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^
             pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
@@ -280,18 +320,6 @@ let rec pp_expr e =
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^^ pp_control "end"
         | Eproc (_, fname, es) ->
             pp_name fname ^^ P.braces (comma_list pp es)
-        | Ecall (fname, es) ->
-            pp_name fname ^^ P.parens (comma_list pp es)
-        | Eoutput str ->
-            pp_keyword "output" ^^ P.parens (!^ str) (* TODO: the string should be quoted and escaped *)
-        | Esame (e1, e2) ->
-            pp_keyword "same" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
-        | Eundef u ->
-            pp_keyword "undef" ^^ P.angles (P.angles (!^ (
-              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
-                         else Undefined.string_of_undefined_behaviour u)))
-        | Eerror ->
-            pp_keyword "error"
         | Eaction (Paction (p, (Action (bs, a)))) ->
           (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
              P.rangle ^^ P.space) ^^ *)
@@ -348,11 +376,11 @@ let rec pp_expr e =
         | Eret e ->
             pp_keyword "return" ^^^ P.parens (pp e)
         | Epar es ->
-            P.enclose !^ "{{{" !^ "}}}" (P.separate_map (P.space ^^ (pp_control "|||") ^^ P.space) pp es)
+            pp_keyword "par" ^^ P.parens (comma_list pp es)
+        | Ewait tid ->
+            pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
         | End es ->
-            P.brackets (P.separate_map (P.space ^^ (pp_control ";") ^^ P.space) pp es)
-        | Eshift (e1, e2) ->
-            pp_keyword "shift" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
+            pp_keyword "nd" ^^ P.parens (comma_list pp es)
         
         (* TODO: temporary *)
         | Eis_scalar e ->
@@ -370,10 +398,10 @@ and pp_action act =
   let pp_args args mo =
     P.parens (comma_list pp_expr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
-    | Create (ty, _) ->
-        pp_keyword "create" ^^ P.parens (pp_expr ty)
-    | Alloc (a, _) ->
-        pp_keyword "alloc" ^^ P.parens (pp_expr a)
+    | Create (al, ty, _) ->
+        pp_keyword "create" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr ty)
+    | Alloc (al, n, _) ->
+        pp_keyword "alloc" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr n)
     | Kill e ->
         pp_keyword "kill" ^^ P.parens (pp_expr e)
     | Store (ty, e1, e2, mo) ->
@@ -413,9 +441,17 @@ let std = [
 *)
 ]
 
+let symbol_compare =
+  Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
+
+
+let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype
+
+let pp_params params =
+  P.parens (comma_list pp_argument params)
+
 let pp_file file =
   isatty := Unix.isatty Unix.stdout;
-  let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype in
   let f acc (fname, (ftype, args, body)) =
     acc ^^
       pp_keyword "fun" ^^^ pp_symbol fname ^^^ P.parens (comma_list pp_argument args) ^^ P.colon ^^^ pp_core_type ftype ^^^
@@ -429,4 +465,4 @@ let pp_file file =
   
   List.fold_left g P.empty file.defs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
-    (Pset.elements (Pmap.bindings (pairCompare compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1
+    (Pset.elements (Pmap.bindings (pairCompare symbol_compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1

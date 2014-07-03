@@ -1,0 +1,24 @@
+
+{-
+fun main () : [integer] :=
+  let ret = 22 + 2 * 10 in
+    return (ret)
+  end
+-}
+
+
+fun f() : [integer] :=
+  let strong (a1,a2) = [ 1 || 2 ] in
+    return (a1+a2)
+  end
+
+
+fun main() : [integer] :=
+{-
+  let strong ret = f{} in
+    return(ret)
+  end
+-}
+  let strong () = par(let strong ret = f{} in return(ret) end, return(44)) in
+    return(42)
+  end

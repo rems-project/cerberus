@@ -1,6 +1,8 @@
 open Symbol
 
-let to_string (Symbol (n, _)) = "a" ^ "_" ^ string_of_int n
+let to_string (Symbol (n, str_opt)) =
+  let str = match str_opt with | Some str -> str | None -> "a" in
+  str ^ "_" ^ Big_int.string_of_big_int n
 
 let to_string_pretty (Symbol (n, name_opt) as s) =
   match name_opt with

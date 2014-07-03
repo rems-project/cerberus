@@ -1,5 +1,5 @@
 open Global
-open Core_run
+open Core_run2
 
 let rec string_of_thread_id = function
   | Cmm_aux_old.Tzero ->
@@ -11,24 +11,24 @@ let rec string_of_thread_id = function
       string_of_thread_id tid
 
 let rec string_of_dyn_rule = function
-  | Core_run_effect.Rule_Pos        -> "POS"
-  | Core_run_effect.Rule_Neg        -> "NEG"
-  | Core_run_effect.Rule_Pure_Hole  -> "PURE_HOLE"
-  | Core_run_effect.Rule_Pure       -> "PURE"
-  | Core_run_effect.Rule_If         -> "IF"
-  | Core_run_effect.Rule_Let        -> "LET"
-  | Core_run_effect.Rule_Ret        -> "RET"
-  | Core_run_effect.Rule_Skip       -> "SKIP"
-  | Core_run_effect.Rule_Proc       -> "== PROC =="
-  | Core_run_effect.Rule_Wseq       -> "WSEQ"
-  | Core_run_effect.Rule_Wseq_Neg   -> "WSEQ_NEG"
-  | Core_run_effect.Rule_Sseq       -> "SSEQ"
-  | Core_run_effect.Rule_Run        -> "RUN"
-  | Core_run_effect.Rule_Save       -> "SAVE"
-  | Core_run_effect.Rule_Unseq      -> "unseq"
-  | Core_run_effect.Rule_ND         -> "nd"
-  | Core_run_effect.Rule_Par        -> "par"
-  | Core_run_effect.Rule_Output str -> "output: " ^ String.escaped str
+  | Core_run2_effect.Rule_Pos        -> "POS"
+  | Core_run2_effect.Rule_Neg        -> "NEG"
+  | Core_run2_effect.Rule_Pure_Hole  -> "PURE_HOLE"
+  | Core_run2_effect.Rule_Pure       -> "PURE"
+  | Core_run2_effect.Rule_If         -> "IF"
+  | Core_run2_effect.Rule_Let        -> "LET"
+  | Core_run2_effect.Rule_Ret        -> "RET"
+  | Core_run2_effect.Rule_Skip       -> "SKIP"
+  | Core_run2_effect.Rule_Proc       -> "== PROC =="
+  | Core_run2_effect.Rule_Wseq       -> "WSEQ"
+  | Core_run2_effect.Rule_Wseq_Neg   -> "WSEQ_NEG"
+  | Core_run2_effect.Rule_Sseq       -> "SSEQ"
+  | Core_run2_effect.Rule_Run        -> "RUN"
+  | Core_run2_effect.Rule_Save       -> "SAVE"
+  | Core_run2_effect.Rule_Unseq      -> "unseq"
+  | Core_run2_effect.Rule_ND         -> "nd"
+  | Core_run2_effect.Rule_Par        -> "par"
+  | Core_run2_effect.Rule_Output str -> "output: " ^ String.escaped str
 
 
 
@@ -51,26 +51,26 @@ let string_of_trace_action tact =
       ": @" ^ Big_int.string_of_big_int (snd o) ^ "]" in
  *)
   match tact with
-    | Core_run_effect.Tcreate (ty, o, tid) ->
+    | Core_run2_effect.Tcreate (ty, o, tid) ->
         f o ^ " <= create {" ^ (Boot_pprint.to_plain_string (Pp_core.pp_ctype ty)) ^ "}" ^
         " thread: " ^ (string_of_thread_id tid)
-    | Core_run_effect.Talloc (n, o, tid) ->
+    | Core_run2_effect.Talloc (n, o, tid) ->
         f o ^ " <= alloc " ^ Big_int.string_of_big_int n ^
         " thread: " ^ (string_of_thread_id tid)
-    | Core_run_effect.Tkill (o, tid) ->
+    | Core_run2_effect.Tkill (o, tid) ->
         "kill " ^ f o ^
         " thread: " ^ (string_of_thread_id tid)
-    | Core_run_effect.Tstore (ty, o, n, mo, tid) ->
+    | Core_run2_effect.Tstore (ty, o, n, mo, tid) ->
         "store {" ^ (Boot_pprint.to_plain_string (Pp_core.pp_ctype ty)) ^ 
           ", " ^ (Boot_pprint.to_plain_string (Pp_core.pp_memory_order mo)) ^ "} " ^ f o ^
           " " ^ string_of_mem_value n  ^
         " thread: " ^ (string_of_thread_id tid)
-    | Core_run_effect.Tload (ty, o, v, mo, tid) ->
+    | Core_run2_effect.Tload (ty, o, v, mo, tid) ->
         "load {" ^ (Boot_pprint.to_plain_string (Pp_core.pp_ctype ty)) ^ 
           ", " ^ (Boot_pprint.to_plain_string (Pp_core.pp_memory_order mo)) ^ "} " ^
           f o ^ " = " ^ string_of_mem_value v ^
         " thread: " ^ (string_of_thread_id tid)
-    | Core_run_effect.Trmw (ty ,o, e, d, mo, tid) ->
+    | Core_run2_effect.Trmw (ty ,o, e, d, mo, tid) ->
         "RMW {" ^ (Boot_pprint.to_plain_string (Pp_core.pp_ctype ty)) ^ 
           ", " ^ (Boot_pprint.to_plain_string (Pp_core.pp_memory_order mo)) ^ "} " ^
           f o ^ " = " ^ string_of_mem_value e ^
@@ -101,7 +101,7 @@ let rec string_of_trace tact_map t =
 int, 'a) Exception.t -> (int, 'a) Exception.t
 
        but an expression was expected of type
-(Core_run.taction_id Core.expr * ((Core_run.taction_id, Core_run.trace_action) Pmap.map * Core_run.E.trace)) list
+(Core_run2.taction_id Core.expr * ((Core_run2.taction_id, Core_run2.trace_action) Pmap.map * Core_run2.E.trace)) list
 
 *)
 
@@ -118,7 +118,7 @@ let pp_traces verbose i_execs =
             "Error"
     ));
     let (_, st) = u_t in
-    print_string (Scanf.unescaped st.Core_run_effect.io.Core_run_effect.stdout)
+    print_string (Scanf.unescaped st.Core_run2_effect.io.Core_run2_effect.stdout)
     
   ) (numerote i_execs)
 

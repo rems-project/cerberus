@@ -457,6 +457,8 @@ let rec hack x =
         Core.End (map hack es)
     | Core.Epar es ->
         Core.Epar (map hack es)
+    | Core.Ewait tids ->
+        Core.Ewait tids
     | Core.Eis_scalar e ->
         Core.Eis_scalar (hack e)
     | Core.Eis_integer e ->
@@ -472,8 +474,8 @@ end
 
 (* TODO: hack *)
 (*  *)
-val order: Core.file zero -> Exception.t (list (nat * Core.file zero)) (Errors.t)
-let order (f: Core.file zero) =
+val order: forall 'a. Core.file 'a -> Exception.t (list (nat * Core.file 'a)) (Errors.t)
+let order f =
 (*  let fbodies' = map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
   
   

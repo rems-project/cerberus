@@ -23,7 +23,7 @@ val debug: forall 'a. string -> 'a
 
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
-let inline {coq} print_debug x z = z
+let inline {coq} print_debug x z = let _ = x in z (* I love lem so very much *)
 
 type char (* TODO[newLem] = Ocaml.Boot.char *)
 
@@ -75,7 +75,7 @@ declare ocaml target_rep function pp_ail_expr = `Boot_pprint.pp_ail_expr`
 val pp_core_expr: forall 'a. Core.expr 'a -> string
 declare ocaml target_rep function pp_core_expr = `Boot_pprint.pp_core_expr`
 (* TODO[newLem] let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr *)
-let inline {coq} pp_core_expr x = ""
+let inline {coq} pp_core_expr x = let _ = x in ""
 
 val nat_of_string: string -> natural
 declare ocaml target_rep function nat_of_string = `Big_int.big_int_of_string`
@@ -84,3 +84,10 @@ declare ocaml target_rep function nat_of_string = `Big_int.big_int_of_string`
 
 val pp_cabs0_definition: forall 'a. 'a -> string
 declare ocaml target_rep function pp_cabs0_definition = `Boot_pprint.pp_cabs0_definition`
+
+val pp_core_file: forall 'a. Core.file 'a -> string
+declare ocaml target_rep function pp_core_file = `Boot_pprint.pp_core_file`
+
+
+val pp_core_params: forall 'a. list (Core.sym * Core.core_base_type) -> string
+declare ocaml target_rep function pp_core_params = `Boot_pprint.pp_core_params`

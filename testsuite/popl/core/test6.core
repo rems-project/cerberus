@@ -1,0 +1,15 @@
+fun f(n: integer) : [integer] :=
+  let strong (a1, a2) = par(
+    return(n)
+  ,
+    let a = 1 + 1 in
+      return(a)
+    end
+  ) in
+    return(a1 * a2)
+  end
+
+fun main() : [integer] :=
+  let strong (a1, a2) = [ 20 || f{11} ] in
+    return(a1 + a2)
+  end

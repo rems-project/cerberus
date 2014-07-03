@@ -1,0 +1,5 @@
+open import Pervasives
+
+type action_id = natural
+
+(* type thread_id = nat *) (* Defined in Core *)

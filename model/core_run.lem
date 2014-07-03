@@ -946,11 +946,14 @@ let red2_action x =
 
 let red2_value x =
   match x with
+(* TODO: I think it is wrong to pop an element of the stack without doing an Eret *)
+(*
     | (e, tid, [] :: _KS) ->
         if is_value e then
           push_trace (E.Rule_Pure_Hole, Nothing) >> E.return (e, Cmm_aux_old.Tzero, _KS)
         else
           E.mzero
+*)
     | (e, tid, _K :: _KS) ->
         if is_value e then
           push_trace (E.Rule_Pure, Nothing) >> E.return (apply_cont _K e, Cmm_aux_old.Tzero, [] :: _KS)
@@ -964,7 +967,7 @@ let red2_pure x =
     | (e, tid, _KS) ->
         if is_pure e then
           E.get_file                     >>= fun file ->
-          E.runU (eval file e)           >>= fun e'    ->
+          E.runU (eval file e)           >>= fun e'   ->
           E.return (e', tid, _KS)
         else
           E.mzero

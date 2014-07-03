@@ -1,0 +1,7 @@
+fun f(n: integer) : integer :=
+  n * 2
+
+fun main() : [integer] :=
+  let strong (a1, a2) = [ 20 || f(11) ] in
+    return(a1 + a2)
+  end

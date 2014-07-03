@@ -1,0 +1,4 @@
+fun main() : [integer] :=
+  let ret = 20 + 11*2 in
+    return(ret)
+  end

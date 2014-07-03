@@ -34,6 +34,45 @@ let eval m st = fst (m st)
 val run : forall 'a 's. t 'a 's -> 's -> 'a * 's
 let run t s = t s
 
+module Operators = struct
+  let inline (>>=)    = bind
+  let inline (>>) m f = bind m (fun _ -> f)
+  let inline (<*>)    = app
+end
+open Operators
+
+
+let sequence ms =
+  foldr
+    (fun m m' ->
+      m  >>= fun x  ->
+      m' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
+
+let listM t xs = sequence (t xs)
+
+val mapM: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t (list 'b) 's
+let mapM f = listM (List.map f)
+
+
+let sequence_ ms = foldr (>>) (return ()) ms
+
+val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
+let mapM_ f _as = sequence_ (List.map f _as)
+
+
+(*
 let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
 val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
 let mapM_ f _as = sequence_ (List.map f _as)
+*)
+
+
+val get: forall 's. t 's 's
+let get =
+  fun st -> (st, st)
+
+val put: forall 's. 's -> t unit 's
+let put st =
+  fun _ -> ((), st)

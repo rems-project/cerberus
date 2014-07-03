@@ -1,0 +1,51 @@
+open import List Function
+open import Global
+
+type t 'a = list 'a
+
+val return: forall 'a. 'a -> t 'a
+let return x = [x]
+
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind m f =
+  List.concat (List.map f m)
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end
+
+open Operators
+
+
+val mzero: forall 'a. t 'a
+let mzero = []
+
+val msum: forall 'a. list (t 'a) -> t 'a
+let msum ms =
+  List.concat ms
+
+val sequence: forall 'a. list (t 'a) -> t (list 'a)
+let sequence ms =
+  List.foldr (fun m ms' ->
+   m   >>= fun x  ->
+   ms' >>= fun xs ->
+  return (x :: xs)
+  ) (return []) ms
+
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+let mapM f xs =
+  sequence (List.map f xs)
+
+
+let rec _pick_one pred acc = function
+  | [] ->
+      []
+  | x::xs ->
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pick_one pred (x::acc) xs
+end
+
+val pick_one: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+let pick_one pred xs =
+  msum $ List.map return (_pick_one pred [] xs)

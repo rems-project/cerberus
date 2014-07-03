@@ -74,9 +74,10 @@ type allocated_space_metadata = <|
 
 (* TODO *)
 module UniqueId = struct
-  type counter
+  type counter =
+    | WIP
   val init: counter
-  let init = assert_false "WIP"
+  let init = WIP (* assert_false "WIP" *) 
 end
 
 

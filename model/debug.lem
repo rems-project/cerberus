@@ -11,7 +11,7 @@ let _DEBUG level f k =
 
 
 (* Used in [core_run.lem], print the collected continuation in a Core program *)
-let print_cont_map cont_map k =
+let print_cont_map _ (* TODO: cont_map *) k =
   Boot.print_debug "TODO[newLem]" k
 (*
   (  "COLLECTED CONTINUATIONS:\n" ^

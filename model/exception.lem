@@ -119,7 +119,7 @@ val onException: forall 'a 'msg. t 'a 'msg -> t 'a 'msg -> t 'a 'msg
 let onException m1 m2 =
   match m1 with
     | Result z    -> Result z
-    | Exception z -> m2
+    | Exception _ -> m2
   end
 
 

@@ -1,11 +1,11 @@
 open import Pervasives Global
 import Symbol AilTypes Implementation_ Undefined Memory_order
-import New_memory
+import Naive_memory (* New_memory *)
 
-open import Core_ctype
+open import Thread Core_ctype
 
 module Cmm = Memory_order
-
+module Mem = Naive_memory
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
@@ -88,7 +88,7 @@ type expr 'a =
   | Eunit
   | Etrue
   | Efalse
-  | Econst of New_memory.mem_value
+  | Econst of Mem.mem_value
 (* these are folded into New_memory.mem_value
   | Epointer of New_memory.pointer_value
   | Epointer_byte of nat * nat * New_memory.pointer_value
@@ -115,7 +115,7 @@ type expr 'a =
   | Eskip
   | Elet of sym * expr 'a * expr 'a
   | Eif of expr 'a * expr 'a * expr 'a
-  | Eproc of set 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Eproc of 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
 (*  | Esame of expr 'a * expr 'a *)
   | Eaction of paction 'a
   
@@ -133,7 +133,7 @@ type expr 'a =
   (* Continuation operators *)
   (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
   | Esave of ksym * list (sym * ctype) * expr 'a
-  | Erun of set 'a * ksym * list (sym * expr 'a)
+  | Erun of 'a * ksym * list (sym * expr 'a)
     (* TODO: need more for VLAs *)
   
   | Eret of expr 'a
@@ -142,8 +142,11 @@ type expr 'a =
   (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
   | End of list (expr 'a)
   
-  (* Parallel composition *)
-  | Epar of list (expr 'a)
+  (* Thread operators *)
+  (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
+  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
+  | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+  
   
 (*  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *) *)
 
@@ -170,7 +173,7 @@ and action_ 'a =
   | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
   | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
 
-and action 'a  = Action of set 'a * action_ 'a
+and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
 
 
@@ -208,16 +211,17 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 (* runtime stuff *)
 
-type _continuation 'a =
+type continuation_element 'a =
   | Kunseq of list (expr 'a) * list (expr 'a)
-  | Kpar   of list (expr 'a) * list (expr 'a)
   | Kwseq  of list (maybe sym) * expr 'a
   | Ksseq  of list (maybe sym) * expr 'a
 
-type continuation 'a = list (_continuation 'a)
+type continuation 'a = list (continuation_element 'a)
 
 
 type labeled_continuation 'a = list (sym * ctype) * expr 'a
 
 
-type stack 'a = list (continuation 'a)
+type stack 'a =
+  | Stack_empty
+  | Stack_cons of continuation 'a * stack 'a

@@ -4,7 +4,13 @@
 open import Pervasives
 import String_extra
 
-import Cmm_aux_old Core_run2_effect New_memory
+open import Driver_util
+import Core_run2_effect New_memory
+
+
+module Memory_layout = New_memory
+
+
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
@@ -388,7 +394,7 @@ let isSignedConversion = function
 end
 
 val applyFlagsAndPadding: bool -> flags -> maybe field_width -> list char -> list char
-let applyFlagsAndPadding isSignedConversion fs fw_opt str =
+let applyFlagsAndPadding (* TODO: isSignedConversion fs fw_opt str *) _ _ _ _ =
   assert_false "TODO: WIP"
 
 
@@ -436,10 +442,12 @@ import Memory_order
 module Cmm = Memory_order
 
 
+(*
+
 (* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
 (* TODO: the first argument (load) is a bit silly but avoid module cycle *)
-val convert: (ctype -> New_memory.pointer_value -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-             maybe precision -> conversion_specifier -> list New_memory.pointer_value -> E.t (list char * list New_memory.pointer_value)
+val convert: (ctype -> Memory_layout.pointer_value -> E.t (Memory_layout.mem_value * action_id)) ->
+             maybe precision -> conversion_specifier -> list Memory_layout.pointer_value -> E.t (list char * list Memory_layout.pointer_value)
 let convert load p_opt cspec args =
   match cspec with
     | CS_di ->
@@ -577,8 +585,8 @@ let convert load p_opt cspec args =
 
 
 (* TODO asterisks *)
-val formatted_print_aux: (ctype -> New_memory.pointer_value -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-                         list char -> format -> list New_memory.pointer_value -> E.t (list char)
+val formatted_print_aux: (ctype -> Memory_layout.pointer_value -> E.t (Cmm_aux_old.cvalue * action_id)) ->
+                         list char -> format -> list Memory_layout.pointer_value -> E.t (list char)
 let rec formatted_print_aux load acc fs ns =
   match (fs, ns) with
     | ([], []) ->
@@ -616,8 +624,8 @@ TODO: new
   end
 
 
-val formatted_print: (ctype -> New_memory.pointer_value -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-                     list char -> list New_memory.pointer_value -> E.t (list char)
+val formatted_print: (ctype -> Memory_layout.pointer_value -> E.t (Cmm_aux_old.cvalue * action_id)) ->
+                     list char -> list Memory_layout.pointer_value -> E.t (list char)
 let formatted_print load fmrt args =
   match parse format fmrt with
     | [(fs, [])] ->
@@ -629,8 +637,8 @@ let formatted_print load fmrt args =
 (* END: actual implementation of printf *)
 
 
-val printf: (ctype -> New_memory.pointer_value -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-            list char -> list New_memory.pointer_value -> E.t (Core.expr E.taction_id)
+val printf: (ctype -> Memory_layout.pointer_value -> E.t (Cmm_aux_old.cvalue * action_id)) ->
+            list char -> list Memory_layout.pointer_value -> E.t (Core.expr action_id)
 let printf load frmt args =
   (* TODO: should fix the lexing of C string instead of hacking here *)
   let frmt = take (length frmt - 2) $ drop 1 frmt in
@@ -643,3 +651,4 @@ let printf load frmt args =
 
 
 
+*)

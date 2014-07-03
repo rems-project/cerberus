@@ -9,7 +9,7 @@ c values: the old thing is in cmm_aux_old.lem (type cvalue)
 *)
 
 open import Pervasives
-import Driver_util Core_driver New_memory_effect Symbolic State_exception AilTypes Core_ctype
+import Driver_util Core_driver New_memory_effect Symbolic State_exception AilTypes Thread Core_ctype
 
 (* TODO: temporary hack *)
 val assert_false: forall 'a. string -> 'a
@@ -44,8 +44,10 @@ open Operators
 *)
 
 
-type memory_state (* TODO *)
-type memory_error (* TODO *)
+type memory_state =
+  | MEMORY_STATE (* TODO *)
+type memory_error =
+  | MEMORY_ERROR (* TODO *)
 
 (* We need this indirection to be able to use the do notation *)
 module E = struct
@@ -58,8 +60,8 @@ module E = struct
   let bind = State_exception.bind
   
   val fresh_sao_id: t Symbolic.symbol
-  let fresh_sao_id =
-    assert_false "WIP"
+  let fresh_sao_id : t Symbolic.symbol (* This annotation is needed for the OCaml to typecheck *) =
+    return 0 (* !!!!!! assert_false "WIP" *)
   
 (*
 E.get_allocator
@@ -261,13 +263,13 @@ type allocator =
 
 
 
-val allocate_object:    Driver_util.thread_id (* the allocating thread *)
-                     -> AilTypes.ctype        (* type of the allocation *)
-                     -> Symbolic.symbolic     (* size of that type *)
-                     -> Symbolic.symbolic     (* alignment of that type *)
+val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> AilTypes.ctype    (* type of the allocation *)
+                     -> Symbolic.symbolic (* size of that type *)
+                     -> Symbolic.symbolic (* alignment of that type *)
                      -> E.t pointer_value
 
-let allocate_object tid ty ty_size ty_alignment = (* do E *)
+let allocate_object _ _ _ _ (* tid ty ty_size ty_alignment *) = (* do E *)
 
 assert_false "
 
@@ -449,7 +451,7 @@ val load:       (*TODO: union declaration data -> *)
                 -> pointer_value 
                 -> E.t mem_value
 
-let load lvalue_ty ptr_val = assert_false "..."
+let load _ _ (* lvalue_ty ptr_val *) = assert_false "..."
 
 (* I feed in the type size, for consistency with the allocate_* calls,
 but we will need to know the whole layout of the ctype for the
@@ -1707,7 +1709,7 @@ let create ty obj_id =
 
 
 
-let store ty ptr v =
+let store _ _ _ (* ty ptr v *) =
   assert_false "WIP"
 
 

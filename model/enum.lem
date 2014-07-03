@@ -1,0 +1,14 @@
+open import Pervasives
+
+class ( Enum 'a ) 
+  val toEnum:   natural -> 'a
+  val fromEnum: 'a -> natural
+  val succ: 'a -> 'a
+end
+
+
+instance (Enum natural)
+  let toEnum   = id
+  let fromEnum = id
+  let succ n   = n + 1
+end

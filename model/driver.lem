@@ -1,0 +1,74 @@
+open import Pervasives
+open import Driver_util
+
+import Exception
+import Core Core_run2_effect
+
+
+module Core_run_effect = Core_run2_effect
+
+
+
+type driver_state = <|
+  core_file:          Core.file action_id;
+  core_runtime_state: Core_run_effect.runtime_state;
+|>
+
+
+type driver_error =
+  | Missing_startup
+  | Invalid_startup
+  | Unknowned_labeled_continuation
+
+
+open Exception.Operators
+
+val init: Core.file action_id -> Exception.t driver_state driver_error
+let init file =
+  Exception.of_maybe Missing_startup
+    (Map.lookup file.Core.main file.Core.funs) >>= fun (_(* ty *), args, _(* expr *)) ->
+  (* This is true for well-typed core programs *)
+  Exception.guard (List.null args) Invalid_startup >>
+  Exception.return <|
+    core_file=          file;
+    core_runtime_state= Core_run_effect.initial_runtime_state
+  |>
+
+
+
+
+
+
+(*
+type file 'a = <|
+  main   : sym;
+  stdlib : fun_map 'a;
+  impl   : impl 'a;
+  defs   : list (sym * core_base_type * expr 'a);
+  funs   : fun_map 'a;
+|>
+
+
+type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

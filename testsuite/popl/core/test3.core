@@ -1,0 +1,4 @@
+fun main() : [integer] :=
+  let strong (a1, a2) = [ 20 || 11*2 ] in
+    return(a1 + a2)
+  end

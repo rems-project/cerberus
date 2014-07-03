@@ -1,0 +1,43 @@
+{-
+atomic_int x = 0;
+atomic_int y = 0;
+
+{{{ {
+  
+  store(relaxed, x, 1);
+  store(relaxed, y, 2);
+  r1 = load(relaxed, y);
+  
+} ||| {
+  
+  store(relaxed, y, 1);
+  store(relaxed, x, 2);
+  r2 = load(relaxed, x);
+  
+} }}}
+
+-}
+
+fun main() : [integer] :=
+  let strong x = create("_Atomic(signed int)", <alignof>("_Atomic(signed int)")) in
+  let strong y = create("_Atomic(signed int)", <alignof>("_Atomic(signed int)")) in
+  
+  let strong () = store("_Atomic(signed int)", x, 0) in
+  let strong () = store("_Atomic(signed int)", y, 0) in
+  
+  let strong (r1, r2) = par(
+    let strong () = store("_Atomic(signed int)", x, 1, relaxed) in
+    let strong () = store("_Atomic(signed int)", y, 2, relaxed) in
+    let strong r1 = load("_Atomic(signed int)", y, relaxed)     in
+      return(r1)
+    end end end
+  ,
+    let strong () = store("_Atomic(signed int)", y, 1, relaxed) in
+    let strong () = store("_Atomic(signed int)", x, 2, relaxed) in
+    let strong r2 = load("_Atomic(signed int)", x, relaxed)     in
+      return(r2)
+    end end end
+  ) in
+  return((r1, r2))
+  
+  end end end end end

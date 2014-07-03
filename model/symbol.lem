@@ -1,18 +1,19 @@
 open import Pervasives
 
-type t =
-  Symbol of nat * maybe string
+open import Enum
+import UniqueId
 
-type counter = nat
+type t =
+  Symbol of natural * maybe string
 
 instance (Eq t)
   let (=) sym1 sym2 =
-    let (Symbol n1 str1) = sym1 in
-    let (Symbol n2 str2) = sym2 in
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
     n1 = n2
   let (<>) sym1 sym2 =
-    let (Symbol n1 str1) = sym1 in
-    let (Symbol n2 str2) = sym2 in
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
     n1 <> n2
 end
 
@@ -42,24 +43,48 @@ instance (Ord t)
     n1 >= n2
 end
 
+instance (Enum t)
+  let toEnum n =
+    Symbol n Nothing
+  let fromEnum sym =
+    let (Symbol n _) = sym in
+    n
+  let succ sym =
+    let (Symbol n str_opt) = sym in 
+    Symbol (n+1) str_opt
+end
+
 instance (SetType t)
   let setElemCompare sym1 sym2 = ordCompare sym1 sym2
 end
 
-val fresh : counter -> t * counter 
-let fresh c =
-  (Symbol c Nothing, c + 1)
+val fresh: State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh =
+  UniqueId.fresh_id
 
-val fresh_pretty : string -> counter -> t * counter
-let fresh_pretty str c =
-  (Symbol c (Just str), c + 1)
+val fresh_pretty : string -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty str =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just str)
+  )
 
-val fresh_fancy : maybe string -> counter -> t * counter
+
+val fresh_pretty_with_id : (natural -> string) -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty_with_id mkStr =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just (mkStr id))
+  )
+
+
+val fresh_fancy : maybe string -> State.t (UniqueId.t t) (UniqueId.supply t)
 let fresh_fancy = function
   | Just str -> fresh_pretty str
   | Nothing  -> fresh
 end
 
+
+
+(*
 
 (* TODO: these are probably not used *)
 
@@ -129,3 +154,5 @@ let free   = Symbol 51 (Just "free")
 
 val init: counter
 let init = 100
+
+*)

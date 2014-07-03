@@ -1,76 +1,64 @@
-open import Pervasives Global Core_ctype
-import Cmm_aux_old Symbol State_exception
+open import Pervasives
 
-module Cmm = Cmm_aux_old
+import State_exception_undefined
+import Symbol Symbolic Core_ctype Thread
 
-(* TODO *)
-type taction_id = natural
+module SEU = State_exception_undefined
 
-
-module E = State_exception
-
-
-type memory_error =
-  | MemErr_TODO
 
 type memory_state =
-  Map.map Cmm.location (list (Cmm.cvalue * taction_id)) * natural
+  | MEMORY_STATE
+
+type memory_error =
+  | MEMORY_ERROR
+
+type memM 'a = SEU.t 'a memory_state memory_error
 
 
-(* Memory effect *)
-type t 'a =
-  E.t 'a memory_state memory_error
+(* val runMem: forall 'a. memM 'a ->  *)
 
 
-type mem_addr =
-  Cmm.location
+type pointer_value =
+  | Pointer_null of Core_ctype.ctype
+  | Pointer_nonnull of natural
+  | Pointer_function of Symbol.t
 
-
-
-
-
-
-let create pref ty taid =
-  E.modify (fun (m, i) ->
-    let o = (pref, Cmm_aux_old.Lbase i) in
-    let init = match ty with
-      | Array _ n -> Cmm_aux_old.Marray (replicate_list Cmm_aux_old.Muninit n)
-      | _         -> Cmm_aux_old.Muninit
-    end in
-    (o, (Map.insert o [(init, taid)] m, i+1))
-  )
-
-
+and mem_value =
+  | MV_pointer of pointer_value
+  | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
 (*
-let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
-  (* DEBUG *)
-(* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
-  (* We update the memory (obviously) and we add information about the location 
-     kind to the state *)
-  let o = (pref, Cmm_aux_old.Lbase i) in
-  let init = match ty with
-    | Array _ n -> Cmm_aux_old.Marray (replicate_list Cmm_aux_old.Muninit n)
-    | _         -> Cmm_aux_old.Muninit
-  end in
-  [(U.return o, <| st with E.mem= (Map.insert o [(init, taid)] m, i+1);
-                           E.lk = Map.insert o (type_to_location_kind ty) lk |>)]
+  | MV_array of list mem_value
+  | MV_struct of list (Symbol.t * mem_value)
+  | MV_union of Symbol.t * mem_value
+  | MV_pointer_byte of nat * nat * pointer_value 
+  | MV_unspecified of Core_ctype.ctype
+*)
 
- *)
+
+
+val null_pointer: Core_ctype.ctype -> pointer_value
+let null_pointer ty =
+  Pointer_null ty
 
 
 
 
 
-(* TODO *)
-let store ty addr n tact_id =
-  E.return ()
 
 
-(* TODO *)
-let load ty addr =
-  E.fail MemErr_TODO
 
 
-(* TODO *)
-let kill addr =
-  E.return ()
+
+
+
+open SEU.Operators
+
+val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> Core_ctype.ctype  (* type of the allocation *)
+(*
+                     -> Symbolic.symbolic (* size of that type *)
+                     -> Symbolic.symbolic (* alignment of that type *)
+*)
+                     -> memM pointer_value
+let allocate_object (* tid ty size_symb align_symb *) _ ty =
+  SEU.return (Pointer_null ty)

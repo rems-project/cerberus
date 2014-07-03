@@ -1,6 +1,6 @@
 (* Effects for Cabs_to_ail: state *)
 open import Pervasives Global
-import Symbol Scope_table Location State_exception Errors
+import UniqueId Symbol Scope_table Location State_exception Errors
 import Cabs0 AilSyntax AilTypes
 
 module C      = Cabs0
@@ -16,7 +16,7 @@ type symbol_kind =
 
 type state = <|
   (* Counter for the symbol generator *)
-  symbol_counter: Symbol.counter;
+  symbol_counter: UniqueId.supply Symbol.t;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   registered_identifiers: Scope_table.t string (A.identifier * symbol_kind);
   
@@ -68,7 +68,7 @@ let fail err = State_exception.fail (Location.dummy, err)
 
 let of_option err = State_exception.of_option (Location.dummy, err)
 
-val make_program: Symbol.t -> t (Symbol.counter * A.program Location.t unit)
+val make_program: Symbol.t -> t (UniqueId.supply Symbol.t * A.program Location.t unit)
 let make_program startup =
   State_exception.read (fun st ->
     (st.symbol_counter, (startup, st.definitions))
@@ -97,10 +97,10 @@ let app  = State_exception.app
 
 (* given a computation producing the symbolic name of the startup function,
    produce the desugared Ail file *)
-val eval: t Symbol.t -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
+val eval: t Symbol.t -> Exception.t (UniqueId.supply Symbol.t * A.program Location.t unit) Errors.t
 let eval m =
   let initial_state : state = <|
-    symbol_counter=         Symbol.init;
+    symbol_counter=         UniqueId.new_supply;
     registered_identifiers= Scope_table.create_scope Scope_table.empty;
     registered_labels=      Map.empty;
     is_inside_switch=       false;

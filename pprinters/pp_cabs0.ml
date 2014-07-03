@@ -45,12 +45,12 @@ let precedence = function
   | Etype_sizeof _
   | Ealignof _ -> Some 2
   
-  | Ebinary (Mul0, _, _)
-  | Ebinary (Div0, _, _)
-  | Ebinary (Mod0, _, _) -> Some 3
+  | Ebinary (Mul1, _, _)
+  | Ebinary (Div1, _, _)
+  | Ebinary (Mod1, _, _) -> Some 3
   
-  | Ebinary (Add0, _, _)
-  | Ebinary (Sub0, _, _) -> Some 4
+  | Ebinary (Add1, _, _)
+  | Ebinary (Sub1, _, _) -> Some 4
   
   | Ebinary (Shl0, _, _)
   | Ebinary (Shr0, _, _) -> Some 5
@@ -276,11 +276,11 @@ and pp_init_name (Init_name (n, ie)) =
   )
 
 and pp_binary_operator = function
-  | Add0         -> P.plus
-  | Sub0         -> P.minus
-  | Mul0         -> P.star
-  | Div0         -> P.slash
-  | Mod0         -> P.percent
+  | Add1         -> P.plus
+  | Sub1         -> P.minus
+  | Mul1         -> P.star
+  | Div1         -> P.slash
+  | Mod1         -> P.percent
   | And0         -> P.ampersand ^^ P.ampersand
   | Or0          -> P.bar ^^ P.bar
   | Band0        -> P.ampersand
@@ -314,7 +314,7 @@ and pp_unary_operator = function
   | Not     -> P.bang
   | Bnot0    -> P.tilde
   | Indirection0   -> P.star
-  | Address1  -> P.ampersand
+  | Address0  -> P.ampersand
   | PrefixIncr -> P.plus ^^ P.plus
   | PrefixDecr -> P.minus ^^ P.minus
   | PostfixIncr0 -> P.plus ^^ P.plus

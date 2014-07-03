@@ -338,7 +338,7 @@ let bind m f =
     | Defined x -> f x
     | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
     | Error     -> Error
-end 
+  end
 
 let inline (>>=) = bind
 

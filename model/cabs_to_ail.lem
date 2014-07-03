@@ -405,7 +405,7 @@ val desugar_constant: C.constant -> E.t A.constant
 let desugar_constant = function
   | C.CONST_INT str suff_opt ->
       E.return $ A.ConstantInteger (desugar_integerConstant str suff_opt)
-  | C.CONST_FLOAT str ->
+  | C.CONST_FLOAT _ ->
       E.fail (Errors.CSEM_NOT_SUPPORTED "float constants")
   | C.CONST_STRING str ->
       E.return $ A.ConstantString str (* TODO *)
@@ -499,7 +499,7 @@ let desugar_type_specifiers = function
             E.return ty
         | Nothing ->
             (* TODO [tmp hack] removing the qualifiers *)
-            E.get_typedef str >>= fun (qs, ty) ->
+            E.get_typedef str >>= fun (_ (* TODO: qs *), ty) ->
             E.return ty
       end
   | ss ->
@@ -510,7 +510,7 @@ end
 
 val desugar_spec_elem_list : list C.spec_elem -> E.t (ATypes.qualifiers * ATypes.ctype) (* (either (ATypes.qualifiers * ATypes.ctype) (ATypes.qualifiers * ATypes.ctype)) *)
 let desugar_spec_elem_list specs =
-  let (cs, attrs, sts, is_inline, ts) = separate_spec_elem_list specs in
+  let (cs, _ (* TODO: attrs *), _ (* TODO: sts *), _ (* TODO: is_inline *), ts) = separate_spec_elem_list specs in
   let q = desugar_type_qualifiers cs in
   desugar_type_specifiers ts >>= fun t ->
   E.return (q, t)
@@ -527,8 +527,8 @@ let rec desugar_decl_type decl_ty =
 *)
   | C.ARRAY decl_ty' cvs _ (Just (C.Econstant (C.CONST_INT n Nothing))) ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
-      E.return $ fun qs ty -> mk_ty (desugar_type_qualifiers cvs) (ATypes.Array (*qs*) ty (snd $ Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
-  | C.ARRAY dt cvs _ _ ->
+      E.return $ fun _ (* TODO: qs *) ty -> mk_ty (desugar_type_qualifiers cvs) (ATypes.Array (*qs*) ty (snd $ Decode.decode_integer_constant n)) (* TODO: for test purposes only ;) *)
+  | C.ARRAY _ _ _ _ ->
       Boot.assert_false "Constant expressions other than integer constant not yet supported."
   | C.PTR cvs _ decl_ty' ->
       desugar_decl_type decl_ty' >>= fun mk_ty ->
@@ -546,8 +546,8 @@ let rec desugar_decl_type decl_ty =
 
 (*  desugar_parameters : list C.parameter -> E.t (list (A.identifier * (ATypes.qualifiers * ATypes.ctype))) *)
 and desugar_parameters params =
-  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl attrs _) acc ->
-    desugar_spec_elem_list param_specs >>= fun (param_qs, param_ty) ->
+  E.foldrM (fun (C.PARAM param_specs param_name_opt param_decl _ (* TODO: attrs *) _) acc ->
+    desugar_spec_elem_list param_specs >>= fun (_ (* TODO: param_qs *), param_ty) ->
     (* (void) the special case of function with no parameters (§6.7.6.3#10) *)
     if param_ty = ATypes.Void then
       (if length params <> 1 then
@@ -634,7 +634,7 @@ let rec desugar_expression e =
     (* A CAST can actually be a constructor expression *)
   | C.Ecast (specs, decl_ty) ie ->
       desugar_spec_elem_list specs >>= fun (qs, ty)   ->
-      desugar_decl_type decl_ty    >>= fun mk_ty      ->
+      desugar_decl_type decl_ty    >>= fun _ (* TODO: why isn't this used?? mk_ty *)      ->
       desugar_init_expression ie   >>= function
         | Just d_e -> E.return $ A.Cast qs ty d_e
         | Nothing  -> Boot.assert_false "[Cabs_to_ail.desugar_expression CAST] the init_expression is not constant, TODO better"
@@ -661,7 +661,7 @@ let rec desugar_expression e =
             A.Var <$> (E.resolve_identifier x >>= fun (id, _) -> E.return id)
       end
   
-  | C.Eexpr_sizeof e ->
+  | C.Eexpr_sizeof _ ->
       E.fail (Errors.OTHER "new-Ail does not yet support sizeof(expr)")
   | C.Etype_sizeof (specs, decl_ty) ->
       desugar_spec_elem_list_and_decl_type specs decl_ty >>= fun (qs, ty) ->
@@ -773,9 +773,9 @@ TODO: tmp
           E.return A.ReturnVoid
       | C.Sreturn (Just expr) _f ->
           A.Return <$> desugar_expression expr
-      | C.Sswitch expr stmt _ ->
+      | C.Sswitch _ (* TODO: expr *) _ (* TODO: stmt *) _ ->
           Boot.assert_false "HIP: desugar_statement  SWITCH"
-      | C.Scase expr stmt _ ->
+      | C.Scase _ (* TODO: expr *) _ (* TODO: stmt *) _ ->
           (* (§6.8.1#2) "A case label shall appear only in a switch statement." *)
           ifElse E.is_inside_switch begin
           (* TODO: for now we only support impl-independent constant
@@ -843,13 +843,13 @@ and desugar_declaration (specs, ins) =
 (*  desugar_definition: C.definition -> E.t unit *)
 and desugar_definition def =
   match def with
-    | C.FUNDEF specs (C.Name str fun_decl attrs _) stmt _ ->
+    | C.FUNDEF specs (C.Name str fun_decl _ (* TODO: attrs *) _) stmt _ ->
         E.is_defined_function str >>= function
           | true  -> E.fail (Errors.CABS_TO_AIL_FUNCTION_REDEFINITION str)
           | false ->
-              desugar_spec_elem_list specs >>= fun (qs, ty) -> (* TODO: q should be A.no_qualifiers; check! *)
+              desugar_spec_elem_list specs >>= fun (_ (* TODO: qs *), ty) -> (* TODO: q should be A.no_qualifiers; check! *)
               E.lookup_name str            >>= function
-                | Just (fun_id, Funname) -> E.return fun_id
+                | Just (fun_id, E.Funname) -> E.return fun_id
                 | Nothing                -> E.register_name str E.Funname
               end >>= fun fun_id   ->
               register_labels stmt               >>
@@ -868,7 +868,7 @@ and desugar_definition def =
         end
 
     (* This should correspond to the def of a struct/union (typedef?) *)
-  | C.DECDEF (specs, []) loc ->
+  | C.DECDEF (_ (* TODO: specs *), []) _ (* TODO: loc *) ->
       
 
 
@@ -901,15 +901,15 @@ DECDEF (
       Boot.assert_false "HIP: desugar_definition DECDEF (case 1)"
 
   (* TODO: the direct use of `separate_sepec_elem_list' may be temporary. *)
-  | C.DECDEF (specs, init_names) loc ->
-      let (cs, attrs, sts, is_inline, tySpecs) = separate_spec_elem_list specs in
+  | C.DECDEF (specs, init_names) _ (* TODO: loc *) ->
+      let (cs, _ (* TODO: attrs *), sts, _ (* TODO: is_inline *), tySpecs) = separate_spec_elem_list specs in
       let d_qs = desugar_type_qualifiers cs in
       desugar_type_specifiers tySpecs >>= fun d_ty ->
       if List.elem C.SC_typedef sts then
         (* Case: type definition *)
-        let sts = List.delete C.SC_typedef sts in
+        let _ (* TODO: sts *) = List.delete C.SC_typedef sts in
         match init_names with
-          | [C.Init_name (C.Name tyname C.JUSTBASE [] _) NO_INIT] ->
+          | [C.Init_name (C.Name tyname C.JUSTBASE [] _) C.NO_INIT] ->
               E.register_typedef tyname (d_qs, d_ty)
           | _ ->
               E.fail (Errors.CSEM_HIP "(TODO msg) found a typedef DECDEF with less/more than one name; or not a JUSTBASE.")
@@ -948,17 +948,17 @@ DECDEF (
         ) init_names
  *)
 
-  | C.PRAGMA at loc ->
+  | C.PRAGMA _ _ ->
       E.fail (Errors.CSEM_NOT_SUPPORTED "PRAGMA definitions")
 end
 
 
-val desugar: C.atom -> C.file -> Exception.t (Symbol.counter * A.program Location.t unit) Errors.t
+val desugar: C.atom -> C.file -> Exception.t (UniqueId.supply Symbol.t * A.program Location.t unit) Errors.t
 let desugar startup defs =
   E.eval (
     E.mapM_ desugar_definition defs >>
     E.resolve_identifier startup >>= function
-      | (id, Varname) -> E.return id
-      | _             -> E.fail (Errors.CABS_TO_AIL_NO_STARTUP startup)
+      | (id, E.Varname) -> E.return id
+      | _               -> E.fail (Errors.CABS_TO_AIL_NO_STARTUP startup)
     end
   )
