@@ -1,55 +1,84 @@
 open import Pervasives
-open import Driver_util
 
-import Exception
-import Core Core_run2_effect
+import Core Core_ctype Boot UniqueId
+open import Core_run2 Core_run2_aux ExecutableOpsem Cmm_master
 
-
-module Core_run_effect = Core_run2_effect
+import State_exception_undefined Exception Undefined Nondeterminism
 
 
+(* The indirection is required because of a bug in Lem *)
+module U = Undefined
+
+
+module SEU = State_exception_undefined
+module ND  = Nondeterminism
+
+
+type driver_error = 
+  | DERR_core_run of core_run_error
 
 type driver_state = <|
-  core_file:          Core.file action_id;
-  core_runtime_state: Core_run_effect.runtime_state;
+  symbol_supply:     UniqueId.supply Symbol.t;
+  
+  core_file:         Core.file core_run_annotation;
+  core_state:        core_state;       (* state of the core program *)
+  core_run_state:    core_run_state;   (* state of the core evaluator *)
+  concurrency_state: exeState; (* state of the concurrency memory model *)
 |>
 
 
-type driver_error =
-  | Missing_startup
-  | Invalid_startup
-  | Unknowned_labeled_continuation
 
 
-open Exception.Operators
-
-val init: Core.file action_id -> Exception.t driver_state driver_error
-let init file =
-  Exception.of_maybe Missing_startup
-    (Map.lookup file.Core.main file.Core.funs) >>= fun (_(* ty *), args, _(* expr *)) ->
-  (* This is true for well-typed core programs *)
-  Exception.guard (List.null args) Invalid_startup >>
-  Exception.return <|
-    core_file=          file;
-    core_runtime_state= Core_run_effect.initial_runtime_state
-  |>
+(* Reinventing the wheel and breaking abstraction for now *)
+type driverM 'a = driver_state -> ND.t (Exception.t (Undefined.t 'a * driver_state) driver_error)
 
 
+val return: forall 'a. 'a -> driverM 'a
+let return z =
+  fun dr_st -> ND.return (Exception.return (U.return z, dr_st))
 
 
+val bind: forall 'a 'b. driverM 'a -> ('a -> driverM 'b) -> driverM 'b
+let bind m f =
+  Boot.assert_false "WIP"
+
+(*
+let bind m f =
+  fun dr_st ->
+    ND.bind (m dr_st) function
+      | (Exception.Result (U.Defined z), dr_st') ->
+          f z dr_st'
+(*
+      | z ->
+          ND.return z
+*)
+    end
+*)
+
+
+let inline (>>=) = bind
 
 
 (*
-type file 'a = <|
-  main   : sym;
-  stdlib : fun_map 'a;
-  impl   : impl 'a;
-  defs   : list (sym * core_base_type * expr 'a);
-  funs   : fun_map 'a;
-|>
-
-
-type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
+val runCore: forall 'a. SEU.t 'a core_run_state core_run_error -> driverM 'a
+let runCore m =
+  Boot.assert_false "WIP"
+*)
+(*
+  fun dr_st ->
+    match SEU.run m dr_st.core_run_state with
+      | Exception.Result (Undefined.Defined z, run_st') ->
+          SEU.put <| dr_st with core_run_state= run_st' |> >>
+          SEU.return z
+      | Exception.Result (Undefined.Undef ubs, run_st') ->
+          SEU.put <| dr_st with core_run_state= run_st' |> >>
+          SEU.undef ubs
+      | Exception.Result (Undefined.Error, run_st') ->
+          SEU.put <| dr_st with core_run_state= run_st' |> >>
+          SEU.error
+      | Exception.Exception err ->
+          SEU.fail (DERR_core_run err)
+    end
 *)
 
 
@@ -57,6 +86,73 @@ type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
 
 
 
+(*
+type preExStep = 
+  <| action       : action;
+     sbBefore     : set aid;
+     ddBefore     : set aid;
+     aswBefore    : set aid;
+     locationKind : maybe location_kind;
+  |>
+
+val updatePreEx: exeState -> preExStep -> exeState
+
+
+val exeOpsemStep: exeState -> equalityCvalue -> S.t exeStep
+
+*)
+
+
+
+val get: driverM driver_state
+let get =
+  Boot.assert_false "WIP"
+
+
+
+val runND: forall 'a. ND.t 'a -> driverM 'a
+let runND m =
+  fun dr_st ->
+    ND.bind m (fun z -> ND.return $ Exception.return (U.return z, dr_st))
+
+
+
+module S = ExecutableOpsem.S
+
+
+
+val runCore: forall 'a. SetType 'a => SEU.t 'a core_run_state core_run_error -> driver_state -> S.t ('a * driver_state)
+let runCore m dr_st =
+  match SEU.run m dr_st.core_run_state with
+    | Exception.Result (U.Defined z, run_st') ->
+        S.return (z, <| dr_st with core_run_state= run_st' |>)
+    | _ ->
+        Boot.assert_false "WIP"
+  end
+
+
+open S
+
+val driver_step: driver_state -> S.t driver_state
+let driver_step dr_st =
+  Set.fromList (core_steps dr_st.core_file dr_st.core_state) >>= function
+    | Step_action_request debug_str tid request_m ->
+        runCore request_m dr_st >>= fun (request, dr_st') ->
+          match request with
+            | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
+                let preEx_step = <|
+                  action=       Alloc aid tid ptr_val;
+                  sbBefore=     sb_edges;
+                  ddBefore=     dd_edges;
+                  aswBefore=    asw_edges;
+                  locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic);
+                |> in
+                
+                exeOpsemStep (updatePreEx dr_st.concurrency_state preEx_step) initialEqualityCvalue >>= fun concur_step ->
+                S.return  <| dr_st' with core_state= core_st'; concurrency_state= stateOf concur_step |>
+
+
+          end
 
 
 
@@ -64,11 +160,96 @@ type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
 
 
 
+  | Step_tau debug_str tid step_m ->
+      runCore step_m dr_st >>= fun (core_st', dr_st') ->
+      S.return <| dr_st' with core_state= core_st' |>
+  
+  | Step_eval debug_str tid step_m ->
+      runCore step_m dr_st >>= fun (core_st', dr_st') ->
+      S.return <| dr_st' with core_state= core_st' |>
+  
+  | Step_done v ->
+      Boot.assert_false ("DONE: " ^ Boot.pp_core_expr v)
+  end
 
 
 
 
+(*
+
+
+val driver_step: driverM unit
+let driver_step =
+  get >>= fun dr_st ->
+  
+  (* pick a Core step *)
+  runND (core_steps dr_st.core_file dr_st.core_state) function
+(*
+    | Step_action_request debug_str tid request_m ->
+      ND.return $
+        runCore request_m >>= function
+          | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
+              let preEx_step = <|
+                action=       Alloc aid tid ptr_val;
+                sbBefore=     sb_edges;
+                ddBefore=     dd_edges;
+                aswBefore=    asw_edges;
+                locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic);
+              |> in
+              
+              let concur_st' = updatePreEx dr_st.concurrency_state in
+              
+              
+              Boot.assert_false "WIP"
+        
+(*
+        | LoadRequest sbBefore ddBefore aswBefore aid tid mo ty ptr_val mk_core_st' ->
+            let action = Load aid tid mo ptr_val in
+            Boot.assert_false "WIP"
+*)
+        
+          | StoreRequest sbBefore ddBefore aswBefore aid tid mo ty ptr_val v core_st' ->
+              let action = Store aid tid mo ptr_val v in
+              Boot.assert_false "WIP"
+        end
+      
+
+
+(*
+  | Alloc of aid * tid * location (* CSEM *)
+  | Load of aid * tid * memory_order * location * cvalue
+  | Store of aid * tid * memory_order * location * cvalue
+
+  | Lock of aid * tid * location * lock_outcome
+  | Unlock of aid * tid * location
+  | RMW of aid * tid * memory_order * location * cvalue * cvalue
+  | Fence of aid * tid * memory_order
+  | Blocked_rmw of aid * tid * location
+  | Dealloc of aid * tid * location (* CSEM *)
+*)
 
 
 
+  
+  | Step_tau debug_str tid step_m ->
+      ND.return (runCore step_m)
+  
+  | Step_eval debug_str tid step_m ->
+      ND.return (runCore step_m)
+  
+*)
 
+
+  | Step_done v ->
+      Boot.assert_false "WIP"
+  end
+
+
+
+(*
+  | Step_action_request of (* DEBUG *) string * thread_id * SEU.t action_request core_run_state core_run_error
+  | Step_tau of (* DEBUG *) string * thread_id * SEU.t core_state core_run_state core_run_error
+  | Step_eval of (* DEBUG *) string * thread_id * SEU.t core_state core_run_state core_run_error
+  | Step_done of Core.expr core_run_annotation
+*)
+*)

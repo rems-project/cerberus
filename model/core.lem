@@ -1,10 +1,10 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Memory_order
+import Symbol AilTypes Implementation_ Undefined Cmm_master
 import Naive_memory (* New_memory *)
 
 open import Thread Core_ctype
 
-module Cmm = Memory_order
+module Cmm = Cmm_master
 module Mem = Naive_memory
 
 

@@ -11,8 +11,8 @@ type address = Symbolic.symbolic   (* the type of symbolic integers *)
 
 
 
-type allocated_object_id = Symbolic.symbol   (* a type of unique-over-time ids *)
-type allocated_space_id = Symbolic.symbol
+type allocated_object_id = Symbol.t   (* a type of unique-over-time ids *)
+type allocated_space_id = Symbol.t
 
 
 (* we have two kinds of allocation:

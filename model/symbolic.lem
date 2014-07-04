@@ -1,6 +1,6 @@
 open import Pervasives
+import Symbol
 
-type symbol = nat
 
 type operator =
   | Add
@@ -11,7 +11,7 @@ type operator =
 
 type symbolic =
   | Symbolic_constant of integer
-  | Symbolic_symbol of symbol
+  | Symbolic_symbol of Symbol.t
   | Symbolic_equal of symbolic * symbolic
   | Symbolic_op of operator * symbolic * symbolic
 
@@ -20,7 +20,7 @@ type counter = nat
 
 
 
-
+(*
 val init: counter
 let init = 0
 
@@ -28,6 +28,13 @@ let init = 0
 val fresh_symbol: counter -> symbolic * counter
 let fresh_symbol n =
   (Symbolic_symbol n, n+1)
+*)
+
+val symbol: Symbol.t -> symbolic
+let symbol sym =
+  Symbolic_symbol sym
+
+
 
 
 

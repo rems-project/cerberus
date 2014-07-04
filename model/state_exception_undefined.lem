@@ -72,13 +72,29 @@ let runS m = fun st ->
   Exception.return (Undefined.return a, st')
 
 
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t (Undefined.t 'a * 's) 'msg
+let run m st = m st
+
+
 (*
+val get: forall 's 'msg. t 's 's 'msg
+let get = State_exception.read (fun z -> Undefined.return z)
 
-
-'s -> Exception.t (Undefined.t 'a * 's) 'msg
-
-
+val put: forall 's 'msg. 's -> t unit 's 'msg
+let put st = State_exception.modify (fun _ -> (Undefined.return (), st))
 *)
+
+
+(*
+val undef: forall 'a 's 'msg. list Undefined.undefined_behaviour -> t 'a 's 'msg
+let undef ubs =
+  State_exception.return (Undefined.undef ubs)
+
+val error: forall 'a 's 'msg. t 'a 's 'msg
+let error =
+  State_exception.return Undefined.error
+*)
+
 
 
 val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'a 's 'msg) -> 'a -> list 'b -> t 'a 's 'msg

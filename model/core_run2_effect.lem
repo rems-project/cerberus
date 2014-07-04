@@ -130,9 +130,9 @@ let bind _ _ =
 
 (* Effects for Core_run *)
 open import Pervasives Global Core Core_aux Core_ctype
-import Undefined Boot State_exception Memory_order Cmm_aux_old Memory
+import Undefined Boot State_exception Cmm_master Cmm_aux_old Memory
 
-module Cmm = Memory_order
+module Cmm = Cmm_master
 module U   = Undefined
 
 

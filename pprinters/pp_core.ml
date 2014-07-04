@@ -400,13 +400,13 @@ and pp_action act =
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr ty)
-    | Alloc (al, n, _) ->
+    | Alloc0 (al, n, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr n)
     | Kill e ->
         pp_keyword "kill" ^^ P.parens (pp_expr e)
-    | Store (ty, e1, e2, mo) ->
+    | Store0 (ty, e1, e2, mo) ->
        pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
-    | Load (ty, e, mo) ->
+    | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_strong" ^^

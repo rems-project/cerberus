@@ -2,6 +2,7 @@
 open Lem_pervasives
 open Global
 
+module Cmm = Cmm_master
 
 let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
@@ -67,10 +68,10 @@ and action =
   | Create of expr * expr
   | Alloc of expr * expr
   | Kill of expr
-  | Store of expr * expr * expr * Memory_order.memory_order
-  | Load of expr * expr * Memory_order.memory_order
-  | CompareExchangeStrong of expr * expr * expr * expr * Memory_order.memory_order * Memory_order.memory_order
-  | CompareExchangeWeak of expr * expr * expr * expr * Memory_order.memory_order * Memory_order.memory_order
+  | Store of expr * expr * expr * Cmm.memory_order
+  | Load of expr * expr * Cmm.memory_order
+  | CompareExchangeStrong of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
 and paction = Core.polarity * action
 
 type declaration =
@@ -299,13 +300,13 @@ let convert_expr e arg_syms fsyms =
       | Create (e_al, e_ty) ->
           ((), Core.Create (f st e_al, f st e_ty, []))
       | Alloc (e_al, e_n) ->
-          ((), Core.Alloc (f st e_al, f st e_n, []))
+          ((), Core.Alloc0 (f st e_al, f st e_n, []))
       | Kill e_o ->
           ((), Core.Kill (f st e_o))
       | Store (e_ty, e_o, e_n, mo) ->
-          ((), Core.Store (f st e_ty, f st e_o, f st e_n, mo))
+          ((), Core.Store0 (f st e_ty, f st e_o, f st e_n, mo))
       | Load (e_ty, e_o, mo) ->
-          ((), Core.Load (f st e_ty, f st e_o, mo))
+          ((), Core.Load0 (f st e_ty, f st e_o, mo))
       | CompareExchangeStrong (e_ty, e_o, e_e, e_d, mo1, mo2) ->
           ((), Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
       | CompareExchangeWeak (e_ty, e_o, e_e, e_d, mo1, mo2) ->
@@ -797,12 +798,12 @@ case_rules:
 
 
 memory_order:
-| SEQ_CST { Memory_order.Seq_cst }
-| RELAXED { Memory_order.Relaxed }
-| RELEASE { Memory_order.Release }
-| ACQUIRE { Memory_order.Acquire }
-| CONSUME { Memory_order.Consume }
-| ACQ_REL { Memory_order.Acq_rel }
+| SEQ_CST { Cmm.Seq_cst }
+| RELAXED { Cmm.Relaxed }
+| RELEASE { Cmm.Release }
+| ACQUIRE { Cmm.Acquire }
+| CONSUME { Cmm.Consume }
+| ACQ_REL { Cmm.Acq_rel }
 ;
 
 action:
@@ -813,9 +814,9 @@ action:
 | KILL e= delimited(LPAREN, expr, RPAREN)
     { Kill e }
 | STORE LPAREN e1= expr COMMA e2= expr COMMA e3= expr RPAREN
-    { Store (e1, e2, e3, Memory_order.NA) }
+    { Store (e1, e2, e3, Cmm.NA) }
 | LOAD LPAREN e1= expr COMMA e2= expr RPAREN
-    { Load (e1, e2, Memory_order.NA) }
+    { Load (e1, e2, Cmm.NA) }
 | STORE LPAREN e1= expr COMMA e2= expr COMMA e3= expr COMMA mo= memory_order RPAREN
     { Store (e1, e2, e3, mo) }
 | LOAD LPAREN e1= expr COMMA e2= expr COMMA mo= memory_order RPAREN

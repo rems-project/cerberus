@@ -103,3 +103,6 @@ let read   f = fun s -> Exception.return (f s, s)
 let update f = fun s -> Exception.return ((), f s)
 let modify f = fun s -> Exception.return (f s)
 let eval   m = fun s -> Exception.fmap fst (m s)
+
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t ('a * 's) 'msg
+let run m = fun st -> m st

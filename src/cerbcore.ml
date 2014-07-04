@@ -123,7 +123,7 @@ let pipeline stdlib impl core_parse file_name =
   |> Exception.rbind
       (Exception.mapM0
 	 (fun (n,file) ->
-           Interactive_driver.drive file
+           Exhaustive_driver.drive file
          )
       )
 

@@ -4,7 +4,7 @@
 open import Pervasives Global Implementation_ Location
 import State State_operators Translation_effect
 open import Translation_aux
-import Memory_order Naive_memory
+import Cmm_master Naive_memory
 
 module Mem = Naive_memory (* New_memory *)
 
@@ -20,7 +20,7 @@ module Cty  = Core_ctype
 module Caux = Core_aux
 module U    = Undefined
 
-module Cmm = Memory_order
+module Cmm = Cmm_master
 
 
 module E = Translation_effect

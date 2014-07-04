@@ -438,8 +438,8 @@ let showNonNegativeWithBasis useUpper b n =
 
 (* TODO: hack *)
 open Core_ctype
-import Memory_order
-module Cmm = Memory_order
+import Cmm_master
+module Cmm = Cmm_master
 
 
 (*

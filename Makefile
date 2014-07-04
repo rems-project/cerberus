@@ -1,13 +1,4 @@
 # Looking for Lem
-#ifneq ($(wildcard $(PWD)/../lem-csem/lem),)
-#  LEMDIR=$(PWD)/../lem-csem
-#else ifdef LEM_PATH
-#  LEMDIR=$(LEM_PATH)
-#else
-#  $(error could not find lem (please set the variable LEM_PATH))
-#endif
-
-
 ifdef LEM_PATH
   LEMDIR=$(LEM_PATH)
 else
@@ -15,29 +6,25 @@ else
 endif
 
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=lem -wl ign  -wl_rename warn -wl_unused_vars err
+LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn
 
 
-# Source directories
-LEMDIRS= model ott/lem
-MLDIRS=\
-  lib/ocaml/src \
-  parsers/cparser parsers/cparser/coq_stdlib parsers/cparser/validator \
-  parsers/coreparser \
-  pprinters \
-  src
 
-VPATH=$(LEMDIRS) $(MLDIRS)
+# C11 related stuff
+CMM_MODEL_DIR=../cpp/axiomatic/ntc
+CMM_MODEL_LEM =\
+  cmm_master.lem
 
-
-# Where and how ocamlbuild will be called
-OCAML_BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
-
-# menhir --external-tokens Core_parser_util
+CMM_EXEC_DIR=../cpp/newmm_op
+CMM_EXEC_LEM =\
+  executableOpsem.lem \
+  minimalOpsem.lem \
+  relationalOpsem.lem
 
 
-AIL_FILES=\
+# Ail syntax and type system
+AIL_DIR=ott/lem
+AIL_LEM=\
   Common.lem \
   OptionMonad.lem \
   TypingError.lem \
@@ -57,8 +44,10 @@ AIL_FILES=\
   GenTypesAux.lem \
   GenTyping.lem
 
-MODEL_FILES=\
-  cmm_aux_old.lem \
+
+# The cerberus model
+CERBERUS_LEM=\
+  cmm_aux.lem \
   boot.lem \
   memory_order.lem \
   core.lem \
@@ -107,110 +96,170 @@ MODEL_FILES=\
   uniqueId.lem \
   enum.lem
 
-CORE_PARSER_FILES=\
+# The collection of lem files
+MODEL_LEM= $(CMM_MODEL_LEM) $(CMM_EXEC_LEM) $(AIL_LEM) $(CERBERUS_LEM)
+
+
+CORE_PARSER_ML=\
   core_parser_util.ml \
   core_parser.mly core_lexer.mll \
   core_parser_base.ml core_parser_base.mli
 
-CPARSER_FILES=\
+
+CPARSER_ML=\
   Lexer.mll \
   $(notdir $(wildcard parsers/cparser/*.ml parsers/cparser/*.mli)) \
   $(notdir $(wildcard parsers/cparser/coq_stdlib/*.ml parsers/cparser/coq_stdlib/*.mli))
 
-PPRINTERS_FILES=\
+
+PPRINTERS_ML=\
   colour.ml \
   pp_errors.ml \
   pp_symbol.ml \
   pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
 
 
-default: lem_model ocaml_byte
+
+
+# Where and how ocamlbuild will be called
+BUILD_DIR=_ocaml_generated
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
+
+
+
+default: lem_model
+
+
 
 
 # Create the directory where ocamlbuild will be called, and copy the OCaml library files from Lem.
-$(OCAML_BUILD_DIR):
-	@echo CREATING the build directory
-	@mkdir $(OCAML_BUILD_DIR)
+$(BUILD_DIR):
+	@echo CREATING the OCaml build directory
+	@mkdir $(BUILD_DIR)
 	@echo COPYING the Lem ocaml libraries
-	@cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(OCAML_BUILD_DIR)
+	@cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(BUILD_DIR)
 
 
-# # Calling Lem on the Ail syntax and typing
-# lem_ail : $(AIL_FILES) | $(OCAML_BUILD_DIR)
-# 	@echo LEM $^
-# 	OCAMLRUNPARAM="" $(LEM) $(foreach D, $(LEMDIRS), -lib $(D)) $(addprefix ott/lem/, $(AIL_FILES))
+# Copy the cmm model files to the build dir
+copy_cmm: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM)) | $(BUILD_DIR)
+	@echo COPYING $(CMM_MODEL_LEM)
+	@cp $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM)) $(BUILD_DIR)
 
-# Calling Lem on the meat of Cerberus
-lem_model_: cabs0.lem $(MODEL_FILES) | $(OCAML_BUILD_DIR)
-	@rm -rf _lem/
-	@mkdir _lem/
-	@cp $(addprefix model/, $(MODEL_FILES)) _lem/
-	@cp model/cabs0.lem _lem/
-	@cp $(addprefix ott/lem/, $(AIL_FILES)) _lem/
+# Copy the cmm executable model files to the build dir
+copy_cmm_exec: $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) | $(BUILD_DIR)
+	@echo COPYING $(CMM_EXEC_LEM)
+	@cp $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) $(BUILD_DIR)
 
-lem_model: lem_model_
-	OCAMLRUNPARAM="" $(LEM) -outdir $(OCAML_BUILD_DIR) -only_changed_output -add_loc_annots -ocaml $(wildcard _lem/*.lem)
-	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(OCAML_BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
-#	@./hack.sh $(OCAML_BUILD_DIR)
-	@sed -i"" -e "s/let <|>/let (<|>)/" $(OCAML_BUILD_DIR)/output.ml
-	@sed -i"" -e "s/open Operators//" $(OCAML_BUILD_DIR)/core_run2.ml
-	@sed -i"" -e "s/open Operators//" $(OCAML_BUILD_DIR)/naive_memory.ml
+# Copy the Ail files to the build dir
+copy_ail: $(addprefix $(AIL_DIR)/, $(AIL_LEM)) | $(BUILD_DIR)
+	@echo COPYING $(AIL_LEM)
+	@cp $(addprefix $(AIL_DIR)/, $(AIL_LEM)) $(BUILD_DIR)
 
-
-lem_check:
-	$(LEM) $(addprefix model/, $(MODEL_FILES)) $(addprefix ott/lem/, $(AIL_FILES))
+# Copy the cerberus model files to the build dir
+copy_cerberus: $(addprefix model/, $(CERBERUS_LEM)) | $(BUILD_DIR)
+	@echo COPYING $(CERBERUS_LEM)
+	@cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
+	@cp model/cabs0.lem $(BUILD_DIR)
 
 
+lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
+	OCAMLRUNPARAM="" $(LEM) -outdir $(BUILD_DIR) -only_changed_output -add_loc_annots -ocaml $(wildcard $(BUILD_DIR)/*.lem)
+#	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
+#	@./hack.sh $(BUILD_DIR)
+	@sed -i"" -e "s/let <|>/let (<|>)/" $(BUILD_DIR)/output.ml
+	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run2.ml
+	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
 
-$(OCAML_BUILD_DIR)/%.ml : %.ml | $(OCAML_BUILD_DIR)
+
+# lem_check:
+# 	$(LEM) $(addprefix model/, $(MODEL_FILES)) $(addprefix ott/lem/, $(AIL_LEM))
+
+
+
+$(BUILD_DIR)/%.ml : %.ml | $(BUILD_DIR)
 	@echo COPYING $<
-	@cp $< $(OCAML_BUILD_DIR)
+	@cp $< $(BUILD_DIR)
 
-$(OCAML_BUILD_DIR)/%.mli : %.mli | $(OCAML_BUILD_DIR)
+$(BUILD_DIR)/%.mli : %.mli | $(BUILD_DIR)
 	@echo COPYING $<
-	@cp $< $(OCAML_BUILD_DIR)
+	@cp $< $(BUILD_DIR)
 
-$(OCAML_BUILD_DIR)/%.mll : %.mll | $(OCAML_BUILD_DIR)
+$(BUILD_DIR)/%.mll : %.mll | $(BUILD_DIR)
 	@echo COPYING $<
-	@cp $< $(OCAML_BUILD_DIR)
+	@cp $< $(BUILD_DIR)
 
-$(OCAML_BUILD_DIR)/%.mly : %.mly | $(OCAML_BUILD_DIR)
+$(BUILD_DIR)/%.mly : %.mly | $(BUILD_DIR)
 	@echo COPYING $<
-	@cp $< $(OCAML_BUILD_DIR)
+	@cp $< $(BUILD_DIR)
 
 
-#$(OCAML_BUILD_DIR)/cparser/% : % | $(OCAML_BUILD_DIR)
-#	-@[ -d $(OCAML_BUILD_DIR)/cparser ] || mkdir $(OCAML_BUILD_DIR)/cparser
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#$(BUILD_DIR)/cparser/% : % | $(BUILD_DIR)
+#	-@[ -d $(BUILD_DIR)/cparser ] || mkdir $(BUILD_DIR)/cparser
 #	@echo COPYING $<
-#	@cp $< $(OCAML_BUILD_DIR)/cparser/
-#	-@(grep -s -e ^$(basename $*)$$ $(OCAML_BUILD_DIR)/cparser.mlpack || echo $(basename $*) >> $(OCAML_BUILD_DIR)/cparser.mlpack)
+#	@cp $< $(BUILD_DIR)/cparser/
+#	-@(grep -s -e ^$(basename $*)$$ $(BUILD_DIR)/cparser.mlpack || echo $(basename $*) >> $(BUILD_DIR)/cparser.mlpack)
 
 
 
 # ocaml_byte: lem_cmm lem_ail lem_model \
 
-# ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
+# ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_ML)) \
             $(addprefix $(OCAML_BUILD_DIR)/cparser/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
-ocaml_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
-            $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
-#	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
-	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/main.ml
-	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.byte
+ocaml_byte: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_ML) $(PPRINTERS_ML)) \
+            $(addprefix $(BUILD_DIR)/, $(CPARSER_ML)) | $(BUILD_DIR)
+#	cd $(BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(BUILD_DIR)/main.ml
+	cd $(BUILD_DIR); $(OCAMLBUILD) main.byte
 	ln -fs _ocaml_generated/main.byte csem
 
 
-ocaml_native: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
-            $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
-#	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.native
-	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/main.ml
-	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) main.native
+ocaml_native: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_ML) $(PPRINTERS_ML)) \
+            $(addprefix $(BUILD_DIR)/, $(CPARSER_ML)) | $(BUILD_DIR)
+#	cd $(BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.native
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(BUILD_DIR)/main.ml
+	cd $(BUILD_DIR); $(OCAMLBUILD) main.native
 	ln -fs _ocaml_generated/main.native csem
 
 
 
 # Temporary rule while memory.lem is WIP
 # memory:
-# 	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(OCAML_LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
+# 	OCAMLRUNPARAM=b $(LEM) $(foreach F, $(LIB_FILES), -ocaml_lib ./$(OCAML_LIB)/$(F)) $(addprefix ./model/, $(MODEL_FILES)) ./model/memory.lem
 
 
 check_memory:
@@ -221,11 +270,23 @@ check_memory:
 
 
 
-cerbcore_byte: $(addprefix $(OCAML_BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_FILES) $(PPRINTERS_FILES)) \
-               $(addprefix $(OCAML_BUILD_DIR)/, $(CPARSER_FILES)) | $(OCAML_BUILD_DIR)
-#	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
-	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(OCAML_BUILD_DIR)/cerbcore.ml
-	cd $(OCAML_BUILD_DIR); $(OCAMLBUILD) cerbcore.byte
+
+
+
+
+
+
+
+VPATH=src pprinters parsers/coreparser
+
+
+
+
+
+cerbcore_byte: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_ML) $(PPRINTERS_ML)) | $(BUILD_DIR)
+#	cd $(BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(BUILD_DIR)/cerbcore.ml
+	cd $(BUILD_DIR); $(OCAMLBUILD) cerbcore.byte
 	ln -fs _ocaml_generated/cerbcore.byte cerbcore
 
 
@@ -296,7 +357,7 @@ coq-coqc: Makefile.coq
 coq: coq-lem coq-coqc
 
 clean:
-	rm -rf $(OCAML_BUILD_DIR) _lem _coq
+	rm -rf $(BUILD_DIR) _lem _coq
 	rm -f csem
 	rm -f Makefile.coq
 
@@ -306,4 +367,4 @@ clear:
 
 
 dot:
-	cd $(OCAML_BUILD_DIR) ;  ocamldoc -dot `ocamldep -sort *.ml *.mli`
+	cd $(BUILD_DIR) ;  ocamldoc -dot `ocamldep -sort *.ml *.mli`

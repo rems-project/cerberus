@@ -135,3 +135,14 @@ let setElemCompare_ctype _ _ =
 instance (SetType ctype)
   let setElemCompare = setElemCompare_ctype
 end
+
+
+
+
+val is_atomic: ctype -> bool
+let is_atomic = function
+ | Atomic _ ->
+     true
+ | _ ->
+     false
+end

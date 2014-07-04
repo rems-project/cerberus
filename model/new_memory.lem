@@ -59,9 +59,9 @@ module E = struct
   val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
   let bind = State_exception.bind
   
-  val fresh_sao_id: t Symbolic.symbol
-  let fresh_sao_id : t Symbolic.symbol (* This annotation is needed for the OCaml to typecheck *) =
-    return 0 (* !!!!!! assert_false "WIP" *)
+  val fresh_sao_id: t Symbol.t
+  let fresh_sao_id : t Symbol.t (* This annotation is needed for the OCaml to typecheck *) =
+    assert_false "WIP"
   
 (*
 E.get_allocator
@@ -117,7 +117,7 @@ type pointer_provenance =
 
 and pointer_path_element =
   | Path_array  of Symbolic.symbolic (* the array index *) 
-  | Path_member of Symbolic.symbol (* struct/union id *) * Symbolic.symbol (* member id *) 
+  | Path_member of Symbol.t (* struct/union id *) * Symbol.t (* member id *) 
 
 and pointer_path = list pointer_path_element
 
@@ -680,7 +680,7 @@ explicitly write unspecified-value padding.
 
 val pointer_member_offset: Core_ctype.ctype (* static type of the pointer*) 
                         -> pointer_value 
-                        -> Symbolic.symbol (* the member id *) 
+                        -> Symbol.t (* the member id *) 
                         -> E.t pointer_value
 
 (* The ctype here is the static type of the original pointer.  e.g.
