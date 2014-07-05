@@ -1,9 +1,0 @@
-open import Pervasives
-import AilSyntax
-
-val decode_integer_constant: forall 'a. string -> AilSyntax.basis * integer
-declare ocaml target_rep function decode_integer_constant = `Decode_ocaml.decode_integer_constant`
-
-val decode_character_constant: string -> integer
-declare ocaml target_rep function decode_character_constant = `Decode_ocaml.decode_character_constant`
-

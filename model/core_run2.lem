@@ -6,8 +6,7 @@ import Cmm_master Naive_memory (* New_memory *)
 import AilTypesAux
 
 open import Thread Driver_util Core_run2_aux
-(* import Core_run2_effect *)
-import Output
+(* import Output *)
 
 
 module Cmm = Cmm_master
@@ -49,11 +48,6 @@ let call_function file f_nm arg_pes =
     end >>= fun (_, params, body_pe) ->
   if List.length params <> List.length arg_pes then
     Boot.assert_false (Boot.pp_core_params params)
-(*
-    Boot.assert_false $ "|params| = " ^ string_of_natural (naturalFromNat $ List.length params) ^
-                         ", |args| = " ^ string_of_natural (naturalFromNat $ List.length arg_pes)
-*)
-(*    Exception.fail (Illformed_program "calling a function with the wrong number of arguments") *)
   else
     Exception.return $ Global.foldl2 (fun acc (a, _) pe -> subst_sym a pe acc) body_pe params arg_pes
 
@@ -75,26 +69,7 @@ let call_proc file nm pes =
           | Nothing ->
               Exception.fail (Illformed_program "calling an unknown procedure")
         end
-(*
-    | Impl (Implementation_.StdFunction "printf") ->
-        (* TODO: uber hack *)
-        match pes with
-          | Eaddr o :: args' ->
-              (* TODO: the types are obviously a hack *)
-              load Core_ctype.Void o >>= fun (Cmm_aux_old.Mbase (Cmm_aux_old.Cstring fmrt), taid) ->
-              
-              Output.printf load fmrt (List.map (fun (Eaddr o) -> o) args')
-
-(*
-              E.mapM (fun (Eaddr o) ->
-                load Core_ctype.Void o >>= fun (Cmm_aux_old.Mbase c, taid) ->
-                E.return c
-              ) args' >>= fun csts ->
-              E.return $ Eoutput (Boot.fake_printf str csts)
- *)
-          | _ -> assert_false "[Core_run.call_proc] printf is very hackish for now"
-        end
-*)
+    
     | _ -> assert_false "[Core_run.call_proc] impossible case: TODO move to Exception.t"
   end
 
@@ -276,7 +251,6 @@ end
 type thread_state = <|
   arena:        expr core_run_annotation;
   stack:        stack core_run_annotation;
-(*  current_proc: expr core_run_annotation;   (* TODO: what is that for? *) *)
 |>
 
 
@@ -334,22 +308,6 @@ let runMem m =
       end
     )
   )
-
-
-(*
-FROM Cmm_master.lem
-
-type action =
-  | Lock of aid * tid * location * lock_outcome
-  | Unlock of aid * tid * location
-  | Load of aid * tid * memory_order * location * cvalue
-  | Store of aid * tid * memory_order * location * cvalue
-  | RMW of aid * tid * memory_order * location * cvalue * cvalue
-  | Fence of aid * tid * memory_order
-  | Blocked_rmw of aid * tid * location
-  | Alloc of aid * tid * location (* CSEM *)
-  | Dealloc of aid * tid * location (* CSEM *)
-*)
 
 
 type action_request =

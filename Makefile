@@ -26,69 +26,43 @@ CMM_EXEC_LEM =\
 AIL_DIR=ott/lem
 AIL_LEM=\
   Common.lem \
-  OptionMonad.lem \
-  TypingError.lem \
   ErrorMonad.lem \
+  TypingError.lem \
   Range.lem \
-  AilTypes.lem \
   Implementation.lem \
+  AilSyntax.lem \
+  AilTypes.lem \
   AilTypesAux.lem \
   Context.lem \
-  AilSyntax.lem \
-  GenTypes.lem \
-  Annotation.lem \
-  GenSyntax.lem \
-  AilSyntaxAux.lem \
-  AilWf.lem \
-  AilTyping.lem \
-  GenTypesAux.lem \
-  GenTyping.lem
+  GenTypes.lem
+
+
 
 
 # The cerberus model
 CERBERUS_LEM=\
   cmm_aux.lem \
   boot.lem \
-  memory_order.lem \
   core.lem \
   core_aux.lem \
-  core_indet.lem \
   core_run2.lem \
   core_run2_aux.lem \
-  core_run2_effect.lem \
-  core_simpl.lem \
-  cabs_to_ail.lem \
-  cabs_to_ail_effect.lem \
-  builtins.lem \
-  debug.lem \
-  decode.lem \
   errors.lem \
   exception.lem \
   global.lem \
   implementation_.lem \
-  lexing_.lem \
   location.lem \
-  multiset.lem \
   product.lem \
-  sb.lem \
   state.lem \
   state_operators.lem \
   state_exception.lem \
   symbol.lem \
-  scope_table.lem \
-  translation.lem \
-  translation_aux.lem \
-  translation_effect.lem \
   undefined.lem \
   core_ctype.lem \
   naive_memory.lem \
-  new_memory.lem \
-  new_memory_effect.lem \
   symbolic.lem \
-  output.lem \
   driver_util.lem \
   driver.lem \
-  core_driver.lem \
   exception_undefined.lem \
   state_exception_undefined.lem \
   nondeterminism.lem \
@@ -159,14 +133,12 @@ copy_ail: $(addprefix $(AIL_DIR)/, $(AIL_LEM)) | $(BUILD_DIR)
 copy_cerberus: $(addprefix model/, $(CERBERUS_LEM)) | $(BUILD_DIR)
 	@echo COPYING $(CERBERUS_LEM)
 	@cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
-	@cp model/cabs0.lem $(BUILD_DIR)
 
 
 lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 	OCAMLRUNPARAM="" $(LEM) -outdir $(BUILD_DIR) -only_changed_output -add_loc_annots -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 #	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
 #	@./hack.sh $(BUILD_DIR)
-	@sed -i"" -e "s/let <|>/let (<|>)/" $(BUILD_DIR)/output.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run2.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
 
@@ -303,7 +275,6 @@ LEM_FILES = \
  AilTypes.lem \
  AilTypesAux.lem \
  boot.lem \
- cmm_aux_old.lem \
  Common.lem \
  core.lem \
  core_aux.lem \
@@ -318,7 +289,6 @@ LEM_FILES = \
  Implementation.lem \
  implementation_.lem \
  location.lem \
- memory.lem \
  naive_memory.lem \
  product.lem \
  Range.lem \
