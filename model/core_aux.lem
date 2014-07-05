@@ -63,7 +63,7 @@ let integer_const n =
 
 val cfunction_const: forall 'a. Symbol.t -> expr 'a
 let cfunction_const fsym =
-  Econst (Mem.MV_pointer (Mem.Pointer_function fsym))
+  Econst (Mem.MV_pointer (Mem.function_pointer fsym))
 
 (*
 val array_const: forall 'a. list Mem.mem_value -> expr 'a

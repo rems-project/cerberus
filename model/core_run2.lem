@@ -297,6 +297,7 @@ type core_run_state = <|
   tid_supply:    UniqueId.supply thread_id;
   symbol_supply: UniqueId.supply Symbol.t;
   aid_supply:    UniqueId.supply action_id;
+  layout_state:  Mem.memory_state;
 |>
 
 
@@ -322,10 +323,17 @@ type core_runM 'a = SEU.t 'a core_run_state core_run_error
 
 (* TODO: this is instanciated to Naive_memory *)
 val runMem: forall 'a. Mem.memM 'a -> core_runM 'a
-let runMem _ =
-  Boot.assert_false "WIP"
-
-
+let runMem m =
+  SEU.runS (
+    State.modify (fun run_st ->
+      match SEU.run m run_st.layout_state with
+        | Exception.Result (Undefined.Defined z, mem_st') ->
+            (z, <| run_st with layout_state= mem_st' |>)
+        | _ ->
+            Boot.assert_false "Core_run2.runMem error"
+      end
+    )
+  )
 
 
 (*
@@ -953,4 +961,5 @@ let initial_core_run_state = <|
   tid_supply=    UniqueId.new_supply;
   symbol_supply= UniqueId.new_supply;
   aid_supply=    UniqueId.new_supply;
+  layout_state=  Mem.initial_memory_state;
 |>

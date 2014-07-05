@@ -27,6 +27,24 @@ type driver_state = <|
 |>
 
 
+(* TODO: HACK *)
+let initial_driver_state file =
+  let (core_st, run_st) =
+    match SEU.run (init file) initial_core_run_state with
+      | Exception.Result (U.Defined core_st, run_st) ->
+          (core_st, run_st)
+      | _ ->
+          Boot.assert_false "failed to build initial driver state"
+    end in
+  <|
+    symbol_supply=     UniqueId.new_supply;
+    core_file=         file;
+    core_state=        core_st;
+    core_run_state=    run_st;
+    concurrency_state= initialExeState emptyPreEx;
+  |>
+
+
 
 
 (* Reinventing the wheel and breaking abstraction for now *)
@@ -40,7 +58,7 @@ let return z =
 
 val bind: forall 'a 'b. driverM 'a -> ('a -> driverM 'b) -> driverM 'b
 let bind m f =
-  Boot.assert_false "WIP"
+  Boot.assert_false "WIP Driver.bind"
 
 (*
 let bind m f =
@@ -104,10 +122,11 @@ val exeOpsemStep: exeState -> equalityCvalue -> S.t exeStep
 
 
 
+(*
 val get: driverM driver_state
 let get =
   Boot.assert_false "WIP"
-
+*)
 
 
 val runND: forall 'a. ND.t 'a -> driverM 'a
@@ -127,7 +146,7 @@ let runCore m dr_st =
     | Exception.Result (U.Defined z, run_st') ->
         S.return (z, <| dr_st with core_run_state= run_st' |>)
     | _ ->
-        Boot.assert_false "WIP"
+        Boot.assert_false "WIP Driver.runCore"
   end
 
 
@@ -150,8 +169,23 @@ let driver_step dr_st =
                 
                 exeOpsemStep (updatePreEx dr_st.concurrency_state preEx_step) initialEqualityCvalue >>= fun concur_step ->
                 S.return  <| dr_st' with core_state= core_st'; concurrency_state= stateOf concur_step |>
-
-
+            
+(*
+            | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val core_st' ->
+                let mem_val = Boot.assert_false "make up a symbolic value" in
+                
+                let preEx_step = <|
+                  action=       Load aid tid mo ptr_val mem_val;
+                  sbBefore=     sb_edges;
+                  ddBefore=     dd_edges;
+                  aswBefore=    asw_edges;
+                  locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic);
+                |> in
+                
+                exeOpsemStep (updatePreEx dr_st.concurrency_state preEx_step) initialEqualityCvalue >>= fun concur_step ->
+                S.return  <| dr_st' with core_state= core_st'; concurrency_state= stateOf concur_step |>
+                
+*)
           end
 
 

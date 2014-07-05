@@ -1,6 +1,6 @@
 fun main() : [integer] :=
   let strong x = create(<alignof>("signed int"), "signed int") in
-  let strong () = store("signed int", x, 42) in
+--  let strong () = store("signed int", x, 42) in
   let strong ret = load("signed int", x) in
   return(ret)
-  end end end
+  end end -- end

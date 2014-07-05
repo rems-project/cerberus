@@ -6,8 +6,24 @@ import Symbol Symbolic Core_ctype Thread
 module SEU = State_exception_undefined
 
 
-type memory_state =
-  | MEMORY_STATE
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+
+
+type object_id = natural
+
+
+type memory_state = <|
+  oid_supply: UniqueId.supply object_id
+|>
+
+let initial_memory_state = <|
+  oid_supply= UniqueId.new_supply;
+|>
+
 
 type memory_error =
   | MEMORY_ERROR
@@ -19,11 +35,11 @@ type memM 'a = SEU.t 'a memory_state memory_error
 
 
 type pointer_value =
-  | Pointer_null of Core_ctype.ctype
-  | Pointer_nonnull of natural
-  | Pointer_function of Symbol.t
+(*  | Pointer_null of Core_ctype.ctype *)
+  | Pointer_nonnull of object_id
+(*  | Pointer_function of Symbol.t *)
 
-and mem_value =
+type mem_value =
   | MV_pointer of pointer_value
   | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
 (*
@@ -35,16 +51,39 @@ and mem_value =
 *)
 
 
+let pointer_value_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
+        oid1 = oid2
+  end
+
+instance (Eq pointer_value)
+  let (=) = pointer_value_eq
+  let (<>) = fun x y -> not (pointer_value_eq x y)
+end
+
+
+
+
 
 val null_pointer: Core_ctype.ctype -> pointer_value
 let null_pointer ty =
-  Pointer_null ty
+  assert_false "Pointer_null ty"
+
+
+val function_pointer: Symbol.t -> pointer_value
+let function_pointer fsym =
+  assert_false "WIP Naive_memory.function_pointer"
 
 
 
 
-
-
+val fresh_object_id: State.t object_id memory_state
+let fresh_object_id =
+  State.modify (fun st ->
+    let (oid, oid_suppl') = UniqueId.fresh_id st.oid_supply in
+    (oid, <| st with oid_supply= oid_suppl' |>)
+  )
 
 
 
@@ -61,4 +100,5 @@ val allocate_object:    Thread.thread_id  (* the allocating thread *)
 *)
                      -> memM pointer_value
 let allocate_object (* tid ty size_symb align_symb *) _ ty =
-  SEU.return (Pointer_null ty)
+  SEU.runS fresh_object_id >>= fun oid ->
+  SEU.return (Pointer_nonnull oid)

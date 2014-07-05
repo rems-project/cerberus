@@ -93,10 +93,13 @@ let string_of_core_run_error = function
 
 
 
-let rec loop file st run_st =
-  print_core_state st;
+let rec loop file dr_st =
+  print_core_state dr_st.Driver.core_state;
   
+  let dr_sts' = Driver.driver_step dr_st in
+  Pset.iter (loop file) dr_sts'
   
+(*  
   let steps = Core_run2.core_steps file st in
   
   if List.length steps == 0 then
@@ -135,6 +138,18 @@ let rec loop file st run_st =
       | Core_run2.Step_done pe ->
           print_endline ("DONE, value: " ^ Boot_pprint.pp_core_expr pe)
   end
+*)
+
+
+
+
+
+
+
+
+
+
+
 
 let drive file =
   let main_body = 
@@ -148,70 +163,10 @@ let drive file =
   
   let file = Core_run2.convert_file file in
   
-  let _ =
-    match Core_run2.init1 file Core_run2.initial_core_run_state with
-      | Exception.Exception _ ->
-          failwith "TODO: failed to init the core driver"
-      | Exception.Result (Undefined.Defined st, run_st) ->
-          loop file st run_st
-  in
+  
+  let _ = loop file (Driver.initial_driver_state0 file) in
   
   Exception.return0 ()
 
 
 
-
-
-(*
-type thread_state0 = {
-  arena0: action_id        expr;
-  stack0: action_id        stack;
-(*  current_proc: expr action_id;   (* TODO: what is that for? *) *)
-}
-
-
-(* TODO: more *)
-(* File "_lem/core_run2.lem", line 438, character 1 to line 440, character 2 *)
-type io_state0 = {
-  stdout0: string;
-}
-
-(* File "_lem/core_run2.lem", line 442, character 1 to line 445, character 2 *)
-type core_state0 = {
-  thread_states: (thread_id * thread_state0) list;
-  io0:            io_state0;
-}
-
-
-
-
-(* File "_lem/core_run2.lem", line 450, character 1 to line 453, character 2 *)
-type core_run_state = {
-  tid_supply: thread_id    UniqueId.supply;
-  symbol_supply: Symbol.t1 UniqueId.supply;
-}
-
-
-
-
-
-
-
-val Pmap.lookup: 'key -> ('key,'a) map -> 'a option
-
-
-Core_run2.core_steps: Core.file action_id -> core_state -> ND.t core_step
-
-
-type 'a fun_map = (sym, (core_type * (sym * core_base_type) list * 'a expr)) Pmap.map
-
-type 'a file = {
-  main   : sym;
-  stdlib : 'a fun_map;
-  impl   : 'a impl;
-  defs   : (sym * core_base_type * 'a expr) list;
-  funs   : 'a fun_map;
-}
-
-
-*)

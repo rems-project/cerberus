@@ -1,0 +1,12 @@
+open import Pervasives
+
+import Driver_util Naive_memory
+
+module Mem = Naive_memory
+
+
+type program_impl = nat (* TODO: what's that? *)
+type location_impl = Mem.pointer_value
+type cvalue_impl   = Mem.mem_value
+type aid_impl      = Driver_util.action_id
+type tid_impl      = Thread.thread_id

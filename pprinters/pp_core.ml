@@ -214,8 +214,12 @@ let pp_name = function
   | Impl i -> pp_impl i
 
 let rec pp_constant = function
+(*
   | Mem.MV_pointer (Mem.Pointer_function f) ->
       !^ "TODO(MV_pointer(function))"
+*)
+  | Mem.MV_pointer (Mem.Pointer_nonnull n) ->
+      !^ ("@" ^ Big_int.string_of_big_int n)
   | Mem.MV_pointer ptr_val ->
       !^ "TODO(MV_pointer)" 
   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
