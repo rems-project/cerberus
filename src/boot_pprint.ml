@@ -12,5 +12,5 @@ let pp_core_expr e = to_plain_string (Pp_core.pp_expr e)
 let pp_core_file f = to_plain_string (Pp_core.pp_file f)
 
 let pp_core_params z = to_plain_string (Pp_core.pp_params z)
-let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def)
+(* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)
 

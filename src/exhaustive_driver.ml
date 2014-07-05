@@ -44,8 +44,8 @@ let rec string_of_stack = function
 let print_core_state st =
   List.iter (fun (tid, (_, th_st)) ->
     Printf.printf "Thread %s:\n" (Big_int.string_of_big_int tid);
-    Printf.printf "  arena= %s\n" (Boot_pprint.pp_core_expr th_st.Core_run2.arena0);
-    Printf.printf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack0);
+    Printf.printf "  arena= %s\n" (Boot_pprint.pp_core_expr th_st.Core_run2.arena);
+    Printf.printf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack);
     print_newline ()
   ) st.Core_run2.thread_states
 
@@ -97,7 +97,7 @@ let rec loop file dr_st =
   print_core_state dr_st.Driver.core_state;
   
   let dr_sts' = Driver.driver_step dr_st in
-  Pset.iter (loop file) dr_sts'
+  List.iter (fun (_, a) -> loop file a) dr_sts'
   
 (*  
   let steps = Core_run2.core_steps file st in
@@ -164,7 +164,7 @@ let drive file =
   let file = Core_run2.convert_file file in
   
   
-  let _ = loop file (Driver.initial_driver_state0 file) in
+  let _ = loop file (Driver.initial_driver_state file) in
   
   Exception.return0 ()
 

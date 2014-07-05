@@ -12,3 +12,18 @@ instance (Enum natural)
   let fromEnum = id
   let succ n   = n + 1
 end
+
+instance (Enum nat)
+  let toEnum   = natFromNatural
+  let fromEnum = naturalFromNat
+  let succ n   = n + 1
+end
+
+
+
+val     enumFromTo: forall 'a. Enum 'a => 'a -> 'a -> list 'a
+let rec enumFromTo n m =
+  if fromEnum n > fromEnum m then
+    []
+  else
+    n :: enumFromTo (succ n) m

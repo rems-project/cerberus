@@ -1,14 +1,33 @@
 open import List Function
 open import Global
+import Symbolic
 
-type t 'a = list 'a
+type t 'a = list (Symbolic.equations * 'a)
 
 val return: forall 'a. 'a -> t 'a
-let return x = [x]
+let return x = [(Symbolic.empty_equations, x)]
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind m f =
-  List.concat (List.map f m)
+  List.concatMap (fun (eqsA, a) ->
+    List.map (fun (eqsB, b) ->
+      (* TODO: do a check for sat here? *)
+      (Symbolic.combine_equations eqsA eqsB, b)
+    ) $ f a
+  ) m
+
+
+
+
+
+(*
+  (ND zs) >>= f =
+    ND $
+      concatMap (\(eqsA, a) ->
+        let ND zs' = f a in
+        map (\(eqsB, b) -> (combine_equations eqsA eqsB, b)) zs'
+      ) zs
+*)
 
 
 module Operators = struct
@@ -39,13 +58,19 @@ let mapM f xs =
   sequence (List.map f xs)
 
 
-let rec _pick_one pred acc = function
+let rec _pickWith pred acc = function
   | [] ->
       []
   | x::xs ->
-      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pick_one pred (x::acc) xs
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pickWith pred (x::acc) xs
 end
 
-val pick_one: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
-let pick_one pred xs =
-  msum $ List.map return (_pick_one pred [] xs)
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+let pickWith pred xs =
+  msum $ List.map return (_pickWith pred [] xs)
+
+
+
+val pick: forall 'a. list 'a -> t 'a
+let pick xs =
+  List.map (fun x -> (Symbolic.empty_equations, x)) xs

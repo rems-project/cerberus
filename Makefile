@@ -90,7 +90,7 @@ PPRINTERS_ML=\
   colour.ml \
   pp_errors.ml \
   pp_symbol.ml \
-  pp_cabs0.ml pp_cabs.ml pp_ail.ml pp_core.ml pp_sb.ml pp_run.ml
+  pp_ail.ml pp_core.ml pp_run.ml
 
 
 
@@ -141,6 +141,7 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 #	@./hack.sh $(BUILD_DIR)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run2.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
+	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 
 
 # lem_check:

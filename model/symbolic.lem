@@ -12,23 +12,54 @@ type operator =
 type symbolic =
   | Symbolic_constant of integer
   | Symbolic_symbol of Symbol.t
-  | Symbolic_equal of symbolic * symbolic
+(*  | Symbolic_equal of symbolic * symbolic *)
   | Symbolic_op of operator * symbolic * symbolic
 
-type counter = nat
 
-
-
-
+(* syntactic equality *)
+let rec symbolic_eq symb1 symb2 =
+  match (symb1, symb2) with
+    | (Symbolic_constant n1, Symbolic_constant n2) ->
+        n1 = n2
+    | (Symbolic_symbol sym1, Symbolic_symbol sym2) ->
+        sym1 = sym2
 (*
-val init: counter
-let init = 0
-
-
-val fresh_symbol: counter -> symbolic * counter
-let fresh_symbol n =
-  (Symbolic_symbol n, n+1)
+    | (Symbolic_equal symb11 symb12, Symbolic_equal symb21 symb22) ->
+        symbolic_eq symb11 symb21 && symbolic_eq symb12 symb22
 *)
+    | (Symbolic_op op1 symb11 symb12, Symbolic_op op2 symb21 symb22) ->
+        op1 = op2 && symbolic_eq symb11 symb21 && symbolic_eq symb12 symb22
+    | _ ->
+        false
+  end
+
+instance (Eq symbolic)
+  let (=) = symbolic_eq
+  let (<>) = fun x y -> not (symbolic_eq x y)
+end
+
+
+
+
+type equation =
+  | Symbolic_eq  of symbolic * symbolic
+  | Symbolic_neq of symbolic * symbolic
+
+
+type equations = list equation
+
+
+val empty_equations: equations
+let empty_equations =
+  []
+
+
+val combine_equations: equations -> equations -> equations
+let combine_equations eqs1 eqs2 =
+  eqs1 ++ eqs2
+
+
+
 
 val symbol: Symbol.t -> symbolic
 let symbol sym =

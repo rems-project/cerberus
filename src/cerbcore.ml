@@ -117,15 +117,17 @@ let pipeline stdlib impl core_parse file_name =
        | _ -> assert false)
   |> pass_message "1-4. Parsing completed!"
   |> pass_through_test !print_core (run_pp -| Pp_core.pp_file)
+(*
   |> pass_message "6. Enumerating indet orders:"
   |> Exception.rbind Core_indet.order
+*)
   |> pass_message "7. Now running:"
   |> Exception.rbind
-      (Exception.mapM0
-	 (fun (n,file) ->
-           Exhaustive_driver.drive file
-         )
-      )
+  (*    (Exception.mapM0
+	 (fun (n,file) -> *)
+           Exhaustive_driver.drive (* file *)
+(*         )
+      ) *)
 
 
 

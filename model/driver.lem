@@ -3,7 +3,7 @@ open import Pervasives
 import Core Core_ctype Boot UniqueId
 open import Core_run2 Core_run2_aux ExecutableOpsem Cmm_master
 
-import State_exception_undefined Exception Undefined Nondeterminism
+import Enum State_exception_undefined Exception Undefined Nondeterminism
 
 
 (* The indirection is required because of a bug in Lem *)
@@ -46,7 +46,7 @@ let initial_driver_state file =
 
 
 
-
+(*
 (* Reinventing the wheel and breaking abstraction for now *)
 type driverM 'a = driver_state -> ND.t (Exception.t (Undefined.t 'a * driver_state) driver_error)
 
@@ -75,6 +75,7 @@ let bind m f =
 
 
 let inline (>>=) = bind
+*)
 
 
 (*
@@ -129,161 +130,160 @@ let get =
 *)
 
 
+(*
 val runND: forall 'a. ND.t 'a -> driverM 'a
 let runND m =
   fun dr_st ->
     ND.bind m (fun z -> ND.return $ Exception.return (U.return z, dr_st))
+*)
 
 
 
-module S = ExecutableOpsem.S
 
 
 
-val runCore: forall 'a. SetType 'a => SEU.t 'a core_run_state core_run_error -> driver_state -> S.t ('a * driver_state)
+
+
+
+
+
+
+
+(* NOTE: can't use the Set-based monad from Ky because I would need to define
+         a compare function for the type core_step ... *)
+
+
+
+val runCore: forall 'a. SetType 'a => SEU.t 'a core_run_state core_run_error -> driver_state -> ND.t ('a * driver_state)
 let runCore m dr_st =
   match SEU.run m dr_st.core_run_state with
     | Exception.Result (U.Defined z, run_st') ->
-        S.return (z, <| dr_st with core_run_state= run_st' |>)
-    | _ ->
-        Boot.assert_false "WIP Driver.runCore"
+        ND.return (z, <| dr_st with core_run_state= run_st' |>)
+
+    | Exception.Result(_, _) ->
+        Boot.assert_false "WIP Driver.runCore: semantic error"
+
+    | Exception.Exception err ->
+        Boot.assert_false ("WIP Driver.runCore: runtime error ==> " ^ string_of_core_run_error err)
   end
 
 
-open S
+open ND.Operators
 
-val driver_step: driver_state -> S.t driver_state
+
+(*
+val     nTimes: forall 'a. nat -> 'a -> ('a -> ND.t 'a) -> ND.t 'a
+let rec nTimes n a m =
+  match n with
+    | 0 ->
+        ND.return a
+    | n ->
+        m a >>= fun a' -> nTimes (n-1) a' m
+  end
+*)
+
+
+(* Perform a given number of successive steps of the concurrency model *)
+val     stepConcurrency: nat -> driver_state -> ND.t driver_state
+let rec stepConcurrency n dr_st =
+  match n with
+    | 0 ->
+        ND.return dr_st
+    | _ ->
+        (let concur_steps = exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
+        if Set.null concur_steps then
+          ND.return dr_st
+        else
+          ND.pick (Set_extra.toList concur_steps) >>= function
+            | ConcurrencyTau performed_act concur_st' ->
+                ND.return  <| dr_st with concurrency_state= concur_st' |>
+            
+            | ReadsFrom v w performed_act concur_st' ->
+                (* TODO: v is the new concrete value, w is the symbolic value from the write *)
+                ND.return  <| dr_st with concurrency_state= concur_st' |>
+          end) >>= fun dr_st' ->
+        
+        stepConcurrency (n-1) dr_st'
+  end
+
+(*
+            nTimes n dr_st' (fun dr_st ->
+              (* Calling the concurrency model *)
+              let concur_steps = exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
+              if Set.null concur_steps then
+                ND.return dr_st
+              else
+                ND.pick (Set_extra.toList concur_steps) >>= function
+                  | ConcurrencyTau performed_act concur_st' ->
+                      ND.return  <| dr_st with concurrency_state= concur_st' |>
+                  
+                  | ReadsFrom v w performed_act concur_st' ->
+                      (* TODO: v is the new concrete value, w is the symbolic value from the write *)
+                      ND.return  <| dr_st with concurrency_state= concur_st' |>
+                end
+            )
+*)
+
+
+
+
+val driver_step: driver_state -> ND.t driver_state
 let driver_step dr_st =
-  Set.fromList (core_steps dr_st.core_file dr_st.core_state) >>= function
+  (* Calling the Core evaluator for 1 step *)
+  core_steps dr_st.core_file dr_st.core_state >>= function
+      (* case where the Core program performs a memory action *)
     | Step_action_request debug_str tid request_m ->
         runCore request_m dr_st >>= fun (request, dr_st') ->
-          match request with
-            | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
-                let preEx_step = <|
-                  action=       Alloc aid tid ptr_val;
-                  sbBefore=     sb_edges;
-                  ddBefore=     dd_edges;
-                  aswBefore=    asw_edges;
-                  locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic);
-                |> in
-                
-                exeOpsemStep (updatePreEx dr_st.concurrency_state preEx_step) initialEqualityCvalue >>= fun concur_step ->
-                S.return  <| dr_st' with core_state= core_st'; concurrency_state= stateOf concur_step |>
+          let (preEx_step, core_st') =
+            match request with
+              | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
+                  (<| action=       Alloc aid tid ptr_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic); |>,
+                   core_st')
+              
+              | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  (<| action=       Store aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+              
+              | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  (<| action=       Load aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+            end in
             
-(*
-            | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val core_st' ->
-                let mem_val = Boot.assert_false "make up a symbolic value" in
-                
-                let preEx_step = <|
-                  action=       Load aid tid mo ptr_val mem_val;
-                  sbBefore=     sb_edges;
-                  ddBefore=     dd_edges;
-                  aswBefore=    asw_edges;
-                  locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic);
-                |> in
-                
-                exeOpsemStep (updatePreEx dr_st.concurrency_state preEx_step) initialEqualityCvalue >>= fun concur_step ->
-                S.return  <| dr_st' with core_state= core_st'; concurrency_state= stateOf concur_step |>
-                
-*)
-          end
-
-
-
-
-
-
-
+            let dr_st' = <| dr_st' with core_state=        core_st';
+                                        concurrency_state= updatePreEx dr_st.concurrency_state preEx_step; |> in
+            
+            (* non deterministically pick how many time we step the concurrency model this turn *)
+            let number_uncommitted = Set.size dr_st'.concurrency_state.preEx.actions - Set.size dr_st'.concurrency_state.committed in
+            ND.pick (Enum.enumFromTo 0 number_uncommitted) >>= fun n ->
+            
+            stepConcurrency n dr_st'
+  
+    (* case where the Core program does a non pure but non memory-related
+       step (typically ordering related stuff) *)
   | Step_tau debug_str tid step_m ->
       runCore step_m dr_st >>= fun (core_st', dr_st') ->
-      S.return <| dr_st' with core_state= core_st' |>
+      ND.return <| dr_st' with core_state= core_st' |>
   
+    (* case where the Core program does a pure step *)
   | Step_eval debug_str tid step_m ->
       runCore step_m dr_st >>= fun (core_st', dr_st') ->
-      S.return <| dr_st' with core_state= core_st' |>
+      ND.return <| dr_st' with core_state= core_st' |>
   
+    (* case where the Core program is done *)
   | Step_done v ->
       Boot.assert_false ("DONE: " ^ Boot.pp_core_expr v)
-  end
-
-
-
-
-(*
-
-
-val driver_step: driverM unit
-let driver_step =
-  get >>= fun dr_st ->
-  
-  (* pick a Core step *)
-  runND (core_steps dr_st.core_file dr_st.core_state) function
-(*
-    | Step_action_request debug_str tid request_m ->
-      ND.return $
-        runCore request_m >>= function
-          | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
-              let preEx_step = <|
-                action=       Alloc aid tid ptr_val;
-                sbBefore=     sb_edges;
-                ddBefore=     dd_edges;
-                aswBefore=    asw_edges;
-                locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic);
-              |> in
-              
-              let concur_st' = updatePreEx dr_st.concurrency_state in
-              
-              
-              Boot.assert_false "WIP"
-        
-(*
-        | LoadRequest sbBefore ddBefore aswBefore aid tid mo ty ptr_val mk_core_st' ->
-            let action = Load aid tid mo ptr_val in
-            Boot.assert_false "WIP"
-*)
-        
-          | StoreRequest sbBefore ddBefore aswBefore aid tid mo ty ptr_val v core_st' ->
-              let action = Store aid tid mo ptr_val v in
-              Boot.assert_false "WIP"
-        end
       
-
-
-(*
-  | Alloc of aid * tid * location (* CSEM *)
-  | Load of aid * tid * memory_order * location * cvalue
-  | Store of aid * tid * memory_order * location * cvalue
-
-  | Lock of aid * tid * location * lock_outcome
-  | Unlock of aid * tid * location
-  | RMW of aid * tid * memory_order * location * cvalue * cvalue
-  | Fence of aid * tid * memory_order
-  | Blocked_rmw of aid * tid * location
-  | Dealloc of aid * tid * location (* CSEM *)
-*)
-
-
-
-  
-  | Step_tau debug_str tid step_m ->
-      ND.return (runCore step_m)
-  
-  | Step_eval debug_str tid step_m ->
-      ND.return (runCore step_m)
-  
-*)
-
-
-  | Step_done v ->
-      Boot.assert_false "WIP"
+      (* TODO: needs to finish the Concurrency execution *)
   end
-
-
-
-(*
-  | Step_action_request of (* DEBUG *) string * thread_id * SEU.t action_request core_run_state core_run_error
-  | Step_tau of (* DEBUG *) string * thread_id * SEU.t core_state core_run_state core_run_error
-  | Step_eval of (* DEBUG *) string * thread_id * SEU.t core_state core_run_state core_run_error
-  | Step_done of Core.expr core_run_annotation
-*)
-*)
