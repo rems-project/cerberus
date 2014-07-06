@@ -44,6 +44,19 @@ end
 type equation =
   | Symbolic_eq  of symbolic * symbolic
   | Symbolic_neq of symbolic * symbolic
+  | Symbolic_lt  of symbolic * symbolic
+
+val eq: symbolic -> symbolic -> equation
+let eq symb1 symb2 =
+  Symbolic_eq symb1 symb2
+
+val lt: symbolic -> symbolic -> equation
+let lt symb1 symb2 =
+  Symbolic_lt symb1 symb2
+
+val neq: symbolic -> symbolic -> equation
+let neq symb1 symb2 =
+  Symbolic_neq symb1 symb2
 
 
 type equations = list equation
