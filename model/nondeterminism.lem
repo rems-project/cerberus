@@ -1,3 +1,4 @@
+open import Pervasives
 open import List Function
 open import Global
 import Symbolic
@@ -9,12 +10,12 @@ let return x = [(Symbolic.empty_equations, x)]
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind m f =
-  List.concatMap (fun (eqsA, a) ->
-    List.map (fun (eqsB, b) ->
-      (* TODO: do a check for sat here? *)
-      (Symbolic.combine_equations eqsA eqsB, b)
-    ) $ f a
-  ) m
+  List.filter (fun (eqs, _) -> not (Symbolic.is_clearly_unsat eqs)) $
+    List.concatMap (fun (eqsA, a) ->
+      List.map (fun (eqsB, b) ->
+        (Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB, b)
+      ) $ f a
+    ) m
 
 
 

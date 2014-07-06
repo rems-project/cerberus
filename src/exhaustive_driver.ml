@@ -109,7 +109,7 @@ let rec loop file dr_st =
 
 
 
-
+open Pp_cmm
 
 
 
@@ -149,8 +149,13 @@ let drive file =
   let vs = Driver.driver (Driver.initial_driver_state file) in
   Printf.printf "Number of executions: %d\n" (List.length vs);
   
-  List.iter (fun (n, (eqs, v)) ->
-    Printf.printf "Execution #%d under constraints:\n=====\n%s\n=====\n has value:\n  %s\n\n" n (pp_eqs eqs) (Boot_pprint.pp_core_expr v)
+  List.iter (fun (n, (eqs, (preEx, v))) ->
+    Printf.printf "Execution #%d under constraints:\n" n;
+    print_endline "=====";
+    print_endline (pp_eqs eqs);
+    print_endline "=====";
+    Printf.printf "with pre_execution:\n%s\n" (Pp_cmm.string_of_pre_execution preEx);
+    Printf.printf "has value:\n  %s\n\n" (Boot_pprint.pp_core_expr v)
   ) (Global.numerote vs);
   
   Exception.return0 ()

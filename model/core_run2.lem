@@ -574,6 +574,20 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             )
       
       | (Eaction (Paction p (Action annots act)), sk) ->
+          let sb_before = Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
+          let dd_before = {(* TODO *)} in
+          let asw_before =
+            if has_sbBefore_on_thread current_tid annots then
+              {}
+            else
+              Set.map snd $ Set.filter (fun (tid, _) ->
+                match parent_tid_opt with
+                  | Just parent_tid ->
+                      tid = parent_tid
+                  | _ ->
+                      false
+                end) annots.sb_before
+          in
           match act with
             | Create al_pe ty_pe pref ->
                 (* TODO: alignment *)
@@ -585,11 +599,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                             SEU.runS fresh_action_id                    >>= fun create_aid ->
                             runMem (Mem.allocate_object current_tid ty) >>= fun ptr_val    ->
                             SEU.return $
-                              AllocRequest annots.sb_before annots.dd_before annots.asw_before
+                              AllocRequest sb_before dd_before asw_before
                                            create_aid current_tid ty ptr_val
                                            (update_thread_state current_tid <| th_st with
                                               arena= Econst (Mem.MV_pointer ptr_val);
-                                              stack= add_to_sb_stack {(p, create_aid)} sk;
+                                              stack= add_to_sb_stack {(p, (current_tid, create_aid))} sk;
                                             |> st)
                           )
                       | _ ->
@@ -624,11 +638,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                                 SEU.runS fresh_action_id >>= fun load_aid ->
                                 SEU.runS fresh_symbol    >>= fun val_sym  ->
                                 SEU.return $
-                                  StoreRequest annots.sb_before annots.dd_before annots.asw_before
+                                  StoreRequest sb_before dd_before asw_before
                                                load_aid current_tid mo ty ptr_val mem_val
                                                (update_thread_state current_tid <| th_st with
                                                  arena= Econst mem_val;
-                                                 stack= add_to_sb_stack {(p, load_aid)} sk;
+                                                 stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
                                                |> st)
                               )
                           
@@ -675,11 +689,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                               SEU.runS fresh_symbol    >>= fun val_sym  ->
                               let mem_val = Mem.MV_integer (Symbolic.symbol val_sym) in
                               SEU.return $
-                                LoadRequest annots.sb_before annots.dd_before annots.asw_before
+                                LoadRequest sb_before dd_before asw_before
                                             load_aid current_tid mo ty ptr_val mem_val
                                             (update_thread_state current_tid <| th_st with
                                               arena= Econst mem_val;
-                                              stack= add_to_sb_stack {(p, load_aid)} sk;
+                                              stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
                                             |> st)
                             )
                         | _ ->

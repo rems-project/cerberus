@@ -90,7 +90,8 @@ PPRINTERS_ML=\
   colour.ml \
   pp_errors.ml \
   pp_symbol.ml \
-  pp_ail.ml pp_core.ml pp_run.ml
+  pp_ail.ml pp_core.ml pp_run.ml \
+  pp_cmm.ml
 
 
 # TODO: these is AddaX specific

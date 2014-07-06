@@ -373,6 +373,11 @@ let rec stepConcurrency n dr_st =
                 let _ = Boot.output_string "READSFROM\n" in
                 (* TODO: v is the new concrete value, w is the symbolic value from the write *)
                 let Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) = w in
+                
+                (* TODO: ignoring pointer for now *)
+                let Mem.MV_integer v_symb = v in
+                ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
+                
                 ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
                                          concurrency_state= concur_st' |>
           end) >>= fun dr_st' ->
@@ -539,10 +544,7 @@ let rec drive_core dr_st =
 
 
 
-
-
-
-val     driver: driver_state -> ND.t (Core.expr core_run_annotation)
+val     driver: driver_state -> ND.t (Cmm_master.pre_execution * Core.expr core_run_annotation)
 let rec driver _dr_st =
   let _ = Boot.output_string (pp_core_state _dr_st.core_state) in
 
@@ -627,7 +629,7 @@ let rec driver _dr_st =
       ND.return $
         match dr_st'.core_state.thread_states with
           | [(_, (_, th_st))] ->
-              th_st.arena
+              (dr_st'.concurrency_state.preEx, th_st.arena)
           | xs ->
               Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
         end

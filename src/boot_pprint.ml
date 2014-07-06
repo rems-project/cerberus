@@ -54,4 +54,3 @@ let pp_core_state st =
     Printf.sprintf "  arena= %s\n" (pp_core_expr th_st.Core_run2.arena) ^
     Printf.sprintf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack) ^ " \n"
   ) "" st.Core_run2.thread_states
-

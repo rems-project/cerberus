@@ -26,7 +26,7 @@ end
 
 
 type core_run_annotation = <|
-  sb_before:  set action_id;
+  sb_before:  set (Thread.thread_id * action_id);
   dd_before:  set action_id;
   asw_before: set action_id;
 |>
@@ -43,6 +43,15 @@ end
 
 
 
+
+val has_sbBefore_on_thread: Thread.thread_id -> core_run_annotation -> bool
+let has_sbBefore_on_thread tid annot =
+  Set.any (fun (tid', _) ->
+    tid = tid'
+  ) annot.sb_before
+
+
+
 (* TODO: the following comment is probably out of date *)
 (* TODO: here I'm annotating all actions instead (this may reduce the number of
          epsilon transitions) *)
@@ -53,7 +62,7 @@ end
  *)
 (* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
 
-val     add_to_sb: set (polarity * action_id) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids = function
   | Eunit ->
       (* no change *)
@@ -153,7 +162,7 @@ end
 
 
 
-val add_to_sb_stack: set (polarity * action_id) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+val add_to_sb_stack: set (polarity * (Thread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
 
 let rec add_to_sb_continuation p_aids = function
   | [] ->
