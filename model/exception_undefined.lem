@@ -45,3 +45,14 @@ module Operators = struct
   let inline (>>=)      = bind
   let inline (>>) m1 m2 = bind m1 (fun () -> m2)
 end
+
+
+open Operators
+val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
+let sequence ms =
+  foldr
+    (fun m ms' ->
+      m   >>= fun x  ->
+      ms' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
