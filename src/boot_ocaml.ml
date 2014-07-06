@@ -31,6 +31,10 @@ let output_string str =
   print_string (Scanf.unescaped str)
 
 
+let output_string2 str =
+  if !debug_level > 0 then
+    print_string str
+
 
 (*
 (* TODO: this is massive hack, just to make csmith programs work *)

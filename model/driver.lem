@@ -24,6 +24,9 @@ type driver_state = <|
   core_state:        core_state;       (* state of the core program *)
   core_run_state:    core_run_state;   (* state of the core evaluator *)
   concurrency_state: exeState; (* state of the concurrency memory model *)
+  
+  (* DEBUG *)
+  trace: list string;
 |>
 
 
@@ -42,6 +45,8 @@ let initial_driver_state file =
     core_state=        core_st;
     core_run_state=    run_st;
     concurrency_state= initialExeState emptyPreEx;
+    
+    trace= [];
   |>
 
 
@@ -319,6 +324,7 @@ end
 (* TODO: hack *)
 val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
 let resolve_read write_sym v core_st =
+  let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in
   <| core_st with
        thread_states= List.map (fun (tid, (parent_tid_opt, th_st)) ->
                        (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym v th_st.arena;
@@ -364,6 +370,7 @@ let rec stepConcurrency n dr_st =
                 ND.return  <| dr_st with concurrency_state= concur_st' |>
             
             | ReadsFrom v w performed_act concur_st' ->
+                let _ = Boot.output_string "READSFROM\n" in
                 (* TODO: v is the new concrete value, w is the symbolic value from the write *)
                 let Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) = w in
                 ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
@@ -470,8 +477,224 @@ declare ocaml target_rep function pp_core_state = `Boot_pprint.pp_core_state`
 
 
 
+
+
+(*
+  ND.tryM (core_steps dr_st.core_file dr_st.core_state)
+    process_core_step
+
+
+
+core_thread_step file (current_tid, (parent_tid_opt, th_st)) st
+*)
+
+
+
+
+(* perform all possible step that are not action requests *)
+val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
+let rec drive_core_thread tid dr_st =
+  let th_info = match List.lookup tid dr_st.core_state.thread_states with
+    | Just z ->
+        (tid, z)
+    | _ ->
+        Boot.assert_false "drive_core_thread, wrong tid"
+  end in
+  
+  let _ = Boot.output_string $ "DRIVE_CORE_THREAD (" ^ string_of_natural tid ^ "):\n" ^ pp_core_state dr_st.core_state ^ "\n" in
+  core_thread_step dr_st.core_file th_info dr_st.core_state >>= function
+    | Step_tau "end of thread" _ step_m ->
+        runCore step_m dr_st >>= fun (core_st', dr_st') ->
+        ND.return <| dr_st' with core_state= core_st' |>
+    
+    | Step_tau _ _ step_m ->
+        (* case where the Core program does a non pure but non memory-related
+           step (typically ordering related stuff) *)
+        runCore step_m dr_st >>= fun (core_st', dr_st') ->
+        drive_core_thread tid <| dr_st' with core_state= core_st' |>
+    
+    | Step_eval _ _ step_m ->
+        (* case where the Core program does a pure step *)
+        runCore step_m dr_st >>= fun (core_st', dr_st') ->
+        drive_core_thread tid <| dr_st' with core_state= core_st' |>
+    
+    | _ ->
+        ND.return dr_st
+  end
+
+val     drive_core: driver_state -> ND.t driver_state
+let rec drive_core dr_st =
+  ND.foldM (fun acc (tid, _) ->
+    ND.tryM (drive_core_thread tid acc)
+      ND.return
+      (fun () -> ND.return acc)
+  ) dr_st dr_st.core_state.thread_states
+
+
+
+
+
+
+
+
+
+
+
+
+
 val     driver: driver_state -> ND.t (Core.expr core_run_annotation)
-let rec driver dr_st =
+let rec driver _dr_st =
+  let _ = Boot.output_string (pp_core_state _dr_st.core_state) in
+
+
+  drive_core _dr_st >>= fun dr_st ->
+  let dr_st = <| dr_st with trace= "drive_core" :: dr_st.trace |> in (* DEBUG *)
+  
+  let process_core_step = function
+    | Step_action_request debug_str tid request_m ->
+        (* case where the Core program performs a memory action *)
+        runCore request_m dr_st >>= fun (request, dr_st') ->
+          let (preEx_step, core_st') =
+            match request with
+              | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
+                  let _ = Boot.output_string "CREATE\n" in
+                  (<| action=       Alloc aid tid ptr_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic); |>,
+                   core_st')
+              
+              | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  let _ = Boot.output_string "STORE\n" in
+                  (<| action=       Store aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+              
+              | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  let _ = Boot.output_string "LOAD\n" in
+                  (<| action=       Load aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+            end in
+            
+            (* debug *)
+            let act = match request with
+              | AllocRequest _ _ _ _ _ _ _ _ ->
+                  "alloc"
+              | StoreRequest _ _ _ _ _ _ _ _ _ _ ->
+                  "store"
+              | LoadRequest _ _ _ _ _ _ _ _ _ _ ->
+                  "load"
+            end in
+            
+            let dr_st' = <| dr_st' with core_state=        core_st';
+                                        concurrency_state= updatePreEx dr_st.concurrency_state preEx_step;
+                                        trace= act :: dr_st.trace |> in (* DEBUG *)
+            driver dr_st'
+(*
+            (* non deterministically pick how many time we step the concurrency model this turn *)
+            ND.pick (Enum.enumFromTo 0 (number_of_uncommitted dr_st'.concurrency_state)) >>= fun n ->
+            
+(*            stepConcurrency n dr_st' >>= driver *)
+            stepConcurrency n dr_st' >>= fun dr_st'' ->
+              driver <| dr_st'' with trace= ("concur(" ^ string_of_natural (naturalFromNat n) ^ ")") :: dr_st''.trace |>
+*)
+
+    | Step_tau debug_str _ step_m ->
+        let _ = Boot.output_string $ "Found a tau ===> " ^ debug_str ^ "\n" in
+        (* TODO: why is this needed ?????? *)
+        runCore step_m dr_st >>= fun (core_st', dr_st') ->
+        driver <| dr_st' with core_state= core_st' |>
+
+
+
+
+    
+    | Step_done v ->
+(*
+        ND.return $
+          List.foldl (fun acc x -> x ^ "\n" ^ acc) "" dr_st.trace
+*)
+      stepConcurrency (number_of_uncommitted dr_st.concurrency_state) dr_st >>= fun dr_st' -> 
+      (* TODO: this is pretty disgusting *)
+      ND.return $
+        match dr_st'.core_state.thread_states with
+          | [(_, (_, th_st))] ->
+              th_st.arena
+          | xs ->
+              Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
+        end
+
+
+
+(*
+        let _ = Boot.output_string "DONE" in
+        ND.return v
+*)
+  end in
+  
+  ND.pick dr_st.core_state.thread_states >>= fun th_info ->
+  core_thread_step dr_st.core_file th_info dr_st.core_state >>=
+    process_core_step
+(*  core_steps dr_st.core_file dr_st.core_state >>= *)
+(*
+  ND.tryM (core_steps dr_st.core_file dr_st.core_state)
+    process_core_step
+    (fun () ->
+      stepConcurrency (number_of_uncommitted dr_st.concurrency_state) dr_st >>= fun dr_st' -> 
+      (* TODO: this is pretty disgusting *)
+      ND.return $
+        match dr_st'.core_state.thread_states with
+          | [(_, (_, th_st))] ->
+              th_st.arena
+          | xs ->
+              Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
+        end
+    )
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* ========================================== *)
+
+(*
+
+val     _driver: driver_state -> ND.t (Core.expr core_run_annotation)
+let rec _driver dr_st =
 (*  let _ = Boot.output_string (pp_core_state dr_st.core_state) in *)
 
   let process_core_step = function
@@ -511,18 +734,18 @@ let rec driver dr_st =
             (* non deterministically pick how many time we step the concurrency model this turn *)
             ND.pick (Enum.enumFromTo 0 (number_of_uncommitted dr_st'.concurrency_state)) >>= fun n ->
             
-            stepConcurrency n dr_st' >>= driver
+            stepConcurrency n dr_st' >>= _driver
   
     (* case where the Core program does a non pure but non memory-related
        step (typically ordering related stuff) *)
   | Step_tau debug_str tid step_m ->
       runCore step_m dr_st >>= fun (core_st', dr_st') ->
-      driver <| dr_st' with core_state= core_st' |>
+      _driver <| dr_st' with core_state= core_st' |>
   
     (* case where the Core program does a pure step *)
   | Step_eval debug_str tid step_m ->
       runCore step_m dr_st >>= fun (core_st', dr_st') ->
-      driver <| dr_st' with core_state= core_st' |>
+      _driver <| dr_st' with core_state= core_st' |>
 
 
 (*  
@@ -563,3 +786,5 @@ let rec driver dr_st =
               Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
         end
     )
+
+*)

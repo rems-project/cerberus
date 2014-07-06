@@ -113,7 +113,20 @@ let rec loop file dr_st =
 
 
 
-
+let pp_eqs eqs =
+  let pp x = Boot_pprint.to_plain_string (Pp_core.pp_symbolic x) in
+  List.fold_left (fun acc eq ->
+    (match eq with
+        | Symbolic.Symbolic_eq  (symb1, symb2) ->
+            pp symb1 ^ " = " ^ pp symb2
+        | Symbolic.Symbolic_neq (symb1, symb2) ->
+            pp symb1 ^ " /= " ^ pp symb2
+        | Symbolic.Symbolic_lt  (symb1, symb2) ->
+            pp symb1 ^ " < " ^ pp symb2
+        | Symbolic.Symbolic_ge  (symb1, symb2) ->
+            pp symb1 ^ " >= " ^ pp symb2
+   ) ^ ";\n" ^ acc
+  ) "" eqs
 
 
 
@@ -136,8 +149,8 @@ let drive file =
   let vs = Driver.driver (Driver.initial_driver_state file) in
   Printf.printf "Number of executions: %d\n" (List.length vs);
   
-  List.iter (fun (n, (_, v)) ->
-    Printf.printf "Execution #%d has value:\n  %s\n\n" n (Boot_pprint.pp_core_expr v)
+  List.iter (fun (n, (eqs, v)) ->
+    Printf.printf "Execution #%d under constraints:\n=====\n%s\n=====\n has value:\n  %s\n\n" n (pp_eqs eqs) (Boot_pprint.pp_core_expr v)
   ) (Global.numerote vs);
   
   Exception.return0 ()

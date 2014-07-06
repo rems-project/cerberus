@@ -425,7 +425,7 @@ type core_step =
 
 
 
-(*  | Step_done of Core.expr core_run_annotation *)
+  | Step_done of Core.expr core_run_annotation
 (*  | Step_thread_frok of thread_id * SEU.t (thread_state * list (thread_id * thread_state)) Symbol.counter core_run_error *)
 
 
@@ -502,44 +502,38 @@ let runNDEU m =
 
 
 open SEU.Operators
-val core_steps: Core.file core_run_annotation -> core_state -> ND.t core_step
-let core_steps file st =
-  ND.bind (ND.pick st.thread_states) (fun (current_tid, (parent_tid_opt, th_st)) ->
-    let update_current_thread th_st = SEU.return (update_thread_state current_tid th_st st) in
-
-    (* TODO: clean up *)
-(*    let eval_update_current_thread th_st = Boot.assert_false "WIP" in *)
-    
-    
-    match (th_st.arena, th_st.stack) with
-      | (Eskip, sk) ->
-          ND.return $ Step_tau "Eskip" current_tid (
-          SEU.runE (pop_continuation_element sk) >>= fun (cont_elem, sk') ->
-            update_current_thread
-              match cont_elem with
-                | Kunseq es1 es2 ->
-                    <| th_st with arena= Eunseq (es1 ++ (Eunit :: es2)); stack= sk' |>
-                | Kwseq _ e2 ->
-                    <| th_st with arena= e2; stack= sk' |>
-                | Ksseq _ e2 ->
-                    <| th_st with arena= e2; stack= sk' |>
-              end
+val core_thread_step: Core.file core_run_annotation -> (thread_id * (maybe thread_id * thread_state)) -> core_state -> ND.t core_step
+let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
+  let update_current_thread th_st = SEU.return (update_thread_state current_tid th_st st) in
+  
+  match (th_st.arena, th_st.stack) with
+    | (Eskip, sk) ->
+        ND.return $ Step_tau "Eskip" current_tid (
+        SEU.runE (pop_continuation_element sk) >>= fun (cont_elem, sk') ->
+          update_current_thread
+            match cont_elem with
+              | Kunseq es1 es2 ->
+                  <| th_st with arena= Eunseq (es1 ++ (Eunit :: es2)); stack= sk' |>
+              | Kwseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+              | Ksseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+            end
+        )
+      
+    | (Elet _a pe1 e2, _) ->
+        if is_value pe1 then
+          ND.return $
+            Step_tau "Elet" current_tid (
+              update_current_thread <| th_st with arena= subst_sym _a pe1 e2 |>
+            )
+        else
+          ND.bind (core_eval file pe1) (fun eu_pe1' ->
+            ND.return $ Step_eval "Elet" current_tid (
+              SEU.runEU eu_pe1' >>= fun pe1' ->
+              update_current_thread <| th_st with arena= Elet _a pe1' e2 |>
+            )
           )
-      
-      | (Elet _a pe1 e2, _) ->
-          if is_value pe1 then
-            ND.return $
-              Step_tau "Elet" current_tid (
-                update_current_thread <| th_st with arena= subst_sym _a pe1 e2 |>
-              )
-            else
-              ND.bind (core_eval file pe1) (fun eu_pe1' ->
-                ND.return $ Step_eval "Elet" current_tid (
-                  SEU.runEU eu_pe1' >>= fun pe1' ->
-                  update_current_thread <| th_st with arena= Elet _a pe1' e2 |>
-                )
-              )
-      
       | (Eif pe1 e2 e3, _) ->
           if is_value pe1 then
           ND.return $
@@ -729,7 +723,7 @@ let core_steps file st =
               update_current_thread <| th_st with arena= Etuple es |>
             )
           else
-            ND.bind (ND.pickWith (fun e -> not $ is_pure e || is_wait e) es) (fun (es1, ej, es2) ->
+            ND.bind (ND.pickWith (fun e -> not (is_pure e) && not (is_wait e)) es) (fun (es1, ej, es2) ->
               ND.return $ Step_tau "Eunseq" current_tid (
                 SEU.runE (push_continuation_element (Kunseq es1 es2) sk) >>= fun sk' ->
                 update_current_thread <| th_st with arena= ej; stack= sk' |>
@@ -873,7 +867,7 @@ let core_steps file st =
           if is_empty_stack sk then
             (* End of program execution *)
             if is_value pe then
-              ND.mzero (* Step_done pe *)
+              (* ND.mzero *) ND.return $ Step_done pe
             else
               ND.return $
                 Step_tau "value error" current_tid (SEU.fail (Illformed_program "found a non-value with empty stack"))
@@ -898,7 +892,19 @@ let core_steps file st =
           else
             Boot.assert_false "(Boot.pp_core_expr pe)"
       end
-    )
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

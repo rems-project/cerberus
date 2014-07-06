@@ -59,7 +59,7 @@ declare ocaml target_rep function fake_printf = `Boot_ocaml.fake_printf`
 *)
 
 val output_string: string -> unit
-declare ocaml target_rep function output_string = `print_string`
+declare ocaml target_rep function output_string = `Boot_ocaml.output_string2`
 
 
 

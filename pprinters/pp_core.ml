@@ -213,6 +213,23 @@ let pp_name = function
   | Sym a  -> pp_symbol a
   | Impl i -> pp_impl i
 
+
+let rec pp_symbolic = function
+  | Symbolic.Symbolic_constant n ->
+      !^ (Big_int.string_of_big_int n)
+  | Symbolic.Symbolic_symbol sym ->
+      pp_symbol sym
+  | Symbolic.Symbolic_op (op, symb1, symb2) ->
+      let str_opt = match op with
+        | Symbolic.Add -> "+"
+        | Symbolic.Sub -> "-"
+        | Symbolic.Mul -> "*"
+        | Symbolic.Div -> "/"
+        | Symbolic.Mod -> "mod" in
+
+      P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
+
+
 let rec pp_constant = function
 (*
   | Mem.MV_pointer (Mem.Pointer_function f) ->
@@ -224,8 +241,8 @@ let rec pp_constant = function
       !^ "TODO(MV_pointer)" 
   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
       !^ (Big_int.string_of_big_int n)
-  | Mem.MV_integer sym ->
-      !^ "TODO(MV_integer(symbolic))"
+  | Mem.MV_integer symb ->
+      !^ "SYMB" ^^ P.parens (pp_symbolic symb)
 (*
   | Mem.MV_array vs ->
       pp_const "array" ^^ P.parens (comma_list pp_constant vs)

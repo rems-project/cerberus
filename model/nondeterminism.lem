@@ -89,6 +89,18 @@ let tryM ma mf mend =
 
 
 
+
+val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+let rec foldM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      f a x >>= fun fax -> foldM f fax xs
+end
+
+
 val add_equation: Symbolic.equation -> t unit
 let add_equation symb_eq =
   [(Symbolic.add_equation symb_eq Symbolic.empty_equations, ())]
+
+
