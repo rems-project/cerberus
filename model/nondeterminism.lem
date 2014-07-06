@@ -74,3 +74,14 @@ let pickWith pred xs =
 val pick: forall 'a. list 'a -> t 'a
 let pick xs =
   List.map (fun x -> (Symbolic.empty_equations, x)) xs
+
+
+
+(* Perform the first computation if it is not empty bind the result to the second computation
+   otherwise run the third computation *)
+val tryM: forall 'a 'b. t 'a -> ('a -> t 'b) -> (unit -> t 'b) -> t 'b
+let tryM ma mf mend =
+  if List.null ma then
+    mend ()
+  else
+    ma >>= mf

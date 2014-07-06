@@ -47,7 +47,7 @@ let call_function file f_nm arg_pes =
         end
     end >>= fun (_, params, body_pe) ->
   if List.length params <> List.length arg_pes then
-    Boot.assert_false (Boot.pp_core_params params)
+    Boot.assert_false "(Boot.pp_core_params params)"
   else
     Exception.return $ Global.foldl2 (fun acc (a, _) pe -> subst_sym a pe acc) body_pe params arg_pes
 
@@ -377,7 +377,7 @@ type core_step =
 
 
 
-  | Step_done of Core.expr core_run_annotation
+(*  | Step_done of Core.expr core_run_annotation *)
 (*  | Step_thread_frok of thread_id * SEU.t (thread_state * list (thread_id * thread_state)) Symbol.counter core_run_error *)
 
 
@@ -565,7 +565,7 @@ Set_helpers.fold (fun b e -> annotate_expr (Pos, b) e) annots expr in
                           
                           | _ ->
                             Step_tau "Store type-error" current_tid $
-                              SEU.fail (Illformed_program $ "some expression was ill-typed in a store: " ^ Boot.pp_core_expr th_st.arena)
+                              SEU.fail (Illformed_program $ "some expression was ill-typed in a store")
                         end
                       else
                         Step_eval "value of Store" current_tid (
@@ -632,12 +632,18 @@ Set_helpers.fold (fun b e -> annotate_expr (Pos, b) e) annots expr in
             end
       
       | (Eunseq es, sk) ->
+          (* TODO: this a bad hack to remove the fake non-determinism introduced by the current semantics of Epar *)
+          let is_wait = function
+            | Ewait _ -> true
+            | _       -> false
+          end in
+          
           if List.all is_pure es then
             ND.return $ Step_tau "Eunseq_pure" current_tid (
               update_current_thread <| th_st with arena= Etuple es |>
             )
           else
-            ND.bind (ND.pickWith (not -| is_pure) es) (fun (es1, ej, es2) ->
+            ND.bind (ND.pickWith (fun e -> not $ is_pure e || is_wait e) es) (fun (es1, ej, es2) ->
               ND.return $ Step_tau "Eunseq" current_tid (
                 SEU.runE (push_continuation_element (Kunseq es1 es2) sk) >>= fun sk' ->
                 update_current_thread <| th_st with arena= ej; stack= sk' |>
@@ -768,32 +774,33 @@ Set_helpers.fold (fun b e -> annotate_expr (Pos, b) e) annots expr in
           ND.mzero
       
       | (pe, sk) ->
-          ND.return $
-            if is_empty_stack sk then
-              (* End of program execution *)
-              if is_value pe then
-                Step_done pe
-              else
-                Step_tau "value error" current_tid (SEU.fail (Illformed_program "found a non-value with empty stack"))
+          if is_empty_stack sk then
+            (* End of program execution *)
+            if is_value pe then
+              ND.mzero (* Step_done pe *)
             else
-              (* *)
-              if is_value pe then
-                Step_tau "value" current_tid (
-                  SEU.runE (pop_stack sk) >>= fun (cont, sk') ->
-                  match cont with
-                    | [] ->
-                        SEU.fail (Illformed_program "FOOO")
-                    | _ ->
-                        update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk' |>
-                  end
-                )
-              else if is_pure pe then
-                Step_tau "value eval" current_tid (
-                  SEU.runEU (core_eval file pe) >>= fun pe' ->
-                  update_current_thread <| th_st with arena= pe' |>
-                )
-              else
-                Boot.assert_false (Boot.pp_core_expr pe)
+              ND.return $
+                Step_tau "value error" current_tid (SEU.fail (Illformed_program "found a non-value with empty stack"))
+          else
+            ND.return $
+            (* *)
+            if is_value pe then
+              Step_tau "value" current_tid (
+                SEU.runE (pop_stack sk) >>= fun (cont, sk') ->
+                match cont with
+                  | [] ->
+                      SEU.fail (Illformed_program "FOOO")
+                  | _ ->
+                      update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk' |>
+                end
+              )
+            else if is_pure pe then
+              Step_tau "value eval" current_tid (
+                SEU.runEU (core_eval file pe) >>= fun pe' ->
+                update_current_thread <| th_st with arena= pe' |>
+              )
+            else
+              Boot.assert_false "(Boot.pp_core_expr pe)"
       
       end
     )

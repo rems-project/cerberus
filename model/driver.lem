@@ -183,6 +183,171 @@ let rec nTimes n a m =
 *)
 
 
+
+(* TODO: hack *)
+let rec resolve_read_expr write_sym v expr =
+  let f = resolve_read_expr write_sym v in
+  match expr with
+    | Core.Eunit ->
+        Core.Eunit
+    | Core.Etrue ->
+        Core.Etrue
+    | Core.Efalse ->
+        Core.Efalse
+    | Core.Econst (Mem.MV_integer symb) ->
+        if Symbolic.symbol write_sym = symb then
+          Core.Econst v
+        else
+          Core.Econst (Mem.MV_integer symb)
+    | Core.Econst mem_val ->
+        Core.Econst mem_val
+    | Core.Elist pes ->
+        Core.Elist $ List.map f pes
+    | Core.Ectype ty ->
+        Core.Ectype ty
+    | Core.Esym sym ->
+        Core.Esym sym
+    | Core.Eimpl i ->
+        Core.Eimpl i
+    | Core.Etuple pes ->
+        Core.Etuple $ List.map f pes
+    | Core.Enot pe ->
+        Core.Enot $ f pe
+    | Core.Eop bop pe1 pe2 ->
+        Core.Eop bop (f pe1) (f pe2)
+    | Core.Ecall nm pes ->
+        Core.Ecall nm $ List.map f pes
+    | Core.Eoutput str ->
+        Core.Eoutput str
+    | Core.Eundef ub ->
+        Core.Eundef ub
+    | Core.Eerror ->
+        Core.Eerror
+    | Core.Eskip ->
+        Core.Eskip
+    | Core.Elet sym pe1 e2 ->
+        Core.Elet sym (f pe1) (f e2)
+    | Core.Eif pe1 e2 e3 ->
+        Core.Eif (f pe1) (f e2) (f e3)
+    | Core.Eproc annots nm pes ->
+        Core.Eproc annots nm $ List.map f pes
+    | Core.Eaction pact ->
+        Core.Eaction $ resolve_read_paction write_sym v pact
+    | Core.Eunseq es ->
+        Core.Eunseq $ List.map f es
+    | Core.Ewseq _as e1 e2 ->
+        Core.Ewseq _as (f e1) (f e2)
+    | Core.Esseq _as e1 e2 ->
+        Core.Esseq _as (f e1) (f e2)
+    | Core.Easeq sym_opt act1 pact2 ->
+        Core.Easeq sym_opt (resolve_read_action write_sym v act1) (resolve_read_paction write_sym v pact2)
+    | Core.Eindet e ->
+        Core.Eindet (f e)
+    | Core.Ebound n e ->
+        Core.Ebound n (f e)
+    | Core.Esave ksym sym_tys e ->
+        Core.Esave ksym sym_tys (f e)
+    | Core.Erun annots ksym sym_es ->
+        Core.Erun annots ksym $ List.map (fun (sym, e) -> (sym, f e)) sym_es
+    | Core.Eret pe ->
+        Core.Eret $ f pe
+    | Core.End es ->
+        Core.End $ List.map f es
+    | Core.Epar es ->
+        Core.Epar $ List.map f es
+    | Core.Ewait tid ->
+        Core.Ewait tid
+    | Core.Eis_scalar pe ->
+        Core.Eis_scalar $ f pe
+    | Core.Eis_integer pe ->
+        Core.Eis_integer $ f pe
+    | Core.Eis_signed pe ->
+        Core.Eis_signed $ f pe
+    | Core.Eis_unsigned pe ->
+        Core.Eis_unsigned $ f pe
+  end
+
+and resolve_read_paction write_sym v (Core.Paction p act) =
+  Core.Paction p (resolve_read_action write_sym v act)
+
+and resolve_read_action write_sym v (Core.Action annots act_) =
+  let f = resolve_read_expr write_sym v in
+  
+  Core.Action annots $ match act_ with
+  | Core.Create pe1 pe2 pref ->
+      Core.Create (f pe1) (f pe2) pref
+  | Core.Alloc pe1 pe2 pref ->
+      Core.Alloc (f pe1) (f pe2) pref
+  | Core.Kill pe ->
+      Core.Kill (f pe)
+  | Core.Store pe1 pe2 pe3 mo ->
+      Core.Store (f pe1) (f pe2) (f pe3) mo
+  | Core.Load pe1 pe2 mo ->
+      Core.Load (f pe1) (f pe2) mo
+  | Core.CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+      Core.CompareExchangeStrong (f pe1) (f pe2) (f pe3) (f pe4) mo1 mo2
+  | Core.CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
+      Core.CompareExchangeWeak (f pe1) (f pe2) (f pe3) (f pe4) mo1 mo2
+  end
+
+
+
+
+(* TODO: hack *)
+let rec resolve_read_continuation write_sym v cont =
+  List.map (function
+    | Core.Kunseq es1 es2 ->
+        Core.Kunseq (List.map (resolve_read_expr write_sym v) es1) (List.map (resolve_read_expr write_sym v) es2)
+    | Core.Kwseq _as e2 ->
+        Core.Kwseq _as (resolve_read_expr write_sym v e2)
+    | Core.Ksseq _as e2 ->
+        Core.Ksseq _as (resolve_read_expr write_sym v e2)
+  end) cont
+
+
+
+(* TODO: hack *)
+let rec resolve_read_stack write_sym v = function
+  | Core.Stack_empty ->
+      Core.Stack_empty
+  | Core.Stack_cons cont sk ->
+      Core.Stack_cons (resolve_read_continuation write_sym v cont) (resolve_read_stack write_sym v sk)
+end
+
+
+
+(* TODO: hack *)
+val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
+let resolve_read write_sym v core_st =
+  <| core_st with
+       thread_states= List.map (fun (tid, (parent_tid_opt, th_st)) ->
+                       (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym v th_st.arena;
+                                                            stack= resolve_read_stack write_sym v th_st.stack; |>))
+                     ) core_st.thread_states
+  |>
+
+
+
+(*
+type thread_state = <|
+  arena:        expr core_run_annotation;
+  stack:        stack core_run_annotation;
+|>
+
+
+(* TODO: more *)
+type io_state = <|
+  stdout: string;
+|>
+
+type core_state = <|
+  thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
+  io:            io_state;
+|>
+*)
+
+
+
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.t driver_state
 let rec stepConcurrency n dr_st =
@@ -190,17 +355,19 @@ let rec stepConcurrency n dr_st =
     | 0 ->
         ND.return dr_st
     | _ ->
-        (let concur_steps = exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
-        if Set.null concur_steps then
+        (let concur_steps = Set_extra.toList $ exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
+        if List.null concur_steps then
           ND.return dr_st
         else
-          ND.pick (Set_extra.toList concur_steps) >>= function
+          ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
                 ND.return  <| dr_st with concurrency_state= concur_st' |>
             
             | ReadsFrom v w performed_act concur_st' ->
                 (* TODO: v is the new concrete value, w is the symbolic value from the write *)
-                ND.return  <| dr_st with concurrency_state= concur_st' |>
+                let Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) = w in
+                ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
+                                         concurrency_state= concur_st' |>
           end) >>= fun dr_st' ->
         
         stepConcurrency (n-1) dr_st'
@@ -226,7 +393,7 @@ let rec stepConcurrency n dr_st =
 
 
 
-
+(*
 val driver_step: driver_state -> ND.t driver_state
 let driver_step dr_st =
   (* Calling the Core evaluator for 1 step *)
@@ -287,3 +454,110 @@ let driver_step dr_st =
       
       (* TODO: needs to finish the Concurrency execution *)
   end
+*)
+
+(* Returns the number of uncommitted action in the concurency memory model state *)
+val number_of_uncommitted: exeState -> nat
+let number_of_uncommitted concur_st =
+  Set.size concur_st.preEx.actions - Set.size concur_st.committed
+
+
+
+(* TODO: debug *)
+val pp_core_state: forall 'a. core_state -> string
+declare ocaml target_rep function pp_core_state = `Boot_pprint.pp_core_state`
+
+
+
+
+val     driver: driver_state -> ND.t (Core.expr core_run_annotation)
+let rec driver dr_st =
+  let process_core_step = function
+      (* case where the Core program performs a memory action *)
+    | Step_action_request debug_str tid request_m ->
+        runCore request_m dr_st >>= fun (request, dr_st') ->
+          let (preEx_step, core_st') =
+            match request with
+              | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
+                  (<| action=       Alloc aid tid ptr_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else  Non_Atomic); |>,
+                   core_st')
+              
+              | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  (<| action=       Store aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+              
+              | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  (<| action=       Load aid tid mo ptr_val mem_val;
+                      sbBefore=     sb_edges;
+                      ddBefore=     dd_edges;
+                      aswBefore=    asw_edges;
+                      locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic); |>,
+                   core_st')
+            end in
+            
+            let dr_st' = <| dr_st' with core_state=        core_st';
+                                        concurrency_state= updatePreEx dr_st.concurrency_state preEx_step; |> in
+            
+            (* non deterministically pick how many time we step the concurrency model this turn *)
+            ND.pick (Enum.enumFromTo 0 (number_of_uncommitted dr_st'.concurrency_state)) >>= fun n ->
+            
+            stepConcurrency n dr_st' >>= driver
+  
+    (* case where the Core program does a non pure but non memory-related
+       step (typically ordering related stuff) *)
+  | Step_tau debug_str tid step_m ->
+      runCore step_m dr_st >>= fun (core_st', dr_st') ->
+      driver <| dr_st' with core_state= core_st' |>
+  
+    (* case where the Core program does a pure step *)
+  | Step_eval debug_str tid step_m ->
+      runCore step_m dr_st >>= fun (core_st', dr_st') ->
+      driver <| dr_st' with core_state= core_st' |>
+
+
+(*  
+    (* case where the Core program is done *)
+  | Step_done v ->
+      ND.return v
+      (* TODO: needs to finish the Concurrency execution *)
+*)
+  end in
+  
+
+(*
+  match core_steps dr_st.core_file dr_st.core_state with
+    | [] ->
+        stepConcurrency (number_of_uncommitted dr_st.concurrency_state) dr_st >>= fun dr_st' -> 
+        (* TODO: this is pretty disgusting *)
+        ND.return $
+          match dr_st'.core_state.thread_states with
+            | [(_, (_, th_st))] ->
+                th_st.arena
+            | xs ->
+                Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
+          end
+    | xs ->
+        xs >>= process_core_step
+  end
+*)
+  ND.tryM (core_steps dr_st.core_file dr_st.core_state)
+    process_core_step
+    (fun () ->
+      stepConcurrency (number_of_uncommitted dr_st.concurrency_state) dr_st >>= fun dr_st' -> 
+      (* TODO: this is pretty disgusting *)
+      ND.return $
+        match dr_st'.core_state.thread_states with
+          | [(_, (_, th_st))] ->
+              th_st.arena
+          | xs ->
+              Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
+        end
+    )

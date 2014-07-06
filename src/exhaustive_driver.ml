@@ -11,43 +11,7 @@ module SEU = State_exception_undefined
 let (>>=) = SEU.bind4
 
 
-let mk_string_of_continuation_element = function
-  | Kunseq (es1, es2) ->
-      fun z ->
-        let str1 = List.fold_right (fun e acc -> Boot_pprint.pp_core_expr e ^ " || " ^ acc) es1 "" in
-        let str2 = List.fold_right (fun e acc -> acc ^ "|| " ^ Boot_pprint.pp_core_expr e) es2 "" in
-        "[ " ^ str1 ^ z ^ str2 ^ " ]"
-  | Kwseq (_as, e) ->
-      fun z ->
-        let str = Boot_pprint.pp_core_expr e in
-        "let weak TODO = " ^ z ^ " in " ^ str
-  | Ksseq (_as, e) ->
-      fun z ->
-        let str = Boot_pprint.pp_core_expr e in
-        "let strong TODO = " ^ z ^ " in " ^ str
 
-let string_of_continuation cont =
-  List.fold_left (fun acc cont_elem -> mk_string_of_continuation_element cont_elem acc) "[]" cont
-
-
-let rec string_of_stack = function
-  | Stack_empty ->
-      ""
-  | Stack_cons (cont, Stack_empty) ->
-      string_of_continuation cont
-  | Stack_cons (cont, sk) ->
-      string_of_continuation cont ^ " . " ^ string_of_stack sk
-
-
-
-
-let print_core_state st =
-  List.iter (fun (tid, (_, th_st)) ->
-    Printf.printf "Thread %s:\n" (Big_int.string_of_big_int tid);
-    Printf.printf "  arena= %s\n" (Boot_pprint.pp_core_expr th_st.Core_run2.arena);
-    Printf.printf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack);
-    print_newline ()
-  ) st.Core_run2.thread_states
 
 
 
@@ -92,12 +56,13 @@ let string_of_core_run_error = function
 
 
 
-
+(*
 let rec loop file dr_st =
   print_core_state dr_st.Driver.core_state;
   
   let dr_sts' = Driver.driver_step dr_st in
   List.iter (fun (_, a) -> loop file a) dr_sts'
+*)
   
 (*  
   let steps = Core_run2.core_steps file st in
@@ -164,7 +129,14 @@ let drive file =
   let file = Core_run2.convert_file file in
   
   
-  let _ = loop file (Driver.initial_driver_state file) in
+(*  let _ = loop file (Driver.initial_driver_state file) in *)
+  
+  let vs = Driver.driver (Driver.initial_driver_state file) in
+  Printf.printf "Number of executions: %d\n" (List.length vs);
+  
+  List.iter (fun (n, (_, v)) ->
+    Printf.printf "Execution #%d has value:\n  %s\n\n" n (Boot_pprint.pp_core_expr v)
+  ) (Global.numerote vs);
   
   Exception.return0 ()
 
