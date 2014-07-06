@@ -98,19 +98,6 @@ module NDEU = struct
           ND.return (Exception.fail err)
     end)
   
-
-
-(*
-val listM: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
-let listM t xs = sequence (t xs)
-
-val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
-let mapM f xs = sequence (List.map f xs)
-*)
-
-
-
-
   
   val mapM: forall 'a 'b 'msg. ('a -> ND.t (Exception_undefined.t 'b 'msg)) -> list 'a -> ND.t (Exception_undefined.t (list 'b) 'msg)
   let mapM f m =
@@ -118,6 +105,11 @@ let mapM f xs = sequence (List.map f xs)
       ND.return (
         Exception_undefined.sequence zs
       )
+    )
+
+  let add_equation symb_eq =
+    ND.bind (ND.add_equation symb_eq) (fun () ->
+      ND.return $ Exception_undefined.return ()
     )
 end
 
@@ -131,6 +123,7 @@ end
    it is necessary to call eval repeatedly until is_value returns True. *)
 
 let inline (>>=) = NDEU.bind
+let inline (>>) m f = m >>= fun _ -> f
 
 val     core_eval: Core.file core_run_annotation -> Core.expr core_run_annotation ->
                    NDEU.t (Core.expr core_run_annotation) core_run_error
@@ -176,24 +169,29 @@ let rec core_eval file expr =
           core_eval file pe2 >>= fun pe2' ->
           if is_value pe1' && is_value pe2' then
             match (binop, pe1', pe2') with
-                | (OpAdd, Econst (Mem.MV_integer sym1), Econst (Mem.MV_integer sym2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Add sym1 sym2)))
-                | (OpSub, Econst (Mem.MV_integer sym1), Econst (Mem.MV_integer sym2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Sub sym1 sym2)))
-                | (OpMul, Econst (Mem.MV_integer sym1), Econst (Mem.MV_integer sym2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Mul sym1 sym2)))
-                | (OpDiv, Econst (Mem.MV_integer sym1), Econst (Mem.MV_integer sym2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Div sym1 sym2)))
-                | (OpMod, Econst (Mem.MV_integer sym1), Econst (Mem.MV_integer sym2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Mod sym1 sym2)))
-                | (OpEq, Econst (Mem.MV_integer _), Econst (Mem.MV_integer _)) ->
-                    (* TODO: constraint *)
-                    ND.msum [NDEU.return Etrue; NDEU.return Efalse]
+                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Mod symb1 symb2)))
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    ND.msum [
+                      NDEU.add_equation (Symbolic.eq symb1 symb2)  >> NDEU.return Etrue;
+                      NDEU.add_equation (Symbolic.neq symb1 symb2) >> NDEU.return Efalse
+                    ]
                 | (OpEq, Ectype ty1, Ectype ty2) ->
                     NDEU.return (if ty1 = ty2 then Etrue else Efalse)
-                | (OpLt, Econst (Mem.MV_integer _), Econst (Mem.MV_integer _)) ->
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
                     (* TODO: constraint *)
-                    ND.msum [NDEU.return Etrue; NDEU.return Efalse]
+                    ND.msum [
+                      NDEU.add_equation (Symbolic.lt symb1 symb2) >> NDEU.return Etrue;
+                      NDEU.add_equation (Symbolic.ge symb1 symb2) >> NDEU.return Efalse
+                    ]
                 | (OpOr, Efalse, Efalse) ->
                     NDEU.return Efalse
                 | (OpOr, _, _) ->

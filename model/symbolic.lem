@@ -45,18 +45,24 @@ type equation =
   | Symbolic_eq  of symbolic * symbolic
   | Symbolic_neq of symbolic * symbolic
   | Symbolic_lt  of symbolic * symbolic
+  | Symbolic_ge  of symbolic * symbolic
 
 val eq: symbolic -> symbolic -> equation
 let eq symb1 symb2 =
   Symbolic_eq symb1 symb2
 
+val neq: symbolic -> symbolic -> equation
+let neq symb1 symb2 =
+  Symbolic_neq symb1 symb2
+
 val lt: symbolic -> symbolic -> equation
 let lt symb1 symb2 =
   Symbolic_lt symb1 symb2
 
-val neq: symbolic -> symbolic -> equation
-let neq symb1 symb2 =
-  Symbolic_neq symb1 symb2
+val ge: symbolic -> symbolic -> equation
+let ge symb1 symb2 =
+  Symbolic_ge symb1 symb2
+
 
 
 type equations = list equation
@@ -66,6 +72,9 @@ val empty_equations: equations
 let empty_equations =
   []
 
+val add_equation: equation -> equations -> equations
+let add_equation symb_eq eqs =
+  symb_eq :: eqs
 
 val combine_equations: equations -> equations -> equations
 let combine_equations eqs1 eqs2 =
@@ -119,3 +128,20 @@ type t 'a =
 
 val return: forall 'a. 'a -> t 'a
 *)
+
+
+
+
+(* TODO *)
+val is_unsat_equation: equation -> bool
+let is_unsat_equation = function
+  | Symbolic_eq  symb1 symb2 ->
+      symb1 = symb2
+  | _ ->
+      false
+end
+
+
+val is_unsat: equations -> bool
+let is_unsat eqs =
+  List.any is_unsat_equation eqs

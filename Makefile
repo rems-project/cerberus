@@ -93,11 +93,18 @@ PPRINTERS_ML=\
   pp_ail.ml pp_core.ml pp_run.ml
 
 
+# TODO: these is AddaX specific
+Z3_API_PATH=~/Applications/z3-git/build/api/ml
+Z3_LIB=/Library/lib
+
+
+
 
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -package pprint -libs nums,unix -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -use-ocamlfind -pkgs pprint -libs nums,unix -cflags -bin-annot
+# OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -use-ocamlfind -pkgs pprint,z3 -libs nums,unix -cflags -bin-annot,-custom,-I,$(Z3_API_PATH) -lflags -cclib,-L$(Z3_LIB),-cclib,-lz3
 
 
 
@@ -263,6 +270,11 @@ cerbcore_byte: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PAR
 	ln -fs _ocaml_generated/cerbcore.byte cerbcore
 
 
+cerbcore_native: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER_ML) $(PPRINTERS_ML)) | $(BUILD_DIR)
+#	cd $(BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
+	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(BUILD_DIR)/cerbcore.ml
+	cd $(BUILD_DIR); $(OCAMLBUILD) cerbcore.native
+	ln -fs _ocaml_generated/cerbcore.native cerbcore
 
 
 

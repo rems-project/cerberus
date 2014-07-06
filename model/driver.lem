@@ -472,6 +472,8 @@ declare ocaml target_rep function pp_core_state = `Boot_pprint.pp_core_state`
 
 val     driver: driver_state -> ND.t (Core.expr core_run_annotation)
 let rec driver dr_st =
+(*  let _ = Boot.output_string (pp_core_state dr_st.core_state) in *)
+
   let process_core_step = function
       (* case where the Core program performs a memory action *)
     | Step_action_request debug_str tid request_m ->
