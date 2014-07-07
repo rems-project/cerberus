@@ -6,7 +6,7 @@ open Colour
 
 module P = PPrint
 
-let isatty = ref true
+let isatty = ref false
 
 
 
