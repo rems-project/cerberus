@@ -322,6 +322,51 @@ let resolve_read write_sym v core_st =
   |>
 
 
+val resolve_read_pre_execution: Symbol.t -> Mem.mem_value -> pre_execution -> pre_execution
+let resolve_read_pre_execution write_sym v preEx =
+  let f = function
+    | Mem.MV_pointer ptr_val ->
+        Mem.MV_pointer ptr_val
+    | Mem.MV_integer symb ->
+        if Symbolic.symbol write_sym = symb then
+          v
+        else
+          Mem.MV_integer symb
+  end in
+
+  let resolve_read_action = function
+(*
+    | Lock aid tid loc lk ->
+        Lock aid tid loc lk
+    | Unlock aid tid loc ->
+        Unlock aid tid loc
+*)
+    | Load aid tid mo loc rv ->
+        Load aid tid mo loc (f rv)
+    | Store aid tid mo loc sv ->
+        Store aid tid mo loc (f sv)
+(*
+    | RMW aid tid mo loc v1 v2 ->
+        RMW aid tid mo loc v1 v2
+    | Fence aid tid mo ->
+        Fence aid tid mo
+    | Blocked_rmw aid tid loc ->
+        Blocked_rmw aid tid loc
+*)
+    | Alloc aid tid loc ->
+        Alloc aid tid loc
+    | Dealloc aid tid loc ->
+        Dealloc aid tid loc
+  end in
+
+  <| preEx with
+       actions= Set.map resolve_read_action preEx.actions;
+       sb=      Set.map (fun (a,b) -> (resolve_read_action a, resolve_read_action b)) preEx.sb;
+       asw=     Set.map (fun (a,b) -> (resolve_read_action a, resolve_read_action b)) preEx.asw;
+       dd=      Set.map (fun (a,b) -> (resolve_read_action a, resolve_read_action b)) preEx.dd;
+ |>
+
+
 
 
 
@@ -350,7 +395,7 @@ let rec stepConcurrency n dr_st =
                 ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
                 
                 ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
-                                         concurrency_state= concur_st' |>
+                                         concurrency_state= <| concur_st' with preEx= resolve_read_pre_execution write_sym v concur_st'.preEx |> |>
           end) >>= fun dr_st' ->
         
         stepConcurrency (n-1) dr_st'

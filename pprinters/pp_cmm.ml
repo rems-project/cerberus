@@ -73,13 +73,16 @@ let string_of_pre_execution preEx =
   Printf.sprintf "preEx {\n%s\n}" str
 
 
-let dot_of_pre_execution preEx =
+let dot_of_pre_execution preEx value_str eqs_str =
   "digraph G {" ^
+  "value [shape=box, label= \"Value: " ^ value_str ^ "\"];" ^
+  "eqs [shape=box, label= \"" ^ eqs_str ^ "\"];" ^
+  "subgraph cluster1 {" ^
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
                                       string_of_action act2 ^ "\";" ^ acc) preEx.sb "") ^
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
                                       string_of_action act2 ^ "\" [color=\"deeppink4\"];" ^ acc) preEx.asw "") ^
-  "}"
+  "}}"
 
 
 
