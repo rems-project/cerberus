@@ -21,18 +21,6 @@ let bind m f =
   end
 
 
-(*
-val ubind: forall 'a 'b 'msg. Undefined.t 'a -> ('a -> Exception.t (Undefined.t 'b) 'msg) -> Exception.t (Undefined.t 'b) 'msg
-let ubind m f =
-  match m with
-    | Undefined.Defined z ->
-        f z
-    | Undefined.Undef ubs ->
-        Exception.return (Undefined.Undef ubs)
-    | Undefined.Error ->
-        Exception.return Undefined.Error
-  end
-*)
 
 
 val     mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg

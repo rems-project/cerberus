@@ -247,6 +247,7 @@ let rec core_eval file expr =
                 NDEU.return (Eif pe1' pe2 pe3)
         end
       
+(*
       | Eis_scalar pe ->
           core_eval file pe >>= function
             | Ectype ty ->
@@ -290,6 +291,7 @@ let rec core_eval file expr =
                 else
                   NDEU.return (Eis_unsigned pe')
           end
+*)
 end
 
 

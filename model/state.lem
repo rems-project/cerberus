@@ -62,12 +62,6 @@ val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
 let mapM_ f _as = sequence_ (List.map f _as)
 
 
-(*
-let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
-val mapM_: forall 'a 'b 's. ('a -> t 'b 's) -> list 'a -> t unit 's
-let mapM_ f _as = sequence_ (List.map f _as)
-*)
-
 
 val get: forall 's. t 's 's
 let get =

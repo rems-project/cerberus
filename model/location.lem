@@ -1,4 +1,4 @@
-open import Pervasives (* Lexing_ *)
+open import Pervasives
 
 open import {ocaml} `Lexing`
 
@@ -36,20 +36,3 @@ let last_line_offset  <|start = _; stop = e|> = e.pos_lnum
 let first_char        <|start = s; stop = _|> = s.pos_cnum
 let last_char         <|start = _; stop = e|> = e.pos_cnum
 
-
-
-(* val to_string: t -> string *)
-(*
-TODO[newLem]
-
-let to_string  = function
-  | Just p ->
-      let f = first_line p in
-      let l = last_line  p in
-      if f = l then
-        "line " ^ string_of_num f
-      else
-        "lines " ^ string_of_num f ^ "-" ^ string_of_num l
-  | Nothing -> "Unknowned location"
-end
-*)

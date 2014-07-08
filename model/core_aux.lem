@@ -3,15 +3,7 @@ import Boot Product Symbolic Exception Naive_memory
 
 open import Thread Core_run2_aux
 
-module Mem = Naive_memory (* New_memory *)
-
-
-
-
-
-
-
-
+module Mem = Naive_memory
 
 
 val sizeof: forall 'a. expr 'a -> expr 'a
@@ -65,86 +57,8 @@ val cfunction_const: forall 'a. Symbol.t -> expr 'a
 let cfunction_const fsym =
   Econst (Mem.MV_pointer (Mem.function_pointer fsym))
 
-(*
-val array_const: forall 'a. list Mem.mem_value -> expr 'a
-let array_const vs =
-  Econst (Mem.MV_array vs)
-*)
 
 
-
-(* Project an AilTypes.ctype into a Core.ctype *)
-val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
-let rec proj_ctype _ =
-  Boot.assert_false "WIP: proj_ctype (need to the alignment stuff, this is now going to be Translation.lem effectfull)"
-(*
-
-
-(*
-
-TODO: bring back structs/unions
-
-  let proj_member = function
-    | Ail.MEMBER ty               -> MEMBER (proj_ctype ty)
-    | Ail.BITFIELD ty w is_packed -> BITFIELD (proj_ctype ty) w is_packed
-  end in
-*)
-  match ty with
-    | AilTypes.Void             -> Core_ctype.Void
-    | AilTypes.Basic bt         -> Core_ctype.Basic bt
-    | AilTypes.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
-    | AilTypes.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
-    | AilTypes.Pointer _ ty    -> Core_ctype.Pointer (proj_ctype ty)
-    | AilTypes.Atomic ty        -> Core_ctype.Atomic (proj_ctype ty)
-(*
-    | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
-    | Ail.ENUM id              -> ENUM id
-    | Ail.ATOMIC ty            -> ATOMIC (proj_ctype ty)
-    | Ail.TYPEDEF _            -> Boot.assert_false "[Core_aux.proj_ctype] found a A.TYPEDEF"
-    | Ail.SIZE_T               -> SIZE_T
-    | Ail.INTPTR_T             -> INTPTR_T
-    | Ail.WCHAR_T              -> WCHAR_T
-    | Ail.CHAR16_T             -> CHAR16_T
-    | Ail.CHAR32_T             -> CHAR32_T
-*)
-end
-*)
-
-(* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
-let rec unproj_ctype _ =
-  Boot.assert_false "WIP: unproj_ctype"
-
-(*
-(*
-  let unproj_member = function
-    | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
-    | BITFIELD ty w is_packed -> Ail.BITFIELD (unproj_ctype ty) w is_packed
-  end in
-*)
-  match ty with
-    | Core_ctype.Void              -> AilTypes.Void
-    | Core_ctype.Basic bt          -> AilTypes.Basic bt
-    | Core_ctype.Array ty n        -> AilTypes.Array (unproj_ctype ty) n
-    | Core_ctype.Function ty tys b -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys) b
-    | Core_ctype.Pointer ty        -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
-    | Core_ctype.Atomic ty         -> AilTypes.Atomic (unproj_ctype ty)
-(*
-    | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
-    | ENUM id            -> Ail.ENUM id
-    | ATOMIC ty          -> Ail.ATOMIC (unproj_ctype ty)
-    | SIZE_T             -> Ail.SIZE_T
-    | INTPTR_T           -> Ail.INTPTR_T
-    | WCHAR_T            -> Ail.WCHAR_T
-    | CHAR16_T           -> Ail.CHAR16_T
-    | CHAR32_T           -> Ail.CHAR32_T
-*)
-end
-*)
-
-val mk_ctype: forall 'a. AilTypes.ctype -> expr 'a
-let mk_ctype ty = Ectype (proj_ctype ty)
 
 let rec mk_wseq a_opts_es =
   match a_opts_es with
@@ -177,109 +91,6 @@ let is_negative_action = function
   | (Paction Neg _) -> true
   | _ -> false
 end
-
-
-(*
-let rec free_syms e =
-  match e with
-  | Etuple es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eunit ->
-      {}
-  | Enull ->
-      {}
-  | Eskip ->
-      {}
-  | Econst _ ->
-      {}
-  | Eaddr _ ->
-      {}
-  | Esym a ->
-      {a}
-  | Eimpl _ ->
-      {}
-  | Eop _ e1 e2 ->
-      free_syms e1 union free_syms e2
-  | Etrue ->
-      {}
-  | Efalse ->
-      {}
-  | Enot e ->
-      free_syms e
-  | Ectype _ ->
-      {}
-  | Elet a e1 e2 ->
-      free_syms e1 union (free_syms e2 \ {a})
-  | Eif e1 e2 e3 ->
-      free_syms e1 union free_syms e2 union free_syms e3
-  | Eproc _ _ es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Ecall _ es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eoutput _ ->
-      {}
-  | Esame e1 e2 ->
-      free_syms e1 union free_syms e2
-  | Eundef _ ->
-      {}
-  | Eerror ->
-      {}
-  | Eaction (Paction _ act) ->
-      free_syms_action act
-  | Eunseq es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Ewseq _as e1 e2 ->
-      free_syms e1 union (free_syms e2 \ (set_from_options _as))
-  | Esseq _as e1 e2 ->
-      free_syms e1 union (free_syms e2 \ (set_from_options _as))
-  | Easeq a_opt act1 (Paction _ act2) ->
-      free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Just a -> {a} | Nothing -> {} end))
-  | Esave _ _ e ->
-      free_syms e
-  | Erun _ _ _ ->
-      {}
-  | Eret e ->
-      free_syms e
-  | Epar es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | End es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eindet e ->
-      free_syms e
-  | Ebound _ e ->
-      free_syms e
-
-(* TODO: temporary *)
-  | Eis_scalar e ->
-      free_syms e
-  | Eis_integer e ->
-      free_syms e
-  | Eis_signed e ->
-      free_syms e
-  | Eis_unsigned e ->
-      free_syms e
-end
-
-and free_syms_action a =
-  match a with (Action _ act_) ->
-    match act_ with
-      | Create ty _ ->
-          free_syms ty
-      | Alloc n _ ->
-          free_syms n
-      | Kill o ->
-          free_syms o
-      | Store ty o n _ ->
-          free_syms ty union free_syms o union free_syms n
-      | Load ty o _ ->
-          free_syms ty union free_syms o
-      | CompareExchangeStrong e1 e2 e3 e4 _ _ ->
-          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
-      | CompareExchangeWeak e1 e2 e3 e4 _ _ ->
-          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
-  end
-end
-*)
 
 
 (* check if a symbolic names is part of a pattern *)
@@ -360,7 +171,6 @@ let rec subst_sym a v e =
     | Ewait tids ->
         Ewait tids
 
-(* TODO: temporary *)
   | Eis_scalar e ->
       Eis_scalar (subst_sym a v e)
   | Eis_integer e ->
@@ -407,9 +217,7 @@ let subst_syms _as v e =
 
     | (_        , Etuple vs) -> Global.foldl2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
 
-(*
-    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
-*)
+
     | _ -> Boot.assert_false "[Core_aux.subst_syms] impossible case"
   end 
 
@@ -496,7 +304,7 @@ let rec subst_wait tid v = function
       Eis_unsigned pe
 end
 
-(* TODO: these functions will become obsolete once the silly determinism in Epar is removed *)
+
 let subst_wait_continuation_element tid v = function
   | Kunseq es1 es2 ->
       Kunseq (List.map (subst_wait tid v) es1) (List.map (subst_wait tid v) es2)
@@ -515,14 +323,6 @@ let rec subst_wait_stack tid v = function
   | Stack_cons cont sk ->
       Stack_cons (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
 end
-
-
-
-
-
-
-
-
 
 
 (* Asuming well typed expressions *)
@@ -570,9 +370,7 @@ let rec is_pure e =
        false
    | Eunseq _ ->
        false
-(* TODO: making a change from Core_run to Core_run2
-       all is_pure es
-*)
+
    | Epar _ ->
        false (* all is_pure es *)
    | Ewait _ ->
@@ -598,7 +396,6 @@ let rec is_pure e =
    | End _ ->
        false
 
-(* TODO: temporary *)
   | Eis_scalar _ ->
       true
   | Eis_integer _ ->
@@ -774,20 +571,6 @@ let rec find_labeled_continuation k expr =
 
 
 
-(*
-type _continuation 'a =
-  | Kunseq of list (expr 'a) * list (expr 'a)
-  | Kwseq  of list (maybe sym) * expr 'a
-  | Ksseq  of list (maybe sym) * expr 'a
-
-type continuation 'a = list (_continuation 'a)
-
-
-type labeled_continuation 'a = list (sym * ctype) * expr 'a
-
-
-type stack 'a = list (continuation 'a)
-*)
 
 val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
 let apply_continuation cont expr =
@@ -803,19 +586,6 @@ let apply_continuation cont expr =
   foldl (fun acc x -> f x acc) expr cont
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 (* Functions on continuation and stacks *)
 val empty_stack: forall 'a. stack 'a
 let empty_stack =
@@ -829,17 +599,7 @@ let is_empty_stack = function
       false
 end
 
-(*
-val current_continuation_element: forall 'a 'msg. 'msg -> stack 'a -> Exception.t (maybe (continuation_element 'a)) 'msg
-let current_continuation_element err = function
-  | Stack_empty ->
-      Exception.fail err
-  | Stack_cons [] _ ->
-      Exception.return Nothing
-  | Stack_cons (cont_elem::_) _ ->
-      Exception.return (Just cont_elem)
-end
-*)
+
 
 val push_empty_continuation: forall 'a. stack 'a -> stack 'a
 let push_empty_continuation sk =

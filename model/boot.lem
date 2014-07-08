@@ -3,15 +3,10 @@ import Core
 
 (* Error messages for impossible situations *)
 val outOfHomeomorphism: forall 'a. string -> 'a
-(* TODO[newLem] let inline {ocaml} outOfHomeomorphism = Ocaml.Boot.outOfHomeomorphism *)
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 declare coq   target_rep function assert_false = `DAEMON`
-
-(* declare ocaml target_rep function assert_false = specialassert false` *) 
-
-(* TODO[newLem] let inline {ocaml} assert_false = Ocaml.Boot.assert_false *)
 
 
 val debug_level: nat
@@ -19,44 +14,29 @@ declare ocaml target_rep function debug_level = `Boot_ocaml.debug_level`
 declare coq   target_rep function debug_level = `0`
 
 val debug: forall 'a. string -> 'a
-(* TODO[newLem] let inline {ocaml} debug = Ocaml.Boot.debug *)
 
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
 let inline {coq} print_debug x z = let _ = x in z (* I love lem so very much *)
 
-type char (* TODO[newLem] = Ocaml.Boot.char *)
+type char
 
 val is_digit: char -> bool
-(* TODO[newLem] let inline {ocaml} is_digit = Ocaml.Boot.is_digit *)
 
 val is_quote: char -> bool
-(* TODO[newLem] let inline {ocaml} is_quote = Ocaml.Boot.is_quote *)
 
 val span_string: (char -> bool) -> string -> string * string
-(* TODO[newLem] let inline {ocaml} span_string = Ocaml.Boot.span_string *)
 
 val unquote_string: string -> string
-(* TODO[newLem] let inline {ocaml} unquote_string = Ocaml.Boot.unquote_string *)
 
 val splitAt_string: nat -> string -> string * string
-(* TODO[newLem] let inline {ocaml} splitAt_string = Ocaml.Boot.splitAt_string *)
 
 val length_string: string -> nat
-(* TODO[newLem] let inline {ocaml} length_string = Ocaml.Boot.length_string *)
 
 (* HACK for testing *)
 val pickList: forall 'a. list 'a -> list 'a * 'a * list 'a
 declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 
-
-
-
-(* TODO: this is massive hack, just to make csmith programs work *)
-(*
-val fake_printf: string -> list (Cmm_aux_old.constant) -> string
-declare ocaml target_rep function fake_printf = `Boot_ocaml.fake_printf`
-*)
 
 val output_string: string -> unit
 declare ocaml target_rep function output_string = `Boot_ocaml.output_string2`
@@ -66,15 +46,13 @@ declare ocaml target_rep function output_string = `Boot_ocaml.output_string2`
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
 declare ocaml target_rep function pp_ail_ctype = `Boot_pprint.pp_ail_ctype`
-(* TODO[newLem] let inline {ocaml} pp_ail_ctype = Ocaml.Boot.pp_ail_ctype *)
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 declare ocaml target_rep function pp_ail_expr = `Boot_pprint.pp_ail_expr`
-(* TODO[newLem] let inline {ocaml} pp_ail_expr = Ocaml.Boot.pp_ail_expr *)
 
 val pp_core_expr: forall 'a. Core.expr 'a -> string
 declare ocaml target_rep function pp_core_expr = `Boot_pprint.pp_core_expr`
-(* TODO[newLem] let inline {ocaml} pp_core_expr = Ocaml.Boot.pp_core_expr *)
+
 let inline {coq} pp_core_expr x = let _ = x in ""
 
 val nat_of_string: string -> natural

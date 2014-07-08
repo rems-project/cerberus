@@ -110,23 +110,6 @@ let operator op sym1 sym2 =
   end
 
 
-(*
-
-(* TODO *)
-val is_unsat_equation: equation -> bool
-let is_unsat_equation = function
-  | Symbolic_eq  symb1 symb2 ->
-      symb1 = symb2
-  | _ ->
-      false
-end
-
-
-val is_unsat: equations -> bool
-let is_unsat eqs =
-  List.any is_unsat_equation eqs
-
-*)
 
 
 val simplify_symbolic: symbolic -> symbolic
