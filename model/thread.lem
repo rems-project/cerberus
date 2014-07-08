@@ -1,4 +1,4 @@
 open import Pervasives
 import UniqueId
 
-type thread_id = UniqueId.t natural
+type thread_id = UniqueId.t nat

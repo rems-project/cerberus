@@ -4,7 +4,7 @@ open import Enum
 import UniqueId
 
 type t =
-  Symbol of natural * maybe string
+  Symbol of nat * maybe string
 
 instance (Eq t)
   let (=) sym1 sym2 =
@@ -45,10 +45,10 @@ end
 
 instance (Enum t)
   let toEnum n =
-    Symbol n Nothing
+    Symbol (natFromNatural n) Nothing
   let fromEnum sym =
     let (Symbol n _) = sym in
-    n
+    naturalFromNat n
   let succ sym =
     let (Symbol n str_opt) = sym in 
     Symbol (n+1) str_opt
@@ -69,7 +69,7 @@ let fresh_pretty str =
   )
 
 
-val fresh_pretty_with_id : (natural -> string) -> State.t (UniqueId.t t) (UniqueId.supply t)
+val fresh_pretty_with_id : (nat -> string) -> State.t (UniqueId.t t) (UniqueId.supply t)
 let fresh_pretty_with_id mkStr =
   State.bind UniqueId.fresh_id (fun (Symbol id _) ->
     State.return $ Symbol id (Just (mkStr id))

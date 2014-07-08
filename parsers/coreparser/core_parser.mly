@@ -124,7 +124,7 @@ let register_cont_symbols e =
        f st e
     | Esave (k, _, e) ->
         let sym_n = !M.sym_counter in
-        M.sym_counter := Big_int.succ_big_int sym_n;
+        M.sym_counter := sym_n + 1;
         f (Pmap.add k (Symbol.Symbol (sym_n, Some k)) st) e
     | End es
     | Epar es ->
@@ -191,7 +191,7 @@ let convert_expr e arg_syms fsyms =
     | Elet (a, e1, e2) ->
         let sym_n = !M.sym_counter in
         let _a = Symbol.Symbol (sym_n, Some a) in
-        M.sym_counter := Big_int.succ_big_int sym_n;
+        M.sym_counter := sym_n+1;
         Core.Elet (_a, f st e1, f (Pmap.add a _a st) e2)
     | Eif (e1, e2, e3) ->
         Core.Eif (f st e1, f st e2, f st e3)
@@ -214,7 +214,7 @@ let convert_expr e arg_syms fsyms =
             | Some sym ->
                 let sym_n = !M.sym_counter in
                 let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := Big_int.succ_big_int sym_n;
+                M.sym_counter := sym_n+1;
                 (Some _a :: _as, Pmap.add sym _a st)
             | None ->
                 (None :: _as, st)
@@ -234,7 +234,7 @@ let convert_expr e arg_syms fsyms =
             | Some sym ->
                 let sym_n = !M.sym_counter in
                 let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := Big_int.succ_big_int sym_n;
+                M.sym_counter := sym_n+1;
                 (Some _a :: _as, Pmap.add sym _a st)
             | None ->
                 (None :: _as, st)
@@ -254,7 +254,7 @@ let convert_expr e arg_syms fsyms =
                 | Some _a ->
                     let sym_n = !M.sym_counter in
                     let _a' = Symbol.Symbol (sym_n, Some _a) in
-                    M.sym_counter := Big_int.succ_big_int sym_n;
+                    M.sym_counter := sym_n+1;
                     let (_, (s1, act1)) = g st (Core.Pos, act) in
                     let (p2, (s2, act2)) = g (Pmap.add _a _a' st) pact in
                     Core.Easeq (Some _a', Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, act2)))
@@ -330,7 +330,7 @@ let mk_file decls =
               failwith ("duplicate definition of `" ^ fname ^ "'")
             else
               let a_fun = Symbol.Symbol (!M.sym_counter, Some fname) in
-              M.sym_counter := Big_int.succ_big_int !M.sym_counter;
+              M.sym_counter := !M.sym_counter+1;
               ((if fname = "main" then Some a_fun else main),
                Pmap.add fname a_fun fsyms,
                Pmap.add a_fun fdef fun_map)
@@ -342,7 +342,7 @@ let mk_file decls =
         let (arg_syms, args') =
           List.fold_left (fun (m, args') (x, ty) ->
             let _a = Symbol.Symbol (!M.sym_counter, Some x) in
-            M.sym_counter := Big_int.succ_big_int !M.sym_counter;
+            M.sym_counter := !M.sym_counter+1;
             (Pmap.add x _a m, (_a, ty) :: args')
           ) (Pmap.empty compare, []) args in
         (coreTy_ret, args', convert_expr fbody arg_syms fsyms)) fun_map in
@@ -361,8 +361,8 @@ let mk_file decls =
                 Pmap.add i (Core.Def (bty, convert_expr e (Pmap.empty compare) (Pmap.empty compare))) impl_map
           | IFun_decl (i, (bty, args, fbody)) ->
               let (_, arg_syms, args') = List.fold_left (fun (count, m, args') (x, ty) ->
-                let _a = Symbol.Symbol (count, Some x) in (Big_int.succ_big_int count, Pmap.add x _a m, (_a, ty) :: args'))
-                (Big_int.zero_big_int, Pmap.empty compare, []) args in
+                let _a = Symbol.Symbol (count, Some x) in (count+1, Pmap.add x _a m, (_a, ty) :: args'))
+                (0, Pmap.empty compare, []) args in
               Pmap.add i (Core.IFun (bty, args', convert_expr fbody arg_syms (Pmap.empty compare))) impl_map
           | Fun_decl _ ->
               failwith "(TODO_MSG) found a function declaration in an implementation file."
@@ -518,7 +518,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 
 %start <Core_parser_util.result>start
 %parameter <M : sig
-                  val sym_counter: Big_int.big_int ref
+                  val sym_counter: int ref
                   val std: (string, Core.sym) Pmap.map
                 end>
 

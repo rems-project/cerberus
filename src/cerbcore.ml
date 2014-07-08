@@ -65,7 +65,7 @@ let run_pp =
 
 
 
-let core_sym_counter = ref Big_int.zero_big_int
+let core_sym_counter = ref 0
 
 
 

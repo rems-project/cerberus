@@ -871,7 +871,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
               (* TODO: using a Eunseq adds some silly non-determinism:
                    [ wait(tid1) || wait (tid2) ]
                  has to do one step before blocking ... *)
-              SEU.return (update_thread_state current_tid <| th_st with arena= Eunseq th_waits |> st')
+              SEU.return (update_thread_state current_tid <| th_st with arena= Eunseq $ List.reverse th_waits |> st')
             )
       
       | (Ewait _, _) ->

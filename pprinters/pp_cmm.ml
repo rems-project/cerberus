@@ -20,7 +20,7 @@ let string_of_memory_order = function
 module Mem = Naive_memory
 
 let string_of_location (Mem.Pointer_nonnull n) =
-  "@" ^ Big_int.string_of_big_int n
+  "@" ^ string_of_int n
 
 let string_of_cvalue = function
   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
@@ -31,36 +31,36 @@ let string_of_cvalue = function
 
 let string_of_action = function
   | Lock (aid, tid, loc, lock) ->
-      Printf.sprintf "Lock[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "Lock[%d]" aid
   | Unlock (aid, tid, loc) ->
-      Printf.sprintf "Unlock[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "Unlock[%d]" aid
   | Load (aid, tid, mo, loc, v) ->
-      Printf.sprintf "%s: R_{%s} %s = %s"
-        (Big_int.string_of_big_int aid) 
+      Printf.sprintf "%d: R_{%s} %s = %s"
+        aid 
         (string_of_memory_order mo)
         (string_of_location loc)
         (string_of_cvalue v)
 
   | Store (aid, tid, mo, loc, v) ->
-      Printf.sprintf "%s: W_{%s} %s := %s"
-        (Big_int.string_of_big_int aid) 
+      Printf.sprintf "%d: W_{%s} %s := %s"
+        aid 
         (string_of_memory_order mo)
         (string_of_location loc)
         (string_of_cvalue v)
 
   | RMW (aid, tid, mo, loc, v1, v2) ->
-      Printf.sprintf "RMW[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "RMW[%d]" aid
   | Fence (aid, tid, mo) ->
-      Printf.sprintf "Fence[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "Fence[%d]" aid
   | Blocked_rmw (aid, tid, loc) ->
-      Printf.sprintf "Blocked_rmw[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "Blocked_rmw[%d]" aid
   | Alloc (aid, tid, loc) ->
-      Printf.sprintf "%s: Create %s"
-        (Big_int.string_of_big_int aid) 
+      Printf.sprintf "%d: Create %s"
+        aid 
         (string_of_location loc)
 
   | Dealloc (aid, tid, loc) ->
-      Printf.sprintf "Dealloc[%s]" (Big_int.string_of_big_int aid)
+      Printf.sprintf "Dealloc[%d]" aid
 
 
 let string_of_pre_execution preEx =

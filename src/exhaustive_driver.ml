@@ -149,7 +149,8 @@ let drive file =
   let vs = Driver.driver (Driver.initial_driver_state file) in
 (*  Printf.printf "Number of executions: %d\n" (List.length vs); *)
   
-  List.iter (fun (n, (eqs, (preEx, v))) ->
+  let ky = ref [] in
+  List.iter (fun (n, (eqs, (is_blocked, preEx, v))) ->
 (*
     Printf.printf "Execution #%d under constraints:\n" n;
     print_endline "=====";
@@ -158,7 +159,12 @@ let drive file =
     Printf.printf "with pre_execution:\n%s\n" (Pp_cmm.dot_of_pre_execution preEx);
     Printf.printf "has value:\n  %s\n\n" (Boot_pprint.pp_core_expr v)
 *)
-    print_endline (Pp_cmm.dot_of_pre_execution preEx (Boot_pprint.pp_core_expr v) (pp_eqs eqs))
+    let str_v = Boot_pprint.pp_core_expr v in
+    if not (List.mem str_v !ky) && not (is_blocked) then 
+      print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_eqs eqs));
+    
+    ky := str_v :: !ky
+
   ) (Global.numerote vs);
   
   Exception.return0 ()

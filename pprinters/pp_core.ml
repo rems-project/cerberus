@@ -236,7 +236,7 @@ let rec pp_constant = function
       !^ "TODO(MV_pointer(function))"
 *)
   | Mem.MV_pointer (Mem.Pointer_nonnull n) ->
-      !^ ("@" ^ Big_int.string_of_big_int n)
+      !^ ("@" ^ string_of_int n)
   | Mem.MV_pointer ptr_val ->
       !^ "TODO(MV_pointer)" 
   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
@@ -278,7 +278,7 @@ let pp_mem_addr (pref, addr) =
 
 
 let pp_thread_id n =
-  !^ ("th_" ^ Big_int.string_of_big_int n)
+  !^ ("th_" ^ string_of_int n)
 
 
 let pp_pattern _as =

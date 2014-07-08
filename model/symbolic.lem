@@ -215,12 +215,13 @@ let subst_equations sym n eqs =
 val simplify_equations: equations -> equations
 let simplify_equations eqs =
   let (sym_ns, eqs') = extract_simplifiers eqs in
+(*
   combine_equations
     (List.map (fun (sym, n) -> eq (symbol sym) (constant n)) sym_ns)
-    
+*)
     (List.map simplify_equation $
       List.foldl (fun acc (sym, n) ->
-        subst_equations sym n acc
+        eq (symbol sym) (constant n) :: subst_equations sym n acc
       ) eqs' sym_ns)
 
 

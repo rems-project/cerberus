@@ -13,7 +13,7 @@ declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
 
-type object_id = natural
+type object_id = nat
 
 
 type memory_state = <|

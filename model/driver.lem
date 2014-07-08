@@ -25,6 +25,7 @@ type driver_state = <|
   core_run_state:    core_run_state;   (* state of the core evaluator *)
   concurrency_state: exeState; (* state of the concurrency memory model *)
   
+  blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
   trace: list string;
 |>
@@ -46,6 +47,7 @@ let initial_driver_state file =
     core_run_state=    run_st;
     concurrency_state= initialExeState emptyPreEx;
     
+    blocked= false;
     trace= [];
   |>
 
@@ -379,7 +381,7 @@ let rec stepConcurrency n dr_st =
     | _ ->
         (let concur_steps = Set_extra.toList $ exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
         if List.null concur_steps then
-          ND.return dr_st
+          Boot.assert_false "ND.return <| dr_st with blocked= true |>"
         else
           ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
@@ -429,7 +431,7 @@ let rec drive_core_thread tid dr_st =
         Boot.assert_false "drive_core_thread, wrong tid"
   end in
   
-  let _ = Boot.output_string $ "DRIVE_CORE_THREAD (" ^ string_of_natural tid ^ "):\n" ^ pp_core_state dr_st.core_state ^ "\n" in
+  let _ = Boot.output_string $ "DRIVE_CORE_THREAD (" ^ string_of_natural (naturalFromNat tid) ^ "):\n" ^ pp_core_state dr_st.core_state ^ "\n" in
   core_thread_step dr_st.core_file th_info dr_st.core_state >>= function
     | Step_tau "end of thread" _ step_m ->
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
@@ -489,7 +491,7 @@ let repair_pre_execution dr_st =
 
 
 
-val     driver: driver_state -> ND.t (Cmm_master.pre_execution * Core.expr core_run_annotation)
+val     driver: driver_state -> ND.t (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
 let rec driver _dr_st =
   let _ = Boot.output_string (pp_core_state _dr_st.core_state) in
 
@@ -555,12 +557,14 @@ let rec driver _dr_st =
     | Step_done v ->
         
         let dr_st = repair_pre_execution dr_st in 
-        stepConcurrency (number_of_uncommitted dr_st.concurrency_state) dr_st >>= fun dr_st' ->
+        let n = (number_of_uncommitted dr_st.concurrency_state) in
+        let _ = Boot.output_string $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" in
+        stepConcurrency n dr_st >>= fun dr_st' ->
         (* TODO: this is pretty disgusting *)
         ND.return $
           match dr_st'.core_state.thread_states with
             | [(_, (_, th_st))] ->
-                (dr_st'.concurrency_state.preEx, th_st.arena)
+                (dr_st'.blocked, dr_st'.concurrency_state.preEx, th_st.arena)
             | xs ->
                 Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
           end

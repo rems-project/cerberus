@@ -50,7 +50,7 @@ let rec string_of_stack = function
 let pp_core_state st =
   List.fold_left (fun acc (tid, (_, th_st)) ->
     acc ^ 
-    Printf.sprintf "Thread %s:\n" (Big_int.string_of_big_int tid) ^
+    Printf.sprintf "Thread %s:\n" (string_of_int tid) ^
     Printf.sprintf "  arena= %s\n" (pp_core_expr th_st.Core_run2.arena) ^
     Printf.sprintf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack) ^ " \n"
   ) "" st.Core_run2.thread_states
