@@ -404,10 +404,11 @@ else
                       (* TODO: ignoring pointer for now *)
                       ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
                       ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
+                                              concurrency_state= concur_st' 
 (*                                               concurrency_state= <| concur_st' with preEx= resolve_read_pre_execution write_sym v concur_st'.preEx |> *) |>
                   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
                       ND.add_equation (Symbolic.eq (Symbolic.constant n) v_symb) >>
-                      ND.return  dr_st
+                      ND.return   <| dr_st with concurrency_state= concur_st' |> 
                 end
                 
 
