@@ -136,7 +136,7 @@ let register_cont_symbols e =
 (*  convert_expr: expr -> .. -> .. -> Core.expr 'a *)
 let convert_expr e arg_syms fsyms =
   let lookup_symbol str syms =
-    Boot_ocaml.dprint ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
+    Boot_ocaml.dprint 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
     begin try
         Pmap.find str syms (* TODO: Error handling *)
       with

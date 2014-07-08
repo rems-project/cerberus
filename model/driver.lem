@@ -388,16 +388,29 @@ let rec stepConcurrency n dr_st =
                 ND.return  <| dr_st with concurrency_state= concur_st' |>
             
             | ReadsFrom v w performed_act concur_st' ->
-                let _ = Boot.output_string "READSFROM\n" in
-                (* TODO: v is the new concrete value, w is the symbolic value from the write *)
-                let Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) = w in
-                
-                (* TODO: ignoring pointer for now *)
+                ND.print_debug ("READSFROM " ^ string_of_natural (naturalFromNat (aid_of performed_act)) ^ "\n") >>
+                (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
-                ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
+
+(*
+                if v_symb = Symbolic.Symbolic_constant 1 then
+                  ND.print_debug "KILLING BECAUSE OF A 1\n" >>
+                  ND.kill_execution >>
+                  ND.return dr_st
+else
+*)
+                match w with
+                  | Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) -> 
+                      (* TODO: ignoring pointer for now *)
+                      ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
+                      ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
+(*                                               concurrency_state= <| concur_st' with preEx= resolve_read_pre_execution write_sym v concur_st'.preEx |> *) |>
+                  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
+                      ND.add_equation (Symbolic.eq (Symbolic.constant n) v_symb) >>
+                      ND.return  dr_st
+                end
                 
-                ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
-                                         concurrency_state= <| concur_st' with preEx= resolve_read_pre_execution write_sym v concur_st'.preEx |> |>
+
           end) >>= fun dr_st' ->
         
         stepConcurrency (n-1) dr_st'
@@ -431,7 +444,7 @@ let rec drive_core_thread tid dr_st =
         Boot.assert_false "drive_core_thread, wrong tid"
   end in
   
-  let _ = Boot.output_string $ "DRIVE_CORE_THREAD (" ^ string_of_natural (naturalFromNat tid) ^ "):\n" ^ pp_core_state dr_st.core_state ^ "\n" in
+(*  ND.print_debug $ "DRIVE_CORE_THREAD (" ^ string_of_natural (naturalFromNat tid) ^ "):\n" ^ pp_core_state dr_st.core_state ^ "\n" >> *)
   core_thread_step dr_st.core_file th_info dr_st.core_state >>= function
     | Step_tau "end of thread" _ step_m ->
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
@@ -493,7 +506,7 @@ let repair_pre_execution dr_st =
 
 val     driver: driver_state -> ND.t (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
 let rec driver _dr_st =
-  let _ = Boot.output_string (pp_core_state _dr_st.core_state) in
+(*  ND.print_debug (pp_core_state _dr_st.core_state) >> *)
 
 
   drive_core _dr_st >>= fun dr_st ->
@@ -506,7 +519,7 @@ let rec driver _dr_st =
           let (preEx_step, core_st') =
             match request with
               | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
-                  let _ = Boot.output_string "CREATE\n" in
+(*                  ND.print_debug "CREATE\n" >> *)
                   (<| action=       Alloc aid tid ptr_val;
                       sbBefore=     sb_edges;
                       ddBefore=     dd_edges;
@@ -515,7 +528,7 @@ let rec driver _dr_st =
                    core_st')
               
               | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
-                  let _ = Boot.output_string "STORE\n" in
+                  (* ND.print_debug "STORE\n" >> *)
                   (<| action=       Store aid tid mo ptr_val mem_val;
                       sbBefore=     sb_edges;
                       ddBefore=     dd_edges;
@@ -524,7 +537,7 @@ let rec driver _dr_st =
                    core_st')
               
               | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
-                  let _ = Boot.output_string "LOAD\n" in
+                  (* ND.print_debug "LOAD\n" >> *)
                   (<| action=       Load aid tid mo ptr_val mem_val;
                       sbBefore=     sb_edges;
                       ddBefore=     dd_edges;
@@ -549,7 +562,7 @@ let rec driver _dr_st =
             driver dr_st'
     
     | Step_tau debug_str _ step_m ->
-        let _ = Boot.output_string $ "Found a tau ===> " ^ debug_str ^ "\n" in
+        ND.print_debug $ "Found a tau ===> " ^ debug_str ^ "\n" >>
         (* TODO: why is this needed ?????? *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         driver <| dr_st' with core_state= core_st' |>
@@ -558,7 +571,7 @@ let rec driver _dr_st =
         
         let dr_st = repair_pre_execution dr_st in 
         let n = (number_of_uncommitted dr_st.concurrency_state) in
-        let _ = Boot.output_string $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" in
+        ND.print_debug $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" >>
         stepConcurrency n dr_st >>= fun dr_st' ->
         (* TODO: this is pretty disgusting *)
         ND.return $

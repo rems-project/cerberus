@@ -687,7 +687,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                             Step_action_request "load" current_tid (
                               SEU.runS fresh_action_id >>= fun load_aid ->
                               SEU.runS fresh_symbol    >>= fun val_sym  ->
-                              let mem_val = Mem.MV_integer (Symbolic.symbol val_sym) in
+                              let mem_val = Mem.MV_integer  (Symbolic.symbol val_sym) (* (Symbolic.constant 0) *) in
                               SEU.return $
                                 LoadRequest sb_before dd_before asw_before
                                             load_aid current_tid mo ty ptr_val mem_val

@@ -3,17 +3,36 @@ open import List Function
 open import Global
 import Symbolic
 
-type t 'a = list (Symbolic.equations * 'a)
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `Boot_ocaml.output_string2`
+
+
+type t 'a = list (bool * string * Symbolic.equations * 'a)
 
 val return: forall 'a. 'a -> t 'a
-let return x = [(Symbolic.empty_equations, x)]
+let return x = [(false, "", Symbolic.empty_equations, x)]
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind m f =
-  List.filter (fun (eqs, _) -> not (Symbolic.is_clearly_unsat eqs)) $
-    List.concatMap (fun (eqsA, a) ->
-      List.map (fun (eqsB, b) ->
-        (Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB, b)
+  (* DEBUG *)
+(*  List.filter (fun (eqs, _) -> not (Symbolic.is_clearly_unsat eqs)) $ *)
+(*
+  List.filter (fun (debug_log, eqs, _) -> not (let b = Symbolic.is_clearly_unsat eqs in if b then let _ = output_string "UNSAT" in true else false)) $
+    List.concatMap (fun (debug_logA, eqsA, a) ->
+      List.map (fun (debug_logB, eqsB, b) ->
+        (debug_logA ^ debug_logB, Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB, b)
+      ) $ f a
+    ) m
+*)
+  List.concatMap (fun (is_killedA, debug_logA, eqsA, a) ->
+      List.map (fun (is_killedB, debug_logB, eqsB, b) ->
+        if is_killedA then
+          (is_killedA, debug_logA, eqsA, b)
+        else
+          let eqs' = Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB in
+          let is_unsat = Symbolic.is_clearly_unsat eqs' in
+
+          (is_killedB || is_unsat, (if is_unsat then "UNSAT\n" else "") ^ debug_logA ^ debug_logB, eqs', b)
       ) $ f a
     ) m
 
@@ -74,7 +93,7 @@ let pickWith pred xs =
 
 val pick: forall 'a. list 'a -> t 'a
 let pick xs =
-  List.map (fun x -> (Symbolic.empty_equations, x)) xs
+  List.map (fun x -> (false, "", Symbolic.empty_equations, x)) xs
 
 
 
@@ -102,6 +121,16 @@ end
 
 val add_equation: Symbolic.equation -> t unit
 let add_equation symb_eq =
-  [(Symbolic.add_equation symb_eq Symbolic.empty_equations, ())]
+  [(false, "", Symbolic.add_equation symb_eq Symbolic.empty_equations, ())]
 
 
+
+
+val kill_execution: t unit
+let kill_execution =
+  [(true, "", Symbolic.empty_equations, ())]
+
+
+val print_debug: string -> t unit
+let print_debug str =
+  [(false, str, Symbolic.empty_equations, ())]

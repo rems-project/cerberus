@@ -113,20 +113,6 @@ open Pp_cmm
 
 
 
-let pp_eqs eqs =
-  let pp x = Boot_pprint.to_plain_string (Pp_core.pp_symbolic x) in
-  List.fold_left (fun acc eq ->
-    (match eq with
-        | Symbolic.Symbolic_eq  (symb1, symb2) ->
-            pp symb1 ^ " = " ^ pp symb2
-        | Symbolic.Symbolic_neq (symb1, symb2) ->
-            pp symb1 ^ " /= " ^ pp symb2
-        | Symbolic.Symbolic_lt  (symb1, symb2) ->
-            pp symb1 ^ " < " ^ pp symb2
-        | Symbolic.Symbolic_ge  (symb1, symb2) ->
-            pp symb1 ^ " >= " ^ pp symb2
-   ) ^ ";\n" ^ acc
-  ) "" eqs
 
 
 
@@ -150,7 +136,10 @@ let drive file =
 (*  Printf.printf "Number of executions: %d\n" (List.length vs); *)
   
   let ky = ref [] in
-  List.iter (fun (n, (eqs, (is_blocked, preEx, v))) ->
+  List.iter (fun (n, (is_killed, debug_log, eqs, (is_blocked, preEx, v))) ->
+
+
+
 (*
     Printf.printf "Execution #%d under constraints:\n" n;
     print_endline "=====";
@@ -160,8 +149,24 @@ let drive file =
     Printf.printf "has value:\n  %s\n\n" (Boot_pprint.pp_core_expr v)
 *)
     let str_v = Boot_pprint.pp_core_expr v in
-    if not (List.mem str_v !ky) && not (is_blocked) then 
-      print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_eqs eqs));
+    if not (List.mem str_v !ky) && not (is_blocked) && not is_killed then (
+(*
+      Printf.printf "Execution #%d (%s) under constraints:\n" n (if is_killed then "KILLED" else "");
+      print_endline "=====";
+      print_endline (pp_eqs eqs);
+      print_endline "=====";
+      Printf.printf "BEGIN LOG\n%s\nEND LOG\n" debug_log;
+*)
+      print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_eqs eqs)) )
+    else
+      (
+(*
+       print_string "SKIPPING: ";
+       if is_blocked then
+         print_endline "(blocked)";
+       print_endline ("eqs= " ^ pp_eqs eqs)
+*)
+      );
     
     ky := str_v :: !ky
 

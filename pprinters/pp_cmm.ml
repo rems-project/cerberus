@@ -1,5 +1,25 @@
 open Cmm_master
 
+
+
+let pp_eqs eqs =
+  let pp x = Boot_pprint.to_plain_string (Pp_core.pp_symbolic x) in
+  List.fold_left (fun acc eq ->
+    (match eq with
+        | Symbolic.Symbolic_eq  (symb1, symb2) ->
+            pp symb1 ^ " = " ^ pp symb2
+        | Symbolic.Symbolic_neq (symb1, symb2) ->
+            pp symb1 ^ " /= " ^ pp symb2
+        | Symbolic.Symbolic_lt  (symb1, symb2) ->
+            pp symb1 ^ " < " ^ pp symb2
+        | Symbolic.Symbolic_ge  (symb1, symb2) ->
+            pp symb1 ^ " >= " ^ pp symb2
+   ) ^ ";\\n" ^ acc
+  ) "" eqs
+
+
+
+
 let string_of_memory_order = function
   | NA ->
       "na"

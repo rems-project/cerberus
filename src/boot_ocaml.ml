@@ -7,8 +7,8 @@ let assert_false str =
 let debug_level = ref 0
 
 
-let dprint str =
-  if !debug_level > 0 then
+let dprint n str =
+  if !debug_level >= n then
     Pervasives.output_string Pervasives.stderr ("\x1b[31m" ^ str ^ "\x1b[0m\n")
 
 let print_debug str k =
