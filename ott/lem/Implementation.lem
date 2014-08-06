@@ -90,6 +90,9 @@ let min_integer_range = function
   | Bool         -> make_range 0 1
   | Unsigned ibt -> min_range_unsigned ibt
   | Signed   ibt -> min_range_signed   ibt
+  | Wchar_t      -> assert_false "WIP"
+  | Char16_t     -> assert_false "WIP"
+  | Char32_t     -> assert_false "WIP"
 end
 
 val min_implementation_signed_char: implementation
@@ -101,6 +104,9 @@ let min_implementation_signed_char =
 	| Signed   _ -> true
         | Bool       -> false
 	| Unsigned _ -> false
+        | Wchar_t    -> assert_false "WIP"
+        | Char16_t   -> false
+        | Char32_t   -> false
       end
     )
     ( function
@@ -125,6 +131,10 @@ let min_implementation_signed_char =
         | Unsigned Int16_t  -> 16
         | Unsigned Int32_t  -> 32
         | Unsigned Int64_t  -> 64
+        
+        | Wchar_t           -> assert_false "WIP"
+        | Char16_t          -> 16
+        | Char32_t          -> 32
       end
     )
     (Unsigned Long)
@@ -139,6 +149,9 @@ let min_implementation_unsigned_char =
         | Char       -> false
 	| Bool       -> false
 	| Unsigned _ -> false
+        | Wchar_t    -> assert_false "WIP"
+        | Char16_t   -> false
+        | Char32_t   -> false
       end
     )
     ( function
@@ -163,6 +176,11 @@ let min_implementation_unsigned_char =
         | Unsigned Int16_t  -> assert_false "TODO"
         | Unsigned Int32_t  -> assert_false "TODO"
         | Unsigned Int64_t  -> assert_false "TODO"
+
+        | Wchar_t           -> assert_false "WIP"
+        | Char16_t          -> 16
+        | Char32_t          -> 32
+
       end
     )
     (Unsigned Long)

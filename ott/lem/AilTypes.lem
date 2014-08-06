@@ -1,4 +1,5 @@
 open import Pervasives
+import Symbol
 
 type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
  | Ichar
@@ -32,6 +33,10 @@ type integerType (* [name = "it*\\|size_t\\|ptrdiff_t"] *) =  (*r integer types 
  | Bool
  | Signed of integerBaseType
  | Unsigned of integerBaseType
+ | Wchar_t
+ | Char16_t
+ | Char32_t
+
  (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
 
 let eq_integerType it1 it2 =
@@ -46,25 +51,29 @@ let eq_integerType it1 it2 =
 type qualifiers [name = "q*"] = <|
   const    : bool;
   restrict : bool;
-  volatile : bool
+  volatile : bool;
+  atomic   : bool;
 |>
 
-let make_qualifiers c r v = <|
+let make_qualifiers c r v a = <|
   const    = c;
   restrict = r;
-  volatile = v
+  volatile = v;
+  atomic   = a;
 |>
 
 let no_qualifiers = <|
   const    = false;
   restrict = false;
-  volatile = false 
+  volatile = false;
+  atomic   = false;
 |>
 
 let eq_qualifiers q1 q2 = 
      q1.const    = q2.const
   && q1.restrict = q2.restrict
   && q1.volatile = q2.volatile
+  && q1.atomic   = q2.atomic
 
 type basicType [name = "bt*"] =  (*r basic types (\S6.2.5\#14) *)
  | Integer of integerType
@@ -79,6 +88,8 @@ instance (Eq basicType)
   let (<>) bt1 bt2 = not (eq_basicType bt1 bt2)
 end
 
+type identifier = Symbol.t
+
 type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
  | Void (*r \texttt{void} type (\S6.2.5\#19) *)
  | Basic of basicType (*r basic types (\S6.2.5\#14) *)
@@ -86,6 +97,9 @@ type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
  | Function of ctype * list (qualifiers * ctype) * bool (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
  | Atomic of ctype
+ | Struct of list (identifier * ctype) (* TODO: no bitfields for now *)
+ | Union of list (identifier * ctype) (* TODO: no bitfields for now *)
+ | Builtin of string
 
 let rec eq_params_aux eq_ctype p1 p2 : bool =
   match (p1, p2) with

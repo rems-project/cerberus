@@ -5,67 +5,75 @@ open Colour
 
 module P = PPrint
 
+let isatty = ref false
+
+
+(* TODO move to global *)
+let ($) f x = f x
+let (-|) f g x = f (g x)
+
+
 let (!^ ) = P.(!^)
 let (^^)  = P.(^^)
 let (^/^) = P.(^/^)
 
 let (^^^) x y = x ^^ P.space ^^ y
 let comma_list f = P.separate_map (P.comma ^^ P.space) f
+let space_list f = P.separate_map P.space f
 
 
 let precedence = function
-  | IDENTIFIER _
-  | CONSTANT _
-  | STRING_LITERAL _
-  | GENERIC_SELECTION _
-  | OFFSETOF _ -> Some 0
+  | CabsEident _
+  | CabsEconst _
+  | CabsEstring _
+  | CabsEgeneric _
   
-  | SUBSCRIPT _
-  | CALL _
-  | MEMBEROF _
-  | MEMBEROFPTR _
-  | UNARY (POSTFIX_INCR, _)
-  | UNARY (POSTFIX_DECR, _) -> Some 1
+  | CabsEsubscript _
+  | CabsEcall _
+  | CabsEmemberof _
+  | CabsEmemberofptr _
+  | CabsEpostincr _
+  | CabsEpostdecr _ -> Some 1
   
-  | UNARY _
-  | CAST _
-  | EXPR_SIZEOF _
-  | TYPE_SIZEOF _
-  | TYPE_ALIGNOF _ -> Some 2
+  | CabsEunary _
+  | CabsEcast _
+  | CabsEsizeof_expr _
+  | CabsEsizeof_type _
+  | CabsEalignof _ -> Some 2
   
-  | BINARY (ARITHMETIC MUL, _, _)
-  | BINARY (ARITHMETIC DIV, _, _)
-  | BINARY (ARITHMETIC MOD, _, _) -> Some 3
+  | CabsEbinary (CabsMul, _, _)
+  | CabsEbinary (CabsDiv, _, _)
+  | CabsEbinary (CabsMod, _, _) -> Some 3
   
-  | BINARY (ARITHMETIC ADD, _, _)
-  | BINARY (ARITHMETIC SUB, _, _) -> Some 4
+  | CabsEbinary (CabsAdd, _, _)
+  | CabsEbinary (CabsSub, _, _) -> Some 4
   
-  | BINARY (ARITHMETIC SHL, _, _)
-  | BINARY (ARITHMETIC SHR, _, _) -> Some 5
+  | CabsEbinary (CabsShl, _, _)
+  | CabsEbinary (CabsShr, _, _) -> Some 5
   
-  | BINARY (LT, _, _)
-  | BINARY (GT, _, _)
-  | BINARY (LE, _, _)
-  | BINARY (GE, _, _) -> Some 6
+  | CabsEbinary (CabsLt, _, _)
+  | CabsEbinary (CabsGt, _, _)
+  | CabsEbinary (CabsLe, _, _)
+  | CabsEbinary (CabsGe, _, _) -> Some 6
   
-  | BINARY (EQ, _, _)
-  | BINARY (NE, _, _) -> Some 7
+  | CabsEbinary (CabsEq, _, _)
+  | CabsEbinary (CabsNe, _, _) -> Some 7
   
-  | BINARY (ARITHMETIC BAND, _, _) -> Some 8
+  | CabsEbinary (CabsBand, _, _) -> Some 8
   
-  | BINARY (ARITHMETIC XOR, _, _) -> Some 9
+  | CabsEbinary (CabsBxor, _, _) -> Some 9
   
-  | BINARY (ARITHMETIC BOR, _, _) -> Some 10
+  | CabsEbinary (CabsBor, _, _) -> Some 10
   
-  | BINARY (AND, _, _) -> Some 11
+  | CabsEbinary (CabsAnd, _, _) -> Some 11
   
-  | BINARY (OR, _, _) -> Some 12
+  | CabsEbinary (CabsOr, _, _) -> Some 12
   
-  | CONDITIONAL _ -> Some 13
+  | CabsEcond _ -> Some 13
   
-  | ASSIGN _ -> Some 14
+  | CabsEassign _ -> Some 14
   
-  | BINARY (COMMA, _, _) -> Some 15
+  | CabsEcomma (_, _) -> Some 15
 
 
 let lt_precedence p1 p2 =
@@ -75,288 +83,475 @@ let lt_precedence p1 p2 =
     | None   , _       -> false
 
 
-let pp_integer_suffix s =
-  let to_string = function
-    | SUFFIX_UNSIGNED           -> "U"
-    | SUFFIX_UNSIGNED_LONG      -> "UL"
-    | SUFFIX_UNSIGNED_LONG_LONG -> "ULL"
-    | SUFFIX_LONG               -> "L"
-    | SUFFIX_LONG_LONG          -> "LL"
-  in
-  P.optional (P.string -| to_string) s
-let pp_integer_constant (i, s) = !^ i ^^ pp_integer_suffix s
+let pp_colour_keyword k =
+  !^ (if !isatty then ansi_format [Bold; Cyan] k else k)
+
+let pp_colour_type_keyword k =
+  !^ (if !isatty then ansi_format [Green] k else k)
+
+let pp_colour_identifier id =
+  !^ (if !isatty then ansi_format [Yellow] id else id)
+
+let pp_colour_function_identifier id =
+  !^ (if !isatty then ansi_format [Bold; Blue] id else id)
+
+let pp_colour_label id =
+  !^ (if !isatty then ansi_format [Magenta] id else id)
 
 
-let pp_character_prefix p =
-  let to_string = function
-    | PREFIX_L -> "L"
-    | PREFIX_u -> "u"
-    | PREFIX_U -> "U"
-  in
-  P.optional (P.string -| to_string) p
-let pp_character_constant (p, c) = pp_character_prefix p ^^ P.squotes (!^ c)
-
-let pp_encoding_prefix = function
-  | ENCODING_u8 -> !^ "u8"
-  | ENCODING_u  -> !^ "u"
-  | ENCODING_U  -> !^ "U"
-  | ENCODING_L  -> !^ "L"
-let pp_string_literal (enc, s) =
-  (P.optional pp_encoding_prefix enc) ^^ (!^ s)
+let pp_cabs_identifier id =
+  pp_colour_identifier id
 
 
-let pp_arithop = function
-  | MUL  -> P.star
-  | DIV  -> P.slash
-  | MOD  -> P.percent
-  | ADD  -> P.plus
-  | SUB  -> P.minus
-  | SHL  -> P.langle ^^ P.langle
-  | SHR  -> P.rangle ^^ P.rangle
-  | BAND -> P.ampersand
-  | BOR  -> P.bar
-  | XOR  -> P.caret
+let pp_cabs_integer_suffix = function
+  | CabsSuffix_U   -> !^ "u"
+  | CabsSuffix_UL  -> !^ "ul"
+  | CabsSuffix_ULL -> !^ "ull"
+  | CabsSuffix_L   -> !^ "l"
+  | CabsSuffix_LL  -> !^ "ll"
+
+let pp_cabs_integer_constant (str, suff_opt) =
+  !^ str ^^ P.optional pp_cabs_integer_suffix suff_opt
+
+let pp_cabs_character_prefix = function
+  | CabsPrefix_L -> !^ "L"
+  | CabsPrefix_u -> !^ "u"
+  | CabsPrefix_U -> !^ "U"
+
+let pp_cabs_character_constant (pref_opt, str) =
+  P.optional pp_cabs_character_prefix pref_opt ^^ P.squotes (!^ str)
+
+let pp_cabs_constant = function
+  | CabsInteger_const icst ->
+      pp_cabs_integer_constant icst
+  | CabsFloating_const str ->
+      !^ str
+  | CabsEnumeration_const ->
+      !^ "WIP[enumeration-constant]"
+  | CabsCharacter_const ccst ->
+      pp_cabs_character_constant ccst
 
 
-let pp_binop = function
-  | ARITHMETIC op -> pp_arithop op
-  | COMMA         -> P.comma
-  | AND           -> P.ampersand ^^ P.ampersand
-  | OR            -> P.bar ^^ P.bar
-  | LT            -> P.langle
-  | GT            -> P.rangle
-  | LE            -> P.langle ^^ P.equals
-  | GE            -> P.rangle ^^ P.equals
-  | EQ            -> P.equals ^^ P.equals
-  | NE            -> P.bang   ^^ P.equals
+let pp_cabs_encoding_prefix = function
+  | CabsEncPrefix_u8 -> !^ "u8"
+  | CabsEncPrefix_u  -> !^ "u"
+  | CabsEncPrefix_U  -> !^ "U"
+  | CabsEncPrefix_L  -> !^ "L"
+
+let pp_cabs_string_literal (pref_opt, str) =
+  P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ str)
 
 
-let pp_unop = function
-  | POSTFIX_INCR -> P.plus ^^ P.plus
-  | POSTFIX_DECR -> P.minus ^^ P.minus
-  | PREFIX_INCR  -> P.plus ^^ P.plus
-  | PREFIX_DECR  -> P.minus ^^ P.minus
-  | ADDRESS      -> P.ampersand
-  | INDIRECTION  -> P.star
-  | PLUS         -> P.plus
-  | MINUS        -> P.minus
-  | BNOT         -> P.tilde
-  | NOT          -> P.bang
-
-
-let pp_storage_class = function
-  | TYPEDEF      -> !^ (ansi_format [Cyan; Bold] "typedef")
-  | EXTERN       -> !^ (ansi_format [Cyan; Bold] "extern")
-  | STATIC       -> !^ (ansi_format [Cyan; Bold] "static")
-  | THREAD_LOCAL -> !^ (ansi_format [Cyan; Bold] "_Thread_Local")
-  | AUTO         -> !^ (ansi_format [Cyan; Bold] "auto")
-  | REGISTER     -> !^ (ansi_format [Cyan; Bold] "register")
-
-
-let pp_qualifier = function
-  | CONST    -> !^ (ansi_format [Cyan; Bold] "const")
-  | RESTRICT -> !^ (ansi_format [Cyan; Bold] "restrict")
-  | VOLATILE -> !^ (ansi_format [Cyan; Bold] "volatile")
-  | ATOMIC_Q -> !^ (ansi_format [Cyan; Bold] "_Atomic")
-
-
-let rec pp_specifier = function
-  | VOID      -> !^ (ansi_format [Green] "void")
-  | CHAR      -> !^ (ansi_format [Green] "char")
-  | SHORT     -> !^ (ansi_format [Green] "short")
-  | INT       -> !^ (ansi_format [Green] "int")
-  | LONG      -> !^ (ansi_format [Green] "long")
-  | FLOAT     -> !^ (ansi_format [Green] "float")
-  | DOUBLE    -> !^ (ansi_format [Green] "double")
-  | SIGNED    -> !^ (ansi_format [Green] "signed")
-  | UNSIGNED  -> !^ (ansi_format [Green] "unsigned")
-  | BOOL      -> !^ (ansi_format [Green] "_Bool")
-  | COMPLEX   -> !^ (ansi_format [Green] "_Complex")
-  | NAMED ty  -> !^ (ansi_format [Green] ty)
-  | ATOMIC ty -> !^ (ansi_format [Green] "_Atomic") ^^ P.parens (pp_type ty)
-  (* TODO: attributes *)
-  | STRUCT (tag_opt, fs, attrs) ->
-      !^ (ansi_format [Cyan; Bold] "struct") ^^
-      (P.optional (fun z -> P.space ^^ !^ (ansi_format [Green] z)) tag_opt) ^^^
-      P.braces (comma_list pp_field fs)
-
-  | UNION (tag_opt, fs, attrs) ->
-      !^ (ansi_format [Cyan; Bold] "union") ^^
-      (P.optional (fun z -> P.space ^^  !^ (ansi_format [Green] z)) tag_opt)
-(*    | ENUM of option string * option (list (string * option exp_l)) * list attribute *)
-  | _ -> !^ "TODO_pp_specifier"
-
-
-(*
-    | STRUCT (name_opt, decls) ->
-        !^ (ansi_format [Green] "struct") ^^
-          match decls with
-            | []    -> P.empty
-            | delcs -> P.lbrace ^^ P.nest 2 (P.break 1 ^^
-                                               let f ds d = ds ^^ d ^^ P.hardline in
-                                               P.sepmap P.break0 pp_struct_union_declaration decls) ^/^ P.rbrace
-*)
-
-and pp_field = function
-  | BasicField (n, ty)      -> pp_type ty ^^^ (!^ n)
-  | BitField (n_opt, ty, e) -> pp_type ty ^^^ (P.optional (!^) n_opt) ^^^ P.colon ^^ (pp_exp None e)
-
-
-and pp_type = function
-  | BASE (_, ss) ->
-      pp_ss ss
-  | ARRAY (_, ty, e_opt) -> 
-      !^ "array " ^^^ (P.optional (pp_exp None) e_opt) ^^^ !^ "of" ^^^ pp_type ty
-  | POINTER (_, ty) ->
-      !^ "pointer to" ^^^ pp_type ty
-  | FUNCTION (ty, ds) ->
-      !^ "function" ^^^ P.parens (comma_list (fun ((_, ty, _), _) -> pp_type ty) ds) ^^^
-      !^ "returning" ^^^ pp_type ty
-
-
-(*
-
-  | BASE (qs, ss)     -> pp_qs qs ^^ pp_ss ss
-  | ARRAY (qs, ty, e_opt) -> 
-    !^ "array " ^^^ (P.optional (pp_exp None) e_opt) ^^^ !^ "of" ^^^ P.parens (pp_type ty)
-
-
-(* pp_qs qs ^^ pp_type ty ^^^ P.brackets (match e with
-                                                                       | Some e -> pp_exp None e
-                                                                       | None   -> P.empty) *)
-(*                         !^ "BOOM" *)
-  | POINTER (qs, ty)  -> pp_qs qs ^^^ P.parens (pp_type ty) ^^^ P.star
-  | FUNCTION (ty, ds) -> pp_type ty ^^ P.parens (!^ "TODO") (* (P.comma_list f ts) *) (* TODO *)
-*)
-
-
-and pp_exp p (exp, _) =
-  let p' = precedence exp in
-  let f = P.group -| pp_exp p' in
+let rec pp_cabs_expression p expr =
+  let p' = precedence expr in
+  let f = P.group -| pp_cabs_expression p' in
   (if lt_precedence p' p then fun x -> x else P.parens) $
-    match exp with
-      | IDENTIFIER id                 -> !^ id
-      | CONSTANT (CONST_INT ic)       -> pp_integer_constant ic
-      | CONSTANT (CONST_FLOAT fc)     -> !^ fc
-      | CONSTANT (CONST_CHAR cc)      -> pp_character_constant cc
-      | STRING_LITERAL s              -> pp_string_literal s (* TODO: should put braces when cabs_transform does an actual translation of the string *)
-      | SUBSCRIPT (e1, e2)            -> f e1 ^^ P.brackets (f e2)
-      | CALL (e, es)                  -> f e ^^ P.parens (comma_list f es)
-      | MEMBEROF (e, x)               -> f e ^^ P.dot ^^ (!^ x)
-      | MEMBEROFPTR (e,x)             -> f e ^^ (!^ "->") ^^ (!^ x)
-      | UNARY (POSTFIX_INCR as op, e) -> f e ^^ pp_unop op
-      | UNARY (POSTFIX_DECR as op, e) -> f e ^^ pp_unop op
-      | UNARY (op, e)                 -> pp_unop op ^^ f e
-      | EXPR_SIZEOF e                 -> !^ "sizeof"  ^^^ f e
-      | TYPE_SIZEOF ty                -> !^ "sizeof"  ^^ P.parens (pp_type ty)
-      | TYPE_ALIGNOF ty               -> !^ "alignof" ^^ P.parens (pp_type ty)
-      | CAST (ty, e)                  -> P.parens (pp_type ty) ^^^ f e
-      | BINARY (COMMA as op, e1, e2)  -> f e1 ^^ pp_binop op ^^ P.space ^^ f e2
-      | BINARY (op, e1, e2)           -> f e1 ^^^ pp_binop op ^^^ f e2
-      | CONDITIONAL (e1, e2, e3)      -> P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
-      | ASSIGN (op_opt, e1, e2)       -> f e1 ^^^ (P.optional pp_arithop op_opt ^^ P.equals) ^^^ f e2
-      | OFFSETOF (ty, s)              -> !^ "offsetof" ^^ P.parens (pp_type ty ^^ P.comma ^^^ (!^ s))
+    match expr with
+      | CabsEident id ->
+          pp_cabs_identifier id
+      | CabsEconst cst ->
+          pp_cabs_constant cst
+      | CabsEstring str ->
+          pp_cabs_string_literal str
+      | CabsEgeneric (e, gs) ->
+          pp_colour_keyword "_Generic" ^^ P.parens (f e ^^ P.comma ^^^ comma_list pp_generic_association gs)
+      | CabsEsubscript (e1, e2) ->
+          f e1 ^^ P.brackets (f e2)
+      | CabsEcall (e, es) ->
+          f e ^^ P.parens (comma_list f es)
+      | CabsEmemberof (e, id) ->
+          f e ^^ P.dot ^^ pp_cabs_identifier id
+      | CabsEmemberofptr (e, id) ->
+          f e ^^ !^ "->" ^^ pp_cabs_identifier id
+      | CabsEpostincr e ->
+          f e ^^ !^ "++"
+      | CabsEpostdecr e ->
+          f e ^^ !^ "--"
+      | CabsEcompound (tyname, inits) ->
+          P.parens (pp_type_name tyname) ^^^ P.braces (pp_initializer_list inits)
+      | CabsEpreincr e ->
+          !^ "++" ^^  f e
+      | CabsEpredecr e ->
+          !^ "--" ^^  f e
+      | CabsEunary (uop, e) ->
+          pp_cabs_unary_operator uop ^^ f e
+      | CabsEsizeof_expr e ->
+          pp_colour_keyword "sizeof"  ^^^ f e
+      | CabsEsizeof_type tyname ->
+          pp_colour_keyword "sizeof"  ^^ P.parens (pp_type_name tyname)
+      | CabsEalignof tyname ->
+          pp_colour_keyword "_Alignof" ^^ P.parens (pp_type_name tyname)
+      | CabsEcast (tyname, e) ->
+          P.parens (pp_type_name tyname) ^^^ f e
+      | CabsEbinary (bop, e1, e2) ->
+          f e1 ^^^ pp_cabs_binary_operator bop ^^^ f e2
+      | CabsEcond (e1, e2, e3) ->
+          P.group (f e1 ^^^ P.qmark ^/^ f e2 ^^^ P.colon ^/^ f e3)
+      | CabsEassign (aop, e1, e2) ->
+          f e1 ^^^ pp_cabs_assignment_operator aop ^^^ f e2
+      | CabsEcomma (e1, e2) ->
+          f e1 ^^ P.comma ^^^ f e2
+
+and pp_generic_association = function
+  | GA_type (tyname, e) ->
+      pp_type_name tyname ^^ P.colon ^^^ pp_cabs_expression None e
+  | GA_default e ->
+      pp_colour_keyword "default" ^^ P.colon ^^^ pp_cabs_expression None e
 
 
-and ins_space ds d = ds ^^ d ^^ P.space
-and pp_qs qs =
-  List.fold_right ins_space (List.map pp_qualifier (Pset.elements qs)) P.empty
-and pp_ss ss =
-  let rec replicate x = function
-    | 0    -> P.empty
-    | n    -> pp_specifier x ^^^ replicate x (n-1) in
-  List.fold_right ins_space (List.map (fun (x,n) -> replicate x n) (Pmap.bindings ss)) P.empty
-  
-  
+and pp_cabs_unary_operator = function
+  | CabsAddress ->
+      !^ "&"
+  | CabsIndirection ->
+      !^ "*"
+  | CabsPlus ->
+      !^ "+"
+  | CabsMinus ->
+      !^ "-"
+  | CabsBnot ->
+      !^ "~"
+  | CabsNot ->
+      !^ "!"
+
+and pp_cabs_binary_operator = function
+  | CabsMul ->
+      !^ "*"
+  | CabsDiv ->
+      !^ "/"
+  | CabsMod ->
+      !^ "%"
+  | CabsAdd ->
+      !^ "+"
+  | CabsSub ->
+      !^ "-"
+  | CabsShl ->
+      !^ "<<"
+  | CabsShr ->
+      !^ ">>"
+  | CabsLt ->
+      !^ "<"
+  | CabsGt ->
+      !^ ">"
+  | CabsLe ->
+      !^ "<="
+  | CabsGe ->
+      !^ ">="
+  | CabsEq ->
+      !^ "=="
+  | CabsNe ->
+      !^ "!="
+  | CabsBand ->
+      !^ "&"
+  | CabsBxor ->
+      !^ "^"
+  | CabsBor ->
+      !^ "|"
+  | CabsAnd ->
+      !^ "&&"
+  | CabsOr ->
+      !^ "||"
 
 
+and pp_cabs_assignment_operator = function
+  | Assign ->
+      !^ "="
+  | Assign_Mul ->
+      !^ "*="
+  | Assign_Div ->
+      !^ "/="
+  | Assign_Mod ->
+      !^ "%="
+  | Assign_Add ->
+      !^ "+="
+  | Assign_Sub ->
+      !^ "-="
+  | Assign_Shl ->
+      !^ "<<="
+  | Assign_Shr ->
+      !^ ">>="
+  | Assign_Band ->
+      !^ "&="
+  | Assign_Bxor ->
+      !^ "^="
+  | Assign_Bor ->
+      !^ "|="
 
 
+and pp_declaration = function
+  | Declaration_base (specifs, idecls) ->
+      pp_specifiers specifs ^^ comma_list pp_init_declarator idecls ^^ P.semi
+  | Declaration_static_assert sa_decl ->
+      pp_static_assert_declaration sa_decl
 
-
-
-
-
-      
-
-
+and pp_specifiers specifs =
 (*
-  and pp_id id = !^ (Symbol.to_string_pretty id)
-
-  let pp_decl file id =
-    let (t, st) = Pmap.find id file.id_map in
-    pp_type t ^^^ pp_id id
+  let zs = List.map pp_storage_class_specifier specifs.storage_classes      @
+           List.map pp_cabs_type_specifier     specifs.type_specifiers      @
+           List.map pp_cabs_type_qualifier     specifs.type_qualifiers      @
+           List.map pp_function_specifier      specifs.function_specifiers  @
+           List.map pp_alignment_specifier     specifs.alignment_specifiers in
 *)
+  space_list pp_storage_class_specifier specifs.storage_classes      ^^ (if specifs.storage_classes      = [] then P.empty else P.space) ^^
+  space_list pp_cabs_type_specifier     specifs.type_specifiers      ^^ (if specifs.type_specifiers      = [] then P.empty else P.space) ^^
+  space_list pp_cabs_type_qualifier     specifs.type_qualifiers      ^^ (if specifs.type_qualifiers      = [] then P.empty else P.space) ^^
+  space_list pp_function_specifier      specifs.function_specifiers  ^^ (if specifs.function_specifiers  = [] then P.empty else P.space) ^^
+  space_list pp_alignment_specifier     specifs.alignment_specifiers ^^ (if specifs.alignment_specifiers = [] then P.empty else P.space)
 
-  let rec pp_stmt (stmt, _) =
-    match stmt with
-      | SKIP                                -> P.semi
-      | LABEL (id, s)                       -> !^ id ^^ P.colon ^^^ pp_stmt s
-      | CASE (e, s)                         -> pp_exp None e ^^ P.colon ^^^ pp_stmt s
-      | DEFAULT s                           -> !^ "default" ^^ P.colon ^^^ pp_stmt s
-      | BLOCK ss                            -> let block = P.separate_map (P.break 1) pp_stmt ss in
-                                               P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
-      | EXPRESSION e                        -> pp_exp None e ^^ P.semi
-      | IF (e, s1, Some s2)                 -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp None e) ^^^
-                                               pp_stmt s1 ^^^ !^ (ansi_format [Cyan; Bold] "else") ^^^
-                                               pp_stmt s2
-      | IF (e, s1, None)                    -> !^ (ansi_format [Cyan; Bold] "if") ^^^ P.parens (pp_exp None e) ^^^
-                                               pp_stmt s1
-      | SWITCH (e, s)                       -> !^ (ansi_format [Cyan; Bold] "switch") ^^^
-                                               P.parens (pp_exp None e) ^/^ pp_stmt s
-      | WHILE (e, s)                        -> !^ (ansi_format [Cyan; Bold] "while") ^^^
-                                               P.parens (pp_exp None e) ^/^ pp_stmt s
-      | DO (e, s)                           -> !^ (ansi_format [Cyan; Bold] "do") ^/^ pp_stmt s ^/^
-                                               !^ (ansi_format [Cyan; Bold] "while") ^^^ P.parens (pp_exp None e)
-      | FOR_EXP (e1_opt, e2_opt, e3_opt, s) -> !^ (ansi_format [Cyan; Bold] "for") ^^
-                                               P.parens (P.optional (pp_exp None) e1_opt ^^ P.semi ^^^
-                                                         P.optional (pp_exp None) e2_opt ^^ P.semi ^^^
-                                                         P.optional (pp_exp None) e3_opt) ^/^ pp_stmt s
-      | FOR_DECL (defs, e1_opt, e2_opt, s)  -> !^ "for" (* TODO *)
-      | GOTO id                             -> !^ (ansi_format [Cyan; Bold] "goto") ^^^ !^ id ^^ P.semi
-      | CONTINUE                            -> !^ (ansi_format [Cyan; Bold] "continue") ^^ P.semi
-      | BREAK                               -> !^ (ansi_format [Cyan; Bold] "break") ^^ P.semi
-      | RETURN (Some e)                     -> !^ (ansi_format [Cyan; Bold] "return") ^^^ pp_exp None e ^^ P.semi
-      | RETURN None                         -> !^ (ansi_format [Cyan; Bold] "return") ^^ P.semi
-      | DECLARATION defs                    -> comma_list pp_definition defs ^^ P.semi
-      | PAR ss                              -> let par = P.separate_map (P.bar ^^ P.bar ^^ P.bar) pp_stmt ss in
-                                               P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ par) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
-  
-  and pp_declaration ((str, ty, scs), _) =
-    !^ "declare" ^^^ !^ str ^^^ !^ "as" ^^^ pp_type ty
+and pp_init_declarator = function
+  | InitDecl (decltor, None) ->
+      pp_declarator decltor
+  | InitDecl (decltor, Some init) ->
+      pp_declarator decltor ^^^ P.equals ^^^ pp_initializer_ init
 
-(*
-    List.fold_right ins_space (List.map pp_storage_class scs) P.empty ^^
-    (match ty with
-      | ARRAY (qs, ty, e) -> pp_qs qs ^^ pp_type ty ^^^ (!^ s) ^^
-                             P.brackets (match e with Some e -> pp_exp None e | None -> P.empty)
-      | FUNCTION (ty, decls) ->
-        Printf.printf "> %d\n" (List.length decls);
 
-        
-pp_type ty ^^ !^ (ansi_format [Blue] s) ^^
-                                P.parens (comma_list pp_declaration decls)
-      | ty                   -> pp_type ty ^^ !^ (ansi_format [Yellow] s))
-*)
-    
-  
-  and pp_init_exp = function
-    | SINGLE_INIT exp  -> pp_exp None exp
-    | ARRAY_INIT inits -> P.braces $ (comma_list pp_init_exp) inits
-  
-  and pp_definition = function
-    | (TYPE_DEF ty, _) -> pp_type ty
-    | (OTHER_DEF (decl, init_opt), _) ->
-        pp_declaration decl ^^^
-          (match init_opt with
-            | Some init -> P.equals ^^^ pp_init_exp init
-            | None      -> P.empty)
-  
-  let pp_global_definition (def, _) =
-    match def with
-      | FUNCTION_DEFINITION (decl, stmt) -> pp_declaration decl ^^^ pp_stmt stmt
-      | EXTERNAL_DECLARATION (decls)     -> List.fold_right ins_space (List.map pp_definition decls) P.empty
-                                              
-  let pp_file defs =
-    let pp d def = d ^^ pp_global_definition def ^^ P.break 1 in
-    List.fold_left pp P.empty defs
+and pp_storage_class_specifier = function
+  | SC_typedef ->
+      pp_colour_keyword "typedef"
+  | SC_extern ->
+      pp_colour_keyword "extern"
+  | SC_static ->
+      pp_colour_keyword "static"
+  | SC_Thread_local ->
+      pp_colour_keyword "_Thread_local"
+  | SC_auto ->
+      pp_colour_keyword "auto"
+  | SC_register ->
+      pp_colour_keyword "register"
+
+
+and pp_cabs_type_specifier = function
+  | TSpec_void ->
+      pp_colour_type_keyword "void"
+  | TSpec_char ->
+      pp_colour_type_keyword "char"
+  | TSpec_short ->
+      pp_colour_type_keyword "short"
+  | TSpec_int ->
+      pp_colour_type_keyword "int"
+  | TSpec_long ->
+      pp_colour_type_keyword "long"
+  | TSpec_float ->
+      pp_colour_type_keyword "float"
+  | TSpec_double ->
+      pp_colour_type_keyword "double"
+  | TSpec_signed ->
+      pp_colour_type_keyword "signed"
+  | TSpec_unsigned ->
+      pp_colour_type_keyword "unsigned"
+  | TSpec_Bool ->
+      pp_colour_type_keyword "_Bool"
+  | TSpec_Complex ->
+      pp_colour_type_keyword "_Complex"
+  | TSpec_Atomic tyname ->
+      pp_colour_keyword "_Atomic" ^^ P.parens (pp_type_name tyname)
+  | TSpec_struct (id_opt, s_decls_opt) ->
+      pp_colour_keyword "struct" ^^^ P.optional pp_cabs_identifier id_opt ^^^
+      P.optional (fun z -> P.braces $ (space_list pp_struct_declaration) z) s_decls_opt
+  | TSpec_union (id_opt, s_decls_opt) ->
+      pp_colour_keyword "union" ^^^ P.optional pp_cabs_identifier id_opt ^^^
+      P.optional (fun z -> P.braces $ (space_list pp_struct_declaration) z) s_decls_opt
+  | TSpec_enum (id_opt, enums_opt) ->
+      pp_colour_keyword "enum" ^^^ P.optional pp_cabs_identifier id_opt ^^^
+      P.optional (fun z -> P.braces $ (space_list pp_enumerator) z) enums_opt
+  | TSpec_name id ->
+      pp_cabs_identifier id
+
+
+and pp_struct_declaration = function
+  | Struct_declaration (specs, qs, s_decls) ->
+      space_list pp_cabs_type_specifier specs ^^^
+      space_list pp_cabs_type_qualifier qs    ^^^
+      comma_list pp_struct_declarator s_decls ^^ P.semi
+  | Struct_assert sa_decl ->
+      pp_static_assert_declaration sa_decl
+
+and pp_struct_declarator = function
+  | SDecl_simple decltor ->
+      pp_declarator decltor
+  | SDecl_bitfield (decltor_opt, e) ->
+      P.optional pp_declarator decltor_opt ^^ P.colon ^^ pp_cabs_expression None e
+
+and pp_enumerator (id, e_opt) =
+  match e_opt with
+    | None   -> pp_cabs_identifier id
+    | Some e -> pp_cabs_identifier id ^^^ P.equals ^^ pp_cabs_expression None e
+
+
+and pp_cabs_type_qualifier = function
+  | Q_const ->
+      pp_colour_keyword "const"
+  | Q_restrict ->
+      pp_colour_keyword "restrict"
+  | Q_volatile ->
+      pp_colour_keyword "volatile"
+  | Q_Atomic ->
+      pp_colour_keyword "_Atomic"
+
+
+and pp_function_specifier = function
+  | FS_inline ->
+      pp_colour_keyword "inline"
+  | FS_Noreturn ->
+      pp_colour_keyword "_Noreturn"
+
+
+and pp_alignment_specifier = function
+  | AS_type tyname ->
+      pp_colour_keyword "_Alignas" ^^ P.parens (pp_type_name tyname)
+  | AS_expr e ->
+      pp_colour_keyword "_Alignas" ^^ P.parens (pp_cabs_expression None e)
+
+
+and pp_declarator = function
+  | Declarator (ptr_decl_opt, ddecl) ->
+      P.optional (fun z -> pp_pointer_declarator z ^^ P.space) ptr_decl_opt ^^ pp_direct_declarator ddecl
+
+and pp_direct_declarator = function
+  | DDecl_identifier id ->
+      pp_cabs_identifier id
+  | DDecl_declarator decltor ->
+      P.parens (pp_declarator decltor)
+  | DDecl_array (ddecltor, abs_decltor) ->
+      pp_direct_declarator ddecltor ^^^ pp_array_declarator abs_decltor
+  | DDecl_function (ddecltor, param_tys) ->
+      pp_direct_declarator ddecltor ^^^ P.parens (pp_parameter_type_list param_tys)
+and pp_array_declarator = function
+  | ADecl (qs, is_static, a_decltor_size_opt) ->
+      P.brackets (
+        (if is_static then pp_colour_keyword "static" else P.empty) ^^^
+        space_list pp_cabs_type_qualifier qs         ^^^
+        P.optional pp_array_declarator_size a_decltor_size_opt
+      )
+and pp_array_declarator_size = function
+  | ADeclSize_expression e ->
+      pp_cabs_expression None e
+  | ADeclSize_asterisk ->
+      !^ "*"
+
+and pp_pointer_declarator = function
+  | PDecl (qs, ptr_decltor_opt) ->
+      !^ "*" ^^^ space_list pp_cabs_type_qualifier qs ^^
+      P.optional (fun z -> P.space ^^ pp_pointer_declarator z) ptr_decltor_opt
+
+and pp_parameter_type_list = function
+  | Params (param_decls, false) ->
+      comma_list pp_parameter_declaration param_decls
+  | Params (param_decls, true) ->
+      comma_list pp_parameter_declaration param_decls ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+
+and pp_parameter_declaration = function
+  | PDeclaration_decl (specifs, decltor) ->
+      pp_specifiers specifs ^^ pp_declarator decltor
+  | PDeclaration_abs_decl (specifs, abs_decltor_opt) ->
+      pp_specifiers specifs ^^ P.optional pp_abstract_declarator abs_decltor_opt
+
+
+and pp_type_name = function
+  | Type_name (specs, qs, a_decltor_opt) ->
+      space_list pp_cabs_type_specifier specs ^^^
+      space_list pp_cabs_type_qualifier qs    ^^^
+      P.optional pp_abstract_declarator a_decltor_opt
+
+and pp_abstract_declarator = function
+  | AbsDecl_pointer ptr_decltor ->
+      pp_pointer_declarator ptr_decltor
+  | AbsDecl_direct (ptr_decltor_opt, dabs_decltor) ->
+      P.optional (fun z -> pp_pointer_declarator z ^^ P.space) ptr_decltor_opt ^^
+      pp_direct_abstract_declarator dabs_decltor
+
+and pp_direct_abstract_declarator = function
+  | DAbs_abs_declarator abs_decltor ->
+      P.parens (pp_abstract_declarator abs_decltor)
+  | DAbs_array (dabs_decltor_opt, abs_decltor) ->
+      P.optional (fun z -> pp_direct_abstract_declarator z ^^ P.space) dabs_decltor_opt ^^ pp_array_declarator abs_decltor
+  | DAbs_function (dabs_decltor_opt, param_tys) ->
+      P.optional (fun z -> pp_direct_abstract_declarator z ^^ P.space) dabs_decltor_opt ^^ P.parens (pp_parameter_type_list param_tys)
+
+and pp_initializer_ = function
+  | Init_expr e ->
+      pp_cabs_expression None e
+  | Init_list inits ->
+      P.braces (pp_initializer_list inits)
+
+and pp_designator = function
+  | Desig_array e ->
+      P.brackets (pp_cabs_expression None e)
+  | Desig_member id ->
+      P.dot ^^ pp_cabs_identifier id
+
+
+and pp_static_assert_declaration = function
+ | Static_assert (e, lit) ->
+     pp_colour_keyword "_Static_assert" ^^ P.parens (pp_cabs_expression None e ^^ P.comma ^^^ pp_cabs_string_literal lit)
+
+
+and pp_initializer_list inits =
+  comma_list (fun (desigs_opt, init) ->
+    P.optional (fun z -> space_list pp_designator z ^^^ P.equals ^^ P.space) desigs_opt ^^ pp_initializer_ init
+  ) inits
+
+
+let rec pp_cabs_statement = function
+  | CabsSlabel (id, s) ->
+      pp_colour_label id ^^ P.colon ^^^ pp_cabs_statement s
+  | CabsScase (e, s) ->
+      pp_colour_keyword "case" ^^^ pp_cabs_expression None e ^^ P.colon ^^^ pp_cabs_statement s
+  | CabsSdefault s ->
+      pp_colour_keyword "default" ^^^ pp_cabs_statement s
+  | CabsSblock ss ->
+      let block = P.separate_map (P.break 1) pp_cabs_statement ss in
+      P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
+  | CabsSdecl decl ->
+      pp_declaration decl
+  | CabsSnull ->
+      P.semi
+  | CabsSexpr e ->
+      pp_cabs_expression None e ^^ P.semi
+  | CabsSif (e, s1, s2_opt) ->
+      pp_colour_keyword "if" ^^^ P.parens (pp_cabs_expression None e) ^^^
+      pp_cabs_statement s1 ^^
+      P.optional (fun z -> P.space ^^ pp_cabs_statement z) s2_opt
+  | CabsSswitch (e, s) ->
+      pp_colour_keyword "switch" ^^^ P.parens (pp_cabs_expression None e) ^/^
+      pp_cabs_statement s
+  | CabsSwhile (e, s) ->
+      pp_colour_keyword "while" ^^^ P.parens (pp_cabs_expression None e) ^/^
+      pp_cabs_statement s
+  | CabsSdo (e, s) ->
+      pp_colour_keyword "do" ^/^ pp_cabs_statement s ^/^
+      pp_colour_keyword "while" ^^^ P.parens (pp_cabs_expression None e) ^^ P.semi
+  | CabsSfor (fc_opt, e1_opt, e2_opt, s) ->
+      pp_colour_keyword "for" ^^^ P.parens (
+        P.optional pp_for_clause fc_opt ^^ P.semi ^^^
+        P.optional (pp_cabs_expression None) e1_opt ^^ P.semi ^^^
+        P.optional (pp_cabs_expression None) e2_opt
+      ) ^/^
+      pp_cabs_statement s
+  | CabsSgoto id ->
+      pp_colour_keyword "goto" ^^^ pp_colour_label id ^^ P.semi
+  | CabsScontinue ->
+      pp_colour_keyword "continue" ^^ P.semi
+  | CabsSbreak ->
+      pp_colour_keyword "break" ^^ P.semi
+  | CabsSreturn e_opt ->
+      pp_colour_keyword "return" ^^^ P.optional (pp_cabs_expression None) e_opt ^^ P.semi
+
+and pp_for_clause = function
+ | FC_expr e ->
+     pp_cabs_expression None e
+ | FC_decl decl ->
+     pp_declaration decl
+
+
+let pp_function_definition (FunDef (specifs, decltor, stmt)) =
+  pp_specifiers specifs ^^ pp_declarator decltor ^^^ pp_cabs_statement stmt
+
+let pp_external_declaration = function
+  | EDecl_func fdef -> pp_function_definition fdef
+  | EDecl_decl decl -> pp_declaration decl
+
+
+let pp_translate_unit (TUnit edecls) =
+  isatty := Unix.isatty Unix.stdout;
+  let pp d def = d ^^ pp_external_declaration def ^^ P.break 1 in
+  List.fold_left pp P.empty edecls

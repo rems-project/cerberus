@@ -155,7 +155,7 @@ type state = <|
   current_proc:   maybe sym;
   file: file taction_id;
   (* maps of labeled continuations (per function) *)
-  cont_map: map sym (map ksym (list (sym * ctype) * expr taction_id));
+  registered_labeled_continuations: map sym (map ksym (list (sym * ctype) * expr taction_id));
   (* counter for the trace actions map *)
   tact_counter: natural;
   tact_map: Map.map taction_id trace_action;
@@ -308,10 +308,14 @@ let get_proc psym = fun st ->
     | Nothing -> Boot.assert_false "HIP: get_proc failure" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
   end
 
-val register_conts: map sym (map ksym (list (sym * ctype) * expr taction_id)) -> t unit
-let register_conts ks = fun st ->
-  [(U.return (), <| st with cont_map= ks |>)]
-
+val register_labeled_continuation: ksym -> list (sym * ctype) * expr taction_id) -> t unit
+let register_labeled_continuation k cont = fun st ->
+  match st.current_proc with
+    | Nothing ->
+        Boot.assert_false "register_labeled_continuation: current_proc = Nothing"
+    | Just proc ->
+        [(U.return (), <| st with registered_labeled_continuations= Map.insert proc (k, cont) st.registered_labeled_continuations |>)]
+  end
 
 let rec map_from_list xs =
   match xs with
@@ -320,7 +324,7 @@ let rec map_from_list xs =
   end
 
 val get_cont: ksym -> t (list (sym * ctype) * expr taction_id)
-let get_cont d = fun st ->
+let get_cont k = fun st ->
   [(U.return (fromJust $ Map.lookup d (fromJust $ Map.lookup (fromJust st.current_proc) st.cont_map)), st)]
 
 

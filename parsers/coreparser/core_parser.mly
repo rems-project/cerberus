@@ -2,7 +2,11 @@
 open Lem_pervasives
 open Global
 
-module Cmm = Cmm_csem
+module Cmm = Cmm_master
+
+let symbol_compare =
+  Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
+
 
 type name =
   | Sym of string
@@ -10,12 +14,11 @@ type name =
 
 type expr =
   | Eunit
-  | Enull
   | Etrue
   | Efalse
-  | Econst of Cmm_aux.constant
+  | Econst of Naive_memory.mem_value
+  | Elist of expr list
   | Ectype of Core_ctype.ctype0
-(*  | Eaddr of Core.mem_addr *)
   | Esym of string
   | Eimpl of Implementation_.implementation_constant
   | Etuple of expr list
@@ -39,7 +42,7 @@ type expr =
               (string * expr) * (* Pointer *)
               (string * expr)) (* Atomic *)
 *)
-  | Esame of expr * expr
+(*  | Esame of expr * expr *)
   | Eaction of paction
   | Eunseq of expr list
   | Ewseq of (string option) list * expr * expr
@@ -52,7 +55,8 @@ type expr =
   | Eret of expr
   | End of expr list
   | Epar of expr list
-  | Eshift of expr * expr
+(*  | Ewait of list Thread.thread_id *)
+
   
   | Eis_scalar of expr
   | Eis_integer of expr
@@ -61,8 +65,8 @@ type expr =
 
 
 and action =
-  | Create of expr
-  | Alloc of expr
+  | Create of expr * expr
+  | Alloc of expr * expr
   | Kill of expr
   | Store of expr * expr * expr * Cmm.memory_order
   | Load of expr * expr * Cmm.memory_order
@@ -80,10 +84,11 @@ type declaration =
 let register_cont_symbols e =
   let rec f st = function
     | Eunit
-    | Enull
+(*    | Enull *)
     | Etrue
     | Efalse
     | Econst _
+    | Elist _
     | Ectype _
     | Esym _
     | Eimpl _
@@ -95,13 +100,12 @@ let register_cont_symbols e =
     | Eerror
     | Eskip
     | Eproc _
-    | Esame _
+(*    | Esame _ *)
     | Eaction _
     | Eunseq _
     | Easeq _
     | Eret _
     | Erun _
-    | Eshift _
     | Eis_scalar _
     | Eis_integer _
     | Eis_signed _
@@ -132,7 +136,7 @@ let register_cont_symbols e =
 (*  convert_expr: expr -> .. -> .. -> Core.expr 'a *)
 let convert_expr e arg_syms fsyms =
   let lookup_symbol str syms =
-    Boot_ocaml.dprint ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
+    Global_ocaml.print_debug 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
     begin try
         Pmap.find str syms (* TODO: Error handling *)
       with
@@ -143,14 +147,18 @@ let convert_expr e arg_syms fsyms =
   let rec f st = function
     | Eunit ->
         Core.Eunit
+(*
     | Enull ->
-        Core.Enull Core_ctype.Void (* TODO *)
+        Core.Enull Core_ctype.Void0 (* TODO *)
+*)
     | Etrue ->
         Core.Etrue
     | Efalse ->
         Core.Efalse
     | Econst c ->
         Core.Econst c
+    | Elist es ->
+        Core.Elist (List.map (f st) es)
     | Ectype ty ->
         Core.Ectype ty
     | Esym a ->
@@ -183,16 +191,18 @@ let convert_expr e arg_syms fsyms =
     | Elet (a, e1, e2) ->
         let sym_n = !M.sym_counter in
         let _a = Symbol.Symbol (sym_n, Some a) in
-        M.sym_counter := sym_n + 1;
+        M.sym_counter := sym_n+1;
         Core.Elet (_a, f st e1, f (Pmap.add a _a st) e2)
     | Eif (e1, e2, e3) ->
         Core.Eif (f st e1, f st e2, f st e3)
     | Eproc (Impl func, args) ->
-        Core.Eproc (Pset.empty compare, Core.Impl func, List.map (f st) args)
+        Core.Eproc ((), Core.Impl func, List.map (f st) args)
     | Eproc (Sym func, args) ->
-        Core.Eproc (Pset.empty compare, Core.Sym (Pmap.find func fsyms), List.map (f st) args)
+        Core.Eproc ((), Core.Sym (Pmap.find func fsyms), List.map (f st) args)
+(*
     | Esame (e1, e2) ->
         Core.Esame (f st e1, f st e2)
+*)
     | Eaction pact ->
         let (p, (s, act)) = g st pact in
         Core.Eaction (Core.Paction (p, Core.Action (s, act)))
@@ -204,7 +214,7 @@ let convert_expr e arg_syms fsyms =
             | Some sym ->
                 let sym_n = !M.sym_counter in
                 let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := sym_n + 1;
+                M.sym_counter := sym_n+1;
                 (Some _a :: _as, Pmap.add sym _a st)
             | None ->
                 (None :: _as, st)
@@ -224,7 +234,7 @@ let convert_expr e arg_syms fsyms =
             | Some sym ->
                 let sym_n = !M.sym_counter in
                 let _a = Symbol.Symbol (sym_n, Some sym) in
-                M.sym_counter := sym_n + 1;
+                M.sym_counter := sym_n+1;
                 (Some _a :: _as, Pmap.add sym _a st)
             | None ->
                 (None :: _as, st)
@@ -244,7 +254,7 @@ let convert_expr e arg_syms fsyms =
                 | Some _a ->
                     let sym_n = !M.sym_counter in
                     let _a' = Symbol.Symbol (sym_n, Some _a) in
-                    M.sym_counter := sym_n + 1;
+                    M.sym_counter := sym_n+1;
                     let (_, (s1, act1)) = g st (Core.Pos, act) in
                     let (p2, (s2, act2)) = g (Pmap.add _a _a' st) pact in
                     Core.Easeq (Some _a', Core.Action (s1, act1), Core.Paction (p2, Core.Action (s2, act2)))
@@ -269,15 +279,13 @@ let convert_expr e arg_syms fsyms =
  *)
     | Erun (k, a_es) ->
         let a_es' = List.map (fun (a, e) -> (lookup_symbol a st, f st e)) a_es in
-        Core.Erun (Pset.empty compare, lookup_symbol k st, a_es')
+        Core.Erun ((), lookup_symbol k st, a_es')
     | Eret e ->
         Core.Eret (f st e)
     | End es ->
         Core.End (List.map (f st) es)
     | Epar es ->
         Core.Epar (List.map (f st) es)
-    | Eshift (e1, e2) ->
-        Core.Eshift (f st e1, f st e2)
     | Eis_scalar e ->
         Core.Eis_scalar (f st e)
     | Eis_integer e ->
@@ -289,20 +297,20 @@ let convert_expr e arg_syms fsyms =
   
   and g st (p, act) =(p,
     match act with
-      | Create e_ty ->
-          (Pset.empty compare, Core.Create0 (f st e_ty, []))
-      | Alloc e_n ->
-          (Pset.empty compare, Core.Alloc (f st e_n, []))
+      | Create (e_al, e_ty) ->
+          ((), Core.Create (f st e_al, f st e_ty, []))
+      | Alloc (e_al, e_n) ->
+          ((), Core.Alloc0 (f st e_al, f st e_n, []))
       | Kill e_o ->
-          (Pset.empty compare, Core.Kill0 (f st e_o))
+          ((), Core.Kill (f st e_o))
       | Store (e_ty, e_o, e_n, mo) ->
-          (Pset.empty compare, Core.Store0 (f st e_ty, f st e_o, f st e_n, mo))
+          ((), Core.Store0 (f st e_ty, f st e_o, f st e_n, mo))
       | Load (e_ty, e_o, mo) ->
-          (Pset.empty compare, Core.Load0 (f st e_ty, f st e_o, mo))
+          ((), Core.Load0 (f st e_ty, f st e_o, mo))
       | CompareExchangeStrong (e_ty, e_o, e_e, e_d, mo1, mo2) ->
-          (Pset.empty compare, Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
+          ((), Core.CompareExchangeStrong (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
       | CompareExchangeWeak (e_ty, e_o, e_e, e_d, mo1, mo2) ->
-          (Pset.empty compare, Core.CompareExchangeWeak (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
+          ((), Core.CompareExchangeWeak (f st e_ty, f st e_o, f st e_e, f st e_d, mo1, mo2))
     )
   in
   let conts = register_cont_symbols e in
@@ -311,33 +319,37 @@ let convert_expr e arg_syms fsyms =
 
 (* TODO: clean up this mess *)
 let mk_file decls =
-  (* if this is not an implementation file. *)
   if List.for_all (function Fun_decl _ -> true | _ -> false) decls then
-    let (main, _, fsyms, fun_map) =
-      List.fold_left (fun (main, count, fsyms, fun_map) decl ->
+    (* if this is not an implementation file. *)
+    let (main, fsyms, fun_map) =
+      List.fold_left (fun (main, fsyms, fun_map) decl ->
         match decl with
           | Fun_decl (fname, fdef) ->
             (* TODO: better error *)
             if Pmap.mem fname fsyms then
               failwith ("duplicate definition of `" ^ fname ^ "'")
             else
-              let a_fun = Symbol.Symbol (count, Some fname) in
+              let a_fun = Symbol.Symbol (!M.sym_counter, Some fname) in
+              M.sym_counter := !M.sym_counter+1;
               ((if fname = "main" then Some a_fun else main),
-               count+1,
                Pmap.add fname a_fun fsyms,
                Pmap.add a_fun fdef fun_map)
           | _ -> assert false
-      ) (None, 0, Pmap.empty compare, Pmap.empty compare) decls
+      ) (None, Pmap.empty compare, Pmap.empty symbol_compare) decls
     in
     let fun_map' =
       Pmap.map (fun (coreTy_ret, args, fbody) ->
-        let (_, arg_syms, args') = List.fold_left (fun (i, m, args') (x, ty) ->
-          let _a = Symbol.Symbol (i, Some x) in (i+1, Pmap.add x _a m, (_a, ty) :: args'))
-          (0, Pmap.empty compare, []) args in
+        let (arg_syms, args') =
+          List.fold_left (fun (m, args') (x, ty) ->
+            let _a = Symbol.Symbol (!M.sym_counter, Some x) in
+            M.sym_counter := !M.sym_counter+1;
+            (Pmap.add x _a m, (_a, ty) :: args')
+          ) (Pmap.empty compare, []) args in
         (coreTy_ret, args', convert_expr fbody arg_syms fsyms)) fun_map in
     match main with
       | Some a_main -> Core_parser_util.Rfile (a_main, fun_map')
       | None        -> Core_parser_util.Rstd fun_map'
+  
   else
     let impl_map =
       List.fold_left (fun impl_map decl ->
@@ -362,7 +374,7 @@ let mk_file decls =
 
 
 (* HACK for now (maybe we should just get back to concrete names for ctypes) *)
-let ctypes_names = ref (0, Pmap.empty Pervasives.compare)
+let ctypes_names = ref (0, Pmap.empty symbol_compare)
 
 (*val subst: string -> Symbol.t *)
 let subst name =
@@ -382,7 +394,7 @@ let subst name =
 %token <Undefined.undefined_behaviour> UB
 
 (* ctype tokens *)
-%token VOID ATOMIC SIZE_T INTPTR_T WCHAR_T CHAR16_T CHAR32_T (* DOTS *)
+%token VOID ATOMIC SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T (* DOTS *)
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
@@ -394,10 +406,10 @@ let subst name =
 %token DEF FUN
 
 (* Core types *)
-%token INTEGER BOOLEAN ADDRESS CTYPE UNIT
+%token INTEGER BOOLEAN POINTER CTYPE CFUNCTION UNIT
 
 (* Core constant keywords *)
-%token NULL TRUE FALSE
+%token LIST ARRAY TRUE FALSE
 %token UNDEF ERROR
 %token SKIP IF THEN ELSE
 
@@ -432,6 +444,8 @@ let subst name =
 (* binder patterns *)
 %token UNDERSCORE
 
+
+%token ND PAR 
 
 
 (* TODO: not used yet, but the tracing mode of the parser crash othewise ..... *)
@@ -504,7 +518,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 
 %start <Core_parser_util.result>start
 %parameter <M : sig
-                  val sym_counter: Symbol.counter ref
+                  val sym_counter: int ref
                   val std: (string, Core.sym) Pmap.map
                 end>
 
@@ -677,48 +691,39 @@ ctype:
 | ty= ctype LBRACKET n= INT_CONST RBRACKET
     { Core_ctype.Array0 (ty, n) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Core_ctype.Function0 (ty, tys, false) }
+    { Core_ctype.Function0 (ty, List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
 (*     { Core_ctype.Function0 (ty, tys, true) } *)
 | ty= ctype STAR
-    { Core_ctype.Pointer0 ty }
+    { Core_ctype.Pointer0 (AilTypes.no_qualifiers, ty) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
-    { Core_ctype.Atomic1 ty }
-(*
-| SIZE_T
-    { Core_ctype.SIZE_T }
-| INTPTR_T
-    { Core_ctype.INTPTR_T }
-| WCHAR_T
-    { Core_ctype.WCHAR_T }
-| CHAR16_T
-    { Core_ctype.CHAR16_T }
-| CHAR32_T
-    { Core_ctype.CHAR32_T }
- *)
+    { Core_ctype.Atomic0 ty }
 ;
 (* END Ail types *)
 
 
 core_base_type:
 | INTEGER
-    { Core.Integer0 }
+    { Core.BTy_integer }
 | BOOLEAN
-    { Core.Boolean }
-| ADDRESS
-    { Core.Address }
+    { Core.BTy_boolean }
+| POINTER
+    { Core.BTy_pointer }
 | CTYPE
-    { Core.Ctype }
+    { Core.BTy_ctype }
+| CFUNCTION
+    { Core.BTy_cfunction }
 | UNIT
-    { Core.Unit }
+    { Core.BTy_unit }
 ;
 
 core_derived_type:
 | baseTy = core_base_type
     { baseTy }
 | baseTys= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN)
-    { Core.Tuple baseTys }
+    { Core.BTy_tuple baseTys }
+(* TODO: BTy_list *)
 ;
 
 core_type:
@@ -802,10 +807,10 @@ memory_order:
 ;
 
 action:
-| CREATE e= delimited(LPAREN, expr, RPAREN)
-    { Create e }
-| ALLOC e= delimited(LPAREN, expr, RPAREN)
-    { Alloc e }
+| CREATE LPAREN e1= expr COMMA e2= expr RPAREN
+    { Create (e1, e2) }
+| ALLOC LPAREN e1= expr COMMA e2= expr RPAREN
+    { Alloc (e1, e2) }
 | KILL e= delimited(LPAREN, expr, RPAREN)
     { Kill e }
 | STORE LPAREN e1= expr COMMA e2= expr COMMA e3= expr RPAREN
@@ -842,20 +847,35 @@ pattern:
 ;
 
 
+constant:
+| n= INT_CONST
+    { Naive_memory.MV_integer (Symbolic.constant n) }
+(*
+| ARRAY LPAREN vs= separated_nonempty_list (COMMA, constant) RPAREN
+    { Naive_memory.MV_array vs }
+*)
+
+
 expr:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | LPAREN RPAREN
     { Eunit }
+(*
 | NULL
     { Enull }
+*)
 | TRUE
     { Etrue }
 | FALSE
     { Efalse }
 (* TODO: other constants *)
-| n= INT_CONST
-    { Econst (Cmm_aux.Cint n) }
+| cst= constant
+    { Econst cst }
+
+| LIST LPAREN es= separated_list(COMMA, expr) RPAREN
+    { Elist es }
+
 | ty= delimited(DQUOTE, ctype, DQUOTE)
     { Ectype ty }
 (* TODO
@@ -923,10 +943,15 @@ expr:
     { Erun (d, a_es) }
 | RETURN e= delimited(LPAREN, expr, RPAREN)
     { Eret e }
+
+| ND es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { End es }
+| PAR es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { Epar es }
+
+
 (*  HIP
-  | End of list (expr 'a)
-  | Epar of list (expr 'a)
-  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *)
+  | Ewait
 *)
 (* TODO: these are temporary *)
 | IS_SCALAR LPAREN e= expr RPAREN

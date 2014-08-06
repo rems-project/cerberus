@@ -1,7 +1,10 @@
 open import Pervasives TypingError
-import Location Exception Errors
+import Location Exception
 
 type errorM 'a = either typing_error 'a
+
+(* for the do notation *)
+type t 'a = errorM 'a
 
 val return: forall 'a. 'a -> errorM 'a
 let return z         = Right z
@@ -9,13 +12,14 @@ let return z         = Right z
 val fail: forall 'a. typing_error -> errorM 'a
 let fail err = Left err
 
-val        (>>=): forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
-let inline (>>=) m f =
+val bind: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
+let bind m f =
   match m with
     | Left l  -> Left l
     | Right r -> f r
   end
 
+let inline (>>=) m f = bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 
 let inline (<$>) f = function
@@ -27,7 +31,7 @@ end
 val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
 let tryM m f errCase =
   match m with
-    | Left err -> errCase
+    | Left _ -> errCase
     | Right z  -> f z
   end
 
@@ -37,9 +41,9 @@ let runM = function
   | Right z -> Just z
 end
 
-val to_exception: forall 'a. errorM 'a -> Exception.t 'a (Errors.t)
-let to_exception = function
-  | Left err -> Exception.Exception (Location.dummy, Errors.AIL_TYPING err)
+val to_exception: forall 'a 'msg. (typing_error -> 'msg) -> errorM 'a -> Exception.t 'a 'msg
+let to_exception f = function
+  | Left err -> Exception.Exception (f err)
   | Right z  -> Exception.Result z
 end
 

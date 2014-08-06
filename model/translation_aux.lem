@@ -17,7 +17,7 @@ let rec mk_stdcall_aux pred xs =
     | x::xs' -> if pred x then Just x else mk_stdcall_aux pred xs'
   end
 
-val mk_stdcall: Core.fun_map zero -> string -> (list (Core.expr zero) -> Core.expr zero)
+val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.expr 'a) -> Core.expr 'a)
 let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Set_extra.toList $ Map.toSet stdlib) with
     | Just (f, _) -> Core.Ecall (Core.Sym f)
@@ -42,7 +42,7 @@ let promote_value (e: C.expr 'b ) : C.expr 'b = e (* TODO !!!! *)
 
 (*
 (* NOTE: assume that [e] is a pure expression *)
-val conv A.ctype -> A.ctype -> C.expr zero -> t (C.expr zero)
+val conv A.ctype -> A.ctype -> C.expr 'a -> t (C.expr 'a)
 let conv ty1 ty2 e =
   
     (* (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value
@@ -167,12 +167,12 @@ let ctype_of a_expr =
 
 
 val is_defined_ail_function: forall 'A 'B. AilSyntax.identifier -> AilSyntax.program 'A 'B -> bool
-let is_defined_ail_function id (_, defs) =
-  match List.lookup id defs with
+let is_defined_ail_function id (_, S) =
+  match AilSyntax.sigma_lookup S id with
     | Nothing ->
         Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a non-declared identifier."
-    | Just (Right _) ->
+    | Just (AilSyntax.SDecl_global _ _) ->
         Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a global variable."
-    | Just (Left (_, s_opt)) ->
-        isJust s_opt
+    | Just (AilSyntax.SDecl_fun _ fdecl) ->
+        isJust fdecl.AilSyntax.fun_body
   end

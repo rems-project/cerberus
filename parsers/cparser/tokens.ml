@@ -1,7 +1,4 @@
-open Cabs0
-
-type token = 
-    (* (§6.4.1) keywords *)
+type token =
   | AUTO
   | BREAK
   | CASE
@@ -42,127 +39,181 @@ type token =
   | BOOL
   | COMPLEX
   | GENERIC
-  | IMAGINARY
+  (* IMAGINARY *)
   | NORETURN
   | STATIC_ASSERT
   | THREAD_LOCAL
-
-
-
-
-
-
-(*
-
-
-  | XOR_ASSIGN of cabsloc
-  | WHILE of cabsloc
-  | VOLATILE of cabsloc
-  | VOID of cabsloc
-  | VAR_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
-  | UNSIGNED of cabsloc
-  | UNKNOWN_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
-  | UNION of cabsloc
-  | TYPEDEF_NAME of (string * Pre_parser_aux.identifier_type ref * cabsloc)
-  | TYPEDEF of cabsloc
-  | TILDE of cabsloc
-  | THREAD_LOCAL of cabsloc
-  | SWITCH of cabsloc
-  | SUB_ASSIGN of cabsloc
-  | STRUCT of cabsloc
-  | STRING_LITERAL of (string * cabsloc)
-  | STATIC_ASSERT of cabsloc
-  | STATIC of cabsloc
-  | STAR of cabsloc
-  | SLASH of cabsloc
-  | SIZEOF of cabsloc
-  | SIGNED of cabsloc
-  | SHORT of cabsloc
-  | SEMICOLON of cabsloc
-  | RPAREN of cabsloc
-  | RIGHT_ASSIGN of cabsloc
-  | RIGHT of cabsloc
-  | RETURN of cabsloc
-  | RESTRICT of cabsloc
-  | REGISTER of cabsloc
-  | RBRACK of cabsloc
-  | RBRACES of cabsloc
-  | RBRACE of cabsloc
-  | QUESTION of cabsloc
-  | PTR of cabsloc
-  | PLUS of cabsloc
-  | PERCENT of cabsloc
-  | OR_ASSIGN of cabsloc
-  | OFFSETOF of cabsloc
-  | NEQ of cabsloc
-  | MUL_ASSIGN of cabsloc
-  | MOD_ASSIGN of cabsloc
-  | MINUS of cabsloc
-  | LT of cabsloc
-  | LPAREN of cabsloc
-  | LONG of cabsloc
-  | LEQ of cabsloc
-  | LEFT_ASSIGN of cabsloc
-  | LEFT of cabsloc
-  | LBRACK of cabsloc
-  | LBRACES of cabsloc
-  | LBRACE of cabsloc
-  | INT of cabsloc
-  | INLINE of cabsloc
-  | INC of cabsloc
-  | IF of cabsloc
-  | HAT of cabsloc
-  | GT of cabsloc
-  | GOTO of cabsloc
-  | GEQ of cabsloc
-  | FOR of cabsloc
-  | FLOAT of cabsloc
-  | EXTERN of cabsloc
-  | EQEQ of cabsloc
-  | EQ of cabsloc
-  | EOF
-  | ENUM of cabsloc
-  | ELSE of cabsloc
-  | ELLIPSIS of cabsloc
-  | DOUBLE of cabsloc
-  | DOT of cabsloc
-  | DO of cabsloc
-  | DIV_ASSIGN of cabsloc
-  | DEFAULT of cabsloc
-  | DEC of cabsloc
-  | CONTINUE of cabsloc
-  | CONSTANT of (constant0 * cabsloc)
-  | CONST of cabsloc
-  | COMMA of cabsloc
-  | COLON of cabsloc
-  | CHAR of cabsloc
-  | CASE of cabsloc
-  | C11_ATOMIC_STORE of cabsloc
-  | C11_ATOMIC_LOAD of cabsloc
-  | C11_ATOMIC_INIT of cabsloc
-  | C11_ATOMIC_FETCH_KEY of cabsloc
-  | C11_ATOMIC_EXCHANGE of cabsloc
-  | C11_ATOMIC_COMPARE_EXCHANGE_WEAK of cabsloc
-  | C11_ATOMIC_COMPARE_EXCHANGE_STRONG of cabsloc
-  | BUILTIN_VA_ARG of cabsloc
-  | BREAK of cabsloc
-  | BOOL of cabsloc
-  | BARES of cabsloc
-  | BARBAR of cabsloc
-  | BAR of cabsloc
-  | BANG of cabsloc
-  | ATOMIC of cabsloc
-  | GENERIC of cabsloc
-  | AND_ASSIGN of cabsloc
-  | ANDAND of cabsloc
-  | AND of cabsloc
-  | ALIGNOF of cabsloc
-  | ADD_ASSIGN of cabsloc
+  | ATOMIC_LPAREN (* this is a hack to solve a grammar ambiguity (see Lexer.mll) *)
   
-  (* Parser.mly specifics *)
-  | VAR_NAME2  of (atom * cabsloc)
-  | TYPEDEF_NAME2 of (atom * cabsloc)
-  | OTHER_NAME of (atom * cabsloc)
+  | VAR_NAME     of (string * Pre_parser_aux.identifier_type ref)
+  | TYPEDEF_NAME of (string * Pre_parser_aux.identifier_type ref)
+  | UNKNOWN_NAME of (string * Pre_parser_aux.identifier_type ref)
+  
+  | VAR_NAME2     of string
+  | TYPEDEF_NAME2 of string
+  | OTHER_NAME    of string
+  
+  
+  | CONSTANT of Cabs.cabs_constant
+  
+  | STRING_LITERAL of Cabs.cabs_string_literal
+  
+  | LBRACKET
+  | RBRACKET
+  | LPAREN
+  | RPAREN
+  | LBRACE
+  | RBRACE
+  | DOT
+  | MINUS_GT
+  | PLUS_PLUS
+  | MINUS_MINUS
+  | AMPERSAND
+  | STAR
+  | PLUS
+  | MINUS
+  | TILDE
+  | BANG
+  | SLASH
+  | PERCENT
+  | LT_LT
+  | GT_GT
+  | LT
+  | GT
+  | LT_EQ
+  | GT_EQ
+  | EQ_EQ
+  | BANG_EQ
+  | CARET
+  | PIPE
+  | AMPERSAND_AMPERSAND
+  | PIPE_PIPE
+  | QUESTION
+  | COLON
+  | SEMICOLON
+  | ELLIPSIS
+  | EQ
+  | STAR_EQ
+  | SLASH_EQ
+  | PERCENT_EQ
+  | PLUS_EQ
+  | MINUS_EQ
+  | LT_LT_EQ
+  | GT_GT_EQ
+  | AMPERSAND_EQ
+  | CARET_EQ
+  | PIPE_EQ
+  | COMMA
+  
+  | EOF
 
 
- *)
+
+
+(* DEBUG *)
+let string_of_identifier_type = function
+  | Pre_parser_aux.VarId -> "VarId"
+  | Pre_parser_aux.TypedefId -> "TypedefId"
+  | Pre_parser_aux.OtherId str -> "OtherId(" ^ str ^ ")"
+
+
+let string_of_token = function
+  | AUTO -> "AUTO"
+  | BREAK -> "BREAK"
+  | CASE -> "CASE"
+  | CHAR -> "CHAR"
+  | CONST -> "CONST"
+  | CONTINUE -> "CONTINUE"
+  | DEFAULT -> "DEFAULT"
+  | DO -> "DO"
+  | DOUBLE -> "DOUBLE"
+  | ELSE -> "ELSE"
+  | ENUM -> "ENUM"
+  | EXTERN -> "EXTERN"
+  | FLOAT -> "FLOAT"
+  | FOR -> "FOR"
+  | GOTO -> "GOTO"
+  | IF -> "IF"
+  | INLINE -> "INLINE"
+  | INT -> "INT"
+  | LONG -> "LONG"
+  | REGISTER -> "REGISTER"
+  | RESTRICT -> "RESTRICT"
+  | RETURN -> "RETURN"
+  | SHORT -> "SHORT"
+  | SIGNED -> "SIGNED"
+  | SIZEOF -> "SIZEOF"
+  | STATIC -> "STATIC"
+  | STRUCT -> "STRUCT"
+  | SWITCH -> "SWITCH"
+  | TYPEDEF -> "TYPEDEF"
+  | UNION -> "UNION"
+  | UNSIGNED -> "UNSIGNED"
+  | VOID -> "VOID"
+  | VOLATILE -> "VOLATILE"
+  | WHILE -> "WHILE"
+  | ALIGNAS -> "ALIGNAS"
+  | ALIGNOF -> "ALIGNOF"
+  | ATOMIC -> "ATOMIC"
+  | BOOL -> "BOOL"
+  | COMPLEX -> "COMPLEX"
+  | GENERIC -> "GENRIC"
+  | NORETURN -> "NORETURN"
+  | STATIC_ASSERT -> "STATIC_ASSERT"
+  | THREAD_LOCAL -> "THREAD_LOCAL"
+  | ATOMIC_LPAREN -> "ATOMIC_LPAREN"
+  | VAR_NAME (str, id_ty) -> "VAR_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | TYPEDEF_NAME (str, id_ty) -> "TYPEDEF_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | UNKNOWN_NAME (str, id_ty) -> "UNKNOWN_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | VAR_NAME2 str -> "VAR_NAME2(" ^ str ^ ")"
+  | TYPEDEF_NAME2 str -> "TYPEDEF_NAME2(" ^ str ^ ")"
+  | OTHER_NAME str -> "OTHER_NAME(" ^ str ^ ")"
+  | CONSTANT _ -> "CONSTANT"
+  | STRING_LITERAL _ -> "STRING_LITERAL"
+  | LBRACKET -> "LBRACKET"
+  | RBRACKET -> "RBRACKET"
+  | LPAREN -> "LPAREN"
+  | RPAREN -> "RPAREN"
+  | LBRACE -> "LBRACE"
+  | RBRACE -> "RBRACE"
+  | DOT -> "DOT"
+  | MINUS_GT -> "MINUS_GT"
+  | PLUS_PLUS -> "PLUS_PLUS"
+  | MINUS_MINUS -> "MINUS_MINUS"
+  | AMPERSAND -> "AMPERSAND"
+  | STAR -> "STAR"
+  | PLUS -> "PLUS"
+  | MINUS -> "MINUS"
+  | TILDE -> "TILDE"
+  | BANG -> "BANG"
+  | SLASH -> "SLASH"
+  | PERCENT -> "PERCENT"
+  | LT_LT -> "LT_LT"
+  | GT_GT -> "GT_GT"
+  | LT -> "LT"
+  | GT -> "GT"
+  | LT_EQ -> "LT_EQ"
+  | GT_EQ -> "GT_EQ"
+  | EQ_EQ -> "EQ_EQ"
+  | BANG_EQ -> "BANG_EQ"
+  | CARET -> "CARET"
+  | PIPE -> "PIPE"
+  | AMPERSAND_AMPERSAND -> "AMPERSAND_AMPERSAND"
+  | PIPE_PIPE -> "PIPE_PIE"
+  | QUESTION -> "QUESTION"
+  | COLON -> "COLON"
+  | SEMICOLON -> "SEMICOLON"
+  | ELLIPSIS -> "ELLIPSIS"
+  | EQ -> "EQ"
+  | STAR_EQ -> "STAR_EQ"
+  | SLASH_EQ -> "SLASH_EQ"
+  | PERCENT_EQ -> "PERCENT_EQ"
+  | PLUS_EQ -> "PLUS_EQ"
+  | MINUS_EQ -> "MINUS_EQ"
+  | LT_LT_EQ -> "LT_LT_EQ"
+  | GT_GT_EQ -> "GT_GT_EQ"
+  | AMPERSAND_EQ -> "AMPERSAND_EQ"
+  | CARET_EQ -> "CARET_EQ"
+  | PIPE_EQ -> "PIPE_EQ"
+  | COMMA -> "COMMA"
+  | EOF -> "EOF"

@@ -1,0 +1,129 @@
+open import Pervasives
+open import List Function
+open import Global
+import Dlist Constraints Symbolic Undefined
+
+
+type kill_reason =
+  | Undef of list Undefined.undefined_behaviour
+  | Error
+  | Other of string
+
+type nd_state 'a =
+    (* active execution: log, constraints, value *)
+  | Active of Dlist.dlist string * Constraints.t * 'a
+    (* killed execution: kill_reason, log, constraints *)
+  | Killed of kill_reason * Dlist.dlist string * Constraints.t
+
+type t 'a =
+  ND of list (nd_state 'a)
+
+
+(* Monadic operations *)
+val return: forall 'a.    'a -> t 'a
+val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+
+let return a =
+  ND [Active Dlist.nil Constraints.empty a]
+
+let bind (ND m) f =
+    ND $
+      List.concatMap (fun ma ->
+        match ma with
+          | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      let eqs' = Constraints.simplify $ Constraints.combine eqsA eqsB in
+                      if Constraints.isUnsat eqs' then
+                        Killed (Other "reached unsatisfiable constraints") log' eqs'
+                      else
+                        Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) (Constraints.simplify $ Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+          | Killed reason log eqs ->
+              [Killed reason log eqs]
+        end) m
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end
+
+open Operators
+
+
+(* MonadPlus operations *)
+val mzero: forall 'a. t 'a
+val mplus: forall 'a. t 'a -> t 'a -> t 'a
+
+let mzero = ND []
+let mplus (ND ma) (ND mb) = ND (ma ++ mb)
+
+
+(* Instanciating generic functions (...) *)
+val sequence: forall 'a. list (t 'a) -> t (list 'a) (* GENERIC Monad *)
+let sequence ms =                                   (* GENERIC Monad *)
+  List.foldr (fun m ms' ->                          (* GENERIC Monad *)
+   m   >>= fun x  ->                                (* GENERIC Monad *)
+   ms' >>= fun xs ->                                (* GENERIC Monad *)
+  return (x :: xs)                                  (* GENERIC Monad *)
+  ) (return []) ms                                  (* GENERIC Monad *)
+
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b) (* GENERIC Monad *)
+let mapM f xs =  sequence (List.map f xs)                      (* GENERIC Monad *)
+
+val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a (* GENERIC Monad *)
+let rec foldM f a = function                                             (* GENERIC Monad *)
+  | [] ->                                                                (* GENERIC Monad *)
+      return a                                                           (* GENERIC Monad *)
+  | x::xs ->                                                             (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                (* GENERIC Monad *)
+end
+
+val msum: forall 'a. list (t 'a) -> t 'a (* GENERIC MonadPlus *)
+let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
+
+
+(* Specific operations *)
+
+(* Non-deterministically pick from a list *)
+val pick: forall 'a. list 'a -> t 'a
+let pick xs =
+  ND $ List.map (Active Dlist.nil Constraints.empty) xs
+
+(* The same but with a predicate and the pick is paired with it context *)
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+let rec _pickWith pred acc = function
+  | [] ->
+      []
+  | x::xs ->
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
+        _pickWith pred (x::acc) xs
+end
+let pickWith pred xs =
+  ND $ List.map (Active Dlist.nil Constraints.empty) (_pickWith pred [] xs)
+
+(* Perform the first computation if it is not empty bind the result to the second computation
+   otherwise run the third computation *)
+val tryM: forall 'a 'b. t 'a -> ('a -> t 'b) -> (unit -> t 'b) -> t 'b
+let tryM (ND ma) mf mend =
+  if List.null ma then mend () else ND ma >>= mf
+
+
+val kill: forall 'a. kill_reason -> t 'a
+let kill reason =
+  ND [Killed reason Dlist.nil Constraints.empty]
+
+
+(* Add a constraint to the current execution *)
+val add_constraint: Constraints.assertion -> t unit
+let add_constraint constr =
+  ND [Active Dlist.nil (Constraints.singleton constr) ()]
+
+val log: string -> t unit
+let log msg =
+  ND [Active (Dlist.singleton msg) Constraints.empty ()]
+

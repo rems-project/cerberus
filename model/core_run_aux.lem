@@ -1,0 +1,186 @@
+open import Pervasives
+open import Global Core Driver_util
+
+
+type core_run_error =
+  | Illformed_program of string (* typing or name-scope error *)
+  | Found_empty_stack
+  | Reached_end_of_proc
+  | Unknown_impl
+  | Unresolved_symbol (* found an unresolved symbolic name in core_eval *)
+
+
+let string_of_core_run_error = function
+  | Illformed_program str ->
+      "Illformed_program[" ^ str ^ "]"
+  | Found_empty_stack ->
+      "Found_empty_stack"
+  | Reached_end_of_proc ->
+      "Reached_end_of_proc"
+  | Unknown_impl ->
+      "Unknown_impl"
+  | Unresolved_symbol ->
+      "Unresolved_symbol"
+end
+
+
+
+type core_run_annotation = <|
+  sb_before:  set (Thread.thread_id * action_id);
+  dd_before:  set action_id;
+  asw_before: set action_id;
+|>
+
+let empty_annotation = <|
+  sb_before  = {};
+  dd_before  = {};
+  asw_before = {};
+|>
+
+instance (Default core_run_annotation)
+  let default = empty_annotation
+end
+
+
+
+
+val has_sbBefore_on_thread: Thread.thread_id -> core_run_annotation -> bool
+let has_sbBefore_on_thread tid annot =
+  Set.any (fun (tid', _) ->
+    tid = tid'
+  ) annot.sb_before
+
+
+
+(* TODO: the following comment is probably out of date *)
+(* TODO: here I'm annotating all actions instead (this may reduce the number of
+         epsilon transitions) *)
+(* [annotate b e] add on each sb-minimal action of [e] an annotation meaning
+                  that this action is sequenced-after [act]
+  
+  in the rules comments, this function is noted: <b> e
+ *)
+(* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
+
+val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+let rec add_to_sb p_aids = function
+  | Eunit ->
+      (* no change *)
+      Eunit
+  | Etrue ->
+      (* no change *)
+      Etrue
+  | Efalse ->
+      (* no change *)
+      Efalse
+  | Econst cts ->
+      (* no change *)
+      Econst cts
+  | Elist pes ->
+      (* no change *)
+      Elist pes
+  | Ectype ty ->
+      (* no change *)
+      Ectype ty
+  | Esym a ->
+      (* no change *)
+      Esym a
+  | Eimpl i ->
+      (* no change *)
+      Eimpl i
+  | Etuple pes ->
+      (* no change *)
+      Etuple pes
+  | Enot pe ->
+      (* no change *)
+      Enot pe
+  | Eop bop pe1 pe2 ->
+      (* no change *)
+      Eop bop pe1 pe2
+  | Ecall nm pes ->
+      (* no change *)
+      Ecall nm pes
+  | Eoutput str ->
+      (* no change *)
+      Eoutput str
+  | Eundef ub ->
+      (* no change *)
+      Eundef ub
+  | Eerror ->
+      (* no change *)
+      Eerror
+  | Eskip ->
+      (* no change *)
+      Eskip
+  | Elet a pe1 e2 ->
+      Elet a pe1 (add_to_sb p_aids e2)
+  | Eif pe1 e2 e3 ->
+      Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+  | Eproc annots nm pes ->
+      Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
+  | Eaction (Paction p' (Action annots a)) ->
+      Eaction (Paction p' (Action <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+  | Eunseq es ->
+      Eunseq (List.map (add_to_sb p_aids) es)
+  | Ewseq _as e1 e2 ->
+      let is_positive = function
+        | (Pos, _) -> true
+        | _        -> false
+      end in
+      Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
+  | Esseq _as e1 e2 ->
+      Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
+(*
+  | Easeq  of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of natural * expr 'a (* this ctor doesn't exist at runtine *)
+*)
+  | Esave k a_tys e ->
+      Esave k a_tys (add_to_sb p_aids e)
+  | Erun annots k a_vs ->
+      Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+  | Eret pe ->
+      (* no change *)
+      Eret pe
+  | End es ->
+      End (List.map (add_to_sb p_aids) es)
+  | Epar es ->
+      Epar (List.map (add_to_sb p_aids) es)
+  | Eis_scalar pe ->
+      (* no change *)
+      Eis_scalar pe
+  | Eis_integer pe ->
+      (* no change *)
+      Eis_integer pe
+  | Eis_signed pe ->
+      (* no change *)
+      Eis_signed pe
+  | Eis_unsigned pe ->
+      (* no change *)
+      Eis_unsigned pe
+end
+
+
+
+val add_to_sb_stack: set (polarity * (Thread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+
+let rec add_to_sb_continuation p_aids = function
+  | [] ->
+      []
+  | Kunseq es1 es2 :: cont ->
+      Kunseq es1 es2 :: add_to_sb_continuation p_aids cont
+  | Kwseq _as e2 :: cont ->
+      let is_positive = function
+        | (Pos, _) -> true
+        | _        -> false
+      end in
+      Kwseq _as(add_to_sb (Set.filter is_positive p_aids) e2) :: add_to_sb_continuation p_aids cont
+  | Ksseq _as e2 :: cont ->
+      Ksseq _as (add_to_sb p_aids e2) :: add_to_sb_continuation p_aids cont
+end
+let rec add_to_sb_stack p_aids = function
+  | Stack_empty ->
+      Stack_empty
+  | Stack_cons cont sk ->
+      Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+end

@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Core Memory Exception Errors Boot Memory_order
+import Core (* Memory *) Exception Errors Boot (* Memory_order *)
 
 
 (* TODO: lem non termination bug *)
@@ -392,24 +392,22 @@ let rec hack x =
   match x with
     | Core.Eunit ->
         Core.Eunit
-    | Core.Enull ty ->
-        Core.Enull ty
     | Core.Etrue ->
         Core.Etrue
     | Core.Efalse ->
         Core.Efalse
     | Core.Econst cst ->
         Core.Econst cst
+    | Core.Elist es ->
+        Core.Elist (List.map hack es)
     | Core.Ectype ty ->
         Core.Ectype ty
-    | Core.Eaddr addr ->
-        Core.Eaddr addr
     | Core.Esym a ->
         Core.Esym a
     | Core.Eimpl impl ->
         Core.Eimpl impl
     | Core.Etuple es ->
-        Core.Etuple (map hack es)
+        Core.Etuple (List.map hack es)
     | Core.Enot e ->
         Core.Enot (hack e)
     | Core.Eop bop e1 e2 ->
@@ -430,8 +428,6 @@ let rec hack x =
         Core.Eif (hack e1) (hack e2) (hack e3)
     | Core.Eproc bs f es ->
         Core.Eproc bs f (map hack es)
-    | Core.Esame e1 e2 ->
-        Core.Esame (hack e1) (hack e2)
     | Core.Eaction pa ->
         Core.Eaction pa
     | Core.Eunseq es ->
@@ -466,8 +462,8 @@ let rec hack x =
         Core.End (map hack es)
     | Core.Epar es ->
         Core.Epar (map hack es)
-    | Core.Eshift a e ->
-        Core.Eshift a (hack e)
+    | Core.Ewait tid ->
+        Core.Ewait tid
     | Core.Eis_scalar e ->
         Core.Eis_scalar (hack e)
     | Core.Eis_integer e ->
@@ -483,8 +479,8 @@ end
 
 (* TODO: hack *)
 (*  *)
-val order: Core.file zero -> Exception.t (list (nat * Core.file zero)) (Errors.t)
-let order (f: Core.file zero) =
+val order: Core.file unit -> Exception.t (list (nat * Core.file unit)) (Errors.t)
+let order (f: Core.file unit) =
 (*  let fbodies' = map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
   
   
@@ -501,3 +497,7 @@ let order (f: Core.file zero) =
 
 *)
 
+
+val hackish_order: Core.file unit -> Core.file unit
+let hackish_order file =
+  <| file with Core.funs= Map.map (fun (ty, args, body) -> (ty, args, hack body)) file.Core.funs |>

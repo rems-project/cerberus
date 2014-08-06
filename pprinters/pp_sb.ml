@@ -38,8 +38,8 @@ let string_of_trace_action tact =
   let f o =
     "[\\text{" ^ String.concat "." (List.map Pp_run.string_of_sym $ fst o) ^ "}]" in
   
-  let pp_ctype ty        = escape_underscores $ Boot_ocaml.to_plain_string (Pp_core.pp_ctype ty) in
-  let pp_memory_order mo = escape_underscores $ Boot_ocaml.to_plain_string (Pp_core.pp_memory_order mo) in
+  let pp_ctype ty        = escape_underscores $ Boot_pprint.to_plain_string (Pp_core.pp_ctype ty) in
+  let pp_memory_order mo = escape_underscores $ Boot_pprint.to_plain_string (Pp_core.pp_memory_order mo) in
   
   match tact with
     | Core_run_effect.Tcreate (ty, o, tid) ->
@@ -70,9 +70,9 @@ let string_of_trace_action tact =
 let pp n g =
   let threads =
     List.fold_left (fun acc (aid, act) ->
-      let tid = Core_run_effect.tid_of0 act in
+      let tid = Core_run_effect.tid_of act in
       Pmap.add tid ((aid, act) :: if Pmap.mem tid acc then Pmap.find tid acc else []) acc
-    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings_list g.actions0 in
+    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings_list g.actions in
   
   let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->

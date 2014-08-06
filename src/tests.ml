@@ -78,7 +78,7 @@ type 'a expr =
 *)
 
 
-
+(*
 
 (* use this to print a halting error message *)
 let error str =
@@ -89,14 +89,14 @@ let error str =
 type execution_result_full = 
 (
   (
-    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t4 *
+    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t3 *
     Core_run_effect.state0
   ) list list,
-  Errors.t6
-) Exception.t0
+  Errors.t8
+) Exception.t2
 
 (* The type we use to compare results of executions *) 
-type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t4) Pset.set, Errors.t6) Exception.t0
+type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t4) Pset.set, Errors.t8) Exception.t2
 
 (* TODO: proper printing for Undef and error *)
 let pp_execution_result (result:execution_result) : string = 
@@ -130,7 +130,7 @@ let simplify_result (result : execution_result_full) : execution_result =
     | E.Exception s ->
         E.Exception s
 
-type test_result = (unit, string) Exception.t0
+type test_result = (unit, string) Exception.t2
 
 let compare_results (expected:execution_result) (actual_full:execution_result_full) : test_result =
   let actual: execution_result = simplify_result actual_full in
@@ -185,3 +185,5 @@ let get_tests: test list =
    get_test "tests/concurrency/SB+rel_acq+rel_acq.c" [0; 1; 2; 3] []
  *)
    ]
+
+*)

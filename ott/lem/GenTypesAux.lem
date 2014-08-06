@@ -158,6 +158,9 @@ let interpret_genType P gt : errorM ctype =
   | GenArray    t n   -> return (Array    t n)
   | GenFunction t p b -> return (Function t p b)
   | GenPointer  q t   -> return (Pointer  q t)
+  | GenStruct   xs    -> return (Struct xs)
+  | GenUnion    xs    -> return (Union xs)
+  | GenBuiltin  str   -> return (Builtin str)
   end
 
 let interpret_genTypeCategory P gt : errorM typeCategory =

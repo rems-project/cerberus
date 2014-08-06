@@ -1,0 +1,15 @@
+open import Pervasives Enum
+import State
+
+type t 'a = 'a
+type supply 'a = t 'a
+
+
+val new_supply: forall 'a. Enum 'a => supply 'a
+let new_supply =
+  toEnum 0
+
+
+val fresh_id: forall 'a. Enum 'a => supply 'a -> t 'a * supply 'a
+let fresh_id supl =
+  (supl, succ supl)

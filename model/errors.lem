@@ -1,40 +1,206 @@
-open import Global Core
+open import Global Cabs Core
 import Location TypingError
+
+
+
+type desugar_cause =
+  | Desugar_NoStartup of cabs_identifier
+  | Desugar_ConstraintViolation of string
+  | Desugar_OtherViolation of string
+
+(* TODO: move these to Desugar_ConstraintViolation *)
+  | Desugar_FunctionRedefinition of cabs_identifier
+  | Desugar_BlockScoped_Thread_local_alone
+(*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)
+(*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
+  | Desugar_NotConstantExpression
+(*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
+  | Desugar_MultibleDeclaration of cabs_identifier
+  | Desugar_NotSupported of string
+
+  | Desugar_TODOCTOR of string
+
+
+(*  | Desugar_DUPLICATED_LABEL *)                    
+(*  | Desugar_UNDECLARED_IDENTIFIER of string *)     
+(*  | Desugar_UNDECLARED_TYPENAME of string *)       
+(*  | Desugar_MULTIPLE_STORAGE_CLASS *)              
+(*  | Desugar_ITERATION_DECLARATON_WRONG_STORAGE *)  
+
+
+
+
+
 
 type cause =
   | CSEM_NOT_SUPPORTED of string
   | CSEM_HIP of string (* this is for features we plan to support,
 			  but that does not work yet *)
   
-  (* Cabs0_to_ail *)
-  | Cabs_to_ail__empty_type_specifier_list   (* STD §6.7.2#2, sentence 1 *)
-  | Cabs_to_ail__invalid_type_specifier_list (* STD §6.7.2#2, sentence 2 *)
+  
+  | Desugar_cause of desugar_cause
+
+  (* Constraint violation *)
+
+(*
+§6.4#2      1 sentence
+§6.4.3#2    1 sentence
+§6.4.4#2    1 sentence
+§6.4.4.4#9  1 sentence
+§6.4.5#2    1 sentence
+§6.5.1.1#2  5 sentence
+
+§6.5.2.1#1  1 sentence
+
+§6.5.2.2#1  1 sentence
+§6.5.2.2#2  2 sentence
+
+§6.5.2.3#1  1 sentence
+§6.5.2.3#2  1 sentence
+
+§6.5.2.4#1  1 sentence
+
+§6.5.2.5#1  1 sentence
+§6.5.2.5#1  1 sentence
+
+§6.5.3.1#1  1 sentence
+
+§6.5.3.2#1  1 sentence
+§6.5.3.2#2  1 sentence
+
+§6.5.3.3#1  1 sentence
+
+§6.5.3.4#1  2 sentence
+
+§6.5.4#2  1 sentence
+§6.5.4#3  1 sentence
+§6.5.4#4  2 sentence
+
+§6.5.5#2  2 sentence TYPING
+
+§6.5.6#2  1 sentence TYPING
+§6.5.6#3  n sentence TYPING
+
+§6.5.7#2  1 sentence TYPING
+
+§6.5.8#2  3 sentence TYPING
+
+§6.5.9#2  n sentence TYPING
+
+§6.5.10#2  1 sentence TYPING
+
+§6.5.11#2  1 sentence TYPING
+
+§6.5.12#2  1 sentence TYPING
+
+§6.5.13#2  1 sentence TYPING
+
+§6.5.14#2  1 sentence TYPING
+
+§6.5.15#2  1 sentence TYPING
+§6.5.15#3  n sentence TYPING
+
+§6.5.16#2  1 sentence TYPING
+
+§6.5.16.1#1  n sentence TYPING
+
+§6.5.16.2#1  1 sentence TYPING
+§6.5.16.2#2  1 sentence TYPING
+
+§6.6#3  1 sentence
+§6.6#4  1 sentence
+
+§6.7#2  1 sentence
+§6.7#3  n sentence
+§6.7#4  1 sentence
+
+§6.7.1#2  1 sentence
+§6.7.1#3  2 sentence
+§6.7.1#4  1 sentence
+
+§6.7.2#2  n sentence
+§6.7.2#3  1 sentence
+
+§6.7.2.1#2  1 sentence
+§6.7.2.1#3  1 sentence
+§6.7.2.1#4  2 sentence
+§6.7.2.1#5  2 sentence TYPING
+
+§6.7.2.2#2  1 sentence
+
+§6.7.2.3#1  1 sentence
+§6.7.2.3#2  1 sentence
+§6.7.2.3#3  1 sentence
+
+§6.7.2.4#2  1 sentence
+§6.7.2.4#3  1 sentence
+
+§6.7.3#2  1 sentence
+§6.7.3#3  1 sentence
+
+§6.7.4#2  1 sentence
+§6.7.4#3  1 sentence
+§6.7.4#4  1 sentence
+
+§6.7.5#2  1 sentence
+§6.7.5#3  1 sentence
+§6.7.5#4  1 sentence
+
+§6.7.6.2#1  5 sentence
+§6.7.6.2#2  2 sentence
+
+§6.7.6.3#1  1 sentence
+§6.7.6.3#2  1 sentence
+§6.7.6.3#3  1 sentence
+§6.7.6.3#4  1 sentence
+
+§6.7.8#2  1 sentence
+
+§6.7.9#2  1 sentence
+§6.7.9#3  1 sentence
+§6.7.9#4  1 sentence
+§6.7.9#5  1 sentence
+§6.7.9#6  2 sentence
+§6.7.9#7  1 sentence
+
+§6.7.10#1  1 sentence
+
+§6.8.1#2  2 sentence
+§6.8.1#3  1 sentence
+
+§6.8.4.1#1  1 sentence
+
+§6.8.4.2#1  1 sentence
+§6.8.4.2#2  1 sentence
+§6.8.4.2#3  2 sentence
+
+§6.8.5#2  1 sentence
+§6.8.5#3  1 sentence
+
+§6.8.6.1#1  2 sentence
+
+§6.8.6.2#1  1 sentence
+
+§6.8.6.3#1  1 sentence
+
+§6.8.6.4#1  2 sentence
+
+§6.9#2  1 sentence
+§6.9#3  2 sentence
+
+§6.9.1#2  1 sentence
+§6.9.1#3  1 sentence TYPING
+§6.9.1#4  1 sentence
+§6.9.1#5  2 sentence
+§6.9.1#6  2 sentence
 
 
-
-
-
-
-
+*)
 
 
 
   | CONSTRAINT_6_6__3
   
-  | CABS_TO_AIL_FUNCTION_REDEFINITION of string
-  | CABS_TO_AIL_BLOCK_THREAD_LOCAL_ALONE
-  | CABS_TO_AIL_THREAD_LOCAL_FUNCTION
-  | CABS_TO_AIL_BLOCK_FUNCTION_STORAGE
-  
-  | CABS_TO_AIL_NO_STARTUP of string
-  | CABS_TO_AIL_NOT_CONSTANT_EXRESSION
-  | CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION
-  | CABS_TO_AIL_MULTIPLE_REGISTRATION of string
-  | CABS_TO_AIL_DUPLICATED_LABEL
-  | CABS_TO_AIL_UNDECLARED_IDENTIFIER of string
-  | CABS_TO_AIL_UNDECLARED_TYPENAME of string
-  | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS
-  | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE
   
   | AIL_TYPING of TypingError.typing_error
 (*
@@ -138,3 +304,6 @@ type cause =
   | OTHER of string
 
 type t = Location.t * cause
+
+
+

@@ -8,9 +8,12 @@ INSTALLATION
     * opam
   
   Then using opam, install:
-    * ocamlfind (1.3.3)
-    * ocaml-text (0.6)
-    * menhir (20120123)
+    * ocamlfind (1.5.1)
+    * pprint (20140424)
+    * menhir (20130912)
+    * cmdliner (0.9.5)
+
+//    * ocaml-text (0.6) (really ?)
     * 
 
   

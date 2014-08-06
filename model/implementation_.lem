@@ -69,7 +69,8 @@ type implementation_constant =
   
   (* Which of signed char or unsigned char has the same range, representation, and
      behavior as ‘‘plain’’ char (6.2.5, 6.3.1.1). *)
-  | Characters__plain_char_sign
+  | Characters__plain_char_is_signed
+    (* TODO: others *)
   
   (* The mapping of members of the source character set (in character constants
      and string literals) to members of the execution character set
@@ -203,7 +204,7 @@ let implementation_constant_to_nat x =
     | Characters__execution_character_set_values -> 3
     | Characters__TODO1 -> 4
     | Characters__TODO2 -> 5
-    | Characters__plain_char_sign -> 6
+    | Characters__plain_char_is_signed -> 6
     | Characters__TODO3 -> 7
     | Characters__TODO4 -> 8
     | Characters__TODO5 -> 9
@@ -258,7 +259,7 @@ let impl_map =
     ("<Characters.execution_character_set_values>"    , Characters__execution_character_set_values);
     ("<Characters.TODO1>"                             , Characters__TODO1);
     ("<Characters.TODO2>"                             , Characters__TODO2);
-    ("<Characters.plain_char_sign>"                   , Characters__plain_char_sign);
+    ("<Characters.plain_char_is_signed>"              , Characters__plain_char_is_signed);
     ("<Characters.TODO3>"                             , Characters__TODO3);
     ("<Characters.TODO4>"                             , Characters__TODO4);
     ("<Characters.TODO5>"                             , Characters__TODO5);
@@ -296,8 +297,8 @@ let string_of_implementation_constant = function
       "Characters.TODO1"
   | Characters__TODO2 ->
       "Characters.TODO2"
-  | Characters__plain_char_sign ->
-      "Characters.plain_char_sign"
+  | Characters__plain_char_is_signed ->
+      "Characters.plain_char_is_signed"
   | Characters__TODO3 ->
       "Characters.TODO3"
   | Characters__TODO4 ->
@@ -341,6 +342,7 @@ let string_of_implementation_constant = function
   | StdFunction fname ->
        "std_function_" ^ fname
 end
+
 
 
 

@@ -30,6 +30,7 @@ let keywords =
       ("enum",        T.ENUM);
       ("size_t",      T.SIZE_T);
       ("intptr_t",    T.INTPTR_T);
+      ("ptrdiff_t",   T.PTRDIFF_T);
       ("wchar_t",     T.WCHAR_T);
       ("char16_t",    T.CHAR16_T);
       ("char32_t",    T.CHAR32_T);
@@ -46,16 +47,18 @@ let keywords =
       
       
       (* for Core.core_base_type *)
-      ("integer",  T.INTEGER  );
-      ("boolean",  T.BOOLEAN  );
-      ("address",  T.ADDRESS  );
-      ("ctype",    T.CTYPE    );
-      ("unit",     T.UNIT     );
-      ("function", T.FUNCTION );
+      ("integer",   T.INTEGER  );
+      ("boolean",   T.BOOLEAN  );
+      ("pointer",   T.POINTER  );
+      ("ctype",     T.CTYPE    );
+      ("cfunction", T.CFUNCTION);
+      ("unit",      T.UNIT     );
+      ("function",  T.FUNCTION );
 (*    | Tuple of list core_base_type *)
       
       (* for Core.expr *)
-      ("null",   T.NULL     );
+      ("list",   T.LIST     );
+      ("array",   T.ARRAY     );
       ("true",   T.TRUE);
       ("false",  T.FALSE);
 (*  | Econst of Cmm_aux.constant *)
@@ -86,8 +89,9 @@ let keywords =
       ("indet", T.INDET);
       ("return", T.RETURN);
   
-(*  | End of list (expr 'a) *)
-(*  | Epar of list (expr 'a) *)
+      ("nd", T.ND);
+      ("par", T.PAR);
+      ("wait", T.WAIT);
 
       
       (* for Core.action_ *)
