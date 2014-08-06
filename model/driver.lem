@@ -211,7 +211,7 @@ end
 
 val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
 let resolve_read write_sym v core_st =
-  let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in
+(*  let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in *)
   <| core_st with
        thread_states= List.map (fun (tid, (parent_tid_opt, th_st)) ->
                        (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym v th_st.arena;
@@ -339,16 +339,10 @@ let rec drive_core_thread tid dr_st =
         ND.return <| dr_st' with core_state= core_st' |>
     
     | Step_tau debug_str _ step_m ->
-        let _ = Boot.output_string ("Found a tau ===> " ^ debug_str) in
+(*        let _ = Boot.output_string ("Found a tau ===> " ^ debug_str) in *)
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
-        
-        let _ = if debug_str = "Erun" then
-          Boot.output_string (">>> " ^ pp_core_state core_st')
-        else
-          () in
-
         drive_core_thread tid <| dr_st' with core_state= core_st' |>
     
     | Step_eval _ _ step_m ->
@@ -439,7 +433,7 @@ let rec driver_notinterleaved _dr_st =
                   "load"
             end in
             
-            let _ = Boot.output_string ("REQUESTED: " ^ act) in
+(*            let _ = Boot.output_string ("REQUESTED: " ^ act) in *)
 
             let dr_st' = <| dr_st' with core_state=        core_st';
                                         concurrency_state= updatePreEx dr_st.concurrency_state preEx_step;
@@ -476,7 +470,7 @@ let rec driver_notinterleaved _dr_st =
 
 val     driver_notweak: driver_state -> ND.t (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
 let rec driver_notweak _dr_st =
-  let _ = Boot.output_string (pp_core_state _dr_st.core_state) in
+(*  let _ = Boot.output_string (pp_core_state _dr_st.core_state) in *)
 
 
   drive_core _dr_st >>= fun dr_st ->
@@ -526,7 +520,7 @@ let rec driver_notweak _dr_st =
                   "load"
             end in
 
-            let _ = Boot.output_string ("REQUESTED: " ^ act) in
+(*            let _ = Boot.output_string ("REQUESTED: " ^ act) in *)
             
             let dr_st' = <| dr_st' with core_state=        core_st';
                                         concurrency_state= updatePreEx dr_st.concurrency_state preEx_step;
@@ -534,7 +528,7 @@ let rec driver_notweak _dr_st =
 
             let dr_st' = repair_pre_execution dr_st' in 
             let n = (number_of_uncommitted dr_st'.concurrency_state) in
-            let _ = Boot.output_string ("CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times") in
+(*            let _ = Boot.output_string ("CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times") in *)
             ND.log $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" >>
             stepConcurrency n dr_st' >>= fun dr_st'' ->
 
@@ -542,7 +536,7 @@ let rec driver_notweak _dr_st =
     
     | Step_tau debug_str _ step_m ->
 (*        ND.log $ "Found a tau ===> " ^ debug_str ^ "\n" >> *)
-        let _ = Boot.output_string ("Found a tau ===> " ^ debug_str) in
+(*        let _ = Boot.output_string ("Found a tau ===> " ^ debug_str) in *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         driver_notweak <| dr_st' with core_state= core_st' |>
     

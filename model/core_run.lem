@@ -853,7 +853,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             SEU.runE (pop_stack sk) >>= fun (cont, sk') ->
             (* TODO: debug *)
             let expr = apply_continuation cont th_st.arena in
-            let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr expr) in
+(*            let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr expr) in *)
 
             match Map.lookup k th_st.labels with
               | Just cont ->
