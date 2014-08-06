@@ -21,16 +21,16 @@ let precedence = function
   | NULL
   | STRING_LITERAL _
 *)
-  | Var _
-  | Constant _       -> Some 0
+  | AilEident _
+  | AilEconst _       -> Some 0
   
-  | Call _
+  | AilEcall _
 (*
   | MEMBEROF _
   | MEMBEROFPTR _
 *)
-  | Unary (PostfixIncr, _)
-  | Unary (PostfixDecr, _)  -> Some 1
+  | AilEunary (PostfixIncr, _)
+  | AilEunary (PostfixDecr, _)  -> Some 1
 (*
   | MALLOC _
   | FREE _
@@ -42,46 +42,46 @@ let precedence = function
   | OFFSETOF _              -> Some 1
 *)
   
-  | Unary _
-  | Cast _
+  | AilEunary _
+  | AilEcast _
 (*  | EXPR_SIZEOF _ *)
-  | SizeOf _
-  | AlignOf _     -> Some 2
+  | AilEsizeof _
+  | AilEalignof _     -> Some 2
   
-  | Binary (_, Arithmetic Mul, _)
-  | Binary (_, Arithmetic Div, _)
-  | Binary (_, Arithmetic Mod, _) -> Some 3
+  | AilEbinary (_, Arithmetic Mul, _)
+  | AilEbinary (_, Arithmetic Div, _)
+  | AilEbinary (_, Arithmetic Mod, _) -> Some 3
   
-  | Binary (_, Arithmetic Add, _)
-  | Binary (_, Arithmetic Sub, _) -> Some 4
+  | AilEbinary (_, Arithmetic Add, _)
+  | AilEbinary (_, Arithmetic Sub, _) -> Some 4
   
-  | Binary (_, Arithmetic Shl, _)
-  | Binary (_, Arithmetic Shr, _) -> Some 5
+  | AilEbinary (_, Arithmetic Shl, _)
+  | AilEbinary (_, Arithmetic Shr, _) -> Some 5
   
-  | Binary (_, Lt, _)
-  | Binary (_, Gt, _)
-  | Binary (_, Le, _)
-  | Binary (_, Ge, _) -> Some 6
+  | AilEbinary (_, Lt, _)
+  | AilEbinary (_, Gt, _)
+  | AilEbinary (_, Le, _)
+  | AilEbinary (_, Ge, _) -> Some 6
   
-  | Binary (_, Eq, _)
-  | Binary (_, Ne, _) -> Some 7
+  | AilEbinary (_, Eq, _)
+  | AilEbinary (_, Ne, _) -> Some 7
   
-  | Binary (_, Arithmetic Band, _) -> Some 8
+  | AilEbinary (_, Arithmetic Band, _) -> Some 8
   
-  | Binary (_, Arithmetic Xor, _) -> Some 9
+  | AilEbinary (_, Arithmetic Bxor, _) -> Some 9
   
-  | Binary (_, Arithmetic Bor, _) -> Some 10
+  | AilEbinary (_, Arithmetic Bor, _) -> Some 10
   
-  | Binary (_, And, _) -> Some 11
+  | AilEbinary (_, And, _) -> Some 11
   
-  | Binary (_, Or, _) -> Some 12
+  | AilEbinary (_, Or, _) -> Some 12
   
-  | Conditional _ -> Some 13
+  | AilEcond _ -> Some 13
   
-  | Assign _
-  | CompoundAssign _ -> Some 14
+  | AilEassign _
+  | AilEcompoundAssign _ -> Some 14
   
-  | Binary (_, Comma, _) -> Some 15
+  | AilEbinary (_, Comma, _) -> Some 15
 
 
 let lt_precedence p1 p2 =
@@ -165,34 +165,22 @@ let rec pp_ctype t =
     | Basic  b ->
         pp_basicType b
     | Array (ty, n) ->
-        pp_ctype ty ^^ P.brackets (pp_integer n)
+        !^ "array" ^^^ pp_integer n ^^^ !^ "of" ^^^ pp_ctype ty
     | Function (ty, ps, is_variadic) ->
-        pp_ctype ty ^^^ P.parens (comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps ^^ (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty))
+        !^ (if is_variadic then "variadic function" else "function") ^^^
+        P.parens (comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps) ^^^
+        !^ "returning" ^^^ pp_ctype ty
     | Pointer (qs, ty) ->
-        pp_qualifiers qs (pp_ctype ty) ^^ P.star
+        pp_qualifiers qs (!^ "pointer to" ^^^ pp_ctype ty)
     | Atomic ty ->
-        !^ "_Atomic" ^^^ pp_ctype ty
-(*
-    | STRUCT (qs, tag, mems)  -> pp_qualifiers qs ^^ !^ "struct" ^^^ pp_id tag ^^^
-                                 P.braces (pp_mems mems)
-    | UNION (qs, tag, mems)   -> pp_qualifiers qs ^^ !^ "union" ^^^ pp_id tag ^^^
-                                 P.braces (pp_mems mems)
-    | ENUM name               -> !^ "enum" ^^^ pp_id name
-*)
-(*
-    | TYPEDEF name            -> pp_id name
-    | SIZE_T                  -> !^ "size_t"
-    | INTPTR_T                -> !^ "intptr_t"
-    | WCHAR_T                 -> !^ "wchar_t"
-    | CHAR16_T                -> !^ "char16_t"
-    | CHAR32_T                -> !^ "char32_t"
-*)
+        !^ "atomic" ^^^ pp_ctype ty
 
-(*
-and pp_member = function
-  | MEMBER ty           -> fun z -> pp_ctype ty ^^^ pp_id z ^^ P.semi
-  | BITFIELD (ty, w, _) -> fun z -> pp_ctype ty ^^^ pp_id z ^^ P.colon ^^^ pp_integer w ^^ P.semi
-*)
+
+
+
+
+
+
 
 
 let pp_arithmeticOperator = function
@@ -205,7 +193,7 @@ let pp_arithmeticOperator = function
   | Shr  -> P.rangle ^^ P.rangle
   | Band -> P.ampersand
   | Bor  -> P.bar
-  | Xor  -> P.caret
+  | Bxor -> P.caret
 
 
 let pp_binaryOperator = function
@@ -225,7 +213,7 @@ let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus
   | Bnot        -> P.tilde
-  | Address0    -> P.ampersand
+  | Address     -> P.ampersand
   | Indirection -> P.star
   | PostfixIncr -> P.plus ^^ P.plus
   | PostfixDecr -> P.minus ^^ P.minus
@@ -267,13 +255,16 @@ let string_of_big_int_with_basis n b =
   f n []
 
 let string_of_octal_big_int n =
-  let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 8) in
-  let ret = String.create (List.length l+1) in
-  ret.[0] <- '0';
-  List.iteri (fun i c ->
-    ret.[i+1] <- c
-  ) l;
-  ret
+  if Big_int.eq_big_int n Big_int.zero_big_int then
+    "0"
+  else
+    let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 8) in
+    let ret = String.create (List.length l+1) in
+    ret.[0] <- '0';
+    List.iteri (fun i c ->
+      ret.[i+1] <- c
+    ) l;
+    ret
 
 let string_of_hexadecimal_big_int n =
   let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 16) in
@@ -295,23 +286,36 @@ let pp_integerConstant (n, basis, suff_opt) =
     | Hexadecimal -> string_of_hexadecimal_big_int n
   )  ^^ (P.optional pp_integerSuffix suff_opt)
 
-(*
-let pp_character_prefix =
-  let to_string = function
-    | PREFIX_L -> "L"
-    | PREFIX_u -> "u"
-    | PREFIX_U -> "U"
-  in
-  P.string -| to_string
 
-let pp_character_constant (pref_opt, c) =
-  (P.optional pp_character_prefix pref_opt) ^^ !^ (Num.string_of_num c)
-*)
+let pp_characterPrefix pref =
+  let to_string = function
+    | Pref_L -> "L"
+    | Pref_u -> "u"
+    | Pref_U -> "U"
+  in
+  P.string (to_string pref)
+
+let pp_characterConstant (pref_opt, c) =
+  (P.optional pp_characterPrefix pref_opt) ^^ (* !^ (Num.string_of_num c) *) (* TODO *) !^ c
+
+
+let pp_encodingPrefix pref =
+  let to_string = function
+    | Enc_u8 -> "u8"
+    | Enc_u  -> "u"
+    | Enc_U  -> "U"
+    | Enc_L  -> "L"
+  in
+  P.string (to_string pref)
+
+let pp_stringConstant (pref_opt, str) =
+  (P.optional pp_encodingPrefix pref_opt) ^^ !^ str
 
 
 let pp_constant = function
-  | ConstantInteger ic -> pp_integerConstant ic
-  | ConstantString str -> !^ str
+  | ConstantInteger   ic -> pp_integerConstant ic
+  | ConstantCharacter cc -> pp_characterConstant cc
+  | ConstantString    sc -> pp_stringConstant sc
 (*
   | CONST_FLOAT fc -> !^ fc
   | CONST_CHAR cc  -> pp_character_constant cc
@@ -344,32 +348,32 @@ let pp_expression a_expr =
         | STRING_LITERAL lit ->
             pp_string_literal lit
 *)
-        | Unary (PostfixIncr as o, e)
-        | Unary (PostfixDecr as o, e) ->
+        | AilEunary (PostfixIncr as o, e)
+        | AilEunary (PostfixDecr as o, e) ->
             pp e ^^ pp_unaryOperator o
-        | Unary (o, e) ->
+        | AilEunary (o, e) ->
             pp_unaryOperator o ^^ pp e
-        | Binary (e1, (Comma as o), e2) ->
+        | AilEbinary (e1, (Comma as o), e2) ->
             pp e1 ^^ pp_binaryOperator o ^^ P.space ^^ pp e2
-        | Binary (e1, o, e2) ->
+        | AilEbinary (e1, o, e2) ->
             pp e1 ^^^ pp_binaryOperator o ^^^ pp e2
-        | Assign (e1, e2) ->
+        | AilEassign (e1, e2) ->
             pp e1 ^^^ P.equals ^^^ pp e2
-        | CompoundAssign (e1, o, e2) ->
+        | AilEcompoundAssign (e1, o, e2) ->
             pp e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp e2
-        | Conditional (e1, e2, e3) ->
+        | AilEcond (e1, e2, e3) ->
             P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
-        | Cast (qs, ty, e) ->
+        | AilEcast (qs, ty, e) ->
             pp_qualifiers qs (P.parens (pp_ctype ty)) ^^^ pp e
-        | Call (e, es) ->
+        | AilEcall (e, es) ->
             pp e ^^ P.parens (comma_list pp es)
-        | Constant c ->
+        | AilEconst c ->
             pp_constant c
-        | Var x ->
+        | AilEident x ->
             pp_id x
-        | SizeOf (qs, ty) ->
+        | AilEsizeof (qs, ty) ->
             !^ "sizeof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
-        | AlignOf (qs, ty) ->
+        | AilEalignof (qs, ty) ->
             !^ "_Alignof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
 
 
@@ -424,11 +428,11 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
       | BLOCK _ -> 
 *)
   match stmt with
-    | Skip ->
+    | AilSskip ->
         P.semi
-    | Expression e ->
+    | AilSexpr e ->
         pp_expression e ^^ P.semi
-    | Block (ids, ss) ->
+    | AilSblock (ids, ss) ->
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
@@ -437,76 +441,78 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
           P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
-    | If (e, s1, s2) ->
+    | AilSif (e, s1, s2) ->
         !^ "if" ^^^ P.parens (pp_expression e) ^/^
           P.nest 2 (pp_statement s1) ^^^
         !^ "else" ^/^
           pp_statement s2
-    | While (e, s) ->
+    | AilSwhile (e, s) ->
         !^ "while" ^^^ P.parens (pp_expression e) ^^^ pp_statement s
-    | Do (s, e) ->
+    | AilSdo (s, e) ->
         !^ "do" ^^^ pp_statement s ^^^ !^ "while" ^^^ P.parens (pp_expression e)
-    | Break ->
+    | AilSbreak ->
         !^ "break" ^^ P.semi
-    | Continue ->
+    | AilScontinue ->
         !^ "continue" ^^ P.semi
-    | ReturnVoid ->
+    | AilSreturnVoid ->
         !^ "return" ^^ P.semi
-    | Return e ->
+    | AilSreturn e ->
         !^ "return" ^^^ pp_expression e ^^ P.semi
-    | Switch (e, s) ->
+    | AilSswitch (e, s) ->
         !^ "switch" ^^^ P.parens (pp_expression e) ^/^ pp_statement s
-    | Case (ic, s) ->
+    | AilScase (ic, s) ->
         pp_integerConstant ic ^^ P.colon ^/^ pp_statement s
-    | Default s ->
+    | AilSdefault s ->
         !^ "default" ^^ P.colon ^/^ pp_statement s
-    | Label (l, s) ->
+    | AilSlabel (l, s) ->
         pp_id l ^^ P.colon ^/^ pp_statement s
-    | Goto l ->
+    | AilSgoto l ->
         !^ "goto" ^^^ pp_id l ^^ P.semi
     (* TODO: looks odd *)
-    | Declaration defs ->
+    | AilSdeclaration defs ->
         comma_list (fun (id, e) -> pp_id id ^^^ P.equals ^^^ pp_expression e) defs ^^
         P.semi
-(*
-    | PAR ss ->
-        (P.lbrace ^^ P.lbrace ^^ P.lbrace) ^/^
-        (P.nest 2 (P.break 1 ^^ P.separate_map (P.bar ^^ P.bar ^^ P.bar) pp_statement_l ss)) ^/^
-        (P.rbrace ^^ P.rbrace ^^ P.rbrace)
-*)
-
-(*
-let pp_declaration file name =
-  let (q, ty, _) = Pmap.find name file.id_map in
-  (pp_qualifiers q $ pp_ctype ty) ^^^ pp_id name
 
 
-let pp_function file (id, (args, s)) =
-  let (_, ty, st) = Pmap.find id file.id_map in
-  (match ty with
-    | FUNCTION (ret_ty, _) -> pp_ctype ret_ty
-    | _                    -> P.empty
-  )
-  ^^^ pp_id id
-  ^^^ P.parens (comma_list (pp_declaration file) args)
-  ^^^ (pp_statement_l file s)
-*)
+
+
+
+let pp_sigma_declaration = function
+  | SDecl_fun (id, fdecl) ->
+      !^ "define" ^^^ pp_id id ^^^ !^ "as" ^^^
+      (if fdecl.fun_is_variadic then !^ "variadic function" else !^ "function") ^^^
+      P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) fdecl.fun_bindings) ^^^
+      !^ "returning" ^^^ pp_ctype fdecl.fun_return_ty ^^^ !^ "with body:" ^^^ P.hardline ^^
+      P.optional pp_statement fdecl.fun_body
+
+  | SDecl_global (id, (qs, ty, _)) ->
+      !^ "declare" ^^^ pp_id id ^^^ !^ "as" ^^^
+      pp_qualifiers qs (pp_ctype ty)
+  | SDecl_static_assert (e, strCst) ->
+      !^ "SDecl_static_assert"
+
+
+
+
+
 
 
 
 let pp_program (startup, defs) =
   List.fold_left (fun acc ->
     function
-      | (id, Left ((return_ty, params, is_variadic), body_opt)) ->
-          pp_ctype return_ty ^^^ pp_id id ^^
-            P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) params ^^
-              if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty
+      | SDecl_fun (id, fdecl) ->
+          pp_ctype fdecl.fun_return_ty ^^^ pp_id id ^^
+            P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) fdecl.fun_bindings ^^
+              if fdecl.fun_is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty
             ) ^^
-          (match body_opt with
+          (match fdecl.fun_body with
              | Some body -> P.space ^^ pp_statement body
              | None      -> P.semi
           ) ^^ P.break 1 ^^ P.hardline ^^ acc
-      | (id, Right (qs, ty, e_opt)) ->
+      | SDecl_global (id, (qs, ty, e_opt)) ->
           (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id ^^^
           P.optional (fun e -> P.equals ^^^ pp_expression e) e_opt ^^ P.semi ^^ P.break 1 ^^ P.hardline ^^ acc
+      | SDecl_static_assert (e, sCst) ->
+          !^ "_Static_assert" ^^ P.parens (pp_expression e ^^ P.comma ^^^ pp_stringConstant sCst)
   ) P.empty defs

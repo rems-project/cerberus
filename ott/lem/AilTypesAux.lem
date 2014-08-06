@@ -4,7 +4,8 @@ let unqualified qs =
   match qs with
   | <| const    = false;
        restrict = false;
-       volatile = false |> -> true
+       volatile = false;
+       atomic   = false |> -> true
   | _                      -> false
   end
 
@@ -111,6 +112,83 @@ let le_integer_range P it1 it2 : bool =
   | (Unsigned Long    , Signed   Long    ) -> false
   | (Unsigned LongLong, Signed   LongLong) -> false
   | (Unsigned ibt1    , Signed   ibt2    ) -> (P.precision (Unsigned ibt1)) < (P.precision (Signed ibt2))
+  
+  (* TODO: check *)
+  | (Wchar_t          , Wchar_t          ) -> true
+
+  | (Char16_t         , Char16_t         ) -> true
+  | (Char32_t         , Char32_t         ) -> true
+  
+  
+
+(*  
+  | (Signed Int8_t    , Signed Int8_t    ) -> true
+  | (Signed Int8_t    , Signed Int16_t   ) -> true
+  | (Signed Int8_t    , Signed Int32_t   ) -> true
+  | (Signed Int8_t    , Signed Int64_t   ) -> true
+  
+  | (Signed Int16_t   , Signed Int8_t    ) -> false
+  | (Signed Int16_t   , Signed Int16_t   ) -> true
+  | (Signed Int16_t   , Signed Int32_t   ) -> true
+  | (Signed Int16_t   , Signed Int64_t   ) -> true
+  
+  | (Signed Int32_t   , Signed Int8_t    ) -> false
+  | (Signed Int32_t   , Signed Int16_t   ) -> false
+  | (Signed Int32_t   , Signed Int32_t   ) -> true
+  | (Signed Int32_t   , Signed Int64_t   ) -> true
+  
+  | (Signed Int64_t   , Signed Int8_t    ) -> false
+  | (Signed Int64_t   , Signed Int16_t   ) -> false
+  | (Signed Int64_t   , Signed Int32_t   ) -> false
+  | (Signed Int64_t   , Signed Int64_t   ) -> true
+  
+  
+  | (Unsigned Int8_t  , Unsigned Int8_t  ) -> true
+  | (Unsigned Int8_t  , Unsigned Int16_t ) -> true
+  | (Unsigned Int8_t  , Unsigned Int32_t ) -> true
+  | (Unsigned Int8_t  , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int16_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int16_t , Unsigned Int16_t ) -> true
+  | (Unsigned Int16_t , Unsigned Int32_t ) -> true
+  | (Unsigned Int16_t , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int32_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int32_t , Unsigned Int16_t ) -> false
+  | (Unsigned Int32_t , Unsigned Int32_t ) -> true
+  | (Unsigned Int32_t , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int64_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int64_t , Unsigned Int16_t ) -> false
+  | (Unsigned Int64_t , Unsigned Int32_t ) -> false
+  | (Unsigned Int64_t , Unsigned Int64_t ) -> true
+  
+  
+  | (Unsigned Int8_t  , Signed Int8_t    ) -> false
+  | (Unsigned Int8_t  , Signed Int16_t   ) -> false
+  | (Unsigned Int8_t  , Signed Int32_t   ) -> false
+  | (Unsigned Int8_t  , Signed Int64_t   ) -> false
+*)
+
+  | _ -> assert_false "WIP"
+
+
+(*
+ | Int8_t
+ | Int16_t
+ | Int32_t
+ | Int64_t
+
+
+
+ | Wchar_t
+ | Char16_t
+ | Char32_t
+
+
+*)
+
+
   end
 
 let eq_integer_rank_base it1 it2 : bool =
@@ -146,6 +224,7 @@ let lt_integer_rank_congruence P it1 it2 : bool =
   | (Unsigned ibt1, Unsigned ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
   | (Unsigned ibt1, it2          ) -> lt_integer_rank_base P (Signed  ibt1) it2
   | (it1          , Unsigned ibt2) -> lt_integer_rank_base P it1            (Signed ibt2)
+  | _ -> assert_false "WIP"
   end
 
 let lt_integer_rank it1 it2 : bool =
@@ -457,13 +536,15 @@ let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
 let combine_qualifiers qs1 qs2 = <|
   const    = qs1.const    || qs2.const   ;
   restrict = qs1.restrict || qs2.restrict;
-  volatile = qs1.volatile || qs2.volatile
+  volatile = qs1.volatile || qs2.volatile;
+  atomic   = qs1.atomic   || qs2.atomic  ;
 |>
 
 let sub_qualifiers qs1 qs2 =
      qs1.const    --> qs2.const
   && qs1.restrict --> qs2.restrict
   && qs1.volatile --> qs2.volatile
+  && qs1.atomic   --> qs2.atomic
 
 (* following (§6.3.2.1)#3 *)
 let array_coercion = function
@@ -548,6 +629,27 @@ val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
   | Basic (Integer it) ->
       unsigned_type it
+  | _ ->
+      false
+end
+
+
+
+
+
+
+val is_struct_type: ctype -> bool
+let is_struct_type = function
+  | Struct _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_union_type: ctype -> bool
+let is_union_type = function
+  | Union _ ->
+      true
   | _ ->
       false
 end

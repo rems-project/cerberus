@@ -1,0 +1,22 @@
+(* Difference lists *)
+open import List Function
+
+type dlist 'a =
+  Dlist of (list 'a -> list 'a)
+
+
+val nil: forall 'a. dlist 'a
+let nil =
+  Dlist id
+
+val singleton: forall 'a. 'a -> dlist 'a
+let singleton x =
+  Dlist (fun xs -> x :: xs)
+
+val append: forall 'a. dlist 'a -> dlist 'a -> dlist 'a
+let append (Dlist xs) (Dlist ys) =
+  Dlist (fun zs -> xs (ys zs))
+
+val toList: forall 'a. dlist 'a -> list 'a
+let toList (Dlist xs) =
+  xs []

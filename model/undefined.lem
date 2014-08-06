@@ -105,7 +105,7 @@ type undefined_behaviour =
      the . operator for the type parameter, or designates a bit-field (7.19). *)
   | TODO_find_a_name12
   
-  
+  | Reached_end_of_function (* 6.9.1#12 *)
 
 
 
@@ -211,6 +211,9 @@ let pretty_string_of_undefined_behaviour = function
      the . operator for the type parameter, or designates a bit-field (7.19). *)
   | TODO_find_a_name12 ->
       "TODO_find_a_name12"
+  | Reached_end_of_function ->
+      "(§6.9.1#12) If the } that terminates a function is reached, and the value of\n \
+                   the function call is used by the caller, the behavior is undefined."
 end
 
 
@@ -250,6 +253,7 @@ let ub_map =
     ("<<Lvalue_not_an_object>>",                          Lvalue_not_an_object);
     ("<<Illtyped_assert>>",                               Illtyped_assert);
     ("<<TODO_find_a_name12>>",                            TODO_find_a_name12);
+    ("<<Reached_end_of_function>>",                       Reached_end_of_function);
   ]
 
 
@@ -319,7 +323,24 @@ let string_of_undefined_behaviour = function
       "Illtyped_assert"
   | TODO_find_a_name12 ->
       "TODO_find_a_name12"
+  | Reached_end_of_function ->
+      "Reached_end_of_function"
 end
+
+
+val     string_of_undefined_behaviours_aux: list undefined_behaviour -> string
+let rec string_of_undefined_behaviours_aux ubs =
+  match ubs with
+    | [] ->
+        ""
+    | [ub] -> string_of_undefined_behaviour ub
+    | ub::ubs ->
+        string_of_undefined_behaviour ub ^ ", " ^ string_of_undefined_behaviours_aux ubs
+  end
+
+let string_of_undefined_behaviours ubs =
+  "[" ^ string_of_undefined_behaviours_aux ubs ^ "]"
+
 
 
 

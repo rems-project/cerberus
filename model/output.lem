@@ -9,8 +9,10 @@ import Cmm_aux_old Core_run_effect Memory
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
+(*
 val output_string: string -> unit
 declare ocaml target_rep function output_string = `Boot_ocaml.output_string`
+*)
 
 
 

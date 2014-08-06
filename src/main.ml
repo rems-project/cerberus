@@ -1,5 +1,266 @@
 open Global_ocaml
 
+(* Environment variables *)
+let corelib_path =
+    try
+      Sys.getenv "CORELIB_PATH"
+    with Not_found ->
+      error "expecting the environment variable CORELIB_PATH set to point to the location of std.core."
+
+let cerb_path =
+    try
+      Sys.getenv "CERB_PATH"
+    with Not_found ->
+      error "expecting the environment variable CERB_PATH set to point to the location cerberus."
+
+
+(* Symbol counter for the Core parser *)
+let core_sym_counter = ref 0
+
+
+(* load the Core standard library *)
+let load_stdlib () =
+  let fname = Filename.concat corelib_path "std.core" in
+  if not (Sys.file_exists fname) then
+    error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "')."
+  else
+    print_debug 5 ("reading Core standard library from `" ^ fname ^ "'.");
+    (* An preliminary instance of the Core parser *)
+    let module Core_std_parser_base = struct
+      include Core_parser.Make (struct
+                                 let sym_counter = core_sym_counter
+                                 let std = Pmap.empty compare
+                               end)
+      type token = Core_parser_util.token
+      type result = Core_parser_util.result
+    end in
+    let module Core_std_parser =
+      Parser_util.Make (Core_std_parser_base) (Lexer_util.Make (Core_lexer)) in
+    (* TODO: yuck *)
+    match Core_std_parser.parse (Input.file fname) with
+      | Exception.Result (Core_parser_util.Rstd z) -> z
+      | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib."
+
+
+(* load the implementation file *)
+let load_impl core_parse impl_name =
+  let iname = Filename.concat corelib_path ("impls/" ^ impl_name ^ ".impl") in
+  if not (Sys.file_exists iname) then
+    error $ "couldn't find the implementation file\n (looked at: `" ^ iname ^ "')."
+  else
+    (* TODO: yuck *)
+    match core_parse (Input.file iname) with
+      | Exception.Result (Core_parser_util.Rimpl z) -> z
+      | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Pp_errors.to_string err
+
+
+
+
+(* use this when calling a pretty printer *)
+let run_pp =
+    PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
+
+
+(* Parse a C translation-unit and elaborate it into a Core program *)
+let c_frontend f =
+    let c_preprocessing (f: Input.t) =
+      let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
+      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name) <> 0 then
+        error "the C preprocessor failed";
+      Input.file temp_name in
+
+       Exception.return0 (c_preprocessing f)
+    |> Exception.fmap Cparser_driver.parse
+    |> pass_message "1. C Parsing completed!"
+    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
+    
+    |> Exception.rbind (Cabs_to_ail.desugar "main")
+    |> pass_message "2. Cabs -> Ail completed!"
+    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
+
+    |> Exception.rbind (fun (counter, z) ->
+          Exception.bind0 (ErrorMonad.to_exception (fun z -> (Location.dummy, Errors.AIL_TYPING z))
+                             (GenTyping.annotate_program Annotation.concrete_annotation z))
+          (fun z -> Exception.return0 (counter, z)))
+    |> pass_message "3. Ail typechecking completed!"
+    
+    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.core_impl)
+    |> pass_message "4. Translation to Core completed!"
+(*
+
+
+
+      
+      
+(*
+      |> Exception.fmap Core_simpl.simplify
+
+      |> pass_message "5. Core to Core simplication completed!"
+      |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *)
+*)
+
+let (>>=) = Exception.bind0
+
+
+let core_frontend f =
+  !!cerb_conf.core_parser f >>= function
+    | Rfile (sym_main, fun_map) ->
+        Exception.return0 {
+          Core.main=   sym_main;
+          Core.stdlib= !!cerb_conf.core_stdlib;
+          Core.impl=   !!cerb_conf.core_impl;
+          Core.defs=   [(* TODO *)];
+          Core.funs=   fun_map
+      }
+    | _ -> assert false
+
+
+
+
+let backend core_file =
+    match !!cerb_conf.exec_mode_opt with
+      | None ->
+          () (* TODO *)
+      | Some Exhaustive ->
+          Exhaustive_driver.drive core_file
+
+
+
+
+
+
+
+
+
+let pipeline filename =
+  let f = Input.file filename in
+  
+  begin
+    if Filename.check_suffix filename ".c" then (
+      print_debug 2 "Using the C frontend";
+      c_frontend f
+     ) else if Filename.check_suffix filename ".core" then (
+       print_debug 2 "Using the Core frontend";
+       core_frontend f
+      ) else
+       Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported")
+  end >>= fun core_file ->
+  
+  (* TODO: for now assuming a single order comes from indet expressions *)
+  let rewritten_core_file = Core_indet.hackish_order (Core_rewrite.rewrite_file core_file) in
+  
+  if !debug_level >= 5 then
+    if List.mem Core !!cerb_conf.pps then begin
+      print_endline "BEFORE CORE REWRITE:";
+      run_pp $ Pp_core.pp_file core_file;
+      print_endline "===================="
+    end;
+  
+  if List.mem Core !!cerb_conf.pps then (
+    run_pp $ Pp_core.pp_file rewritten_core_file;
+    if !debug_level >= 5 then
+      print_endline "====================";
+   );
+  
+  
+  Exception.return0 (backend rewritten_core_file)
+
+
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file =
+  Global_ocaml.debug_level := debug_level;
+  (* TODO: move this the random driver *)
+  Random.self_init ();
+  
+  (* Looking for and parsing the core standard library *)
+  let core_stdlib = load_stdlib () in
+  print_success "0.1. - Core standard library loaded.";
+  
+  (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
+  let module Core_parser_base = struct
+    include Core_parser.Make (struct
+        let sym_counter = core_sym_counter
+        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some fname)) as fsym, _) ->
+          Pmap.add fname fsym acc
+        ) (Pmap.empty compare) $ Pmap.bindings_list core_stdlib
+      end)
+    type token = Core_parser_util.token
+    type result = Core_parser_util.result
+  end in
+  let module Core_parser =
+    Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
+  
+  (* Looking for and parsing the implementation file *)
+  let core_impl = load_impl Core_parser.parse impl_name in
+  print_success "0.2. - Implementation file loaded.";
+  
+  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse;
+  
+  match pipeline file with
+    | Exception.Exception err ->
+        prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
+        exit 1
+    | _ ->
+        ()
+
+
+
+(* CLI stuff *)
+open Cmdliner
+
+let debug_level =
+  let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
+  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+let impl =
+  let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls and excluding the .impl suffix)." in
+  Arg.(value & opt string "gcc_4.9.0_x86_64-apple-darwin10.8.0" & info ["impl"] ~docv:"NAME" ~doc)
+
+let cpp_cmd =
+  let doc = "Command to call for the C preprocessing." in
+  Arg.(value & opt string ("gcc-4.8 -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime")
+             & info ["cpp"] ~docv:"CMD" ~doc)
+
+let exec =
+  let doc = "Execute the Core program after the elaboration." in
+  Arg.(value & flag & info ["exec"] ~doc)
+
+let exec_mode =
+  let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
+  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Random & info ["mode"] ~docv:"MODE" ~doc)
+
+let pprints =
+  let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
+  Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] & info ["pp"] ~docv:"LANG1,..." ~doc)
+
+let file =
+  let doc = "source C or Core file" in
+  Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
+
+
+(* entry point *)
+let () =
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file) in
+  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  match Term.eval (cerberus_t, info) with
+      `Error _ ->
+      exit 1
+    | _ ->
+      exit 0
+
+
+
+
+
+
+
+
+
+
+
+(* OLD *)
+
+(*
+
 (* command-line options *)
 let impl_file        = ref ""
 
@@ -8,7 +269,7 @@ let print_cabs       = ref false
 let print_ail        = ref false
 let print_core       = ref false
 let execute          = ref false
-let execution_mode   = ref Core_run.E.Exhaustive
+(* OLD: let execution_mode   = ref Core_run.E.Exhaustive *)
 let sb_graph         = ref false
 let skip_core_tcheck = ref false (* TODO: this is temporary, until I fix the typechecker (...) *)
 
@@ -27,7 +288,7 @@ let options = Arg.align [
   (* Core backend options *)
   ("--skip-core-tcheck", Arg.Set skip_core_tcheck,                                  "       Do not run the Core typechecker");
   ("--execute",          Arg.Set execute,                                           "       Execute the Core program");
-  ("-r",                 Arg.Unit (fun () -> execution_mode := Core_run.E.Random ), "       Randomly choose a single execution path"); 
+(* OLD:   ("-r",                 Arg.Unit (fun () -> execution_mode := Core_run.E.Random ), "       Randomly choose a single execution path"); *)
   ("--sb-graph",         Arg.Set sb_graph,                                          "       Generate dot graphs of the sb orders");
   
   (* printing options *)
@@ -46,21 +307,23 @@ let usage = "Usage: csem [OPTIONS]... [FILE]...\n"
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
 let pass_message      m   = Exception.fmap (fun v -> debug_print (Colour.ansi_format [Colour.Green] m); v)
-let return_none m         = Exception.bind m (fun _ -> Exception.return0 None)
-let return_empty m        = Exception.bind m (fun _ -> Exception.return0 [])
+let return_none m         = Exception.bind0 m (fun _ -> Exception.return0 None)
+let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
-let return_value m        = Exception.bind m (fun _ -> Exception.return0 [])
+let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
 
+(* WIP
 let catch_result m =
   match m with
-  | Exception.Result [[(Undefined.Defined0 (Core.Econst (Cmm_aux.Cint n), _), _)]] ->
+  | Exception.Result [[(Undefined.Defined (Core.Econst (Cmm_aux.Cint n), _), _)]] ->
       exit (Big_int.int_of_big_int n)
   | Exception.Result _ ->
      debug_print "[Main.catch_result] returning a fake return code";
      exit 0
   | Exception.Exception msg ->
       print_endline (Colour.ansi_format [Colour.Red] (Pp_errors.to_string msg))
+*)
 
 
 (* use this when calling a pretty printer *)
@@ -68,13 +331,14 @@ let run_pp =
     PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
 
 
+(* WIP
 (* for given traces: generated a temporary .dot file, call dot2tex on it and then pdflatex *)
 let write_graph fname ts =
   debug_print (Colour.ansi_format [Colour.Green] "[generating the pdf of the execution-graph(s)]");
   
 (*  let dot = List.fold_left (fun acc (n, (_, t)) -> *)
   let graphs = List.map (fun (i, (_, st)) ->
-    Boot_ocaml.to_plain_string $ Pp_sb.pp i (Sb.simplify0 $ Sb.extract2 st)
+    Boot_pprint.to_plain_string $ Pp_sb.pp i (Sb.simplify0 $ Sb.extract2 st)
 (*
     match u_t with
       | (Undefined.Defined _, st) ->
@@ -110,12 +374,12 @@ let write_graph fname ts =
     prerr_endline $ Colour.ansi_format [Colour.Red] "WARNING: an error occured while trying to generate the pdf for the sb-graph."
   else
     (Sys.remove (fname ^ ".aux"); Sys.remove (fname ^ ".log"))
+*)
 
 
 
 
-
-let core_sym_counter = ref Symbol.init
+let core_sym_counter = ref 0
 
 
 
@@ -184,8 +448,8 @@ let pipeline stdlib impl core_parse file_name =
 
 
       |> Exception.rbind (fun (counter, z) ->
-            Exception.bind (ErrorMonad.to_exception (GenTyping.annotate_program Annotation.concrete_annotation z))
-                           (fun z -> Exception.return0 (counter, z))
+            Exception.bind0 (ErrorMonad.to_exception (GenTyping.annotate_program Annotation.concrete_annotation z))
+                            (fun z -> Exception.return0 (counter, z))
           )
       |> pass_message "3. Ail typechecking completed!"
       
@@ -234,7 +498,7 @@ let pipeline stdlib impl core_parse file_name =
 		(fun (n,f) -> Core_run.run0 !execution_mode f
                               |> pass_message ("SB order #" ^ string_of_int n)
                               |> pass_through (Pp_run.pp_traces !print_trace)
-                              |> pass_through_test !sb_graph (write_graph file_name)
+(* WIP                             |> pass_through_test !sb_graph (write_graph file_name) *)
 (*                              |> return_empty *)
 		)
 	     )
@@ -298,7 +562,11 @@ let () =
   let impl = load_impl Core_parser.parse csemlib_path in
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   
+(* WIP
+
   if !testing then
     List.iter (run_test stdlib impl Core_parser.parse) Tests.get_tests
   else
     (catch_result -| pipeline stdlib impl Core_parser.parse) !file;
+*)
+*)

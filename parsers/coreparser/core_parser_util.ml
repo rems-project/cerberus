@@ -2,9 +2,9 @@ open Global
 
 (* Type of Core parser outputs *)
 type result =
-  | Rfile of Core.sym * (zero Core.fun_map)
-  | Rstd  of zero Core.fun_map
-  | Rimpl of zero Core.impl
+  | Rfile of Core.sym * (unit Core.fun_map)
+  | Rstd  of unit Core.fun_map
+  | Rimpl of unit Core.impl
 
 
 type token =
@@ -37,16 +37,19 @@ type token =
   | ENUM
   | SIZE_T
   | INTPTR_T
+  | PTRDIFF_T
   | WCHAR_T
   | CHAR16_T
   | CHAR32_T
   | INTEGER
   | BOOLEAN
-  | ADDRESS
+  | POINTER
   | CTYPE
+  | CFUNCTION
   | UNIT
   | FUNCTION
-  | NULL
+  | LIST
+  | ARRAY
   | TRUE
   | FALSE
   | NOT
@@ -137,6 +140,10 @@ type token =
   | EOF
   | SEMICOLON
   | PIPE_PIPE
+  
+  | PAR
+  | ND
+  | WAIT
 
 
 (*

@@ -1,15 +1,22 @@
 open import Pervasives
 import Map
 
+
+class (Default 'a)
+  val default: 'a
+end
+
+instance (Default unit)
+  let default = ()
+end
+
+
 (*
 (* TODO: hack *)
 val assert_false_: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false_ = `Boot_ocaml.assert_false`
 *)
 
-
-(* empty type *)
-type zero
 
 
 val     numerote_: forall 'a. nat -> list 'a -> list (nat * 'a)
@@ -208,4 +215,54 @@ let rec replicate_list_ x (n: integer) acc =
 val replicate_list: forall 'a. 'a -> integer -> list 'a
 let replicate_list x n =
   replicate_list_ x n []
-  
+
+val uncurry: forall 'a 'b 'c. ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
+let uncurry f =
+  fun (x, y) -> f x y
+
+
+val eq_pair: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('a * 'b -> 'a * 'b -> bool)
+let eq_pair eqA eqB = fun (a1, b1) (a2, b2) ->
+  eqA a1 a2 && eqB b1 b2
+
+val eq_triple: forall 'a 'b 'c. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('c -> 'c -> bool) -> ('a * 'b * 'c -> 'a * 'b * 'c -> bool)
+let eq_triple eqA eqB eqC = fun (a1, b1, c1) (a2, b2, c2) ->
+  eqA a1 a2 && eqB b1 b2 && eqC c1 c2
+
+
+
+(* insert in an association list *)
+val     assoc_insert: forall 'a 'b. Eq 'a => 'a -> 'b -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_insert k v = function
+  |  [] ->
+      [(k, v)]
+  | (k',v') :: xs ->
+      if k = k' then
+        (k, v) :: xs
+      else
+        (k', v') :: assoc_insert k v xs
+end
+
+
+val     assoc_remove: forall 'a 'b. Eq 'a => 'a -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_remove k = function
+  |  [] ->
+      []
+  | (k',v') :: xs ->
+      if k = k' then
+        xs
+      else
+        (k', v') :: assoc_remove k xs
+end
+
+
+val     assoc_adjust: forall 'a 'b. Eq 'a => ('b -> 'b) -> 'a -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_adjust f k = function
+  | [] ->
+      []
+  | (k',v) :: xs ->
+      if k = k' then
+        (k, f v) :: xs
+      else
+        (k', v) :: assoc_adjust f k xs
+end

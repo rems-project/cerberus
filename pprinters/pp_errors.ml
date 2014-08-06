@@ -12,16 +12,81 @@ let location_to_string  = function
   | None -> "Unknowned location"
 
 
+let desugar_cause_to_string = function
+  | Desugar_NoStartup str ->
+      "could not find the startup function (" ^ str ^ ")"
+  | Desugar_ConstraintViolation msg ->
+      "violation of contraint " ^ msg
+  | Desugar_OtherViolation msg ->
+      "other violation: " ^ msg
+  
+(* TODO: move these to Desugar_ConstraintViolation *)
+  | Desugar_FunctionRedefinition str ->
+       "(TODO msg) redefinition of '" ^ str ^ "'\n"
+  | Desugar_BlockScoped_Thread_local_alone ->
+      "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
+       ``In the declaration of an object with block scope, if the declaration \
+       specifiers include _Thread_local, they shall also include either static \
+       or extern. [...].. ``\n"
+(*
+  | CABS_TO_AIL_THREAD_LOCAL_FUNCTION ->
+      "Violation of constraint 6.7.1#4 Storage-class specifiers, Contraints: \
+       ``_Thread_local shall not appear in the declaration specifiers of a \
+       function declaration.``\n"
+  | CABS_TO_AIL_BLOCK_FUNCTION_STORAGE ->
+      "Violation of constraint 6.7.1#7 Storage-class specifiers, Contraints: \
+       ``The declaration of an identifier for a function that has block scope \
+       shall have no explicit storage-class specifier other than extern.``\n"
+  | CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION ->
+      "Violation of constraint 6.8.4.2#3 The switch statement, Constraints: \
+       ``The expression of each case label shall be an integer constant \
+       expression [...]``\n"
+*)
+  | Desugar_NotConstantExpression ->
+      "found a non-contant expression in place of a constant one.\n"
+  | Desugar_MultibleDeclaration str ->
+      "violation of constraint (§6.7#3): multiple declaration of `" ^ str ^ "'."
+(*
+  | CABS_TO_AIL_DUPLICATED_LABEL ->
+    "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
+     names shall be unique within a function.``\n"
+  | CABS_TO_AIL_UNDECLARED_IDENTIFIER id ->
+      "FOUND> " ^ id ^
+      "\nViolation of constraint 6.7#3 as described by footnote 91 \
+       ``..[A]n undeclared identifier is a violation of syntax..``\n"
+  (* TODO: find if there is some relevant text in the std *)
+  | CABS_TO_AIL_UNDECLARED_TYPENAME id ->
+      "Found undeclared typename> " ^ id
+  | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
+      "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
+       ``..At most, one storage-class specifier may be given [...]..``\n"
+  | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE ->
+      "Violation of constraint 6.8.5#3 Iteration statements, \
+       Constraints: ..The declaration part of a for statement \
+       shall only declare identifiers for objects having storage \
+       class auto or register.. in\n"
+*)
+  | Desugar_NotSupported str ->
+      "this feature is not supported: " ^ str ^ "."
+
+  | Desugar_TODOCTOR str ->
+      "Desugar_TODOCOTR[" ^ str ^ "]"
+
+
+
+
 let to_string (loc, c) =
   location_to_string loc ^ ": " ^
   match c with
+    | Desugar_cause dcause ->
+        "[During desugaring] " ^ desugar_cause_to_string dcause
+
     | CSEM_NOT_SUPPORTED msg ->
         "Csem doesn't yet support `" ^ msg ^"'"
     
     | CSEM_HIP msg ->
         "HIP, this doesn't work yet: `" ^ msg ^ "'"
-    
-    
+        
     (* Cabs0_to_ail *)
     | CONSTRAINT_6_6__3 ->
         "Violation of constraint 6.6#3 [Constant expressions] `Constant \
@@ -29,63 +94,9 @@ let to_string (loc, c) =
          function-call, or comma operators, except when they are contained \
          within a subexpression that is not evaluated.'\n"
     
-    | CABS_TO_AIL_FUNCTION_REDEFINITION str ->
-         "(TODO msg) redefinition of '" ^ str ^ "'\n"
 
 
-    | CABS_TO_AIL_BLOCK_THREAD_LOCAL_ALONE ->
-        "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
-         ``In the declaration of an object with block scope, if the declaration \
-         specifiers include _Thread_local, they shall also include either static \
-         or extern. [...].. ``\n"
     
-    | CABS_TO_AIL_THREAD_LOCAL_FUNCTION ->
-        "Violation of constraint 6.7.1#4 Storage-class specifiers, Contraints: \
-         ``_Thread_local shall not appear in the declaration specifiers of a \
-         function declaration.``\n"
-    
-    
-    | CABS_TO_AIL_BLOCK_FUNCTION_STORAGE ->
-        "Violation of constraint 6.7.1#7 Storage-class specifiers, Contraints: \
-         ``The declaration of an identifier for a function that has block scope \
-         shall have no explicit storage-class specifier other than extern.``\n"
-    
-    
-    | CABS_TO_AIL_NO_STARTUP startup ->
-        "Could not find startup function: `" ^ startup ^ "'\n"
-    | CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION ->
-        "Violation of constraint 6.8.4.2#3 The switch statement, Constraints: \
-         ``The expression of each case label shall be an integer constant \
-         expression [...]``\n"
-    | CABS_TO_AIL_NOT_CONSTANT_EXRESSION ->
-        "Found a non contant expression in place of a constant one.\n"
-    
-    | CABS_TO_AIL_MULTIPLE_REGISTRATION str ->
-        "Violation of constraint 6.7#3 Declarations, Constraints: ``..If \
-         an identifier has no linkage, there shall be no more than one \
-         declaration of the identifier [...]..``\n \
-         >>> " ^ str ^ "\n"
-    
-    | CABS_TO_AIL_DUPLICATED_LABEL ->
-      "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
-       names shall be unique within a function.``\n"
-    | CABS_TO_AIL_UNDECLARED_IDENTIFIER id ->
-        "FOUND> " ^ id ^
-        "\nViolation of constraint 6.7#3 as described by footnote 91 \
-         ``..[A]n undeclared identifier is a violation of syntax..``\n"
-    
-    (* TODO: find if there is some relevant text in the std *)
-    | CABS_TO_AIL_UNDECLARED_TYPENAME id ->
-        "Found undeclared typename> " ^ id
-
-    | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
-        "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
-         ``..At most, one storage-class specifier may be given [...]..``\n"
-    | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE ->
-        "Violation of constraint 6.8.5#3 Iteration statements, \
-         Constraints: ..The declaration part of a for statement \
-         shall only declare identifiers for objects having storage \
-         class auto or register.. in\n"
 
 
     | AIL_TYPING (TError_TODO n) ->

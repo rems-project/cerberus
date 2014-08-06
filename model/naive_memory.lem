@@ -1,76 +1,149 @@
-open import Pervasives Global Core_ctype
-import Cmm_aux_old Symbol State_exception
+open import Pervasives
 
-module Cmm = Cmm_aux_old
+import State_exception_undefined
+import Symbol Symbolic Core_ctype Thread
 
-(* TODO *)
-type taction_id = natural
+module SEU = State_exception_undefined
 
 
-module E = State_exception
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+
+
+type object_id = nat
+
+
+type memory_state = <|
+  oid_supply: UniqueId.supply object_id
+|>
+
+let initial_memory_state = <|
+  oid_supply= UniqueId.new_supply;
+|>
 
 
 type memory_error =
-  | MemErr_TODO
+  | MEMORY_ERROR
 
-type memory_state =
-  Map.map Cmm.location (list (Cmm.cvalue * taction_id)) * natural
-
-
-(* Memory effect *)
-type t 'a =
-  E.t 'a memory_state memory_error
+type memM 'a = SEU.t 'a memory_state memory_error
 
 
-type mem_addr =
-  Cmm.location
+(* val runMem: forall 'a. memM 'a ->  *)
+
+
+type pointer_value =
+(*  | Pointer_null of Core_ctype.ctype *)
+  | Pointer_nonnull of object_id
+  | Pointer_function of Symbol.t
+
+let pointer_value_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
+        oid1 = oid2
+    | (Pointer_function sym1, Pointer_function sym2) ->
+        sym1 = sym2
+    | _ ->
+        false
+  end
+
+instance (Eq pointer_value)
+  let (=) = pointer_value_eq
+  let (<>) = fun x y -> not (pointer_value_eq x y)
+end
 
 
 
+type mem_value =
+  | MV_pointer of pointer_value
+  | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
+(*
+  | MV_array of list mem_value
+  | MV_struct of list (Symbol.t * mem_value)
+  | MV_union of Symbol.t * mem_value
+  | MV_pointer_byte of nat * nat * pointer_value 
+  | MV_unspecified of Core_ctype.ctype
+*)
 
+let mem_value_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (MV_pointer ptr_val1, MV_pointer ptr_val2) ->
+        ptr_val1 = ptr_val2
+    | (MV_integer symb1, MV_integer symb2) ->
+        (* TODO: should use the constrain solver somewhere *)
+        symb1 = symb2
+    | _ ->
+        false
+  end
 
-
-let create pref ty taid =
-  E.modify (fun (m, i) ->
-    let o = (pref, Cmm_aux_old.Lbase i) in
-    let init = match ty with
-      | Array _ n -> Cmm_aux_old.Marray (replicate_list Cmm_aux_old.Muninit n)
-      | _         -> Cmm_aux_old.Muninit
-    end in
-    (o, (Map.insert o [(init, taid)] m, i+1))
-  )
+instance (Eq mem_value)
+  let (=) = mem_value_eq
+  let (<>) = fun x y -> not (mem_value_eq x y)
+end
 
 
 (*
-let create pref ty taid = fun (<| E.mem= (m, i); E.lk = lk |> as st) ->
-  (* DEBUG *)
-(* TODO[newLem]  Boot.print_debug ("[Core_run.create] @" ^ (string_of_num i)) $ *)
-  (* We update the memory (obviously) and we add information about the location 
-     kind to the state *)
-  let o = (pref, Cmm_aux_old.Lbase i) in
-  let init = match ty with
-    | Array _ n -> Cmm_aux_old.Marray (replicate_list Cmm_aux_old.Muninit n)
-    | _         -> Cmm_aux_old.Muninit
-  end in
-  [(U.return o, <| st with E.mem= (Map.insert o [(init, taid)] m, i+1);
-                           E.lk = Map.insert o (type_to_location_kind ty) lk |>)]
+val     setElemCompare_mem_value: mem_value -> mem_value -> ordering
+let rec setElemCompare_mem_value mem_value1 mem_value2 =
+  match (mem_value1, mem_value2) with
+    | (
 
- *)
+    | (Tseq tid1', _) -> setElemCompare tid1' tid2
+    | (_, Tseq tid2') -> setElemCompare tid1 tid2'
+    | (Tzero, Tzero) -> EQ
+    | (Tpar n1 tid1', Tpar n2 tid2') -> pairCompare setElemCompare setElemCompare (n1, tid1') (n2, tid2')
+    | (Tzero, _) -> LT
+    | (_, Tzero) -> GT
+  end
+*)
 
+(* TODO ... *)
+let setElemCompare_mem_value mem_val1 mem_val2 =
+  if mem_value_eq mem_val1 mem_val2 then EQ else LT
 
-
-
-
-(* TODO *)
-let store ty addr n tact_id =
-  E.return ()
-
-
-(* TODO *)
-let load ty addr =
-  E.fail MemErr_TODO
+instance (SetType mem_value)
+  let setElemCompare = setElemCompare_mem_value
+end
 
 
-(* TODO *)
-let kill addr =
-  E.return ()
+
+
+
+val null_pointer: Core_ctype.ctype -> pointer_value
+let null_pointer ty =
+  assert_false "Pointer_null ty"
+
+
+val function_pointer: Symbol.t -> pointer_value
+let function_pointer fsym =
+  Pointer_function fsym
+
+
+
+
+val fresh_object_id: State.t object_id memory_state
+let fresh_object_id =
+  State.modify (fun st ->
+    let (oid, oid_suppl') = UniqueId.fresh_id st.oid_supply in
+    (oid, <| st with oid_supply= oid_suppl' |>)
+  )
+
+
+
+
+
+
+open SEU.Operators
+
+val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> Core_ctype.ctype  (* type of the allocation *)
+(*
+                     -> Symbolic.symbolic (* size of that type *)
+                     -> Symbolic.symbolic (* alignment of that type *)
+*)
+                     -> memM pointer_value
+let allocate_object (* tid ty size_symb align_symb *) _ ty =
+  SEU.runS fresh_object_id >>= fun oid ->
+  SEU.return (Pointer_nonnull oid)

@@ -1,23 +1,24 @@
 open import Pervasives Global
-import Symbol AilTypes Implementation_ Undefined Cmm_aux_old Memory_order
-import Memory
+import Symbol AilTypes Implementation_ Undefined Cmm_master
+import Naive_memory
 
-open import Core_ctype
+open import Thread Core_ctype
 
-module Cmm = Memory_order
-
+module Cmm = Cmm_master
+module Mem = Naive_memory
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
 type core_base_type =
-  | Integer (* TODO: should have and "Object" type for C arrays/struct ? *)
-  | Boolean
-  | Address
-  | Ctype
-  | CFunction
-  | Unit
-  | Tuple of list core_base_type
-  | Wildcard
+  | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
+  | BTy_boolean
+  | BTy_pointer
+  | BTy_ctype
+  | BTy_cfunction
+  | BTy_unit
+  | BTy_list of core_base_type
+  | BTy_tuple of list core_base_type
+  | BTy_any
 
 (* Types discriminate between pure (TyBase) and effectful
    expressions (TyEffect) *)
@@ -59,37 +60,30 @@ type name =
 declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
 
 
-(*
 type constant =
-  | Cint of integer
-(*  | Carray of list constant *)
-(*  | Cstruct *)
-  | Cfunction of sym
- *)
+  | ConstInt of integer
+(*
+  | Carray of list constant
+  | Cfunction of Symbol.t
+  | Cstring of list char (* TODO: temporary hack *)
+*)
+
 
 type expr 'a =
-  (* pointer stuff *)
-(*  | Epointer of New_memory.mem_pointer_value
-  | Epointer_byte of nat * New_memory.mem_pointer_value
-HACK TO BUILD*)
-  | Enull of ctype (*HACK*)
-  
-  | Econcat_bytes of list (expr 'a) (* non empty list please *)
-
-
   (* pure expressions *)
   | Eunit
   | Etrue
   | Efalse
-  | Econst of Cmm_aux_old.constant
+  | Econst of Mem.mem_value
+  | Elist of list (expr 'a) (* This is for variadic functions *)
   | Ectype of ctype
-  | Eaddr of Memory.mem_addr
   | Esym of sym
   | Eimpl of Implementation_.implementation_constant
   | Etuple of list (expr 'a)
   | Enot of expr 'a
   | Eop of binop * expr 'a * expr 'a
   | Ecall of name * list (expr 'a)
+  
   
   (* I/O operations *)
   | Eoutput of string
@@ -102,8 +96,7 @@ HACK TO BUILD*)
   | Eskip
   | Elet of sym * expr 'a * expr 'a
   | Eif of expr 'a * expr 'a * expr 'a
-  | Eproc of set 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
-  | Esame of expr 'a * expr 'a
+  | Eproc of 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
   | Eaction of paction 'a
   
   (* sequencing operators *)
@@ -120,8 +113,7 @@ HACK TO BUILD*)
   (* Continuation operators *)
   (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
   | Esave of ksym * list (sym * ctype) * expr 'a
-  | Erun of set 'a * ksym * list (sym * expr 'a)
-    (* TODO: need more for VLAs *)
+  | Erun of 'a * ksym * list (sym * expr 'a)
   
   | Eret of expr 'a
   
@@ -129,10 +121,10 @@ HACK TO BUILD*)
   (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
   | End of list (expr 'a)
   
-  (* Parallel composition *)
-  | Epar of list (expr 'a)
-  
-  | Eshift of expr 'a * expr 'a (* Shift (obj: Address) (index: Integer) *)
+  (* Thread operators *)
+  (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
+  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
+  | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
 
 
 
@@ -149,15 +141,15 @@ HACK TO BUILD*)
 
 (* the qualification prefixes are for pprint *)
 and action_ 'a =
-  | Create of expr 'a * list Symbol.t
-  | Alloc of expr 'a * list Symbol.t
+  | Create of expr 'a * expr 'a * list Symbol.t (* the expr arguments are: alignment requirement, effective type *)
+  | Alloc of expr 'a * expr 'a * list Symbol.t  (* the expr arguments are: alignment requirement, space size *)
   | Kill of expr 'a
   | Store of expr 'a * expr 'a * expr 'a * Cmm.memory_order
   | Load of expr 'a * expr 'a * Cmm.memory_order
   | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
   | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
 
-and action 'a  = Action of set 'a * action_ 'a
+and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
 
 
@@ -189,91 +181,24 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 
 
-(* NOTE: we assume that the expression is well typed *)
-val is_value: forall 'a. expr 'a -> bool
-let rec is_value e =
-  match e with
-    | Etuple es ->
-        true
-    | Eunit ->
-        true
-    | Enull ->
-        true
-    | Eskip ->
-        false
-    | Econst _ ->
-        true
-    | Eaddr _ ->
-        true
-    | Esym _ ->
-        true
-    | Eimpl _ ->
-        true
-    | Eop _ _ _ ->
-        true
-    | Etrue ->
-        true
-    | Efalse ->
-        true
-    | Enot _ ->
-        true
-    | Ectype _ ->
-        true
-    | Elet _ _ e2 ->
-        is_value e2
-    | Eif _ e2 e3 ->
-        is_value e2 && is_value e3
-    | Eproc _ _ _ ->
-        false
-    | Ecall _ _ ->
-        true
-    | Eoutput _ ->
-        false
-    | Esame _ _ ->
-        false (* TODO: think about it *)
-    | Eundef _ ->
-        true
-    | Eerror ->
-        true
-    | Eaction _ ->
-        false
-    | Eunseq es ->
-        all (is_value) es
-    | Ewseq _ e1 e2 ->
-        is_value e1 && is_value e2
-    | Esseq _ e1 e2 ->
-        is_value e1 && is_value e2
-    (* TODO: this is assuming that we never use this function before Core_indet *)
-(*
-    | Easeq _ _ _ ->
-    | Eindet _    ->
-    | Ebound _ _  ->
-*)
-    | Esave _ _ e ->
-        is_value e (* TODO: or false ? *)
-    | Erun _ _ _ ->
-        false
-    | Eret e ->
-        false
-    | End es ->
-        false (* TODO: think about it *)
-    | Eshift a e ->
-        false
-    
-    | Easeq _ _ _ ->
-        false
-    | Eindet _ ->
-        false
-    | Ebound _ _ ->
-        false
-    | Epar _ ->
-        false
-    | Eis_scalar _ ->
-        true
-    | Eis_integer _ ->
-        true
-    | Eis_signed _ ->
-        true
-    | Eis_unsigned _ ->
-        true
-  end
+
+
+
+
+(* runtime stuff *)
+
+type continuation_element 'a =
+  | Kunseq of list (expr 'a) * list (expr 'a)
+  | Kwseq  of list (maybe sym) * expr 'a
+  | Ksseq  of list (maybe sym) * expr 'a
+
+
+type continuation 'a = list (continuation_element 'a)
+
+
+type labeled_continuation 'a = list (sym * ctype) * expr 'a
+
+
+type stack 'a =
+  | Stack_empty
+  | Stack_cons of continuation 'a * stack 'a

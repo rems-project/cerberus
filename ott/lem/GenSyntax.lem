@@ -2,6 +2,7 @@ open import Pervasives Common Context AilTypes AilSyntax
 open import GenTypes Annotation OptionMonad
 
 
+(*
 val equiv_annotation_global: forall 'A1 'A2 'A2'.
                              annotation 'A1 'A2 -> annotation 'A1 'A2' ->
                              qualifiers * ctype * maybe (expression 'A1) -> qualifiers * ctype * maybe (expression 'A2) ->
@@ -26,6 +27,8 @@ val equiv_annotation_program: forall 'A1 'A2 'A2' 'B.
                               annotation 'A1 'A2 -> annotation 'A1 'A2' ->
                               program 'B 'A1 -> program 'B 'A2          ->
                               maybe (program 'B 'A2')
+*)
+
 
 (* TODO
 

@@ -1,16 +1,17 @@
-// ATOMIC_BOOL_LOCK_FREE
-// ATOMIC_CHAR_LOCK_FREE
-// ATOMIC_CHAR16_T_LOCK_FREE
-// ATOMIC_CHAR32_T_LOCK_FREE
-// ATOMIC_WCHAR_T_LOCK_FREE
-// ATOMIC_SHORT_LOCK_FREE
-// ATOMIC_INT_LOCK_FREE
-// ATOMIC_LONG_LOCK_FREE
-// ATOMIC_LLONG_LOCK_FREE
-// ATOMIC_POINTER_LOCK_FREE
+// TODO
 
-// ATOMIC_FLAG_INIT
-// which expands to an initializer for an object of type atomic_flag.
+#define ATOMIC_BOOL_LOCK_FREE      __cerbvar_ATOMIC_BOOL_LOCK_FREE
+#define ATOMIC_CHAR_LOCK_FREE      __cerbvar_ATOMIC_CHAR_LOCK_FREE
+#define ATOMIC_CHAR16_T_LOCK_FREE  __cerbvar_ATOMIC_CHAR16_LOCK_FREE
+#define ATOMIC_CHAR32_T_LOCK_FREE  __cerbvar_ATOMIC_CHAR32_LOCK_FREE
+#define ATOMIC_WCHAR_T_LOCK_FREE   __cerbvar_ATOMIC_WCHAR_LOCK_FREE
+#define ATOMIC_SHORT_LOCK_FREE     __cerbvar_ATOMIC_SHORT_LOCK_FREE
+#define ATOMIC_INT_LOCK_FREE       __cerbvar_ATOMIC_INT_LOCK_FREE
+#define ATOMIC_LONG_LOCK_FREE      __cerbvar_ATOMIC_LONG_LOCK_FREE
+#define ATOMIC_LLONG_LOCK_FREE     __cerbvar_ATOMIC_LLONG_LOCK_FREE
+#define ATOMIC_POINTER_LOCK_FREE   __cerbvar_ATOMIC_POINTER_LOCK_FREE
+
+#define ATOMIC_FLAG_INIT __cerbvar_ATOMIC_FLAG_INIT
 
 typedef enum memory_order {
   memory_order_relaxed,
@@ -27,19 +28,20 @@ typedef enum memory_order {
 #define ATOMIC_VAR_INIT(value) (value)
 
 
-#define atomic_init(obj, value)    __c11_atomic_init(obj, value)
+#define atomic_init(obj, value)    __cerbvar_atomic_init(obj, value)
 
 
 // type kill_dependency(type y);
 
 
-#define atomic_thread_fence(order)    __c11_atomic_thread_fence(order)
-#define atomic_signal_fence(order)    __c11_atomic_signal_fence(order)
+#define atomic_thread_fence(order)    __cerbvar_atomic_thread_fence(order)
+#define atomic_signal_fence(order)    __cerbvar_atomic_signal_fence(order)
 
 
-#define atomic_is_lock_free(obj)    __c11_atomic_is_lock_free(sizeof(obj))
+#define atomic_is_lock_free(obj)    __cerbvar_atomic_is_lock_free(sizeof(obj))
 
 
+/* TODO: wtf?
 typedef _Atomic(_Bool)                  atomic_bool;
 typedef _Atomic(char)                   atomic_char;
 typedef _Atomic(signed char)            atomic_schar;
@@ -77,34 +79,23 @@ typedef _Atomic(size_t)                 atomic_size_t;
 // typedef _Atomic(ptrdiff_t)              atomic_ptrdiff_t;
 // typedef _Atomic(intmax_t)               atomic_intmax_t;
 // typedef _Atomic(uintmax_t)              atomic_uintmax_t;
+*/
 
 
-#define	atomic_store_explicit(object, desired, order) \
-    __c11_atomic_store(object, desired, order)
-#define	atomic_load_explicit(object, order) \
-    __c11_atomic_load(object, order)
-#define	atomic_exchange_explicit(object, desired, order) \
-    __c11_atomic_exchange(object, desired, order)
-#define atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure) \
-    __c11_atomic_compare_exchange_strong(object, expected, desired, success, failure)
-#define atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure) \
-    __c11_atomic_compare_exchange_weak(object, expected, desired, success, failure)
-#define atomic_fetch_key_explicit(object, operand, order) \
-    __c11_atomic_fetch_key(object, operand, order)
+#define	atomic_store_explicit(object, desired, order)                                         __cerbvar_atomic_store(object, desired, order)
+#define	atomic_load_explicit(object, order)                                                   __cerbvar_atomic_load(object, order)
+#define	atomic_exchange_explicit(object, desired, order)                                      __cerbvar_atomic_exchange(object, desired, order)
+#define atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure)  __cerbvar_atomic_compare_exchange_strong(object, expected, desired, success, failure)
+#define atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure)    __cerbvar_atomic_compare_exchange_weak(object, expected, desired, success, failure)
+#define atomic_fetch_key_explicit(object, operand, order)                                     __cerbvar_atomic_fetch_key(object, operand, order)
 
 
-#define	atomic_store(object, desired) \
-    atomic_store_explicit(object, desired, memory_order_seq_cst)
-#define	atomic_load(object) \
-    atomic_load_explicit(object, memory_order_seq_cst)
-#define	atomic_exchange(object, desired) \
-    atomic_exchange_explicit(object, desired, memory_order_seq_cst)
-#define atomic_compare_exchange_strong(object, expected, desired) \
-    atomic_compare_exchange_strong(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
-#define atomic_compare_exchange_weak(object, expected, desired) \
-    atomic_compare_exchange_weak(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
-#define atomic_fetch_key(object, operand) \
-    atomic_fetch_key_explicit(object, operand, memory_order_seq_cst)
+#define	atomic_store(object, desired)                              atomic_store_explicit(object, desired, memory_order_seq_cst)
+#define	atomic_load(object)                                        atomic_load_explicit(object, memory_order_seq_cst)
+#define	atomic_exchange(object, desired)                           atomic_exchange_explicit(object, desired, memory_order_seq_cst)
+#define atomic_compare_exchange_strong(object, expected, desired)  atomic_compare_exchange_strong(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
+#define atomic_compare_exchange_weak(object, expected, desired)    atomic_compare_exchange_weak(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
+#define atomic_fetch_key(object, operand)                          atomic_fetch_key_explicit(object, operand, memory_order_seq_cst)
 
 
 

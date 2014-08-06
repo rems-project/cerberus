@@ -22,12 +22,26 @@ let rec wf_parameters_aux wf_type p : bool =
 let rec wf_type t : bool =
   let wf_parameters = wf_parameters_aux wf_type in
   match t with
-  | Void -> true
-  | Basic _ -> true
-  | Array t _ -> complete t && wf_type t
-  | Function t p _ -> not (array  t) && not (is_function t) && wf_type  t && wf_parameters p
-  | Pointer q t -> wf_type t && wf_lvalue_aux q t
-  | Atomic _ -> assert_false "TODO"
+  | Void ->
+      true
+  | Basic _ ->
+      true
+  | Array t _ ->
+      complete t && wf_type t
+  | Function t p _ ->
+      not (array  t) && not (is_function t) && wf_type  t && wf_parameters p
+  | Pointer q t ->
+      wf_type t && wf_lvalue_aux q t
+  | Atomic _ ->
+      assert_false "TODO"
+  | Struct xs ->
+      (* TODO: check *)
+      all (fun (_, ty) -> wf_type ty) xs
+  | Union xs ->
+      (* TODO: check *)
+      all (fun (_, ty) -> wf_type ty) xs
+  | Builtin _ ->
+      true
   end
 
 let wf_lvalue q t : bool =

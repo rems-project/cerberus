@@ -1,3 +1,9 @@
-// define macro: void assert(scalar expression); (KKK: this is made a Ctor of Ail)
-// define macro: static_assert
-// refer to macro (which is NOT defined here): NDEBUG
+// 7.2 Diagnostics<assert.h>
+
+#ifdef NDEBUG
+#define assert(ignore) ((void)0)
+#elseif
+// void assert(scalar expression); // TODO the "polymorphic" type implies we need a specific construct in Cabs/Ail...
+#endif // NDEBUG
+
+#define static_assert _Static_assert

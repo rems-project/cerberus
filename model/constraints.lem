@@ -1,0 +1,88 @@
+open import Pervasives
+open import Global Symbolic
+
+type assertion =
+  | Assert_eq  of symbolic * symbolic
+  | Assert_neq of symbolic * symbolic
+  | Assert_lt  of symbolic * symbolic
+  | Assert_ge  of symbolic * symbolic
+
+type t =
+  Constraints of list assertion
+
+
+val empty: t
+let empty =
+  Constraints []
+
+val singleton: assertion -> t
+let singleton x =
+  Constraints [x]
+
+
+val combine: t -> t -> t
+let combine (Constraints a) (Constraints b) =
+  Constraints (a ++ b)
+
+
+(* TODO *)
+let trivially_sat = function
+  | Assert_eq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 = n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_neq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 <> n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_lt (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 < n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_ge (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 >= n2 then
+        true
+      else
+        false (* TODO *)
+  | _ ->
+      false (* TODO *)
+end
+
+
+val simplify: t -> t
+let simplify (Constraints xs) =
+  (* TODO *)
+  Constraints (List.filter (not -| trivially_sat) xs)
+
+
+let trivially_unsat = function
+  | Assert_eq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 <> n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_neq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 = n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_lt (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 >= n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_ge (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 < n2 then
+        true
+      else
+        false (* TODO *)
+  | _ ->
+      false (* TODO *)
+end
+
+val isUnsat: t -> bool
+let isUnsat (Constraints asserts) =
+  any trivially_unsat asserts

@@ -1,27 +1,31 @@
 open import Pervasives Global Core
-import Boot Product
+import Boot Product Symbolic Exception Naive_memory
+
+open import Thread Core_run_aux
+
+module Mem = Naive_memory
 
 
-val sizeof: expr zero -> expr zero
+val sizeof: forall 'a. expr 'a -> expr 'a
 let sizeof e = Ecall (Impl Implementation_.Sizeof) [e]
 
-val alignof: expr zero -> expr zero
+val alignof: forall 'a. expr 'a -> expr 'a
 let alignof e = Ecall (Impl Implementation_.Alignof) [e]
 
-val ctype_min: expr zero -> expr zero
+val ctype_min: forall 'a. expr 'a -> expr 'a
 let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
 
-val ctype_max: expr zero -> expr zero
+val ctype_max: forall 'a. expr 'a -> expr 'a
 let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
 
-val bitwise_complement: expr zero -> expr zero
+val bitwise_complement: forall 'a. expr 'a -> expr 'a
 let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
 
-val integer_encode: expr zero -> expr zero -> expr zero
+val integer_encode: forall 'a. expr 'a -> expr 'a -> expr 'a
 let integer_encode e1 e2 =
   Ecall (Impl Implementation_.Integer__encode) [e1; e2]
 
-val integer_decode: expr zero -> expr zero -> expr zero
+val integer_decode: forall 'a. expr 'a -> expr 'a -> expr 'a
 let integer_decode e1 e2 =
   Ecall (Impl Implementation_.Integer__decode) [e1; e2]
 
@@ -29,22 +33,62 @@ let integer_decode e1 e2 =
 
 
 (* Some aliases for positive actions *)
-let pcreate ty pref  = Eaction (Paction Pos (Action {} (Create ty pref )))
-let palloc e pref    = Eaction (Paction Pos (Action {} (Alloc e pref   )))
-let pkill x          = Eaction (Paction Pos (Action {} (Kill x         )))
-let pstore ty x n mo = Eaction (Paction Pos (Action {} (Store ty x n mo)))
-let pload ty x mo    = Eaction (Paction Pos (Action {} (Load ty x mo   )))
+let pcreate al ty pref = Eaction (Paction Pos (Action default (Create al ty pref )))
+let palloc al e pref   = Eaction (Paction Pos (Action default (Alloc al e pref   )))
+let pkill x            = Eaction (Paction Pos (Action default (Kill x         )))
+let pstore ty x n mo   = Eaction (Paction Pos (Action default (Store ty x n mo)))
+let pload ty x mo      = Eaction (Paction Pos (Action default (Load ty x mo   )))
 
 
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
-let zero : expr zero = Econst (Cmm_aux_old.Cint 0)
-let one  : expr zero = Econst (Cmm_aux_old.Cint 1)
+val zero: forall 'a. expr 'a
+let zero =
+  Econst (Mem.MV_integer (Symbolic.constant 0))
+val one: forall 'a. expr 'a
+let one =
+  Econst (Mem.MV_integer (Symbolic.constant 1))
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
+
+val integer_const: forall 'a. integer -> expr 'a
+let integer_const n =
+  Econst (Mem.MV_integer (Symbolic.constant n))
+
+val cfunction_const: forall 'a. Symbol.t -> expr 'a
+let cfunction_const fsym =
+  Econst (Mem.MV_pointer (Mem.function_pointer fsym))
+
+
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
 val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
 let rec proj_ctype ty =
+  match ty with
+    | AilTypes.Void ->
+        Core_ctype.Void
+    | AilTypes.Basic bTy ->
+        Core_ctype.Basic bTy
+    | AilTypes.Array ty n ->
+        Core_ctype.Array (proj_ctype ty) n
+    | AilTypes.Function ty qs_tys is_variadic ->
+        Core_ctype.Function (proj_ctype ty) (List.map (fun (qs,ty) -> (qs, proj_ctype ty)) qs_tys) is_variadic
+    | AilTypes.Pointer qs ty ->
+        Core_ctype.Pointer qs (proj_ctype ty)
+    | AilTypes.Atomic ty ->
+        Core_ctype.Atomic (proj_ctype ty)
+(* TOO
+ | AilTypes.Struct of list (identifier * ctype) (* TODO: no bitfields for now *)
+ | AilTypes.Union of list (identifier * ctype) (* TODO: no bitfields for now *)
+ | AilTypes.Builtin of string
+*)
+  end
+
+
+
+
+(*
+
+
 (*
 
 TODO: bring back structs/unions
@@ -59,7 +103,7 @@ TODO: bring back structs/unions
     | AilTypes.Basic bt         -> Core_ctype.Basic bt
     | AilTypes.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
     | AilTypes.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
-    | AilTypes.Pointer qs ty    -> Core_ctype.Pointer (proj_ctype ty)
+    | AilTypes.Pointer _ ty    -> Core_ctype.Pointer (proj_ctype ty)
     | AilTypes.Atomic ty        -> Core_ctype.Atomic (proj_ctype ty)
 (*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
@@ -74,9 +118,31 @@ TODO: bring back structs/unions
     | Ail.CHAR32_T             -> CHAR32_T
 *)
 end
+*)
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
+  match ty with
+    | Core_ctype.Void ->
+        AilTypes.Void
+    | Core_ctype.Basic bTy ->
+        AilTypes.Basic bTy
+    | Core_ctype.Array ty n ->
+        AilTypes.Array (unproj_ctype ty) n
+    | Core_ctype.Function ty qs_tys is_variadic ->
+        AilTypes.Function (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
+    | Core_ctype.Pointer qs ty ->
+        AilTypes.Pointer qs (unproj_ctype ty)
+    | Core_ctype.Atomic ty ->
+        AilTypes.Atomic (unproj_ctype ty)
+(*
+    | Struct of struct_tag * list (member_id * modifiable * ctype)
+    | Union  of union_tag * list (member_id * modifiable * ctype)
+*)
+  end
+
+
+(*
 (*
   let unproj_member = function
     | MEMBER ty               -> Ail.MEMBER (unproj_ctype ty)
@@ -102,6 +168,7 @@ let rec unproj_ctype ty =
     | CHAR32_T           -> Ail.CHAR32_T
 *)
 end
+*)
 
 val mk_ctype: forall 'a. AilTypes.ctype -> expr 'a
 let mk_ctype ty = Ectype (proj_ctype ty)
@@ -139,109 +206,6 @@ let is_negative_action = function
 end
 
 
-let rec free_syms e =
-  match e with
-  | Etuple es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eunit ->
-      {}
-  | Enull ->
-      {}
-  | Eskip ->
-      {}
-  | Econst _ ->
-      {}
-  | Eaddr _ ->
-      {}
-  | Esym a ->
-      {a}
-  | Eimpl _ ->
-      {}
-  | Eop _ e1 e2 ->
-      free_syms e1 union free_syms e2
-  | Etrue ->
-      {}
-  | Efalse ->
-      {}
-  | Enot e ->
-      free_syms e
-  | Ectype _ ->
-      {}
-  | Elet a e1 e2 ->
-      free_syms e1 union (free_syms e2 \ {a})
-  | Eif e1 e2 e3 ->
-      free_syms e1 union free_syms e2 union free_syms e3
-  | Eproc _ _ es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Ecall _ es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eoutput _ ->
-      {}
-  | Esame e1 e2 ->
-      free_syms e1 union free_syms e2
-  | Eundef _ ->
-      {}
-  | Eerror ->
-      {}
-  | Eaction (Paction _ act) ->
-      free_syms_action act
-  | Eunseq es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Ewseq _as e1 e2 ->
-      free_syms e1 union (free_syms e2 \ (set_from_options _as))
-  | Esseq _as e1 e2 ->
-      free_syms e1 union (free_syms e2 \ (set_from_options _as))
-  | Easeq a_opt act1 (Paction _ act2) ->
-      free_syms_action act1 union (free_syms_action act2 \ (match a_opt with Just a -> {a} | Nothing -> {} end))
-  | Esave _ _ e ->
-      free_syms e
-  | Erun _ _ _ ->
-      {}
-  | Eret e ->
-      free_syms e
-  | Epar es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | End es ->
-      foldl (fun acc e -> free_syms e union acc) {} es
-  | Eindet e ->
-      free_syms e
-  | Ebound _ e ->
-      free_syms e
-  | Eshift a e ->
-      free_syms e
-
-(* TODO: temporary *)
-  | Eis_scalar e ->
-      free_syms e
-  | Eis_integer e ->
-      free_syms e
-  | Eis_signed e ->
-      free_syms e
-  | Eis_unsigned e ->
-      free_syms e
-end
-
-and free_syms_action a =
-  match a with (Action _ act_) ->
-    match act_ with
-      | Create ty _ ->
-          free_syms ty
-      | Alloc n _ ->
-          free_syms n
-      | Kill o ->
-          free_syms o
-      | Store ty o n _ ->
-          free_syms ty union free_syms o union free_syms n
-      | Load ty o _ ->
-          free_syms ty union free_syms o
-      | CompareExchangeStrong e1 e2 e3 e4 _ _ ->
-          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
-      | CompareExchangeWeak e1 e2 e3 e4 _ _ ->
-          free_syms e1 union free_syms e2 union free_syms e3 union free_syms e4
-  end
-end
-
-
 (* check if a symbolic names is part of a pattern *)
 val in_pattern: sym -> list (maybe sym) -> bool
 let rec in_pattern a p =
@@ -257,18 +221,16 @@ let rec subst_sym a v e =
   match e with
     | Eunit ->
         Eunit
-    | Enull ->
-        Enull
     | Etrue ->
         Etrue
     | Efalse ->
         Efalse
     | Econst n ->
         Econst n
+    | Elist es ->
+        Elist $ List.map (subst_sym a v) es
     | Ectype ty ->
         Ectype ty
-    | Eaddr o ->
-        Eaddr o
     | Esym a' ->
         if a = a' then v else e
     | Eimpl i ->
@@ -295,8 +257,6 @@ let rec subst_sym a v e =
         Eif (subst_sym a v e1) (subst_sym a v e2) (subst_sym a v e3)
     | Eproc bs f args ->
         Eproc bs f (List.map (subst_sym a v) args)
-    | Esame e1 e2 ->
-        Esame (subst_sym a v e1) (subst_sym a v e2)
     | Eaction p ->
         Eaction (subst_sym_paction a v p)
     | Eunseq es ->
@@ -307,9 +267,9 @@ let rec subst_sym a v e =
         Esseq _as (subst_sym a v e1) (if in_pattern a _as then e2 else subst_sym a v e2)
     | Easeq _a act p  ->
         Easeq _a (subst_sym_action a v act) (if Just a = _a then p else subst_sym_paction a v p)
-    | Eindet (* i *) e -> (* Eindet (* i *) (subst_sym a v e) *)
+    | Eindet (* i *) _ -> (* Eindet (* i *) (subst_sym a v e) *)
         Boot.assert_false "[Core_aux.subst_sym] #Eindet"
-    | Ebound i e -> (* Ebound i (subst_sym a v e) *)
+    | Ebound _ _ -> (* Ebound i (subst_sym a v e) *)
         Boot.assert_false "[Core_aux.subst_sym] #Ebound"
     | Esave k a_tys e ->
         Esave k a_tys (subst_sym a v e)
@@ -321,10 +281,9 @@ let rec subst_sym a v e =
         End $ List.map (subst_sym a v) es
     | Epar es ->
         Epar $ List.map (subst_sym a v) es
-    | Eshift a' e ->
-        Eshift a' (subst_sym a v e)
+    | Ewait tids ->
+        Ewait tids
 
-(* TODO: temporary *)
   | Eis_scalar e ->
       Eis_scalar (subst_sym a v e)
   | Eis_integer e ->
@@ -337,8 +296,8 @@ let rec subst_sym a v e =
 
 and subst_sym_action_ a v act =
   match act with
-    | Create e_ty pref      -> Create (subst_sym a v e_ty) pref
-    | Alloc e_n   pref      -> Alloc (subst_sym a v e_n) pref
+    | Create al e_ty pref   -> Create (subst_sym a v al) (subst_sym a v e_ty) pref
+    | Alloc al e_n pref     -> Alloc (subst_sym a v al) (subst_sym a v e_n) pref
     | Kill e_o              -> Kill (subst_sym a v e_o)
     | Store e_ty e_o e_v mo -> Store (subst_sym a v e_ty) (subst_sym a v e_o) (subst_sym a v e_v) mo
     | Load e_ty e_o mo      -> Load (subst_sym a v e_ty) (subst_sym a v e_o) mo
@@ -371,21 +330,118 @@ let subst_syms _as v e =
 
     | (_        , Etuple vs) -> Global.foldl2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
 
-(*
-    | (_        , Eunseq vs) -> List.fold_left2 (fun acc _a_opt v -> match _a_opt with Just _a -> subst_sym _a v acc | Nothing -> acc end) e _as vs
-*)
-(* TODO: lem non termination bug *)
-(*
+
     | _ -> Boot.assert_false "[Core_aux.subst_syms] impossible case"
-*)
   end 
+
+
+
+
+
+val subst_wait: forall 'a. thread_id -> expr 'a -> expr 'a -> expr 'a
+let rec subst_wait tid v = function
+   | Eunit ->
+       Eunit
+   | Etrue ->
+       Etrue
+   | Efalse ->
+       Efalse
+   | Econst cst ->
+       Econst cst
+   | Elist pes ->
+       Elist pes
+   | Ectype ty ->
+       Ectype ty
+   | Esym sym ->
+       Esym sym
+   | Eimpl i ->
+       Eimpl i
+   | Etuple pes ->
+       Etuple pes
+   | Enot pe ->
+       Enot pe
+   | Eop bop pe1 pe2 ->
+       Eop bop pe1 pe2
+   | Ecall nm pes ->
+       Ecall nm pes
+   | Eoutput str ->
+       Eoutput str
+   | Eundef ub ->
+       Eundef ub
+   | Eerror ->
+       Eerror
+   | Eskip ->
+       Eskip
+   | Elet sym pe1 e2 ->
+       Elet sym pe1 (subst_wait tid v e2)
+   | Eif pe1 e2 e3 ->
+       Eif pe1 (subst_wait tid v e2) (subst_wait tid v e3)
+   | Eproc annots nm pes ->
+       Eproc annots nm pes
+   | Eaction pact ->
+       Eaction pact
+   | Eunseq es ->
+       Eunseq (List.map (subst_wait tid v) es)
+   | Epar es ->
+       Epar (List.map (subst_wait tid v) es)
+   | Ewait tid' ->
+       if tid = tid' then
+         v
+       else
+         Ewait tid'
+   | Ewseq _as e1 e2 ->
+       Ewseq _as (subst_wait tid v e1) (subst_wait tid v e2)
+   | Esseq _as e1 e2 ->
+       Esseq _as (subst_wait tid v e1) (subst_wait tid v e2)
+   | Easeq sym_opt act1 pact2 ->
+       Easeq sym_opt act1 pact2
+   | Eindet e ->
+       Eindet (subst_wait tid v e)
+   | Ebound j e ->
+       Ebound j (subst_wait tid v e)
+   | Esave k a_tys e ->
+       Esave k a_tys (subst_wait tid v e)
+   | Erun annots k a_vs ->
+       Erun annots k a_vs
+   | Eret pe ->
+       Eret pe
+   | End es ->
+       End (List.map (subst_wait tid v) es)
+  | Eis_scalar pe ->
+      Eis_scalar pe
+  | Eis_integer pe ->
+      Eis_integer pe
+  | Eis_signed pe ->
+      Eis_signed pe
+  | Eis_unsigned pe ->
+      Eis_unsigned pe
+end
+
+
+let subst_wait_continuation_element tid v = function
+  | Kunseq es1 es2 ->
+      Kunseq (List.map (subst_wait tid v) es1) (List.map (subst_wait tid v) es2)
+  | Kwseq syms_opt e2 ->
+      Kwseq syms_opt (subst_wait tid v e2)
+  | Ksseq syms_opt e2 ->
+      Ksseq syms_opt (subst_wait tid v e2)
+end
+
+let subst_wait_continuation tid v cont =
+  List.map (subst_wait_continuation_element tid v) cont
+
+let rec subst_wait_stack tid v = function
+  | Stack_empty ->
+      Stack_empty
+  | Stack_cons cont sk ->
+      Stack_cons (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
+end
+
 
 (* Asuming well typed expressions *)
 let rec is_pure e =
   match e with
    | Eunit ->
-       true
-   | Enull ->
        true
    | Etrue ->
        true
@@ -393,9 +449,9 @@ let rec is_pure e =
        true
    | Econst _ ->
        true
-   | Ectype _ ->
+   | Elist _ ->
        true
-   | Eaddr _ ->
+   | Ectype _ ->
        true
    | Esym _ ->
        true
@@ -423,18 +479,19 @@ let rec is_pure e =
        is_pure e2 && is_pure e3
    | Eproc _ _ _ ->
        false
-   | Esame _ _ ->
-       false
    | Eaction _ ->
        false
-   | Eunseq es ->
-       all is_pure es
-   | Epar es ->
+   | Eunseq _ ->
+       false
+
+   | Epar _ ->
        false (* all is_pure es *)
-   | Ewseq _ e1 e2 ->
+   | Ewait _ ->
+       false
+   | Ewseq _ _ _ ->
        false
        (* is_pure e1 && is_pure e2 *)
-   | Esseq _ e1 e2 ->
+   | Esseq _ _ _ ->
        false
        (* is_pure e1 && is_pure e2 *)
    | Easeq _ _ _ ->
@@ -449,12 +506,9 @@ let rec is_pure e =
        false
    | Eret _ ->
        false
-   | End es ->
-       false
-   | Eshift a e ->
+   | End _ ->
        false
 
-(* TODO: temporary *)
   | Eis_scalar _ ->
       true
   | Eis_integer _ ->
@@ -468,216 +522,246 @@ end
 
 let rec is_value e =
   match e with
-   | Etuple pes ->
-       all is_value pes
-   | Eunit ->
-       true
-   | Enull ->
-       true
-   | Econst _ ->
-       true
-   | Eaddr _ ->
-       true
-   | Etrue ->
-       true
-   | Efalse ->
-       true
-   | Ectype _ ->
-       true
-(*
-   | Eundef _ ->
-       true
-   | Eerror ->
-       true
-*)
-   
-   | _ -> false
+    | Eunit ->
+        true
+    | Etrue ->
+        true
+    | Efalse ->
+        true
+    | Econst _ ->
+        true
+    | Elist pes ->
+        all is_value pes
+    | Ectype _ ->
+        true
+    | Esym  _ ->
+        false
+    | Eimpl _ ->
+        false
+    | Etuple pes ->
+        all is_value pes
+    | Enot _ ->
+        false
+    | Eop _ _ _ ->
+        false
+    | Ecall _ _ ->
+        false
+    | Eoutput _ ->
+        false
+    | Eundef _ ->
+        false
+    | Eerror ->
+        false
+    | Eskip ->
+        false
+    | Elet _ _ _ ->
+        false
+    | Eif _ _ _->
+        false
+    | Eproc _ _ _ ->
+        false
+    | Eaction _ ->
+        false
+    | Eunseq _ ->
+        false
+    | Ewseq _ _ _ ->
+        false
+    | Esseq _ _ _ ->
+        false
+    | Easeq _ _ _ ->
+        false
+    | Eindet _ ->
+        false
+    | Ebound _ _ ->
+        false
+    | Esave _ _ _->
+        false
+    | Erun _ _ _->
+        false
+    | Eret _ ->
+        false
+    | End _ ->
+        false
+    | Epar _ ->
+        false
+    | Ewait _ ->
+        false
+    | Eis_scalar _ ->
+        false
+    | Eis_integer _ ->
+        false
+    | Eis_signed _ ->
+        false
+    | Eis_unsigned _ ->
+        false
 end
 
 
-(* TODO: documentation *)
-(*
-let rec trailing_actions e =
-  match e with
-  | Etuple _ ->
-      []
-  | Eunit ->
-      []
-  | Enull ->
-      []
-  | Eskip ->
-      []
-  | Econst _ ->
-      []
-  | Eaddr _ ->
-      []
-  | Esym _ ->
-      []
-  | Eop _ _ _ ->
-      []
-  | Etrue ->
-      []
-  | Efalse ->
-      []
-  | Enot _ ->
-      []
-  | Ectype _ ->
-      []
-  | Elet _ _ e2 ->
-      trailing_actions e2
-  | Eif _ _ e3 ->
-      trailing_actions e3
-  | Eproc _ _ _ ->
-      []
-  | Ecall _ _ ->
-      [] (* TODO: check *)
-  | Esame _ _ ->
-      []
-  | Eundef _ ->
-      []
-  | Eerror ->
-      []
-  | Eaction pact ->
-      [pact]
-  | Eunseq es ->
-      List.concat $ List.map trailing_actions es
-  | Ewseq _ e1 e2 ->
-      [ act | forall (act MEM trailing_actions e1) | is_negative_action act ] ++ trailing_actions e2
-  | Esseq _ _ e2 ->
-      trailing_actions e2
-  | Easeq _ act pact ->
-      [pact]
-  | Eindet e ->
-      trailing_actions e (* TODO: check *)
-  | Ebound _ e ->
-      trailing_actions e
-  | Esave _ _ e ->
-      trailing_actions e
-  | Erun _ _ _ ->
-      []
-  | Eret e ->
-      trailing_actions e
-  | End es ->
-      Boot.assert_false "WIP [Core_aux.trailing_actions] End"
-  | Eshift _ e ->
-      trailing_actions e
-end
- *)
-
-(*
-(* symbolic evaluation *)
-let rec simpl e =
-  match e with
-  | Etuple es ->
-      Etuple $ List.map simpl e
-  | Enull ->
-      Enull
-  | Eskip ->
-      Eskip
-  | Econst n ->
-      Econst n
-  | Eaddr addr ->
-      Eaddr addr
-  | Esym a ->
-      Esym a
-  | Eop bop pe1 pe2 ->
-      match (simpl pe1, simpl pe2) with
-        | (OpAdd, Econst n1,  Econst n2 ) -> Econst (Int.(+) n1 n2)
-        | (OpSub, Econst n1,  Econst n2 ) -> Econst (Int.(-) n1 n2)
-        | (OpMul, Econst n1,  Econst n2 ) -> Econst (Int.( * ) n1 n2)
-        | (OpDiv, Econst n1,  Econst n2 ) -> Econst (Int.(/) n1 n2)
-        | (OpMod, Econst n1,  Econst n2 ) -> Econst (Int.(%) n1 n2)
-        | (OpEq,  Econst n1,  Econst n2 ) -> if n1 = n2 then Etrue else Efalse
-        | (OpEq,  Ectype ty1, Ectype ty2) -> if Ail.ctype_eq ty1 ty2 then Etrue else Efalse
-        | (OpLt,  Econst n1,  Econst n2 ) -> if Int.(<) n1 n2 then Etrue else Efalse
-        | (OpOr,  Efalse,     Efalse    ) -> Efalse
-        | (OpOr,  _,          _         ) -> Etrue
-        | (OpAnd, Etrue,      Etrue     ) -> Etrue
-        | (OpAnd, _,          _         ) -> Efalse
-        | (_,     pe1',         pe2'    ) -> Eop bop pe1' pe2'
-      end
-  | Etrue ->
-      Etrue
-  | Efalse ->
-      Efalse
-  | Enot pe ->
-      match simpl pe with
-        | Etrue  -> Efalse
-        | Efalse -> Etrue
-        | pe'    -> pe'
-      end
-  | Ectype ty ->
-      Ectype ty
-  | Elet a pe1 e2 ->
-      let pe1' = simpl pe1 in
-      if is_value pe1' then
-        simpl (subst_sym a pe1' e2)
-      else
-        Elet a pe1' (simpl e2)
-  | Eif pe1 e2 e3 ->
-      match simpl pe1 with
-        | Etrue  -> simpl e2
-        | Efalse -> simpl e3
-        | pe1'   -> Eif pe1' (simpl e2) (simpl e3)
-  | Eproc bs f pes ->
-      
-  | Ecall f pes ->
-      
-  | Esame pe1 pe2 ->
-      
-  | Eundef u ->
-      Eundef u (* TODO: should use the monad in Undefined *)
-  | Eerror ->
-      Eerror (* TODO: should use the monad in Undefined *)
-  
-  | Eaction pact ->
-      
-  | Eunseq es ->
-      
-
-  | Ewseq _as e1 e2 ->
-      
-  | Esseq _as e1 e2 ->
-      
-  | Easeq a_opt act pact ->
-      
-  | Eindet e ->
-      
-  | Ebound j e ->
-      
-  | Esave d a_tys e ->
-      
-  | Erun bs d a_vs ->
-      
-  | Eret e ->
-      
-  | End es ->
-      
-(*  | Eshift of sym *expr 'a *)
-end
-*)
-
-(*
-let have_simple_race e1 e2 =
-  let are_simple_racy (_, (_, act1)) (_, (_, act2)) =
-    match (act1, act2) with
-      | Load
-
-  | Store of expr 'a * expr 'a * expr 'a
-  | Load of expr 'a * expr 'a
-
-*)
-
-val is_atomic_type: Core_ctype.ctype -> bool
-let is_atomic_type t = 
-  match t with
-    | Core_ctype.Atomic _ -> true
-    | _                   -> false
+let rec find_labeled_continuation k expr =
+  match expr with
+    | Eunit ->
+        Nothing
+    | Etrue ->
+        Nothing
+    | Efalse ->
+        Nothing
+    | Econst _ ->
+        Nothing
+    | Elist _ ->
+        Nothing
+    | Ectype _ ->
+        Nothing
+    | Esym _ ->
+        Nothing
+    | Eimpl _ ->
+        Nothing
+    | Etuple _ ->
+        Nothing
+    | Enot _ ->
+        Nothing
+    | Eop _ _ _ ->
+        Nothing
+    | Ecall _ _ ->
+        Nothing
+    | Eoutput _ ->
+        Nothing
+    | Eundef _ ->
+        Nothing
+    | Eerror ->
+        Nothing
+    | Eskip ->
+        Nothing
+    | Elet _ _ e2 ->
+        find_labeled_continuation k e2
+    | Eif _ e2 e3 ->
+        match find_labeled_continuation k e2 with
+          | Just cont ->
+              Just cont
+          | Nothing ->
+              find_labeled_continuation k e3
+        end
+    | Eproc _ _ _ ->
+        Nothing
+    | Eaction _ ->
+        Nothing
+    | Eunseq _ ->
+        Nothing
+    | Ewseq _as e1 e2 ->
+        match find_labeled_continuation k e1 with
+          | Just (a_tys, cont_e) ->
+              Just (a_tys, Ewseq _as cont_e e2)
+          | Nothing ->
+              find_labeled_continuation k e2
+        end
+    | Esseq _as e1 e2 ->
+        match find_labeled_continuation k e1 with
+          | Just (a_tys, cont_e) ->
+              Just (a_tys, Esseq _as cont_e e2)
+          | Nothing ->
+              find_labeled_continuation k e2
+        end
+    | Easeq _ _ _ ->
+        Boot.assert_false "This ctor shouldn't exists at this point"
+    | Eindet _ ->
+        Boot.assert_false "This ctor shouldn't exists at this point"
+    | Ebound _ _ ->
+        Boot.assert_false "This ctor shouldn't exists at this point"
+    | Esave k' a_tys e ->
+        if k = k' then
+          Just (a_tys, e)
+        else
+          find_labeled_continuation k e
+    | Erun _ _ _ ->
+        Nothing
+    | Eret _ ->
+        Nothing
+    | End _ ->
+        Nothing
+    | Epar _ ->
+        Boot.assert_false "TODO: think about this Ctor"
+    | Ewait _ ->
+        Nothing
+    | Eis_scalar _ ->
+        Nothing
+    | Eis_integer _ ->
+        Nothing
+    | Eis_signed _ ->
+        Nothing
+    | Eis_unsigned _ ->
+        Nothing
   end
 
 
 
 
 
+val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
+let apply_continuation cont expr =
+  let f _cont expr =
+    match _cont with
+      | Kwseq _as e2 ->
+          Ewseq _as expr e2
+      | Ksseq _as e2 ->
+          Esseq _as expr e2
+      | Kunseq es1 es2 ->
+          Eunseq $ es1 ++ (expr :: es2)
+    end in
+  foldl (fun acc x -> f x acc) expr cont
 
 
+(* Functions on continuation and stacks *)
+val empty_stack: forall 'a. stack 'a
+let empty_stack =
+  Stack_empty
+
+val is_empty_stack: forall 'a. stack 'a -> bool
+let is_empty_stack = function
+  | Stack_empty ->
+      true
+  | _ ->
+      false
+end
+
+
+
+val push_empty_continuation: forall 'a. stack 'a -> stack 'a
+let push_empty_continuation sk =
+  Stack_cons [] sk
+
+val pop_stack: forall 'a. stack 'a -> Exception.t (continuation 'a * stack 'a) core_run_error
+let pop_stack = function
+  | Stack_empty ->
+      Exception.fail Found_empty_stack
+  | Stack_cons cont sk ->
+      Exception.return (cont, sk)
+end
+
+val pop_continuation_element: forall 'a. stack 'a -> Exception.t (continuation_element 'a * stack 'a) core_run_error
+let pop_continuation_element = function
+  | Stack_empty ->
+      Exception.fail Found_empty_stack
+  | Stack_cons [] _ ->
+      Exception.fail Reached_end_of_proc
+  | Stack_cons (cont_elem :: cont) sk ->
+      Exception.return (cont_elem, Stack_cons cont sk)
+end
+
+
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.t (stack 'a) core_run_error
+let push_continuation_element cont_elem = function
+  | Stack_empty ->
+      Exception.fail Found_empty_stack
+  | Stack_cons cont sk ->
+      Exception.return (Stack_cons (cont_elem :: cont) sk)
+end
+
+
+
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.t (stack 'a) core_run_error
+let append_to_current_continuation cont = function
+  | Stack_empty ->
+      (* A procedure need to currently be running to append *)
+      Exception.fail Found_empty_stack
+  | Stack_cons ccont sk ->
+      Exception.return $ Stack_cons (cont :: ccont) sk
+end

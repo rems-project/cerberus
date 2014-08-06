@@ -1,844 +1,957 @@
 %{
-open Cabs0
-(* open List0 *)
+open Cabs
+
+let id =
+  fun z -> z
+
+let option d f = function
+  | Some z -> f z
+  | None   -> d
+
+
+let empty_specs = {
+  storage_classes= [];
+  type_specifiers= [];
+  type_qualifiers= [];
+  function_specifiers= [];
+  alignment_specifiers= [];
+}
+
+
 %}
 
-%token<Cabs0.atom * Cabs0.cabsloc> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
-%token<Cabs0.constant1 * Cabs0.cabsloc> CONSTANT_
-%token<Cabs0.cabsloc> SIZEOF ALIGNOF_ PTR_ INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ_ NEQ LT_ GT_
-  ANDAND BARBAR PLUS_ MINUS_ STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION_
-  COLON AND_
 
-%token<Cabs0.cabsloc> MUL_ASSIGN_ DIV_ASSIGN_ MOD_ASSIGN_ ADD_ASSIGN_ SUB_ASSIGN_
-  LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN_ OR_ASSIGN
+(* §6.4.1 keywords *)
+%token AUTO BREAK CASE CHAR CONST CONTINUE DEFAULT DO DOUBLE ELSE ENUM EXTERN
+  FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
+  STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
+  ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
+  THREAD_LOCAL
+  ATOMIC_LPAREN (* this is a hack to solve a grammar ambiguity (see Lexer.mll) *)
 
-%token<Cabs0.cabsloc> LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT COMMA_
-  SEMICOLON ELLIPSIS TYPEDEF_ EXTERN_ STATIC_ RESTRICT AUTO_ THREAD_LOCAL_ REGISTER_ INLINE
-  CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE ATOMIC VOID STRUCT
-  UNION ENUM BOOL LBRACES BARES RBRACES
+(* §6.4.2 Identifiers *)
+%token<Cabs.cabs_identifier> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
 
-%token<Cabs0.cabsloc> CASE_ DEFAULT_ IF ELSE SWITCH_ WHILE_ DO FOR_ GOTO_ CONTINUE_ BREAK_
-  RETURN_ BUILTIN_VA_ARG_ OFFSETOF_
+(* §6.4.4 Constants *)
+%token<Cabs.cabs_constant> CONSTANT
 
-%token<Cabs0.cabsloc> C11_ATOMIC_INIT_ C11_ATOMIC_STORE_ C11_ATOMIC_LOAD_
-  C11_ATOMIC_EXCHANGE_ C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ C11_ATOMIC_COMPARE_EXCHANGE_WEAK_
-  C11_ATOMIC_FETCH_KEY_
+(* §6.4.5 String literals *)
+%token<Cabs.cabs_string_literal> STRING_LITERAL
+
+(* §6.4.6 Punctuators *)
+%token LBRACKET RBRACKET LPAREN RPAREN LBRACE RBRACE DOT MINUS_GT
+  PLUS_PLUS MINUS_MINUS AMPERSAND STAR PLUS MINUS TILDE BANG
+  SLASH PERCENT LT_LT GT_GT LT GT LT_EQ GT_EQ EQ_EQ BANG_EQ CARET PIPE AMPERSAND_AMPERSAND PIPE_PIPE
+  QUESTION COLON SEMICOLON ELLIPSIS
+  EQ STAR_EQ SLASH_EQ PERCENT_EQ PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ
+  COMMA (* TODO: HASH HASH_HASH *)
+(* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
 %token EOF
 
-%type<Cabs0.expression0 * Cabs0.cabsloc> primary_expression (* atomic_operation *) postfix_expression
-  unary_expression cast_expression multiplicative_expression additive_expression
-  shift_expression relational_expression equality_expression AND_expression
+(* ========================================================================== *)
+
+%type<Cabs.cabs_identifier>
+  enumeration_constant
+
+%type<Cabs.cabs_expression>
+  primary_expression generic_selection postfix_expression unary_expression
+  cast_expression multiplicative_expression additive_expression shift_expression
+  relational_expression equality_expression _AND_expression
   exclusive_OR_expression inclusive_OR_expression logical_AND_expression
-  logical_OR_expression conditional_expression assignment_expression
-  constant_expression expression
-%type<Cabs0.unary_operator * Cabs0.cabsloc> unary_operator
-%type<Cabs0.binary_operator> assignment_operator
-%type<Cabs0.expression0 list (* Reverse order *)> argument_expression_list
-%type<Cabs0.definition> declaration
-%type<Cabs0.spec_elem list * Cabs0.cabsloc> declaration_specifiers
-%type<Cabs0.init_name list (* Reverse order *)> init_declarator_list
-%type<Cabs0.init_name> init_declarator
-%type<Cabs0.storage * Cabs0.cabsloc> storage_class_specifier
-%type<Cabs0.typeSpecifier * Cabs0.cabsloc> type_specifier struct_or_union_specifier enum_specifier
-%type<Cabs0.typeSpecifier * Cabs0.cabsloc> atomic_type_specifier
-%type<(Cabs0.atom option -> (Cabs0.field_group list) option -> attribute list -> typeSpecifier) * Cabs0.cabsloc> struct_or_union
-%type<field_group list (* Reverse order *)> struct_declaration_list
-%type<field_group> struct_declaration
-%type<spec_elem list * Cabs0.cabsloc> specifier_qualifier_list
-%type<(name0 option * Cabs0.expression0 option) list (* Reverse order *)> struct_declarator_list
-%type<name0 option * Cabs0.expression0 option> struct_declarator
-%type<(atom * Cabs0.expression0 option * Cabs0.cabsloc) list (* Reverse order *)> enumerator_list
-%type<atom * Cabs0.expression0 option * Cabs0.cabsloc> enumerator
-%type<atom * Cabs0.cabsloc> enumeration_constant
-%type<cvspec * Cabs0.cabsloc> type_qualifier
-%type<Cabs0.cabsloc> function_specifier
-%type<Cabs0.name0> declarator direct_declarator
-%type<(Cabs0.decl_type -> Cabs0.decl_type) * Cabs0.cabsloc> pointer
-%type<Cabs0.cvspec list (* Reverse order *)> type_qualifier_list
-%type<Cabs0.parameter list * bool> parameter_type_list
-%type<Cabs0.parameter list (* Reverse order *)> parameter_list
-%type<Cabs0.parameter> parameter_declaration
-%type<Cabs0.spec_elem list * Cabs0.decl_type> type_name
-%type<Cabs0.decl_type> abstract_declarator direct_abstract_declarator
-%type<Cabs0.init_expression> c_initializer
-%type<(Cabs0.initwhat list * Cabs0.init_expression) list (* Reverse order *)> initializer_list
-%type<Cabs0.initwhat list> designation
-%type<Cabs0.initwhat list (* Reverse order *)> designator_list
-%type<Cabs0.initwhat> designator
-%type<Cabs0.statement0> statement_dangerous statement_safe 
-  labeled_statement(statement_safe) labeled_statement(statement_dangerous)
-  iteration_statement(statement_safe) iteration_statement(statement_dangerous)
-  compound_statement
-%type<Cabs0.statement0 list (* Reverse order *)> block_item_list
-%type<Cabs0.statement0> block_item expression_statement selection_statement_dangerous
-  selection_statement_safe jump_statement
-%type<Cabs0.definition list (* Reverse order *)> translation_unit
-%type<Cabs0.definition> external_declaration function_definition
+  logical_OR_expression conditional_expression assignment_expression expression
+  constant_expression
 
-%type<Cabs0.statement0>par_statement
-%type<Cabs0.statement0 list> par_statement_list
+%type<Cabs.generic_association list>
+  generic_assoc_list
+%type<Cabs.generic_association>
+  generic_association
+
+%type<Cabs.cabs_expression list>
+  argument_expression_list
+
+%type<Cabs.cabs_unary_operator>
+  unary_operator
+%type<Cabs.cabs_assignment_operator>
+  assignment_operator
+
+%type<Cabs.declaration>
+  declaration
+
+%type<Cabs.specifiers>
+  declaration_specifiers
+
+%type<Cabs.init_declarator list>
+  init_declarator_list
+
+%type<Cabs.init_declarator>
+  init_declarator
+
+%type<Cabs.storage_class_specifier>
+  storage_class_specifier
+
+%type<Cabs.cabs_type_specifier>
+  type_specifier
+
+%type<Cabs.cabs_type_specifier>
+  struct_or_union_specifier
+
+%type<Cabs.cabs_identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+  struct_or_union
+
+%type<Cabs.struct_declaration list>
+  struct_declaration_list
+
+%type<Cabs.struct_declaration>
+  struct_declaration
+
+%type<Cabs.cabs_type_specifier list * Cabs.cabs_type_qualifier list>
+  specifier_qualifier_list
+
+%type<Cabs.struct_declarator list>
+  struct_declarator_list
+
+%type<Cabs.struct_declarator>
+  struct_declarator
+
+%type<Cabs.cabs_type_specifier>
+  enum_specifier
+
+%type<Cabs.enumerator list>
+  enumerator_list
+
+%type<Cabs.enumerator>
+  enumerator
+
+%type<Cabs.cabs_type_specifier>
+  atomic_type_specifier
+
+%type<Cabs.cabs_type_qualifier>
+  type_qualifier
+
+%type<Cabs.function_specifier>
+  function_specifier
+
+%type<Cabs.alignment_specifier>
+  alignment_specifier
+
+%type<Cabs.declarator>
+  declarator
+
+%type<Cabs.direct_declarator>
+  direct_declarator
+
+%type<Cabs.pointer_declarator>
+  pointer
+
+%type<Cabs.cabs_type_qualifier list>
+  type_qualifier_list
+
+%type<Cabs.parameter_type_list>
+  parameter_type_list
+
+%type<Cabs.parameter_declaration list>
+  parameter_list
+
+%type<Cabs.parameter_declaration>
+  parameter_declaration
+
+%type<Cabs.type_name>
+  type_name
+
+%type<Cabs.abstract_declarator>
+  abstract_declarator
+
+%type<Cabs.direct_abstract_declarator>
+  direct_abstract_declarator
+
+%type<Cabs.initializer_>
+  initializer_
+
+%type<((Cabs.designator list) option * Cabs.initializer_) list>
+  initializer_list
+
+%type<Cabs.designator list>
+  designation
+
+%type<Cabs.designator list>
+  designator_list
+
+%type<Cabs.designator>
+  designator
+
+%type<Cabs.static_assert_declaration>
+  static_assert_declaration
+
+%type<Cabs.cabs_statement>
+  statement_dangerous statement_safe  labeled_statement(statement_safe)
+  labeled_statement(statement_dangerous) iteration_statement(statement_safe)
+  iteration_statement(statement_dangerous) compound_statement
+  expression_statement selection_statement_dangerous selection_statement_safe
+  iteration_statement(last_statement) jump_statement
+
+%type<Cabs.cabs_statement list>
+  block_item_list
+
+%type<Cabs.cabs_statement>
+  block_item
+
+%type<Cabs.external_declaration list>
+  translation_unit
+
+%type<Cabs.external_declaration>
+  external_declaration
+
+%type<Cabs.function_definition>
+  function_definition
 
 
 
-%start<Cabs0.definition list> translation_unit_file
-%%
 
-(* Actual grammar *)
 
-(* 6.5.1 *)
+%start<Cabs.translation_unit> translation_unit_file
+
+%% (* ======================================================================= *)
+
+translation_unit_file: (* NOTE: this is not present in the standard *)
+| edecls= translation_unit EOF
+    { TUnit (List.rev edecls) }
+
+
+
+
+
+
+
+(* §6.4.4.3 Enumeration constants Primary expressions *)
+enumeration_constant:
+| cst= VAR_NAME2
+    { cst }
+
+
+(* §6.5.1 Primary expressions *)
 primary_expression:
-| var = VAR_NAME2
-    { (VARIABLE (fst var), snd var) }
-| cst = CONSTANT_
-    { (CONSTANT (fst cst), snd cst) }
-| loc = LPAREN expr = expression RPAREN
-    { (fst expr, loc)}
+| id= VAR_NAME2
+    { CabsEident id }
+| cst= CONSTANT
+    { CabsEconst cst }
+| lit= STRING_LITERAL
+    { CabsEstring lit }
+| LPAREN expr= expression RPAREN
+    { expr }
+| gs= generic_selection
+    { gs }
 
 
-(* NOTE: this is not present in the actual C11 syntax *)
-(* atomic_operation: *)
-(* | loc = C11_ATOMIC_INIT_ LPAREN obj = postfix_expression COMMA_ value = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_INIT (fst obj, fst value), loc) } *)
-(* | loc = C11_ATOMIC_STORE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_STORE (fst object_, fst desired, fst order), loc) } *)
-(* | loc = C11_ATOMIC_LOAD_ LPAREN object_ = postfix_expression COMMA_ order = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_LOAD (fst object_, fst order), loc) } *)
-(* | loc = C11_ATOMIC_EXCHANGE_ LPAREN object_ = postfix_expression COMMA_ desired = postfix_expression COMMA_ order = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_EXCHANGE (fst object_, fst desired, fst order), loc) } *)
-(* | loc = C11_ATOMIC_COMPARE_EXCHANGE_STRONG_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_ *)
-(*   desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_COMPARE_EXCHANGE_STRONG (fst object_, fst expected, fst desired, fst success, fst failure), loc) } *)
-(* | loc = C11_ATOMIC_COMPARE_EXCHANGE_WEAK_ LPAREN object_ = postfix_expression COMMA_ expected = postfix_expression COMMA_ *)
-(*   desired = postfix_expression COMMA_ success = postfix_expression COMMA_ failure = postfix_expression RPAREN *)
-(*     { (C11_ATOMIC_COMPARE_EXCHANGE_WEAK (fst object_, fst expected, fst desired, fst success, fst failure), loc) } *)
+(* §6.5.1.1 Generic selection *)
+generic_selection:
+| GENERIC LPAREN expr= assignment_expression COMMA gas= generic_assoc_list RPAREN
+    { CabsEgeneric (expr, gas) }
+
+generic_assoc_list: (* NOTE: the list is in reverse *)
+| ga= generic_association
+    { [ga] }
+| gas= generic_assoc_list COMMA ga= generic_association
+    { ga::gas }
+
+generic_association:
+| ty= type_name COLON expr= assignment_expression
+    { GA_type (ty, expr) }
+| DEFAULT COLON expr= assignment_expression
+    { GA_default expr }
 
 
-(* 6.5.2 *)
+(* §6.5.2 Postfix operators *)
 postfix_expression:
-| expr = primary_expression
+| expr= primary_expression
     { expr }
-| expr = postfix_expression LBRACK index = expression RBRACK
-    { (INDEX (fst expr, fst index), snd expr) }
-(* NOTE: we extend the syntax with builtin C11 atomic operation (the way clang does) *)
-(* | expr = atomic_operation *)
-(*     { expr } *)
+| expr1= postfix_expression LBRACKET expr2= expression RBRACKET
+    { CabsEsubscript (expr1, expr2) }
+| expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
+    { CabsEcall (expr, option [] List.rev exprs_opt) }
+| expr= postfix_expression DOT id= OTHER_NAME
+    { CabsEmemberof (expr, id) }
+| expr= postfix_expression MINUS_GT id= OTHER_NAME
+    { CabsEmemberofptr (expr, id) }
+| expr= postfix_expression PLUS_PLUS
+    { CabsEpostincr expr }
+| expr= postfix_expression MINUS_MINUS
+    { CabsEpostdecr expr }
+| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list RBRACE
+| LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA RBRACE
+    { CabsEcompound (ty, List.rev inits) }
 
-| expr = postfix_expression LPAREN args = argument_expression_list RPAREN
-    { (CALL (fst expr, List.rev args), snd expr) }
-| expr = postfix_expression LPAREN RPAREN
-    { (CALL (fst expr, []), snd expr) }
-| loc = BUILTIN_VA_ARG_ LPAREN expr = assignment_expression COMMA_ ty = type_name RPAREN
-    { (BUILTIN_VA_ARG (fst expr, ty), loc) }
-| expr = postfix_expression DOT mem = OTHER_NAME
-    { (MEMBEROF (fst expr, fst mem), snd expr) }
-| expr = postfix_expression PTR_ mem = OTHER_NAME
-    { (MEMBEROFPTR (fst expr, fst mem), snd expr) }
-| expr = postfix_expression INC
-    { (UNARY (POSINCR, fst expr), snd expr) }
-| expr = postfix_expression DEC
-    { (UNARY (POSDECR, fst expr), snd expr) }
-| loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list RBRACE
-    { (CAST (typ, COMPOUND_INIT (List.rev init)), loc) }
-| loc = LPAREN typ = type_name RPAREN LBRACE init = initializer_list COMMA_ RBRACE
-    { (CAST (typ, COMPOUND_INIT (List.rev init)), loc) }
+argument_expression_list: (* NOTE: the list is in reverse *)
+| expr= assignment_expression
+    { [expr] }
+| exprs= argument_expression_list COMMA expr= assignment_expression
+    { expr::exprs }
 
-(* Semantic value is in reverse order. *)
-argument_expression_list:
-| expr = assignment_expression
-    { [fst expr] }
-| exprq = argument_expression_list COMMA_ exprt = assignment_expression
-    { fst exprt::exprq }
 
-(* 6.5.3 *)
+(* §6.5.3 Unary operators *)
 unary_expression:
-| expr = postfix_expression
+| expr= postfix_expression
     { expr }
-| loc = INC expr = unary_expression
-    { (UNARY (PREINCR, fst expr), loc) }
-| loc = DEC expr = unary_expression
-    { (UNARY (PREDECR, fst expr), loc) }
-| op = unary_operator expr = cast_expression
-    { (UNARY (fst op, fst expr), snd op) }
-| loc = SIZEOF expr = unary_expression
-    { (EXPR_SIZEOF (fst expr), loc) }
-| loc = SIZEOF LPAREN typ = type_name RPAREN
-    { (TYPE_SIZEOF typ, loc) }
-| loc = ALIGNOF_ LPAREN typ = type_name RPAREN
-    { (ALIGNOF typ, loc) }
-(* K: in truth this is a macro, but we fake it *)
-(* | loc = OFFSETOF_ LPAREN ty = type_name COMMA_ member = OTHER_NAME RPAREN *)
-(*     { (OFFSETOF (ty, fst member), loc) } *)
-
+| PLUS_PLUS expr= unary_expression
+    { CabsEpreincr expr }
+| MINUS_MINUS expr= unary_expression
+    { CabsEpredecr expr }
+| op= unary_operator expr= cast_expression
+    { CabsEunary (op, expr) }
+| SIZEOF expr= unary_expression
+    { CabsEsizeof_expr expr }
+| SIZEOF LPAREN ty= type_name RPAREN
+    { CabsEsizeof_type ty }
+| ALIGNOF LPAREN ty= type_name RPAREN
+    { CabsEalignof ty }
 
 unary_operator:
-| loc = AND_
-    { (ADDROF, loc) }
-| loc = STAR
-    { (MEMOF, loc) } 
-| loc = PLUS_
-    { (PLUS, loc) }
-| loc = MINUS_
-    { (MINUS, loc) }
-| loc = TILDE
-    { (BNOT, loc) }
-| loc = BANG
-    { (NOT, loc) }
+| AMPERSAND
+    { CabsAddress }
+| STAR
+    { CabsIndirection } 
+| PLUS
+    { CabsPlus }
+| MINUS
+    { CabsMinus }
+| TILDE
+    { CabsBnot }
+| BANG
+    { CabsNot }
 
-(* 6.5.4 *)
+
+(* §6.5.4 Cast operators *)
 cast_expression:
-| expr = unary_expression
+| expr= unary_expression
     { expr }
-| loc = LPAREN typ = type_name RPAREN expr = cast_expression
-    { (CAST (typ, SINGLE_INIT (fst expr)), loc) }
+| LPAREN ty= type_name RPAREN expr= cast_expression
+    { CabsEcast (ty, expr) }
 
-(* 6.5.5 *)
+
+(* §6.5.5 Multiplicative operators *)
 multiplicative_expression:
-| expr = cast_expression
+| expr= cast_expression
     { expr }
-| expr1 = multiplicative_expression STAR expr2 = cast_expression
-    { (BINARY (MUL, fst expr1, fst expr2), snd expr1) }
-| expr1 = multiplicative_expression SLASH expr2 = cast_expression
-    { (BINARY (DIV, fst expr1, fst expr2), snd expr1) }
-| expr1 = multiplicative_expression PERCENT expr2 = cast_expression
-    { (BINARY (MOD, fst expr1, fst expr2), snd expr1) }
+| expr1= multiplicative_expression STAR expr2= cast_expression
+    { CabsEbinary (CabsMul, expr1, expr2) }
+| expr1= multiplicative_expression SLASH expr2= cast_expression
+    { CabsEbinary (CabsDiv, expr1, expr2) }
+| expr1= multiplicative_expression PERCENT expr2= cast_expression
+    { CabsEbinary (CabsMod, expr1, expr2) }
 
-(* 6.5.6 *)
+
+(* §6.5.6 Additive operators *)
 additive_expression:
-| expr = multiplicative_expression
+| expr= multiplicative_expression
     { expr }
-| expr1 = additive_expression PLUS_ expr2 = multiplicative_expression
-    { (BINARY (ADD, fst expr1, fst expr2), snd expr1) }
-| expr1 = additive_expression MINUS_ expr2 = multiplicative_expression
-    { (BINARY (SUB, fst expr1, fst expr2), snd expr1) }
+| expr1= additive_expression PLUS expr2= multiplicative_expression
+    { CabsEbinary (CabsAdd, expr1, expr2) }
+| expr1= additive_expression MINUS expr2= multiplicative_expression
+    { CabsEbinary (CabsSub, expr1, expr2) }
 
-(* 6.5.7 *)
+
+(* §6.5.7 Bitwise shift operators *)
 shift_expression:
-| expr = additive_expression
+| expr= additive_expression
     { expr }
-| expr1 = shift_expression LEFT expr2 = additive_expression
-    { (BINARY (SHL, fst expr1, fst expr2), snd expr1) }
-| expr1 = shift_expression RIGHT expr2 = additive_expression
-    { (BINARY (SHR, fst expr1, fst expr2), snd expr1) }
+| expr1= shift_expression LT_LT expr2= additive_expression
+    { CabsEbinary (CabsShl, expr1, expr2) }
+| expr1= shift_expression GT_GT expr2= additive_expression
+    { CabsEbinary (CabsShr, expr1, expr2) }
 
-(* 6.5.8 *)
+
+(* §6.5.8 Relational operators *)
 relational_expression:
-| expr = shift_expression
+| expr= shift_expression
     { expr }
-| expr1 = relational_expression LT_ expr2 = shift_expression
-    { (BINARY (LT, fst expr1, fst expr2), snd expr1) }
-| expr1 = relational_expression GT_ expr2 = shift_expression
-    { (BINARY (GT, fst expr1, fst expr2), snd expr1) }
-| expr1 = relational_expression LEQ expr2 = shift_expression
-    { (BINARY (LE, fst expr1, fst expr2), snd expr1) }
-| expr1 = relational_expression GEQ expr2 = shift_expression
-    { (BINARY (GE, fst expr1, fst expr2), snd expr1) }
+| expr1= relational_expression LT expr2= shift_expression
+    { CabsEbinary (CabsLt, expr1, expr2) }
+| expr1= relational_expression GT expr2= shift_expression
+    { CabsEbinary (CabsGt, expr1, expr2) }
+| expr1= relational_expression LT_EQ expr2= shift_expression
+    { CabsEbinary (CabsLe, expr1, expr2) }
+| expr1= relational_expression GT_EQ expr2= shift_expression
+    { CabsEbinary (CabsGe, expr1, expr2) }
 
-(* 6.5.9 *)
+
+(* §6.5.9 Equality operators *)
 equality_expression:
-| expr = relational_expression
+| expr= relational_expression
     { expr }
-| expr1 = equality_expression EQEQ expr2 = relational_expression
-    { (BINARY (EQ, fst expr1, fst expr2), snd expr1) }
-| expr1 = equality_expression NEQ expr2 = relational_expression
-    { (BINARY (NE, fst expr1, fst expr2), snd expr1) }
+| expr1= equality_expression EQ_EQ expr2= relational_expression
+    { CabsEbinary (CabsEq, expr1, expr2) }
+| expr1= equality_expression BANG_EQ expr2= relational_expression
+    { CabsEbinary (CabsNe, expr1, expr2) }
 
-(* 6.5.10 *)
-AND_expression:
-| expr = equality_expression
+
+(* §6.5.10 Bitwise AND operator *)
+_AND_expression:
+| expr= equality_expression
     { expr }
-| expr1 = AND_expression AND_ expr2 = equality_expression
-    { (BINARY (BAND, fst expr1, fst expr2), snd expr1) }
+| expr1= _AND_expression AMPERSAND expr2= equality_expression
+    { CabsEbinary (CabsBand, expr1, expr2) }
 
-(* 6.5.11 *)
+
+(* §6.5.11 Bitwise exclusive OR operator *)
 exclusive_OR_expression:
-| expr = AND_expression
+| expr= _AND_expression
     { expr }
-| expr1 = exclusive_OR_expression HAT expr2 = AND_expression
-    { (BINARY (XOR, fst expr1, fst expr2), snd expr1) }
+| expr1= exclusive_OR_expression CARET expr2= _AND_expression
+    { CabsEbinary (CabsBxor, expr1, expr2) }
 
-(* 6.5.12 *)
+
+(* §6.5.12 Bitwise inclusive OR operator *)
 inclusive_OR_expression:
-| expr = exclusive_OR_expression
+| expr= exclusive_OR_expression
     { expr }
-| expr1 = inclusive_OR_expression BAR expr2 = exclusive_OR_expression
-    { (BINARY (BOR, fst expr1, fst expr2), snd expr1) }
+| expr1= inclusive_OR_expression PIPE expr2= exclusive_OR_expression
+    { CabsEbinary (CabsBor, expr1, expr2) }
 
-(* 6.5.13 *)
+
+(* §6.5.13 Logical AND operator *)
 logical_AND_expression:
-| expr = inclusive_OR_expression
+| expr= inclusive_OR_expression
     { expr }
-| expr1 = logical_AND_expression ANDAND expr2 = inclusive_OR_expression
-    { (BINARY (AND, fst expr1, fst expr2), snd expr1) }
+| expr1= logical_AND_expression AMPERSAND_AMPERSAND expr2= inclusive_OR_expression
+    { CabsEbinary (CabsAnd, expr1, expr2) }
 
-(* 6.5.14 *)
+
+(* §6.5.14 Logical OR operator *)
 logical_OR_expression:
-| expr = logical_AND_expression
+| expr= logical_AND_expression
     { expr }
-| expr1 = logical_OR_expression BARBAR expr2 = logical_AND_expression
-    { (BINARY (OR, fst expr1, fst expr2), snd expr1) }
+| expr1= logical_OR_expression PIPE_PIPE expr2= logical_AND_expression
+    { CabsEbinary (CabsOr, expr1, expr2) }
 
-(* 6.5.15 *)
+
+(* §6.5.15 Conditional operator *)
 conditional_expression:
-| expr = logical_OR_expression
+| expr= logical_OR_expression
     { expr }
-| expr1 = logical_OR_expression QUESTION_ expr2 = expression COLON expr3 = conditional_expression
-    { (QUESTION (fst expr1, fst expr2, fst expr3), snd expr1) }
+| expr1= logical_OR_expression QUESTION expr2= expression COLON expr3= conditional_expression
+    { CabsEcond (expr1, expr2, expr3) }
 
-(* 6.5.16 *)
+
+(* §6.5.16 Assignment operators *)
 assignment_expression:
-| expr = conditional_expression
+| expr= conditional_expression
     { expr }
-| expr1 = unary_expression op = assignment_operator expr2 = assignment_expression
-    { (BINARY (op, fst expr1, fst expr2), snd expr1) }
+| expr1= unary_expression op= assignment_operator expr2= assignment_expression
+    { CabsEassign (op, expr1, expr2) }
 
 assignment_operator:
-| EQ_
-    { ASSIGN  }
-| MUL_ASSIGN_
-    { MUL_ASSIGN }
-| DIV_ASSIGN_
-    { DIV_ASSIGN }
-| MOD_ASSIGN_
-    { MOD_ASSIGN }
-| ADD_ASSIGN_
-    { ADD_ASSIGN }
-| SUB_ASSIGN_
-    { SUB_ASSIGN }
-| LEFT_ASSIGN
-    { SHL_ASSIGN }
-| RIGHT_ASSIGN
-    { SHR_ASSIGN }
-| XOR_ASSIGN_
-    { XOR_ASSIGN }
-| OR_ASSIGN
-    { BOR_ASSIGN }
-| AND_ASSIGN
-    { BAND_ASSIGN }
+| EQ
+    { Assign  }
+| STAR_EQ
+    { Assign_Mul }
+| SLASH_EQ
+    { Assign_Div }
+| PERCENT_EQ
+    { Assign_Mod }
+| PLUS_EQ
+    { Assign_Add }
+| MINUS_EQ
+    { Assign_Sub }
+| LT_LT_EQ
+    { Assign_Shl }
+| GT_GT_EQ
+    { Assign_Shr }
+| AMPERSAND_EQ
+    { Assign_Band }
+| CARET_EQ
+    { Assign_Bxor }
+| PIPE_EQ
+    { Assign_Bor }
 
-(* 6.5.17 *)
+
+(* §6.5.17 Comma operator *)
 expression:
-| expr = assignment_expression
+| expr= assignment_expression
     { expr }
-| expr1 = expression COMMA_ expr2 = assignment_expression
-    { (BINARY (COMMA, fst expr1, fst expr2), snd expr1) }
+| expr1= expression COMMA expr2= assignment_expression
+    { CabsEcomma (expr1, expr2) }
 
 
-(* 6.6 *)
+(* §6.6 Constant expressions *)
 constant_expression:
-| expr = conditional_expression
+| expr= conditional_expression
     { expr }
 
-(* 6.7 *)
-declaration:
-| decspec = declaration_specifiers decls = init_declarator_list SEMICOLON
-    { DECDEF ((fst decspec, List.rev decls), snd decspec) }
-| decspec = declaration_specifiers SEMICOLON
-    { DECDEF ((fst decspec, []), snd decspec) }
-(* TODO
-| static_assert_declaration
-    {}
-*)
 
+(* §6.7 Declarations *)
+declaration:
+| decspecs= declaration_specifiers idecls_opt= init_declarator_list? SEMICOLON
+    { Declaration_base (decspecs, option [] id idecls_opt) }
+| sa= static_assert_declaration
+    { Declaration_static_assert sa }
 
 declaration_specifiers:
-| storage = storage_class_specifier rest = declaration_specifiers
-    { (SpecStorage (fst storage)::fst rest, snd storage) }
-| storage = storage_class_specifier
-    { ([SpecStorage (fst storage)], snd storage) }
-| typ = type_specifier rest = declaration_specifiers
-    { (SpecType (fst typ)::fst rest, snd typ) }
-| typ = type_specifier
-    { ([SpecType (fst typ)], snd typ) }
-| qual = type_qualifier rest = declaration_specifiers
-    { (SpecCV (fst qual)::fst rest, snd qual) }
-| qual = type_qualifier
-    { ([SpecCV (fst qual)], snd qual) }
-| loc = function_specifier rest = declaration_specifiers
-    { (SpecInline::fst rest, loc) }
-| loc = function_specifier
-    { ([SpecInline], loc) }
+| sc= storage_class_specifier specs_opt= declaration_specifiers?
+    { let specs = option empty_specs id specs_opt in
+      { specs with storage_classes= sc :: specs.storage_classes }
+    }
+| tspec= type_specifier specs_opt= declaration_specifiers?
+    { let specs = option empty_specs id specs_opt in
+      { specs with type_specifiers= tspec :: specs.type_specifiers }
+    }
+| tqual= type_qualifier specs_opt= declaration_specifiers?
+    { let specs = option empty_specs id specs_opt in
+      { specs with type_qualifiers= tqual :: specs.type_qualifiers }
+    }
+| fspec= function_specifier specs_opt= declaration_specifiers?
+    { let specs = option empty_specs id specs_opt in
+      { specs with function_specifiers= fspec :: specs.function_specifiers }
+    }
+| aspec= alignment_specifier specs_opt= declaration_specifiers?
+    { let specs = option empty_specs id specs_opt in
+      { specs with alignment_specifiers= aspec :: specs.alignment_specifiers }
+    }
 
-init_declarator_list:
-| init = init_declarator
-    { [init] }
-| initq = init_declarator_list COMMA_ initt = init_declarator
-    { initt::initq }
+init_declarator_list: (* NOTE: the list is in reverse *)
+| idecl= init_declarator
+    { [idecl] }
+| idecls= init_declarator_list COMMA idecl= init_declarator
+    { idecl::idecls }
 
 init_declarator:
-| name = declarator
-    { Init_name (name, NO_INIT) }
-| name = declarator EQ_ init = c_initializer
-    { Init_name (name, init) }
+| decl= declarator
+    { InitDecl (decl, None) }
+| decl= declarator EQ init= initializer_
+    { InitDecl (decl, Some init) }
 
-(* 6.7.1 *)
+
+(* §6.7.1 Storage-class specifiers *)
 storage_class_specifier:
-| loc = TYPEDEF_
-    { (TYPEDEF, loc) }
-| loc = EXTERN_
-    { (EXTERN, loc) }
-| loc = STATIC_
-    { (STATIC, loc) }
-| loc = AUTO_
-    { (AUTO, loc) } 
-| loc = THREAD_LOCAL_
-    { (THREAD_LOCAL, loc) } 
-| loc = REGISTER_
-    { (REGISTER, loc) }
+| TYPEDEF
+    { SC_typedef }
+| EXTERN
+    { SC_extern }
+| STATIC
+    { SC_static }
+| THREAD_LOCAL
+    { SC_Thread_local }
+| AUTO
+    { SC_auto }
+| REGISTER
+    { SC_register }
 
-(* 6.7.2 *)
+
+(* §6.7.2 Type specifiers *)
 type_specifier:
-| loc = VOID
-    { (Tvoid, loc) }
-| loc = CHAR
-    { (Tchar, loc) }
-| loc = SHORT
-    { (Tshort, loc) }
-| loc = INT
-    { (Tint, loc) }
-| loc = LONG
-    { (Tlong, loc) }
-| loc = FLOAT
-    { (Tfloat, loc) }
-| loc = DOUBLE
-    { (Tdouble, loc) }
-| loc = SIGNED
-    { (Tsigned, loc) }
-| loc = UNSIGNED
-    { (Tunsigned, loc) }
-| loc = BOOL
-    { (T_Bool, loc) }
-(* | spec = atomic_type_specifier *)
-(*     { spec } *)
-| spec = struct_or_union_specifier
+| VOID
+    { TSpec_void }
+| CHAR
+    { TSpec_char }
+| SHORT
+    { TSpec_short }
+| INT
+    { TSpec_int }
+| LONG
+    { TSpec_long }
+| FLOAT
+    { TSpec_float }
+| DOUBLE
+    { TSpec_double }
+| SIGNED
+    { TSpec_signed }
+| UNSIGNED
+    { TSpec_unsigned }
+| BOOL
+    { TSpec_Bool }
+| COMPLEX
+    { TSpec_Complex }
+| spec= atomic_type_specifier
     { spec }
-| spec = enum_specifier
+| spec= struct_or_union_specifier
     { spec }
-| id = TYPEDEF_NAME2
-    { (Tnamed (fst id), snd id) }
+| spec= enum_specifier
+    { spec }
+| id= TYPEDEF_NAME2
+    { TSpec_name id }
 
-(* 6.7.2.1 *)
+
+(* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
-| str_uni = struct_or_union id = OTHER_NAME LBRACE decls = struct_declaration_list RBRACE
-    { ((fst str_uni) (Some (fst id)) (Some (List.rev decls)) [], snd str_uni) }
-| str_uni = struct_or_union LBRACE decls = struct_declaration_list RBRACE
-    { ((fst str_uni) None (Some (List.rev decls)) [],            snd str_uni) }
-| str_uni = struct_or_union id = OTHER_NAME
-    { ((fst str_uni) (Some (fst id)) None [],         snd str_uni) }
+| ctor= struct_or_union id_opt= OTHER_NAME? LBRACE decls= struct_declaration_list RBRACE
+    {  ctor id_opt (Some (List.rev decls)) }
+| ctor= struct_or_union id= OTHER_NAME
+    { ctor (Some id) None }
 
 struct_or_union:
-| loc = STRUCT
-    { ((fun x y z -> Tstruct (x, y, z)), loc) }
-| loc = UNION
-    { ((fun x y z -> Tunion (x, y, z)), loc) }
+| STRUCT
+    { fun x y -> TSpec_struct (x, y) }
+| UNION
+    { fun x y -> TSpec_union (x, y) }
 
-struct_declaration_list:
-| decl = struct_declaration
-    { [decl] }
-| qdecls = struct_declaration_list tdecls = struct_declaration
-    { tdecls::qdecls }
+struct_declaration_list: (* NOTE: the list is in reverse *)
+| sdecl= struct_declaration
+    { [sdecl] }
+| sdecls= struct_declaration_list sdecl= struct_declaration
+    { sdecl::sdecls }
 
 struct_declaration:
-| decspec = specifier_qualifier_list decls = struct_declarator_list SEMICOLON
-    { Field_group (fst decspec, List.rev decls, snd decspec) }
-(* Extension to C99 grammar needed to parse some GNU header files. *)
-| decspec = specifier_qualifier_list SEMICOLON
-    { Field_group (fst decspec, [], snd decspec) }
-(* TODO
-| static_assert_declaration
-    {}
-*)
-
-(* 6.7.2.4 *)
-atomic_type_specifier:
-| loc = ATOMIC LPAREN ty = type_name RPAREN
-    { (Tatomic ty, loc) }
+| tspecs_tquals= specifier_qualifier_list sdeclrs_opt= struct_declarator_list? SEMICOLON
+    { let (tspecs, tquals) = tspecs_tquals in Struct_declaration (tspecs, tquals, option [] id sdeclrs_opt) }
+| sa_decl= static_assert_declaration
+    { Struct_assert sa_decl }
 
 specifier_qualifier_list:
-| typ = type_specifier rest = specifier_qualifier_list
-    { (SpecType (fst typ)::fst rest, snd typ) }
-| typ = type_specifier
-    { ([SpecType (fst typ)], snd typ) }
-| qual = type_qualifier rest = specifier_qualifier_list
-    { (SpecCV (fst qual)::fst rest, snd qual) }
-| qual = type_qualifier
-    { ([SpecCV (fst qual)], snd qual) }
+| tspec= type_specifier tspecs_tquals_opt= specifier_qualifier_list?
+    {
+      let (tspecs, tquals) = option ([],[]) id tspecs_tquals_opt in
+      (tspec::tspecs, tquals)
+    }
+| tqual= type_qualifier tspecs_tquals_opt= specifier_qualifier_list?
+    {
+      let (tspecs, tquals) = option ([],[]) id tspecs_tquals_opt in
+      (tspecs, tqual::tquals)
+    }
 
-struct_declarator_list:
-| decl = struct_declarator
-    { [decl] }
-| declq = struct_declarator_list COMMA_ declt = struct_declarator
-    { declt::declq }
+struct_declarator_list: (* NOTE: the list is in reverse *)
+| sdelctor= struct_declarator
+    { [sdelctor] }
+
+| sdecltors= struct_declarator_list COMMA sdecltor= struct_declarator
+    { sdecltor::sdecltors }
 
 struct_declarator:
-| decl = declarator
-    { (Some decl, None) }
-| decl = declarator COLON expr = constant_expression
-    { (Some decl, Some (fst expr)) }
-| COLON expr = constant_expression
-    { (None, Some (fst expr)) }
+| decltor= declarator
+    { SDecl_simple decltor }
+| decltor_opt= declarator? COLON expr= constant_expression
+    { SDecl_bitfield (decltor_opt, expr) }
 
-(* 6.7.2.2 *)
+
+(* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
-| loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) }
-| loc = ENUM LBRACE enum_list = enumerator_list RBRACE
-    { (Tenum (None, Some (List.rev enum_list), []), loc) }
-| loc = ENUM name = OTHER_NAME LBRACE enum_list = enumerator_list COMMA_ RBRACE
-    { (Tenum (Some (fst name), Some (List.rev enum_list), []), loc) }
-| loc = ENUM LBRACE enum_list = enumerator_list COMMA_ RBRACE
-    { (Tenum (None, Some (List.rev enum_list), []), loc) }
-| loc = ENUM name = OTHER_NAME
-    { (Tenum (Some (fst name), None, []), loc) }
+| ENUM id_opt= OTHER_NAME? LBRACE enums= enumerator_list RBRACE
+| ENUM id_opt= OTHER_NAME? LBRACE enums= enumerator_list COMMA RBRACE
+    { TSpec_enum (id_opt, Some (List.rev enums)) }
+| ENUM id= OTHER_NAME
+    { TSpec_enum (Some id, None)  }
 
-enumerator_list:
-| enum = enumerator
+enumerator_list: (* NOTE: the list is in reverse *)
+| enum= enumerator
     { [enum] }
-| enumsq = enumerator_list COMMA_ enumst = enumerator
-    { enumst :: enumsq }
+| enums= enumerator_list COMMA enum= enumerator
+    { enum::enums }
 
 enumerator:
-| atom = enumeration_constant
-    { (fst atom, None, snd atom) }
-| atom = enumeration_constant EQ_ expr = constant_expression
-    { (fst atom, Some (fst expr), snd atom) }
+| enum_cst= enumeration_constant
+    { (enum_cst, None) }
+| enum_cst= enumeration_constant EQ expr= constant_expression
+    { (enum_cst, Some expr) }
 
-enumeration_constant:
-| loc = VAR_NAME2
-    { loc }
 
-(* 6.7.3 *)
+(* §6.7.2.4 Atomic type specifiers *)
+atomic_type_specifier:
+| ATOMIC_LPAREN ty= type_name RPAREN
+    { TSpec_Atomic ty }
+
+
+(* §6.7.3 Type qualifiers *)
 type_qualifier:
-| loc = CONST
-    { (CV_CONST, loc) }
-| loc = RESTRICT
-    { (CV_RESTRICT, loc) }
-| loc = VOLATILE
-    { (CV_VOLATILE, loc) }
-| loc = ATOMIC
-    { (CV_ATOMIC, loc) }
+| CONST
+    { Q_const }
+| RESTRICT
+    { Q_restrict }
+| VOLATILE
+    { Q_volatile }
+| ATOMIC
+    { Q_Atomic }
 
-(* 6.7.4 *)
+
+(* §6.7.4 Function specifiers *)
 function_specifier:
-| loc = INLINE
-    { loc }
+| INLINE
+    { FS_inline }
+| NORETURN
+    { FS_Noreturn }
 
-(* 6.7.5 *)
+
+(* §6.7.5 Alignment specifier *)
+alignment_specifier:
+| ALIGNAS LPAREN ty= type_name RPAREN
+    { AS_type ty }
+| ALIGNAS LPAREN expr= constant_expression RPAREN
+    { AS_expr expr }
+
+
+(* §6.7.6 Declarators *)
 declarator:
-| decl = direct_declarator
-    { decl }
-| pt = pointer decl = direct_declarator
-    { match decl with Name (name, typ, attr, _) -> 
-	Name (name, ((fst pt) typ), attr, snd pt) }
+| ptr_opt= pointer? ddecltor= direct_declarator
+    { Declarator (ptr_opt, ddecltor) }
 
 direct_declarator:
-| id = VAR_NAME2
-    { Name (fst id, JUSTBASE, [], snd id) }
-| LPAREN decl = declarator RPAREN
-    { decl }
-| decl = direct_declarator LBRACK quallst = type_qualifier_list expr = assignment_expression RBRACK
-    { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, List.rev quallst, [], Some (fst expr)), attr, loc) }
-| decl = direct_declarator LBRACK expr = assignment_expression RBRACK
-    { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, [], [], Some (fst expr)), attr, loc) }
-| decl = direct_declarator LBRACK quallst = type_qualifier_list RBRACK
-    { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, List.rev quallst, [], None), attr, loc) }
-| decl = direct_declarator LBRACK RBRACK
-    { match decl with Name (name, typ, attr, loc) ->
-	Name (name, ARRAY (typ, [], [], None), attr, loc) }
-(*| direct_declarator LBRACK ... STATIC ... RBRACK
-| direct_declarator LBRACK STAR RBRACK*)
-| decl = direct_declarator LPAREN params = parameter_type_list RPAREN
-    { match decl with Name (name, typ, attr, loc) ->
-	Name (name, PROTO (typ, params), attr, loc) }
-| decl = direct_declarator LPAREN RPAREN
-    { match decl with Name (name, typ, attr, loc) ->
-        Name (name, PROTO (typ, ([],false)), attr, loc) }
-(* TODO : K&R *)
-(*| direct_declarator LPAREN identifier_list RPAREN
-    {}*)
+| id= VAR_NAME2
+    { DDecl_identifier id }
+| LPAREN decltor= declarator RPAREN
+    { DDecl_declarator decltor }
+| ddecltor= direct_declarator LBRACKET tquals_opt= type_qualifier_list? expr_opt= assignment_expression? RBRACKET
+    { DDecl_array (ddecltor, ADecl (option [] List.rev tquals_opt, false, option None (fun z -> Some (ADeclSize_expression z)) expr_opt)) }
+| ddecltor= direct_declarator LBRACKET STATIC tquals_opt= type_qualifier_list? expr= assignment_expression RBRACKET
+    { DDecl_array (ddecltor, ADecl (option [] List.rev tquals_opt, true, Some (ADeclSize_expression expr))) }
+| ddecltor= direct_declarator LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
+    { DDecl_array (ddecltor, ADecl (List.rev tquals, true, Some (ADeclSize_expression expr))) }
+| ddecltor= direct_declarator LBRACKET tquals_opt= type_qualifier_list? STAR RBRACKET
+    { DDecl_array (ddecltor, ADecl (option [] List.rev tquals_opt, false, Some ADeclSize_asterisk)) }
+| ddecltor= direct_declarator LPAREN param_tys= parameter_type_list RPAREN
+    { DDecl_function (ddecltor, param_tys) }
+(* TODO this is hack, while we don't support identifier_list *)
+| ddecltor= direct_declarator LPAREN RPAREN
+    { DDecl_function (ddecltor, Params ([], false)) }
+(* TODO | direct_declarator LPAREN identifier_list? RPAREN *)
 
 pointer:
-| loc = STAR
-    { ((fun z -> PTR ([], [], z)), loc) }
-| loc = STAR quallst = type_qualifier_list
-    { ((fun z -> PTR (List.rev quallst, [], z)), loc) }
-| loc = STAR pt = pointer
-    { ((fun typ -> PTR ([], [], (fst pt) typ)), loc) }
-| loc = STAR quallst = type_qualifier_list pt = pointer
-    { ((fun typ -> PTR (List.rev quallst, [], (fst pt) typ)), loc) }
+| STAR tquals= type_qualifier_list?
+    { PDecl (option [] List.rev tquals, None) }
+| STAR tquals= type_qualifier_list? ptr_decltor= pointer
+    { PDecl (option [] List.rev tquals, Some ptr_decltor) }
 
-type_qualifier_list:
-| qual = type_qualifier
-    { [fst qual] }
-| qualq = type_qualifier_list qualt = type_qualifier
-    { fst qualt::qualq }
+type_qualifier_list: (* NOTE: the list is in reverse *)
+| tqual= type_qualifier
+    { [tqual] }
+| tquals= type_qualifier_list tqual= type_qualifier
+    { tqual::tquals }
 
 parameter_type_list:
-| lst = parameter_list
-    { (List.rev lst, false) }
-| lst = parameter_list COMMA_ ELLIPSIS
-    { (List.rev lst, true) }
+| param_decls= parameter_list
+    { Params (List.rev param_decls, false) }
+| param_decls= parameter_list COMMA ELLIPSIS
+    { Params (List.rev param_decls, true) }
 
-parameter_list:
-| param = parameter_declaration
-    { [param] }
-| paramq = parameter_list COMMA_ paramt = parameter_declaration
-    { paramt::paramq }
+parameter_list: (* NOTE: the list is in reverse *)
+| param_decl= parameter_declaration
+    { [param_decl] }
+| param_decls= parameter_list COMMA param_decl= parameter_declaration
+    { param_decl::param_decls }
 
 parameter_declaration:
-| specs = declaration_specifiers decl = declarator
-    { match decl with Name (name, typ, attr, _) ->
-        PARAM (fst specs, Some name, typ, attr, snd specs) }
-| specs = declaration_specifiers decl = abstract_declarator
-    { PARAM (fst specs, None, decl, [], snd specs) }
-| specs = declaration_specifiers
-    { PARAM (fst specs, None, JUSTBASE, [], snd specs) }
+| specifs= declaration_specifiers decltor= declarator
+    { PDeclaration_decl (specifs, decltor) }
+| specifs= declaration_specifiers abs_decltor_opt= abstract_declarator?
+    { PDeclaration_abs_decl (specifs, abs_decltor_opt) }
 
-(* TODO : K&R *)
-(*
+(* TODO
 identifier_list:
-| VAR_NAME2
-| identifier_list COMMA_ idt = VAR_NAME2
-    {}
+| identifier
+| identifier_list COMMA identifier
+    { failwith "TODO: identifier_list" }
 *)
 
-(* 6.7.6 *)
+
+(* §6.7.7 Type names *)
 type_name:
-| specqual = specifier_qualifier_list
-    { (fst specqual, JUSTBASE) }
-| specqual = specifier_qualifier_list typ = abstract_declarator
-    { (fst specqual, typ) }
+| tspecs_tquals= specifier_qualifier_list abs_declr_opt= abstract_declarator?
+    { let (tspecs, tquals) = tspecs_tquals in
+      Type_name (tspecs, tquals, abs_declr_opt) }
 
 abstract_declarator:
-| pt = pointer
-    { (fst pt) JUSTBASE }
-| pt = pointer typ = direct_abstract_declarator
-    { (fst pt) typ }
-| typ = direct_abstract_declarator
-    { typ }
+| ptr_decltor= pointer
+    { AbsDecl_pointer ptr_decltor }
+| ptr_decltor_opt= pointer? dabs_decltor= direct_abstract_declarator
+    { AbsDecl_direct (ptr_decltor_opt, dabs_decltor) }
 
+ (* NOTE: this rule is split to avoid a conflict *)
 direct_abstract_declarator:
-| LPAREN typ = abstract_declarator RPAREN
-    { typ }
-| typ = direct_abstract_declarator LBRACK cvspec = type_qualifier_list expr = assignment_expression RBRACK
-    { ARRAY (typ, cvspec, [], Some (fst expr)) }
-| LBRACK cvspec = type_qualifier_list expr = assignment_expression RBRACK
-    { ARRAY (JUSTBASE, cvspec, [], Some (fst expr)) }
-| typ = direct_abstract_declarator LBRACK expr = assignment_expression RBRACK
-    { ARRAY (typ, [], [], Some (fst expr)) }
-| LBRACK expr = assignment_expression RBRACK
-    { ARRAY (JUSTBASE, [], [], Some (fst expr)) }
-| typ = direct_abstract_declarator LBRACK cvspec = type_qualifier_list RBRACK
-    { ARRAY (typ, cvspec, [], None) }
-| LBRACK cvspec = type_qualifier_list RBRACK
-    { ARRAY (JUSTBASE, cvspec, [], None) }
-| typ = direct_abstract_declarator LBRACK RBRACK
-    { ARRAY (typ, [], [], None) }
-| LBRACK RBRACK
-    { ARRAY (JUSTBASE, [], [], None) }
-(*| direct_abstract_declarator? LBRACK STAR RBRACK*)
-(*| direct_abstract_declarator? LBRACK ... STATIC ... RBRACK*)
-| typ = direct_abstract_declarator LPAREN params = parameter_type_list RPAREN
-    { PROTO (typ, params) }
-| LPAREN params = parameter_type_list RPAREN
-    { PROTO (JUSTBASE, params) }
-| typ = direct_abstract_declarator LPAREN RPAREN
-    { PROTO (typ, ([], false)) }
-| LPAREN RPAREN
-    { PROTO (JUSTBASE, ([], false)) }
+| LPAREN abs_decltor= abstract_declarator RPAREN
+    { DAbs_abs_declarator abs_decltor }
+(* direct_abstract_declarator? LBRACKET type_qualifier_list? assignment_expression? RBRACKET *)
+| dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list expr= assignment_expression RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl (tquals, false, Some (ADeclSize_expression expr))) }
+| dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl (tquals, false, None)) }
+| dabs_decltor= direct_abstract_declarator LBRACKET expr= assignment_expression RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl ([], false, Some (ADeclSize_expression expr))) }
+| dabs_decltor= direct_abstract_declarator LBRACKET RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl ([], false, None)) }
+| LBRACKET tquals= type_qualifier_list expr= assignment_expression RBRACKET
+    { DAbs_array (None, ADecl (tquals, false, Some (ADeclSize_expression expr))) }
+| LBRACKET expr= assignment_expression RBRACKET
+    { DAbs_array (None, ADecl ([], false, Some (ADeclSize_expression expr))) }
+| LBRACKET tquals= type_qualifier_list RBRACKET
+    { DAbs_array (None, ADecl (tquals, false, None)) }
+| LBRACKET RBRACKET
+    { DAbs_array (None, ADecl ([], false, None)) }
+(* direct_abstract_declarator? LBRACKET STATIC type_qualifier_list? assignment_expression RBRACKET *)
+| dabs_decltor= direct_abstract_declarator LBRACKET STATIC tquals= type_qualifier_list expr= assignment_expression RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl (tquals, true, Some (ADeclSize_expression expr))) }
+| LBRACKET STATIC tquals= type_qualifier_list expr= assignment_expression RBRACKET
+    { DAbs_array (None, ADecl (tquals, true, Some (ADeclSize_expression expr))) }
+| dabs_decltor= direct_abstract_declarator LBRACKET STATIC expr= assignment_expression RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl ([], true, Some (ADeclSize_expression expr))) }
+| LBRACKET STATIC expr= assignment_expression RBRACKET
+    { DAbs_array (None, ADecl ([], true, Some (ADeclSize_expression expr))) }
+(* direct_abstract_declarator? LBRACKET type_qualifier_list STATIC assignment_expression RBRACKET *)
+| dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl (tquals, true, Some (ADeclSize_expression expr))) }
+| LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
+    { DAbs_array (None, ADecl (tquals, true, Some (ADeclSize_expression expr))) }
+(* direct_abstract_declarator? LBRACKET STAR RBRACKET *)
+| dabs_decltor= direct_abstract_declarator LBRACKET STAR RBRACKET
+    { DAbs_array (Some dabs_decltor, ADecl ([], false, Some ADeclSize_asterisk)) }
+| LBRACKET STAR RBRACKET
+    { DAbs_array (None, ADecl ([], false, Some ADeclSize_asterisk)) }
+(* direct_abstract_declarator? LPAREN parameter_type_list? RPAREN *)
+| dabs_decltor= direct_abstract_declarator LPAREN param_tys_opt= parameter_type_list? RPAREN
+    { DAbs_function (Some dabs_decltor, option (Params ([], false)) (fun z -> z) param_tys_opt) }
+| LPAREN param_tys_opt= parameter_type_list? RPAREN
+    { DAbs_function (None, option (Params ([], false)) (fun z -> z) param_tys_opt) }
 
-(* 6.7.8 *)
-c_initializer:
-| expr = assignment_expression
-    { SINGLE_INIT (fst expr) }
-| LBRACE init = initializer_list RBRACE
-    { COMPOUND_INIT (List.rev init) }
-| LBRACE init = initializer_list COMMA_ RBRACE
-    { COMPOUND_INIT (List.rev init) }
 
-initializer_list:
-| design = designation init = c_initializer
-    { [(design, init)] }
-| init = c_initializer
-    { [([], init)] }
-| initq = initializer_list COMMA_ design = designation init = c_initializer
-    { (design, init)::initq }
-| initq = initializer_list COMMA_ init = c_initializer
-    { ([], init)::initq }
+(* §6.7.8 Type definitions
+  
+  NOTE: This is dealt with during the pre parsing and appear
+        here as the token TYPEDEF_NAME2
+*)
+
+
+(* §6.7.9 Initialization *)
+initializer_:
+| expr= assignment_expression
+    { Init_expr expr }
+| LBRACE inits= initializer_list RBRACE
+| LBRACE inits= initializer_list COMMA RBRACE
+    { Init_list (List.rev inits) }
+
+initializer_list: (* NOTE: the list is in reverse *)
+| design_opt= designation? init= initializer_
+    { [(design_opt, init)] }
+| inits= initializer_list COMMA design_opt= designation? init= initializer_
+    { (design_opt, init)::inits }
 
 designation:
-| design = designator_list EQ_
+| design= designator_list EQ
     { List.rev design }
 
-designator_list:
-| design = designator
+designator_list: (* NOTE: the list is in reverse *)
+| design= designator
     { [design] }
-| designq = designator_list designt = designator
-    { designt::designq }
+| designs= designator_list design= designator
+    { design::designs }
 
 designator:
-| LBRACK expr = constant_expression RBRACK
-    { ATINDEX_INIT (fst expr) }
-| DOT id = OTHER_NAME
-    { INFIELD_INIT (fst id) }
+| LBRACKET expr= constant_expression RBRACKET
+    { Desig_array expr }
+| DOT id= OTHER_NAME
+    { Desig_member id }
 
-(* 6.8 *)
+
+(* §6.7.10 Static assertions *)
+static_assert_declaration:
+| STATIC_ASSERT LPAREN expr= constant_expression COMMA lit= STRING_LITERAL RPAREN SEMICOLON
+    { Static_assert (expr, lit) }
+
+
+(* §6.8 Statements and blocks *)
 statement_dangerous:
-| stmt = labeled_statement(statement_dangerous)
-| stmt = compound_statement
-| stmt = expression_statement
-| stmt = selection_statement_dangerous
-| stmt = iteration_statement(statement_dangerous)
-| stmt = jump_statement
-| stmt = par_statement
+| stmt= labeled_statement(statement_dangerous)
+| stmt= compound_statement
+| stmt= expression_statement
+| stmt= selection_statement_dangerous
+| stmt= iteration_statement(statement_dangerous)
+| stmt= jump_statement
     { stmt }
 
 statement_safe:
-| stmt = labeled_statement(statement_safe)
-| stmt = compound_statement
-| stmt = expression_statement
-| stmt = selection_statement_safe
-| stmt = iteration_statement(statement_safe)
-| stmt = jump_statement
-| stmt = par_statement
+| stmt= labeled_statement(statement_safe)
+| stmt= compound_statement
+| stmt= expression_statement
+| stmt= selection_statement_safe
+| stmt= iteration_statement(statement_safe)
+| stmt= jump_statement
     { stmt }
 
-(* 6.8.1 *)
+
+(* §6.8.1 Labeled statements *)
 labeled_statement(last_statement):
-| lbl = OTHER_NAME COLON stmt = last_statement
-    { LABEL (fst lbl, stmt, snd lbl) }
-| loc = CASE_ expr = constant_expression COLON stmt = last_statement
-    { CASE (fst expr, stmt, loc) }
-| loc = DEFAULT_ COLON stmt = last_statement
-    { DEFAULT (stmt, loc) }
+| id= OTHER_NAME COLON stmt= last_statement
+    { CabsSlabel (id, stmt) }
+| CASE expr= constant_expression COLON stmt= last_statement
+    { CabsScase (expr, stmt) }
+| DEFAULT COLON stmt= last_statement
+    { CabsSdefault stmt }
 
-(* 6.8.2 *)
+
+(* §6.8.2 Compound statement *)
 compound_statement:
-| loc = LBRACE lst = block_item_list RBRACE
-    { BLOCK (List.rev lst, loc) }
-| loc = LBRACE RBRACE
-    { BLOCK ([], loc) }
+| LBRACE bis_opt= block_item_list? RBRACE
+    { CabsSblock (option [] List.rev bis_opt) }
 
-block_item_list:
-| stmt = block_item
+block_item_list: (* NOTE: the list is in reverse *)
+| stmt= block_item
     { [stmt] }
-| stmtq = block_item_list stmtt = block_item
-    { stmtt::stmtq }
+| stmts= block_item_list stmt= block_item
+    { stmt::stmts }
 
 block_item:
-| decl = declaration
-    { DEFINITION decl }
-| stmt = statement_dangerous
+| decl= declaration
+    { CabsSdecl decl }
+| stmt= statement_dangerous
     { stmt }
 
-(* 6.8.3 *)
-expression_statement:
-| expr = expression SEMICOLON
-    { COMPUTATION (fst expr, snd expr) }
-| loc = SEMICOLON
-    { NOP loc }
 
-(* 6.8.4 *)
+(* §6.8.3 Expression and null statements *)
+expression_statement:
+| expr_opt= expression? SEMICOLON
+    { option CabsSnull (fun z -> CabsSexpr z) expr_opt }
+
+
+(* §6.8.4 Selection statements *)
 selection_statement_dangerous:
-| loc = IF LPAREN expr = expression RPAREN stmt = statement_dangerous
-    { If0 (fst expr, stmt, None, loc) }
-| loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_dangerous
-    { If0 (fst expr, stmt1, Some stmt2, loc) }
-| loc = SWITCH_ LPAREN expr = expression RPAREN stmt = statement_dangerous
-    { SWITCH (fst expr, stmt, loc) }
+| IF LPAREN expr= expression RPAREN stmt= statement_dangerous
+    { CabsSif (expr, stmt, None) }
+| IF LPAREN expr= expression RPAREN stmt1= statement_safe ELSE stmt2= statement_dangerous
+    { CabsSif (expr, stmt1, Some stmt2) }
+| SWITCH LPAREN expr= expression RPAREN stmt= statement_dangerous
+    { CabsSswitch (expr, stmt) }
 
 selection_statement_safe:
-| loc = IF LPAREN expr = expression RPAREN stmt1 = statement_safe ELSE stmt2 = statement_safe
-    { If0 (fst expr, stmt1, Some stmt2, loc) }
-| loc = SWITCH_ LPAREN expr = expression RPAREN stmt = statement_safe
-    { SWITCH (fst expr, stmt, loc) }
+| IF LPAREN expr= expression RPAREN stmt1= statement_safe ELSE stmt2= statement_safe
+    { CabsSif (expr, stmt1, Some stmt2) }
+| SWITCH LPAREN expr= expression RPAREN stmt= statement_safe
+    { CabsSswitch (expr, stmt) }
 
-(* 6.8.5 *)
+
+(* §6.8.5 Iteration statements *)
 iteration_statement(last_statement):
-| loc = WHILE_ LPAREN expr = expression RPAREN stmt = last_statement
-    { WHILE (fst expr, stmt, loc) }
-| loc = DO stmt = statement_dangerous WHILE_ LPAREN expr = expression RPAREN SEMICOLON
-    { DOWHILE (fst expr, stmt, loc) }
-| loc = FOR_ LPAREN expr1 = expression SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (Some (FC_EXP (fst expr1)), Some (fst expr2), Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN decl1 = declaration expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (Some (FC_DECL decl1), Some (fst expr2), Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (None, Some (fst expr2), Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN expr1 = expression SEMICOLON SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (Some (FC_EXP (fst expr1)), None, Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN decl1 = declaration SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (Some (FC_DECL decl1), None, Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN SEMICOLON SEMICOLON expr3 = expression RPAREN stmt = last_statement
-    { FOR (None, None, Some (fst expr3), stmt, loc) }
-| loc = FOR_ LPAREN expr1 = expression SEMICOLON expr2 = expression SEMICOLON RPAREN stmt = last_statement
-    { FOR (Some (FC_EXP (fst expr1)), Some (fst expr2), None, stmt, loc) }
-| loc = FOR_ LPAREN decl1 = declaration expr2 = expression SEMICOLON RPAREN stmt = last_statement
-    { FOR (Some (FC_DECL decl1), Some (fst expr2), None, stmt, loc) }
-| loc = FOR_ LPAREN SEMICOLON expr2 = expression SEMICOLON RPAREN stmt = last_statement
-    { FOR (None, Some (fst expr2), None, stmt, loc) }
-| loc = FOR_ LPAREN expr1 = expression SEMICOLON SEMICOLON RPAREN stmt = last_statement
-    { FOR (Some (FC_EXP (fst expr1)), None, None, stmt, loc) }
-| loc = FOR_ LPAREN decl1 = declaration SEMICOLON RPAREN stmt = last_statement
-    { FOR (Some (FC_DECL decl1), None, None, stmt, loc) }
-| loc = FOR_ LPAREN SEMICOLON SEMICOLON RPAREN stmt = last_statement
-    { FOR (None, None, None, stmt, loc) }
+| WHILE LPAREN expr= expression RPAREN stmt= last_statement
+    { CabsSwhile (expr, stmt) }
+| DO stmt= statement_dangerous WHILE LPAREN expr= expression RPAREN SEMICOLON
+    { CabsSdo (expr, stmt) }
+| FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= last_statement
+    { CabsSfor (option None (fun z -> Some (FC_expr z)) expr1_opt, expr2_opt, expr3_opt, stmt) }
+| FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= last_statement
+    { CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt) }
 
-(* 6.8.6 *)
+
+(* §6.8.6 Jump statements *)
 jump_statement:
-| loc = GOTO_ id = OTHER_NAME SEMICOLON
-    { GOTO (fst id, loc) }
-| loc = CONTINUE_ SEMICOLON
-    { CONTINUE loc }
-| loc = BREAK_ SEMICOLON
-    { BREAK loc }
-| loc = RETURN_ expr = expression SEMICOLON
-    { RETURN (Some (fst expr), loc) }
-| loc = RETURN_ SEMICOLON
-    { RETURN (None, loc) }
-
-(* TODO[non-standard] cppmem thread notation *)
-par_statement:
-| loc = LBRACES ss = par_statement_list RBRACES
-    { PAR (ss, loc) }
-
-par_statement_list:
-| s = statement_dangerous
-    { [s] }
-| s = statement_dangerous BARES ss = par_statement_list
-    { s :: ss }
+| GOTO id= OTHER_NAME SEMICOLON
+    { CabsSgoto id }
+| CONTINUE SEMICOLON
+    { CabsScontinue }
+| BREAK SEMICOLON
+    { CabsSbreak }
+| RETURN expr_opt= expression? SEMICOLON
+    { CabsSreturn expr_opt }
 
 
-(* 6.9 *)
-translation_unit_file:
-| lst = translation_unit EOF
-    { List.rev lst }
-
-translation_unit:
-| def = external_declaration
+(* §6.9 External definitions *)
+translation_unit: (* NOTE: the list is in reverse *)
+| def= external_declaration
     { [def] }
-| defq = translation_unit deft = external_declaration
-    { deft::defq }
+| defs = translation_unit def= external_declaration
+    { def :: defs }
 
 external_declaration:
-| def = function_definition
-| def = declaration
-    { def }
+| fdef= function_definition
+    { EDecl_func fdef }
+| decl= declaration
+    { EDecl_decl decl }
 
-(* 6.9.1 *)
+
+(* §6.9.1 Function definitions *)
+(* TODO: declaration_list (this is old K&R ??) *)
 function_definition:
-(* TODO : K&R *)
-(*| declaration_specifiers declarator declaration_list compound_statement
-    {}*)
-| specs = declaration_specifiers decl = declarator stmt = compound_statement
-    { FUNDEF (fst specs, decl, stmt, snd specs) }
-
-(* TODO : K&R 
-declaration_list:
-| declaration
-| declaration_list declaration
-    {}
-*)
+| specifs= declaration_specifiers decltor= declarator stmt= compound_statement
+    { FunDef (specifs, decltor, stmt) }
