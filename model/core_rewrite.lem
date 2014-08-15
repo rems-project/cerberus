@@ -1,0 +1,166 @@
+open import Pervasives
+
+open import Global Core Core_aux
+
+let rec remove_skips expr =
+  match expr with
+  | Elet sym e1 e2 ->
+      Elet sym e1 (remove_skips e2)
+
+  | Eif pe1 e2 e3 ->
+      Eif pe1 (remove_skips e2) (remove_skips e3)
+
+  | Eunseq es ->
+      Eunseq (List.map remove_skips es)
+
+  | Ewseq _ Eskip e2 ->
+      remove_skips e2
+  
+  | Esseq _ e1 Eskip ->
+      remove_skips e1
+  
+  | Ewseq _as e1 e2 ->
+      match remove_skips e1 with
+        | Eskip ->
+            remove_skips e2
+        | e1' ->
+            Ewseq _as e1' (remove_skips e2)
+      end
+  
+  | Esseq _ Eskip e2 ->
+      remove_skips e2
+  
+  | Esseq _ e1 Eskip ->
+      remove_skips e1
+  
+  | Esseq _as e1 e2 ->
+      match remove_skips e1 with
+        | Eskip ->
+            remove_skips e2
+        | e1' ->
+            Esseq _as e1' (remove_skips e2)
+      end
+  
+  | Eindet e ->
+      Eindet (remove_skips e)
+  | Ebound n e ->
+      Ebound n (remove_skips e)
+  | Esave k sym_tys e ->
+      Esave k sym_tys (remove_skips e)
+  | End es ->
+      End (List.map remove_skips es)
+  | Epar es ->
+      Epar (List.map remove_skips es)
+  | _ ->
+      expr
+  end
+
+
+let rec remove_unseqs expr =
+  match expr with
+  | Elet sym e1 e2 ->
+      Elet sym e1 (remove_unseqs e2)
+
+  | Eif pe1 e2 e3 ->
+      Eif pe1 (remove_unseqs e2) (remove_unseqs e3)
+
+  | Eunseq es ->
+      if List.all is_pure es then
+        Etuple es
+      else
+        Eunseq (List.map remove_unseqs es)
+  
+  | Ewseq _as e1 e2 ->
+      Ewseq _as (remove_unseqs e1) (remove_unseqs e2)
+  
+  | Esseq _as e1 e2 ->
+      Esseq _as (remove_unseqs e1) (remove_unseqs e2)
+  
+  | Eindet e ->
+      Eindet (remove_unseqs e)
+  | Ebound n e ->
+      Ebound n (remove_unseqs e)
+  | Esave k sym_tys e ->
+      Esave k sym_tys (remove_unseqs e)
+  | End es ->
+      End (List.map remove_unseqs es)
+  | Epar es ->
+      Epar (List.map remove_unseqs es)
+  | _ ->
+      expr
+  end
+
+
+let rec remove_seqs expr =
+  match expr with
+  | Elet sym e1 e2 ->
+      Elet sym e1 (remove_seqs e2)
+
+  | Eif pe1 e2 e3 ->
+      Eif pe1 (remove_seqs e2) (remove_seqs e3)
+
+  | Eunseq es ->
+      Eunseq (List.map remove_seqs es)
+  
+  | Ewseq _as e1 e2 ->
+      let e1' = remove_seqs e1 in
+      let e2' = remove_seqs e2 in
+      match _as with
+        | [Just a] ->
+            if is_pure e1' then
+              subst_sym a e1' e2'
+            else
+              Ewseq _as e1' e2'
+        | _ ->
+            if is_value e1' then
+              subst_syms _as e1' e2'
+            else
+              Ewseq _as e1' e2'
+      end
+  
+  | Esseq _as e1 e2 ->
+      let e1' = remove_seqs e1 in
+      let e2' = remove_seqs e2 in
+      match _as with
+        | [Just a] ->
+            if is_pure e1' then
+              subst_sym a e1' e2'
+            else
+              Esseq _as e1' e2'
+        | _ ->
+            if is_value e1' then
+              subst_syms _as e1' e2'
+            else
+              Esseq _as e1' e2'
+      end
+  
+  | Eindet e ->
+      Eindet (remove_seqs e)
+  | Ebound n e ->
+      Ebound n (remove_seqs e)
+  | Esave k sym_tys e ->
+      Esave k sym_tys (remove_seqs e)
+  | End es ->
+      End (List.map remove_seqs es)
+  | Epar es ->
+      Epar (List.map remove_seqs es)
+  | _ ->
+      expr
+  end
+
+
+let rewrite_expr expr =
+  (remove_seqs -| remove_unseqs -| remove_skips) expr
+
+let rewrite_fun_map fun_map =
+  Map.map (fun (ret_ty, params, expr) ->
+    (ret_ty, params, rewrite_expr expr)
+  ) fun_map
+
+
+
+
+(* TODO *)
+let rewrite_file file =
+  <| file with funs= rewrite_fun_map file.funs
+|>
