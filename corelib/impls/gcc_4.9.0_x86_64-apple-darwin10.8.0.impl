@@ -475,14 +475,14 @@ fun <Integer.decode> (ty: ctype, n: integer) : integer :=
 fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
 --  n % exp(2, ctype_width(ty))
   let n = encodeTwos("unsigned long", n) in
-    <Integer.decode>(ty, n % exp(2, ctype_width(ty)))
+    <Integer.decode>(ty, n % 2^ctype_width(ty))
   end
 
 
 -- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
 fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
   let n = encodeTwos(ty, n) in
-    decodeTwos(ty, (n / exp(2, m)) + ones_prefix(0, m, ctype_width(ty)))
+    decodeTwos(ty, (n / 2^m) + ones_prefix(0, m, ctype_width(ty)))
   end
 
 -- implementation of the ~ operator (only used in the signed case)

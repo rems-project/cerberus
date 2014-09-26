@@ -1,6 +1,6 @@
 -- Math utilities
 
-
+{-
 fun exp_aux(n: integer, m: integer, acc: integer) : integer :=
   if m = 0 then
     acc
@@ -12,15 +12,13 @@ fun exp_aux(n: integer, m: integer, acc: integer) : integer :=
 -- TODO: diverges if m < 0
 fun exp (n: integer, m: integer) : integer :=
   exp_aux(n, m, 1)
-{-
-  if m = 0 then
-    1
-  else
-    n * exp(n, m - 1)
-  end
+--  if m = 0 then
+--    1
+--  else
+--    n * exp(n, m - 1)
+--  end
+
 -}
-
-
 
 {-
 fun is_signed (ty: ctype) : boolean :=
@@ -164,13 +162,13 @@ fun is_representable (n: integer, ty: ctype): boolean :=
 fun encodeTwos (ty : ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
   let width = ctype_width(ty) in
-    if (n < 0 - exp(2, width - 1)) \/ (exp(2, width - 1) - 1 < n) then
+    if (n < 0 - 2^(width - 1)) \/ (2^(width - 1) - 1 < n) then
       error
     else
       if 0 <= n then
         n
       else
-        exp(2, width) + n
+        2^width + n
       end
     end
   end
@@ -179,13 +177,13 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
 fun decodeTwos (ty: ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
   let width = ctype_width(ty) in
-    if (n < 0) \/ (exp(2, width) <= n) then
+    if (n < 0) \/ (2^width <= n) then
       error
     else
-      if n <= exp(2, width - 1) - 1 then
+      if n <= 2^(width - 1) - 1 then
         n
       else
-        n - exp(2, width)
+        n - 2^width
       end
     end
   end
@@ -268,7 +266,7 @@ fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
 --                     k times     width - k times
 fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
   if (0 <= i) /\ (i < k) then
-    exp(2, width - 1 - i) + ones_prefix(i + 1, k, width)
+    2^(width - 1 - i) + ones_prefix(i + 1, k, width)
   else
     0
   end

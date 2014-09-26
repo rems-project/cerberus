@@ -3,20 +3,22 @@ open import Pervasives Common AilTypes AilSyntax AilTypesAux
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
 
-let adjusted t : bool = not (array t) && not (is_function t)
+let adjusted t : bool = not (is_array t) && not (is_function t)
 
 let wf_lvalue_aux q t : bool =
   match t with
-  | Pointer _  t' -> not (object_ t') --> not (q.restrict)
+  | Pointer _  t' -> not (is_object t') --> not (q.restrict)
   | _             -> if is_function t
-                       then unqualified q 
+                       then is_unqualified q 
                        else not (q.restrict)
   end
 
 let rec wf_parameters_aux wf_type p : bool =
   match p with
   | []          -> true
-  | (q, t) :: p -> adjusted t && not (incomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
+    (* TODO: check if qualifiers are allowed here *)
+  | [(_, Void)] -> true
+  | (q, t) :: p -> adjusted t && not (is_incomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
   end
 
 let rec wf_type t : bool =
@@ -27,17 +29,17 @@ let rec wf_type t : bool =
   | Basic _ ->
       true
   | Array t _ ->
-      complete t && wf_type t
+      is_complete t && wf_type t
   | Function t p _ ->
-      not (array  t) && not (is_function t) && wf_type  t && wf_parameters p
+      not (is_array  t) && not (is_function t) && wf_type  t && wf_parameters p
   | Pointer q t ->
       wf_type t && wf_lvalue_aux q t
   | Atomic _ ->
-      assert_false "TODO"
-  | Struct xs ->
+      assert_false "TODO: wf_type, Atomic"
+  | Struct _ xs ->
       (* TODO: check *)
       all (fun (_, ty) -> wf_type ty) xs
-  | Union xs ->
+  | Union _ xs ->
       (* TODO: check *)
       all (fun (_, ty) -> wf_type ty) xs
   | Builtin _ ->

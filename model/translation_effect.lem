@@ -2,10 +2,15 @@
 open import Pervasives Global
 import Boot UniqueId Symbol Undefined
 
+open import Core
+
+
 type state = <|
   symbol_supply:   UniqueId.supply Symbol.t; (* counter for Core's symbolic names (all of them) *)
   visible_objects: list (list Symbol.t);     (* visible C objects with scoping (used to properly
                                                 annotate Esave/Erun ctors) *)
+  
+  string_literals: list (sym * expr unit)
 |>
 
 
@@ -68,6 +73,7 @@ val init: UniqueId.supply Symbol.t -> state
 let init suppl = <|
   symbol_supply=   suppl;
   visible_objects= [[]];
+  string_literals= [];
 |>
 
 
@@ -97,7 +103,27 @@ let pop_block_objects = fun st ->
         | _       -> Boot.assert_false "[Translation.E.pop_block_objects] found an ill-formed scope stack."
       end |>)
 
+
+let inline (>>=)    = bind
+let inline (>>) m f = bind m (fun _ -> f)
+
+val with_block_objects: forall 'a. list Symbol.t -> t 'a -> t 'a
+let with_block_objects syms m =
+  push_block_objects syms >>
+  m                       >>= fun ret ->
+  pop_block_objects       >>
+  return ret
+
 (* returns the list of all the C objects in scope. *)
 val get_visible_objects: t (list Symbol.t)
 let get_visible_objects = fun st ->
   Undefined.return (foldl (++) [] st.visible_objects, st)
+
+
+
+
+
+val register_string_literal: sym -> expr unit -> t unit
+let register_string_literal a e = fun st ->
+  Undefined.return ((), <| st with string_literals= (a, e) :: st.string_literals |>)
+

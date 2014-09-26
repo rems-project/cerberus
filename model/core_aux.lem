@@ -18,8 +18,8 @@ let ctype_min e = Ecall (Impl Implementation_.Ctype_min) [e]
 val ctype_max: forall 'a. expr 'a -> expr 'a
 let ctype_max e = Ecall (Impl Implementation_.Ctype_max) [e]
 
-val bitwise_complement: forall 'a. expr 'a -> expr 'a
-let bitwise_complement e = Ecall (Impl Implementation_.Bitwise_complement) [e]
+val bitwise_complement: forall 'a. expr 'a -> expr 'a -> expr 'a
+let bitwise_complement e1 e2 = Ecall (Impl Implementation_.Bitwise_complement) [e1; e2]
 
 val integer_encode: forall 'a. expr 'a -> expr 'a -> expr 'a
 let integer_encode e1 e2 =
@@ -43,15 +43,12 @@ let pload ty x mo      = Eaction (Paction Pos (Action default (Load ty x mo   ))
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
 val zero: forall 'a. expr 'a
 let zero =
-  Econst (Mem.MV_integer (Symbolic.constant 0))
+  Econst (Mem.MV_integer (Symbolic.SYMBconst 0))
 val one: forall 'a. expr 'a
 let one =
-  Econst (Mem.MV_integer (Symbolic.constant 1))
+  Econst (Mem.MV_integer (Symbolic.SYMBconst 1))
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
 
-val integer_const: forall 'a. integer -> expr 'a
-let integer_const n =
-  Econst (Mem.MV_integer (Symbolic.constant n))
 
 val cfunction_const: forall 'a. Symbol.t -> expr 'a
 let cfunction_const fsym =
@@ -249,6 +246,14 @@ let rec subst_sym a v e =
         Eundef u
     | Eerror ->
         Eerror
+    | Eraise str ->
+        Eraise str
+(*
+    | Etry e str_es ->
+        Etry e str_es
+*)
+    | Eregister str nm ->
+        Eregister str nm
     | Eskip ->
         Eskip
     | Elet _a e1 e2 ->
@@ -267,10 +272,10 @@ let rec subst_sym a v e =
         Esseq _as (subst_sym a v e1) (if in_pattern a _as then e2 else subst_sym a v e2)
     | Easeq _a act p  ->
         Easeq _a (subst_sym_action a v act) (if Just a = _a then p else subst_sym_paction a v p)
-    | Eindet (* i *) _ -> (* Eindet (* i *) (subst_sym a v e) *)
-        Boot.assert_false "[Core_aux.subst_sym] #Eindet"
-    | Ebound _ _ -> (* Ebound i (subst_sym a v e) *)
-        Boot.assert_false "[Core_aux.subst_sym] #Ebound"
+    | Eindet e ->
+        Eindet (subst_sym a v e)
+    | Ebound i e ->
+        Ebound i (subst_sym a v e)
     | Esave k a_tys e ->
         Esave k a_tys (subst_sym a v e)
     | Erun bs k a_vs ->
@@ -305,6 +310,11 @@ and subst_sym_action_ a v act =
         CompareExchangeStrong (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
     | CompareExchangeWeak e_ty e_obj e_expected e_desired mo1 mo2 ->
         CompareExchangeWeak (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
+  | Pointer_eq e1 e2 ->
+      Pointer_eq (subst_sym a v e1) (subst_sym a v e2)
+  | Pointer_neq e1 e2 ->
+      Pointer_neq (subst_sym a v e1) (subst_sym a v e2)
+      
   end
 and subst_sym_action a v act =
   match act with
@@ -370,6 +380,14 @@ let rec subst_wait tid v = function
        Eundef ub
    | Eerror ->
        Eerror
+   | Eraise str ->
+       Eraise str
+(*
+   | Etry e str_es ->
+       Etry e str_es
+*)
+   | Eregister evnt nm ->
+       Eregister evnt nm
    | Eskip ->
        Eskip
    | Elet sym pe1 e2 ->
@@ -425,6 +443,10 @@ let subst_wait_continuation_element tid v = function
       Kwseq syms_opt (subst_wait tid v e2)
   | Ksseq syms_opt e2 ->
       Ksseq syms_opt (subst_wait tid v e2)
+(*
+  | Ktry str_es ->
+      Ktry (List.map (fun (str, e) -> (str, subst_wait tid v e)) str_es)
+*)
 end
 
 let subst_wait_continuation tid v cont =
@@ -471,6 +493,14 @@ let rec is_pure e =
        true
    | Eerror ->
        true
+   | Eraise _ ->
+       false
+(*
+   | Etry _ _ ->
+       false
+*)
+   | Eregister _ _ ->
+       false
    | Eskip ->
        false
    | Elet _ _ e2 ->
@@ -552,6 +582,14 @@ let rec is_value e =
         false
     | Eerror ->
         false
+    | Eraise str ->
+        false
+(*
+    | Etry e str_es ->
+        false
+*)
+    | Eregister _ _ ->
+        false
     | Eskip ->
         false
     | Elet _ _ _ ->
@@ -629,6 +667,14 @@ let rec find_labeled_continuation k expr =
         Nothing
     | Eerror ->
         Nothing
+    | Eraise _ ->
+       Nothing
+(*
+    | Etry e str_es ->
+       Nothing (* TODO *)
+*)
+    | Eregister _ _ ->
+        Nothing
     | Eskip ->
         Nothing
     | Elet _ _ e2 ->
@@ -705,6 +751,10 @@ let apply_continuation cont expr =
           Esseq _as expr e2
       | Kunseq es1 es2 ->
           Eunseq $ es1 ++ (expr :: es2)
+(*
+      | Ktry str_es ->
+          Etry expr str_es
+*)
     end in
   foldl (fun acc x -> f x acc) expr cont
 
@@ -765,3 +815,13 @@ let append_to_current_continuation cont = function
   | Stack_cons ccont sk ->
       Exception.return $ Stack_cons (cont :: ccont) sk
 end
+
+
+val subst_sym_fun_map: forall 'a. sym -> expr 'a -> fun_map 'a -> fun_map 'a
+let subst_sym_fun_map sym v funs =
+  Map.map (fun (cTy, params, e) ->
+    (cTy, params, subst_sym sym v e)
+  ) funs
+
+
+(* val find_try: string ->  *)

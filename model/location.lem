@@ -1,7 +1,20 @@
 open import Pervasives (* Lexing_ *)
 
-open import {ocaml} `Lexing`
 
+type t =
+  maybe (nat * nat) (* line, char positions *)
+
+val unknown: t
+let unknown = Nothing
+
+
+val make: nat -> nat -> t
+let make l c =
+  Just (l, c)
+
+(* open import {ocaml} `Lexing` *)
+
+(*
 type position = <|
   pos_fname: string;
   pos_lnum:  nat;
@@ -16,14 +29,10 @@ type loc = <|
 |>
 type t = maybe loc
 
-val unknowned: t
-let unknowned = Nothing
+val unknown: t
+let unknown = Nothing
 
 
-val dummy: t
-let dummy =
-  let pos = <| pos_fname= ""; pos_lnum= 0; pos_bol= 0; pos_cnum= 0 |> in
-  Just <| start= pos; stop= pos |>
 
 val make: position -> position -> t
 let make s e = Just <|start = s; stop = e|>
@@ -35,6 +44,8 @@ let first_line_offset <|start = s; stop = _|> = s.pos_lnum
 let last_line_offset  <|start = _; stop = e|> = e.pos_lnum
 let first_char        <|start = s; stop = _|> = s.pos_cnum
 let last_char         <|start = _; stop = e|> = e.pos_cnum
+*)
+
 
 
 

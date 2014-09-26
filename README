@@ -1,3 +1,17 @@
+Z3-INSTALLATION
+
+  git clone -b ml-ng https://git01.codeplex.com/z3 z3-ml-ng
+  cd z3-ml-ng
+  python scripts/mk_make.py --ml
+  cd build; make
+  sudo make install
+
+
+
+
+
+
+
 INSTALLATION
   (the version numbers are just an example of known working configuration, older
    packages may work just fine)

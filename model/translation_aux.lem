@@ -167,12 +167,6 @@ let ctype_of a_expr =
 
 
 val is_defined_ail_function: forall 'A 'B. AilSyntax.identifier -> AilSyntax.program 'A 'B -> bool
-let is_defined_ail_function id (_, S) =
-  match AilSyntax.sigma_lookup S id with
-    | Nothing ->
-        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a non-declared identifier."
-    | Just (AilSyntax.SDecl_global _ _) ->
-        Boot.assert_false "[Translation_aux.ail_is_defined_function] called on a global variable."
-    | Just (AilSyntax.SDecl_fun _ fdecl) ->
-        isJust fdecl.AilSyntax.fun_body
-  end
+let is_defined_ail_function sym (_, sigm) =
+  (* NOTE: the `Nothing' case could technically also mean that [sym] is not event registered *)
+  isJust (Context.lookup AilSyntax.eq_identifier sigm.AilSyntax.function_definitions sym)

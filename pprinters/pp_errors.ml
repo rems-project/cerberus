@@ -1,6 +1,7 @@
 open Errors
 open TypingError
 
+(*
 let location_to_string  = function
   | Some p ->
       let f = Location.first_line p in
@@ -9,7 +10,16 @@ let location_to_string  = function
         "line " ^ string_of_int f
       else
         "lines " ^ string_of_int f ^ "-" ^ string_of_int l
-  | None -> "Unknowned location"
+  | None -> "Unknown location"
+*)
+
+let location_to_string = function
+  | Some (l, c) ->
+      "line= " ^ string_of_int l ^ ", char= " ^ string_of_int c
+  | None ->
+      "Unknown location"
+
+
 
 
 let desugar_cause_to_string = function
@@ -21,8 +31,8 @@ let desugar_cause_to_string = function
       "other violation: " ^ msg
   
 (* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_FunctionRedefinition str ->
-       "(TODO msg) redefinition of '" ^ str ^ "'\n"
+  | Desugar_FunctionRedefinition sym ->
+       "(TODO msg) redefinition of '" ^ (Boot_pprint.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
   | Desugar_BlockScoped_Thread_local_alone ->
       "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
        ``In the declaration of an object with block scope, if the declaration \
@@ -66,11 +76,17 @@ let desugar_cause_to_string = function
        shall only declare identifiers for objects having storage \
        class auto or register.. in\n"
 *)
-  | Desugar_NotSupported str ->
+  | Desugar_NeverSupported str ->
+      "this feature won't be supported: " ^ str ^ "."
+
+  | Desugar_NotyetSupported str ->
       "this feature is not supported: " ^ str ^ "."
 
   | Desugar_TODOCTOR str ->
       "Desugar_TODOCOTR[" ^ str ^ "]"
+  
+  | Desugar_impossible ->
+      "impossible error"
 
 
 
@@ -101,6 +117,9 @@ let to_string (loc, c) =
 
     | AIL_TYPING (TError_TODO n) ->
         "Ail typing error (TODO " ^ string_of_int n ^ ")"
+
+    | AIL_TYPING (TError std) ->
+        "[Ail typing error]\n \"" ^ Pp_std.quote std ^ "\""
 
 
 (*

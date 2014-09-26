@@ -1,6 +1,6 @@
 open Global_ocaml
 
-(* Environment variables *)
+(* == Environment variables ===================================================================== *)
 let corelib_path =
     try
       Sys.getenv "CORELIB_PATH"
@@ -14,15 +14,15 @@ let cerb_path =
       error "expecting the environment variable CERB_PATH set to point to the location cerberus."
 
 
-(* Symbol counter for the Core parser *)
+(* == Symbol counter for the Core parser ======================================================== *)
 let core_sym_counter = ref 0
 
 
-(* load the Core standard library *)
+(* == load the Core standard library ============================================================ *)
 let load_stdlib () =
   let fname = Filename.concat corelib_path "std.core" in
   if not (Sys.file_exists fname) then
-    error $ "couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "')."
+    error ("couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "').")
   else
     print_debug 5 ("reading Core standard library from `" ^ fname ^ "'.");
     (* An preliminary instance of the Core parser *)
@@ -39,21 +39,24 @@ let load_stdlib () =
     (* TODO: yuck *)
     match Core_std_parser.parse (Input.file fname) with
       | Exception.Result (Core_parser_util.Rstd z) -> z
-      | _ -> error "(TODO_MSG) found an error while parsing the Core stdlib."
+      | Exception.Result _ ->
+          error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
+      | Exception.Exception (loc, Errors.PARSER msg) ->
+          error ("Core parsing error @ " ^ Pp_errors.location_to_string loc  ^ ": " ^ msg)
 
 
-(* load the implementation file *)
+(* == load the implementation file ============================================================== *)
 let load_impl core_parse impl_name =
   let iname = Filename.concat corelib_path ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
-    error $ "couldn't find the implementation file\n (looked at: `" ^ iname ^ "')."
+    error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
     (* TODO: yuck *)
     match core_parse (Input.file iname) with
-      | Exception.Result (Core_parser_util.Rimpl z) -> z
-      | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Pp_errors.to_string err
-
-
+      | Exception.Result (Core_parser_util.Rimpl z) ->
+          z
+      | Exception.Exception err ->
+          error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
 
 
 (* use this when calling a pretty printer *)
@@ -61,31 +64,32 @@ let run_pp =
     PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
 
 
-(* Parse a C translation-unit and elaborate it into a Core program *)
+(* == parse a C translation-unit and elaborate it into a Core program =========================== *)
 let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
+      print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
       if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name) <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
-
+    
        Exception.return0 (c_preprocessing f)
     |> Exception.fmap Cparser_driver.parse
-    |> pass_message "1. C Parsing completed!"
+    |> pass_message (progress_sofar := 10; "1. C Parsing completed!")
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
     
     |> Exception.rbind (Cabs_to_ail.desugar "main")
-    |> pass_message "2. Cabs -> Ail completed!"
+    |> pass_message (progress_sofar := 11; "2. Cabs -> Ail completed!")
     |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
-
+    
     |> Exception.rbind (fun (counter, z) ->
-          Exception.bind0 (ErrorMonad.to_exception (fun z -> (Location.dummy, Errors.AIL_TYPING z))
+          Exception.bind0 (ErrorMonad.to_exception (fun z -> (Location.unknown, Errors.AIL_TYPING z))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
           (fun z -> Exception.return0 (counter, z)))
-    |> pass_message "3. Ail typechecking completed!"
+    |> pass_message (progress_sofar := 12; "3. Ail typechecking completed!")
     
     |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.core_impl)
-    |> pass_message "4. Translation to Core completed!"
+    |> pass_message (progress_sofar := 13; "4. Translation to Core completed!")
 (*
 
 
@@ -109,10 +113,11 @@ let core_frontend f =
           Core.main=   sym_main;
           Core.stdlib= !!cerb_conf.core_stdlib;
           Core.impl=   !!cerb_conf.core_impl;
-          Core.defs=   [(* TODO *)];
+          Core.globs=   [(* TODO *)];
           Core.funs=   fun_map
       }
-    | _ -> assert false
+    | _ ->
+        assert false
 
 
 
@@ -133,8 +138,10 @@ let backend core_file =
 
 
 let pipeline filename =
-  let f = Input.file filename in
+  if not (Sys.file_exists filename) then
+    error ("The file `" ^ filename ^ "' doesn't exist.");
   
+  let f = Input.file filename in
   begin
     if Filename.check_suffix filename ".c" then (
       print_debug 2 "Using the C frontend";
@@ -143,7 +150,7 @@ let pipeline filename =
        print_debug 2 "Using the Core frontend";
        core_frontend f
       ) else
-       Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported")
+       Exception.fail (Location.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun core_file ->
   
   (* TODO: for now assuming a single order comes from indet expressions *)
@@ -166,9 +173,9 @@ let pipeline filename =
   Exception.return0 (backend rewritten_core_file)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress =
   Global_ocaml.debug_level := debug_level;
-  (* TODO: move this the random driver *)
+  (* TODO: move this to the random driver *)
   Random.self_init ();
   
   (* Looking for and parsing the core standard library *)
@@ -193,14 +200,17 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file =
   let core_impl = load_impl Core_parser.parse impl_name in
   print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse;
+  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress;
   
   match pipeline file with
     | Exception.Exception err ->
         prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
-        exit 1
+        if progress then
+          exit !progress_sofar
+        else
+          exit 1
     | _ ->
-        ()
+        progress
 
 
 
@@ -226,7 +236,7 @@ let exec =
 
 let exec_mode =
   let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Random & info ["mode"] ~docv:"MODE" ~doc)
+  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Exhaustive & info ["mode"] ~docv:"MODE" ~doc)
 
 let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
@@ -236,16 +246,24 @@ let file =
   let doc = "source C or Core file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
+let progress =
+  let doc = "Progress mode: the return code indicate how far the source program went through the pipeline \
+             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed, 13 = elaborated, 14 = executed]" in
+  Arg.(value & flag & info ["progress"] ~doc)
+
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file) in
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress) in
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
-      `Error _ ->
-      exit 1
+    | `Error _ ->
+        exit 1
+    | `Ok true ->
+        (* progress mode *)
+        exit 14
     | _ ->
-      exit 0
+        exit 0
 
 
 
@@ -467,7 +485,7 @@ let pipeline stdlib impl core_parse file_name =
           core_parse m
       |> Exception.fmap (function
             | Core_parser_util.Rfile (a_main, funs) ->
-              { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.defs= [(* TODO *)];Core.funs= funs }
+              { Core.main= a_main; Core.stdlib= stdlib; Core.impl= impl; Core.globs= [(* TODO *)];Core.funs= funs }
             | _ -> assert false)
       |> pass_message "1-4. Parsing completed!"
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in

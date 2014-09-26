@@ -89,7 +89,8 @@ CERBERUS_LEM=\
   nondeterminism.lem \
   thread.lem \
   uniqueId.lem \
-  enum.lem
+  enum.lem \
+  builtins.lem
 
 # The collection of lem files
 MODEL_LEM= $(CMM_MODEL_LEM) $(CMM_EXEC_LEM) $(AIL_LEM) $(CERBERUS_LEM)
@@ -110,6 +111,7 @@ CPARSER_ML=\
 PPRINTERS_ML=\
   colour.ml \
   pp_errors.ml \
+  pp_std.ml \
   pp_symbol.ml \
   pp_cabs.ml pp_ail.ml pp_core.ml pp_run.ml \
   pp_cmm.ml
@@ -125,7 +127,7 @@ Z3_LIB=/Library/lib
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs pprint,cmdliner -libs nums,unix -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -classic-display -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs Z3,pprint,cmdliner -libs unix -cflags -bin-annot
 # OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -use-ocamlfind -pkgs pprint,z3 -libs nums,unix -cflags -bin-annot,-custom,-I,$(Z3_API_PATH) -lflags -cclib,-L$(Z3_LIB),-cclib,-lz3
 
 
@@ -251,7 +253,7 @@ ocaml_byte: $(addprefix $(BUILD_DIR)/, $(notdir $(wildcard src/*)) $(CORE_PARSER
             $(addprefix $(BUILD_DIR)/, $(CPARSER_ML)) | $(BUILD_DIR)
 #	cd $(BUILD_DIR); $(OCAMLBUILD) -I cparser cparser.cmo main.byte
 	@sed -i"" -e "s/<<HG-IDENTITY>>/`hg id`/" $(BUILD_DIR)/main.ml
-	cd $(BUILD_DIR); $(OCAMLBUILD) main.byte
+	cd $(BUILD_DIR); $(OCAMLBUILD) -lflag "-custom" main.byte
 	ln -fs _ocaml_generated/main.byte cerberus
 
 

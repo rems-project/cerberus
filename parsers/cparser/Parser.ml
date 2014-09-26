@@ -446,7 +446,7 @@ let rec _menhir_goto_initializer_list : _menhir_env -> 'ttv_tail -> _menhir_stat
 
 and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 451 "Parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
@@ -458,7 +458,7 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
 # 459 "Parser.ml"
     )) * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 463 "Parser.ml"
     )) = Obj.magic _menhir_stack in
     ((assert (Pervasives.(<>) _menhir_env._menhir_shifted (-1));
@@ -470,7 +470,7 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
 # 471 "Parser.ml"
     )) * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 475 "Parser.ml"
     )) = _menhir_stack in
     let (_tok : Tokens.token) = _tok in
@@ -479,14 +479,14 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv2487 * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 484 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let _tok = _menhir_discard _menhir_env in
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv2485 * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 491 "Parser.ml"
         )) = _menhir_stack in
         let (_tok : Tokens.token) = _tok in
@@ -545,7 +545,7 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
 # 546 "Parser.ml"
         )) * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 550 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let _ = _menhir_discard _menhir_env in
@@ -556,7 +556,7 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
 # 557 "Parser.ml"
         )) * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 561 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (((_menhir_stack, _menhir_s), _, expr), _, gas) = _menhir_stack in
@@ -613,7 +613,7 @@ and _menhir_goto_generic_assoc_list : _menhir_env -> 'ttv_tail -> _menhir_state 
 # 614 "Parser.ml"
         )) * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 618 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in
@@ -803,7 +803,7 @@ and _menhir_goto_initializer_ : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 
 and _menhir_goto_generic_association : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 808 "Parser.ml"
 ) -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s _v ->
@@ -814,7 +814,7 @@ and _menhir_goto_generic_association : _menhir_env -> 'ttv_tail -> _menhir_state
         let (_menhir_s : _menhir_state) = _menhir_s in
         let (_v : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 819 "Parser.ml"
         )) = _v in
         ((let (_menhir_env : _menhir_env) = _menhir_env in
@@ -822,12 +822,12 @@ and _menhir_goto_generic_association : _menhir_env -> 'ttv_tail -> _menhir_state
         let (_menhir_s : _menhir_state) = _menhir_s in
         let (ga : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 827 "Parser.ml"
         )) = _v in
         ((let _v : (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 832 "Parser.ml"
         ) = 
 # 253 "Parser.mly"
@@ -839,31 +839,31 @@ and _menhir_goto_generic_association : _menhir_env -> 'ttv_tail -> _menhir_state
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv2469 * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 844 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         let (_menhir_s : _menhir_state) = _menhir_s in
         let (_v : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 850 "Parser.ml"
         )) = _v in
         ((let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv2467 * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 856 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         let (_ : _menhir_state) = _menhir_s in
         let (ga : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 862 "Parser.ml"
         )) = _v in
         ((let (_menhir_stack, _menhir_s, gas) = _menhir_stack in
         let _v : (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 868 "Parser.ml"
         ) = 
 # 255 "Parser.mly"
@@ -3404,7 +3404,7 @@ and _menhir_goto_assignment_expression : _menhir_env -> 'ttv_tail -> _menhir_sta
         ((let ((_menhir_stack, _menhir_s), _, expr) = _menhir_stack in
         let _v : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 3409 "Parser.ml"
         ) = 
 # 261 "Parser.mly"
@@ -3436,7 +3436,7 @@ and _menhir_goto_assignment_expression : _menhir_env -> 'ttv_tail -> _menhir_sta
         ((let ((_menhir_stack, _menhir_s, ty), _, expr) = _menhir_stack in
         let _v : (
 # 67 "Parser.mly"
-     (Cabs.generic_association)
+     (Cabs.cabs_generic_association)
 # 3441 "Parser.ml"
         ) = 
 # 259 "Parser.mly"
@@ -19683,7 +19683,7 @@ and _menhir_errorcase : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
         let (_menhir_env : _menhir_env) = _menhir_env in
         let (_menhir_stack : 'freshtv209 * _menhir_state * (
 # 65 "Parser.mly"
-     (Cabs.generic_association list)
+     (Cabs.cabs_generic_association list)
 # 19688 "Parser.ml"
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, _) = _menhir_stack in

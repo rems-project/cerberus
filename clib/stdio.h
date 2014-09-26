@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 typedef __cerbty_size_t size_t;
 typedef __cerbty_FILE   FILE;
 typedef __cerbty_fpos_t fpos_t;

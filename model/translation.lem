@@ -6,6 +6,8 @@ import State State_operators Translation_effect
 open import Translation_aux
 import Cmm_master Naive_memory
 
+import Decode
+
 module Mem = Naive_memory (* New_memory *)
 
 import AilSyntax AilSyntaxAux AilTypes
@@ -57,7 +59,7 @@ val translate_stmt:
 
 val translate_program:
   C.fun_map unit -> A.program Location.t GenTypes.genTypeCategory ->
-  E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
+  E.t (list (C.sym * C.core_type * C.expr unit) * C.fun_map unit)
 
 val translate:
   C.fun_map unit -> C.impl unit -> (UniqueId.supply Symbol.t) * A.program Location.t GenTypes.genTypeCategory -> C.file unit
@@ -121,7 +123,6 @@ and translate_expression stdlib program a_expr =
   let conv_int         = mk_stdcall "conv_int"         in
   let overflow         = mk_stdcall "overflow"         in
   let ctype_width      = mk_stdcall "ctype_width"      in
-  let exp              = mk_stdcall "exp"              in
 (*  let quot             = mk_stdcall "quot"             in *)
   let is_representable = mk_stdcall "is_representable" in
   let usual_arithmetic = mk_stdcall "usual_arithmetic" in
@@ -132,7 +133,7 @@ and translate_expression stdlib program a_expr =
   (* TODO: we do a match instead of a let, because of a bug in Lem *)
   let result_ty = ctype_of a_expr in
   
-  if AilTypesAux.pointer result_ty && Aaux.null_pointer_constant a_expr then
+  if AilTypesAux.is_pointer result_ty && Aaux.null_pointer_constant a_expr then
     E.return $ C.Econst (Mem.MV_pointer (Mem.null_pointer (Caux.proj_ctype result_ty)))
   else
     let A.AnnotatedExpression _ expr = a_expr in
@@ -161,7 +162,7 @@ and translate_expression stdlib program a_expr =
                 if is_unsigned_integer_type result_ty then
                   C.Eop C.OpSub (Caux.ctype_max $ Caux.mk_ctype result_ty) (promote_value $ C.Esym a_e)
                 else
-                  Caux.bitwise_complement (promote_value $ C.Esym a_e)
+                  Caux.bitwise_complement (Caux.mk_ctype $ exp_type_of e) (promote_value $ C.Esym a_e)
               )
           end
       
@@ -287,14 +288,14 @@ and translate_expression stdlib program a_expr =
               (* else [...] *)
                  (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                     (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                     C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [Caux.integer_const 2; C.Esym a_e2]))
+                     C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (C.Eop C.OpExp (C.Econst $ Mem.mk_integer 2) (C.Esym a_e2)))
                                    (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one)
                   else (* e1 has a signed type *)
                     (* if a_e2 < 0 then undef *)
                     (C.Eif (C.Eop C.OpLt (C.Esym a_e2) Caux.zero)
                        (C.Eundef Undefined.Negative_left_shift)
                        (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                       (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (exp [Caux.integer_const 2; C.Esym a_e2]))
+                       (C.Elet a_res (C.Eop C.OpMod (C.Eop C.OpMul (C.Esym a_e1) (C.Eop C.OpExp (C.Econst $ Mem.mk_integer 2) (C.Esym a_e2)))
                                                     (C.Eop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
                           (* not representable(ty, a_res) then undef *)
                           (C.Eif (C.Enot (is_representable [C.Esym a_res; Caux.mk_ctype result_ty]))
@@ -329,7 +330,7 @@ and translate_expression stdlib program a_expr =
                  (C.Eundef Undefined.Shift_too_large)
               
               (* else [...] *)
-              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (exp [Caux.integer_const 2; C.Esym a_e2]) in
+              (let expr = C.Eop C.OpDiv (C.Esym a_e1) (C.Eop C.OpExp (C.Econst $ Mem.mk_integer 2) (C.Esym a_e2)) in
                if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                  (* If E1 has an unsigned type *)
                  expr
@@ -399,7 +400,7 @@ and translate_expression stdlib program a_expr =
           translate_expression e
       
       | A.AilEunary A.Address e ->
-          if AilTypesAux.object_ result_ty then
+          if AilTypesAux.is_object result_ty then
             translate_lvalue stdlib program e
           else
             translate_function_designator e
@@ -421,7 +422,7 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic ty1 && AilTypesAux.arithmetic ty2 then
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
               (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
                             performed on them. *)
               let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
@@ -478,7 +479,7 @@ and translate_expression stdlib program a_expr =
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2;
           a_sub   <- E.fresh_symbol; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               let sub_ctx x =
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Elet a_sub (C.Eop C.OpSub (C.Esym a_e1) (C.Esym a_e2))
@@ -535,7 +536,7 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
               let conv_e1 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e1] in
               let conv_e2 = conv_int [Caux.mk_ctype common_ty; C.Esym a_e2] in
@@ -551,7 +552,7 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Eif (C.Enot (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))))
@@ -567,7 +568,7 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Eif (C.Eop C.OpOr (C.Eop C.OpLt (C.Esym a_e1) (C.Esym a_e2)) (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)))
@@ -584,7 +585,7 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Eif (C.Eop C.OpLt (C.Esym a_e2) (C.Esym a_e1))
@@ -600,11 +601,11 @@ and translate_expression stdlib program a_expr =
           a_e2    <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)) Caux.one Caux.zero)
-            else if AilTypesAux.pointer (exp_type_of e1) && AilTypesAux.pointer (exp_type_of e2) then
+            else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
               Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
             else if Aaux.null_pointer_constant e1 then
               Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
@@ -615,17 +616,20 @@ and translate_expression stdlib program a_expr =
       | A.AilEbinary e1 A.Ne e2 -> do E
           a_e1    <- E.fresh_symbol;
           a_e2    <- E.fresh_symbol;
+          a_cmp   <- E.fresh_symbol;
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2))
-                         Caux.zero
-                         Caux.one
-                  )
+                  (C.Eif (C.Eop C.OpEq (C.Esym a_e1) (C.Esym a_e2)) Caux.zero Caux.one)
             else
-              Boot.assert_false "[Translation.translate_expression] #A.BINARY A.NE e1 e2 <not both of arithmetic type>: TODO"
+              E.return $
+                C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Ewseq [Just a_cmp] (
+                    C.Eaction (C.Paction C.Pos (C.Action default (C.Pointer_eq (C.Esym a_e1) (C.Esym a_e2))))
+                  )
+                    (C.Eif (C.Esym a_cmp) Caux.zero Caux.one))
           end
       
       | A.AilEassign e1 e2 -> do E
@@ -668,7 +672,7 @@ and translate_expression stdlib program a_expr =
           core_e1 <- translate_expression e1;
           core_e2 <- translate_expression e2;
           core_e3 <- translate_expression e3; in
-            if AilTypesAux.arithmetic (exp_type_of e1) && AilTypesAux.arithmetic (exp_type_of e2) then
+            if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
               E.return $
                 C.Ewseq [Just a_e1] core_e1
                   (C.Eif (C.Enot (C.Eop C.OpEq (C.Esym a_e1) Caux.zero))
@@ -697,22 +701,29 @@ and translate_expression stdlib program a_expr =
               | A.AnnotatedExpression _ (A.AilEident fid) ->
                   (* If the function is just declared in a prototype but not defined,
                      assume it is provided by the implementation. *)
-                  let fname = if is_defined_ail_function fid program
-                              then C.Sym fid
-                              else C.Impl (Implementation_.StdFunction "printf") in (* TODO: meta hack *)
+                  let fname =
+                    if is_defined_ail_function fid program then
+                      C.Sym fid
+                    (* TODO: this is dirty *)
+                    else match fid with
+                      | Symbol.Symbol _ Nothing ->
+                          Boot.assert_false "TODO: error"
+                      | Symbol.Symbol _ (Just str) ->
+                          C.Impl (Implementation_.StdFunction str)
+                    end in
                   
                   if List.length es = 0 then
                     (* if there are no arguments, we don't need all the temporary object creation stuff *)
                     E.return $ C.Eproc default fname []
                   else
                     (* TODO: variadic case *)
-                    let (return_ty, binds, is_variadic) =
-                      match A.sigma_lookup (snd program) fid with
-                        | Just (A.SDecl_fun _ fdecl) ->
-                            (fdecl.AilSyntax.fun_return_ty, fdecl.AilSyntax.fun_bindings, fdecl.AilSyntax.fun_is_variadic)
+                    let (return_ty, params, is_variadic) =
+                      match Context.lookup A.eq_identifier (snd program).A.declarations fid with
+                        | Just (A.Decl_function return_ty params is_variadic is_inline is_Noreturn) ->
+                            (return_ty, params, is_variadic)
                         | _ ->
-                            Boot.assert_false "[Translate] impossible error: TODO move to Exception.t"
-                    end in
+                           Boot.assert_false "[Translate] impossible error: TODO move to Exception.t"
+                      end in
                     let n = List.length es in
                     
                     (* symbolic names for the temporary objects and init value *)
@@ -727,27 +738,27 @@ and translate_expression stdlib program a_expr =
                           Caux.pcreate (Caux.alignof c_ty) c_ty []
                         ) es
                       else
-                        List.map (fun (_, (_, ty)) ->
+                        List.map (fun (_, ty) ->
                           let c_ty = Caux.mk_ctype ty in
-                          Caux.pcreate (Caux.alignof c_ty) c_ty []) binds in
+                          Caux.pcreate (Caux.alignof c_ty) c_ty []) params in
                     
                     (* the list of "Nothing" is empty if the function is not variadic *)
-                    let binds =
-                      List.map (fun z -> Just z) binds ++ (List.replicate (n - List.length binds) Nothing) in
+                    let params =
+                      List.map (fun z -> Just z) params ++ (List.replicate (n - List.length params) Nothing) in
                     
                     
                     (* their initialisations *)
-                    E.mapM (fun (a, bind_opt, e) ->
+                    E.mapM (fun (a, param_opt, e) ->
                       E.fresh_symbol >>= fun a_init ->
                       translate_expression e            >>= fun core_e ->
-                      let ty = match bind_opt with
-                        | Just (_, (_, ty)) -> ty
-                        | Nothing           -> ctype_of e (* TODO: check the std *)
+                      let ty = match param_opt with
+                        | Just (_, ty) -> ty
+                        | Nothing     -> ctype_of e (* TODO: check the std *)
                       end in
                       E.return $
                         C.Ewseq [Just a_init] core_e
                           (Caux.pstore (Caux.mk_ctype ty) (C.Esym a) (C.Esym a_init) Cmm.NA)
-                    ) (zip3 as_tmp binds es) >>= fun core_inits ->
+                    ) (zip3 as_tmp params es) >>= fun core_inits ->
                     
                     (* their kill actions *)
                     let core_kills = List.map (Caux.pkill -| C.Esym) as_tmp in
@@ -768,10 +779,35 @@ and translate_expression stdlib program a_expr =
           end
       
       | A.AilEconst (A.ConstantInteger (i, _, _)) ->
-          E.return (Caux.integer_const i)
+          E.return (C.Econst $ Mem.mk_integer i)
 
-      | A.AilEconst (A.ConstantString _) ->
-          Boot.assert_false "E.return (C.Econst $ Cmm_aux_old.Cstring (String.toCharList str))" (* TODO: this is a hack, this should be a pointer to a global char pointer *)
+      (* TODO *)
+      | A.AilEconst (A.ConstantCharacter (_, str)) ->
+          (* TODO: making an implementation fix here (ASCII) *)
+          E.return (C.Econst $ Mem.mk_integer (Decode.decode_character_constant str))
+      
+        (* TODO: prefix + check, §6.4.5#6 *)
+      | A.AilEstr (_, str) ->
+          E.fresh_symbol >>= fun a ->
+          (* TODO: making an implementation fix here (ASCII) *)
+          let array = Mem.mk_array $    (List.map (fun c ->
+                                           Mem.mk_integer (Decode.decode_character_constant $ String.toString [c])
+                                         ) $ String.toCharList str)
+                                     ++ [Mem.mk_integer 0] in
+          E.register_string_literal a (C.Econst array) >>
+          E.return (C.Esym a)
+
+(*
+
+n := | str |
+
+let strong a  = create("char[n+1]", <alignof>("char[n+1]")) in
+store("char[n+1]", a, array(...)) ;
+a
+
+
+          E.return (C.Econst $ C.Cstring (String.toCharList str)) (* TODO: this is a hack, this should be a pointer to a global char pointer *)
+*)
       
       
       | A.AilEsizeof _ (Aty.Basic (Aty.Integer Aty.Char))                 -> E.return Caux.one
@@ -843,7 +879,7 @@ open State_operators
 
 type collect_cases_state = <|
   found_default: bool;
-  cases: list AilSyntax.integerConstant
+  cases: list A.integerConstant
 |>
 
 val     collect_cases_: A.statement Location.t GenTypes.genTypeCategory -> St.t unit collect_cases_state
@@ -1054,9 +1090,9 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         a_e        <- E.fresh_symbol;
         visible_as <- E.get_visible_objects; in
           let A.AnnotatedExpression ty _ = e in
-          let return_ty = match A.sigma_lookup (snd program) f with
-            | Just (A.SDecl_fun _ fdecl) ->
-                fdecl.A.fun_return_ty
+          let return_ty = match Context.lookup A.eq_identifier (snd program).A.declarations f with
+            | Just (A.Decl_function return_ty _ _ _ _) ->
+                return_ty
             | _ ->
                 Boot.assert_false "[Translation.translate_expression A.Return] impossible error: TODO move to Exception.t"
           end in
@@ -1090,7 +1126,7 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         E.return $
           C.Ewseq [Just a_e] core_e
             (foldl (fun acc (n, d) ->
-              C.Eif (C.Eop C.OpEq (C.Esym a_e) (Caux.integer_const n))
+              C.Eif (C.Eop C.OpEq (C.Esym a_e) (C.Econst $ Mem.mk_integer n))
                 (C.Erun default d run_as)
                 acc
              )
@@ -1163,81 +1199,88 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
 
 
 
-(* Run the translator on different functions *)
-let translate_program stdlib ((startup_id, decls) as program) =
+
+(*
+val translate_program:
+  C.fun_map unit -> A.program Location.t GenTypes.genTypeCategory ->
+  E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
+*)
+
+let translate_program stdlib ((startup_sym, sigm) as program) =
   let conv_int = mk_stdcall stdlib "conv_int" in
   
-  let (global_ids, globals, funs) = foldl (fun (ids, gs, fs) decl ->
+  E.foldlM (fun (gacc, facc) (sym, decl) ->
     match decl with
-      | A.SDecl_fun    id f -> (     ids,            gs, (id, f) :: fs)
-      | A.SDecl_global id g -> (id ::ids, (id, g) :: gs,            fs)
+      | A.Decl_object qs ty ->
+          (* generate the initialisation code for global variables *)
+          let core_ty     = Caux.mk_ctype ty in
+          let core_create = Caux.pcreate (Caux.alignof core_ty) core_ty [sym] in
+          E.fresh_symbol >>= fun a_global ->
+          
+          match Context.lookup A.eq_identifier sigm.A.object_definitions sym with
+            | Just expr ->
+                (* if the global has an initialisation *)
+                E.fresh_symbol                           >>= fun a_e      ->
+                translate_expression stdlib program expr >>= fun core_e   ->
+                E.return
+                  ((sym,
+                    C.TyEffect C.BTy_pointer,
+                    C.Esseq [Just a_global] core_create
+                      (C.Esseq [Just a_e] core_e
+                         (* TODO: proper memory order *)
+                         (C.Esseq [] (Caux.pstore core_ty (C.Esym a_global) (conv_int [core_ty; C.Esym a_e]) Cmm.NA)
+                            (C.Eret $ C.Esym a_global)
+                         )
+                      )
+                   ) :: gacc, facc)
+            | Nothing ->
+                (* otherwise *)
+                E.return
+                  ((sym,
+                    C.TyEffect C.BTy_pointer,
+                    C.Esseq [Just a_global] core_create
+                      (* TODO: proper memory order *)
+                      (C.Esseq [] (Caux.pstore core_ty (C.Esym a_global) Caux.zero Cmm.NA)
+                         (C.Eret $ C.Esym a_global)
+                      )
+                    ) :: gacc, facc)
+          end
+      
+      | A.Decl_function return_ty params is_variadic is_inline is_Noreturn ->
+          (* generate the code for the defined Ail functions *)
+          match Context.lookup A.eq_identifier sigm.A.function_definitions sym with
+            | Just (param_syms, stmt) ->
+                (* making the argument variables visible *)
+                E.with_block_objects param_syms (
+                  translate_stmt stdlib program sym Nothing Nothing Nothing Nothing stmt
+                ) >>= fun core_body ->
+                
+                let core_return =
+                  if startup_sym = sym then
+                    (* §5.1.2.2.3#1 first sentence *)
+                    (* TODO: "If the return type is not compatible with int" *)
+                    C.Eret Caux.zero
+                  else if return_ty = Aty.Void then
+                    C.Eret C.Eunit
+                  else
+                    (* §6.9.1#12 *)
+                    C.Eundef Undefined.Reached_end_of_function in
+                
+                E.return
+                  (gacc,
+                   Map.insert sym
+                     (C.TyEffect C.BTy_integer (* TODO: this should de address for pointer type *),
+                      List.map (fun sym -> (sym, C.BTy_pointer (* TODO: check *))) param_syms,
+                      (C.Esseq [] core_body core_return)
+                     ) facc)
+            | Nothing ->
+                E.return (gacc, facc)
+          end
     end
-    ) ([], [], []) decls in
-  
+  ) ([], Map.empty) (List.reverse sigm.A.declarations)
 (*
 
-(* ALTERNATIVE globals *)
-
-  E.foldlM (fun mk_core_acc (global_id, (qs, ty, e_opt)) ->
-    let core_create = Caux.pcreate (Caux.mk_ctype ty) [global_id] in
-    match e_opt with
-      | Just e  ->
-          E.fresh_symbol                        >>= fun a_e    ->
-          translate_expression stdlib program e >>= fun core_e ->
-          E.return $
-             fun z ->
-               C.Esseq [Just global_id] core_create
-                 (C.Esseq [Just a_e] core_e
-                   (C.Esseq [Nothing] (Caux.pstore (Caux.mk_ctype ty) (C.Esym global_id) (C.Esym a_e) Cmm.NA) (* TODO: proper memory order *)
-                      (mk_core_acc z)
-                   )
-                 )
-      (* globals are initialised to zero *)
-      | Nothing ->
-          E.return $
-            fun z ->
-               C.Esseq [Just global_id] core_create
-                 (C.Esseq [Nothing] (Caux.pstore (Caux.mk_ctype ty) (C.Esym global_id) (Caux.zero) Cmm.NA) (* TODO: proper memory order *)
-                    (mk_core_acc z)
-                 )
-    end
-  ) (fun z -> z) (List.reverse globals) >>= fun mk_core_globals ->
- *)
-  
-  E.foldlM (fun acc (global_id, (_ (* TODO: qs *), ty, e_opt)) ->
-    let c_ty = Caux.mk_ctype ty in
-    let core_create = Caux.pcreate (Caux.alignof c_ty) c_ty [global_id] in
-    match e_opt with
-      | Just e -> do E
-          a_global <- E.fresh_symbol;
-          a_e      <- E.fresh_symbol;
-          core_e   <- translate_expression stdlib program e; in
-            E.return $
-              (global_id, C.BTy_pointer,
-               C.Esseq [Just a_global] core_create
-                 (C.Esseq [Just a_e] core_e
-                   (* TODO: proper memory order *)
-                   (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) (conv_int [Caux.mk_ctype ty; C.Esym a_e]) Cmm.NA)
-                     (C.Esym a_global)
-                   )
-                 )
-              ) :: acc
-          end
-      | Nothing -> do E
-          a_global <- E.fresh_symbol; in
-            E.return $
-              (global_id, C.BTy_pointer,
-               C.Esseq [Just a_global] core_create
-                   (* TODO: proper memory order *)
-                 (C.Esseq [] (Caux.pstore (Caux.mk_ctype ty) (C.Esym a_global) Caux.zero Cmm.NA)
-                   (C.Esym a_global)
-                 )
-              ) :: acc
-          end
-    end
-  ) [] (List.reverse globals) >>= fun cdefs ->
-  
-  E.foldlM (fun acc (fun_id, <| A.fun_return_ty=   ret_ty;
+  E.foldlM (fun acc (fun_sym, <| A.fun_return_ty=   ret_ty;
                                 A.fun_bindings=    fun_args;
                                 A.fun_is_variadic= is_variadic;
                                 A.fun_body=        fun_body_opt |>) ->
@@ -1247,24 +1290,15 @@ let translate_program stdlib ((startup_id, decls) as program) =
           E.push_block_objects (List.map fst fun_args) >>
           
           (* translate the body to Core *)
-          translate_stmt stdlib program fun_id Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
+          translate_stmt stdlib program fun_sym Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
           (* removing the argument variables from the "visibles" *)
           E.pop_block_objects >>
           
           (* If we are elaborating the startup function, then we add at the beginning of the body
              the allocations/initialisations of the global variables *)
-(*
-(* ALTERNATIVE globals *)
-
-          (if fun_id <> startup_id then
-             E.return core_body
-           else
-             E.return (mk_core_globals core_body)
-          ) >>= fun core_body ->
-*)
           
           let e_ret =
-            if startup_id = fun_id then
+            if startup_sym = fun_sym then
               (* §5.1.2.2.3#1 first sentence *)
               (* TODO: "If the return type is not compatible with int" *)
               C.Eret Caux.zero
@@ -1275,7 +1309,7 @@ let translate_program stdlib ((startup_id, decls) as program) =
               (* §6.9.1#12 *)
               C.Eundef Undefined.Reached_end_of_function in
           
-          (E.return $ Map.insert fun_id (
+          (E.return $ Map.insert fun_sym (
                                         C.TyEffect C.BTy_integer (* TODO: this should de address for pointer type *),
                                         List.map (fun (arg, _) -> (arg, C.BTy_pointer (* TODO: check *))) fun_args,
                                         (C.Esseq [] core_body e_ret)
@@ -1285,43 +1319,24 @@ let translate_program stdlib ((startup_id, decls) as program) =
           E.return acc
     end
   ) Map.empty funs >>= fun cfuns ->
-  E.return (cdefs, cfuns)
-
-
-(*
-  E.foldlM (fun acc ->
-    function
-      | (fun_id, Left ((_, fun_args, is_variadic), fun_body_opt)) ->
-          match fun_body_opt with
-            | Just fun_body ->
-                (* making the argument variables visible *)
-                E.push_block_objects (List.map fst fun_args) >>
-                
-                (* translate the body to Core *)
-                translate_stmt stdlib program fun_id Nothing Nothing Nothing Nothing fun_body >>= fun core_body ->
-                (* removing the argument variables from the "visibles" *)
-                E.pop_block_objects >>
-                (E.return $ Map.insert fun_id (
-                                            C.TyEffect C.BTy_integer (* TODO: this should de address for pointer type *),
-                                            List.map (fun (arg, _) -> (arg, C.BTy_pointer (* TODO: check *))) fun_args,
-                                            core_body
-                                           ) acc)
-            | Nothing ->
-                (* TODO: this corresponds to an Ail function a prototype but no implementation ==> std lib function *)
-                E.return acc
-          end
-      (* TODO: allocate/initialise globals at the beginning of the execution *)
-      | (_, Right (qs, ty, e_opt)) -> E.return acc
-    end
-  ) Map.empty (snd program)
+  E.return (cglobs, cfuns)
 *)
+
+
+
+
+
+
+
+
+
 
 (* This is the entry function (called from main.ml) *)
 let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   match (translate_program stdlib prog) (E.init symbol_counter) with
-    | U.Defined ((cdefs, cfuns), _) ->
-        <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.defs= cdefs; C.funs= cfuns |>
+    | U.Defined ((cglobs, cfuns), _) ->
+        <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>
     | _ ->
         Boot.assert_false "[Translation.translate #_] error in the elaboration"
   end

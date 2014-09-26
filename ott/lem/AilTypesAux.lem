@@ -1,54 +1,173 @@
 open import Pervasives Common AilTypes Implementation ErrorMonad TypingError
 
-let unqualified qs =
-  match qs with
-  | <| const    = false;
-       restrict = false;
-       volatile = false;
-       atomic   = false |> -> true
-  | _                      -> false
-  end
+(* == Function on qualifiers ==================================================================== *)
+val is_unqualified: qualifiers -> bool
+let is_unqualified = function
+  | <|
+      const    = false;
+      restrict = false;
+      volatile = false;
+      atomic   = false
+    |> ->
+      true
+  | _ ->
+      false
+end
 
-let integer t =
-  match t with
-  | Basic (Integer _) -> true
+val combine_qualifiers: qualifiers -> qualifiers -> qualifiers
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+  atomic   = qs1.atomic   || qs2.atomic  ;
+|>
+
+val sub_qualifiers: qualifiers -> qualifiers -> bool
+let sub_qualifiers qs1 qs2 =
+     qs1.const    --> qs2.const
+  && qs1.restrict --> qs2.restrict
+  && qs1.volatile --> qs2.volatile
+  && qs1.atomic   --> qs2.atomic
+
+
+(* == predicates on integerTypes ================================================================= *)
+(* TODO: change name *)
+val is_unsigned: implementation -> integerType -> bool
+let is_unsigned P it =
+  not (P.signed it)
+
+val signed_type: integerType -> bool
+let signed_type = function
+  | Signed _ ->
+      true
+  | _ ->
+      false
+end
+
+val unsigned_type: integerType -> bool
+let unsigned_type = function
+  | Unsigned _ ->
+      true
+  | Bool ->
+      true
+  | _ ->
+      false
+ end
+
+
+
+(* == constructor predicates on ctypes =========================================================== *)
+val is_integer: ctype -> bool
+let is_integer = function
+  | Basic (Integer _) ->
+      true
+  | _ ->
+      false
+end
+
+val is_void: ctype -> bool
+let is_void = function
+  | Void ->
+      true
+  | _ ->
+      false
+end
+
+val is_pointer: ctype -> bool
+let is_pointer = function
+  | Pointer _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_bool: ctype -> bool
+let is_bool = function
+  | Basic (Integer Bool) ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO: STD doc *)
+val is_array: ctype -> bool
+let is_array = function
+  | Array _ _ ->
+      true
+  | _ ->
+      false
+end
+
+(* STD §6.2.5#1, sentence 3 *)
+val is_function: ctype -> bool
+let is_function = function
+  | Function _ _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_struct: ctype -> bool
+let is_struct = function
+  | Struct _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_union: ctype -> bool
+let is_union = function
+  | Union _ _ ->
+      true
+  | _ ->
+      false
+end
+
+
+
+(* == generic predicates on ctypes ============================================================== *)
+(* STD §6.2.5#1, sentence 3 *)
+val is_object: ctype -> bool
+let is_object ty =
+  not (is_function ty)
+
+(* STD §6.2.5#18, sentence 1 *)
+val is_arithmetic: ctype -> bool
+let is_arithmetic ty =
+  is_integer ty (* TODO: || is_floating ty *)
+
+(* STD §6.2.5#21, sentence 1 *)
+val is_scalar: ctype -> bool
+let is_scalar ty =
+  is_pointer ty || is_arithmetic ty
+
+(* STD §6.2.5#21, sentence 2 *)
+val is_aggregate: ctype -> bool
+let is_aggregate ty =
+  is_array ty || is_struct ty
+
+
+
+(* TODO *)
+val is_complete: ctype -> bool
+let is_complete = function
+  | Basic _ -> true
+  | Pointer _ _ -> true
+  | Array _ _ -> true
   | _ -> false
-  end
+end
 
-let void t =
+(* TODO *)
+let is_incomplete t : bool =
   match t with
   | Void -> true
   | _ -> false
   end
 
-let pointer t =
-  match t with
-  | Pointer _ _ -> true
-  | _ -> false
-  end
 
-let boolean t =
-  match t with
-  | Basic (Integer Bool) -> true
-  | _ -> false
-  end
 
-let unsigned P it : bool =
-  not (P.signed it)
 
-let signed_type it : bool =
-  match it with
-  | Signed _ -> true
-  | _ -> false
-  end
-
-let unsigned_type it : bool =
-  match it with
-  | Unsigned _ -> true
-  | Bool -> true
-  | _ -> false
-  end
-
+(* ============================================================================================== *)
 let in_integer_range P n it : bool =
   Range.mem n (integer_range P it)
 
@@ -269,22 +388,6 @@ let lt_integer_rank it1 it2 : bool =
 let le_integer_rank it1 it2 : bool =
   eq_integer_rank it1 it2 || lt_integer_rank it1 it2
 
-let arithmetic t : bool = integer t
-
-let scalar t : bool = pointer t || arithmetic t
-
-let array t : bool =
-  match t with
-  | Array _ _ -> true
-  | _         -> false
-  end
-
-(* TODO: should be called "function" *)
-let is_function t : bool =
-  match t with
-  | Function _ _ _ -> true
-  | _              -> false
-  end
 
 let is_corresponding_unsigned it1 it2 : bool =
   match (it1, it2) with
@@ -425,36 +528,22 @@ let usual_arithmetic P t1 t2 : maybe ctype =
   | (_                  , _                  ) -> Nothing
   end
 
-let object_ t : bool =
-  match t with
-  | Basic _ -> true
-  | Void -> true
-  | Pointer _ _ -> true
-  | Array _ _ -> true
-  | _ -> false
-  end
 
-let complete t : bool =
-  match t with
-  | Basic _ -> true
-  | Pointer _ _ -> true
-  | Array _ _ -> true
-  | _ -> false
-  end
 
-let incomplete t : bool =
-  match t with
-  | Void -> true
-  | _ -> false
-  end
+(* assuming [ty] is an lvalue type, [modifiable ty] is true iff
+   [ty] is modifiable lvalue type (see §6.3.2.1#1, sentence 3) *)
 
-let modifiable q t : bool =
-  object_ t &&
-  not (array t) &&
-  not (incomplete t) &&
-  not (q.const)
+(*
+A modifiable lvalue is an lvalue that does not have array type, does not have an incomplete type, does not have a const- qualified type, and if it is a structure or union, does not have any member (including, recursively, any member or element of all contained aggregates or unions) with a const- qualified type.
+*)
+val modifiable: qualifiers -> ctype -> bool
+let modifiable qs ty =
+  not (is_array ty) &&
+  not (qs.const) &&
+  is_object ty &&
+  not (is_incomplete ty)
 
-let real t : bool = integer t
+let real t : bool = is_integer t
 
 let rec ~{coq} compatible_params_aux compatible p1 p2 : bool =
   match (p1, p2) with
@@ -480,7 +569,7 @@ let ~{coq} compatible_params p1 p2 = compatible_params_aux compatible p1 p2
 let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 : bool =
   match (p1, p2, p3) with
   | ([]           , []           , []            ) -> true
-  | ((_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3) -> unqualified q3 &&
+  | ((_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3) -> is_unqualified q3 &&
                                                       is_composite t1 t2 t3 &&
                                                       is_composite_params_aux is_composite p1 p2 p3
   | (_            , _            , _             ) -> false
@@ -533,18 +622,6 @@ let rec ~{coq} composite t1 t2 : maybe ctype =
 
 let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
 
-let combine_qualifiers qs1 qs2 = <|
-  const    = qs1.const    || qs2.const   ;
-  restrict = qs1.restrict || qs2.restrict;
-  volatile = qs1.volatile || qs2.volatile;
-  atomic   = qs1.atomic   || qs2.atomic  ;
-|>
-
-let sub_qualifiers qs1 qs2 =
-     qs1.const    --> qs2.const
-  && qs1.restrict --> qs2.restrict
-  && qs1.volatile --> qs2.volatile
-  && qs1.atomic   --> qs2.atomic
 
 (* following (§6.3.2.1)#3 *)
 let array_coercion = function
@@ -560,20 +637,20 @@ end
 
 (* following (§6.3.2.1)#2 *)
 let lvalue_convertible ty : bool =
-  not (array ty) && complete ty
+  not (is_array ty) && is_complete ty
 
 (* following (§6.3.2.1)#2 and #3 *)
 let lvalue_coercion ty : errorM ctype =
   if lvalue_convertible ty then
     return ty
-  else if array ty then
+  else if is_array ty then
     return (array_coercion ty)
   else
     fail (TError_TODO 1)
 
 (* following (§6.3.2.1)#3 and #4 *)
 let rvalue_coercion ty : ctype =
-  if array ty then
+  if is_array ty then
     array_coercion ty
   else if is_function ty then
     function_coercion ty
@@ -582,25 +659,25 @@ let rvalue_coercion ty : ctype =
 
 let pointer_to_complete_object t : bool =
   match t with
-  | Pointer _ t -> complete t
+  | Pointer _ t -> is_complete t
   | _           -> false
   end
 
 let ~{coq} pointers_to_compatible_complete_objects t1 t2 : bool =
   match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> complete t1 && complete t2 && compatible t1 t2
+  | (Pointer _ t1, Pointer _ t2) -> is_complete t1 && is_complete t2 && compatible t1 t2
   | (_           , _           ) -> false
   end  
 
 let ~{coq} pointers_to_compatible_objects t1 t2 : bool =
   match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> object_ t1 && object_ t2 && compatible t1 t2
+  | (Pointer _ t1, Pointer _ t2) -> is_object t1 && is_object t2 && compatible t1 t2
   | (_           , _           ) -> false
   end  
 
 let pointer_to_object t : bool =
   match t with
-  | Pointer _ t -> object_ t
+  | Pointer _ t -> is_object t
   | _           -> false
   end
 
@@ -638,18 +715,50 @@ end
 
 
 
-val is_struct_type: ctype -> bool
-let is_struct_type = function
-  | Struct _ ->
-      true
+
+
+val variably_modified: ctype -> bool
+let variably_modified _ =
+  (* TODO *)
+  false
+
+
+
+val had_unknown_size: ctype -> bool
+let has_unknown_size = function
   | _ ->
-      false
+      false (* TODO !!!!!!! *)
 end
 
-val is_union_type: ctype -> bool
-let is_union_type = function
-  | Union _ ->
-      true
+val is_vla: ctype -> bool
+let is_vla = function
   | _ ->
-      false
+      false (* TODO !!!!!!! *)
 end
+
+val is_complete_object: ctype -> bool
+let is_complete_object ty =
+  is_complete ty && is_object ty
+
+
+val unqualify: ctype -> ctype
+let unqualify ty =
+  ty (* TODO *)
+(*
+function
+ | Void ->
+     Void
+ | Basic bty ->
+     Basic bty
+ | Array ty n ->
+     Array (unqualify ty) n
+ | Function ty qs_tys is_variadic ->
+     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
+ | Atomic ty ->
+     Atomic (unqualify ty)
+ | Struct sym ids_ty ->
+     Struct sym 
+ | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
+ | Builtin of string
+end
+*)

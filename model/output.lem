@@ -448,7 +448,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 d,i) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Just (P_asterisk) -> assert_false "TODO: output.lem 1" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -468,7 +468,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Just (P_asterisk) -> assert_false "TODO: output.lem 2" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -489,7 +489,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Just (P_asterisk) -> assert_false "TODO: output.lem 3" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -510,7 +510,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Just (P_asterisk) -> assert_false "TODO: output.lem 4" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -531,7 +531,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO" (* TODO *)
+          | Just (P_asterisk) -> assert_false "TODO: output.lem 5" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -600,7 +600,7 @@ let rec formatted_print_aux load acc fs ns =
                 else
                   expanded
             | Just FW_asterisk ->
-                assert_false "TODO"
+                assert_false "TODO: output.lem 6"
           end in
           formatted_print_aux load (acc ++ justified) fs ns'
 

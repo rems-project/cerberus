@@ -27,6 +27,11 @@ type expr =
   | Ecall of name * expr list
   | Eundef of Undefined.undefined_behaviour
   | Eerror
+  | Eraise of string
+  | Eregister of string * name
+(*
+  | Etry of expr * (string * expr) list
+*)
   | Eskip
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
@@ -77,6 +82,7 @@ and paction = Core.polarity * action
 type declaration =
   | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * expr
   | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (string * Core.core_base_type) list * expr)
+  | Glob_decl of string * Core.core_type * expr
   | Fun_decl  of string * (Core.core_type * (string * Core.core_base_type) list * expr)
 
 
@@ -99,6 +105,11 @@ let register_cont_symbols e =
     | Eundef _
     | Eerror
     | Eskip
+    | Eraise _
+    | Eregister _
+(*
+    | Etry _
+*)
     | Eproc _
 (*    | Esame _ *)
     | Eaction _
@@ -186,6 +197,19 @@ let convert_expr e arg_syms fsyms =
         Core.Eundef ub
     | Eerror ->
         Core.Eerror
+    | Eraise evnt ->
+        Core.Eraise evnt
+    | Eregister (evnt, nm) ->
+        let nm' = match nm with
+          | Impl f ->
+              Core.Impl f
+          | Sym str ->
+              Core.Sym (Pmap.find str fsyms) in
+        Core.Eregister (evnt, nm')
+(*
+    | Etry (e, str_es) ->
+        Core.Etry (f st e, List.map (fun (str, e) -> (str, f st e)) str_es)
+*)
     | Eskip ->
         Core.Eskip
     | Elet (a, e1, e2) ->
@@ -364,6 +388,8 @@ let mk_file decls =
                 let _a = Symbol.Symbol (count, Some x) in (count+1, Pmap.add x _a m, (_a, ty) :: args'))
                 (0, Pmap.empty compare, []) args in
               Pmap.add i (Core.IFun (bty, args', convert_expr fbody arg_syms (Pmap.empty compare))) impl_map
+          | Glob_decl _ ->
+              failwith "(TODO_MSG) found a global declaration in an implementation file."
           | Fun_decl _ ->
               failwith "(TODO_MSG) found a function declaration in an implementation file."
       ) (Pmap.empty compare) decls in
@@ -394,7 +420,7 @@ let subst name =
 %token <Undefined.undefined_behaviour> UB
 
 (* ctype tokens *)
-%token VOID ATOMIC SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T (* DOTS *)
+%token VOID ATOMIC (* SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T *) (* DOTS *)
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
@@ -403,21 +429,24 @@ let subst name =
 %token SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
 
 (* definition keywords *)
-%token DEF FUN
+%token DEF GLOB FUN
 
 (* Core types *)
 %token INTEGER BOOLEAN POINTER CTYPE CFUNCTION UNIT
 
 (* Core constant keywords *)
-%token LIST ARRAY TRUE FALSE
+%token LIST (* ARRAY *) TRUE FALSE
 %token UNDEF ERROR
 %token SKIP IF THEN ELSE
+
+(* Core exception operators *)
+%token RAISE REGISTER (* TRY WITH PIPE MINUS_GT *)
 
 (* Core sequencing operators *)
 %token LET STRONG WEAK ATOM IN END PIPE_PIPE INDET RETURN
 
 
-%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON COMMA LBRACE RBRACE TILDE
+%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA LBRACE RBRACE TILDE
 
 (* %token CASE_TY SIGNED_PATTERN UNSIGNED_PATTERN ARRAY_PATTERN POINTER_PATTERN ATOMIC_PATTERN EQ_GT *)
 
@@ -427,7 +456,7 @@ let subst name =
 %token NOT
 
 (* binary operators *)
-%token STAR SLASH PERCENT MINUS EQ PLUS
+%token STAR SLASH PERCENT MINUS EQ PLUS CARET
 
 (* boolean operators *)
 %token LE LT
@@ -460,6 +489,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 %left EQ LT LE
 %left PLUS MINUS
 %left STAR SLASH PERCENT
+%nonassoc CARET
 
 (* %right ELSE (* TODO: CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *) *)
 
@@ -740,6 +770,7 @@ core_type:
 | STAR            { Core.OpMul }
 | SLASH           { Core.OpDiv }
 | PERCENT         { Core.OpMod }
+| CARET           { Core.OpExp }
 | EQ              { Core.OpEq  }
 | LT              { Core.OpLt  }
 | SLASH_BACKSLASH { Core.OpAnd }
@@ -849,17 +880,25 @@ pattern:
 
 constant:
 | n= INT_CONST
-    { Naive_memory.MV_integer (Symbolic.constant n) }
+    { Naive_memory.MV_integer (Symbolic.SYMBconst n) }
 (*
 | ARRAY LPAREN vs= separated_nonempty_list (COMMA, constant) RPAREN
     { Naive_memory.MV_array vs }
 *)
 
 
+(*
+try_clauses:
+| PIPE str= SYM (* TODO: hack *) MINUS_GT e= expr
+    { [(str, e)] }
+| str= SYM (* TODO: hack *) MINUS_GT e= expr str_es= try_clauses
+    { (str, e) :: str_es }
+*)
+
 expr:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
-| LPAREN RPAREN
+| UNIT
     { Eunit }
 (*
 | NULL
@@ -900,6 +939,14 @@ expr:
     { Eundef ub }
 | ERROR
     { Eerror }
+| RAISE LPAREN evnt= SYM (* TODO: hack *) RPAREN
+    { Eraise evnt }
+(*
+| TRY e= expr WITH str_es= try_clauses END
+    { Etry (e, str_es) }
+*)
+| REGISTER LPAREN evnt= SYM COMMA nm= name RPAREN
+    { Eregister (evnt, nm) }
 | SKIP
     { Eskip }
 | LET a= SYM EQ e1= expr IN e2= expr END
@@ -920,6 +967,10 @@ expr:
     { Eaction p }
 | es= delimited(LBRACKET, separated_nonempty_list(PIPE_PIPE, expr), RBRACKET)
     { Eunseq es }
+(*
+| e1= expr SEMICOLON e2= expr
+    { Esseq ([], e1, e2) }
+*)
 | LET STRONG _as= pattern EQ e1= expr IN e2= expr END
     { Esseq (_as, e1, e2) }
 | LET STRONG LPAREN RPAREN EQ e1= expr IN e2= expr END
@@ -976,6 +1027,13 @@ ifun_declaration:
     { IFun_decl (fname, (bTy, List.rev args, fbody)) }
 ;
 
+glob_declaration:
+| GLOB gname= SYM COLON cTy= core_type COLON_EQ e= expr
+  {
+   print_endline "GLOB";
+   Glob_decl (gname, cTy, e) }
+;
+
 fun_declaration:
 | FUN fname= SYM args= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON coreTy= core_type
@@ -988,6 +1046,8 @@ declaration:
 | d= def_declaration
     { d }
 | d= ifun_declaration
+    { d }
+| d= glob_declaration
     { d }
 | d= fun_declaration
     { d }

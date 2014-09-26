@@ -1,0 +1,28 @@
+fun f (n: pointer): [integer] :=
+  return (unit)
+
+fun main (): [integer] :=
+  let strong x = create(<alignof>("signed int"), "signed int") in
+  let strong () =
+    let strong () = store("signed int", x, 10) in
+    let strong () =
+      save loop_6(x: void).
+        if true then
+          let weak a_9 = create(<alignof>("signed int"), "signed int") in
+            let weak a_10 = load("signed int", x) in
+            let weak () = store("signed int", a_9, a_10) in
+            let weak a_11 = f{a_9} in
+            let weak () = kill(a_9) in
+            run loop_6(x: x)
+            end end end end
+        end
+      else
+        save break_7(x: void). skip
+      end
+       end end in
+      kill(x)
+      end
+    end in
+    return (0)
+    end
+  end

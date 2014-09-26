@@ -57,3 +57,10 @@ let rec mapM f ys =
                return (z::zs)
 end
 
+val     foldM: forall 'a 'b. ('a -> 'b -> errorM 'a) -> 'a -> list 'b -> errorM 'a (* GENERIC Monad *)
+let rec foldM f a = function                                                       (* GENERIC Monad *)
+  | [] ->                                                                          (* GENERIC Monad *)
+      return a                                                                     (* GENERIC Monad *)
+  | x::xs ->                                                                       (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                          (* GENERIC Monad *)
+end

@@ -19,8 +19,13 @@ let drive file =
           exit (-1) in
   
   let file = Core_run.convert_file file in
-  
-  let (Nondeterminism.ND vs) = Driver.driver_notweak (Driver.initial_driver_state file) in
+
+(*
+  let (Nondeterminism.ND vs) =
+    ND.bind7 (Driver.driver_sequential (Driver.initial_driver_state file))
+      (fun z -> ND.return7 (Driver.finalize z))  in
+*)
+  let (Nondeterminism.ND vs) = Driver.drive file in
   
   Global_ocaml.print_debug 1 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
   

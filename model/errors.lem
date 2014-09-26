@@ -1,4 +1,4 @@
-open import Global Cabs Core
+open import Global Cabs AilSyntax Core
 import Location TypingError
 
 
@@ -9,16 +9,22 @@ type desugar_cause =
   | Desugar_OtherViolation of string
 
 (* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_FunctionRedefinition of cabs_identifier
+  | Desugar_ExternalObjectRedefinition of identifier
+  | Desugar_FunctionRedefinition of identifier
   | Desugar_BlockScoped_Thread_local_alone
 (*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)
 (*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
   | Desugar_NotConstantExpression
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultibleDeclaration of cabs_identifier
-  | Desugar_NotSupported of string
+  | Desugar_NeverSupported of string
+
+  | Desugar_NotyetSupported of string
+
 
   | Desugar_TODOCTOR of string
+  
+  | Desugar_impossible
 
 
 (*  | Desugar_DUPLICATED_LABEL *)                    

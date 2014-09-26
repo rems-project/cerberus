@@ -33,7 +33,9 @@ struct
       Exception.return0 result
     with B.Error ->
       let token = Lexing.lexeme lexbuf in
-      Exception.throw (Location.unknowned, Errors.PARSER ("Unexpected token: " ^ token ^ "."))
+      let spos  = Lexing.lexeme_start_p lexbuf in
+      let loc = Location.make spos.Lexing.pos_lnum (spos.Lexing.pos_cnum - spos.Lexing.pos_bol) in
+      Exception.throw (loc, Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
   let parse input = L.lexbuf parse_exn (L.make input)
 end

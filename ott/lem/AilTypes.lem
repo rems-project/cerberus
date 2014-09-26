@@ -1,5 +1,5 @@
 open import Pervasives
-import Symbol
+import Symbol Cabs
 
 type integerBaseType [name = "ibt*"] =  (*r standard signed integer types (\S6.2.5\#4) *)
  | Ichar
@@ -97,8 +97,8 @@ type ctype (* [name = "ty*|'*_ty"] *) =  (*r $\texttt{Ail}_\tau$ types *)
  | Function of ctype * list (qualifiers * ctype) * bool (*r function types *)
  | Pointer of qualifiers * ctype (*r pointer types *)
  | Atomic of ctype
- | Struct of list (identifier * ctype) (* TODO: no bitfields for now *)
- | Union of list (identifier * ctype) (* TODO: no bitfields for now *)
+ | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
+ | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
  | Builtin of string
 
 let rec eq_params_aux eq_ctype p1 p2 : bool =

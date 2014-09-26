@@ -36,23 +36,24 @@ let rvalue_coercion gty : genType =
     gty
 
 
-let integer gt =
-  match gt with
-  | GenBasic (GenInteger _) -> true
-  | _ -> false
+val is_integer: genType -> bool
+let is_integer = function
+  | GenBasic (GenInteger _) ->
+      true
+  | _ ->
+      false
   end
 
-let real gt : bool = integer gt
+let real gt : bool = is_integer gt
 
-let pointer gt =
-  match gt with
-  | GenPointer _ _ -> true
-  | _ -> false
+val is_pointer: genType -> bool
+let is_pointer = function
+  | GenPointer _ _ ->
+      true
+  | _ ->
+      false
   end
 
-let arithmetic gt : bool = integer gt
-
-let scalar gt : bool = pointer gt || arithmetic gt
 
 let void gt : bool =
   match gt with
@@ -62,25 +63,25 @@ let void gt : bool =
 
 let pointer_to_complete_object gt : bool =
   match gt with
-  | GenPointer _ t -> AilTypesAux.complete t
+  | GenPointer _ t -> AilTypesAux.is_complete t
   | _              -> false
   end
 
 let pointers_to_compatible_complete_objects gt1 gt2 : bool =
   match (gt1, gt2) with
-  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.complete t1 && AilTypesAux.complete t2 && AilTypesAux.compatible t1 t2
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.is_complete t1 && AilTypesAux.is_complete t2 && AilTypesAux.compatible t1 t2
   | (_              , _              ) -> false
   end  
 
 let pointers_to_compatible_objects gt1 gt2 : bool =
   match (gt1, gt2) with
-  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.object_ t1 && AilTypesAux.object_ t2 && AilTypesAux.compatible t1 t2
+  | (GenPointer _ t1, GenPointer _ t2) -> AilTypesAux.is_object t1 && AilTypesAux.is_object t2 && AilTypesAux.compatible t1 t2
   | (_              , _              ) -> false
   end  
 
 let pointer_to_object gt : bool =
   match gt with
-  | GenPointer _ t -> AilTypesAux.object_ t
+  | GenPointer _ t -> AilTypesAux.is_object t
   | _              -> false
   end
 
@@ -152,15 +153,23 @@ let interpret_genBasicType P gbt : errorM basicType =
 
 let interpret_genType P gt : errorM ctype =
   match gt with
-  | GenVoid           -> return Void
-  | GenBasic gbt      -> interpret_genBasicType P gbt >>= fun bt ->
-                         return (Basic bt)
-  | GenArray    t n   -> return (Array    t n)
-  | GenFunction t p b -> return (Function t p b)
-  | GenPointer  q t   -> return (Pointer  q t)
-  | GenStruct   xs    -> return (Struct xs)
-  | GenUnion    xs    -> return (Union xs)
-  | GenBuiltin  str   -> return (Builtin str)
+  | GenVoid ->
+      return Void
+  | GenBasic gbt ->
+      interpret_genBasicType P gbt >>= fun bt ->
+      return (Basic bt)
+  | GenArray ty n ->
+      return (Array ty n)
+  | GenFunction t p b ->
+      return (Function t p b)
+  | GenPointer qs ty ->
+      return (Pointer qs ty)
+  | GenStruct tag_opt xs ->
+      return (Struct tag_opt xs)
+  | GenUnion tag_opt xs ->
+      return (Union tag_opt xs)
+  | GenBuiltin  str ->
+      return (Builtin str)
   end
 
 let interpret_genTypeCategory P gt : errorM typeCategory =
@@ -205,3 +214,18 @@ let min_interpret_optionIntegerSuffix os =
 
 let min_interpret_integerConstant ((_, _, suff):integerConstant) =
   min_interpret_optionIntegerSuffix suff
+
+
+
+
+(* == generic predicates on ctypes ============================================================== *)
+(* TODO: we be moved to Ctype.lem to be function working on all instanced of the class Ctype *)
+(* STD §6.2.5#18, sentence 1 *)
+val is_arithmetic: genType -> bool
+let is_arithmetic gty =
+  is_integer gty
+
+(* STD §6.2.5#21, sentence 1 *)
+val is_scalar: genType -> bool
+let is_scalar gty =
+  is_pointer gty || is_arithmetic gty

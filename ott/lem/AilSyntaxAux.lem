@@ -3,7 +3,7 @@ open import Pervasives Common AilTypes AilTypesAux AilSyntax
 let rec null_pointer_constant' (e : expression' 'A) : bool =
   match e with
   | AilEconst (ConstantInteger (n , _, Nothing)) -> n = 0
-  | AilEcast q (Pointer q' Void) e               -> null_pointer_constant e && unqualified q && unqualified q'
+  | AilEcast q (Pointer q' Void) e               -> null_pointer_constant e && is_unqualified q && is_unqualified q'
   | _                                            -> false
   end
 and null_pointer_constant e : bool =

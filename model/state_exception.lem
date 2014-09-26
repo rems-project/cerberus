@@ -48,6 +48,8 @@ let listM t xs = sequence (t xs)
 val mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t (list 'b) 's 'msg
 let mapM f = listM (List.map f)
 
+val mapiM: forall 'a 'b 's 'msg. (nat -> 'a -> t 'b 's 'msg) -> list 'a -> t (list 'b) 's 'msg
+let mapiM f = listM (Global.mapi f)
 
 let sequence_ ms = foldr (>>) (return ()) ms
 val mapM_: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) -> list 'a -> t unit 's 'msg

@@ -1,6 +1,40 @@
 open import Pervasives
 open import Global Symbolic
 
+type t
+declare ocaml target_rep type t = `Smt_wrapper.assertions`
+
+
+val empty: t
+declare ocaml target_rep function empty = `Smt_wrapper.empty_assertions`
+
+
+val is_empty: t -> bool
+declare ocaml target_rep function is_empty = `Smt_wrapper.is_empty_assertions`
+
+val combine: t -> t -> t
+declare ocaml target_rep function combine = `Smt_wrapper.combine_assertions`
+
+val assert_eq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_eq = `Smt_wrapper.assert_eq`
+
+val assert_neq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_neq = `Smt_wrapper.assert_neq`
+
+val assert_lt: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_lt = `Smt_wrapper.assert_lt`
+
+val assert_ge: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_ge = `Smt_wrapper.assert_ge`
+
+
+
+
+
+val isUnsat: t -> bool
+declare ocaml target_rep function isUnsat = `Smt_wrapper.is_unsat`
+
+(*
 type assertion =
   | Assert_eq  of symbolic * symbolic
   | Assert_neq of symbolic * symbolic
@@ -86,3 +120,4 @@ end
 val isUnsat: t -> bool
 let isUnsat (Constraints asserts) =
   any trivially_unsat asserts
+*)
