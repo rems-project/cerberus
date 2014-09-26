@@ -9,6 +9,11 @@ module Mem = Naive_memory
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
+type handler_event =
+  string (* TODO: fixed ctors? *)
+
+
+
 type core_base_type =
   | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
   | BTy_boolean
@@ -41,6 +46,7 @@ type binop =
   | OpMul
   | OpDiv
   | OpMod
+  | OpExp
   (* relational operators *)
   | OpEq
   | OpLt
@@ -74,7 +80,7 @@ type expr 'a =
   | Eunit
   | Etrue
   | Efalse
-  | Econst of Mem.mem_value
+  | Econst of Mem.mem_value (* TODO: need to add an "indet value of type ty" *)
   | Elist of list (expr 'a) (* This is for variadic functions *)
   | Ectype of ctype
   | Esym of sym
@@ -92,6 +98,14 @@ type expr 'a =
   | Eundef of Undefined.undefined_behaviour
   | Eerror
   
+  (* TODO: thing better about these two *)
+  (* TODO: use something other than string *)
+  | Eraise of handler_event (* correspond to the raising of C signal and friends (e.g. exit) *)
+  | Eregister of handler_event * name (* this is for C signal handler registration and friends, the name is that of the procedure to call *)
+(*  | Etry of expr 'a * list (string * expr 'a) *)
+
+  
+  
   (* potentialy effectful *)
   | Eskip
   | Elet of sym * expr 'a * expr 'a
@@ -108,7 +122,7 @@ type expr 'a =
   
   (* indeterminately-sequenced expressions and boundary *) 
   | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-  | Ebound of natural * expr 'a (* this ctor doesn't exist at runtine *)
+  | Ebound of nat * expr 'a (* this ctor doesn't exist at runtine *)
   
   (* Continuation operators *)
   (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
@@ -148,6 +162,10 @@ and action_ 'a =
   | Load of expr 'a * expr 'a * Cmm.memory_order
   | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
   | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+  
+  (* TODO: it annoying (maybe wrong) that these are actions *)
+  | Pointer_eq of expr 'a * expr 'a
+  | Pointer_neq of expr 'a * expr 'a
 
 and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
@@ -172,7 +190,7 @@ type file 'a = <|
   main   : sym;
   stdlib : fun_map 'a;
   impl   : impl 'a;
-  defs   : list (sym * core_base_type * expr 'a);
+  globs  : list (sym * core_type * expr 'a);
   funs   : fun_map 'a;
 |>
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
@@ -191,6 +209,7 @@ type continuation_element 'a =
   | Kunseq of list (expr 'a) * list (expr 'a)
   | Kwseq  of list (maybe sym) * expr 'a
   | Ksseq  of list (maybe sym) * expr 'a
+(*  | Ktry   of list (string * expr 'a) *)
 
 
 type continuation 'a = list (continuation_element 'a)

@@ -13,3 +13,7 @@ let new_supply =
 val fresh_id: forall 'a. Enum 'a => supply 'a -> t 'a * supply 'a
 let fresh_id supl =
   (supl, succ supl)
+
+val latest_id: forall 'a. supply 'a -> t 'a
+let latest_id supl =
+  supl

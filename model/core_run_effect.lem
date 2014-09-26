@@ -67,7 +67,7 @@ let tid_of = function
   | Toutput _ tid      -> tid
   end 
 
-type taction_id = natural
+type taction_id = nat
 
 
 
@@ -157,7 +157,7 @@ type state = <|
   (* maps of labeled continuations (per function) *)
   registered_labeled_continuations: map sym (map ksym (list (sym * ctype) * expr taction_id));
   (* counter for the trace actions map *)
-  tact_counter: natural;
+  tact_counter: nat;
   tact_map: Map.map taction_id trace_action;
 |>
 declare {coq} rename type execution_mode = execution_mode_ (* workaround for Lem issue #74 *)
@@ -432,13 +432,13 @@ val subst_inAll: Core.sym -> Core.expr taction_id -> t unit
 let subst_inAll _a v = fun st ->
   let st' = <| st with
     file=     <| st.file with Core.funs= Map.map  (fun (f_Ty, f_args, f_body) -> (f_Ty, f_args, Core_aux.subst_sym _a v f_body)) st.file.Core.funs;
-                              Core.defs= List.map (fun (g_a, g_bTy, g_e) ->
+                              Core.globs= List.map (fun (g_a, g_Ty, g_e) ->
 (* Boot.print_debug ("substs in " ^ (let (Symbol.Symbol _ (Just foo)) = g_a in foo)) *)
 
 Boot.print_debug ("substs >>> " ^ Boot.pp_core_expr (Core_aux.subst_sym _a v g_e))
 
 
-(g_a, g_bTy, Core_aux.subst_sym _a v g_e)) st.file.Core.defs |>;
+(g_a, g_Ty, Core_aux.subst_sym _a v g_e)) st.file.Core.globs |>;
     cont_map= Map.map (Map.map (fun (xs, e) -> (xs, Core_aux.subst_sym _a v e))) st.cont_map
   |> in
   [(U.return (), st')]

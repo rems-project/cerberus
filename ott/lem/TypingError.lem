@@ -5,3 +5,4 @@ type typing_error =
   | TError_TODO of nat
   | TError_integerConstant_too_large of integer (* AilSyntax.integerConstant *)
   | TError of string
+

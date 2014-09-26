@@ -84,7 +84,7 @@ type expr =
   | Esseq of list (maybe Core.sym) * expr * expr
   | Easeq of maybe Core.sym * action * paction
   | Eindet of expr
-  | Ebound of natural * expr
+  | Ebound of nat * expr
   | Esave of Core.ksym * list (Core.sym * Core_ctype.ctype) * expr
   | Erun of Core.ksym * list (Core.sym * expr)
   | Eshift of expr * expr
@@ -420,6 +420,14 @@ let rec hack x =
         Core.Eundef ub
     | Core.Eerror ->
         Core.Eerror
+    | Core.Eraise str ->
+        Core.Eraise str
+(*
+    | Core.Etry e str_es ->
+        Core.Etry (hack e) (List.map (fun (str, e_) -> (str, hack e)) str_es)
+*)
+    | Core.Eregister evnt nm ->
+        Core.Eregister evnt nm
     | Core.Eskip ->
         Core.Eskip
     | Core.Elet a e1 e2 ->

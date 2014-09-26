@@ -1,7 +1,7 @@
 open Cmm_master
 
 
-
+(*
 let pp_constraints (Constraints.Constraints asserts) =
   let pp x = Boot_pprint.to_plain_string (Pp_core.pp_symbolic x) in
   List.fold_left (fun acc eq ->
@@ -16,6 +16,10 @@ let pp_constraints (Constraints.Constraints asserts) =
             pp symb1 ^ " >= " ^ pp symb2
    ) ^ ";\\n" ^ acc
   ) "" asserts
+*)
+
+let pp_constraints (Smt_wrapper.Assertions (_, xs)) =
+  String.concat ";\n" xs
 
 
 
@@ -43,7 +47,7 @@ let string_of_location (Mem.Pointer_nonnull n) =
   "@" ^ string_of_int n
 
 let string_of_cvalue = function
-  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
+  | Mem.MV_integer (Symbolic.SYMBconst n) ->
       Big_int.string_of_big_int n
   | Mem.MV_integer symb ->
       "SYMB(" ^ Boot_pprint.to_plain_string (Pp_core.pp_symbolic symb) ^ ")"

@@ -88,6 +88,12 @@ let keywords =
       ("run", T.RUN);
       ("indet", T.INDET);
       ("return", T.RETURN);
+(*
+      ("try", T.TRY);
+      ("with", T.WITH);
+*)
+      ("raise", T.RAISE);
+      ("register", T.REGISTER);
   
       ("nd", T.ND);
       ("par", T.PAR);
@@ -106,6 +112,7 @@ let keywords =
       
       
       ("def",     T.DEF     ); (* for implementation files only *)
+      ("glob",    T.GLOB     ); (* for implementation files only *)
       ("fun",     T.FUN     );
       ("proc",    T.PROC     );
       
@@ -196,6 +203,7 @@ rule main = parse
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
   | '%'   { T.PERCENT }
+  | '^'   { T.CARET }
   | '='   { T.EQ }
   | '<'   { T.LT }
   | "<="  { T.LE }
@@ -225,6 +233,7 @@ rule main = parse
   | '>'	  { T.RANGLE }
   | '.'   { T.DOT }
   | "..." { T.DOTS }
+  | ";"   { T.SEMICOLON }
   | ','   { T.COMMA }
   | ':'   { T.COLON }
   | ":="  { T.COLON_EQ }

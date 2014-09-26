@@ -35,13 +35,19 @@ let bind (ND m) f =
                 match mb with
                   | Active logB eqsB vB ->
                       let log' = Dlist.append logA logB in
-                      let eqs' = Constraints.simplify $ Constraints.combine eqsA eqsB in
-                      if Constraints.isUnsat eqs' then
-                        Killed (Other "reached unsatisfiable constraints") log' eqs'
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
                       else
-                        Active log' eqs' vB
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
                   | Killed reason logB eqsB ->
-                      Killed reason (Dlist.append logA logB) (Constraints.simplify $ Constraints.combine eqsA eqsB)
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
                 end) $ (let ND z = f vA in z)
           | Killed reason log eqs ->
               [Killed reason log eqs]
@@ -83,6 +89,14 @@ let rec foldM f a = function                                             (* GENE
       f a x >>= fun fax -> foldM f fax xs                                (* GENERIC Monad *)
 end
 
+
+(*
+let sequence_ ms = foldr (>>) (return ()) ms               (* GENERIC Monad *)
+val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit (* GENERIC Monad *)
+let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
+*)
+
+
 val msum: forall 'a. list (t 'a) -> t 'a (* GENERIC MonadPlus *)
 let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
 
@@ -119,9 +133,9 @@ let kill reason =
 
 
 (* Add a constraint to the current execution *)
-val add_constraint: Constraints.assertion -> t unit
-let add_constraint constr =
-  ND [Active Dlist.nil (Constraints.singleton constr) ()]
+val add_constraint: (Constraints.t -> Constraints.t) -> t unit
+let add_constraint mk_assert =
+  ND [Active Dlist.nil (mk_assert Constraints.empty) ()]
 
 val log: string -> t unit
 let log msg =

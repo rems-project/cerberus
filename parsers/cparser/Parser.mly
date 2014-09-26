@@ -62,9 +62,9 @@ let empty_specs = {
   logical_OR_expression conditional_expression assignment_expression expression
   constant_expression
 
-%type<Cabs.generic_association list>
+%type<Cabs.cabs_generic_association list>
   generic_assoc_list
-%type<Cabs.generic_association>
+%type<Cabs.cabs_generic_association>
   generic_association
 
 %type<Cabs.cabs_expression list>

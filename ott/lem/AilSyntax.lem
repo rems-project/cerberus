@@ -33,7 +33,7 @@ type encodingPrefix =
   | Enc_U
   | Enc_L
 
-type stringConstant =
+type stringLiteral =
   maybe encodingPrefix * string
 
 type arithmeticOperator [name = "aop.*"] =  (*r 6.5.5 Multiplicative operators *)
@@ -49,9 +49,11 @@ type arithmeticOperator [name = "aop.*"] =  (*r 6.5.5 Multiplicative operators *
  | Bxor (*r Binary operators from 6.5.5-14, 6.5.17 *)
 
 type constant [name = "c*"] = 
- | ConstantInteger   of integerConstant
- | ConstantCharacter of characterConstant
- | ConstantString    of stringConstant
+ | ConstantIndeterminate of ctype
+ | ConstantNull (* TODO: maybe temporary *)
+ | ConstantInteger       of integerConstant
+ | ConstantCharacter     of characterConstant
+ | ConstantArray         of list constant
 
 type unaryOperator = 
  | Plus
@@ -82,14 +84,21 @@ type expression' 'A [name = "e*"] =
   | AilEcond of expression 'A * expression 'A * expression 'A
   | AilEcast of qualifiers * ctype * expression 'A
   | AilEcall of expression 'A * list (expression 'A)
+  | AilEgeneric of expression 'A * list (generic_association 'A)
   
-  | AilEmemberof of expression 'A * identifier
-  | AilEmemberofptr of expression 'A * identifier
+  | AilEmemberof of expression 'A * Cabs.cabs_identifier
+  | AilEmemberofptr of expression 'A * Cabs.cabs_identifier
   
+  | AilEstr of stringLiteral
   | AilEconst of constant
   | AilEident of identifier
   | AilEsizeof of qualifiers * ctype
   | AilEalignof of qualifiers * ctype
+
+and generic_association 'A =
+  | AilGAtype of ctype * expression 'A
+  | AilGAdefault of expression 'A
+
 and expression 'A [name = "e*"] =
   | AnnotatedExpression of 'A * expression' 'A
 
@@ -117,6 +126,7 @@ and statement 'A 'B [name="s*"] =
 
 (* (OLD) type sigma 'A 'B = context identifier ((ctype * bindings) * statement 'A 'B) *)
 
+(*
 type function_declaration 'A 'B = <|
   fun_return_ty:   ctype;
   fun_bindings:    bindings;
@@ -131,10 +141,24 @@ type sigma_declaration 'A 'B =
   | SDecl_fun           of identifier * function_declaration 'A 'B
   | SDecl_global        of identifier * (qualifiers * ctype * maybe (expression 'B))
   | SDecl_static_assert of expression 'B * stringConstant
+*)
 
+type declaration =
+  | Decl_object   of qualifiers * ctype
+    (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
+  | Decl_function of ctype * (list (qualifiers * ctype)) * bool * bool * bool
 
-type sigma 'A 'B =
+type sigma 'A 'B = <|
+  declarations: Context.context identifier declaration;
+  object_definitions: Context.context identifier (expression 'B);
+  (* the list of identifiers are the parameter names used in the body *)
+  function_definitions: Context.context identifier (list identifier * statement 'A 'B);
+  static_assertions: list (expression 'B * stringLiteral)
+|>
+
+(*
   list (sigma_declaration 'A 'B)
+*)
 
 type gamma = Context.context identifier (qualifiers * ctype)
 
@@ -191,10 +215,7 @@ val eq_definition: forall 'A.
                    (identifier * expression 'A) -> (identifier * expression 'A) ->
                    bool
 
-val eq_declaration: forall 'A.
-                    ('A -> 'A -> bool)                                                     ->
-                    list (identifier * expression 'A) -> list (identifier * expression 'A) ->
-                    bool
+val eq_declaration: declaration -> declaration -> bool
 
 val eq_block_aux: forall 'A 'B.
                   ('A -> 'A -> bool) -> ('B -> 'B -> bool)                                                 ->
@@ -290,7 +311,7 @@ let eq_encodingPrefix pref1 pref2 =
     | (_     , _     ) -> false
   end
 
-let eq_stringConstant =
+let eq_stringLiteral =
   eq_pair (eq_option eq_encodingPrefix) (=)
 
 
@@ -298,7 +319,6 @@ let eq_constant c1 c2 =
   match (c1, c2) with
     | (ConstantInteger   ic1, ConstantInteger   ic2) -> eq_integerConstant   ic1 ic2
     | (ConstantCharacter cc1, ConstantCharacter cc2) -> eq_characterConstant cc1 cc2
-    | (ConstantString    sc1, ConstantString    sc2) -> eq_stringConstant    sc1 sc2
     | (_                    , _                    ) -> false
   end
 
@@ -364,6 +384,8 @@ let rec eq_expression' eq_A e1 e2 =
     | (AilEcall e1 es1, AilEcall e2 es2) ->
         eq_expression eq_A e1 e2 &&
         eq_arguments es1 es2
+    | (AilEstr lit1, AilEstr lit2) ->
+        eq_stringLiteral lit1 lit2
     | (AilEconst c1, AilEconst c2) ->
         eq_constant c1 c2
     | (AilEident v1, AilEident v2) ->
@@ -391,8 +413,19 @@ let eq_bindings =
 let eq_definition eq_A d1 d2 =
   eq_pair eq_identifier (eq_expression eq_A) d1 d2
 
-let eq_declaration eq_A ds1 ds2 =
-  eq_list (eq_definition eq_A) ds1 ds2
+let eq_declaration ds1 ds2 =
+  match (ds1, ds2) with
+    | (Decl_object qs1 ty1, Decl_object qs2 ty2) ->
+        eq_qualifiers qs1 qs2 && eq_ctype ty1 ty2
+    | (Decl_function ret_ty1 qs_tys1 is_variadic1 is_inline1 is_Noreturn1, Decl_function ret_ty2 qs_tys2 is_variadic2 is_inline2 is_Noreturn2) ->
+        eq_ctype ret_ty1 ret_ty2 &&
+        eq_list (eq_pair eq_qualifiers eq_ctype) qs_tys1 qs_tys2 &&
+        is_variadic1 = is_variadic2 &&
+        is_inline1 = is_inline2 &&
+        is_Noreturn1 = is_Noreturn2
+    | _ ->
+        false
+  end
 
 let rec eq_block_aux eq_A eq_B equiv_statement ss1 ss2 =
   match (ss1, ss2) with
@@ -439,7 +472,7 @@ let rec eq_statement' eq_A eq_B s1 s2 =
     | (AilSgoto v1, AilSgoto v2) ->
         eq_identifier v1 v2
     | (AilSdeclaration d1, AilSdeclaration d2) ->
-        eq_declaration eq_B d1 d2
+        eq_list (eq_pair eq_identifier (eq_expression eq_B)) d1 d2
     | (_, _) -> false
   end
 and eq_statement eq_A eq_B s1 s2 =
@@ -452,6 +485,7 @@ let eq_block eq_A eq_B ss1 ss2 =
   eq_block_aux eq_A eq_B eq_statement ss1 ss2
 
 
+(*
 let eq_function_declaration eq_A eq_B fdecl1 fdecl2 =
   eq_ctype    fdecl1.fun_return_ty fdecl2.fun_return_ty  &&
   eq_bindings fdecl1.fun_bindings  fdecl2.fun_bindings   &&
@@ -472,12 +506,21 @@ let eq_sigma_declaration eq_A eq_B sdecl1 sdecl2 =
           glob1 glob2
     | (SDecl_static_assert e1 sc1, SDecl_static_assert e2 sc2) ->
         eq_expression eq_B e1 e2 &&
-        eq_stringConstant sc1 sc2
+        eq_stringLiteral sc1 sc2
     | (_,_) ->
         false
   end
+*)
 
 
+
+let eq_sigma eq_A eq_B sig1 sig2 =
+  eq_context eq_identifier eq_declaration sig1.declarations sig1.declarations &&
+  eq_context eq_identifier (eq_expression eq_B) sig1.object_definitions sig2.object_definitions &&
+  eq_context eq_identifier (eq_pair (eq_list eq_identifier) (eq_statement eq_A eq_B)) sig1.function_definitions sig2.function_definitions &&
+  eq_list (eq_pair (eq_expression eq_B) eq_stringLiteral) sig1.static_assertions sig2.static_assertions
+
+(*
 let eq_sigma eq_A eq_B =
   eq_list (eq_sigma_declaration eq_A eq_B)
 (* (OLD)  eq_context eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) *)
@@ -487,6 +530,7 @@ let eq_sigma eq_A eq_B =
       (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (eq_statement eq_A eq_B)))
       (eq_triple eq_qualifiers eq_ctype (eq_option (eq_expression eq_B)))
     )
+*)
 *)
 
 let eq_gamma g1 g2 =
@@ -672,6 +716,7 @@ let equiv_block ss1 ss2 =
 let declaration = identifier * maybe storageDuration.
 *)
 
+(*
 let equiv_function_declaration fdecl1 fdecl2 =
   eq_ctype    fdecl1.fun_return_ty fdecl2.fun_return_ty  &&
   eq_bindings fdecl1.fun_bindings  fdecl2.fun_bindings   &&
@@ -691,10 +736,11 @@ let equiv_sigma_declaration sdecl1 sdecl2 =
           glob1 glob2
     | (SDecl_static_assert e1 sc1, SDecl_static_assert e2 sc2) ->
         equiv_expression e1 e2 &&
-        eq_stringConstant sc1 sc2
+        eq_stringLiteral sc1 sc2
     | (_,_) ->
         false
   end
+*)
 
 (* WIP
 
@@ -748,7 +794,8 @@ let equiv_eq_program eq_A eq_B p1 p2 =
 *)
 
 (* *)
-val     sigma_lookup: forall 'A 'B. sigma 'A 'B -> identifier -> maybe (sigma_declaration 'A 'B)
+val     sigma_lookup: forall 'A 'B. sigma 'A 'B -> identifier -> maybe ((* sigma_declaration 'A 'B *) unit)
+(*
 let rec sigma_lookup S a =
   match S with
     | [] ->
@@ -766,7 +813,9 @@ let rec sigma_lookup S a =
     | (SDecl_static_assert _ _) :: S' ->
         sigma_lookup S' a
   end
+*)
 
+(*
 val sigma_mem: forall 'A 'B. identifier -> sigma 'A 'B -> bool
 let sigma_mem a S =
   match sigma_lookup S a with
@@ -777,72 +826,15 @@ let sigma_mem a S =
 val sigma_fresh: forall 'A 'B. identifier -> sigma 'A 'B -> bool
 let sigma_fresh a S =
   not (sigma_mem a S)
+*)
 
 val sigma_fresh_bindings: forall 'A 'B1 'B2. bindings -> sigma 'A 'B1 -> bool
 let sigma_fresh_bindings bs S =
-  all_list (fun b -> sigma_fresh (fst b) S) bs
-
-
-val     sigma_remove_var: forall 'A 'B. identifier -> sigma 'A 'B -> sigma 'A 'B
-let rec sigma_remove_var a S =
-  match S with
-    | [] ->
-        []
-    | (SDecl_fun id fdecl) :: S' ->
-        if eq_identifier a id then
-          sigma_remove_var a S'
-        else
-          (SDecl_fun id fdecl) :: sigma_remove_var a S'
-    | (SDecl_global id glob) :: S' ->
-        if eq_identifier a id then
-          sigma_remove_var a S'
-        else
-          (SDecl_global id glob) :: sigma_remove_var a S'
-    | sa_decl :: S' ->
-        sa_decl :: sigma_remove_var a S'
-  end
-
-
-val     sigma_linearize: forall 'A 'B. sigma 'A 'B -> sigma 'A 'B
-let rec sigma_linearize S =
-  match S with
-    | [] ->
-        []
-    | (SDecl_fun id fdecl) :: S' ->
-        (SDecl_fun id fdecl) :: sigma_remove_var id (sigma_linearize S')
-    | (SDecl_global id glob) :: S' ->
-        (SDecl_global id glob) :: sigma_remove_var id (sigma_linearize S')
-    | sa_decl :: S' ->
-        sa_decl :: sigma_linearize S'
-  end
-
-
-val sigma_mapP_linear: forall 'A1 'A2 'B1 'B2.
-    (sigma_declaration 'A1 'B1 -> ErrorMonad.errorM (sigma_declaration 'A2 'B2)) ->
-    sigma 'A1 'B1 -> ErrorMonad.errorM (sigma 'A2 'B2)
-let rec sigma_mapP_linear p S =
-  match S with
-    | [] ->
-        ErrorMonad.return []
-    | sdecl :: S' -> do ErrorMonad
-        sdecl2 <- p sdecl;
-        S''    <- sigma_mapP_linear p S'; in
-          ErrorMonad.return (sdecl2 :: S'')
-        end
-  end
-
-val sigma_mapP: forall 'A1 'A2 'B1 'B2. (sigma_declaration 'A1 'B1 -> ErrorMonad.errorM (sigma_declaration 'A2 'B2)) ->
-                                        sigma 'A1 'B1 -> ErrorMonad.errorM (sigma 'A2 'B2)
-let sigma_mapP p S =
-  sigma_mapP_linear p (sigma_linearize S)
+  all_list (fun (ident, _) -> Context.fresh eq_identifier ident S.declarations) bs
 
 
 
-
-
-
-
-
+(*
 val lookup:         forall 'B. Context.context identifier 'B -> identifier -> maybe 'B
 val mem:            forall 'B. identifier -> Context.context identifier 'B -> bool
 val fresh:          forall 'B. identifier -> Context.context identifier 'B -> bool
@@ -852,9 +844,6 @@ val disjoint: forall 'B1 'B2.
               Context.context identifier 'B1 -> Context.context identifier 'B2 ->
               bool
 
-val parameters_of_bindings: bindings -> list (qualifiers * ctype)
-
-val type_from_sigma: forall 'A 'B. (ctype * bindings * bool) * maybe (statement 'A 'B) -> ctype
 
 
 let lookup C v          = Context.lookup eq_identifier C v
@@ -862,6 +851,11 @@ let mem v C             = Context.mem eq_identifier v C
 let fresh v C           = Context.fresh eq_identifier v C
 let fresh_bindings bs C = Context.fresh_bindings eq_identifier bs C
 let disjoint C1 C2      = Context.disjoint eq_identifier C1 C2
+*)
+
+val parameters_of_bindings: bindings -> list (qualifiers * ctype)
+
+val type_from_sigma: forall 'A 'B. (ctype * bindings * bool) * maybe (statement 'A 'B) -> ctype
 
 let parameters_of_bindings bs =
   List.map snd bs

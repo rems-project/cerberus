@@ -1,4 +1,5 @@
 open import Pervasives Common AilTypes AilSyntax
+import Cabs
 
 type genIntegerType [name="git*"] =
  | Concrete of integerType
@@ -33,21 +34,21 @@ type genType [name="gt*"] =
  | GenArray of ctype * integer
  | GenFunction of ctype * list (qualifiers * ctype) * bool
  | GenPointer of qualifiers * ctype
- | GenStruct of list (AilTypes.identifier * ctype)
- | GenUnion of list (AilTypes.identifier * ctype)
+ | GenStruct of identifier * list (Cabs.cabs_identifier * ctype)
+ | GenUnion of identifier * list (Cabs.cabs_identifier * ctype)
  | GenBuiltin of string
 
 let rec eq_genType gt1 gt2 =
   match (gt1, gt2) with
-  | (GenVoid             , GenVoid             ) -> true
-  | (GenBasic    gbt1    , GenBasic    gbt2    ) -> eq_genBasicType gbt1 gbt2
-  | (GenArray    t1 n1   , GenArray    t2 n2   ) -> eq_ctype t1 t2 && n1 = n2
-  | (GenFunction t1 p1 b1, GenFunction t2 p2 b2) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
-  | (GenPointer  q1 t1   , GenPointer  q2 t2   ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
-  | (GenStruct   xs1     , GenStruct   xs2     ) -> eq_list (eq_pair (=) eq_ctype) xs1 xs2
-  | (GenUnion    xs1     , GenUnion    xs2     ) -> eq_list (eq_pair (=) eq_ctype) xs1 xs2
-  | (GenBuiltin  str1    , GenBuiltin  str2    ) -> str1 = str2
-  | (_                   , _                   ) -> false
+  | (GenVoid              , GenVoid              ) -> true
+  | (GenBasic    gbt1     , GenBasic    gbt2     ) -> eq_genBasicType gbt1 gbt2
+  | (GenArray    t1 n1    , GenArray    t2 n2    ) -> eq_ctype t1 t2 && n1 = n2
+  | (GenFunction t1 p1 b1 , GenFunction t2 p2 b2 ) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
+  | (GenPointer  q1 t1    , GenPointer  q2 t2    ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
+  | (GenStruct   tag1 xs1 , GenStruct   tag2 xs2 ) -> tag1 = tag2 && eq_list (eq_pair (=) eq_ctype) xs1 xs2
+  | (GenUnion    tag1 xs1 , GenUnion    tag2 xs2 ) -> tag1 = tag2 && eq_list (eq_pair (=) eq_ctype) xs1 xs2
+  | (GenBuiltin  str1     , GenBuiltin  str2     ) -> str1 = str2
+  | (_                    , _                    ) -> false
   end
 
 type genTypeCategory = 
@@ -75,9 +76,9 @@ let inject_type t : genType =
   | Pointer  q t   -> GenPointer q t
   | Array    t n   -> GenArray t n
   | Function t p b -> GenFunction t p b
-  | Atomic _       -> assert_false "TODO"
-  | Struct xs      -> GenStruct xs
-  | Union  xs      -> GenUnion  xs
+  | Atomic _       -> assert_false "TODO: inject_type, Atomic"
+  | Struct tag xs  -> GenStruct tag xs
+  | Union  tag xs  -> GenUnion  tag xs
   | Builtin str    -> GenBuiltin str
   end
 

@@ -206,13 +206,13 @@ let step s rel =
       acc
   ) s rel
 
-let rec replicate_list_ x (n: integer) acc =
+let rec replicate_list_ x (n: nat) acc =
   if n > 0 then
     replicate_list_ x (n-1) (x :: acc)
   else
     acc
 
-val replicate_list: forall 'a. 'a -> integer -> list 'a
+val replicate_list: forall 'a. 'a -> nat -> list 'a
 let replicate_list x n =
   replicate_list_ x n []
 
@@ -266,3 +266,25 @@ let rec assoc_adjust f k = function
       else
         (k', v) :: assoc_adjust f k xs
 end
+
+
+(* insert the element to the list only if it isn't already there. O(n) *)
+val list_insert: forall 'a. Eq 'a => 'a -> list 'a -> list 'a
+let list_insert x xs =
+  if List.elem x xs then
+    xs
+  else
+    x :: xs
+
+
+val     mapi_aux: forall 'a 'b. (nat -> 'a -> 'b) -> nat -> list 'b -> list 'a -> list 'b
+let rec mapi_aux f n acc = function
+  | [] ->
+      acc
+  | x::xs ->
+      mapi_aux f (n+1) (f n x :: acc) xs
+end
+
+val mapi: forall 'a 'b. (nat -> 'a -> 'b) -> list 'a -> list 'b
+let mapi f xs =
+  mapi_aux f 0 [] xs

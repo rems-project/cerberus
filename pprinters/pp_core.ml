@@ -24,6 +24,23 @@ module Mem = Naive_memory
 
 
 let precedence = function
+  | Eop (OpExp, _, _) -> Some 1
+
+  | Eop (OpMul, _, _)
+  | Eop (OpDiv, _, _)
+  | Eop (OpMod, _, _) -> Some 2
+  
+  | Eop (OpAdd, _, _)
+  | Eop (OpSub, _, _) -> Some 3
+  
+  | Eop (OpLt,  _, _) -> Some 4
+  
+  | Eop (OpEq,  _, _) -> Some 5
+  
+  | Eop (OpAnd, _, _) -> Some 6
+  
+  | Eop (OpOr,  _, _) -> Some 7
+
   | Eunit
   | Etrue
   | Efalse
@@ -35,65 +52,44 @@ let precedence = function
   | Etuple _
   | Eundef _
   | Eerror
+  | Eraise _
+  | Eregister _
+(*
+  | Etry _
+*)
   | Eskip
-  | Erun _            -> Some 0
-  
+  | Erun _
   | Enot _
   | Esave _
   | Eret _
-  | Eindet _          -> Some 1
-  
+  | Eindet _
   | Eaction _
   | Eproc _
   | Ecall _
-  | Eoutput _         -> Some 2
-  
-  | Eop (OpMul, _, _)
-  | Eop (OpDiv, _, _)
-  | Eop (OpMod, _, _) -> Some 3
-  
-  | Eop (OpAdd, _, _)
-  | Eop (OpSub, _, _) -> Some 4
-  
-  | Eop (OpLt,  _, _) -> Some 5
-  
-  | Eop (OpEq,  _, _) -> Some 6
-  
-  | Eop (OpAnd, _, _) -> Some 7
-  
-  | Eop (OpOr,  _, _) -> Some 8
-  
-  | Eif _             -> Some 9
-  
-  | Elet _            -> Some 10
-  
-  | Easeq _           -> Some 11
-  
-  | Ewseq _           -> Some 12
-  
-  | Esseq _           -> Some 13
-  
-  | Eunseq _          -> Some 14
-  | Epar _            -> None
-  | Ewait _           -> None
-  | Etuple _          -> None (* shouldn't be needed *)
-  | Ebound _          -> None (* shouldn't be needed *)
-(* TODO: hack *)
-  | End _             -> None
-
+  | Eoutput _
+  | Eif _
+  | Elet _
+  | Easeq _
+  | Ewseq _
+  | Esseq _
+  | Eunseq _
+  | Epar _
+  | Ewait _
+  | Etuple _
+  | Ebound _
+  | End _
 (* TODO: temporary *)
-  | Eis_scalar _   -> Some 2
-  | Eis_integer _  -> Some 2
-  | Eis_signed _   -> Some 2
-  | Eis_unsigned _ -> Some 2
+  | Eis_scalar _
+  | Eis_integer _
+  | Eis_signed _
+  | Eis_unsigned _ -> None
 
 
 
 let lt_precedence p1 p2 =
   match (p1, p2) with
     | (Some n1, Some n2) -> n1 <= n2
-    | (Some _ , None   ) -> true
-    | (None   , _      ) -> false
+    | _                  -> true
 
 
 let pp_keyword w = !^ (if !isatty then ansi_format [Bold; Magenta] w else w)
@@ -193,6 +189,7 @@ let pp_binop = function
   | OpMul -> P.star
   | OpDiv -> P.slash
   | OpMod -> P.percent
+  | OpExp -> P.caret
   | OpEq  -> P.equals
   | OpLt  -> P.langle
   | OpAnd -> !^ "/\\"
@@ -215,19 +212,26 @@ let pp_name = function
 
 
 let rec pp_symbolic = function
-  | Symbolic.Symbolic_constant n ->
+  | Symbolic.SYMBtrue ->
+      !^ "true"
+  | Symbolic.SYMBfalse ->
+      !^ "false"
+  | Symbolic.SYMBconst n ->
       !^ (Big_int.string_of_big_int n)
-  | Symbolic.Symbolic_symbol sym ->
+  | Symbolic.SYMBsym (_, sym) ->
       pp_symbol sym
-  | Symbolic.Symbolic_op (op, symb1, symb2) ->
+  | Symbolic.SYMBop (op, symb1, symb2) ->
       let str_opt = match op with
         | Symbolic.Add0 -> "+"
         | Symbolic.Sub0 -> "-"
         | Symbolic.Mul0 -> "*"
         | Symbolic.Div0 -> "/"
         | Symbolic.Mod0 -> "mod" in
-
       P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
+  | Symbolic.SYMBite (symb1, symb2, symb3) ->
+      P.parens (!^ "ite" ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2 ^^^ pp_symbolic symb3)
+
+
 
 
 let rec pp_constant = function
@@ -239,7 +243,7 @@ let rec pp_constant = function
       !^ ("@" ^ string_of_int n)
   | Mem.MV_pointer ptr_val ->
       !^ "TODO(MV_pointer)" 
-  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
+  | Mem.MV_integer (Symbolic.SYMBconst n) ->
       !^ (Big_int.string_of_big_int n)
   | Mem.MV_integer symb ->
       !^ "SYMB" ^^ P.parens (pp_symbolic symb)
@@ -295,6 +299,17 @@ let rec pp_expr e =
   let rec pp p e =
     let p'   = precedence e in
     let pp z = P.group (pp p' z) in
+    
+(*
+    let rec pp_try_clauses = function
+      | [] ->
+          !^ "ERROR[empty try_clauses]"
+      | [(str, e)] ->
+          !^ "|" ^^^ !^ str ^^^ !^ "->" ^^^ pp e
+      | (str, e) :: str_es ->
+          !^ "|" ^^^ !^ str ^^^ !^ "->" ^^^ pp e ^^^ pp_try_clauses str_es in
+*)
+    
     (if lt_precedence p' p then fun x -> x else P.parens)
       (match e with
         | Eunit ->
@@ -330,6 +345,10 @@ let rec pp_expr e =
                          else Undefined.string_of_undefined_behaviour u)))
         | Eerror ->
             pp_keyword "error"
+        | Eraise str ->
+            pp_keyword "raise" ^^ P.parens (!^ str)
+        | Eregister (str, nm) ->
+            pp_keyword "register" ^^ P.parens (!^ str ^^ P.comma ^^^ pp_name nm)
         | Eskip ->
             pp_keyword "skip"
         | Elet (a, e1, e2) ->
@@ -372,6 +391,12 @@ let rec pp_expr e =
             pp_control "let" ^^^ pp_control "weak" ^^^ P.parens (comma_list g _as) ^^^ P.equals ^^^
             pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
  *)
+          (* TODO: update the parser to be sync ... *)
+(*
+        | Ewseq ([], e1, e2) ->
+            pp e1 ^^ P.semi ^^ P.break 1 ^^ pp e2
+*)
+
         | Ewseq (_as, e1, e2) ->
             pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
             pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
@@ -439,6 +464,10 @@ and pp_action act =
         P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
                   pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | Pointer_eq (e1, e2) ->
+       pp_keyword "pointer_eq" ^^ P.parens (pp_expr e1 ^^ P.comma ^^^ pp_expr e2)
+    | Pointer_neq (e1, e2) ->
+       pp_keyword "pointer_neq" ^^ P.parens (pp_expr e1 ^^ P.comma ^^^ pp_expr e2)
 
 
 
@@ -478,12 +507,12 @@ let pp_file file =
       pp_keyword "fun" ^^^ pp_symbol fname ^^^ P.parens (comma_list pp_argument args) ^^ P.colon ^^^ pp_core_type ftype ^^^
       P.colon ^^ P.equals ^^
       P.nest 2 (P.break 1 ^^ pp_expr body) ^^ P.break 1 ^^ P.break 1 in
-  let g acc (gsym, gbTy, e) =
+  let g acc (gsym, gTy, e) =
     acc ^^
-    pp_keyword "def" ^^^ pp_symbol gsym ^^ P.colon ^^^ pp_core_base_type gbTy ^^^
+    pp_keyword "glob" ^^^ pp_symbol gsym ^^ P.colon ^^^ pp_core_type gTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
   
-  List.fold_left g P.empty file.defs ^^
+  List.fold_left g P.empty file.globs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
     (Pset.elements (Pmap.bindings (pairCompare symbol_compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1

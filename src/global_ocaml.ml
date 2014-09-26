@@ -43,6 +43,7 @@ type cerberus_conf = {
   core_impl:     unit Core.impl;
   core_parser:   Input.t -> (Core_parser_util.result, Errors.t9) Exception.t2;
   exec_mode_opt: execution_mode option;
+  progress:      bool
 }
 
 let (!!) z = !z()
@@ -50,24 +51,29 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress =
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
     pps=           pps;
     core_stdlib=   core_stdlib;
     core_impl=     core_impl;
     core_parser=   core_parser;
-    exec_mode_opt= if exec then Some exec_mode else None
+    exec_mode_opt= if exec then Some exec_mode else None;
+    progress=      progress
   }
 
 
-(* use this to print a fatal error message *)
-let error msg =
+(* print an error fatal message and exit with a given code *)
+let error ?(code = 1) msg =
   prerr_endline Colour.(ansi_format [Red] $ "ERROR: " ^ msg);
-  exit 1
+  exit code
 
 
 let debug_level = ref 0
+
+(* TODO: hack *)
+let progress_sofar = ref 1
+
 
 let print_success msg =
   if !debug_level > 0 then

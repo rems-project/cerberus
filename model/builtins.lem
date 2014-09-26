@@ -12,351 +12,351 @@ type builtin_kind =
 
 let builtin = [
   (* from errno.h (§7.5) *)
-  ("__cerb_EDOM",                   Varname );
-  ("__cerb_EILSEQ",                 Varname );
-  ("__cerb_ERANGE",                 Varname );
-  ("__cerb_errno",                  Varname );
+  ("__cerbvar_EDOM",                   Varname );
+  ("__cerbvar_EILSEQ",                 Varname );
+  ("__cerbvar_ERANGE",                 Varname );
+  ("__cerbvar_errno",                  Varname );
 
   (* from inttypes.h (§7.8) *)
-  ("__cerb_imaxdiv_t",   Typename);
-  ("__cerb_PRId8",       Varname );
-  ("__cerb_PRId16",      Varname );
-  ("__cerb_PRId32",      Varname );
-  ("__cerb_PRId64",      Varname );
-  ("__cerb_PRIdLEAST8",  Varname );
-  ("__cerb_PRIdLEAST16", Varname );
-  ("__cerb_PRIdLEAST32", Varname );
-  ("__cerb_PRIdLEAST64", Varname );
-  ("__cerb_PRIdFAST8",   Varname );
-  ("__cerb_PRIdFAST16",  Varname );
-  ("__cerb_PRIdFAST32",  Varname );
-  ("__cerb_PRIdFAST64",  Varname );
-  ("__cerb_PRIdMAX",     Varname );
-  ("__cerb_PRIdPTR",     Varname );
-  ("__cerb_PRIi8",       Varname );
-  ("__cerb_PRIi16",      Varname );
-  ("__cerb_PRIi32",      Varname );
-  ("__cerb_PRIi64",      Varname );
-  ("__cerb_PRIiLEAST8",  Varname );
-  ("__cerb_PRIiLEAST16", Varname );
-  ("__cerb_PRIiLEAST32", Varname );
-  ("__cerb_PRIiLEAST64", Varname );
-  ("__cerb_PRIiFAST8",   Varname );
-  ("__cerb_PRIiFAST16",  Varname );
-  ("__cerb_PRIiFAST32",  Varname );
-  ("__cerb_PRIiFAST64",  Varname );
-  ("__cerb_PRIiMAX",     Varname );
-  ("__cerb_PRIiPTR",     Varname );
-  ("__cerb_PRIo8",       Varname );
-  ("__cerb_PRIo16",      Varname );
-  ("__cerb_PRIo32",      Varname );
-  ("__cerb_PRIo64",      Varname );
-  ("__cerb_PRIoLEAST8",  Varname );
-  ("__cerb_PRIoLEAST16", Varname );
-  ("__cerb_PRIoLEAST32", Varname );
-  ("__cerb_PRIoLEAST64", Varname );
-  ("__cerb_PRIoFAST8",   Varname );
-  ("__cerb_PRIoFAST16",  Varname );
-  ("__cerb_PRIoFAST32",  Varname );
-  ("__cerb_PRIoFAST64",  Varname );
-  ("__cerb_PRIoMAX",     Varname );
-  ("__cerb_PRIoPTR",     Varname );
-  ("__cerb_PRIu8",       Varname );
-  ("__cerb_PRIu16",      Varname );
-  ("__cerb_PRIu32",      Varname );
-  ("__cerb_PRIu64",      Varname );
-  ("__cerb_PRIuLEAST8",  Varname );
-  ("__cerb_PRIuLEAST16", Varname );
-  ("__cerb_PRIuLEAST32", Varname );
-  ("__cerb_PRIuLEAST64", Varname );
-  ("__cerb_PRIuFAST8",   Varname );
-  ("__cerb_PRIuFAST16",  Varname );
-  ("__cerb_PRIuFAST32",  Varname );
-  ("__cerb_PRIuFAST64",  Varname );
-  ("__cerb_PRIuMAX",     Varname );
-  ("__cerb_PRIuPTR",     Varname );
-  ("__cerb_PRIx8",       Varname );
-  ("__cerb_PRIx16",      Varname );
-  ("__cerb_PRIx32",      Varname );
-  ("__cerb_PRIx64",      Varname );
-  ("__cerb_PRIxLEAST8",  Varname );
-  ("__cerb_PRIxLEAST16", Varname );
-  ("__cerb_PRIxLEAST32", Varname );
-  ("__cerb_PRIxLEAST64", Varname );
-  ("__cerb_PRIxFAST8",   Varname );
-  ("__cerb_PRIxFAST16",  Varname );
-  ("__cerb_PRIxFAST32",  Varname );
-  ("__cerb_PRIxFAST64",  Varname );
-  ("__cerb_PRIxMAX",     Varname );
-  ("__cerb_PRIxPTR",     Varname );
-  ("__cerb_PRIX8",       Varname );
-  ("__cerb_PRIX16",      Varname );
-  ("__cerb_PRIX32",      Varname );
-  ("__cerb_PRIX64",      Varname );
-  ("__cerb_PRIXLEAST8",  Varname );
-  ("__cerb_PRIXLEAST16", Varname );
-  ("__cerb_PRIXLEAST32", Varname );
-  ("__cerb_PRIXLEAST64", Varname );
-  ("__cerb_PRIXFAST8",   Varname );
-  ("__cerb_PRIXFAST16",  Varname );
-  ("__cerb_PRIXFAST32",  Varname );
-  ("__cerb_PRIXFAST64",  Varname );
-  ("__cerb_PRIXMAX",     Varname );
-  ("__cerb_PRIXPTR",     Varname );
-  ("__cerb_SCNd8",       Varname );
-  ("__cerb_SCNd16",      Varname );
-  ("__cerb_SCNd32",      Varname );
-  ("__cerb_SCNd64",      Varname );
-  ("__cerb_SCNdLEAST8",  Varname );
-  ("__cerb_SCNdLEAST16", Varname );
-  ("__cerb_SCNdLEAST32", Varname );
-  ("__cerb_SCNdLEAST64", Varname );
-  ("__cerb_SCNdFAST8",   Varname );
-  ("__cerb_SCNdFAST16",  Varname );
-  ("__cerb_SCNdFAST32",  Varname );
-  ("__cerb_SCNdFAST64",  Varname );
-  ("__cerb_SCNdMAX",     Varname );
-  ("__cerb_SCNdPTR",     Varname );
-  ("__cerb_SCNi8",       Varname );
-  ("__cerb_SCNi16",      Varname );
-  ("__cerb_SCNi32",      Varname );
-  ("__cerb_SCNi64",      Varname );
-  ("__cerb_SCNiLEAST8",  Varname );
-  ("__cerb_SCNiLEAST16", Varname );
-  ("__cerb_SCNiLEAST32", Varname );
-  ("__cerb_SCNiLEAST64", Varname );
-  ("__cerb_SCNiFAST8",   Varname );
-  ("__cerb_SCNiFAST16",  Varname );
-  ("__cerb_SCNiFAST32",  Varname );
-  ("__cerb_SCNiFAST64",  Varname );
-  ("__cerb_SCNiMAX",     Varname );
-  ("__cerb_SCNiPTR",     Varname );
-  ("__cerb_SCNo8",       Varname );
-  ("__cerb_SCNo16",      Varname );
-  ("__cerb_SCNo32",      Varname );
-  ("__cerb_SCNo64",      Varname );
-  ("__cerb_SCNoLEAST8",  Varname );
-  ("__cerb_SCNoLEAST16", Varname );
-  ("__cerb_SCNoLEAST32", Varname );
-  ("__cerb_SCNoLEAST64", Varname );
-  ("__cerb_SCNoFAST8",   Varname );
-  ("__cerb_SCNoFAST16",  Varname );
-  ("__cerb_SCNoFAST32",  Varname );
-  ("__cerb_SCNoFAST64",  Varname );
-  ("__cerb_SCNoMAX",     Varname );
-  ("__cerb_SCNoPTR",     Varname );
-  ("__cerb_SCNu8",       Varname );
-  ("__cerb_SCNu16",      Varname );
-  ("__cerb_SCNu32",      Varname );
-  ("__cerb_SCNu64",      Varname );
-  ("__cerb_SCNuLEAST8",  Varname );
-  ("__cerb_SCNuLEAST16", Varname );
-  ("__cerb_SCNuLEAST32", Varname );
-  ("__cerb_SCNuLEAST64", Varname );
-  ("__cerb_SCNuFAST8",   Varname );
-  ("__cerb_SCNuFAST16",  Varname );
-  ("__cerb_SCNuFAST32",  Varname );
-  ("__cerb_SCNuFAST64",  Varname );
-  ("__cerb_SCNuMAX",     Varname );
-  ("__cerb_SCNuPTR",     Varname );
-  ("__cerb_SCNx8",       Varname );
-  ("__cerb_SCNx16",      Varname );
-  ("__cerb_SCNx32",      Varname );
-  ("__cerb_SCNx64",      Varname );
-  ("__cerb_SCNxLEAST8",  Varname );
-  ("__cerb_SCNxLEAST16", Varname );
-  ("__cerb_SCNxLEAST32", Varname );
-  ("__cerb_SCNxLEAST64", Varname );
-  ("__cerb_SCNxFAST8",   Varname );
-  ("__cerb_SCNxFAST16",  Varname );
-  ("__cerb_SCNxFAST32",  Varname );
-  ("__cerb_SCNxFAST64",  Varname );
-  ("__cerb_SCNxMAX",     Varname );
-  ("__cerb_SCNxPTR",     Varname );
+  ("__cerbty_imaxdiv_t",   Typename);
+  ("__cerbvar_PRId8",       Varname );
+  ("__cerbvar_PRId16",      Varname );
+  ("__cerbvar_PRId32",      Varname );
+  ("__cerbvar_PRId64",      Varname );
+  ("__cerbvar_PRIdLEAST8",  Varname );
+  ("__cerbvar_PRIdLEAST16", Varname );
+  ("__cerbvar_PRIdLEAST32", Varname );
+  ("__cerbvar_PRIdLEAST64", Varname );
+  ("__cerbvar_PRIdFAST8",   Varname );
+  ("__cerbvar_PRIdFAST16",  Varname );
+  ("__cerbvar_PRIdFAST32",  Varname );
+  ("__cerbvar_PRIdFAST64",  Varname );
+  ("__cerbvar_PRIdMAX",     Varname );
+  ("__cerbvar_PRIdPTR",     Varname );
+  ("__cerbvar_PRIi8",       Varname );
+  ("__cerbvar_PRIi16",      Varname );
+  ("__cerbvar_PRIi32",      Varname );
+  ("__cerbvar_PRIi64",      Varname );
+  ("__cerbvar_PRIiLEAST8",  Varname );
+  ("__cerbvar_PRIiLEAST16", Varname );
+  ("__cerbvar_PRIiLEAST32", Varname );
+  ("__cerbvar_PRIiLEAST64", Varname );
+  ("__cerbvar_PRIiFAST8",   Varname );
+  ("__cerbvar_PRIiFAST16",  Varname );
+  ("__cerbvar_PRIiFAST32",  Varname );
+  ("__cerbvar_PRIiFAST64",  Varname );
+  ("__cerbvar_PRIiMAX",     Varname );
+  ("__cerbvar_PRIiPTR",     Varname );
+  ("__cerbvar_PRIo8",       Varname );
+  ("__cerbvar_PRIo16",      Varname );
+  ("__cerbvar_PRIo32",      Varname );
+  ("__cerbvar_PRIo64",      Varname );
+  ("__cerbvar_PRIoLEAST8",  Varname );
+  ("__cerbvar_PRIoLEAST16", Varname );
+  ("__cerbvar_PRIoLEAST32", Varname );
+  ("__cerbvar_PRIoLEAST64", Varname );
+  ("__cerbvar_PRIoFAST8",   Varname );
+  ("__cerbvar_PRIoFAST16",  Varname );
+  ("__cerbvar_PRIoFAST32",  Varname );
+  ("__cerbvar_PRIoFAST64",  Varname );
+  ("__cerbvar_PRIoMAX",     Varname );
+  ("__cerbvar_PRIoPTR",     Varname );
+  ("__cerbvar_PRIu8",       Varname );
+  ("__cerbvar_PRIu16",      Varname );
+  ("__cerbvar_PRIu32",      Varname );
+  ("__cerbvar_PRIu64",      Varname );
+  ("__cerbvar_PRIuLEAST8",  Varname );
+  ("__cerbvar_PRIuLEAST16", Varname );
+  ("__cerbvar_PRIuLEAST32", Varname );
+  ("__cerbvar_PRIuLEAST64", Varname );
+  ("__cerbvar_PRIuFAST8",   Varname );
+  ("__cerbvar_PRIuFAST16",  Varname );
+  ("__cerbvar_PRIuFAST32",  Varname );
+  ("__cerbvar_PRIuFAST64",  Varname );
+  ("__cerbvar_PRIuMAX",     Varname );
+  ("__cerbvar_PRIuPTR",     Varname );
+  ("__cerbvar_PRIx8",       Varname );
+  ("__cerbvar_PRIx16",      Varname );
+  ("__cerbvar_PRIx32",      Varname );
+  ("__cerbvar_PRIx64",      Varname );
+  ("__cerbvar_PRIxLEAST8",  Varname );
+  ("__cerbvar_PRIxLEAST16", Varname );
+  ("__cerbvar_PRIxLEAST32", Varname );
+  ("__cerbvar_PRIxLEAST64", Varname );
+  ("__cerbvar_PRIxFAST8",   Varname );
+  ("__cerbvar_PRIxFAST16",  Varname );
+  ("__cerbvar_PRIxFAST32",  Varname );
+  ("__cerbvar_PRIxFAST64",  Varname );
+  ("__cerbvar_PRIxMAX",     Varname );
+  ("__cerbvar_PRIxPTR",     Varname );
+  ("__cerbvar_PRIX8",       Varname );
+  ("__cerbvar_PRIX16",      Varname );
+  ("__cerbvar_PRIX32",      Varname );
+  ("__cerbvar_PRIX64",      Varname );
+  ("__cerbvar_PRIXLEAST8",  Varname );
+  ("__cerbvar_PRIXLEAST16", Varname );
+  ("__cerbvar_PRIXLEAST32", Varname );
+  ("__cerbvar_PRIXLEAST64", Varname );
+  ("__cerbvar_PRIXFAST8",   Varname );
+  ("__cerbvar_PRIXFAST16",  Varname );
+  ("__cerbvar_PRIXFAST32",  Varname );
+  ("__cerbvar_PRIXFAST64",  Varname );
+  ("__cerbvar_PRIXMAX",     Varname );
+  ("__cerbvar_PRIXPTR",     Varname );
+  ("__cerbvar_SCNd8",       Varname );
+  ("__cerbvar_SCNd16",      Varname );
+  ("__cerbvar_SCNd32",      Varname );
+  ("__cerbvar_SCNd64",      Varname );
+  ("__cerbvar_SCNdLEAST8",  Varname );
+  ("__cerbvar_SCNdLEAST16", Varname );
+  ("__cerbvar_SCNdLEAST32", Varname );
+  ("__cerbvar_SCNdLEAST64", Varname );
+  ("__cerbvar_SCNdFAST8",   Varname );
+  ("__cerbvar_SCNdFAST16",  Varname );
+  ("__cerbvar_SCNdFAST32",  Varname );
+  ("__cerbvar_SCNdFAST64",  Varname );
+  ("__cerbvar_SCNdMAX",     Varname );
+  ("__cerbvar_SCNdPTR",     Varname );
+  ("__cerbvar_SCNi8",       Varname );
+  ("__cerbvar_SCNi16",      Varname );
+  ("__cerbvar_SCNi32",      Varname );
+  ("__cerbvar_SCNi64",      Varname );
+  ("__cerbvar_SCNiLEAST8",  Varname );
+  ("__cerbvar_SCNiLEAST16", Varname );
+  ("__cerbvar_SCNiLEAST32", Varname );
+  ("__cerbvar_SCNiLEAST64", Varname );
+  ("__cerbvar_SCNiFAST8",   Varname );
+  ("__cerbvar_SCNiFAST16",  Varname );
+  ("__cerbvar_SCNiFAST32",  Varname );
+  ("__cerbvar_SCNiFAST64",  Varname );
+  ("__cerbvar_SCNiMAX",     Varname );
+  ("__cerbvar_SCNiPTR",     Varname );
+  ("__cerbvar_SCNo8",       Varname );
+  ("__cerbvar_SCNo16",      Varname );
+  ("__cerbvar_SCNo32",      Varname );
+  ("__cerbvar_SCNo64",      Varname );
+  ("__cerbvar_SCNoLEAST8",  Varname );
+  ("__cerbvar_SCNoLEAST16", Varname );
+  ("__cerbvar_SCNoLEAST32", Varname );
+  ("__cerbvar_SCNoLEAST64", Varname );
+  ("__cerbvar_SCNoFAST8",   Varname );
+  ("__cerbvar_SCNoFAST16",  Varname );
+  ("__cerbvar_SCNoFAST32",  Varname );
+  ("__cerbvar_SCNoFAST64",  Varname );
+  ("__cerbvar_SCNoMAX",     Varname );
+  ("__cerbvar_SCNoPTR",     Varname );
+  ("__cerbvar_SCNu8",       Varname );
+  ("__cerbvar_SCNu16",      Varname );
+  ("__cerbvar_SCNu32",      Varname );
+  ("__cerbvar_SCNu64",      Varname );
+  ("__cerbvar_SCNuLEAST8",  Varname );
+  ("__cerbvar_SCNuLEAST16", Varname );
+  ("__cerbvar_SCNuLEAST32", Varname );
+  ("__cerbvar_SCNuLEAST64", Varname );
+  ("__cerbvar_SCNuFAST8",   Varname );
+  ("__cerbvar_SCNuFAST16",  Varname );
+  ("__cerbvar_SCNuFAST32",  Varname );
+  ("__cerbvar_SCNuFAST64",  Varname );
+  ("__cerbvar_SCNuMAX",     Varname );
+  ("__cerbvar_SCNuPTR",     Varname );
+  ("__cerbvar_SCNx8",       Varname );
+  ("__cerbvar_SCNx16",      Varname );
+  ("__cerbvar_SCNx32",      Varname );
+  ("__cerbvar_SCNx64",      Varname );
+  ("__cerbvar_SCNxLEAST8",  Varname );
+  ("__cerbvar_SCNxLEAST16", Varname );
+  ("__cerbvar_SCNxLEAST32", Varname );
+  ("__cerbvar_SCNxLEAST64", Varname );
+  ("__cerbvar_SCNxFAST8",   Varname );
+  ("__cerbvar_SCNxFAST16",  Varname );
+  ("__cerbvar_SCNxFAST32",  Varname );
+  ("__cerbvar_SCNxFAST64",  Varname );
+  ("__cerbvar_SCNxMAX",     Varname );
+  ("__cerbvar_SCNxPTR",     Varname );
   
   (* from limits.h (§7.10) *)
-  ("__cerb_CHAR_BIT",   Varname);
-  ("__cerb_SCHAR_MIN",  Varname);
-  ("__cerb_SCHAR_MAX",  Varname);
-  ("__cerb_UCHAR_MAX",  Varname);
-  ("__cerb_CHAR_MIN",   Varname);
-  ("__cerb_CHAR_MAX",   Varname);
-  ("__cerb_MB_LEN_MAX", Varname);
-  ("__cerb_SHRT_MIN",   Varname);
-  ("__cerb_SHRT_MAX",   Varname);
-  ("__cerb_USHRT_MAX",  Varname);
-  ("__cerb_INT_MIN",    Varname);
-  ("__cerb_INT_MAS",    Varname);
-  ("__cerb_UINT_MAX",   Varname);
-  ("__cerb_LONG_MIN",   Varname);
-  ("__cerb_LONG_MAX",   Varname);
-  ("__cerb_ULONG_MAX",  Varname);
-  ("__cerb_LLONG_MIN",  Varname);
-  ("__cerb_LLONG_MAX",  Varname);
-  ("__cerb_ULLONG_MAX", Varname);
+  ("__cerbvar_CHAR_BIT",   Varname);
+  ("__cerbvar_SCHAR_MIN",  Varname);
+  ("__cerbvar_SCHAR_MAX",  Varname);
+  ("__cerbvar_UCHAR_MAX",  Varname);
+  ("__cerbvar_CHAR_MIN",   Varname);
+  ("__cerbvar_CHAR_MAX",   Varname);
+  ("__cerbvar_MB_LEN_MAX", Varname);
+  ("__cerbvar_SHRT_MIN",   Varname);
+  ("__cerbvar_SHRT_MAX",   Varname);
+  ("__cerbvar_USHRT_MAX",  Varname);
+  ("__cerbvar_INT_MIN",    Varname);
+  ("__cerbvar_INT_MAS",    Varname);
+  ("__cerbvar_UINT_MAX",   Varname);
+  ("__cerbvar_LONG_MIN",   Varname);
+  ("__cerbvar_LONG_MAX",   Varname);
+  ("__cerbvar_ULONG_MAX",  Varname);
+  ("__cerbvar_LLONG_MIN",  Varname);
+  ("__cerbvar_LLONG_MAX",  Varname);
+  ("__cerbvar_ULLONG_MAX", Varname);
   
   (* TODO: locale.h (§7.11) *)
   
   (* from setjump.h (§7.13) *)
-  ("__cerb_jmp_buf", Typename);
+  ("__cerbty_jmp_buf", Typename);
   
   (* from signal.h (§7.14) *)
-  ("__cerb_sig_atomic_t", Typename);
-  ("__cerb_SIG_IGN",      Varname );
-  ("__cerb_SIGILL",       Varname );
-  ("__cerb_SIGTERM",      Varname );
-  ("__cerb_SIG_DFL",      Varname );
-  ("__cerb_SIGABRT",      Varname );
-  ("__cerb_SIGINT",       Varname );
-  ("__cerb_SIG_ERR",      Varname );
-  ("__cerb_SIGFPE",       Varname );
-  ("__cerb_SIGSEGV",      Varname );
+  ("__cerbty_sig_atomic_t", Typename);
+  ("__cerbvar_SIG_IGN",      Varname );
+  ("__cerbvar_SIGILL",       Varname );
+  ("__cerbvar_SIGTERM",      Varname );
+  ("__cerbvar_SIG_DFL",      Varname );
+  ("__cerbvar_SIGABRT",      Varname );
+  ("__cerbvar_SIGINT",       Varname );
+  ("__cerbvar_SIG_ERR",      Varname );
+  ("__cerbvar_SIGFPE",       Varname );
+  ("__cerbvar_SIGSEGV",      Varname );
   
   (* from stdarg.h (§7.16) *)
-  ("__cerb_va_list",  Typename);
-  ("__cerb_va_arg",   Varname );
-  ("__cerb_va_copy",  Varname );
-  ("__cerb_va_end",   Varname );
-  ("__cerb_va_start", Varname );
+  ("__cerbty_va_list",  Typename);
+  ("__cerbvar_va_arg",   Varname );
+  ("__cerbvar_va_copy",  Varname );
+  ("__cerbvar_va_end",   Varname );
+  ("__cerbvar_va_start", Varname );
   
   (* from stdatomic.h (§7.17) *)
-  ("__cerb_ATOMIC_BOOL_LOCK_FREE",     Varname);
-  ("__cerb_ATOMIC_CHAR_LOCK_FREE",     Varname);
-  ("__cerb_ATOMIC_CHAR16_T_LOCK_FREE", Varname);
-  ("__cerb_ATOMIC_CHAR32_T_LOCK_FREE", Varname);
-  ("__cerb_ATOMIC_WCHAR_T_LOCK_FREE",  Varname);
-  ("__cerb_ATOMIC_SHORT_LOCK_FREE",    Varname);
-  ("__cerb_ATOMIC_INT_LOCK_FREE",      Varname);
-  ("__cerb_ATOMIC_LONG_LOCK_FREE",     Varname);
-  ("__cerb_ATOMIC_LLONG_LOCK_FREE",    Varname);
-  ("__cerb_ATOMIC_POINTER_LOCK_FREE",  Varname);
-  ("__cerb_ATOMIC_FLAG_INIT",          Varname);
+  ("__cerbvar_ATOMIC_BOOL_LOCK_FREE",     Varname);
+  ("__cerbvar_ATOMIC_CHAR_LOCK_FREE",     Varname);
+  ("__cerbvar_ATOMIC_CHAR16_T_LOCK_FREE", Varname);
+  ("__cerbvar_ATOMIC_CHAR32_T_LOCK_FREE", Varname);
+  ("__cerbvar_ATOMIC_WCHAR_T_LOCK_FREE",  Varname);
+  ("__cerbvar_ATOMIC_SHORT_LOCK_FREE",    Varname);
+  ("__cerbvar_ATOMIC_INT_LOCK_FREE",      Varname);
+  ("__cerbvar_ATOMIC_LONG_LOCK_FREE",     Varname);
+  ("__cerbvar_ATOMIC_LLONG_LOCK_FREE",    Varname);
+  ("__cerbvar_ATOMIC_POINTER_LOCK_FREE",  Varname);
+  ("__cerbvar_ATOMIC_FLAG_INIT",          Varname);
   (* TODO *)
   
   
   (* from stddef.h (§7.19) *)
-  ("__cerb_ptrdiff_t",   Typename);
-  ("__cerb_size_t",      Typename);
-  ("__cerb_max_align_t", Typename);
-  ("__cerb_wchar_t",     Typename);
-  ("__cerb_NULL",        Varname );
-  ("__cerb_offsetof",    Varname );
+  ("__cerbty_ptrdiff_t",   Typename);
+  ("__cerbty_size_t",      Typename);
+  ("__cerbty_max_align_t", Typename);
+  ("__cerbty_wchar_t",     Typename);
+  ("__cerbvar_NULL",        Varname );
+  ("__cerbvar_offsetof",    Varname );
   
   (* from stdint.h (§7.20) *)
-  ("__cerb_int8_t",           Typename);
-  ("__cerb_int16_t",          Typename);
-  ("__cerb_int32_t",          Typename);
-  ("__cerb_int64_t",          Typename);
-  ("__cerb_uint8_t",          Typename);
-  ("__cerb_uint16_t",         Typename);
-  ("__cerb_uint32_t",         Typename);
-  ("__cerb_uint64_t",         Typename);
-  ("__cerb_int_least8_t",     Typename);
-  ("__cerb_int_least16_t",    Typename);
-  ("__cerb_int_least32_t",    Typename);
-  ("__cerb_int_least64_t",    Typename);
-  ("__cerb_uint_least8_t",    Typename);
-  ("__cerb_uint_least16_t",   Typename);
-  ("__cerb_uint_least32_t",   Typename);
-  ("__cerb_uint_least64_t",   Typename);
-  ("__cerb_int_fast8_t",      Typename);
-  ("__cerb_int_fast16_t",     Typename);
-  ("__cerb_int_fast32_t",     Typename);
-  ("__cerb_int_fast64_t",     Typename);
-  ("__cerb_uint_fast8_t",     Typename);
-  ("__cerb_uint_fast16_t",    Typename);
-  ("__cerb_uint_fast32_t",    Typename);
-  ("__cerb_uint_fast64_t",    Typename);
-  ("__cerb_intptr_t",         Typename); (* optional *)
-  ("__cerb_uintptr_t",        Typename); (* optional *)
-  ("__cerb_intmax_t",         Typename);
-  ("__cerb_uintmax_t",        Typename);
-  ("__cerb_UINT8_MAX",        Varname );
-  ("__cerb_UINT16_MAX",       Varname );
-  ("__cerb_UINT32_MAX",       Varname );
-  ("__cerb_UINT64_MAX",       Varname );
-  ("__cerb_INT_LEAST8_MIN",   Varname );
-  ("__cerb_INT_LEAST16_MIN",  Varname );
-  ("__cerb_INT_LEAST32_MIN",  Varname );
-  ("__cerb_INT_LEAST64_MIN",  Varname );
-  ("__cerb_INT_LEAST8_MAX",   Varname );
-  ("__cerb_INT_LEAST16_MAX",  Varname );
-  ("__cerb_INT_LEAST32_MAX",  Varname );
-  ("__cerb_INT_LEAST64_MAX",  Varname );
-  ("__cerb_UINT_LEAST8_MAX",  Varname );
-  ("__cerb_UINT_LEAST16_MAX", Varname );
-  ("__cerb_UINT_LEAST32_MAX", Varname );
-  ("__cerb_UINT_LEAST64_MAX", Varname );
-  ("__cerb_INT_FAST8_MIN",    Varname );
-  ("__cerb_INT_FAST16_MIN",   Varname );
-  ("__cerb_INT_FAST32_MIN",   Varname );
-  ("__cerb_INT_FAST64_MIN",   Varname );
-  ("__cerb_INT_FAST8_MAX",    Varname );
-  ("__cerb_INT_FAST16_MAX",   Varname );
-  ("__cerb_INT_FAST32_MAX",   Varname );
-  ("__cerb_INT_FAST64_MAX",   Varname );
-  ("__cerb_UINT_FAST8_MAX",   Varname );
-  ("__cerb_UINT_FAST16_MAX",  Varname );
-  ("__cerb_UINT_FAST32_MAX",  Varname );
-  ("__cerb_UINT_FAST64_MAX",  Varname );
-  ("__cerb_INTPTR_MIN",       Varname );
-  ("__cerb_INTPTR_MAX",       Varname );
-  ("__cerb_UINTPTR_MAX",      Varname );
-  ("__cerb_INTMAX_MIN",       Varname );
-  ("__cerb_INTMAX_MAX",       Varname );
-  ("__cerb_UINTMAX_MAX",      Varname );
-  ("__cerb_PTRDIFF_MIN",      Varname );
-  ("__cerb_PTRDIFF_MAX",      Varname );
-  ("__cerb_SIG_ATOMIC_MIN",   Varname );
-  ("__cerb_SIG_ATOMIC_MAX",   Varname );
-  ("__cerb_SIZE_MAX",         Varname );
-  ("__cerb_WCHAR_MIN",        Varname );
-  ("__cerb_WCHAR_MAX",        Varname );
-  ("__cerb_WINT_MIN",         Varname );
-  ("__cerb_WINT_MAX",         Varname );
+  ("__cerbty_int8_t",           Typename);
+  ("__cerbty_int16_t",          Typename);
+  ("__cerbty_int32_t",          Typename);
+  ("__cerbty_int64_t",          Typename);
+  ("__cerbty_uint8_t",          Typename);
+  ("__cerbty_uint16_t",         Typename);
+  ("__cerbty_uint32_t",         Typename);
+  ("__cerbty_uint64_t",         Typename);
+  ("__cerbty_int_least8_t",     Typename);
+  ("__cerbty_int_least16_t",    Typename);
+  ("__cerbty_int_least32_t",    Typename);
+  ("__cerbty_int_least64_t",    Typename);
+  ("__cerbty_uint_least8_t",    Typename);
+  ("__cerbty_uint_least16_t",   Typename);
+  ("__cerbty_uint_least32_t",   Typename);
+  ("__cerbty_uint_least64_t",   Typename);
+  ("__cerbty_int_fast8_t",      Typename);
+  ("__cerbty_int_fast16_t",     Typename);
+  ("__cerbty_int_fast32_t",     Typename);
+  ("__cerbty_int_fast64_t",     Typename);
+  ("__cerbty_uint_fast8_t",     Typename);
+  ("__cerbty_uint_fast16_t",    Typename);
+  ("__cerbty_uint_fast32_t",    Typename);
+  ("__cerbty_uint_fast64_t",    Typename);
+  ("__cerbty_intptr_t",         Typename); (* optional *)
+  ("__cerbty_uintptr_t",        Typename); (* optional *)
+  ("__cerbty_intmax_t",         Typename);
+  ("__cerbty_uintmax_t",        Typename);
+  ("__cerbvar_UINT8_MAX",        Varname );
+  ("__cerbvar_UINT16_MAX",       Varname );
+  ("__cerbvar_UINT32_MAX",       Varname );
+  ("__cerbvar_UINT64_MAX",       Varname );
+  ("__cerbvar_INT_LEAST8_MIN",   Varname );
+  ("__cerbvar_INT_LEAST16_MIN",  Varname );
+  ("__cerbvar_INT_LEAST32_MIN",  Varname );
+  ("__cerbvar_INT_LEAST64_MIN",  Varname );
+  ("__cerbvar_INT_LEAST8_MAX",   Varname );
+  ("__cerbvar_INT_LEAST16_MAX",  Varname );
+  ("__cerbvar_INT_LEAST32_MAX",  Varname );
+  ("__cerbvar_INT_LEAST64_MAX",  Varname );
+  ("__cerbvar_UINT_LEAST8_MAX",  Varname );
+  ("__cerbvar_UINT_LEAST16_MAX", Varname );
+  ("__cerbvar_UINT_LEAST32_MAX", Varname );
+  ("__cerbvar_UINT_LEAST64_MAX", Varname );
+  ("__cerbvar_INT_FAST8_MIN",    Varname );
+  ("__cerbvar_INT_FAST16_MIN",   Varname );
+  ("__cerbvar_INT_FAST32_MIN",   Varname );
+  ("__cerbvar_INT_FAST64_MIN",   Varname );
+  ("__cerbvar_INT_FAST8_MAX",    Varname );
+  ("__cerbvar_INT_FAST16_MAX",   Varname );
+  ("__cerbvar_INT_FAST32_MAX",   Varname );
+  ("__cerbvar_INT_FAST64_MAX",   Varname );
+  ("__cerbvar_UINT_FAST8_MAX",   Varname );
+  ("__cerbvar_UINT_FAST16_MAX",  Varname );
+  ("__cerbvar_UINT_FAST32_MAX",  Varname );
+  ("__cerbvar_UINT_FAST64_MAX",  Varname );
+  ("__cerbvar_INTPTR_MIN",       Varname );
+  ("__cerbvar_INTPTR_MAX",       Varname );
+  ("__cerbvar_UINTPTR_MAX",      Varname );
+  ("__cerbvar_INTMAX_MIN",       Varname );
+  ("__cerbvar_INTMAX_MAX",       Varname );
+  ("__cerbvar_UINTMAX_MAX",      Varname );
+  ("__cerbvar_PTRDIFF_MIN",      Varname );
+  ("__cerbvar_PTRDIFF_MAX",      Varname );
+  ("__cerbvar_SIG_ATOMIC_MIN",   Varname );
+  ("__cerbvar_SIG_ATOMIC_MAX",   Varname );
+  ("__cerbvar_SIZE_MAX",         Varname );
+  ("__cerbvar_WCHAR_MIN",        Varname );
+  ("__cerbvar_WCHAR_MAX",        Varname );
+  ("__cerbvar_WINT_MIN",         Varname );
+  ("__cerbvar_WINT_MAX",         Varname );
   
   (* from stdio.h (§7.21) *)
-(*  ("__cerb_size_t", Typename); *) (* Already listed *)
-  ("__cerb_FILE",   Typename);
-  ("__cerb_fpos_t", Typename);
-(*  ("__cerb_NULL", Varname); *) (* Already listed *)
-  ("__cerb_IOFBF",        Varname);
-  ("__cerb_IOLBF",        Varname);
-  ("__cerb_IONBF",        Varname);
-  ("__cerb_BUFSIZ",       Varname);
-  ("__cerb_EOF",          Varname);
-  ("__cerb_FOPEN_MAX",    Varname);
-  ("__cerb_FILENAME_MAX", Varname);
-  ("__cerb_L_tmpnam",     Varname);
-  ("__cerb_SEEK_CUR",     Varname);
-  ("__cerb_SEEK_END",     Varname);
-  ("__cerb_SEEK_SET",     Varname);
-  ("__cerb_TMP_MAX",      Varname);
-  ("__cerb_stderr",       Varname);
-  ("__cerb_stdin",        Varname);
-  ("__cerb_stdout",       Varname);
+(*  ("__cerbty_size_t", Typename); *) (* Already listed *)
+  ("__cerbty_FILE",   Typename);
+  ("__cerbty_fpos_t", Typename);
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
+  ("__cerbvar_IOFBF",        Varname);
+  ("__cerbvar_IOLBF",        Varname);
+  ("__cerbvar_IONBF",        Varname);
+  ("__cerbvar_BUFSIZ",       Varname);
+  ("__cerbvar_EOF",          Varname);
+  ("__cerbvar_FOPEN_MAX",    Varname);
+  ("__cerbvar_FILENAME_MAX", Varname);
+  ("__cerbvar_L_tmpnam",     Varname);
+  ("__cerbvar_SEEK_CUR",     Varname);
+  ("__cerbvar_SEEK_END",     Varname);
+  ("__cerbvar_SEEK_SET",     Varname);
+  ("__cerbvar_TMP_MAX",      Varname);
+  ("__cerbvar_stderr",       Varname);
+  ("__cerbvar_stdin",        Varname);
+  ("__cerbvar_stdout",       Varname);
   
   (* from stdlib.h (§7.22) *)
-  ("__cerb_EXIT_FAILURE", Varname);
-  ("__cerb_MB_CUR_MAX",   Varname);
-  ("__cerb_EXIT_SUCCESS", Varname);
-  ("__cerb_RAND_MAX",     Varname);
-(*  ("__cerb_NULL", Varname); *) (* Already listed *)
+  ("__cerbvar_EXIT_FAILURE", Varname);
+  ("__cerbvar_MB_CUR_MAX",   Varname);
+  ("__cerbvar_EXIT_SUCCESS", Varname);
+  ("__cerbvar_RAND_MAX",     Varname);
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
   
   (* from string.h (§7.24) *)
-(*  ("__cerb_size_t", Typename); *) (* Already listed *)
-(*  ("__cerb_NULL", Varname); *) (* Already listed *)
+(*  ("__cerbty_size_t", Typename); *) (* Already listed *)
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
   
   (* TODO: from tgmath.h (§7.25) *)
   
   (* from threads.h (§7.26) *)
-  ("__cerb_ONCE_FLAG_INIT",      Varname);
-  ("__cerb_TSS_DTOR_ITERATIONS", Varname);
-  ("__cerb_cnd_t", Typename);
-  ("__cerb_thrd_t", Typename);
-  ("__cerb_tss_t", Typename);
-  ("__cerb_mtx_t", Typename);
-  ("__cerb_once_flag", Typename);
+  ("__cerbvar_ONCE_FLAG_INIT",      Varname);
+  ("__cerbvar_TSS_DTOR_ITERATIONS", Varname);
+  ("__cerbty_cnd_t", Typename);
+  ("__cerbty_thrd_t", Typename);
+  ("__cerbty_tss_t", Typename);
+  ("__cerbty_mtx_t", Typename);
+  ("__cerbty_once_flag", Typename);
   
   (* TODO: from time.h (§7.27) *)
   
@@ -373,40 +373,40 @@ let builtin = [
 
 val translate_builtin_typenames: string -> maybe ATypes.ctype
 let translate_builtin_typenames = function
-  | "__cerb_ptrdiff_t"      -> Nothing
-  | "__cerb_size_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
-  | "__cerb_max_align_t"    -> Nothing
-  | "__cerb_wchar_t"        -> Nothing
-  | "__cerb_int8_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int8_t))
-  | "__cerb_int16_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int16_t))
-  | "__cerb_int32_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int32_t))
-  | "__cerb_int64_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int64_t))
-  | "__cerb_uint8_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t))
-  | "__cerb_uint16_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t))
-  | "__cerb_uint32_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t))
-  | "__cerb_uint64_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t))
+  | "__cerbty_ptrdiff_t"      -> Nothing
+  | "__cerbty_size_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_max_align_t"    -> Nothing
+  | "__cerbty_wchar_t"        -> Nothing
+  | "__cerbty_int8_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int8_t))
+  | "__cerbty_int16_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int16_t))
+  | "__cerbty_int32_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int32_t))
+  | "__cerbty_int64_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int64_t))
+  | "__cerbty_uint8_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t))
+  | "__cerbty_uint16_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t))
+  | "__cerbty_uint32_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t))
+  | "__cerbty_uint64_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t))
 
-  | "__cerb_int_least8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
-  | "__cerb_int_least16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
-  | "__cerb_int_least32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
-  | "__cerb_int_least64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
-  | "__cerb_uint_least8_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
-  | "__cerb_uint_least16_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
-  | "__cerb_uint_least32_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
-  | "__cerb_uint_least64_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
-  | "__cerb_int_fast8_t"    -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
-  | "__cerb_int_fast16_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
-  | "__cerb_int_fast32_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
-  | "__cerb_int_fast64_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
-  | "__cerb_uint_fast8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
-  | "__cerb_uint_fast16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
-  | "__cerb_uint_fast32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
-  | "__cerb_uint_fast64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_int_least8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_int_least16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_int_least32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_int_least64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_uint_least8_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_uint_least16_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_uint_least32_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_uint_least64_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_int_fast8_t"    -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_int_fast16_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_int_fast32_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_int_fast64_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
   
-  | "__cerb_intptr_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
-  | "__cerb_uintptr_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
-  | "__cerb_intmax_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
-  | "__cerb_uintmax_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_intptr_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_uintptr_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_intmax_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_uintmax_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
   
   | _                       -> Nothing
 end
@@ -414,22 +414,22 @@ end
 
 val translate_builtin_varnames: string -> maybe (A.expression' unit)
 let translate_builtin_varnames = function
-  | "__cerb_NULL"       -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT8_MIN"   -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT16_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT32_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT64_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT8_MAX"   -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT16_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT32_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_INT64_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
-  | "__cerb_UINT8_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT16_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT32_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT64_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT8_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT16_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT32_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
-  | "__cerb_UINT64_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_NULL"       -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT8_MIN"   -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT16_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT32_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT64_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT8_MAX"   -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT16_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT32_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_INT64_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Nothing)) (* TODO: hack *)
+  | "__cerbvar_UINT8_MIN"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT16_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT32_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT64_MIN" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT8_MAX"  -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT16_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT32_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
+  | "__cerbvar_UINT64_MAX" -> Just $ A.AilEconst (A.ConstantInteger (0, A.Decimal, Just A.U)) (* TODO: hack *)
   | _                   -> Nothing
 end

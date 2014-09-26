@@ -168,16 +168,16 @@ let min_implementation_unsigned_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
         
-        | Signed Int8_t     -> assert_false "TODO"
-        | Signed Int16_t    -> assert_false "TODO"
-        | Signed Int32_t    -> assert_false "TODO"
-        | Signed Int64_t    -> assert_false "TODO"
-        | Unsigned Int8_t   -> assert_false "TODO"
-        | Unsigned Int16_t  -> assert_false "TODO"
-        | Unsigned Int32_t  -> assert_false "TODO"
-        | Unsigned Int64_t  -> assert_false "TODO"
+        | Signed Int8_t     -> assert_false "TODO: min_implementation_unsigned_char, Signed Int8_t"
+        | Signed Int16_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int16_t"
+        | Signed Int32_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int32_t"
+        | Signed Int64_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int64_t"
+        | Unsigned Int8_t   -> assert_false "TODO: min_implementation_unsigned_char, Signed Int8_t"
+        | Unsigned Int16_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int16_t"
+        | Unsigned Int32_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int42_t"
+        | Unsigned Int64_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int64_t"
 
-        | Wchar_t           -> assert_false "WIP"
+        | Wchar_t           -> assert_false "TODO: min_implementation_unsigned_char, Wchar_t"
         | Char16_t          -> 16
         | Char32_t          -> 32
 

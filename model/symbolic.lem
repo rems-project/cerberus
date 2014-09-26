@@ -1,249 +1,165 @@
 open import Pervasives
 import Symbol
 
-(* Symbolic expressions *)
+(* TODO: tmp *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+declare coq   target_rep function assert_false = `DAEMON`
+
+
+
 type operator =
   | Add
   | Sub
   | Mul
   | Div
   | Mod
+  | Exp
+  | Eq
+  | Lt
+  | And
+  | Or
+
+type symbolic_type =
+  | SYMBint
+  | SYMBbool
 
 type symbolic =
-  | Symbolic_constant of integer
-  | Symbolic_symbol of Symbol.t
-  | Symbolic_op of operator * symbolic * symbolic
+  | SYMBtrue
+  | SYMBfalse
+  | SYMBconst of integer
+  | SYMBsym   of symbolic_type * Symbol.t
+  | SYMBop    of operator * symbolic * symbolic
+  | SYMBite   of symbolic * symbolic * symbolic
 
 
-(* syntactic equality *)
-let rec symbolic_eq symb1 symb2 =
-  match (symb1, symb2) with
-    | (Symbolic_constant n1, Symbolic_constant n2) ->
-        n1 = n2
-    | (Symbolic_symbol sym1, Symbolic_symbol sym2) ->
-        sym1 = sym2
-    | (Symbolic_op op1 symb11 symb12, Symbolic_op op2 symb21 symb22) ->
-        op1 = op2 && symbolic_eq symb11 symb21 && symbolic_eq symb12 symb22
-    | _ ->
-        false
-  end
-
-instance (Eq symbolic)
-  let (=) = symbolic_eq
-  let (<>) = fun x y -> not (symbolic_eq x y)
-end
-
-
-val     eval: symbolic -> symbolic
-let rec eval symb =
+val     typeof: symbolic -> maybe symbolic_type
+let rec typeof symb =
   match symb with
-    | Symbolic_constant _ ->
-        symb
-    | Symbolic_symbol _ ->
-        symb
-    |  Symbolic_op op symb1 symb2 ->
-        match (op, eval symb1, symb2) with
-          | (Add, Symbolic_constant n1, Symbolic_constant n2) ->
-              Symbolic_constant (n1 + n2)
-          | (Sub, Symbolic_constant n1, Symbolic_constant n2) ->
-              Symbolic_constant (n1 - n2)
-          | (Mul, Symbolic_constant n1, Symbolic_constant n2) ->
-              Symbolic_constant (n1 * n2)
-          | (Div, Symbolic_constant n1, Symbolic_constant n2) ->
-              Symbolic_constant (n1 / n2)
-          | (Mod, Symbolic_constant n1, Symbolic_constant n2) ->
-              Symbolic_constant (n1 mod n2)
-          | (_, symb1', symb2') ->
-              Symbolic_op op symb1' symb2'
+    | SYMBtrue ->
+        Just SYMBbool
+    | SYMBfalse ->
+        Just SYMBbool
+    | SYMBconst _ ->
+        Just SYMBint
+    | SYMBsym ty _ ->
+        Just ty
+    | SYMBop op symb1 symb2 ->
+        match (op, typeof symb1, typeof symb2) with
+          | (Add, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Sub, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Mul, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Div, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Mod, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Exp, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Eq, Just SYMBint, Just SYMBint) ->
+              Just SYMBbool
+          | (Lt, Just SYMBint, Just SYMBint) ->
+              Just SYMBbool
+          | _ ->
+              Nothing
+        end
+    | SYMBite symb1 symb2 symb3 ->
+        match (typeof symb1, typeof symb2, typeof symb3) with
+          | (Just SYMBbool, Just SYMBbool, Just SYMBbool) ->
+              Just SYMBbool
+          | (Just SYMBbool, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | _ ->
+              Nothing
         end
   end
 
 
-
-
-type equation =
-  | Symbolic_eq  of symbolic * symbolic
-  | Symbolic_neq of symbolic * symbolic
-  | Symbolic_lt  of symbolic * symbolic
-  | Symbolic_ge  of symbolic * symbolic
-
-val eq: symbolic -> symbolic -> equation
-let eq symb1 symb2 =
-  Symbolic_eq symb1 symb2
-
-val neq: symbolic -> symbolic -> equation
-let neq symb1 symb2 =
-  Symbolic_neq symb1 symb2
-
-val lt: symbolic -> symbolic -> equation
-let lt symb1 symb2 =
-  Symbolic_lt symb1 symb2
-
-val ge: symbolic -> symbolic -> equation
-let ge symb1 symb2 =
-  Symbolic_ge symb1 symb2
-
-
-
-type equations = list equation
-
-
-val empty_equations: equations
-let empty_equations =
-  []
-
-val add_equation: equation -> equations -> equations
-let add_equation symb_eq eqs =
-  symb_eq :: eqs
-
-val combine_equations: equations -> equations -> equations
-let combine_equations eqs1 eqs2 =
-  eqs1 ++ eqs2
-
-
-
-
-val symbol: Symbol.t -> symbolic
-let symbol sym =
-  Symbolic_symbol sym
-
-
-
-
-
-val constant: integer -> symbolic
-let constant n =
-  Symbolic_constant n
-
-
-
-
-val operator: operator -> symbolic -> symbolic -> symbolic
-let operator op sym1 sym2 =
-  match (sym1, sym2) with
-    | (Symbolic_constant n1, Symbolic_constant n2) ->
-        Symbolic_constant
-          match op with
-            | Add -> n1 + n2
-            | Sub -> n1 - n2
-            | Mul -> n1 * n2
-            | Div -> n1 / n2
-            | Mod -> n1 mod n2
-          end
-    | _ ->
-        Symbolic_op op sym1 sym2
-  end
-
-
-
-
-val simplify_symbolic: symbolic -> symbolic
-let rec simplify_symbolic symb =
+val     reduce: symbolic -> symbolic
+let rec reduce symb =
   match symb with
-    | Symbolic_constant cst ->
-        Symbolic_constant cst
-    | Symbolic_symbol sym ->
-        Symbolic_symbol sym
-    | Symbolic_op op symb1 symb2 ->
-        match (op, simplify_symbolic symb1, simplify_symbolic symb2) with
-          | (Add, Symbolic_constant cst1, Symbolic_constant cst2) ->
-              Symbolic_constant $ cst1 + cst2
-          | (Sub, Symbolic_constant cst1, Symbolic_constant cst2) ->
-              Symbolic_constant $ cst1 - cst2
-          | (Mul, Symbolic_constant cst1, Symbolic_constant cst2) ->
-              Symbolic_constant $ cst1 * cst2
-          | (Div, Symbolic_constant cst1, Symbolic_constant cst2) ->
-              Symbolic_constant $ cst1 / cst2
-          | (Mod, Symbolic_constant cst1, Symbolic_constant cst2) ->
-              Symbolic_constant $ cst1 mod cst2
-          | (_, symb1', symb2') ->
-              Symbolic_op op symb1' symb2'
-        end
-  end
-
-val simplify_equation: equation -> equation
-let simplify_equation = function
-  | Symbolic_eq symb1 symb2 ->
-      Symbolic_eq (simplify_symbolic symb1) (simplify_symbolic symb2)
-  | Symbolic_neq symb1 symb2 ->
-      Symbolic_neq (simplify_symbolic symb1) (simplify_symbolic symb2)
-  | Symbolic_lt symb1 symb2 ->
-      Symbolic_lt (simplify_symbolic symb1) (simplify_symbolic symb2)
-  | Symbolic_ge symb1 symb2 ->
-      Symbolic_ge (simplify_symbolic symb1) (simplify_symbolic symb2)
-end
-
-
-val     extract_simplifiers: equations -> (list (Symbol.t * integer) * equations)
-let rec extract_simplifiers eqs =
-  match eqs with
-    | [] ->
-        ([], [])
-    | (Symbolic_eq  (Symbolic_symbol sym) (Symbolic_constant n)) :: xs ->
-        let (ys, zs) = extract_simplifiers xs in
-        ((sym, n) :: ys, zs)
-    | (Symbolic_eq  (Symbolic_constant n) (Symbolic_symbol sym)) :: xs ->
-        let (ys, zs) = extract_simplifiers xs in
-        ((sym, n) :: ys, zs)
-    | x :: xs ->
-        let (ys, zs) = extract_simplifiers xs in
-        (ys, x :: zs)
-  end
-
-
-val     subst_symbolic: Symbol.t -> integer -> symbolic -> symbolic
-let rec subst_symbolic sym n = function
-  | Symbolic_constant cst ->
-      Symbolic_constant cst
-  | Symbolic_symbol sym' ->
-      if sym = sym' then
-        Symbolic_constant n
-      else
-        Symbolic_symbol sym'
-  | Symbolic_op op symb1 symb2 ->
-      Symbolic_op op (subst_symbolic sym n symb1) (subst_symbolic sym n symb2)
-end
-
-val subst_equation: Symbol.t -> integer -> equation -> equation
-let subst_equation sym n = function
-  | Symbolic_eq symb1 symb2 ->
-      Symbolic_eq (subst_symbolic sym n symb1) (subst_symbolic sym n symb2)
-  | Symbolic_neq symb1 symb2 ->
-      Symbolic_neq (subst_symbolic sym n symb1) (subst_symbolic sym n symb2)
-  | Symbolic_lt symb1 symb2 ->
-      Symbolic_lt (subst_symbolic sym n symb1) (subst_symbolic sym n symb2)
-  | Symbolic_ge symb1 symb2 ->
-      Symbolic_ge (subst_symbolic sym n symb1) (subst_symbolic sym n symb2)
-end
-
-val subst_equations: Symbol.t -> integer -> equations -> equations
-let subst_equations sym n eqs =
-  List.map (subst_equation sym n) eqs
-
-val simplify_equations: equations -> equations
-let simplify_equations eqs =
-  let (sym_ns, eqs') = extract_simplifiers eqs in
+    | SYMBconst _ ->
+        symb
+    | SYMBsym _ _ ->
+        symb
+    |  SYMBop op symb1 symb2 ->
+        match (op, reduce symb1, reduce symb2) with
+          | (Add, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 + n2)
+          | (Sub, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 - n2)
+          | (Mul, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 * n2)
+          | (Div, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 / n2)
+          | (Mod, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 mod n2)
 (*
-  combine_equations
-    (List.map (fun (sym, n) -> eq (symbol sym) (constant n)) sym_ns)
+          | (Exp, Symbolic_constant n1, Symbolic_constant n2) ->
+              (* TODO: if the natFromInteger doesn't work, you are far gone anyway *)
+              Symbolic_constant (n1 ** natFromInteger n2)
 *)
-    (List.map simplify_equation $
-      List.foldl (fun acc (sym, n) ->
-        eq (symbol sym) (constant n) :: subst_equations sym n acc
-      ) eqs' sym_ns)
+          | (Eq, SYMBconst n1, SYMBconst n2) ->
+              if n1 = n2 then SYMBtrue else assert_false "Eq: SYMBfalse"
+          | (Lt, SYMBconst n1, SYMBconst n2) ->
+              if n1 < n2 then SYMBtrue else assert_false "Lt: SYMBfalse"
+          | (And, SYMBtrue, SYMBtrue) ->
+              SYMBtrue
+          | (And, SYMBfalse, _) ->
+              assert_false "And: SYMBfalse"
+          | (And, _, SYMBfalse) ->
+              assert_false"And2: SYMBfalse"
+          | (Or, SYMBfalse, SYMBfalse) ->
+              assert_false "Or: SYMBfalse"
+          | (Or, SYMBtrue, _) ->
+              SYMBtrue
+          | (Or, _, SYMBtrue) ->
+              SYMBtrue
+          | (_, symb1', symb2') ->
+              SYMBop op symb1' symb2'
+        end
+    | SYMBite symb1 symb2 symb3 ->
+        match (reduce symb1, reduce symb2, reduce symb3) with
+          | (SYMBtrue, symb2', _) ->
+              symb2'
+          | (SYMBfalse, _, symb3') ->
+              symb3'
+          | (symb1', symb2', symb3') ->
+              SYMBite symb1' symb2' symb3'
+        end
+  end
 
 
-val is_clearly_unsat: equations -> bool
-let is_clearly_unsat eqs =
-  List.any (function
-    | Symbolic_eq (Symbolic_constant n1) (Symbolic_constant n2) ->
-        n1 <> n2
-    | Symbolic_neq (Symbolic_constant n1) (Symbolic_constant n2) ->
-        n1 = n2
-    | Symbolic_lt (Symbolic_constant n1) (Symbolic_constant n2) ->
-        n1 >= n2
-    | Symbolic_ge (Symbolic_constant n1) (Symbolic_constant n2) ->
-        n1 < n2
-    | _ ->
-        false
-  end) eqs
+
+val make_op: operator -> symbolic -> symbolic -> symbolic
+let make_op op symb1 symb2 =
+  reduce (SYMBop op symb1 symb2)
+
+
+val make_ite: symbolic -> symbolic -> symbolic -> symbolic
+let make_ite symb1 symb2 symb3 =
+  reduce (SYMBite symb1 symb2 symb3)
+
+
+
+(*
+val try_eq: symbolic -> symbolic -> either bool (symbolic * symbolic)
+let try_eq symb1 symb2 =
+  match (reduce symb1, reduce symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        Left (n1 = n2)
+    | symbs' ->
+        Right symbs'
+  end
+
+val try_lt: symbolic -> symbolic -> either bool (symbolic * symbolic)
+let try_lt symb1 symb2 =
+  match (reduce symb1, reduce symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        Left (n1 < n2)
+    | symbs' ->
+        Right symbs'
+  end
+*)

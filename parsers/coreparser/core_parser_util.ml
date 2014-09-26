@@ -1,5 +1,6 @@
 open Global
 
+
 (* Type of Core parser outputs *)
 type result =
   | Rfile of Core.sym * (unit Core.fun_map)
@@ -66,6 +67,12 @@ type token =
   | ATOM
   | SAVE
   | RUN
+  | RAISE
+  | REGISTER
+(*
+  | TRY
+  | WITH
+*)
   | RETURN
   | INDET
   | CREATE
@@ -76,6 +83,7 @@ type token =
   | COMPARE_EXCHANGE_STRONG
   | COMPARE_EXCHANGE_WEAK
   | DEF
+  | GLOB
   | FUN
   | PROC
   | END
@@ -112,6 +120,7 @@ type token =
   | STAR
   | SLASH
   | PERCENT
+  | CARET
   | EQ
   | LT
   | LE
@@ -134,11 +143,11 @@ type token =
   | RANGLE
   | DOT
   | DOTS
+  | SEMICOLON
   | COMMA
   | COLON
   | COLON_EQ
   | EOF
-  | SEMICOLON
   | PIPE_PIPE
   
   | PAR

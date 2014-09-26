@@ -88,9 +88,13 @@ let parse input : Cabs.translation_unit =
       saved_tokens := tks' in
     
     try
-      Pre_parser.translation_unit_file lexer_wrapper lexbuf;
-      
 (*
+      print_endline "RUNNING pre_parser";
+*)
+      Pre_parser.translation_unit_file lexer_wrapper lexbuf;
+(*
+      print_endline "DONE";
+      
       print_endline "=== TOKENS before ===";
       List.iter (fun tk -> print_endline (string_of_token tk)) (List.rev !saved_tokens);
 *)
