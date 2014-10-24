@@ -86,14 +86,7 @@ let error str =
   exit 1
 
 (* The return type of Core_run.run *)
-type execution_result_full = 
-(
-  (
-    (Core_run_effect.taction_id1 Core.expr * ((Core_run_effect.taction_id1, Core_run_effect.trace_action) Pmap.map * Core_run.E.trace)) Undefined.t4 *
-    Core_run_effect.state0
-  ) list list,
-  Errors.t6
-) Exception.t0
+type execution_result_full = Exhaustive_driver.execution_result
 
 (* The type we use to compare results of executions *) 
 type execution_result = (((Core_run_effect.taction_id1 Core.expr) Undefined.t4) Pset.set, Errors.t6) Exception.t0

@@ -111,7 +111,7 @@ let load_impl core_parse corelib_path =
           | Exception.Exception err -> error $ "[Core parsing error: impl-file]" ^ Pp_errors.to_string err
 
 
-let pipeline stdlib impl core_parse file_name : 'a Exhaustive_driver.execution_result =
+let pipeline stdlib impl core_parse file_name : Exhaustive_driver.execution_result =
   file_name
   |> Input.file
   |> core_parse
@@ -176,6 +176,7 @@ let () =
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   let run = pipeline stdlib impl Core_parser.parse in
   (if !regression_test then
+     (* let tests = Tests.get_tests in *)
      ()
    else  
      let result = run !file in

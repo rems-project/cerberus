@@ -115,9 +115,9 @@ open Pp_cmm
 
 
 
-type 'a execution_result = (Core_run2_aux.core_run_annotation Core.expr list, 'a) Exception.t2
+type execution_result = (Core_run2_aux.core_run_annotation Core.expr list, Errors.t8) Exception.t2
 
-let drive (file:'a Core.file) : 'b execution_result =
+let drive (file:'a Core.file) : execution_result =
   let main_body = 
     match Pmap.lookup file.main file.funs with
       | Some (retTy, [], expr_main) ->
