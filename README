@@ -1,0 +1,74 @@
+IMPORTANT:
+  ==> The latest version of Lem that can compile Cerberus is that of commit #00650f1.
+
+
+
+
+
+
+INSTALLATION
+  (the version numbers are just an example of known working configuration, older
+   packages may work just fine)
+  
+  First install:
+    * ocaml (at least 4.00.0)
+    * ott (svn)
+    * opam
+  
+  Then using opam, install:
+    * ocamlfind (1.3.3)
+    * ocaml-text (0.6)
+    * menhir (20120123)
+    * 
+
+  
+   with opam:
+  
+  
+---- Requirements for the graph generation ---
+
+  * pyparsing (can be installed by running "easy_install pyparsing")
+  * latex preview package (on debian: "apt-get install preview-latex-style", on mac with texlive: "tlmgr install preview")
+  * dot2tex (code.google.com/p/dot2tex/)
+  
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+
+The execution of simple core programs (no indet exprs) seems to be working but
+the buggy hack with core_simpl makes things hard to play with for anything
+interesting (e.g. arithmetic operations: for some reason it doesn't understand
+that the overflow function is pure ...)
+(I'm working on a parser for Core)
+
+----
+
+For entertainment, the following (impressive) C program works:
+
+int main(void) {
+  int x = 42, y = 1;
+  return 0;
+}
+
+assuming it is in the file a.c
+
+run csem using:
+
+$ csem --print-core --graph a.c
+
+This prints in the stdout the generated core program (the crappy original
+version and then the simplified one)
+
+then prints the traces of the 4 possible executions
+
+and generates a file "a.c.dot" with the sb orders corresponding to each trace
+(here they all have the same order)
+
+(to get a pdf: dot -Tpdf a.c.dot > a_sb.pdf)
+
+The automated tests are run when the flag --test is set. For example with "csem --impl gcc_4.9.0_x86_64-apple-darwin10.8.0 --test"

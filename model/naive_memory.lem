@@ -1,0 +1,121 @@
+open import Pervasives
+
+import State_exception_undefined
+import Symbol Symbolic Core_ctype Thread
+
+module SEU = State_exception_undefined
+
+
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+
+
+type object_id = nat
+
+
+type memory_state = <|
+  oid_supply: UniqueId.supply object_id
+|>
+
+let initial_memory_state = <|
+  oid_supply= UniqueId.new_supply;
+|>
+
+
+type memory_error =
+  | MEMORY_ERROR
+
+type memM 'a = SEU.t 'a memory_state memory_error
+
+
+(* val runMem: forall 'a. memM 'a ->  *)
+
+
+type pointer_value =
+(*  | Pointer_null of Core_ctype.ctype *)
+  | Pointer_nonnull of object_id
+(*  | Pointer_function of Symbol.t *)
+
+let pointer_value_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
+        oid1 = oid2
+  end
+
+instance (Eq pointer_value)
+  let (=) = pointer_value_eq
+  let (<>) = fun x y -> not (pointer_value_eq x y)
+end
+
+
+
+type mem_value =
+  | MV_pointer of pointer_value
+  | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
+(*
+  | MV_array of list mem_value
+  | MV_struct of list (Symbol.t * mem_value)
+  | MV_union of Symbol.t * mem_value
+  | MV_pointer_byte of nat * nat * pointer_value 
+  | MV_unspecified of Core_ctype.ctype
+*)
+
+let mem_value_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (MV_pointer ptr_val1, MV_pointer ptr_val2) ->
+        ptr_val1 = ptr_val2
+    | (MV_integer symb1, MV_integer symb2) ->
+        (* TODO: should use the constrain solver somewhere *)
+        symb1 = symb2
+    | _ ->
+        false
+  end
+
+instance (Eq mem_value)
+  let (=) = mem_value_eq
+  let (<>) = fun x y -> not (mem_value_eq x y)
+end
+
+
+
+
+
+val null_pointer: Core_ctype.ctype -> pointer_value
+let null_pointer ty =
+  assert_false "Pointer_null ty"
+
+
+val function_pointer: Symbol.t -> pointer_value
+let function_pointer fsym =
+  assert_false "WIP Naive_memory.function_pointer"
+
+
+
+
+val fresh_object_id: State.t object_id memory_state
+let fresh_object_id =
+  State.modify (fun st ->
+    let (oid, oid_suppl') = UniqueId.fresh_id st.oid_supply in
+    (oid, <| st with oid_supply= oid_suppl' |>)
+  )
+
+
+
+
+
+
+open SEU.Operators
+
+val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> Core_ctype.ctype  (* type of the allocation *)
+(*
+                     -> Symbolic.symbolic (* size of that type *)
+                     -> Symbolic.symbolic (* alignment of that type *)
+*)
+                     -> memM pointer_value
+let allocate_object (* tid ty size_symb align_symb *) _ ty =
+  SEU.runS fresh_object_id >>= fun oid ->
+  SEU.return (Pointer_nonnull oid)

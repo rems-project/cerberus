@@ -1,0 +1,118 @@
+open import Pervasives
+import State State_exception Exception_undefined Undefined
+
+
+type t 'a 's 'msg = State_exception.t (Undefined.t 'a) 's 'msg
+
+val return: forall 'a 'b 's 'msg. 'a -> t 'a 's 'msg
+let return z =
+  State_exception.return (Undefined.return z)
+
+val bind: forall 'a 'b 's 'msg. t 'a 's 'msg         ->
+                                ('a -> t 'b 's 'msg) ->
+                                t 'b 's 'msg
+let bind m f = fun st ->
+  match m st with
+    | Exception.Result (Undefined.Defined z, st') ->
+        f z st'
+    | Exception.Result (Undefined.Undef ubs, st') ->
+        State_exception.return (Undefined.undef ubs) st'
+    | Exception.Result (Undefined.Error, st') ->
+        State_exception.return Undefined.error st'
+    | Exception.Exception err ->
+        State_exception.fail err st
+  end
+
+
+(*
+val ubind: forall 'a 'b 'msg. Undefined.t 'a -> ('a -> Exception.t (Undefined.t 'b) 'msg) -> Exception.t (Undefined.t 'b) 'msg
+let ubind m f =
+  match m with
+    | Undefined.Defined z ->
+        f z
+    | Undefined.Undef ubs ->
+        Exception.return (Undefined.Undef ubs)
+    | Undefined.Error ->
+        Exception.return Undefined.Error
+  end
+*)
+
+
+val     mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) ->
+                                    list 'a              ->
+                                    t (list 'b) 's 'msg
+let rec mapM f xs =
+  State_exception.bind (State_exception.mapM f xs)
+    (fun us -> State_exception.return $ Undefined.mapM id us)
+
+
+val runEU: forall 'a 's 'msg. Exception_undefined.t 'a 'msg -> t 'a 's 'msg
+let runEU m = fun st ->
+  match m with
+    | Exception.Result (Undefined.Defined z) ->
+        Exception.Result (Undefined.Defined z, st)
+    | Exception.Result (Undefined.Undef ubs) ->
+        Exception.Result (Undefined.Undef ubs, st)
+    | Exception.Result Undefined.Error ->
+        Exception.Result (Undefined.Error, st)
+    | Exception.Exception err ->
+        Exception.Exception err
+  end
+
+
+val runE: forall 'a 's 'msg. Exception.t 'a 'msg -> t 'a 's 'msg
+let runE m =
+  runEU (Exception.bind m Exception_undefined.return)
+
+
+
+val runS: forall 'a 's 'msg. State.t 'a 's -> t 'a 's 'msg
+let runS m = fun st ->
+  let (a, st') = m st in
+  Exception.return (Undefined.return a, st')
+
+
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t (Undefined.t 'a * 's) 'msg
+let run m st = m st
+
+
+(*
+val get: forall 's 'msg. t 's 's 'msg
+let get = State_exception.read (fun z -> Undefined.return z)
+
+val put: forall 's 'msg. 's -> t unit 's 'msg
+let put st = State_exception.modify (fun _ -> (Undefined.return (), st))
+*)
+
+
+(*
+val undef: forall 'a 's 'msg. list Undefined.undefined_behaviour -> t 'a 's 'msg
+let undef ubs =
+  State_exception.return (Undefined.undef ubs)
+
+val error: forall 'a 's 'msg. t 'a 's 'msg
+let error =
+  State_exception.return Undefined.error
+*)
+
+
+
+val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'a 's 'msg) -> 'a -> list 'b -> t 'a 's 'msg
+let rec foldM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      bind (f a x) (fun z -> foldM f z xs)
+end
+
+
+
+val fail: forall 'a 's 'msg. 'msg -> t 'a 's 'msg
+let fail err =
+  runE (Exception.fail err)
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end

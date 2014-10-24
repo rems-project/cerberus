@@ -1,0 +1,55 @@
+open import Pervasives (* Lexing_ *)
+
+open import {ocaml} `Lexing`
+
+type position = <|
+  pos_fname: string;
+  pos_lnum:  nat;
+  pos_bol:   nat;
+  pos_cnum:  nat
+|>
+
+
+type loc = <|
+  start : position;
+  stop  : position
+|>
+type t = maybe loc
+
+val unknowned: t
+let unknowned = Nothing
+
+
+val dummy: t
+let dummy =
+  let pos = <| pos_fname= ""; pos_lnum= 0; pos_bol= 0; pos_cnum= 0 |> in
+  Just <| start= pos; stop= pos |>
+
+val make: position -> position -> t
+let make s e = Just <|start = s; stop = e|>
+
+let name              <|start = s; stop = _|> = s.pos_fname
+let first_line        <|start = s; stop = _|> = s.pos_lnum
+let last_line         <|start = _; stop = e|> = e.pos_lnum
+let first_line_offset <|start = s; stop = _|> = s.pos_lnum
+let last_line_offset  <|start = _; stop = e|> = e.pos_lnum
+let first_char        <|start = s; stop = _|> = s.pos_cnum
+let last_char         <|start = _; stop = e|> = e.pos_cnum
+
+
+
+(* val to_string: t -> string *)
+(*
+TODO[newLem]
+
+let to_string  = function
+  | Just p ->
+      let f = first_line p in
+      let l = last_line  p in
+      if f = l then
+        "line " ^ string_of_num f
+      else
+        "lines " ^ string_of_num f ^ "-" ^ string_of_num l
+  | Nothing -> "Unknowned location"
+end
+*)

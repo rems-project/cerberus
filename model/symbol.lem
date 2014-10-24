@@ -1,0 +1,158 @@
+open import Pervasives
+
+open import Enum
+import UniqueId
+
+type t =
+  Symbol of nat * maybe string
+
+instance (Eq t)
+  let (=) sym1 sym2 =
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 = n2
+  let (<>) sym1 sym2 =
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 <> n2
+end
+
+
+
+instance (Ord t)
+(* (TODO: why is lem refusing this?)  let compare (Symbol n1 _) (Symbol n2 _) = compare n1 n2 *)
+  let compare sym1 sym2 =
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    compare n1 n2
+  let (<) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 < n2
+  let (<=) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 <= n2
+  let (>) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 > n2
+  let (>=) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 >= n2
+end
+
+instance (Enum t)
+  let toEnum n =
+    Symbol (natFromNatural n) Nothing
+  let fromEnum sym =
+    let (Symbol n _) = sym in
+    naturalFromNat n
+  let succ sym =
+    let (Symbol n str_opt) = sym in 
+    Symbol (n+1) str_opt
+end
+
+instance (SetType t)
+  let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+end
+
+val fresh: State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh =
+  UniqueId.fresh_id
+
+val fresh_pretty : string -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty str =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just str)
+  )
+
+
+val fresh_pretty_with_id : (nat -> string) -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty_with_id mkStr =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just (mkStr id))
+  )
+
+
+val fresh_fancy : maybe string -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_fancy = function
+  | Just str -> fresh_pretty str
+  | Nothing  -> fresh
+end
+
+
+
+(*
+
+(* TODO: these are probably not used *)
+
+let undefined  = Symbol 0 (Just "UNDEFINED")
+
+let char_bit   = Symbol 1 (Just "char_bit")
+
+(* Minimum and maximum  values. *)
+let char_min     = Symbol 2 (Just "char_min")
+let char_max     = Symbol 3 (Just "char_max")
+let schar_min    = Symbol 4 (Just "schar_min")
+let schar_max    = Symbol 5 (Just "schar_max")
+let uchar_max    = Symbol 6 (Just "uchar_max")
+let shrt_min     = Symbol 7 (Just "shrt_min")
+let shrt_max     = Symbol 8 (Just "shrt_max")
+let ushrt_max    = Symbol 9 (Just "ushrt_max")
+let int_min      = Symbol 10 (Just "int_min")
+let int_max      = Symbol 11 (Just "int_max")
+let uint_max     = Symbol 12 (Just "uint_max")
+let long_min     = Symbol 13 (Just "long_min")
+let long_max     = Symbol 14 (Just "long_max")
+let ulong_max    = Symbol 15 (Just "ulong_max")
+let llong_min    = Symbol 16 (Just "llong_min")
+let llong_max    = Symbol 17 (Just "llong_max")
+let ullong_max   = Symbol 18 (Just "ullong_max")
+
+(* Byte sizes. *)
+let bool_size    = Symbol 19 (Just "bool_size")
+let char_size    = Symbol 20 (Just "char_size")
+let schar_size   = Symbol 21 (Just "schar_size")
+let uchar_size   = Symbol 22 (Just "uchar_size")
+let shrt_size    = Symbol 23 (Just "shrt_size")
+let ushrt_size   = Symbol 24 (Just "ushrt_size")
+let int_size     = Symbol 25 (Just "int_size")
+let uint_size    = Symbol 26 (Just "uint_size")
+let long_size    = Symbol 27 (Just "long_size")
+let ulong_size   = Symbol 28 (Just "ulong_size")
+let llong_size   = Symbol 29 (Just "llong_size")
+let ullong_size  = Symbol 30 (Just "ullong_size")
+
+(* Alignment requirements. *)
+let bool_align   = Symbol 31 (Just "bool_align")
+let char_align   = Symbol 32 (Just "char_align")
+let schar_align  = Symbol 33 (Just "schar_align")
+let uchar_align  = Symbol 34 (Just "uchar_align")
+let shrt_align   = Symbol 35 (Just "shrt_align")
+let ushrt_align  = Symbol 36 (Just "ushrt_align")
+let int_align    = Symbol 37 (Just "int_align")
+let uint_align   = Symbol 38 (Just "uint_align")
+let long_align   = Symbol 39 (Just "long_align")
+let ulong_align  = Symbol 40 (Just "ulong_align")
+let llong_align  = Symbol 41 (Just "llong_align")
+let ullong_align = Symbol 42 (Just "ullong_align")
+
+let to_char      = Symbol 43 (Just "to_char")
+let to_shrt      = Symbol 44 (Just "to_shrt")
+let to_int       = Symbol 45 (Just "to_int")
+let to_long      = Symbol 46 (Just "to_long")
+let to_llong     = Symbol 47 (Just "to_llong")
+
+let shift_r      = Symbol 48 (Just "impl_shift_r")
+
+let return       = Symbol 49 (Just "return")
+
+let malloc = Symbol 50 (Just "malloc")
+let free   = Symbol 51 (Just "free")
+
+val init: counter
+let init = 100
+
+*)

@@ -1,0 +1,12 @@
+{- In every execution the two non-atomic writes race.
+-}
+
+fun main () : [integer] :=
+  x <- create(signed int);
+  {{{
+       store(signed int, x, 0)
+  |||
+       store(signed int, x, 1)
+  }}};
+  kill(x);
+  ret 0

@@ -1,0 +1,125 @@
+open import Pervasives Global
+
+type t 'a 'msg =
+  | Result of 'a
+  | Exception of 'msg
+
+let bind m k =
+  match m with
+    | Result a    -> k a
+    | Exception s -> Exception s
+  end
+
+let rbind k m = bind m k
+
+let return a = Result a
+let throw m = Exception m
+let fail = throw
+let join m = bind m (fun x -> x)
+
+val fmap: forall 'a 'b 'msg. ('a -> 'b) -> t 'a 'msg -> t 'b 'msg
+let fmap f m = bind m (return -| f)
+
+val app: forall 'a 'b 'msg. t ('a -> 'b) 'msg -> t 'a 'msg -> t 'b 'msg
+let app mf m = bind mf (fun f -> fmap f m)
+
+let of_maybe m = function
+  | Just a  -> return a
+  | Nothing -> throw  m
+  end
+
+let to_bool = function
+  | Result    _ -> true
+  | Exception _ -> false
+  end
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+  let inline (=<<)      = rbind
+end
+
+open Operators
+
+let map2 f mx my    = app (fmap f mx) my
+let map3 f mx my mz = app (map2 f mx my) mz
+
+val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
+let sequence ms =
+  foldr
+    (fun m ms' ->
+      m   >>= fun x  ->
+      ms' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
+
+val listM: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
+let listM t xs = sequence (t xs)
+
+val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+let mapM f = listM (List.map f)
+
+
+
+
+
+
+
+(*
+TODO[not used anymore]
+
+let sequence_map mmap =
+  Ocaml.Pmap.fold (fun k m mm->
+    m  >>= fun x   ->
+    mm >>= fun map ->
+    return (Pmap.add k x map)
+  ) mmap (return Pmap.empty)
+
+let map_map f m = sequence_map (Ocaml.Pmap.map f m)
+*)
+
+let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
+
+
+(*
+TODO[newLem] should use the Ord class instead
+
+==> Seem unused
+
+*)
+let compare cmp cmp_msg a1 a2 =
+  match (a1, a2) with
+  | (Result r1, Result r2) -> cmp r1 r2
+  | (Exception e1, Exception e2) -> cmp_msg e1 e2
+  | (Result _, _) -> LT
+  | (_, Result _) -> GT
+  end
+
+let bind_exception m k =
+  match m with
+    | Result a -> Result a
+    | Exception s -> k s
+  end
+
+let rbind_exception k m = bind_exception m k
+
+
+
+
+val guard: forall 'msg. bool -> 'msg -> t unit 'msg
+let guard pred err =
+  if pred then
+    return ()
+  else
+    fail err
+
+
+
+val onException: forall 'a 'msg. t 'a 'msg -> t 'a 'msg -> t 'a 'msg
+let onException m1 m2 =
+  match m1 with
+    | Result z    -> Result z
+    | Exception _ -> m2
+  end
+
+

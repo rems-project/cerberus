@@ -1,0 +1,136 @@
+open import Pervasives
+open import List Function
+open import Global
+import Symbolic
+
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `Boot_ocaml.output_string2`
+
+
+type t 'a = list (bool * string * Symbolic.equations * 'a)
+
+val return: forall 'a. 'a -> t 'a
+let return x = [(false, "", Symbolic.empty_equations, x)]
+
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind m f =
+  (* DEBUG *)
+(*  List.filter (fun (eqs, _) -> not (Symbolic.is_clearly_unsat eqs)) $ *)
+(*
+  List.filter (fun (debug_log, eqs, _) -> not (let b = Symbolic.is_clearly_unsat eqs in if b then let _ = output_string "UNSAT" in true else false)) $
+    List.concatMap (fun (debug_logA, eqsA, a) ->
+      List.map (fun (debug_logB, eqsB, b) ->
+        (debug_logA ^ debug_logB, Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB, b)
+      ) $ f a
+    ) m
+*)
+  List.concatMap (fun (is_killedA, debug_logA, eqsA, a) ->
+      List.map (fun (is_killedB, debug_logB, eqsB, b) ->
+        if is_killedA then
+          (is_killedA, debug_logA, eqsA, b)
+        else
+          let eqs' = Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB in
+          let is_unsat = Symbolic.is_clearly_unsat eqs' in
+
+          (is_killedB || is_unsat, (if is_unsat then "UNSAT\n" else "") ^ debug_logA ^ debug_logB, eqs', b)
+      ) $ f a
+    ) m
+
+
+
+
+
+(*
+  (ND zs) >>= f =
+    ND $
+      concatMap (\(eqsA, a) ->
+        let ND zs' = f a in
+        map (\(eqsB, b) -> (combine_equations eqsA eqsB, b)) zs'
+      ) zs
+*)
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end
+
+open Operators
+
+
+val mzero: forall 'a. t 'a
+let mzero = []
+
+val msum: forall 'a. list (t 'a) -> t 'a
+let msum ms =
+  List.concat ms
+
+val sequence: forall 'a. list (t 'a) -> t (list 'a)
+let sequence ms =
+  List.foldr (fun m ms' ->
+   m   >>= fun x  ->
+   ms' >>= fun xs ->
+  return (x :: xs)
+  ) (return []) ms
+
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
+let mapM f xs =
+  sequence (List.map f xs)
+
+
+let rec _pickWith pred acc = function
+  | [] ->
+      []
+  | x::xs ->
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $ _pickWith pred (x::acc) xs
+end
+
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+let pickWith pred xs =
+  msum $ List.map return (_pickWith pred [] xs)
+
+
+
+val pick: forall 'a. list 'a -> t 'a
+let pick xs =
+  List.map (fun x -> (false, "", Symbolic.empty_equations, x)) xs
+
+
+
+(* Perform the first computation if it is not empty bind the result to the second computation
+   otherwise run the third computation *)
+val tryM: forall 'a 'b. t 'a -> ('a -> t 'b) -> (unit -> t 'b) -> t 'b
+let tryM ma mf mend =
+  if List.null ma then
+    mend ()
+  else
+    ma >>= mf
+
+
+
+
+
+val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+let rec foldM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      f a x >>= fun fax -> foldM f fax xs
+end
+
+
+val add_equation: Symbolic.equation -> t unit
+let add_equation symb_eq =
+  [(false, "", Symbolic.add_equation symb_eq Symbolic.empty_equations, ())]
+
+
+
+
+val kill_execution: t unit
+let kill_execution =
+  [(true, "", Symbolic.empty_equations, ())]
+
+
+val print_debug: string -> t unit
+let print_debug str =
+  [(false, str, Symbolic.empty_equations, ())]

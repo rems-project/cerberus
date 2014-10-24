@@ -1,0 +1,148 @@
+open import Pervasives Global
+import Symbol Symbolic AilTypes
+
+(* TODO: temporary hack *)
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
+
+(* C types (this is a simplication of what is need for typechecking) *)
+(* TODO: what about Ail.ATOMIC_Q ? *)
+
+type struct_tag = Symbol.t
+type union_tag  = Symbol.t
+type member_id  = Symbol.t
+
+
+
+type modifiable =
+  | Modifiable_yes
+  | Modifiable_no
+
+(* TODO: no volatile for now *)
+type ctype =
+ | Void
+ | Basic of AilTypes.basicType
+ | Array of ctype * integer
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of AilTypes.qualifiers * ctype
+ | Atomic of ctype
+ | Struct of struct_tag * list (member_id * modifiable * ctype)
+ | Union  of union_tag * list (member_id * modifiable * ctype)
+
+
+  (* this alignment is the default for the type unless overridden by
+  _Alignas, eg "_Alignas(int32_t) int16_t i", in which case it's that *)
+
+
+(* choice: do we have a layout environment or do we duplicate the info
+in every ctype? For the former:
+
+
+-  somewhere for every base type, there has to be the default (maybe impl-def) alignment and size 
+
+type layout_environment = 
+  (* for every structure member_id, the offset *)
+  
+
+then given those, we should be able to define a Lem function from ctype to calculate:
+
+- its alignment
+- its size
+- its footprint (a list of offset,size pairs)
+
+
+For the latter, we have to add more stuff into ctype.
+*)
+
+
+
+let rec ctypeEquality ty1 ty2 =
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        ctypeEquality ty1 ty2 && n1 = n2
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        ctypeEquality ty1 ty2 &&
+        List.all (uncurry $ eq_pair AilTypes.eq_qualifiers ctypeEquality) (zip tys1 tys2) &&
+        b1 = b2
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        AilTypes.eq_qualifiers qs1 qs2 &&
+        ctypeEquality ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+        ctypeEquality ty1 ty2
+    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEquality ty1 ty2
+        ) (zip membrs1 membrs2)
+    | (Union tag1 membrs1, Union tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEquality ty1 ty2
+        ) (zip membrs1 membrs2)
+    | _ -> false
+  end
+
+instance (Eq ctype)
+  let (=) = ctypeEquality
+  let (<>) x y = not (ctypeEquality x y)
+end
+
+
+(*
+val ctype_to_nat : ctype -> nat
+let ctype_to_nat = function
+ | Void           -> 0
+ | Basic _        -> 1
+ | Array _ _      -> 2
+ | Function _ _ _ -> 3
+ | Pointer _      -> 4
+ | Atomic _       -> 5
+end
+
+let rec setElemCompare_ctype ty1 ty2 =
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        EQ
+    | (Basic bty1, Basic bty2) ->
+        setElemCompare bty1 bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        pairCompare setElemCompare_ctype setElemCompare (ty1, n1) (ty2, n2)
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        pairCompare setElemCompare_ctype (pairCompare (lexicographicCompareBy setElemCompare_ctype) setElemCompare)
+          (ty1, (tys1, b1)) (ty2, (tys2, b2))
+    | (Pointer ty1, Pointer ty2) ->
+        setElemCompare_ctype ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+         setElemCompare_ctype ty1 ty2
+    | (_, _) ->
+        setElemCompare (ctype_to_nat ty1) (ctype_to_nat ty2)
+  end
+*)
+
+let setElemCompare_ctype _ _ =
+  assert_false "WIP: comparition function for Core_ctype.ctype"
+
+
+instance (SetType ctype)
+  let setElemCompare = setElemCompare_ctype
+end
+
+
+
+
+val is_atomic: ctype -> bool
+let is_atomic = function
+ | Atomic _ ->
+     true
+ | _ ->
+     false
+end
