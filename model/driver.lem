@@ -53,109 +53,6 @@ let initial_driver_state file =
 
 
 
-(*
-(* Reinventing the wheel and breaking abstraction for now *)
-type driverM 'a = driver_state -> ND.t (Exception.t (Undefined.t 'a * driver_state) driver_error)
-
-
-val return: forall 'a. 'a -> driverM 'a
-let return z =
-  fun dr_st -> ND.return (Exception.return (U.return z, dr_st))
-
-
-val bind: forall 'a 'b. driverM 'a -> ('a -> driverM 'b) -> driverM 'b
-let bind m f =
-  Boot.assert_false "WIP Driver.bind"
-
-(*
-let bind m f =
-  fun dr_st ->
-    ND.bind (m dr_st) function
-      | (Exception.Result (U.Defined z), dr_st') ->
-          f z dr_st'
-(*
-      | z ->
-          ND.return z
-*)
-    end
-*)
-
-
-let inline (>>=) = bind
-*)
-
-
-(*
-val runCore: forall 'a. SEU.t 'a core_run_state core_run_error -> driverM 'a
-let runCore m =
-  Boot.assert_false "WIP"
-*)
-(*
-  fun dr_st ->
-    match SEU.run m dr_st.core_run_state with
-      | Exception.Result (Undefined.Defined z, run_st') ->
-          SEU.put <| dr_st with core_run_state= run_st' |> >>
-          SEU.return z
-      | Exception.Result (Undefined.Undef ubs, run_st') ->
-          SEU.put <| dr_st with core_run_state= run_st' |> >>
-          SEU.undef ubs
-      | Exception.Result (Undefined.Error, run_st') ->
-          SEU.put <| dr_st with core_run_state= run_st' |> >>
-          SEU.error
-      | Exception.Exception err ->
-          SEU.fail (DERR_core_run err)
-    end
-*)
-
-
-
-
-
-
-(*
-type preExStep = 
-  <| action       : action;
-     sbBefore     : set aid;
-     ddBefore     : set aid;
-     aswBefore    : set aid;
-     locationKind : maybe location_kind;
-  |>
-
-val updatePreEx: exeState -> preExStep -> exeState
-
-
-val exeOpsemStep: exeState -> equalityCvalue -> S.t exeStep
-
-*)
-
-
-
-(*
-val get: driverM driver_state
-let get =
-  Boot.assert_false "WIP"
-*)
-
-
-(*
-val runND: forall 'a. ND.t 'a -> driverM 'a
-let runND m =
-  fun dr_st ->
-    ND.bind m (fun z -> ND.return $ Exception.return (U.return z, dr_st))
-*)
-
-
-
-
-
-
-
-
-
-
-
-
-
 (* NOTE: can't use the Set-based monad from Ky because I would need to define
          a compare function for the type core_step ... *)
 
@@ -180,7 +77,6 @@ open ND.Operators
 
 
 
-(* TODO: hack *)
 let rec resolve_read_expr write_sym v expr =
   let f = resolve_read_expr write_sym v in
   match expr with
@@ -289,7 +185,6 @@ and resolve_read_action write_sym v (Core.Action annots act_) =
 
 
 
-(* TODO: hack *)
 let rec resolve_read_continuation write_sym v cont =
   List.map (function
     | Core.Kunseq es1 es2 ->
@@ -302,7 +197,6 @@ let rec resolve_read_continuation write_sym v cont =
 
 
 
-(* TODO: hack *)
 let rec resolve_read_stack write_sym v = function
   | Core.Stack_empty ->
       Core.Stack_empty
@@ -312,7 +206,6 @@ end
 
 
 
-(* TODO: hack *)
 val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
 let resolve_read write_sym v core_st =
   let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in
@@ -392,20 +285,11 @@ let rec stepConcurrency n dr_st =
                 (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
 
-(*
-                if v_symb = Symbolic.Symbolic_constant 1 then
-                  ND.print_debug "KILLING BECAUSE OF A 1\n" >>
-                  ND.kill_execution >>
-                  ND.return dr_st
-else
-*)
                 match w with
                   | Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) -> 
-                      (* TODO: ignoring pointer for now *)
                       ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
                       ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
-                                              concurrency_state= concur_st' 
-(*                                               concurrency_state= <| concur_st' with preEx= resolve_read_pre_execution write_sym v concur_st'.preEx |> *) |>
+                                              concurrency_state= concur_st'  |>
                   | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
                       ND.add_equation (Symbolic.eq (Symbolic.constant n) v_symb) >>
                       ND.return   <| dr_st with concurrency_state= concur_st' |> 
@@ -476,16 +360,7 @@ let rec drive_core dr_st =
 
 
 
-(*
-type pre_execution =
-  <|  actions : set (action);
-      threads : set (tid);
-      lk      : location -> location_kind;
-      sb      : set (action * action) ;
-      asw     : set (action * action) ;
-      dd      : set (action * action) ;
-  |>
-*)
+
 let repair_pre_execution dr_st =
   let repair preEx =
     <| preEx with asw=
@@ -494,7 +369,7 @@ let repair_pre_execution dr_st =
           Set.any (fun b -> a <> b && Relation.inRel a b preEx.sb) preEx.actions
         )
       ) preEx.asw
-(*      let sb_asw_star = Relation.transitiveClosure $ Relation.relComp preEx.sb preEx.asw in *)
+
 |>
   in
   <| dr_st with concurrency_state=
@@ -564,7 +439,6 @@ let rec driver _dr_st =
     
     | Step_tau debug_str _ step_m ->
         ND.print_debug $ "Found a tau ===> " ^ debug_str ^ "\n" >>
-        (* TODO: why is this needed ?????? *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         driver <| dr_st' with core_state= core_st' |>
     
@@ -574,7 +448,6 @@ let rec driver _dr_st =
         let n = (number_of_uncommitted dr_st.concurrency_state) in
         ND.print_debug $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" >>
         stepConcurrency n dr_st >>= fun dr_st' ->
-        (* TODO: this is pretty disgusting *)
         ND.return $
           match dr_st'.core_state.thread_states with
             | [(_, (_, th_st))] ->

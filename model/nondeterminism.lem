@@ -14,16 +14,6 @@ let return x = [(false, "", Symbolic.empty_equations, x)]
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind m f =
-  (* DEBUG *)
-(*  List.filter (fun (eqs, _) -> not (Symbolic.is_clearly_unsat eqs)) $ *)
-(*
-  List.filter (fun (debug_log, eqs, _) -> not (let b = Symbolic.is_clearly_unsat eqs in if b then let _ = output_string "UNSAT" in true else false)) $
-    List.concatMap (fun (debug_logA, eqsA, a) ->
-      List.map (fun (debug_logB, eqsB, b) ->
-        (debug_logA ^ debug_logB, Symbolic.simplify_equations $ Symbolic.combine_equations eqsA eqsB, b)
-      ) $ f a
-    ) m
-*)
   List.concatMap (fun (is_killedA, debug_logA, eqsA, a) ->
       List.map (fun (is_killedB, debug_logB, eqsB, b) ->
         if is_killedA then
@@ -37,17 +27,6 @@ let bind m f =
     ) m
 
 
-
-
-
-(*
-  (ND zs) >>= f =
-    ND $
-      concatMap (\(eqsA, a) ->
-        let ND zs' = f a in
-        map (\(eqsB, b) -> (combine_equations eqsA eqsB, b)) zs'
-      ) zs
-*)
 
 
 module Operators = struct

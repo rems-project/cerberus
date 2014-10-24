@@ -84,7 +84,7 @@ let inj_right f (a, b) = f b >>= fun b' -> return (a, b')
 (*
 TODO[newLem] should use the Ord class instead
 
-==> Seem unused
+==> Seems unused
 
 *)
 let compare cmp cmp_msg a1 a2 =

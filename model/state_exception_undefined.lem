@@ -24,20 +24,6 @@ let bind m f = fun st ->
   end
 
 
-(*
-val ubind: forall 'a 'b 'msg. Undefined.t 'a -> ('a -> Exception.t (Undefined.t 'b) 'msg) -> Exception.t (Undefined.t 'b) 'msg
-let ubind m f =
-  match m with
-    | Undefined.Defined z ->
-        f z
-    | Undefined.Undef ubs ->
-        Exception.return (Undefined.Undef ubs)
-    | Undefined.Error ->
-        Exception.return Undefined.Error
-  end
-*)
-
-
 val     mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) ->
                                     list 'a              ->
                                     t (list 'b) 's 'msg
@@ -74,26 +60,6 @@ let runS m = fun st ->
 
 val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t (Undefined.t 'a * 's) 'msg
 let run m st = m st
-
-
-(*
-val get: forall 's 'msg. t 's 's 'msg
-let get = State_exception.read (fun z -> Undefined.return z)
-
-val put: forall 's 'msg. 's -> t unit 's 'msg
-let put st = State_exception.modify (fun _ -> (Undefined.return (), st))
-*)
-
-
-(*
-val undef: forall 'a 's 'msg. list Undefined.undefined_behaviour -> t 'a 's 'msg
-let undef ubs =
-  State_exception.return (Undefined.undef ubs)
-
-val error: forall 'a 's 'msg. t 'a 's 'msg
-let error =
-  State_exception.return Undefined.error
-*)
 
 
 
