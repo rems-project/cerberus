@@ -31,7 +31,7 @@ module Effect = struct
         match Map.lookup a senv with
           | Just z  -> Success z
           | Nothing -> Error (* CORE_TYPECHECK_GET_FAILURE *)
-                         (Location.unknowned,
+                         (Loc.unknowned,
                           CORE_TYPECHECK "TODO msg" (* ("[get]> " ^ string_of_senv senv ^ " | " ^ Symbol.to_string_pretty a) *) )
         end
       in (ret, (senv,fenv))
@@ -40,7 +40,7 @@ module Effect = struct
     let ret =
       match Map.lookup f fenv with
         | Just z  -> Success z
-        | Nothing -> Error (Location.unknowned, CORE_TYPECHECK_UNDECLARED_FUNCTION f)
+        | Nothing -> Error (Loc.unknowned, CORE_TYPECHECK_UNDECLARED_FUNCTION f)
       end
     in (ret, (senv,fenv))
   
@@ -50,7 +50,7 @@ module Effect = struct
 
   
   val fail: forall 'a. Errors.cause -> t 'a
-  let fail cause       = fun env -> (Error (Location.unknowned, cause), env)
+  let fail cause       = fun env -> (Error (Loc.unknowned, cause), env)
   val guard: bool -> Errors.cause -> t unit
   let guard cond cause = if cond then return () else fail cause
   

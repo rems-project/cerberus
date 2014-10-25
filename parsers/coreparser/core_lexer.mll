@@ -154,7 +154,10 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation_.impl_map)
   with Not_found ->
-    failwith ("Found an invalid impl_name: " ^ id)
+    if Str.string_match (Str.regexp "^<std_function_") id 0 then
+      T.IMPL (Implementation_.StdFunction (String.sub id 14 (String.length id - 15)))
+    else
+      failwith ("Found an invalid impl_name: " ^ id)
 
 let scan_ub lexbuf =
   let id = Lexing.lexeme lexbuf in

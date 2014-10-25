@@ -1,5 +1,10 @@
 open Global
 
+module P = PPrint
+let (!^ ) = P.(!^)
+let (^^)  = P.(^^)
+
+
 (* Part of the escape ANSI's "Select Graphic Rendition" parameters *)
 type ansi_style =
   | Black
@@ -33,6 +38,11 @@ let int_fg = function
   | Inverted  -> 7
 
 
-let ansi_format f s =
+let ansi_format f str =
   let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
-  "\x1b[" ^ g f ^ s ^ "\x1b[0m" (* TODO: optimize, someday *)
+  "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
+
+
+let pp_ansi_format f doc =
+  let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
+  !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m" (* TODO: optimize, someday *)

@@ -87,3 +87,5 @@ let fake_printf str args =
 
 
 
+let sort_assoc_list xs =
+  List.stable_sort (fun (a, _) (b, _) -> Pervasives.compare a b) xs

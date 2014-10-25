@@ -132,14 +132,10 @@ let pp_integer_ctype ity =
   match ity with
     | Char             -> !^ "char"
     | Bool             -> !^ "_Bool"
-    | Signed Int8_t    -> !^ "int8_t"
-    | Signed Int16_t   -> !^ "int16_t"
-    | Signed Int32_t   -> !^ "int32_t"
-    | Signed Int64_t   -> !^ "int64_t"
-    | Unsigned Int8_t  -> !^ "uint8_t"
-    | Unsigned Int16_t -> !^ "uint16_t"
-    | Unsigned Int32_t -> !^ "uint32_t"
-    | Unsigned Int64_t -> !^ "uint64_t"
+    | Signed (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
+        !^ str
+    | Unsigned (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
+        !^ ("u" ^ str)
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
 
@@ -157,8 +153,8 @@ let rec pp_ctype t =
         !^ "void"
     | Basic0 bty ->
         pp_basic_ctype bty
-    | Array0 (ty, n) ->
-        pp_ctype ty ^^ P.brackets (Pp_ail.pp_integer n)
+    | Array0 (ty, n_opt) ->
+        pp_ctype ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
 (*
     | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
     | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
@@ -233,23 +229,29 @@ let rec pp_symbolic = function
 
 
 
+let rec pp_prefix = function
+  | [] ->
+      P.empty
+  | sym :: pref ->
+      !^ (Pp_symbol.to_string_pretty sym) ^^ P.dot ^^ pp_prefix pref
+
 
 let rec pp_constant = function
 (*
   | Mem.MV_pointer (Mem.Pointer_function f) ->
       !^ "TODO(MV_pointer(function))"
 *)
-  | Mem.MV_pointer (Mem.Pointer_nonnull n) ->
-      !^ ("@" ^ string_of_int n)
+  | Mem.MV_pointer (Mem.Pointer_nonnull (n, pref)) ->
+      !^ ("@" ^ string_of_int n) ^^ P.braces (pp_prefix pref)
   | Mem.MV_pointer ptr_val ->
       !^ "TODO(MV_pointer)" 
   | Mem.MV_integer (Symbolic.SYMBconst n) ->
       !^ (Big_int.string_of_big_int n)
   | Mem.MV_integer symb ->
       !^ "SYMB" ^^ P.parens (pp_symbolic symb)
-(*
   | Mem.MV_array vs ->
       pp_const "array" ^^ P.parens (comma_list pp_constant vs)
+(*
   | Mem.MV_struct _ ->
       !^ "TODO(MV_struct)"
   | Mem.MV_union _ ->
@@ -293,6 +295,15 @@ let pp_pattern _as =
     | []   -> P.lparen ^^ P.rparen
     | [_a] -> g _a
     | _    -> P.parens (comma_list g _as)
+
+
+let pp_pointer_action = function
+  | PtrEq ->
+      pp_keyword "pointer_eq"
+  | PtrNe ->
+      pp_keyword "pointer_ne"
+  | PtrShift ->
+      pp_keyword "pointer_shift"
 
 
 let rec pp_expr e =
@@ -464,10 +475,8 @@ and pp_action act =
         P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
                   pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | Pointer_eq (e1, e2) ->
-       pp_keyword "pointer_eq" ^^ P.parens (pp_expr e1 ^^ P.comma ^^^ pp_expr e2)
-    | Pointer_neq (e1, e2) ->
-       pp_keyword "pointer_neq" ^^ P.parens (pp_expr e1 ^^ P.comma ^^^ pp_expr e2)
+    | Ptr (ptr_act, es) ->
+       pp_pointer_action ptr_act ^^ P.parens (comma_list pp_expr es)
 
 
 

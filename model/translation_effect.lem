@@ -1,6 +1,6 @@
 (* Effects for Translation: state + exception *)
 open import Pervasives Global
-import Boot UniqueId Symbol Undefined
+import Boot UniqueId Symbol Undefined Core_ctype
 
 open import Core
 
@@ -10,7 +10,7 @@ type state = <|
   visible_objects: list (list Symbol.t);     (* visible C objects with scoping (used to properly
                                                 annotate Esave/Erun ctors) *)
   
-  string_literals: list (sym * expr unit)
+  string_literals: list (sym * Core_ctype.ctype * expr unit)
 |>
 
 
@@ -123,7 +123,10 @@ let get_visible_objects = fun st ->
 
 
 
-val register_string_literal: sym -> expr unit -> t unit
-let register_string_literal a e = fun st ->
-  Undefined.return ((), <| st with string_literals= (a, e) :: st.string_literals |>)
+val register_string_literal: sym -> Core_ctype.ctype -> expr unit -> t unit
+let register_string_literal a ty e = fun st ->
+  Undefined.return ((), <| st with string_literals= (a, ty, e) :: st.string_literals |>)
 
+val get_string_literals: t (list (sym * Core_ctype.ctype * expr unit))
+let get_string_literals = fun st ->
+  Undefined.return (st.string_literals, st)

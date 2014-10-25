@@ -4,6 +4,9 @@ open import Global
 import State_exception_undefined
 import Symbol Symbolic Core_ctype Thread
 
+import Map_extra (* DEBUG *)
+
+
 module SEU = State_exception_undefined
 
 
@@ -17,55 +20,62 @@ declare ocaml target_rep function output_string = `Pervasives.print_endline`
 
 
 
-type object_id = nat
+type object_id = nat * list Symbol.t (* symbols originating from C, for debugging purpose *)
 
-
-type memory_state = <|
-  oid_supply: UniqueId.supply object_id
-|>
-
-let initial_memory_state = <|
-  oid_supply= UniqueId.new_supply;
-|>
-
-
-type memory_error =
-  | MEMORY_ERROR
-
-type memM 'a = SEU.t 'a memory_state memory_error
-
-
-(* val runMem: forall 'a. memM 'a ->  *)
 
 
 type pointer_value =
 (*  | Pointer_null of Core_ctype.ctype *)
   | Pointer_nonnull of object_id
   | Pointer_function of Symbol.t
+  | Pointer_shift of pointer_value * nat
 
-let pointer_value_eq ptr_val1 ptr_val2 =
+let rec pointer_value_eq ptr_val1 ptr_val2 =
   match (ptr_val1, ptr_val2) with
     | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
         oid1 = oid2
     | (Pointer_function sym1, Pointer_function sym2) ->
         sym1 = sym2
+    | (Pointer_shift ptr_val1 n1, Pointer_shift ptr_val2 n2) ->
+        pointer_value_eq ptr_val1 ptr_val2 &&
+        n1 = n2
     | _ ->
         false
   end
 
 
 (* TODO: debug *)
-let string_of_pointer_value = function
-  | Pointer_nonnull oid ->
-      "Pointer_nonnull[" ^ string_of_natural (naturalFromNat oid) ^ "]"
-  | Pointer_function (Symbol.Symbol n str_opt) ->
-      let sym_str = match str_opt with
-        | Just str -> 
-            string_of_natural (naturalFromNat n) ^ ": " ^ str
-        | Nothing ->
-            string_of_natural (naturalFromNat n)
-      end in
-      "Pointer_function[" ^ sym_str ^ "]"
+let rec string_of_prefix syms =
+  let f = function
+    | Symbol.Symbol n (Just str) ->
+        str
+    | Symbol.Symbol n Nothing ->
+        "a_" ^ string_of_natural (naturalFromNat n)
+  end in
+  match syms with
+    | [] ->
+        ""
+    | [sym] ->
+        f sym
+    | sym :: syms' ->
+        f sym ^ "." ^ string_of_prefix syms'
+  end
+  
+
+let rec string_of_pointer_value ptr_val =
+  match ptr_val with
+    | Pointer_nonnull (oid, pref) ->
+        "Pointer_nonnull[" ^ string_of_natural (naturalFromNat oid) ^ ":{" ^ string_of_prefix pref ^ "}]"
+    | Pointer_function (Symbol.Symbol n str_opt) ->
+        let sym_str = match str_opt with
+          | Just str -> 
+              string_of_natural (naturalFromNat n) ^ ": " ^ str
+          | Nothing ->
+              string_of_natural (naturalFromNat n)
+        end in
+        "Pointer_function[" ^ sym_str ^ "]"
+    | Pointer_shift ptr_val' n ->
+        "Pointer_shift[" ^ string_of_pointer_value ptr_val' ^ ", " ^ string_of_natural (naturalFromNat n) ^ "]"
 end
 
 
@@ -76,15 +86,41 @@ instance (Eq pointer_value)
 end
 
 (* TODO ... *)
-let mapKeyCompare_pointer_value ptr_val1 ptr_val2 =
-  if pointer_value_eq ptr_val1 ptr_val2 then EQ else
-  let _ = output_string $ string_of_pointer_value ptr_val1 ^ " /= " ^ string_of_pointer_value ptr_val2 in
-  GT
+let rec compare_pointer_value ptr_val1 ptr_val2 =
+  let ordOf = function
+     | Pointer_nonnull _ ->
+         (0 : nat)
+     | Pointer_function _ ->
+         1
+     | Pointer_shift _ _ ->
+         2
+  end in
+  match compare (ordOf ptr_val1) (ordOf ptr_val2) with
+    | EQ ->
+        match (ptr_val1, ptr_val2) with
+          | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
+              compare oid1 oid2
+          | (Pointer_function sym1, Pointer_function sym2) ->
+              compare sym1 sym2
+          | (Pointer_shift ptr_val1' n1, Pointer_shift ptr_val2' n2) ->
+              match compare_pointer_value ptr_val1' ptr_val2' with
+                | EQ ->
+                    compare n1 n2
+                | cmp ->
+                    cmp
+              end
+        end
+    | cmp ->
+        cmp
+  end
 
 instance (MapKeyType pointer_value)
-  let mapKeyCompare = mapKeyCompare_pointer_value
+  let mapKeyCompare = compare_pointer_value
 end
 
+instance (SetType pointer_value)
+  let setElemCompare = compare_pointer_value
+end
 
 
 
@@ -104,11 +140,174 @@ let rec string_of_mem_value mem_val =
   match mem_val with
     | MV_pointer ptr_val ->
         "MV_pointer[" ^ string_of_pointer_value ptr_val ^ "]"
+    | MV_integer (Symbolic.SYMBconst n) ->
+        "MV_integer[" ^ string_of_natural (naturalFromInteger n) ^ "]"
     | MV_integer symb ->
         "MV_integer[TODO]"
     | MV_array mem_vals ->
         "MV_array[" ^ List.foldr (fun mem_val acc ->  string_of_mem_value mem_val ^ ", " ^ acc) "" mem_vals ^ "]"
 end
+
+
+
+type memory_write =
+  pointer_value * mem_value
+
+type memory_read =
+  pointer_value * nat (* number of bytes being read *)
+
+
+type memory_state = <|
+  oid_supply: UniqueId.supply nat;
+  mem_writes: list memory_write; (* TODO: uber non efficient *)
+(*  mem_writes: map pointer_value (maybe mem_value); *)
+|>
+
+let string_of_memory_state mem_st =
+  "TODO_string_of_memory_state"
+(*
+  let ws = Map_extra.toList mem_st.mem_writes in 
+  "state[" ^ (string_of_natural (naturalFromNat (Map.size mem_st.mem_writes))) ^ ";" ^
+  (string_of_natural (naturalFromNat (Map.size mem_st.mem_writes))) ^ "]{" ^ 
+  List.foldl (fun acc (ptr_val, mem_val_opt) ->
+    string_of_pointer_value ptr_val ^ " := " ^
+    match mem_val_opt with
+      | Just mem_val ->
+          string_of_mem_value mem_val
+      | Nothing ->
+          "uninit"
+    end ^ ", " ^ acc
+  ) "" ws
+  ^ "}"
+*)
+
+
+val     base_object_id: pointer_value -> object_id
+let rec base_object_id ptr_val =
+  match ptr_val with
+    | Pointer_nonnull oid ->
+        oid
+    | Pointer_shift ptr_val' _ ->
+        base_object_id ptr_val'
+    | Pointer_function _ ->
+        assert_false "base_object_id: found a function pointer"
+  end
+
+val     normalise_pointer_value: pointer_value -> pointer_value
+let rec normalise_pointer_value ptr_val =
+  match ptr_val with
+    | Pointer_shift ptr_val 0 ->
+        normalise_pointer_value ptr_val
+    | Pointer_shift (Pointer_shift ptr_val' n) m ->
+        normalise_pointer_value (Pointer_shift ptr_val' (n+m))
+    | _ ->
+        ptr_val
+  end
+
+
+
+val is_affected: memory_read -> memory_write -> bool
+let is_affected (r_ptr_val, width) (w_ptr_val, _) =
+  match (normalise_pointer_value r_ptr_val, normalise_pointer_value w_ptr_val) with
+    | (Pointer_nonnull r_oid, Pointer_nonnull w_oid) ->
+        r_oid = w_oid
+    | (Pointer_nonnull r_oid, Pointer_shift (Pointer_nonnull w_oid) w_n) ->
+        r_oid = w_oid && w_n < width
+    | (Pointer_shift (Pointer_nonnull r_oid) r_n, Pointer_shift (Pointer_nonnull w_oid) w_n) ->
+        let n = w_n - r_n in
+        r_oid = w_oid && 0 <= n && n < width
+    | _ ->
+        false
+end
+
+
+
+val filter_writes: memory_read -> list memory_write -> list memory_write
+let filter_writes r ws =
+  List.filter (is_affected r) ws
+
+
+(* TODO: move that somewhere else *)
+(* NOTE: the sort must be stable *)
+val sort_assoc_list: forall 'a 'b. list ('a * 'b) -> list ('a * 'b)
+declare ocaml target_rep function sort_assoc_list = `Boot_ocaml.sort_assoc_list`
+
+(* remove duplicates from assoc list (keeping the first occurences) *)
+(* NOTE: assumes that the assoc list is sorted *)
+val uniq_assoc_list: forall 'a 'b. Eq 'a => list ('a * 'b) -> list ('a * 'b)
+let rec uniq_assoc_list_aux xs acc =
+  match xs with
+    | [] ->
+        acc
+    | [(n, a)] ->
+        (n, a) :: acc
+    | ((n, a) :: (m, b) :: ws) ->
+        if n = m then
+          uniq_assoc_list_aux ((n, a) :: ws) acc
+        else
+          uniq_assoc_list_aux ((m, b) :: ws) ((n, a) :: acc)
+  end
+let uniq_assoc_list xs =
+  List.reverse $ uniq_assoc_list_aux xs []
+
+
+
+val combine_writes: memory_read -> list memory_write -> maybe mem_value
+let combine_writes ((r_ptr_val, width) as r) ws =
+  let offset =
+    match normalise_pointer_value r_ptr_val with
+      | Pointer_nonnull _ -> 0
+      | Pointer_shift _ n -> n
+    end in
+  
+  let xs = List.map (function
+    | (Pointer_nonnull _, mem_val) ->
+        (0, mem_val)
+    | (Pointer_shift _ n, mem_val) ->
+        (n - offset, mem_val)
+  end) $ filter_writes r (List.map (fun (x, y) -> (normalise_pointer_value x, y)) ws) in
+  
+  (* TODO: we don't always want an array *)
+  match xs with
+    | [] ->
+        Nothing
+    | _ ->
+        (* NOTE: the sorting function REALLY needs to be stable *)
+        match uniq_assoc_list $ sort_assoc_list xs with
+          | [(_, mem_val)] ->
+              Just mem_val
+          | mem_vals ->
+              Just (MV_array $ List.map snd mem_vals)
+        end
+  end
+
+
+
+
+let initial_memory_state = <|
+  oid_supply= UniqueId.new_supply;
+  mem_writes= [];
+|>
+
+
+type memory_error =
+  | MemErr_uninitialised
+  | MEMORY_ERROR
+
+type memM 'a = SEU.t 'a memory_state memory_error
+
+val runMem: forall 'a. memM 'a -> memory_state -> either memory_error ('a * memory_state)
+let runMem m mem_st =
+  match SEU.run m mem_st with
+    | Exception.Result (Undefined.Defined z, mem_st') ->
+        Right (z, mem_st')
+    | Exception.Exception err ->
+        Left err
+(* TODO: undef case *)
+  end
+
+
+
 
 
 
@@ -182,11 +381,11 @@ let function_pointer fsym =
 
 
 
-val fresh_object_id: State.t object_id memory_state
-let fresh_object_id =
+val fresh_object_id: list Symbol.t -> State.t object_id memory_state
+let fresh_object_id pref =
   State.modify (fun st ->
-    let (oid, oid_suppl') = UniqueId.fresh_id st.oid_supply in
-    (oid, <| st with oid_supply= oid_suppl' |>)
+    let (n, oid_suppl') = UniqueId.fresh_id st.oid_supply in
+    ((n, pref), <| st with oid_supply= oid_suppl' |>)
   )
 
 
@@ -197,12 +396,73 @@ let fresh_object_id =
 open SEU.Operators
 
 val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
                      -> Core_ctype.ctype  (* type of the allocation *)
 (*
                      -> Symbolic.symbolic (* size of that type *)
                      -> Symbolic.symbolic (* alignment of that type *)
 *)
                      -> memM pointer_value
-let allocate_object (* tid ty size_symb align_symb *) _ ty =
-  SEU.runS fresh_object_id >>= fun oid ->
+let allocate_object (* tid ty size_symb align_symb *) _ pref ty =
+  SEU.runS (fresh_object_id pref) >>= fun oid ->
   SEU.return (Pointer_nonnull oid)
+(*
+  let ptr_val = Pointer_nonnull oid in
+  SEU.update (fun st ->
+    let st' = <| st with
+      mem_writes= Map.insert ptr_val Nothing st.mem_writes
+    |> in
+(*    let _ = output_string ("AFTER0> " ^ string_of_memory_state st') in *)
+    st') >>
+  
+  SEU.read (fun st ->
+(*    let _ = output_string ("AFTER1> " ^ string_of_memory_state st) in *)
+    ()
+  ) >>
+  SEU.return ptr_val
+*)
+
+
+
+(* TODO: WIP *)
+val store: pointer_value -> mem_value -> memM unit
+let store ptr_val mem_val =
+  SEU.update (fun st ->
+    <| st with mem_writes= (ptr_val, mem_val) :: st.mem_writes |>
+  )
+
+(* TODO: WIP *)
+val load: pointer_value -> memM mem_value
+let load ptr_val =
+  SEU.read (fun st -> st.mem_writes) >>= fun ws ->
+  match combine_writes (ptr_val, 1 (* TODO *)) ws with
+    | Nothing ->
+        SEU.fail MemErr_uninitialised
+    | Just mem_val ->
+        SEU.return mem_val
+  end
+(*
+  match Map.lookup ptr_val writes with
+    | Just (Just mem_val) ->
+        SEU.return mem_val
+    | Just Nothing ->
+        SEU.fail MemErr_uninitialised
+    | Nothing ->
+        SEU.fail MEMORY_ERROR
+  end
+*)
+
+
+
+val pointer_shift:
+  Core_ctype.ctype -> pointer_value -> integer -> memM pointer_value
+let pointer_shift ty ptr_val n =
+  SEU.return (Pointer_shift ptr_val (natFromInteger n)) (* TODO: undef when we run out *)
+(*
+
+type pointer_value =
+(*  | Pointer_null of Core_ctype.ctype *)
+  | Pointer_nonnull of object_id
+  | Pointer_function of Symbol.t
+
+*)

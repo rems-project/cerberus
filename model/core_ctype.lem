@@ -19,16 +19,36 @@ type modifiable =
   | Modifiable_yes
   | Modifiable_no
 
+instance (Eq modifiable)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
 (* TODO: no volatile for now *)
 type ctype =
  | Void
  | Basic of AilTypes.basicType
- | Array of ctype * integer
+ | Array of ctype * maybe integer
  | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
  | Pointer of AilTypes.qualifiers * ctype
  | Atomic of ctype
  | Struct of struct_tag * list (member_id * modifiable * ctype)
  | Union  of union_tag * list (member_id * modifiable * ctype)
+ | Builtin of string
+
+
+
+val char16_t: ctype
+let char16_t =
+  (* STD §7.28#2 *)
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least16_t")))
+
+val char32_t: ctype
+let char32_t =
+  (* STD §7.28#2 *)
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least32_t")))
+
 
 
   (* this alignment is the default for the type unless overridden by
@@ -56,43 +76,45 @@ For the latter, we have to add more stuff into ctype.
 *)
 
 
-let rec ctypeEquality ty1 ty2 =
+let rec ctypeEqual ty1 ty2 =
+  let paramsEqual (qs1, ty1) (qs2, ty2) =
+    qs1 = qs2 && ctypeEqual ty1 ty2 in
   match (ty1, ty2) with
     | (Void, Void) ->
         true
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
-    | (Array ty1 n1, Array ty2 n2) ->
-        ctypeEquality ty1 ty2 && n1 = n2
+    | (Array ty1 n1_opt, Array ty2 n2_opt) ->
+        ctypeEqual ty1 ty2 && n1_opt = n2_opt
     | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
-        ctypeEquality ty1 ty2 &&
-        List.all (uncurry $ eq_pair AilTypes.eq_qualifiers ctypeEquality) (zip tys1 tys2) &&
-        b1 = b2
+        ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip tys1 tys2) && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
-        AilTypes.eq_qualifiers qs1 qs2 &&
-        ctypeEquality ty1 ty2
+        qs1 = qs2 &&
+        ctypeEqual ty1 ty2
     | (Atomic ty1, Atomic ty2) ->
-        ctypeEquality ty1 ty2
+        ctypeEqual ty1 ty2
     | (Struct tag1 membrs1, Struct tag2 membrs2) ->
         tag1 = tag2 &&
         List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
           mem1 = mem2 &&
           m1 = m2 &&
-          ctypeEquality ty1 ty2
+          ctypeEqual ty1 ty2
         ) (zip membrs1 membrs2)
     | (Union tag1 membrs1, Union tag2 membrs2) ->
         tag1 = tag2 &&
         List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
           mem1 = mem2 &&
           m1 = m2 &&
-          ctypeEquality ty1 ty2
+          ctypeEqual ty1 ty2
         ) (zip membrs1 membrs2)
+    | (Builtin str1, Builtin str2) ->
+        str1 = str2
     | _ -> false
   end
 
 instance (Eq ctype)
-  let (=) = ctypeEquality
-  let (<>) x y = not (ctypeEquality x y)
+  let (=) = ctypeEqual
+  let (<>) x y = not (ctypeEqual x y)
 end
 
 

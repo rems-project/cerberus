@@ -1,7 +1,7 @@
 open import Pervasives Global Translation_effect Symbol
 import Core Core_aux
 import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
-import Set_extra
+import Map_extra
 
 module C    = Core
 module Caux = Core_aux
@@ -19,7 +19,7 @@ let rec mk_stdcall_aux pred xs =
 
 val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.expr 'a) -> Core.expr 'a)
 let mk_stdcall stdlib fname =
-  match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Set_extra.toList $ Map.toSet stdlib) with
+  match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
     | Just (f, _) -> Core.Ecall (Core.Sym f)
     | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
@@ -101,14 +101,14 @@ let tmp_implementation =
         | Aty.Signed   Aty.LongLong -> 63
         | Aty.Unsigned Aty.LongLong -> 64
 
-        | Aty.Signed Aty.Int8_t     -> 7
-        | Aty.Signed Aty.Int16_t    -> 15
-        | Aty.Signed Aty.Int32_t    -> 31
-        | Aty.Signed Aty.Int64_t    -> 63
-        | Aty.Unsigned Aty.Int8_t   -> 8
-        | Aty.Unsigned Aty.Int16_t  -> 16
-        | Aty.Unsigned Aty.Int32_t  -> 32
-        | Aty.Unsigned Aty.Int64_t  -> 64
+        | Aty.Signed (Aty.IBBuiltin "int8_t") -> 7
+        | Aty.Signed (Aty.IBBuiltin "int16_t") -> 15
+        | Aty.Signed (Aty.IBBuiltin "int32_t") -> 31
+        | Aty.Signed (Aty.IBBuiltin "int64_t") -> 63
+        | Aty.Unsigned (Aty.IBBuiltin "int8_t") -> 8
+        | Aty.Unsigned (Aty.IBBuiltin "int16_t") -> 16
+        | Aty.Unsigned (Aty.IBBuiltin "int32_t") -> 32
+        | Aty.Unsigned (Aty.IBBuiltin "int64_t") -> 64
       end
     )
     (Aty.Unsigned Aty.Long)
@@ -119,14 +119,14 @@ let tmp_implementation =
 open AilTypes
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
-  | Basic (Integer it) ->
-      AilTypesAux.unsigned_type it
+  | Basic (Integer ity) ->
+      AilTypesAux.unsigned_type ity
   | _ ->
       false
 end
 
 let function_return_type = function
-  | Function t _ _ -> t
+  | Function ty _ _ -> ty
   | _ -> Boot.assert_false "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 
@@ -156,17 +156,17 @@ let ctype_of a_expr =
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
     | Right (AilTypes.LValueType _ ty) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
-    | Left (TypingError.TError_TODO n) ->
+    | Left (loc, TypingError.TError_TODO n) ->
         Boot.assert_false $ "TYPING ERROR(translation_aux): " ^ string_of_natural (naturalFromNat n) ^ " at \n==> " ^
                             (Boot.pp_ail_expr a_expr)
-    | Left (TypingError.TError_integerConstant_too_large n) ->
+    | Left (loc, TypingError.TError_integerConstant_too_large n) ->
         Boot.assert_false $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
                             string_of_natural (naturalFromInteger n)
     | _ -> Boot.assert_false "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
 
-val is_defined_ail_function: forall 'A 'B. AilSyntax.identifier -> AilSyntax.program 'A 'B -> bool
+val is_defined_ail_function: forall 'A. AilSyntax.identifier -> AilSyntax.program 'A -> bool
 let is_defined_ail_function sym (_, sigm) =
   (* NOTE: the `Nothing' case could technically also mean that [sym] is not event registered *)
-  isJust (Context.lookup AilSyntax.eq_identifier sigm.AilSyntax.function_definitions sym)
+  isJust (Context.lookup (=) sigm.AilSyntax.function_definitions sym)

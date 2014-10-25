@@ -1,6 +1,30 @@
 open Errors
 open TypingError
 
+open Colour
+
+
+type kind =
+  | Error
+  | Warning
+  | Note
+
+let string_of_kind = function
+  | Error ->
+      ansi_format [Bold; Red] "error"
+  | Warning ->
+      ansi_format [Bold; Magenta] "warning"
+  | Note ->
+      ansi_format [Bold; Black] "note"
+
+
+let make_message (start_p, _) k str =
+  Lexing.(
+    ansi_format [Bold] (String.concat ":" [(* Filename.basename *) start_p.pos_fname; string_of_int start_p.pos_lnum; string_of_int (start_p.pos_cnum - start_p.pos_bol)] ^ ": ")
+  ) ^ string_of_kind k ^ ": " ^ ansi_format [Bold] str
+
+
+
 (*
 let location_to_string  = function
   | Some p ->
@@ -13,12 +37,16 @@ let location_to_string  = function
   | None -> "Unknown location"
 *)
 
-let location_to_string = function
-  | Some (l, c) ->
-      "line= " ^ string_of_int l ^ ", char= " ^ string_of_int c
-  | None ->
-      "Unknown location"
 
+let location_to_string (start_p, end_p) =
+  Lexing.(
+    "[lnum= " ^ string_of_int start_p.pos_lnum ^ ", " ^
+    "bol= " ^ string_of_int start_p.pos_bol ^ ", " ^
+    "cnum= " ^ string_of_int start_p.pos_cnum ^ " - " ^
+    "lnum= " ^ string_of_int end_p.pos_lnum ^ ", " ^
+    "bol= " ^ string_of_int end_p.pos_bol ^ ", " ^
+    "cnum= " ^ string_of_int end_p.pos_cnum ^ "]"
+  )
 
 
 
@@ -54,7 +82,7 @@ let desugar_cause_to_string = function
 *)
   | Desugar_NotConstantExpression ->
       "found a non-contant expression in place of a constant one.\n"
-  | Desugar_MultibleDeclaration str ->
+  | Desugar_MultipleDeclaration (CabsIdentifier (_, str)) ->
       "violation of constraint (§6.7#3): multiple declaration of `" ^ str ^ "'."
 (*
   | CABS_TO_AIL_DUPLICATED_LABEL ->
@@ -91,24 +119,28 @@ let desugar_cause_to_string = function
 
 
 
-let to_string (loc, c) =
-  location_to_string loc ^ ": " ^
-  match c with
-    | Desugar_cause dcause ->
-        "[During desugaring] " ^ desugar_cause_to_string dcause
-
-    | CSEM_NOT_SUPPORTED msg ->
-        "Csem doesn't yet support `" ^ msg ^"'"
-    
-    | CSEM_HIP msg ->
-        "HIP, this doesn't work yet: `" ^ msg ^ "'"
-        
-    (* Cabs0_to_ail *)
-    | CONSTRAINT_6_6__3 ->
-        "Violation of constraint 6.6#3 [Constant expressions] `Constant \
-         expressions shall not contain assignment, increment, decrement, \
-         function-call, or comma operators, except when they are contained \
-         within a subexpression that is not evaluated.'\n"
+let to_string ((start_p, end_p) as loc, c) =
+  make_message loc Error
+  begin
+    match c with
+      | Desugar_cause (Desugar_MultipleDeclaration (CabsIdentifier (_, str))) ->
+          "multiple declaration of '" ^ str ^ "'"
+      
+      | Desugar_cause dcause ->
+          "[During desugaring] " ^ desugar_cause_to_string dcause
+      
+      | CSEM_NOT_SUPPORTED msg ->
+          "Csem doesn't yet support `" ^ msg ^"'"
+      
+      | CSEM_HIP msg ->
+          "HIP, this doesn't work yet: `" ^ msg ^ "'"
+      
+      (* Cabs0_to_ail *)
+      | CONSTRAINT_6_6__3 ->
+          "Violation of constraint 6.6#3 [Constant expressions] `Constant \
+           expressions shall not contain assignment, increment, decrement, \
+           function-call, or comma operators, except when they are contained \
+           within a subexpression that is not evaluated.'\n"
     
 
 
@@ -557,4 +589,12 @@ let to_string (loc, c) =
           List.fold_left (fun acc u ->
             acc ^ "  --> " ^ Undefined.pretty_string_of_undefined_behaviour u ^ "\n"
           ) "" us
-
+  end (* ^ "\n" ^
+  Lexing.(
+    let ic = open_in start_p.pos_fname in
+    seek_in ic start_p.pos_bol;
+    input_line ic ^ "\n" ^
+    String.make (start_p.pos_cnum - start_p.pos_bol) ' ' ^
+    ansi_format [Bold; Green] "^"
+  )
+*)

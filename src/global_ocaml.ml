@@ -41,9 +41,10 @@ type cerberus_conf = {
   pps:           language list;
   core_stdlib:   unit Core.fun_map;
   core_impl:     unit Core.impl;
-  core_parser:   Input.t -> (Core_parser_util.result, Errors.t9) Exception.t2;
+  core_parser:   Input.t -> (Core_parser_util.result, Errors.t9) Exception.t3;
   exec_mode_opt: execution_mode option;
-  progress:      bool
+  progress:      bool;
+  no_rewrite:    bool;
 }
 
 let (!!) z = !z()
@@ -51,7 +52,7 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress no_rewrite =
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
     pps=           pps;
@@ -59,7 +60,8 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser p
     core_impl=     core_impl;
     core_parser=   core_parser;
     exec_mode_opt= if exec then Some exec_mode else None;
-    progress=      progress
+    progress=      progress;
+    no_rewrite=    no_rewrite
   }
 
 

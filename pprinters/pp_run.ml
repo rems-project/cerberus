@@ -168,8 +168,8 @@ open Core_run_aux
 let string_of_core_run_error = function
   | Illformed_program str ->
       "Illformed_program[" ^ str ^ "]"
-  | Found_empty_stack ->
-      "Found_empty_stack"
+  | Found_empty_stack str ->
+      "Found_empty_stack[" ^ str ^ "]"
   | Reached_end_of_proc ->
       "Reached_end_of_proc"
   | Unknown_impl ->

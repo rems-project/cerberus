@@ -1,4 +1,9 @@
 open import Pervasives Common AilTypes Implementation ErrorMonad TypingError
+import Loc
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+
 
 (* == Function on qualifiers ==================================================================== *)
 val is_unqualified: qualifiers -> bool
@@ -24,33 +29,45 @@ let combine_qualifiers qs1 qs2 = <|
 
 val sub_qualifiers: qualifiers -> qualifiers -> bool
 let sub_qualifiers qs1 qs2 =
-     qs1.const    --> qs2.const
-  && qs1.restrict --> qs2.restrict
-  && qs1.volatile --> qs2.volatile
-  && qs1.atomic   --> qs2.atomic
+     (qs1.const    --> qs2.const)
+  && (qs1.restrict --> qs2.restrict)
+  && (qs1.volatile --> qs2.volatile)
+  && (qs1.atomic   --> qs2.atomic)
 
 
 (* == predicates on integerTypes ================================================================= *)
 (* TODO: change name *)
 val is_unsigned: implementation -> integerType -> bool
-let is_unsigned P it =
-  not (P.signed it)
+let is_unsigned impl ity =
+  not (impl.signed ity)
 
 val signed_type: integerType -> bool
 let signed_type = function
+  | Char ->
+      false (* TODO: impl-def *)
+  | Bool ->
+      false
   | Signed _ ->
       true
-  | _ ->
+  | Unsigned _ ->
+      false
+  | IBuiltin _ ->
       false
 end
 
 val unsigned_type: integerType -> bool
 let unsigned_type = function
-  | Unsigned _ ->
-      true
+  | Char ->
+      false (* TODO: impl-def *)
   | Bool ->
       true
-  | _ ->
+  | Signed _ ->
+      false
+  | Unsigned _ ->
+      true
+  | IBuiltin "size_t" ->
+      true
+  | IBuiltin _ ->
       false
  end
 
@@ -81,8 +98,42 @@ let is_pointer = function
       false
 end
 
-val is_bool: ctype -> bool
-let is_bool = function
+val is_atomic: ctype -> bool
+let is_atomic = function
+  | Atomic _ ->
+      (* STD §6.2.5#20, bullet 6 *)
+      true
+  | Pointer qs _ ->
+      (* STD §6.2.5#27 *)
+      qs.atomic
+  | _ ->
+      false
+end
+
+(* TODO: I don't like that, in particular if pred = is_atomic this doesn't work... *)
+val atomic_qualified_unqualified: (ctype -> bool) -> ctype -> bool
+let atomic_qualified_unqualified pred = function
+  | Atomic ty ->
+      pred ty
+  | ty ->
+      pred ty
+end
+  
+
+val is_character: ctype -> bool
+let is_character = function
+  | Basic (Integer Char) ->
+      true
+  | Basic (Integer (Signed Ichar)) ->
+      true
+  | Basic (Integer (Unsigned Ichar)) ->
+      true
+  | _ ->
+      false
+end
+
+val is_Bool: ctype -> bool
+let is_Bool = function
   | Basic (Integer Bool) ->
       true
   | _ ->
@@ -94,8 +145,18 @@ val is_array: ctype -> bool
 let is_array = function
   | Array _ _ ->
       true
+  | Builtin "jmp_buf" ->
+      true
+  | Builtin "fpos_t" ->
+      false
   | _ ->
       false
+end
+
+val is_array_of_character: ctype -> bool
+let is_array_of_character = function
+  | Array elem_ty _ ->
+      is_character elem_ty
 end
 
 (* STD §6.2.5#1, sentence 3 *)
@@ -123,13 +184,34 @@ let is_union = function
       false
 end
 
+val is_struct_or_union: ctype -> bool
+let is_struct_or_union ty =
+  is_struct ty || is_union ty
 
 
 (* == generic predicates on ctypes ============================================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool
-let is_object ty =
-  not (is_function ty)
+let is_object = function
+  | Builtin "FILE" ->
+      true
+  | Builtin "cnd_t" ->
+      true
+  | Builtin "fpos_t" ->
+      true
+  | Builtin "mtx_t" ->
+      true
+  | Builtin "once_flag" ->
+      true
+  | Builtin "thrd_t" ->
+      true
+  | Builtin "tss_t" ->
+      true
+  | Builtin "va_list" ->
+      true
+  | ty ->
+      not (is_function ty)
+end
 
 (* STD §6.2.5#18, sentence 1 *)
 val is_arithmetic: ctype -> bool
@@ -151,92 +233,153 @@ let is_aggregate ty =
 (* TODO *)
 val is_complete: ctype -> bool
 let is_complete = function
-  | Basic _ -> true
-  | Pointer _ _ -> true
-  | Array _ _ -> true
-  | _ -> false
+  | Basic _ ->
+      true
+  | Pointer _ _ ->
+      true
+  | Array _ _ ->
+      true
+  | Builtin "cnd_t" ->
+      true
+  | Builtin "fpos_t" ->
+      true
+  | Builtin "mtx_t" ->
+      true
+  | Builtin "once_flag" ->
+      true
+  | Builtin "thrd_t" ->
+      true
+  | Builtin "tss_t" ->
+      true
+  | Builtin "va_list" ->
+      true
+  | _ ->
+      false
 end
 
 (* TODO *)
-let is_incomplete t : bool =
-  match t with
-  | Void -> true
-  | _ -> false
-  end
+val is_icomplete: ctype -> bool
+let is_incomplete ty =
+  not (is_complete ty)
 
 
 
 
 (* ============================================================================================== *)
-let in_integer_range P n it : bool =
-  Range.mem n (integer_range P it)
+val in_integer_range: implementation -> integer -> integerType -> bool
+let in_integer_range impl n ity =
+  Range.mem n (integer_range impl ity)
 
-let in_min_integer_range n it : bool =
-  Range.mem n (Implementation.min_integer_range it)
+val in_min_integer_range: integer -> integerType -> bool
+let in_min_integer_range n ity =
+  Range.mem n (Implementation.min_integer_range ity)
 
-let le_integer_range P it1 it2 : bool =
-  match (it1, it2) with
-  | (Char             , Char             ) -> true
-  | (Char             , Signed   Ichar   ) -> P.signed Char
-  | (Char             , Signed   ibt     ) -> P.signed Char ||
-                                              (P.precision Char) < (P.precision (Signed ibt))
-  | (Signed Ichar     , Char             ) -> P.signed Char
-  | (Signed ibt       , Char             ) -> P.signed Char &&
-                                              P.precision (Signed ibt) = P.precision Char
-  | (Unsigned Ichar   , Char             ) -> not (P.signed Char)
-  | (Unsigned ibt     , Char             ) -> not (P.signed Char) &&
-                                              P.precision (Unsigned ibt) = P.precision Char
-  | (Char             , Unsigned _       ) -> not (P.signed Char)
-  | (Char             , Bool             ) -> not (P.signed Char) &&
-                                              P.precision Char = P.precision Bool
-  | (Bool             , Char             ) -> not (P.signed Char) ||
-                                              (P.precision Bool) < (P.precision Char)
 
-  | (Signed   Ichar   , Signed   _       ) -> true
-  | (Signed   Short   , Signed   Short   ) -> true
-  | (Signed   Short   , Signed   Int_    ) -> true
-  | (Signed   Short   , Signed   Long    ) -> true
-  | (Signed   Short   , Signed   LongLong) -> true
-  | (Signed   Int_    , Signed   Int_    ) -> true
-  | (Signed   Int_    , Signed   Long    ) -> true
-  | (Signed   Int_    , Signed   LongLong) -> true
-  | (Signed   Long    , Signed   Long    ) -> true
-  | (Signed   Long    , Signed   LongLong) -> true
-  | (Signed   LongLong, Signed   LongLong) -> true
-  | (Signed   ibt1    , Signed   ibt2    ) -> P.precision (Signed ibt1) = P.precision (Signed ibt2)
+val le_integer_range: implementation -> integerType -> integerType -> bool
+let le_integer_range impl ity1 ity2 =
+  match (ity1, ity2) with
+    (* reflexive cases *)
+    | (Char, Char) ->
+        true
+    | (Bool, Bool) ->
+        true
+    | (Signed Short, Signed Short) ->
+        true
+    | (Signed Int_, Signed Int_) ->
+        true
+    | (Signed Long, Signed Long) ->
+        true
+    | (Signed LongLong, Signed LongLong) ->
+        true
+    | (Unsigned Short, Unsigned Short) ->
+        true
+    | (Unsigned Int_, Unsigned Int_) ->
+        true
+    | (Unsigned Long, Unsigned Long) ->
+        true
+    | (Unsigned LongLong, Unsigned LongLong) ->
+        true
+    
+    | (Char, Signed Ichar) ->
+        impl.signed Char
+    | (Char, Signed ibty) ->
+        impl.signed Char || (impl.precision Char) < (impl.precision (Signed ibty))
+    | (Signed Ichar, Char) ->
+        impl.signed Char
+    | (Signed ibty, Char) ->
+        impl.signed Char && impl.precision (Signed ibty) = impl.precision Char
+    | (Unsigned Ichar, Char) ->
+        not (impl.signed Char)
+    | (Unsigned ibty, Char) ->
+        not (impl.signed Char) && impl.precision (Unsigned ibty) = impl.precision Char
+    | (Char, Unsigned _) ->
+        not (impl.signed Char)
+    | (Char, Bool) ->
+        not (impl.signed Char) && impl.precision Char = impl.precision Bool
+    | (Bool, Char) ->
+        not (impl.signed Char) || (impl.precision Bool) < (impl.precision Char)
 
-  | (Bool             , Bool             ) -> true
-  | (Bool             , Unsigned _       ) -> true
-  | (Unsigned Ichar   , Unsigned _       ) -> true
-  | (Unsigned Short   , Unsigned Short   ) -> true
-  | (Unsigned Short   , Unsigned Int_    ) -> true
-  | (Unsigned Short   , Unsigned Long    ) -> true
-  | (Unsigned Short   , Unsigned LongLong) -> true
-  | (Unsigned Int_    , Unsigned Int_    ) -> true
-  | (Unsigned Int_    , Unsigned Long    ) -> true
-  | (Unsigned Int_    , Unsigned LongLong) -> true
-  | (Unsigned Long    , Unsigned Long    ) -> true
-  | (Unsigned Long    , Unsigned LongLong) -> true
-  | (Unsigned LongLong, Unsigned LongLong) -> true
-  | (Unsigned ibt     , Bool             ) -> P.precision (Unsigned ibt) = P.precision Bool
-  | (Unsigned ibt1    , Unsigned   ibt2  ) -> P.precision (Unsigned ibt1) = P.precision (Unsigned ibt2)
-
-  | (Signed   _       , Bool             ) -> false
-  | (Signed   _       , Unsigned _       ) -> false
-
-  | (Bool             , Signed   ibt2    ) -> (P.precision Bool) < (P.precision (Signed ibt2))
-  | (Unsigned _       , Signed   Ichar   ) -> false
-  | (Unsigned Short   , Signed   Short   ) -> false
-  | (Unsigned Int_    , Signed   Int_    ) -> false
-  | (Unsigned Long    , Signed   Long    ) -> false
-  | (Unsigned LongLong, Signed   LongLong) -> false
-  | (Unsigned ibt1    , Signed   ibt2    ) -> (P.precision (Unsigned ibt1)) < (P.precision (Signed ibt2))
-  
-  (* TODO: check *)
-  | (Wchar_t          , Wchar_t          ) -> true
-
-  | (Char16_t         , Char16_t         ) -> true
-  | (Char32_t         , Char32_t         ) -> true
+    | (Signed Ichar, Signed _) ->
+        true
+    | (Signed Short, Signed Int_) ->
+        true
+    | (Signed Short, Signed Long) ->
+        true
+    | (Signed Short, Signed LongLong) ->
+        true
+    | (Signed Int_, Signed Long) ->
+        true
+    | (Signed Int_, Signed LongLong) ->
+        true
+    | (Signed Long, Signed LongLong) ->
+        true
+    | (Signed ibty1, Signed ibty2) ->
+        impl.precision (Signed ibty1) = impl.precision (Signed ibty2)
+    | (Signed _, Bool) ->
+        false
+    | (Bool, Signed ibty2) ->
+        (impl.precision Bool) < (impl.precision (Signed ibty2))
+    
+    | (Bool, Unsigned _) ->
+        true
+    | (Unsigned Ichar, Unsigned _) ->
+        true
+    | (Unsigned Short, Unsigned Int_) ->
+        true
+    | (Unsigned Short, Unsigned Long) ->
+        true
+    | (Unsigned Short, Unsigned LongLong) ->
+        true
+    | (Unsigned Int_, Unsigned Long) ->
+        true
+    | (Unsigned Int_, Unsigned LongLong) ->
+        true
+    | (Unsigned Long, Unsigned LongLong) ->
+        true
+    | (Unsigned ibty, Bool) ->
+        impl.precision (Unsigned ibty) = impl.precision Bool
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        impl.precision (Unsigned ibty1) = impl.precision (Unsigned ibty2)
+    
+    | (Signed _, Unsigned _) ->
+        false
+    
+    | (Unsigned _, Signed Ichar) ->
+        false
+    | (Unsigned Short, Signed Short) ->
+        false
+    | (Unsigned Int_, Signed Int_) ->
+        false
+    | (Unsigned Long, Signed Long) ->
+        false
+    | (Unsigned LongLong, Signed LongLong) ->
+        false
+    | (Unsigned ibty1, Signed ibty2) ->
+        (impl.precision (Unsigned ibty1)) < (impl.precision (Signed ibty2))
+      
+    (* TODO: check *)
+    | (IBuiltin str1, IBuiltin str2) ->
+        str1 = str2
   
   
 
@@ -306,226 +449,315 @@ let le_integer_range P it1 it2 : bool =
 
 
 *)
-
-
   end
 
-let eq_integer_rank_base it1 it2 : bool =
-  match (it1, it2) with
-  | (Signed ibt1, Unsigned ibt2  ) -> eq_integerBaseType ibt1 ibt2
-  | (Char       , Unsigned  Ichar) -> true
-  | (Char       , Signed    Ichar) -> true
-  | (_          , _              ) -> false
+
+(* TODO: this is not symmetric ... *)
+val eq_integer_rank_base: integerType -> integerType -> bool
+let eq_integer_rank_base ity1 ity2 =
+  match (ity1, ity2) with
+  | (Signed ibty1, Unsigned ibty2) ->
+      ibty1 = ibty2
+  | (Char, Unsigned Ichar) ->
+      true
+  | (Char, Signed Ichar) ->
+      true
+  | _ ->
+      false
   end
 
-let eq_integer_rank it1 it2 : bool =
-  eq_integerType it1 it2 || eq_integer_rank_base it1 it2 || eq_integer_rank_base it2 it1
+val eq_integer_rank: integerType -> integerType -> bool
+let eq_integer_rank ity1 ity2 =
+  ity1 = ity2 || eq_integer_rank_base ity1 ity2 || eq_integer_rank_base ity2 ity1
 
-let lt_integer_rank_base P it1 it2 : bool =
-  match (it1, it2) with
-  | (Bool        , it             ) -> not (eq_integerType Bool it)
-  | (Signed  Long, Signed LongLong) -> true
-  | (Signed   Int_, Signed     Long) -> true
-  | (Signed Short, Signed      Int_) -> true
-  | (Signed Ichar, Signed    Short) -> true
-  | (Signed  ibt1, Signed     ibt2) -> (P.precision (Signed ibt1)) < (P.precision (Signed ibt2))
-  | (_           , _              ) -> false
+val lt_integer_rank_base: implementation -> integerType -> integerType -> bool
+let lt_integer_rank_base impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (Bool, _) ->
+        not (Bool = ity2)
+    | (Signed Long, Signed LongLong) ->
+        true
+    | (Signed Int_, Signed Long) ->
+        true
+    | (Signed Short, Signed Int_) ->
+        true
+    | (Signed Ichar, Signed Short) ->
+        true
+    | (Signed ibty1, Signed ibty2) ->
+        (impl.precision (Signed ibty1)) < (impl.precision (Signed ibty2))
+    | _ ->
+        false
   end
 
-let lt_integer_rank_congruence P it1 it2 : bool =
-  match (it1, it2) with
-  | (_            , Bool         ) -> false
-  | (Bool         , _            ) -> true
-  | (_            , Char         ) -> false
-  | (Char         , Unsigned ibt2) -> lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
-  | (Char         , Signed   ibt2) -> lt_integer_rank_base P (Signed Ichar) (Signed ibt2)
-  | (Signed ibt1  , Signed   ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
-  | (Unsigned ibt1, Unsigned ibt2) -> lt_integer_rank_base P (Signed  ibt1) (Signed ibt2)
-  | (Unsigned ibt1, it2          ) -> lt_integer_rank_base P (Signed  ibt1) it2
-  | (it1          , Unsigned ibt2) -> lt_integer_rank_base P it1            (Signed ibt2)
-  | _ -> assert_false "WIP"
+val lt_integer_rank_congruence: implementation -> integerType -> integerType -> bool
+let lt_integer_rank_congruence impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (_, Bool) ->
+        false
+    | (Bool, _) ->
+        true
+    | (_, Char) ->
+        false
+    | (Char, Unsigned ibty2) ->
+        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
+    | (Char, Signed ibty2) ->
+        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
+    | (Signed ibty1, Signed ibty2) ->
+        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
+    | (Unsigned ibty1, ity2) ->
+        lt_integer_rank_base impl (Signed  ibty1) ity2
+    | (ity1, Unsigned ibty2) ->
+        lt_integer_rank_base impl ity1 (Signed ibty2)
+    | _ ->
+        assert_false "WIP"
   end
 
-let lt_integer_rank it1 it2 : bool =
-  match (it1, it2) with
-  | (_             , Bool          ) -> false
-  | (Bool          , _             ) -> true
-
-  | (_             , Char          ) -> false
-  | (_             , Signed   Ichar) -> false
-  | (_             , Unsigned Ichar) -> false
-  | (Char          , Signed    _   ) -> true
-  | (Char          , Unsigned  _   ) -> true
-  | (Signed   Ichar, Signed    _   ) -> true
-  | (Signed   Ichar, Unsigned  _   ) -> true
-  | (Unsigned Ichar, Signed    _   ) -> true
-  | (Unsigned Ichar, Unsigned  _   ) -> true
-
-  | (_             , Signed   Short) -> false
-  | (_             , Unsigned Short) -> false
-  | (Signed   Short, Signed    _   ) -> true
-  | (Signed   Short, Unsigned  _   ) -> true
-  | (Unsigned Short, Signed    _   ) -> true
-  | (Unsigned Short, Unsigned  _   ) -> true
-
-  | (_             , Signed     Int_) -> false
-  | (_             , Unsigned   Int_) -> false
-  | (Signed     Int_, Signed    _   ) -> true
-  | (Signed     Int_, Unsigned  _   ) -> true
-  | (Unsigned   Int_, Signed    _   ) -> true
-  | (Unsigned   Int_, Unsigned  _   ) -> true
-
-  | (_             , Signed    Long) -> false
-  | (_             , Unsigned  Long) -> false
-  | (Signed    Long, Signed    _   ) -> true
-  | (Signed    Long, Unsigned  _   ) -> true
-  | (Unsigned  Long, Signed    _   ) -> true
-  | (Unsigned  Long, Unsigned  _   ) -> true
-
-  | (_             , _             ) -> false
+val lt_integer_rank: integerType -> integerType -> bool
+let lt_integer_rank ity1 ity2 =
+  match (ity1, ity2) with
+    | (_, Bool) ->
+        false
+    | (Bool, _) ->
+        true
+    
+    | (_, Char) ->
+        false
+    | (_, Signed Ichar) ->
+        false
+    | (_, Unsigned Ichar) ->
+        false
+    | (Char, Signed _) ->
+        true
+    | (Char, Unsigned _) ->
+        true
+    | (Signed Ichar, Signed _) ->
+        true
+    | (Signed Ichar, Unsigned _) ->
+        true
+    | (Unsigned Ichar, Signed _) ->
+        true
+    | (Unsigned Ichar, Unsigned _) ->
+        true
+    
+    | (_, Signed Short) ->
+        false
+    | (_, Unsigned Short) ->
+        false
+    | (Signed Short, Signed _) ->
+        true
+    | (Signed Short, Unsigned _) ->
+        true
+    | (Unsigned Short, Signed _) ->
+        true
+    | (Unsigned Short, Unsigned _) ->
+        true
+    
+    | (_, Signed Int_) ->
+        false
+    | (_, Unsigned Int_) ->
+        false
+    | (Signed Int_, Signed _) ->
+        true
+    | (Signed Int_, Unsigned _) ->
+        true
+    | (Unsigned Int_, Signed _) ->
+        true
+    | (Unsigned Int_, Unsigned _) ->
+        true
+    
+    | (_, Signed Long) ->
+        false
+    | (_, Unsigned Long) ->
+        false
+    | (Signed Long, Signed _) ->
+        true
+    | (Signed Long, Unsigned _) ->
+        true
+    | (Unsigned Long, Signed _) ->
+        true
+    | (Unsigned Long, Unsigned _) ->
+        true
+    
+    | _ ->
+        false
   end
 
-let le_integer_rank it1 it2 : bool =
-  eq_integer_rank it1 it2 || lt_integer_rank it1 it2
+val le_integer_rank: integerType -> integerType -> bool
+let le_integer_rank ity1 ity2 =
+  eq_integer_rank ity1 ity2 || lt_integer_rank ity1 ity2
 
 
-let is_corresponding_unsigned it1 it2 : bool =
-  match (it1, it2) with
-  | (Signed ibt1, Unsigned ibt2) -> eq_integerBaseType ibt1 ibt2
-  | (_          , _            ) -> false
+val is_corresponding_unsigned: integerType -> integerType -> bool
+let is_corresponding_unsigned ity1 ity2 =
+  match (ity1, ity2) with
+    | (Signed ibty1, Unsigned ibty2) ->
+        ibty1 = ibty2
+    | (_, _) ->
+        false
   end
 
-let corresponding_unsigned it : maybe integerType =
-  match it with
-  | Signed ibt -> Just (Unsigned ibt)
-  | _          -> Nothing
+val corresponding_unsigned: integerType -> maybe integerType
+let corresponding_unsigned = function
+  | Signed ibty ->
+      Just (Unsigned ibty)
+  | _ ->
+      Nothing
+end
+
+val make_corresponding_unsigned: integerType -> integerType
+let make_corresponding_unsigned = function
+  | Signed ibty ->
+      Unsigned ibty
+  | ity ->
+      ity
+end
+
+val is_integer_promotion: implementation -> integerType -> integerType -> bool
+let is_integer_promotion impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (Signed Int_, Signed Int_) ->
+        true
+    | (Unsigned Int_, Signed Int_) ->
+        false
+    | (Unsigned Int_, Unsigned Int_) ->
+        true
+    | (Signed Int_, Unsigned Int_) ->
+        false
+    | (_, Signed Int_) ->
+        le_integer_rank ity1 (Signed Int_) && le_integer_range impl ity1 (Signed Int_)
+    | (_, Unsigned Int_) ->
+        le_integer_rank ity1 (Signed Int_) && not (le_integer_range impl ity1 (Signed Int_))
+    | _ ->
+        ity1 = ity2 && not (le_integer_rank ity1 (Signed Int_))
   end
 
-let make_corresponding_unsigned it : integerType =
-  match it with
-  | Signed ibt -> Unsigned ibt
-  | _          -> it
-  end
-
-let is_integer_promotion P it1 it2 : bool =
-  match (it1, it2) with
-  | (Signed   Int_, Signed   Int_) -> true
-  | (Unsigned Int_, Signed   Int_) -> false
-  | (Unsigned Int_, Unsigned Int_) -> true
-  | (Signed   Int_, Unsigned Int_) -> false
-  | (_           , Signed   Int_) -> le_integer_rank it1 (Signed Int_) &&
-                                    le_integer_range P it1 (Signed Int_)
-  | (_           , Unsigned Int_) -> le_integer_rank it1 (Signed Int_) &&
-                                    not (le_integer_range P it1 (Signed Int_))
-  | (_           , _           ) -> eq_integerType it1 it2 &&
-                                    not (le_integer_rank it1 (Signed Int_))
-  end
-
-let integer_promotion P it : integerType =
-  match it with
-  | Signed   Int_ -> Signed   Int_
-  | Unsigned Int_ -> Unsigned Int_
-  | _            -> if le_integer_rank it (Signed Int_)
-                      then if le_integer_range P it (Signed Int_)
-                             then Signed Int_
-                             else Unsigned Int_
-                      else it
-  end
-
-let is_promotion P t1 t2 : bool =
-  match (t1, t2) with
-  | (Basic (Integer it1), Basic (Integer it2)) -> is_integer_promotion P it1 it2
-  | (_                  , _                  ) -> false
-  end
-
-let promotion P t : maybe ctype =
-  match t with
-  | Basic (Integer it) -> Just (Basic (Integer (integer_promotion P it)))
-  | _                  -> Nothing
-  end
-
-let is_usual_arithmetic_promoted_integer P it1 it2 it3 : bool =
-  if signed_type it1 then
-    if signed_type it2 then
-      if lt_integer_rank it2 it1 then
-        eq_integerType it1 it3
-      else
-        eq_integerType it2 it3
-    else if unsigned_type it2 then
-      if le_integer_rank it1 it2 then
-        eq_integerType it2 it3
-      else
-        if le_integer_range P it2 it1 then
-          eq_integerType it1 it3
+val integer_promotion: implementation -> integerType -> integerType
+let integer_promotion impl = function
+  | Signed   Int_ ->
+      Signed   Int_
+  | Unsigned Int_ ->
+      Unsigned Int_
+  | ity ->
+      if le_integer_rank ity (Signed Int_) then
+        if le_integer_range impl ity (Signed Int_) then
+          Signed Int_
         else
-          is_corresponding_unsigned it1 it3
+          Unsigned Int_
+      else
+        ity
+  end
+
+val is_promotion: implementation -> ctype -> ctype -> bool
+let is_promotion impl ty1 ty2 =
+  match (ty1, ty2) with
+  | (Basic (Integer ity1), Basic (Integer ity2)) ->
+      is_integer_promotion impl ity1 ity2
+  | _ ->
+      false
+  end
+
+val promotion: implementation -> ctype -> maybe ctype
+let promotion impl = function
+  | Basic (Integer ity) ->
+      Just (Basic (Integer (integer_promotion impl ity)))
+  | _ ->
+      Nothing
+end
+
+val is_usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType -> bool
+let is_usual_arithmetic_promoted_integer impl ity1 ity2 ity3 =
+  if signed_type ity1 then
+    if signed_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1 = ity3
+      else
+        ity2 = ity3
+    else if unsigned_type ity2 then
+      if le_integer_rank ity1 ity2 then
+        ity2 = ity3
+      else
+        if le_integer_range impl ity2 ity1 then
+          ity1 = ity3
+        else
+          is_corresponding_unsigned ity1 ity3
     else
       false
-  else if unsigned_type it1 then
-    if unsigned_type it2 then
-      if lt_integer_rank it2 it1 then
-        eq_integerType it1 it3
+  else if unsigned_type ity1 then
+    if unsigned_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1 = ity3
       else
-        eq_integerType it2 it3
-    else if signed_type it2 then
-      if le_integer_rank it2 it1 then
-        eq_integerType it1 it3
-      else if le_integer_range P it1 it2 then
-        eq_integerType it2 it3
+        ity2 = ity3
+    else if signed_type ity2 then
+      if le_integer_rank ity2 ity1 then
+        ity1 = ity3
+      else if le_integer_range impl ity1 ity2 then
+        ity2 = ity3
       else
-        is_corresponding_unsigned it2 it3
+        is_corresponding_unsigned ity2 ity3
     else
       false
   else
     false
 
-let usual_arithmetic_promoted_integer P it1 it2 : integerType =
-  if signed_type it1 then
-    if signed_type it2 then
-      if lt_integer_rank it2 it1 then
-        it1
+val usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType
+let usual_arithmetic_promoted_integer impl ity1 ity2 =
+  if signed_type ity1 then
+    if signed_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1
       else
-        it2
+        ity2
     else
-      if le_integer_rank it1 it2 then
-        it2
+      if le_integer_rank ity1 ity2 then
+        ity2
       else
-        if le_integer_range P it2 it1 then
-          it1
+        if le_integer_range impl ity2 ity1 then
+          ity1
         else
-          make_corresponding_unsigned it1
+          make_corresponding_unsigned ity1
   else
-    if unsigned_type it2 then
-      if lt_integer_rank it2 it1 then
-        it1
+    if unsigned_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1
       else
-        it2
+        ity2
     else
-      if le_integer_rank it2 it1 then
-        it1
-      else if le_integer_range P it1 it2 then
-        it2
+      if le_integer_rank ity2 ity1 then
+        ity1
+      else if le_integer_range impl ity1 ity2 then
+        ity2
       else
-        make_corresponding_unsigned it2
+        make_corresponding_unsigned ity2
 
-let is_usual_arithmetic_integer P it1 it2 it3 : bool =
-  is_usual_arithmetic_promoted_integer P (integer_promotion P it1)
-                                         (integer_promotion P it2) it3
+val is_usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType -> bool
+let is_usual_arithmetic_integer impl ity1 ity2 ity3 =
+  is_usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
+                                            (integer_promotion impl ity2) ity3
 
-let usual_arithmetic_integer P it1 it2 : integerType =
-  usual_arithmetic_promoted_integer P (integer_promotion P it1)
-                                      (integer_promotion P it2)
+val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
+let usual_arithmetic_integer impl ity1 ity2 =
+  usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
+                                         (integer_promotion impl ity2)
 
-let is_usual_arithmetic P t1 t2 t3 : bool =
-  match (t1, t2, t3) with
-  | (Basic (Integer it1), Basic (Integer it2), Basic (Integer it3)) -> is_usual_arithmetic_integer P it1 it2 it3
-  | (_                  , _                  , _                  ) -> false
+val is_usual_arithmetic: implementation -> ctype -> ctype -> ctype -> bool
+let is_usual_arithmetic impl ty1 ty2 ty3 =
+  match (ty1, ty2, ty3) with
+  | (Basic (Integer ity1), Basic (Integer ity2), Basic (Integer ity3)) ->
+      is_usual_arithmetic_integer impl ity1 ity2 ity3
+  | _ ->
+      false
   end
 
-let usual_arithmetic P t1 t2 : maybe ctype =
-  match (t1, t2) with
-  | (Basic (Integer it1), Basic (Integer it2)) -> Just (Basic (Integer (usual_arithmetic_integer P it1 it2)))
-  | (_                  , _                  ) -> Nothing
+val usual_arithmetic: implementation -> ctype -> ctype -> maybe ctype
+let usual_arithmetic impl ty1 ty2 =
+  match (ty1, ty2) with
+  | (Basic (Integer ity1), Basic (Integer ity2)) ->
+      Just (Basic (Integer (usual_arithmetic_integer impl ity1 ity2)))
+  | _ ->
+      Nothing
   end
 
 
@@ -543,113 +775,180 @@ let modifiable qs ty =
   is_object ty &&
   not (is_incomplete ty)
 
-let real t : bool = is_integer t
+val real: ctype -> bool
+let real ty =
+  is_integer ty
 
-let rec ~{coq} compatible_params_aux compatible p1 p2 : bool =
+val            compatible_params_aux: (ctype -> ctype -> bool) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let rec ~{coq} compatible_params_aux is_compatible p1 p2 =
   match (p1, p2) with
-  | ([]           , []           ) -> true
-  | ((_, t1) :: p1, (_, t2) :: p2) -> compatible t1 t2 && compatible_params_aux compatible p1 p2
-  | (_            , _            ) -> false
+    | ([], []) ->
+        true
+    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
+        is_compatible ty1 ty2 && compatible_params_aux is_compatible p1 p2
+    | _ ->
+        false
   end
 
 (* (§6.2.7) Compatible type *)
-let rec ~{coq} compatible t1 t2 : bool =
+val            compatible: ctype -> ctype -> bool
+let rec ~{coq} compatible ty1 ty2 =
   let compatible_params = compatible_params_aux compatible in
-  match (t1, t2) with
-  | (Void             , Void             ) -> true
-  | (Basic bt1        , Basic bt2        ) -> eq_basicType bt1 bt2
-  | (Array    t1 n1   , Array    t2 n2   ) -> compatible t1 t2 && n1 = n2
-  | (Function t1 p1 b1, Function t2 p2 b2) -> compatible t1 t2 && compatible_params p1 p2 && b1 = b2
-  | (Pointer  q1 t1   , Pointer  q2 t2   ) -> compatible t1 t2 && eq_qualifiers q1 q2
-  | (_                , _                ) -> false
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        compatible ty1 ty2 && n1 = n2
+    | (Function ty1 p1 b1, Function ty2 p2 b2) ->
+        compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        compatible ty1 ty2 && qs1 = qs2
+    | (Struct _ _, _) ->
+        assert_false "WIP: compatible"
+    | (Union _ _, _) ->
+        assert_false "WIP: compatible"
+    | (_, Struct _ _) ->
+        assert_false "WIP: compatible"
+    | (_, Union _ _) ->
+        assert_false "WIP: compatible"
+    | _ ->
+        false
   end
 
-let ~{coq} compatible_params p1 p2 = compatible_params_aux compatible p1 p2
+val        compatible_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let ~{coq} compatible_params p1 p2 =
+  compatible_params_aux compatible p1 p2
 
-let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 : bool =
+val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
+                                        list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
   match (p1, p2, p3) with
-  | ([]           , []           , []            ) -> true
-  | ((_, t1) :: p1, (_, t2) :: p2, (q3, t3) :: p3) -> is_unqualified q3 &&
-                                                      is_composite t1 t2 t3 &&
-                                                      is_composite_params_aux is_composite p1 p2 p3
-  | (_            , _            , _             ) -> false
+    | ([], [], []) ->
+        true
+    | ((_, ty1) :: p1, (_, ty2) :: p2, (qs3, ty3) :: p3) ->
+        is_unqualified qs3 && is_composite ty1 ty2 ty3 &&
+        is_composite_params_aux is_composite p1 p2 p3
+    | _ ->
+      false
   end
 
-let rec ~{coq} is_composite t1 t2 t3 : bool =
+val            is_composite: ctype -> ctype -> ctype -> bool
+let rec ~{coq} is_composite ty1 ty2 ty3 =
   let is_composite_params = is_composite_params_aux is_composite in
-  match (t1, t2, t3) with
-  | (Void            , Void            , Void            ) -> true
-  | (Basic bt1       , Basic bt2       , Basic bt3       ) -> eq_basicType bt1 bt2 && eq_basicType bt1 bt3
-  | (Array t1 n1     , Array t2 n2     , Array t3 n3     ) -> is_composite t1 t2 t3 && n1 = n2 && n1 = n3
-  | (Function t1 p1 _, Function t2 p2 _, Function t3 p3 _) -> is_composite t1 t2 t3 && is_composite_params p1 p2 p3
-  | (Pointer  q1 t1  , Pointer  q2 t2  , Pointer  q3 t3  ) -> is_composite t1 t2 t3 && eq_qualifiers q1 q2 && eq_qualifiers q1 q3
-  | (_               , _               , _               ) -> false
+  match (ty1, ty2, ty3) with
+    | (Void, Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2, Basic bty3) ->
+        bty1 = bty2 && bty1 = bty3
+    | (Array ty1 n1, Array ty2 n2, Array ty3 n3) ->
+        is_composite ty1 ty2 ty3 && n1 = n2 && n1 = n3
+    | (Function ty1 p1 _, Function ty2 p2 _, Function ty3 p3 _) ->
+        is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
+    | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
+        is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
+    | _ ->
+        false
   end
 
-let ~{coq} is_composite_params p1 p2 p3 = is_composite_params_aux is_composite p1 p2 p3
+val        is_composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let ~{coq} is_composite_params p1 p2 p3 =
+  is_composite_params_aux is_composite p1 p2 p3
 
-let rec ~{coq} composite_params_aux composite p1 p2 : maybe (list (qualifiers * ctype))=
-    match (p1, p2) with
-    | ([]           , []           ) -> Just []
-    | ((_, t1) :: p1, (_, t2) :: p2) -> match (composite t1 t2, composite_params_aux composite p1 p2) with
-                                        | (Just t, Just p) -> Just ((no_qualifiers, t) :: p)
-                                        | (_     , _     ) -> Nothing
-                                        end
-    | (_            , _            ) -> Nothing
+val            composite_params_aux: (ctype -> ctype -> maybe ctype) ->
+                                     list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
+let rec ~{coq} composite_params_aux composite p1 p2 =
+  match (p1, p2) with
+    | ([], []) ->
+        Just []
+    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
+        match (composite ty1 ty2, composite_params_aux composite p1 p2) with
+          | (Just ty, Just p) ->
+              Just ((no_qualifiers, ty) :: p)
+          | _ ->
+              Nothing
+        end
+    | _ ->
+        Nothing
     end
 
 (* (§6.2.7#3) composite type *)
-let rec ~{coq} composite t1 t2 : maybe ctype =
+val            composite: ctype -> ctype -> maybe ctype
+let rec ~{coq} composite ty1 ty2 =
   let composite_params = composite_params_aux composite in
-  match (t1, t2) with
-  | (Void          , Void          ) -> Just Void
-  | (Basic bt1     , Basic bt2     ) -> if eq_basicType bt1 bt2
-                                          then Just (Basic bt1)
-                                          else Nothing
-  | (Array t1 n1   , Array t2 n2   ) -> if n1 = n2
-                                          then Maybe.map (fun t -> Array t n1) (composite t1 t2)
-                                          else Nothing
-  | (Function t1 p1 b1, Function t2 p2 b2) ->
-      match (composite t1 t2, composite_params p1 p2) with
-      | (Just t, Just p) -> if b1 = b2 then Just (Function t p b1) else Nothing
-      | (_     , _     ) -> Nothing
-      end
-  | (Pointer  q1 t1, Pointer  q2 t2) -> if eq_qualifiers q1 q2
-                                          then Maybe.map (Pointer q1) (composite t1 t2)
-                                          else Nothing
-  | (_             , _             ) -> Nothing
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        Just Void
+    | (Basic bty1, Basic bty2) ->
+        if bty1 = bty2 then
+          Just (Basic bty1)
+        else
+          Nothing
+    | (Array ty1 n1, Array ty2 n2) ->
+        if n1 = n2 then
+          Maybe.map (fun ty -> Array ty n1) (composite ty1 ty2)
+        else
+          Nothing
+    | (Function ty1 p1 b1, Function ty2 p2 b2) ->
+        match (composite ty1 ty2, composite_params p1 p2) with
+          | (Just ty, Just p) ->
+              if b1 = b2 then
+                Just (Function ty p b1)
+              else
+                Nothing
+          | _ ->
+              Nothing
+        end
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        if qs1 = qs2 then
+          Maybe.map (Pointer qs1) (composite ty1 ty2)
+        else
+          Nothing
+    | _ ->
+        Nothing
   end
 
+val        composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
 let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
 
 
 (* following (§6.3.2.1)#3 *)
+val array_coercion: ctype -> ctype
 let array_coercion = function
-  | Array    ty _ -> Pointer no_qualifiers ty
-  | ty            -> ty
+  | Array ty _ ->
+      Pointer no_qualifiers ty
+  | ty ->
+      ty
 end
 
 (* following (§6.3.2.1)#4 *)
+val function_coercion: ctype -> ctype
 let function_coercion = function
-  | Function ty' qs b -> Pointer no_qualifiers (Function ty' qs b)
-  | ty                -> ty
+  | Function ty' params is_variadic ->
+      Pointer no_qualifiers (Function ty' params is_variadic)
+  | ty ->
+      ty
 end
 
 (* following (§6.3.2.1)#2 *)
-let lvalue_convertible ty : bool =
+val lvalue_convertible: ctype -> bool
+let lvalue_convertible ty =
   not (is_array ty) && is_complete ty
 
 (* following (§6.3.2.1)#2 and #3 *)
-let lvalue_coercion ty : errorM ctype =
+val lvalue_coercion: ctype -> errorM ctype
+let lvalue_coercion ty =
   if lvalue_convertible ty then
     return ty
   else if is_array ty then
     return (array_coercion ty)
   else
-    fail (TError_TODO 1)
+    fail Loc.unknown (TError_TODO 1)
 
 (* following (§6.3.2.1)#3 and #4 *)
-let rvalue_coercion ty : ctype =
+val rvalue_coercion: ctype -> ctype
+let rvalue_coercion ty =
   if is_array ty then
     array_coercion ty
   else if is_function ty then
@@ -657,55 +956,70 @@ let rvalue_coercion ty : ctype =
   else
     ty
 
-let pointer_to_complete_object t : bool =
-  match t with
-  | Pointer _ t -> is_complete t
-  | _           -> false
+val is_pointer_to_complete_object: ctype -> bool
+let is_pointer_to_complete_object = function
+  | Pointer _ ty ->
+      is_complete ty
+  | _ ->
+      false
   end
 
-let ~{coq} pointers_to_compatible_complete_objects t1 t2 : bool =
-  match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> is_complete t1 && is_complete t2 && compatible t1 t2
-  | (_           , _           ) -> false
+val        pointers_to_compatible_complete_objects: ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_complete_objects ty1 ty2 =
+  match (ty1, ty2) with
+    | (Pointer _ ty1, Pointer _ ty2) ->
+        is_complete ty1 && is_complete ty2 && compatible ty1 ty2
+    | _ ->
+        false
   end  
 
-let ~{coq} pointers_to_compatible_objects t1 t2 : bool =
-  match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> is_object t1 && is_object t2 && compatible t1 t2
-  | (_           , _           ) -> false
+val        pointers_to_compatible_objects: ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_objects ty1 ty2 =
+  match (ty1, ty2) with
+    | (Pointer _ ty1, Pointer _ ty2) ->
+        is_object ty1 && is_object ty2 && compatible ty1 ty2
+    | _ ->
+        false
   end  
 
-let pointer_to_object t : bool =
-  match t with
-  | Pointer _ t -> is_object t
-  | _           -> false
-  end
+val pointer_to_object: ctype -> bool
+let pointer_to_object = function
+  | Pointer _ ty ->
+      is_object ty
+  | _ ->
+      false
+end
 
-let pointer_to_void t : bool =
-  match t with
-  | Pointer _ Void -> true
-  | _              -> false
-  end
+val pointer_to_void: ctype -> bool
+let pointer_to_void = function
+  | Pointer _ Void ->
+      true
+  | _ ->
+      false
+end
 
-let ~{coq} pointers_to_compatible_types t1 t2 : bool =
-  match (t1, t2) with
-  | (Pointer _ t1, Pointer _ t2) -> compatible t1 t2
-  | (_           , _           ) -> false
+val        pointers_to_compatible_types: ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_types ty1 ty2 =
+  match (ty1, ty2) with
+  | (Pointer _ ty1, Pointer _ ty2) ->
+      compatible ty1 ty2
+  | _ ->
+      false
   end  
 
 
 val is_signed_integer_type: ctype -> bool
 let is_signed_integer_type = function
-  | Basic (Integer it) ->
-      signed_type it
+  | Basic (Integer ity) ->
+      signed_type ity
   | _ ->
       false
 end
 
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
-  | Basic (Integer it) ->
-      unsigned_type it
+  | Basic (Integer ity) ->
+      unsigned_type ity
   | _ ->
       false
 end
@@ -741,9 +1055,16 @@ let is_complete_object ty =
   is_complete ty && is_object ty
 
 
+(* TODO: check *)
 val unqualify: ctype -> ctype
-let unqualify ty =
-  ty (* TODO *)
+let unqualify = function
+(*
+  | Pointer _ ty ->
+      Pointer no_qualifiers ty
+*)
+  | ty ->
+      ty
+end
 (*
 function
  | Void ->
@@ -762,3 +1083,41 @@ function
  | Builtin of string
 end
 *)
+
+
+val adjust: ctype -> ctype
+let adjust = function
+  | Array elem_ty _ ->
+      (* STD §6.7.6.3#7 *)
+      (* TODO: qualifiers *)
+      Pointer no_qualifiers elem_ty
+ | Function ret_ty params is_variadic ->
+      (* STD §6.7.6.3#8 *)
+     Pointer no_qualifiers (Function ret_ty params is_variadic)
+ | ty ->
+     ty
+end
+
+
+
+(* STD §6.3.2.1#2 *)
+val lvalue_conversion: ctype -> errorM ctype
+let lvalue_conversion ty =
+  if is_array ty then
+    fail Loc.unknown (TError "trying to do a lvalue conversion on an array type")
+  
+  else if is_incomplete ty && not (is_array ty) then
+    fail Loc.unknown (TError_undef "§6.3.2.1#2, sentence 3: lvalue conversion of an incomplete non-array type")
+  
+  (* STD §6.3.2.1#2, sentence 2 *)
+  else match ty with
+    | Atomic ty' ->
+        return ty'
+    | _ ->
+        return (unqualify ty)
+  end
+
+val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
+let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
+  (* TODO: the qualified unqualified part *)
+  List.any (compatible ty) tys

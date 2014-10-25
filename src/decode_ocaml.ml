@@ -128,3 +128,58 @@ let decode_character_constant = function
   | "|"    -> Big_int.big_int_of_int 124
   | "}"    -> Big_int.big_int_of_int 125
   | "~"    -> Big_int.big_int_of_int 126
+  
+  | " "    -> Big_int.big_int_of_int 32
+  
+  (* §5.2.2#2 *)
+  | "\\a"   -> Big_int.big_int_of_int 7
+  | "\\b"   -> Big_int.big_int_of_int 8
+  | "\\f"   -> Big_int.big_int_of_int 12
+  | "\\n"   -> Big_int.big_int_of_int 10
+  | "\\r"   -> Big_int.big_int_of_int 13
+  | "\\t"   -> Big_int.big_int_of_int 9
+  | "\\v"   -> Big_int.big_int_of_int 11
+  
+  | str ->
+      if String.length str = 0 then
+        failwith "decode_character_constant: empty constant"
+      else
+        if String.get str 0 = '\\' then
+          if String.length str = 1 then
+            failwith "decode_character_constant, invalid constant: '\\'"
+          else
+            if String.get str 1 = 'x' then
+              if String.length str = 2 then
+                failwith "decode_character_constant, invalid constant: '\\x'"
+              else
+                let str = String.sub str 2 (String.length str - 2) in
+                let b = ref true in
+                String.iter (fun c ->
+                  let n = Char.code c in
+                  if not (48 <= n && n <= 57 || 65 <= n && n <= 70 || 97 <= n && n <= 102) then
+                    b := false
+                ) str;
+                if !b then
+                  snd (decode_integer_constant ("0x" ^ str))
+                else
+                  failwith ("decode_character_constant, started like an hexa constant, but failed: " ^ str)
+            else
+                let str = String.sub str 1 (String.length str - 1) in
+                let b = ref true in
+                String.iter (fun c ->
+                  let n = Char.code c in
+                  if not (48 <= n && n <= 56) then
+                    b := false
+                ) str;
+                if !b then
+                  snd (decode_integer_constant ("0" ^ str))
+                else
+                  failwith ("decode_character_constant, started like an octal constant, but failed: " ^ str)
+        else
+          failwith "decode_character_constant: invalid char constant"
+
+
+let encode_character_constant n =
+  (* TODO: fixing the encoding to ASCII for now *)
+(*  Printf.printf "ENCODING %s\n" (Big_int.string_of_big_int n); *)
+  Char.chr (Big_int.int_of_big_int n)

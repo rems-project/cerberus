@@ -63,16 +63,18 @@ let rec proj_ctype ty =
   match ty with
     | AilTypes.Void ->
         Core_ctype.Void
-    | AilTypes.Basic bTy ->
-        Core_ctype.Basic bTy
-    | AilTypes.Array ty n ->
-        Core_ctype.Array (proj_ctype ty) n
+    | AilTypes.Basic bty ->
+        Core_ctype.Basic bty
+    | AilTypes.Array ty n_opt ->
+        Core_ctype.Array (proj_ctype ty) n_opt
     | AilTypes.Function ty qs_tys is_variadic ->
         Core_ctype.Function (proj_ctype ty) (List.map (fun (qs,ty) -> (qs, proj_ctype ty)) qs_tys) is_variadic
     | AilTypes.Pointer qs ty ->
         Core_ctype.Pointer qs (proj_ctype ty)
     | AilTypes.Atomic ty ->
         Core_ctype.Atomic (proj_ctype ty)
+    | AilTypes.Builtin str ->
+        Core_ctype.Builtin str
 (* TOO
  | AilTypes.Struct of list (identifier * ctype) (* TODO: no bitfields for now *)
  | AilTypes.Union of list (identifier * ctype) (* TODO: no bitfields for now *)
@@ -122,16 +124,18 @@ let rec unproj_ctype ty =
   match ty with
     | Core_ctype.Void ->
         AilTypes.Void
-    | Core_ctype.Basic bTy ->
-        AilTypes.Basic bTy
-    | Core_ctype.Array ty n ->
-        AilTypes.Array (unproj_ctype ty) n
+    | Core_ctype.Basic bty ->
+        AilTypes.Basic bty
+    | Core_ctype.Array ty n_opt ->
+        AilTypes.Array (unproj_ctype ty) n_opt
     | Core_ctype.Function ty qs_tys is_variadic ->
         AilTypes.Function (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
     | Core_ctype.Pointer qs ty ->
         AilTypes.Pointer qs (unproj_ctype ty)
     | Core_ctype.Atomic ty ->
         AilTypes.Atomic (unproj_ctype ty)
+    | Core_ctype.Builtin str ->
+        AilTypes.Builtin str
 (*
     | Struct of struct_tag * list (member_id * modifiable * ctype)
     | Union  of union_tag * list (member_id * modifiable * ctype)
@@ -310,11 +314,8 @@ and subst_sym_action_ a v act =
         CompareExchangeStrong (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
     | CompareExchangeWeak e_ty e_obj e_expected e_desired mo1 mo2 ->
         CompareExchangeWeak (subst_sym a v e_ty) (subst_sym a v e_obj) (subst_sym a v e_expected) (subst_sym a v e_desired) mo1 mo2
-  | Pointer_eq e1 e2 ->
-      Pointer_eq (subst_sym a v e1) (subst_sym a v e2)
-  | Pointer_neq e1 e2 ->
-      Pointer_neq (subst_sym a v e1) (subst_sym a v e2)
-      
+  | Ptr ptr_act pes ->
+      Ptr ptr_act (List.map (subst_sym a v) pes)
   end
 and subst_sym_action a v act =
   match act with
@@ -443,6 +444,7 @@ let subst_wait_continuation_element tid v = function
       Kwseq syms_opt (subst_wait tid v e2)
   | Ksseq syms_opt e2 ->
       Ksseq syms_opt (subst_wait tid v e2)
+
 (*
   | Ktry str_es ->
       Ktry (List.map (fun (str, e) -> (str, subst_wait tid v e)) str_es)
@@ -781,7 +783,7 @@ let push_empty_continuation sk =
 val pop_stack: forall 'a. stack 'a -> Exception.t (continuation 'a * stack 'a) core_run_error
 let pop_stack = function
   | Stack_empty ->
-      Exception.fail Found_empty_stack
+      Exception.fail (Found_empty_stack "pop_stack")
   | Stack_cons cont sk ->
       Exception.return (cont, sk)
 end
@@ -789,7 +791,7 @@ end
 val pop_continuation_element: forall 'a. stack 'a -> Exception.t (continuation_element 'a * stack 'a) core_run_error
 let pop_continuation_element = function
   | Stack_empty ->
-      Exception.fail Found_empty_stack
+      Exception.fail (Found_empty_stack "pop_continuation_element")
   | Stack_cons [] _ ->
       Exception.fail Reached_end_of_proc
   | Stack_cons (cont_elem :: cont) sk ->
@@ -800,7 +802,7 @@ end
 val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.t (stack 'a) core_run_error
 let push_continuation_element cont_elem = function
   | Stack_empty ->
-      Exception.fail Found_empty_stack
+      Exception.fail (Found_empty_stack "push_continuation_element")
   | Stack_cons cont sk ->
       Exception.return (Stack_cons (cont_elem :: cont) sk)
 end
@@ -811,7 +813,7 @@ val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 
 let append_to_current_continuation cont = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)
-      Exception.fail Found_empty_stack
+      Exception.fail (Found_empty_stack "append_to_current_continuation")
   | Stack_cons ccont sk ->
       Exception.return $ Stack_cons (cont :: ccont) sk
 end
@@ -824,4 +826,89 @@ let subst_sym_fun_map sym v funs =
   ) funs
 
 
-(* val find_try: string ->  *)
+
+
+val     collect_labeled_continuations: forall 'a. expr 'a -> map ksym (list (sym * Core_ctype.ctype) * expr 'a)
+let rec collect_labeled_continuations expr =
+  match expr with
+    | Eunit ->
+        Map.empty
+    | Etrue ->
+        Map.empty
+    | Efalse ->
+        Map.empty
+    | Econst _ ->
+        Map.empty
+    | Elist _ ->
+        Map.empty
+    | Ectype _ ->
+        Map.empty
+    | Esym _ ->
+        Map.empty
+    | Eimpl _ ->
+        Map.empty
+    | Etuple _ ->
+        Map.empty
+    | Enot _ ->
+        Map.empty
+    | Eop _ _ _ ->
+        Map.empty
+    | Ecall _ _ ->
+        Map.empty
+    | Eoutput _ ->
+        Map.empty
+    | Eundef _ ->
+        Map.empty
+    | Eerror ->
+        Map.empty
+    | Eraise _ ->
+        Map.empty
+    | Eregister _ _ ->
+        Map.empty
+    | Eskip ->
+        Map.empty
+    | Elet _ _ e2 ->
+        collect_labeled_continuations e2
+    | Eif pe1 e2 e3 ->
+        Map.(union) (collect_labeled_continuations e2) (collect_labeled_continuations e3)
+    | Eproc _ _ _ ->
+        Map.empty
+    | Eaction _ ->
+        Map.empty
+    | Eunseq _ ->
+        Map.empty
+    | Ewseq _as e1 e2 ->
+        Map.(union) (Map.map (fun (a_tys, e) -> (a_tys, Ewseq _as e e2)) $ collect_labeled_continuations e1)
+                    (collect_labeled_continuations e2)
+    | Esseq _as e1 e2 ->
+        Map.(union) (Map.map (fun (a_tys, e) -> (a_tys, Esseq _as e e2)) $ collect_labeled_continuations e1)
+                    (collect_labeled_continuations e2)
+    | Easeq _ _ _ ->
+        Map.empty
+    | Eindet _ ->
+        Map.empty
+    | Ebound _ _ ->
+        Map.empty
+    | Esave k a_tys e ->
+        Map.insert k (a_tys, e) $ collect_labeled_continuations e
+    | Erun _ _ _ ->
+        Map.empty
+    | Eret _ ->
+        Map.empty
+    | End _ ->
+        (* TODO: check *)
+        Map.empty
+    | Epar _ ->
+        (* TODO: check *)
+        Map.empty
+    | Ewait _ ->
+        Map.empty
+    | Eis_scalar _->
+        Map.empty
+    | Eis_integer _->
+        Map.empty
+    | Eis_signed _->
+        Map.empty
+    | Eis_unsigned _->
+        Map.empty
+  end

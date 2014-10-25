@@ -12,7 +12,7 @@ end
 module type PARSER =
 sig
   type result
-  val parse : Input.t -> (result, Errors.t9) Exception.t2
+  val parse : Input.t -> (result, Errors.t9) Exception.t3
 end
 
 module type MAKE =
@@ -34,7 +34,8 @@ struct
     with B.Error ->
       let token = Lexing.lexeme lexbuf in
       let spos  = Lexing.lexeme_start_p lexbuf in
-      let loc = Location.make spos.Lexing.pos_lnum (spos.Lexing.pos_cnum - spos.Lexing.pos_bol) in
+(*      let loc = Some (spos.Lexing.pos_lnum, (spos.Lexing.pos_cnum - spos.Lexing.pos_bol)) in *)
+      let loc = (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) in
       Exception.throw (loc, Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
   let parse input = L.lexbuf parse_exn (L.make input)

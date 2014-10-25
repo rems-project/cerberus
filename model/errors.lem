@@ -1,10 +1,10 @@
 open import Global Cabs AilSyntax Core
-import Location TypingError
+import Loc TypingError
 
 
 
 type desugar_cause =
-  | Desugar_NoStartup of cabs_identifier
+  | Desugar_NoStartup of string
   | Desugar_ConstraintViolation of string
   | Desugar_OtherViolation of string
 
@@ -16,7 +16,7 @@ type desugar_cause =
 (*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
   | Desugar_NotConstantExpression
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
-  | Desugar_MultibleDeclaration of cabs_identifier
+  | Desugar_MultipleDeclaration of cabs_identifier
   | Desugar_NeverSupported of string
 
   | Desugar_NotyetSupported of string
@@ -309,7 +309,7 @@ type cause =
   | PARSER of string
   | OTHER of string
 
-type t = Location.t * cause
+type t = Loc.t * cause
 
 
 

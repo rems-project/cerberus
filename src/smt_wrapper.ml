@@ -3,7 +3,7 @@
 open Symbol
 open Symbolic
 
-open Z3
+(* open Z3 *)
 
 
 (*
