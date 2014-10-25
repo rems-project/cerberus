@@ -24,7 +24,7 @@
 
 
 (* §6.4.2 Identifiers *)
-%token<string * Pre_parser_aux.identifier_type ref>
+%token<Cabs.cabs_identifier * Pre_parser_aux.identifier_type ref>
   VAR_NAME TYPEDEF_NAME UNKNOWN_NAME
 
 (* §6.4.4 Constants *)
@@ -735,7 +735,7 @@ function_definition_begin:
 	    | None -> ()
 	    | Some i -> declare_varname i
 	  ) l;
-	declare_varname ("__func__", ())
+	declare_varname (CabsIdentifier (Location_ocaml.unknown, "__func__"), ())
     }
 
 (* TODO: declaration_list (this is old K&R ??) *)

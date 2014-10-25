@@ -17,15 +17,15 @@ INSTALLATION
    packages may work just fine)
   
   First install:
-    * ocaml (at least 4.00.0)
+    * ocaml (at least 4.02.0)
     * ott (svn)
     * opam
   
   Then using opam, install:
-    * ocamlfind (1.5.1)
-    * pprint (20140424)
-    * menhir (20130912)
-    * cmdliner (0.9.5)
+    * ocamlfind (tested with 1.5.3)
+    * pprint    (tested with 20140424)
+    * menhir    (tested with 20130912)
+    * cmdliner  (tested with 0.9.5)
 
 //    * ocaml-text (0.6) (really ?)
     * 

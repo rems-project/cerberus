@@ -1,7 +1,43 @@
-open import Pervasives
+open import Pervasives Loc
+
+type cabs_identifier =
+  | CabsIdentifier of Loc.t * string
+
+instance (Eq cabs_identifier)
+  let (=) ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    str1 = str2
+  let (<>) ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    str1 <> str2
+end
+
+instance (SetType cabs_identifier)
+  let setElemCompare ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    setElemCompare str1 str2
+end
+
+(*
+instance (MapKeyType cabs_identifier)
+  let mapKeyCompare ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    mapKeyCompare str1 str2
+end
+*)
+
+instance (Located cabs_identifier)
+  let locOf ident =
+    let (CabsIdentifier loc _) = ident in
+    loc
+end
 
 
-type cabs_identifier = string
+
 
 
 (* §6.4.4 Constants *)
@@ -40,11 +76,11 @@ type cabs_encoding_prefix =
   | CabsEncPrefix_L
 
 type cabs_string_literal =
-  maybe cabs_encoding_prefix * string
+  maybe cabs_encoding_prefix * list string
 
 
 (* §6.5 Expressions *)
-type cabs_expression =
+type cabs_expression_ =
   (* §6.5.1 Primary expressions, Syntax *)
   | CabsEident of cabs_identifier
   | CabsEconst of cabs_constant
@@ -75,6 +111,8 @@ type cabs_expression =
   | CabsEassign of cabs_assignment_operator * cabs_expression * cabs_expression
   (* §6.5.17 Comma operator, Syntax *)
   | CabsEcomma of cabs_expression * cabs_expression
+and cabs_expression =
+  | CabsExpression of Loc.t * cabs_expression_
 
 (* §6.5.1.1 Generic selection, Syntax *)
 and cabs_generic_association =
@@ -218,7 +256,7 @@ and direct_declarator =
   | DDecl_function   of direct_declarator * parameter_type_list
 and array_declarator =
     (* the bool indicate the occurence of the static keyword *)
-  | ADecl of list cabs_type_qualifier * bool * maybe array_declarator_size
+  | ADecl of Loc.t * list cabs_type_qualifier * bool * maybe array_declarator_size
 and array_declarator_size =
   | ADeclSize_expression of cabs_expression
   | ADeclSize_asterisk
@@ -264,7 +302,7 @@ and static_assert_declaration =
 
 
 (* §6.8 Statements and blocks, Syntax *)
-type cabs_statement =
+type cabs_statement_ =
   (* §6.8.1 Labeled statements, Syntax *)
   | CabsSlabel of cabs_identifier * cabs_statement
   | CabsScase of cabs_expression * cabs_statement
@@ -289,6 +327,9 @@ type cabs_statement =
   | CabsSbreak
   | CabsSreturn of maybe cabs_expression
 
+and cabs_statement =
+  | CabsStatement of Loc.t * cabs_statement_
+
 and for_clause =
  | FC_expr of cabs_expression
  | FC_decl of declaration
@@ -305,3 +346,81 @@ and external_declaration =
 (* §6.9.1 Function definitions, Syntax *)
 and function_definition =
   | FunDef of specifiers * declarator * cabs_statement
+
+
+(* This type's sole purpose it to allow the construction of multiset of base
+   type specifiers *)
+type cabs_base_type_specifier =
+  | BTSpec_void
+  | BTSpec_char
+  | BTSpec_short
+  | BTSpec_int
+  | BTSpec_long
+  | BTSpec_float
+  | BTSpec_double
+  | BTSpec_signed
+  | BTSpec_unsigned
+  | BTSpec_Bool
+  | BTSpec_Complex
+
+
+instance (Located cabs_expression)
+  let locOf expr =
+    let (CabsExpression loc _) = expr in
+    loc
+end
+
+instance (Located cabs_statement)
+  let locOf stmt =
+    let (CabsStatement loc _) = stmt in
+    loc
+end
+
+
+instance (Eq storage_class_specifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+
+instance (SetType cabs_base_type_specifier)
+  let setElemCompare bspecif1 bspecif2 =
+    let ord = function
+      | BTSpec_void ->
+          (0 : nat)
+      | BTSpec_char ->
+          1
+      | BTSpec_short ->
+          2
+      | BTSpec_int ->
+          3
+      | BTSpec_long ->
+          4
+      | BTSpec_float ->
+          5
+      | BTSpec_double ->
+          6
+      | BTSpec_signed ->
+          7
+      | BTSpec_unsigned ->
+          8
+      | BTSpec_Bool ->
+          9
+      | BTSpec_Complex ->
+          10
+    end in
+    setElemCompare (ord bspecif1) (ord bspecif2)
+end
+
+
+instance (Eq cabs_type_qualifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+instance (Eq function_specifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end

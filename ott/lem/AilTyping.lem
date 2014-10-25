@@ -4,90 +4,91 @@ open import ErrorMonad TypingError
 
 
 (* following the table from (§6.4.4.1#5) *)
-let type_of_constant P (ic : integerConstant) : errorM integerType =
-  match ic with
-    | (n, Decimal, Nothing) ->
-        if in_integer_range P n (Signed Int_) then
-          return (Signed Int_)
-        else if in_integer_range P n (Signed Long) then
-          return (Signed Long)
-        else if in_integer_range P n (Signed LongLong) then
-          return (Signed LongLong)
-        else
-          fail (TError_integerConstant_too_large n)
-    (* Octal or Hexadecimal *)
-    | (n, _, Nothing) ->
-       if in_integer_range P n (Signed Int_) then
-         return (Signed Int_)
-       else if in_integer_range P n (Unsigned Int_) then
-         return (Unsigned Int_)
-       else if in_integer_range P n (Signed Long) then
-         return (Signed Long)
-       else if in_integer_range P n (Unsigned Long) then
-         return (Unsigned Long)
-       else if in_integer_range P n (Signed LongLong) then
-         return (Signed LongLong)
-       else if in_integer_range P n (Unsigned LongLong) then
-         return (Unsigned LongLong)
-       else
-         fail (TError_integerConstant_too_large n)
-  (* Octal, Decimal or Hexadecimal *)
-  | (n, _, Just U) ->
-      if in_integer_range P n (Unsigned Int_) then
+val type_of_constant: implementation -> integerConstant -> errorM integerType
+let type_of_constant impl = function
+  | IntegerConstant n Decimal Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  
+  (* Octal or Hexadecimal *)
+  | IntegerConstant n _ Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Unsigned Int_) then
         return (Unsigned Int_)
-      else if in_integer_range P n (Unsigned Long) then
-        return (Unsigned Long)
-      else if in_integer_range P n (Unsigned LongLong) then
-        return (Unsigned LongLong)
-      else
-        fail (TError_integerConstant_too_large n)
-  | (n, Decimal, Just L) ->
-      if in_integer_range P n (Signed Long) then
+      else if in_integer_range impl n (Signed Long) then
         return (Signed Long)
-      else if in_integer_range P n (Signed LongLong) then
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
       else
-        fail (TError_integerConstant_too_large n)
-  (* Octal or Hexadecimal *)
-  | (n, _, Just L) ->
-      if in_integer_range P n (Signed Long) then
+        fail Loc.unknown (TError_integerConstant_too_large n)
+    (* Octal, Decimal or Hexadecimal *)
+  | IntegerConstant n _ (Just U) ->
+      if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IntegerConstant n Decimal (Just L) ->
+      if in_integer_range impl n (Signed Long) then
         return (Signed Long)
-      else if in_integer_range P n (Unsigned Long) then
-        return (Unsigned Long)
-      else if in_integer_range P n (Signed LongLong) then
-        return (Signed LongLong)
-      else if in_integer_range P n (Unsigned LongLong) then
-        return (Unsigned LongLong)
-      else
-        fail (TError_integerConstant_too_large n)
-  (* Octal, Decimal or Hexadecimal *)
-  | (n, _, Just UL) ->
-      if in_integer_range P n (Unsigned Long) then
-        return (Unsigned Long)
-      else if in_integer_range P n (Unsigned LongLong) then
-        return (Unsigned LongLong)
-      else
-        fail (TError_integerConstant_too_large n)
-  | (n, Decimal, Just LL) ->
-      if in_integer_range P n (Signed LongLong) then
+      else if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail (TError_integerConstant_too_large n)
+        fail Loc.unknown (TError_integerConstant_too_large n)
   (* Octal or Hexadecimal *)
-  | (n, _, Just LL) ->
-      if in_integer_range P n (Signed LongLong) then
+  | IntegerConstant n _ (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
-      else if in_integer_range P n (Unsigned LongLong) then
+      else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail (TError_integerConstant_too_large n)
+        fail Loc.unknown (TError_integerConstant_too_large n)
   (* Octal, Decimal or Hexadecimal *)
-  | (n, _, Just ULL) ->
-      if in_integer_range P n (Unsigned LongLong) then
+  | IntegerConstant n _ (Just UL) ->
+      if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail (TError_integerConstant_too_large n)
-  end
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IntegerConstant n Decimal (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal or Hexadecimal *)
+  | IntegerConstant n _ (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IntegerConstant n _ (Just ULL) ->
+      if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+end
 
 (*
 
@@ -499,13 +500,12 @@ let typeable P (S : sigma 'B1 'B2) G (e : expression 'A) : bool =
 
 
 
-let well_formed_binding (b : identifier * (qualifiers * ctype)) =
-  let (_, (q, t)) = b in
-  wf_lvalue q t
-
+val well_formed_bindings: list (identifier * (qualifiers * ctype)) -> errorM unit
 let well_formed_bindings bs =
-  all_list well_formed_binding bs && disjoint_bindings eq_identifier bs
-
+  mapM_ (comb (uncurry wf_lvalue) snd) bs >>
+  guard (TError "found non disjoint bindings") (
+    disjoint_bindings identifierEqual bs
+  )
 
 
 
@@ -590,7 +590,7 @@ let well_typed_global P S (qs, ty, e_opt) =
   && option_bool e_opt (typeable P S empty)
 
 let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
-  Context.all eq_identifier (fun _ x ->
+  Context.all identifierEqual (fun _ x ->
     match x with
       | Left func    -> well_typed_function P S func
       | Right global -> well_typed_global P S global

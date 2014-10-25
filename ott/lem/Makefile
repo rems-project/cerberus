@@ -3,6 +3,7 @@ LEM= OCAMLRUNPARAM="" /Users/catzilla/University/PhD/lem-git/lem -lib /Users/cat
 
 
 FILES=\
+  ctype.lem \
   AilSyntax.lem \
   AilTypesAux.lem \
   Annotation.lem \
@@ -25,3 +26,6 @@ FILES=\
 
 all:
 	@$(LEM) $(FILES)
+
+wip:
+	@$(LEM) ctype.lem AilSyntax2.lem AilTypes2.lem GenTypes2.lem

@@ -12,7 +12,7 @@ let (>>=) = SEU.bind5
 let drive file =
   let main_body = 
     match Pmap.lookup file.main file.funs with
-      | Some (retTy, [], expr_main) ->
+      | Some (retTy, _, expr_main) ->
           expr_main
       |  _ ->
           Pervasives.output_string stderr "ERROR: couldn't find the Core main function\n";
@@ -31,8 +31,10 @@ let drive file =
   
   let ky = ref [] in
   List.iteri (fun n exec ->
+    
     match exec with
-      | ND.Active (log, constraints, (is_blocked, preEx, value)) ->
+      | ND.Active (log, constraints, (stdout, (is_blocked, preEx, value))) ->
+          print_string stdout;
           let str_v = Boot_pprint.pp_core_expr value in
           if not (List.mem str_v !ky) && not is_blocked then (
             Global_ocaml.print_debug 2 (

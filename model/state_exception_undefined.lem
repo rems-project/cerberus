@@ -57,6 +57,11 @@ let runS m = fun st ->
   let (a, st') = m st in
   Exception.return (Undefined.return a, st')
 
+val runSE: forall 'a 's 'msg. State_exception.t 'a 's 'msg -> t 'a 's 'msg
+let runSE m =
+  State_exception.bind m
+    (fun z -> State_exception.return (Undefined.return z))
+
 
 val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t (Undefined.t 'a * 's) 'msg
 let run m st = m st
@@ -82,3 +87,14 @@ module Operators = struct
   let inline (>>=)      = bind
   let inline (>>) m1 m2 = bind m1 (fun () -> m2)
 end
+open Operators
+
+
+
+val        update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
+let inline update f =
+  runSE (State_exception.update f)
+
+val        read: forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
+let inline read f =
+  runSE (State_exception.read f)

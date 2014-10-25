@@ -687,21 +687,21 @@ integer_type:
 | BOOL
     { AilTypes.Bool }
 | INT8_T
-    { AilTypes.Signed AilTypes.Int8_t }
+    { AilTypes.Signed (AilTypes.IBBuiltin "int8_t") }
 | INT16_T
-    { AilTypes.Signed AilTypes.Int16_t }
+    { AilTypes.Signed (AilTypes.IBBuiltin "int16_t") }
 | INT32_T
-    { AilTypes.Signed AilTypes.Int32_t }
+    { AilTypes.Signed (AilTypes.IBBuiltin "int32_t") }
 | INT64_T
-    { AilTypes.Signed AilTypes.Int64_t }
+    { AilTypes.Signed (AilTypes.IBBuiltin "int64_t") }
 | UINT8_T
-    { AilTypes.Unsigned AilTypes.Int8_t }
+    { AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t") }
 | UINT16_T
-    { AilTypes.Unsigned AilTypes.Int16_t }
+    { AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t") }
 | UINT32_T
-    { AilTypes.Unsigned AilTypes.Int32_t }
+    { AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t") }
 | UINT64_T
-    { AilTypes.Unsigned AilTypes.Int64_t }
+    { AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t") }
 | SIGNED ibt= integer_base_type
     { AilTypes.Signed ibt }
 | UNSIGNED ibt= integer_base_type
@@ -718,8 +718,8 @@ ctype:
     { Core_ctype.Void0 }
 | bty= basic_type
     { Core_ctype.Basic0 bty }
-| ty= ctype LBRACKET n= INT_CONST RBRACKET
-    { Core_ctype.Array0 (ty, n) }
+| ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
+    { Core_ctype.Array0 (ty, n_opt) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
     { Core_ctype.Function0 (ty, List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
 (* TODO *)

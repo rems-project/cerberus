@@ -1,52 +1,104 @@
 open import Pervasives Common AilTypes AilSyntax AilTypesAux
 
+open import TypingError ErrorMonad
+
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
 
-let adjusted t : bool = not (is_array t) && not (is_function t)
 
-let wf_lvalue_aux q t : bool =
-  match t with
-  | Pointer _  t' -> not (is_object t') --> not (q.restrict)
-  | _             -> if is_function t
-                       then is_unqualified q 
-                       else not (q.restrict)
+
+(* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
+   NOTE: this function obviously doesn't whether the adjusting was properly
+         done. *)
+val is_adjusted: ctype -> bool
+let is_adjusted ty =
+  not (is_array ty) && not (is_function ty)
+
+
+val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
+let wf_lvalue_aux qs ty =
+  match ty with
+    | Pointer _ ref_ty ->
+        guard (TError "§6.7.3#2, pointer case") (
+          not (is_object ref_ty) --> not (qs.restrict)
+        )
+    | _ ->
+        guard (TError "§6.7.3#2, non pointer case") (
+          not (qs.restrict)
+        ) >>
+        guard (TError_undef "§6.7.3#9, sentence 2") (
+          is_function ty --> is_unqualified qs
+        )
   end
 
-let rec wf_parameters_aux wf_type p : bool =
-  match p with
-  | []          -> true
-    (* TODO: check if qualifiers are allowed here *)
-  | [(_, Void)] -> true
-  | (q, t) :: p -> adjusted t && not (is_incomplete t) && wf_type t && wf_lvalue_aux q t && wf_parameters_aux wf_type p
+val     wf_parameters_aux: (ctype -> errorM unit) -> list (qualifiers * ctype) -> errorM unit
+let rec wf_parameters_aux wf_type params =
+  match params with
+    | [] ->
+        return ()
+      (* TODO: check if qualifiers are allowed here *)
+    | [(_, Void)] ->
+        return ()
+    | (qs, ty) :: params' ->
+        guard (TError "a parameter type was not adjusted") (
+          is_adjusted ty
+        ) >>
+        guard (TError "a parameter type was incomplete") (
+          not (is_incomplete ty)
+        ) >>
+        wf_type ty >>
+        wf_lvalue_aux qs ty >>
+        wf_parameters_aux wf_type params'
   end
 
-let rec wf_type t : bool =
+
+(* TODO: check *)
+val     wf_type: ctype -> errorM unit
+let rec wf_type ty =
   let wf_parameters = wf_parameters_aux wf_type in
-  match t with
+  match ty with
   | Void ->
-      true
+      return ()
   | Basic _ ->
-      true
-  | Array t _ ->
-      is_complete t && wf_type t
-  | Function t p _ ->
-      not (is_array  t) && not (is_function t) && wf_type  t && wf_parameters p
-  | Pointer q t ->
-      wf_type t && wf_lvalue_aux q t
-  | Atomic _ ->
-      assert_false "TODO: wf_type, Atomic"
+      return ()
+  | Array elem_ty _ ->
+      guard (TError "§6.7.6.2#1, sentence 4") (
+        is_complete elem_ty && not (is_function elem_ty)
+      ) >>
+      wf_type elem_ty
+  | Function ret_ty params _ ->
+      guard (TError "§6.7.6.3#1") (
+        not (is_array ret_ty || is_function ret_ty)
+      ) >>
+      wf_type ret_ty >>
+      wf_parameters params
+  | Pointer ref_qs ref_ty ->
+      wf_type ref_ty >>
+      wf_lvalue_aux ref_qs ref_ty
+  | Atomic ty' ->
+      guard (TError "§6.7.2.4#3") (
+        (* NOTE: the check that ty' is not qualified has to be done during the
+           desugaring (see Cabs_to_ail.desugar_type_specifiers). *)
+        not (is_array ty' || is_function ty' || is_atomic ty')
+      ) >>
+      wf_type ty'
+      
   | Struct _ xs ->
       (* TODO: check *)
-      all (fun (_, ty) -> wf_type ty) xs
+      mapM_ (comb wf_type snd) xs
   | Union _ xs ->
       (* TODO: check *)
-      all (fun (_, ty) -> wf_type ty) xs
+      mapM_ (comb wf_type snd) xs
   | Builtin _ ->
-      true
+      return ()
   end
 
-let wf_lvalue q t : bool =
-  wf_type t && wf_lvalue_aux q t
 
-let wf_parameters = wf_parameters_aux wf_type
+val wf_lvalue: qualifiers -> ctype -> errorM unit
+let wf_lvalue qs ty =
+  wf_type ty >>
+  wf_lvalue_aux qs ty
+
+
+let wf_parameters =
+  wf_parameters_aux wf_type

@@ -91,14 +91,9 @@ let rec in_list (eq_A : 'A -> 'A -> bool) (a : 'A) (ls : list 'A) : bool =
   | x::xs -> eq_A x a || in_list eq_A a xs
   end
 
-let rec all_list (dec : 'A -> bool) (l : list 'A) : bool =
-    match l with
-    | []    -> true
-    | x::xs -> dec x && all_list dec xs
-    end
 
 let sub_list (eq_A : 'A -> 'A -> bool) l1 l2 =
-  all_list (fun x -> in_list eq_A x l2) l1
+  List.all (fun x -> in_list eq_A x l2) l1
 
 let equiv_list (eq_A : 'A -> 'A -> bool) l1 l2 =
   sub_list eq_A l1 l2 && sub_list eq_A l2 l1

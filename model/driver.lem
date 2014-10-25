@@ -3,7 +3,7 @@ open import Pervasives
 import Core Core_ctype Boot UniqueId
 open import Core_run Core_run_aux ExecutableOpsem Cmm_master
 
-import Enum State_exception_undefined Exception Undefined Nondeterminism
+import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 import Map_extra (* DEBUG *)
 
@@ -21,6 +21,7 @@ module ND  = Nondeterminism
 
 (* BEGIN HACK *)
 
+(*
 type sequential_state =
   map Mem.pointer_value (maybe Mem.mem_value)
 
@@ -38,6 +39,7 @@ let string_of_sequential_state xs =
     end
   ) "" (Map_extra.toList xs)
   ^ "}"
+*)
 
 
 (* END HACK *)
@@ -55,7 +57,7 @@ type driver_state = <|
   core_run_state:    core_run_state;   (* state of the core evaluator *)
   concurrency_state: exeState; (* state of the concurrency memory model *)
   
-  sequential_state: sequential_state;
+(* sequential_state: sequential_state; *)
   
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
@@ -71,7 +73,7 @@ type driver_state = <|
 
 
 
-val runCore: forall 'a. SetType 'a => SEU.t 'a core_run_state core_run_error -> driver_state -> ND.t ('a * driver_state)
+val runCore: forall 'a. (* SetType 'a => *) SEU.t 'a core_run_state core_run_error -> driver_state -> ND.t ('a * driver_state)
 let runCore m dr_st =
   match SEU.run m dr_st.core_run_state with
     | Exception.Result (U.Defined z, run_st') ->
@@ -162,6 +164,15 @@ let repair_pre_execution dr_st =
 
 
 
+val update_core_state: core_state -> driver_state -> driver_state
+let update_core_state core_st dr_st =
+  <| dr_st with core_state= core_st |>
+
+val update_core_run_state: core_run_state -> driver_state -> driver_state
+let update_core_run_state run_st dr_st =
+  <| dr_st with core_run_state= run_st |>
+
+
 
 
 (* ========================================================================== *)
@@ -176,42 +187,89 @@ let rec driver_sequential _dr_st =
   let dr_st = <| dr_st with trace= "drive_core" :: dr_st.trace |> in (* DEBUG *)
   
   let process_core_step = function
+(*
+    | Step_pointer_request ptr_request ->
+        match ptr_request with
+          | PtrShiftRequest ty ptr_val n mk_core_st' ->
+              
+        end
+    
+*)
     | Step_action_request debug_str tid request_m ->
+        let _ = Boot.output_string ("Step_action_request[" ^ debug_str ^ "]") in
+        
         (* case where the Core program performs a memory action *)
         runCore request_m dr_st >>= fun (request, dr_st') ->
           let dr_st_with_request =
             match request with
               | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
-                  <| dr_st' with core_state= core_st';
-                                 sequential_state= Map.insert ptr_val Nothing dr_st'.sequential_state |>
+                  let dr_st'' = update_core_state core_st' dr_st' in
+                  
+                  let _ = Boot.output_string ("AllocRequest on: " ^ Mem.string_of_pointer_value ptr_val ^  (* DEBUG *)
+                          ", giving " ^ Mem.string_of_memory_state dr_st''.core_run_state.layout_state) in (* DEBUG *)
+                  
+                  dr_st''
               
               | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
-                  let _ = Boot.output_string ("StoreRequest on: " ^ Mem.string_of_pointer_value ptr_val) in
-                  <| dr_st' with core_state= core_st';
-                                 sequential_state= Map.insert ptr_val (Just mem_val) dr_st'.sequential_state |>
-              
+                  let dr_st'' = <| dr_st' with
+                    core_state= core_st';
+                    core_run_state= <| dr_st'.core_run_state with
+                      layout_state=
+  (* TODO: hack hack hack *)
+  let (Exception.Result (Undefined.Defined _, z)) = SEU.run (Mem.store ptr_val mem_val) dr_st'.core_run_state.layout_state in
+  z
 
+
+
+
+                    |>
+(*                    sequential_state= Map.insert ptr_val (Just mem_val) dr_st'.sequential_state *)
+                  |> in
+                  let _ = Boot.output_string ("StoreRequest on: " ^ Mem.string_of_pointer_value ptr_val ^
+                          ", from " ^ Mem.string_of_memory_state dr_st'.core_run_state.layout_state ^
+                          ", to " ^ Mem.string_of_memory_state dr_st''.core_run_state.layout_state) in
+                  dr_st''
+              
               | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val _ mk_core_st' ->
+                  let dr_st'' = <| dr_st' with
+                    core_state=
+                      match Mem.runMem (Mem.load ptr_val) dr_st'.core_run_state.layout_state with
+                        | Left _ ->
+                            Boot.assert_false $ "Error while loading: " ^ Mem.string_of_pointer_value ptr_val
+                        | Right (mem_val, _) ->
+                            mk_core_st' mem_val
+                      end
+
+(*
+                      let mem_val = match Map.lookup ptr_val dr_st'.core_run_state.layout_state.Mem.mem_writes with
+                        | Just (Just z) ->
+                            z
+                        | _ ->
+                            Boot.assert_false $
+                              "reading from uninitialised object: " ^
+                              Mem.string_of_pointer_value ptr_val
+                      end in
+                      mk_core_st' mem_val
+*)
+                  |> in
                   let _ = Boot.output_string ("LoadRequest on: " ^ Mem.string_of_pointer_value ptr_val ^
-                          ", with " ^ string_of_sequential_state dr_st'.sequential_state) in
-                  <| dr_st' with core_state=
-                       let mem_val = match Map.lookup ptr_val dr_st'.sequential_state with
-                         | Just (Just z) ->
-                             z
-                         | _ ->
-                             Boot.assert_false $
-                               "reading from uninitialised object: " ^
-                               Mem.string_of_pointer_value ptr_val
-                        end in
-                        mk_core_st' mem_val |>
+                          ", with " ^ Mem.string_of_memory_state dr_st'.core_run_state.layout_state) in
+                  dr_st''
             end in
             driver_sequential dr_st_with_request
     
     | Step_tau debug_str _ step_m ->
+        let _ = Boot.output_string ("Step_tau[" ^ debug_str ^ "]") in
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         driver_sequential <| dr_st' with core_state= core_st' |>
     
+    | Step_output step_m ->
+        let _ = Boot.output_string "Step_output" in
+        runCore step_m dr_st >>= fun ((str, core_st'), dr_st') ->
+        driver_sequential <| dr_st' with core_state= <| core_st' with io= <| core_st'.io with stdout= Dlist.append (Dlist.singleton str) core_st'.io.stdout |> |> |>
+    
     | Step_done _ ->
+        let _ = Boot.output_string "Step_done" in
         ND.return dr_st
   end in
   
@@ -220,11 +278,11 @@ let rec driver_sequential _dr_st =
     process_core_step
 
 
-val finalize: driver_state -> (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
+val finalize: driver_state -> (string * (bool * Cmm_master.pre_execution * Core.expr core_run_annotation))
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(_, (_, th_st))] ->
-        (dr_st.blocked, dr_st.concurrency_state.preEx, th_st.arena)
+        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state.preEx, th_st.arena))
     | xs ->
         Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state
   end
@@ -269,7 +327,7 @@ let initial_driver_state file =
     concurrency_state= initialExeState emptyPreEx;
     
     (* TODO: uber hack *)
-    sequential_state= Map.empty;
+(*    sequential_state= Map.empty; *)
     blocked= false;
     trace= [];
   |>

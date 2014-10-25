@@ -1,5 +1,5 @@
 open import Pervasives Common AilTypes Context
-import Symbol ErrorMonad
+import Symbol Loc ErrorMonad
 
 
 (* == Ail syntax datatypes ================================================== *)
@@ -17,7 +17,8 @@ type basis =
   | Decimal
   | Hexadecimal
 
-type integerConstant (*[name = "ic*"]*) = integer * basis * maybe integerSuffix
+type integerConstant (*[name = "ic*"]*) =
+    IntegerConstant of integer * basis * maybe integerSuffix
 
 type characterPrefix =
   | Pref_L
@@ -34,7 +35,7 @@ type encodingPrefix =
   | Enc_L
 
 type stringLiteral =
-  maybe encodingPrefix * string
+  maybe encodingPrefix * list string
 
 type arithmeticOperator [name = "aop.*"] =  (*r 6.5.5 Multiplicative operators *)
  | Mul
@@ -86,8 +87,13 @@ type expression' 'A [name = "e*"] =
   | AilEcall of expression 'A * list (expression 'A)
   | AilEgeneric of expression 'A * list (generic_association 'A)
   
+  (* TODO: hackish? *)
+  | AilEarray of list (expression 'A)
+  
   | AilEmemberof of expression 'A * Cabs.cabs_identifier
   | AilEmemberofptr of expression 'A * Cabs.cabs_identifier
+  
+  | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
   
   | AilEstr of stringLiteral
   | AilEconst of constant
@@ -104,157 +110,156 @@ and expression 'A [name = "e*"] =
 
 type bindings (*[name="b*"]*) = list (identifier * (qualifiers * ctype))
 
-type statement' 'A 'B [name="s*"] = 
+type statement' 'A [name="s*"] = 
   | AilSskip
-  | AilSexpr of expression 'B
-  | AilSblock of bindings * list (statement 'A 'B)
-  | AilSif of expression 'B * statement 'A 'B * statement 'A 'B
-  | AilSwhile of expression 'B * statement 'A 'B
-  | AilSdo of statement 'A 'B * expression 'B
+  | AilSexpr of expression 'A
+  | AilSblock of bindings * list (statement 'A)
+  | AilSif of expression 'A * statement 'A * statement 'A
+  | AilSwhile of expression 'A * statement 'A
+  | AilSdo of statement 'A * expression 'A
   | AilSbreak
   | AilScontinue
   | AilSreturnVoid
-  | AilSreturn of expression 'B
-  | AilSswitch of expression 'B * statement 'A 'B
-  | AilScase of integerConstant * statement 'A 'B
-  | AilSdefault of statement 'A 'B
-  | AilSlabel of identifier * statement 'A 'B
+  | AilSreturn of expression 'A
+  | AilSswitch of expression 'A * statement 'A
+  | AilScase of integerConstant * statement 'A
+  | AilSdefault of statement 'A
+  | AilSlabel of identifier * statement 'A
   | AilSgoto of identifier
-  | AilSdeclaration of list (identifier * expression 'B)
-and statement 'A 'B [name="s*"] =
-  | AnnotatedStatement of 'A * statement' 'A 'B
+  | AilSdeclaration of list (identifier * expression 'A)
+and statement 'A [name="s*"] =
+  | AnnotatedStatement of Loc.t * statement' 'A
 
-(* (OLD) type sigma 'A 'B = context identifier ((ctype * bindings) * statement 'A 'B) *)
-
-(*
-type function_declaration 'A 'B = <|
-  fun_return_ty:   ctype;
-  fun_bindings:    bindings;
-  fun_is_variadic: bool;
-  fun_is_inline:   bool;
-  fun_is_Noreturn: bool;
-  fun_body:        maybe (statement 'A 'B);
-|>
-
-type sigma_declaration 'A 'B =
-    (* no statement ==> prototype; the bool is for variadic functions *)
-  | SDecl_fun           of identifier * function_declaration 'A 'B
-  | SDecl_global        of identifier * (qualifiers * ctype * maybe (expression 'B))
-  | SDecl_static_assert of expression 'B * stringConstant
-*)
 
 type declaration =
   | Decl_object   of qualifiers * ctype
     (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   | Decl_function of ctype * (list (qualifiers * ctype)) * bool * bool * bool
 
-type sigma 'A 'B = <|
+type sigma 'A = <|
   declarations: Context.context identifier declaration;
-  object_definitions: Context.context identifier (expression 'B);
+  object_definitions: Context.context identifier (expression 'A);
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: Context.context identifier (list identifier * statement 'A 'B);
-  static_assertions: list (expression 'B * stringLiteral)
+  function_definitions: Context.context identifier (list identifier * statement 'A);
+  static_assertions: list (expression 'A * stringLiteral)
 |>
 
-(*
-  list (sigma_declaration 'A 'B)
-*)
 
 type gamma = Context.context identifier (qualifiers * ctype)
 
-type program 'A 'B = identifier * sigma 'A 'B
-(* (NEW OLD )
-type program 'A 'B = <|
-  startup    : identifier;
-  
-  (* no statement ==> prototype; the bool is for variadic functions *)
-  functions  : context identifier ((ctype * bindings * bool) * maybe (statement 'A 'B));
-  globals    : context identifier (ctype * maybe (expression 'B));
-  strings    : context identifier string
-|>
- *)
+type program 'A = identifier * sigma 'A
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (* == Equality functions ==================================================== *)
 
-val eq_identifier:         identifier         -> identifier         -> bool
-val eq_integerSuffix:      integerSuffix      -> integerSuffix      -> bool
-val eq_integerConstant:    integerConstant    -> integerConstant    -> bool
-val eq_arithmeticOperator: arithmeticOperator -> arithmeticOperator -> bool
-val eq_constant:           constant           -> constant           -> bool
-val eq_unaryOperator:      unaryOperator      -> unaryOperator      -> bool
-val eq_binaryOperator:     binaryOperator     -> binaryOperator     -> bool
+val identifierEqual:         identifier         -> identifier         -> bool
+val integerSuffixEqual:      integerSuffix      -> integerSuffix      -> bool
+val integerConstantEqual:    integerConstant    -> integerConstant    -> bool
+val arithmeticOperatorEqual: arithmeticOperator -> arithmeticOperator -> bool
+val constantEqual:           constant           -> constant           -> bool
+val unaryOperatorEqual:      unaryOperator      -> unaryOperator      -> bool
+val binaryOperatorEqual:     binaryOperator     -> binaryOperator     -> bool
 
 (* NOTE: this is an internal function *)
-val eq_arguments_aux: forall 'A.
+val argumentsEqual_aux: forall 'A.
                       ('A -> 'A -> bool)                                             ->
                       (('A -> 'A -> bool) -> expression 'A -> expression 'A -> bool) ->
                       list (expression 'A) -> list (expression 'A)                   ->
                       bool
 
 (* NOTE: this is an internal function *)
-val eq_expression': forall 'A.
+val expressionEqual': forall 'A.
                     ('A -> 'A -> bool)               ->
                     expression' 'A -> expression' 'A ->
                     bool
 
-val eq_expression: forall 'A.
+val expressionEqual: forall 'A.
                    ('A -> 'A -> bool)             ->
                    expression 'A -> expression 'A ->
                    bool
 
-val eq_arguments: forall 'A.
+val argumentsEqual: forall 'A.
                   ('A -> 'A -> bool)                           ->
                   list (expression 'A) -> list (expression 'A) ->
                   bool
 
-val eq_bindings: bindings -> bindings -> bool
+val bindingsEqual: bindings -> bindings -> bool
 
-val eq_definition: forall 'A.
+val definitionEqual: forall 'A.
                    ('A -> 'A -> bool)                                           ->
                    (identifier * expression 'A) -> (identifier * expression 'A) ->
                    bool
 
-val eq_declaration: declaration -> declaration -> bool
+val declarationEqual: declaration -> declaration -> bool
 
-val eq_block_aux: forall 'A 'B.
-                  ('A -> 'A -> bool) -> ('B -> 'B -> bool)                                                 ->
-                  (('A -> 'A -> bool) -> ('B -> 'B -> bool) -> statement 'A 'B -> statement 'A 'B -> bool) ->
-                  list (statement 'A 'B) -> list (statement 'A 'B)                                         ->
+val blockEqual_aux: forall 'A.
+                  ('A -> 'A -> bool)                                           ->
+                  (('A -> 'A -> bool) -> statement 'A -> statement 'A -> bool) ->
+                  list (statement 'A) -> list (statement 'A)                   ->
                   bool
 
-val eq_statement': forall 'A 'B.
-                   ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-                   statement' 'A 'B -> statement' 'A 'B     ->
+val statementEqual': forall 'A.
+                   ('A -> 'A -> bool)             ->
+                   statement' 'A -> statement' 'A ->
                    bool
 
-val eq_statement: forall 'A 'B.
-                  ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-                  statement 'A 'B -> statement 'A 'B       ->
+val statementEqual: forall 'A.
+                  ('A -> 'A -> bool)           ->
+                  statement 'A -> statement 'A ->
                   bool
 
-val eq_block: forall 'A 'B.
-              ('A -> 'A -> bool) -> ('B -> 'B -> bool)         ->
-              list (statement 'A 'B) -> list (statement 'A 'B) ->
+val blockEqual: forall 'A.
+              ('A -> 'A -> bool)                         ->
+              list (statement 'A) -> list (statement 'A) ->
               bool
 
-val eq_sigma: forall 'A 'B.
-              ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-              sigma 'A 'B -> sigma 'A 'B               ->
+val sigmaEqual: forall 'A.
+              ('A -> 'A -> bool)   ->
+              sigma 'A -> sigma 'A ->
               bool
 
-val eq_gamma: gamma -> gamma -> bool
+val gammaEqual: gamma -> gamma -> bool
 
-val eq_program: forall 'A 'B.
-                ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-                program 'A 'B -> program 'A 'B           ->
+val programEqual: forall 'A.
+                ('A -> 'A -> bool)       ->
+                program 'A -> program 'A ->
                 bool
 
 
-let eq_identifier =
+let identifierEqual =
   (=)
 
-let eq_basis b1 b2 =
+let basisEqual b1 b2 =
   match (b1, b2) with
     | (Octal      , Octal      ) -> true
     | (Decimal    , Decimal    ) -> true
@@ -262,7 +267,7 @@ let eq_basis b1 b2 =
     | (_          , _          ) -> false
   end
 
-let eq_integerSuffix s1 s2 =
+let integerSuffixEqual s1 s2 =
   match (s1, s2) with
     | (U  , U  ) -> true
     | (UL , UL ) -> true
@@ -272,10 +277,15 @@ let eq_integerSuffix s1 s2 =
     | (_  , _  ) -> false
   end
 
-let eq_integerConstant =
-  eq_triple (=) (eq_basis) (eq_option eq_integerSuffix)
+let integerConstantEqual (IntegerConstant n1 b1 suff1_opt) (IntegerConstant n2 b2 suff2_opt) =
+  n1 = n2 && basisEqual b1 b2 && eq_option integerSuffixEqual suff1_opt suff2_opt
 
-let eq_arithmeticOperator aop1 aop2 =
+instance (Eq integerConstant)
+  let (=)  = integerConstantEqual
+  let (<>) = fun a b -> not (integerConstantEqual a b)
+end
+
+let arithmeticOperatorEqual aop1 aop2 =
   match (aop1, aop2) with
     | (Mul , Mul ) -> true
     | (Div , Div ) -> true
@@ -291,7 +301,7 @@ let eq_arithmeticOperator aop1 aop2 =
   end
 
 
-let eq_characterPrefix pref1 pref2 =
+let characterPrefixEqual pref1 pref2 =
   match (pref1, pref2) with
     | (Pref_L, Pref_L) -> true
     | (Pref_u, Pref_u) -> true
@@ -299,10 +309,10 @@ let eq_characterPrefix pref1 pref2 =
     | (_     , _     ) -> false
   end
 
-let eq_characterConstant =
-  eq_pair (eq_option eq_characterPrefix) (=)
+let characterConstantEqual =
+  eq_pair (eq_option characterPrefixEqual) (=)
 
-let eq_encodingPrefix pref1 pref2 =
+let encodingPrefixEqual pref1 pref2 =
   match (pref1, pref2) with
     | (Enc_u8, Enc_u8) -> true
     | (Enc_u , Enc_u ) -> true
@@ -311,18 +321,18 @@ let eq_encodingPrefix pref1 pref2 =
     | (_     , _     ) -> false
   end
 
-let eq_stringLiteral =
-  eq_pair (eq_option eq_encodingPrefix) (=)
+let stringLiteralEqual =
+  eq_pair (eq_option encodingPrefixEqual) (=)
 
 
-let eq_constant c1 c2 =
+let constantEqual c1 c2 =
   match (c1, c2) with
-    | (ConstantInteger   ic1, ConstantInteger   ic2) -> eq_integerConstant   ic1 ic2
-    | (ConstantCharacter cc1, ConstantCharacter cc2) -> eq_characterConstant cc1 cc2
+    | (ConstantInteger   ic1, ConstantInteger   ic2) -> integerConstantEqual   ic1 ic2
+    | (ConstantCharacter cc1, ConstantCharacter cc2) -> characterConstantEqual cc1 cc2
     | (_                    , _                    ) -> false
   end
 
-let eq_unaryOperator u1 u2 =
+let unaryOperatorEqual u1 u2 =
   match (u1, u2) with
     | (Plus       , Plus       ) -> true
     | (Minus      , Minus      ) -> true
@@ -334,9 +344,9 @@ let eq_unaryOperator u1 u2 =
     | (_          , _          ) -> false
   end
 
-let eq_binaryOperator bop1 bop2 =
+let binaryOperatorEqual bop1 bop2 =
   match (bop1, bop2) with
-    | (Arithmetic aop1, Arithmetic aop2) -> eq_arithmeticOperator aop1 aop2
+    | (Arithmetic aop1, Arithmetic aop2) -> arithmeticOperatorEqual aop1 aop2
     | (Comma, Comma) -> true
     | (And  , And  ) -> true
     | (Or   , Or   ) -> true
@@ -349,77 +359,74 @@ let eq_binaryOperator bop1 bop2 =
     | (_    , _    ) -> false
   end
 
-let rec eq_arguments_aux eq_A eq_expression a1 a2 =
+let rec argumentsEqual_aux eq_A expressionEqual a1 a2 =
   match (a1, a2) with
     | ([]      , []      ) -> true
-    | (e1 :: a1, e2 :: a2) -> eq_expression eq_A e1 e2 && eq_arguments_aux eq_A eq_expression a1 a2
+    | (e1 :: a1, e2 :: a2) -> expressionEqual eq_A e1 e2 && argumentsEqual_aux eq_A expressionEqual a1 a2
     | (_       , _       ) -> false
   end
 
-let rec eq_expression' eq_A e1 e2 =
-  let eq_arguments = eq_arguments_aux eq_A eq_expression in
+let rec expressionEqual' eq_A e1 e2 =
+  let argumentsEqual = argumentsEqual_aux eq_A expressionEqual in
   match (e1, e2) with
     | (AilEunary uop1 e1, AilEunary uop2 e2) ->
-        eq_unaryOperator uop1 uop2 &&
-        eq_expression eq_A e1 e2
+        unaryOperatorEqual uop1 uop2 &&
+        expressionEqual eq_A e1 e2
     | (AilEbinary e1_1 bop1 e2_1, AilEbinary e1_2 bop2 e2_2) ->
-        eq_expression eq_A e1_1 e1_2 &&
-        eq_binaryOperator bop1 bop2 &&
-        eq_expression eq_A e2_1 e2_2
+        expressionEqual eq_A e1_1 e1_2 &&
+        binaryOperatorEqual bop1 bop2 &&
+        expressionEqual eq_A e2_1 e2_2
     | (AilEassign e1_1 e2_1, AilEassign e1_2 e2_2) ->
-        eq_expression eq_A e1_1 e1_2 &&
-        eq_expression eq_A e2_1 e2_2
+        expressionEqual eq_A e1_1 e1_2 &&
+        expressionEqual eq_A e2_1 e2_2
     | (AilEcompoundAssign e1_1 aop1 e2_1, AilEcompoundAssign e1_2 aop2 e2_2) ->
-        eq_expression eq_A e1_1 e1_2 &&
-        eq_arithmeticOperator aop1 aop2 &&
-        eq_expression eq_A e2_1 e2_2
+        expressionEqual eq_A e1_1 e1_2 &&
+        arithmeticOperatorEqual aop1 aop2 &&
+        expressionEqual eq_A e2_1 e2_2
     | (AilEcond e1_1 e2_1 e3_1, AilEcond e1_2 e2_2 e3_2) ->
-        eq_expression eq_A e1_1 e1_2 &&
-        eq_expression eq_A e2_1 e2_2 &&
-        eq_expression eq_A e3_1 e3_2
-    | (AilEcast q1 t1 e1, AilEcast q2 t2 e2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2 &&
-        eq_expression eq_A e1 e2
+        expressionEqual eq_A e1_1 e1_2 &&
+        expressionEqual eq_A e2_1 e2_2 &&
+        expressionEqual eq_A e3_1 e3_2
+    | (AilEcast qs1 ty1 e1, AilEcast qs2 ty2 e2) ->
+        qs1 = qs2 && ty1 = ty2 &&
+        expressionEqual eq_A e1 e2
     | (AilEcall e1 es1, AilEcall e2 es2) ->
-        eq_expression eq_A e1 e2 &&
-        eq_arguments es1 es2
+        expressionEqual eq_A e1 e2 &&
+        argumentsEqual es1 es2
     | (AilEstr lit1, AilEstr lit2) ->
-        eq_stringLiteral lit1 lit2
+        stringLiteralEqual lit1 lit2
     | (AilEconst c1, AilEconst c2) ->
-        eq_constant c1 c2
+        constantEqual c1 c2
     | (AilEident v1, AilEident v2) ->
-        eq_identifier v1 v2
-    | (AilEsizeof q1 t1, AilEsizeof q2 t2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2
-    | (AilEalignof q1 t1, AilEalignof q2 t2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2
+        identifierEqual v1 v2
+    | (AilEsizeof qs1 ty1, AilEsizeof qs2 ty2) ->
+        qs1 = qs2 && ty1 = ty2
+    | (AilEalignof qs1 ty1, AilEalignof qs2 ty2) ->
+        qs1 = qs2 && ty1 = ty2
     | (_, _) -> false
   end
-and eq_expression eq_A e1 e2 =
+and expressionEqual eq_A e1 e2 =
   match (e1, e2) with
     | (AnnotatedExpression a1 e1, AnnotatedExpression a2 e2) ->
-        eq_A a1 a2 && eq_expression' eq_A e1 e2
+        eq_A a1 a2 && expressionEqual' eq_A e1 e2
   end
 
-let eq_arguments eq_A a1 a2 =
-  eq_arguments_aux eq_A eq_expression a1 a2
+let argumentsEqual eq_A a1 a2 =
+  argumentsEqual_aux eq_A expressionEqual a1 a2
 
-let eq_bindings =
-  eq_list (eq_pair eq_identifier (eq_pair eq_qualifiers eq_ctype))
+let bindingsEqual =
+  eq_list (eq_pair identifierEqual (eq_pair qualifiersEqual ctypeEqual))
 
-let eq_definition eq_A d1 d2 =
-  eq_pair eq_identifier (eq_expression eq_A) d1 d2
+let definitionEqual eq_A d1 d2 =
+  eq_pair identifierEqual (expressionEqual eq_A) d1 d2
 
 let eq_declaration ds1 ds2 =
   match (ds1, ds2) with
     | (Decl_object qs1 ty1, Decl_object qs2 ty2) ->
-        eq_qualifiers qs1 qs2 && eq_ctype ty1 ty2
+        qs1 = qs2 && ty1 = ty2
     | (Decl_function ret_ty1 qs_tys1 is_variadic1 is_inline1 is_Noreturn1, Decl_function ret_ty2 qs_tys2 is_variadic2 is_inline2 is_Noreturn2) ->
-        eq_ctype ret_ty1 ret_ty2 &&
-        eq_list (eq_pair eq_qualifiers eq_ctype) qs_tys1 qs_tys2 &&
+        ret_ty1 = ret_ty2 &&
+        qs_tys1 = qs_tys2 &&
         is_variadic1 = is_variadic2 &&
         is_inline1 = is_inline2 &&
         is_Noreturn1 = is_Noreturn2
@@ -427,62 +434,62 @@ let eq_declaration ds1 ds2 =
         false
   end
 
-let rec eq_block_aux eq_A eq_B equiv_statement ss1 ss2 =
+let rec eq_block_aux eq_A equiv_statement ss1 ss2 =
   match (ss1, ss2) with
     | ([]       , []       ) -> true
-    | (s1 :: ss1, s2 :: ss2) -> equiv_statement eq_A eq_B s1 s2 && eq_block_aux eq_A eq_B equiv_statement ss1 ss2
+    | (s1 :: ss1, s2 :: ss2) -> equiv_statement eq_A s1 s2 && eq_block_aux eq_A equiv_statement ss1 ss2
     | (_        , _        ) -> false
   end
 
-let rec eq_statement' eq_A eq_B s1 s2 =
-  let eq_block = eq_block_aux eq_A eq_B eq_statement in
+let rec statementEqual' eq_A s1 s2 =
+  let eq_block = eq_block_aux eq_A statementEqual in
   match (s1, s2) with
     | (AilSskip, AilSskip) -> true
     | (AilSexpr e1, AilSexpr e2) ->
-        eq_expression eq_B e1 e2
-    | (AilSblock b1 ss1, AilSblock b2 ss2) ->
-        eq_bindings b1 b2 &&
+        expressionEqual eq_A e1 e2
+    | (AilSblock bs1 ss1, AilSblock bs2 ss2) ->
+        bs1 = bs2 &&
         eq_block ss1 ss2
     | (AilSif e1 s1_1 s2_1, AilSif e2 s1_2 s2_2) ->
-        eq_expression eq_B e1 e2 &&
-        eq_statement eq_A eq_B s1_1 s1_2 &&
-        eq_statement eq_A eq_B s2_1 s2_2  
+        expressionEqual eq_A e1 e2 &&
+        statementEqual eq_A s1_1 s1_2 &&
+        statementEqual eq_A s2_1 s2_2  
     | (AilSwhile e1 s1, AilSwhile e2 s2) ->
-        eq_expression eq_B e1 e2 &&
-        eq_statement eq_A eq_B s1 s2
+        expressionEqual eq_A e1 e2 &&
+        statementEqual eq_A s1 s2
     | (AilSdo s1 e1, AilSdo s2 e2) ->
-        eq_expression eq_B e1 e2 &&
-        eq_statement eq_A eq_B s1 s2
+        expressionEqual eq_A e1 e2 &&
+        statementEqual eq_A s1 s2
     | (AilSbreak, AilSbreak) -> true
     | (AilScontinue, AilScontinue) -> true
     | (AilSreturnVoid, AilSreturnVoid) -> true
     | (AilSreturn e1, AilSreturn e2) ->
-        eq_expression eq_B e1 e2
+        expressionEqual eq_A e1 e2
     | (AilSswitch e1 s1, AilSswitch e2 s2) ->
-        eq_expression eq_B e1 e2 &&
-        eq_statement eq_A eq_B s1 s2
+        expressionEqual eq_A e1 e2 &&
+        statementEqual eq_A s1 s2
     | (AilScase ic1 s1, AilScase ic2 s2) ->
-        eq_integerConstant ic1 ic2 &&
-        eq_statement eq_A eq_B s1 s2
+        integerConstantEqual ic1 ic2 &&
+        statementEqual eq_A s1 s2
     | (AilSdefault s1, AilSdefault s2) ->
-        eq_statement eq_A eq_B s1 s2
+        statementEqual eq_A s1 s2
     | (AilSlabel v1 s1, AilSlabel v2 s2) ->
-        eq_identifier v1 v2 &&
-        eq_statement eq_A eq_B s1 s2
+        identifierEqual v1 v2 &&
+        statementEqual eq_A s1 s2
     | (AilSgoto v1, AilSgoto v2) ->
-        eq_identifier v1 v2
+        identifierEqual v1 v2
     | (AilSdeclaration d1, AilSdeclaration d2) ->
-        eq_list (eq_pair eq_identifier (eq_expression eq_B)) d1 d2
+        eq_list (eq_pair identifierEqual (expressionEqual eq_A)) d1 d2
     | (_, _) -> false
   end
-and eq_statement eq_A eq_B s1 s2 =
+and statementEqual eq_A s1 s2 =
   match (s1, s2) with
-    | (AnnotatedStatement a1 s1, AnnotatedStatement a2 s2) ->
-        eq_A a1 a2 && eq_statement' eq_A eq_B s1 s2
+    | (AnnotatedStatement _ s1, AnnotatedStatement _ s2) ->
+        statementEqual' eq_A s1 s2
   end
 
-let eq_block eq_A eq_B ss1 ss2 =
-  eq_block_aux eq_A eq_B eq_statement ss1 ss2
+let eq_block eq_A ss1 ss2 =
+  eq_block_aux eq_A statementEqual ss1 ss2
 
 
 (*
@@ -492,21 +499,21 @@ let eq_function_declaration eq_A eq_B fdecl1 fdecl2 =
   fdecl1.fun_is_variadic <-> fdecl2.fun_is_variadic      &&
   fdecl1.fun_is_inline   <-> fdecl2.fun_is_inline        &&
   fdecl1.fun_is_Noreturn <-> fdecl2.fun_is_Noreturn      &&
-  eq_option (eq_statement eq_A eq_B) fdecl1.fun_body fdecl2.fun_body
+  eq_option (statementEqual eq_A eq_B) fdecl1.fun_body fdecl2.fun_body
 
 
 let eq_sigma_declaration eq_A eq_B sdecl1 sdecl2 =
   match (sdecl1, sdecl2) with
     | (SDecl_fun id1 fdecl1, SDecl_fun id2 fdecl2) ->
-        eq_identifier id1 id2 &&
+        identifierEqual id1 id2 &&
         eq_function_declaration eq_A eq_B fdecl1 fdecl2
     | (SDecl_global id1 glob1, SDecl_global id2 glob2) ->
-        eq_identifier id1 id2 &&
-        eq_triple eq_qualifiers eq_ctype (eq_option (eq_expression eq_B))
+        identifierEqual id1 id2 &&
+        eq_triple eq_qualifiers eq_ctype (eq_option (expressionEqual eq_B))
           glob1 glob2
     | (SDecl_static_assert e1 sc1, SDecl_static_assert e2 sc2) ->
-        eq_expression eq_B e1 e2 &&
-        eq_stringLiteral sc1 sc2
+        expressionEqual eq_B e1 e2 &&
+        stringLiteralEqual sc1 sc2
     | (_,_) ->
         false
   end
@@ -514,37 +521,37 @@ let eq_sigma_declaration eq_A eq_B sdecl1 sdecl2 =
 
 
 
-let eq_sigma eq_A eq_B sig1 sig2 =
-  eq_context eq_identifier eq_declaration sig1.declarations sig1.declarations &&
-  eq_context eq_identifier (eq_expression eq_B) sig1.object_definitions sig2.object_definitions &&
-  eq_context eq_identifier (eq_pair (eq_list eq_identifier) (eq_statement eq_A eq_B)) sig1.function_definitions sig2.function_definitions &&
-  eq_list (eq_pair (eq_expression eq_B) eq_stringLiteral) sig1.static_assertions sig2.static_assertions
+let eq_sigma eq_A sig1 sig2 =
+  eq_context identifierEqual eq_declaration sig1.declarations sig1.declarations &&
+  eq_context identifierEqual (expressionEqual eq_A) sig1.object_definitions sig2.object_definitions &&
+  eq_context identifierEqual (eq_pair (eq_list identifierEqual) (statementEqual eq_A)) sig1.function_definitions sig2.function_definitions &&
+  eq_list (eq_pair (expressionEqual eq_A) stringLiteralEqual) sig1.static_assertions sig2.static_assertions
 
 (*
 let eq_sigma eq_A eq_B =
   eq_list (eq_sigma_declaration eq_A eq_B)
-(* (OLD)  eq_context eq_identifier (eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) *)
-(*  eq_context eq_identifier (eq_sigma_declaration eq_A eq_B) *)
+(* (OLD)  eq_context identifierEqual (eq_pair (eq_pair eq_ctype eq_bindings) (statementEqual eq_A eq_B)) *)
+(*  eq_context identifierEqual (eq_sigma_declaration eq_A eq_B) *)
 (*
     (eq_either
-      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (eq_statement eq_A eq_B)))
-      (eq_triple eq_qualifiers eq_ctype (eq_option (eq_expression eq_B)))
+      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+      (eq_triple eq_qualifiers eq_ctype (eq_option (expressionEqual eq_B)))
     )
 *)
 *)
 
 let eq_gamma g1 g2 =
-  eq_context eq_identifier (eq_pair eq_qualifiers eq_ctype) g1 g2
+  eq_context identifierEqual (eq_pair qualifiersEqual ctypeEqual) g1 g2
 
-let eq_program eq_A eq_B p1 p2 =
-  eq_pair eq_identifier (eq_sigma eq_A eq_B) p1 p2
+let eq_program eq_A p1 p2 =
+  eq_pair identifierEqual (eq_sigma eq_A) p1 p2
 (* (NEW OLD)
-     eq_identifier p1.startup p2.startup
-  && eq_context eq_identifier (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (eq_statement eq_A eq_B)))
+     identifierEqual p1.startup p2.startup
+  && eq_context identifierEqual (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
        p1.functions p2.functions
-  && eq_context eq_identifier (eq_pair eq_ctype (eq_option (eq_expression eq_B)))
+  && eq_context identifierEqual (eq_pair eq_ctype (eq_option (expressionEqual eq_B)))
        p1.globals p2.globals
-  && eq_context eq_identifier (=) p1.strings p2.strings
+  && eq_context identifierEqual (=) p1.strings p2.strings
  *)
 
 
@@ -561,14 +568,14 @@ val equiv_arguments:   forall 'A1 'A2. list (expression 'A1)              -> lis
 val equiv_definition:  forall 'A1 'A2. identifier * expression 'A1        -> identifier * expression 'A2        -> bool
 val equiv_declaration: forall 'A1 'A2. list (identifier * expression 'A1) -> list (identifier * expression 'A2) -> bool
 
-val equiv_block_aux: forall 'A1 'A2 'B1 'B2.
-                     (statement  'A1 'B1 -> statement  'A2 'B2 -> bool) ->
-                     list (statement 'A1 'B1) -> list (statement 'A2 'B2) ->
+val equiv_block_aux: forall 'A1 'A2.
+                     (statement 'A1 -> statement 'A2 -> bool) ->
+                     list (statement 'A1) -> list (statement 'A2) ->
                      bool
 
-val equiv_statement': forall 'A1 'A2 'B1 'B2. statement' 'A1 'B1       -> statement' 'A2 'B2       -> bool
-val equiv_statement:  forall 'A1 'A2 'B1 'B2. statement  'A1 'B1       -> statement  'A2 'B2       -> bool
-val equiv_block:      forall 'A1 'A2 'B1 'B2. list (statement 'A1 'B1) -> list (statement 'A2 'B2) -> bool
+val equiv_statement': forall 'A1 'A2. statement' 'A1       -> statement' 'A2       -> bool
+val equiv_statement:  forall 'A1 'A2. statement  'A1       -> statement  'A2       -> bool
+val equiv_block:      forall 'A1 'A2. list (statement 'A1) -> list (statement 'A2) -> bool
 
 (* WIP
 val equiv_sigma: forall 'A1 'A2 'B1 'B2. sigma 'A1 'B1 -> sigma 'A2 'B2 -> bool
@@ -599,40 +606,37 @@ let rec equiv_expression' e1 e2 =
   let equiv_arguments = equiv_arguments_aux equiv_expression in
   match (e1, e2) with
     | (AilEunary uop1 e1, AilEunary uop2 e2) ->
-        eq_unaryOperator uop1 uop2 &&
+        unaryOperatorEqual uop1 uop2 &&
         equiv_expression e1 e2
     | (AilEbinary e1_1 bop1 e2_1, AilEbinary e1_2 bop2 e2_2) ->
         equiv_expression e1_1 e1_2 &&
-        eq_binaryOperator bop1 bop2 &&
+        binaryOperatorEqual bop1 bop2 &&
         equiv_expression e2_1 e2_2
     | (AilEassign e1_1 e2_1, AilEassign e1_2 e2_2) ->
         equiv_expression e1_1 e1_2 &&
         equiv_expression e2_1 e2_2
     | (AilEcompoundAssign e1_1 aop1 e2_1, AilEcompoundAssign e1_2 aop2 e2_2) ->
         equiv_expression e1_1 e1_2 &&
-        eq_arithmeticOperator aop1 aop2 &&
+        arithmeticOperatorEqual aop1 aop2 &&
         equiv_expression e2_1 e2_2
     | (AilEcond e1_1 e2_1 e3_1, AilEcond e1_2 e2_2 e3_2) ->
         equiv_expression e1_1 e1_2 &&
         equiv_expression e2_1 e2_2 &&
         equiv_expression e3_1 e3_2
-    | (AilEcast q1 t1 e1, AilEcast q2 t2 e2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2 &&
+    | (AilEcast qs1 ty1 e1, AilEcast qs2 ty2 e2) ->
+        qs1 = qs2 && ty1 = ty2 &&
         equiv_expression e1 e2
     | (AilEcall e1 es1, AilEcall e2 es2) ->
         equiv_expression e1 e2 &&
         equiv_arguments es1 es2
     | (AilEconst c1, AilEconst c2) ->
-        eq_constant c1 c2
+        constantEqual c1 c2
     | (AilEident v1, AilEident v2) ->
-        eq_identifier v1 v2
-    | (AilEsizeof q1 t1, AilEsizeof q2 t2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2
-    | (AilEalignof q1 t1, AilEalignof q2 t2) ->
-        eq_qualifiers q1 q2 &&
-        eq_ctype t1 t2
+        identifierEqual v1 v2
+    | (AilEsizeof qs1 ty1, AilEsizeof qs2 ty2) ->
+        qs1 = qs2 && ty1 = ty2
+    | (AilEalignof qs1 ty1, AilEalignof qs2 ty2) ->
+        qs1 = qs2 && ty1 = ty2
     | (_, _) -> false
   end
 and equiv_expression e1 e2 =
@@ -644,7 +648,7 @@ let equiv_arguments a1 a2 =
   equiv_arguments_aux equiv_expression a1 a2
 
 let equiv_definition d1 d2 =
-  equiv_pair eq_identifier equiv_expression d1 d2
+  equiv_pair identifierEqual equiv_expression d1 d2
 
 
 let rec equiv_declaration ds1 ds2 =
@@ -667,8 +671,8 @@ let rec equiv_statement' s1 s2 =
     | (AilSskip, AilSskip) -> true
     | (AilSexpr e1, AilSexpr e2) ->
         equiv_expression e1 e2
-    | (AilSblock b1 ss1, AilSblock b2 ss2) ->
-        eq_bindings b1 b2 &&
+    | (AilSblock bs1 ss1, AilSblock bs2 ss2) ->
+        bs1 = bs2 &&
         equiv_block ss1 ss2
     | (AilSif e1 s1_1 s2_1, AilSif e2 s1_2 s2_2) ->
         equiv_expression e1 e2 &&
@@ -689,15 +693,15 @@ let rec equiv_statement' s1 s2 =
         equiv_expression e1 e2 &&
         equiv_statement s1 s2
     | (AilScase ic1 s1, AilScase ic2 s2) ->
-        eq_integerConstant ic1 ic2 &&
+        integerConstantEqual ic1 ic2 &&
         equiv_statement s1 s2
     | (AilSdefault s1, AilSdefault s2) ->
         equiv_statement s1 s2
     | (AilSlabel v1 s1, AilSlabel v2 s2) ->
-        eq_identifier v1 v2 &&
+        identifierEqual v1 v2 &&
         equiv_statement s1 s2
     | (AilSgoto v1, AilSgoto v2) ->
-        eq_identifier v1 v2
+        identifierEqual v1 v2
     | (AilSdeclaration d1, AilSdeclaration d2) ->
         equiv_declaration d1 d2
     | (_, _) -> false
@@ -728,15 +732,15 @@ let equiv_function_declaration fdecl1 fdecl2 =
 let equiv_sigma_declaration sdecl1 sdecl2 =
   match (sdecl1, sdecl2) with
     | (SDecl_fun id1 fdecl1, SDecl_fun id2 fdecl2) ->
-        eq_identifier id1 id2 &&
+        identifierEqual id1 id2 &&
         equiv_function_declaration fdecl1 fdecl2
     | (SDecl_global id1 glob1, SDecl_global id2 glob2) ->
-        eq_identifier id1 id2 &&
+        identifierEqual id1 id2 &&
         equiv_triple eq_qualifiers eq_ctype (equiv_option equiv_expression)
           glob1 glob2
     | (SDecl_static_assert e1 sc1, SDecl_static_assert e2 sc2) ->
         equiv_expression e1 e2 &&
-        eq_stringLiteral sc1 sc2
+        stringLiteralEqual sc1 sc2
     | (_,_) ->
         false
   end
@@ -745,10 +749,10 @@ let equiv_sigma_declaration sdecl1 sdecl2 =
 (* WIP
 
 let equiv_sigma S1 S2 =
-  sigma_equiv eq_identifier (fun _ ->
+  sigma_equiv identifierEqual (fun _ ->
     equiv_sigma_declaration
   ) S1 S2
-(* (OLD)  equiv eq_identifier (fun _ -> equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2 *)
+(* (OLD)  equiv identifierEqual (fun _ -> equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2 *)
 (*
     equiv_either
       (equiv_pair (eq_triple eq_ctype eq_bindings (=)) (equiv_option equiv_statement))
@@ -756,57 +760,57 @@ let equiv_sigma S1 S2 =
 *)
 
 let equiv_eq_sigma eq_A eq_B S1 S2 =
-(* (OLD)  equiv eq_identifier (fun _ -> eq_pair (eq_pair eq_ctype eq_bindings) (eq_statement eq_A eq_B)) S1 S2 *)
-  sigma_equiv eq_identifier (fun _ ->
+(* (OLD)  equiv identifierEqual (fun _ -> eq_pair (eq_pair eq_ctype eq_bindings) (statementEqual eq_A eq_B)) S1 S2 *)
+  sigma_equiv identifierEqual (fun _ ->
     eq_sigma_declaration eq_A eq_B
 (*
     eq_either
-      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (eq_statement eq_A eq_B)))
-      (eq_triple eq_qualifiers eq_ctype (eq_option (eq_expression eq_B)))
+      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+      (eq_triple eq_qualifiers eq_ctype (eq_option (expressionEqual eq_B)))
 *)
   ) S1 S2
 
 let equiv_gamma g1 g2 =
-  sigma_equiv eq_identifier (fun _ -> eq_pair eq_qualifiers eq_ctype) g1 g2
+  sigma_equiv identifierEqual (fun _ -> eq_pair eq_qualifiers eq_ctype) g1 g2
 
 let equiv_program p1 p2 =
-  equiv_pair eq_identifier equiv_sigma p1 p2
+  equiv_pair identifierEqual equiv_sigma p1 p2
 (* (NEW OLD)
-     eq_identifier p1.startup p2.startup
-  && equiv eq_identifier (fun _ -> equiv_pair (eq_triple eq_ctype eq_bindings (=)) (equiv_option equiv_statement))
+     identifierEqual p1.startup p2.startup
+  && equiv identifierEqual (fun _ -> equiv_pair (eq_triple eq_ctype eq_bindings (=)) (equiv_option equiv_statement))
        p1.functions p2.functions
-  && equiv eq_identifier (fun _ -> equiv_pair eq_ctype (equiv_option equiv_expression))
+  && equiv identifierEqual (fun _ -> equiv_pair eq_ctype (equiv_option equiv_expression))
        p1.globals p2.globals
-  && eq_context eq_identifier (=) p1.strings p2.strings
+  && eq_context identifierEqual (=) p1.strings p2.strings
 *)
 
 let equiv_eq_program eq_A eq_B p1 p2 =
-  eq_pair eq_identifier (equiv_eq_sigma eq_A eq_B) p1 p2
+  eq_pair identifierEqual (equiv_eq_sigma eq_A eq_B) p1 p2
 (* (NEW OLD)
-     eq_identifier p1.startup p2.startup
-  && equiv eq_identifier (fun _ -> eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (eq_statement eq_A eq_B)))
+     identifierEqual p1.startup p2.startup
+  && equiv identifierEqual (fun _ -> eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
        p1.functions p2.functions
-  && equiv eq_identifier (fun _ -> eq_pair eq_ctype (eq_option (eq_expression eq_B)))
+  && equiv identifierEqual (fun _ -> eq_pair eq_ctype (eq_option (expressionEqual eq_B)))
        p1.globals p2.globals
-  && eq_context eq_identifier (=) p1.strings p2.strings
+  && eq_context identifierEqual (=) p1.strings p2.strings
 *)
 
 *)
 
 (* *)
-val     sigma_lookup: forall 'A 'B. sigma 'A 'B -> identifier -> maybe ((* sigma_declaration 'A 'B *) unit)
+val     sigma_lookup: forall 'A. sigma 'A -> identifier -> maybe ((* sigma_declaration 'A 'B *) unit)
 (*
 let rec sigma_lookup S a =
   match S with
     | [] ->
         Nothing
     | (SDecl_fun id fdecl) :: S' ->
-        if eq_identifier id a then
+        if identifierEqual id a then
           Just (SDecl_fun id fdecl)
         else
           sigma_lookup S' a
     | (SDecl_global id glob) :: S' ->
-        if eq_identifier id a then
+        if identifierEqual id a then
           Just (SDecl_global id glob)
         else
           sigma_lookup S' a
@@ -828,9 +832,9 @@ let sigma_fresh a S =
   not (sigma_mem a S)
 *)
 
-val sigma_fresh_bindings: forall 'A 'B1 'B2. bindings -> sigma 'A 'B1 -> bool
+val sigma_fresh_bindings: forall 'A. bindings -> sigma 'A -> bool
 let sigma_fresh_bindings bs S =
-  all_list (fun (ident, _) -> Context.fresh eq_identifier ident S.declarations) bs
+  List.all (fun (ident, _) -> Context.fresh identifierEqual ident S.declarations) bs
 
 
 
@@ -846,16 +850,16 @@ val disjoint: forall 'B1 'B2.
 
 
 
-let lookup C v          = Context.lookup eq_identifier C v
-let mem v C             = Context.mem eq_identifier v C
-let fresh v C           = Context.fresh eq_identifier v C
-let fresh_bindings bs C = Context.fresh_bindings eq_identifier bs C
-let disjoint C1 C2      = Context.disjoint eq_identifier C1 C2
+let lookup C v          = Context.lookup identifierEqual C v
+let mem v C             = Context.mem identifierEqual v C
+let fresh v C           = Context.fresh identifierEqual v C
+let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
+let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
 val parameters_of_bindings: bindings -> list (qualifiers * ctype)
 
-val type_from_sigma: forall 'A 'B. (ctype * bindings * bool) * maybe (statement 'A 'B) -> ctype
+val type_from_sigma: forall 'A. (ctype * bindings * bool) * maybe (statement 'A) -> ctype
 
 let parameters_of_bindings bs =
   List.map snd bs
@@ -879,10 +883,10 @@ type file 'a = <|
   main:    identifier;
   id_map:  Pmap.map identifier declaration;
   globals: list (identifier * expression 'a);
-  fn_map:  Pmap.map identifier (list identifier * statement Location.t 'a)
+  fn_map:  Pmap.map identifier (list identifier * statement Loc.t 'a)
 |>
 
-val file_of_program: forall 'B. program Location.t 'B -> file 'B
+val file_of_program: forall 'B. program Loc.t 'B -> file 'B
 let file_of_program (main_id, ctx) =
   let (ids, fns) = List.fold_left (fun (ids_, fns_) (id, ((ty, bds), s)) ->
     (

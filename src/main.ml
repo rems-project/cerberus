@@ -69,7 +69,7 @@ let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
       print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
-      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name) <> 0 then
+      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name ^ " 2> /dev/null") <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
     
@@ -83,7 +83,7 @@ let c_frontend f =
     |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
     
     |> Exception.rbind (fun (counter, z) ->
-          Exception.bind0 (ErrorMonad.to_exception (fun z -> (Location.unknown, Errors.AIL_TYPING z))
+          Exception.bind0 (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
           (fun z -> Exception.return0 (counter, z)))
     |> pass_message (progress_sofar := 12; "3. Ail typechecking completed!")
@@ -150,11 +150,12 @@ let pipeline filename =
        print_debug 2 "Using the Core frontend";
        core_frontend f
       ) else
-       Exception.fail (Location.unknown, Errors.UNSUPPORTED "The file extention is not supported")
+       Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun core_file ->
   
   (* TODO: for now assuming a single order comes from indet expressions *)
-  let rewritten_core_file = Core_indet.hackish_order (Core_rewrite.rewrite_file core_file) in
+  let rewritten_core_file = Core_indet.hackish_order
+      (if !!cerb_conf.no_rewrite then core_file else Core_rewrite.rewrite_file core_file) in
   
   if !debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
@@ -173,7 +174,7 @@ let pipeline filename =
   Exception.return0 (backend rewritten_core_file)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_rewrite =
   Global_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -200,7 +201,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress =
   let core_impl = load_impl Core_parser.parse impl_name in
   print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress;
+  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress no_rewrite;
   
   match pipeline file with
     | Exception.Exception err ->
@@ -251,10 +252,13 @@ let progress =
              [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed, 13 = elaborated, 14 = executed]" in
   Arg.(value & flag & info ["progress"] ~doc)
 
+let no_rewrite =
+  let doc = "Desactivate the Core to Core transformations" in
+  Arg.(value & flag & info["no_rewrite"] ~doc)
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress) in
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite) in
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
@@ -491,7 +495,7 @@ let pipeline stdlib impl core_parse file_name =
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) in
     if      Filename.check_suffix file_name ".c"    then (debug_print "Cmulator mode"    ; c_frontend    m)
     else if Filename.check_suffix file_name ".core" then (debug_print "Core runtime mode"; core_frontend m)
-                                                    else Exception.fail (Location.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
+                                                    else Exception.fail (Location_ocaml.unknowned, Errors.UNSUPPORTED "The file extention is not supported") in
   let core_backend m =
 (*
     ((m

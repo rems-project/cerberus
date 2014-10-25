@@ -32,7 +32,7 @@ let mem eq_A a C =
 let fresh (eq_A : 'A -> 'A -> bool) a (C: context 'A 'B) = not (mem eq_A a C)
 
 val fresh_bindings : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> list ('A * 'B2) -> context 'A 'B1 -> bool
-let fresh_bindings eq_A bs C = all_list (fun b -> fresh eq_A (fst b) C) bs
+let fresh_bindings eq_A bs C = List.all (fun b -> fresh eq_A (fst b) C) bs
 
 val remove_var : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> context 'A 'B -> context 'A 'B
 let rec remove_var eq_A a C =
@@ -90,7 +90,7 @@ let rec disjoint eq_A C1 C2 =
   end
 
 val fresh_in_bindings : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> list ('A * 'B) -> bool
-let fresh_in_bindings eq_A a xs = all_list (fun x -> not (eq_A a (fst x))) xs
+let fresh_in_bindings eq_A a xs = List.all (fun x -> not (eq_A a (fst x))) xs
 
 val disjoint_bindings : forall 'A 'B. ('A -> 'A -> bool) -> list ('A * 'B) -> bool
 let rec disjoint_bindings eq_A xs =

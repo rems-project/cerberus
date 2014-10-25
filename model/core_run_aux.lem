@@ -4,7 +4,7 @@ open import Global Core Driver_util
 
 type core_run_error =
   | Illformed_program of string (* typing or name-scope error *)
-  | Found_empty_stack
+  | Found_empty_stack of string (* TODO debug *)
   | Reached_end_of_proc
   | Unknown_impl
   | Unresolved_symbol (* found an unresolved symbolic name in core_eval *)
@@ -13,8 +13,8 @@ type core_run_error =
 let string_of_core_run_error = function
   | Illformed_program str ->
       "Illformed_program[" ^ str ^ "]"
-  | Found_empty_stack ->
-      "Found_empty_stack"
+  | Found_empty_stack str ->
+      "Found_empty_stack[" ^ str ^ "]"
   | Reached_end_of_proc ->
       "Reached_end_of_proc"
   | Unknown_impl ->

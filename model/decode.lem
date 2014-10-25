@@ -7,3 +7,6 @@ declare ocaml target_rep function decode_integer_constant = `Decode_ocaml.decode
 val decode_character_constant: string -> integer
 declare ocaml target_rep function decode_character_constant = `Decode_ocaml.decode_character_constant`
 
+
+val encode_character_constant: integer -> char
+declare ocaml target_rep function encode_character_constant = `Decode_ocaml.encode_character_constant`

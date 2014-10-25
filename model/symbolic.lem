@@ -33,6 +33,53 @@ type symbolic =
   | SYMBite   of symbolic * symbolic * symbolic
 
 
+
+instance (Eq operator)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+instance (Eq symbolic_type)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+let rec symbolicEqual symb1 symb2 =
+  let ord = function
+    | SYMBtrue ->
+        (0 : nat)
+    | SYMBfalse ->
+        1
+    | SYMBconst _ ->
+        2
+    | SYMBsym _ _ ->
+        3
+    | SYMBop _ _ _ ->
+        4
+    | SYMBite _ _ _ ->
+        5
+  end in
+  match (symb1, symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        n1 = n2
+    | (SYMBsym symbty1 sym1, SYMBsym symbty2 sym2) ->
+        symbty1 = symbty2 && sym1 = sym2
+    | (SYMBop op1 symb11 symb12, SYMBop op2 symb21 symb22) ->
+        op1 = op2 && symbolicEqual symb11 symb21 && symbolicEqual symb12 symb22
+    | (SYMBite symb11 symb12 symb13, SYMBite symb21 symb22 symb23) ->
+        symbolicEqual symb11 symb21 && symbolicEqual symb12 symb22 && symbolicEqual symb13 symb23
+    | _ ->
+        ord symb1 = ord symb2
+  end
+
+instance (Eq symbolic)
+  let (=)  = symbolicEqual
+  let (<>) = fun symb1 symb2 -> not (symbolicEqual symb1 symb2)
+end
+
+
 val     typeof: symbolic -> maybe symbolic_type
 let rec typeof symb =
   match symb with

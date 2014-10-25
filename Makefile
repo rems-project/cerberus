@@ -6,7 +6,7 @@ else
 endif
 
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn
+LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err
 
 
 
@@ -72,7 +72,7 @@ CERBERUS_LEM=\
   exception.lem \
   global.lem \
   implementation_.lem \
-  location.lem \
+  loc.lem \
   product.lem \
   state.lem \
   state_operators.lem \
@@ -127,7 +127,7 @@ Z3_LIB=/Library/lib
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -classic-display -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs Z3,pprint,cmdliner -libs unix -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -classic-display -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs pprint,cmdliner -libs nums,unix,str -cflags -bin-annot
 # OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -use-ocamlfind -pkgs pprint,z3 -libs nums,unix -cflags -bin-annot,-custom,-I,$(Z3_API_PATH) -lflags -cclib,-L$(Z3_LIB),-cclib,-lz3
 
 
@@ -329,7 +329,7 @@ LEM_FILES = \
  global.lem \
  Implementation.lem \
  implementation_.lem \
- location.lem \
+ loc.lem \
  naive_memory.lem \
  product.lem \
  Range.lem \

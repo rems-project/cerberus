@@ -76,7 +76,7 @@ let parse input : Cabs.translation_unit =
             | (Some (pref1_opt, str1), STRING_LITERAL (pref2_opt, str2)) ->
                 (* we don't support non-standard concatenation for now (neither gcc nor clang seems to do either) *)
                 (match merge_encoding_prefixes pref1_opt pref2_opt with
-                  | Some pref_opt -> (Some (pref_opt, str2 ^ str1), acc)
+                  | Some pref_opt -> (Some (pref_opt, str2 @ str1), acc)
                   | None          -> raise NonStandard_string_concatenation)
             | (None, STRING_LITERAL lit) ->
                 (Some lit, acc)

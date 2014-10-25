@@ -74,6 +74,11 @@ type constant =
   | Cstring of list char (* TODO: temporary hack *)
 *)
 
+type pointer_action =
+  | PtrEq
+  | PtrNe
+  | PtrShift
+
 
 type expr 'a =
   (* pure expressions *)
@@ -164,8 +169,7 @@ and action_ 'a =
   | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
   
   (* TODO: it annoying (maybe wrong) that these are actions *)
-  | Pointer_eq of expr 'a * expr 'a
-  | Pointer_neq of expr 'a * expr 'a
+  | Ptr of pointer_action * list (expr 'a)
 
 and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
@@ -221,3 +225,13 @@ type labeled_continuation 'a = list (sym * ctype) * expr 'a
 type stack 'a =
   | Stack_empty
   | Stack_cons of continuation 'a * stack 'a
+
+
+
+
+
+
+(* basic class instanciations *)
+instance (SetType polarity)
+  let setElemCompare = defaultCompare
+end

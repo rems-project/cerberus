@@ -13,7 +13,7 @@ fun main (): [integer] :=
             let weak () = store("signed int", a_9, a_10) in
             let weak a_11 = f{a_9} in
             let weak () = kill(a_9) in
-            run loop_6(x: x)
+            run break_7(x: x)
             end end end end
         end
       else

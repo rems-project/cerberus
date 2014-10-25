@@ -1,27 +1,114 @@
+open import Pervasives
 import Implementation
+
+val assert_false: forall 'a. string -> 'a
+
+
+type qualifiers = <|
+  const    : bool;
+  restrict : bool;
+  volatile : bool;
+  atomic   : bool;
+|>
 
 (* Qualifiers functions *)
 val combine_qualifiers: qualifiers -> qualifiers -> qualifiers
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+  atomic   = qs1.atomic   || qs2.atomic  ;
+|>
+
 val sub_qualifiers: qualifiers -> qualifiers -> bool
-
-
-
-
+let sub_qualifiers qs1 qs2 =
+     qs1.const    --> qs2.const
+  && qs1.restrict --> qs2.restrict
+  && qs1.volatile --> qs2.volatile
+  && qs1.atomic   --> qs2.atomic
 
 
 
 
 (* Type classe for C types *)
 class ( Ctype 'a ) 
-  val is_void:    'a -> bool;
-  val is_integer: 'a -> bool;
-  val is_pointer: 'a -> bool;
-  val is_bool:    'a -> bool;
-
-val is_struct: ctype -> bool
-val is_union: ctype -> bool
-
+  val is_void:     'a -> bool
+  val is_basic:    'a -> bool
+  val is_array:    'a -> bool
+  val is_function: 'a -> bool
+  val is_pointer:  'a -> bool
+  val is_atomic:   'a -> bool
+  val is_struct:   'a -> bool
+  val is_union:    'a -> bool
+  
+  val is_bool:     'a -> bool
+  val is_integer:  'a -> bool
+  
+  val get_array_size: 'a -> maybe integer
 end
+
+
+(* STD §6.2.5#1, sentence 3 *)
+val is_object: forall 'a. Ctype 'a => 'a -> bool
+let is_object ty =
+  not (is_function ty)
+
+(* STD §6.2.5#18, sentence 1 *)
+val is_arithmetic: forall 'a. Ctype 'a => 'a -> bool
+let is_arithmetic ty =
+  is_integer ty (* TODO: || is_floating ty *)
+
+(* STD §6.2.5#21, sentence 1 *)
+val is_scalar: forall 'a. Ctype 'a => 'a -> bool
+let is_scalar ty =
+  is_pointer ty || is_arithmetic ty
+
+(* STD §6.2.5#21, sentence 2 *)
+val is_aggregate: forall 'a. Ctype 'a => 'a -> bool
+let is_aggregate ty =
+  is_array ty || is_struct ty
+
+
+(* assumes [wf_type ty] = true *)
+val is_complete: forall 'a. Ctype 'a => 'a -> bool
+let is_complete ty =
+  if is_basic ty then
+    (* STD §6.2.5#14, sentence 2 *)
+    true
+  else if is_void ty then
+    (* STD §6.2.5#19, sentence 2 *)
+    false
+  else if is_pointer ty then
+    (* STD §6.2.5#20, bullet 5, sentence 5 *)
+    true
+  else if is_array ty then
+    (* STD §6.2.5#22, sentence 1 *)
+    maybe false (fun _ -> true) (get_array_size ty)
+  else if is_struct ty || is_union ty then
+    (* STD §6.2.5#22, sentence 3 *)
+    (* STD §6.2.5#22, sentence 4 *)
+    assert_false "TODO: is_complete on struct/union"
+  else
+    assert_false "WIP"
+
+
+(* TODO *)
+val is_vla: forall 'a. Ctype 'a => 'a -> bool
+
+
+(* STD §6.2.5#23 *)
+val has_known_constant_size: forall 'a. Ctype 'a => 'a -> bool
+let has_known_constant_size ty =
+  (* NOTE: assuming complete <=> not incomplete *)
+  is_complete ty && not (is_vla ty)
+
+
+(* STD §6.2.5#24, sentence 1 *)
+val is_derived_declarator_type: forall 'a. Ctype 'a => 'a -> bool
+let is_derived_declarator_type ty =
+  is_array ty || is_function ty || is_pointer ty
+
+
 
 
 (* val is_unqualified: qualifiers -> bool *)
@@ -40,14 +127,9 @@ end
 
 
 
-(* TODO *)
-val is_arithmetic: forall 'a. Ctype 'a => 'a -> bool
-val is_scalar: forall 'a. Ctype 'a => 'a -> bool
 
 
-val is_array: 'a -> bool
-val is_function: 'a -> bool
-
+(*
 
 val is_corresponding_unsigned: integerType -> integerType -> bool
 val corresponding_unsigned: integerType -> maybe integerType
@@ -269,3 +351,4 @@ let ~{coq} pointers_to_compatible_types t1 t2 : bool =
 
 
 val variably_modified: forall 'a. Ctype 'a => 'a -> bool
+*)

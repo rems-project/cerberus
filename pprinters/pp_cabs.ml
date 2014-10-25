@@ -84,12 +84,12 @@ let pp_colour_identifier id =
 let pp_colour_function_identifier id =
   !^ (if !isatty then ansi_format [Bold; Blue] id else id)
 
-let pp_colour_label id =
-  !^ (if !isatty then ansi_format [Magenta] id else id)
+let pp_colour_label (CabsIdentifier (_, str)) =
+  !^ (if !isatty then ansi_format [Magenta] str else str)
 
 
-let pp_cabs_identifier id =
-  pp_colour_identifier id
+let pp_cabs_identifier (CabsIdentifier (_, str)) =
+  pp_colour_identifier str
 
 
 (*
@@ -598,11 +598,11 @@ let pp_cabs_encoding_prefix = function
   | CabsEncPrefix_U  -> !^ "U"
   | CabsEncPrefix_L  -> !^ "L"
 
-let pp_cabs_string_literal (pref_opt, str) =
-  P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ str)
+let pp_cabs_string_literal (pref_opt, strs) =
+  P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
 
 
-let rec pp_cabs_expression p expr =
+let rec pp_cabs_expression p (CabsExpression (_, expr)) =
   let p' = precedence expr in
   let f = P.group -| pp_cabs_expression p' in
   (if lt_precedence p' p then fun x -> x else P.parens) $
@@ -745,6 +745,23 @@ and pp_declaration = function
 
 (* TODO *)
 and pp_specifiers specifs =
+  P.braces (
+    P.brackets (comma_list pp_storage_class_specifier specifs.storage_classes     ) ^^ P.comma ^^^
+    P.brackets (comma_list pp_cabs_type_specifier     specifs.type_specifiers     ) ^^ P.comma ^^^
+    P.brackets (comma_list pp_cabs_type_qualifier     specifs.type_qualifiers     ) ^^ P.comma ^^^
+    P.brackets (comma_list pp_function_specifier      specifs.function_specifiers ) ^^ P.comma ^^^
+    P.brackets (comma_list pp_alignment_specifier     specifs.alignment_specifiers)
+  )
+
+(*
+  storage_classes:      list storage_class_specifier;
+  type_specifiers:      list cabs_type_specifier;
+  type_qualifiers:      list cabs_type_qualifier;
+  function_specifiers:  list function_specifier;
+  alignment_specifiers: list alignment_specifier;
+*)
+
+
 (*
   let zs = List.map pp_storage_class_specifier specifs.storage_classes      @
            List.map pp_cabs_type_specifier     specifs.type_specifiers      @
@@ -752,11 +769,13 @@ and pp_specifiers specifs =
            List.map pp_function_specifier      specifs.function_specifiers  @
            List.map pp_alignment_specifier     specifs.alignment_specifiers in
 *)
+(*
   space_list pp_storage_class_specifier specifs.storage_classes      ^^ (if specifs.storage_classes      = [] then P.empty else P.space) ^^
   space_list pp_cabs_type_specifier     specifs.type_specifiers      ^^ (if specifs.type_specifiers      = [] then P.empty else P.space) ^^
   space_list pp_cabs_type_qualifier     specifs.type_qualifiers      ^^ (if specifs.type_qualifiers      = [] then P.empty else P.space) ^^
   space_list pp_function_specifier      specifs.function_specifiers  ^^ (if specifs.function_specifiers  = [] then P.empty else P.space) ^^
   space_list pp_alignment_specifier     specifs.alignment_specifiers ^^ (if specifs.alignment_specifiers = [] then P.empty else P.space)
+*)
 
 and pp_init_declarator = function
   | InitDecl (decltor, None) ->
@@ -892,7 +911,7 @@ and pp_direct_declarator = function
         P.brackets (pp_parameter_type_list param_tys)
       )
 and pp_array_declarator = function
-  | ADecl (qs, is_static, a_decltor_size_opt) ->
+  | ADecl (_, qs, is_static, a_decltor_size_opt) ->
       pp_ctor "ADecl" ^^ P.brackets (
         P.brackets (comma_list pp_cabs_type_qualifier qs) ^^ P.comma ^^^
         pp_bool is_static ^^ P.comma ^^
@@ -930,8 +949,8 @@ and pp_parameter_declaration = function
 and pp_type_name = function
   | Type_name (specs, qs, a_decltor_opt) ->
       pp_ctor "Type_name" ^^ P.brackets (
-        comma_list pp_cabs_type_specifier specs ^^ P.comma ^^^
-        comma_list pp_cabs_type_qualifier qs ^^ P.comma ^^^
+        P.brackets (comma_list pp_cabs_type_specifier specs) ^^ P.comma ^^^
+        P.brackets (comma_list pp_cabs_type_qualifier qs) ^^ P.comma ^^^
         pp_option pp_abstract_declarator a_decltor_opt
       )
 
@@ -985,7 +1004,8 @@ and pp_initializer_list inits =
   ) inits
 
 
-let rec pp_cabs_statement = function
+let rec pp_cabs_statement (CabsStatement (_, stmt_)) =
+  match stmt_ with
   | CabsSlabel (id, s) ->
       pp_ctor "CabsSlabel" ^^ P.brackets (pp_colour_label id ^^ P.comma ^^^ pp_cabs_statement s)
   | CabsScase (e, s) ->

@@ -9,81 +9,194 @@ type genIntegerType [name="git*"] =
  | Promote of genIntegerType
  | Usual of genIntegerType * genIntegerType
 
-let rec eq_genIntegerType git1 git2 : bool =
-  match (git1, git2) with
-  | (Concrete it1, Concrete it2) -> eq_integerType it1 it2
-  | (SizeT, SizeT) -> true
-  | (PtrdiffT, PtrdiffT) -> true
-  | (Unknown ic1, Unknown ic2) -> eq_integerConstant ic1 ic2
-  | (Promote git1, Promote git2) -> eq_genIntegerType git1 git2
-  | (Usual git1_1 git2_1, Usual git1_2 git2_2) -> eq_genIntegerType git1_1 git1_2 && eq_genIntegerType git2_1 git2_2
-  | (_, _) -> false
-  end
 
 type genBasicType [name="gbt"] =
  | GenInteger of genIntegerType
 
-let eq_genBasicType gbt1 gbt2 : bool =
-  match (gbt1, gbt2) with
-  | (GenInteger git1, GenInteger git2) -> eq_genIntegerType git1 git2
-  end
 
 type genType [name="gt*"] =
  | GenVoid
  | GenBasic of genBasicType
- | GenArray of ctype * integer
+ | GenArray of ctype * (maybe integer)
  | GenFunction of ctype * list (qualifiers * ctype) * bool
  | GenPointer of qualifiers * ctype
  | GenStruct of identifier * list (Cabs.cabs_identifier * ctype)
  | GenUnion of identifier * list (Cabs.cabs_identifier * ctype)
  | GenBuiltin of string
 
-let rec eq_genType gt1 gt2 =
-  match (gt1, gt2) with
-  | (GenVoid              , GenVoid              ) -> true
-  | (GenBasic    gbt1     , GenBasic    gbt2     ) -> eq_genBasicType gbt1 gbt2
-  | (GenArray    t1 n1    , GenArray    t2 n2    ) -> eq_ctype t1 t2 && n1 = n2
-  | (GenFunction t1 p1 b1 , GenFunction t2 p2 b2 ) -> eq_ctype t1 t2 && eq_params p1 p2 && b1 = b2
-  | (GenPointer  q1 t1    , GenPointer  q2 t2    ) -> eq_qualifiers q1 q2 && eq_ctype t1 t2
-  | (GenStruct   tag1 xs1 , GenStruct   tag2 xs2 ) -> tag1 = tag2 && eq_list (eq_pair (=) eq_ctype) xs1 xs2
-  | (GenUnion    tag1 xs1 , GenUnion    tag2 xs2 ) -> tag1 = tag2 && eq_list (eq_pair (=) eq_ctype) xs1 xs2
-  | (GenBuiltin  str1     , GenBuiltin  str2     ) -> str1 = str2
-  | (_                    , _                    ) -> false
-  end
+
+val genChar16_t: genType
+let genChar16_t =
+  (* STD §7.28#2 *)
+  GenBasic (GenInteger (Concrete (Unsigned (IBBuiltin "int_least16_t"))))
+
+val genChar32_t: genType
+let genChar32_t =
+  (* STD §7.28#2 *)
+  GenBasic (GenInteger (Concrete (Unsigned (IBBuiltin "int_least32_t"))))
+
 
 type genTypeCategory = 
  | GenLValueType of qualifiers * ctype
  | GenRValueType of genType
 
-let eq_genTypeCategory x y : bool =
-  match (x, y) with
-  | (GenLValueType q1 t1 , GenLValueType q2 t2 ) -> eq_ctype t1 t2 && eq_qualifiers q1 q2
-  | (GenRValueType    gt1, GenRValueType    gt2) -> eq_genType gt1 gt2
-  | (_                   , _                   ) -> false
+
+
+
+(* Equality functions *)
+let rec eq_genIntegerType gity1 gity2 =
+  let ord = function
+    | Concrete _ ->
+        (0 : nat)
+    | SizeT ->
+        1
+    | PtrdiffT ->
+        2
+    | Unknown _ ->
+        3
+    | Promote _ ->
+        4
+    | Usual _ _ ->
+        5
+  end in
+  match (gity1, gity2) with
+    | (Concrete ity1, Concrete ity2) ->
+        ity1 = ity2
+    | (Unknown iCst1, Unknown iCst2) ->
+        iCst1 = iCst2
+    | (Promote gity1, Promote gity2) ->
+        eq_genIntegerType gity1 gity2
+    | (Usual gity11 gity21, Usual gity12 gity22) ->
+        eq_genIntegerType gity11 gity12 && eq_genIntegerType gity21 gity22
+    | _ ->
+        ord gity1 = ord gity2
   end
 
-let inject_integerType it : genIntegerType = Concrete it
+instance (Eq genIntegerType)
+  let (=)  = eq_genIntegerType
+  let (<>) = fun git1 git2 -> not (eq_genIntegerType git1 git2)
+end
 
-let inject_basicType bt : genBasicType =
-  match bt with
-  | Integer it -> GenInteger (inject_integerType it)
+
+let eq_genBasicType gbty1 gbty2 =
+  match (gbty1, gbty2) with
+    | (GenInteger gity1, GenInteger gity2) ->
+        eq_genIntegerType gity1 gity2
   end
 
-let inject_type t : genType =
-  match t with
-  | Void           -> GenVoid
-  | Basic bt       -> GenBasic (inject_basicType bt)
-  | Pointer  q t   -> GenPointer q t
-  | Array    t n   -> GenArray t n
-  | Function t p b -> GenFunction t p b
-  | Atomic _       -> assert_false "TODO: inject_type, Atomic"
-  | Struct tag xs  -> GenStruct tag xs
-  | Union  tag xs  -> GenUnion  tag xs
-  | Builtin str    -> GenBuiltin str
+instance (Eq genBasicType)
+  let (=)  = eq_genBasicType
+  let (<>) = fun gbty1 gbty2 -> not (eq_genBasicType gbty1 gbty2)
+end
+
+
+let rec eq_genType gty1 gty2 =
+  let ord = function
+    | GenVoid ->
+        (0 : nat)
+    | GenBasic _ ->
+        1
+    | GenArray _ _ ->
+        2
+    | GenFunction _ _ _ ->
+        3
+    | GenPointer _ _ ->
+        4
+    | GenStruct _ _ ->
+        5
+    | GenUnion _ _ ->
+        6
+    | GenBuiltin _ ->
+        7
+  end in
+  match (gty1, gty2) with
+    | (GenBasic gbty1, GenBasic gbty2 ) ->
+        gbty1 = gbty2
+    | (GenArray ty1 n1_opt, GenArray ty2 n2_opt) ->
+        ty1 = ty2 && n1_opt = n2_opt
+    | (GenFunction ty1 params1 b1 , GenFunction ty2 params2 b2 ) ->
+        ty1 = ty2 && params1 = params2 && b1 = b2
+    | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
+        qs1 = qs2 && ty1 = ty2
+    | (GenStruct tag1 xs1, GenStruct tag2 xs2) ->
+        tag1 = tag2 && xs1 = xs2
+    | (GenUnion tag1 xs1, GenUnion tag2 xs2) ->
+        tag1 = tag2 && xs1 = xs2
+    | (GenBuiltin str1, GenBuiltin str2) ->
+        str1 = str2
+    | _ ->
+        ord gty1 = ord gty2
   end
 
-let inject_typeCategory tc : genTypeCategory =
-  match tc with
-  | LValueType q t -> GenLValueType q t
-  | RValueType   t -> GenRValueType   (inject_type t)
+instance (Eq genType)
+  let (=)  = eq_genType
+  let (<>) = fun gty1 gty2 -> not (eq_genType gty1 gty2)
+end
+
+
+let eq_genTypeCategory gentyCat1 gentyCat2 =
+  let ord = function
+    | GenLValueType _  _ ->
+        (0 : nat)
+    | GenRValueType _ ->
+        1
+  end in
+  match (gentyCat1, gentyCat2) with
+    | (GenLValueType qs1 ty1, GenLValueType qs2 ty2 ) ->
+        qs1 = qs2 && ty1 = ty2
+    | (GenRValueType gty1, GenRValueType gty2) ->
+        gty1 = gty2
+    | _ ->
+        ord gentyCat1 = ord gentyCat2
   end
+
+instance (Eq genTypeCategory)
+  let (=)  = eq_genTypeCategory
+  let (<>) = fun gty1 gty2 -> not (eq_genTypeCategory gty1 gty2)
+end
+
+
+
+
+(* TODO: documentation *)
+val inject_integerType: integerType -> genIntegerType
+let inject_integerType ity =
+  Concrete ity
+
+
+val inject_basicType: basicType -> genBasicType
+let inject_basicType = function
+  | Integer ity ->
+      GenInteger (inject_integerType ity)
+end
+
+
+val inject_type: ctype -> genType
+let inject_type = function
+  | Void -> GenVoid
+  | Basic bty ->
+      GenBasic (inject_basicType bty)
+  | Pointer qs ty ->
+      GenPointer qs ty
+  | Array ty n_opt ->
+      GenArray ty n_opt
+  | Function ty params b ->
+      GenFunction ty params b
+  | Atomic _ ->
+      assert_false "TODO: inject_type, Atomic"
+  | Struct tag xs ->
+      GenStruct tag xs
+  | Union  tag xs ->
+      GenUnion tag xs
+  | Builtin str ->
+      GenBuiltin str
+end
+
+
+val inject_typeCategory: typeCategory -> genTypeCategory
+let inject_typeCategory = function
+  | LValueType qs ty ->
+      GenLValueType qs ty
+  | RValueType ty ->
+      GenRValueType (inject_type ty)
+end

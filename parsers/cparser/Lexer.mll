@@ -7,6 +7,22 @@ module SMap = Map.Make(String)
 open Tokens
 
 
+let mk_loc lexbuf =
+  (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
+
+
+let offset_location lexbuf file n =
+  Lexing.(
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
+      pos_fname = file;
+      pos_lnum = n;
+(*      pos_bol = lexbuf.lex_curr_p.pos_cnum *)
+    }
+  )
+
+
+
+
 (* STD §6.4.1#1 *)
 let keywords: (string * Tokens.token) list = [
     "auto"           , AUTO;
@@ -79,18 +95,18 @@ let init filename channel: Lexing.lexbuf =
       | t::q -> List.iter (Hashtbl.remove lexicon) t
   end;
   
- declare_varname := begin fun id ->
-    Hashtbl.add lexicon id (VAR_NAME (id, ref VarId));
+ declare_varname := begin fun (Cabs.CabsIdentifier (_, str) as id) ->
+    Hashtbl.add lexicon str (VAR_NAME (id, ref VarId));
     match !contexts with
       | [] -> ()
-      | t::q -> contexts := (id::t)::q
+      | t::q -> contexts := (str::t)::q
   end;
   
-  declare_typename := begin fun id ->
-    Hashtbl.add lexicon id (TYPEDEF_NAME (id, ref TypedefId));
+  declare_typename := begin fun (Cabs.CabsIdentifier (_, str) as id) ->
+    Hashtbl.add lexicon str (TYPEDEF_NAME (id, ref TypedefId));
     match !contexts with
       | [] -> ()
-      | t::q -> contexts := (id::t)::q
+      | t::q -> contexts := (str::t)::q
   end;
   
   let lb = Lexing.from_channel channel in
@@ -235,7 +251,7 @@ let s_char =
     [^ '"' '\\' '\n']
   | escape_sequence
 
-let s_char_sequence = s_char+
+(* let s_char_sequence = s_char+ *) (* NOTE: replaced by a rule of the same name *)
 
 (* (* NOTE: we instead do the decoding in `initial' *)
 let string_literal =
@@ -273,12 +289,17 @@ let whitespace_char = [' ' '\t' '\n' '\012' '\r']
 
 
 
-
+rule s_char_sequence = parse
+  | s_char as x
+      { let xs = s_char_sequence lexbuf in
+        x :: xs }
+  | '"'
+      { [] }
 
 
 
 (* Consume a comment: /* ... */ *)
-rule comment = parse
+and comment = parse
   (* End of the comment *)
   | "*/" {[]}
   | _    {lex_comment comment lexbuf}
@@ -292,18 +313,32 @@ and onelinecomment = parse
 
 (* We assume gcc -E syntax. **)
 and hash = parse
-  | ' ' (decimal_constant as n) " \"" ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n'
-      { let n =
-	  try int_of_string n
-	  with Failure "int_of_string" -> 
-            Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
-              lexbuf.Lexing.lex_curr_p.Lexing.pos_fname lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum
-	in
-	lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = file; Lexing.pos_lnum = n };
-        initial lexbuf }
+  | (' ' (decimal_constant as n) " \"" ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n') as l
+      { Lexing.(
+          let n =
+  	    try
+              int_of_string n
+            with
+              Failure "int_of_string" -> 
+                Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
+                  lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum in
+          offset_location lexbuf file n;
+(*          print_endline "FOUND A HASH"; (* DEBUG *) *)
+          String.length l
+        )}
+(*
   | "pragma" [^ '\n']* '\n'
       { (* TODO *)
 	 initial lexbuf }
+  | [^ '\n']* eof
+       { Parser_errors.fatal_error "%s:%d Error:@ unexpected end of file"
+           lexbuf.Lexing.lex_curr_p.Lexing.pos_fname lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum }
+  | _ 
+      { Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
+          lexbuf.Lexing.lex_curr_p.Lexing.pos_fname lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum }
+*)
+  | ("pragma" [^ '\n']* '\n' as l)
+      { String.length l }
   | [^ '\n']* eof
        { Parser_errors.fatal_error "%s:%d Error:@ unexpected end of file"
            lexbuf.Lexing.lex_curr_p.Lexing.pos_fname lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum }
@@ -324,7 +359,17 @@ and initial = parse
   
   | '\n'            { Lexing.new_line lexbuf; initial lexbuf }
   | whitespace_char { initial lexbuf }
-  | '#'             { hash lexbuf}
+  | '#'             { 
+(*
+let offset = hash lexbuf in
+                      lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
+                        pos_bol = lexbuf.lex_curr_p.pos_cnum
+                      };
+*)
+hash lexbuf;
+(*                      Printf.printf ">>> %d\n" lexbuf.lex_curr_p.pos_bol; *)
+                      initial lexbuf
+                    }
   
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -358,16 +403,17 @@ and initial = parse
       { CONSTANT (Cabs.CabsCharacter_const (Some Cabs.CabsPrefix_U, str)) }
   
   (* NOTE: we partialy (TODO) decode string literals here *)
-  | '"' (s_char_sequence? as str) '"'
-      { STRING_LITERAL (None, str) }
-  | "u8" '"' (s_char_sequence? as str) '"'
-      { STRING_LITERAL (Some Cabs.CabsEncPrefix_u8, str) }
-  | 'u' '"' (s_char_sequence? as str) '"'
-      { STRING_LITERAL (Some Cabs.CabsEncPrefix_u, str) }
-  | 'U' '"' (s_char_sequence? as str) '"'
-      { STRING_LITERAL (Some Cabs.CabsEncPrefix_U, str) }
-  | 'L' '"' (s_char_sequence? as str) '"'
-      { STRING_LITERAL (Some Cabs.CabsEncPrefix_L, str) }
+  | '"'
+      { let strs = s_char_sequence lexbuf in
+        STRING_LITERAL (None, strs) }
+  | ("u8" | 'u' | 'U' | 'L') as pref '"'
+      { let pref = match pref with
+          | "u8" -> Cabs.CabsEncPrefix_u8
+          | "u"  -> Cabs.CabsEncPrefix_u
+          | "U"  -> Cabs.CabsEncPrefix_U
+          | "L"  -> Cabs.CabsEncPrefix_L  in
+        let strs = s_char_sequence lexbuf in
+        STRING_LITERAL (Some pref, strs) }
   
   (* STD §6.4.6#1 Punctuators *)
   | '['   { LBRACKET            }
@@ -434,6 +480,11 @@ and initial = parse
   | "}}}" { RBRACES }
 *)
 
+
+  (* STD §6.7.2.4#4, sentence 2 *)
+  | "_Atomic" (' ')* "(" { ATOMIC_LPAREN }
+
+
   | identifier as id
       { try
           Hashtbl.find lexicon id
@@ -442,12 +493,12 @@ and initial = parse
           let pref_ty  = "__cerbty_"  in
           if    String.length id > String.length pref_ty
              && String.sub id 0 (String.length pref_ty) = pref_ty then
-            TYPEDEF_NAME (id, ref TypedefId)
+            TYPEDEF_NAME (Cabs.CabsIdentifier (mk_loc lexbuf, id), ref TypedefId)
           else if    String.length id > String.length pref_var
                   && String.sub id 0 (String.length pref_var) = pref_var then
-            VAR_NAME (id, ref VarId)
+            VAR_NAME (Cabs.CabsIdentifier (mk_loc lexbuf, id), ref VarId)
           else
-            UNKNOWN_NAME(id, ref (OtherId "Lexer.mll"))
+            UNKNOWN_NAME(Cabs.CabsIdentifier (mk_loc lexbuf, id), ref (OtherId "Lexer.mll"))
       }
   
   | eof

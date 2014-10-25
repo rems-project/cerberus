@@ -1,5 +1,5 @@
 open import Pervasives Cabs Std
-import Boot Errors Scope_table State_exception UniqueId Symbol
+import Boot Loc Errors Scope_table State_exception UniqueId Symbol
 
 import Global
 import AilSyntax AilTypes
@@ -8,7 +8,6 @@ import Map_extra
 
 module A      = AilSyntax
 module ATypes = AilTypes
-
 
 
 type tag_declaration =
@@ -35,6 +34,16 @@ type identifier_kind =
   | Kind_macro_parameter
 *)
 
+instance (Eq identifier_kind)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (SetType identifier_kind)
+  let setElemCompare = defaultCompare
+end
+
+
 val is_object_kind: identifier_kind -> bool
 let is_object_kind = function
   | Kind_object _ -> true
@@ -57,6 +66,12 @@ type scope =
   | Scope_block
   | Scope_prototype
 
+instance (Eq scope)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
 (* TODO DEBUG *)
 let string_of_scope = function
   | Scope_function ->
@@ -76,6 +91,15 @@ type linkage =
   | Linkage_internal
   | Linkage_none
 
+instance (Eq linkage)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (SetType linkage)
+  let setElemCompare = defaultCompare
+end
+
 
 (* STD §6.2.3#1 *)
 type namespace =
@@ -83,6 +107,28 @@ type namespace =
   | Namespace_tag
   | Namespace_member of cabs_identifier
   | Namespace_ordinary
+
+instance (SetType namespace)
+  let setElemCompare ns1 ns2 =
+    let ord = function
+      | Namespace_label ->
+          (0 : nat)
+      | Namespace_tag ->
+          1
+      | Namespace_member _ ->
+          2
+      | Namespace_ordinary ->
+          3
+    end in
+    match (ns1, ns2) with
+      | (Namespace_member ident1, Namespace_member ident2) ->
+          setElemCompare ident1 ident2
+      | _ ->
+          setElemCompare (ord ns1) (ord ns2)
+    end
+end
+
+
 
 
 type state = <|
@@ -101,7 +147,7 @@ type state = <|
   external_object_declarations: map A.identifier  (ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.qualifiers * ATypes.ctype);
   
-  function_definitions: map A.identifier (list A.identifier * A.statement Location.t unit);
+  function_definitions: map A.identifier (list A.identifier * A.statement unit);
   external_object_definitions: map A.identifier (A.expression unit);
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
@@ -130,8 +176,8 @@ val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind = State_exception.bind
 
 
-val fail: forall 'a. Errors.desugar_cause -> t 'a
-let fail dcause = State_exception.fail (Location.unknown, Errors.Desugar_cause dcause) (* TODO: location *)
+val fail: forall 'a. Loc.t -> Errors.desugar_cause -> t 'a
+let fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
 
 
 
@@ -228,7 +274,7 @@ let with_scope scope m =
     <| st with registered_identifiers=      ident_table';
                registered_tag_declarations= tagDecl_table' |>)
   ) >>= fun bs ->
-  return (bs, res)
+  return (List.reverse bs, res)
 
 
 
@@ -299,7 +345,7 @@ let register_unamed_struct_union_enum =
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
-val _register_identifier : cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
+val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
 let _register_identifier ident namespace kind link =
   State_exception.read (fun st ->
     Scope_table.is_in_current_scope (ident, namespace) st.registered_identifiers
@@ -312,7 +358,8 @@ let _register_identifier ident namespace kind link =
           else if kind = Kind_tag then
             Boot.assert_false "WIP Kind_tag"
           else
-            fail (Errors.Desugar_MultibleDeclaration ident)
+            (* TODO: location *)
+            fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
         else
           return ()
     | false ->
@@ -321,7 +368,8 @@ let _register_identifier ident namespace kind link =
   
   (* generates a fresh symbol *)
   State_exception.modify (fun st ->
-    let (sym, symbol_supply) = Symbol.fresh_pretty ident st.symbol_supply in
+    let CabsIdentifier _ str = ident in
+    let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
     (sym, <| st with symbol_supply = symbol_supply |>)
   ) >>= fun sym ->
   (* associates it to the identifier *)
@@ -456,7 +504,7 @@ end
 
 
 (*
-val register_declaration: A.sigma_declaration Location.t unit -> t unit
+val register_declaration: A.sigma_declaration Loc.t unit -> t unit
 let register_declaration decl =
   let ident = match decl with
     | A.SDecl_fun ident _ ->
@@ -473,7 +521,7 @@ let register_declaration decl =
     <| st with registered_declarations= (* assoc_insert ident decl *) decl :: st.registered_declarations |>
   )
 
-val resolve_declarations: t (list (A.sigma_declaration Location.t unit))
+val resolve_declarations: t (list (A.sigma_declaration Loc.t unit))
 let resolve_declarations =
   State_exception.read (fun st ->
     st.registered_declarations
@@ -493,7 +541,7 @@ let register_external_object_definition sym e =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.identifier -> (list A.identifier * A.statement Location.t unit) -> t unit
+val register_function_definition: A.identifier -> (list A.identifier * A.statement unit) -> t unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
@@ -523,8 +571,8 @@ let register_function_declaration sym decl =
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
-          (* TODO: msg *)
-          fail (Errors.Desugar_OtherViolation "redeclaration of a function with a different type")
+          (* TODO: msg and location *)
+          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a function with a different type")
         else
           return ()
     | Nothing ->
@@ -542,8 +590,8 @@ let register_external_object_declaration sym decl =
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
-          (* TODO: msg *)
-          fail (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+          (* TODO: msg and location *)
+          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
           return ()
     | Nothing ->
@@ -560,8 +608,8 @@ let register_internal_object_declaration sym decl =
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
-          (* TODO: msg *)
-          fail (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+          (* TODO: msg and location *)
+          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
           return ()
     | Nothing ->
@@ -593,7 +641,7 @@ let resolve_label ident =
     | Just (_, (sym ,_, _)) ->
         return sym
     | Nothing ->
-        fail (Errors.Desugar_OtherViolation "§6.8.6.1#1, sentence 1")
+        fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.8.6.1#1, sentence 1")
   end
 
 
@@ -651,10 +699,10 @@ let perform_inside_loop m =
 
 
 val freshify: cabs_identifier -> t cabs_identifier
-let freshify id =
+let freshify (CabsIdentifier loc str) =
   State_exception.modify (fun st ->
     let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
-    (id ^ string_of_natural (naturalFromNat n), <| st with aux_supply= aux_supply' |>)
+    (CabsIdentifier loc (str ^ string_of_natural (naturalFromNat n)), <| st with aux_supply= aux_supply' |>)
   )
 
 
@@ -716,9 +764,9 @@ let remove_block_scoped_identifiers st xs =
 (* TODO: ... *)
 let map_union = Map.(union)
 
-val extract_program: cabs_identifier -> t (A.program Location.t unit)
-let extract_program startup_ident =
-  resolve_identifier startup_ident Namespace_ordinary  >>= function
+val extract_program: string -> t (A.program unit)
+let extract_program startup_str =
+  resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) ->
         State_exception.read (fun st ->
           let decls = Map_extra.toList (
@@ -735,5 +783,5 @@ let extract_program startup_ident =
            |>)
         )
     | Nothing ->
-        fail (Errors.Desugar_NoStartup startup_ident)
+        fail Loc.unknown (Errors.Desugar_NoStartup startup_str)
   end

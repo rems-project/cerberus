@@ -160,7 +160,7 @@ let rec remove_skips expr =
   | Ewseq _ Eskip e2 ->
       remove_skips e2
   
-  | Esseq _ e1 Eskip ->
+  | Ewseq _ e1 Eskip ->
       remove_skips e1
   
   | Ewseq _as e1 e2 ->
@@ -606,10 +606,8 @@ and remove_conv_int_action_ act_ =
         CompareExchangeStrong (remove_conv_int pe1) (remove_conv_int pe2) (remove_conv_int pe3) (remove_conv_int pe4) mo1 mo2
     | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeWeak (remove_conv_int pe1) (remove_conv_int pe2) (remove_conv_int pe3) (remove_conv_int pe4) mo1 mo2
-    | Pointer_eq pe1 pe2 ->
-        Pointer_eq (remove_conv_int pe1) (remove_conv_int pe2)
-    | Pointer_neq pe1 pe2 ->
-        Pointer_neq (remove_conv_int pe1) (remove_conv_int pe2)
+    | Ptr ptr_act pes ->
+        Ptr ptr_act (List.map remove_conv_int pes)
   end
 
 and remove_conv_int_action (Action () act_) = Action () (remove_conv_int_action_ act_)
@@ -617,10 +615,83 @@ and remove_conv_int_paction (Paction p act) = Paction p (remove_conv_int_action 
 
 
 
+let is_create = function
+  | Eaction (Paction _ (Action _ (Create _ _ _))) ->
+      true
+  | _ ->
+      false
+end
+
+let is_kill = function
+  | Eaction (Paction _ (Action _ (Kill _))) ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO: not sure if this in general a sound optimisation, but it violently reduces ND *)
+let rec sequentialise_creates_kills expr =
+  match expr with
+    | Elet sym pe1 e2 ->
+        Elet sym pe1 (sequentialise_creates_kills e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (sequentialise_creates_kills e2) (sequentialise_creates_kills e3)
+    | Eunseq es ->
+        if List.all is_kill es then
+          List.foldr (fun e acc ->
+            Esseq [] e acc
+          ) Eskip es
+        else
+          Eunseq (List.map sequentialise_creates_kills es)
+    
+    | Ewseq _as ((Eunseq es1) as e1) e2 ->
+        if List.all is_create es1 then
+          List.foldr (fun (sym_opt, e) acc ->
+            Ewseq [sym_opt] e acc
+          ) (sequentialise_creates_kills e2) (zip _as es1)
+        else
+          Ewseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+    
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+    
+    | Esseq _as ((Eunseq es1) as e1) e2 ->
+        if List.all is_create es1 then
+          List.foldr (fun (sym_opt, e) acc ->
+            Esseq [sym_opt] e acc
+          ) (sequentialise_creates_kills e2) (zip _as es1)
+        else
+          Esseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+    
+    | Eindet e ->
+        Eindet (sequentialise_creates_kills e)
+    | Ebound i e ->
+        Ebound i (sequentialise_creates_kills e)
+    | Esave k a_tys e ->
+        Esave k a_tys (sequentialise_creates_kills e)
+    | End es ->
+        End (List.map sequentialise_creates_kills es)
+    | Epar es ->
+        Epar (List.map sequentialise_creates_kills es)
+    
+    | _ ->
+        expr
+  end
+
+
+(* TODO: check the soundness ... *)
+(* sequentialise unseq with independant  *)
+
+
+
 (* ========================================================================== *)
 
 let rewrite_expr expr =
-  (remove_conv_int -| remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| remove_skips) expr
+  (remove_conv_int -|
+   (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
+   sequentialise_creates_kills) expr
 
 let rewrite_fun_map fun_map =
   Map.map (fun (ret_ty, params, expr) ->

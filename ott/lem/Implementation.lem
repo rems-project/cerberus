@@ -26,10 +26,11 @@ let min_precision = function
   | Long     -> 32
   | LongLong -> 64
   (* TODO: check the following *)
-  | Int8_t   -> 8
-  | Int16_t  -> 16
-  | Int32_t  -> 32
-  | Int64_t  -> 64
+  | IBBuiltin "int8_t"  -> 8
+  | IBBuiltin "int16_t" -> 16
+  | IBBuiltin "int32_t" -> 32
+  | IBBuiltin "int64_t" -> 64
+  | IBBuiltin _ -> assert_false "WIP"
 end
 
 type implementation = <|
@@ -41,18 +42,18 @@ type implementation = <|
 |>
 
 val make_implementation: binaryMode -> (integerType -> bool) -> (integerType -> nat) -> integerType -> integerType -> implementation
-let make_implementation binary_mode signed precision size_t ptrdiff_t = <|
+let make_implementation binary_mode signed precision size_ity ptrdiff_ity = <|
   binary_mode= binary_mode;
   signed=      signed;
   precision=   precision;
-  size_t=      size_t;
-  ptrdiff_t=   ptrdiff_t
+  size_t=      size_ity;
+  ptrdiff_t=   ptrdiff_ity
 |>
 
 val integer_range: implementation -> integerType -> range
-let integer_range P it =
-  let prec = P.precision it in
-  if P.signed it then
+let integer_range P ity =
+  let prec = P.precision ity in
+  if P.signed ity then
 (*    let prec_minus_one = prec - 1 in *)
     match P.binary_mode with
 (*
@@ -74,25 +75,23 @@ let integer_range P it =
     make_range 0 ((2 ** prec) - 1)
 
 val min_range_unsigned: integerBaseType -> range
-let min_range_unsigned ibt =
-  let prec = min_precision ibt in
+let min_range_unsigned ibty =
+  let prec = min_precision ibty in
   make_range 0 ((2 ** prec) - 1)
 
 val min_range_signed: integerBaseType -> range
-let min_range_signed ibt =
-  let prec = (min_precision ibt) - 1 in
+let min_range_signed ibty =
+  let prec = (min_precision ibty) - 1 in
   make_range ((~(2 ** (prec - 1))) + 1)
              ((2 ** (prec - 1)) - 1)
 
 val min_integer_range: integerType -> range
 let min_integer_range = function
-  | Char         -> make_range 0 ((2 ** ((min_precision Ichar)- 1)) - 1)
-  | Bool         -> make_range 0 1
-  | Unsigned ibt -> min_range_unsigned ibt
-  | Signed   ibt -> min_range_signed   ibt
-  | Wchar_t      -> assert_false "WIP"
-  | Char16_t     -> assert_false "WIP"
-  | Char32_t     -> assert_false "WIP"
+  | Char          -> make_range 0 ((2 ** ((min_precision Ichar)- 1)) - 1)
+  | Bool          -> make_range 0 1
+  | Unsigned ibty -> min_range_unsigned ibty
+  | Signed   ibty -> min_range_signed   ibty
+  | IBuiltin _ -> assert_false "WIP"
 end
 
 val min_implementation_signed_char: implementation
@@ -104,9 +103,7 @@ let min_implementation_signed_char =
 	| Signed   _ -> true
         | Bool       -> false
 	| Unsigned _ -> false
-        | Wchar_t    -> assert_false "WIP"
-        | Char16_t   -> false
-        | Char32_t   -> false
+        | IBuiltin _ -> assert_false "WIP"
       end
     )
     ( function
@@ -123,18 +120,21 @@ let min_implementation_signed_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
 
-        | Signed Int8_t     -> 7
-        | Signed Int16_t    -> 15
-        | Signed Int32_t    -> 31
-        | Signed Int64_t    -> 63
-        | Unsigned Int8_t   -> 8
-        | Unsigned Int16_t  -> 16
-        | Unsigned Int32_t  -> 32
-        | Unsigned Int64_t  -> 64
+        | Signed (IBBuiltin "int8_t") -> 7
+        | Signed (IBBuiltin "int16_t") -> 15
+        | Signed (IBBuiltin "int32_t") -> 31
+        | Signed (IBBuiltin "int64_t") -> 63
+
+        | Signed (IBBuiltin _) -> assert_false "WIP"
+
+        | Unsigned (IBBuiltin "int8_t") -> 8
+        | Unsigned (IBBuiltin "int16_t") -> 17
+        | Unsigned (IBBuiltin "int32_t") -> 32
+        | Unsigned (IBBuiltin "int64_t") -> 64
         
-        | Wchar_t           -> assert_false "WIP"
-        | Char16_t          -> 16
-        | Char32_t          -> 32
+        | Unsigned (IBBuiltin _) -> assert_false "WIP"
+        
+        | IBuiltin _ -> assert_false "WIP"
       end
     )
     (Unsigned Long)
@@ -149,9 +149,7 @@ let min_implementation_unsigned_char =
         | Char       -> false
 	| Bool       -> false
 	| Unsigned _ -> false
-        | Wchar_t    -> assert_false "WIP"
-        | Char16_t   -> false
-        | Char32_t   -> false
+        | IBuiltin _ -> assert_false "WIP"
       end
     )
     ( function
@@ -168,19 +166,21 @@ let min_implementation_unsigned_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
         
-        | Signed Int8_t     -> assert_false "TODO: min_implementation_unsigned_char, Signed Int8_t"
-        | Signed Int16_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int16_t"
-        | Signed Int32_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int32_t"
-        | Signed Int64_t    -> assert_false "TODO: min_implementation_unsigned_char, Signed Int64_t"
-        | Unsigned Int8_t   -> assert_false "TODO: min_implementation_unsigned_char, Signed Int8_t"
-        | Unsigned Int16_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int16_t"
-        | Unsigned Int32_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int42_t"
-        | Unsigned Int64_t  -> assert_false "TODO: min_implementation_unsigned_char, Signed Int64_t"
+        | Signed (IBBuiltin "int8_t") -> 7
+        | Signed (IBBuiltin "int16_t") -> 15
+        | Signed (IBBuiltin "int32_t") -> 31
+        | Signed (IBBuiltin "int64_t") -> 63
 
-        | Wchar_t           -> assert_false "TODO: min_implementation_unsigned_char, Wchar_t"
-        | Char16_t          -> 16
-        | Char32_t          -> 32
+        | Signed (IBBuiltin _) -> assert_false "WIP"
 
+        | Unsigned (IBBuiltin "int8_t") -> 8
+        | Unsigned (IBBuiltin "int16_t") -> 17
+        | Unsigned (IBBuiltin "int32_t") -> 32
+        | Unsigned (IBBuiltin "int64_t") -> 64
+        
+        | Unsigned (IBBuiltin _) -> assert_false "WIP"
+
+        | IBuiltin _ -> assert_false "WIP"
       end
     )
     (Unsigned Long)
