@@ -625,9 +625,12 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
 (*
               | Alloc al_pe n_pe pref ->
                   Boot.assert_false "WIP: Alloc"
-              | Kill ptr_pe ->
-                  Boot.assert_false "WIP: Kill"
 *)
+            | Kill ptr_pe ->
+                (* TODO: skipping Kills for now *)
+                ND.return $ Step_tau "Kill" current_tid (
+                  update_current_thread <| th_st with arena= Eskip |>
+                )
             
             | Store ty_pe ptr_pe val_pe mo ->
                 if is_value ty_pe then

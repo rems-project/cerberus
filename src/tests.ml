@@ -33,11 +33,21 @@ type test_result = (unit, string) Exception.t2
 
 let compare_results (expected:execution_result) (actual_full:execution_result_full) : test_result =
   let actual: execution_result = simplify_result actual_full in
+  
+  let expected_str = pp_execution_result expected in
+  let actual_str   = pp_execution_result actual   in
+  if expected_str = actual_str then
+    E.Result ()
+  else
+    E.Exception ("Expected: " ^ expected_str ^ ". " ^
+                 "Actual: " ^ actual_str ^ ".")
+(*
   if expected = actual then
     E.Result ()
   else
     E.Exception ("Expected: " ^ (pp_execution_result expected) ^ ". " ^
                  "Actual: " ^ (pp_execution_result actual) ^ ".")
+*)
 
 type test = 
   { file_name: string;

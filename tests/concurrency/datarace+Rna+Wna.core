@@ -1,6 +1,7 @@
 {- In every execution the non-atomic load races with the non-atomic
 write.  -}
 
+{-
 fun main () : [integer] :=
   x <- create(signed int);
   store(signed int, x, 0);
@@ -11,3 +12,19 @@ fun main () : [integer] :=
   }}};
   kill(x);
   ret 0
+-}
+fun main () : [integer] :=
+  let strong x = create(<alignof>("signed int"), "signed int") in
+  let strong _ = store("signed int", x, 0) in
+  let strong _ = par(
+    let strong _ = load("signed int", x) in
+    return (())
+    end
+  ,
+    let strong _ = store("signed int", x, 1) in
+    return (())
+    end
+  ) in
+  let strong _ = kill(x) in
+  return(0)
+  end end end end
