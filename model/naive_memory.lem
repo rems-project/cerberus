@@ -50,7 +50,25 @@ instance (Eq pointer_value)
   let (<>) = fun x y -> not (pointer_value_eq x y)
 end
 
+(* TODO ... *)
+let rec compare_pointer_value ptr_val1 ptr_val2 =
+  let ordOf = function
+     | Pointer_nonnull _ ->
+         (0 : nat)
+  end in
+  match compare (ordOf ptr_val1) (ordOf ptr_val2) with
+    | EQ ->
+        match (ptr_val1, ptr_val2) with
+          | (Pointer_nonnull oid1, Pointer_nonnull oid2) ->
+              compare oid1 oid2
+        end
+    | cmp ->
+        cmp
+  end
 
+instance (SetType pointer_value)
+  let setElemCompare = compare_pointer_value
+end
 
 type mem_value =
   | MV_pointer of pointer_value
@@ -62,6 +80,26 @@ type mem_value =
   | MV_pointer_byte of nat * nat * pointer_value 
   | MV_unspecified of Core_ctype.ctype
 *)
+
+let mem_value_to_nat v1 =
+  match v1 with
+  | MV_pointer _ -> (0:nat)
+  | MV_integer _ -> 1
+  end
+
+let mem_valueCompare v1 v2 =
+  match (v1, v2) with
+  | (MV_pointer p1, MV_pointer p2) -> 
+      compare_pointer_value p1 p2
+  | (MV_integer s1, MV_integer s2) -> 
+      Symbolic.symbolicCompare s1 s2
+  | _                              -> 
+      compare (mem_value_to_nat v1) (mem_value_to_nat v2)
+  end
+
+instance (SetType mem_value)
+  let setElemCompare = mem_valueCompare
+end
 
 let mem_value_eq ptr_val1 ptr_val2 =
   match (ptr_val1, ptr_val2) with

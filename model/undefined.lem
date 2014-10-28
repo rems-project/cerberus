@@ -108,6 +108,10 @@ type undefined_behaviour =
   
 
 
+instance (Eq undefined_behaviour)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 
 

@@ -11,18 +11,21 @@ let error str =
 type execution_result_full = Exhaustive_driver.execution_result
 
 (* The type we use to compare results of executions *) 
-type execution_result = (Core_run2_aux.core_run_annotation Core.expr Pset.set, Errors.t8) Exception.t2
+type execution_result = (string Pset.set, Errors.t8) Exception.t2
 
 (* We forget the order of the results *)
 let simplify_result (result : execution_result_full) : execution_result =
   match result with
-  | Result l1   -> Result (Pset.from_list Pervasives.compare l1)
+  | Result l1   -> Result (Pset.from_list 
+                           Pervasives.compare 
+                           (List.map Boot_pprint.pp_core_expr l1)
+                          )
   | Exception e -> Exception e
   
 let pp_execution_result (result:execution_result) : string = 
   match result with
     | E.Result s ->
-        "{" ^ (String.concat ", " (List.map Boot_pprint.pp_core_expr (Pset.elements s))) ^ "}"
+        "{" ^ (String.concat ", " (Pset.elements s)) ^ "}"
     | E.Exception e ->
         Pp_errors.to_string e
 
@@ -54,9 +57,10 @@ let get_test (file_name:string)
                      ) 
                      def_results in
   let undef_results2 = List.map (fun x -> Eundef x) undef_results in
-  let results = Pset.from_list Pervasives.compare (def_results2 @ undef_results2) in
+  let results_full = E.Result (def_results2 @ undef_results2) in
+  let results_simplified = simplify_result results_full in
   {file_name= file_name; 
-   expected_result= E.Result results; }
+   expected_result= results_simplified; }
   
 let get_tests: test list = 
   [(* Core programs *)

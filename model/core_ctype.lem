@@ -15,6 +15,11 @@ type modifiable =
   | Modifiable_yes
   | Modifiable_no
 
+instance (Eq modifiable)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
 type ctype =
  | Void
  | Basic of AilTypes.basicType

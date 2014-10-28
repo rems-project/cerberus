@@ -9,11 +9,15 @@ type operator =
   | Div
   | Mod
 
+instance (Eq operator)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
 type symbolic =
   | Symbolic_constant of integer
   | Symbolic_symbol of Symbol.t
   | Symbolic_op of operator * symbolic * symbolic
-
 
 (* syntactic equality *)
 let rec symbolic_eq symb1 symb2 =
@@ -33,8 +37,28 @@ instance (Eq symbolic)
   let (<>) = fun x y -> not (symbolic_eq x y)
 end
 
+let symbolic_to_nat s =
+  match s with
+  | Symbolic_constant _ -> (0:nat) 
+  | Symbolic_symbol _   -> 1
+  | Symbolic_op _ _ _   -> 2
+  end
 
-
+let rec symbolicCompare s1 s2 =
+  match (s1, s2) with
+  | (Symbolic_constant i1, Symbolic_constant i2)       -> 
+      compare i1 i2
+  | (Symbolic_symbol t1, Symbolic_symbol t2)           -> 
+      compare t1 t2
+  | (Symbolic_op op1 s11 s21, Symbolic_op op2 s12 s22) -> 
+      match (defaultCompare op1 op2, symbolicCompare s11 s12) with
+      | (EQ, EQ)   -> symbolicCompare s12 s22
+      | (EQ, cmp)  -> cmp
+      | (cmp, _)   -> cmp
+      end 
+  | _                                                  ->
+      compare (symbolic_to_nat s1) (symbolic_to_nat s2)
+  end
 
 type equation =
   | Symbolic_eq  of symbolic * symbolic

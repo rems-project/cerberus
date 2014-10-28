@@ -7,6 +7,9 @@ open import Thread Core_ctype
 module Cmm = Cmm_master
 module Mem = Naive_memory
 
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+declare coq   target_rep function assert_false = `DAEMON`
 
 (* -- Syntax ---------------------------------------------------------------- *)
 type core_base_type =
@@ -58,11 +61,27 @@ type polarity =
   | Pos
   | Neg
 
+instance (SetType polarity)
+  let setElemCompare = defaultCompare
+end
+
 type name =
   | Sym of sym
   | Impl of Implementation_.implementation_constant
 declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
 
+let nameEquality n1 n2 =
+  match (n1, n2) with
+  | (Sym s1, Sym s2)   -> s1 = s2
+  | (Sym _, _)         -> false
+  | (Impl i1, Impl i2) -> i1 = i2
+  | (Impl _, _)        -> false
+  end
+
+instance (Eq name)
+  let (=)  = nameEquality
+  let (<>) = fun n1 n2 -> not (nameEquality n1 n2)
+end
 
 type constant =
   | ConstInt of integer
@@ -145,6 +164,7 @@ and action_ 'a =
 and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
 
+(*
 
 (* This equality ignores the annotation of an expression. *)
 let rec exprEqual e1 e2 =
@@ -216,7 +236,7 @@ let rec exprEqual e1 e2 =
     | (Eproc _ n1 l1, Eproc _ n2 l2)       -> 
         n1 = n2 && exprListEqual l1 l2
     | (Eaction pa1, Eaction pa2)           -> 
-        pa1 = pa2
+        assert_false "It sucks being you"        
     | (Eunseq l1, Eunseq l2)               -> 
         exprListEqual l1 l2
     | (Ewseq l1 ea1 eb1, Ewseq l2 ea2 eb2) -> 
@@ -224,7 +244,7 @@ let rec exprEqual e1 e2 =
     | (Esseq l1 ea1 eb1, Esseq l2 ea2 eb2) -> 
         l1 = l2 && exprEqual ea1 ea2 && exprEqual eb1 eb2
     | (Easeq s1 a1 pa1, Easeq s2 a2 pa2)   ->
-        a1 = a2 && a1 = a2 && pa1 = pa2
+        assert_false "Take that!"        
     | (Eindet e1' , Eindet e2')            -> 
         exprEqual e1' e2'
     | (Ebound n1 e1', Ebound n2 e2')       -> 
@@ -232,7 +252,7 @@ let rec exprEqual e1 e2 =
     | (Esave s1 l1 e1', Esave s2 l2 e2')   -> 
         s1 = s2 && l1 = l2 && exprEqual e1' e2'
     | (Erun _ s1 l1, Erun _ s2 l2)         -> 
-        s1 = s2 && l1 = l2
+        assert_false "Bad luck for you"
     | (Eret e1', Eret e2')                 -> 
         exprEqual e1' e2'
     | (End l1 , End l2)                    -> 
@@ -266,6 +286,7 @@ instance forall 'a. (Eq expr 'a)
   let (<>) = fun e1 e2 -> not (exprEqual e1 e2)
 end
 
+*)
 
 
 
