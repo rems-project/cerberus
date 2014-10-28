@@ -134,6 +134,16 @@ let pipeline stdlib impl core_parse file_name : Exhaustive_driver.execution_resu
       ) *)
 
 
+let run_test (run:string->Exhaustive_driver.execution_result) (test:Tests.test) = 
+  let ex_result = run test.Tests.file_name in
+  let test_result = Tests.compare_results test.Tests.expected_result ex_result in
+  match test_result with
+  | Exception.Result _      -> 
+      print_endline (Colour.ansi_format [Colour.Green] 
+                                        ("Test succeeded (" ^ test.Tests.file_name ^ ")"))
+  | Exception.Exception msg -> 
+      print_endline (Colour.ansi_format [Colour.Red]   
+                                        ("Test failed    (" ^ test.Tests.file_name ^ "): " ^ msg))
 
 (* the entry point *)
 let () =
@@ -176,8 +186,8 @@ let () =
   debug_print (Colour.ansi_format [Colour.Green] "0.2. - Implementation file loaded.");
   let run = pipeline stdlib impl Core_parser.parse in
   (if !regression_test then
-     (* let tests = Tests.get_tests in *)
-     ()
+     let tests = Tests.get_tests in
+     List.iter (run_test run) tests
    else  
      let result = run !file in
      ()

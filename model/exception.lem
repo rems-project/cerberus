@@ -4,6 +4,20 @@ type t 'a 'msg =
   | Result of 'a
   | Exception of 'msg
 
+val exceptionEqual: forall 'a 'msg. Eq 'a, Eq 'msg => t 'a 'msg -> t 'a 'msg -> bool
+let exceptionEqual e1 e2 = 
+  match (e1, e2) with
+  | (Result v1, Result v2)       -> v1 = v2
+  | (Result _, _)                -> false
+  | (Exception m1, Exception m2) -> m1 = m2
+  | (Exception _, _)             -> false
+  end
+
+instance forall 'a 'msg. Eq 'a, Eq 'msg => (Eq t 'a 'msg)
+  let (=)  = exceptionEqual
+  let (<>) = fun e1 e2 -> not (exceptionEqual e1 e2)
+end 
+
 let bind m k =
   match m with
     | Result a    -> k a
