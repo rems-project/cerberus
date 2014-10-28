@@ -48,6 +48,10 @@ type binop =
   | OpAnd
   | OpOr
 
+instance (Eq binop)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 (* Polarity for actions *)
 type polarity =
@@ -142,7 +146,125 @@ and action 'a  = Action of 'a * action_ 'a
 and paction 'a = Paction of polarity * action 'a
 
 
+(* This equality ignores the annotation of an expression. *)
+let rec exprEqual e1 e2 =
+  let ord = function
+    | Eunit          -> (0 : nat)
+    | Etrue          -> 1
+    | Efalse         -> 2
+    | Econst _       -> 3
+    | Elist _        -> 4
+    | Ectype _       -> 5
+    | Esym _         -> 6
+    | Eimpl _        -> 7
+    | Etuple _       -> 8
+    | Enot _         -> 9
+    | Eop _ _ _      -> 10
+    | Ecall _ _      -> 11
+    | Eoutput _      -> 12
+    | Eundef _       -> 13
+    | Eerror         -> 14
+    | Eskip          -> 15
+    | Elet _ _ _     -> 16
+    | Eif _ _ _      -> 17
+    | Eproc _ _ _    -> 18
+    | Eaction _      -> 19
+    | Eunseq _       -> 20
+    | Ewseq _ _ _    -> 21
+    | Esseq _ _ _    -> 22
+    | Easeq _ _ _    -> 23
+    | Eindet _       -> 24
+    | Ebound _ _     -> 25
+    | Esave _ _ _    -> 26
+    | Erun _ _ _     -> 27
+    | Eret _         -> 28
+    | End _          -> 29
+    | Epar _         -> 30
+    | Ewait _        -> 31
+    | Eis_scalar _   -> 32
+    | Eis_integer _  -> 33
+    | Eis_signed _   -> 34
+    | Eis_unsigned _ -> 35
+  end in
+  match (e1, e2) with
+    | (Econst v1, Econst v2)               ->
+        v1 = v2
+    | (Elist l1, Elist l2)                 -> 
+        exprListEqual l1 l2
+    | (Ectype t1, Ectype t2)               -> 
+        t1 = t2
+    | (Esym s1, Esym s2)                   -> 
+        s1 = s2
+    | (Eimpl i1, Eimpl i2)                 -> 
+        i1 = i2
+    | (Etuple l1, Etuple l2)               -> 
+        exprListEqual l1 l2
+    | (Enot e1', Enot e2')                 -> 
+        exprEqual e1' e2'
+    | (Eop b1 ea1 eb1, Eop b2 ea2 eb2)     ->
+        b1 = b2 && exprEqual ea1 ea2 && exprEqual eb1 eb2
+    | (Ecall n1 l1, Ecall n2 l2)           -> 
+        n1 = n2 && exprListEqual l1 l2
+    | (Eoutput s1, Eoutput s2)             -> 
+        s1 = s2
+    | (Eundef u1, Eundef u2)               -> 
+        u1 = u2
+    | (Elet s1 ea1 eb1, Elet s2 ea2 eb2)   ->
+        s1 = s2 && exprEqual ea1 ea2 && exprEqual eb1 eb2
+    | (Eif ea1 eb1 ec1, Eif ea2 eb2 ec2)   ->
+        exprEqual ea1 ea2 && exprEqual eb1 eb2 && exprEqual ec1 ec2
+    | (Eproc _ n1 l1, Eproc _ n2 l2)       -> 
+        n1 = n2 && exprListEqual l1 l2
+    | (Eaction pa1, Eaction pa2)           -> 
+        pa1 = pa2
+    | (Eunseq l1, Eunseq l2)               -> 
+        exprListEqual l1 l2
+    | (Ewseq l1 ea1 eb1, Ewseq l2 ea2 eb2) -> 
+        l1 = l2 && exprEqual ea1 ea2 && exprEqual eb1 eb2
+    | (Esseq l1 ea1 eb1, Esseq l2 ea2 eb2) -> 
+        l1 = l2 && exprEqual ea1 ea2 && exprEqual eb1 eb2
+    | (Easeq s1 a1 pa1, Easeq s2 a2 pa2)   ->
+        a1 = a2 && a1 = a2 && pa1 = pa2
+    | (Eindet e1' , Eindet e2')            -> 
+        exprEqual e1' e2'
+    | (Ebound n1 e1', Ebound n2 e2')       -> 
+        n1 = n2 && exprEqual e1' e2'
+    | (Esave s1 l1 e1', Esave s2 l2 e2')   -> 
+        s1 = s2 && l1 = l2 && exprEqual e1' e2'
+    | (Erun _ s1 l1, Erun _ s2 l2)         -> 
+        s1 = s2 && l1 = l2
+    | (Eret e1', Eret e2')                 -> 
+        exprEqual e1' e2'
+    | (End l1 , End l2)                    -> 
+        exprListEqual l1 l2
+    | (Epar l1, Epar l2)                   -> 
+        exprListEqual l1 l2
+    | (Ewait tid1, Ewait tid2)             -> 
+        tid1 = tid2
+    | (Eis_scalar e1', Eis_scalar e2')     -> 
+        exprEqual e1' e2'
+    | (Eis_integer e1', Eis_integer e2')   -> 
+        exprEqual e1' e2'
+    | (Eis_signed e1', Eis_signed e2')     -> 
+        exprEqual e1' e2'
+    | (Eis_unsigned e1', Eis_unsigned e2') -> 
+        exprEqual e1' e2'
+    | _ ->
+        ord e1 = ord e2
+  end
 
+and exprListEqual l1 l2 =
+  match (l1, l2) with
+  | (h1::t1, h2::t2) -> exprEqual h1 h2 && exprListEqual t1 t2
+  | ([], [])         -> true
+  | _                -> false
+  end
+
+(* This equality ignores the annotation of an expression. *)
+instance forall 'a. (Eq expr 'a)
+  let (=)  = exprEqual
+  let (<>) = fun e1 e2 -> not (exprEqual e1 e2)
+end
 
 
 
