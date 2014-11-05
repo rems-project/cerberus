@@ -17,8 +17,8 @@ let bind m f = fun st ->
         f z st'
     | Exception.Result (Undefined.Undef ubs, st') ->
         State_exception.return (Undefined.undef ubs) st'
-    | Exception.Result (Undefined.Error, st') ->
-        State_exception.return Undefined.error st'
+    | Exception.Result (Undefined.Error str, st') ->
+        State_exception.return (Undefined.error str) st'
     | Exception.Exception err ->
         State_exception.fail err st
   end
@@ -39,8 +39,8 @@ let runEU m = fun st ->
         Exception.Result (Undefined.Defined z, st)
     | Exception.Result (Undefined.Undef ubs) ->
         Exception.Result (Undefined.Undef ubs, st)
-    | Exception.Result Undefined.Error ->
-        Exception.Result (Undefined.Error, st)
+    | Exception.Result (Undefined.Error str) ->
+        Exception.Result (Undefined.Error str, st)
     | Exception.Exception err ->
         Exception.Exception err
   end

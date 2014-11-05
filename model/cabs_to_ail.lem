@@ -4,7 +4,7 @@ open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 
 import Boot Cabs Multiset Decode UniqueId
-import AilTypes AilTypesAux Builtins
+import AilSyntaxAux AilTypes AilTypesAux Builtins
 
 
 module ATypes = AilTypes
@@ -49,6 +49,26 @@ let oneAil =
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (* inject the given qualifiers to the base of the given ctype *)
 val     inject_qualifiers: ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)
 let rec inject_qualifiers qs = function
@@ -74,6 +94,24 @@ let rec inject_qualifiers qs = function
 end
 
 
+
+
+
+(*
+An integer constant expression117) shall have integer type and shall only have operands that are integer constants,
+
+enumeration constants,
+
+character constants,
+
+sizeof expressions whose results are integer constants,
+
+_Alignof expressions,
+
+and floating constants that are the immediate operands of casts. Cast operators in an integer constant expression shall only convert arithmetic types to integer types,
+
+except as part of an operand to the sizeof or _Alignof operator.
+*)
 
 
 
@@ -145,6 +183,119 @@ let rec is_integer_constant_expression (AnnotatedExpression () expr) =
 end
 
 
+
+
+(* STD §6.6#8 *)
+val is_arithmetic_constant_expression: expression unit -> E.t bool
+let is_arithmetic_constant_expression ((AnnotatedExpression () expr) as a_expr) =
+  (* TODO: floating constants, enumeration constant *)
+  match expr with
+    | AilEconst (ConstantInteger _) ->
+        E.return true
+    | AilEconst (ConstantArray _) ->
+        E.return true
+    | AilEsizeof _ ty ->
+        E.return (AilTypesAux.is_vla ty)
+    | AilEalignof _ _ ->
+        E.return true
+    | AilEcast _ ty e ->
+        Boot.assert_false "WIP is_arithmetic_constant_expression AilEcast: annoying ==> need to typecheck e..."
+        
+    | _ ->
+        E.return true
+
+  end
+(*
+An arithmetic constant expression shall have arithmetic type and
+
+shall only have operands that are
+  
+  integer constants,
+  
+  floating constants,
+  
+  enumeration constants,
+  
+  character constants,
+  
+  sizeof expressions whose results are integer constants,
+  
+  and _Alignof expressions.
+  
+  Cast operators in an arithmetic constant expression shall only convert arithmetic types to arithmetic types,
+  except as part of an operand to a sizeof or _Alignof operator.
+*)
+(* WIP
+val     is_arithmetic_constant_expression: expression unit -> E.t bool
+let rec is_arithmetic_constant_expression expr =
+  match expr with
+
+  end
+*)
+
+
+(* STD §6.6#9 *)
+val is_address_constant: expression unit -> E.t bool
+let is_address_constant ((AnnotatedExpression () expr) as a_expr) =
+  (* An address constant (...) *)
+  if AilSyntaxAux.is_null_pointer_constant a_expr then
+    (* (...) is a null pointer, *)
+    E.return true
+  
+  else match expr with
+    (* (...) a pointer to an lvalue designating an object of static storage
+       duration, or a pointer to a function designator; (...) *)
+    | AilEunary Address (AnnotatedExpression () (AilEident sym)) ->
+        (* (...) it shall be created explicitly using the unary & operator (...) *)
+        E.fetch_object_declaration sym >>= fun (sd, _, _) ->
+        match sd with
+          | ATypes.Static ->
+              E.return true
+          | _ ->
+              E.return false
+        end
+    
+    | AilEcast _ ty (AnnotatedExpression () (AilEconst (ConstantInteger _))) ->
+        (* (...) an integer constant cast to pointer type, (...) *)
+        E.return (AilTypesAux.is_pointer ty)
+    
+    | _ ->
+        E.return false
+        (* TODO *)
+(*
+or implicitly by the use of an expression of array or function type.
+
+The array-subscript [] and member-access . and -> operators, the address & and indirection * unary operators, and pointer casts may be used in the creation of an address constant, but the value of an object shall not be accessed by use of these operators.
+*)
+
+  end
+
+
+(* STD §6.6#7 *)
+(* TODO: check the "or evaluate to" *)
+val is_initializer_constant_expression: expression unit -> E.t bool
+let is_initializer_constant_expression a_expr =
+  is_arithmetic_constant_expression a_expr >>= fun b1 ->
+  is_address_constant a_expr               >>= fun b2 ->
+  if b1 || AilSyntaxAux.is_null_pointer_constant a_expr || b2 then
+    E.return true
+  
+  else match a_expr with
+    | AnnotatedExpression () (AilEbinary e1 (Arithmetic Add) e2) ->
+        is_address_constant e1            >>= fun b11 ->
+        is_integer_constant_expression e2 >>= fun b12 ->
+        is_address_constant e2            >>= fun b21 ->
+        is_integer_constant_expression e1 >>= fun b22 ->
+        E.return (b11 && b12 || b21 && b22)
+    | AnnotatedExpression () (AilEbinary e1 (Arithmetic Sub) e2) ->
+        is_address_constant e1            >>= fun b11 ->
+        is_integer_constant_expression e2 >>= fun b12 ->
+        is_address_constant e2            >>= fun b21 ->
+        is_integer_constant_expression e1 >>= fun b22 ->
+        E.return (b11 && b12 || b21 && b22)
+    | _ ->
+        E.return false
+  end
 (* END predicates on Ail syntax *)
 
 
@@ -168,24 +319,6 @@ end
 
 
 
-val determinate_storage_duration: E.linkage -> list storage_class_specifier -> ATypes.storageDuration
-let determinate_storage_duration link scs =
-  if not (List.elem SC_Thread_local scs) &&
-     (link = E.Linkage_external || link = E.Linkage_internal ||
-      List.elem SC_static scs) then
-_STD "§6.2.4#3, sentence 1"
-    ATypes.Static
-  
-  else if List.elem SC_Thread_local scs then
-_STD "§6.2.4#4, sentence 1"
-    ATypes.Thread
-  
-  else if link = E.Linkage_none && not (List.elem SC_static scs) then
-_STD "§6.2.4#5, sentence 1"
-    ATypes.Automatic
-  
-  else
-    Boot.assert_false "determinate_storage_duration"
 
 
 
@@ -622,7 +755,7 @@ _STD "§6.7.2#2, sentence 2 (`void' case)"
   
   | [TSpec_struct (Just tag_ident) Nothing] ->
       (* §6.7.3.2#7 *)
-      E.register_identifier tag_ident E.Namespace_tag E.Kind_tag [(* TODO: check *)] >>= fun tag_sym ->
+      E.register_identifier tag_ident E.Namespace_tag E.Kind_tag [(* TODO: check *)] >>= fun (_, tag_sym) ->
       (* TODO: bogus? *)
       E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym [])
 
@@ -1154,7 +1287,7 @@ and desugar_pointer_declarator ptr_decltor =
         maybe (E.return (ATypes.no_qualifiers, id))
           desugar_pointer_declarator ptr_decltor_opt >>= fun (ref_qs, mk_ty) ->
         let ptr_qs = translate_type_qualifiers tquals in
-        E.return (ptr_qs, fun ty -> ATypes.Pointer ref_qs ty)
+        E.return (ptr_qs, fun ty -> ATypes.Pointer ref_qs (mk_ty ty))
   end
 
 and desugar_parameter_type_list params =
@@ -1314,11 +1447,14 @@ and wip_desugar_initializer_ sd current_ty = function
         (* Static | Thread *)
         | _ ->
             desugar_expression e               >>= fun d_e ->
-            is_integer_constant_expression d_e >>= function
+            is_initializer_constant_expression d_e >>= function
               | true ->
+                  E.return d_e
+(*
                   evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun cst ->
                   E.return $
                     AnnotatedExpression () (AilEconst (ConstantInteger cst))
+*)
               | false ->
                   E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
             end
@@ -1444,7 +1580,7 @@ let desugar_declaration_base specifs idecltors =
       if specifs.storage_classes = [SC_typedef] then
         (* Case of a typedef *)
         E.register_identifier ident
-          E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun sym ->
+          E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun (_, sym) ->
         let (qs', ty') = inject_qualifiers base_qs ty in
         if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
           Boot.assert_false "TODO: desugar_declaration_base: is this case legal?"
@@ -1455,7 +1591,7 @@ let desugar_declaration_base specifs idecltors =
       else match ty with
         | ATypes.Function return_ty params is_variadic ->
             E.register_identifier ident
-              E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun sym ->
+              E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
             E.register_function_declaration sym (
               return_ty,
               params,
@@ -1466,8 +1602,9 @@ let desugar_declaration_base specifs idecltors =
             E.return acc
         | _ ->
             E.register_identifier ident
-              E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun sym ->
-            E.register_internal_object_declaration sym (qs, ty) >>
+              E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
+            let sd = determinate_storage_duration link specifs.storage_classes in
+            E.register_internal_object_declaration sym (sd, qs, ty) >>
             match d_e_opt with
               | Just d_e ->
                   E.return ((sym, d_e) :: acc)
@@ -1704,7 +1841,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
                 | _ ->
                     E.register_identifier ident
-                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun sym ->
+                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (_, sym) ->
                     match d_e_opt with
                       | Just d_e ->
                           E.return ((sym, d_e) :: acc1, (sym, (qs, ty)) :: acc2)
@@ -1903,7 +2040,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
           let return_ty = mk_ptr_type ty in
           
           E.register_identifier fun_ident
-            E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun fun_sym ->
+            E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, fun_sym) ->
           
           E.function_is_defined fun_sym >>= function
             | true  -> E.fail Loc.unknown (Errors.Desugar_FunctionRedefinition fun_sym)
@@ -1929,7 +2066,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
                         | Nothing ->
                             E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1, sub-sentence 2")
                         | Just (ident, storage_classes) ->
-                            E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) storage_classes >>= fun sym ->
+                            E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) storage_classes >>= fun (_, sym) ->
                             E.return (sym, (qs, ty))
                       end
                     ) params
@@ -2005,13 +2142,13 @@ let desugar_and_register_external_declaration edecl =
               if specifs.storage_classes = [SC_typedef] then
                 (* Case of a typedef *)
                 E.register_identifier ident
-                  E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun sym ->
+                  E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun (_, sym) ->
                 E.register_typedef sym (AilTypesAux.combine_qualifiers qs qs', ty')
                 
               else match ty with
                 | ATypes.Function return_ty params is_variadic ->
                     E.register_identifier ident
-                      E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun sym ->
+                      E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
                     E.register_function_declaration sym (
                       return_ty,
                       params,
@@ -2021,8 +2158,9 @@ let desugar_and_register_external_declaration edecl =
                     )
                 | _ ->
                     E.register_identifier ident
-                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun sym ->
-                    E.register_external_object_declaration sym (AilTypesAux.combine_qualifiers qs qs', ty') >>
+                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
+                    let sd = determinate_storage_duration link specifs.storage_classes in
+                    E.register_external_object_declaration sym (sd, AilTypesAux.combine_qualifiers qs qs', ty') >>
                     match d_e_opt with
                       | Just d_e ->
                           E.register_external_object_definition sym d_e

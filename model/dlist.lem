@@ -15,7 +15,7 @@ let singleton x =
 
 val append: forall 'a. dlist 'a -> dlist 'a -> dlist 'a
 let append (Dlist xs) (Dlist ys) =
-  Dlist (fun zs -> xs (ys zs))
+  Dlist (fun zs -> ys (xs zs))
 
 val toList: forall 'a. dlist 'a -> list 'a
 let toList (Dlist xs) =

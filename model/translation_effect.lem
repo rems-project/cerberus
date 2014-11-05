@@ -28,8 +28,8 @@ let bind m f = fun st ->
         f a st'
     | Undefined.Undef us ->
         Undefined.Undef us
-    | Undefined.Error ->
-        Undefined.Error
+    | Undefined.Error str ->
+        Undefined.Error str
   end
 
 

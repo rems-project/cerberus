@@ -418,8 +418,8 @@ let rec hack x =
         Core.Eoutput str
     | Core.Eundef ub ->
         Core.Eundef ub
-    | Core.Eerror ->
-        Core.Eerror
+    | Core.Eerror str ->
+        Core.Eerror str
     | Core.Eraise str ->
         Core.Eraise str
 (*

@@ -1,5 +1,5 @@
 open import Pervasives
-open import Global Core Driver_util
+open import Global Show Core Driver_util
 
 
 type core_run_error =
@@ -7,20 +7,22 @@ type core_run_error =
   | Found_empty_stack of string (* TODO debug *)
   | Reached_end_of_proc
   | Unknown_impl
-  | Unresolved_symbol (* found an unresolved symbolic name in core_eval *)
+  | Unresolved_symbol of Symbol.t(* found an unresolved symbolic name in core_eval *)
 
 
-let string_of_core_run_error = function
-  | Illformed_program str ->
-      "Illformed_program[" ^ str ^ "]"
-  | Found_empty_stack str ->
-      "Found_empty_stack[" ^ str ^ "]"
-  | Reached_end_of_proc ->
-      "Reached_end_of_proc"
-  | Unknown_impl ->
-      "Unknown_impl"
-  | Unresolved_symbol ->
-      "Unresolved_symbol"
+instance (Show core_run_error)
+  let show = function
+    | Illformed_program str ->
+        "Illformed_program[" ^ str ^ "]"
+    | Found_empty_stack str ->
+        "Found_empty_stack[" ^ str ^ "]"
+    | Reached_end_of_proc ->
+        "Reached_end_of_proc"
+    | Unknown_impl ->
+        "Unknown_impl"
+    | Unresolved_symbol sym ->
+        "Unresolved_symbol[" ^ show sym ^ "]"
+  end
 end
 
 
@@ -106,9 +108,9 @@ let rec add_to_sb p_aids = function
   | Eundef ub ->
       (* no change *)
       Eundef ub
-  | Eerror ->
+  | Eerror str ->
       (* no change *)
-      Eerror
+      Eerror str
   | Eskip ->
       (* no change *)
       Eskip

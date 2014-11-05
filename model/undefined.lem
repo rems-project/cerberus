@@ -348,7 +348,7 @@ let string_of_undefined_behaviours ubs =
 type t 'a =
   | Defined of 'a
   | Undef of list undefined_behaviour
-  | Error
+  | Error of string
 
 val return: forall 'a. 'a -> t 'a
 let return x = Defined x
@@ -358,7 +358,7 @@ let bind m f =
   match m with
     | Defined x -> f x
     | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
-    | Error     -> Error
+    | Error str -> Error str
 end 
 
 let inline (>>=) = bind
@@ -374,8 +374,8 @@ let mapM f xs = sequence (List.map f xs)
 val undef: forall 'a. list undefined_behaviour -> t 'a
 let undef us = Undef us
 
-val error: forall 'a. t 'a
-let error = Error
+val error: forall 'a. string -> t 'a
+let error str = Error str
 
 
 val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
@@ -383,5 +383,5 @@ let fmap f m =
   match m with
     | Defined x -> Defined (f x)
     | Undef us  -> Undef us
-    | Error     -> Error
+    | Error str -> Error str
   end

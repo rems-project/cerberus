@@ -99,7 +99,9 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
-
+  
+  | STRING of string
+  
   | SYM of string
   | IMPL of Implementation_.implementation_constant
   | UB of Undefined.undefined_behaviour

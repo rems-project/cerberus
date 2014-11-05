@@ -9,7 +9,7 @@ module SEU = State_exception_undefined
 let (>>=) = SEU.bind5
 
 
-let drive file =
+let drive file args =
   let main_body = 
     match Pmap.lookup file.main file.funs with
       | Some (retTy, _, expr_main) ->
@@ -25,25 +25,35 @@ let drive file =
     ND.bind7 (Driver.driver_sequential (Driver.initial_driver_state file))
       (fun z -> ND.return7 (Driver.finalize z))  in
 *)
-  let (Nondeterminism.ND vs) = Driver.drive file in
+  let (Nondeterminism.ND vs) = Driver.drive file args in
   
-  Global_ocaml.print_debug 1 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
+  Debug.print_debug 1 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
+  
+  let isActive = function
+    | ND.Active _ ->
+        true
+    | _ ->
+        false in
+  
+  if List.length (List.filter isActive vs) = 0 then
+    Debug.print_debug 0 "FOUND NO VALID EXECUTION";
   
   let ky = ref [] in
+  let str_v = ref "" in
   List.iteri (fun n exec ->
     
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, preEx, value))) ->
-          print_string stdout;
-          let str_v = Boot_pprint.pp_core_expr value in
+          str_v := Pp_core.string_of_expr value;
           if not (List.mem str_v !ky) && not is_blocked then (
-            Global_ocaml.print_debug 2 (
+            Debug.print_debug 2 (
               Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-                n (pp_constraints constraints) (String.concat "\n" (Dlist.toList log))
+                n (pp_constraints constraints) (String.concat "\n" (Dlist.toList log)) ^ "\n" ^
+              (Pp_cmm.dot_of_pre_execution preEx !str_v (pp_constraints constraints))
             );
-            print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_constraints constraints))
+            print_string stdout;
           ) else
-            Global_ocaml.print_debug 2 (
+            Debug.print_debug 2 (
               "SKIPPING: " ^
               if is_blocked then "(blocked)" else "" ^
               "eqs= " ^ pp_constraints constraints
@@ -58,12 +68,13 @@ let drive file =
             ))
           )
       
-      | ND.Killed (ND.Error0, _, _) ->
-          print_endline (Colour.(ansi_format [Red]"IMPL-DEFINED STATIC ERROR"))
+      | ND.Killed (ND.Error0 str, _, _) ->
+          print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR: " ^ str)))
       
       | ND.Killed (ND.Other reason, log, constraints) ->
-          Global_ocaml.print_debug 3 (
+          Debug.print_debug 3 (
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason (pp_constraints constraints) (String.concat "\n" (Dlist.toList log))
           )
-  ) vs
+  ) vs;
+  !str_v

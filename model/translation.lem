@@ -70,7 +70,7 @@ val translate:
 let rec translate_lvalue stdlib program a_exp =
   let translate_expression = translate_expression stdlib program in
   if Aaux.is_null_pointer_constant a_exp then
-    E.return $ (C.Econst (Mem.MV_pointer (Mem.null_pointer (Caux.proj_ctype (ctype_of a_exp)))))
+    E.return $ (C.Econst (Mem.mk_pointer (Mem.null_pointer (Caux.proj_ctype (ctype_of a_exp)))))
   else
     let A.AnnotatedExpression _ exp = a_exp in
     match exp with
@@ -134,7 +134,7 @@ and translate_expression stdlib program a_expr =
   let result_ty = ctype_of a_expr in
   
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
-    E.return $ C.Econst (Mem.MV_pointer (Mem.null_pointer (Caux.proj_ctype result_ty)))
+    E.return $ C.Econst (Mem.mk_pointer (Mem.null_pointer (Caux.proj_ctype result_ty)))
   else
     let A.AnnotatedExpression annot expr = a_expr in
     match expr with
@@ -649,7 +649,7 @@ and translate_expression stdlib program a_expr =
               C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
                 (C.Ewseq [] (C.Eaction (C.Paction C.Pos (C.Action default (C.Store core_ty_e1
                                                   (C.Esym a_e1)
-                                                  (conv [Caux.mk_ctype (exp_type_of e1); Caux.mk_ctype (exp_type_of e2); C.Esym a_e2])
+                                                  (conv [Caux.mk_ctype (exp_type_of e2); Caux.mk_ctype (exp_type_of e1); C.Esym a_e2])
                                                   Cmm.NA)
                                                )
                                        )
@@ -790,6 +790,36 @@ and translate_expression stdlib program a_expr =
       | A.AilEconst (A.ConstantCharacter (_, str)) ->
           (* TODO: making an implementation fix here (ASCII) *)
           E.return (C.Econst $ Mem.mk_integer (Decode.decode_character_constant str))
+      
+      | A.AilEbuiltin str ->
+          let mk_ctype_min ty = C.Ecall (C.Impl Implementation_.Ctype_min) [C.Ectype ty] in
+          let mk_ctype_max ty = C.Ecall (C.Impl Implementation_.Ctype_max) [C.Ectype ty] in
+          E.return $match str with
+            | "INT8_MIN" ->
+                mk_ctype_min (Cty.builtin_signed_integer_type "int8_t")
+            | "INT16_MIN" ->
+                mk_ctype_min (Cty.builtin_signed_integer_type "int16_t")
+            | "INT32_MIN" ->
+                mk_ctype_min (Cty.builtin_signed_integer_type "int32_t")
+            | "INT64_MIN" ->
+                mk_ctype_min (Cty.builtin_signed_integer_type "int64_t")
+            | "INT8_MAX" ->
+                mk_ctype_max (Cty.builtin_signed_integer_type "int8_t")
+            | "INT16_MAX" ->
+                mk_ctype_max (Cty.builtin_signed_integer_type "int16_t")
+            | "INT32_MAX" ->
+                mk_ctype_max (Cty.builtin_signed_integer_type "int32_t")
+            | "INT64_MAX" ->
+                mk_ctype_max (Cty.builtin_signed_integer_type "int64_t")
+            | "UINT8_MAX" ->
+                mk_ctype_max (Cty.builtin_unsigned_integer_type "int8_t")
+            | "UINT16_MAX" ->
+                mk_ctype_max (Cty.builtin_unsigned_integer_type "int16_t")
+            | "UINT32_MAX" ->
+                mk_ctype_max (Cty.builtin_unsigned_integer_type "int32_t")
+            | "UINT64_MAX" ->
+                mk_ctype_max (Cty.builtin_unsigned_integer_type "int64_t")
+          end
       
         (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->
@@ -1193,8 +1223,10 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         E.mapM (fun (id, e) -> do E
           a      <- E.fresh_symbol;
           core_e <- translate_expression e; in
+          let ty = exp_type_of e in
+          let expr = if AilTypesAux.is_pointer ty then C.Esym a else conv_int [Caux.mk_ctype ty; C.Esym a] in
             E.return $ C.Esseq [Just a] core_e
-                         (Caux.pstore (Caux.mk_ctype (exp_type_of e)) (C.Esym id) (conv_int [Caux.mk_ctype (exp_type_of e); C.Esym a]) Cmm.NA)                               end
+                         (Caux.pstore (Caux.mk_ctype ty) (C.Esym id) expr Cmm.NA) end
 
 
 (*
@@ -1233,7 +1265,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
   
   E.foldlM (fun (gacc, facc) (sym, decl) ->
     match decl with
-      | A.Decl_object qs ty ->
+      | A.Decl_object _ qs ty ->
           (* generate the initialisation code for global variables *)
           let core_ty     = Caux.mk_ctype ty in
           let core_create = Caux.pcreate (Caux.alignof core_ty) core_ty [sym] in
@@ -1244,13 +1276,19 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
                 (* if the global has an initialisation *)
                 E.fresh_symbol                           >>= fun a_e      ->
                 translate_expression stdlib program expr >>= fun core_e   ->
+                let core_init_e =
+                  if AilTypesAux.is_pointer ty then
+                    (* TODO: check, might need some pointer to pointer conversion *)
+                    C.Esym a_e
+                  else
+                    conv_int [core_ty; C.Esym a_e] in
                 E.return
                   ((sym,
                     C.TyEffect C.BTy_pointer,
                     C.Esseq [Just a_global] core_create
                       (C.Esseq [Just a_e] core_e
                          (* TODO: proper memory order *)
-                         (C.Esseq [] (Caux.pstore core_ty (C.Esym a_global) (conv_int [core_ty; C.Esym a_e]) Cmm.NA)
+                         (C.Esseq [] (Caux.pstore core_ty (C.Esym a_global) core_init_e Cmm.NA)
                             (C.Eret $ C.Esym a_global)
                          )
                       )
@@ -1273,7 +1311,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
           match Context.lookup (=) sigm.A.function_definitions sym with
             | Just (param_syms, stmt) ->
                 (* making the argument variables visible *)
-                E.with_block_objects param_syms (
+(* TODO: WIP                E.with_block_objects param_syms *) (
                   translate_stmt stdlib program sym Nothing Nothing Nothing Nothing stmt
                 ) >>= fun core_body ->
                 
@@ -1310,7 +1348,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
         (C.Esseq [] (Caux.pstore (C.Ectype ty) (C.Esym a_lit) e_init Cmm.NA)
           (C.Eret $ C.Esym a_lit)) in
     E.return $ (sym, C.TyEffect C.BTy_pointer, expr) :: acc
-  ) globs xs >>= fun globs' ->
+  ) (List.reverse globs) xs >>= fun globs' ->
   E.return (List.reverse globs', cfuns)
 (*
 

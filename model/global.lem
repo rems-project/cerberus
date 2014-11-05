@@ -288,3 +288,12 @@ end
 val mapi: forall 'a 'b. (nat -> 'a -> 'b) -> list 'a -> list 'b
 let mapi f xs =
   mapi_aux f 0 [] xs
+
+
+val     takeWhile: forall 'a. ('a -> bool) -> list 'a -> list 'a
+let rec takeWhile pred = function
+  | [] ->
+      []
+  | x::xs ->
+      if pred x then x :: takeWhile pred xs else []
+end

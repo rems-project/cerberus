@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Enum
+open import Show Enum
 import UniqueId
 
 type t =
@@ -55,6 +55,21 @@ end
 instance (SetType t)
   let setElemCompare sym1 sym2 = ordCompare sym1 sym2
 end
+
+instance (Show t)
+  let show sym =
+    let (Symbol n str_opt) = sym in
+    match str_opt with
+      | Just str ->
+          str
+      | Nothing ->
+          "a_" ^ string_of_natural (naturalFromNat n)
+    end
+end
+
+
+
+
 
 val fresh: State.t (UniqueId.t t) (UniqueId.supply t)
 let fresh =

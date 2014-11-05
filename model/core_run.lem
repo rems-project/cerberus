@@ -1,9 +1,9 @@
-open import Pervasives Global Core Core_ctype Core_aux
+open import Pervasives Show Global Core Core_ctype Core_aux
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
 import Cmm_master Naive_memory (* New_memory *)
-import AilTypesAux
+import AilTypes AilTypesAux
 import Dlist
 
 open import Implementation_ Decode
@@ -97,8 +97,8 @@ let rec core_eval file expr =
           EU.mapM (core_eval file) pes >>= fun pes' ->
           EU.return (Elist pes')
       
-      | Esym _ ->
-          EU.fail Unresolved_symbol
+      | Esym sym ->
+          EU.fail (Unresolved_symbol sym)
       
       | Eimpl i ->
           match Map.lookup i file.impl with
@@ -292,8 +292,8 @@ let rec core_eval file expr =
       | Eundef ub ->
           Exception.return (Undefined.undef [ub])
       
-      | Eerror ->
-          Exception.return Undefined.error
+      | Eerror str ->
+          Exception.return (Undefined.error str)
       
       | Elet a pe1 pe2 ->
           core_eval file pe1 >>= fun pe1' ->
@@ -420,7 +420,7 @@ let runMem m =
     State.modify (fun run_st ->
       match SEU.run m run_st.layout_state with
         | Exception.Result (Undefined.Defined z, mem_st') ->
-(*            let _ = Boot.output_string ("AFTER2> " ^ Mem.string_of_memory_state mem_st') in *)
+(*            let _ = Boot.output_string ("AFTER2> " ^ show mem_st') in *)
             (z, <| run_st with layout_state= mem_st' |>)
         | _ ->
             Boot.assert_false "Core_run.runMem error"
@@ -609,6 +609,10 @@ let printf_hack core_st pes =
   end
 *)
 
+(* TODO: hack *)
+val pseudo_printf: string -> list string -> string
+declare ocaml target_rep function pseudo_printf = `Boot_ocaml.pseudo_printf`
+
 
 
 
@@ -703,34 +707,45 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                                   Decode.encode_character_constant n
                               | _ ->
                                   Boot.assert_false "printf_hack: one of the element of the format array was invalid"
-                            end) vs
+                            end) (takeWhile (fun (Mem.MV_integer (Symbolic.SYMBconst n)) -> n <> 0) vs)
                         | _ ->
                             Boot.assert_false "printf_hack: the format argument was not an array"
                       end in
+                      
+                      let format_ty = Pointer AilTypes.no_qualifiers char in
+                      
                       match pes with
                         | [Econst (Mem.MV_pointer ptr1)] ->
                             ND.return $ Step_output (
-                              runMem (Mem.load ptr1)       >>= fun (Mem.MV_pointer ptr_format) ->
-                              runMem (Mem.load ptr_format) >>= fun format                      ->
+                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              (* TODO: this should be an array of the proper size of char !!! *)
+                              runMem (Mem.load char ptr_format) >>= fun format                      ->
                               (* TODO: should be the number of printed chars *)
-                              SEU.return (mk_string format, update_thread_state current_tid <| th_st with
-                                arena= Econst (Mem.MV_integer (Symbolic.SYMBconst 0))
+                              let str = mk_string format in
+                              SEU.return (str, update_thread_state current_tid <| th_st with
+                                arena= Econst (Mem.mk_integer 0)
                               |> st)
                             )
                         | Econst (Mem.MV_pointer ptr1) :: args ->
                             ND.return $ Step_output (
-                              runMem (Mem.load ptr1)       >>= fun (Mem.MV_pointer ptr_format) ->
-                              runMem (Mem.load ptr_format) >>= fun format                      ->
+                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              (* TODO: this should be an array of the proper size of char !!! *)
+                              runMem (Mem.load char ptr_format) >>= fun format                      ->
                               SEU.foldM (fun acc (Econst (Mem.MV_pointer ptr)) ->
-                                runMem (Mem.load ptr) >>= fun mem_val ->
-                                SEU.return (Mem.string_of_mem_value mem_val :: acc)
-                              ) [] args >>= fun arg_strs ->
+                                (* TODO: the ctype is obviously wrong here *)
+                                runMem (Mem.load signed_int ptr) >>= fun mem_val ->
+                                SEU.return (show mem_val :: acc)
+                              ) [] args >>= fun arg_strs_rev ->
                               
+(*
                               let str = mk_string format ^ " with args: " ^
                                 List.foldl (fun acc x -> x ^ ", " ^ acc) "" arg_strs ^ "\n" in
+*)
+                              let str = pseudo_printf (mk_string format) (List.reverse arg_strs_rev) in
                               (* TODO: should be the number of printed chars *)
+
                               SEU.return (str, update_thread_state current_tid <| th_st with
-                                arena= Econst (Mem.MV_integer (Symbolic.SYMBconst 0))
+                                arena= Econst (Mem.mk_integer 0)
                               |> st)
                             )
                             
@@ -780,7 +795,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
 
                           (* TODO: debug *)
                           SEU.runS (State.read (fun run_st ->
-(*                            let _ = Boot.output_string ("BEFORE> " ^ Mem.string_of_memory_state run_st.layout_state) in *)
+(*                            let _ = Boot.output_string ("BEFORE> " ^ show run_st.layout_state) in *)
                             ()
                           )) >>
 
@@ -789,7 +804,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                           (* TODO: debug *)
 (*
                           SEU.runS (State.read (fun run_st ->
-                            let _ = Boot.output_string ("AFTER> " ^ Mem.string_of_memory_state run_st.layout_state) in
+                            let _ = Boot.output_string ("AFTER> " ^ show run_st.layout_state) in
                             ()
                           )) >>
 *)
@@ -798,7 +813,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                             AllocRequest sb_before dd_before asw_before
                                          create_aid current_tid ty ptr_val
                                          (update_thread_state current_tid <| th_st with
-                                            arena= Econst (Mem.MV_pointer ptr_val);
+                                            arena= Econst (Mem.mk_pointer ptr_val);
                                             stack= add_to_sb_stack {(p, (current_tid, create_aid))} sk;
                                           |> st)
                           )
@@ -894,7 +909,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                           Step_action_request "load" current_tid (
                             SEU.runS fresh_action_id >>= fun load_aid ->
                             SEU.runS fresh_symbol    >>= fun val_sym  ->
-                            let mem_val = Mem.MV_integer  (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                            let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
                             SEU.return $
                               LoadRequest sb_before dd_before asw_before
                                           load_aid current_tid mo ty ptr_val mem_val
@@ -935,7 +950,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   | (PtrShift, [Ectype ty; Econst (Mem.MV_pointer ptr_val); Econst (Mem.MV_integer (Symbolic.SYMBconst n))]) ->
                       Step_tau "Pointer shift" current_tid (
                         runMem (Mem.pointer_shift ty ptr_val n) >>= fun ptr_val' ->
-                        update_current_thread <| th_st with arena= Econst (Mem.MV_pointer ptr_val') |>
+                        update_current_thread <| th_st with arena= Econst (Mem.mk_pointer ptr_val') |>
                       )
 
 
@@ -1108,7 +1123,8 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
         if is_value pe then
           ND.return $
             Step_tau "end of procedure" current_tid (
-              update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk |>
+              update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk;
+                                                  labels= Map.empty (* TODO: this is too violent, but doing no reset is unsound *) |>
             )
         else
           ND.return $ Step_eval "<Eret pe, _ . cont . sk>" current_tid (
@@ -1249,8 +1265,8 @@ let rec convert_expr e =
         Eoutput str
     | Eundef ub ->
         Eundef ub
-    | Eerror ->
-        Eerror
+    | Eerror str ->
+        Eerror str
     | Eraise str ->
         Eraise str
 (*
