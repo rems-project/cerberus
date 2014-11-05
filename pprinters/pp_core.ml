@@ -241,7 +241,7 @@ let rec pp_constant = function
   | Mem.MV_pointer (Mem.Pointer_function f) ->
       !^ "TODO(MV_pointer(function))"
 *)
-  | Mem.MV_pointer (Mem.Pointer_nonnull (n, pref)) ->
+  | Mem.MV_pointer (Mem.Pointer_nonnull (_, (n, pref))) ->
       !^ ("@" ^ string_of_int n) ^^ P.braces (pp_prefix pref)
   | Mem.MV_pointer ptr_val ->
       !^ "TODO(MV_pointer)" 

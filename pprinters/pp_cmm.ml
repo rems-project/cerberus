@@ -44,7 +44,7 @@ let string_of_memory_order = function
 module Mem = Naive_memory
 
 
-let string_of_location (Mem.Pointer_nonnull (n, pref)) =
+let string_of_location (Mem.Pointer_nonnull (_, (n, pref))) =
   "@" ^ string_of_int n ^ "{" ^ Mem.string_of_prefix pref ^ "}"
 
 let string_of_cvalue = function

@@ -172,7 +172,7 @@ instance (Eq pointer_value)
 end
 
 (* TODO ... *)
-let rec compare_pointer_value ptr_val1 ptr_val2 =
+let rec setElemCompare_pointer_value ptr_val1 ptr_val2 =
   let ordOf = function
      | Pointer_nonnull _ _ ->
          (0 : nat)
@@ -181,29 +181,29 @@ let rec compare_pointer_value ptr_val1 ptr_val2 =
      | Pointer_shift _ _ ->
          2
   end in
-  match compare (ordOf ptr_val1) (ordOf ptr_val2) with
+  match setElemCompare (ordOf ptr_val1) (ordOf ptr_val2) with
     | EQ ->
         match (ptr_val1, ptr_val2) with
           | (Pointer_nonnull ty1 oid1, Pointer_nonnull ty2 oid2) ->
-              match compare ty1 ty2 with
+              match setElemCompare ty1 ty2 with
                 | EQ ->
-                    compare oid1 oid2
+                    setElemCompare oid1 oid2
                 | z ->
                     z
               end
           | (Pointer_cast ty1 ptr_val1', Pointer_cast ty2 ptr_val2') ->
-              match compare ty1 ty2 with
+              match setElemCompare ty1 ty2 with
                 | EQ ->
-                    compare_pointer_value ptr_val1' ptr_val2'
+                    setElemCompare_pointer_value ptr_val1' ptr_val2'
                 | z ->
                     z
               end
           | (Pointer_function sym1, Pointer_function sym2) ->
-              compare sym1 sym2
+              setElemCompare sym1 sym2
           | (Pointer_shift ptr_val1' n1, Pointer_shift ptr_val2' n2) ->
-              match compare_pointer_value ptr_val1' ptr_val2' with
+              match setElemCompare_pointer_value ptr_val1' ptr_val2' with
                 | EQ ->
-                    compare n1 n2
+                    setElemCompare n1 n2
                 | z ->
                     z
               end
@@ -212,12 +212,14 @@ let rec compare_pointer_value ptr_val1 ptr_val2 =
         cmp
   end
 
+(*
 instance (MapKeyType pointer_value)
   let mapKeyCompare = compare_pointer_value
 end
+*)
 
 instance (SetType pointer_value)
-  let setElemCompare = compare_pointer_value
+  let setElemCompare = setElemCompare_pointer_value
 end
 
 

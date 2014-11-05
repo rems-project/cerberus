@@ -19,33 +19,6 @@ module U = Undefined
 module SEU = State_exception_undefined
 module ND  = Nondeterminism
 
-(* BEGIN HACK *)
-
-(*
-type sequential_state =
-  map Mem.pointer_value (maybe Mem.mem_value)
-
-
-(* TODO: DEBUG *)
-let string_of_sequential_state xs =
-  "state{" ^ 
-  List.foldl (fun acc (ptr_val, mem_val_opt) ->
-    Mem.string_of_pointer_value ptr_val ^ " := " ^
-    match mem_val_opt with
-      | Just mem_val ->
-          Mem.string_of_mem_value mem_val
-      | Nothing ->
-          "uninitialized"
-    end
-  ) "" (Map_extra.toList xs)
-  ^ "}"
-*)
-
-
-(* END HACK *)
-
-
-
 type driver_error = 
   | DERR_core_run of core_run_error
 
@@ -67,6 +40,76 @@ type driver_state = <|
 
 
 
+
+
+
+(* WIP
+(* Perform a given number of successive steps of the concurrency model *)
+val     stepConcurrency: nat -> driver_state -> ND.t driver_state
+let rec stepConcurrency n dr_st =
+  match n with
+    | 0 ->
+        ND.return dr_st
+    | _ ->
+        (let concur_steps = Set_extra.toList $ exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
+        if List.null concur_steps then
+          Boot.assert_false "ND.return <| dr_st with blocked= true |>"
+        else
+          ND.pick concur_steps >>= function
+            | ConcurrencyTau performed_act concur_st' ->
+                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
+                (if (concur_st'.stateIsDefined) then
+                   let _ = Boot.output_string "Found a def.\n" in
+                   ND.return  <| dr_st with concurrency_state= concur_st' |>
+                 else
+                   let _ = Boot.output_string "Found an undef.\n" in
+                   ND.kill_execution >>
+                   (* TODO *)
+                   ND.return  <| dr_st with concurrency_state= concur_st' |>
+                )
+            
+            | ReadsFrom v w performed_act concur_st' ->
+                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
+                ND.print_debug ("READSFROM " ^ string_of_natural (naturalFromNat (aid_of performed_act)) ^ "\n") >>
+                (* TODO: v is the new concrete value, w is the symbolic value from the read *)
+                let Mem.MV_integer v_symb = v in
+
+                match w with
+                  | Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) -> 
+                      ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
+                      ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
+                                              concurrency_state= concur_st'  |>
+                  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
+                      ND.add_equation (Symbolic.eq (Symbolic.constant n) v_symb) >>
+                      ND.return   <| dr_st with concurrency_state= concur_st' |> 
+                end
+                
+
+          end) >>= fun dr_st' ->
+        
+        stepConcurrency (n-1) dr_st'
+end
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 
 (* NOTE: can't use the Set-based monad from Ky because I would need to define
          a compare function for the type core_step ... *)
@@ -93,6 +136,12 @@ let runCore m dr_st =
 open ND.Operators
 
 
+
+
+(* Returns the number of uncommitted action in the concurency memory model state *)
+val number_of_uncommitted: exeState -> nat
+let number_of_uncommitted concur_st =
+  Set.size concur_st.preEx.actions - Set.size concur_st.committed
 
 
 (* TODO: debug *)
@@ -272,6 +321,12 @@ let rec driver_sequential _dr_st =
     
     | Step_done _ ->
         let _ = Boot.output_string "Step_done" in
+        (* TODO: repair driver state? *)
+(* WIP
+        let n = (number_of_uncommitted dr_st.concurrency_state) in
+        let _ = Boot.output_string ("CALLING CONCURRENCY: " ^ show n ^ " times") in
+        stepConcurrency n dr_st
+*)
         ND.return dr_st
   end in
   

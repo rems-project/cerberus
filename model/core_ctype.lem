@@ -173,6 +173,12 @@ instance (Eq ctype)
   let (<>) x y = not (ctypeEqual x y)
 end
 
+(*
+instance (Ord ctype)
+  let compare ty1 ty2 = LT (* TODO !!! *)
+end
+*)
+
 
 (*
 val ctype_to_nat : ctype -> nat
