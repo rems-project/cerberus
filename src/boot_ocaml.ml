@@ -89,3 +89,43 @@ let fake_printf str args =
 
 let sort_assoc_list xs =
   List.stable_sort (fun (a, _) (b, _) -> Pervasives.compare a b) xs
+
+
+let random_select xs =
+  List.nth xs (Random.int (List.length xs))
+
+
+open Str
+(* TODO: ridiculous hack *)
+let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)) : string =
+  let rexp = regexp "%d" in
+  let rec f str args acc =
+    if String.length str = 0 then
+      List.rev acc
+    else
+      try
+        let n    = search_forward rexp str 0 in
+        let pre  = String.sub str 0 n    in
+        let str' = String.sub str (n+2) (String.length str - n - 2) in
+        
+        match args with
+          | [] ->
+              print_endline "PRINTF WITH NOT ENOUGH ARGUMENTS";
+              List.rev (str :: acc)
+          | arg :: args' ->
+              f str' args' ((* Big_int.string_of_big_int *) arg :: pre :: acc)
+      with
+        Not_found ->
+          if List.length args <> 0 then
+            print_endline "PRINTF WITH TOO MANY ARGUMENTS";
+          List.rev (str :: acc)
+  in
+  let frmt' =
+    try
+      let n = search_forward (regexp "\000") frmt 0 in
+      String.sub frmt 0 n
+    with
+      Not_found ->
+        frmt (* TODO: technically that should be invalid *)
+  in
+  String.concat "" (f frmt' args [])

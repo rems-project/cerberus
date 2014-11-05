@@ -65,7 +65,7 @@ fun <ctype_min> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           0
                                         else
-                                          error -- TODO
+                                          error <<<ctype_min>>> -- TODO
                                         end
                                       end
                                     end
@@ -148,7 +148,7 @@ fun <ctype_max> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           18446744073709551615
                                         else
-                                          error -- TODO
+                                          error <<<ctype_max>>> -- TODO
                                         end
                                       end
                                     end
@@ -261,7 +261,7 @@ fun <sizeof> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           8
                                         else
-                                          error -- TODO
+                                          error <<<sizeof>>> -- TODO
                                         end
                                       end
                                     end
@@ -373,7 +373,7 @@ fun <alignof> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           8
                                         else
-                                          error -- TODO
+                                          error <<<alignof>>> -- TODO
                                         end
                                       end
                                     end

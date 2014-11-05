@@ -6,7 +6,7 @@ import Dlist Constraints Symbolic Undefined
 
 type kill_reason =
   | Undef of list Undefined.undefined_behaviour
-  | Error
+  | Error of string
   | Other of string
 
 type nd_state 'a =
@@ -26,7 +26,7 @@ val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let return a =
   ND [Active Dlist.nil Constraints.empty a]
 
-let bind (ND m) f =
+let bindExhaustive (ND m) f =
     ND $
       List.concatMap (fun ma ->
         match ma with
@@ -52,6 +52,39 @@ let bind (ND m) f =
           | Killed reason log eqs ->
               [Killed reason log eqs]
         end) m
+
+
+(* TODO *)
+val random_select: forall 'a. list 'a -> 'a
+declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
+
+let bindRandom (ND m) f =
+  ND $
+    match random_select m with
+      | Active logA eqsA vA ->
+          match random_select (let ND z = f vA in z) with
+            | Active logB eqsB vB ->
+                let log' = Dlist.append logA logB in
+                
+                if Constraints.is_empty eqsA then
+                  [Active log' eqsB vB]
+                else if Constraints.is_empty eqsB then
+                  [Active log' eqsA vB]
+                else
+                  let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                  if Constraints.isUnsat eqs' then
+                    [Killed (Other "reached unsatisfiable constraints") log' eqs']
+                  else
+                    [Active log' eqs' vB]
+            | Killed reason logB eqsB ->
+                [Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)]
+          end
+      | Killed reason log eqs ->
+          [Killed reason log eqs]
+    end
+
+
+let bind = bindRandom
 
 module Operators = struct
   let inline (>>=)      = bind

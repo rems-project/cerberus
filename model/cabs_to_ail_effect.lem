@@ -1,6 +1,8 @@
 open import Pervasives Cabs Std
 import Boot Loc Errors Scope_table State_exception UniqueId Symbol
 
+open import Cabs_to_ail_aux
+
 import Global
 import AilSyntax AilTypes
 
@@ -85,20 +87,6 @@ let string_of_scope = function
 end
 
 
-(* STD §6.2.2#1 *)
-type linkage =
-  | Linkage_external
-  | Linkage_internal
-  | Linkage_none
-
-instance (Eq linkage)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-instance (SetType linkage)
-  let setElemCompare = defaultCompare
-end
 
 
 (* STD §6.2.3#1 *)
@@ -144,8 +132,8 @@ type state = <|
   
                                                 (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   function_declarations:        map A.identifier (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool);
-  external_object_declarations: map A.identifier  (ATypes.qualifiers * ATypes.ctype);
-  internal_object_declarations: map A.identifier  (ATypes.qualifiers * ATypes.ctype);
+  external_object_declarations: map A.identifier  (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype);
+  internal_object_declarations: map A.identifier  (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype);
   
   function_definitions: map A.identifier (list A.identifier * A.statement unit);
   external_object_definitions: map A.identifier (A.expression unit);
@@ -254,11 +242,11 @@ let with_scope scope m =
       match kind with
         | Kind_object false ->
             match Map.lookup sym st.external_object_declarations with
-              | Just (qs, ty) ->
+              | Just (_ (* storage duration *), qs, ty) ->
                   (sym, (qs, ty)) :: acc
               | Nothing ->
                   match Map.lookup sym st.internal_object_declarations with
-                    | Just (qs, ty) ->
+                    | Just (_ (* storage duration *), qs, ty) ->
                         (sym, (qs, ty)) :: acc
                     | Nothing ->
                         (* TODO: check *)
@@ -429,10 +417,12 @@ _STD "§6.2.2#6" $
   end
 
 
-val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t A.identifier
+val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
 let register_identifier ident namespace kind storage_classes =
-  determinate_linkage ident namespace kind storage_classes >>=
-  _register_identifier ident namespace kind
+  determinate_linkage ident namespace kind storage_classes >>= fun link ->
+  _register_identifier ident namespace kind link           >>= fun sym  ->
+  return (link, sym)
+
 
 (*
 val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> t A.identifier
@@ -583,7 +573,7 @@ let register_function_declaration sym decl =
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.identifier -> (ATypes.qualifiers * ATypes.ctype) -> t unit
+val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
 let register_external_object_declaration sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
@@ -601,7 +591,7 @@ let register_external_object_declaration sym decl =
   end
 
 (* TODO: factorize *)
-val register_internal_object_declaration: A.identifier -> (ATypes.qualifiers * ATypes.ctype) -> t unit
+val register_internal_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
 let register_internal_object_declaration sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.internal_object_declarations
@@ -761,6 +751,25 @@ let remove_block_scoped_identifiers st xs =
 *)
 
 
+val fetch_object_declaration: A.identifier -> t (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype)
+let fetch_object_declaration sym =
+  State_exception.read (fun st ->
+    (* ... *)
+    let map_union = Map.(union) in
+    map_union st.external_object_declarations st.internal_object_declarations
+  ) >>= fun decls ->
+  match Map.lookup sym decls with
+    | Just decl ->
+        return decl
+    | Nothing ->
+        Boot.assert_false "TODO: failed to fetch object declaration"
+  end
+
+
+
+
+
+
 (* TODO: ... *)
 let map_union = Map.(union)
 
@@ -772,7 +781,7 @@ let extract_program startup_str =
           let decls = Map_extra.toList (
             map_union
               (Map.map (fun (ty, params, b1, b2, b3) -> A.Decl_function ty params b1 b2 b3) st.function_declarations)
-              (Map.map (fun (qs, ty) -> A.Decl_object qs ty) st.external_object_declarations)
+              (Map.map (fun (sd, qs, ty) -> A.Decl_object sd qs ty) st.external_object_declarations)
           ) in
           
           (startup_sym, <|

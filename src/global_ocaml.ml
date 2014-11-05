@@ -71,38 +71,16 @@ let error ?(code = 1) msg =
   exit code
 
 
-let debug_level = ref 0
-
 (* TODO: hack *)
 let progress_sofar = ref 1
-
-
-let print_success msg =
-  if !debug_level > 0 then
-    prerr_endline Colour.(ansi_format [Green] msg)
-
-let print_debug level msg =
-  if !debug_level >= level then
-    prerr_endline Colour.(ansi_format [Red] ("\x1b[31mDEBUG: " ^ msg ^ "\x1b[0m"))
-
-let print_debug2 msg k =
-  if !debug_level > 0 then
-    let _ = prerr_endline Colour.(ansi_format [Red] ("\x1b[31mDEBUG: " ^ msg ^ "\x1b[0m")) in k
-  else
-    k
-
-let output_string2 msg =
-  if !debug_level > 0 then
-    prerr_endline msg
-
-
 
 
 (* some block functions used by the pipeline *)
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
-let pass_message      msg = Exception.fmap (fun v -> print_success msg; v)
+let pass_message      msg = Exception.fmap (fun v -> Debug.print_success msg; v)
 let return_none m         = Exception.bind0 m (fun _ -> Exception.return0 None)
 let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
 let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
+

@@ -178,10 +178,10 @@ let lex_comment remainder lexbuf =
 }
 
 
+let error_name = "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
 let ub_name = "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
 let impl_name = '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
 let symbolic_name = ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
-
 
 rule main = parse
   (* beginning of a comment *)
@@ -242,9 +242,11 @@ rule main = parse
   | ":="  { T.COLON_EQ }
   | "\""  { T.DQUOTE }
   
-  | "=> " { T.EQ_GT }
-
-
+  | "=>" { T.EQ_GT }
+  
+  | error_name { let str = Lexing.lexeme lexbuf in
+             T.STRING (String.sub str 3 (String.length str - 6))  }
+  
   | ub_name { scan_ub lexbuf }
   | impl_name { scan_impl lexbuf }
   | symbolic_name { scan_sym lexbuf }

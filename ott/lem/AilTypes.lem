@@ -316,6 +316,12 @@ type storageDuration [name = "sd*"] =  (*r storage duration (\S6.2.4\#1) *)
  | Automatic
  | Allocated
 
+instance (Eq storageDuration)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
 let storageDurationEqual sd1 sd2 : bool = 
   match (sd1, sd2) with
   | (Static   , Static   ) -> true

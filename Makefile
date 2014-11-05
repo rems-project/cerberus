@@ -90,7 +90,8 @@ CERBERUS_LEM=\
   thread.lem \
   uniqueId.lem \
   enum.lem \
-  builtins.lem
+  builtins.lem \
+  show.lem
 
 # The collection of lem files
 MODEL_LEM= $(CMM_MODEL_LEM) $(CMM_EXEC_LEM) $(AIL_LEM) $(CERBERUS_LEM)
@@ -110,10 +111,11 @@ CPARSER_ML=\
 
 PPRINTERS_ML=\
   colour.ml \
+  pp_utils.ml \
   pp_errors.ml \
   pp_std.ml \
   pp_symbol.ml \
-  pp_cabs.ml pp_ail.ml pp_core.ml pp_run.ml \
+  pp_cabs.ml pp_ail.ml pp_core.ml pp_core_run.ml pp_run.ml \
   pp_cmm.ml
 
 
@@ -338,7 +340,7 @@ LEM_FILES = \
  state_operators.lem \
  symbol.lem \
  TypingError.lem \
- undefined.lem
+ undefined.lem 
 
 COQ_FILES := $(shell echo $(LEM_FILES:%.lem=%.v) | python -c $$'import sys\nfor word in sys.stdin.read().split(): sys.stdout.write(word[0].lower() + word[1:] + " ")')
 

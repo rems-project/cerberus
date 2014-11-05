@@ -10,17 +10,17 @@ let inline (>>) m f = m >>= (fun _ -> f)
 
 
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
-declare ocaml target_rep function pp_ail_ctype = `Boot_pprint.pp_ail_ctype`
+declare ocaml target_rep function pp_ail_ctype = `Pp_ail.string_of_ail_ctype`
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
-declare ocaml target_rep function pp_ail_expr = `Boot_pprint.pp_ail_expr`
+declare ocaml target_rep function pp_ail_expr = `Pp_ail.string_of_ail_expr`
 
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 val output_string: string -> unit
-declare ocaml target_rep function output_string = `Global_ocaml.output_string2`
+declare ocaml target_rep function output_string = `Debug.output_string2`
 
 
 
@@ -417,22 +417,76 @@ let rec annotate_constant cst =
   end
 
 
+(* TODO: temporary *)
+val     are_all_eq: forall 'a. Eq 'a => list 'a -> bool
+let rec are_all_eq xs =
+  match xs with
+    | [] ->
+        true
+    | [x] ->
+        true
+    | x::y::xs' ->
+        x=y && are_all_eq (y::xs')
+  end
+
 let rec annotate_expression' A S G e =
   let annotate_rvalue    = annotate_rvalue_aux A (annotate_expression A S G)                      in
   let annotate_assignee  = annotate_assignee_aux annotate_rvalue                                  in
   let annotate_arguments = annotate_arguments_aux A (annotate_expression A S G) annotate_assignee in
   match e with
-    | AilEarray _ ->
-        assert_false "WIP typing: AilEarray"
-    | AilEbuiltin _ ->
-        assert_false "WIP typing: AilEbuiltin"
-
-
+    | AilEarray es ->
+        (* TODO: I have pretty much no idea what I'm doing *)
+        E.mapM annotate_rvalue es >>= fun xs ->
+        (* TODO: I guess the equality should be relaxed to compatibility *)
+        if are_all_eq (List.map snd xs) then
+          match xs with
+            | (_, gty)::_ ->
+                (* TODO !!!! *)
+                E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray (Basic (Integer Char)) (Just (integerFromNat $ List.length xs))))
+(*
+                E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray gty (Just (integerFromNat $ List.length xs))))
+*)
+          end
+        else
+          E.fail Loc.unknown (TError "TODO[msg]: failed to type an array constant")
+    
+    | AilEbuiltin str ->
+        (* TODO: check *)
+        let ity = match str with
+          | "INT8_MIN" ->
+              Signed Int_
+          | "INT16_MIN" ->
+              Signed Int_
+          | "INT32_MIN" ->
+              Signed Int_ (* TODO: this might not fit in a signed int ... *)
+          | "INT64_MIN" ->
+              Signed Long
+          | "INT8_MAX" ->
+              Signed Int_
+          | "INT16_MAX" ->
+              Signed Int_
+          | "INT32_MAX" ->
+              Signed Int_ (* TODO: this might not fit in a signed int ... *)
+          | "INT64_MAX" ->
+              Signed Long
+          | "UINT8_MAX" ->
+              Unsigned Int_
+          | "UINT16_MAX" ->
+              Unsigned Int_
+          | "UINT32_MAX" ->
+              Unsigned Int_ (* TODO: this might not fit in a signed int ... *)
+          | "UINT64_MAX" ->
+              Unsigned Long
+          | _ ->
+              assert_false ("WIP typing, AilEbuiltin: " ^ str)
+        end in
+        E.return (AilEbuiltin str, GenRValueType (GenBasic (GenInteger (Concrete ity))))
+    
     | AilEident v ->
         match (Context.lookup identifierEqual G v, Context.lookup identifierEqual S.declarations v) with
           | (Just (qs, ty), Nothing) ->
               E.return (AilEident v, GenLValueType qs ty)
-          | (Nothing, Just (Decl_object qs ty)) ->
+          | (Nothing, Just (Decl_object _ qs ty)) ->
               E.return (AilEident v, GenLValueType qs ty)
           | (Nothing, Just (Decl_function ret_ty bs is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
@@ -1178,7 +1232,7 @@ let annotate_sigma A S =
   (* TODO: morally we want a "mapP_" here *)
   Context.mapP identifierEqual (fun _ decl ->
     match decl with
-      | Decl_object _ ty ->
+      | Decl_object _ _ ty ->
           wf_type ty >>
           E.return decl
       | Decl_function ret_ty qs_tys is_variadic _ (* is_inline *) _ (* is_Noreturn *) ->
@@ -1190,7 +1244,7 @@ let annotate_sigma A S =
   
   Context.mapP identifierEqual (fun ident e ->
     match Context.lookup identifierEqual S.declarations ident with
-      | Just (Decl_object _ (* qs *) ty) ->
+      | Just (Decl_object _ _ (* qs *) ty) ->
           annotate_assignee A S Context.empty ty e
       | _ ->
           E.fail Loc.unknown (TError_TODO 1000)

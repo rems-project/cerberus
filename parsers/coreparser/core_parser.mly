@@ -26,7 +26,7 @@ type expr =
   | Eop of Core.binop * expr * expr
   | Ecall of name * expr list
   | Eundef of Undefined.undefined_behaviour
-  | Eerror
+  | Eerror of string
   | Eraise of string
   | Eregister of string * name
 (*
@@ -36,6 +36,11 @@ type expr =
   | Elet of string * expr * expr
   | Eif of expr * expr * expr
   | Eproc of name * expr list
+  
+  (* TODO: hack *)
+  | Ecase of expr * name * name * name * name * name * name * name * name * name
+
+
 (* HIP
   | Ecase of expr *
              (expr * (* void *)
@@ -103,13 +108,16 @@ let register_cont_symbols e =
     | Eop _
     | Ecall _
     | Eundef _
-    | Eerror
+    | Eerror _
     | Eskip
     | Eraise _
     | Eregister _
 (*
     | Etry _
 *)
+
+    | Ecase _
+
     | Eproc _
 (*    | Esame _ *)
     | Eaction _
@@ -147,7 +155,7 @@ let register_cont_symbols e =
 (*  convert_expr: expr -> .. -> .. -> Core.expr 'a *)
 let convert_expr e arg_syms fsyms =
   let lookup_symbol str syms =
-    Global_ocaml.print_debug 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
+    Debug.print_debug 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
     begin try
         Pmap.find str syms (* TODO: Error handling *)
       with
@@ -195,8 +203,8 @@ let convert_expr e arg_syms fsyms =
         Core.Ecall (Core.Sym fsym, List.map (f st) args)
     | Eundef ub ->
         Core.Eundef ub
-    | Eerror ->
-        Core.Eerror
+    | Eerror str ->
+        Core.Eerror str
     | Eraise evnt ->
         Core.Eraise evnt
     | Eregister (evnt, nm) ->
@@ -223,6 +231,14 @@ let convert_expr e arg_syms fsyms =
         Core.Eproc ((), Core.Impl func, List.map (f st) args)
     | Eproc (Sym func, args) ->
         Core.Eproc ((), Core.Sym (Pmap.find func fsyms), List.map (f st) args)
+
+    | Ecase (e, nm1, nm2, nm3, nm4, nm5, nm6, nm7, nm8, nm9) ->
+        let g = function
+          | Impl f -> Core.Impl f
+          | Sym f  -> Core.Sym (Pmap.find f fsyms) in
+        Core.Ecase (f st e, g nm1, g nm2, g nm3, g nm4, g nm5, g nm6, g nm7, g nm8, g nm9)
+
+
 (*
     | Esame (e1, e2) ->
         Core.Esame (f st e1, f st e2)
@@ -435,8 +451,9 @@ let subst name =
 %token INTEGER BOOLEAN POINTER CTYPE CFUNCTION UNIT
 
 (* Core constant keywords *)
-%token LIST (* ARRAY *) TRUE FALSE
+%token LIST ARRAY TRUE FALSE
 %token UNDEF ERROR
+%token<string> STRING
 %token SKIP IF THEN ELSE
 
 (* Core exception operators *)
@@ -448,7 +465,7 @@ let subst name =
 
 %token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA LBRACE RBRACE TILDE
 
-(* %token CASE_TY SIGNED_PATTERN UNSIGNED_PATTERN ARRAY_PATTERN POINTER_PATTERN ATOMIC_PATTERN EQ_GT *)
+%token CASE_TY SIGNED_PATTERN UNSIGNED_PATTERN ARRAY_PATTERN POINTER_PATTERN ATOMIC_PATTERN EQ_GT
 
 %token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
 
@@ -881,10 +898,8 @@ pattern:
 constant:
 | n= INT_CONST
     { Naive_memory.MV_integer (Symbolic.SYMBconst n) }
-(*
 | ARRAY LPAREN vs= separated_nonempty_list (COMMA, constant) RPAREN
     { Naive_memory.MV_array vs }
-*)
 
 
 (*
@@ -937,8 +952,8 @@ expr:
     { Ecall (f, es) }
 | UNDEF ub= UB
     { Eundef ub }
-| ERROR
-    { Eerror }
+| ERROR str= STRING
+    { Eerror str }
 | RAISE LPAREN evnt= SYM (* TODO: hack *) RPAREN
     { Eraise evnt }
 (*
@@ -953,10 +968,12 @@ expr:
     { Elet (a, e1, e2) }
 | IF b= expr THEN e1= expr ELSE e2= expr END
     { Eif (b, e1, e2) }
-(* HIP
-| CASE_TY e= expr OF rs= case_rules END
-    { Ecase (e, rs) }
-*)
+(* TODO: temporary restricted version *)
+| CASE_TY LPAREN e= expr COMMA f_void= name COMMA f_basic= name COMMA f_array= name COMMA
+                 f_fun= name COMMA f_ptr= name COMMA f_atom= name COMMA f_struct= name COMMA f_union= name COMMA f_builtin= name RPAREN
+    { Ecase (e, f_void, f_basic, f_array, f_fun, f_ptr, f_atom, f_struct, f_union, f_builtin) }
+
+
 | f= name es= delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
     { Eproc (f, es) }
 (* HIP

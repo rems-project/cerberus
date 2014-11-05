@@ -14,8 +14,8 @@ let bind m f =
         f z
     | Exception.Result (Undefined.Undef ubs) ->
         Exception.return (Undefined.undef ubs)
-    | Exception.Result Undefined.Error ->
-        Exception.return Undefined.error
+    | Exception.Result (Undefined.Error str) ->
+        Exception.return (Undefined.error str)
     | Exception.Exception err ->
         Exception.fail err
   end

@@ -24,7 +24,7 @@ let load_stdlib () =
   if not (Sys.file_exists fname) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "').")
   else
-    print_debug 5 ("reading Core standard library from `" ^ fname ^ "'.");
+    Debug.print_debug 5 ("reading Core standard library from `" ^ fname ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
       include Core_parser.Make (struct
@@ -64,32 +64,40 @@ let run_pp =
     PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
 
 
+let set_progress n =
+  Exception.fmap (fun v -> progress_sofar := n; v)
+
+
 (* == parse a C translation-unit and elaborate it into a Core program =========================== *)
 let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
-      print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
+      Debug.print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
       if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name ^ " 2> /dev/null") <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
     
        Exception.return0 (c_preprocessing f)
     |> Exception.fmap Cparser_driver.parse
-    |> pass_message (progress_sofar := 10; "1. C Parsing completed!")
+    |> set_progress 10
+    |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
     
     |> Exception.rbind (Cabs_to_ail.desugar "main")
-    |> pass_message (progress_sofar := 11; "2. Cabs -> Ail completed!")
+    |> set_progress 11
+    |> pass_message "2. Cabs -> Ail completed!"
     |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
     
     |> Exception.rbind (fun (counter, z) ->
           Exception.bind0 (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
           (fun z -> Exception.return0 (counter, z)))
-    |> pass_message (progress_sofar := 12; "3. Ail typechecking completed!")
+    |> set_progress 12
+    |> pass_message "3. Ail typechecking completed!"
     
     |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.core_impl)
-    |> pass_message (progress_sofar := 13; "4. Translation to Core completed!")
+    |> set_progress 13
+    |> pass_message "4. Translation to Core completed!"
 (*
 
 
@@ -122,12 +130,18 @@ let core_frontend f =
 
 
 
-let backend core_file =
+let backend core_file args =
     match !!cerb_conf.exec_mode_opt with
       | None ->
-          () (* TODO *)
+          0
       | Some Exhaustive ->
-          Exhaustive_driver.drive core_file
+          (* TODO: temporary hack for the command name *)
+          let str_v = Exhaustive_driver.drive core_file ("cmdname" :: args) in
+          try
+            int_of_string str_v
+          with
+            | _ ->
+                0
 
 
 
@@ -137,17 +151,17 @@ let backend core_file =
 
 
 
-let pipeline filename =
+let pipeline filename args =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   
   let f = Input.file filename in
   begin
     if Filename.check_suffix filename ".c" then (
-      print_debug 2 "Using the C frontend";
+      Debug.print_debug 2 "Using the C frontend";
       c_frontend f
      ) else if Filename.check_suffix filename ".core" then (
-       print_debug 2 "Using the Core frontend";
+       Debug.print_debug 2 "Using the Core frontend";
        core_frontend f
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
@@ -157,7 +171,7 @@ let pipeline filename =
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.no_rewrite then core_file else Core_rewrite.rewrite_file core_file) in
   
-  if !debug_level >= 5 then
+  if !Debug.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
       run_pp $ Pp_core.pp_file core_file;
@@ -166,22 +180,22 @@ let pipeline filename =
   
   if List.mem Core !!cerb_conf.pps then (
     run_pp $ Pp_core.pp_file rewritten_core_file;
-    if !debug_level >= 5 then
+    if !Debug.debug_level >= 5 then
       print_endline "====================";
    );
   
   
-  Exception.return0 (backend rewritten_core_file)
+  Exception.return0 (backend rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_rewrite =
-  Global_ocaml.debug_level := debug_level;
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_rewrite args =
+  Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
-  print_success "0.1. - Core standard library loaded.";
+  Debug.print_success "0.1. - Core standard library loaded.";
   
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
   let module Core_parser_base = struct
@@ -199,19 +213,22 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_r
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
-  print_success "0.2. - Implementation file loaded.";
+  Debug.print_success "0.2. - Implementation file loaded.";
   
   set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress no_rewrite;
   
-  match pipeline file with
+  match pipeline file args with
     | Exception.Exception err ->
         prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
         if progress then
           exit !progress_sofar
         else
           exit 1
-    | _ ->
-        progress
+    | Exception.Result n ->
+        if progress then
+          14
+        else
+          n
 
 
 
@@ -256,16 +273,19 @@ let no_rewrite =
   let doc = "Desactivate the Core to Core transformations" in
   Arg.(value & flag & info["no_rewrite"] ~doc)
 
+let args =
+  let doc = "List of arguments for the C program" in
+  Arg.(value & opt (list string) [] & info ["args"] ~docv:"ARG1,..." ~doc)
+
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite) in
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $ args) in
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
-    | `Ok true ->
-        (* progress mode *)
-        exit 14
+    | `Ok n ->
+        exit n
     | _ ->
         exit 0
 

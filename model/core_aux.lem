@@ -1,4 +1,4 @@
-open import Pervasives Global Core
+open import Pervasives Global Show Core
 import Boot Product Symbolic Exception Naive_memory
 
 open import Thread Core_run_aux
@@ -43,16 +43,16 @@ let pload ty x mo      = Eaction (Paction Pos (Action default (Load ty x mo   ))
 (* NOTE: without the type annotations, the generated ocaml doesn't typecheck *)
 val zero: forall 'a. expr 'a
 let zero =
-  Econst (Mem.MV_integer (Symbolic.SYMBconst 0))
+  Econst (Mem.mk_integer 0)
 val one: forall 'a. expr 'a
 let one =
-  Econst (Mem.MV_integer (Symbolic.SYMBconst 1))
+  Econst (Mem.mk_integer 1)
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
 
 
 val cfunction_const: forall 'a. Symbol.t -> expr 'a
 let cfunction_const fsym =
-  Econst (Mem.MV_pointer (Mem.function_pointer fsym))
+  Econst (Mem.mk_pointer (Mem.function_pointer fsym))
 
 
 
@@ -218,8 +218,8 @@ let rec in_pattern a p =
 
 (* substitute in an expression a symbolic name with a (pure) expression *)
 val     subst_sym: forall 'a. sym -> expr 'a -> expr 'a -> expr 'a
-let rec subst_sym a v e =
-  match e with
+let rec subst_sym a v expr =
+  match expr with
     | Eunit ->
         Eunit
     | Etrue ->
@@ -233,7 +233,7 @@ let rec subst_sym a v e =
     | Ectype ty ->
         Ectype ty
     | Esym a' ->
-        if a = a' then v else e
+        if a = a' then v else expr
     | Eimpl i ->
         Eimpl i
     | Etuple es ->
@@ -248,8 +248,8 @@ let rec subst_sym a v e =
         Eoutput str
     | Eundef u ->
         Eundef u
-    | Eerror ->
-        Eerror
+    | Eerror str ->
+        Eerror str
     | Eraise str ->
         Eraise str
 (*
@@ -379,8 +379,8 @@ let rec subst_wait tid v = function
        Eoutput str
    | Eundef ub ->
        Eundef ub
-   | Eerror ->
-       Eerror
+   | Eerror str ->
+       Eerror str
    | Eraise str ->
        Eraise str
 (*
@@ -493,7 +493,7 @@ let rec is_pure e =
        false
    | Eundef _ ->
        true
-   | Eerror ->
+   | Eerror _ ->
        true
    | Eraise _ ->
        false
@@ -582,7 +582,7 @@ let rec is_value e =
         false
     | Eundef _ ->
         false
-    | Eerror ->
+    | Eerror _ ->
         false
     | Eraise str ->
         false
@@ -667,7 +667,7 @@ let rec find_labeled_continuation k expr =
         Nothing
     | Eundef _ ->
         Nothing
-    | Eerror ->
+    | Eerror _ ->
         Nothing
     | Eraise _ ->
        Nothing
@@ -859,7 +859,7 @@ let rec collect_labeled_continuations expr =
         Map.empty
     | Eundef _ ->
         Map.empty
-    | Eerror ->
+    | Eerror _ ->
         Map.empty
     | Eraise _ ->
         Map.empty

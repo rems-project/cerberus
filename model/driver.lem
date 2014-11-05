@@ -1,7 +1,7 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId
-open import Core_run Core_run_aux ExecutableOpsem Cmm_master
+import Core Core_ctype Boot UniqueId Decode
+open import Show Core_run Core_run_aux ExecutableOpsem Cmm_master
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
@@ -73,7 +73,7 @@ type driver_state = <|
 
 
 
-val runCore: forall 'a. (* SetType 'a => *) SEU.t 'a core_run_state core_run_error -> driver_state -> ND.t ('a * driver_state)
+val runCore: forall 'a. (* SetType 'a => *) core_runM 'a -> driver_state -> ND.t ('a * driver_state)
 let runCore m dr_st =
   match SEU.run m dr_st.core_run_state with
     | Exception.Result (U.Defined z, run_st') ->
@@ -82,11 +82,11 @@ let runCore m dr_st =
     | Exception.Result (U.Undef ubs, _) ->
         ND.kill (ND.Undef ubs)
     
-    | Exception.Result (U.Error, _) ->
-        ND.kill ND.Error
+    | Exception.Result (U.Error str, _) ->
+        ND.kill (ND.Error str)
     
     | Exception.Exception err ->
-        ND.kill (ND.Other $ "WIP Driver.runCore: runtime error ==> " ^ string_of_core_run_error err)
+        ND.kill (ND.Other $ "WIP Driver.runCore: runtime error ==> " ^ show err)
   end
 
 
@@ -97,7 +97,7 @@ open ND.Operators
 
 (* TODO: debug *)
 val pp_core_state: forall 'a. core_state -> string
-declare ocaml target_rep function pp_core_state = `Boot_pprint.pp_core_state`
+declare ocaml target_rep function pp_core_state = `Pp_core_run.string_of_core_state`
 
 
 
@@ -127,7 +127,8 @@ let rec drive_core_thread tid dr_st =
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         drive_core_thread tid <| dr_st' with core_state= core_st' |>
     
-    | Step_eval _ _ step_m ->
+    | Step_eval debug_str _ step_m ->
+        let _ = Boot.output_string ("Step_val: " ^ debug_str) in
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         drive_core_thread tid <| dr_st' with core_state= core_st' |>
@@ -205,18 +206,19 @@ let rec driver_sequential _dr_st =
               | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
                   let dr_st'' = update_core_state core_st' dr_st' in
                   
-                  let _ = Boot.output_string ("AllocRequest on: " ^ Mem.string_of_pointer_value ptr_val ^  (* DEBUG *)
-                          ", giving " ^ Mem.string_of_memory_state dr_st''.core_run_state.layout_state) in (* DEBUG *)
+                  let _ = Boot.output_string ("AllocRequest on: " ^ show ptr_val ^  (* DEBUG *)
+                          ", giving " ^ show dr_st''.core_run_state.layout_state) in (* DEBUG *)
                   
                   dr_st''
               
               | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
+                  let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in
                   let dr_st'' = <| dr_st' with
                     core_state= core_st';
                     core_run_state= <| dr_st'.core_run_state with
                       layout_state=
   (* TODO: hack hack hack *)
-  let (Exception.Result (Undefined.Defined _, z)) = SEU.run (Mem.store ptr_val mem_val) dr_st'.core_run_state.layout_state in
+  let (Exception.Result (Undefined.Defined _, z)) = SEU.run (Mem.store ty ptr_val mem_val) dr_st'.core_run_state.layout_state in
   z
 
 
@@ -225,17 +227,17 @@ let rec driver_sequential _dr_st =
                     |>
 (*                    sequential_state= Map.insert ptr_val (Just mem_val) dr_st'.sequential_state *)
                   |> in
-                  let _ = Boot.output_string ("StoreRequest on: " ^ Mem.string_of_pointer_value ptr_val ^
-                          ", from " ^ Mem.string_of_memory_state dr_st'.core_run_state.layout_state ^
-                          ", to " ^ Mem.string_of_memory_state dr_st''.core_run_state.layout_state) in
+                  let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^
+                          ", from " ^ show dr_st'.core_run_state.layout_state ^
+                          ", to " ^ show dr_st''.core_run_state.layout_state) in
                   dr_st''
               
               | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val _ mk_core_st' ->
                   let dr_st'' = <| dr_st' with
                     core_state=
-                      match Mem.runMem (Mem.load ptr_val) dr_st'.core_run_state.layout_state with
+                      match Mem.runMem (Mem.load ty ptr_val) dr_st'.core_run_state.layout_state with
                         | Left _ ->
-                            Boot.assert_false $ "Error while loading: " ^ Mem.string_of_pointer_value ptr_val
+                            Boot.assert_false $ "Error while loading: " ^ show ptr_val
                         | Right (mem_val, _) ->
                             mk_core_st' mem_val
                       end
@@ -247,13 +249,13 @@ let rec driver_sequential _dr_st =
                         | _ ->
                             Boot.assert_false $
                               "reading from uninitialised object: " ^
-                              Mem.string_of_pointer_value ptr_val
+                              show ptr_val
                       end in
                       mk_core_st' mem_val
 *)
                   |> in
-                  let _ = Boot.output_string ("LoadRequest on: " ^ Mem.string_of_pointer_value ptr_val ^
-                          ", with " ^ Mem.string_of_memory_state dr_st'.core_run_state.layout_state) in
+                  let _ = Boot.output_string ("LoadRequest on: " ^ show ptr_val ^
+                          ", with " ^ show dr_st'.core_run_state.layout_state) in
                   dr_st''
             end in
             driver_sequential dr_st_with_request
@@ -358,12 +360,16 @@ let driver_globals_sequential file =
     core_run_state= run_st
   |> in
   
-  ND.foldM (fun dr_st (sym, cTy, e) ->
+  ND.foldM (fun (to_subst, dr_st) (sym, cTy, e) ->
+    let _ = Boot.output_string ("eval GLOB: " ^ show sym) in
+    
     (* setting up the initialisation of the current global in thread 0 *)
     let dr_st = <| dr_st with
       core_state=
         update_thread_state tid0 <|
-          arena=  e;
+          arena=  List.foldl (fun acc (sym', v) ->
+                    if sym <> sym' then Core_aux.subst_sym sym' v acc else acc
+                  ) e to_subst;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty
         |> dr_st.core_state
@@ -375,22 +381,21 @@ let driver_globals_sequential file =
     ND.return $
       match dr_st'.core_state.thread_states with
         | [(_, (_, th_st))] ->
-            (* TODO: would be more efficient to evaluate all the globs,
-                     and then do the substitution *)
-            <| dr_st' with core_file=
-              <| dr_st'.core_file with
-                Core.funs= Core_aux.subst_sym_fun_map sym th_st.arena dr_st'.core_file.Core.funs
-              |>
-            |>
+            ((sym, th_st.arena) :: to_subst,
+             <| dr_st' with core_file=
+                  <| dr_st'.core_file with
+                       Core.funs=  Core_aux.subst_sym_fun_map sym th_st.arena dr_st'.core_file.Core.funs;
+                  |>
+             |>)
         | xs ->
-            Boot.assert_false "ERROR (in Driver, global init didn't evaluate to value)\n"
+            Boot.assert_false "ERROR (in Driver, global init didn't evaluate to value)"
       end
-  ) dr_st dr_st.core_file.Core.globs >>= fun dr_st' ->
+  ) ([], dr_st) dr_st.core_file.Core.globs >>= fun (_, dr_st') ->
   
   ND.return (tid0, dr_st')
 
 
-let drive file =
+let drive file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
   driver_globals_sequential file >>= fun (tid0, dr_st) ->
@@ -399,7 +404,61 @@ let drive file =
   match Map.lookup dr_st.core_file.Core.main dr_st.core_file.Core.funs with
     | Nothing ->
         ND.kill (ND.Other "couldn't find the startup function")
-    | Just (_, _, expr) ->
+    | Just (_, params, expr) ->
+        match params with
+          | [(argc_sym, _); (argv_sym, _)] ->
+              (* memomy_values to be stored in memory objects pointed to by
+                 the element of main.argv  *)
+              let args_mem_val_tys =
+                List.map (fun arg_str ->
+                  let mem_vals =
+                    List.map (fun c ->
+                      (* TODO: fixing impl choice here (ASCII) *)
+                      Mem.mk_integer $ Decode.decode_character_constant (String.toString [c])
+                    ) (String.toCharList arg_str) in
+                  (* NOTE: adding a null termination to the char array *)
+                  (
+                    Mem.mk_array (mem_vals ++ [Mem.mk_integer 0]),
+                    Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
+                  )
+                ) arg_strs in
+              
+              (* memory value to be stored in the memory object pointed to by main.argc *)
+              let argc_mem_val = Mem.mk_integer (integerFromNat $ List.length args_mem_val_tys) in
+              
+              (* allocating and initialising an object for main.argc *)
+              runCore (
+                SEU.bind (runMem (Mem.allocate_object tid0 [dr_st.core_file.Core.main; argc_sym] Core_ctype.signed_int)) (fun ptr_val ->
+                SEU.bind (runMem (Mem.store Core_ctype.signed_int ptr_val argc_mem_val)) (fun _ ->
+                SEU.return ptr_val))
+              ) dr_st >>= fun (argc_ptr_val, dr_st) ->
+              
+              (* allocating and initialising the objects pointed to by the elements of argv *)
+              ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
+                runCore (
+                  SEU.bind (runMem (Mem.allocate_object tid0 [] arg_ty)) (fun ptr_val ->
+                  SEU.bind (runMem (Mem.store arg_ty ptr_val arg_mem_val)) (fun _ ->
+                  SEU.return (ptr_val :: ptr_vals)))
+                ) dr_st
+              ) ([], dr_st) args_mem_val_tys >>= fun (ptr_vals_rev, dr_st) ->
+              
+              (* allocating and initialising an object for main.argv *)
+              let argv_ty =
+                Core_ctype.Array (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char)
+                                 (Just (integerFromNat $ List.length ptr_vals_rev)) in
+              runCore (
+                SEU.bind (runMem (Mem.allocate_object tid0 [dr_st.core_file.Core.main; argv_sym] argv_ty)) (fun ptr_val ->
+                SEU.bind (runMem (Mem.store argv_ty ptr_val (Mem.mk_array $ List.map Mem.mk_pointer (List.reverse ptr_vals_rev)))) (fun _ ->
+                SEU.return ptr_val))
+              ) dr_st >>= fun (argv_ptr_val, dr_st) ->
+              
+              ND.return $
+                Core_aux.subst_syms [Just argc_sym; Just argv_sym]
+                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val])
+                  expr
+          | _ ->
+              ND.return expr
+        end >>= fun expr ->
         driver_sequential <| dr_st with
           core_state= update_thread_state tid0 <|
                         arena=  expr;

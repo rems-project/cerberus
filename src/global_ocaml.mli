@@ -37,6 +37,10 @@ type cerberus_conf = {
   no_rewrite:    bool;
 }
 
+(* print an error fatal message and exit with a given code (default is 1) *)
+val error: ?code:int -> string -> 'a
+
+
 val (!!): (unit -> 'a) ref -> 'a
 
 val cerb_conf: (unit -> cerberus_conf) ref
@@ -53,19 +57,7 @@ val set_cerb_conf:
     bool ->
     unit
 
-(* print an error fatal message and exit with a given code (default is 1) *)
-val error: ?code:int -> string -> 'a
-
-val debug_level: int ref
 val progress_sofar: int ref
-
-
-val print_success: string -> unit
-val print_debug: int -> string -> unit
-
-(* val print_deubg2: string -> 'a -> 'a *)
-
-val output_string2: string -> unit (* TODO: rename *)
 
 
 (* let pass_through        f = Exception.fmap (fun v ->           f v        ; v) *)

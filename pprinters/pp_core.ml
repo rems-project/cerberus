@@ -51,7 +51,7 @@ let precedence = function
   | Eimpl _
   | Etuple _
   | Eundef _
-  | Eerror
+  | Eerror _
   | Eraise _
   | Eregister _
 (*
@@ -354,8 +354,8 @@ let rec pp_expr e =
             pp_keyword "undef" ^^ P.angles (P.angles (!^ (
               if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
                          else Undefined.string_of_undefined_behaviour u)))
-        | Eerror ->
-            pp_keyword "error"
+        | Eerror str ->
+            pp_keyword "error" ^^^ P.dquotes (!^ str)
         | Eraise str ->
             pp_keyword "raise" ^^ P.parens (!^ str)
         | Eregister (str, nm) ->
@@ -525,3 +525,47 @@ let pp_file file =
   List.fold_left g P.empty file.globs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
     (Pset.elements (Pmap.bindings (pairCompare symbol_compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1
+
+
+
+(* String functions *)
+let string_of_expr e =
+  Pp_utils.to_plain_string (pp_expr e)
+let string_of_file f =
+  Pp_utils.to_plain_string (pp_file f)
+
+
+let string_of_params z =
+  Pp_utils.to_plain_string (pp_params z)
+(* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)
+
+let mk_string_of_continuation_element = function
+  | Kunseq (es1, es2) ->
+      fun z ->
+        let str1 = List.fold_right (fun e acc -> string_of_expr e ^ " || " ^ acc) es1 "" in
+        let str2 = List.fold_right (fun e acc -> acc ^ "|| " ^ string_of_expr e) es2 "" in
+        "[ " ^ str1 ^ z ^ str2 ^ " ]"
+  | Kwseq (_as, e) ->
+      fun z ->
+        let str = string_of_expr e in
+        "let weak TODO = " ^ z ^ " in " ^ str
+  | Ksseq (_as, e) ->
+      fun z ->
+        let str = string_of_expr e in
+        "let strong TODO = " ^ z ^ " in " ^ str
+
+let string_of_continuation cont =
+  List.fold_left (fun acc cont_elem -> mk_string_of_continuation_element cont_elem acc) "[]" cont
+
+
+let rec string_of_stack = function
+  | Stack_empty ->
+      ""
+  | Stack_cons (cont, Stack_empty) ->
+      string_of_continuation cont
+  | Stack_cons (cont, sk) ->
+      string_of_continuation cont ^ " . " ^ string_of_stack sk
+
+
+
+

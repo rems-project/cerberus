@@ -723,7 +723,7 @@ let pp_program (startup, sigm) =
   
   List.fold_left (fun acc (sym, decl) ->
     match decl with
-      | Decl_object (qs, ty) ->
+      | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           (if !isatty then !^ "\x1b[31m" else P.empty) ^^
@@ -782,3 +782,16 @@ let pp_program (startup, sigm) =
           )  ^^
           P.break 1 ^^ P.hardline ^^ acc
     ) P.empty (List.rev sigm.declarations) ^^ P.break 1
+
+
+
+
+(* String functions *)
+let string_of_ctype ty =
+  Pp_utils.to_plain_string (pp_ctype ty)
+
+let string_of_expr e =
+  Pp_utils.to_plain_string (pp_expression e)
+
+let string_of_qualifiers_human qs =
+  Pp_utils.to_plain_string (pp_qualifiers_human qs)
