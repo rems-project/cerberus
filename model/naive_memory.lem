@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Show
 
 import State_exception_undefined
 import Symbol Symbolic Core_ctype Thread
@@ -70,6 +70,10 @@ instance (SetType pointer_value)
   let setElemCompare = compare_pointer_value
 end
 
+instance (Show pointer_value)
+  let show p = "?" (* TODO *)
+end
+
 type mem_value =
   | MV_pointer of pointer_value
   | MV_integer of Symbolic.symbolic   (* possibly-symbolic integer value *)
@@ -117,7 +121,9 @@ instance (Eq mem_value)
   let (<>) = fun x y -> not (mem_value_eq x y)
 end
 
-
+instance (Show mem_value)
+  let show m = "?" (* TODO *)
+end
 
 
 

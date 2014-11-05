@@ -1,7 +1,7 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId
-open import Core_run2 Core_run2_aux ExecutableOpsem Cmm_master
+import Core Core_ctype Boot UniqueId MinimalOpsem
+open import Show Core_run2 Core_run2_aux ExecutableOpsem Cmm_master
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism
 
@@ -282,20 +282,12 @@ let rec stepConcurrency n dr_st =
         else
           ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
-                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
-                (if (concur_st'.stateIsDefined) then
-                   let _ = Boot.output_string "Found a def.\n" in
-                   ND.return  <| dr_st with concurrency_state= concur_st' |>
-                 else
-                   let _ = Boot.output_string "Found an undef.\n" in
-                   ND.kill_execution >>
-                   (* TODO *)
-                   ND.return  <| dr_st with concurrency_state= concur_st' |>
-                )
+                let _ = Boot.output_string ("Performed action " ^ show (aid_of performed_act) ^ "\n") in
+                ND.return  <| dr_st with concurrency_state= concur_st' |>
             
             | ReadsFrom v w performed_act concur_st' ->
-                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
-                ND.print_debug ("READSFROM " ^ string_of_natural (naturalFromNat (aid_of performed_act)) ^ "\n") >>
+                let _ = Boot.output_string ("Performed action " ^ show (aid_of performed_act) ^ "\n") in
+                ND.print_debug ("READSFROM " ^ show (aid_of performed_act) ^ "\n") >>
                 (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
 
@@ -461,14 +453,26 @@ let rec driver _dr_st =
         let dr_st = repair_pre_execution dr_st in 
         let n = (number_of_uncommitted dr_st.concurrency_state) in
         ND.print_debug $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" >>
+        let _ = Boot.output_string ("pre_ex: " ^ show dr_st.concurrency_state.preEx ^ "\n") in
         stepConcurrency n dr_st >>= fun dr_st' ->
-        ND.return $
-          match dr_st'.core_state.thread_states with
-            | [(_, (_, th_st))] ->
-                (dr_st'.blocked, dr_st'.concurrency_state.preEx, th_st.arena)
-            | xs ->
-                Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
-          end
+        let v =  match dr_st'.core_state.thread_states with
+                  | [(_, (_, th_st))] ->
+                      th_st.arena
+                  | xs ->
+                      Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
+                end in
+        ND.return (dr_st'.blocked, dr_st'.concurrency_state.preEx,
+        match dr_st'.concurrency_state.stateIsDefined with
+          | MinimalOpsem.Defined2 -> v
+          | MinimalOpsem.DataRaces _ -> Core.Eundef U.Data_race
+          | MinimalOpsem.UnsequencedRaces _ -> Core.Eundef U.Unsequenced_race
+          | MinimalOpsem.IndeterminateReads _ -> Core.Eundef U.DUMMY
+          | MinimalOpsem.BadMutexes _ -> Core.Eundef U.DUMMY
+          | MinimalOpsem.NotInSublanguage -> Core.Eundef U.DUMMY
+        end)
+     
+        
+        
   end in
   
   ND.pick dr_st.core_state.thread_states >>= fun th_info ->

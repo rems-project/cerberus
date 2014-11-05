@@ -68,7 +68,8 @@ CERBERUS_LEM=\
   nondeterminism.lem \
   thread.lem \
   uniqueId.lem \
-  enum.lem
+  enum.lem \
+  show.lem
 
 # The collection of lem files
 MODEL_LEM= $(CMM_MODEL_LEM) $(CMM_EXEC_LEM) $(AIL_LEM) $(CERBERUS_LEM)
