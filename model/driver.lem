@@ -264,6 +264,10 @@ let resolve_read_pre_execution write_sym v preEx =
 
 
 
+val aid_to_string: action -> string
+let aid_to_string a =
+  string_of_natural (naturalFromNat (aid_of a))
+
 
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.t driver_state
@@ -278,9 +282,19 @@ let rec stepConcurrency n dr_st =
         else
           ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
-                ND.return  <| dr_st with concurrency_state= concur_st' |>
+                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
+                (if (concur_st'.stateIsDefined) then
+                   let _ = Boot.output_string "Found a def.\n" in
+                   ND.return  <| dr_st with concurrency_state= concur_st' |>
+                 else
+                   let _ = Boot.output_string "Found an undef.\n" in
+                   ND.kill_execution >>
+                   (* TODO *)
+                   ND.return  <| dr_st with concurrency_state= concur_st' |>
+                )
             
             | ReadsFrom v w performed_act concur_st' ->
+                let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
                 ND.print_debug ("READSFROM " ^ string_of_natural (naturalFromNat (aid_of performed_act)) ^ "\n") >>
                 (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
