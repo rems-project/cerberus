@@ -277,7 +277,7 @@ let rec stepConcurrency n dr_st =
     | _ ->
         (let concur_steps = Set_extra.toList $ exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
         if List.null concur_steps then
-          Boot.assert_false "ND.return <| dr_st with blocked= true |>"
+          ND.return <| dr_st with blocked= true |>
         else
           ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
