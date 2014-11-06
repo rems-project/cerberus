@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Show
 import Symbol
 
 (* Symbolic expressions *)
@@ -12,6 +12,17 @@ type operator =
 instance (Eq operator)
   let (=)  = unsafe_structural_equality
   let (<>) = unsafe_structural_inequality
+end
+
+instance (Show operator)
+  let show op = 
+    match op with
+    | Add -> "Add"
+    | Sub -> "Sub"
+    | Mul -> "Mul"
+    | Div -> "Div"
+    | Mod -> "Mod"
+    end
 end
 
 type symbolic =
@@ -35,6 +46,19 @@ let rec symbolic_eq symb1 symb2 =
 instance (Eq symbolic)
   let (=) = symbolic_eq
   let (<>) = fun x y -> not (symbolic_eq x y)
+end
+
+val symbolic_to_string: symbolic -> string
+let rec symbolic_to_string sym =
+  match sym with
+  | Symbolic_constant i -> "Constant (" ^ show i ^ ")" 
+  | Symbolic_symbol t -> "Symbol (" ^ show t ^ ")"
+  | Symbolic_op op sym1 sym2 -> 
+      "Op (" ^ show op ^ " " ^ symbolic_to_string sym1 ^ " " ^ symbolic_to_string sym2 ^ ")"
+  end
+
+instance (Show symbolic)
+  let show = symbolic_to_string
 end
 
 let symbolic_to_nat s =

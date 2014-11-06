@@ -208,7 +208,7 @@ end
 
 val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
 let resolve_read write_sym v core_st =
-  let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in
+  (* let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in *)
   <| core_st with
        thread_states= List.map (fun (tid, (parent_tid_opt, th_st)) ->
                        (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym v th_st.arena;
@@ -264,14 +264,13 @@ let resolve_read_pre_execution write_sym v preEx =
 
 
 
-val aid_to_string: action -> string
-let aid_to_string a =
-  string_of_natural (naturalFromNat (aid_of a))
+
 
 
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.t driver_state
 let rec stepConcurrency n dr_st =
+  let indent = String.makeString n #' ' in
   match n with
     | 0 ->
         ND.return dr_st
@@ -282,12 +281,19 @@ let rec stepConcurrency n dr_st =
         else
           ND.pick concur_steps >>= function
             | ConcurrencyTau performed_act concur_st' ->
-                let _ = Boot.output_string ("Performed action " ^ show (aid_of performed_act) ^ "\n") in
+                (* let _ = Boot.output_string (indent ^ "Performed action " ^
+                                            show (aid_of performed_act) ^ "\n") in *)
+                ND.print_debug ("Performed action " ^
+                                show (aid_of performed_act) ^ "\n") >>
                 ND.return  <| dr_st with concurrency_state= concur_st' |>
             
             | ReadsFrom v w performed_act concur_st' ->
-                let _ = Boot.output_string ("Performed action " ^ show (aid_of performed_act) ^ "\n") in
-                ND.print_debug ("READSFROM " ^ show (aid_of performed_act) ^ "\n") >>
+                (* let _ = Boot.output_string (indent ^ "Performed action " ^ 
+                                            show (aid_of performed_act) ^ "\n") in *)
+                ND.print_debug ("Performed action " ^
+                                show (aid_of performed_act) ^ 
+                                " The symbolic value (" ^ show w ^ ") becomes (" ^ show v ^ ")\n") >>
+                (* ND.print_debug ("READSFROM " ^ show (aid_of performed_act) ^ "\n") >> *)
                 (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
 
@@ -452,26 +458,28 @@ let rec driver _dr_st =
         
         let dr_st = repair_pre_execution dr_st in 
         let n = (number_of_uncommitted dr_st.concurrency_state) in
-        ND.print_debug $ "CALLING CONCURRENCY> " ^ string_of_natural (naturalFromNat n) ^ " times\n" >>
-        let _ = Boot.output_string ("pre_ex: " ^ show dr_st.concurrency_state.preEx ^ "\n") in
+        ND.print_debug ("pre_ex: " ^ show dr_st.concurrency_state.preEx ^ "\n") >>
+        ND.print_debug ("Calling concurrency " ^ show n ^ " times\n") >>
         stepConcurrency n dr_st >>= fun dr_st' ->
-        let v =  match dr_st'.core_state.thread_states with
+        ND.print_debug ("wit: " ^ show dr_st'.concurrency_state.exWitness ^ "\n") >>
+        let v = 
+        match dr_st'.concurrency_state.stateIsDefined with
+          | MinimalOpsem.Defined2 -> 
+                match dr_st'.core_state.thread_states with
                   | [(_, (_, th_st))] ->
                       th_st.arena
                   | xs ->
                       Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st'.core_state
-                end in
-        ND.return (dr_st'.blocked, dr_st'.concurrency_state.preEx,
-        match dr_st'.concurrency_state.stateIsDefined with
-          | MinimalOpsem.Defined2 -> v
+                end
           | MinimalOpsem.DataRaces _ -> Core.Eundef U.Data_race
           | MinimalOpsem.UnsequencedRaces _ -> Core.Eundef U.Unsequenced_race
           | MinimalOpsem.IndeterminateReads _ -> Core.Eundef U.DUMMY
           | MinimalOpsem.BadMutexes _ -> Core.Eundef U.DUMMY
           | MinimalOpsem.NotInSublanguage -> Core.Eundef U.DUMMY
-        end)
-     
-        
+        end in
+        ND.print_debug ("Result: " ^ show v ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
+        ND.return (dr_st'.blocked, dr_st'.concurrency_state.preEx, v)
+       
         
   end in
   

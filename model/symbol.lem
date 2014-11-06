@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Show
 
 open import Enum
 import UniqueId
@@ -55,6 +55,13 @@ end
 
 instance (SetType t)
   let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+end
+
+instance (Show t)
+  let show t = 
+    match t with
+    | Symbol n s -> "Symbol (" ^ show n ^ " " ^ show s ^ ")"
+    end
 end
 
 val fresh: State.t (UniqueId.t t) (UniqueId.supply t)

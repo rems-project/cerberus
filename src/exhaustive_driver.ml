@@ -133,7 +133,7 @@ let drive (file:'a Core.file) : execution_result =
 (*  let _ = loop file (Driver.initial_driver_state file) in *)
   
   let vs = Driver.driver (Driver.initial_driver_state file) in
-(*  Printf.printf "Number of executions: %d\n" (List.length vs); *)
+  Boot_ocaml.dprint 4 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
   
   let ky = ref [] in
   let ret = ref [] in
@@ -141,15 +141,22 @@ let drive (file:'a Core.file) : execution_result =
 
 
 
+    Boot_ocaml.dprint 4 (Printf.sprintf "Execution #%d under constraints:\n" n); 
 (*
-    Printf.printf "Execution #%d under constraints:\n" n;
-    print_endline "=====";
-    print_endline (pp_eqs eqs);
-    print_endline "=====";
-    Printf.printf "with pre_execution:\n%s\n" (Pp_cmm.dot_of_pre_execution preEx);
-    Printf.printf "has value:\n  %s\n\n" (Boot_pprint.pp_core_expr v)
+    Boot_ocaml.dprint 4 "=====";
+    Boot_ocaml.dprint 4 (pp_eqs eqs);
+    Boot_ocaml.dprint 4 "=====";
+    Boot_ocaml.dprint 4 (Printf.sprintf "with pre_execution:\n%s\n" (Pp_cmm.dot_of_pre_execution preEx));
+    Boot_ocaml.dprint 4 (Printf.sprintf "has value:\n  %s\n\n" (Boot_pprint.pp_core_expr v));
 *)
+
+    if not is_killed then (
+      Boot_ocaml.dprint 1 debug_log
+    );
+
     let str_v = Boot_pprint.pp_core_expr v in
+    (* Printf.printf "Yo mamma> %s\n" str_v; *)
+    
     if not (List.mem str_v !ky) && not (is_blocked) && not is_killed then (
 (*
       Printf.printf "Execution #%d (%s) under constraints:\n" n (if is_killed then "KILLED" else "");
@@ -158,21 +165,23 @@ let drive (file:'a Core.file) : execution_result =
       print_endline "=====";
       Printf.printf "BEGIN LOG\n%s\nEND LOG\n" debug_log;
 *)
+      
       ret := v :: !ret;
-      print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_eqs eqs)) )
+      ky := str_v :: !ky;
+      Boot_ocaml.dprint 1 (Pp_cmm.dot_of_pre_execution preEx str_v (pp_eqs eqs)) )
     else
       (
-(*
-       print_string "SKIPPING: ";
+       Boot_ocaml.dprint 4 "SKIPPING: ";
        if is_blocked then
-         print_endline "(blocked)";
-       print_endline ("eqs= " ^ pp_eqs eqs)
-*)
-      );
+         Boot_ocaml.dprint 4 "(blocked)";
+       Boot_ocaml.dprint 4 ("eqs= " ^ pp_eqs eqs)
+      )
     
-    ky := str_v :: !ky
+
 
   ) (Global.numerote vs);
+  
+  (* Printf.printf "FOUND %d mammas\n" (List.length !ky); *)
   
   Exception.return0 !ret
 

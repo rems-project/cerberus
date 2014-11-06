@@ -1,4 +1,4 @@
-open import Pervasives Show
+open import Pervasives Show 
 
 import State_exception_undefined
 import Symbol Symbolic Core_ctype Thread
@@ -71,7 +71,10 @@ instance (SetType pointer_value)
 end
 
 instance (Show pointer_value)
-  let show p = "?" (* TODO *)
+  let show p = 
+    match p with
+    | Pointer_nonnull id -> "Nonnull (" ^ show id ^ ")"
+    end
 end
 
 type mem_value =
@@ -122,7 +125,11 @@ instance (Eq mem_value)
 end
 
 instance (Show mem_value)
-  let show m = "?" (* TODO *)
+  let show m = 
+    match m with
+    | MV_pointer p -> "Pointer (" ^ show p ^ ")"
+    | MV_integer sym -> "Integer (" ^ show sym ^ ")"
+    end
 end
 
 
