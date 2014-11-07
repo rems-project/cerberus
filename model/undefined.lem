@@ -327,6 +327,10 @@ let string_of_undefined_behaviour = function
       "Reached_end_of_function"
 end
 
+instance (Show undefined_behaviour)
+  let show = string_of_undefined_behaviour
+end
+
 
 val     string_of_undefined_behaviours_aux: list undefined_behaviour -> string
 let rec string_of_undefined_behaviours_aux ubs =
