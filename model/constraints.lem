@@ -1,6 +1,7 @@
 open import Pervasives
 open import Global Symbolic
 
+  (*
 type t
 declare ocaml target_rep type t = `Smt_wrapper.assertions`
 
@@ -33,6 +34,53 @@ declare ocaml target_rep function assert_ge = `Smt_wrapper.assert_ge`
 
 val isUnsat: t -> bool
 declare ocaml target_rep function isUnsat = `Smt_wrapper.is_unsat`
+*)
+
+type t =
+  (* TODO: assumes that the symbolic expressions have type "bool" *)
+  | Constraints of list symbolic
+
+
+val empty: t
+let empty =
+  Constraints []
+
+
+val is_empty: t -> bool
+let is_empty (Constraints xs) =
+  List.null xs
+
+
+val combine: t -> t -> t
+let combine (Constraints xs) (Constraints ys) =
+  Constraints (xs ++ ys) (* TODO: simplification ? *)
+
+
+
+
+val assert_eq: symbolic -> symbolic -> t -> t
+let assert_eq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Eq symb1 symb2 :: xs)
+
+val assert_neq: symbolic -> symbolic -> t -> t
+let assert_neq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Neq symb1 symb2 :: xs)
+
+
+
+
+
+
+
+val isUnsat: t -> bool
+let isUnsat _ =
+  false (* TODO: WIP *)
+
+
+
+(* ============================================================================================== *)
+
+
 
 (*
 type assertion =

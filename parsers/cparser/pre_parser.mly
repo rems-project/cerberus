@@ -42,6 +42,9 @@
   COMMA (* TODO: HASH HASH_HASH *)
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
+(* NON-STD cppmem syntax *)
+LBRACES PIPES RBRACES
+
 %token EOF
 
 
@@ -58,6 +61,7 @@ when a is a TYPEDEF_NAME. It is solved by 6.7.5.3 11.
 %%
 
 (* Helpers *)
+
 
 %inline option(X):
 | /* nothing */
@@ -659,6 +663,8 @@ labeled_statement(last_statement):
 (* §6.8.2 Compound statement *)
 compound_statement:
 | LBRACE block_item_list? RBRACE
+(* NON-STD cppmem syntax *)
+| LBRACES separated_nonempty_list(PIPES, compound_statement) RBRACES
     {}
 
 block_item_list:

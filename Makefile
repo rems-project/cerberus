@@ -115,7 +115,8 @@ PPRINTERS_ML=\
   pp_errors.ml \
   pp_std.ml \
   pp_symbol.ml \
-  pp_cabs.ml pp_ail.ml pp_core.ml pp_core_run.ml pp_run.ml \
+  pp_cabs.ml pp_ail.ml pp_core_ctype.ml pp_core.ml pp_run.ml \
+  string_ail.ml string_core_ctype.ml string_core.ml string_core_run.ml \
   pp_cmm.ml
 
 

@@ -57,6 +57,9 @@ let dummy_loc =
   COMMA (* TODO: HASH HASH_HASH *)
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
+(* NON-STD cppmem syntax *)
+LBRACES PIPES RBRACES
+
 %token EOF
 
 (* ========================================================================== *)
@@ -886,6 +889,10 @@ labeled_statement(last_statement):
 compound_statement:
 | LBRACE bis_opt= block_item_list? RBRACE
     { CabsStatement (($startpos, $endpos), CabsSblock (option [] List.rev bis_opt)) }
+(* NON-STD cppmem syntax *)
+| LBRACES ss= separated_nonempty_list(PIPES, compound_statement) RBRACES
+    (* TODO: the locations are messed up *)
+    { CabsStatement (($startpos, $endpos), CabsSpar (List.rev ss)) }
 
 block_item_list: (* NOTE: the list is in reverse *)
 | stmt= block_item

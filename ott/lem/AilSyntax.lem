@@ -1,5 +1,7 @@
 open import Pervasives Common AilTypes Context
-import Symbol Loc ErrorMonad
+import Symbol Loc ErrorMonad Cmm_master
+
+(* module Cmm = Cmm_master *)
 
 
 (* == Ail syntax datatypes ================================================== *)
@@ -56,6 +58,11 @@ type constant [name = "c*"] =
  | ConstantCharacter     of characterConstant
  | ConstantArray         of list constant
 
+(* 
+ (* TODO: this is a kind of integer constant, may need to update some predicates *)
+ | ConstantMemoryOrder of Cmm.memory_order
+*)
+
 type unaryOperator = 
  | Plus
  | Minus
@@ -100,6 +107,10 @@ type expression' 'A [name = "e*"] =
   | AilEident of identifier
   | AilEsizeof of qualifiers * ctype
   | AilEalignof of qualifiers * ctype
+  
+  (* NOTE: type annotation on expression, used to remember the type of desugared
+           enumeration constants *)
+  | AilEannot of ctype * (expression 'A)
 
 and generic_association 'A =
   | AilGAtype of ctype * expression 'A
@@ -127,6 +138,7 @@ type statement' 'A [name="s*"] =
   | AilSlabel of identifier * statement 'A
   | AilSgoto of identifier
   | AilSdeclaration of list (identifier * expression 'A)
+  | AilSpar of list (statement 'A) (* NON-STD cppmem threads *)
 and statement 'A [name="s*"] =
   | AnnotatedStatement of Loc.t * statement' 'A
 

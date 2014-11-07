@@ -18,6 +18,9 @@ declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 val output_debug: nat -> string -> unit
 declare ocaml target_rep function output_debug = `Debug.print_debug`
 
+val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
+declare ocaml target_rep function string_of_ail_ctype = `String_core_ctype.string_of_ctype`
+
 
 
 type object_id = nat * list Symbol.t (* symbols originating from C, for debugging purpose *)
@@ -63,7 +66,7 @@ let rec string_of_pointer_shift ptr_sh =
   | Shift_byte ->
       "Shift_byte"
   | Shift_ctype ty ->
-      "Shift_ctype[" ^ show ty ^ "]"
+      "Shift_ctype[" ^ string_of_ail_ctype ty ^ "]"
   | Shift_times ptr_sh' n ->
       "Shift_times[" ^ string_of_pointer_shift ptr_sh' ^ ", " ^ show n ^ "]"
   end
@@ -146,9 +149,9 @@ let rec string_of_prefix syms =
 let rec string_of_pointer_value ptr_val =
   match ptr_val with
     | Pointer_nonnull ty (oid, pref) ->
-        "Pointer_nonnull[" ^ show ty ^ ", " ^ show oid ^ ":{" ^ string_of_prefix pref ^ "}]"
+        "Pointer_nonnull[" ^ string_of_ail_ctype ty ^ ", " ^ show oid ^ ":{" ^ string_of_prefix pref ^ "}]"
     | Pointer_cast ty ptr_val' ->
-        "Pointer_cast[" ^ show ty ^ ", " ^ string_of_pointer_value ptr_val' ^ "]"
+        "Pointer_cast[" ^ string_of_ail_ctype ty ^ ", " ^ string_of_pointer_value ptr_val' ^ "]"
     | Pointer_function (Symbol.Symbol n str_opt) ->
         let sym_str = match str_opt with
           | Just str -> 
@@ -542,7 +545,7 @@ let allocate_object (* tid ty size_symb align_symb *) _ pref ty =
 (* TODO: WIP *)
 val store: Core_ctype.ctype -> pointer_value -> mem_value -> memM unit
 let store ty ptr_val mem_val =
-  let _ = output_debug 5 ("Mem.store: (" ^ show ty ^ ") " ^ string_of_pointer_value ptr_val ^ " := " ^ string_of_mem_value mem_val) in (* DEBUG *)
+  let _ = output_debug 5 ("Mem.store: (" ^ string_of_ail_ctype ty ^ ") " ^ string_of_pointer_value ptr_val ^ " := " ^ string_of_mem_value mem_val) in (* DEBUG *)
   SEU.update (fun st ->
     <| st with mem_writes= (ptr_val, mem_val) :: st.mem_writes |>
   )
@@ -553,10 +556,10 @@ let load ty ptr_val =
   SEU.read (fun st -> st.mem_writes) >>= fun ws ->
   match combine_writes (ptr_val, 1 (* TODO *)) ws with
     | Nothing ->
-        let _ = output_debug 5 ("Mem.load: (" ^ show ty ^ ") " ^ string_of_pointer_value ptr_val ^ " = UNINIT") in (* DEBUG *)
+        let _ = output_debug 5 ("Mem.load: (" ^ string_of_ail_ctype ty ^ ") " ^ string_of_pointer_value ptr_val ^ " = UNINIT") in (* DEBUG *)
         SEU.fail MemErr_uninitialised
     | Just mem_val ->
-        let _ = output_debug 5 ("Mem.load: (" ^ show ty ^ ") " ^ string_of_pointer_value ptr_val ^ " = " ^ string_of_mem_value mem_val) in (* DEBUG *)
+        let _ = output_debug 5 ("Mem.load: (" ^ string_of_ail_ctype ty ^ ") " ^ string_of_pointer_value ptr_val ^ " = " ^ string_of_mem_value mem_val) in (* DEBUG *)
         SEU.return mem_val
   end
 (*

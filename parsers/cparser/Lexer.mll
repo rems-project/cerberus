@@ -474,13 +474,11 @@ hash lexbuf;
 (*  | "%:%:" *)
 
   (* NON-STD (cppmem-like thread syntax) *)
-(*
   | "{{{" { LBRACES }
   | "|||" { PIPES   }
   | "}}}" { RBRACES }
-*)
-
-
+  
+  
   (* STD §6.7.2.4#4, sentence 2 *)
   | "_Atomic" (' ')* "(" { ATOMIC_LPAREN }
 

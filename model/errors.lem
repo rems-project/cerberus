@@ -1,4 +1,4 @@
-open import Global Cabs AilSyntax Core
+open import Global Cabs AilSyntax (* Core *)
 import Loc TypingError
 
 
@@ -288,6 +288,7 @@ type cause =
   | DEFAULT_OUTSIDE_SWITCH
   | UNSUPPORTED of string
   
+(*
   | CORE_TYPECHECK_INCORRECT_EXPECTED of core_type * core_type * string
   | CORE_TYPECHECK_IF_BRANCHES
   
@@ -303,6 +304,7 @@ type cause =
   | CORE_TYPECHECK_UNDECLARED_SYMBOL of sym
   
   | CORE_TYPECHECK of string
+*)
   
   | CORE_UNDEF of list Undefined.undefined_behaviour
   

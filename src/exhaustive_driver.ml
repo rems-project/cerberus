@@ -6,7 +6,7 @@ open Pp_run
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
-let (>>=) = SEU.bind5
+let (>>=) = SEU.bind4
 
 
 let drive file args =
@@ -44,7 +44,7 @@ let drive file args =
     
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, preEx, value))) ->
-          str_v := Pp_core.string_of_expr value;
+          str_v := String_core.string_of_expr value;
           if not (List.mem str_v !ky) && not is_blocked then (
             Debug.print_debug 2 (
               Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"

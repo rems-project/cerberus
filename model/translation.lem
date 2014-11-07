@@ -693,6 +693,22 @@ and translate_expression stdlib program a_expr =
                 (conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.Esym a_e])
           end
       
+      
+(*
+      (* TODO: a bit hackish *)
+      | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin str)) es ->
+          match (str, es) with
+            | ("atomic_load_explicit", [object_e; order_e]) ->
+                (* TODO: for now we don't allow complicated expressions for order_e *)
+                E.return $
+                  E.fresh_symbol >>= fun a_object ->
+                  translate_expression e
+                  C.
+          end
+*)
+      
+      
+      
       (* TODO:
            * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
                           "default argument promotions"

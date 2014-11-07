@@ -118,67 +118,6 @@ let pp_core_type = function
   | TyEffect baseTy -> P.brackets (pp_core_base_type baseTy)
 
 
-let pp_integer_base_ctype ibty =
-  let open AilTypes in
-  match ibty with
-    | Ichar    -> !^ "ichar"
-    | Short    -> !^ "short"
-    | Int_     -> !^ "int"
-    | Long     -> !^ "long"
-    | LongLong -> !^ "long_long"
-
-let pp_integer_ctype ity =
-  let open AilTypes in
-  match ity with
-    | Char             -> !^ "char"
-    | Bool             -> !^ "_Bool"
-    | Signed (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-        !^ str
-    | Unsigned (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-        !^ ("u" ^ str)
-    | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
-    | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
-
-let pp_basic_ctype bty =
-  let open AilTypes in
-  match bty with
-    | Integer ity -> pp_integer_ctype ity
-
-
-let rec pp_ctype t =
-(*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
-  let open Core_ctype in
-  match t with
-    | Void0 ->
-        !^ "void"
-    | Basic0 bty ->
-        pp_basic_ctype bty
-    | Array0 (ty, n_opt) ->
-        pp_ctype ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
-(*
-    | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
-*)
-    | Function0 (ty, args_tys, is_variadic) ->
-        pp_ctype ty ^^^ P.parens (
-          comma_list (fun (qs, ty) -> Pp_ail.pp_qualifiers qs (pp_ctype ty)) args_tys ^^
-          (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-        )
-    | Pointer0 (qs, ty) ->
-        Pp_ail.pp_qualifiers qs (pp_ctype ty) ^^ P.star
-    | Atomic0 ty ->
-        !^ "_Atomic" ^^^ P.parens (pp_ctype ty)
-
-(*
-and pp_member = function
-  | Core_ctype.MEMBER ty ->
-      fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.semi
-  | Core_ctype.BITFIELD (ty, w, _) ->
-      fun z -> pp_ctype ty ^^^ Pp_ail.pp_id z ^^ P.colon ^^^ Pp_ail.pp_integer w ^^ P.semi
- *)
-
-
 let pp_binop = function
   | OpAdd -> P.plus
   | OpSub -> P.minus
@@ -218,11 +157,11 @@ let rec pp_symbolic = function
       pp_symbol sym
   | Symbolic.SYMBop (op, symb1, symb2) ->
       let str_opt = match op with
-        | Symbolic.Add0 -> "+"
-        | Symbolic.Sub0 -> "-"
-        | Symbolic.Mul0 -> "*"
-        | Symbolic.Div0 -> "/"
-        | Symbolic.Mod0 -> "mod" in
+        | Symbolic.Add -> "+"
+        | Symbolic.Sub -> "-"
+        | Symbolic.Mul -> "*"
+        | Symbolic.Div -> "/"
+        | Symbolic.Mod -> "mod" in
       P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
   | Symbolic.SYMBite (symb1, symb2, symb3) ->
       P.parens (!^ "ite" ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2 ^^^ pp_symbolic symb3)
@@ -259,7 +198,7 @@ let rec pp_constant = function
   | Mem.MV_pointer_byte _ ->
       !^ "TODO(MV_pointer_byte)"
   | Mem.MV_unspecified ty ->
-      !^ "unspecified" ^^ P.parens (pp_ctype ty)
+      !^ "unspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
 *)
 
 let pp_memory_order = function
@@ -334,7 +273,7 @@ let rec pp_expr e =
         | Elist pes ->
             P.brackets (comma_list pp pes)
         | Ectype ty ->
-            P.dquotes (pp_ctype ty)
+            P.dquotes (Pp_core_ctype.pp_ctype ty)
         | Esym sym ->
             pp_symbol sym
         | Eimpl i ->
@@ -426,7 +365,7 @@ let rec pp_expr e =
             pp_control "indet" ^^ P.parens (pp e)
         | Esave (l, a_ty_s, e) ->
             pp_keyword "save" ^^^ pp_symbol l ^^
-            P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ pp_ctype ty) a_ty_s) ^^
+            P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ Pp_core_ctype.pp_ctype ty) a_ty_s) ^^
             P.dot ^^^ pp e ^^^ pp_control "end"
         | Erun (_, l, es) ->
             pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
@@ -525,47 +464,3 @@ let pp_file file =
   List.fold_left g P.empty file.globs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
     (Pset.elements (Pmap.bindings (pairCompare symbol_compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1
-
-
-
-(* String functions *)
-let string_of_expr e =
-  Pp_utils.to_plain_string (pp_expr e)
-let string_of_file f =
-  Pp_utils.to_plain_string (pp_file f)
-
-
-let string_of_params z =
-  Pp_utils.to_plain_string (pp_params z)
-(* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)
-
-let mk_string_of_continuation_element = function
-  | Kunseq (es1, es2) ->
-      fun z ->
-        let str1 = List.fold_right (fun e acc -> string_of_expr e ^ " || " ^ acc) es1 "" in
-        let str2 = List.fold_right (fun e acc -> acc ^ "|| " ^ string_of_expr e) es2 "" in
-        "[ " ^ str1 ^ z ^ str2 ^ " ]"
-  | Kwseq (_as, e) ->
-      fun z ->
-        let str = string_of_expr e in
-        "let weak TODO = " ^ z ^ " in " ^ str
-  | Ksseq (_as, e) ->
-      fun z ->
-        let str = string_of_expr e in
-        "let strong TODO = " ^ z ^ " in " ^ str
-
-let string_of_continuation cont =
-  List.fold_left (fun acc cont_elem -> mk_string_of_continuation_element cont_elem acc) "[]" cont
-
-
-let rec string_of_stack = function
-  | Stack_empty ->
-      ""
-  | Stack_cons (cont, Stack_empty) ->
-      string_of_continuation cont
-  | Stack_cons (cont, sk) ->
-      string_of_continuation cont ^ " . " ^ string_of_stack sk
-
-
-
-

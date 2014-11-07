@@ -6,11 +6,13 @@ val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
+(*
 val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
-declare ocaml target_rep function string_of_ail_ctype = `Pp_ail.string_of_ctype`
+declare ocaml target_rep function string_of_ail_ctype = `String_ail.string_of_ctype`
 
 val string_of_ail_qualifiers_human: forall 'a. 'a (* AilTypes.qualifiers *) -> string
-declare ocaml target_rep function string_of_ail_qualifiers_human = `Pp_ail.string_of_qualifiers_human`
+declare ocaml target_rep function string_of_ail_qualifiers_human = `String_ail.string_of_qualifiers_human`
+*)
 
 
 
@@ -46,6 +48,7 @@ type ctype =
  | Builtin of string
 
 
+(*
 let rec string_of_ctype ty =
   match ty with
    | Void ->
@@ -74,7 +77,7 @@ let rec string_of_ctype ty =
 instance (Show ctype)
   let show = string_of_ctype
 end
-
+*)
 
 
 

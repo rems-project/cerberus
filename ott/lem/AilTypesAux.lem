@@ -53,6 +53,9 @@ let signed_type = function
       false
   | IBuiltin _ ->
       false
+  | Enum _ ->
+      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+      true
 end
 
 val unsigned_type: integerType -> bool
@@ -68,6 +71,9 @@ let unsigned_type = function
   | IBuiltin "size_t" ->
       true
   | IBuiltin _ ->
+      false
+  | Enum _ ->
+      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
       false
  end
 
@@ -157,6 +163,8 @@ val is_array_of_character: ctype -> bool
 let is_array_of_character = function
   | Array elem_ty _ ->
       is_character elem_ty
+  | _ ->
+      false
 end
 
 (* STD §6.2.5#1, sentence 3 *)

@@ -30,22 +30,22 @@ let precedence = function
   | AilEunary (Indirection, _)
   | AilEunary (Address, _) -> Some 2
   
-  | AilEbinary (_, Arithmetic Mul, _)
-  | AilEbinary (_, Arithmetic Div, _)
-  | AilEbinary (_, Arithmetic Mod, _) -> Some 3
+  | AilEbinary (_, Arithmetic Mul0, _)
+  | AilEbinary (_, Arithmetic Div0, _)
+  | AilEbinary (_, Arithmetic Mod0, _) -> Some 3
   
-  | AilEbinary (_, Arithmetic Add, _)
-  | AilEbinary (_, Arithmetic Sub, _) -> Some 4
+  | AilEbinary (_, Arithmetic Add0, _)
+  | AilEbinary (_, Arithmetic Sub0, _) -> Some 4
   
   | AilEbinary (_, Arithmetic Shl, _)
   | AilEbinary (_, Arithmetic Shr, _) -> Some 5
   
-  | AilEbinary (_, Lt, _)
+  | AilEbinary (_, Lt0, _)
   | AilEbinary (_, Gt, _)
   | AilEbinary (_, Le, _)
   | AilEbinary (_, Ge, _) -> Some 6
   
-  | AilEbinary (_, Eq, _)
+  | AilEbinary (_, Eq0, _)
   | AilEbinary (_, Ne, _) -> Some 7
   
   | AilEbinary (_, Arithmetic Band, _) -> Some 8
@@ -54,9 +54,9 @@ let precedence = function
   
   | AilEbinary (_, Arithmetic Bor, _) -> Some 10
   
-  | AilEbinary (_, And, _) -> Some 11
+  | AilEbinary (_, And0, _) -> Some 11
   
-  | AilEbinary (_, Or, _) -> Some 12
+  | AilEbinary (_, Or0, _) -> Some 12
   
   | AilEcond _ -> Some 13
   
@@ -147,6 +147,8 @@ let pp_integerType = function
  | Unsigned ibt     -> pp_type_keyword "unsigned" ^^^ pp_integerBaseType ibt
  | IBuiltin str ->
      pp_type_keyword str
+ | Enum sym ->
+     pp_type_keyword "enum" ^^^ pp_id sym
 
 
 (*
@@ -365,11 +367,11 @@ let rec pp_ctype_human qs ty =
 
 
 let pp_arithmeticOperator = function
-  | Mul  -> P.star
-  | Div  -> P.slash
-  | Mod  -> P.percent
-  | Add  -> P.plus
-  | Sub  -> P.minus
+  | Mul0  -> P.star
+  | Div0  -> P.slash
+  | Mod0  -> P.percent
+  | Add0  -> P.plus
+  | Sub0  -> P.minus
   | Shl  -> P.langle ^^ P.langle
   | Shr  -> P.rangle ^^ P.rangle
   | Band -> P.ampersand
@@ -380,13 +382,13 @@ let pp_arithmeticOperator = function
 let pp_binaryOperator = function
   | Arithmetic o -> pp_arithmeticOperator o
   | Comma        -> P.comma
-  | And          -> P.ampersand ^^ P.ampersand
-  | Or           -> P.bar ^^ P.bar
-  | Lt           -> P.langle
+  | And0          -> P.ampersand ^^ P.ampersand
+  | Or0           -> P.bar ^^ P.bar
+  | Lt0           -> P.langle
   | Gt           -> P.rangle
   | Le           -> P.langle ^^ P.equals
   | Ge           -> P.rangle ^^ P.equals
-  | Eq           -> P.equals ^^ P.equals
+  | Eq0           -> P.equals ^^ P.equals
   | Ne           -> P.bang   ^^ P.equals
 
 
@@ -586,6 +588,9 @@ let rec pp_expression a_expr =
             pp e ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier ident
         | AilEmemberofptr (e, ident) ->
             pp e ^^ (!^ "->") ^^ Pp_cabs.pp_cabs_identifier ident
+
+        | AilEannot (_, e) ->
+            pp e
 (*
         | MEMBEROF (e, (tag, mem)) ->
             pp e ^^ P.dot ^^ pp_id mem
@@ -782,16 +787,3 @@ let pp_program (startup, sigm) =
           )  ^^
           P.break 1 ^^ P.hardline ^^ acc
     ) P.empty (List.rev sigm.declarations) ^^ P.break 1
-
-
-
-
-(* String functions *)
-let string_of_ctype ty =
-  Pp_utils.to_plain_string (pp_ctype ty)
-
-let string_of_expr e =
-  Pp_utils.to_plain_string (pp_expression e)
-
-let string_of_qualifiers_human qs =
-  Pp_utils.to_plain_string (pp_qualifiers_human qs)

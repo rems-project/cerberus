@@ -42,8 +42,22 @@ type driver_state = <|
 
 
 
+val aid_to_string: action -> string
+let aid_to_string a =
+  show (aid_of a)
 
-(* WIP
+
+
+(* TODO: wip *)
+val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
+let resolve_read sym mem_val core_st =
+  core_st
+
+
+
+
+open ND.Operators
+
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.t driver_state
 let rec stepConcurrency n dr_st =
@@ -63,24 +77,24 @@ let rec stepConcurrency n dr_st =
                    ND.return  <| dr_st with concurrency_state= concur_st' |>
                  else
                    let _ = Boot.output_string "Found an undef.\n" in
-                   ND.kill_execution >>
-                   (* TODO *)
-                   ND.return  <| dr_st with concurrency_state= concur_st' |>
+                   (* TODO: proper kill_reason *)
+                   ND.kill (ND.Other "concurrency found undef")
                 )
             
             | ReadsFrom v w performed_act concur_st' ->
                 let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in
-                ND.print_debug ("READSFROM " ^ string_of_natural (naturalFromNat (aid_of performed_act)) ^ "\n") >>
+                ND.log ("READSFROM " ^ aid_to_string performed_act ^ "\n") >>
                 (* TODO: v is the new concrete value, w is the symbolic value from the read *)
                 let Mem.MV_integer v_symb = v in
 
                 match w with
-                  | Mem.MV_integer (Symbolic.Symbolic_symbol write_sym) -> 
-                      ND.add_equation (Symbolic.eq (Symbolic.symbol write_sym) v_symb) >>
+                  | Mem.MV_integer (Symbolic.SYMBsym _ write_sym) -> 
+                      ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBsym Symbolic.SYMBint write_sym) v_symb) >>
                       ND.return  <| dr_st with core_state=        resolve_read write_sym v dr_st.core_state;
-                                              concurrency_state= concur_st'  |>
-                  | Mem.MV_integer (Symbolic.Symbolic_constant n) ->
-                      ND.add_equation (Symbolic.eq (Symbolic.constant n) v_symb) >>
+                                               concurrency_state= concur_st'  |>
+                  
+                  | Mem.MV_integer (Symbolic.SYMBconst n) ->
+                      ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) v_symb) >>
                       ND.return   <| dr_st with concurrency_state= concur_st' |> 
                 end
                 
@@ -89,7 +103,7 @@ let rec stepConcurrency n dr_st =
         
         stepConcurrency (n-1) dr_st'
 end
-*)
+
 
 
 
@@ -133,7 +147,6 @@ let runCore m dr_st =
   end
 
 
-open ND.Operators
 
 
 
@@ -146,7 +159,7 @@ let number_of_uncommitted concur_st =
 
 (* TODO: debug *)
 val pp_core_state: forall 'a. core_state -> string
-declare ocaml target_rep function pp_core_state = `Pp_core_run.string_of_core_state`
+declare ocaml target_rep function pp_core_state = `String_core_run.string_of_core_state`
 
 
 
@@ -322,12 +335,13 @@ let rec driver_sequential _dr_st =
     | Step_done _ ->
         let _ = Boot.output_string "Step_done" in
         (* TODO: repair driver state? *)
-(* WIP
+
         let n = (number_of_uncommitted dr_st.concurrency_state) in
         let _ = Boot.output_string ("CALLING CONCURRENCY: " ^ show n ^ " times") in
         stepConcurrency n dr_st
-*)
+(*
         ND.return dr_st
+*)
   end in
   
   ND.pick dr_st.core_state.thread_states >>= fun th_info ->

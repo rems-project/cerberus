@@ -16,6 +16,7 @@ type operator =
   | Mod
   | Exp
   | Eq
+  | Neq
   | Lt
   | And
   | Or
