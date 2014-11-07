@@ -14,7 +14,7 @@ type genBasicType [name="gbt"] =
  | GenInteger of genIntegerType
 
 
-type genType [name="gt*"] =
+type genType (* [name="gt*"] *) =
  | GenVoid
  | GenBasic of genBasicType
  | GenArray of ctype * (maybe integer)

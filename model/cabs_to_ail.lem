@@ -615,6 +615,38 @@ let translate_cabs_string_literal (pref_opt, str) =
 
 
 
+val is_simple_enumerator: enumerator -> bool
+let is_simple_enumerator = function
+  | (_, Nothing) ->
+      true
+  | _ ->
+      false
+end
+
+val register_simple_enumerators: ATypes.ctype -> list enumerator -> E.t unit
+let register_simple_enumerators ty enums =
+  if List.all is_simple_enumerator enums then
+    let register_simple_enumerator (n, (ident, Nothing)) =
+      (* NOTE: numerote starts counting from 1 *)
+      let n = n-1 in
+      
+      let expr =
+        let basis = if n = 0 then Octal else Decimal in
+        AilEannot ty (
+          AnnotatedExpression () (AilEconst (ConstantInteger (IntegerConstant (integerFromNat n) basis Nothing)))
+        ) in
+      
+      E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
+      E.register_enum_constant sym expr in
+    
+    E.mapM_ register_simple_enumerator $ numerote enums
+  else
+    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "enum constants with expressions")
+
+
+
+
+
 
 
 val project_base_type_specifier: cabs_type_specifier -> cabs_base_type_specifier
@@ -825,8 +857,12 @@ and struct_declaration =
         (* TODO: qualifiers *)
         E.return (qs, ATypes.Atomic ty)
 
-  | [TSpec_enum _ _] ->
-      Boot.assert_false "WIP: TSpec_enum"
+  (* TODO: partial *)
+  | [TSpec_enum (Just ident) enums_opt] ->
+      E.register_identifier ident E.Namespace_tag E.Kind_tag [] >>= fun (_, sym) ->
+      let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum sym)) in
+      maybe (E.return ()) (register_simple_enumerators ty) enums_opt >>
+      E.return (ATypes.no_qualifiers, ty)
 
 
 (*  WIP
@@ -958,6 +994,8 @@ and desugar_expression (CabsExpression loc expr) =
         let _ = Boot.output_string ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
 _STD "§6.5.1#2" $
         E.resolve_identifier ident E.Namespace_ordinary >>= function
+          | Just (_, (id, E.Kind_member E.Kind_enum, _)) ->
+              E.resolve_enum_constant id
           | Just (_, (id, kind, _)) ->
               (* I love the fact that it is a footnote that says that undeclared
                  identifiers are syntax errors ... *)
@@ -971,7 +1009,7 @@ _STD "§6.5.1#2" $
                 | Just d_e ->
                     E.return d_e
                 | Nothing ->
-                    E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2, Nothing, Nothing") (* TODO: check the quote *)
+                    E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation ("§6.5.1#2, Nothing, Nothing: " ^ str)) (* TODO: check the quote *)
               end
         end
     
@@ -1974,6 +2012,9 @@ let rec desugar_statement (CabsStatement loc stmt_) =
             | _ ->
                 AilSreturn <$> desugar_expression e
           end
+      
+      | CabsSpar ss ->
+          AilSpar <$> E.mapM desugar_statement ss
     end
 
 

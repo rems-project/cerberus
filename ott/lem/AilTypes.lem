@@ -1,6 +1,9 @@
 open import Pervasives
 import Symbol Cabs
 
+type identifier = Symbol.t
+
+
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
  | Short
@@ -24,13 +27,14 @@ type integerType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] =
  | Signed of integerBaseType
  | Unsigned of integerBaseType
  | IBuiltin of string
+ | Enum of identifier
+
 (*
  | Wchar_t (* TODO: merge into a IBuiltin variant ? *)
  | Char16_t (* TODO: merge into a IBuiltin variant ? *)
  | Char32_t (* TODO: merge into a IBuiltin variant ? *)
 *)
  (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
-(* TODO: Enum *)
 
 
 
@@ -47,8 +51,6 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   volatile : bool;
   atomic   : bool;
 |>
-
-type identifier = Symbol.t
 
 (* NOTE: we restrict qualifiers in the syntax to place that correspond to
          lvalues (to reflect STD §6.7.3#4) *)
@@ -122,6 +124,8 @@ let integerTypeEqual ity1 ity2 =
         3
     | IBuiltin _ ->
         4
+    | Enum _ ->
+        5
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -130,6 +134,8 @@ let integerTypeEqual ity1 ity2 =
         ibty1 = ibty2
     | (IBuiltin str1, IBuiltin str2) ->
         str1 = str2
+    | (Enum sym1, Enum sym2) ->
+        sym1 = sym2
     | _ ->
         ord ity1 = ord ity2
   end

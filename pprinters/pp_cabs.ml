@@ -1047,6 +1047,9 @@ let rec pp_cabs_statement (CabsStatement (_, stmt_)) =
       pp_ctor "CabsSbreak"
   | CabsSreturn e_opt ->
       pp_ctor "CabsSreturn" ^^ P.brackets (pp_option (pp_cabs_expression None) e_opt)
+  | CabsSpar ss ->
+      pp_ctor "CabsSpar" ^^ P.brackets (P.brackets (comma_list pp_cabs_statement ss))
+
 
 and pp_for_clause = function
  | FC_expr e ->

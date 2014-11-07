@@ -18,6 +18,12 @@ type tag_declaration =
   | Enum_declaration (* TODO *)
 
 
+type member_kind =
+  (* TODO: we may be able to merge struct and union *)
+  | Kind_struct
+  | Kind_union
+  | Kind_enum
+
 (* STD §6.2.1#1, sentence 1 *)
 type identifier_kind =
   (* the boolean is true iff we are dealing with a function parameter (needed to determinate the linkage ...) *)
@@ -28,7 +34,7 @@ type identifier_kind =
   | Kind_function
   (* TODO: putting the struct/union definition here is a bit of a hack *)
   | Kind_tag
-  | Kind_member
+  | Kind_member of member_kind
   | Kind_typedef
   | Kind_label
 (*
@@ -93,8 +99,8 @@ end
 type namespace =
   | Namespace_label
   | Namespace_tag
-  | Namespace_member of cabs_identifier
-  | Namespace_ordinary
+  | Namespace_member of cabs_identifier (* NOTE: theses are only struct/union members *)
+  | Namespace_ordinary (* NOTE: enum members go here *)
 
 instance (SetType namespace)
   let setElemCompare ns1 ns2 =
@@ -143,7 +149,10 @@ type state = <|
   
   static_assertions: list (A.expression unit * A.stringLiteral);
   
+(*
   enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
+*)
+  enumeration_constants: map A.identifier (A.expression' unit);
   
   (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
@@ -731,6 +740,33 @@ let resolve_typedef sym =
   )
 
 
+val register_enum_constant: A.identifier -> A.expression' unit -> t unit
+let register_enum_constant sym expr =
+  State_exception.update (fun st ->
+    <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
+  )
+
+val resolve_enum_constant: A.identifier -> t (A.expression' unit)
+let resolve_enum_constant sym =
+  State_exception.read (fun st ->
+    st.enumeration_constants
+  ) >>= fun enumeration_constants ->
+  match Map.lookup sym enumeration_constants with
+    | Just e ->
+        return e
+    | Nothing ->
+        fail Loc.unknown Errors.Desugar_impossible
+  end
+
+(*
+val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
+*)
+
+
+
+
+
+
 
 (* TODO: hackish, uber inefficient *)
 val remove_unused_identifiers: forall 'a. state -> A.identifier -> list (A.identifier * 'a) -> list (A.identifier * 'a)
@@ -794,3 +830,7 @@ let extract_program startup_str =
     | Nothing ->
         fail Loc.unknown (Errors.Desugar_NoStartup startup_str)
   end
+
+
+
+

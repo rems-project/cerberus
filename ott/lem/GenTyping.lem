@@ -423,7 +423,7 @@ let rec are_all_eq xs =
   match xs with
     | [] ->
         true
-    | [x] ->
+    | [_] ->
         true
     | x::y::xs' ->
         x=y && are_all_eq (y::xs')
@@ -440,12 +440,14 @@ let rec annotate_expression' A S G e =
         (* TODO: I guess the equality should be relaxed to compatibility *)
         if are_all_eq (List.map snd xs) then
           match xs with
-            | (_, gty)::_ ->
+            | (_, (* gty *)_)::_ ->
                 (* TODO !!!! *)
                 E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray (Basic (Integer Char)) (Just (integerFromNat $ List.length xs))))
 (*
                 E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray gty (Just (integerFromNat $ List.length xs))))
 *)
+            | _ ->
+                assert_false "WIP: GenTyping.annotate_expression', AilEarray"
           end
         else
           E.fail Loc.unknown (TError "TODO[msg]: failed to type an array constant")
@@ -622,6 +624,22 @@ OLD(sigma_declaration)
               else E.fail Loc.unknown (TError_TODO 23)
           | _ -> E.fail Loc.unknown (TError_TODO 24)
         end
+     
+     (* TODO: it may be to restrictive to only direct left-expressions for atomic functions *)
+     | AilEcall (AnnotatedExpression _ (AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
+         annotate_rvalue object_e >>= fun (object_e', object_gty) ->
+         annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
+         
+         
+         
+         
+         assert_false "WIP: typing of atomic_load_explicit"
+
+
+
+
+
+
     | AilEcall e es ->
         annotate_rvalue e >>= fun (e, gty) ->
 (* _STD "§6.5.2.2#1" $ *)
@@ -978,6 +996,11 @@ _STD "§6.5.2.1#1" $
   (* TODO: check *)
   | AilEstr lit ->
       annotate_stringLiteral lit
+  
+  (* TODO: maybe look at the type of inside? *)
+  | AilEannot ty e ->
+      annotate_expression A S G e >>= fun (AnnotatedExpression _ e') ->
+      E.return (e', GenRValueType (inject_type ty))
   end
 
 and annotate_generic_association A S G = function

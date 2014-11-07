@@ -82,12 +82,12 @@ typedef _Atomic(size_t)                 atomic_size_t;
 */
 
 
-#define	atomic_store_explicit(object, desired, order)                                         __cerbvar_atomic_store(object, desired, order)
-#define	atomic_load_explicit(object, order)                                                   __cerbvar_atomic_load(object, order)
-#define	atomic_exchange_explicit(object, desired, order)                                      __cerbvar_atomic_exchange(object, desired, order)
-#define atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure)  __cerbvar_atomic_compare_exchange_strong(object, expected, desired, success, failure)
-#define atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure)    __cerbvar_atomic_compare_exchange_weak(object, expected, desired, success, failure)
-#define atomic_fetch_key_explicit(object, operand, order)                                     __cerbvar_atomic_fetch_key(object, operand, order)
+#define	atomic_store_explicit(object, desired, order) __cerbvar_atomic_store_explicit(object, desired, order)
+#define	atomic_load_explicit(object, order) __cerbvar_atomic_load_explicit(object, order)
+#define	atomic_exchange_explicit(object, desired, order) __cerbvar_atomic_exchange_explicit(object, desired, order)
+#define atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure) __cerbvar_atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure)
+#define atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure) __cerbvar_atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure)
+#define atomic_fetch_key_explicit(object, operand, order) __cerbvar_atomic_fetch_key_explicit(object, operand, order)
 
 
 #define	atomic_store(object, desired)                              atomic_store_explicit(object, desired, memory_order_seq_cst)

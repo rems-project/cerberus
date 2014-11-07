@@ -92,6 +92,8 @@ let min_integer_range = function
   | Unsigned ibty -> min_range_unsigned ibty
   | Signed   ibty -> min_range_signed   ibty
   | IBuiltin _ -> assert_false "WIP"
+  (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+  | Enum _ -> min_range_signed Int_
 end
 
 val min_implementation_signed_char: implementation
@@ -104,6 +106,8 @@ let min_implementation_signed_char =
         | Bool       -> false
 	| Unsigned _ -> false
         | IBuiltin _ -> assert_false "WIP"
+        (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+        | Enum _ -> true
       end
     )
     ( function
@@ -135,6 +139,9 @@ let min_implementation_signed_char =
         | Unsigned (IBBuiltin _) -> assert_false "WIP"
         
         | IBuiltin _ -> assert_false "WIP"
+        
+        (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+        | Enum _ -> 15
       end
     )
     (Unsigned Long)
@@ -150,6 +157,8 @@ let min_implementation_unsigned_char =
 	| Bool       -> false
 	| Unsigned _ -> false
         | IBuiltin _ -> assert_false "WIP"
+        (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+        | Enum _ -> true
       end
     )
     ( function
@@ -181,6 +190,8 @@ let min_implementation_unsigned_char =
         | Unsigned (IBBuiltin _) -> assert_false "WIP"
 
         | IBuiltin _ -> assert_false "WIP"
+        (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+        | Enum _ -> 15
       end
     )
     (Unsigned Long)

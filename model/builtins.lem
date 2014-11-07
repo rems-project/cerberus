@@ -722,6 +722,20 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_UINT16_MAX" -> Just (A.AilEbuiltin "UINT16_MAX")
     | "__cerbvar_UINT32_MAX" -> Just (A.AilEbuiltin "UINT32_MAX")
     | "__cerbvar_UINT64_MAX" -> Just (A.AilEbuiltin "UINT64_MAX")
+    
+    | "__cerbvar_atomic_init" -> Just (A.AilEbuiltin "atomic_init")
+    | "__cerbvar_atomic_thread_fence" -> Just (A.AilEbuiltin "atomic_thread_fence")
+    | "__cerbvar_atomic_signal_fence" -> Just (A.AilEbuiltin "atomic_signal_fence")
+    | "__cerbvar_atomic_is_lock_free" -> Just (A.AilEbuiltin "atomic_is_lock_free")
+    | "__cerbvar_atomic_store_explicit" -> Just (A.AilEbuiltin "atomic_store_explicit")
+    | "__cerbvar_atomic_load_explicit" -> Just (A.AilEbuiltin "atomic_load_explicit")
+    | "__cerbvar_atomic_exchange_explicit" -> Just (A.AilEbuiltin "atomic_exchange_explicit")
+    | "__cerbvar_atomic_compare_exchange_strong_explicit" -> Just (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")
+    | "__cerbvar_atomic_compare_exchange_weak_explicit" -> Just (A.AilEbuiltin "atomic_compare_exchange_weak_explicit")
+    | "__cerbvar_atomic_fetch_key_explicit" -> Just (A.AilEbuiltin "atomic_fetch_key_explicit")
+
+
+
 (*
     | "__cerbvar_INT_LEAST8_MIN" -> Just (A.AilEbuiltin "INT_LEAST8_MIN")
     | "__cerbvar_INT_LEAST16_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")

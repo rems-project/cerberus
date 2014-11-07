@@ -326,6 +326,8 @@ type cabs_statement_ =
   | CabsScontinue
   | CabsSbreak
   | CabsSreturn of maybe cabs_expression
+  (* NON-STD cppmem par construct *)
+  | CabsSpar of list cabs_statement
 
 and cabs_statement =
   | CabsStatement of Loc.t * cabs_statement_

@@ -541,6 +541,7 @@ let to_string ((start_p, end_p) as loc, c) =
     | OTHER msg -> "[Other] " ^ msg
     
     
+(*
     (* Core typechecking *)
     | CORE_TYPECHECK_INCORRECT_EXPECTED (foundTy, expectedTy, e) ->
         "[Core Typechecking] found type `" ^ (* (Document.to_plain_string $ Core.Print.pp_core_type foundTy) ^ *) "', while expecting `" (* ^
@@ -582,6 +583,7 @@ let to_string ((start_p, end_p) as loc, c) =
     
     
     | CORE_TYPECHECK msg -> "[Core typechecking] " ^ msg
+*)
     
     | CORE_UNDEF us ->
         let plural = List.length us > 1 in

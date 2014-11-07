@@ -18,9 +18,13 @@ let pp_constraints (Constraints.Constraints asserts) =
   ) "" asserts
 *)
 
+(*
 let pp_constraints (Smt_wrapper.Assertions (_, xs)) =
   String.concat ";\n" xs
+*)
 
+let pp_constraints _ =
+  "TODO[constraints]"
 
 
 
