@@ -790,7 +790,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                 ND.return $
                   match (ty_pe) with
                     | Ectype ty ->
-                        Step_action_request "create" current_tid (
+                          Step_tau "Create" current_tid (
+                            runMem (Mem.allocate_object current_tid ty) >>= fun ptr_val    ->
+                            update_current_thread <| th_st with arena= Econst (Mem.MV_pointer ptr_val) |>
+                          )
+                        (* Step_action_request "create" current_tid (
                           SEU.runS fresh_action_id                    >>= fun create_aid ->
 
                           (* TODO: debug *)
@@ -817,7 +821,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                                             stack= add_to_sb_stack {(p, (current_tid, create_aid))} sk;
                                           |> st)
                           )
-                        )
+                        ) *)
                     | _ ->
                         Step_tau "Create type-error" current_tid $
                           SEU.fail (Illformed_program "some expression was ill-typed in a create")

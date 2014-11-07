@@ -21,6 +21,28 @@ type operator =
   | And
   | Or
 
+instance (Eq operator)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show operator)
+  let show op = 
+    match op with
+    | Add -> "Add"
+    | Sub -> "Sub"
+    | Mul -> "Mul"
+    | Div -> "Div"
+    | Mod -> "Mod"
+    | Exp -> "Exp"
+    | Eq  -> "Eq"
+    | Neq -> "Neq"
+    | Lt  -> "Lt"
+    | And -> "And"
+    | Or  -> "Or"
+    end
+end
+
 type symbolic_type =
   | SYMBint
   | SYMBbool
@@ -34,11 +56,6 @@ type symbolic =
   | SYMBite   of symbolic * symbolic * symbolic
 
 
-
-instance (Eq operator)
-  let (=) = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
 
 
 instance (Eq symbolic_type)
@@ -78,6 +95,19 @@ let rec symbolicEqual symb1 symb2 =
 instance (Eq symbolic)
   let (=)  = symbolicEqual
   let (<>) = fun symb1 symb2 -> not (symbolicEqual symb1 symb2)
+end
+
+val symbolic_to_string: symbolic -> string
+let rec symbolic_to_string sym =
+  match sym with
+  | SYMBconst i -> "Constant (" ^ show i ^ ")" 
+  | SYMBsym ty t -> "Symbol (TODO, " ^ show t ^ ")"
+  | SYMBop op sym1 sym2 -> 
+      "Op (" ^ show op ^ " " ^ symbolic_to_string sym1 ^ " " ^ symbolic_to_string sym2 ^ ")"
+  end
+
+instance (Show symbolic)
+  let show = symbolic_to_string
 end
 
 
