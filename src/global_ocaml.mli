@@ -71,3 +71,6 @@ val pass_message: string -> ('a, 'msg) Exception.t3 -> ('a, 'msg) Exception.t3
 (* let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 []) *)
 
 (* let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 []) *)
+
+
+val user_request_driver: string list -> int

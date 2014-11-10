@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives String_extra
 open import List Function
 open import Global
 import Boot Dlist Constraints Symbolic Undefined
@@ -110,7 +110,7 @@ let bind m f =
         Boot.assert_false "Nondeterminism.bind sees execution_mode = Nothing"
     | Just Interactive ->
         (* TODO *)
-        Boot.assert_false "Interactive mode not yet supported"
+        bindExhaustive m f
     | Just Exhaustive ->
         bindExhaustive m f
     | Just Random ->
@@ -205,3 +205,22 @@ val log: string -> t unit
 let log msg =
   ND [Active (Dlist.singleton msg) Constraints.empty ()]
 
+
+
+val user_request_driver: list string -> nat
+declare ocaml target_rep function user_request_driver = `Global_ocaml.user_request_driver`
+
+val user_request: forall 'a. Show 'a => list 'a -> t 'a
+let user_request xs =
+  match xs with
+    | [x] ->
+        return x
+    | _ ->
+        let strs = List.map show xs in
+        match List.index xs (user_request_driver strs) with
+          | Just x ->
+              return x
+          | _ ->
+              Boot.assert_false "ND.user_request: invalid choice"
+        end
+  end
