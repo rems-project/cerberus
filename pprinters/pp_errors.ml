@@ -60,7 +60,7 @@ let desugar_cause_to_string = function
   
 (* TODO: move these to Desugar_ConstraintViolation *)
   | Desugar_FunctionRedefinition sym ->
-       "(TODO msg) redefinition of '" ^ (Boot_pprint.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
+       "(TODO msg) redefinition of '" ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
   | Desugar_BlockScoped_Thread_local_alone ->
       "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
        ``In the declaration of an object with block scope, if the declaration \

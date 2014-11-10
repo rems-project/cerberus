@@ -1,4 +1,4 @@
-open import Pervasives Show Global Core Core_ctype Core_aux
+open import Pervasives String_extra Global Core Core_ctype Core_aux
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
@@ -86,19 +86,22 @@ let call_proc file psym pes =
 let inline (>>=) = EU.bind
 let inline (>>) m f = m >>= fun _ -> f
 
-val     core_eval: Core.file core_run_annotation -> Core.expr core_run_annotation ->
+val     core_eval: Core.file core_run_annotation -> bool -> Core.expr core_run_annotation ->
                    EU.t (Core.expr core_run_annotation) core_run_error
-let rec core_eval file expr =
+let rec core_eval file inside_if expr =
   if is_value expr then
     EU.return expr
   else
     match expr with
       | Elist pes ->
-          EU.mapM (core_eval file) pes >>= fun pes' ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
           EU.return (Elist pes')
       
       | Esym sym ->
-          EU.fail (Unresolved_symbol sym)
+          if inside_if then
+            EU.return (Esym sym)
+          else
+            EU.fail (Unresolved_symbol sym)
       
       | Eimpl i ->
           match Map.lookup i file.impl with
@@ -109,11 +112,11 @@ let rec core_eval file expr =
           end
       
       | Etuple pes ->
-          EU.mapM (core_eval file) pes >>= fun pes' ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
           EU.return $ Etuple pes'
       
       | Enot pe ->
-          core_eval file pe >>= function
+          core_eval file inside_if pe >>= function
             | Etrue ->
                 EU.return Efalse
             | Efalse ->
@@ -126,8 +129,8 @@ let rec core_eval file expr =
           end
       
       | Eop binop pe1 pe2 ->
-          core_eval file pe1 >>= fun pe1' ->
-          core_eval file pe2 >>= fun pe2' ->
+          core_eval file inside_if pe1 >>= fun pe1' ->
+          core_eval file inside_if pe2 >>= fun pe2' ->
           if is_value pe1' && is_value pe2' then
             match (binop, pe1', pe2') with
                 | (OpAdd, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
@@ -163,7 +166,27 @@ let rec core_eval file expr =
 
                 | (OpEq, Ectype ty1, Ectype ty2) ->
                     EU.return (if ty1 = ty2 then Etrue else Efalse)
+                
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_eq symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1' symb2')))
+                    end
 
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_lt symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Lt symb1' symb2')))
+                    end
+  
 (*
                 | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with
@@ -190,6 +213,7 @@ let rec core_eval file expr =
                           ]
                     end
 *)
+
                 | (OpOr, Efalse, Efalse) ->
                     EU.return Efalse
                 | (OpOr, Etrue, _) ->
@@ -280,7 +304,7 @@ let rec core_eval file expr =
 *)
 
       | Ecall f pes ->
-          EU.mapM (core_eval file) pes >>= fun pes' ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
           if all is_value pes' then
             (* We do not immediately call eval on the result of call_function,
                as that could lead to non-termination. *)
@@ -296,7 +320,7 @@ let rec core_eval file expr =
           Exception.return (Undefined.error str)
       
       | Elet a pe1 pe2 ->
-          core_eval file pe1 >>= fun pe1' ->
+          core_eval file inside_if pe1 >>= fun pe1' ->
           EU.return (
             if is_value pe1' then
               (* We do not immediately call eval on the result of subst_sym, as
@@ -307,11 +331,11 @@ let rec core_eval file expr =
           )
       
       | Eif pe1 pe2 pe3 ->
-        core_eval file pe1 >>= function
+        core_eval file inside_if pe1 >>= function
           | Etrue ->
-              core_eval file pe2
+              core_eval file inside_if pe2
           | Efalse ->
-              core_eval file pe3
+              core_eval file inside_if pe3
           | pe1' ->
               if is_value pe1' then
                 EU.fail (Illformed_program "ill-typed Eif")
@@ -320,7 +344,7 @@ let rec core_eval file expr =
         end
       
       | Eis_scalar pe ->
-          core_eval file pe >>= function
+          core_eval file inside_if pe >>= function
             | Ectype ty ->
                 EU.return (if AilTypesAux.is_scalar (unproj_ctype ty) then Etrue else Efalse)
             | pe' ->
@@ -331,7 +355,7 @@ let rec core_eval file expr =
           end
       
       | Eis_integer pe ->
-          core_eval file pe >>= function
+          core_eval file inside_if pe >>= function
             | Ectype ty ->
                 EU.return (if AilTypesAux.is_integer (unproj_ctype ty) then Etrue else Efalse)
             | pe' ->
@@ -342,7 +366,7 @@ let rec core_eval file expr =
           end
       
       | Eis_signed pe ->
-          core_eval file pe >>= function
+          core_eval file inside_if pe >>= function
             | Ectype ty ->
                 EU.return (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
             | pe' ->
@@ -353,7 +377,7 @@ let rec core_eval file expr =
           end
       
       | Eis_unsigned pe ->
-          core_eval file pe >>= function
+          core_eval file inside_if pe >>= function
             | Ectype ty ->
                 EU.return (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
             | pe' ->
@@ -647,29 +671,50 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             )
         else
           ND.return $ Step_eval "Elet" current_tid (
-            SEU.runEU (core_eval file pe1) >>= fun pe1' ->
+            SEU.runEU (core_eval file false pe1) >>= fun pe1' ->
             update_current_thread <| th_st with arena= Elet _a pe1' e2 |>
           )
     
     (* NOTE: the case where the stack is empty is deal with by the "pure expression in arena" case *)
     | (Eif pe1 e2 e3, Stack_cons cont _) ->
         if is_value pe1 then
-          ND.return $
-            Step_tau "Eif" current_tid (
-              update_current_thread match pe1 with
-                | Etrue ->
+          match pe1 with
+            | Etrue ->
+                ND.return $
+                  Step_tau "Eif (then)" current_tid (
                     let labeled_conts =
                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
-                    <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
-                | Efalse ->
+                    update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                  )
+           | Efalse ->
+                ND.return $
+                  Step_tau "Eif (else)" current_tid (
                     let labeled_conts =
                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
-                    <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
-              end
-            )
+                    update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                  )
+           | Econst (Mem.MV_integer (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
+               ND.msum [
+                 ND.bind (ND.add_constraint (Constraints.assert_eq symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic then)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                     update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                 ));
+                 
+                 ND.bind (ND.add_constraint (Constraints.assert_neq symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic else)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                 ))
+               ]
+          end
         else
           ND.return $ Step_eval "Eif" current_tid (
-            SEU.runEU (core_eval file pe1) >>= fun pe1' ->
+            SEU.runEU (core_eval file true pe1) >>= fun pe1' ->
             update_current_thread <| th_st with arena= Eif pe1' e2 e3 |>
           )
     
@@ -764,7 +809,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
           end
         else
           ND.return $ Step_eval "Eproc" current_tid (
-            SEU.runEU (EU.mapM (core_eval file) pes) >>= fun pes' ->
+            SEU.runEU (EU.mapM (core_eval file false) pes) >>= fun pes' ->
             update_current_thread <| th_st with arena= Eproc annots nm pes' |>
           )
     
@@ -791,7 +836,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   match (ty_pe) with
                     | Ectype ty ->
                           Step_tau "Create" current_tid (
-                            runMem (Mem.allocate_object current_tid ty) >>= fun ptr_val    ->
+                            runMem (Mem.allocate_object current_tid pref ty) >>= fun ptr_val    ->
                             update_current_thread <| th_st with arena= Econst (Mem.MV_pointer ptr_val) |>
                           )
                         (* Step_action_request "create" current_tid (
@@ -828,7 +873,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   end
               else
                 ND.return $ Step_eval "ctype of Create" current_tid (
-                  SEU.runEU (core_eval file ty_pe) >>= fun ty_pe' ->
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
                   update_current_thread <| th_st with arena=
                     Eaction (Paction p (Action annots (Create al_pe ty_pe' pref)))
                   |>
@@ -853,7 +898,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   end
               else
                 ND.return $ Step_eval "pointer of Kill" current_tid (
-                  SEU.runEU (core_eval file ptr_pe) >>= fun ptr_pe' ->
+                  SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
                   update_current_thread <| th_st with arena=
                     Eaction (Paction p (Action annots (Kill ptr_pe')))
                   |>
@@ -884,21 +929,21 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                       end
                   else
                     ND.return $ Step_eval "value of Store" current_tid (
-                      SEU.runEU (core_eval file val_pe) >>= fun val_pe' ->
+                      SEU.runEU (core_eval file false val_pe) >>= fun val_pe' ->
                       update_current_thread <| th_st with arena=
                         Eaction (Paction p (Action annots (Store ty_pe ptr_pe val_pe' mo)))
                       |>
                     )
                 else
                   ND.return $ Step_eval "pointer of Store" current_tid (
-                    SEU.runEU (core_eval file ptr_pe) >>= fun ptr_pe' ->
+                    SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
                     update_current_thread <| th_st with arena=
                       Eaction (Paction p (Action annots (Store ty_pe ptr_pe' val_pe mo)))
                     |>
                   )
               else
                 ND.return $ Step_eval "ctype of Store" current_tid (
-                  SEU.runEU (core_eval file ty_pe) >>= fun ty_pe' ->
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
                   update_current_thread <| th_st with arena=
                     Eaction (Paction p (Action annots (Store ty_pe' ptr_pe val_pe mo)))
                   |>
@@ -929,21 +974,73 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     end
                 else
                   ND.return $ Step_eval "pointer of Load" current_tid (
-                    SEU.runEU (core_eval file ptr_pe) >>= fun ptr_pe' ->
+                    SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
                     update_current_thread <| th_st with arena=
                       Eaction (Paction p (Action annots (Load ty_pe ptr_pe' mo)))
                     |>
                   )
               else
                 ND.return $ Step_eval "ctype of Load" current_tid (
-                  SEU.runEU (core_eval file ty_pe) >>= fun ty_pe' ->
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
                   update_current_thread <| th_st with arena=
                     Eaction (Paction p (Action annots (Load ty_pe' ptr_pe mo)))
                   |>
                 )
 
-(*
-            | CompareExchangeStrong of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+(* WIP
+            | CompareExchangeStrong ty_pe ptr1_pe ptr2_pe val_pe mo1 mo2 ->
+                if is_value ty_pe then
+                  if is_value ptr1_pe then
+                    if is_value ptr2_pe then
+                      if is_value val_pe then
+                        match (ty_pe, ptr1_pe, ptr2_pe, val_pe) with
+                          | (Ectype ty, Econst (Mem.MV_pointer ptr_val1), Econst (Mem.MV_pointer ptr_val2), Econst mem_val) ->
+                              Step_action_request "compare_exchange_strong" current_tid (
+                                SEU.runS fresh_action_id >>= fun load_aid ->
+                                SEU.runS fresh_symbol    >>= fun val_sym  ->
+                                let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                                SEU.return $
+                                  LoadRequest sb_before dd_before asw_before
+                                          load_aid current_tid mo ty ptr_val mem_val
+                                          (fun mem_val ->
+                                            update_thread_state current_tid <| th_st with
+                                              arena= Econst mem_val;
+                                              stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
+                                            |> st)
+                              )
+                          | _ ->
+                              Step_tau "CompareExchangeStrong type-error" current_tid $
+                                SEU.fail (Illformed_program "some expression was ill-typed in a compare_exchange_strong")
+                        
+                      else
+                        ND.return $ Step_eval "value of CompareExchangeStrong" current_tid (
+                          SEU.runEU (core_eval file val_pe) >>= fun val_pe' ->
+                          update_current_thread <| th_st with arena=
+                            Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe ptr2_pe val_pe' mo1 mo2)))
+                          |>
+                        )
+                    else
+                      ND.return $ Step_eval "pointer 2 of CompareExchangeStrong" current_tid (
+                        SEU.runEU (core_eval file ptr2_pe) >>= fun ptr2_pe' ->
+                        update_current_thread <| th_st with arena=
+                          Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe ptr2_pe' val_pe mo1 mo2)))
+                        |>
+                      )
+                  else
+                    ND.return $ Step_eval "pointer 1 of CompareExchangeStrong" current_tid (
+                      SEU.runEU (core_eval file ptr1_pe) >>= fun ptr1_pe' ->
+                      update_current_thread <| th_st with arena=
+                        Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe' ptr2_pe val_pe mo1 mo2)))
+                      |>
+                    )
+                else
+                  ND.return $ Step_eval "ctype of CompareExchangeStrong" current_tid (
+                    SEU.runEU (core_eval file ty_pe) >>= fun ty_pe' ->
+                    update_current_thread <| th_st with arena=
+                      Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe' ptr1_pe ptr2_pe val_pe mo1 mo2)))
+                    |>
+                  )
+
             | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
 *)
 
@@ -968,7 +1065,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                 end
               else
                 ND.return $ Step_eval "Ptr" current_tid (
-                  SEU.runEU (EU.mapM (core_eval file) pes) >>= fun pes' ->
+                  SEU.runEU (EU.mapM (core_eval file false) pes) >>= fun pes' ->
                   update_current_thread <| th_st with arena=
                     Eaction (Paction p (Action annots (Ptr ptr_act pes')))
                   |>
@@ -1034,7 +1131,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             )
           else if is_pure e1 then
             ND.return $ Step_eval "Ewseq" current_tid (
-              SEU.runEU (core_eval file e1) >>= fun e1' ->
+              SEU.runEU (core_eval file false e1) >>= fun e1' ->
               update_current_thread <| th_st with arena= Ewseq _as e1' e2 |>
             )
           else (* e1 still has some effects to perform *)
@@ -1050,7 +1147,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
           )
         else if is_pure e1 then
           ND.return $ Step_eval "Esseq" current_tid (
-            SEU.runEU (core_eval file e1) >>= fun e1' ->
+            SEU.runEU (core_eval file false e1) >>= fun e1' ->
             update_current_thread <| th_st with arena= Esseq _as e1' e2 |>
           )
         else (* e1 still has some effects to perform *)
@@ -1118,7 +1215,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             end
         else
           ND.return $ Step_eval "<Eret pe, _ . ε>" current_tid (
-            SEU.runEU (core_eval file pe) >>= fun pe' ->
+            SEU.runEU (core_eval file false pe) >>= fun pe' ->
             update_current_thread <| th_st with arena= Eret pe' |>
           )
     
@@ -1132,7 +1229,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             )
         else
           ND.return $ Step_eval "<Eret pe, _ . cont . sk>" current_tid (
-            SEU.runEU (core_eval file pe) >>= fun pe' ->
+            SEU.runEU (core_eval file false pe) >>= fun pe' ->
             update_current_thread <| th_st with arena= Eret pe' |>
           )
     
@@ -1209,7 +1306,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
               )
           else if is_pure pe then
             ND.return $ Step_eval "value" current_tid (
-              SEU.runEU (core_eval file pe) >>= fun pe' ->
+              SEU.runEU (core_eval file false pe) >>= fun pe' ->
               update_current_thread <| th_st with arena= pe' |>
             )
           else

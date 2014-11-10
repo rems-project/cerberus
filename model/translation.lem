@@ -62,7 +62,8 @@ val translate_program:
   E.t (list (C.sym * C.core_type * C.expr unit) * C.fun_map unit)
 
 val translate:
-  C.fun_map unit -> C.impl unit -> (UniqueId.supply Symbol.t) * A.program GenTypes.genTypeCategory -> C.file unit
+    C.fun_map unit -> C.impl unit -> (UniqueId.supply Symbol.t) * A.program GenTypes.genTypeCategory ->
+    (UniqueId.supply Symbol.t * C.file unit)
 
 
 (* ========================================================================== *)
@@ -1423,8 +1424,8 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
 let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   match (translate_program stdlib prog) (E.init symbol_counter) with
-    | U.Defined ((cglobs, cfuns), _) ->
-        <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>
+    | U.Defined ((cglobs, cfuns), st) ->
+        (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>)
     | _ ->
         Boot.assert_false "[Translation.translate #_] error in the elaboration"
   end

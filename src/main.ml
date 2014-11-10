@@ -117,31 +117,50 @@ let (>>=) = Exception.bind0
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Rfile (sym_main, fun_map) ->
-        Exception.return0 {
-          Core.main=   sym_main;
-          Core.stdlib= !!cerb_conf.core_stdlib;
-          Core.impl=   !!cerb_conf.core_impl;
-          Core.globs=   [(* TODO *)];
-          Core.funs=   fun_map
-      }
+        Exception.return0 (Symbol.Symbol (!core_sym_counter, None), {
+           Core.main=   sym_main;
+           Core.stdlib= !!cerb_conf.core_stdlib;
+           Core.impl=   !!cerb_conf.core_impl;
+           Core.globs=   [(* TODO *)];
+           Core.funs=   fun_map
+         })
     | _ ->
         assert false
 
+(*
+let run_test (run: string -> Exhaustive_driver.execution_result) (test:Tests.test) = 
+  let ex_result = run test.Tests.file_name in
+  let test_result = Tests.compare_results test.Tests.expected_result ex_result in
+  match test_result with
+  | Exception.Result _      -> 
+      print_endline (Colour.ansi_format [Colour.Green] 
+                                        ("Test succeeded (" ^ test.Tests.file_name ^ ")"))
+  | Exception.Exception msg -> 
+      print_endline (Colour.ansi_format [Colour.Red]   
+                                        ("Test failed    (" ^ test.Tests.file_name ^ "): " ^ msg))
+*)
 
 
-
-let backend core_file args =
-    match !!cerb_conf.exec_mode_opt with
-      | None ->
-          0
-      | Some Exhaustive ->
-          (* TODO: temporary hack for the command name *)
-          let str_v = Exhaustive_driver.drive core_file ("cmdname" :: args) in
-          try
-            int_of_string str_v
-          with
-            | _ ->
+let backend sym_supply core_file args =
+  match !!cerb_conf.exec_mode_opt with
+    | None ->
+        0
+    | Some Interactive ->
+        print_endline "Interactive mode not yet supported";
+        exit 1
+    | Some (Exhaustive | Random) ->
+        (* TODO: temporary hack for the command name *)
+        match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) (!!cerb_conf.concurrency) with
+          | Exception.Result (v::_ | [v]) ->
+            begin
+              (* TODO: yuck *)
+              try
+                int_of_string (String_core.string_of_expr v)
+              with | _ ->
                 0
+            end
+          | _ ->
+              0
 
 
 
@@ -165,7 +184,7 @@ let pipeline filename args =
        core_frontend f
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
-  end >>= fun core_file ->
+  end >>= fun (sym_supply, core_file) ->
   
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
@@ -185,10 +204,10 @@ let pipeline filename args =
    );
   
   
-  Exception.return0 (backend rewritten_core_file args)
+  Exception.return0 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_rewrite args =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress no_rewrite concurrency args =
   Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -215,20 +234,33 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file progress no_r
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress no_rewrite;
+  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency;
   
-  match pipeline file args with
-    | Exception.Exception err ->
-        prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
-        if progress then
-          exit !progress_sofar
-        else
-          exit 1
-    | Exception.Result n ->
-        if progress then
-          14
-        else
-          n
+(*
+  if !!cerb_conf.concurrency_tests then
+    (* Running the concurrency regression tests *)
+    let tests = Tests.get_tests in
+    List.iter (run_test (fun z -> pipeline z args)) tests
+  else 
+*)
+  match file_opt with
+    | None ->
+        (* TODO: make this print the help *)
+        prerr_endline "No filename given";
+        exit 1
+    | Some file ->
+        match pipeline file args with
+          | Exception.Exception err ->
+              prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
+              if progress then
+                exit !progress_sofar
+              else
+                exit 1
+          | Exception.Result n ->
+              if progress then
+                14
+              else
+                n
 
 
 
@@ -262,7 +294,7 @@ let pprints =
 
 let file =
   let doc = "source C or Core file" in
-  Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
+  Arg.(value & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
 let progress =
   let doc = "Progress mode: the return code indicate how far the source program went through the pipeline \
@@ -273,13 +305,23 @@ let no_rewrite =
   let doc = "Desactivate the Core to Core transformations" in
   Arg.(value & flag & info["no_rewrite"] ~doc)
 
+let concurrency =
+  let doc = "Activate the C11 concurrency" in
+  Arg.(value & flag & info["concurrency"] ~doc)
+
+(*
+let concurrency_tests =
+  let doc = "Runs the concurrency regression tests" in
+  Arg.(value & flag & info["regression-test"] ~doc)
+*)
+
 let args =
   let doc = "List of arguments for the C program" in
   Arg.(value & opt (list string) [] & info ["args"] ~docv:"ARG1,..." ~doc)
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $ args) in
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $ concurrency $ args) in
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->

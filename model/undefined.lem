@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives String_extra
 
 (* C undefined behaviours *)
 type undefined_behaviour =

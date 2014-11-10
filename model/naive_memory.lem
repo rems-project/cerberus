@@ -246,7 +246,7 @@ let rec string_of_mem_value mem_val =
     | MV_integer (Symbolic.SYMBconst n) ->
         string_of_integer n
     | MV_integer symb ->
-        "MV_integer[TODO]"
+        "MV_integer (" ^ show symb ^ ")"
     | MV_array mem_vals ->
         "MV_array[" ^ List.foldr (fun mem_val acc ->  string_of_mem_value mem_val ^ ", " ^ acc) "" mem_vals ^ "]"
 end

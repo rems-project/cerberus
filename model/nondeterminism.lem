@@ -1,7 +1,25 @@
 open import Pervasives
 open import List Function
 open import Global
-import Dlist Constraints Symbolic Undefined
+import Boot Dlist Constraints Symbolic Undefined
+
+
+
+(* TODO: move somewhere else? *)
+type execution_mode =
+  | Interactive
+  | Exhaustive
+  | Random
+
+declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
+declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
+declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
+declare ocaml target_rep function Random         = `Global_ocaml.Random`
+
+val current_execution_mode: unit -> maybe execution_mode
+declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
+
+
 
 
 type kill_reason =
@@ -26,6 +44,7 @@ val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let return a =
   ND [Active Dlist.nil Constraints.empty a]
 
+val bindExhaustive: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindExhaustive (ND m) f =
     ND $
       List.concatMap (fun ma ->
@@ -58,6 +77,7 @@ let bindExhaustive (ND m) f =
 val random_select: forall 'a. list 'a -> 'a
 declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 
+val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindRandom (ND m) f =
   ND $
     match random_select m with
@@ -84,11 +104,22 @@ let bindRandom (ND m) f =
     end
 
 
-let bind = bindRandom
+let bind m f =
+  match current_execution_mode () with
+    | Nothing ->
+        Boot.assert_false "Nondeterminism.bind sees execution_mode = Nothing"
+    | Just Interactive ->
+        (* TODO *)
+        Boot.assert_false "Interactive mode not yet supported"
+    | Just Exhaustive ->
+        bindExhaustive m f
+    | Just Random ->
+        bindRandom m f
+  end
 
 module Operators = struct
   let inline (>>=)      = bind
-  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+  let inline (>>) m1 m2 = bind m1 (fun _ -> m2)
 end
 
 open Operators
