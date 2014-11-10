@@ -97,3 +97,16 @@ let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
 let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
+
+
+
+
+let user_request_driver (strs: string list) : int =
+  print_endline "HERE ARE THE POSSIBLE MOVES:";
+  List.iteri (fun n str ->
+    Printf.printf "Choice %d:\n%s\n\n" n str;
+  ) strs;
+  print_string "YOUR CHOICE: ";
+  Pervasives.read_int ()
+
+

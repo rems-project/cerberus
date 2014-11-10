@@ -158,14 +158,13 @@ let rec core_eval file inside_if expr =
                     EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
 *)
 
+                | (OpEq, Ectype ty1, Ectype ty2) ->
+                    EU.return (if ty1 = ty2 then Etrue else Efalse)
+                
                 | (OpEq, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
                     EU.return (if n1 = n2 then Etrue else Efalse)
                 | (OpLt, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
                     EU.return (if n1 < n2 then Etrue else Efalse)
-
-
-                | (OpEq, Ectype ty1, Ectype ty2) ->
-                    EU.return (if ty1 = ty2 then Etrue else Efalse)
                 
                 | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with
@@ -186,7 +185,20 @@ let rec core_eval file inside_if expr =
                       | Right (symb1', symb2') ->
                           EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Lt symb1' symb2')))
                     end
-  
+
+
+(* TODO: check *)
+                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mod symb1 symb2)))
+
 (*
                 | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with

@@ -108,15 +108,15 @@ let drive sym_supply file args with_concurrency : execution_result =
   
   List.iteri (fun n exec ->
     match exec with
-      | ND.Active (log, constraints, (stdout, (is_blocked, preEx, value))) ->
+      | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, value))) ->
           let str_v = String_core.string_of_expr value in
           if not (List.mem str_v !ky) && not is_blocked then (
             Debug.print_debug 2 (
               Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-                n (pp_constraints constraints) (String.concat "\n" (Dlist.toList log)) ^ "\n"
+                n (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))) ^ "\n"
             );
             if with_concurrency then
-              print_endline (Pp_cmm.dot_of_pre_execution preEx str_v (pp_constraints constraints));
+              print_endline (Pp_cmm.dot_of_exeState conc_st str_v (pp_constraints constraints));
             print_string stdout;
             
             ky := str_v :: !ky;
@@ -144,7 +144,7 @@ let drive sym_supply file args with_concurrency : execution_result =
       | ND.Killed (ND.Other reason, log, constraints) ->
           Debug.print_debug 3 (
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason (pp_constraints constraints) (String.concat "\n" (Dlist.toList log))
+              n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log)))
           )
   ) vs;
   Exception.return0 !ret

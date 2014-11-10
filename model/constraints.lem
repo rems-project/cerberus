@@ -70,11 +70,44 @@ let assert_neq symb1 symb2 (Constraints xs) =
 
 
 
+val simplify: t -> t
+let simplify (Constraints xs) =
+  Constraints $
+  List.foldl (fun acc symb ->
+    let symb = Symbolic.reduce symb in
+    match symb with
+      | SYMBop Eq (SYMBsym _ sym) symb2 ->
+          symb :: List.map (subst_sym sym symb2) acc
+      | SYMBop Eq symb1 (SYMBsym _ sym) ->
+          symb :: List.map (subst_sym sym symb1) acc
+      | SYMBop Eq symb1 symb2 ->
+          if symb1 = symb2 then
+            acc
+          else
+            symb :: acc
+      | _ ->
+        symb :: acc
+    end
+  ) [] xs
 
 
+
+(* TODO: more "is clearly unsat" *)
 val isUnsat: t -> bool
-let isUnsat _ =
-  false (* TODO: WIP *)
+let isUnsat xs =
+  let Constraints xs = simplify xs in
+  List.any (function
+    | SYMBfalse ->
+        true
+    | SYMBop Eq (SYMBconst n1) (SYMBconst n2) ->
+        n1 <> n2
+    | SYMBop Neq (SYMBconst n1) (SYMBconst n2) ->
+        n1 = n2
+    | SYMBop Lt (SYMBconst n1) (SYMBconst n2) ->
+        n1 >= n2
+    | _ ->
+        false
+  end) xs
 
 
 

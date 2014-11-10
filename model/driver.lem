@@ -68,8 +68,8 @@ open ND.Operators
 
 (* BEGIN reads resolving ======================================================================== *)
 
-let rec resolve_read_expr write_sym v expr =
-  let f = resolve_read_expr write_sym v in
+let rec resolve_read_expr write_sym symb_v expr =
+  let f = resolve_read_expr write_sym symb_v in
   match expr with
     | Core.Eunit ->
         Core.Eunit
@@ -77,11 +77,15 @@ let rec resolve_read_expr write_sym v expr =
         Core.Etrue
     | Core.Efalse ->
         Core.Efalse
+(*
     | Core.Econst (Mem.MV_integer symb) ->
         if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
           Core.Econst v
         else
           Core.Econst (Mem.MV_integer symb)
+*)
+    | Core.Econst (Mem.MV_integer symb) ->
+        Core.Econst (Mem.MV_integer (Symbolic.subst_sym write_sym symb_v symb))
     | Core.Econst mem_val ->
         Core.Econst mem_val
     | Core.Elist pes ->
@@ -115,7 +119,7 @@ let rec resolve_read_expr write_sym v expr =
     | Core.Eproc annots nm pes ->
         Core.Eproc annots nm $ List.map f pes
     | Core.Eaction pact ->
-        Core.Eaction $ resolve_read_paction write_sym v pact
+        Core.Eaction $ resolve_read_paction write_sym symb_v pact
     | Core.Eunseq es ->
         Core.Eunseq $ List.map f es
     | Core.Ewseq _as e1 e2 ->
@@ -123,7 +127,7 @@ let rec resolve_read_expr write_sym v expr =
     | Core.Esseq _as e1 e2 ->
         Core.Esseq _as (f e1) (f e2)
     | Core.Easeq sym_opt act1 pact2 ->
-        Core.Easeq sym_opt (resolve_read_action write_sym v act1) (resolve_read_paction write_sym v pact2)
+        Core.Easeq sym_opt (resolve_read_action write_sym symb_v act1) (resolve_read_paction write_sym symb_v pact2)
     | Core.Eindet e ->
         Core.Eindet (f e)
     | Core.Ebound n e ->
@@ -150,11 +154,11 @@ let rec resolve_read_expr write_sym v expr =
         Core.Eis_unsigned $ f pe
   end
 
-and resolve_read_paction write_sym v (Core.Paction p act) =
-  Core.Paction p (resolve_read_action write_sym v act)
+and resolve_read_paction write_sym symb_v (Core.Paction p act) =
+  Core.Paction p (resolve_read_action write_sym symb_v act)
 
-and resolve_read_action write_sym v (Core.Action annots act_) =
-  let f = resolve_read_expr write_sym v in
+and resolve_read_action write_sym symb_v (Core.Action annots act_) =
+  let f = resolve_read_expr write_sym symb_v in
   
   Core.Action annots $ match act_ with
   | Core.Create pe1 pe2 pref ->
@@ -176,47 +180,50 @@ and resolve_read_action write_sym v (Core.Action annots act_) =
 
 
 
-let rec resolve_read_continuation write_sym v cont =
+let rec resolve_read_continuation write_sym symb_v cont =
   List.map (function
     | Core.Kunseq es1 es2 ->
-        Core.Kunseq (List.map (resolve_read_expr write_sym v) es1) (List.map (resolve_read_expr write_sym v) es2)
+        Core.Kunseq (List.map (resolve_read_expr write_sym symb_v) es1) (List.map (resolve_read_expr write_sym symb_v) es2)
     | Core.Kwseq _as e2 ->
-        Core.Kwseq _as (resolve_read_expr write_sym v e2)
+        Core.Kwseq _as (resolve_read_expr write_sym symb_v e2)
     | Core.Ksseq _as e2 ->
-        Core.Ksseq _as (resolve_read_expr write_sym v e2)
+        Core.Ksseq _as (resolve_read_expr write_sym symb_v e2)
   end) cont
 
 
 
-let rec resolve_read_stack write_sym v = function
+let rec resolve_read_stack write_sym symb_v = function
   | Core.Stack_empty ->
       Core.Stack_empty
   | Core.Stack_cons cont sk ->
-      Core.Stack_cons (resolve_read_continuation write_sym v cont) (resolve_read_stack write_sym v sk)
+      Core.Stack_cons (resolve_read_continuation write_sym symb_v cont) (resolve_read_stack write_sym symb_v sk)
 end
 
 
-val resolve_read: Symbol.t -> Mem.mem_value -> core_state -> core_state
-let resolve_read write_sym v core_st =
+val resolve_read: Symbol.t -> Symbolic.symbolic -> core_state -> core_state
+let resolve_read write_sym symb_v core_st =
   (* let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in *)
   <| core_st with
        thread_states= List.map (fun (tid, (parent_tid_opt, th_st)) ->
-                       (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym v th_st.arena;
-                                                            stack= resolve_read_stack write_sym v th_st.stack; |>))
+                       (tid, (parent_tid_opt, <| th_st with arena= resolve_read_expr write_sym symb_v th_st.arena;
+                                                            stack= resolve_read_stack write_sym symb_v th_st.stack; |>))
                      ) core_st.thread_states
   |>
 
 
-val resolve_read_pre_execution: Symbol.t -> Mem.mem_value -> pre_execution -> pre_execution
-let resolve_read_pre_execution write_sym v preEx =
+val resolve_read_pre_execution: Symbol.t -> Symbolic.symbolic -> pre_execution -> pre_execution
+let resolve_read_pre_execution write_sym symb_v preEx =
   let f = function
     | Mem.MV_pointer ptr_val ->
         Mem.MV_pointer ptr_val
     | Mem.MV_integer symb ->
+        Mem.MV_integer (Symbolic.subst_sym write_sym symb_v symb)
+(*
         if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
-          v
+          symb_v
         else
           Mem.MV_integer symb
+*)
   end in
 
   let resolve_read_action = function
@@ -257,7 +264,6 @@ let resolve_read_pre_execution write_sym v preEx =
 (* END reads resolving ========================================================================= *)
 
 
-
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.t driver_state
 let rec stepConcurrency n dr_st =
@@ -268,17 +274,25 @@ let rec stepConcurrency n dr_st =
     if List.null concur_steps then
       (* the concurrency model got stuck *)
       ND.return <| dr_st with blocked= true |>
+    
     else
-      ND.pick concur_steps >>= function
+      match ND.current_execution_mode () with
+        | Nothing ->
+            Boot.assert_false "Driver.stepConcurrency sees execution_mode = Nothing"
+        | Just ND.Interactive ->
+            ND.user_request concur_steps
+        | _ ->
+            ND.pick concur_steps
+      end >>= function
         | ConcurrencyTau performed_act concur_st' ->
-            let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (* DEBUG *)
+            (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)
             ND.log ("Performed action " ^ show (aid_of performed_act) ^ "\n") >>                     (* DEBUG *)
             ND.return  <| dr_st with concurrency_state= concur_st' |>
         
         (* TODO: the variables names seems completely messed up here *)
         | ReadsFrom v w performed_act concur_st' ->
-            let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (* DEBUG *)
-            ND.log ("READSFROM " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
+            (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act) in (\* DEBUG *\) *)
+            ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
             (* TODO: v is the new concrete value, w is the symbolic value from the read *)
             let Mem.MV_integer v_symb = v in
             
@@ -287,7 +301,7 @@ let rec stepConcurrency n dr_st =
                   let _ = Boot.output_string ("ReadsFrom CASE 1: write_sym= " ^ show write_sym ^ ", v= " ^ show v) in
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBsym Symbolic.SYMBint write_sym) v_symb) >>
                   ND.return  <| dr_st with
-                    core_state=        resolve_read write_sym v dr_st.core_state;
+                    core_state=        resolve_read write_sym v_symb dr_st.core_state;
                     concurrency_state= concur_st'
                   |>
               
@@ -586,11 +600,11 @@ let rec driver with_concurrency _dr_st =
     process_core_step
 
 
-val finalize: driver_state -> (string * (bool * Cmm_master.pre_execution * Core.expr core_run_annotation))
+val finalize: driver_state -> (string * (bool * exeState * Core.expr core_run_annotation))
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state.preEx, th_st.arena))
+        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, th_st.arena))
     | xs ->
         Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state
   end
@@ -783,24 +797,24 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
           ND.log ("with: " ^ show dr_st'.concurrency_state.exWitness ^ "\n") >>
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
-                  let (str, (is_blocked, preEx, v)) = finalize dr_st' in
+                  let (str, (is_blocked, conc_st, v)) = finalize dr_st' in
                   ND.log ("Result: " ^ show v ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
-                  ND.return (str, (is_blocked, preEx, v))
+                  ND.return (str, (is_blocked, conc_st, v))
               | MinimalOpsem.DataRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state.preEx, Core.Eundef U.Data_race))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Data_race))
               | MinimalOpsem.UnsequencedRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state.preEx, Core.Eundef U.Unsequenced_race))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Unsequenced_race))
               | MinimalOpsem.IndeterminateReads _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state.preEx, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
               | MinimalOpsem.BadMutexes _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state.preEx, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
               | MinimalOpsem.NotInSublanguage ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state.preEx, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
             end
         else
           ND.return (finalize dr_st')

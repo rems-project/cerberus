@@ -180,9 +180,9 @@ let rec reduce symb =
               Symbolic_constant (n1 ** natFromInteger n2)
 *)
           | (Eq, SYMBconst n1, SYMBconst n2) ->
-              if n1 = n2 then SYMBtrue else assert_false "Eq: SYMBfalse"
+              if n1 = n2 then SYMBtrue else SYMBfalse
           | (Lt, SYMBconst n1, SYMBconst n2) ->
-              if n1 < n2 then SYMBtrue else assert_false "Lt: SYMBfalse"
+              if n1 < n2 then SYMBtrue else SYMBfalse
           | (And, SYMBtrue, SYMBtrue) ->
               SYMBtrue
           | (And, SYMBfalse, _) ->
@@ -207,6 +207,8 @@ let rec reduce symb =
           | (symb1', symb2', symb3') ->
               SYMBite symb1' symb2' symb3'
         end
+    | _ ->
+        symb
   end
 
 
@@ -238,4 +240,23 @@ let try_lt symb1 symb2 =
         Left (n1 < n2)
     | symbs' ->
         Right symbs'
+  end
+
+
+
+val     subst_sym: Symbol.t -> symbolic -> symbolic -> symbolic
+let rec subst_sym sym v symb =
+  reduce match symb with
+    | SYMBtrue ->
+        SYMBtrue
+    | SYMBfalse ->
+        SYMBfalse
+    | SYMBconst n ->
+        SYMBconst n
+    | SYMBsym _ sym' ->
+        if sym = sym' then v else symb
+    | SYMBop op symb1 symb2 ->
+        SYMBop op (subst_sym sym v symb1) (subst_sym sym v symb2)
+    | SYMBite symb1 symb2 symb3 ->
+        SYMBite (subst_sym sym v symb1) (subst_sym sym v symb2) (subst_sym sym v symb3)
   end
