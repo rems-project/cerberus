@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives String_extra
 import Symbol
 
 (* TODO: tmp *)
@@ -222,7 +222,6 @@ let make_ite symb1 symb2 symb3 =
 
 
 
-(*
 val try_eq: symbolic -> symbolic -> either bool (symbolic * symbolic)
 let try_eq symb1 symb2 =
   match (reduce symb1, reduce symb2) with
@@ -240,4 +239,3 @@ let try_lt symb1 symb2 =
     | symbs' ->
         Right symbs'
   end
-*)

@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives String_extra Global
 import Symbol AilTypes Implementation_ Undefined Cmm_master
 import Naive_memory
 
@@ -234,7 +234,7 @@ let rec expr_to_string e =
   | Ecall n l       -> "Ecall (" ^ show n ^ ", " ^ Show.string_of_list expr_to_string l ^ ")"
   | Eoutput s       -> "Eoutput " ^ show s 
   | Eundef un       -> "Eundef (" ^ show un ^ ")"
-  | Eerror          -> "Eerror"
+  | Eerror str          -> "Eerror " ^ show str
   | Eskip           -> "Eskip"
   | Elet sym e1 e2  -> "Elet (?)"
   | Eif e1 e2 e3    -> "Eif (?)"

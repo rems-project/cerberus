@@ -23,8 +23,10 @@ let pp_constraints (Smt_wrapper.Assertions (_, xs)) =
   String.concat ";\n" xs
 *)
 
-let pp_constraints _ =
-  "TODO[constraints]"
+open Constraints
+let pp_constraints (Constraints xs) =
+  let strs = List.map Symbolic.symbolic_to_string xs in
+  "[" ^ String.concat ", " strs ^ "]"
 
 
 
@@ -55,7 +57,7 @@ let string_of_cvalue = function
   | Mem.MV_integer (Symbolic.SYMBconst n) ->
       Big_int.string_of_big_int n
   | Mem.MV_integer symb ->
-      "SYMB(" ^ Boot_pprint.to_plain_string (Pp_core.pp_symbolic symb) ^ ")"
+      "SYMB(" ^ Pp_utils.to_plain_string (Pp_core.pp_symbolic symb) ^ ")"
 
 
 let string_of_action = function

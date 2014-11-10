@@ -35,6 +35,7 @@ type cerberus_conf = {
   exec_mode_opt: execution_mode option;
   progress:      bool;
   no_rewrite:    bool;
+  concurrency:   bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -45,6 +46,8 @@ val (!!): (unit -> 'a) ref -> 'a
 
 val cerb_conf: (unit -> cerberus_conf) ref
 
+val current_execution_mode: unit -> execution_mode option
+
 val set_cerb_conf:
     string ->
     language list ->
@@ -53,6 +56,7 @@ val set_cerb_conf:
     bool ->
     execution_mode ->
     (Input.t -> (Core_parser_util.result, Errors.t9) Exception.t3) ->
+    bool ->
     bool ->
     bool ->
     unit
