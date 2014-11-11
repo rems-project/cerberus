@@ -286,19 +286,19 @@ let rec stepConcurrency n dr_st =
       end >>= function
         | ConcurrencyTau performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)
-            ND.log ("Performed action " ^ show (aid_of performed_act) ^ "\n") >>                     (* DEBUG *)
+            ND.log ("Performed action " ^ show (aid_of performed_act)) >>                     (* DEBUG *)
             ND.return  <| dr_st with concurrency_state= concur_st' |>
         
         (* TODO: the variables names seems completely messed up here *)
         | ReadsFrom v w performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act) in (\* DEBUG *\) *)
-            ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
+            ND.log ("Performed action " ^ aid_to_string performed_act) >>                            (* DEBUG *)
             (* TODO: v is the new concrete value, w is the symbolic value from the read *)
             let Mem.MV_integer v_symb = v in
             
             match w with
               | Mem.MV_integer (Symbolic.SYMBsym _ write_sym) -> 
-                  let _ = Boot.output_string ("ReadsFrom CASE 1: write_sym= " ^ show write_sym ^ ", v= " ^ show v) in
+                  ND.log ("ReadsFrom case 1: write_sym = " ^ show write_sym ^ ", v = " ^ show v) >>
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBsym Symbolic.SYMBint write_sym) v_symb) >>
                   ND.return  <| dr_st with
                     core_state=        resolve_read write_sym v_symb dr_st.core_state;
@@ -306,7 +306,7 @@ let rec stepConcurrency n dr_st =
                   |>
               
               | Mem.MV_integer (Symbolic.SYMBconst n) ->
-                  let _ = Boot.output_string "ReadsFrom CASE 2" in
+                  ND.log "ReadsFrom case 2" >>
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) v_symb) >>
                   ND.return   <| dr_st with concurrency_state= concur_st' |> 
             end
@@ -314,9 +314,27 @@ let rec stepConcurrency n dr_st =
      
      stepConcurrency (n-1) dr_st'
 
+val followConcurrencyTrace_aux: driver_state -> list aid -> driver_state
+let rec followConcurrencyTrace_aux s l = 
+  match l with
+  | []   -> s
+  | h::t -> let concur_steps = Set_extra.toList (exeOpsemStep s.concurrency_state initialEqualityCvalue) in
+            let filtered_steps = List.filter (fun step -> aid_of (actionOf step) = h) concur_steps in 
+            match filtered_steps with
+            | []     -> let _ = Boot.output_string ("Cannot execution action " ^ show h ^ "\n") in 
+                        s
+            | [step] -> let _ = Boot.output_string ("Performed step " ^ show step ^ "\n") in
+                        let newState = <|s with concurrency_state=stateOf step |> in
+                        followConcurrencyTrace_aux newState t
+            | _      -> let _ = Boot.output_string 
+                                ("There are multiple ways of executing action " ^ show h ^ "\n") in 
+                        s
+            end
+  end
 
-
-
+val followConcurrencyTrace: driver_state -> list aid -> unit
+let followConcurrencyTrace s l = 
+  let _ = followConcurrencyTrace_aux s l in ()
 
 
 
@@ -400,7 +418,7 @@ let rec drive_core_thread tid dr_st =
         drive_core_thread tid <| dr_st' with core_state= core_st' |>
     
     | Step_eval debug_str _ step_m ->
-        let _ = Boot.output_string ("Step_val: " ^ debug_str) in
+        (* let _ = Boot.output_string ("Step_val: " ^ debug_str) in *)
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         drive_core_thread tid <| dr_st' with core_state= core_st' |>
@@ -456,7 +474,7 @@ let action_request_concurrency dr_st request =
   let (preEx_step, dr_st') =
     match request with
       | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
-          let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in
+          (* let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in *)
           (<| action=       Store aid tid mo ptr_val mem_val;
               sbBefore=     sb_edges;
               ddBefore=     dd_edges;
@@ -465,7 +483,7 @@ let action_request_concurrency dr_st request =
           update_core_state core_st' dr_st)
       | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val mk_core_st' ->
 (*          let (sym, dr_st) = fresh_symbol dr_st in *)
-          let _ = Boot.output_string ("LoadRequest on: " ^ show ptr_val) in
+          (* let _ = Boot.output_string ("LoadRequest on: " ^ show ptr_val) in *)
           (* ND.log "LOAD\n" >> *)
           (<| action=       Load aid tid mo ptr_val mem_val;
               sbBefore=     sb_edges;
@@ -500,13 +518,13 @@ let action_request_sequential dr_st request =
     | AllocRequest sb_edges dd_edges asw_edges aid tid ty ptr_val core_st' ->
         let dr_st' = update_core_state core_st' dr_st in
         
-        let _ = Boot.output_string ("AllocRequest on: " ^ show ptr_val ^  (* DEBUG *)
-                                    ", giving " ^ show dr_st'.core_run_state.layout_state) in (* DEBUG *)
+        (* let _ = Boot.output_string ("AllocRequest on: " ^ show ptr_val ^  (* DEBUG *)
+                                    ", giving " ^ show dr_st'.core_run_state.layout_state) in (* DEBUG *) *)
         
         dr_st'
     
     | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
-        let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in
+        (* let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in *)
         let dr_st' = <| dr_st with
           core_state= core_st';
           core_run_state= <| dr_st.core_run_state with
@@ -517,9 +535,9 @@ z
           |>
 (*                    sequential_state= Map.insert ptr_val (Just mem_val) dr_st.sequential_state *)
         |> in
-        let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^
+        (* let _ = Boot.output_string ("StoreRequest on: " ^ show ptr_val ^
                                     ", from " ^ show dr_st.core_run_state.layout_state ^
-                                    ", to " ^ show dr_st'.core_run_state.layout_state) in
+                                    ", to " ^ show dr_st'.core_run_state.layout_state) in *)
         dr_st'
     
     | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val _ mk_core_st' ->
@@ -539,8 +557,8 @@ z
                       end;
 (*                    concurrency_state= updatePreEx dr_st.concurrency_state preEx_step *)
         |> in
-        let _ = Boot.output_string ("LoadRequest on: " ^ show ptr_val ^
-                                    ", with " ^ show dr_st.core_run_state.layout_state) in
+        (* let _ = Boot.output_string ("LoadRequest on: " ^ show ptr_val ^
+                                    ", with " ^ show dr_st.core_run_state.layout_state) in *)
         dr_st'
   end
 
@@ -568,7 +586,7 @@ let rec driver with_concurrency _dr_st =
 *)
     | Step_action_request debug_str tid request_m ->
         (* case where the Core program performs a memory action *)
-        let _ = Boot.output_string ("Step_action_request[" ^ debug_str ^ "]") in
+        ND.log ("Step_action_request (" ^ debug_str ^ ")") >>
         runCore request_m dr_st >>= fun (request, dr_st') ->
         
         let dr_st'' =
@@ -580,17 +598,17 @@ let rec driver with_concurrency _dr_st =
         driver with_concurrency dr_st''
     
     | Step_tau debug_str _ step_m ->
-        let _ = Boot.output_string ("Step_tau[" ^ debug_str ^ "]") in
+        ND.log ("Step_tau (" ^ debug_str ^ ")") >> 
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         driver with_concurrency <| dr_st' with core_state= core_st' |>
     
     | Step_output step_m ->
-        let _ = Boot.output_string "Step_output" in
+        ND.log "Step_output" >>
         runCore step_m dr_st >>= fun ((str, core_st'), dr_st') ->
         driver with_concurrency <| dr_st' with core_state= <| core_st' with io= <| core_st'.io with stdout= Dlist.append (Dlist.singleton str) core_st'.io.stdout |> |> |>
     
     | Step_done _ ->
-        let _ = Boot.output_string "Step_done" in
+        ND.log "Step_done" >>
         ND.return dr_st
 
   end in
@@ -791,10 +809,10 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
         if with_concurrency then
           let dr_st' = repair_pre_execution dr_st' in 
           let n     = (number_of_uncommitted dr_st'.concurrency_state) in
-          ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.preEx ^ "\n") >>
-          ND.log ("Calling concurrency " ^ show n ^ " times\n") >>
+          ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.preEx) >>
+          ND.log ("Calling concurrency " ^ show n ^ " times") >>
           stepConcurrency n dr_st' >>= fun dr_st' ->
-          ND.log ("with: " ^ show dr_st'.concurrency_state.exWitness ^ "\n") >>
+          ND.log ("with: " ^ show dr_st'.concurrency_state.exWitness) >>
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
                   let (str, (is_blocked, conc_st, v)) = finalize dr_st' in
