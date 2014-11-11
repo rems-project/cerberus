@@ -203,7 +203,7 @@ let add_constraint mk_assert =
 
 val log: string -> t unit
 let log msg =
-  ND [Active (Dlist.singleton msg) Constraints.empty ()]
+  ND [Active (Dlist.singleton ("ND log: " ^ msg)) Constraints.empty ()]
 
 
 
