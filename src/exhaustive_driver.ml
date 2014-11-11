@@ -96,7 +96,9 @@ let drive sym_supply file args with_concurrency : execution_result =
           exit (-1) in
   
   let file = Core_run.convert_file file in
-  let (Nondeterminism.ND vs) = Driver.drive with_concurrency sym_supply file args in
+  let (Nondeterminism.ND vs) = Driver.drive with_concurrency sym_supply file args in 
+  (* let vs = [] in
+  let _ = Driver.followConcurrencyTrace sym_supply file args [1;3;4;0;2;5] in *)
   
   Debug.print_debug 1 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
   

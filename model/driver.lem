@@ -270,7 +270,7 @@ let rec stepConcurrency n dr_st =
   if n = 0 then
     ND.return dr_st
   else
-    (let concur_steps = Set_extra.toList $ exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
+    (let concur_steps = exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
     if List.null concur_steps then
       (* the concurrency model got stuck *)
       ND.return <| dr_st with blocked= true |>
@@ -313,29 +313,6 @@ let rec stepConcurrency n dr_st =
       end) >>= fun dr_st' ->
      
      stepConcurrency (n-1) dr_st'
-
-val followConcurrencyTrace_aux: driver_state -> list aid -> driver_state
-let rec followConcurrencyTrace_aux s l = 
-  match l with
-  | []   -> s
-  | h::t -> let concur_steps = Set_extra.toList (exeOpsemStep s.concurrency_state initialEqualityCvalue) in
-            let filtered_steps = List.filter (fun step -> aid_of (actionOf step) = h) concur_steps in 
-            match filtered_steps with
-            | []     -> let _ = Boot.output_string ("Cannot execution action " ^ show h ^ "\n") in 
-                        s
-            | [step] -> let _ = Boot.output_string ("Performed step " ^ show step ^ "\n") in
-                        let newState = <|s with concurrency_state=stateOf step |> in
-                        followConcurrencyTrace_aux newState t
-            | _      -> let _ = Boot.output_string 
-                                ("There are multiple ways of executing action " ^ show h ^ "\n") in 
-                        s
-            end
-  end
-
-val followConcurrencyTrace: driver_state -> list aid -> unit
-let followConcurrencyTrace s l = 
-  let _ = followConcurrencyTrace_aux s l in ()
-
 
 
 
@@ -733,6 +710,8 @@ let driver_globals with_concurrency sym_supply file =
   ND.return (tid0, dr_st')
 
 
+
+
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -837,3 +816,135 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
         else
           ND.return (finalize dr_st')
 end
+
+
+
+
+
+(* This function is a almost-clone of driver. It is only used for debugging. *)
+val get_initial_conc_states: Symbol.t -> Core.file Core_run_aux.core_run_annotation -> 
+                             list string -> ND.t exeState
+let get_initial_conc_states sym_supply file arg_strs =
+  (* first we execute the body of global definitions and remove their symbols
+     from the rest of the program *)
+  driver_globals true sym_supply file >>= fun (tid0, dr_st) ->
+  
+  (* setting the arena of thread 0 to the body of the main function *)
+  match Map.lookup dr_st.core_file.Core.main dr_st.core_file.Core.funs with
+    | Nothing ->
+        ND.kill (ND.Other "couldn't find the startup function")
+    | Just (_, params, expr) ->
+        match params with
+          | [(argc_sym, _); (argv_sym, _)] ->
+              (* memomy_values to be stored in memory objects pointed to by
+                 the element of main.argv  *)
+              let args_mem_val_tys =
+                List.map (fun arg_str ->
+                  let mem_vals =
+                    List.map (fun c ->
+                      (* TODO: fixing impl choice here (ASCII) *)
+                      Mem.mk_integer $ Decode.decode_character_constant (String.toString [c])
+                    ) (String.toCharList arg_str) in
+                  (* NOTE: adding a null termination to the char array *)
+                  (
+                    Mem.mk_array (mem_vals ++ [Mem.mk_integer 0]),
+                    Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
+                  )
+                ) arg_strs in
+              
+              (* memory value to be stored in the memory object pointed to by main.argc *)
+              let argc_mem_val = Mem.mk_integer (integerFromNat $ List.length args_mem_val_tys) in
+              
+              (* allocating and initialising an object for main.argc *)
+              runCore (
+                SEU.bind (runMem (Mem.allocate_object tid0 [dr_st.core_file.Core.main; argc_sym] Core_ctype.signed_int)) (fun ptr_val ->
+                SEU.bind (runMem (Mem.store Core_ctype.signed_int ptr_val argc_mem_val)) (fun _ ->
+                SEU.return ptr_val))
+              ) dr_st >>= fun (argc_ptr_val, dr_st) ->
+              
+              (* allocating and initialising the objects pointed to by the elements of argv *)
+              ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
+                runCore (
+                  SEU.bind (runMem (Mem.allocate_object tid0 [] arg_ty)) (fun ptr_val ->
+                  SEU.bind (runMem (Mem.store arg_ty ptr_val arg_mem_val)) (fun _ ->
+                  SEU.return (ptr_val :: ptr_vals)))
+                ) dr_st
+              ) ([], dr_st) args_mem_val_tys >>= fun (ptr_vals_rev, dr_st) ->
+              
+              (* allocating and initialising an object for main.argv *)
+              let argv_ty =
+                Core_ctype.Array (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char)
+                                 (Just (integerFromNat $ List.length ptr_vals_rev)) in
+              runCore (
+                SEU.bind (runMem (Mem.allocate_object tid0 [dr_st.core_file.Core.main; argv_sym] argv_ty)) (fun ptr_val ->
+                SEU.bind (runMem (Mem.store argv_ty ptr_val (Mem.mk_array $ List.map Mem.mk_pointer (List.reverse ptr_vals_rev)))) (fun _ ->
+                SEU.return ptr_val))
+              ) dr_st >>= fun (argv_ptr_val, dr_st) ->
+              
+              ND.return $
+                Core_aux.subst_syms [Just argc_sym; Just argv_sym]
+                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val])
+                  expr
+          | _ ->
+              ND.return expr
+        end >>= fun expr ->
+        driver true <| dr_st with
+          core_state= update_thread_state tid0 <|
+                        arena=  expr;
+                        stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
+                        labels= Map.empty
+                      |> dr_st.core_state
+        |> >>= fun dr_st' ->
+        
+        
+          let dr_st' = repair_pre_execution dr_st' in 
+          let n     = (number_of_uncommitted dr_st'.concurrency_state) in
+          ND.return dr_st'.concurrency_state
+
+end
+
+val pick_initial_conc_states_aux: list (ND.nd_state exeState) -> maybe exeState
+let rec pick_initial_conc_states_aux l = 
+  match l with
+  | []                   -> Nothing
+  | (ND.Killed _ _ _)::t -> pick_initial_conc_states_aux t
+  | (ND.Active _ _ s)::_ -> Just s
+  end
+
+val pick_initial_conc_states: Symbol.t -> Core.file Core_run_aux.core_run_annotation -> 
+                              list string -> maybe exeState
+let pick_initial_conc_states sym_supply file arg_strs =
+  let (ND.ND vs) = get_initial_conc_states sym_supply file arg_strs in
+  pick_initial_conc_states_aux vs  
+
+val followConcurrencyTrace_aux: exeState -> list aid -> exeState
+let rec followConcurrencyTrace_aux s l = 
+  match l with
+  | []   -> s
+  | h::t -> let concur_steps = (exeOpsemStep s initialEqualityCvalue) in
+            let filtered_steps = List.filter (fun step -> aid_of (actionOf step) = h) concur_steps in 
+            let _ = Boot.output_string ("There are " ^ show (List.length concur_steps) ^
+                                        " steps in total, and " ^ show (List.length filtered_steps) ^ 
+                                        " steps that perform action " ^ show h) in
+            match filtered_steps with
+            | []     -> let _ = Boot.output_string ("Cannot execution action " ^ show h ^ "\n") in 
+                        s
+            | [step] -> let _ = Boot.output_string ("Performed step " ^ show step ^ "\n") in
+                        let newState = stateOf step in
+                        followConcurrencyTrace_aux newState t
+            | _      -> let _ = Boot.output_string 
+                                ("There are multiple ways of executing action " ^ show h ^ "\n") in 
+                        s
+            end
+  end
+
+val followConcurrencyTrace: Symbol.t -> Core.file Core_run_aux.core_run_annotation -> 
+                            list string -> list aid -> unit
+let followConcurrencyTrace sym_supply file arg_strs l = 
+  let maybe_state = pick_initial_conc_states sym_supply file arg_strs in
+  match maybe_state with
+  | Nothing -> Boot.output_string "No initial executions"
+  | Just s  -> let _ = Boot.output_string ("Picked initial states " ^ show s ^ "\n") in
+               let _ = followConcurrencyTrace_aux s l in
+               Boot.output_string "Finished"
+  end
