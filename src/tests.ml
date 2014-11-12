@@ -85,7 +85,8 @@ let get_tests: test list =
    get_test "tests/concurrency/hb-mo-cycle+Wsc_Wsc_Rsc+Wsc_Wsc_Rsc.core" [1; 2; 3] []; 
    get_test "tests/concurrency/MP+na_rel+acq_na.core" [1; 2] [];
    get_test "tests/concurrency/LB+acq_rel+acq_rel.core" [0; 1; 2] [];
-   get_test "tests/concurrency/LB+Rsc_Wsc+Rsc_Wsc.core" [0; 1; 2] [];
+   get_test "tests/concurrency/LB+Rsc_Wsc+Rsc_Wsc.core" [0; 1; 2] []; 
+   get_test "tests/concurrency/LB+rlx_rlx+rlx_rlx.core" [0; 1; 2; 3] [];
    get_test "tests/concurrency/SB+rel_acq+rel_acq.core" [0; 1; 2; 3] [];
    get_test "tests/concurrency/SB+Wsc_Rsc+Wsc_Rsc.core" [1; 2; 3] [];
    get_test "tests/concurrency/WRC+rel+acq_rel+acq_acq.core" [1; 2] [];
