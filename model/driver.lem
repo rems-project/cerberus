@@ -620,8 +620,29 @@ let rec driver with_concurrency _dr_st =
             action_request_concurrency dr_st' request
           else
             action_request_sequential dr_st' request in
+
+        let execution_mode_is_random = 
+          match ND.current_execution_mode () with
+          | Nothing   -> false
+          | Just mode -> mode = ND.Random
+          end in
+
+        (if with_concurrency && execution_mode_is_random then
+           let total = numberOfUncommittedActions dr_st''.concurrency_state in
+           let choices = Enum.enumFromTo 0 total in
+           
+           (* DEBUG *)
+           let _ = if choices = [] then
+             Boot.assert_false "BOOM"
+           else
+             () in
+           
+           ND.pick choices >>= fun n ->
+           stepConcurrency n dr_st''
+         else
+           ND.return dr_st'') >>= fun dr_st''' ->
         
-        driver with_concurrency dr_st''
+        driver with_concurrency dr_st'''
     
     | Step_tau debug_str _ step_m ->
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
@@ -652,6 +673,9 @@ let rec hack core_file expr =
           expr'
         else
           hack core_file expr'
+    | _ ->
+        (* TODO: this is wrong *)
+        expr
   end
 
 

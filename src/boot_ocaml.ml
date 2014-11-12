@@ -92,7 +92,7 @@ let sort_assoc_list xs =
 
 
 let random_select xs =
-  Printf.printf "random_select >> %d\n" (List.length xs);
+(*  Printf.printf "random_select >> %d\n" (List.length xs); *)
   List.nth xs (Random.int (List.length xs))
 
 
