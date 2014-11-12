@@ -659,11 +659,27 @@ let rec driver with_concurrency _dr_st =
         ND.return dr_st
 
   end in
-  
-  ND.pick dr_st.core_state.thread_states >>= fun th_info ->
-  core_thread_step dr_st.core_file th_info dr_st.core_state >>=
-    process_core_step
 
+  (if ND.current_execution_mode () = Just ND.Random then
+    (* HACK The problem is that some threads are blocked (they wait
+       for other threads to finish. If we randomly pick that thread to
+       execute, there will not be any steps to execute, and the whole
+       execution comes to a halt. To properly solve this, we need to
+       implement back tracking. Since we haven't, we temporarily
+       switch to exhaustive mode and also compute the steps of the
+       other threads. *)
+
+    
+    ND.bindExhaustive (ND.pick dr_st.core_state.thread_states) 
+                      (fun th_info ->
+                       core_thread_step dr_st.core_file th_info dr_st.core_state)
+    
+
+   else
+     ND.pick dr_st.core_state.thread_states >>= fun th_info ->
+     core_thread_step dr_st.core_file th_info dr_st.core_state 
+  ) >>=
+      process_core_step
 
 
 let rec hack core_file expr =
