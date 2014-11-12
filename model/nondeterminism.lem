@@ -80,29 +80,56 @@ declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindRandom (ND m) f =
   ND $
-    match random_select m with
-      | Active logA eqsA vA ->
-          match random_select (let ND z = f vA in z) with
-            | Active logB eqsB vB ->
-                let log' = Dlist.append logA logB in
-                
-                if Constraints.is_empty eqsA then
-                  [Active log' eqsB vB]
-                else if Constraints.is_empty eqsB then
-                  [Active log' eqsA vB]
-                else
-                  let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
-                  if Constraints.isUnsat eqs' then
-                    [Killed (Other "reached unsatisfiable constraints") log' eqs']
-                  else
-                    [Active log' eqs' vB]
-            | Killed reason logB eqsB ->
-                [Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)]
-          end
-      | Killed reason log eqs ->
-          [Killed reason log eqs]
+   match m with
+     | [] -> []
+     | _ ->
+         match random_select m with
+           | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
+                      else
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+(*
+               match f vA with
+                 | ND [] -> []
+                 | ND z ->
+                     match random_select z with
+                       | Active logB eqsB vB ->
+                           let log' = Dlist.append logA logB in
+                           
+                           if Constraints.is_empty eqsA then
+                             [Active log' eqsB vB]
+                           else if Constraints.is_empty eqsB then
+                             [Active log' eqsA vB]
+                           else
+                             let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                             if Constraints.isUnsat eqs' then
+                               [Killed (Other "reached unsatisfiable constraints") log' eqs']
+                             else
+                               [Active log' eqs' vB]
+                       | Killed reason logB eqsB ->
+                           [Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)]
+                     end
+               end
+*)
+           | Killed reason log eqs ->
+               [Killed reason log eqs]
+         end
     end
-
 
 let bind m f =
   match current_execution_mode () with
