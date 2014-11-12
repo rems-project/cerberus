@@ -5,6 +5,16 @@ val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
+
+let unatomic = function
+  | Atomic ty ->
+      ty
+  | ty ->
+      ty
+end
+
+
+
 (* == Function on qualifiers ==================================================================== *)
 val is_unqualified: qualifiers -> bool
 let is_unqualified = function
@@ -81,7 +91,9 @@ let unsigned_type = function
 
 (* == constructor predicates on ctypes =========================================================== *)
 val is_integer: ctype -> bool
-let is_integer = function
+let is_integer ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Basic (Integer _) ->
       true
   | _ ->
@@ -89,7 +101,9 @@ let is_integer = function
 end
 
 val is_void: ctype -> bool
-let is_void = function
+let is_void ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Void ->
       true
   | _ ->
@@ -97,7 +111,9 @@ let is_void = function
 end
 
 val is_pointer: ctype -> bool
-let is_pointer = function
+let is_pointer ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Pointer _ _ ->
       true
   | _ ->
@@ -127,7 +143,9 @@ end
   
 
 val is_character: ctype -> bool
-let is_character = function
+let is_character ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Basic (Integer Char) ->
       true
   | Basic (Integer (Signed Ichar)) ->
@@ -139,7 +157,9 @@ let is_character = function
 end
 
 val is_Bool: ctype -> bool
-let is_Bool = function
+let is_Bool ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Basic (Integer Bool) ->
       true
   | _ ->
@@ -147,8 +167,10 @@ let is_Bool = function
 end
 
 (* TODO: STD doc *)
-val is_array: ctype -> bool
-let is_array = function
+val     is_array: ctype -> bool
+let is_array ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Array _ _ ->
       true
   | Builtin "jmp_buf" ->
@@ -160,7 +182,9 @@ let is_array = function
 end
 
 val is_array_of_character: ctype -> bool
-let is_array_of_character = function
+let is_array_of_character ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Array elem_ty _ ->
       is_character elem_ty
   | _ ->
@@ -169,7 +193,9 @@ end
 
 (* STD §6.2.5#1, sentence 3 *)
 val is_function: ctype -> bool
-let is_function = function
+let is_function ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Function _ _ _ ->
       true
   | _ ->
@@ -177,7 +203,9 @@ let is_function = function
 end
 
 val is_struct: ctype -> bool
-let is_struct = function
+let is_struct ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Struct _ _ ->
       true
   | _ ->
@@ -185,7 +213,9 @@ let is_struct = function
 end
 
 val is_union: ctype -> bool
-let is_union = function
+let is_union ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Union _ _ ->
       true
   | _ ->
@@ -200,7 +230,9 @@ let is_struct_or_union ty =
 (* == generic predicates on ctypes ============================================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool
-let is_object = function
+let is_object ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Builtin "FILE" ->
       true
   | Builtin "cnd_t" ->
@@ -240,7 +272,9 @@ let is_aggregate ty =
 
 (* TODO *)
 val is_complete: ctype -> bool
-let is_complete = function
+let is_complete ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
   | Basic _ ->
       true
   | Pointer _ _ ->

@@ -1,5 +1,5 @@
 open import Pervasives Global Show
-import Symbol Symbolic AilTypes
+import Symbol (* Symbolic *) AilTypes
 
 (* TODO: temporary hack *)
 val assert_false: forall 'a. string -> 'a

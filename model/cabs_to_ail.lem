@@ -2054,6 +2054,9 @@ let rec register_labels (CabsStatement _ stmt_) =
         E.return ()
     | CabsSreturn _ ->
         E.return ()
+    | CabsSpar _ ->
+        (* TODO: temporary *)
+        E.return ()
   end
 
 

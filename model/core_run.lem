@@ -90,7 +90,19 @@ val     core_eval: Core.file core_run_annotation -> bool -> Core.expr core_run_a
                    EU.t (Core.expr core_run_annotation) core_run_error
 let rec core_eval file inside_if expr =
   if is_value expr then
-    EU.return expr
+    match expr with
+      | Econst (Mem.MV_integer symb) ->
+          EU.return match Symbolic.reduce symb with
+            | Symbolic.SYMBtrue ->
+                Etrue
+            | Symbolic.SYMBfalse ->
+                Efalse
+            | symb' ->
+                Econst (Mem.MV_integer symb')
+          end
+      | _ ->
+          EU.return expr
+    end
   else
     match expr with
       | Elist pes ->
@@ -236,6 +248,24 @@ let rec core_eval file inside_if expr =
                     EU.return Etrue
                 | (OpAnd, _, _) ->
                     EU.return Efalse
+
+
+                | (op, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    let op = match op with
+                      | OpAdd -> Symbolic.Add
+                      | OpSub -> Symbolic.Sub
+                      | OpMul -> Symbolic.Mul
+                      | OpDiv -> Symbolic.Div
+                      | OpMod -> Symbolic.Mod
+                      | OpExp -> Symbolic.Exp
+                      | OpEq  -> Symbolic.Eq
+                      | OpLt  -> Symbolic.Lt
+                      | OpAnd -> Symbolic.And
+                      | OpOr  -> Symbolic.Or
+                    end in
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op op symb1 symb2)))
+
+
                 | (_, _, _) ->
                     Exception.fail (Illformed_program ("ill-typed Eop: " ^ Boot.pp_core_expr (Eop binop pe1' pe2')))
 (*                    Exception.fail (Illformed_program "ill-typed Eop") *)
@@ -315,15 +345,22 @@ let rec core_eval file inside_if expr =
             NDEU.return (Eop binop pe1' pe2')
 *)
 
-      | Ecall f pes ->
+      | Ecall nm pes ->
           EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
-          if all is_value pes' then
-            (* We do not immediately call eval on the result of call_function,
-               as that could lead to non-termination. *)
-            Exception.bind (call_function file f pes')
-              EU.return
+          if List.all is_value pes' then
+            if List.all Core_aux.is_concrete pes' then
+              (* We do not immediately call eval on the result of call_function,
+                 as that could lead to non-termination. *)
+              Exception.bind (call_function file nm pes')
+                EU.return
+            else
+              let symb_nm = match nm with
+                | Sym f -> Symbolic.SYMBfsym f
+                | Impl i -> Symbolic.SYMBimpl i
+              end in
+              EU.return (Econst (Mem.MV_integer (Symbolic.make_call symb_nm (List.map symbolify pes'))))
           else
-            EU.return (Ecall f pes')
+            EU.return (Ecall nm pes')
       
       | Eundef ub ->
           Exception.return (Undefined.undef [ub])
@@ -354,6 +391,35 @@ let rec core_eval file inside_if expr =
               else
                 EU.return (Eif pe1' pe2 pe3)
         end
+(*
+      | Eif pe1 pe2 pe3 ->
+        core_eval file inside_if pe1 >>= function
+          | Etrue ->
+              core_eval file inside_if pe2
+          | Efalse ->
+              core_eval file inside_if pe3
+          | (Econst (Mem.MV_integer symb) as pe1') ->
+              if is_value pe2 then
+                if is_value pe3 then
+                  match (pe2, pe3) with
+                    | (Econst (Mem.MV_integer symb2), Econst (Mem.MV_integer symb3)) ->
+                        EU.return (Econst (Mem.MV_integer (Symbolic.make_ite symb symb2 symb3)))
+                    | _ ->
+                        EU.fail (Illformed_program "ill-typed Eif")
+                  end
+                else
+                  core_eval file inside_if pe2 >>= fun pe2' ->
+                  EU.return (Eif pe1' pe2' pe3)
+              else
+                  core_eval file inside_if pe3 >>= fun pe3' ->
+                  EU.return (Eif pe1' pe2 pe3')
+          | pe1' ->
+              if is_value pe1' then
+                EU.fail (Illformed_program "ill-typed Eif")
+              else
+                EU.return (Eif pe1' pe2 pe3)
+        end
+*)
       
       | Eis_scalar pe ->
           core_eval file inside_if pe >>= function
@@ -398,6 +464,8 @@ let rec core_eval file inside_if expr =
                 else
                   EU.return (Eis_unsigned pe')
           end
+| e ->
+    Boot.assert_false (">>> " ^ Boot.pp_core_expr e)
 end
 
 
@@ -420,6 +488,23 @@ type core_state = <|
   io:            io_state;
   handlers:      Map.map handler_event (list name);
 |>
+
+
+let string_of_thread_state th_st =
+  "Arena= " ^ Boot.pp_core_expr th_st.arena ^ "\n" ^
+  "Stack= " ^ "TODO" ^ "\n"
+
+let string_of_core_state core_st =
+  List.foldr (fun (tid, (parent_tid_opt, th_st)) acc ->
+    "Thread " ^ show tid ^ (maybe "" (fun z -> "(spawn of thread " ^ show z ^ ")") parent_tid_opt) ^ "\n" ^
+    string_of_thread_state th_st ^
+    "-----------------------------\n\n" ^ acc
+  ) "" core_st.thread_states
+
+
+instance (Show core_state)
+  let show = string_of_core_state
+end
 
 
 
@@ -612,6 +697,145 @@ let fresh_action_id =
     let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
     (aid, <| run_st with aid_supply= aid_suppl' |>)
   )
+
+
+
+
+open State.Operators
+
+val     hoist_negatives: forall 'a. expr 'a -> State.t (expr 'a) (list (expr 'a) * core_run_state)
+let rec hoist_negatives expr =
+  let add_neg neg_e =
+    State.modify (fun (negs, run_st) ->
+      ((), (neg_e :: negs, run_st))
+    ) in
+(*
+  let flush_negs = 
+    State.modify (fun (negs, run_st) ->
+      (negs, ([], run_st))
+    ) in
+*)
+  match expr with
+    | Eunit ->
+        State.return expr
+    | Etrue ->
+        State.return expr
+    | Efalse ->
+        State.return expr
+    | Econst _ ->
+        State.return expr
+    | Elist _ ->
+        State.return expr
+    | Ectype _ ->
+        State.return expr
+    | Esym _ ->
+        State.return expr
+    | Eimpl _ ->
+        State.return expr
+    | Etuple _ ->
+        State.return expr
+    | Enot _ ->
+        State.return expr
+    | Eop _ _ _ ->
+        State.return expr
+    | Ecall _ _ ->
+        State.return expr
+    | Eoutput _ ->
+        State.return expr
+    | Eundef _ ->
+        State.return expr
+    | Eerror _ ->
+        State.return expr
+    | Eraise _ ->
+        State.return expr
+    | Eregister _ _ ->
+        State.return expr
+    | Eskip ->
+        State.return expr
+    | Eproc _ _ _ ->
+        (* TODO: might be wrong *)
+        State.return expr
+    | Easeq _ _ _  ->
+        Boot.assert_false "hoist_negatives found an Easeq"
+    | Erun _ _ _ ->
+        State.return expr
+    | Eret _ ->
+        State.return expr
+    | Epar _ ->
+        (* TODO: I think *)
+        State.return expr
+    | Ewait _ ->
+        State.return expr
+    | Eis_scalar _ ->
+        State.return expr
+    | Eis_integer _ ->
+        State.return expr
+    | Eis_signed _ ->
+        State.return expr
+    | Eis_unsigned _ ->
+        State.return expr
+    
+    (* Now we actually do work *)
+    | Elet sym pe1 e2 ->
+        hoist_negatives e2 >>= fun e2' ->
+        State.return (Elet sym pe1 e2')
+    | Eif pe1 e2 e3 ->
+        hoist_negatives e2 >>= fun e2' ->
+        hoist_negatives e3 >>= fun e3' ->
+        State.return (Eif pe1 e2' e3')
+    | Eaction p ->
+        if is_negative_action p then
+          add_neg expr >> State.return Eunit
+        else
+          State.return expr
+    | Eunseq es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (Eunseq es')
+    | Ewseq _as e1 e2 ->
+        hoist_negatives e1 >>= fun e1'  ->
+        hoist_negatives e2 >>= fun e2'  ->
+        State.return (Ewseq _as e1' e2')
+    | Esseq _as e1 e2 ->
+        Boot.assert_false "hoist_negatives found an Esseq"
+(*
+        hoist_negatives e1 >>= fun e1'  ->
+        flush_negs         >>= fun negs ->
+        hoist_negatives e2 >>= fun e2'  ->
+        let nothings = Global.replicate_list Nothing (List.length negs) in
+        match negs with
+          | [] ->
+              State.return (Esseq _as e1' e2')
+          | _ ->
+              State.return (
+                Esseq (nothings ++ _as) (Eunseq (negs ++ [e1'])) e2'
+              )
+        end
+*)
+
+    | Eindet e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Eindet e)
+    | Ebound i e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Ebound i e')
+    | Esave k a_tys e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Esave k a_tys e)
+    | End es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (End es')
+  end
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -825,6 +1049,19 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             update_current_thread <| th_st with arena= Eproc annots nm pes' |>
           )
     
+    
+(*
+    | (Eaction (Paction neg act, sk) ->
+        let rewind_stack =
+          match sk with
+            | Stack_empty ->
+                Boot.assert_false "Eaction neg, found empty stack"
+            | Stack_cons 
+          end in
+*)
+
+
+
     | (Eaction (Paction p (Action annots act)), sk) ->
         let sb_before = Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
         let dd_before = {(* TODO *)} in
@@ -924,14 +1161,14 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                       match (ty_pe, ptr_pe, val_pe) with
                         | (Ectype ty, Econst (Mem.MV_pointer ptr_val), Econst mem_val) ->
                             Step_action_request "store" current_tid (
-                              SEU.runS fresh_action_id >>= fun load_aid ->
+                              SEU.runS fresh_action_id >>= fun store_aid ->
                               SEU.runS fresh_symbol    >>= fun val_sym  ->
                               SEU.return $
                                 StoreRequest sb_before dd_before asw_before
-                                             load_aid current_tid mo ty ptr_val mem_val
+                                             store_aid current_tid mo ty ptr_val mem_val
                                              (update_thread_state current_tid <| th_st with
                                                arena= Econst mem_val;
-                                               stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
+                                               stack= add_to_sb_stack {(p, (current_tid, store_aid))} sk;
                                              |> st)
                             )
                         
@@ -1103,6 +1340,10 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             )
           )
     
+(*
+
+WIP: trying something new: in the rule of Esseq, any negation is brought to the top of the left expression
+
     | (Ewseq _ (Eaction (Paction Neg _) as pact_expr) e2, _) ->
         ND.return $ Step_tau "Ewseq Neg" current_tid (
           match e2 with
@@ -1121,22 +1362,53 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
           end
         )
     
+*)
     | (Ewseq _as e1 e2, sk) ->
 (*
-        let is_unseq_with_negative = function
-          | Eunseq es ->
-              List.any is_negative es
-          | _ ->
-              false
-        end in
+
+WIP: see comment for Ewseq neg 
+
         if is_unseq_with_negative e1 then
+          let Eunseq es = e1 in
+          let (negs, _as', es') = List.foldr (fun (sym_opt, e) (negs, _as', es') ->
+            if is_negative e then
+              ((e :: negs), _as', es')
+            else
+              (negs, sym_opt :: _as', e :: es')
+          ) ([], [], []) (zip _as es) in
           
-          (* TODO *)
-          Boot.assert_false "Ewseq, non (simple?) negative case"
+          let mk_unseq = function
+            | [] ->
+                Boot.assert_false "Ewseq neg non-simple, mk_unseq found empty list"
+            | [x] ->
+                x
+            | xs ->
+                Eunseq xs
+          end in
+          
+          let nothings = Global.replicate_list Nothing (List.length negs) in
+          
+          ND.return $ Step_tau "Ewseq neg-unseq" current_tid (
+            match e2 with
+              | Eunseq e2s ->
+                  SEU.runS (State.mapM (fun _ -> fresh_symbol) e2s) >>= fun e2s_syms ->
+                  update_current_thread <| th_st with
+                    arena= Ewseq _as' (mk_unseq es')
+                             (Ewseq (nothings ++ List.map (fun z -> Just z) e2s_syms) (mk_unseq (negs ++ e2s))
+                               (Etuple $ List.map Esym e2s_syms))
+                  |>
+              | _ ->
+                  SEU.runS fresh_symbol >>= fun sym ->
+                  update_current_thread <| th_st with
+                    arena= Ewseq _as' (mk_unseq es')
+                             (Ewseq (nothings ++ [Just sym]) (mk_unseq (negs ++ [e2]))
+                               (Esym sym))
+                  |>
+            end
+          )
+          
         else
-          
 *)
-(* TODO !!!!!! *)
           if is_value e1 then
             ND.return $ Step_tau "Ewseq subst" current_tid (
               update_current_thread <| th_st with arena= subst_syms _as e1 e2 |>
@@ -1163,6 +1435,45 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             update_current_thread <| th_st with arena= Esseq _as e1' e2 |>
           )
         else (* e1 still has some effects to perform *)
+
+(* WIP: this doesn't work
+
+          if has_sseqs e1 then
+          ND.return $ Step_tau "Esseq" current_tid (
+            SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
+              update_current_thread <| th_st with arena= e1; stack= sk' |>
+          )
+else
+          
+          (* TODO: experimental implementation of negative actions *)
+          (* TODO: this might be wrong with procedure calls ... *)
+          let runS' m = fun st ->
+            let (a, (negs, st')) = m ([], st) in
+            Exception.return (Undefined.return (negs, a), st') in
+          
+          ND.return $ Step_tau "Esseq" current_tid (
+            let _ = Boot.print_debug 9 "HOISTING" in
+            runS' (hoist_negatives e1) >>= fun (negs, e1') ->
+            match negs with
+              | [] ->
+                  SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
+                    update_current_thread <| th_st with arena= e1'; stack= sk' |>
+              | _ ->
+                  let nothings = Global.replicate_list Nothing (List.length negs) in
+                  
+                  let new_arena = match e1' with
+                    | Eunseq e1s' ->
+                        Eunseq (negs ++ e1s')
+                    | _ ->
+                        Eunseq (negs ++ [e1'])
+                  end in
+                  
+                  
+                  SEU.runE (push_continuation_element (Ksseq (nothings ++ _as) e2) sk) >>= fun sk' ->
+                    update_current_thread <| th_st with arena= new_arena; stack= sk' |>
+            end
+          )
+*)
           ND.return $ Step_tau "Esseq" current_tid (
             SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
               update_current_thread <| th_st with arena= e1; stack= sk' |>

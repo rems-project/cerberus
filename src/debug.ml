@@ -24,7 +24,7 @@ let print_success msg =
 
 let print_debug level msg =
   if !debug_level >= level then
-    prerr_endline Colour.(ansi_format [Red] ("\x1b[31mDEBUG: " ^ msg ^ "\x1b[0m"))
+    prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg))
 
 let print_debug2 msg k =
   if !debug_level > 0 then

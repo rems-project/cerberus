@@ -100,9 +100,12 @@ let drive sym_supply file args with_concurrency : execution_result =
   (* let vs = [] in
   let _ = Driver.followConcurrencyTrace sym_supply file args [1;3;4;0;2;5] in *)
   
-  Debug.print_debug 1 (Printf.sprintf "Number of executions: %d\n" (List.length vs));
+  let n_actives = List.length (List.filter isActive vs) in
+  let n_execs   = List.length vs in
   
-  if List.length (List.filter isActive vs) = 0 then
+  Debug.print_debug 1 (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
+  
+  if n_actives = 0 then
     Debug.print_debug 0 "FOUND NO VALID EXECUTION";
   
   let ky  = ref [] in

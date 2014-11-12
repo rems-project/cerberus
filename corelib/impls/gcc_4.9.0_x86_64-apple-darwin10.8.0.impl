@@ -65,7 +65,12 @@ fun <ctype_min> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           0
                                         else
+
+if ty = "_Atomic(signed int)" then
+  -2147483648  else
+
                                           error <<<ctype_min>>> -- TODO
+end
                                         end
                                       end
                                     end
@@ -148,7 +153,10 @@ fun <ctype_max> (ty: ctype) : integer :=
                                         if ty = "uint64_t" then
                                           18446744073709551615
                                         else
+if ty = "_Atomic(signed int)" then
+  2147483647  else
                                           error <<<ctype_max>>> -- TODO
+end
                                         end
                                       end
                                     end

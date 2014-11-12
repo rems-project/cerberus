@@ -990,7 +990,9 @@ let rec collect_cases_ (A.AnnotatedStatement _ stmt) =
         St.return ()
     | A.AilSdeclaration _ ->
         St.return ()
-(*    | PAR of list (statement_l 'a) *)
+    | A.AilSpar ss ->
+        (* TODO: check *)
+        St.mapM_ collect_cases_ ss
   end
 let collect_cases s =
   snd $ St.run (collect_cases_ s) <| found_default= false; cases= [] |>
@@ -1257,6 +1259,12 @@ let rec translate_stmt stdlib program f d_default d_cases d_loop d_break (A.Anno
         (* This pass combine the translated declarations *)
         E.foldl1M (fun x y -> E.return $ Caux.concat_sseq x y)
   
+    | A.AilSpar ss ->
+        E.mapM translate_stmt_ ss >>= fun core_ss ->
+        let core_ss' = List.map (fun core_s ->
+          C.Esseq [] core_s (C.Eret C.Eunit)
+        ) core_ss in
+        E.return $ C.Epar core_ss'
 
 (*
   TODO: need to bring them back to the new Ail

@@ -912,3 +912,202 @@ let rec collect_labeled_continuations expr =
     | Eis_unsigned _->
         Map.empty
   end
+
+
+val is_unseq_with_negative: forall 'a. expr 'a -> bool
+let is_unseq_with_negative expr =
+  match expr with
+    | Eunseq es ->
+        List.any is_negative es
+    | _ ->
+        false
+  end
+
+
+val     has_sseqs: forall 'a. expr 'a -> bool
+let rec has_sseqs expr =
+  match expr with
+    | Eunit ->
+        false
+    | Etrue ->
+        false
+    | Efalse ->
+        false
+    | Econst _ ->
+        false
+    | Elist _ ->
+        false
+    | Ectype _ ->
+        false
+    | Esym _ ->
+        false
+    | Eimpl _ ->
+        false
+    | Etuple _ ->
+        false
+    | Enot _ ->
+        false
+    | Eop _ _ _ ->
+        false
+    | Ecall _ _ ->
+        false
+    | Eoutput _ ->
+        false
+    | Eundef _ ->
+        false
+    | Eerror _ ->
+        false
+    | Eraise _ ->
+        false
+    | Eregister _ _ ->
+        false
+    | Eskip ->
+        false
+    | Elet _ _ e2 ->
+        has_sseqs e2
+    | Eif _ e2 e3 ->
+        has_sseqs e2 || has_sseqs e3
+    | Eproc _ _ _ ->
+        (* TODO *)
+        false
+    | Eaction p ->
+        false
+    | Eunseq es ->
+        List.any has_sseqs es
+    | Ewseq _ e1 e2 ->
+        has_sseqs e1 || has_sseqs e2
+    | Esseq _ _ _ ->
+        true
+    | Easeq _ _ _  ->
+        Boot.assert_false "has_negatives found an Easeq"
+    | Eindet e ->
+        has_sseqs e
+    | Ebound _ e ->
+        has_sseqs e
+    | Esave _ _ e ->
+        has_sseqs e
+    | Erun _ _ _ ->
+        false
+    | Eret _ ->
+        false
+    | End es ->
+        List.any has_sseqs es
+    | Epar _ ->
+        (* TODO: I think *)
+        false
+    | Ewait _ ->
+        false
+    | Eis_scalar _ ->
+        false
+    | Eis_integer _ ->
+        false
+    | Eis_signed _ ->
+        false
+    | Eis_unsigned _ ->
+        false
+  end
+
+
+(* val rewind_upto_sseq: forall 'a. stack 'a -> expr 'a -> (expr 'a * stack 'a) *)
+
+
+(* Assume the expression is a value, check it doesn't any symbols (inside a Symbolic.symbolic) *)
+val is_concrete: forall 'a. expr 'a -> bool
+let is_concrete expr =
+  match expr with
+    | Econst (Mem.MV_integer symb) ->
+        Symbolic.is_concrete_symbolic symb
+    | _ ->
+        true
+  end
+
+(* assumes a value expression *)
+val     symbolify_mem_value: Mem.mem_value -> Symbolic.symbolic
+let rec symbolify_mem_value mem_val =
+  match mem_val with
+    | Mem.MV_pointer ptr_val ->
+        Boot.assert_false "TODO: Core_aux.symbolify_mem_value: MV_pointer"
+(*
+        Symbolic.SYMBptr ptr_val
+*)
+    | Mem.MV_integer symb ->
+        symb
+    | Mem.MV_array mem_vals ->
+        Boot.assert_false "TODO: Core_aux.symbolify_mem_value: MV_array"
+(*
+        Symbolic.SYMBarray (List.map symbolic_mem_value mem_vals)
+*)
+  end
+
+val symbolify: forall 'a. expr 'a -> Symbolic.symbolic
+let symbolify expr =
+  match expr with
+    | Eunit ->
+        Boot.assert_false "TODO: Core_aux.symbolify: Elist"
+(*
+        Symbolic.SYMBunit
+*)
+    | Etrue ->
+        Symbolic.SYMBtrue
+    | Efalse ->
+        Symbolic.SYMBfalse
+    | Econst mem_val ->
+       symbolify_mem_value mem_val
+    | Elist pes ->
+        Boot.assert_false "TODO: Core_aux.symbolify: Elist"
+    | Ectype ty ->
+        Symbolic.SYMBctype ty
+    | Etuple vs ->
+        Boot.assert_false "TODO: Core_aux.symbolify: Etuple"
+  end
+
+val     unsymbolify: forall 'a. Symbolic.symbolic -> expr 'a
+let rec unsymbolify symb =
+  let convert_operator = function
+    | Symbolic.Add ->
+        OpAdd
+    | Symbolic.Sub ->
+        OpSub
+    | Symbolic.Mul ->
+        OpMul
+    | Symbolic.Div ->
+        OpDiv
+    | Symbolic.Mod ->
+        OpMod
+    | Symbolic.Exp ->
+        OpExp
+    | Symbolic.Eq ->
+        OpEq
+    | Symbolic.Lt ->
+        OpLt
+    | Symbolic.And ->
+        OpAnd
+    | Symbolic.Or ->
+        OpOr
+  end in
+  let convert_name = function
+    | Symbolic.SYMBfsym sym ->
+        Sym sym
+    | Symbolic.SYMBimpl i ->
+        Impl i
+  end in
+  match symb with
+    | Symbolic.SYMBtrue ->
+        Etrue
+    | Symbolic.SYMBfalse ->
+        Efalse
+    | Symbolic.SYMBconst _ ->
+        Econst (Mem.MV_integer symb)
+    | Symbolic.SYMBctype ty ->
+        Ectype ty
+    | Symbolic.SYMBsym _ sym ->
+        Esym sym
+    | Symbolic.SYMBop Symbolic.Neq symb1 symb2 ->
+        Enot (Eop OpEq (unsymbolify symb1) (unsymbolify symb2))
+    | Symbolic.SYMBop symb_op symb1 symb2 ->
+        Eop (convert_operator symb_op) (unsymbolify symb1) (unsymbolify symb2)
+    | Symbolic.SYMBite symb1 symb2 symb3 ->
+        Eif (unsymbolify symb1) (unsymbolify symb2) (unsymbolify symb3)
+    | Symbolic.SYMBcall symb_nm symbs ->
+        Ecall (convert_name symb_nm) (List.map unsymbolify symbs)
+  end

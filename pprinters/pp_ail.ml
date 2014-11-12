@@ -695,7 +695,8 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
     | AilSdeclaration defs ->
         comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression e) defs ^^
         P.semi ^^^ pp_comment "// decl"
-
+    | AilSpar ss ->
+        P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
 
 
 

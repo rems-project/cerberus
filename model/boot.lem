@@ -17,9 +17,11 @@ declare coq   target_rep function debug_level = `0`
 
 val debug: forall 'a. string -> 'a
 
+(*
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Debug.print_debug`
 let inline {coq} print_debug x z = let _ = x in z (* I love lem so very much *)
+*)
 
 type char
 
@@ -43,6 +45,8 @@ declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
 val output_string: string -> unit
 declare ocaml target_rep function output_string = `Debug.output_string2`
 
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
 
 
 (* Pretty printing (HACK: mind your mind) *)
