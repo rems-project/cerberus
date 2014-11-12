@@ -81,7 +81,7 @@ val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindRandom (ND m) f =
   ND $
    match m with
-     | [] -> []
+     | [] -> let _ = Boot.print_debug 3 "WARNING: bindRandom is called with an empty list" in []
      | _ ->
          match random_select m with
            | Active logA eqsA vA ->
@@ -156,7 +156,7 @@ open Operators
 val mzero: forall 'a. t 'a
 val mplus: forall 'a. t 'a -> t 'a -> t 'a
 
-let mzero = ND []
+let mzero = let _ = Boot.print_debug 3 "WARNING: mzero is called" in ND []
 let mplus (ND ma) (ND mb) = ND (ma ++ mb)
 
 
@@ -201,15 +201,23 @@ let pick xs =
 
 (* The same but with a predicate and the pick is paired with it context *)
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
-let rec _pickWith pred acc = function
+let rec _pickWith pred acc debug_n = function
   | [] ->
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
-        _pickWith pred (x::acc) xs
+        _pickWith pred (x::acc) (debug_n + (1:nat)) xs
 end
 let pickWith pred xs =
-  ND $ List.map (Active Dlist.nil Constraints.empty) (_pickWith pred [] xs)
+  let ret = List.map (Active Dlist.nil Constraints.empty) (_pickWith pred [] 0 xs) in
+  let _ = 
+    if List.null ret then
+      Boot.print_debug 3 ("pickWith called with xs of length " ^ show (List.length xs) ^
+                          " and returns a list with length " ^ show (List.length ret))
+    else 
+      ()
+  in ND ret
+        
 
 (* Perform the first computation if it is not empty bind the result to the second computation
    otherwise run the third computation *)

@@ -1322,6 +1322,12 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
           end
       
     | (Eunseq es, sk) ->
+        (* DEBUG *)
+        let _ = if List.null es then
+            Boot.assert_false "Core_run.core_thread_step found an invalid Eunseq"
+          else
+          ()
+        in
         (* TODO: this a bad hack to remove the fake non-determinism introduced by the current semantics of Epar *)
         let is_wait = function
           | Ewait _ -> true
