@@ -145,6 +145,9 @@ let pp_name = function
   | Sym a  -> pp_symbol a
   | Impl i -> pp_impl i
 
+let pp_symbolic_name = function
+  | Symbolic.SYMBfsym a -> pp_symbol a
+  | Symbolic.SYMBimpl i -> pp_impl i
 
 let rec pp_symbolic = function
   | Symbolic.SYMBtrue ->
@@ -153,6 +156,8 @@ let rec pp_symbolic = function
       !^ "false"
   | Symbolic.SYMBconst n ->
       !^ (Big_int.string_of_big_int n)
+  | Symbolic.SYMBctype ty ->
+      P.dquotes (Pp_core_ctype.pp_ctype ty)
   | Symbolic.SYMBsym (_, sym) ->
       pp_symbol sym
   | Symbolic.SYMBop (op, symb1, symb2) ->
@@ -161,10 +166,18 @@ let rec pp_symbolic = function
         | Symbolic.Sub -> "-"
         | Symbolic.Mul -> "*"
         | Symbolic.Div -> "/"
-        | Symbolic.Mod -> "mod" in
+        | Symbolic.Mod -> "mod"
+        | Symbolic.Exp -> "exp"
+        | Symbolic.Eq  -> "=="
+        | Symbolic.Neq -> "/="
+        | Symbolic.Lt  -> "<"
+        | Symbolic.And -> "and"
+        | Symbolic.Or  -> "or" in
       P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
   | Symbolic.SYMBite (symb1, symb2, symb3) ->
       P.parens (!^ "ite" ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2 ^^^ pp_symbolic symb3)
+  | Symbolic.SYMBcall (symb_nm, symbs) ->
+      P.parens (!^ "call" ^^^ pp_symbolic_name symb_nm ^^^ P.separate_map (P.space) pp_symbolic symbs)
 
 
 

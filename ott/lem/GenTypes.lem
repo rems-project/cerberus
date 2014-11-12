@@ -22,6 +22,7 @@ type genType (* [name="gt*"] *) =
  | GenPointer of qualifiers * ctype
  | GenStruct of identifier * list (Cabs.cabs_identifier * ctype)
  | GenUnion of identifier * list (Cabs.cabs_identifier * ctype)
+ | GenAtomic of ctype (* TODO: check *)
  | GenBuiltin of string
 
 
@@ -182,8 +183,8 @@ let inject_type = function
       GenArray ty n_opt
   | Function ty params b ->
       GenFunction ty params b
-  | Atomic _ ->
-      assert_false "TODO: inject_type, Atomic"
+  | Atomic ty ->
+      GenAtomic ty
   | Struct tag xs ->
       GenStruct tag xs
   | Union  tag xs ->

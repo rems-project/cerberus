@@ -630,11 +630,14 @@ OLD(sigma_declaration)
          annotate_rvalue object_e >>= fun (object_e', object_gty) ->
          annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
          
-         
-         
-         
-         assert_false "WIP: typing of atomic_load_explicit"
-
+(*
+         match (object_gty, order_gty) with
+           | (GenPointer qs , GenBasic (GenInteger _ (* TODO: need to enforce enum *))) ->
+               
+           | _ ->
+*)
+               assert_false "WIP: typing of atomic_load_explicit"
+(*         end *)
 
 
 
@@ -1167,6 +1170,11 @@ let rec annotate_statement' A S G return_ty s =
     | AilSdeclaration ds ->
         annotate_definitions A S G ds >>= fun ds ->
         E.return (AilSdeclaration ds)
+
+    | AilSpar ss ->
+        E.mapM (annotate_statement A S G return_ty) ss >>= fun ss' ->
+        E.return (AilSpar ss')
+
   end
 
 and annotate_statement A S G return_ty (AnnotatedStatement b s) =

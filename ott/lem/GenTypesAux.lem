@@ -262,6 +262,8 @@ let interpret_genType impl = function
       return (Union tag_opt xs)
   | GenBuiltin str ->
       return (Builtin str)
+  | GenAtomic ty ->
+      return (Atomic ty)
   end
 
 val interpret_genTypeCategory: implementation -> genTypeCategory -> errorM typeCategory
