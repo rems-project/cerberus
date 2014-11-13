@@ -175,7 +175,7 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
-
+	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/executableOpsem.ml
 
 lem_check: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 	OCAMLRUNPARAM=b $(LEM) $(wildcard $(BUILD_DIR)/*.lem)
