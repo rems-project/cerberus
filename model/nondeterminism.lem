@@ -165,7 +165,9 @@ let bindRandom (ND m) f =
 (*
       | [] -> let _ = Boot.print_debug 4 "bindRandom FOUND NO ACTIVES" in killed
 *)
-      | [] -> Boot.assert_false (show (List.map (fun (Killed r _ _) -> r) killed))
+      | [] -> let _ = Boot.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
+                                 show (List.map (fun (Killed r _ _) -> r) killed)) in 
+              killed
 
 
       | _ ->
