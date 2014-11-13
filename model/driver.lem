@@ -272,6 +272,7 @@ let rec stepConcurrency n dr_st =
   if n = 0 then
     ND.return dr_st
   else
+    (* 
     (let concur_steps = exeOpsemStep dr_st.concurrency_state initialEqualityCvalue in
     if List.null concur_steps then
       (* the concurrency model got stuck *)
@@ -285,7 +286,9 @@ let rec stepConcurrency n dr_st =
             ND.user_request concur_steps
         | _ ->
             ND.pick concur_steps
-      end >>= function
+      end >>= *)
+    (exeOpsemStep dr_st.concurrency_state initialEqualityCvalue >>= 
+     function
         | ConcurrencyTau performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)
             ND.log ("Performed action " ^ show (aid_of performed_act) ^ "\n") >>                     (* DEBUG *)
@@ -613,7 +616,7 @@ let rec driver with_concurrency _dr_st =
                 ("loading: " ^ show ptr_val)
             | StoreRequest _ _ _ _ _ _ _ ptr_val mem_val _ ->
                 ("storing: " ^ show ptr_val ^ " := " ^ show mem_val)
-          end >>
+          end >>= fun _ ->
         
         let dr_st'' =
           if with_concurrency then
@@ -638,7 +641,7 @@ let rec driver with_concurrency _dr_st =
              () in
            
            ND.pick choices >>= fun n ->
-           stepConcurrency n dr_st''
+           ND.kyndylan (stepConcurrency n dr_st'' )
          else
            ND.return dr_st'') >>= fun dr_st''' ->
         

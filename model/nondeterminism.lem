@@ -1,4 +1,4 @@
-open import Pervasives String_extra
+open import Pervasives String_extra Show
 open import List Function
 open import Global
 import Boot Dlist Constraints Symbolic Undefined
@@ -26,6 +26,15 @@ type kill_reason =
   | Undef of list Undefined.undefined_behaviour
   | Error of string
   | Other of string
+
+instance (Show kill_reason)
+  let show reason = 
+    match reason with
+    | Undef l -> "Undef (" ^ show l ^ ")"
+    | Error s -> "Error (" ^ show s ^ ")"
+    | Other s -> "Other (" ^ show s ^ ")"
+    end
+end
 
 type nd_state 'a =
     (* active execution: log, constraints, value *)
@@ -77,6 +86,7 @@ let bindExhaustive (ND m) f =
 val random_select: forall 'a. list 'a -> 'a
 declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 
+(*
 val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindRandom (ND m) f =
   ND $
@@ -130,6 +140,62 @@ let bindRandom (ND m) f =
                [Killed reason log eqs]
          end
     end
+*)
+
+let rec split_nd_states_aux ((actives,killed) as acc) = function
+  | [] ->
+      acc
+  | ((Active _ _ _) as x)::xs ->
+      split_nd_states_aux (x::actives, killed) xs
+  | ((Killed _ _ _) as x)::xs ->
+      split_nd_states_aux (actives, x::killed) xs
+end
+
+let split_nd_states xs =
+  split_nd_states_aux ([], []) xs
+
+
+val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bindRandom (ND m) f =
+  ND $
+    let (actives, killed) = split_nd_states m in
+    let killed =
+      List.map (fun (Killed a b c) -> Killed a b c) killed in
+    match actives with
+(*
+      | [] -> let _ = Boot.print_debug 4 "bindRandom FOUND NO ACTIVES" in killed
+*)
+      | [] -> Boot.assert_false (show (List.map (fun (Killed r _ _) -> r) killed))
+
+
+      | _ ->
+         match random_select actives with
+           | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
+                      else
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+         end ++ killed
+    end
+
+
+
+
+
 
 let bind m f =
   match current_execution_mode () with
@@ -230,6 +296,11 @@ val kill: forall 'a. kill_reason -> t 'a
 let kill reason =
   ND [Killed reason Dlist.nil Constraints.empty]
 
+(* The reason contains the message in the case the guard is FALSE. *)
+val guard: bool -> kill_reason -> t unit
+let guard b reason =
+  if b then return () else kill reason
+
 
 (* Add a constraint to the current execution *)
 val add_constraint: (Constraints.t -> Constraints.t) -> t unit
@@ -259,3 +330,19 @@ let user_request xs =
               Boot.assert_false "ND.user_request: invalid choice"
         end
   end
+
+
+let is_active = function
+  | Active _ _ _ ->
+      true
+  | _ ->
+      false
+end
+
+let kyndylan (ND xs) =
+  let _ =
+    if not (List.any is_active xs) then
+      Boot.print_debug 4 "KYNDYLAN!"
+    else
+      () in
+  ND xs
