@@ -1,15 +1,18 @@
 // IRIW with release/acquire
 // The reading threads do not have to see the writes to x and y in the same order.
-// An exhaustive execution of this program should therefore only return the value 0 (instead of blocking?).
-int main() {
-  atomic_int x = 0; atomic_int y = 0;
+
+#include <stdatomic.h>
+
+int main(void) {
+  _Atomic int x = 0; 
+  _Atomic int y = 0;
   int z1; int z2; int z3; int z4;
-  {{{ x.store(1, memory_order_release);
-  ||| y.store(1, memory_order_release);
-  ||| { z1=x.load(memory_order_acquire).readsvalue(1);
-        z2=y.load(memory_order_acquire).readsvalue(0); }
-  ||| { z3=y.load(memory_order_acquire).readsvalue(1);
-        z4=x.load(memory_order_acquire).readsvalue(0); }
+  {{{ atomic_store_explicit(&x, 1, memory_order_release);
+  ||| atomic_store_explicit(&y, 1, memory_order_release);
+  ||| { z1=atomic_load_explicit(&x, memory_order_acquire);
+        z2=atomic_load_explicit(&y, memory_order_acquire); }
+  ||| { z3=atomic_load_explicit(&y, memory_order_acquire);
+        z4=atomic_load_explicit(&x, memory_order_acquire); }
   }}};
-  return 0; }
+  return (z1 + 2 * (z2 + 2 * (z3 + 2 * z4))); }
 
