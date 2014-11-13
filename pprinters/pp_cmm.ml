@@ -60,7 +60,7 @@ let string_of_cvalue = function
       "SYMB(" ^ Pp_utils.to_plain_string (Pp_core.pp_symbolic symb) ^ ")"
 
 
-let string_of_action = function
+let string_of_action_aux = function
   | Lock (aid, tid, loc, lock) ->
       Printf.sprintf "Lock[%d]" aid
   | Unlock (aid, tid, loc) ->
@@ -92,6 +92,8 @@ let string_of_action = function
 
   | Dealloc (aid, tid, loc) ->
       Printf.sprintf "Dealloc[%d]" aid
+
+let string_of_action act = String.escaped (string_of_action_aux act)
 
 
 let string_of_pre_execution preEx =
@@ -135,6 +137,9 @@ let dot_of_exeState st value_str eqs_str =
 
   "}}"
 
+
+let pp_execState st =
+  dot_of_exeState st "" ""
 
 
 (*

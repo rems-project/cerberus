@@ -1,7 +1,7 @@
 (* TODO: for now everything is mapped to nonatomics. The translation to atomics
          still needs to be defined *)
 
-open import Pervasives Global Implementation_ Loc
+open import Pervasives Global Implementation_ Loc String_extra
 import State State_operators Translation_effect
 open import Translation_aux
 import Cmm_master Naive_memory
@@ -708,6 +708,57 @@ and translate_expression stdlib program a_expr =
           end
 *)
       
+
+     | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
+         let mo = match order_e with
+           | A.AnnotatedExpression _ (A.AilEconst (A.ConstantInteger (A.IntegerConstant n _ _))) ->
+               match natFromInteger n with
+                 | 0 -> Cmm.Relaxed
+                 | 1 -> Cmm.Consume
+                 | 2 -> Cmm.Acquire
+                 | 3 -> Cmm.Release
+                 | 4 -> Cmm.Acq_rel
+                 | 5 -> Cmm.Seq_cst
+                 | _ ->
+                     Boot.assert_false ("atomic_store_explicit other order number: " ^ show n)
+               end
+           | _ ->
+               Boot.assert_false ("atomic_store_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
+         end in
+         
+         translate_expression object_e >>= fun core_object_e ->
+         translate_expression desired_e >>= fun core_desired_e ->
+         let ty = match ctype_of object_e with
+           | Aty.Pointer _ ty ->
+               ty
+         end in
+         E.return $
+           C.Eaction (C.Paction C.Pos (C.Action () (C.Store (Caux.mk_ctype ty) core_object_e core_desired_e mo)))
+
+     | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
+         let mo = match order_e with
+           | A.AnnotatedExpression _ (A.AilEconst (A.ConstantInteger (A.IntegerConstant n _ _))) ->
+               match natFromInteger n with
+                 | 0 -> Cmm.Relaxed
+                 | 1 -> Cmm.Consume
+                 | 2 -> Cmm.Acquire
+                 | 3 -> Cmm.Release
+                 | 4 -> Cmm.Acq_rel
+                 | 5 -> Cmm.Seq_cst
+                 | _ ->
+                     Boot.assert_false ("atomic_load_explicit other order number: " ^ show n)
+               end
+           | _ ->
+               Boot.assert_false ("atomic_load_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
+         end in
+         
+         translate_expression object_e >>= fun core_object_e ->
+         let ty = match ctype_of object_e with
+           | Aty.Pointer _ ty ->
+               ty
+         end in
+         E.return $
+           C.Eaction (C.Paction C.Pos (C.Action () (C.Load (Caux.mk_ctype ty) core_object_e mo)))
       
       
       (* TODO:

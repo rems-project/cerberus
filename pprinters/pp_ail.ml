@@ -590,7 +590,7 @@ let rec pp_expression a_expr =
             pp e ^^ (!^ "->") ^^ Pp_cabs.pp_cabs_identifier ident
 
         | AilEannot (_, e) ->
-            pp e
+            !^ "/* annot */" ^^^ pp e
 (*
         | MEMBEROF (e, (tag, mem)) ->
             pp e ^^ P.dot ^^ pp_id mem

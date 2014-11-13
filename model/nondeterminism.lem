@@ -348,3 +348,16 @@ let kyndylan (ND xs) =
     else
       () in
   ND xs
+
+
+let apply_to_constraints f (ND xs) =
+  ND $ List.map (function
+    | Active log eqs v ->
+        let eqs' = f eqs in
+        if Constraints.isUnsat eqs' then
+          Killed (Other "reached unsatisfiable constraints") log eqs'
+        else
+          Active log eqs' v
+    | x ->
+        x
+  end) xs

@@ -629,18 +629,32 @@ OLD(sigma_declaration)
      | AilEcall (AnnotatedExpression _ (AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
          annotate_rvalue object_e >>= fun (object_e', object_gty) ->
          annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
-         
-(*
          match (object_gty, order_gty) with
-           | (GenPointer qs , GenBasic (GenInteger _ (* TODO: need to enforce enum *))) ->
-               
-           | _ ->
+           | (GenPointer qs object_ty, GenBasic (GenInteger _ (* TODO: need to enforce enum *))) ->
+(*               if AilTypesAux.is_atomic object_ty then *)
+                 E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unatomic object_ty))
+(*
+               else
+                 assert_false "WIP: typing of atomic_load_explicit 2"
 *)
+           | _ ->
                assert_false "WIP: typing of atomic_load_explicit"
-(*         end *)
+         end
 
-
-
+     | AilEcall (AnnotatedExpression _ (AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
+         annotate_rvalue object_e >>= fun (object_e', object_gty) ->
+         annotate_rvalue order_e  >>= fun (desired_e' , desired_gty ) ->
+         annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
+         
+         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
+                   GenRValueType GenVoid)
+(*
+         match (object_gty, desired_e; order_gty) with
+           | () ->
+                 E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unat           | _ ->
+               assert_false "WIP: typing of atomic_store_explicit"
+         end
+*)
 
 
     | AilEcall e es ->

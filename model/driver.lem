@@ -695,7 +695,18 @@ let rec hack core_file expr =
     | _ ->
         (* TODO: this is wrong *)
         expr
-  end
+end
+
+
+let finalize_constraints core_file (Constraints.Constraints symbs) =
+  Constraints.Constraints $ List.map (function
+    | Symbolic.SYMBop op symb1 symb2 ->
+        let (Core.Econst (Mem.MV_integer symb1')) = hack core_file (Core.Econst (Mem.MV_integer symb1)) in
+        let (Core.Econst (Mem.MV_integer symb2')) = hack core_file (Core.Econst (Mem.MV_integer symb2)) in
+        Symbolic.SYMBop op symb1' symb2'
+    | symb ->
+        symb
+  end) symbs
 
 
 
@@ -822,6 +833,12 @@ let driver_globals with_concurrency sym_supply file =
   ND.return (tid0, dr_st')
 
 
+
+val pp_exeState: exeState -> string
+declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
+
+
+
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -900,8 +917,14 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
           let n     = (number_of_uncommitted dr_st'.concurrency_state) in
           ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.preEx ^ "\n") >>
           ND.log ("Calling concurrency " ^ show n ^ " times\n") >>
-          stepConcurrency n dr_st' >>= fun dr_st' ->
+          ND.apply_to_constraints (finalize_constraints dr_st'.core_file) (stepConcurrency n dr_st') >>= fun dr_st' ->
           ND.log ("with: " ^ show dr_st'.concurrency_state.exWitness ^ "\n") >>
+          
+
+          (* TODO: tmp *)
+          ND.log (pp_exeState dr_st'.concurrency_state) >>
+
+
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
                   let (str, (is_blocked, conc_st, v)) = finalize dr_st' in
