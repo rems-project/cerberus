@@ -1,0 +1,28 @@
+{- SB+Wsc_Rsc+Wsc_Rsc Store Buffering (or Dekker's), with sequential
+   consistent atomics. The reads cannot both see 0 in the same
+   execution. This contrasts with SB with release/acquire pairs where
+   the reads can both see 0. An exhaustive execution of this program
+   should return the values 1, 2, 3.  -}
+
+fun main () : [integer] :=
+  let strong x  =  create (<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong () = store ("_Atomic(signed int)", x, 0)                             in
+  
+  let strong y  = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong () = store("_Atomic(signed int)", y, 0)                            in
+  
+  let strong (a1, a2) = par(
+    let strong () = store("_Atomic(signed int)", y, 1, seq_cst) in
+    let strong r1 = load("_Atomic(signed int)", x, seq_cst)     in
+    return(r1)
+   end end
+  ,
+   let strong () = store("_Atomic(signed int)", x, 1, seq_cst) in
+   let strong r2 = load("_Atomic(signed int)", y, seq_cst)     in
+   return (r2)
+   end end
+  ) in
+  let strong () = kill(x) in
+  let strong () = kill(y) in
+  return (a1 + 2*a2)
+  end end end end end end end

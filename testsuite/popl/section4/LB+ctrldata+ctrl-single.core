@@ -1,0 +1,30 @@
+{-
+r1=loadrlx (x) //reads 42
+if (r1 == 42)
+storerlx (y,r1)
+r2=loadrlx (y) //reads 42
+if (r2 == 42)
+storerlx (x,42)
+-}
+
+fun main() : [integer] :=
+  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  
+  let strong () = store("_Atomic(signed int)", x, 0) in
+  let strong () = store("_Atomic(signed int)", y, 0) in
+  
+  let strong (s1, s2) = par(
+    let strong r1 = load("_Atomic(signed int)", x, relaxed)      in
+    let strong () = if r1 = 42 then store("_Atomic(signed int)", y, r1, relaxed) else skip end in
+      return(r1)
+    end end
+  ,
+    let strong r2 = load("_Atomic(signed int)", y, relaxed) in
+    let strong () = if r2 = 42 then store("_Atomic(signed int)", x, 42, relaxed) else skip end in
+      return(r2)
+    end end
+  ) in
+  return((s1, s2))
+  
+  end end end end end

@@ -1,0 +1,363 @@
+open import Pervasives String_extra Show
+open import List Function
+open import Global
+import Boot Dlist Constraints Symbolic Undefined
+
+
+
+(* TODO: move somewhere else? *)
+type execution_mode =
+  | Interactive
+  | Exhaustive
+  | Random
+
+declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
+declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
+declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
+declare ocaml target_rep function Random         = `Global_ocaml.Random`
+
+val current_execution_mode: unit -> maybe execution_mode
+declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
+
+
+
+
+type kill_reason =
+  | Undef of list Undefined.undefined_behaviour
+  | Error of string
+  | Other of string
+
+instance (Show kill_reason)
+  let show reason = 
+    match reason with
+    | Undef l -> "Undef (" ^ show l ^ ")"
+    | Error s -> "Error (" ^ show s ^ ")"
+    | Other s -> "Other (" ^ show s ^ ")"
+    end
+end
+
+type nd_state 'a =
+    (* active execution: log, constraints, value *)
+  | Active of Dlist.dlist string * Constraints.t * 'a
+    (* killed execution: kill_reason, log, constraints *)
+  | Killed of kill_reason * Dlist.dlist string * Constraints.t
+
+type t 'a =
+  ND of list (nd_state 'a)
+
+
+(* Monadic operations *)
+val return: forall 'a.    'a -> t 'a
+val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+
+let return a =
+  ND [Active Dlist.nil Constraints.empty a]
+
+val bindExhaustive: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bindExhaustive (ND m) f =
+    ND $
+      List.concatMap (fun ma ->
+        match ma with
+          | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
+                      else
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+          | Killed reason log eqs ->
+              [Killed reason log eqs]
+        end) m
+
+
+(* TODO *)
+val random_select: forall 'a. list 'a -> 'a
+declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
+
+(*
+val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bindRandom (ND m) f =
+  ND $
+   match m with
+     | [] -> let _ = Boot.print_debug 3 "WARNING: bindRandom is called with an empty list" in []
+     | _ ->
+         match random_select m with
+           | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
+                      else
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+(*
+               match f vA with
+                 | ND [] -> []
+                 | ND z ->
+                     match random_select z with
+                       | Active logB eqsB vB ->
+                           let log' = Dlist.append logA logB in
+                           
+                           if Constraints.is_empty eqsA then
+                             [Active log' eqsB vB]
+                           else if Constraints.is_empty eqsB then
+                             [Active log' eqsA vB]
+                           else
+                             let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                             if Constraints.isUnsat eqs' then
+                               [Killed (Other "reached unsatisfiable constraints") log' eqs']
+                             else
+                               [Active log' eqs' vB]
+                       | Killed reason logB eqsB ->
+                           [Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)]
+                     end
+               end
+*)
+           | Killed reason log eqs ->
+               [Killed reason log eqs]
+         end
+    end
+*)
+
+let rec split_nd_states_aux ((actives,killed) as acc) = function
+  | [] ->
+      acc
+  | ((Active _ _ _) as x)::xs ->
+      split_nd_states_aux (x::actives, killed) xs
+  | ((Killed _ _ _) as x)::xs ->
+      split_nd_states_aux (actives, x::killed) xs
+end
+
+let split_nd_states xs =
+  split_nd_states_aux ([], []) xs
+
+
+val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bindRandom (ND m) f =
+  ND $
+    let (actives, killed) = split_nd_states m in
+    let killed =
+      List.map (fun (Killed a b c) -> Killed a b c) killed in
+    match actives with
+(*
+      | [] -> let _ = Boot.print_debug 4 "bindRandom FOUND NO ACTIVES" in killed
+*)
+      | [] -> let _ = Boot.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
+                                 show (List.map (fun (Killed r _ _) -> r) killed)) in 
+              killed
+
+
+      | _ ->
+         match random_select actives with
+           | Active logA eqsA vA ->
+              List.map (fun mb ->
+                match mb with
+                  | Active logB eqsB vB ->
+                      let log' = Dlist.append logA logB in
+                      
+                      if Constraints.is_empty eqsA then
+                        Active log' eqsB vB
+                      else if Constraints.is_empty eqsB then
+                        Active log' eqsA vB
+                      else
+                        let eqs' = (* Constraints.simplify $ *) Constraints.combine eqsA eqsB in
+                        if Constraints.isUnsat eqs' then
+                          Killed (Other "reached unsatisfiable constraints") log' eqs'
+                        else
+                          Active log' eqs' vB
+                  | Killed reason logB eqsB ->
+                      Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
+                end) $ (let ND z = f vA in z)
+         end ++ killed
+    end
+
+
+
+
+
+
+let bind m f =
+  match current_execution_mode () with
+    | Nothing ->
+        Boot.assert_false "Nondeterminism.bind sees execution_mode = Nothing"
+    | Just Interactive ->
+        (* TODO *)
+        bindExhaustive m f
+    | Just Exhaustive ->
+        bindExhaustive m f
+    | Just Random ->
+        bindRandom m f
+  end
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun _ -> m2)
+end
+
+open Operators
+
+
+(* MonadPlus operations *)
+val mzero: forall 'a. t 'a
+val mplus: forall 'a. t 'a -> t 'a -> t 'a
+
+let mzero = let _ = Boot.print_debug 3 "WARNING: mzero is called" in ND []
+let mplus (ND ma) (ND mb) = ND (ma ++ mb)
+
+
+(* Instanciating generic functions (...) *)
+val sequence: forall 'a. list (t 'a) -> t (list 'a) (* GENERIC Monad *)
+let sequence ms =                                   (* GENERIC Monad *)
+  List.foldr (fun m ms' ->                          (* GENERIC Monad *)
+   m   >>= fun x  ->                                (* GENERIC Monad *)
+   ms' >>= fun xs ->                                (* GENERIC Monad *)
+  return (x :: xs)                                  (* GENERIC Monad *)
+  ) (return []) ms                                  (* GENERIC Monad *)
+
+val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b) (* GENERIC Monad *)
+let mapM f xs =  sequence (List.map f xs)                      (* GENERIC Monad *)
+
+val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a (* GENERIC Monad *)
+let rec foldM f a = function                                             (* GENERIC Monad *)
+  | [] ->                                                                (* GENERIC Monad *)
+      return a                                                           (* GENERIC Monad *)
+  | x::xs ->                                                             (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                (* GENERIC Monad *)
+end
+
+
+(*
+let sequence_ ms = foldr (>>) (return ()) ms               (* GENERIC Monad *)
+val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit (* GENERIC Monad *)
+let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
+*)
+
+
+val msum: forall 'a. list (t 'a) -> t 'a (* GENERIC MonadPlus *)
+let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
+
+
+(* Specific operations *)
+
+(* Non-deterministically pick from a list *)
+val pick: forall 'a. list 'a -> t 'a
+let pick xs =
+  ND $ List.map (Active Dlist.nil Constraints.empty) xs
+
+(* The same but with a predicate and the pick is paired with it context *)
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+let rec _pickWith pred acc debug_n = function
+  | [] ->
+      []
+  | x::xs ->
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
+        _pickWith pred (x::acc) (debug_n + (1:nat)) xs
+end
+let pickWith pred xs =
+  let ret = List.map (Active Dlist.nil Constraints.empty) (_pickWith pred [] 0 xs) in
+  let _ = 
+    if List.null ret then
+      Boot.print_debug 3 ("pickWith called with xs of length " ^ show (List.length xs) ^
+                          " and returns a list with length " ^ show (List.length ret))
+    else 
+      ()
+  in ND ret
+        
+
+(* Perform the first computation if it is not empty bind the result to the second computation
+   otherwise run the third computation *)
+val tryM: forall 'a 'b. t 'a -> ('a -> t 'b) -> (unit -> t 'b) -> t 'b
+let tryM (ND ma) mf mend =
+  if List.null ma then mend () else ND ma >>= mf
+
+
+val kill: forall 'a. kill_reason -> t 'a
+let kill reason =
+  ND [Killed reason Dlist.nil Constraints.empty]
+
+(* The reason contains the message in the case the guard is FALSE. *)
+val guard: bool -> kill_reason -> t unit
+let guard b reason =
+  if b then return () else kill reason
+
+
+(* Add a constraint to the current execution *)
+val add_constraint: (Constraints.t -> Constraints.t) -> t unit
+let add_constraint mk_assert =
+  ND [Active Dlist.nil (mk_assert Constraints.empty) ()]
+
+val log: string -> t unit
+let log msg =
+  ND [Active (Dlist.singleton ("ND log: " ^ msg)) Constraints.empty ()]
+
+
+
+val user_request_driver: list string -> nat
+declare ocaml target_rep function user_request_driver = `Global_ocaml.user_request_driver`
+
+val user_request: forall 'a. Show 'a => list 'a -> t 'a
+let user_request xs =
+  match xs with
+    | [x] ->
+        return x
+    | _ ->
+        let strs = List.map show xs in
+        match List.index xs (user_request_driver strs) with
+          | Just x ->
+              return x
+          | _ ->
+              Boot.assert_false "ND.user_request: invalid choice"
+        end
+  end
+
+
+let is_active = function
+  | Active _ _ _ ->
+      true
+  | _ ->
+      false
+end
+
+let kyndylan (ND xs) =
+  let _ =
+    if not (List.any is_active xs) then
+      Boot.print_debug 4 "KYNDYLAN!"
+    else
+      () in
+  ND xs
+
+
+let apply_to_constraints f (ND xs) =
+  ND $ List.map (function
+    | Active log eqs v ->
+        let eqs' = f eqs in
+        if Constraints.isUnsat eqs' then
+          Killed (Other "reached unsatisfiable constraints") log eqs'
+        else
+          Active log eqs' v
+    | x ->
+        x
+  end) xs

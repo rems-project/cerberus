@@ -1,0 +1,83 @@
+open import Pervasives TypingError
+import Loc Exception
+
+type errorM 'a = either (Loc.t * typing_error) 'a
+
+(* for the do notation *)
+type t 'a = errorM 'a
+
+val return: forall 'a. 'a -> errorM 'a
+let return z         = Right z
+
+val fail: forall 'a. Loc.t -> typing_error -> errorM 'a
+let fail loc err = Left (loc, err)
+
+val bind: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
+let bind m f =
+  match m with
+    | Left l  -> Left l
+    | Right r -> f r
+  end
+
+let inline (>>=) m f = bind m f
+let inline (>>) m f = m >>= (fun _ -> f)
+
+let inline (<$>) f = function
+  | Left  z -> Left z
+  | Right z -> Right (f z)
+end
+
+
+val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
+let tryM m f errCase =
+  match m with
+    | Left _ -> errCase
+    | Right z  -> f z
+  end
+
+val runM: forall 'a. errorM 'a -> maybe 'a
+let runM = function
+  | Left _  -> Nothing
+  | Right z -> Just z
+end
+
+val to_exception: forall 'a 'msg. (Loc.t * typing_error -> 'msg) -> errorM 'a -> Exception.t 'a 'msg
+let to_exception f = function
+  | Left loc_err ->
+      Exception.Exception (f loc_err)
+  | Right z ->
+      Exception.Result z
+end
+
+
+val     mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
+let rec mapM f ys =
+  match ys with
+  | []      -> return []
+  | (x::xs) -> f x       >>= fun z  ->
+               mapM f xs >>= fun zs ->
+               return (z::zs)
+end
+
+let sequence_ ms = List.foldr (>>) (return ()) ms
+val mapM_: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM unit
+let mapM_ f _as =
+  sequence_ (List.map f _as)
+
+
+
+val     foldM: forall 'a 'b. ('a -> 'b -> errorM 'a) -> 'a -> list 'b -> errorM 'a (* GENERIC Monad *)
+let rec foldM f a = function                                                       (* GENERIC Monad *)
+  | [] ->                                                                          (* GENERIC Monad *)
+      return a                                                                     (* GENERIC Monad *)
+  | x::xs ->                                                                       (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                          (* GENERIC Monad *)
+end
+
+val guard: typing_error -> bool -> errorM unit
+let guard err = function
+  | true ->
+      return ()
+  | false ->
+      fail Loc.unknown err
+end

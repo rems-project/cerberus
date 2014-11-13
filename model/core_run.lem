@@ -1,0 +1,1841 @@
+open import Pervasives String_extra Global Core Core_ctype Core_aux
+import Set_extra (* Set_helpers *)
+import State State_operators
+import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
+import Cmm_master Naive_memory (* New_memory *)
+import AilTypes AilTypesAux
+import Dlist
+
+open import Implementation_ Decode
+
+open import Thread Driver_util Core_run_aux
+(* import Output *)
+
+
+module Cmm = Cmm_master
+
+module Mem = Naive_memory (* TODO: New_memory *)
+
+module U   = Undefined
+module ND  = Nondeterminism
+module EU  = Exception_undefined
+module SEU = State_exception_undefined
+
+
+
+open Exception.Operators
+(* takes the symbolic names of a function, some pure expressions and produce
+   the function body where the arguments have been substituted *)
+val call_function: Core.file core_run_annotation -> name -> list (Core.expr core_run_annotation) ->
+                   Exception.t (Core.expr core_run_annotation) core_run_error
+let call_function file f_nm arg_pes =
+  match f_nm with
+    | Sym f_a ->
+        match Map.lookup f_a file.stdlib with
+          | Just z ->
+              (* callign a function from the Core standard library *)
+              Exception.return z
+          | Nothing ->
+              match Map.lookup f_a file.funs with
+                | Just z ->
+                    (* callign a user function *)
+                    Exception.return z
+                | Nothing ->
+                    Exception.fail (Illformed_program "calling an unknown function")
+              end
+        end
+    | Impl f ->
+        match Map.lookup f file.impl with
+          | Just (IFun bty fargs fbody) ->
+              Exception.return (TyBase bty, fargs, fbody)
+          | _ ->
+              Exception.fail (Illformed_program "calling an unknown impl-function")
+        end
+    end >>= fun (_, params, body_pe) ->
+  if List.length params <> List.length arg_pes then
+    Boot.assert_false "$ \"CALL #args <> #params, params= \" ^ Boot.pp_core_params params"
+  else
+    Exception.return $ Global.foldl2 (fun acc (a, _) pe -> subst_sym a pe acc) body_pe params arg_pes
+
+
+
+
+val call_proc: Core.file core_run_annotation -> Core.sym -> list (Core.expr core_run_annotation) ->
+               Exception.t (Core.expr core_run_annotation) core_run_error
+let call_proc file psym pes =
+  match Map.lookup psym file.funs with
+    | Just (_, params, body) ->
+        if List.length params <> List.length pes then
+          assert_false $ "[Core_run.call_proc] wrong number of args applied to `" (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
+        else
+          Exception.return (Global.foldl2 (fun acc (_a, _) arg -> subst_sym _a arg acc) body params pes)
+    | Nothing ->
+        Exception.fail (Illformed_program "calling an unknown procedure")
+  end
+
+
+
+
+(* evaluation of pure expressions (will crash on ill-typed and/or non pure
+   expressions).  Note that this evaluation may be partial; that is, the
+   result of eval may be another unevaluated expression rather than a value.
+   This is to ensure that the eval function will always terminate (which is
+   important for the Coq backend).  To fully evaluate a pure expression,
+   it is necessary to call eval repeatedly until is_value returns True. *)
+
+let inline (>>=) = EU.bind
+let inline (>>) m f = m >>= fun _ -> f
+
+val     core_eval: Core.file core_run_annotation -> bool -> Core.expr core_run_annotation ->
+                   EU.t (Core.expr core_run_annotation) core_run_error
+let rec core_eval file inside_if expr =
+  if is_value expr then
+    match expr with
+      | Econst (Mem.MV_integer symb) ->
+          EU.return match Symbolic.reduce symb with
+            | Symbolic.SYMBtrue ->
+                Etrue
+            | Symbolic.SYMBfalse ->
+                Efalse
+            | symb' ->
+                Econst (Mem.MV_integer symb')
+          end
+      | _ ->
+          EU.return expr
+    end
+  else
+    match expr with
+      | Elist pes ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+          EU.return (Elist pes')
+      
+      | Esym sym ->
+          if inside_if then
+            EU.return (Esym sym)
+          else
+            EU.fail (Unresolved_symbol sym)
+      
+      | Eimpl i ->
+          match Map.lookup i file.impl with
+            | Just (Def _ e) ->
+                EU.return e
+            | _ ->
+                EU.fail Unknown_impl
+          end
+      
+      | Etuple pes ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+          EU.return $ Etuple pes'
+      
+      | Enot pe ->
+          core_eval file inside_if pe >>= function
+            | Etrue ->
+                EU.return Efalse
+            | Efalse ->
+                EU.return Etrue
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Enot")
+                else
+                  EU.return (Enot pe')
+          end
+      
+      | Eop binop pe1 pe2 ->
+          core_eval file inside_if pe1 >>= fun pe1' ->
+          core_eval file inside_if pe2 >>= fun pe2' ->
+          if is_value pe1' && is_value pe2' then
+            match (binop, pe1', pe2') with
+                | (OpAdd, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 + n2))))
+                | (OpSub, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 - n2))))
+                | (OpMul, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 * n2))))
+                | (OpDiv, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 / n2))))
+                | (OpMod, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 mod n2))))
+                | (OpExp, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    (* TODO: if the natFromInteger doesn't work, you are far gone anyway *)
+                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 ** natFromInteger n2))))
+
+(*
+                | (OpExp, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Exp symb1 symb2)))
+*)
+(*
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+*)
+
+                | (OpEq, Ectype ty1, Ectype ty2) ->
+                    EU.return (if ty1 = ty2 then Etrue else Efalse)
+                
+                | (OpEq, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (if n1 = n2 then Etrue else Efalse)
+                | (OpLt, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                    EU.return (if n1 < n2 then Etrue else Efalse)
+                
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_eq symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1' symb2')))
+                    end
+
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_lt symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Lt symb1' symb2')))
+                    end
+
+
+(* TODO: check *)
+                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mod symb1 symb2)))
+
+(*
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_eq symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          ND.msum [
+                            EU.add_equation (Constraints.assert_eq  symb1' symb2') >> EU.return Etrue;
+                            EU.add_equation (Constraints.assert_neq symb1' symb2') >> EU.return Efalse
+                          ]
+                    end
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_lt symb1 symb2 with
+                      | Left true ->
+                          EU.return Etrue
+                      | Left false ->
+                          EU.return Efalse
+                      | Right (symb1', symb2') ->
+                          ND.msum [
+                            EU.add_equation (Constraints.assert_lt  symb1' symb2') >> EU.return Etrue;
+                            EU.add_equation (Constraints.assert_ge symb1' symb2') >> EU.return Efalse
+                          ]
+                    end
+*)
+
+                | (OpOr, Efalse, Efalse) ->
+                    EU.return Efalse
+                | (OpOr, Etrue, _) ->
+                    EU.return Etrue
+                | (OpOr, _, Etrue) ->
+                    EU.return Etrue
+                | (OpAnd, Etrue, Etrue ) ->
+                    EU.return Etrue
+                | (OpAnd, _, _) ->
+                    EU.return Efalse
+
+
+                | (op, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    let op = match op with
+                      | OpAdd -> Symbolic.Add
+                      | OpSub -> Symbolic.Sub
+                      | OpMul -> Symbolic.Mul
+                      | OpDiv -> Symbolic.Div
+                      | OpMod -> Symbolic.Mod
+                      | OpExp -> Symbolic.Exp
+                      | OpEq  -> Symbolic.Eq
+                      | OpLt  -> Symbolic.Lt
+                      | OpAnd -> Symbolic.And
+                      | OpOr  -> Symbolic.Or
+                    end in
+                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op op symb1 symb2)))
+
+
+                | (_, _, _) ->
+                    Exception.fail (Illformed_program ("ill-typed Eop: " ^ Boot.pp_core_expr (Eop binop pe1' pe2')))
+(*                    Exception.fail (Illformed_program "ill-typed Eop") *)
+              end
+          else
+            EU.return (Eop binop pe1' pe2')
+
+(*
+      | Eop binop pe1 pe2 ->
+          core_eval file pe1 >>= fun pe1' ->
+          core_eval file pe2 >>= fun pe2' ->
+          if is_value pe1' && is_value pe2' then
+            match (binop, pe1', pe2') with
+                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mod symb1 symb2)))
+(*
+                | (OpExp, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Exp symb1 symb2)))
+*)
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+
+(*
+                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_eq symb1 symb2 with
+                      | Left true ->
+                          NDEU.return Etrue
+                      | Left false ->
+                          NDEU.return Efalse
+                      | Right (symb1', symb2') ->
+                          ND.msum [
+                            NDEU.add_equation (Constraints.assert_eq  symb1' symb2') >> NDEU.return Etrue;
+                            NDEU.add_equation (Constraints.assert_neq symb1' symb2') >> NDEU.return Efalse
+                          ]
+                    end
+                | (OpEq, Ectype ty1, Ectype ty2) ->
+                    NDEU.return (if ty1 = ty2 then Etrue else Efalse)
+                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                    match Symbolic.try_lt symb1 symb2 with
+                      | Left true ->
+                          NDEU.return Etrue
+                      | Left false ->
+                          NDEU.return Efalse
+                      | Right (symb1', symb2') ->
+                          ND.msum [
+                            NDEU.add_equation (Constraints.assert_lt  symb1' symb2') >> NDEU.return Etrue;
+                            NDEU.add_equation (Constraints.assert_ge symb1' symb2') >> NDEU.return Efalse
+                          ]
+                    end
+*)
+                | (OpOr, Efalse, Efalse) ->
+                    NDEU.return Efalse
+                | (OpOr, Etrue, _) ->
+                    NDEU.return Etrue
+                | (OpOr, _, Etrue) ->
+                    NDEU.return Etrue
+                | (OpOr, Econst (Mem.MV_)
+
+                | (OpAnd, Etrue, Etrue ) ->
+                    NDEU.return Etrue
+                | (OpAnd, _, _) ->
+                    NDEU.return Efalse
+                | (_, _, _) ->
+                    ND.return $ Exception.fail (Illformed_program "ill-typed Eop")
+              end
+          else
+            NDEU.return (Eop binop pe1' pe2')
+*)
+
+      | Ecall nm pes ->
+          EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+          if List.all is_value pes' then
+            if List.all Core_aux.is_concrete pes' then
+              (* We do not immediately call eval on the result of call_function,
+                 as that could lead to non-termination. *)
+              Exception.bind (call_function file nm pes')
+                EU.return
+            else
+              let symb_nm = match nm with
+                | Sym f -> Symbolic.SYMBfsym f
+                | Impl i -> Symbolic.SYMBimpl i
+              end in
+              EU.return (Econst (Mem.MV_integer (Symbolic.make_call symb_nm (List.map symbolify pes'))))
+          else
+            EU.return (Ecall nm pes')
+      
+      | Eundef ub ->
+          Exception.return (Undefined.undef [ub])
+      
+      | Eerror str ->
+          Exception.return (Undefined.error str)
+      
+      | Elet a pe1 pe2 ->
+          core_eval file inside_if pe1 >>= fun pe1' ->
+          EU.return (
+            if is_value pe1' then
+              (* We do not immediately call eval on the result of subst_sym, as
+                 that could lead to non-termination. *)
+              subst_sym a pe1' pe2
+            else
+              Elet a pe1' pe2
+          )
+      
+      | Eif pe1 pe2 pe3 ->
+        core_eval file inside_if pe1 >>= function
+          | Etrue ->
+              core_eval file inside_if pe2
+          | Efalse ->
+              core_eval file inside_if pe3
+          | pe1' ->
+              if is_value pe1' then
+                EU.fail (Illformed_program "ill-typed Eif")
+              else
+                EU.return (Eif pe1' pe2 pe3)
+        end
+(*
+      | Eif pe1 pe2 pe3 ->
+        core_eval file inside_if pe1 >>= function
+          | Etrue ->
+              core_eval file inside_if pe2
+          | Efalse ->
+              core_eval file inside_if pe3
+          | (Econst (Mem.MV_integer symb) as pe1') ->
+              if is_value pe2 then
+                if is_value pe3 then
+                  match (pe2, pe3) with
+                    | (Econst (Mem.MV_integer symb2), Econst (Mem.MV_integer symb3)) ->
+                        EU.return (Econst (Mem.MV_integer (Symbolic.make_ite symb symb2 symb3)))
+                    | _ ->
+                        EU.fail (Illformed_program "ill-typed Eif")
+                  end
+                else
+                  core_eval file inside_if pe2 >>= fun pe2' ->
+                  EU.return (Eif pe1' pe2' pe3)
+              else
+                  core_eval file inside_if pe3 >>= fun pe3' ->
+                  EU.return (Eif pe1' pe2 pe3')
+          | pe1' ->
+              if is_value pe1' then
+                EU.fail (Illformed_program "ill-typed Eif")
+              else
+                EU.return (Eif pe1' pe2 pe3)
+        end
+*)
+      
+      | Eis_scalar pe ->
+          core_eval file inside_if pe >>= function
+            | Ectype ty ->
+                EU.return (if AilTypesAux.is_scalar (unproj_ctype ty) then Etrue else Efalse)
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Eis_scalar")
+                else
+                  EU.return (Eis_scalar pe')
+          end
+      
+      | Eis_integer pe ->
+          core_eval file inside_if pe >>= function
+            | Ectype ty ->
+                EU.return (if AilTypesAux.is_integer (unproj_ctype ty) then Etrue else Efalse)
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Eis_integer")
+                else
+                  EU.return (Eis_integer pe')
+          end
+      
+      | Eis_signed pe ->
+          core_eval file inside_if pe >>= function
+            | Ectype ty ->
+                EU.return (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Etrue else Efalse)
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Eis_signed")
+                else
+                  EU.return (Eis_signed pe')
+          end
+      
+      | Eis_unsigned pe ->
+          core_eval file inside_if pe >>= function
+            | Ectype ty ->
+                EU.return (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Etrue else Efalse)
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Eis_unsigned")
+                else
+                  EU.return (Eis_unsigned pe')
+          end
+| e ->
+    Boot.assert_false (">>> " ^ Boot.pp_core_expr e)
+end
+
+
+
+
+type thread_state = <|
+  arena:  expr core_run_annotation;
+  stack:  stack core_run_annotation;
+  labels: map ksym (list (sym * ctype) * expr core_run_annotation);
+|>
+
+
+(* TODO: more *)
+type io_state = <|
+  stdout: Dlist.dlist string;
+|>
+
+type core_state = <|
+  thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
+  io:            io_state;
+  handlers:      Map.map handler_event (list name);
+|>
+
+
+let string_of_thread_state th_st =
+  "Arena= " ^ Boot.pp_core_expr th_st.arena ^ "\n" ^
+  "Stack= " ^ "TODO" ^ "\n"
+
+let string_of_core_state core_st =
+  List.foldr (fun (tid, (parent_tid_opt, th_st)) acc ->
+    "Thread " ^ show tid ^ (maybe "" (fun z -> "(spawn of thread " ^ show z ^ ")") parent_tid_opt) ^ "\n" ^
+    string_of_thread_state th_st ^
+    "-----------------------------\n\n" ^ acc
+  ) "" core_st.thread_states
+
+
+instance (Show core_state)
+  let show = string_of_core_state
+end
+
+
+
+
+type core_run_state = <|
+  tid_supply:    UniqueId.supply thread_id;
+  symbol_supply: UniqueId.supply Symbol.t;
+  aid_supply:    UniqueId.supply action_id;
+  layout_state:  Mem.memory_state;
+|>
+
+
+
+
+
+
+
+
+
+(* Monad of the core evaluator (State + Exception + Undefined) *)
+type core_runM 'a = SEU.t 'a core_run_state core_run_error
+
+
+
+
+
+
+
+
+(* TODO: this is instanciated to Naive_memory *)
+val runMem: forall 'a. Mem.memM 'a -> core_runM 'a
+let runMem m =
+  SEU.runS (
+    State.modify (fun run_st ->
+      match SEU.run m run_st.layout_state with
+        | Exception.Result (Undefined.Defined z, mem_st') ->
+(*            let _ = Boot.output_string ("AFTER2> " ^ show mem_st') in *)
+            (z, <| run_st with layout_state= mem_st' |>)
+        | _ ->
+            Boot.assert_false "Core_run.runMem error"
+      end
+    )
+  )
+
+
+type action_request =
+  (* RequestName  of sbBefore * ddBefore * aswBefore
+                     parameters of request *
+                     the new state or a callback *)
+  
+  | AllocRequest  of set action_id * set action_id * set action_id *
+                     action_id * thread_id * ctype * Mem.pointer_value *
+                     core_state
+  
+  | LoadRequest   of set action_id * set action_id * set action_id * 
+                     (* the mem_value is a fresh symbolic value, to be later resolved by the concurrency *)
+                     action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                     (* the argument of the callback is either a concrete value if the memory model
+                        is able to give one right away, or is equal to the symbolic value provided by the
+                        present LoadRequest *)
+                     (Mem.mem_value -> core_state)
+
+  | StoreRequest  of set action_id * set action_id * set action_id *
+                     action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                     core_state
+
+(*
+  | LockRequest   of set action_id * set action_id * set action_id *
+                     action_id * thread_id * Mem.pointer_value * location_kind *
+                     (lock_outcome -> SEU.t thread_state Symbol.counter core_run_error)
+
+  | UnlockRequest of set action_id * set action_id * set action_id * 
+                     action_id * thread_id * Mem.pointer_value * location_kind *
+                     (SEU.t thread_state Symbol.counter core_run_error)
+
+  | RmwRequest    of set action_id * set action_id * set action_id *
+                     action_id * thread_id * Cmm.memory_order * Mem.pointer_value * location_kind * Mem.mem_value *
+                     (Mem.mem_value -> SEU.t thread_state Symbol.counter core_run_error)
+
+  | FenceRequest  of set action_id * set action_id * set action_id *
+                     action_id * thread_id * Cmm.memory_order *
+                     (SEU.t thread_state Symbol.counter core_run_error)
+*)
+
+
+(*
+type pointer_request =
+(*
+  | PtrEqRequest 
+  | PtrNeRequest 
+*)
+  | PtrShiftRequest of ctype * Mem.pointer_value * Symbolic.symbolic (* integer value *) *
+                       (Core.expr core_run_annotation -> core_state)
+*)
+
+
+type core_step =
+(*   | Step_pointer_request of pointer_request *)
+  | Step_action_request of (* DEBUG *) string * thread_id * core_runM action_request
+  
+
+(*
+  TODO: these twos variant are not needed because the preEx incrementation function
+        is clever enough to spot thread spawning/kills
+  
+  
+    (* the first tid is that of the parent thread, and the following computation
+       returns the tids of the spawned threads and the new core state *)
+  | Step_spawn_threads of thread_id * SEU.t (set thread_id * core_state) core_run_state core_run_error
+  
+    (* the computation returns the tid of the killed threand and the new core state *)
+  | Step_kill_thread of thread_id * SEU.t (thread_id * core_state) core_run_state core_run_error
+*)
+
+  | Step_tau of (* DEBUG *) string * thread_id * core_runM core_state
+
+
+    (* TODO: the ND here comes from symbolic branching, for now I leave it to the driver to merge that ND
+             with that of the core_step function *)
+  | Step_eval of (* DEBUG *) string * thread_id * core_runM core_state
+
+
+  | Step_output of core_runM (string * core_state)
+
+
+  | Step_done of Core.expr core_run_annotation
+(*  | Step_thread_frok of thread_id * SEU.t (thread_state * list (thread_id * thread_state)) Symbol.counter core_run_error *)
+
+
+
+
+
+
+
+
+
+(*
+val update_thread_state: thread_id -> thread_state -> core_state -> Exception.t core_state core_run_error
+let update_thread_state tid th_st st =
+  Exception.bind match List.lookup tid st.thread_states with
+    | Just z ->
+        Exception.return z
+    | Nothing ->
+        Exception.fail (Illformed_program "trying to update the state of a non existing thread")
+  end (fun (parent_tid_opt, _) ->
+    Exception.return <| st with thread_states= assoc_insert tid (parent_tid_opt, th_st) st.thread_states |>
+  )
+*)
+
+val register_handler: core_state -> core_state
+let register_handler st =
+  Boot.assert_false "WIP"
+
+val update_thread_state: thread_id -> thread_state -> core_state -> core_state
+let update_thread_state tid th_st st =
+  let f (parent_tid_opt, _) = (parent_tid_opt, th_st) in
+  <| st with thread_states= assoc_adjust f tid st.thread_states |>
+
+
+val spawn_thread: maybe thread_id -> thread_state -> core_state -> State.t (thread_id * core_state) core_run_state
+let spawn_thread parent_tid_opt th_st st =
+  State.modify (fun run_st ->
+    let (tid, tid_suppl') = UniqueId.fresh_id run_st.tid_supply in
+    ((tid, <| st with thread_states= assoc_insert tid (parent_tid_opt, th_st) st.thread_states |>),
+     <| run_st with tid_supply= tid_suppl' |>)
+  )
+
+
+val kill_thread: thread_id -> thread_id -> Core.expr core_run_annotation -> core_state -> core_state
+let kill_thread tid parent_tid v st =
+  <| st with thread_states=
+               assoc_adjust (fun (parent_tid_opt, th_st) ->
+                 (parent_tid_opt, <| th_st with arena= subst_wait tid v th_st.arena;
+                                                stack= subst_wait_stack tid v th_st.stack |>)
+               ) parent_tid $ assoc_remove tid st.thread_states
+  |>
+
+
+val fresh_symbol: State.t Symbol.t core_run_state
+let fresh_symbol =
+  State.modify (fun run_st ->
+    let (sym, symbol_suppl') = UniqueId.fresh_id run_st.symbol_supply in
+    (sym, <| run_st with symbol_supply= symbol_suppl' |>)
+  )
+
+
+val fresh_action_id: State.t action_id core_run_state
+let fresh_action_id =
+  State.modify (fun run_st ->
+    let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
+    (aid, <| run_st with aid_supply= aid_suppl' |>)
+  )
+
+
+
+
+open State.Operators
+
+val     hoist_negatives: forall 'a. expr 'a -> State.t (expr 'a) (list (expr 'a) * core_run_state)
+let rec hoist_negatives expr =
+  let add_neg neg_e =
+    State.modify (fun (negs, run_st) ->
+      ((), (neg_e :: negs, run_st))
+    ) in
+(*
+  let flush_negs = 
+    State.modify (fun (negs, run_st) ->
+      (negs, ([], run_st))
+    ) in
+*)
+  match expr with
+    | Eunit ->
+        State.return expr
+    | Etrue ->
+        State.return expr
+    | Efalse ->
+        State.return expr
+    | Econst _ ->
+        State.return expr
+    | Elist _ ->
+        State.return expr
+    | Ectype _ ->
+        State.return expr
+    | Esym _ ->
+        State.return expr
+    | Eimpl _ ->
+        State.return expr
+    | Etuple _ ->
+        State.return expr
+    | Enot _ ->
+        State.return expr
+    | Eop _ _ _ ->
+        State.return expr
+    | Ecall _ _ ->
+        State.return expr
+    | Eoutput _ ->
+        State.return expr
+    | Eundef _ ->
+        State.return expr
+    | Eerror _ ->
+        State.return expr
+    | Eraise _ ->
+        State.return expr
+    | Eregister _ _ ->
+        State.return expr
+    | Eskip ->
+        State.return expr
+    | Eproc _ _ _ ->
+        (* TODO: might be wrong *)
+        State.return expr
+    | Easeq _ _ _  ->
+        Boot.assert_false "hoist_negatives found an Easeq"
+    | Erun _ _ _ ->
+        State.return expr
+    | Eret _ ->
+        State.return expr
+    | Epar _ ->
+        (* TODO: I think *)
+        State.return expr
+    | Ewait _ ->
+        State.return expr
+    | Eis_scalar _ ->
+        State.return expr
+    | Eis_integer _ ->
+        State.return expr
+    | Eis_signed _ ->
+        State.return expr
+    | Eis_unsigned _ ->
+        State.return expr
+    
+    (* Now we actually do work *)
+    | Elet sym pe1 e2 ->
+        hoist_negatives e2 >>= fun e2' ->
+        State.return (Elet sym pe1 e2')
+    | Eif pe1 e2 e3 ->
+        hoist_negatives e2 >>= fun e2' ->
+        hoist_negatives e3 >>= fun e3' ->
+        State.return (Eif pe1 e2' e3')
+    | Eaction p ->
+        if is_negative_action p then
+          add_neg expr >> State.return Eunit
+        else
+          State.return expr
+    | Eunseq es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (Eunseq es')
+    | Ewseq _as e1 e2 ->
+        hoist_negatives e1 >>= fun e1'  ->
+        hoist_negatives e2 >>= fun e2'  ->
+        State.return (Ewseq _as e1' e2')
+    | Esseq _as e1 e2 ->
+        Boot.assert_false "hoist_negatives found an Esseq"
+(*
+        hoist_negatives e1 >>= fun e1'  ->
+        flush_negs         >>= fun negs ->
+        hoist_negatives e2 >>= fun e2'  ->
+        let nothings = Global.replicate_list Nothing (List.length negs) in
+        match negs with
+          | [] ->
+              State.return (Esseq _as e1' e2')
+          | _ ->
+              State.return (
+                Esseq (nothings ++ _as) (Eunseq (negs ++ [e1'])) e2'
+              )
+        end
+*)
+
+    | Eindet e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Eindet e)
+    | Ebound i e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Ebound i e')
+    | Esave k a_tys e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Esave k a_tys e)
+    | End es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (End es')
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+open SEU.Operators
+
+
+(*
+val printf_hack: core_state -> list (expr core_run_annotation) -> ND.t core_step
+let printf_hack core_st pes =
+  let mk_string = function
+    | Mem.MV_array vs ->
+        let _ = Boot.output_string ("KKK> " ^ string_of_natural (naturalFromNat (List.length vs))) in (* DEBUG *)
+        String.toString $ List.map (function
+          | Mem.MV_integer (Symbolic.SYMBconst n) ->
+              Decode.encode_character_constant n
+          | _ ->
+              Boot.assert_false "printf_hack: one of the element of the format array was invalid"
+        end) vs
+    | _ ->
+        Boot.assert_false "printf_hack: the format argument was not an array"
+  end in
+  match pes with
+    | [Econst (Mem.MV_pointer ptr1)] ->
+        ND.return $ Step_output (
+          runMem (Mem.load ptr1)       >>= fun (Mem.MV_pointer ptr_format) ->
+          runMem (Mem.load ptr_format) >>= fun format                      ->
+          SEU.return (mk_string format, core_st)
+        )
+    | _ ->
+        Boot.assert_false "invalid arguments for printf"
+  end
+*)
+
+(* TODO: hack *)
+val pseudo_printf: string -> list string -> string
+declare ocaml target_rep function pseudo_printf = `Boot_ocaml.pseudo_printf`
+
+
+
+
+val core_thread_step: Core.file core_run_annotation -> (thread_id * (maybe thread_id * thread_state)) -> core_state -> ND.t core_step
+let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
+  let update_current_thread th_st = SEU.return (update_thread_state current_tid th_st st) in
+  
+  match (th_st.arena, th_st.stack) with
+    | (Eskip, sk) ->
+        ND.return $ Step_tau "Eskip" current_tid (
+        SEU.runE (pop_continuation_element sk) >>= fun (cont_elem, sk') ->
+          update_current_thread
+            match cont_elem with
+              | Kunseq es1 es2 ->
+                  <| th_st with arena= Eunseq (es1 ++ (Eunit :: es2)); stack= sk' |>
+              | Kwseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+              | Ksseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+(*
+              | Ktry _ ->
+                  <| th_st with stack= sk' |>
+*)
+            end
+        )
+    
+    | (Elet _a pe1 e2, _) ->
+        if is_value pe1 then
+          ND.return $
+            Step_tau "Elet" current_tid (
+              update_current_thread <| th_st with arena= subst_sym _a pe1 e2 |>
+            )
+        else
+          ND.return $ Step_eval "Elet" current_tid (
+            SEU.runEU (core_eval file false pe1) >>= fun pe1' ->
+            update_current_thread <| th_st with arena= Elet _a pe1' e2 |>
+          )
+    
+    (* NOTE: the case where the stack is empty is deal with by the "pure expression in arena" case *)
+    | (Eif pe1 e2 e3, Stack_cons cont _) ->
+        if is_value pe1 then
+          match pe1 with
+            | Etrue ->
+                ND.return $
+                  Step_tau "Eif (then)" current_tid (
+                    let labeled_conts =
+                      Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                    update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                  )
+           | Efalse ->
+                ND.return $
+                  Step_tau "Eif (else)" current_tid (
+                    let labeled_conts =
+                      Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                    update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                  )
+           | Econst (Mem.MV_integer (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
+               ND.msum [
+                 ND.bind (ND.add_constraint (Constraints.assert_eq symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic then)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                     update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                 ));
+                 
+                 ND.bind (ND.add_constraint (Constraints.assert_neq symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic else)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                 ))
+               ]
+          end
+        else
+          ND.return $ Step_eval "Eif" current_tid (
+            SEU.runEU (core_eval file true pe1) >>= fun pe1' ->
+            update_current_thread <| th_st with arena= Eif pe1' e2 e3 |>
+          )
+    
+    | (Eproc annots nm pes, sk) ->
+        if all is_value pes then
+          match nm with
+            | Sym psym ->
+                (* this case correspond to a normal C function call *)
+                ND.return $
+                  Step_tau "Eproc" current_tid (
+                    SEU.runEU (
+                      Exception.bind (call_proc file psym pes)
+                        EU.return
+                   ) >>= fun expr ->
+                    (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                    let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) expr in
+                    update_current_thread <| th_st with arena= a_expr; stack= push_empty_continuation sk |>
+                  )
+            
+            | Impl (StdFunction str) ->
+                (* this case correspond to a call to a stdlib function *)
+                (* TODO: only dealing with a handful for now, and doing it here, instead of the Stdlib module *)
+                match str with
+                  | "abort" ->
+                      (* TODO: not doing the signal and impl-def stuff for now *)
+                      Boot.assert_false "WIP, abort()"
+                  
+                  | "printf" ->
+                      (* TODO: hack, should use output.lem instead *)
+                      let mk_string = function
+                        | Mem.MV_array vs ->
+                            let _ = Boot.output_string ("KKK> " ^ string_of_natural (naturalFromNat (List.length vs))) in (* DEBUG *)
+                            String.toString $ List.map (function
+                              | Mem.MV_integer (Symbolic.SYMBconst n) ->
+                                  Decode.encode_character_constant n
+                              | _ ->
+                                  Boot.assert_false "printf_hack: one of the element of the format array was invalid"
+                            end) (takeWhile (fun (Mem.MV_integer (Symbolic.SYMBconst n)) -> n <> 0) vs)
+                        | _ ->
+                            Boot.assert_false "printf_hack: the format argument was not an array"
+                      end in
+                      
+                      let format_ty = Pointer AilTypes.no_qualifiers char in
+                      
+                      match pes with
+                        | [Econst (Mem.MV_pointer ptr1)] ->
+                            ND.return $ Step_output (
+                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              (* TODO: this should be an array of the proper size of char !!! *)
+                              runMem (Mem.load char ptr_format) >>= fun format                      ->
+                              (* TODO: should be the number of printed chars *)
+                              let str = mk_string format in
+                              SEU.return (str, update_thread_state current_tid <| th_st with
+                                arena= Econst (Mem.mk_integer 0)
+                              |> st)
+                            )
+                        | Econst (Mem.MV_pointer ptr1) :: args ->
+                            ND.return $ Step_output (
+                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              (* TODO: this should be an array of the proper size of char !!! *)
+                              runMem (Mem.load char ptr_format) >>= fun format                      ->
+                              SEU.foldM (fun acc (Econst (Mem.MV_pointer ptr)) ->
+                                (* TODO: the ctype is obviously wrong here *)
+                                runMem (Mem.load signed_int ptr) >>= fun mem_val ->
+                                SEU.return (show mem_val :: acc)
+                              ) [] args >>= fun arg_strs_rev ->
+                              
+(*
+                              let str = mk_string format ^ " with args: " ^
+                                List.foldl (fun acc x -> x ^ ", " ^ acc) "" arg_strs ^ "\n" in
+*)
+                              let str = pseudo_printf (mk_string format) (List.reverse arg_strs_rev) in
+                              (* TODO: should be the number of printed chars *)
+
+                              SEU.return (str, update_thread_state current_tid <| th_st with
+                                arena= Econst (Mem.mk_integer 0)
+                              |> st)
+                            )
+                            
+                        | _ ->
+                            Boot.assert_false "invalid arguments for printf"
+                      end
+                  
+                  | _ ->
+                      Boot.assert_false $ "WIP, this stdlib function is not yet implemented: " ^ str
+                end
+(* TODO
+            | _ ->
+                ND.return $
+                  SEU.fail (Illformed_program "Eproc, found a Impl that is not a StdFunction")
+*)
+          end
+        else
+          ND.return $ Step_eval "Eproc" current_tid (
+            SEU.runEU (EU.mapM (core_eval file false) pes) >>= fun pes' ->
+            update_current_thread <| th_st with arena= Eproc annots nm pes' |>
+          )
+    
+    
+(*
+    | (Eaction (Paction neg act, sk) ->
+        let rewind_stack =
+          match sk with
+            | Stack_empty ->
+                Boot.assert_false "Eaction neg, found empty stack"
+            | Stack_cons 
+          end in
+*)
+
+
+
+    | (Eaction (Paction p (Action annots act)), sk) ->
+        let sb_before = Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
+        let dd_before = {(* TODO *)} in
+        let asw_before =
+          if has_sbBefore_on_thread current_tid annots then
+            {}
+          else
+            Set.map snd $ Set.filter (fun (tid, _) ->
+              match parent_tid_opt with
+                | Just parent_tid ->
+                    tid = parent_tid
+                | _ ->
+                    false
+              end) annots.sb_before
+        in
+        match act with
+          | Create al_pe ty_pe pref ->
+              (* TODO: alignment *)
+              if is_value ty_pe then
+                ND.return $
+                  match (ty_pe) with
+                    | Ectype ty ->
+                          Step_tau "Create" current_tid (
+                            runMem (Mem.allocate_object current_tid pref ty) >>= fun ptr_val    ->
+                            update_current_thread <| th_st with arena= Econst (Mem.MV_pointer ptr_val) |>
+                          )
+                        (* Step_action_request "create" current_tid (
+                          SEU.runS fresh_action_id                    >>= fun create_aid ->
+
+                          (* TODO: debug *)
+                          SEU.runS (State.read (fun run_st ->
+(*                            let _ = Boot.output_string ("BEFORE> " ^ show run_st.layout_state) in *)
+                            ()
+                          )) >>
+
+                          runMem (Mem.allocate_object current_tid pref ty) >>= fun ptr_val    ->
+                          
+                          (* TODO: debug *)
+(*
+                          SEU.runS (State.read (fun run_st ->
+                            let _ = Boot.output_string ("AFTER> " ^ show run_st.layout_state) in
+                            ()
+                          )) >>
+*)
+                          
+                          SEU.return (
+                            AllocRequest sb_before dd_before asw_before
+                                         create_aid current_tid ty ptr_val
+                                         (update_thread_state current_tid <| th_st with
+                                            arena= Econst (Mem.mk_pointer ptr_val);
+                                            stack= add_to_sb_stack {(p, (current_tid, create_aid))} sk;
+                                          |> st)
+                          )
+                        ) *)
+                    | _ ->
+                        Step_tau "Create type-error" current_tid $
+                          SEU.fail (Illformed_program "some expression was ill-typed in a create")
+                  end
+              else
+                ND.return $ Step_eval "ctype of Create" current_tid (
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
+                  update_current_thread <| th_st with arena=
+                    Eaction (Paction p (Action annots (Create al_pe ty_pe' pref)))
+                  |>
+                )
+
+(*
+              | Alloc al_pe n_pe pref ->
+                  Boot.assert_false "WIP: Alloc"
+*)
+          | Kill ptr_pe ->
+              if is_value ptr_pe then
+                ND.return $
+                  match ptr_pe with
+                    | Econst (Mem.MV_pointer ptr_val) ->
+                        (* TODO *)
+                        Step_tau "kill TODO" current_tid (
+                          update_current_thread <| th_st with arena= Eskip |>
+                        )
+                    | _ ->
+                        Step_tau "Kill type-error" current_tid $
+                          SEU.fail (Illformed_program $ "pointer expression was ill-typed in a kill")
+                  end
+              else
+                ND.return $ Step_eval "pointer of Kill" current_tid (
+                  SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
+                  update_current_thread <| th_st with arena=
+                    Eaction (Paction p (Action annots (Kill ptr_pe')))
+                  |>
+                )
+          
+          | Store ty_pe ptr_pe val_pe mo ->
+              if is_value ty_pe then
+                if is_value ptr_pe then
+                  if is_value val_pe then
+                    ND.return $
+                      match (ty_pe, ptr_pe, val_pe) with
+                        | (Ectype ty, Econst (Mem.MV_pointer ptr_val), Econst mem_val) ->
+                            Step_action_request "store" current_tid (
+                              SEU.runS fresh_action_id >>= fun store_aid ->
+                              SEU.runS fresh_symbol    >>= fun val_sym  ->
+                              SEU.return $
+                                StoreRequest sb_before dd_before asw_before
+                                             store_aid current_tid mo ty ptr_val mem_val
+                                             (update_thread_state current_tid <| th_st with
+                                               arena= Econst mem_val;
+                                               stack= add_to_sb_stack {(p, (current_tid, store_aid))} sk;
+                                             |> st)
+                            )
+                        
+                        | _ ->
+                            Step_tau "Store type-error" current_tid $
+                              SEU.fail (Illformed_program $ "some expression was ill-typed in a store")
+                      end
+                  else
+                    ND.return $ Step_eval "value of Store" current_tid (
+                      SEU.runEU (core_eval file false val_pe) >>= fun val_pe' ->
+                      update_current_thread <| th_st with arena=
+                        Eaction (Paction p (Action annots (Store ty_pe ptr_pe val_pe' mo)))
+                      |>
+                    )
+                else
+                  ND.return $ Step_eval "pointer of Store" current_tid (
+                    SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
+                    update_current_thread <| th_st with arena=
+                      Eaction (Paction p (Action annots (Store ty_pe ptr_pe' val_pe mo)))
+                    |>
+                  )
+              else
+                ND.return $ Step_eval "ctype of Store" current_tid (
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
+                  update_current_thread <| th_st with arena=
+                    Eaction (Paction p (Action annots (Store ty_pe' ptr_pe val_pe mo)))
+                  |>
+                )
+          
+          | Load ty_pe ptr_pe mo ->
+              if is_value ty_pe then
+                if is_value ptr_pe then
+                  ND.return $
+                    match (ty_pe, ptr_pe) with
+                      | (Ectype ty, Econst (Mem.MV_pointer ptr_val)) ->
+                          Step_action_request "load" current_tid (
+                            SEU.runS fresh_action_id >>= fun load_aid ->
+                            SEU.runS fresh_symbol    >>= fun val_sym  ->
+                            let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                            SEU.return $
+                              LoadRequest sb_before dd_before asw_before
+                                          load_aid current_tid mo ty ptr_val mem_val
+                                          (fun mem_val ->
+                                            update_thread_state current_tid <| th_st with
+                                              arena= Econst mem_val;
+                                              stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
+                                            |> st)
+                          )
+                      | _ ->
+                          Step_tau "Load type-error" current_tid $
+                            SEU.fail (Illformed_program "some expression was ill-typed in a load")
+                    end
+                else
+                  ND.return $ Step_eval "pointer of Load" current_tid (
+                    SEU.runEU (core_eval file false ptr_pe) >>= fun ptr_pe' ->
+                    update_current_thread <| th_st with arena=
+                      Eaction (Paction p (Action annots (Load ty_pe ptr_pe' mo)))
+                    |>
+                  )
+              else
+                ND.return $ Step_eval "ctype of Load" current_tid (
+                  SEU.runEU (core_eval file false ty_pe) >>= fun ty_pe' ->
+                  update_current_thread <| th_st with arena=
+                    Eaction (Paction p (Action annots (Load ty_pe' ptr_pe mo)))
+                  |>
+                )
+
+(* WIP
+            | CompareExchangeStrong ty_pe ptr1_pe ptr2_pe val_pe mo1 mo2 ->
+                if is_value ty_pe then
+                  if is_value ptr1_pe then
+                    if is_value ptr2_pe then
+                      if is_value val_pe then
+                        match (ty_pe, ptr1_pe, ptr2_pe, val_pe) with
+                          | (Ectype ty, Econst (Mem.MV_pointer ptr_val1), Econst (Mem.MV_pointer ptr_val2), Econst mem_val) ->
+                              Step_action_request "compare_exchange_strong" current_tid (
+                                SEU.runS fresh_action_id >>= fun load_aid ->
+                                SEU.runS fresh_symbol    >>= fun val_sym  ->
+                                let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                                SEU.return $
+                                  LoadRequest sb_before dd_before asw_before
+                                          load_aid current_tid mo ty ptr_val mem_val
+                                          (fun mem_val ->
+                                            update_thread_state current_tid <| th_st with
+                                              arena= Econst mem_val;
+                                              stack= add_to_sb_stack {(p, (current_tid, load_aid))} sk;
+                                            |> st)
+                              )
+                          | _ ->
+                              Step_tau "CompareExchangeStrong type-error" current_tid $
+                                SEU.fail (Illformed_program "some expression was ill-typed in a compare_exchange_strong")
+                        
+                      else
+                        ND.return $ Step_eval "value of CompareExchangeStrong" current_tid (
+                          SEU.runEU (core_eval file val_pe) >>= fun val_pe' ->
+                          update_current_thread <| th_st with arena=
+                            Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe ptr2_pe val_pe' mo1 mo2)))
+                          |>
+                        )
+                    else
+                      ND.return $ Step_eval "pointer 2 of CompareExchangeStrong" current_tid (
+                        SEU.runEU (core_eval file ptr2_pe) >>= fun ptr2_pe' ->
+                        update_current_thread <| th_st with arena=
+                          Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe ptr2_pe' val_pe mo1 mo2)))
+                        |>
+                      )
+                  else
+                    ND.return $ Step_eval "pointer 1 of CompareExchangeStrong" current_tid (
+                      SEU.runEU (core_eval file ptr1_pe) >>= fun ptr1_pe' ->
+                      update_current_thread <| th_st with arena=
+                        Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe ptr1_pe' ptr2_pe val_pe mo1 mo2)))
+                      |>
+                    )
+                else
+                  ND.return $ Step_eval "ctype of CompareExchangeStrong" current_tid (
+                    SEU.runEU (core_eval file ty_pe) >>= fun ty_pe' ->
+                    update_current_thread <| th_st with arena=
+                      Eaction (Paction p (Action annots (CompareExchangeStrong ty_pe' ptr1_pe ptr2_pe val_pe mo1 mo2)))
+                    |>
+                  )
+
+            | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
+*)
+
+          | Ptr ptr_act pes ->
+              if all is_value pes then
+                ND.return $ match (ptr_act, pes) with
+                  (* TODO: hack on the integer *)
+                  | (PtrShift, [Ectype ty; Econst (Mem.MV_pointer ptr_val); Econst (Mem.MV_integer (Symbolic.SYMBconst n))]) ->
+                      Step_tau "Pointer shift" current_tid (
+                        runMem (Mem.pointer_shift ty ptr_val n) >>= fun ptr_val' ->
+                        update_current_thread <| th_st with arena= Econst (Mem.mk_pointer ptr_val') |>
+                      )
+
+
+(*
+                      Step_pointer_request (
+                        PtrShiftRequest ty ptr_val n (fun e -> update_thread_state current_tid <| th_st with arena= e |> st)
+                      )
+*)
+                  | _ ->
+                      Boot.assert_false "WIP core_run Ptr (case not dealt with or Error)"
+                end
+              else
+                ND.return $ Step_eval "Ptr" current_tid (
+                  SEU.runEU (EU.mapM (core_eval file false) pes) >>= fun pes' ->
+                  update_current_thread <| th_st with arena=
+                    Eaction (Paction p (Action annots (Ptr ptr_act pes')))
+                  |>
+                )
+          end
+      
+    | (Eunseq es, sk) ->
+        (* DEBUG *)
+        let _ = if List.null es then
+            Boot.assert_false "Core_run.core_thread_step found an invalid Eunseq"
+          else
+          ()
+        in
+        (* TODO: this a bad hack to remove the fake non-determinism introduced by the current semantics of Epar *)
+        let is_wait = function
+          | Ewait _ -> true
+          | _       -> false
+        end in
+        
+        if List.all is_pure es then
+          ND.return $ Step_tau "Eunseq_pure" current_tid (
+            update_current_thread <| th_st with arena= Etuple es |>
+          )
+        else
+          ND.bind (ND.pickWith (fun e -> not (is_pure e) && not (is_wait e)) es) (fun (es1, ej, es2) ->
+            ND.return $ Step_tau "Eunseq" current_tid (
+              SEU.runE (push_continuation_element (Kunseq es1 es2) sk) >>= fun sk' ->
+              update_current_thread <| th_st with arena= ej; stack= sk' |>
+            )
+          )
+    
+(*
+
+WIP: trying something new: in the rule of Esseq, any negation is brought to the top of the left expression
+
+    | (Ewseq _ (Eaction (Paction Neg _) as pact_expr) e2, _) ->
+        ND.return $ Step_tau "Ewseq Neg" current_tid (
+          match e2 with
+            | Eunseq es ->
+                SEU.runS (State.mapM (fun _ -> fresh_symbol) es) >>= fun syms ->
+                (* let weak _ ~A in [ e2_1 || ... || e2_k ] ===>
+                   let weak (_, a1, ..., ak) = [ ~A || e2_1 || ... || e2_k ] in (a1, ..., ak) *)
+                update_current_thread
+                    <| th_st with arena= Ewseq (Nothing :: List.map (fun z -> Just z) syms)
+                                           (Eunseq (pact_expr :: es)) (Etuple $ List.map Esym syms) |>
+            | _ ->
+                SEU.runS fresh_symbol >>= fun sym ->
+                update_current_thread
+                    <| th_st with arena= Ewseq [Nothing; (fun z -> Just z) sym]
+                                           (Eunseq [pact_expr; e2]) (Esym sym) |>
+          end
+        )
+    
+*)
+    | (Ewseq _as e1 e2, sk) ->
+(*
+
+WIP: see comment for Ewseq neg 
+
+        if is_unseq_with_negative e1 then
+          let Eunseq es = e1 in
+          let (negs, _as', es') = List.foldr (fun (sym_opt, e) (negs, _as', es') ->
+            if is_negative e then
+              ((e :: negs), _as', es')
+            else
+              (negs, sym_opt :: _as', e :: es')
+          ) ([], [], []) (zip _as es) in
+          
+          let mk_unseq = function
+            | [] ->
+                Boot.assert_false "Ewseq neg non-simple, mk_unseq found empty list"
+            | [x] ->
+                x
+            | xs ->
+                Eunseq xs
+          end in
+          
+          let nothings = Global.replicate_list Nothing (List.length negs) in
+          
+          ND.return $ Step_tau "Ewseq neg-unseq" current_tid (
+            match e2 with
+              | Eunseq e2s ->
+                  SEU.runS (State.mapM (fun _ -> fresh_symbol) e2s) >>= fun e2s_syms ->
+                  update_current_thread <| th_st with
+                    arena= Ewseq _as' (mk_unseq es')
+                             (Ewseq (nothings ++ List.map (fun z -> Just z) e2s_syms) (mk_unseq (negs ++ e2s))
+                               (Etuple $ List.map Esym e2s_syms))
+                  |>
+              | _ ->
+                  SEU.runS fresh_symbol >>= fun sym ->
+                  update_current_thread <| th_st with
+                    arena= Ewseq _as' (mk_unseq es')
+                             (Ewseq (nothings ++ [Just sym]) (mk_unseq (negs ++ [e2]))
+                               (Esym sym))
+                  |>
+            end
+          )
+          
+        else
+*)
+          if is_value e1 then
+            ND.return $ Step_tau "Ewseq subst" current_tid (
+              update_current_thread <| th_st with arena= subst_syms _as e1 e2 |>
+            )
+          else if is_pure e1 then
+            ND.return $ Step_eval "Ewseq" current_tid (
+              SEU.runEU (core_eval file false e1) >>= fun e1' ->
+              update_current_thread <| th_st with arena= Ewseq _as e1' e2 |>
+            )
+          else (* e1 still has some effects to perform *)
+            ND.return $ Step_tau "Ewseq" current_tid (
+              SEU.runE (push_continuation_element (Kwseq _as e2) sk) >>= fun sk' ->
+                update_current_thread <| th_st with arena= e1; stack= sk' |>
+            )
+    
+    | (Esseq _as e1 e2, sk) ->
+        if is_value e1 then
+          ND.return $ Step_tau "Esseq subst" current_tid (
+            update_current_thread <| th_st with arena= subst_syms _as e1 e2 |>
+          )
+        else if is_pure e1 then
+          ND.return $ Step_eval "Esseq" current_tid (
+            SEU.runEU (core_eval file false e1) >>= fun e1' ->
+            update_current_thread <| th_st with arena= Esseq _as e1' e2 |>
+          )
+        else (* e1 still has some effects to perform *)
+
+(* WIP: this doesn't work
+
+          if has_sseqs e1 then
+          ND.return $ Step_tau "Esseq" current_tid (
+            SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
+              update_current_thread <| th_st with arena= e1; stack= sk' |>
+          )
+else
+          
+          (* TODO: experimental implementation of negative actions *)
+          (* TODO: this might be wrong with procedure calls ... *)
+          let runS' m = fun st ->
+            let (a, (negs, st')) = m ([], st) in
+            Exception.return (Undefined.return (negs, a), st') in
+          
+          ND.return $ Step_tau "Esseq" current_tid (
+            let _ = Boot.print_debug 9 "HOISTING" in
+            runS' (hoist_negatives e1) >>= fun (negs, e1') ->
+            match negs with
+              | [] ->
+                  SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
+                    update_current_thread <| th_st with arena= e1'; stack= sk' |>
+              | _ ->
+                  let nothings = Global.replicate_list Nothing (List.length negs) in
+                  
+                  let new_arena = match e1' with
+                    | Eunseq e1s' ->
+                        Eunseq (negs ++ e1s')
+                    | _ ->
+                        Eunseq (negs ++ [e1'])
+                  end in
+                  
+                  
+                  SEU.runE (push_continuation_element (Ksseq (nothings ++ _as) e2) sk) >>= fun sk' ->
+                    update_current_thread <| th_st with arena= new_arena; stack= sk' |>
+            end
+          )
+*)
+          ND.return $ Step_tau "Esseq" current_tid (
+            SEU.runE (push_continuation_element (Ksseq _as e2) sk) >>= fun sk' ->
+              update_current_thread <| th_st with arena= e1; stack= sk' |>
+          )
+    
+    (* TODO: this is partial *)
+    | (Esave k a_tys e, Stack_cons cont _) ->
+        let _ = Boot.output_string ("SAVING " ^ Boot.pp_core_expr (Esym k : expr unit) ^ " ==> " ^ Boot.pp_core_expr (apply_continuation cont e)) in
+        ND.return $ Step_tau "Esave" current_tid (
+          update_current_thread <| th_st with arena= e; labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels |>
+        )
+    
+    | (Erun annots k a_vs, sk) ->
+        ND.return $ Step_tau "Erun" current_tid (
+          SEU.runE (pop_stack sk) >>= fun (cont, sk') ->
+          match Map.lookup k th_st.labels with
+            | Just cont ->
+                SEU.return cont
+            | Nothing ->
+                match find_labeled_continuation k (apply_continuation cont th_st.arena) with
+                  | Nothing ->
+                      SEU.fail (Illformed_program "unknown ksym when running an Erun")
+                  | Just cont ->
+                      SEU.return cont
+                end
+          end >>= fun (a_tys, e_cont) ->
+          (* TODO: debug *)
+          let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr e_cont) in
+          
+          (* we have to create the objects which are visible at the level of the save but not from the run *)
+          let (create_as, create_tys) = unzip $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) a_vs)) a_tys in
+          (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
+          let kill_es = List.map snd $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) a_tys)) a_vs in
+          let e =
+            Ewseq [] (mk_unseq $ List.map (fun e -> pkill e) kill_es)
+              (Ewseq (List.map (fun z -> Just z) create_as) (mk_unseq $ List.map (fun ty ->
+                let e_ty = Ectype ty in
+                pcreate (alignof e_ty) e_ty []
+              ) create_tys)
+                 (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont a_vs)) in
+          (* TODO: it seems strange that annotate_expr need to know the polarity *)
+          
+          update_current_thread <| th_st with arena= add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e;
+                                              stack= push_empty_continuation sk' |>
+      )
+      
+      (* End of the execution of a thread. *)
+    | (Eret pe, Stack_cons _ Stack_empty) ->
+        if is_value pe then
+          ND.return $
+            match parent_tid_opt with
+              | Just parent_tid ->
+                  (* case of a thread reaching the end of its execution *)
+                  Step_tau "end of thread" current_tid (
+                    SEU.return $ kill_thread current_tid parent_tid pe st
+                  )
+              | Nothing ->
+                  (* case of the end of the program execution *)
+                  Step_tau "end of program" current_tid (
+                    update_current_thread <| th_st with arena= pe; stack= empty_stack |>
+                  )
+            end
+        else
+          ND.return $ Step_eval "<Eret pe, _ . ε>" current_tid (
+            SEU.runEU (core_eval file false pe) >>= fun pe' ->
+            update_current_thread <| th_st with arena= Eret pe' |>
+          )
+    
+      (* End of the execution of a procedure. *)
+    | (Eret pe, Stack_cons _ (Stack_cons cont sk)) ->
+        if is_value pe then
+          ND.return $
+            Step_tau "end of procedure" current_tid (
+              update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk;
+                                                  labels= Map.empty (* TODO: this is too violent, but doing no reset is unsound *) |>
+            )
+        else
+          ND.return $ Step_eval "<Eret pe, _ . cont . sk>" current_tid (
+            SEU.runEU (core_eval file false pe) >>= fun pe' ->
+            update_current_thread <| th_st with arena= Eret pe' |>
+          )
+    
+    | (End es, _) ->
+        ND.bind (ND.pick es) (fun ej ->
+          ND.return $ Step_tau "End" current_tid (
+            update_current_thread <| th_st with arena= ej |>
+          )
+        )
+    
+    | (Epar es, _) ->
+        ND.return $
+          Step_tau "Epar" current_tid (
+            SEU.foldM (fun (th_waits, st) e ->
+              SEU.runS (spawn_thread (Just current_tid)
+                          <| arena= e; stack= push_empty_continuation empty_stack; labels= Map.empty |> st
+              ) >>= fun (th_tid, st') ->
+              SEU.return (Ewait th_tid :: th_waits, st')
+            ) ([], st) es >>= fun (th_waits, st') ->
+            
+            (* TODO: using a Eunseq adds some silly non-determinism:
+                 [ wait(tid1) || wait (tid2) ]
+               has to do one step before blocking ... *)
+            SEU.return (update_thread_state current_tid <| th_st with arena= Eunseq $ List.reverse th_waits |> st')
+          )
+    
+    | (Ewait _, _) ->
+        ND.mzero
+    
+(*
+   | (Eraise str, sk) ->
+        ND.return $ Step_tau "Eskip" current_tid (
+        SEU.runE (pop_continuation_element sk) >>= fun (cont_elem, sk') ->
+          update_current_thread
+            match cont_elem with
+              | Kunseq es1 es2 ->
+                  <| th_st with arena= Eunseq (es1 ++ (Eunit :: es2)); stack= sk' |>
+              | Kwseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+              | Ksseq _ e2 ->
+                  <| th_st with arena= e2; stack= sk' |>
+            end
+        )
+*)
+(* WIP
+
+
+    | (Eregister evnt nm, sk) ->
+        ND.return $ Step_tau "Eregister" current_tid (
+          update_current_thread <| th_st with arena= Eskip; handlers KKK |>
+        )
+*)
+
+
+
+      | (pe, sk) ->
+          if is_empty_stack sk then
+            (* End of program execution *)
+            if is_value pe then
+              (* ND.mzero *) ND.return $ Step_done pe
+            else
+              ND.return $
+                Step_tau "value error" current_tid (SEU.fail (Illformed_program "found a non-value with empty stack"))
+          else if is_value pe then
+            ND.return $
+              Step_tau "value" current_tid (
+                SEU.runE (pop_stack sk) >>= fun (cont, sk') ->
+                match cont with
+                  | [] ->
+                      SEU.fail (Illformed_program "FOOO")
+                  | _ ->
+                      update_current_thread <| th_st with arena= apply_continuation cont pe; stack= push_empty_continuation sk' |>
+                end
+              )
+          else if is_pure pe then
+            ND.return $ Step_eval "value" current_tid (
+              SEU.runEU (core_eval file false pe) >>= fun pe' ->
+              update_current_thread <| th_st with arena= pe' |>
+            )
+          else
+            Boot.assert_false "(Boot.pp_core_expr pe)"
+      end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* BEGIN silly *)
+(* Dummy function doing nothing, but required to typecheck *)
+val     convert_expr: forall 'a. Core.expr 'a -> Core.expr core_run_annotation
+let rec convert_expr e =
+  match e with
+    | Eunit ->
+        Eunit
+    | Etrue ->
+        Etrue
+    | Efalse ->
+        Efalse
+    | Econst cst ->
+        Econst cst
+    | Elist pes ->
+        Elist (List.map convert_expr pes)
+    | Ectype ty ->
+        Ectype ty
+    | Esym sym ->
+        Esym sym
+    | Eimpl i ->
+        Eimpl i
+    | Etuple pes ->
+        Etuple (List.map convert_expr pes)
+    | Enot pe ->
+        Enot (convert_expr pe)
+    | Eop op pe1 pe2 ->
+        Eop op (convert_expr pe1) (convert_expr pe2)
+    | Ecall nm pes ->
+        Ecall nm (List.map convert_expr pes)
+    | Eoutput str ->
+        Eoutput str
+    | Eundef ub ->
+        Eundef ub
+    | Eerror str ->
+        Eerror str
+    | Eraise str ->
+        Eraise str
+(*
+    | Etry e str_es ->
+        Etry (convert_expr e) (List.map (fun (str, e) -> (str, convert_expr e)) str_es)
+*)
+    | Eregister evnt nm ->
+        Eregister evnt nm
+    | Eskip ->
+        Eskip
+    | Elet sym pe1 e2 ->
+        Elet sym (convert_expr pe1) (convert_expr e2)
+    | Eif pe1 e2 e3 ->
+        Eif (convert_expr pe1) (convert_expr e2) (convert_expr e3)
+    | Eproc _ nm pes ->
+        Eproc empty_annotation nm (List.map convert_expr pes)
+    | Eaction pact ->
+        Eaction (convert_paction pact)
+    | Eunseq es ->
+        Eunseq (List.map convert_expr es)
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (convert_expr e1) (convert_expr e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (convert_expr e1) (convert_expr e2)
+    | Easeq a b u ->
+        Easeq a (convert_action b) (convert_paction u)
+    | Eindet e ->
+        Eindet (convert_expr e)
+    | Ebound i e ->
+        Ebound i (convert_expr e)
+    | Esave k a_tys e ->
+        Esave k a_tys (convert_expr e)
+    | Erun _ k a_vs ->
+        Erun empty_annotation k (List.map (fun (a,v) -> (a, convert_expr v)) a_vs)
+    | Eret pe ->
+        Eret (convert_expr pe)
+    | End es ->
+        End (List.map convert_expr es)
+    | Epar es ->
+        Epar (List.map convert_expr es)
+    | Ewait tid ->
+        Ewait tid
+    | Eis_scalar pe ->
+        Eis_scalar (convert_expr pe)
+    | Eis_integer pe ->
+        Eis_integer (convert_expr pe)
+    | Eis_signed pe -> 
+        Eis_signed (convert_expr pe)
+    | Eis_unsigned pe ->
+        Eis_unsigned (convert_expr pe)
+  end
+
+and convert_paction pact =
+  match pact with
+    | Paction p act ->
+        Paction p (convert_action act)
+  end
+
+and convert_action act =
+  match act with
+    | Action _ act_ -> Action empty_annotation (convert_action_ act_)
+  end
+
+and convert_action_ act_ =
+  match act_ with
+    | Create ty al pref ->
+        Create (convert_expr ty) (convert_expr al) pref
+    | Alloc n al pref ->
+        Alloc (convert_expr n) (convert_expr al) pref
+    | Kill e ->
+        Kill (convert_expr e)
+    | Store ty o v mo ->
+        Store (convert_expr ty) (convert_expr o) (convert_expr v) mo
+    | Load ty o mo ->
+        Load (convert_expr ty) (convert_expr o) mo
+    | CompareExchangeStrong ty obj expected desired mo1 mo2 ->
+        CompareExchangeStrong (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
+    | CompareExchangeWeak ty obj expected desired mo1 mo2 ->
+        CompareExchangeWeak (convert_expr ty) (convert_expr obj) (convert_expr expected) (convert_expr desired) mo1 mo2
+    | Ptr ptr_act pes ->
+        Ptr ptr_act (List.map convert_expr pes)
+  end
+
+
+val convert_file: forall 'a. file 'a -> file core_run_annotation
+let convert_file file = <|
+  main=   file.main;
+  stdlib= Map.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.stdlib;
+  impl=   Map.map (function
+            | Def bty e       -> Def bty (convert_expr e)
+            | IFun bty args e -> IFun bty args (convert_expr e)
+          end) file.impl;
+  globs=  List.map (fun (_a, bTy, e) -> (_a, bTy, convert_expr e)) file.globs;
+  funs=   Map.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
+ |>
+(* END silly *)
+
+
+
+
+
+val initial_io_state: io_state
+let initial_io_state = <|
+  stdout= Dlist.nil;
+|>
+
+val initial_core_state: core_state
+let initial_core_state = <|
+  thread_states= [];
+  io= initial_io_state;
+  handlers= Map.empty;
+|>
+
+
+(*
+val init: Core.file core_run_annotation -> core_runM core_state
+let init file =
+  match Map.lookup file.main file.funs with
+    | Nothing ->
+        SEU.fail (Illformed_program "couldn't find the startup function")
+    | Just (_, _, expr) ->
+        SEU.return expr
+  end >>= fun expr ->
+  
+  SEU.runS (spawn_thread Nothing <|
+    arena= expr;
+    stack= push_empty_continuation empty_stack;
+    labels= Map.empty
+  |> initial_core_state) >>= fun (_, st') ->
+  
+  SEU.return st'
+*)
+
+
+
+val initial_core_run_state: core_run_state
+let initial_core_run_state = <|
+  tid_supply=    UniqueId.new_supply;
+  symbol_supply= UniqueId.new_supply;
+  aid_supply=    UniqueId.new_supply;
+  layout_state=  Mem.initial_memory_state;
+|>
