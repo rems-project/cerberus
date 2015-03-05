@@ -66,6 +66,13 @@ val assert_neq: symbolic -> symbolic -> t -> t
 let assert_neq symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Neq symb1 symb2 :: xs)
 
+val assert_lt: symbolic -> symbolic -> t -> t
+let assert_lt symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Lt symb1 symb2 :: xs)
+
+val assert_ge: symbolic -> symbolic -> t -> t
+let assert_ge symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Ge symb1 symb2 :: xs)
 
 
 

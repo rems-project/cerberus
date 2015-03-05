@@ -115,6 +115,7 @@ PPRINTERS_ML=\
   pp_std.ml \
   pp_symbol.ml \
   pp_cabs.ml pp_ail.ml pp_core_ctype.ml pp_core.ml pp_run.ml \
+  pp_cabs.mli pp_ail.mli \
   string_ail.ml string_core_ctype.ml string_core.ml string_core_run.ml \
   pp_cmm.ml
 

@@ -32,11 +32,11 @@ end
 
 val zeroAil': expression' unit
 let zeroAil' =
-  AilEconst (ConstantInteger (IntegerConstant 0 Octal Nothing))
+  AilEconst (ConstantInteger (IConstant 0 Octal Nothing))
 
 val oneAil': expression' unit
 let oneAil' =
-  AilEconst (ConstantInteger (IntegerConstant 1 Decimal Nothing))
+  AilEconst (ConstantInteger (IConstant 1 Decimal Nothing))
 
 val zeroAil: expression unit
 let zeroAil =
@@ -85,10 +85,12 @@ let rec inject_qualifiers qs = function
         (ATypes.no_qualifiers, ATypes.Pointer (AilTypesAux.combine_qualifiers ref_qs ref_qs') ref_ty')
   | ATypes.Atomic ty' ->
       (ATypes.no_qualifiers, ATypes.Atomic (snd $ inject_qualifiers qs ty'))
-  | ATypes.Struct _ _ ->
-      Boot.assert_false "Cabs_to_ail.inject_qualifiers should NOT be called on a Struct"
-  | ATypes.Union _ _ ->
-      Boot.assert_false "Cabs_to_ail.inject_qualifiers should NOT be called on a Union"
+
+(* TODO: not sure at all about struct/union *)
+  | (ATypes.Struct _ as ty) ->
+      (qs, ty)
+  | (ATypes.Union _ as ty) ->
+      (qs, ty)
   | ty ->
       (qs, ty)
 end
@@ -335,7 +337,8 @@ val desugar_generic_association:        cabs_generic_association -> E.t (generic
 val desugar_specifiers:                 declaration_context -> E.scope -> specifiers -> E.t unit (* TODO *)
 val desugar_init_declarator:            ATypes.ctype -> list storage_class_specifier -> init_declarator ->
                                         E.t (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit))
-val desugar_struct_declaration:         struct_declaration -> E.t (list (cabs_identifier * ATypes.ctype)) (* TODO *)
+val desugar_struct_declaration:         struct_declaration -> E.t (list (cabs_identifier * ATypes.ctype))
+
 val desugar_struct_declarator:          struct_declarator -> E.t (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) (* TODO *)
 val desugar_enumerator:                 enumerator -> E.t unit (* TODO *)
 val desugar_alignment_specifier:        alignment_specifier -> E.t unit (* TODO *)
@@ -421,8 +424,8 @@ val translate_integer_constant: cabs_integer_constant -> integerConstant
 let translate_integer_constant (str, suff_opt) =
   let (basis, n) = Decode.decode_integer_constant str in
   match suff_opt with
-    | Just suff -> IntegerConstant n basis (Just (translate_integer_suffix suff))
-    | Nothing   -> IntegerConstant n basis Nothing
+    | Just suff -> IConstant n basis (Just (translate_integer_suffix suff))
+    | Nothing   -> IConstant n basis Nothing
   end
 
 
@@ -633,7 +636,7 @@ let register_simple_enumerators ty enums =
       let expr =
         let basis = if n = 0 then Octal else Decimal in
         AilEannot ty (
-          AnnotatedExpression () (AilEconst (ConstantInteger (IntegerConstant (integerFromNat n) basis Nothing)))
+          AnnotatedExpression () (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
         ) in
       
       E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
@@ -785,12 +788,37 @@ _STD "§6.7.2#2, sentence 1"
 _STD "§6.7.2#2, sentence 2 (`void' case)"
       E.return (ATypes.no_qualifiers, ATypes.Void)
   
-  | [TSpec_struct (Just tag_ident) Nothing] ->
+  | [TSpec_struct Nothing Nothing] ->
+      Boot.assert_false "WIP: TSpec_struct Nothing, Nothing"
+  
+  | [TSpec_struct tag_ident_opt sdecls_opt] ->
       (* §6.7.3.2#7 *)
-      E.register_identifier tag_ident E.Namespace_tag E.Kind_tag [(* TODO: check *)] >>= fun (_, tag_sym) ->
-      (* TODO: bogus? *)
-      E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym [])
+      E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
+      
+      match sdecls_opt with
+        | Just sdecls ->
+            E.mapM desugar_struct_declaration sdecls >>= fun xs ->
+            (* TODO: hum, a bit silly here *)
+            (* TODO: not silly ==> catch redefinitions *)
+            E.register_tag_definition Loc.unknown tag_sym (E.Struct_definition $ List.concat xs) >>
+            E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+(*
+            E.resolve_tag_definition tag_sym >>= function
+              | E.Struct_definition xs ->
+                  (* TODO: qs? *)
+                  E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym xs)
+              | _ ->
+                  Boot.assert_false "desugar_type_specifiers: expecting a Struct_declarations"
+            end
+*)
 
+        | Nothing ->
+            (* TODO: bogus? *)
+            E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+      end
+  
+  
+  
 (*
       (* NOTE: in this case the struct type has already been declared *)
       E.resolve_identifier ident E.Namespace_tag >>= function
@@ -841,12 +869,7 @@ and struct_declaration =
 
 
 *)
-
-  | [TSpec_struct _ _] ->
-      Boot.assert_false "WIP: TSpec_struct"
   
-  | [TSpec_union _ _] ->
-      Boot.assert_false "WIP: TSpec_union"
   
   | [TSpec_Atomic tyname] ->
       desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1168,6 +1191,7 @@ and desugar_init_declarator _ty scs idecltor =
 
 
 
+(* val desugar_struct_declaration:         struct_declaration -> E.t (list (cabs_identifier * ATypes.ctype)) *)
 and desugar_struct_declaration struct_decl =
   match struct_decl with
     | Struct_declaration specs qs sdecltors ->
@@ -1177,8 +1201,10 @@ and desugar_struct_declaration struct_decl =
           desugar_struct_declarator sdecltor >>= fun (ident, qs, mk_type) ->
           E.return (ident, mk_type ty)
         ) sdecltors
-    | Struct_assert _ ->
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "Struct_assert")
+    
+    | Struct_assert sa_decl ->
+        desugar_and_register_static_assert_declaration sa_decl >>
+        E.return []
   end
 
 and desugar_struct_declarator struct_decltor =
@@ -1448,7 +1474,7 @@ and static_thread_implicit_initializer ty =
         ConstantNull
     | ATypes.Basic _ ->
         if AilTypesAux.is_arithmetic ty then
-          ConstantInteger (IntegerConstant 0 Octal Nothing)
+          ConstantInteger (IConstant 0 Octal Nothing)
         else
           Boot.assert_false "type error"
     | ATypes.Array elem_ty n_opt ->
@@ -1518,7 +1544,7 @@ and wip_desugar_initializer_ sd current_ty = function
                     desugar_expression e               >>= fun d_e ->
                     is_integer_constant_expression d_e >>= function
                       | true ->
-                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IntegerConstant j _ _) ->
+                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IConstant j _ _) ->
                           wip_desugar_initializer_ sd elem_ty init               >>= fun d_e                     ->
                           
                           match compare j i with
@@ -1527,7 +1553,7 @@ and wip_desugar_initializer_ sd current_ty = function
                             | EQ ->
                                 E.return (i+1, acc)
                             | GT ->
-                                E.return (j+1, d_e :: (Global.replicate_list implicit (natFromInteger $ j-i)) ++ acc)
+                                E.return (j+1, Just d_e :: (Global.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
                           end
                       
                       | false ->
@@ -1538,7 +1564,7 @@ and wip_desugar_initializer_ sd current_ty = function
 *)
                 | Nothing ->
                     wip_desugar_initializer_ sd elem_ty init >>= fun cst ->
-                    E.return (i+1, cst :: acc)
+                    E.return (i+1, Just cst :: acc)
                 | _ ->
                     (* Multi-array designator *)
                     E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
@@ -1547,10 +1573,26 @@ and wip_desugar_initializer_ sd current_ty = function
             E.return $
               AnnotatedExpression ()
                 (* TODO: should use ConstantArray when possible *)
-                (AilEarray (List.reverse (Global.replicate_list implicit (natFromInteger n - List.length xs) ++ xs)))
+                (AilEarray elem_ty (List.reverse (Global.replicate_list (Just implicit) (natFromInteger n - List.length xs) ++ xs)))
             
+        | ATypes.Struct tag ->
 (*
-        | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
+            E.resolve_tag_definition tag >>= function
+              | E.Struct_definition ident_tys ->
+                  let initial_assoc = List.map (fun (z, _) -> (z, Nothing)) ident_tys in
+                  E.foldlM (fun (desigs_opt, init) (cursor, assoc) ->
+                    match desigs_opt with
+                      | Just [Desig_member]
+                    end
+                  ) desigs_opt_inits (List.map fst ident_tys, initial_assoc)
+              | _ ->
+                  Boot.assert_false "ERROR, todo msg"
+            end >>
+*)
+            Boot.assert_false "WIP"
+
+
+(*
         | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
 *)
         | ATypes.Array elem_ty Nothing ->
@@ -1560,7 +1602,7 @@ and wip_desugar_initializer_ sd current_ty = function
         | _ ->
             (* STD §6.7.9#11, sentence 1 *)
             match desigs_opt_inits with
-              (* this the "optionnally enclosed in braces" case from (§6.7.9#11, sentence 1) *)
+              (* this the "optionaly enclosed in braces" case from (§6.7.9#11, sentence 1) *)
               | [(Nothing, init)] ->
                   wip_desugar_initializer_ sd current_ty init
               | _ ->
@@ -2175,6 +2217,7 @@ let desugar_and_register_external_declaration edecl =
               (if base_qs.ATypes.const then "FOUND CONST" else "DIDN'T FIND CONST") in (* DEBUG *)
             
             
+            let _ = Boot.output_string $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
             let (qs', ty') = inject_qualifiers base_qs ty in
             if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
               Boot.assert_false "TODO: desugar_declaration_base: is this case legal?"

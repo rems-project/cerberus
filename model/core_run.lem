@@ -1,4 +1,5 @@
-open import Pervasives String_extra Global Core Core_ctype Core_aux
+
+open import Pervasives String_extra Global Core Core_ctype Core_aux Show Show_extra
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
@@ -91,20 +92,26 @@ val     core_eval: Core.file core_run_annotation -> bool -> Core.expr core_run_a
 let rec core_eval file inside_if expr =
   if is_value expr then
     match expr with
-      | Econst (Mem.MV_integer symb) ->
+      | Econst (Mem.MVinteger symb) ->
           EU.return match Symbolic.reduce symb with
             | Symbolic.SYMBtrue ->
                 Etrue
             | Symbolic.SYMBfalse ->
                 Efalse
             | symb' ->
-                Econst (Mem.MV_integer symb')
+                Econst (Mem.MVinteger symb')
           end
       | _ ->
           EU.return expr
     end
   else
     match expr with
+      | Econs pe (Elist pes) ->
+          EU.return (Elist $ pe :: pes)
+      | Econs pe1 pe2 ->
+          core_eval file inside_if pe2 >>= fun pe2' ->
+          EU.return (Econs pe1 pe2')
+      
       | Elist pes ->
           EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
           EU.return (Elist pes')
@@ -145,74 +152,74 @@ let rec core_eval file inside_if expr =
           core_eval file inside_if pe2 >>= fun pe2' ->
           if is_value pe1' && is_value pe2' then
             match (binop, pe1', pe2') with
-                | (OpAdd, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 + n2))))
-                | (OpSub, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 - n2))))
-                | (OpMul, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 * n2))))
-                | (OpDiv, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 / n2))))
-                | (OpMod, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 mod n2))))
-                | (OpExp, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                | (OpAdd, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 + n2))))
+                | (OpSub, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 - n2))))
+                | (OpMul, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 * n2))))
+                | (OpDiv, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 / n2))))
+                | (OpMod, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 mod n2))))
+                | (OpExp, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
                     (* TODO: if the natFromInteger doesn't work, you are far gone anyway *)
-                    EU.return (Econst (Mem.MV_integer (Symbolic.SYMBconst (n1 ** natFromInteger n2))))
+                    EU.return (Econst (Mem.MVinteger (Symbolic.SYMBconst (n1 ** natFromInteger n2))))
 
 (*
-                | (OpExp, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Exp symb1 symb2)))
+                | (OpExp, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.operator Symbolic.Exp symb1 symb2)))
 *)
 (*
-                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
-                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpEq, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpLt, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Eq symb1 symb2)))
 *)
 
                 | (OpEq, Ectype ty1, Ectype ty2) ->
                     EU.return (if ty1 = ty2 then Etrue else Efalse)
                 
-                | (OpEq, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                | (OpEq, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
                     EU.return (if n1 = n2 then Etrue else Efalse)
-                | (OpLt, Econst (Mem.MV_integer (Symbolic.SYMBconst n1)), Econst (Mem.MV_integer (Symbolic.SYMBconst n2))) ->
+                | (OpLt, Econst (Mem.MVinteger (Symbolic.SYMBconst n1)), Econst (Mem.MVinteger (Symbolic.SYMBconst n2))) ->
                     EU.return (if n1 < n2 then Etrue else Efalse)
                 
-                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpEq, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with
                       | Left true ->
                           EU.return Etrue
                       | Left false ->
                           EU.return Efalse
                       | Right (symb1', symb2') ->
-                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1' symb2')))
+                          EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Eq symb1' symb2')))
                     end
 
-                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpLt, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_lt symb1 symb2 with
                       | Left true ->
                           EU.return Etrue
                       | Left false ->
                           EU.return Efalse
                       | Right (symb1', symb2') ->
-                          EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Lt symb1' symb2')))
+                          EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Lt symb1' symb2')))
                     end
 
 
 (* TODO: check *)
-                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Add symb1 symb2)))
-                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Sub symb1 symb2)))
-                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mul symb1 symb2)))
-                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Div symb1 symb2)))
-                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mod symb1 symb2)))
+                | (OpAdd, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Mod symb1 symb2)))
 
 (*
-                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpEq, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with
                       | Left true ->
                           EU.return Etrue
@@ -224,7 +231,7 @@ let rec core_eval file inside_if expr =
                             EU.add_equation (Constraints.assert_neq symb1' symb2') >> EU.return Efalse
                           ]
                     end
-                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpLt, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_lt symb1 symb2 with
                       | Left true ->
                           EU.return Etrue
@@ -250,7 +257,7 @@ let rec core_eval file inside_if expr =
                     EU.return Efalse
 
 
-                | (op, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (op, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     let op = match op with
                       | OpAdd -> Symbolic.Add
                       | OpSub -> Symbolic.Sub
@@ -263,7 +270,7 @@ let rec core_eval file inside_if expr =
                       | OpAnd -> Symbolic.And
                       | OpOr  -> Symbolic.Or
                     end in
-                    EU.return (Econst (Mem.MV_integer (Symbolic.make_op op symb1 symb2)))
+                    EU.return (Econst (Mem.MVinteger (Symbolic.make_op op symb1 symb2)))
 
 
                 | (_, _, _) ->
@@ -279,27 +286,27 @@ let rec core_eval file inside_if expr =
           core_eval file pe2 >>= fun pe2' ->
           if is_value pe1' && is_value pe2' then
             match (binop, pe1', pe2') with
-                | (OpAdd, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Add symb1 symb2)))
-                | (OpSub, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Sub symb1 symb2)))
-                | (OpMul, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mul symb1 symb2)))
-                | (OpDiv, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Div symb1 symb2)))
-                | (OpMod, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Mod symb1 symb2)))
+                | (OpAdd, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Add symb1 symb2)))
+                | (OpSub, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Sub symb1 symb2)))
+                | (OpMul, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Mul symb1 symb2)))
+                | (OpDiv, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Div symb1 symb2)))
+                | (OpMod, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Mod symb1 symb2)))
 (*
-                | (OpExp, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.operator Symbolic.Exp symb1 symb2)))
+                | (OpExp, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.operator Symbolic.Exp symb1 symb2)))
 *)
-                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
-                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
-                    NDEU.return (Econst (Mem.MV_integer (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpEq, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Eq symb1 symb2)))
+                | (OpLt, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
+                    NDEU.return (Econst (Mem.MVinteger (Symbolic.make_op Symbolic.Eq symb1 symb2)))
 
 (*
-                | (OpEq, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpEq, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_eq symb1 symb2 with
                       | Left true ->
                           NDEU.return Etrue
@@ -313,7 +320,7 @@ let rec core_eval file inside_if expr =
                     end
                 | (OpEq, Ectype ty1, Ectype ty2) ->
                     NDEU.return (if ty1 = ty2 then Etrue else Efalse)
-                | (OpLt, Econst (Mem.MV_integer symb1), Econst (Mem.MV_integer symb2)) ->
+                | (OpLt, Econst (Mem.MVinteger symb1), Econst (Mem.MVinteger symb2)) ->
                     match Symbolic.try_lt symb1 symb2 with
                       | Left true ->
                           NDEU.return Etrue
@@ -332,7 +339,7 @@ let rec core_eval file inside_if expr =
                     NDEU.return Etrue
                 | (OpOr, _, Etrue) ->
                     NDEU.return Etrue
-                | (OpOr, Econst (Mem.MV_)
+                | (OpOr, Econst (Mem.MV)
 
                 | (OpAnd, Etrue, Etrue ) ->
                     NDEU.return Etrue
@@ -358,9 +365,105 @@ let rec core_eval file inside_if expr =
                 | Sym f -> Symbolic.SYMBfsym f
                 | Impl i -> Symbolic.SYMBimpl i
               end in
-              EU.return (Econst (Mem.MV_integer (Symbolic.make_call symb_nm (List.map symbolify pes'))))
+              EU.return (Econst (Mem.MVinteger (Symbolic.make_call symb_nm (List.map symbolify pes'))))
           else
             EU.return (Ecall nm pes')
+      
+      (* TODO: think about this *)
+      | Eshift pe sh_path ->
+          match pe with
+            | Econst mem_val ->
+                match Mem.ptr_from_mem_value mem_val with
+                  | Just ptr_val ->
+                      (* evaluating the shift_path indices, which must be pure integer expressions *)
+                      EU.mapM (fun (ty, sh_pe) ->
+                        core_eval file inside_if sh_pe >>= fun sh_pe' ->
+                        EU.return (ty, sh_pe')
+                      ) sh_path >>= fun sh_path' ->
+                      if List.all (fun (_, pe) -> is_value pe) sh_path' then
+                        
+                        (* TODO: this is partial, and fails on ill-typed paths *)
+                        let sh_path' = List.map (fun (ty, Econst mem_val) ->
+                          match Mem.symb_from_mem_value mem_val with
+                            | Just symb ->
+                                (ty, symb)
+                            | Nothing ->
+                                Boot.assert_false $ "Eshift, something wrong inside a path: " ^ Boot.pp_core_expr (Eshift pe sh_path)
+                          end
+                        ) sh_path' in
+                        
+                        EU.return $
+                          Econst (Mem.mk_pointer (Mem.shift_pointer_value ptr_val sh_path'))
+                      else
+                        EU.return (Eshift pe sh_path')
+                  | Nothing ->
+                      EU.fail (Illformed_program "Eshift: first operand was a non-pointer memory value")
+                end
+            | _ ->
+                if is_value pe then
+                  EU.fail (Illformed_program "Eshift: first operand didn't reduce to an Econst")
+                else
+                  core_eval file inside_if pe >>= fun pe' ->
+                  EU.return (Eshift pe' sh_path)
+          end
+(*
+          core_eval file inside_if pe >>= function
+            (* TODO: shouldn't break the abstraction of Mem like that ... *)
+            | Econst (Mem.MVpointer ptr_val) ->
+                (* evaluating the shift_path indices, which must be pure integer expressions *)
+                EU.mapM (fun (ty, pe) ->
+                  EU.bind (core_eval file inside_if pe) (fun pe' ->
+                  EU.return (ty, pe'))
+                ) >>= fun sh_path' ->
+
+
+                Boot.assert_false "WIP: EU.return $ Econst (Mem.mk_pointer (Mem.shift_pointer_value ptr_val sh_path))"
+(*
+(Mem.mk_pointer (
+                  match path with
+                    | ShiftArray n ->
+                        Mem.Pointer_shift ptr_val n
+                    | ShiftMember tag_sym ident ->
+                        Mem.Pointer_memberof ptr_val tag_sym ident
+                  end
+                )))
+*)
+            | pe' ->
+                if is_value pe' then
+                  EU.fail (Illformed_program "ill-typed Eshift")
+                else
+                  EU.return (Eshift pe' sh_path)
+          end
+
+*)
+    
+    | Ecase pe f_void f_basic f_array f_fun f_ptr f_atom f_struct f_union f_builtin ->
+        if is_value pe then
+          match pe with
+            | Ectype Void ->
+                EU.return (Ecall f_void [])
+            | Ectype ((Basic _) as ty) ->
+                EU.return (Ecall f_basic [Ectype ty])
+            | Ectype (Array elem_ty (Just n)) ->
+                (* TODO: Nothing case *)
+                EU.return (Ecall f_array [Ectype elem_ty; Econst (Mem.mk_integer n)])
+            | Ectype (Pointer qs ref_ty) ->
+                (* TODO: do something about qualifiers *)
+                EU.return (Ecall f_ptr [Ectype ref_ty])
+            | Ectype (Atomic ty) ->
+                (* TODO: do something about qualifiers *)
+                EU.return (Ecall f_atom [Ectype ty])
+(*
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Struct of struct_tag
+ | Union  of union_tag
+ | Builtin of string
+*)
+
+          end
+        else
+          core_eval file inside_if pe >>= fun pe' ->
+          EU.return (Ecase pe' f_void f_basic f_array f_fun f_ptr f_atom f_struct f_union f_builtin)
       
       | Eundef ub ->
           Exception.return (Undefined.undef [ub])
@@ -398,12 +501,12 @@ let rec core_eval file inside_if expr =
               core_eval file inside_if pe2
           | Efalse ->
               core_eval file inside_if pe3
-          | (Econst (Mem.MV_integer symb) as pe1') ->
+          | (Econst (Mem.MVinteger symb) as pe1') ->
               if is_value pe2 then
                 if is_value pe3 then
                   match (pe2, pe3) with
-                    | (Econst (Mem.MV_integer symb2), Econst (Mem.MV_integer symb3)) ->
-                        EU.return (Econst (Mem.MV_integer (Symbolic.make_ite symb symb2 symb3)))
+                    | (Econst (Mem.MVinteger symb2), Econst (Mem.MVinteger symb3)) ->
+                        EU.return (Econst (Mem.MVinteger (Symbolic.make_ite symb symb2 symb3)))
                     | _ ->
                         EU.fail (Illformed_program "ill-typed Eif")
                   end
@@ -513,13 +616,11 @@ type core_run_state = <|
   tid_supply:    UniqueId.supply thread_id;
   symbol_supply: UniqueId.supply Symbol.t;
   aid_supply:    UniqueId.supply action_id;
-  layout_state:  Mem.memory_state;
+  layout_state:  Mem.mem_state;
+  
+  (* DEBUG *)
+  step_counter: nat;
 |>
-
-
-
-
-
 
 
 
@@ -530,6 +631,13 @@ type core_runM 'a = SEU.t 'a core_run_state core_run_error
 
 
 
+val increment_step_counter: core_runM unit
+let increment_step_counter =
+  SEU.runS (
+    State.update (fun run_st ->
+      <| run_st with step_counter= run_st.step_counter + 1 |>
+    )
+  )
 
 
 
@@ -726,6 +834,8 @@ let rec hoist_negatives expr =
         State.return expr
     | Elist _ ->
         State.return expr
+    | Econs _ _ ->
+        State.return expr
     | Ectype _ ->
         State.return expr
     | Esym _ ->
@@ -846,10 +956,10 @@ open SEU.Operators
 val printf_hack: core_state -> list (expr core_run_annotation) -> ND.t core_step
 let printf_hack core_st pes =
   let mk_string = function
-    | Mem.MV_array vs ->
+    | Mem.MVarray vs ->
         let _ = Boot.output_string ("KKK> " ^ string_of_natural (naturalFromNat (List.length vs))) in (* DEBUG *)
         String.toString $ List.map (function
-          | Mem.MV_integer (Symbolic.SYMBconst n) ->
+          | Mem.MVinteger (Symbolic.SYMBconst n) ->
               Decode.encode_character_constant n
           | _ ->
               Boot.assert_false "printf_hack: one of the element of the format array was invalid"
@@ -858,9 +968,9 @@ let printf_hack core_st pes =
         Boot.assert_false "printf_hack: the format argument was not an array"
   end in
   match pes with
-    | [Econst (Mem.MV_pointer ptr1)] ->
+    | [Econst (Mem.MVpointer ptr1)] ->
         ND.return $ Step_output (
-          runMem (Mem.load ptr1)       >>= fun (Mem.MV_pointer ptr_format) ->
+          runMem (Mem.load ptr1)       >>= fun (Mem.MVpointer ptr_format) ->
           runMem (Mem.load ptr_format) >>= fun format                      ->
           SEU.return (mk_string format, core_st)
         )
@@ -929,7 +1039,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
                   )
-           | Econst (Mem.MV_integer (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
+           | Econst (Mem.MVinteger (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
                ND.msum [
                  ND.bind (ND.add_constraint (Constraints.assert_eq symb1 symb2)) (fun _ ->
                  ND.return (
@@ -940,6 +1050,24 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                  ));
                  
                  ND.bind (ND.add_constraint (Constraints.assert_neq symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic else)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                 ))
+               ]
+           | Econst (Mem.MVinteger (Symbolic.SYMBop Symbolic.Lt symb1 symb2)) ->
+               ND.msum [
+                 ND.bind (ND.add_constraint (Constraints.assert_lt symb1 symb2)) (fun _ ->
+                 ND.return (
+                   Step_tau "Eif (symbolic then)" current_tid $
+                     let labeled_conts =
+                       Map.map (fun (a_tys, e) -> (a_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                     update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                 ));
+                 
+                 ND.bind (ND.add_constraint (Constraints.assert_ge symb1 symb2)) (fun _ ->
                  ND.return (
                    Step_tau "Eif (symbolic else)" current_tid $
                      let labeled_conts =
@@ -978,44 +1106,49 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                       (* TODO: not doing the signal and impl-def stuff for now *)
                       Boot.assert_false "WIP, abort()"
                   
+(*
                   | "printf" ->
+                      
+*)
+                  
+                  | "printf_internal" ->
                       (* TODO: hack, should use output.lem instead *)
                       let mk_string = function
-                        | Mem.MV_array vs ->
-                            let _ = Boot.output_string ("KKK> " ^ string_of_natural (naturalFromNat (List.length vs))) in (* DEBUG *)
+                        | Mem.MVarray vs ->
+                            let _ = Boot.output_string ("KKK> " ^ show (List.length vs)) in (* DEBUG *)
                             String.toString $ List.map (function
-                              | Mem.MV_integer (Symbolic.SYMBconst n) ->
+                              | Mem.MVinteger (Symbolic.SYMBconst n) ->
                                   Decode.encode_character_constant n
                               | _ ->
                                   Boot.assert_false "printf_hack: one of the element of the format array was invalid"
-                            end) (takeWhile (fun (Mem.MV_integer (Symbolic.SYMBconst n)) -> n <> 0) vs)
-                        | _ ->
-                            Boot.assert_false "printf_hack: the format argument was not an array"
+                            end) (takeWhile (fun (Mem.MVinteger (Symbolic.SYMBconst n)) -> n <> 0) vs)
+                        | mem_val ->
+                            Boot.assert_false ("printf_hack: the format argument was not an array >> " ^ show mem_val)
                       end in
                       
                       let format_ty = Pointer AilTypes.no_qualifiers char in
                       
                       match pes with
-                        | [Econst (Mem.MV_pointer ptr1)] ->
+                        | [Econst (Mem.MVpointer ptr1)] ->
                             ND.return $ Step_output (
-                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              runMem (Mem.load format_ty ptr1) >>= fun (Mem.MVpointer ptr_format) ->
                               (* TODO: this should be an array of the proper size of char !!! *)
-                              runMem (Mem.load char ptr_format) >>= fun format                      ->
+                              runMem (Mem.load char ptr_format) >>= fun format ->
                               (* TODO: should be the number of printed chars *)
                               let str = mk_string format in
                               SEU.return (str, update_thread_state current_tid <| th_st with
                                 arena= Econst (Mem.mk_integer 0)
                               |> st)
                             )
-                        | Econst (Mem.MV_pointer ptr1) :: args ->
+                        | Econst (Mem.MVpointer ptr1) :: args ->
                             ND.return $ Step_output (
-                              runMem (Mem.load format_ty ptr1)      >>= fun (Mem.MV_pointer ptr_format) ->
+                              runMem (Mem.load format_ty ptr1) >>= fun (Mem.MVpointer ptr_format) ->
                               (* TODO: this should be an array of the proper size of char !!! *)
-                              runMem (Mem.load char ptr_format) >>= fun format                      ->
-                              SEU.foldM (fun acc (Econst (Mem.MV_pointer ptr)) ->
+                              runMem (Mem.load char ptr_format) >>= fun format ->
+                              SEU.foldM (fun acc (Econst (Mem.MVpointer ptr)) ->
                                 (* TODO: the ctype is obviously wrong here *)
                                 runMem (Mem.load signed_int ptr) >>= fun mem_val ->
-                                SEU.return (show mem_val :: acc)
+                                SEU.return (Mem.prettyStringFromMem_value mem_val :: acc)
                               ) [] args >>= fun arg_strs_rev ->
                               
 (*
@@ -1063,8 +1196,13 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
 
 
     | (Eaction (Paction p (Action annots act)), sk) ->
-        let sb_before = Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
-        let dd_before = {(* TODO *)} in
+        let sb_before =
+          (* only keep the actions from the current thread *)
+          Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
+        
+        let dd_before =
+          {(* TODO *)} in
+        
         let asw_before =
           if has_sbBefore_on_thread current_tid annots then
             {}
@@ -1086,7 +1224,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     | Ectype ty ->
                           Step_tau "Create" current_tid (
                             runMem (Mem.allocate_object current_tid pref ty) >>= fun ptr_val    ->
-                            update_current_thread <| th_st with arena= Econst (Mem.MV_pointer ptr_val) |>
+                            update_current_thread <| th_st with arena= Econst (Mem.MVpointer ptr_val) |>
                           )
                         (* Step_action_request "create" current_tid (
                           SEU.runS fresh_action_id                    >>= fun create_aid ->
@@ -1136,7 +1274,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
               if is_value ptr_pe then
                 ND.return $
                   match ptr_pe with
-                    | Econst (Mem.MV_pointer ptr_val) ->
+                    | Econst (Mem.MVpointer ptr_val) ->
                         (* TODO *)
                         Step_tau "kill TODO" current_tid (
                           update_current_thread <| th_st with arena= Eskip |>
@@ -1159,7 +1297,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   if is_value val_pe then
                     ND.return $
                       match (ty_pe, ptr_pe, val_pe) with
-                        | (Ectype ty, Econst (Mem.MV_pointer ptr_val), Econst mem_val) ->
+                        | (Ectype ty, Econst (Mem.MVpointer ptr_val), Econst mem_val) ->
                             Step_action_request "store" current_tid (
                               SEU.runS fresh_action_id >>= fun store_aid ->
                               SEU.runS fresh_symbol    >>= fun val_sym  ->
@@ -1203,11 +1341,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                 if is_value ptr_pe then
                   ND.return $
                     match (ty_pe, ptr_pe) with
-                      | (Ectype ty, Econst (Mem.MV_pointer ptr_val)) ->
+                      | (Ectype ty, Econst (Mem.MVpointer ptr_val)) ->
                           Step_action_request "load" current_tid (
                             SEU.runS fresh_action_id >>= fun load_aid ->
                             SEU.runS fresh_symbol    >>= fun val_sym  ->
-                            let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                            let mem_val = Mem.MVinteger (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
                             SEU.return $
                               LoadRequest sb_before dd_before asw_before
                                           load_aid current_tid mo ty ptr_val mem_val
@@ -1243,11 +1381,11 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     if is_value ptr2_pe then
                       if is_value val_pe then
                         match (ty_pe, ptr1_pe, ptr2_pe, val_pe) with
-                          | (Ectype ty, Econst (Mem.MV_pointer ptr_val1), Econst (Mem.MV_pointer ptr_val2), Econst mem_val) ->
+                          | (Ectype ty, Econst (Mem.MVpointer ptr_val1), Econst (Mem.MVpointer ptr_val2), Econst mem_val) ->
                               Step_action_request "compare_exchange_strong" current_tid (
                                 SEU.runS fresh_action_id >>= fun load_aid ->
                                 SEU.runS fresh_symbol    >>= fun val_sym  ->
-                                let mem_val = Mem.MV_integer (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
+                                let mem_val = Mem.MVinteger (Symbolic.SYMBsym Symbolic.SYMBint val_sym) (* (Symbolic.constant 0) *) in
                                 SEU.return $
                                   LoadRequest sb_before dd_before asw_before
                                           load_aid current_tid mo ty ptr_val mem_val
@@ -1293,11 +1431,12 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
             | CompareExchangeWeak of expr 'a * expr 'a * expr 'a * expr 'a * Cmm.memory_order * Cmm.memory_order
 *)
 
+(* WIP: commented since new MLM
           | Ptr ptr_act pes ->
               if all is_value pes then
                 ND.return $ match (ptr_act, pes) with
                   (* TODO: hack on the integer *)
-                  | (PtrShift, [Ectype ty; Econst (Mem.MV_pointer ptr_val); Econst (Mem.MV_integer (Symbolic.SYMBconst n))]) ->
+                  | (PtrShift, [Ectype ty; Econst (Mem.MVpointer ptr_val); Econst (Mem.MVinteger (Symbolic.SYMBconst n))]) ->
                       Step_tau "Pointer shift" current_tid (
                         runMem (Mem.pointer_shift ty ptr_val n) >>= fun ptr_val' ->
                         update_current_thread <| th_st with arena= Econst (Mem.mk_pointer ptr_val') |>
@@ -1319,6 +1458,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     Eaction (Paction p (Action annots (Ptr ptr_act pes')))
                   |>
                 )
+*)
           end
       
     | (Eunseq es, sk) ->
@@ -1487,7 +1627,7 @@ else
     
     (* TODO: this is partial *)
     | (Esave k a_tys e, Stack_cons cont _) ->
-        let _ = Boot.output_string ("SAVING " ^ Boot.pp_core_expr (Esym k : expr unit) ^ " ==> " ^ Boot.pp_core_expr (apply_continuation cont e)) in
+(*        let _ = Boot.output_string ("SAVING " ^ Boot.pp_core_expr (Esym k : expr unit) ^ " ==> " ^ Boot.pp_core_expr (apply_continuation cont e)) in *)
         ND.return $ Step_tau "Esave" current_tid (
           update_current_thread <| th_st with arena= e; labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels |>
         )
@@ -1507,7 +1647,7 @@ else
                 end
           end >>= fun (a_tys, e_cont) ->
           (* TODO: debug *)
-          let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr e_cont) in
+(*          let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr e_cont) in *)
           
           (* we have to create the objects which are visible at the level of the save but not from the run *)
           let (create_as, create_tys) = unzip $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) a_vs)) a_tys in
@@ -1613,7 +1753,29 @@ else
 *)
 
 
-
+      | (Earray xs, _) ->
+          let ys_opt = List.foldr (fun x acc ->
+            match acc with
+              | Nothing ->
+                  Nothing
+              | Just acc ->
+                  match x with
+                    | Left mem_val ->
+                        Just (mem_val :: acc)
+                    | _ ->
+                        Nothing
+                  end
+            end) (Just []) xs in
+          
+          ND.return $ match ys_opt with
+            | Just ys ->
+                Step_tau "Earray" current_tid
+                  (update_current_thread <| th_st with arena= Econst (Mem.mk_array ys)  |>)
+            | Nothing ->
+                Step_tau "Earray error" current_tid
+                  (SEU.fail (Illformed_program "the elements of an array weren't all substituted."))
+          end
+      
       | (pe, sk) ->
           if is_empty_stack sk then
             (* End of program execution *)
@@ -1677,6 +1839,8 @@ let rec convert_expr e =
         Econst cst
     | Elist pes ->
         Elist (List.map convert_expr pes)
+    | Econs pe1 pe2 ->
+        Econs (convert_expr pe1) (convert_expr pe2)
     | Ectype ty ->
         Ectype ty
     | Esym sym ->
@@ -1691,6 +1855,12 @@ let rec convert_expr e =
         Eop op (convert_expr pe1) (convert_expr pe2)
     | Ecall nm pes ->
         Ecall nm (List.map convert_expr pes)
+    | Earray xs ->
+        Earray xs
+    | Eshift pe path ->
+        Eshift (convert_expr pe) (List.map (second convert_expr) path)
+    | Ecase pe f_void f_basic f_array f_fun f_ptr f_atom f_struct f_union f_builtin ->
+        Ecase (convert_expr pe) f_void f_basic f_array f_fun f_ptr f_atom f_struct f_union f_builtin
     | Eoutput str ->
         Eoutput str
     | Eundef ub ->
@@ -1790,7 +1960,8 @@ let convert_file file = <|
             | IFun bty args e -> IFun bty args (convert_expr e)
           end) file.impl;
   globs=  List.map (fun (_a, bTy, e) -> (_a, bTy, convert_expr e)) file.globs;
-  funs=   Map.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs
+  funs=   Map.map (fun (ty_ret, args, fbody) -> (ty_ret, args, convert_expr fbody)) file.funs;
+  tagDefinitions= file.tagDefinitions
  |>
 (* END silly *)
 
@@ -1832,10 +2003,12 @@ let init file =
 
 
 
-val initial_core_run_state: core_run_state
-let initial_core_run_state = <|
+val initial_core_run_state: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> core_run_state
+let initial_core_run_state tagDefs = <|
   tid_supply=    UniqueId.new_supply;
   symbol_supply= UniqueId.new_supply;
   aid_supply=    UniqueId.new_supply;
-  layout_state=  Mem.initial_memory_state;
+  layout_state=  Mem.initial_mem_stateWithTagDefinitions tagDefs;
+  
+  step_counter= 0;
 |>

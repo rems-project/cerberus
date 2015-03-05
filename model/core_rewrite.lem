@@ -540,7 +540,7 @@ let rec remove_conv_int expr =
         let pes' = List.map remove_conv_int pes in
         match (nm, pes') with
           (* TODO: hack !!!!!!!!! *)
-          | (Sym (Symbol.Symbol _ (Just "conv_int")), [Ectype ty; (Econst (Mem.MV_integer (Symbolic.SYMBconst n)) as cst)]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv_int")), [Ectype ty; (Econst (Mem.MVinteger (Symbolic.SYMBconst n)) as cst)]) ->
               if in_minimal_range ty n then
                 cst
               else

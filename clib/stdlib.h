@@ -1,3 +1,6 @@
+#ifndef	_STDLIB_H_
+#define	_STDLIB_H_
+
 typedef __cerbty_size_t size_t;
 typedef __cerbty_wchar_t wchar_t;
 
@@ -88,3 +91,6 @@ void *bsearch_s(const void *key, const void *base,
           char * restrict dst, rsize_t dstmax,
           const wchar_t * restrict src, rsize_t len);
 */
+
+#else
+#endif

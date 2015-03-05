@@ -151,7 +151,10 @@ let to_string ((start_p, end_p) as loc, c) =
         "Ail typing error (TODO " ^ string_of_int n ^ ")"
 
     | AIL_TYPING (TError std) ->
-        "[Ail typing error]\n \"" ^ Pp_std.quote std ^ "\""
+        "[Ail typing error] (" ^ std ^ ")\n \"" ^ Pp_std.quote std ^ "\""
+
+    | AIL_TYPING (TError_lvalue_coercion ty) ->
+        "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype ty) ^ "\""
 
 
 (*

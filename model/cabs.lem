@@ -37,6 +37,12 @@ instance (Located cabs_identifier)
 end
 
 
+instance (Show cabs_identifier)
+  let show ident =
+    let CabsIdentifier _ str = ident in
+    str
+end
+
 
 
 

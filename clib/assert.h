@@ -1,3 +1,6 @@
+#ifndef	_ASSERT_H_
+#define	_ASSERT_H_
+
 // 7.2 Diagnostics<assert.h>
 
 #ifdef NDEBUG
@@ -7,3 +10,6 @@
 #endif // NDEBUG
 
 #define static_assert _Static_assert
+
+#else
+#endif

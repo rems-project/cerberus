@@ -1,4 +1,4 @@
-open import Pervasives Global Translation_effect Symbol
+open import Pervasives Global Translation_effect Symbol Show Show_extra
 import Core Core_aux
 import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
 import Map_extra
@@ -157,11 +157,11 @@ let ctype_of a_expr =
     | Right (AilTypes.LValueType _ ty) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
     | Left (loc, TypingError.TError_TODO n) ->
-        Boot.assert_false $ "TYPING ERROR(translation_aux): " ^ string_of_natural (naturalFromNat n) ^ " at \n==> " ^
+        Boot.assert_false $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
                             (Boot.pp_ail_expr a_expr)
     | Left (loc, TypingError.TError_integerConstant_too_large n) ->
         Boot.assert_false $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
-                            string_of_natural (naturalFromInteger n)
+                            show n
     | _ -> Boot.assert_false "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 

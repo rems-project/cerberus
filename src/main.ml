@@ -53,8 +53,8 @@ let load_impl core_parse impl_name =
   else
     (* TODO: yuck *)
     match core_parse (Input.file iname) with
-      | Exception.Result (Core_parser_util.Rimpl z) ->
-          z
+      | Exception.Result (Core_parser_util.Rimpl (impl_map, fun_map)) ->
+          (fun_map, impl_map)
       | Exception.Exception err ->
           error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
 
@@ -122,10 +122,14 @@ let core_frontend f =
            Core.stdlib= !!cerb_conf.core_stdlib;
            Core.impl=   !!cerb_conf.core_impl;
            Core.globs=   [(* TODO *)];
-           Core.funs=   fun_map
+           Core.funs=   fun_map;
+           Core.tagDefinitions0 = Pmap.empty Symbol.instance_Basic_classes_SetType_Symbol_t_dict.setElemCompare_method;
          })
-    | _ ->
-        assert false
+    
+    | Rstd _ ->
+        error "Found no main function in the Core program"
+    | Rimpl _ ->
+        failwith "core_frontend found a Rimpl"
 
 (*
 let run_test (run: string -> Exhaustive_driver.execution_result) (test:Tests.test) = 
@@ -233,10 +237,10 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   
   (* Looking for and parsing the implementation file *)
-  let core_impl = load_impl Core_parser.parse impl_name in
+  let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency;
   
 (*
   if !!cerb_conf.concurrency_tests then

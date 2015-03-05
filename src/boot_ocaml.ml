@@ -1,8 +1,11 @@
 open Global
 
 let assert_false str =
+  failwith str
+(*
   print_endline ("ERROR>\n" ^ str);
   exit (-1)
+*)
 
 (*
 let debug_level = ref 0
@@ -98,8 +101,9 @@ let random_select xs =
 
 open Str
 (* TODO: ridiculous hack *)
+(*
 let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)) : string =
-  let rexp = regexp "%d" in
+  let rexp = regexp "%\(d\|llx\)" in
   let rec f str args acc =
     if String.length str = 0 then
       List.rev acc
@@ -107,13 +111,58 @@ let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)
       try
         let n    = search_forward rexp str 0 in
         let pre  = String.sub str 0 n    in
-        let str' = String.sub str (n+2) (String.length str - n - 2) in
+        let str' =
+          let offset = match_end () in
+          String.sub str offset (String.length str - offset) in
         
         match args with
           | [] ->
               print_endline "PRINTF WITH NOT ENOUGH ARGUMENTS";
               List.rev (str :: acc)
           | arg :: args' ->
+              f str' args' ((* Big_int.string_of_big_int *) arg :: pre :: acc)
+      with
+        Not_found ->
+          if List.length args <> 0 then
+            print_endline "PRINTF WITH TOO MANY ARGUMENTS";
+          List.rev (str :: acc)
+  in
+  let frmt' =
+    try
+      let n = search_forward (regexp "\000") frmt 0 in
+      String.sub frmt 0 n
+    with
+      Not_found ->
+        frmt (* TODO: technically that should be invalid *)
+  in
+  String.concat "" (f frmt' args [])
+*)
+
+(* TODO: ridiculous hack (v2) *)
+let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)) : string =
+  let rexp = regexp "%\(d\|llx\)" in
+  let rec f str args acc =
+    if String.length str = 0 then
+      List.rev acc
+    else
+      try
+        let n    = search_forward rexp str 0 in
+        let pre  = String.sub str 0 n    in
+        let str' =
+          let offset = match_end () in
+          String.sub str offset (String.length str - offset) in
+        
+        match args with
+          | [] ->
+              print_endline "PRINTF WITH NOT ENOUGH ARGUMENTS";
+              List.rev (str :: acc)
+          | arg :: args' ->
+              let arg = match matched_group 0 str with
+                | "%d" ->
+                    Printf.sprintf "%Ld" (Int64.of_string arg)
+                | "%llx" ->
+                    Printf.sprintf "%Lx" (Int64.of_string arg)
+              in 
               f str' args' ((* Big_int.string_of_big_int *) arg :: pre :: acc)
       with
         Not_found ->

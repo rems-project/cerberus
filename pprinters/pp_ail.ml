@@ -43,7 +43,7 @@ let precedence = function
   | AilEbinary (_, Lt0, _)
   | AilEbinary (_, Gt, _)
   | AilEbinary (_, Le, _)
-  | AilEbinary (_, Ge, _) -> Some 6
+  | AilEbinary (_, Ge0, _) -> Some 6
   
   | AilEbinary (_, Eq0, _)
   | AilEbinary (_, Ne, _) -> Some 7
@@ -236,10 +236,22 @@ let rec pp_ctype_raw = function
       !^ "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
   | Atomic ty ->
       !^ "Atomic" ^^ P.brackets (pp_ctype_raw ty)
-  | Struct _ ->
-      !^ "STRUCT"
-  | Union _ ->
-      !^ "UNION"
+  | Struct sym ->
+      !^ "Struct" ^^ pp_id sym
+(*
+      !^ "Struct" ^^ P.brackets (
+        pp_id sym ^^ P.comma ^^^
+        comma_list (fun (ident, ty) -> P.parens (Pp_cabs.pp_cabs_identifier ident ^^ P.comma ^^^ pp_ctype_raw ty)) xs
+      )
+*)
+  | Union sym ->
+      !^ "Union" ^^ pp_id sym
+(*
+      !^ "Union" ^^ P.brackets (
+        pp_id sym ^^ P.comma ^^^
+        comma_list (fun (ident, ty) -> P.parens (Pp_cabs.pp_cabs_identifier ident ^^ P.comma ^^^ pp_ctype_raw ty)) xs
+      )
+*)
   | Builtin str ->
       !^ "Builtin" ^^ P.brackets (!^ str)
 
@@ -265,12 +277,18 @@ let rec pp_ctype = function
       pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
   | Atomic ty ->
       pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
+  | Struct sym ->
+      pp_keyword "struct" ^^^ pp_id_type sym
+  | Union sym ->
+      pp_keyword "union" ^^^ pp_id_type sym
+(*
   | Struct (tag, ident_tys) ->
       pp_keyword "struct" ^^^ pp_id_type tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
   | Union (tag, ident_tys) ->
       pp_keyword "union" ^^^ pp_id_type tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
+*)
   | Builtin str ->
       !^ str
 
@@ -295,12 +313,18 @@ let rec pp_ctype_declaration id = function
       pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
   | Atomic ty ->
       pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
+  | Struct sym ->
+      pp_keyword "struct" ^^^ pp_id_type sym
+  | Union sym ->
+      pp_keyword "union" ^^^ pp_id_type sym
+(*
   | Struct (tag, ident_tys) ->
       pp_keyword "struct" ^^^ pp_id_type tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys) ^^^ id
   | Union (tag, ident_tys) ->
       pp_keyword "union" ^^^ pp_id_type tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys) ^^^ id
+*)
   | Builtin str ->
       !^ str
 
@@ -350,12 +374,18 @@ let rec pp_ctype_human qs ty =
       pp_qualifiers_human qs ^^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
   | Atomic ty ->
       !^ "atomic" ^^^ pp_ctype_human qs ty
+  | Struct sym ->
+      !^ "struct" ^^^ pp_id sym
+  | Union sym ->
+      !^ "union" ^^^ pp_id sym
+(*
   | Struct (tag, ident_tys) ->
       !^ "struct" ^^^ pp_id tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype_human qs ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
   | Union (tag, ident_tys) ->
       !^ "union" ^^^ pp_id tag ^^^
       P.braces (comma_list (fun (ident, ty) -> pp_ctype_human qs ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
+*)
   | Builtin str ->
       prefix_pp_qs ^^ !^ str
 
@@ -387,7 +417,7 @@ let pp_binaryOperator = function
   | Lt0           -> P.langle
   | Gt           -> P.rangle
   | Le           -> P.langle ^^ P.equals
-  | Ge           -> P.rangle ^^ P.equals
+  | Ge0           -> P.rangle ^^ P.equals
   | Eq0           -> P.equals ^^ P.equals
   | Ne           -> P.bang   ^^ P.equals
 
@@ -462,12 +492,15 @@ let string_of_hexadecimal_big_int n =
 
 
 (* TODO: should reverse the decoding of n *)
-let pp_integerConstant (IntegerConstant (n, basis, suff_opt)) =
-  !^ (match basis with
-    | Octal       -> string_of_octal_big_int n
-    | Decimal     -> Big_int.string_of_big_int n
-    | Hexadecimal -> string_of_hexadecimal_big_int n
-  )  ^^ (P.optional pp_integerSuffix suff_opt)
+let pp_integerConstant = function
+  | IConstant (n, basis, suff_opt) ->
+      !^ (match basis with
+            | Octal       -> string_of_octal_big_int n
+            | Decimal     -> Big_int.string_of_big_int n
+            | Hexadecimal -> string_of_hexadecimal_big_int n
+         )  ^^ (P.optional pp_integerSuffix suff_opt)
+  | IConstantMax ity ->
+      !^ "TODO[IConstantMax]"
 
 
 let pp_characterPrefix pref =
@@ -565,8 +598,8 @@ let rec pp_expression a_expr =
             pp e ^^ P.parens (comma_list pp es)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list pp_generic_association gas)
-        | AilEarray es ->
-            P.braces (comma_list pp es)
+        | AilEarray (ty, e_opts) ->
+            P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
         | AilEbuiltin str ->
             !^ str
         | AilEstr lit ->
@@ -723,9 +756,28 @@ let pp_sigma_declaration = function
 let pp_static_assertion (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression e ^^ P.comma ^^^ pp_stringLiteral lit)
 
+
+let pp_tag_definition (tag, def) =
+  match def with
+    | StructDef ident_tys ->
+        pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
+          P.nest 2 (
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+          ) ^^ P.break 1
+        ) ^^ P.semi
+    | UnionDef ident_tys ->
+        pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
+          P.nest 2 (
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+          ) ^^ P.break 1
+        ) ^^ P.semi
+
 let pp_program (startup, sigm) =
   isatty := Unix.isatty Unix.stdout;
-  P.separate_map (P.break 1) pp_static_assertion sigm.static_assertions ^^ P.break 1 ^^
+  P.separate_map (P.break 1 ^^ P.break 1) pp_static_assertion sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  
+  (* Tag declarations *)
+  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   List.fold_left (fun acc (sym, decl) ->
     match decl with

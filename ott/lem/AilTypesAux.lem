@@ -1,9 +1,11 @@
-open import Pervasives Common AilTypes Implementation ErrorMonad TypingError
+open import Pervasives Common AilSyntax AilTypes Implementation ErrorMonad TypingError
 import Loc
 
 val assert_false: forall 'a. string -> 'a
 declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
 
 
 let unatomic = function
@@ -206,7 +208,7 @@ val is_struct: ctype -> bool
 let is_struct ty =
   (* TODO: check atomic *)
   match unatomic ty with
-  | Struct _ _ ->
+  | Struct _ ->
       true
   | _ ->
       false
@@ -216,7 +218,7 @@ val is_union: ctype -> bool
 let is_union ty =
   (* TODO: check atomic *)
   match unatomic ty with
-  | Union _ _ ->
+  | Union _ ->
       true
   | _ ->
       false
@@ -271,8 +273,8 @@ let is_aggregate ty =
 
 
 (* TODO *)
-val is_complete: ctype -> bool
-let is_complete ty =
+val is_complete: forall 'a. sigma 'a -> ctype -> bool
+let is_complete S ty =
   (* TODO: check atomic *)
   match unatomic ty with
   | Basic _ ->
@@ -295,14 +297,29 @@ let is_complete ty =
       true
   | Builtin "va_list" ->
       true
+  | Struct sym ->
+      match Context.lookup (=) S.tag_definitions sym with
+        | Just (StructDef _) ->
+            true
+        | _ ->
+            let _ = print_debug 5 ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show S.tag_definitions) in
+            false
+      end
+  | Union sym ->
+      match Context.lookup (=) S.tag_definitions sym with
+        | Just (UnionDef _) ->
+            true
+        | _ ->
+            false
+      end
   | _ ->
       false
 end
 
 (* TODO *)
-val is_icomplete: ctype -> bool
-let is_incomplete ty =
-  not (is_complete ty)
+val is_icomplete: forall 'a. sigma 'a -> ctype -> bool
+let is_incomplete S ty =
+  not (is_complete S ty)
 
 
 
@@ -810,12 +827,12 @@ let usual_arithmetic impl ty1 ty2 =
 (*
 A modifiable lvalue is an lvalue that does not have array type, does not have an incomplete type, does not have a const- qualified type, and if it is a structure or union, does not have any member (including, recursively, any member or element of all contained aggregates or unions) with a const- qualified type.
 *)
-val modifiable: qualifiers -> ctype -> bool
-let modifiable qs ty =
+val modifiable: forall 'a. sigma 'a -> qualifiers -> ctype -> bool
+let modifiable S qs ty =
   not (is_array ty) &&
   not (qs.const) &&
   is_object ty &&
-  not (is_incomplete ty)
+  not (is_incomplete S ty)
 
 val real: ctype -> bool
 let real ty =
@@ -847,14 +864,16 @@ let rec ~{coq} compatible ty1 ty2 =
         compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
         compatible ty1 ty2 && qs1 = qs2
-    | (Struct _ _, _) ->
+    | (Struct _, _) ->
         assert_false "WIP: compatible"
-    | (Union _ _, _) ->
+    | (Union _, _) ->
         assert_false "WIP: compatible"
-    | (_, Struct _ _) ->
+    | (_, Struct _) ->
         assert_false "WIP: compatible"
-    | (_, Union _ _) ->
+    | (_, Union _) ->
         assert_false "WIP: compatible"
+    | (Builtin str1, Builtin str2) ->
+        str1 = str2
     | _ ->
         false
   end
@@ -974,19 +993,19 @@ let function_coercion = function
 end
 
 (* following (§6.3.2.1)#2 *)
-val lvalue_convertible: ctype -> bool
-let lvalue_convertible ty =
-  not (is_array ty) && is_complete ty
+val lvalue_convertible: forall 'a. sigma 'a -> ctype -> bool
+let lvalue_convertible S ty =
+  not (is_array ty) && is_complete S ty
 
 (* following (§6.3.2.1)#2 and #3 *)
-val lvalue_coercion: ctype -> errorM ctype
-let lvalue_coercion ty =
-  if lvalue_convertible ty then
+val lvalue_coercion: forall 'a. sigma 'a -> ctype -> errorM ctype
+let lvalue_coercion S ty =
+  if lvalue_convertible S ty then
     return ty
   else if is_array ty then
     return (array_coercion ty)
   else
-    fail Loc.unknown (TError_TODO 1)
+    fail Loc.unknown (TError_lvalue_coercion ty)
 
 (* following (§6.3.2.1)#3 and #4 *)
 val rvalue_coercion: ctype -> ctype
@@ -998,19 +1017,19 @@ let rvalue_coercion ty =
   else
     ty
 
-val is_pointer_to_complete_object: ctype -> bool
-let is_pointer_to_complete_object = function
+val is_pointer_to_complete_object: forall 'a. sigma 'a -> ctype -> bool
+let is_pointer_to_complete_object S = function
   | Pointer _ ty ->
-      is_complete ty
+      is_complete S ty
   | _ ->
       false
   end
 
-val        pointers_to_compatible_complete_objects: ctype -> ctype -> bool
-let ~{coq} pointers_to_compatible_complete_objects ty1 ty2 =
+val        pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_complete_objects S ty1 ty2 =
   match (ty1, ty2) with
     | (Pointer _ ty1, Pointer _ ty2) ->
-        is_complete ty1 && is_complete ty2 && compatible ty1 ty2
+        is_complete S ty1 && is_complete S ty2 && compatible ty1 ty2
     | _ ->
         false
   end  
@@ -1092,9 +1111,9 @@ let is_vla = function
       false (* TODO !!!!!!! *)
 end
 
-val is_complete_object: ctype -> bool
-let is_complete_object ty =
-  is_complete ty && is_object ty
+val is_complete_object: forall 'a. sigma 'a -> ctype -> bool
+let is_complete_object S ty =
+  is_complete S ty && is_object ty
 
 
 (* TODO: check *)
@@ -1143,12 +1162,12 @@ end
 
 
 (* STD §6.3.2.1#2 *)
-val lvalue_conversion: ctype -> errorM ctype
-let lvalue_conversion ty =
+val lvalue_conversion: forall 'a. sigma 'a -> ctype -> errorM ctype
+let lvalue_conversion S ty =
   if is_array ty then
     fail Loc.unknown (TError "trying to do a lvalue conversion on an array type")
   
-  else if is_incomplete ty && not (is_array ty) then
+  else if is_incomplete S ty && not (is_array ty) then
     fail Loc.unknown (TError_undef "§6.3.2.1#2, sentence 3: lvalue conversion of an incomplete non-array type")
   
   (* STD §6.3.2.1#2, sentence 2 *)

@@ -20,7 +20,8 @@ type basis =
   | Hexadecimal
 
 type integerConstant (*[name = "ic*"]*) =
-    IntegerConstant of integer * basis * maybe integerSuffix
+  | IConstant of integer * basis * maybe integerSuffix
+  | IConstantMax of integerType
 
 type characterPrefix =
   | Pref_L
@@ -95,7 +96,10 @@ type expression' 'A [name = "e*"] =
   | AilEgeneric of expression 'A * list (generic_association 'A)
   
   (* TODO: hackish? *)
-  | AilEarray of list (expression 'A)
+  (* TODO: these two don't exist in C (apart from in decl) *)
+  | AilEarray of ctype * list (maybe (expression 'A))
+  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *)
+  
   
   | AilEmemberof of expression 'A * Cabs.cabs_identifier
   | AilEmemberofptr of expression 'A * Cabs.cabs_identifier
@@ -148,12 +152,29 @@ type declaration =
     (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   | Decl_function of ctype * (list (qualifiers * ctype)) * bool * bool * bool
 
+
+type tag_definition =
+  | StructDef of list (Cabs.cabs_identifier * ctype)
+  | UnionDef of list (Cabs.cabs_identifier * ctype)
+
+instance (Show tag_definition)
+  let show def = match def with
+    | StructDef _ ->
+        "TODO[StructDef]"
+    | UnionDef _ ->
+        "TODO[UnionDef]"
+  end
+end
+
+
 type sigma 'A = <|
   declarations: Context.context identifier declaration;
   object_definitions: Context.context identifier (expression 'A);
   (* the list of identifiers are the parameter names used in the body *)
   function_definitions: Context.context identifier (list identifier * statement 'A);
-  static_assertions: list (expression 'A * stringLiteral)
+  static_assertions: list (expression 'A * stringLiteral);
+  
+  tag_definitions: Context.context identifier tag_definition
 |>
 
 
@@ -289,7 +310,7 @@ let integerSuffixEqual s1 s2 =
     | (_  , _  ) -> false
   end
 
-let integerConstantEqual (IntegerConstant n1 b1 suff1_opt) (IntegerConstant n2 b2 suff2_opt) =
+let integerConstantEqual (IConstant n1 b1 suff1_opt) (IConstant n2 b2 suff2_opt) =
   n1 = n2 && basisEqual b1 b2 && eq_option integerSuffixEqual suff1_opt suff2_opt
 
 instance (Eq integerConstant)

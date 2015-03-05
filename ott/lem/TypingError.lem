@@ -1,7 +1,7 @@
-open import Pervasives
+open import Pervasives AilTypes
 
 type typing_error =
-  | TError_lvalue_coercion
+  | TError_lvalue_coercion of ctype
   | TError_TODO of nat
   | TError_integerConstant_too_large of integer (* AilSyntax.integerConstant *)
   | TError of string

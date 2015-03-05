@@ -4,6 +4,117 @@ def <bits_in_byte> : integer :=
   8
 
 
+fun ctype_min_void () : integer :=
+  error <<<ctype_min>>> -- TODO
+
+fun ctype_min_basic (ty: ctype) : integer :=
+  if ty = "char" then
+    -128
+  else
+    if ty = "_Bool" then
+      0 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        -128
+      else
+        if ty = "unsigned ichar" then
+          0
+        else
+          if ty = "signed short" then
+            -32768
+          else
+            if ty = "unsigned short" then
+              0
+            else
+              if ty = "signed int" then
+                -2147483648
+              else
+                if ty = "unsigned int" then
+                  0
+                else
+                  if ty = "signed long" then
+                    -9223372036854775808
+                  else
+                    if ty = "unsigned long" then
+                      0
+                    else
+                      if ty = "signed long_long" then
+                        -9223372036854775808
+                      else
+                        if ty = "unsigned long_long" then
+                          0
+                        else
+                          if ty = "int8_t" then
+                            -128
+                          else
+                            if ty = "int16_t" then
+                              -32768
+                            else
+                              if ty = "int32_t" then
+                                -2147483648
+                              else
+                                if ty = "int64_t" then
+                                  -9223372036854775808
+                                else
+                                  if ty = "uint8_t" then
+                                    0
+                                  else
+                                    if ty = "uint16_t" then
+                                      0
+                                    else
+                                      if ty = "uint32_t" then
+                                        0
+                                      else
+                                        if ty = "uint64_t" then
+                                          0
+                                        else
+                                          error <<<ctype_min>>> -- TODO
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+fun ctype_min_array (ty: ctype, n: integer) : integer :=
+  <ctype_min>(ty)
+
+fun ctype_min_pointer (ty: ctype) : integer :=
+  <ctype_min>(ty)
+
+fun ctype_min_atomic (ty: ctype) : integer :=
+  <ctype_min>(ty)
+
+
+fun <ctype_min> (ty: ctype) : integer :=
+  case_ty ( ty,
+    ctype_min_void, ctype_min_basic, ctype_min_array,
+    ctype_min_void {- HACK -}, ctype_min_pointer, ctype_min_atomic,
+    ctype_min_void {- HACK -}, ctype_min_void {- HACK -}, ctype_min_void {- HACK -}
+  )
+
+
+{-
+fun bar(n: integer) : integer :=
+  case_ty ( "signed int", foo, foo, foo, foo, foo, foo, foo, foo, foo )
+-}
+
+
+{-
 fun <ctype_min> (ty: ctype) : integer :=
   if ty = "char" then
     -128
@@ -91,8 +202,13 @@ end
       end
     end
   end
+-}
 
-fun <ctype_max> (ty: ctype) : integer :=
+fun ctype_max_void () : integer :=
+  error <<<ctype_max>>> -- TODO
+
+
+fun ctype_max_basic (ty: ctype) : integer :=
   if ty = "char" then
     127
   else
@@ -208,7 +324,43 @@ end
 -}
 
 
-fun <sizeof> (ty: ctype) : integer :=
+fun ctype_max_array (ty: ctype, n: integer) : integer :=
+  <ctype_max>(ty)
+
+fun ctype_max_pointer (ty: ctype) : integer :=
+  <ctype_max>(ty)
+
+fun ctype_max_atomic (ty: ctype) : integer :=
+  <ctype_max>(ty)
+
+
+fun <ctype_max> (ty: ctype) : integer :=
+  case_ty ( ty,
+    ctype_max_void, ctype_max_basic, ctype_max_array,
+    ctype_max_void {- HACK -}, ctype_max_pointer, ctype_max_atomic,
+    ctype_max_void {- HACK -}, ctype_max_void {- HACK -}, ctype_max_void {- HACK -}
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+fun sizeof_void () : integer :=
+  error <<<sizeof>>> -- sizeof can only be called on complete types
+
+
+fun sizeof_basic (ty: ctype) : integer :=
   if ty = "char" then
     1
   else
@@ -318,6 +470,36 @@ fun <sizeof> (ty: ctype) : integer :=
   else
     error -- TODO
 -}
+
+
+fun sizeof_array (ty: ctype, n: integer) : integer :=
+  <sizeof>(ty) * n
+
+fun sizeof_pointer (ty: ctype) : integer :=
+  8
+
+fun sizeof_atomic (ty: ctype) : integer :=
+  <sizeof>(ty)
+
+
+
+fun <sizeof> (ty: ctype) : integer :=
+  case_ty ( ty,
+    sizeof_void, sizeof_basic, sizeof_array,
+    sizeof_void {- HACK -}, sizeof_pointer, sizeof_atomic,
+    sizeof_void {- HACK -}, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
+  )
+
+
+
+
+
+
+
+
+
+
+
 
 
 fun <alignof> (ty: ctype) : integer :=
@@ -430,6 +612,9 @@ fun <alignof> (ty: ctype) : integer :=
   else
     error -- TODO
 -}
+
+
+
 
 
 {-

@@ -67,8 +67,12 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
    (* NOTE: the qualifiers are that of the referenced type *)
  | Pointer of qualifiers * ctype
  | Atomic of ctype
+(*
  | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
  | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
+ *)
+ | Struct of identifier
+ | Union of identifier
  | Builtin of string
 
 
@@ -194,9 +198,9 @@ let rec ctypeEqual ty1 ty2 =
         4
     | Atomic _ ->
         5
-    | Struct _ _ ->
+    | Struct _ ->
         6
-    | Union _ _ ->
+    | Union _ ->
         7
     | Builtin _ ->
         8
@@ -204,8 +208,10 @@ let rec ctypeEqual ty1 ty2 =
   let paramsEqual (qs1, ty1) (qs2, ty2) =
     qs1 = qs2 && ctypeEqual ty1 ty2 in
   
+(*
   let memberEqual (ident1, ty1) (ident2, ty2) =
     ident1 = ident2 && ctypeEqual ty1 ty2 in
+*)
   match (ty1, ty2) with
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
@@ -215,10 +221,10 @@ let rec ctypeEqual ty1 ty2 =
         ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2
-    | (Struct id1 xs1, Struct id2 xs2) ->
-        id1 = id2 && List.all (uncurry memberEqual) (List.zip xs1 xs2)
-    | (Union id1 xs1, Union id2 xs2) ->
-        id1 = id2 && List.all (uncurry memberEqual) (List.zip xs1 xs2)
+    | (Struct id1, Struct id2) ->
+        id1 = id2 (* && List.all (uncurry memberEqual) (List.zip xs1 xs2) *)
+    | (Union id1, Union id2) ->
+        id1 = id2 (* && List.all (uncurry memberEqual) (List.zip xs1 xs2) *)
     | (Builtin str1, Builtin str2) ->
         str1 = str2
     | _ ->
@@ -252,6 +258,97 @@ type ctype =
 
 
 *)
+
+
+
+
+
+
+let setElemCompare_integerBaseType ibty1 ibty2 =
+  let ord = function
+    | Ichar ->
+        (0 : nat)
+    | Short ->
+        1
+    | Int_ ->
+        2
+    | Long ->
+        3
+    | LongLong ->
+        4
+    | IBBuiltin _ ->
+        5
+  end in
+  match (ibty1, ibty2) with
+    | (IBBuiltin str1, IBBuiltin str2) ->
+        setElemCompare str1 str2
+    | _ ->
+        setElemCompare (ord ibty1) (ord ibty2)
+  end
+
+instance (SetType integerBaseType)
+  let setElemCompare = setElemCompare_integerBaseType
+end
+
+
+let setElemCompare_integerType ity1 ity2 =
+  let ord = function
+    | Char ->
+        (0 : nat)
+    | Bool ->
+        1
+    | Signed _ ->
+        2
+    | Unsigned _ ->
+        3
+    | IBuiltin _ ->
+        4
+    | Enum _ ->
+        5
+  end in
+  match (ity1, ity2) with
+    | (Signed ibty1, Signed ibty2) ->
+        setElemCompare ibty1 ibty2
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        setElemCompare ibty1 ibty2
+    | (IBuiltin str1, IBuiltin str2) ->
+        setElemCompare str1 str2
+    | (Enum sym1, Enum sym2) ->
+        setElemCompare sym1 sym2
+    | _ ->
+        setElemCompare (ord ity1) (ord ity2)
+  end
+
+instance (SetType integerType)
+  let setElemCompare = setElemCompare_integerType
+end
+
+
+let setElemCompare_basicType bty1 bty2 =
+(* TODO: currently not used
+  let ord = function
+    | Integer ->
+        (0 : nat)
+  end in
+*)
+  match (bty1, bty2) with
+    | (Integer ity1, Integer ity2) ->
+        setElemCompare ity1 ity2
+(* TODO: currently a redundant pattern
+    | _ ->
+        setElemCompare (ord bty1) (ord bty2)
+*)
+  end
+
+instance (SetType basicType)
+  let setElemCompare = setElemCompare_basicType
+end
+
+
+instance (SetType qualifiers)
+  let setElemCompare qs1 qs2 =
+    setElemCompare (qs1.const, qs1.restrict, qs1.volatile, qs1.atomic) (qs2.const, qs2.restrict, qs2.volatile, qs2.atomic)
+end
 
 
 

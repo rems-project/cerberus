@@ -18,8 +18,13 @@ type operator =
   | Eq
   | Neq
   | Lt
+  | Ge
   | And
   | Or
+
+instance (SetType operator)
+  let setElemCompare = defaultCompare
+end
 
 instance (Eq operator)
   let (=) = unsafe_structural_equality
@@ -38,6 +43,7 @@ instance (Show operator)
     | Eq  -> "Eq"
     | Neq -> "Neq"
     | Lt  -> "Lt"
+    | Ge  -> "Ge"
     | And -> "And"
     | Or  -> "Or"
     end
@@ -46,6 +52,10 @@ end
 type symbolic_type =
   | SYMBint
   | SYMBbool
+
+instance (SetType symbolic_type)
+  let setElemCompare = defaultCompare
+end
 
 type symbolic_name =
   | SYMBfsym of Symbol.t
@@ -62,6 +72,26 @@ let symbolic_nameEquality n1 n2 =
 instance (Eq symbolic_name)
   let (=)  = symbolic_nameEquality
   let (<>) = fun n1 n2 -> not (symbolic_nameEquality n1 n2)
+end
+
+let setElemCompare_symbolic_name n1 n2 =
+  let ord = function
+    | SYMBfsym _ ->
+        (0: nat)
+    | SYMBimpl _ ->
+        1
+  end in
+  match (n1, n2) with
+    | (SYMBfsym sym1, SYMBfsym sym2) ->
+        setElemCompare sym1 sym2
+    | (SYMBimpl impl1, SYMBimpl impl2) ->
+        setElemCompare impl1 impl2
+    | _ ->
+        setElemCompare (ord n1) (ord n2)
+  end
+
+instance (SetType symbolic_name)
+  let setElemCompare = setElemCompare_symbolic_name
 end
 
 type symbolic =
@@ -122,6 +152,49 @@ let rec symbolicEqual symb1 symb2 =
 instance (Eq symbolic)
   let (=)  = symbolicEqual
   let (<>) = fun symb1 symb2 -> not (symbolicEqual symb1 symb2)
+end
+
+
+let rec setElemCompare_symbolic symb1 symb2 =
+  let ord = function
+    | SYMBtrue ->
+        (0 : nat)
+    | SYMBfalse ->
+        1
+    | SYMBconst _ ->
+        2
+    | SYMBctype _ ->
+        3
+    | SYMBsym _ _ ->
+        4
+    | SYMBop _ _ _ ->
+        5
+    | SYMBite _ _ _ ->
+        6
+    | SYMBcall _ _ ->
+        7
+  end in
+  match (symb1, symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        setElemCompare n1 n2
+    | (SYMBctype ty1, SYMBctype ty2) ->
+        setElemCompare ty1 ty2
+    | (SYMBsym symbty1 sym1, SYMBsym symbty2 sym2) ->
+        setElemCompare (symbty1, sym1) (symbty2, sym2)
+    | (SYMBop op1 symb11 symb12, SYMBop op2 symb21 symb22) ->
+        tripleCompare setElemCompare setElemCompare_symbolic setElemCompare_symbolic
+          (op1, symb11, symb12) (op2, symb21, symb22)
+    | (SYMBite symb11 symb12 symb13, SYMBite symb21 symb22 symb23) ->
+        tripleCompare setElemCompare_symbolic setElemCompare_symbolic setElemCompare_symbolic
+          (symb11, symb12, symb13) (symb21, symb22, symb23)
+    | (SYMBcall sym1 symbs1, SYMBcall sym2 symbs2) ->
+        pairCompare setElemCompare (lexicographicCompareBy setElemCompare_symbolic) (sym1, symbs1) (sym2, symbs2)
+    | _ ->
+        setElemCompare (ord symb1) (ord symb2)
+  end
+
+instance (SetType symbolic)
+  let setElemCompare = setElemCompare_symbolic
 end
 
 val symbolic_to_string: symbolic -> string
@@ -218,6 +291,8 @@ let rec reduce symb =
               if n1 = n2 then SYMBtrue else SYMBfalse
           | (Lt, SYMBconst n1, SYMBconst n2) ->
               if n1 < n2 then SYMBtrue else SYMBfalse
+          | (Ge, SYMBconst n1, SYMBconst n2) ->
+              if n1 >= n2 then SYMBtrue else SYMBfalse
           | (And, SYMBtrue, SYMBtrue) ->
               SYMBtrue
           | (And, SYMBfalse, _) ->

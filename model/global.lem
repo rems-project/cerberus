@@ -168,7 +168,7 @@ let rec map_option f xs =
 val transitive_reduction: forall 'a. Eq 'a => list ('a * 'a) -> maybe (list ('a * 'a))
 let transitive_reduction r =
   let transitive_pairs =
-    concat $
+    List.concat $
       List.map (fun (a1,a2) -> 
         map_option (fun (a1',a2') -> if a2 = a1' then Just (a1,a2') else Nothing) r
       ) r in
@@ -180,7 +180,7 @@ let transitive_reduction r =
 val is_transitive: forall 'a. Eq 'a => list ('a * 'a) -> bool
 let is_transitive r =
   let two_step_edges =
-    concat $
+    List.concat $
       List.map (fun (n,n') -> 
         map_option (fun (n'',n''') -> if n'=n'' then Just (n,n''') else Nothing) r
       ) r in
@@ -297,3 +297,14 @@ let rec takeWhile pred = function
   | x::xs ->
       if pred x then x :: takeWhile pred xs else []
 end
+
+
+
+
+val first: forall 'a 'b 'c . ('a -> 'b) -> 'a * 'c -> 'b * 'c
+let first f (x, y) =
+  (f x, y)
+
+val second: forall 'a 'b 'c . ('a -> 'b) -> 'c * 'a -> 'c * 'b
+let second f (x, y) =
+  (x, f y)

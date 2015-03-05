@@ -1,3 +1,6 @@
+#ifndef	_STDATOMIC_H_
+#define	_STDATOMIC_H_
+
 // TODO
 
 #define ATOMIC_BOOL_LOCK_FREE      __cerbvar_ATOMIC_BOOL_LOCK_FREE
@@ -405,3 +408,6 @@ typedef atomic_bool			atomic_flag;
 
 #endif
 */
+
+#else
+#endif

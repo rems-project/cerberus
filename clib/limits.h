@@ -1,3 +1,6 @@
+#ifndef	_LIMITS_H_
+#define	_LIMITS_H_
+
 #define CHAR_BIT   __cerbvar_CHAR_BIT
 #define SCHAR_MIN  __cerbvar_SCHAR_MIN
 #define SCHAR_MAX  __cerbvar_SCHAR_MAX
@@ -17,3 +20,11 @@
 #define LLONG_MIN  __cerbvar_LLONG_MIN
 #define LLONG_MAX  __cerbvar_LLONG_MAX
 #define ULLONG_MAX __cerbvar_ULLONG_MAX
+
+
+// POSIX stuff
+#define IOV_MAX __cerbvar_IOV_MAX
+
+
+#else
+#endif
