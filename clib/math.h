@@ -1,3 +1,6 @@
+#ifndef	_MATH_H_
+#define	_MATH_H_
+
 /* // TODO: floating
 
 float_t
@@ -209,3 +212,6 @@ int islessequal(real-floating x, real-floating y);
 int islessgreater(real-floating x, real-floating y);
 int isunordered(real-floating x, real-floating y);
 */
+
+#else
+#endif

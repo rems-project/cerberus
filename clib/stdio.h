@@ -1,3 +1,6 @@
+#ifndef	_STDIO_H_
+#define	_STDIO_H_
+
 #include <stdarg.h>
 
 typedef __cerbty_size_t size_t;
@@ -99,3 +102,5 @@ char *gets_s(char *s, rsize_t n);
 
 
 
+#else
+#endif

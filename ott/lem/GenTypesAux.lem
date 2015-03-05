@@ -129,19 +129,19 @@ let rvalue_coercion gty : genType =
 
 
 
-val is_pointer_to_complete_object: genType -> bool
-let is_pointer_to_complete_object = function
+val is_pointer_to_complete_object: forall 'a. sigma 'a -> genType -> bool
+let is_pointer_to_complete_object S = function
   | GenPointer _ ty ->
-      AilTypesAux.is_complete ty
+      AilTypesAux.is_complete S ty
   | _ ->
       false
 end
 
-val are_pointers_to_compatible_complete_objects: genType -> genType -> bool
-let are_pointers_to_compatible_complete_objects gty1 gty2 =
+val are_pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> genType -> genType -> bool
+let are_pointers_to_compatible_complete_objects S gty1 gty2 =
   match (gty1, gty2) with
     | (GenPointer _ ty1, GenPointer _ ty2) ->
-        AilTypesAux.is_complete ty1 && AilTypesAux.is_complete ty2 && AilTypesAux.compatible ty1 ty2
+        AilTypesAux.is_complete S ty1 && AilTypesAux.is_complete S ty2 && AilTypesAux.compatible ty1 ty2
     | _ ->
         false
   end
@@ -256,10 +256,10 @@ let interpret_genType impl = function
       return (Function ty params is_variadic)
   | GenPointer qs ty ->
       return (Pointer qs ty)
-  | GenStruct tag_opt xs ->
-      return (Struct tag_opt xs)
-  | GenUnion tag_opt xs ->
-      return (Union tag_opt xs)
+  | GenStruct tag ->
+      return (Struct tag)
+  | GenUnion tag ->
+      return (Union tag)
   | GenBuiltin str ->
       return (Builtin str)
   | GenAtomic ty ->
@@ -310,7 +310,7 @@ let min_interpret_optionIntegerSuffix = function
 end
 
 val min_interpret_integerConstant: integerConstant -> integerBaseType
-let min_interpret_integerConstant (IntegerConstant _ _ suff) =
+let min_interpret_integerConstant (IConstant _ _ suff) =
   min_interpret_optionIntegerSuffix suff
 
 

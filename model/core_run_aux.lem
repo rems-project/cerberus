@@ -66,45 +66,9 @@ let has_sbBefore_on_thread tid annot =
 
 val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids = function
-  | Eunit ->
+  | Epure pe ->
       (* no change *)
-      Eunit
-  | Etrue ->
-      (* no change *)
-      Etrue
-  | Efalse ->
-      (* no change *)
-      Efalse
-  | Econst cts ->
-      (* no change *)
-      Econst cts
-  | Elist pes ->
-      (* no change *)
-      Elist pes
-  | Ectype ty ->
-      (* no change *)
-      Ectype ty
-  | Esym a ->
-      (* no change *)
-      Esym a
-  | Eimpl i ->
-      (* no change *)
-      Eimpl i
-  | Etuple pes ->
-      (* no change *)
-      Etuple pes
-  | Enot pe ->
-      (* no change *)
-      Enot pe
-  | Eop bop pe1 pe2 ->
-      (* no change *)
-      Eop bop pe1 pe2
-  | Ecall nm pes ->
-      (* no change *)
-      Ecall nm pes
-  | Eoutput str ->
-      (* no change *)
-      Eoutput str
+      Epure pe
   | Eundef ub ->
       (* no change *)
       Eundef ub
@@ -148,18 +112,6 @@ let rec add_to_sb p_aids = function
       End (List.map (add_to_sb p_aids) es)
   | Epar es ->
       Epar (List.map (add_to_sb p_aids) es)
-  | Eis_scalar pe ->
-      (* no change *)
-      Eis_scalar pe
-  | Eis_integer pe ->
-      (* no change *)
-      Eis_integer pe
-  | Eis_signed pe ->
-      (* no change *)
-      Eis_signed pe
-  | Eis_unsigned pe ->
-      (* no change *)
-      Eis_unsigned pe
 end
 
 

@@ -17,6 +17,11 @@ type desugar_cause =
   | Desugar_NotConstantExpression
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultipleDeclaration of cabs_identifier
+
+
+  | Desugar_Redefinition of identifier
+
+
   | Desugar_NeverSupported of string
 
   | Desugar_NotyetSupported of string

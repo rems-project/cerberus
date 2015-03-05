@@ -113,12 +113,13 @@ let drive sym_supply file args with_concurrency : execution_result =
   
   List.iteri (fun n exec ->
     match exec with
-      | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, value))) ->
+      | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, value), (dr_steps, coreRun_steps))) ->
           let str_v = String_core.string_of_expr value in
           if not (List.mem str_v !ky) then (
             Debug.print_debug 2 (
-              Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-                n (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))) ^ "\n"
+              Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\n" n (pp_constraints constraints) ^
+              Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps ^
+              Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log)))
             );
           );
           if not (List.mem str_v !ky) && not is_blocked then (

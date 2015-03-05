@@ -11,6 +11,11 @@ type execution_mode =
   | Exhaustive
   | Random
 
+instance (Eq execution_mode)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
 declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
 declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
 declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`

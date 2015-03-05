@@ -19,13 +19,15 @@ let bind m f =
     | Right r -> f r
   end
 
-let inline (>>=) m f = bind m f
-let inline (>>) m f = m >>= (fun _ -> f)
-
-let inline (<$>) f = function
+let inline fmap f = function
   | Left  z -> Left z
   | Right z -> Right (f z)
 end
+
+let inline (>>=) m f = bind m f
+let inline (>>) m f = m >>= (fun _ -> f)
+let inline (<$>) = fmap
+
 
 
 val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b

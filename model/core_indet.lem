@@ -387,6 +387,28 @@ let determinate_expr e =
 
   *)
 
+let rec hack_pexpr pe =
+  match pe with
+    | PEval _ ->
+        pe
+    | PEsym _ ->
+        pe
+    | PEimpl _ ->
+        pe
+    | PEnil ->
+        pe
+    | PEcons pe1 pe2 ->
+        pe
+    | PEcase_list of pexpr * name * name
+    | PEcase_ctype of pexpr * name * name * name * name * name * name * name * name * name
+    | PEshift of pexpr * shift_path
+    | PEnot of pexpr
+    | PEop of binop * pexpr * pexpr
+    | PEtuple of list pexpr
+    | PEarray of list (either Mem.mem_value sym)
+    | PEcall of name * list pexpr
+    | PEif of pexpr * pexpr * pexpr
+  end
 
 let rec hack x =
   match x with
@@ -400,6 +422,8 @@ let rec hack x =
         Core.Econst cst
     | Core.Elist es ->
         Core.Elist (List.map hack es)
+    | Core.Econs pe1 pe2 ->
+        Core.Econs (hack pe1) (hack pe2)
     | Core.Ectype ty ->
         Core.Ectype ty
     | Core.Esym a ->
@@ -408,12 +432,16 @@ let rec hack x =
         Core.Eimpl impl
     | Core.Etuple es ->
         Core.Etuple (List.map hack es)
+    | Core.Earray xs ->
+        Core.Earray xs
     | Core.Enot e ->
         Core.Enot (hack e)
     | Core.Eop bop e1 e2 ->
         Core.Eop bop (hack e1) (hack e2)
     | Core.Ecall f es ->
         Core.Ecall f (map hack es)
+    | Core.Eshift pe path ->
+        Core.Eshift (hack pe) path
     | Core.Eoutput str ->
         Core.Eoutput str
     | Core.Eundef ub ->

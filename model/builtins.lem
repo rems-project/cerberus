@@ -667,20 +667,20 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_SCNxPTR" -> Just (A.AilEbuiltin "SCNxPTR")
     | "__cerbvar_CHAR_BIT" -> Just (A.AilEbuiltin "CHAR_BIT")
     | "__cerbvar_SCHAR_MIN" -> Just (A.AilEbuiltin "SCHAR_MIN")
-    | "__cerbvar_SCHAR_MAX" -> Just (A.AilEbuiltin "SCHAR_MAX")
-    | "__cerbvar_UCHAR_MAX" -> Just (A.AilEbuiltin "UCHAR_MAX")
+    | "__cerbvar_SCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Ichar))))
+    | "__cerbvar_UCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Ichar))))
     | "__cerbvar_CHAR_MIN" -> Just (A.AilEbuiltin "CHAR_MIN")
-    | "__cerbvar_CHAR_MAX" -> Just (A.AilEbuiltin "CHAR_MAX")
+    | "__cerbvar_CHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ATypes.Char)))
     | "__cerbvar_MB_LEN_MAX" -> Just (A.AilEbuiltin "MB_LEN_MAX")
     | "__cerbvar_SHRT_MIN" -> Just (A.AilEbuiltin "SHRT_MIN")
-    | "__cerbvar_SHRT_MAX" -> Just (A.AilEbuiltin "SHRT_MAX")
-    | "__cerbvar_USHRT_MAX" -> Just (A.AilEbuiltin "USHRT_MAX")
+    | "__cerbvar_SHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Short))))
+    | "__cerbvar_USHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Short))))
     | "__cerbvar_INT_MIN" -> Just (A.AilEbuiltin "INT_MIN")
-    | "__cerbvar_INT_MAX" -> Just (A.AilEbuiltin "INT_MAX")
-    | "__cerbvar_UINT_MAX" -> Just (A.AilEbuiltin "UINT_MAX")
+    | "__cerbvar_INT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Int_))))
+    | "__cerbvar_UINT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Int_))))
     | "__cerbvar_LONG_MIN" -> Just (A.AilEbuiltin "LONG_MIN")
-    | "__cerbvar_LONG_MAX" -> Just (A.AilEbuiltin "LONG_MAX")
-    | "__cerbvar_ULONG_MAX" -> Just (A.AilEbuiltin "ULONG_MAX")
+    | "__cerbvar_LONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Long))))
+    | "__cerbvar_ULONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Long))))
     | "__cerbvar_LLONG_MIN" -> Just (A.AilEbuiltin "LLONG_MIN")
     | "__cerbvar_LLONG_MAX" -> Just (A.AilEbuiltin "LLONG_MAX")
     | "__cerbvar_ULLONG_MAX" -> Just (A.AilEbuiltin "ULLONG_MAX")
@@ -789,7 +789,9 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_SEEK_SET" -> Just (A.AilEbuiltin "SEEK_SET")
     | "__cerbvar_TMP_MAX" -> Just (A.AilEbuiltin "TMP_MAX")
     | "__cerbvar_stderr" -> Just (A.AilEbuiltin "srderr")
+*)
     | "__cerbvar_stdin" -> Just (A.AilEbuiltin "stdin")
+(*
     | "__cerbvar_stdout" -> Just (A.AilEbuiltin "stdout")
     | "__cerbvar_EXIT_FAILURE" -> Just (A.AilEbuiltin "EXIT_FAILURE")
     | "__cerbvar_MB_CUR_MAX" -> Just (A.AilEbuiltin "MB_CUR_MAX")
@@ -799,4 +801,22 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_TSS_DTOR_ITERATIONS" -> Just (A.AilEbuiltin "tss_DTOR_ITERATIONS")
 *)
     | _                   -> Nothing
+end
+
+
+
+val ctype_of_builtin_varname: string -> maybe ATypes.ctype
+let ctype_of_builtin_varname = function
+  
+  (* STD §7.21.1#3 *)
+  | "stderr" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+  | "stdin" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+  | "stdout" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+      
+
+  | _ ->
+      Nothing
 end

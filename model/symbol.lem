@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Show Enum
+open import Show Show_extra Enum
 import UniqueId
 
 type t =
@@ -61,9 +61,9 @@ instance (Show t)
     let (Symbol n str_opt) = sym in
     match str_opt with
       | Just str ->
-          str
+          str ^ "{" ^ show n  ^ "}"
       | Nothing ->
-          "a_" ^ string_of_natural (naturalFromNat n)
+          "a_" ^ show n
     end
 end
 

@@ -614,7 +614,7 @@ let rec pp_cabs_expression p (CabsExpression (_, expr)) =
       | CabsEstring str ->
           pp_ctor "CabsEstring" ^^ P.brackets (pp_cabs_string_literal str)
       | CabsEgeneric (e, gs) ->
-          pp_ctor "CabsEgeneric" ^^ P.brackets (f e ^^ P.comma ^^^ comma_list pp_generic_association gs)
+          pp_ctor "CabsEgeneric" ^^ P.brackets (f e ^^ P.comma ^^^ comma_list pp_cabs_generic_association gs)
       | CabsEsubscript (e1, e2) ->
           pp_ctor "CabsEsubscript" ^^ P.brackets (f e1 ^^ P.comma ^^^ f e2)
       | CabsEcall (e, es) ->
@@ -652,7 +652,7 @@ let rec pp_cabs_expression p (CabsExpression (_, expr)) =
       | CabsEcomma (e1, e2) ->
           pp_ctor "CabsEcomma" ^^ P.brackets (f e1 ^^ P.comma ^^^ f e2)
 
-and pp_generic_association = function
+and pp_cabs_generic_association = function
   | GA_type (tyname, e) ->
       pp_ctor "GA_type" ^^ P.brackets (pp_type_name tyname ^^ P.comma ^^^ pp_cabs_expression None e)
   | GA_default e ->

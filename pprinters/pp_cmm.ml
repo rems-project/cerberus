@@ -50,13 +50,13 @@ let string_of_memory_order = function
 module Mem = Naive_memory
 
 
-let string_of_location (Mem.Pointer_nonnull (_, (n, pref))) =
-  "@" ^ string_of_int n ^ "{" ^ Mem.string_of_prefix pref ^ "}"
+let string_of_location (Mem.PVobject ((n, pref), ptr_sh)) =
+  "@" ^ string_of_int n ^ (Pp_utils.to_plain_string (Pp_core.pp_pointer_shift ptr_sh)) ^ "{" ^ Mem.string_of_prefix pref ^ "}"
 
 let string_of_cvalue = function
-  | Mem.MV_integer (Symbolic.SYMBconst n) ->
+  | Mem.MVinteger (Symbolic.SYMBconst n) ->
       Big_int.string_of_big_int n
-  | Mem.MV_integer symb ->
+  | Mem.MVinteger symb ->
       "SYMB(" ^ Pp_utils.to_plain_string (Pp_core.pp_symbolic symb) ^ ")"
 
 

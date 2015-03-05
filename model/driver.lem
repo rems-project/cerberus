@@ -39,6 +39,7 @@ type driver_state = <|
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
   trace: list string;
+  dr_step_counter: nat;
 |>
 
 
@@ -80,14 +81,14 @@ let rec resolve_read_expr write_sym symb_v expr =
     | Core.Efalse ->
         Core.Efalse
 (*
-    | Core.Econst (Mem.MV_integer symb) ->
+    | Core.Econst (Mem.MVinteger symb) ->
         if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
           Core.Econst v
         else
-          Core.Econst (Mem.MV_integer symb)
+          Core.Econst (Mem.MVinteger symb)
 *)
-    | Core.Econst (Mem.MV_integer symb) ->
-        Core.Econst (Mem.MV_integer (Symbolic.subst_sym write_sym symb_v symb))
+    | Core.Econst (Mem.MVinteger symb) ->
+        Core.Econst (Mem.MVinteger (Symbolic.subst_sym write_sym symb_v symb))
     | Core.Econst mem_val ->
         Core.Econst mem_val
     | Core.Elist pes ->
@@ -216,15 +217,15 @@ let resolve_read write_sym symb_v core_st =
 val resolve_read_pre_execution: Symbol.t -> Symbolic.symbolic -> pre_execution -> pre_execution
 let resolve_read_pre_execution write_sym symb_v preEx =
   let f = function
-    | Mem.MV_pointer ptr_val ->
-        Mem.MV_pointer ptr_val
-    | Mem.MV_integer symb ->
-        Mem.MV_integer (Symbolic.subst_sym write_sym symb_v symb)
+    | Mem.MVpointer ptr_val ->
+        Mem.MVpointer ptr_val
+    | Mem.MVinteger symb ->
+        Mem.MVinteger (Symbolic.subst_sym write_sym symb_v symb)
 (*
         if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
           symb_v
         else
-          Mem.MV_integer symb
+          Mem.MVinteger symb
 *)
   end in
 
@@ -299,10 +300,10 @@ let rec stepConcurrency n dr_st =
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act) in (\* DEBUG *\) *)
             ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
             (* TODO: v is the new concrete value, w is the symbolic value from the read *)
-            let Mem.MV_integer v_symb = v in
+            let Mem.MVinteger v_symb = v in
             
             match w with
-              | Mem.MV_integer (Symbolic.SYMBsym _ write_sym) -> 
+              | Mem.MVinteger (Symbolic.SYMBsym _ write_sym) -> 
                   let _ = Boot.print_debug 8 ("ReadsFrom CASE 1: write_sym= " ^ show write_sym ^ ", v= " ^ show v) in
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBsym Symbolic.SYMBint write_sym) v_symb) >>
                   ND.return  <| dr_st with
@@ -310,7 +311,7 @@ let rec stepConcurrency n dr_st =
                     concurrency_state= concur_st'
                   |>
               
-              | Mem.MV_integer (Symbolic.SYMBconst n) ->
+              | Mem.MVinteger (Symbolic.SYMBconst n) ->
                   let _ = Boot.print_debug 8 "ReadsFrom CASE 2" in
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) v_symb) >>
                   ND.return   <| dr_st with concurrency_state= concur_st' |> 
@@ -395,7 +396,7 @@ let rec drive_core_thread tid dr_st =
   core_thread_step dr_st.core_file th_info dr_st.core_state >>= function
     | Step_tau "end of thread" _ step_m ->
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
-        ND.return <| dr_st' with core_state= core_st' |>
+        ND.return <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
     
     | Step_tau debug_str _ step_m ->
 (*        let _ = Boot.output_string ("Found a tau ===> " ^ debug_str) in *)
@@ -404,14 +405,14 @@ let rec drive_core_thread tid dr_st =
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         let _ = Boot.print_debug 9 ("Step_tau: " ^ debug_str) in
         let _ = Boot.print_debug 9 (show core_st' ^ "END Step_tau\n\n") in
-        drive_core_thread tid <| dr_st' with core_state= core_st' |>
+        drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
     
     | Step_eval debug_str _ step_m ->
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (core_st', dr_st') ->
         let _ = Boot.print_debug 9 ("Step_eval: " ^ debug_str) in
         let _ = Boot.print_debug 9 (show core_st' ^ "END Step_eval\n\n") in
-        drive_core_thread tid <| dr_st' with core_state= core_st' |>
+        drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
     
     | _ ->
         ND.return dr_st
@@ -564,8 +565,8 @@ let action_request_sequential dr_st request =
     | LoadRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val _ mk_core_st' ->
         let mem_val =
           match Mem.runMem (Mem.load ty ptr_val) dr_st.core_run_state.layout_state with
-            | Left _ ->
-                Boot.assert_false $ "Error while loading: " ^ show ptr_val
+            | Left err ->
+                Boot.assert_false $ "Error while loading: " ^ show err ^ " with pointer: " ^ show ptr_val
             | Right (mem_val, _) ->
                 mem_val
           end in
@@ -701,8 +702,8 @@ end
 let finalize_constraints core_file (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
     | Symbolic.SYMBop op symb1 symb2 ->
-        let (Core.Econst (Mem.MV_integer symb1')) = hack core_file (Core.Econst (Mem.MV_integer symb1)) in
-        let (Core.Econst (Mem.MV_integer symb2')) = hack core_file (Core.Econst (Mem.MV_integer symb2)) in
+        let (Core.Econst (Mem.MVinteger symb1')) = hack core_file (Core.Econst (Mem.MVinteger symb1)) in
+        let (Core.Econst (Mem.MVinteger symb2')) = hack core_file (Core.Econst (Mem.MVinteger symb2)) in
         Symbolic.SYMBop op symb1' symb2'
     | symb ->
         symb
@@ -711,18 +712,19 @@ let finalize_constraints core_file (Constraints.Constraints symbs) =
 
 
 
-val finalize: driver_state -> (string * (bool * exeState * Core.expr core_run_annotation))
+val finalize: driver_state -> (string * (bool * exeState * Core.expr core_run_annotation) * (nat * nat))
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
         let v = hack dr_st.core_file
             match th_st.arena with
-              | Core.Econst (Mem.MV_integer symb) ->
+              | Core.Econst (Mem.MVinteger symb) ->
                   Core_aux.unsymbolify symb
               | _ ->
                   th_st.arena
             end in
-        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, v))
+        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, v),
+         (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
     | xs ->
         Boot.assert_false $ "ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state
   end
@@ -763,13 +765,15 @@ let initial_driver_state sym_supply file =
     symbol_supply=     sym_supply;
     core_file=         file;
     core_state=        initial_core_state;
-    core_run_state=    initial_core_run_state;
+    core_run_state=    initial_core_run_state file.Core.tagDefinitions;
     concurrency_state= initialExeState emptyPreEx;
     
     (* TODO: uber hack *)
 (*    sequential_state= Map.empty; *)
     blocked= false;
     trace= [];
+    
+    dr_step_counter= 0;
   |>
 
 
@@ -862,7 +866,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                     ) (String.toCharList arg_str) in
                   (* NOTE: adding a null termination to the char array *)
                   (
-                    Mem.mk_array (mem_vals ++ [Mem.mk_integer 0]),
+                    Mem.mk_array $ mem_vals ++ [Mem.mk_integer 0],
                     Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
                   )
                 ) arg_strs in
@@ -927,24 +931,29 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
 
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
-                  let (str, (is_blocked, conc_st, v)) = finalize dr_st' in
+                  let (str, (is_blocked, conc_st, v), steps) = finalize dr_st' in
                   ND.log ("Result: " ^ show v ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
-                  ND.return (str, (is_blocked, conc_st, v))
+                  ND.return (str, (is_blocked, conc_st, v), steps)
               | MinimalOpsem.DataRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Data_race))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Data_race),
+                             (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.UnsequencedRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Unsequenced_race))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Unsequenced_race),
+                             (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.IndeterminateReads _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.BadMutexes _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.NotInSublanguage ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY))
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
             end
         else
           ND.return (finalize dr_st')

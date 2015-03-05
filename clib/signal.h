@@ -1,3 +1,6 @@
+#ifndef	_SIGNAL_H_
+#define	_SIGNAL_H_
+
 typedef __cerbty_sig_atomic_t sig_atomic_t;
 #define SIG_IGN __cerbvar_SIG_IGN
 #define SIGILL  __cerbvar_SIGILL
@@ -11,3 +14,6 @@ typedef __cerbty_sig_atomic_t sig_atomic_t;
 
 void (*signal(int sig, void (*func)(int)))(int);
 int raise(int sig);
+
+#else
+#endif

@@ -76,6 +76,31 @@ let rec foldM f a = function
       bind (f a x) (fun z -> foldM f z xs)
 end
 
+val     filterM: forall 'a 's 'msg. ('a -> t bool 's 'msg) -> list 'a -> t (list 'a) 's 'msg
+let rec filterM pred = function
+  | [] ->
+      return []
+  | (x::xs) ->
+      bind (pred x)          (fun b  ->
+      bind (filterM pred xs) (fun ys ->
+      return (if b then x::ys else ys)
+      ))
+end
+
+
+val        sequence: forall 'a 's 'msg. list (t 'a 's 'msg) -> t (list 'a) 's 'msg
+let inline sequence ms =
+  let k m m' =
+    bind m (fun x ->
+      bind m' (fun xs ->
+        return (x::xs)
+      )
+    ) in
+  List.foldr k (return []) ms
+
+val     replicateM: forall 'a 's 'msg. nat -> (t 'a 's 'msg) -> t (list 'a) 's 'msg
+let rec replicateM n x =
+  sequence (List.replicate n x)
 
 
 val fail: forall 'a 's 'msg. 'msg -> t 'a 's 'msg
@@ -83,9 +108,17 @@ let fail err =
   runE (Exception.fail err)
 
 
+
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+let fmap f m =
+  bind m (fun z -> return (f z))
+
+
+
 module Operators = struct
   let inline (>>=)      = bind
   let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+  let inline (<$>) = fmap
 end
 open Operators
 

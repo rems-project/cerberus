@@ -1,3 +1,6 @@
+#ifndef	_THREADS_H_
+#define	_THREAD_H_
+
 #define thread_local _Thread_local
 
 #define ONCE_FLAG_INIT      __cerbvar_ONCE_FLAG_INIT
@@ -12,3 +15,6 @@ typedef __cerbty_mtx_t      mtx_t;
 // TODO: wtf? typedef int (*)(void*)  thrd_start_t;
 
 typedef __cerbty_once_flag once_flag;
+
+#else
+#endif

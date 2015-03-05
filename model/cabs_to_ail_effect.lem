@@ -1,4 +1,4 @@
-open import Pervasives Cabs Std
+open import Pervasives Cabs Std Show Show_extra
 import Boot Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
@@ -12,10 +12,10 @@ module A      = AilSyntax
 module ATypes = AilTypes
 
 
-type tag_declaration =
-  | Struct_declaration of list (Cabs.cabs_identifier * ATypes.ctype)
-  | Union_declaration of list (Cabs.cabs_identifier * ATypes.ctype)
-  | Enum_declaration (* TODO *)
+type tag_definition =
+  | Struct_definition of list (Cabs.cabs_identifier * ATypes.ctype)
+  | Union_definition of list (Cabs.cabs_identifier * ATypes.ctype)
+  | Enum_definition (* TODO *)
 
 
 type member_kind =
@@ -134,7 +134,9 @@ type state = <|
   
   (* IMPORTANT: the two scope tables must be updated in sync *)
   registered_identifiers:      Scope_table.t scope (cabs_identifier * namespace) (A.identifier * identifier_kind * linkage);
-  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration;
+(*  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration; *)
+  
+  tag_definitions: map A.identifier tag_definition;
   
                                                 (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   function_declarations:        map A.identifier (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool);
@@ -146,6 +148,10 @@ type state = <|
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
   typedef_definitions: map A.identifier (ATypes.qualifiers * ATypes.ctype);
+  
+(* WIP
+  struct_definitions: map A.identifier (
+*)
   
   static_assertions: list (A.expression unit * A.stringLiteral);
   
@@ -238,12 +244,12 @@ let with_scope scope m =
     let _ = Boot.output_string ("ENTERING Scope: " ^ string_of_scope scope) in
     
     <| st with registered_identifiers=      Scope_table.create_scope scope st.registered_identifiers;
-               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations |>
+(*               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations *) |> 
   ) >>
   m >>= fun res ->
   State_exception.modify (fun st ->
     let (idents_map, ident_table'  ) = Scope_table.destroy_scope st.registered_identifiers      in
-    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in
+(*    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in *)
     
     let _ = Boot.output_string ("EXITING Scope: " ^ string_of_scope scope) in
     
@@ -269,7 +275,7 @@ let with_scope scope m =
     ) (Map.range idents_map) [],
     
     <| st with registered_identifiers=      ident_table';
-               registered_tag_declarations= tagDecl_table' |>)
+(*               registered_tag_declarations= tagDecl_table' *) |>)
   ) >>= fun bs ->
   return (List.reverse bs, res)
 
@@ -281,7 +287,9 @@ let initial_state = <|
   aux_supply=                  UniqueId.new_supply;
   symbol_supply=               UniqueId.new_supply;
   registered_identifiers=      Scope_table.empty;
-  registered_tag_declarations= Scope_table.empty;
+(*  registered_tag_declarations= Scope_table.empty;*)
+  tag_definitions= Map.empty;
+
   enumeration_constants=       Map.empty;
   
   function_declarations=        Map.empty;
@@ -311,6 +319,17 @@ let eval m =
 
 
 
+val freshify: cabs_identifier -> t cabs_identifier
+let freshify (CabsIdentifier loc str) =
+  State_exception.modify (fun st ->
+    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
+    (CabsIdentifier loc (str ^ show n), <| st with aux_supply= aux_supply' |>)
+  )
+
+
+
+
+
 (* ========================================================================== *)
 val ident_is_in_scope: cabs_identifier -> namespace -> t bool
 let ident_is_in_scope ident namespace =
@@ -325,55 +344,45 @@ let ident_is_in_current_scope ident namespace =
     Scope_table.is_in_current_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
   )
 
-(*
-val register_unamed_struct_union_enum: tag_declaration -> t A.identifier
-let register_unamed_struct_union_enum =
-  (* generates a fresh symbol *)
-  State_exception.modify (fun st ->
-    let (sym, symbol_supply) = Symbol.fresh st.symbol_supply in
-    (sym, <| st with symbol_supply = symbol_supply |>)
-  ) >>= fun tag_sym ->
-  (* associates it to the identifier *)
-  State_exception.update (fun st ->
-    <| st with registered_identifiers= Scope_table.register (tag_sym, Namespace_tag) (tag_sym, kind, link) st.registered_identifiers |>
-  ) >>
-  return sym
-*)
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
 val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
 let _register_identifier ident namespace kind link =
+  let do_fresh =
+    (* generates a fresh symbol *)
+    State_exception.modify (fun st ->
+      let CabsIdentifier _ str = ident in
+      let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
+      (sym, <| st with symbol_supply = symbol_supply |>)
+    ) >>= fun sym ->
+    (* associates it to the identifier *)
+    State_exception.update (fun st ->
+      <| st with registered_identifiers= Scope_table.register (ident, namespace) (sym, kind, link) st.registered_identifiers |>
+    ) >>
+    return sym in
+  
   State_exception.read (fun st ->
-    Scope_table.is_in_current_scope (ident, namespace) st.registered_identifiers
+    Scope_table.resolve (ident, namespace) st.registered_identifiers
   ) >>= function
-    | true ->
+    | Just (_, (sym, kind', link')) ->
+        (* TODO: need to check that the kind/link match up *)
         if link = Linkage_none then
           (* §6.7#3 "except that ..." *)
           if kind = Kind_typedef then
             Boot.assert_false "WIP Kind_typedef"
           else if kind = Kind_tag then
-            Boot.assert_false "WIP Kind_tag"
+            (* TODO: multiple definition are not allowed *)
+            return sym
           else
             (* TODO: location *)
             fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
         else
-          return ()
-    | false ->
-        return ()
-  end >>
+          do_fresh
+    | Nothing ->
+        do_fresh
+  end
   
-  (* generates a fresh symbol *)
-  State_exception.modify (fun st ->
-    let CabsIdentifier _ str = ident in
-    let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
-    (sym, <| st with symbol_supply = symbol_supply |>)
-  ) >>= fun sym ->
-  (* associates it to the identifier *)
-  State_exception.update (fun st ->
-    <| st with registered_identifiers= Scope_table.register (ident, namespace) (sym, kind, link) st.registered_identifiers |>
-  ) >>
-  return sym
 
 
 val resolve_identifier: cabs_identifier -> namespace -> t (maybe (scope * (A.identifier * identifier_kind * linkage)))
@@ -444,6 +453,83 @@ _STD "§6.2.2#6" $
 
 
 
+
+
+val register_tag: Loc.t -> maybe cabs_identifier -> t A.identifier
+let register_tag loc tag_ident_opt =
+  (* generate a fresh tag identifier if none provided *)
+  maybe (freshify (CabsIdentifier loc "anonymous_tag_")) return tag_ident_opt  >>= fun tag_ident    ->
+  register_identifier tag_ident Namespace_tag Kind_tag [(* TODO: check *)]     >>= fun (_, tag_sym) ->
+  return tag_sym
+  
+
+
+val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> t unit
+let register_tag_definition loc tag_sym tag_decl =
+  let _ = Boot.print_debug 5 ("REGISTERING TAG: " ^ show tag_sym) in
+  State_exception.read (fun st ->
+    Map.member tag_sym st.tag_definitions
+  ) >>= function
+    | true ->
+        (* TODO: check *)
+        fail loc (Errors.Desugar_Redefinition tag_sym)
+    | false ->
+        return ()
+  end >>
+  
+  State_exception.update (fun st ->
+    <| st with tag_definitions= Map.insert tag_sym tag_decl st.tag_definitions |>
+  )
+
+
+val resolve_tag_definition: A.identifier -> t tag_definition
+let resolve_tag_definition tag_sym =
+  State_exception.read (fun st ->
+    Map.lookup tag_sym st.tag_definitions
+  ) >>= function
+    | Just tag_decl ->
+        return tag_decl
+    | Nothing ->
+        Boot.assert_false "TODO: resolve_tag_definition: Nothing" (* TODO: is probably a possible/valid situation *)
+  end
+
+
+
+
+(*
+KKK
+
+type tag_declaration =
+  | Struct_declaration of list (Cabs.cabs_identifier * ATypes.ctype)
+
+
+
+  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration;
+*)
+
+
+
+(*
+  match tag_ident_opt with
+    | Just sym ->
+        return sym
+    | Nothing ->
+        State_exception.modify (fun st ->
+          let (sym, symbol_supply) = Symbol.fresh st.symbol_supply in
+          (sym, <| st with symbol_supply = symbol_supply |>)
+        )
+  end >>= fun tag_sym ->
+  
+  
+
+
+
+  (* associates it to the identifier *)
+  State_exception.update (fun st ->
+    <| st with registered_identifiers= Scope_table.register (tag_sym, Namespace_tag) (tag_sym, kind, link) st.registered_identifiers |>
+  ) >>
+  return sym
+*)
 
 
 
@@ -697,15 +783,6 @@ let perform_inside_loop m =
 
 
 
-val freshify: cabs_identifier -> t cabs_identifier
-let freshify (CabsIdentifier loc str) =
-  State_exception.modify (fun st ->
-    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
-    (CabsIdentifier loc (str ^ string_of_natural (naturalFromNat n)), <| st with aux_supply= aux_supply' |>)
-  )
-
-
-
 
 (* TODO: would be more efficient to store in the state the list of unused functions *)
 val add_used_identifier: A.identifier -> t unit
@@ -814,6 +891,7 @@ let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) ->
         State_exception.read (fun st ->
+          let _ = Boot.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
           let decls = Map_extra.toList (
             map_union
               (Map.map (fun (ty, params, b1, b2, b3) -> A.Decl_function ty params b1 b2 b3) st.function_declarations)
@@ -825,6 +903,17 @@ let extract_program startup_str =
              A.object_definitions=   remove_unused_identifiers st startup_sym $ Map_extra.toList st.external_object_definitions;
              A.function_definitions= remove_unused_identifiers st startup_sym $ Map_extra.toList st.function_definitions;
              A.static_assertions=    st.static_assertions;
+             
+             A.tag_definitions= List.foldr (fun (sym, def) acc ->
+                                  match def with
+                                    | Struct_definition ident_tys ->
+                                        (sym, A.StructDef ident_tys) :: acc
+                                    | Union_definition ident_tys ->
+                                        (sym, A.UnionDef ident_tys) :: acc
+                                    | Enum_definition ->
+                                        acc
+                                   end
+                                ) [] $ Map_extra.toList st.tag_definitions
            |>)
         )
     | Nothing ->

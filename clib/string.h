@@ -1,5 +1,9 @@
-typedef __cerbty_size_t size_t;
+#ifndef	_STRING_H_
+#define	_STRING_H_
+
+// typedef __cerbty_size_t size_t;
 #define NULL __cerbvar_NULL
+
 void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
 void *memmove(void *s1, const void *s2, size_t n);
 char *strcpy(char * restrict s1, const char * restrict s2);
@@ -39,3 +43,6 @@ errno_t strerror_s(char *s, rsize_t maxsize, errno_t errnum);
 size_t strerrorlen_s(errno_t errnum);
 size_t strnlen_s(const char *s, size_t maxsize);
 */
+
+#else
+#endif

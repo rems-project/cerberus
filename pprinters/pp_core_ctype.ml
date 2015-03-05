@@ -35,6 +35,8 @@ let pp_integer_ctype ity =
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
+    | _ ->
+        !^ "pp_inter_ctype OTHER"
 
 let pp_basic_ctype bty =
   let open AilTypes in
@@ -43,26 +45,29 @@ let pp_basic_ctype bty =
 
 let rec pp_ctype = function
 (*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
+
   | Void0 ->
       !^ "void"
   | Basic0 bty ->
       pp_basic_ctype bty
   | Array0 (elem_ty, n_opt) ->
       pp_ctype elem_ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
-(*
-    | STRUCT (tag, mems)      -> !^ "struct" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | UNION (tag, mems)       -> !^ "union" ^^^ Pp_ail.pp_id tag ^^^ P.braces (pp_mems mems)
-    | ENUM name               -> !^ "enum" ^^^ Pp_ail.pp_id name
-*)
   | Function0 (return_ty, args_tys, is_variadic) ->
         pp_ctype return_ty ^^^ P.parens (
           comma_list (fun (qs, ty) -> Pp_ail.pp_qualifiers qs (pp_ctype ty)) args_tys ^^
           (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
         )
-    | Pointer0 (qs, ref_ty) ->
-        Pp_ail.pp_qualifiers qs (pp_ctype ref_ty) ^^ P.star
-    | Atomic0 atom_ty ->
-        !^ "_Atomic" ^^^ P.parens (pp_ctype atom_ty)
+  | Pointer0 (qs, ref_ty) ->
+      Pp_ail.pp_qualifiers qs (pp_ctype ref_ty) ^^ P.star
+  | Atomic0 atom_ty ->
+      !^ "_Atomic" ^^^ P.parens (pp_ctype atom_ty)
+  | Struct0 sym ->
+      !^ "struct" ^^^ Pp_ail.pp_id sym
+  | Union0 sym ->
+      !^ "union" ^^^ Pp_ail.pp_id sym
+  | Builtin0 str ->
+      !^ str
+
 
 (*
 and pp_member = function

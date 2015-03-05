@@ -2,6 +2,8 @@ open Lem_pervasives
 open Global
 open Core
 
+open Either
+
 open Colour
 
 module P = PPrint
@@ -46,9 +48,11 @@ let precedence = function
   | Efalse
   | Econst _
   | Elist _
+  | Econs _
   | Ectype _
   | Esym _
   | Eimpl _
+  | Earray _
   | Etuple _
   | Eundef _
   | Eerror _
@@ -66,6 +70,8 @@ let precedence = function
   | Eaction _
   | Eproc _
   | Ecall _
+  | Eshift _
+  | Ecase _
   | Eoutput _
   | Eif _
   | Elet _
@@ -187,30 +193,48 @@ let rec pp_prefix = function
   | sym :: pref ->
       !^ (Pp_symbol.to_string_pretty sym) ^^ P.dot ^^ pp_prefix pref
 
+let pp_pointer_shift ptr_sh =
+  let rec aux = function
+    | [] ->
+        P.empty
+    | (ty, n) :: ptr_sh' ->
+        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Big_int.string_of_big_int n) ^^ P.comma ^^^
+        aux ptr_sh'
+  in
+  P.brackets (aux ptr_sh)
+
 
 let rec pp_constant = function
-(*
-  | Mem.MV_pointer (Mem.Pointer_function f) ->
-      !^ "TODO(MV_pointer(function))"
-*)
-  | Mem.MV_pointer (Mem.Pointer_nonnull (_, (n, pref))) ->
-      !^ ("@" ^ string_of_int n) ^^ P.braces (pp_prefix pref)
-  | Mem.MV_pointer ptr_val ->
-      !^ "TODO(MV_pointer)" 
-  | Mem.MV_integer (Symbolic.SYMBconst n) ->
+  | Mem.MVunspecified ty ->
+      !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+  | Mem.MVinteger (Symbolic.SYMBconst n) ->
       !^ (Big_int.string_of_big_int n)
-  | Mem.MV_integer symb ->
+  | Mem.MVinteger symb ->
       !^ "SYMB" ^^ P.parens (pp_symbolic symb)
-  | Mem.MV_array vs ->
-      pp_const "array" ^^ P.parens (comma_list pp_constant vs)
+  | Mem.MVpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
+      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
+  | Mem.MVpointer ptr_val ->
+      !^ "TODO(MVpointer)" 
+  | Mem.MVarray vs_opt ->
+      pp_const "array" ^^ P.parens (comma_list pp_constant vs_opt)
+  | Mem.MVstruct (tag, ident_vs) ->
+      P.parens (!^ "struct" ^^^ pp_symbol tag) ^^^ P.braces (comma_list (fun (ident, mem_val) -> P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp_constant mem_val) ident_vs)
+(*   | MVunion of Symbol.t * Symbol.t * mem_value *)
+
+
+
 (*
-  | Mem.MV_struct _ ->
-      !^ "TODO(MV_struct)"
-  | Mem.MV_union _ ->
-      !^ "TODO(MV_union)"
-  | Mem.MV_pointer_byte _ ->
-      !^ "TODO(MV_pointer_byte)"
-  | Mem.MV_unspecified ty ->
+  | Mem.MVpointer (Mem.Pointer_function f) ->
+      !^ "TODO(MVpointer(function))"
+*)
+(*
+  | Mem.MVstruct _ ->
+      !^ "TODO(MVstruct)"
+  | Mem.MVunion _ ->
+      !^ "TODO(MVunion)"
+  | Mem.MVpointer_byte _ ->
+      !^ "TODO(MVpointer_byte)"
+  | Mem.MVunspecified ty ->
       !^ "unspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
 *)
 
@@ -257,7 +281,6 @@ let pp_pointer_action = function
   | PtrShift ->
       pp_keyword "pointer_shift"
 
-
 let rec pp_expr e =
   let rec pp p e =
     let p'   = precedence e in
@@ -285,12 +308,19 @@ let rec pp_expr e =
             pp_constant c
         | Elist pes ->
             P.brackets (comma_list pp pes)
+        | Econs (pe1, pe2) ->
+            pp_const "cons" ^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
         | Ectype ty ->
             P.dquotes (Pp_core_ctype.pp_ctype ty)
         | Esym sym ->
             pp_symbol sym
         | Eimpl i ->
             pp_impl i
+        | Earray xs ->
+            pp_const "array" ^^ P.parens (comma_list (function
+              | Left z -> pp_constant z
+              | Right sym -> pp_symbol sym
+            ) xs)
         | Etuple pes ->
             P.parens (comma_list pp pes)
         | Enot e ->
@@ -299,6 +329,10 @@ let rec pp_expr e =
             pp e1 ^^^ pp_binop op ^^^ pp e2
         | Ecall (fname, es) ->
             pp_name fname ^^ P.parens (comma_list pp es)
+        | Eshift (pe, path) ->
+            pp_keyword "shift" ^^ P.parens (pp pe ^^ P.comma ^^^ pp_shift_path path)
+        | Ecase (pe, nm_void, nm_basic, nm_array, nm_fun, nm_ptr, nm_atomic, nm_struct, nm_union, nm_builtin) ->
+            pp_keyword "case_ty" ^^ P.parens (comma_list pp_name [nm_void; nm_basic; nm_array; nm_fun; nm_ptr; nm_atomic; nm_struct; nm_union; nm_builtin])
         | Eoutput str ->
             (* TODO: the string should be quoted and escaped *)
             pp_keyword "output" ^^ P.parens (!^ str)
@@ -403,6 +437,12 @@ let rec pp_expr e =
       )
   in pp None e
 
+and pp_shift_path sh_path =
+  P.braces (
+    comma_list (fun (ty, pe) -> P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty) ^^ P.comma ^^^ pp_expr pe)) sh_path
+  )
+
+
 and pp_action act =
   let pp_args args mo =
     P.parens (comma_list pp_expr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
@@ -456,6 +496,21 @@ let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
 
 
+
+let pp_tagDefinitions tagDefs =
+  let tagDefs = Pmap.bindings_list tagDefs in
+  
+  P.separate_map (P.break 1 ^^ P.break 1) (fun (tag, ident_tys) ->
+    pp_keyword "struct" ^^^ pp_symbol tag ^^^ P.braces (P.break 1 ^^
+      P.nest 2 (
+        P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> Pp_core_ctype.pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+      ) ^^ P.break 1
+    ) ^^ P.semi
+  ) tagDefs
+
+
+
+
 let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype
 
 let pp_params params =
@@ -473,6 +528,11 @@ let pp_file file =
     pp_keyword "glob" ^^^ pp_symbol gsym ^^ P.colon ^^^ pp_core_type gTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
+  
+  !^ "{-" ^^ P.break 1 ^^
+  pp_tagDefinitions file.tagDefinitions0 ^^ P.break 1 ^^
+  !^ "-}" ^^ P.break 1 ^^
+  
   
   List.fold_left g P.empty file.globs ^^
   List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)

@@ -54,10 +54,13 @@ let keywords =
       ("cfunction", T.CFUNCTION);
       ("unit",      T.UNIT     );
       ("function",  T.FUNCTION );
+      
+      ("eff", T.EFF);
 (*    | Tuple of list core_base_type *)
       
       (* for Core.expr *)
       ("list",   T.LIST     );
+      ("cons",   T.CONS     );
       ("array",   T.ARRAY     );
       ("true",   T.TRUE);
       ("false",  T.FALSE);
@@ -99,6 +102,8 @@ let keywords =
       ("par", T.PAR);
       ("wait", T.WAIT);
 
+     
+      ("shift", T.SHIFT);
       
       (* for Core.action_ *)
       ("create",                  T.CREATE                 );
@@ -108,7 +113,7 @@ let keywords =
       ("load",                    T.LOAD                   );
       ("compare_exchange_strong", T.COMPARE_EXCHANGE_STRONG);
       ("compare_exchange_weak",   T.COMPARE_EXCHANGE_WEAK  );
-
+     
       
       
       ("def",     T.DEF     ); (* for implementation files only *)

@@ -5,7 +5,7 @@ open Global
 type result =
   | Rfile of Core.sym * (unit Core.fun_map)
   | Rstd  of unit Core.fun_map
-  | Rimpl of unit Core.impl
+  | Rimpl of unit Core.impl * unit Core.fun_map
 
 
 type token =
@@ -49,7 +49,9 @@ type token =
   | CFUNCTION
   | UNIT
   | FUNCTION
+  | EFF
   | LIST
+  | CONS
   | ARRAY
   | TRUE
   | FALSE
@@ -155,6 +157,7 @@ type token =
   | PAR
   | ND
   | WAIT
+  | SHIFT
 
 
 (*

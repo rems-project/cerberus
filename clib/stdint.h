@@ -1,3 +1,6 @@
+#ifndef	_STDINT_H_
+#define	_STDINT_H_
+
 /* The typedef name intN_t designates a signed integer type with width N, no
    padding bits, and a two’s complement representation. */
 typedef __cerbty_int8_t  int8_t;
@@ -143,3 +146,6 @@ typedef __cerbty_uintmax_t uintmax_t;
 /* #define __STDC_WANT_LIB_EXT1__   */
 
 // TODO RSIZE_MAX
+
+#else
+#endif
