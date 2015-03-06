@@ -261,6 +261,110 @@ let is_negative_action = function
 end
 
 
+val     to_value: pexr -> maybe value
+let rec to_value pexpr =
+  match pexpr with
+    | PEval cval ->
+        Just cval
+    | PEsym _ ->
+        Nothing
+    | PEimpl _ ->
+        Nothing
+    | PEcons pe1 pe2 ->
+        match (to_value pe1, to_value pe2) with
+          | (Just cval1, Just (Vlist cvals)) ->
+              Just (Vlist (cval1 :: cvals))
+          |  _ ->
+              Nothing
+        end
+    | PEcase_list of pexpr * name * name
+    | PEcase_ctype of pexpr * name * name * name * name * name * name * name * name * name
+    | PEshift of pexpr * shift_path
+    | PEnot of pexpr
+    | PEop of binop * pexpr * pexpr
+    | PEtuple of list pexpr
+    | PEarray xs ->
+        Varray
+        List.foldr (fun acc_opt x ->
+          match (acc_opt, x) with
+            | (Just acc, Left mem_val) ->
+                Just (mem_val :: acc)
+          | _ ->
+              Nothing
+        end) xs
+    | PEcall _ _ ->
+         (* TODO: maybe do some eval? *)
+        Nothing
+    | PEif (PEval Vtrue) pe2 _ ->
+        to_value pe2
+    | PEif (PEval Vfalse) _ pe3 ->
+        to_value pe3
+  end
+
+val     to_pure: forall 'a. expr 'a -> pexpr
+let rec to_pure expr =
+  match expr with
+    | Epure pe ->
+        Just pe
+    | Eundef _ ->
+        Nothing
+    | Eerror _ ->
+        Nothing
+    | Eraise _ ->
+        Nothing
+    | Eregister _ _ ->
+        Nothing
+    | Eskip ->
+        Nothing
+    | Elet sym pe1 e2 ->
+        match to_pure e2 with
+          | Just pe2 ->
+              Just (PElet sym pe1 pe2)
+          | Nothing
+        end
+    | Eif pe1 e2 e3 ->
+        match (to_pure e2, to_pure e3) with
+          | (Just pe2, Just pe3) ->
+              Just (PEif pe1 pe2 pe3)
+          | _ ->
+              Nothing
+        end
+    | Eproc _ _ _ ->
+        Nothing
+    | Eaction _ ->
+        Nothing
+    | Eunseq _ ->
+        Nothing
+    | Ewseq _ _ _ ->
+        Nothing
+    | Esseq _ _ _ ->
+        Nothing
+    | Easeq _ _ _ ->
+      Nothing
+    | Eindet _ ->
+        Nothing
+    | Ebound _ _ ->
+        Nothing
+    | Esave _ _ _ ->
+        Nothing
+    | Erun _ _ _ ->
+        Nothing
+    | Eret _ ->
+        Nothing
+    | End _ ->
+        Nothing
+    | Epar _ ->
+        Nothing
+    | Ewait _ ->
+        Nothing
+end
+
+
+
+
+
+
+
 (* check if a symbolic names is part of a pattern *)
 val in_pattern: sym -> list (maybe sym) -> bool
 let rec in_pattern a p =
@@ -278,8 +382,6 @@ let rec subst_sym_pexpr sym v = function
   | (PEsym sym' as pe) ->
       if sym = sym' then PEval v else pe
   | (PEimpl _ as pe) ->
-      pe
-  | (PEnil as pe) ->
       pe
   | PEcons pe1 pe2 ->
       PEcons (subst_sym_pexpr sym v pe1) (subst_sym_pexpr sym v pe2)
@@ -310,7 +412,10 @@ let rec subst_sym_pexpr sym v = function
       end
   | PEcall nm pes ->
       PEcall nm (List.map (subst_sym_pexpr sym v) pes)
-  
+  | PElet sym' pe1 pe2 ->
+      PElet sym' (subst_sym_pexpr sym v pe1) (if sym = sym' then pe2 else subst_sym_pexpr sym v pe2)
+  | PEif pe1 pe2 pe3 ->
+      PEif (subst_sym_pexpr sym v pe1) (subst_sym_pexpr sym v pe2) (subst_sym_pexpr sym v pe3)
   | PEis_scalar pe ->
       PEis_scalar (subst_sym_pexpr sym v pe)
   | PEis_integer pe ->

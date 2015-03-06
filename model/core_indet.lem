@@ -387,85 +387,16 @@ let determinate_expr e =
 
   *)
 
-let rec hack_pexpr pe =
-  match pe with
-    | PEval _ ->
-        pe
-    | PEsym _ ->
-        pe
-    | PEimpl _ ->
-        pe
-    | PEnil ->
-        pe
-    | PEcons pe1 pe2 ->
-        pe
-    | PEcase_list of pexpr * name * name
-    | PEcase_ctype of pexpr * name * name * name * name * name * name * name * name * name
-    | PEshift of pexpr * shift_path
-    | PEnot of pexpr
-    | PEop of binop * pexpr * pexpr
-    | PEtuple of list pexpr
-    | PEarray of list (either Mem.mem_value sym)
-    | PEcall of name * list pexpr
-    | PEif of pexpr * pexpr * pexpr
-  end
-
-let rec hack x =
-  match x with
-    | Core.Eunit ->
-        Core.Eunit
-    | Core.Etrue ->
-        Core.Etrue
-    | Core.Efalse ->
-        Core.Efalse
-    | Core.Econst cst ->
-        Core.Econst cst
-    | Core.Elist es ->
-        Core.Elist (List.map hack es)
-    | Core.Econs pe1 pe2 ->
-        Core.Econs (hack pe1) (hack pe2)
-    | Core.Ectype ty ->
-        Core.Ectype ty
-    | Core.Esym a ->
-        Core.Esym a
-    | Core.Eimpl impl ->
-        Core.Eimpl impl
-    | Core.Etuple es ->
-        Core.Etuple (List.map hack es)
-    | Core.Earray xs ->
-        Core.Earray xs
-    | Core.Enot e ->
-        Core.Enot (hack e)
-    | Core.Eop bop e1 e2 ->
-        Core.Eop bop (hack e1) (hack e2)
-    | Core.Ecall f es ->
-        Core.Ecall f (map hack es)
-    | Core.Eshift pe path ->
-        Core.Eshift (hack pe) path
-    | Core.Eoutput str ->
-        Core.Eoutput str
-    | Core.Eundef ub ->
-        Core.Eundef ub
-    | Core.Eerror str ->
-        Core.Eerror str
-    | Core.Eraise str ->
-        Core.Eraise str
-(*
-    | Core.Etry e str_es ->
-        Core.Etry (hack e) (List.map (fun (str, e_) -> (str, hack e)) str_es)
-*)
-    | Core.Eregister evnt nm ->
-        Core.Eregister evnt nm
-    | Core.Eskip ->
-        Core.Eskip
-    | Core.Elet a e1 e2 ->
-        Core.Elet a (hack e1) (hack e2)
-    | Core.Eif e1 e2 e3 ->
-        Core.Eif (hack e1) (hack e2) (hack e3)
-    | Core.Eproc bs f es ->
-        Core.Eproc bs f (map hack es)
-    | Core.Eaction pa ->
-        Core.Eaction pa
+let rec hack expr =
+  match expr with
+    | Core.Epure _ ->
+        expr
+    | Core.Elet sym pe1 e2 ->
+        Core.Elet sym pe1 (hack e2)
+    | Core.Eproc _ _ _ ->
+        expr
+    | Core.Eif pe1 e2 e3 ->
+        Core.Eif pe1 (hack e2) (hack e3)
     | Core.Eunseq es ->
         Core.Eunseq (map hack es)
     | Core.Ewseq as_opt e1 e2 ->
@@ -476,7 +407,7 @@ let rec hack x =
 (* TODO: lem non termination bug *)
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
-                            (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Just x -> x end))
+                            (Core.Ewseq [] (Core.Eaction pact) (Core.Epure (Core.PEsym match _a_opt with Just x -> x end)))
 
 
 (*
@@ -492,22 +423,14 @@ let rec hack x =
         Core.Esave d a_tys (hack e)
     | Core.Erun bs d a_vs ->
         Core.Erun bs d a_vs
-    | Core.Eret e ->
-        Core.Eret (hack e)
+    | Core.Eret _ ->
+        expr
     | Core.End es ->
         Core.End (map hack es)
     | Core.Epar es ->
         Core.Epar (map hack es)
     | Core.Ewait tid ->
         Core.Ewait tid
-    | Core.Eis_scalar e ->
-        Core.Eis_scalar (hack e)
-    | Core.Eis_integer e ->
-        Core.Eis_integer (hack e)
-    | Core.Eis_signed e ->
-        Core.Eis_signed (hack e)
-    | Core.Eis_unsigned e ->
-        Core.Eis_unsigned (hack e)
 end
 
 

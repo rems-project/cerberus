@@ -214,7 +214,7 @@ let rec remove_unseqs expr =
 
   | Eunseq es ->
       if List.all is_pure es then
-        Etuple es
+        Epure (PEtuple es)
       else
         Eunseq (List.map remove_unseqs es)
   
