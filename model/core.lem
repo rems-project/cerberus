@@ -134,6 +134,7 @@ type value =
   | Vinteger of Symbolic.symbolic
   | Vfloating of string
   | Vpointer of Mem.pointer_value
+  | Varray of list Mem.mem_value
 
 
 (* pure Core expressions *)
@@ -144,7 +145,6 @@ type pexpr =
   | PEsym of sym
   | PEimpl of Implementation_.implementation_constant
   (* list (de|con)structors *)
-  | PEnil
   | PEcons of pexpr * pexpr
   | PEcase_list of pexpr * name * name
   (* ctype destructor *)
@@ -160,6 +160,7 @@ type pexpr =
   (* call to a pure function *)
   | PEcall of name * list pexpr
   
+  | PElet of sym * pexpr * pexpr
   | PEif of pexpr * pexpr * pexpr
   
   (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)

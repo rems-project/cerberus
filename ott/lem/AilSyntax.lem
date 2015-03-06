@@ -123,7 +123,7 @@ and generic_association 'A =
 and expression 'A [name = "e*"] =
   | AnnotatedExpression of 'A * expression' 'A
 
-type bindings (*[name="b*"]*) = list (identifier * (qualifiers * ctype))
+type bindings (*[name="b*"]*) = list (identifier * (storageDuration * qualifiers * ctype))
 
 type statement' 'A [name="s*"] = 
   | AilSskip
