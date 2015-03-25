@@ -89,8 +89,10 @@ type execution_result = (Core_run_aux.core_run_annotation Core.expr list, Errors
 let drive sym_supply file args with_concurrency : execution_result =
   let main_body = 
     match Pmap.lookup file.main file.funs with
-      | Some (retTy, _, expr_main) ->
-          expr_main
+      | Some (Core.Proc (_, _, e)) ->
+          e
+      | Some (Core.Fun (_, _, pe)) ->
+          Core.Eret pe
       |  _ ->
           Pervasives.output_string stderr "ERROR: couldn't find the Core main function\n";
           exit (-1) in

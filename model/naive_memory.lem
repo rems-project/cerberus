@@ -51,10 +51,25 @@ type pointer_value =
   | PVobject of object_id * pointer_shift
   | PVfunction of Symbol.t
 
+type integer_operator =
+  | IntAdd
+  | IntSub
+  | IntMul
+  | IntDiv
+  | IntMod
+  | IntExp
+
+type integer_value =
+  (* TODO: merge the two kind of symbolics *)
+  | IVinteger of integer
+  | IVsymbolic of Symbolic.symbolic (* possibly-symbolic integer value *)
+  | IVptrdiff of pointer_value * pointer_value
+  | IVintptr of pointer_value
+  | IVop of integer_operator * integer_value * integer_value
 
 type mem_value =
   | MVunspecified of Core_ctype.ctype (* this should only be used for base and union types *)
-  | MVinteger of Symbolic.symbolic (* possibly-symbolic integer value *)
+  | MVinteger of integer_value
   | MVfloating of string
   | MVpointer of pointer_value
   | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
@@ -70,7 +85,7 @@ type mem_read =
 
 
 type tag_definitions =
-    map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))
+  map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))
 
 
 type mem_state = <|
@@ -89,7 +104,15 @@ type memM 'a = SEU.t 'a mem_state mem_error
 
 
 (* BEGIN CLASS ======================================================================== *)
-let rec pointer_valueCompare ptr_val1 ptr_val2 =
+let pointer_valueCompare ptr_val1 ptr_val2 =
+  let ord = function
+    | PVnull _ ->
+        (0 : nat)
+    | PVobject _ _ ->
+        1
+    | PVfunction _ ->
+        2
+  end in
   match (ptr_val1, ptr_val2) with
     | (PVnull ty1, PVnull ty2) ->
         setElemCompare ty1 ty2
@@ -97,6 +120,8 @@ let rec pointer_valueCompare ptr_val1 ptr_val2 =
         setElemCompare (oid1, sh1) (oid2, sh2)
     | (PVfunction sym1, PVfunction sym2) ->
         setElemCompare sym1 sym2
+    | _ ->
+        setElemCompare (ord ptr_val1) (ord ptr_val2)
   end
 
 let pointer_valueEquals ptr_val1 ptr_val2 =
@@ -190,19 +215,51 @@ let rec stringFromPointer_value ptr_val =
   end
 
 instance (Show pointer_value)
-  let show ptr_val = stringFromPointer_value ptr_val
+  let show = stringFromPointer_value
 end
 
+let stringFromInteger_operator = function
+  | IntAdd ->
+      "IntAdd"
+  | IntSub ->
+      "IntSub"
+  | IntMul ->
+      "IntMul"
+  | IntDiv ->
+      "IntDiv"
+  | IntMod ->
+      "IntMod"
+  | IntExp ->
+      "IntExp"
+end
 
+instance (Show integer_operator)
+  let show = stringFromInteger_operator
+end
 
+let rec stringFromInteger_value ival =
+  match ival with
+    | IVsymbolic symb ->
+        "(IVsymbolic " ^ show symb ^ ")"
+    | IVptrdiff ptr_val1 ptr_val2 ->
+        "(IVptrdiff " ^ show ptr_val1 ^ ", " ^ show ptr_val2 ^ ")"
+    | IVintptr ptr_val ->
+        "(IVintptr " ^ show ptr_val ^ ")"
+    | IVop op ival1 ival2 ->
+        "(IVop " ^ show op ^ ", " ^ stringFromInteger_value ival1 ^ ", " ^ stringFromInteger_value ival2 ^ ")"
+  end
+
+instance (Show integer_value)
+  let show = stringFromInteger_value
+end
 
 (* TODO: debug *)
 let rec stringFromMem_value mem_val =
   match mem_val with
     | MVunspecified ty ->
         "(MVunspecified " ^ string_of_ctype ty ^ ")"
-    | MVinteger symb ->
-        "(MVinteger " ^ show symb ^ ")"
+    | MVinteger ival ->
+        "(MVinteger " ^ show ival ^ ")"
     | MVpointer ptr_val ->
         "(MVpointer " ^ show ptr_val ^ ")"
     | MVarray mem_vals ->
@@ -235,10 +292,10 @@ let rec prettyStringFromMem_value mem_val =
   match mem_val with
     | MVunspecified ty ->
         "UNSPEC"
-    | MVinteger (Symbolic.SYMBconst n) ->
+    | MVinteger (IVsymbolic (Symbolic.SYMBconst n)) ->
         show n
-    | MVinteger symb ->
-        "(MVinteger " ^ show symb ^ ")"
+    | MVinteger ival ->
+        "(MVinteger " ^ show ival ^ ")"
     | MVpointer ptr_val ->
         "(MVpointer " ^ show ptr_val ^ ")"
     | MVarray mem_vals ->
@@ -688,6 +745,11 @@ let combineWrites (MemRead (PVobject _ rSh) rTy as r) ws =
 
 
 (* Memory layout model API ================================================== *)
+type memop =
+  | Ptrdiff (* (address, address) -> integer *)
+  | Intptr  (* address -> integer *)
+
+
 val runMem: forall 'a. memM 'a -> mem_state -> either mem_error ('a * mem_state)
 
 val initial_mem_stateWithTagDefinitions: tag_definitions -> mem_state
@@ -706,18 +768,22 @@ val store: Core_ctype.ctype -> pointer_value -> mem_value -> memM unit
 val shift_pointer_value: pointer_value -> list (Core_ctype.ctype * Symbolic.symbolic) -> pointer_value
 
 
+(* TODO: change the name *)
+val mk_integer_value: integer -> integer_value
+val mk_integer_op: integer_operator -> integer_value -> integer_value -> integer_value
+
 val mk_unspecified: Core_ctype.ctype -> mem_value
 val mk_integer: integer -> mem_value
 val mk_floating: string -> mem_value
 val mk_pointer: pointer_value -> mem_value
 val mk_array: list mem_value -> mem_value
 
+val mk_ptrdiff: pointer_value -> pointer_value -> mem_value
+
 val null_pointer: Core_ctype.ctype -> pointer_value
 val function_pointer: Symbol.t -> pointer_value
 val ptr_from_mem_value: mem_value -> maybe pointer_value
 val symb_from_mem_value: mem_value -> maybe Symbolic.symbolic
-
-
 
 
 
@@ -787,13 +853,42 @@ let shift_pointer_value ptr_val ptr_sh' =
   end
 
 
+let mk_integer_value n =
+  IVinteger n
+
+
+let mk_integer_op op ival1 ival2 =
+  match (op, ival1, ival2) with
+    | (IntAdd, IVinteger n1, IVinteger n2) ->
+        IVinteger (n1 + n2)
+    | (IntSub, IVinteger n1, IVinteger n2) ->
+        IVinteger (n1 - n2)
+    | (IntMul, IVinteger n1, IVinteger n2) ->
+        IVinteger (n1 * n2)
+    | (IntDiv, IVinteger n1, IVinteger n2) ->
+        IVinteger (if n2 = 0 then 0 else n1 / n2)
+    | (IntMod, IVinteger n1, IVinteger n2) ->
+        IVinteger (if n2 = 0 then 0 else n1 mod n2)
+    | (IntExp, IVinteger n1, IVinteger n2) ->
+        IVinteger (n1 ** natFromInteger n2)
+    | _ ->
+        IVop op ival1 ival2
+  end
+
+
+
+let mk_integer_symbolic symb =
+  IVsymbolic symb
+
+
+
 let mk_unspecified ty =
   MVunspecified ty
 
 
 
 let mk_integer n =
-  MVinteger (Symbolic.SYMBconst n)
+  MVinteger (IVsymbolic (Symbolic.SYMBconst n))
 
 let mk_floating str =
   MVfloating str
@@ -805,6 +900,8 @@ let mk_array mem_vals =
   (* TODO: assert mem_vals <> [] *)
   MVarray mem_vals
 
+let mk_ptrdiff ptr_val1 ptr_val2 =
+  MVinteger (IVptrdiff ptr_val1 ptr_val2)
 
 let null_pointer ty =
   PVnull ty
@@ -820,7 +917,7 @@ let ptr_from_mem_value = function
 end
 
 let symb_from_mem_value = function
-  | MVinteger symb ->
+  | MVinteger (IVsymbolic symb) ->
       Just symb
   | _ ->
       Nothing
@@ -830,21 +927,29 @@ end
 
 
 
+(* TODO: move up to API *)
+val integer_value_is_concrete: integer_value -> bool
+let integer_value_is_concrete = function
+  | IVsymbolic _ ->
+      false
+  | _ ->
+      (* TODO: should it return false for IVptrdiff and IVintptr? *)
+      true
+end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+val     symbolify_mem_value: mem_value -> Symbolic.symbolic
+let rec symbolify_mem_value mem_val =
+  match mem_val with
+    | MVpointer ptr_val ->
+        assert_false "TODO: Core_aux.symbolify_mem_value: MVpointer"
+(*
+        Symbolic.SYMBptr ptr_val
+*)
+    | MVinteger ival ->
+        assert_false "TODO: symbolify integer_value"
+    | MVarray mem_vals ->
+        assert_false "TODO: Core_aux.symbolify_mem_value: MVarray"
+(*
+        Symbolic.SYMBarray (List.map symbolic_mem_value mem_vals)
+*)
+  end

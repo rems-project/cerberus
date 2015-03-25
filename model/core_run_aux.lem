@@ -69,12 +69,6 @@ let rec add_to_sb p_aids = function
   | Epure pe ->
       (* no change *)
       Epure pe
-  | Eundef ub ->
-      (* no change *)
-      Eundef ub
-  | Eerror str ->
-      (* no change *)
-      Eerror str
   | Eskip ->
       (* no change *)
       Eskip

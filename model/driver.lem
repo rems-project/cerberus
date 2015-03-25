@@ -70,114 +70,128 @@ let aid_to_string a =
 open ND.Operators
 
 (* BEGIN reads resolving ======================================================================== *)
+let rec resolve_read_pexpr write_sym symb_v pexpr =
+  let fpe = resolve_read_pexpr write_sym symb_v in
+  match pexpr with
+    | Core.PEundef _ ->
+        pexpr
+    | Core.PEerror _ ->
+        pexpr
+    | Core.PEval (Core.Vinteger (Mem.IVsymbolic symb)) ->
+        (* TODO: get back a Vinteger/... when possible *)
+        Core.PEval (Core.Vinteger (Mem.IVsymbolic $ Symbolic.subst_sym write_sym symb_v symb))
+    | Core.PEval _ ->
+        pexpr
+    | Core.PEsym _ ->
+        pexpr
+    | Core.PEimpl _ ->
+        pexpr
+    | Core.PEcons pe1 pe2 ->
+        Core.PEcons (fpe pe1) (fpe pe2)
+    | Core.PEcase_list pe1 pe2 nm ->
+        Core.PEcase_list (fpe pe1) (fpe pe2) nm
+    | Core.PEcase_ctype pe1 pe2 nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 ->
+        Core.PEcase_ctype (fpe pe1) (fpe pe2) nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8
+    | Core.PEshift pe1 path ->
+        Core.PEshift (fpe pe1) (List.map (fun (ty, pe) -> (ty, fpe pe)) path)
+    | Core.PEnot pe ->
+        Core.PEnot (fpe pe)
+    | Core.PEop bop pe1 pe2 ->
+        Core.PEop bop (fpe pe1) (fpe pe2)
+    | Core.PEtuple pes ->
+        Core.PEtuple (List.map fpe pes)
+    | Core.PEarray xs ->
+        (* TODO: check is this is ever useful *)
+        Core.PEarray (List.map (either function
+          | Mem.MVinteger (Mem.IVsymbolic symb) ->
+              Left $ Mem.MVinteger (Mem.IVsymbolic (Symbolic.subst_sym write_sym symb_v symb))
+          | mem_val ->
+              Left mem_val
+        end (fun z -> Right z)) xs)
+    | Core.PEcall nm pes ->
+        Core.PEcall nm (List.map fpe pes)
+    | Core.PElet sym pe1 pe2 ->
+        Core.PElet sym (fpe pe1) (fpe pe2)
+    | Core.PEif pe1 pe2 pe3 ->
+        Core.PEif (fpe pe1) (fpe pe2) (fpe pe3)
+    | Core.PEis_scalar pe ->
+        Core.PEis_scalar (fpe pe)
+    | Core.PEis_integer pe ->
+        Core.PEis_integer (fpe pe)
+    | Core.PEis_signed pe ->
+        Core.PEis_signed (fpe pe)
+    | Core.PEis_unsigned pe ->
+        Core.PEis_unsigned (fpe pe)
+  end
+
 
 let rec resolve_read_expr write_sym symb_v expr =
-  let f = resolve_read_expr write_sym symb_v in
+  let fe  = resolve_read_expr write_sym symb_v in
+  let fpe = resolve_read_pexpr write_sym symb_v in
   match expr with
-    | Core.Eunit ->
-        Core.Eunit
-    | Core.Etrue ->
-        Core.Etrue
-    | Core.Efalse ->
-        Core.Efalse
-(*
-    | Core.Econst (Mem.MVinteger symb) ->
-        if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
-          Core.Econst v
-        else
-          Core.Econst (Mem.MVinteger symb)
-*)
-    | Core.Econst (Mem.MVinteger symb) ->
-        Core.Econst (Mem.MVinteger (Symbolic.subst_sym write_sym symb_v symb))
-    | Core.Econst mem_val ->
-        Core.Econst mem_val
-    | Core.Elist pes ->
-        Core.Elist $ List.map f pes
-    | Core.Ectype ty ->
-        Core.Ectype ty
-    | Core.Esym sym ->
-        Core.Esym sym
-    | Core.Eimpl i ->
-        Core.Eimpl i
-    | Core.Etuple pes ->
-        Core.Etuple $ List.map f pes
-    | Core.Enot pe ->
-        Core.Enot $ f pe
-    | Core.Eop bop pe1 pe2 ->
-        Core.Eop bop (f pe1) (f pe2)
-    | Core.Ecall nm pes ->
-        Core.Ecall nm $ List.map f pes
-    | Core.Eoutput str ->
-        Core.Eoutput str
-    | Core.Eundef ub ->
-        Core.Eundef ub
-    | Core.Eerror str ->
-        Core.Eerror str
+    | Core.Epure pe ->
+        Core.Epure (fpe pe)
+    | Core.Eraise _ ->
+        expr
+    | Core.Eregister _ _ ->
+        expr
     | Core.Eskip ->
-        Core.Eskip
+        expr
     | Core.Elet sym pe1 e2 ->
-        Core.Elet sym (f pe1) (f e2)
+        Core.Elet sym (fpe pe1) (fe e2)
     | Core.Eif pe1 e2 e3 ->
-        Core.Eif (f pe1) (f e2) (f e3)
-    | Core.Eproc annots nm pes ->
-        Core.Eproc annots nm $ List.map f pes
+        Core.Eif (fpe pe1) (fe e2) (fe e3)
+    | Core.Eproc annot nm pes ->
+        Core.Eproc annot nm (List.map fpe pes)
     | Core.Eaction pact ->
-        Core.Eaction $ resolve_read_paction write_sym symb_v pact
+        Core.Eaction (resolve_read_paction write_sym symb_v pact)
     | Core.Eunseq es ->
-        Core.Eunseq $ List.map f es
+        Core.Eunseq (List.map fe es)
     | Core.Ewseq _as e1 e2 ->
-        Core.Ewseq _as (f e1) (f e2)
+        Core.Ewseq _as (fe e1) (fe e2)
     | Core.Esseq _as e1 e2 ->
-        Core.Esseq _as (f e1) (f e2)
+        Core.Esseq _as (fe e1) (fe e2)
     | Core.Easeq sym_opt act1 pact2 ->
         Core.Easeq sym_opt (resolve_read_action write_sym symb_v act1) (resolve_read_paction write_sym symb_v pact2)
     | Core.Eindet e ->
-        Core.Eindet (f e)
-    | Core.Ebound n e ->
-        Core.Ebound n (f e)
+        Core.Eindet (fe e)
+    | Core.Ebound i e ->
+        Core.Ebound i (fe e)
     | Core.Esave ksym sym_tys e ->
-        Core.Esave ksym sym_tys (f e)
-    | Core.Erun annots ksym sym_es ->
-        Core.Erun annots ksym $ List.map (fun (sym, e) -> (sym, f e)) sym_es
+        Core.Esave ksym sym_tys (fe e)
+    | Core.Erun annot ksym sym_pes ->
+        Core.Erun annot ksym (List.map (fun (sym, pe) -> (sym, fpe pe)) sym_pes)
     | Core.Eret pe ->
-        Core.Eret $ f pe
+        Core.Eret (fpe pe)
     | Core.End es ->
-        Core.End $ List.map f es
+        Core.End (List.map fe es)
     | Core.Epar es ->
-        Core.Epar $ List.map f es
-    | Core.Ewait tid ->
-        Core.Ewait tid
-    | Core.Eis_scalar pe ->
-        Core.Eis_scalar $ f pe
-    | Core.Eis_integer pe ->
-        Core.Eis_integer $ f pe
-    | Core.Eis_signed pe ->
-        Core.Eis_signed $ f pe
-    | Core.Eis_unsigned pe ->
-        Core.Eis_unsigned $ f pe
+        Core.Epar (List.map fe es)
+    | Core.Ewait _ ->
+        expr
   end
 
 and resolve_read_paction write_sym symb_v (Core.Paction p act) =
   Core.Paction p (resolve_read_action write_sym symb_v act)
 
 and resolve_read_action write_sym symb_v (Core.Action annots act_) =
-  let f = resolve_read_expr write_sym symb_v in
+  let fpe = resolve_read_pexpr write_sym symb_v in
   
   Core.Action annots $ match act_ with
   | Core.Create pe1 pe2 pref ->
-      Core.Create (f pe1) (f pe2) pref
+      Core.Create (fpe pe1) (fpe pe2) pref
   | Core.Alloc pe1 pe2 pref ->
-      Core.Alloc (f pe1) (f pe2) pref
+      Core.Alloc (fpe pe1) (fpe pe2) pref
   | Core.Kill pe ->
-      Core.Kill (f pe)
+      Core.Kill (fpe pe)
   | Core.Store pe1 pe2 pe3 mo ->
-      Core.Store (f pe1) (f pe2) (f pe3) mo
+      Core.Store (fpe pe1) (fpe pe2) (fpe pe3) mo
   | Core.Load pe1 pe2 mo ->
-      Core.Load (f pe1) (f pe2) mo
+      Core.Load (fpe pe1) (fpe pe2) mo
   | Core.CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-      Core.CompareExchangeStrong (f pe1) (f pe2) (f pe3) (f pe4) mo1 mo2
+      Core.CompareExchangeStrong (fpe pe1) (fpe pe2) (fpe pe3) (fpe pe4) mo1 mo2
   | Core.CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-      Core.CompareExchangeWeak (f pe1) (f pe2) (f pe3) (f pe4) mo1 mo2
+      Core.CompareExchangeWeak (fpe pe1) (fpe pe2) (fpe pe3) (fpe pe4) mo1 mo2
   end
 
 
@@ -219,8 +233,8 @@ let resolve_read_pre_execution write_sym symb_v preEx =
   let f = function
     | Mem.MVpointer ptr_val ->
         Mem.MVpointer ptr_val
-    | Mem.MVinteger symb ->
-        Mem.MVinteger (Symbolic.subst_sym write_sym symb_v symb)
+    | Mem.MVinteger (Mem.IVsymbolic symb) ->
+        Mem.MVinteger (Mem.IVsymbolic (Symbolic.subst_sym write_sym symb_v symb))
 (*
         if Symbolic.SYMBsym Symbolic.SYMBint write_sym = symb then
           symb_v
@@ -300,10 +314,10 @@ let rec stepConcurrency n dr_st =
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act) in (\* DEBUG *\) *)
             ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
             (* TODO: v is the new concrete value, w is the symbolic value from the read *)
-            let Mem.MVinteger v_symb = v in
+            let Mem.MVinteger (Mem.IVsymbolic v_symb) = v in
             
             match w with
-              | Mem.MVinteger (Symbolic.SYMBsym _ write_sym) -> 
+              | Mem.MVinteger (Mem.IVsymbolic (Symbolic.SYMBsym _ write_sym)) -> 
                   let _ = Boot.print_debug 8 ("ReadsFrom CASE 1: write_sym= " ^ show write_sym ^ ", v= " ^ show v) in
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBsym Symbolic.SYMBint write_sym) v_symb) >>
                   ND.return  <| dr_st with
@@ -311,7 +325,7 @@ let rec stepConcurrency n dr_st =
                     concurrency_state= concur_st'
                   |>
               
-              | Mem.MVinteger (Symbolic.SYMBconst n) ->
+              | Mem.MVinteger (Mem.IVinteger n) ->
                   let _ = Boot.print_debug 8 "ReadsFrom CASE 2" in
                   ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) v_symb) >>
                   ND.return   <| dr_st with concurrency_state= concur_st' |> 
@@ -686,24 +700,29 @@ let rec driver with_concurrency _dr_st =
       process_core_step
 
 
-let rec hack core_file expr =
-  match core_eval core_file false expr with
-    | Exception.Result (Undefined.Defined expr') ->
-        if Core_aux.is_value expr' then
-          expr'
-        else
-          hack core_file expr'
+val     hack: Core.file core_run_annotation -> Core.pexpr -> Core.value
+let rec hack core_file pexpr =
+  match core_eval core_file false pexpr with
+    | Exception.Result (Undefined.Defined pexpr') ->
+        match Core_aux.to_value pexpr' with
+          | Just cval ->
+              cval
+          | Nothing ->
+              hack core_file pexpr'
+        end
+(*
     | _ ->
         (* TODO: this is wrong *)
         expr
+*)
 end
 
 
 let finalize_constraints core_file (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
     | Symbolic.SYMBop op symb1 symb2 ->
-        let (Core.Econst (Mem.MVinteger symb1')) = hack core_file (Core.Econst (Mem.MVinteger symb1)) in
-        let (Core.Econst (Mem.MVinteger symb2')) = hack core_file (Core.Econst (Mem.MVinteger symb2)) in
+        let Core.Vinteger (Mem.IVsymbolic symb1') = hack core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb1))) in
+        let Core.Vinteger (Mem.IVsymbolic symb2') = hack core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb2))) in
         Symbolic.SYMBop op symb1' symb2'
     | symb ->
         symb
@@ -712,16 +731,18 @@ let finalize_constraints core_file (Constraints.Constraints symbs) =
 
 
 
-val finalize: driver_state -> (string * (bool * exeState * Core.expr core_run_annotation) * (nat * nat))
+val finalize: driver_state -> (string * (bool * exeState * Core.value) * (nat * nat))
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
         let v = hack dr_st.core_file
-            match th_st.arena with
-              | Core.Econst (Mem.MVinteger symb) ->
+            match Core_aux.to_pure th_st.arena with
+              | Just (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb))) ->
                   Core_aux.unsymbolify symb
-              | _ ->
-                  th_st.arena
+              | Just pe ->
+                  pe
+              | Nothing ->
+                  Boot.assert_false "Driver.finalize: the arena wasn't pure"
             end in
         (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, v),
          (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
@@ -809,8 +830,8 @@ let driver_globals with_concurrency sym_supply file =
     let dr_st = <| dr_st with
       core_state=
         update_thread_state tid0 <|
-          arena=  List.foldl (fun acc (sym', v) ->
-                    if sym <> sym' then Core_aux.subst_sym sym' v acc else acc
+          arena=  List.foldl (fun acc (sym', pe) ->
+                    if sym <> sym' then Core_aux.subst_sym sym' pe acc else acc
                   ) e to_subst;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty
@@ -823,12 +844,19 @@ let driver_globals with_concurrency sym_supply file =
     ND.return $
       match dr_st'.core_state.thread_states with
         | [(_, (_, th_st))] ->
-            ((sym, th_st.arena) :: to_subst,
-             <| dr_st' with core_file=
-                  <| dr_st'.core_file with
-                       Core.funs=  Core_aux.subst_sym_fun_map sym th_st.arena dr_st'.core_file.Core.funs;
-                  |>
-             |>)
+            (* TODO: technically the arena should always be a value at this point *)
+            match Core_aux.to_pure th_st.arena with
+              | Just pe ->
+                  ((sym, pe) :: to_subst,
+                   <| dr_st' with core_file=
+                     <| dr_st'.core_file with
+                       Core.funs=  Core_aux.subst_sym_fun_map sym pe dr_st'.core_file.Core.funs;
+                     |>
+                   |>)
+              | Nothing ->
+                  Boot.assert_false "TODO(msg): Driver.driver_globals, the end of the evaluation of a glob didn't produce a value"
+            end
+            
         | xs ->
             Boot.assert_false "ERROR (in Driver, global init didn't evaluate to value)"
       end
@@ -843,6 +871,7 @@ declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
 
+val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> list string -> ND.t (* WIP *) unit
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -852,6 +881,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   match Map.lookup dr_st.core_file.Core.main dr_st.core_file.Core.funs with
     | Nothing ->
         ND.kill (ND.Other "couldn't find the startup function")
+(*
     | Just (_, params, expr) ->
         match params with
           | [(argc_sym, _); (argv_sym, _)] ->
@@ -902,7 +932,8 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               
               ND.return $
                 Core_aux.subst_syms [Just argc_sym; Just argv_sym]
-                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val])
+                  (Core.PEval $ Core.Vtuple [Core.Vpointer argc_ptr_val; Core.Vpointer argv_ptr_val])
+(*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
                   expr
           | _ ->
               ND.return expr
@@ -927,34 +958,37 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
 
           (* TODO: tmp *)
           ND.log (pp_exeState dr_st'.concurrency_state) >>
-
-
+          
+            (* TODO: the current function should return a Core.value inside an
+               undef/error monad. Not a Core.pexpr like we currently do *)
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
-                  let (str, (is_blocked, conc_st, v), steps) = finalize dr_st' in
-                  ND.log ("Result: " ^ show v ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
-                  ND.return (str, (is_blocked, conc_st, v), steps)
+                  let (str, (is_blocked, conc_st, cval), steps) = finalize dr_st' in
+                  ND.log ("Result: " ^ show cval ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
+                  ND.return (str, (is_blocked, conc_st, Core.PEval cval), steps)
               | MinimalOpsem.DataRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Data_race),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Data_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.UnsequencedRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.Unsequenced_race),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Unsequenced_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.IndeterminateReads _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.BadMutexes _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | MinimalOpsem.NotInSublanguage ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Eundef U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
             end
         else
-          ND.return (finalize dr_st')
+          ND.return $
+            (fun (str, (is_blocked, conc_st, cval), steps) -> (str, (is_blocked, conc_st, Core.PEval cval), steps)) (finalize dr_st')
+*)
 end

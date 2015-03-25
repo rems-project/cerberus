@@ -20,16 +20,16 @@ let core_sym_counter = ref 0
 
 (* == load the Core standard library ============================================================ *)
 let load_stdlib () =
-  let fname = Filename.concat corelib_path "std.core" in
-  if not (Sys.file_exists fname) then
-    error ("couldn't find the Core standard library file\n (looked at: `" ^ fname ^ "').")
+  let filepath = Filename.concat corelib_path "std.core" in
+  if not (Sys.file_exists filepath) then
+    error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
-    Debug.print_debug 5 ("reading Core standard library from `" ^ fname ^ "'.");
+    Debug.print_debug 5 ("reading Core standard library from `" ^ filepath ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
       include Core_parser.Make (struct
                                  let sym_counter = core_sym_counter
-                                 let std = Pmap.empty compare
+                                 let std = Pmap.empty Core_parser_util._sym_compare
                                end)
       type token = Core_parser_util.token
       type result = Core_parser_util.result
@@ -37,7 +37,7 @@ let load_stdlib () =
     let module Core_std_parser =
       Parser_util.Make (Core_std_parser_base) (Lexer_util.Make (Core_lexer)) in
     (* TODO: yuck *)
-    match Core_std_parser.parse (Input.file fname) with
+    match Core_std_parser.parse (Input.file filepath) with
       | Exception.Result (Core_parser_util.Rstd z) -> z
       | Exception.Result _ ->
           error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
@@ -116,13 +116,13 @@ let (>>=) = Exception.bind0
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
-    | Rfile (sym_main, fun_map) ->
+    | Rfile (sym_main, globs, funs) ->
         Exception.return0 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;
            Core.impl=   !!cerb_conf.core_impl;
-           Core.globs=   [(* TODO *)];
-           Core.funs=   fun_map;
+           Core.globs=  globs;
+           Core.funs=   funs;
            Core.tagDefinitions0 = Pmap.empty Symbol.instance_Basic_classes_SetType_Symbol_t_dict.setElemCompare_method;
          })
     
@@ -226,9 +226,10 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser_base = struct
     include Core_parser.Make (struct
         let sym_counter = core_sym_counter
-        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some fname)) as fsym, _) ->
-          Pmap.add fname fsym acc
-        ) (Pmap.empty compare) $ Pmap.bindings_list core_stdlib
+        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
+          let std_pos = {Lexing.dummy_pos with pos_fname= "core_stdlib"} in
+          Pmap.add (str, (std_pos, std_pos)) fsym acc
+        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
       end)
     type token = Core_parser_util.token
     type result = Core_parser_util.result

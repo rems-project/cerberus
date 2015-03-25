@@ -101,8 +101,8 @@ fun ctype_min_atomic (ty: ctype) : integer :=
 
 
 fun <ctype_min> (ty: ctype) : integer :=
-  case_ty ( ty,
-    ctype_min_void, ctype_min_basic, ctype_min_array,
+  case_ctype ( ty,
+    ctype_min_void(), ctype_min_basic, ctype_min_array,
     ctype_min_void {- HACK -}, ctype_min_pointer, ctype_min_atomic,
     ctype_min_void {- HACK -}, ctype_min_void {- HACK -}, ctype_min_void {- HACK -}
   )
@@ -110,7 +110,7 @@ fun <ctype_min> (ty: ctype) : integer :=
 
 {-
 fun bar(n: integer) : integer :=
-  case_ty ( "signed int", foo, foo, foo, foo, foo, foo, foo, foo, foo )
+  case_ctype ( "signed int", foo, foo, foo, foo, foo, foo, foo, foo, foo )
 -}
 
 
@@ -335,8 +335,8 @@ fun ctype_max_atomic (ty: ctype) : integer :=
 
 
 fun <ctype_max> (ty: ctype) : integer :=
-  case_ty ( ty,
-    ctype_max_void, ctype_max_basic, ctype_max_array,
+  case_ctype ( ty,
+    ctype_max_void(), ctype_max_basic, ctype_max_array,
     ctype_max_void {- HACK -}, ctype_max_pointer, ctype_max_atomic,
     ctype_max_void {- HACK -}, ctype_max_void {- HACK -}, ctype_max_void {- HACK -}
   )
@@ -484,8 +484,8 @@ fun sizeof_atomic (ty: ctype) : integer :=
 
 
 fun <sizeof> (ty: ctype) : integer :=
-  case_ty ( ty,
-    sizeof_void, sizeof_basic, sizeof_array,
+  case_ctype ( ty,
+    sizeof_void(), sizeof_basic, sizeof_array,
     sizeof_void {- HACK -}, sizeof_pointer, sizeof_atomic,
     sizeof_void {- HACK -}, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
   )
@@ -620,7 +620,7 @@ fun <alignof> (ty: ctype) : integer :=
 {-
 
 fun <sizeof> (ty: ctype) : integer :=
-  case_ty ty of
+  case_ctype ty of
     | "void"               => error
     | "char"               => 1
     | "_Bool"              => 1

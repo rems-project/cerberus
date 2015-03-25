@@ -3,173 +3,509 @@ open Lem_pervasives
 open Either
 open Global
 
+open Core_parser_util
+
+module Mem = Naive_memory
+
 module Cmm = Cmm_master
 
 let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
 
+let implementation_constant_compare =
+  compare
+
 
 type name =
-  | Sym of string
+  | Sym of _sym
   | Impl of Implementation_.implementation_constant
 
+
 type expr =
-  | Eunit
-  | Etrue
-  | Efalse
-  | Econst of Naive_memory.mem_value
-  | Elist of expr list
-  | Econs of expr * expr
-  | Ectype of Core_ctype.ctype0
-  | Esym of string
-  | Eimpl of Implementation_.implementation_constant
-  | Etuple of expr list
-  | Enot of expr
-  | Eop of Core.binop * expr * expr
-  | Ecall of name * expr list
-  | Eundef of Undefined.undefined_behaviour
-  | Eerror of string
-  | Eraise of string
-  | Eregister of string * name
-  | Eshift of expr * (Core_ctype.ctype0 * expr) list
+  | Vunit
+  | Vtrue | Vfalse
+  | Vlist of expr list (* value *)
+(*  | Vtuple of list value *)
+  | Vctype of Core_ctype.ctype0
+  | Vunspecified of Core_ctype.ctype0
+  | Vinteger of Big_int.big_int
+  | Vfloating of string
+(* RUNTIME  | Vsymbolic of Symbolic.symbolic *)
+(* RUNTIME  | Vpointer of Mem.pointer_value *)
+(*  | Varray of list Mem.mem_value *)
+  | PEundef of Undefined.undefined_behaviour
+  | PEerror of string
+  | PEsym of _sym
+  | PEimpl of Implementation_.implementation_constant
+  | PEcons of expr (* pexpr *) * expr (* pexpr *)
+  | PEcase_list of expr (* pexpr *) * expr (* pexpr *) * name
+  | PEcase_ctype of expr (* pexpr *) * expr (* pexpr *) * name * name * name * name *
+                    name * name * name * name
+  | PEshift of expr (* pexpr *) * (Core_ctype.ctype0 * expr (* pexpr *)) list
+  | PEnot of expr (* pexpr *)
+  | PEop of Core.binop * expr (* pexpr *) * expr (* pexpr *)
+  | PEtuple of expr list (* pexpr *)
+  | PEarray of ((Mem.mem_value, _sym) either) list
+  | PEcall of name * expr list (* pexpr *)
 (*
-  | Etry of expr * (string * expr) list
+  | PElet of sym * pexpr * pexpr
+  | PEif of pexpr * pexpr * pexpr
 *)
+  | PEis_scalar of expr (* pexpr *)
+  | PEis_integer of expr (* pexpr *)
+  | PEis_signed of expr (* pexpr *)
+  | PEis_unsigned of expr (* pexpr *)
+  | Eraise of _sym
+  | Eregister of _sym * name
   | Eskip
-  | Elet of string * expr * expr
-  | Eif of expr * expr * expr
-  | Eproc of name * expr list
-  
-  (* TODO: hack *)
-  | Ecase of expr * name * name * name * name * name * name * name * name * name
-
-
-(* HIP
-  | Ecase of expr *
-             (expr * (* void *)
-              expr * (* char *)
-              expr * (* _Bool *)
-              (AilTypes.integerBaseType * expr) list * (* Signed *)
-              (AilTypes.integerBaseType * expr) list * (* Unsigned *)
-              (string * string * expr) * (* Array *)
-              (string * expr) * (* Pointer *)
-              (string * expr)) (* Atomic *)
-*)
-(*  | Esame of expr * expr *)
+  | Elet of _sym * expr (* pexpr *) * expr
+  | Eif of expr (* pexpr *) * expr * expr
+  | Eproc of name * expr list (* pexpr *)
   | Eaction of paction
   | Eunseq of expr list
-  | Ewseq of (string option) list * expr * expr
-  | Esseq of (string option) list * expr * expr
-  | Easeq of string option * action * paction
-  | Eindet of expr (* TODO: add unique indices *)
+  | Ewseq of (_sym option) list * expr * expr
+  | Esseq of (_sym option) list * expr * expr
+  | Easeq of _sym option * action * paction
+  | Eindet of expr
   | Ebound of int * expr
-  | Esave of string * (string * Core_ctype.ctype0) list * expr
-  | Erun of string * (string * expr) list
-  | Eret of expr
+  | Esave of _sym * (_sym * Core_ctype.ctype0) list * expr
+  | Erun of _sym * (_sym * expr (* pexpr *)) list
+  | Eret of expr (* pexpr *)
   | End of expr list
   | Epar of expr list
-(*  | Ewait of list Thread.thread_id *)
-
-  
-  | Eis_scalar of expr
-  | Eis_integer of expr
-  | Eis_signed of expr
-  | Eis_unsigned of expr
-
+(* RUNTIME  | Ewait of Thread.thread_id *)
 
 and action =
-  | Create of expr * expr
-  | Alloc of expr * expr
-  | Kill of expr
-  | Store of expr * expr * expr * Cmm.memory_order
-  | Load of expr * expr * Cmm.memory_order
-  | CompareExchangeStrong of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
-  | CompareExchangeWeak of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+  | Create of expr (* pexpr *) * expr (* pexpr *)
+  | Alloc of expr (* pexpr *) * expr (* pexpr *)
+  | Kill of expr (* pexpr *)
+  | Store of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order
+  | Load of expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order
+  | CompareExchangeStrong of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order * Cmm.memory_order
 and paction = Core.polarity * action
+
 
 type declaration =
   | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * expr
-  | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (string * Core.core_base_type) list * expr)
-  | Glob_decl of string * Core.core_type * expr
-  | Fun_decl  of string * (Core.core_type * (string * Core.core_base_type) list * expr)
+  | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * expr)
+  | Glob_decl of _sym * Core.core_type * expr
+  | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * expr)
+  | Proc_decl of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * expr)
 
 
 
-let fresh_symbol str =
+
+let fresh_symbol (str, _) =
   let n = !M.sym_counter in
   M.sym_counter := n+1;
   Symbol.Symbol (n, Some str)
 
 
+let lookup_symbol ((str, loc) as _sym) syms =
+  (* TODO: print location *)
+  Debug.print_debug 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
+  begin try
+    Pmap.find _sym syms (* TODO: Error handling *)
+  with
+    | e -> print_endline (pp_pos _sym ^ " [Core_parser.convert_expr] Failed to find: " ^ str);
+           Pmap.iter (fun (str, _) _ ->
+             Printf.printf "DEBUG, in sigma: %s\n" str
+           ) syms;
+           raise e
+  end
 
 
-
-
-
-
-
-let register_cont_symbols e =
-  let rec f st = function
-    | Eunit
-(*    | Enull *)
-    | Etrue
-    | Efalse
-    | Econst _
-    | Elist _
-    | Econs _
-    | Ectype _
-    | Esym _
-    | Eimpl _
-    | Etuple _
-    | Enot _
-    | Eop _
-    | Ecall _
-    | Eundef _
-    | Eerror _
-    | Eskip
+let register_cont_symbols expr =
+  let rec f (st : (_sym, Core.sym) Pmap.map) = function
+    | Vunit
+    | Vtrue
+    | Vfalse
+    | Vlist _
+    | Vctype _
+    | Vunspecified _
+    | Vinteger _
+    | Vfloating _
+    | PEundef _
+    | PEerror _
+    | PEsym _
+    | PEimpl _
+    | PEcons _
+    | PEcase_list _
+    | PEcase_ctype _
+    | PEshift _
+    | PEnot _
+    | PEop _
+    | PEtuple _
+    | PEarray _
+    | PEcall _
+    | PEis_scalar _
+    | PEis_integer _
+    | PEis_signed _
+    | PEis_unsigned _
     | Eraise _
     | Eregister _
-    | Eshift _
-(*
-    | Etry _
-*)
-
-    | Ecase _
-
+    | Eskip
+    | Elet _
     | Eproc _
-(*    | Esame _ *)
     | Eaction _
     | Eunseq _
     | Easeq _
-    | Eret _
     | Erun _
-    | Eis_scalar _
-    | Eis_integer _
-    | Eis_signed _
-    | Eis_unsigned _ ->
+    | Eret _ ->
         st
-    
-    | Elet (_, _, e2) ->
-        f st e2
-    | Eif (_, e1, e2)
-    | Ewseq (_, e1, e2)
-    | Esseq (_, e1, e2) ->
-        f (f st e1) e2
-    | Eindet e ->
-        f st e
-    | Ebound (_, e) ->
-       f st e
-    | Esave (k, _, e) ->
-        let sym_n = fresh_symbol k in
-        f (Pmap.add k sym_n st) e
-    | End es
-    | Epar es ->
-        List.fold_left f st es
+    | Eif (_, _e1, _e2)
+    | Ewseq (_, _e1, _e2)
+    | Esseq (_, _e1, _e2) ->
+        f (f st _e1) _e2
+    | Eindet _e
+    | Ebound (_, _e) ->
+        f st _e
+    | End _es
+    | Epar _es ->
+        List.fold_left f st _es
+    | Esave (_sym, _, _e) ->
+        f (Pmap.add _sym (fresh_symbol _sym) st) _e
   
-  in f (Pmap.empty compare) e
+  in f (Pmap.empty _sym_compare) expr
 
 
-let symbolify (_Sigma, fsyms) expr =
+let symbolify_name _Sigma : name -> Core.name = function
+  | Impl iCst ->
+      Core.Impl iCst
+  | Sym _sym ->
+      let sym = try Pmap.find _sym _Sigma
+      with Not_found -> try Pmap.find _sym M.std
+      with Not_found ->
+        prerr_endline (Colour.ansi_format [Colour.Red] ("PARSING ERROR: the function `" ^ fst _sym ^ "' was not declared."));
+        exit 1 in
+      Core.Sym sym
+
+
+type _core =
+  | Value of Core.value
+  | Pure of Core.pexpr
+  | Expr of unit Core.expr
+
+let to_value = function
+  | Value cval ->
+      Some cval
+  | _ ->
+      None
+
+let to_values xs =
+  List.fold_right (fun x acc_opt ->
+    match to_value x, acc_opt with
+      | Some cval, Some acc ->
+          Some (cval :: acc)
+      | _ ->
+          None
+  ) xs (Some [])
+
+let to_pure = function
+  | Value cval ->
+      Left (Core.PEval cval)
+  | Pure pe ->
+      Left pe
+  | Expr e ->
+      Right e
+
+let to_pures xs =
+  List.fold_right (fun x acc_opt ->
+    match to_pure x, acc_opt with
+      | Left pe, Left acc ->
+          Left (pe :: acc)
+      | Left pe, Right acc ->
+          Right (Core.Epure pe :: acc)
+      | Right e, Left acc ->
+          Right (e :: List.map (fun pe -> Core.Epure pe) acc)
+      | Right e, Right acc ->
+          Right (e :: acc)
+  ) xs (Left [])
+
+let to_expr = function
+  | Value cval ->
+      Core.Epure (Core.PEval cval)
+  | Pure pe ->
+      Core.Epure pe
+  | Expr e ->
+      e
+
+
+(* NOTE: the second argument is the map of non-filescoped symbols *)
+let symbolify_expr _Sigma st (expr: expr) : _core =
+  let fnm = symbolify_name _Sigma in
+  let rec f (st : (_sym, Core.sym) Pmap.map) = function
+    | Vunit ->
+        Value (Core.Vunit)
+    | Vtrue ->
+        Value (Core.Vtrue)
+    | Vfalse ->
+        Value (Core.Vfalse)
+    | Vlist _es ->
+        (match to_values (List.map (f st) _es) with
+          | Some cvals ->
+              Value (Core.Vlist cvals)
+          | None ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Vlist")
+    | Vctype ty ->
+        Value (Core.Vctype ty)
+    | Vunspecified ty ->
+        Value (Core.Vunspecified ty)
+    | Vinteger n ->
+        Value (Core.Vinteger (Mem.mk_integer_value n))
+    | Vfloating str ->
+        Value (Core.Vfloating str)
+    | PEundef ub ->
+        Pure (Core.PEundef ub)
+    | PEerror str ->
+        Pure (Core.PEerror str)
+    | PEsym _sym ->
+        Pure (Core.PEsym (lookup_symbol _sym st))
+    | PEimpl iCst ->
+        Pure (Core.PEimpl iCst)
+    | PEcons (_e1, _e2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PEcons (pe1, pe2))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEcons")
+    | PEcase_list (_e1, _e2, nm) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PEcase_list (pe1, pe2, fnm nm))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEcase_list")
+    | PEcase_ctype (_e1, _e2, nm1, nm2, nm3, nm4, nm5, nm6, nm7, nm8) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PEcase_ctype (pe1, pe2, fnm nm1, fnm nm2, fnm nm3, fnm nm4, fnm nm5, fnm nm6, fnm nm7, fnm nm8))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEcase_ctype")
+    | PEshift (_e1, ty_es) ->
+        let ty_es_opt = List.fold_right (fun (ty, _e) acc_opt ->
+          match to_pure (f st _e), acc_opt with
+            | Left pe, Some acc ->
+                Some ((ty, pe) :: acc)
+            | _ ->
+                None
+        ) ty_es (Some []) in
+        (match to_pure (f st _e1), ty_es_opt with
+          | Left pe1, Some ty_pes ->
+              Pure (Core.PEshift (pe1, ty_pes))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEshift")
+    | PEnot _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEnot pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEnot")
+    | PEop (bop, _e1, _e2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PEop (bop, pe1, pe2))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEop")
+    | PEtuple _es ->
+        (match to_pures (List.map (f st) _es) with
+          | Left pes ->
+              Pure (Core.PEtuple pes)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEtuple")
+    | PEarray _xs ->
+        let xs = List.map (function
+          | Left mem_val ->
+              Left mem_val
+          | Right _sym ->
+              Right (lookup_symbol _sym st)
+        ) _xs in
+        Pure (Core.PEarray xs)
+    | PEcall (_nm, _es) ->
+        let nm = fnm _nm in
+        (match to_pures (List.map (f st) _es) with
+          | Left pes ->
+              Pure (Core.PEcall (nm, pes))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEcall")
+    | PEis_scalar _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEis_scalar pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEis_scalar")
+    | PEis_integer _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEis_integer pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEis_integer")
+    | PEis_signed _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEis_signed pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEis_signed")
+    | PEis_unsigned _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEis_unsigned pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEis_unsigned")
+    | Eraise _sym ->
+        Expr (Core.Eraise (fst _sym))
+    | Eregister (_sym, nm) ->
+        Expr (Core.Eregister (fst _sym, fnm nm))
+    | Eskip ->
+        Expr (Core.Eskip)
+    | Elet (_sym, _e1, _e2) ->
+        let sym = fresh_symbol _sym in
+        let _e2' = f (Pmap.add _sym sym st) _e2 in
+        (match to_pure (f st _e1), to_pure _e2' with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PElet (sym, pe1, pe2))
+          | Left pe1, Right e2 ->
+              Expr (Core.Elet (sym, pe1, e2))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Elet")
+    | Eif (_e1, _e2, _e3) ->
+        let _e2' = f st _e2 in
+        let _e3' = f st _e3 in
+        (match to_pure (f st _e1), to_pure _e2', to_pure _e3' with
+          | Left pe1, Left pe2, Left pe3 ->
+              Pure (Core.PEif (pe1, pe2, pe3))
+          | Left pe1, Left pe2, Right e3 ->
+              Expr (Core.Eif (pe1, Core.Epure pe2, e3))
+          | Left pe1, Right e2, Left pe3 ->
+              Expr (Core.Eif (pe1, e2, Core.Epure pe3))
+          | Left pe1, Right e2, Right e3 ->
+              Expr (Core.Eif (pe1, e2, e3))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Eif")
+    | Eproc (nm, _es) ->
+        (match to_pures (List.map (f st) _es) with
+          | Left pes ->
+              Expr (Core.Eproc ((), fnm nm, pes))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Eproc")
+    | Eaction (p, act) ->
+        Expr (Core.Eaction (Core.Paction (p, Core.Action ((), g st act))))
+    | Eunseq _es ->
+        Expr (Core.Eunseq (List.map (fun z -> to_expr (f st z)) _es))
+    | Ewseq (_as, _e1, _e2) ->
+        let (_as', st') = List.fold_left (fun (_as, st) _sym_opt ->
+          match _sym_opt with
+            | Some _sym ->
+                let sym = fresh_symbol _sym in
+                (Some sym :: _as, Pmap.add _sym sym st)
+            | None ->
+                (None :: _as, st)
+        ) ([], st) _as in
+        Expr (Core.Ewseq (List.rev _as', to_expr (f st _e1), to_expr (f st' _e2)))
+    | Esseq (_as, _e1, _e2) ->
+        let (_as', st') = List.fold_left (fun (_as, st) _sym_opt ->
+          match _sym_opt with
+            | Some _sym ->
+                let sym = fresh_symbol _sym in
+                (Some sym :: _as, Pmap.add _sym sym st)
+            | None ->
+                (None :: _as, st)
+        ) ([], st) _as in
+        Expr (Core.Esseq (List.rev _as', to_expr (f st _e1), to_expr (f st' _e2)))
+    | Easeq (_sym_opt, act1, (p, act2)) ->
+        Expr (match _sym_opt with
+          | Some _sym ->
+              let sym = fresh_symbol _sym in
+              Core.Easeq (Some sym, Core.Action ((), g st act1), Core.Paction (p, Core.Action ((), g (Pmap.add _sym sym st) act2)))
+          | None ->
+              Core.Easeq (None, Core.Action ((), g st act1), Core.Paction (p, Core.Action ((), g st act2))))
+    | Eindet _e ->
+        Expr (Core.Eindet (to_expr (f st _e)))
+    | Ebound (n, _e) ->
+        Expr (Core.Ebound (n, to_expr (f st _e)))
+    | Esave (_sym, _sym_tys, _e) ->
+        let sym_tys =
+          List.map (fun (_sym, ty) -> (lookup_symbol _sym st, ty)) _sym_tys in
+        Expr (Core.Esave (lookup_symbol _sym st, sym_tys, to_expr (f st _e)))
+    | Erun (_sym, _sym__es) ->
+        let sym_pes_opt = List.fold_right (fun (_sym, _e) acc_opt ->
+          match (to_pure (f st _e), acc_opt) with
+            | (Left pe, Some acc) ->
+                Some ((lookup_symbol _sym st, pe) :: acc)
+            | _ ->
+                None
+        ) _sym__es (Some []) in
+        (match sym_pes_opt with
+          | Some sym_pes ->
+              Expr (Core.Erun ((), lookup_symbol _sym st, sym_pes))
+          | None ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Erun")
+    | Eret _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Expr (Core.Eret pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, Eret")
+    | End _es ->
+        Expr (Core.End (List.map (fun z -> to_expr (f st z)) _es))
+    | Epar _es ->
+        Expr (Core.Epar (List.map (fun z -> to_expr (f st z)) _es))
+  
+  and g st = function
+    | Create (_e1, _e2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Core.Create (pe1, pe2, [])
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, Create")
+    | Alloc (_e1, _e2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Core.Alloc0 (pe1, pe2, [])
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, Alloc")
+    | Kill _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Core.Kill pe
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, Kill")
+    | Store (_e1, _e2, _e3, mo) ->
+        (match to_pure (f st _e1), to_pure (f st _e2), to_pure (f st _e3) with
+          | Left pe1, Left pe2, Left pe3 ->
+              Core.Store0 (pe1, pe2, pe3, mo)
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, Store")
+    | Load (_e1, _e2, mo) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Core.Load0 (pe1, pe2, mo)
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, Load")
+        
+    | CompareExchangeStrong (_e1, _e2, _e3, _e4, mo1, mo2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2), to_pure (f st _e3), to_pure (f st _e4) with
+          | Left pe1, Left pe2, Left pe3, Left pe4 ->
+              Core.CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2)
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, CompareExchangeStrong")
+    | CompareExchangeWeak (_e1, _e2, _e3, _e4, mo1, mo2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2), to_pure (f st _e3), to_pure (f st _e4) with
+          | Left pe1, Left pe2, Left pe3, Left pe4 ->
+              Core.CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2)
+          | _ ->
+            failwith "TODO(MSG) type-error: symbolify_expr, CompareExchangeWeak") in
+  f st expr
+
+
+(* let symbolify_ *)
+
+
+
+
+let symbolify_expr_ (_Sigma, fsyms) (expr: expr) : unit Core.expr =
+  failwith "WIP"
+(* TODO: WIP
   let lookup_symbol str syms =
     Debug.print_debug 7 ("[Core_parser.convert_expr] LOOKING FOR: " ^ str);
     begin try
@@ -181,15 +517,15 @@ let symbolify (_Sigma, fsyms) expr =
   
   let rec f st = function
     | Eunit ->
-        Core.Eunit
+        Core.Epure (Core.PEval Core.Vunit)
 (*
     | Enull ->
         Core.Enull Core_ctype.Void0 (* TODO *)
 *)
     | Etrue ->
-        Core.Etrue
+        Core.Epure (Core.PEval Core.Etrue)
     | Efalse ->
-        Core.Efalse
+        Core.Epure (Core.PEval Core.Efalse)
     | Econst c ->
         Core.Econst c
     | Elist es ->
@@ -376,50 +712,152 @@ let symbolify (_Sigma, fsyms) expr =
   in
   let conts = register_cont_symbols expr in
   f (Pmap.union _Sigma conts) expr
+*)
 
 
-
-
+(*
 
 
 (* symbolify_impl_map: (Implementation_.implementation_constant, Core.core_basic_type * () list) Pmap.map -> unit Core.impl *)
-let symbolify_impl_map global_syms xs : unit Core.impl =
+let symbolify_impl_map global_syms xs : Core.impl =
   Pmap.map (function
-    | Left (bTy, e) ->
-        Core.Def (bTy, symbolify (Pmap.empty compare, global_syms) e)
+    | Left (bTy, _e) ->
+        (match to_pure (symbolify_expr global_syms (Pmap.empty _sym_compare) _e) with
+          | Left pe ->
+              Core.Def (bTy, pe)
+          | _ ->
+              failwith "(TODO msg) Type-error: symbolify_impl_map, Left")
     
-    | Right (bTy, params_, body) ->
-    let (_Sigma, params) =
-      List.fold_left (fun (_Sigma_acc, params_acc) (param_str, param_ty) ->
-        let param_sym = fresh_symbol param_str in
-        ( Pmap.add param_str param_sym _Sigma_acc, (param_sym, param_ty) :: params_acc )
-      ) (Pmap.empty compare, []) params_ in
-    
-    Core.IFun (bTy, params, symbolify (_Sigma, global_syms) body)
+    | Right (bTy, params_, _e) ->
+        let (_Sigma, params) =
+          List.fold_left (fun (_Sigma_acc, params_acc) (param_str, param_ty) ->
+            let param_sym = fresh_symbol param_str in
+            ( Pmap.add param_str param_sym _Sigma_acc, (param_sym, param_ty) :: params_acc )
+          ) (Pmap.empty _sym_compare, []) params_ in
+        
+        (match to_pure (symbolify_expr global_syms _Sigma _e) with
+          | Left pe ->
+              Core.IFun (bTy, params, pe)
+          | _ ->
+              failwith "(TODO msg) Type-error: symbolify_impl_map, Right")
   ) xs
-
-
-(* symbolify_fun_map: *)
-let symbolify_fun_map global_syms xs : unit Core.fun_map =
-  Pmap.map (fun (coreTy, params_, body) ->
-    let (_Sigma, params) =
-      List.fold_left (fun (_Sigma_acc, params_acc) (param_str, param_ty) ->
-        let param_sym = fresh_symbol param_str in
-        (Pmap.add param_str param_sym _Sigma_acc, (param_sym, param_ty) :: params_acc)
-      ) (Pmap.empty compare, []) params_ in
-    
-    (coreTy, params, symbolify (_Sigma, global_syms) body)
-  ) xs
+*)
 
 
 
 
 
 
+let symbolify_params _params =
+  List.fold_right (fun (str, bTy) (params_acc, _Gamma_acc) ->
+    let sym = fresh_symbol str in
+    ((sym, bTy) :: params_acc, Pmap.add str sym _Gamma_acc)
+  ) _params ([], Pmap.empty _sym_compare)
 
 
-(* TODO: clean up this mess *)
-let mk_file decls =
+let symbolify_decls _Sigma _decls =
+  List.fold_left (fun (impl_acc, globs_acc, funs_acc) -> function
+    | Def_decl (iCst, bTy, _e) ->
+        (match to_pure (symbolify_expr _Sigma (Pmap.empty _sym_compare) _e) with
+          | Left pe ->
+              (Pmap.add iCst (Core.Def (bTy, pe)) impl_acc, globs_acc, funs_acc)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_decls, Def_decl")
+    | IFun_decl (iCst, (bTy, _params, _e)) ->
+        let (params, _Gamma) = symbolify_params _params in
+        (match to_pure (symbolify_expr _Sigma _Gamma _e) with
+          | Left pe ->
+              (Pmap.add iCst (Core.IFun (bTy, params, pe)) impl_acc, globs_acc, funs_acc)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_decls, IFun_decl")
+    | Glob_decl (_sym, coreTy, _e) ->
+        (impl_acc,
+         (lookup_symbol _sym _Sigma, coreTy, to_expr (symbolify_expr (Pmap.remove _sym _Sigma) (Pmap.empty _sym_compare) _e)) :: globs_acc,
+         funs_acc)
+    | Fun_decl (_sym, (bTy, _params, _e)) ->
+        let (params, _Gamma) = symbolify_params _params in
+        (match to_pure (symbolify_expr _Sigma _Gamma _e) with
+           | Left pe ->
+               (impl_acc, globs_acc,
+                Pmap.add (lookup_symbol _sym _Sigma) (Core.Fun (bTy, params, pe)) funs_acc)
+           | _ ->
+               failwith "TODO(MSG) type-error: symbolify_decls, Fun_decl")
+    | Proc_decl (_sym, (bTy, _params, _e)) ->
+        let (params, _Gamma) = symbolify_params _params in
+        (impl_acc, globs_acc,
+         Pmap.add (lookup_symbol _sym _Sigma) (Core.Proc (bTy, params, to_expr (symbolify_expr _Sigma _Gamma _e))) funs_acc)
+  ) (Pmap.empty implementation_constant_compare, [], Pmap.empty symbol_compare) _decls
+
+
+
+let mk_file _decls =
+  (* this first pass collect all the file scope symbol names to allow mutually recursive definitions *)
+  (* TODO: check for exhaustivity of iCst definition *)
+  let (sym_opt, _, _Sigma) = List.fold_left (fun (sym_opt_acc, iCsts, _Sigma_acc) -> function
+    | Def_decl (iCst, _, _)
+    | IFun_decl (iCst, _) ->
+        if List.mem iCst iCsts then
+          failwith ("duplicate definition of '" ^ Implementation_.string_of_implementation_constant iCst ^ "'")
+        else
+          (sym_opt_acc, iCst :: iCsts, _Sigma_acc)
+    | Glob_decl ((str, _) as _sym, _, _) ->
+        if Pmap.mem _sym _Sigma_acc then
+          failwith ("duplicate definition of '" ^ str ^ "'")
+        else if str = "main" then
+          failwith "a global cannot be named 'main'"
+        else
+          (sym_opt_acc, iCsts, Pmap.add _sym (fresh_symbol _sym) _Sigma_acc)
+    | Fun_decl  ((str, _) as _sym, _)
+    | Proc_decl  ((str, _) as _sym, _) ->
+        if Pmap.mem _sym _Sigma_acc then
+          failwith ("duplicate definition of '" ^ str ^ "'")
+        else
+          let sym = fresh_symbol _sym in
+          ((if str = "main" then Some sym else sym_opt_acc), iCsts, Pmap.add _sym sym _Sigma_acc)
+  ) (None, [], Pmap.empty _sym_compare) _decls in
+  
+  if List.exists (function Glob_decl _ -> true | _ -> false) _decls then
+    (* CASE: this must be program file *)
+    if List.exists (function IFun_decl _ | Def_decl _ -> true | _ -> false) _decls then
+      failwith "TODO(msg): globals are not allowed in implementation files"
+    else
+      let (_, globs, funs) = symbolify_decls _Sigma _decls in
+      match sym_opt with
+        | Some sym ->
+            Core_parser_util.Rfile (sym, globs, funs)
+        | None ->
+            failwith "TODO(msg): program file should define the startup function/procedure 'main'"
+  else if List.exists (function IFun_decl _ | Def_decl _ -> true | _ -> false) _decls then
+    (* CASE: this has to be an implementation file *)
+    match sym_opt with
+      | Some _ ->
+          failwith "TODO(msg): the file-scope name 'main' is reserved for the startup function/procedure in program files"
+      | None ->
+          let (impl, _, funs) = symbolify_decls _Sigma _decls in
+          Core_parser_util.Rimpl (impl, funs)
+  else
+    (* CASE: program or std file (latter in absence of a main function/procedure *)
+    let (_, globs, funs) = symbolify_decls _Sigma _decls in
+    match sym_opt with
+      | Some sym ->
+          Core_parser_util.Rfile (sym, globs, funs)
+      | None ->
+          Core_parser_util.Rstd funs
+
+
+(*
+              match coreTy with
+                | Core.TyBase bTy ->
+                    match to_pure (symbolify_expr global_syms _Sigma_acc' _e)
+                    (sym_opt_acc, _Sigma_acc', Core.Fun_decl (bTy, [], ) :: fun_map_acc)
+                     
+*)
+
+
+
+
+(*
+
   if List.for_all (function Fun_decl _ -> true | _ -> false) decls then
     (* CASE: this is not an implementation file. *)
     let (main_opt, _Sigma, fun_map_) =
@@ -476,12 +914,12 @@ let mk_file decls =
     
     
     (* We perform the symbolification as a second step to allow mutual recursion *)
-    let impl_map = symbolify_impl_map _Sigma impl_map_ in
-    let fun_map = symbolify_fun_map _Sigma fun_map_ in
+    let impl_map = failwith "symbolify_impl_map _Sigma impl_map_" in
+    let fun_map = failwith "symbolify_fun_map _Sigma fun_map_" in
     
     (* TODO: add a check for completeness of the impl map *)
     Core_parser_util.Rimpl (impl_map, fun_map)
-
+*)
 
 
 (* HACK for now (maybe we should just get back to concrete names for ctypes) *)
@@ -500,7 +938,7 @@ let subst name =
 %}
 
 %token <Big_int.big_int> INT_CONST
-%token <string> SYM
+%token <Core_parser_util._sym> SYM
 %token <Implementation_.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
 
@@ -514,13 +952,13 @@ let subst name =
 %token SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
 
 (* definition keywords *)
-%token DEF GLOB FUN
+%token DEF GLOB FUN PROC
 
 (* Core types *)
 %token INTEGER BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF
 
 (* Core constant keywords *)
-%token LIST CONS ARRAY TRUE FALSE
+%token CONS ARRAY TRUE FALSE
 %token SHIFT
 %token UNDEF ERROR
 %token<string> STRING
@@ -530,12 +968,12 @@ let subst name =
 %token RAISE REGISTER (* TRY WITH PIPE MINUS_GT *)
 
 (* Core sequencing operators *)
-%token LET STRONG WEAK ATOM IN END PIPE_PIPE INDET RETURN
+%token LET STRONG UNSEQ WEAK ATOM IN END INDET RETURN
 
 
 %token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA LBRACE RBRACE TILDE
 
-%token CASE_TY (* SIGNED_PATTERN UNSIGNED_PATTERN ARRAY_PATTERN POINTER_PATTERN ATOMIC_PATTERN EQ_GT *)
+%token CASE_LIST CASE_CTYPE
 
 %token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
 
@@ -636,11 +1074,12 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 %start <Core_parser_util.result>start
 %parameter <M : sig
                   val sym_counter: int ref
-                  val std: (string, Core.sym) Pmap.map
+                  val std: (Core_parser_util._sym, Core.sym) Pmap.map
                 end>
 
 %%
 
+(*
 n_ary_operator(separator, X):
   x1 = X separator x2 = X
     { [ x1; x2 ] }
@@ -648,11 +1087,12 @@ n_ary_operator(separator, X):
     { x :: xs }
 
 delimited_nonempty_list(opening, separator, X, closing):
-  x = X
+  opening x= X closing
    { [x] }
 | xs = delimited(opening, n_ary_operator(separator, X),
   closing)
    { xs }
+*)
 
 start:
 | decls= nonempty_list(declaration) EOF
@@ -877,52 +1317,14 @@ core_type:
 
 
 name:
-| a= SYM
-    { Sym a }
+| _sym= SYM
+    { Sym _sym }
 | i= IMPL
     { Impl i }
 ;
 
 
-(*
-case_pattern:
-| DQUOTE VOID DQUOTE
-    { (* TODO *) }
-| DQUOTE CHAR DQUOTE
-    { (* TODO *) }
-| DQUOTE BOOL DQUOTE
-    { (* TODO *) }
-| SIGNED_PATTERN DQUOTE ibty= integer_base_type DQUOTE
-    { (* TODO *) }
-| UNSIGNED_PATTERN DQUOTE ibty= integer_base_type DQUOTE
-    { (* TODO *) }
-| ARRAY_PATTERN ty= SYM n= SYM
-    { (* TODO *) }
-| POINTER_PATTERN ty= SYM
-    { (* TODO *) }
-| ATOMIC_PATTERN ty= SYM
-    { (* TODO *) }
-| DQUOTE SIZE_T DQUOTE
-    { (* TODO *) }
-| DQUOTE INTPTR_T DQUOTE
-    { (* TODO *) }
-| DQUOTE WCHAR_T DQUOTE
-    { (* TODO *) }
-| DQUOTE CHAR16_T DQUOTE
-    { (* TODO *) }
-| DQUOTE CHAR32_T DQUOTE
-    { (* TODO *) }
-;
 
-
-case_rules:
-| pat= case_pattern EQ_GT e= expr
-    { }
-
-| pat= case_pattern EQ_GT e= expr PIPE rs= case_rules
-    {  (pat, e) }
-;
-*)
 
 
 
@@ -934,6 +1336,169 @@ memory_order:
 | CONSUME { Cmm.Consume }
 | ACQ_REL { Cmm.Acq_rel }
 ;
+
+
+
+mem_value:
+| n= INT_CONST
+    { Mem.mk_integer n }
+(*
+| ARRAY LPAREN mem_vals= separated_nonempty_list (COMMA, mem_value) RPAREN
+    { Mem.mk_array mem_vals }
+*)
+;
+
+
+array_elem:
+| mem_val= mem_value
+    { Left mem_val }
+| str= SYM
+    { Right str }
+;
+
+expr:
+| UNIT
+    { Vunit }
+| TRUE
+    { Vtrue }
+| FALSE
+    { Vfalse }
+| _es= delimited(LBRACKET, separated_list(COMMA, expr), RBRACKET)
+    { Vlist _es }
+| ty= delimited(DQUOTE, ctype, DQUOTE)
+    { Vctype ty }
+(* TODO:
+| Vunspecified of ctype
+    {  }
+*)
+| n= INT_CONST
+    { Vinteger n }
+(* TODO:
+| Vfloating of string
+    {  }
+*)
+| UNDEF ub= UB
+    { PEundef ub }
+| ERROR str= STRING
+    { PEerror str }
+| str= SYM
+    { PEsym str }
+| iCst= IMPL
+    { PEimpl iCst }
+| CONS LPAREN _e1= expr COMMA _e2= expr RPAREN
+    { PEcons (_e1, _e2) }
+| CASE_LIST LPAREN _e1= expr COMMA _e2= expr COMMA nm= name RPAREN
+    { PEcase_list (_e1, _e2, nm) }
+| CASE_CTYPE LPAREN _e1= expr COMMA _e2= expr COMMA nm1= name COMMA nm2= name COMMA nm3= name COMMA
+    nm4= name COMMA nm5= name COMMA nm6= name COMMA nm7= name COMMA nm8= name RPAREN
+    { PEcase_ctype (_e1, _e2, nm1, nm2, nm3, nm4, nm5, nm6, nm7, nm8) }
+| SHIFT LPAREN _e= expr COMMA sh= delimited(LBRACE, separated_nonempty_list(COMMA, shift_elem), RBRACE) RPAREN
+    { PEshift (_e, sh) }
+| NOT _e= delimited(LPAREN, expr, RPAREN)
+    { PEnot _e }
+(* some sugar *)
+| _e1= expr LE _e2= expr
+    { PEop (Core.OpOr, PEop (Core.OpLt, _e1, _e2), PEop (Core.OpEq, _e1, _e2)) }
+| _e1= expr bop= binary_operator _e2= expr
+    { PEop (bop, _e1, _e2) }
+| LPAREN _e= expr COMMA _es= separated_nonempty_list(COMMA, expr) RPAREN
+    { PEtuple (_e::_es) }
+| ARRAY xs= delimited(LPAREN, separated_nonempty_list(COMMA, array_elem), RPAREN)
+    { PEarray xs }
+| nm= name _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { PEcall (nm, _es) }
+(* TODO: these are temporary *)
+| IS_SCALAR _e= delimited(LPAREN, expr, RPAREN)
+    { PEis_scalar _e }
+| IS_INTEGER _e= delimited(LPAREN, expr, RPAREN)
+    { PEis_integer _e }
+| IS_SIGNED _e= delimited(LPAREN, expr, RPAREN)
+    { PEis_signed _e }
+| IS_UNSIGNED _e= delimited(LPAREN, expr, RPAREN)
+    { PEis_unsigned _e }
+
+(* BEGIN: effectful *)
+| RAISE str= delimited(LPAREN, SYM (* TODO: hack *), RPAREN)
+    { Eraise str }
+| REGISTER LPAREN str= SYM COMMA nm= name RPAREN
+    { Eregister (str, nm) }
+| SKIP
+    { Eskip }
+| LET str= SYM EQ _e1= expr IN _e2= expr END
+    { Elet (str, _e1, _e2) }
+| IF _e1= expr THEN _e2= expr ELSE _e3= expr END
+    { Eif (_e1, _e2, _e3) }
+| nm= name _es= delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
+    { Eproc (nm, _es) }
+| pact= paction
+    { Eaction pact }
+| UNSEQ _es= delimited(LPAREN, separated_nonempty_list(COMMA, expr), RPAREN)
+    { Eunseq _es }
+| LET STRONG _as= pattern EQ _e1= expr IN _e2= expr END
+    { Esseq (_as, _e1, _e2) }
+| LET STRONG empty_pattern EQ _e1= expr IN _e2= expr END
+    { Esseq ([], _e1, _e2) }
+| LET WEAK _as= pattern EQ _e1= expr IN _e2= expr END
+    { Ewseq (_as, _e1, _e2) }
+| LET WEAK empty_pattern EQ _e1= expr IN _e2= expr END
+    { Ewseq ([], _e1, _e2) }
+| LET ATOM empty_pattern EQ act1= action IN pact2= paction
+    { Easeq (None, act1, pact2) }
+| LET ATOM str= SYM EQ act1= action IN pact2= paction
+    { Easeq (Some str, act1, pact2) }
+| INDET _e= delimited(LPAREN, expr, RPAREN)
+    { Eindet _e }
+(*
+WIP  | Ebound of int * expr
+*)
+| SAVE str= SYM str_tys= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, ctype)), RPAREN) DOT _e= expr END
+    { Esave (str, str_tys, _e) }
+| RUN d= SYM str__es= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, expr)), RPAREN)
+    { Erun (d, str__es) }
+| RETURN _e= delimited(LPAREN, expr, RPAREN)
+    { Eret _e }
+| ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { End _es }
+| PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
+    { Epar _es }
+(*
+WIP  | Ewait of Thread.thread_id
+*)
+| LPAREN _e= expr RPAREN
+    { _e }
+;
+
+shift_elem:
+| LPAREN ty= delimited(DQUOTE, ctype, DQUOTE) COMMA _e= expr RPAREN
+  { (ty, _e) }
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 action:
 | CREATE LPAREN e1= expr COMMA e2= expr RPAREN
@@ -971,16 +1536,18 @@ pattern_elem:
 ;
 
 pattern:
-| _as= delimited_nonempty_list(LPAREN, COMMA, pattern_elem, RPAREN)
+(* | _as= delimited_nonempty_list(LPAREN, COMMA, pattern_elem, RPAREN) *)
+| sym= SYM
+    { [Some sym] }
+| LPAREN _as= separated_nonempty_list(COMMA, pattern_elem) RPAREN
     { _as }
 ;
 
-
-constant:
-| n= INT_CONST
-    { Naive_memory.MVinteger (Symbolic.SYMBconst n) }
-| ARRAY LPAREN vs= separated_nonempty_list (COMMA, constant) RPAREN
-    { Naive_memory.MVarray vs }
+empty_pattern:
+| LPAREN RPAREN
+| UNDERSCORE
+    { }
+;
 
 
 (*
@@ -992,11 +1559,8 @@ try_clauses:
 *)
 
 
-shift_elem:
-| LPAREN ty= delimited(DQUOTE, ctype, DQUOTE) COMMA pe= expr RPAREN
-  { (ty, pe) }
-
-expr:
+(*
+expr_old:
 | e= delimited(LPAREN, expr, RPAREN)
     { e }
 | UNIT
@@ -1062,7 +1626,7 @@ expr:
 | IF b= expr THEN e1= expr ELSE e2= expr END
     { Eif (b, e1, e2) }
 (* TODO: temporary restricted version *)
-| CASE_TY LPAREN e= expr COMMA f_void= name COMMA f_basic= name COMMA f_array= name COMMA
+| CASE_CTYPE LPAREN e= expr COMMA f_void= name COMMA f_basic= name COMMA f_array= name COMMA
                  f_fun= name COMMA f_ptr= name COMMA f_atom= name COMMA f_struct= name COMMA f_union= name COMMA f_builtin= name RPAREN
     { Ecase (e, f_void, f_basic, f_array, f_fun, f_ptr, f_atom, f_struct, f_union, f_builtin) }
 
@@ -1123,6 +1687,7 @@ expr:
     { Eis_signed e }
 | IS_UNSIGNED LPAREN e= expr RPAREN
     { Eis_unsigned e }
+*)
 
 
 def_declaration:
@@ -1146,20 +1711,25 @@ glob_declaration:
 
 fun_declaration:
 | FUN fname= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
-  COLON coreTy= core_type
+  COLON bTy= core_base_type
   COLON_EQ fbody= expr
-    { Fun_decl (fname, (coreTy, List.rev params, fbody)) }
+    { Fun_decl (fname, (bTy, List.rev params, fbody)) }
+;
+
+proc_declaration:
+| PROC _sym= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
+  COLON EFF bTy= core_base_type
+  COLON_EQ fbody= expr
+    { Proc_decl (_sym, (bTy, List.rev params, fbody)) }
 ;
 
 
 declaration:
 | d= def_declaration
-    { d }
 | d= ifun_declaration
-    { d }
 | d= glob_declaration
-    { d }
 | d= fun_declaration
+| d= proc_declaration
     { d }
 
 %%

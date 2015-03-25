@@ -2,6 +2,8 @@ open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
 open import GenTypes Implementation
 import AilTypesAux AilTyping
 
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
 
 
 
@@ -316,3 +318,66 @@ let min_interpret_integerConstant (IConstant _ _ suff) =
 
 
 
+
+
+
+
+
+let unatomic = function
+  | GenAtomic ty ->
+      inject_type ty
+  | gty ->
+      gty
+end
+
+(* TODO: check *)
+val is_complete: forall 'a. sigma 'a -> genType -> bool
+let is_complete sigm gty =
+  match unatomic gty with
+   | GenVoid ->
+       false
+   | GenBasic _ ->
+       true
+   | GenArray _ _ ->
+       true
+   | GenFunction _ _ _ ->
+       false (* TODO: check *)
+   | GenPointer _ _ ->
+       true
+   | GenStruct sym ->
+       match Context.lookup (=) sigm.tag_definitions sym with
+         | Just (StructDef _) ->
+             true
+         | _ ->
+             let _ = print_debug 5 ("GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+             false
+       end
+   | GenUnion sym ->
+       match Context.lookup (=) sigm.tag_definitions sym with
+         | Just (UnionDef _) ->
+             true
+         | _ ->
+             false
+       end
+  | GenBuiltin "cnd_t" ->
+      true
+  | GenBuiltin "fpos_t" ->
+      true
+  | GenBuiltin "mtx_t" ->
+      true
+  | GenBuiltin "once_flag" ->
+      true
+  | GenBuiltin "thrd_t" ->
+      true
+  | GenBuiltin "tss_t" ->
+      true
+  | GenBuiltin "va_list" ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO *)
+val is_incomplete: forall 'a. sigma 'a -> genType -> bool
+let is_incomplete sigm gty =
+  not (is_complete sigm gty)

@@ -1,6 +1,8 @@
 open import Pervasives
 import Symbol Cabs
 
+
+(** Types *************************************************************************************** *)
 type identifier = Symbol.t
 
 
@@ -28,15 +30,12 @@ type integerType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] =
  | Unsigned of integerBaseType
  | IBuiltin of string
  | Enum of identifier
-
 (*
  | Wchar_t (* TODO: merge into a IBuiltin variant ? *)
  | Char16_t (* TODO: merge into a IBuiltin variant ? *)
  | Char32_t (* TODO: merge into a IBuiltin variant ? *)
 *)
  (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
-
-
 
 
 (* STD §6.2.5#14, sentence 1 *)
@@ -51,6 +50,7 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   volatile : bool;
   atomic   : bool;
 |>
+
 
 (* NOTE: we restrict qualifiers in the syntax to place that correspond to
          lvalues (to reflect STD §6.7.3#4) *)
@@ -76,18 +76,21 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
  | Builtin of string
 
 
-val char16_t: ctype
-let char16_t =
-  (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (IBBuiltin "int_least16_t")))
-
-val char32_t: ctype
-let char32_t =
-  (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (IBBuiltin "int_least32_t")))
+type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =  (*r storage duration (\S6.2.4\#1) *)
+ | Static
+ | Thread
+ | Automatic
+ | Allocated
 
 
-(* Equality functions *)
+type typeCategory [name = "tc*"] = 
+ | LValueType of qualifiers * ctype
+ | RValueType of ctype
+
+
+
+
+(** Type-class instances ************************************************************************ *)
 let integerBaseTypeEqual ibty1 ibty2 =
   let ord = function
     | Ichar ->
@@ -207,11 +210,6 @@ let rec ctypeEqual ty1 ty2 =
   end in
   let paramsEqual (qs1, ty1) (qs2, ty2) =
     qs1 = qs2 && ctypeEqual ty1 ty2 in
-  
-(*
-  let memberEqual (ident1, ty1) (ident2, ty2) =
-    ident1 = ident2 && ctypeEqual ty1 ty2 in
-*)
   match (ty1, ty2) with
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
@@ -222,9 +220,9 @@ let rec ctypeEqual ty1 ty2 =
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2
     | (Struct id1, Struct id2) ->
-        id1 = id2 (* && List.all (uncurry memberEqual) (List.zip xs1 xs2) *)
+        id1 = id2
     | (Union id1, Union id2) ->
-        id1 = id2 (* && List.all (uncurry memberEqual) (List.zip xs1 xs2) *)
+        id1 = id2
     | (Builtin str1, Builtin str2) ->
         str1 = str2
     | _ ->
@@ -236,32 +234,11 @@ instance (Eq ctype)
   let (<>) = fun ty1 ty2 -> not (ctypeEqual ty1 ty2)
 end
 
-(*
-(* NOTE: we restrict qualifiers in the syntax to place that correspond to
-         lvalues (to reflect STD §6.7.3#4) *)
-type ctype =
- | Void
- | Basic of basicType
- | Array of ctype * (maybe integer)
-   (* NOTE: the qualifiers associated to a ctype in the
-            list of parameters is that of the parameter lvalue. For example if
-            we have a parameter with type "restrict pointer to a const char",
-            the qualifiers in the tuple will be:
-              {no_qualifiers with restrict=true} *)
- | Function of ctype * list (qualifiers * ctype) * bool
-   (* NOTE: the qualifiers are that of the referenced type *)
- | Pointer of qualifiers * ctype
- | Atomic of ctype
- | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
- | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
- | Builtin of string
 
-
-*)
-
-
-
-
+instance (Eq storageDuration)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 
 let setElemCompare_integerBaseType ibty1 ibty2 =
@@ -353,20 +330,8 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+(** Some useful functions *********************************************************************** *)
+val make_qualifiers: bool -> bool -> bool -> bool -> qualifiers
 let make_qualifiers c r v a = <|
   const    = c;
   restrict = r;
@@ -374,6 +339,8 @@ let make_qualifiers c r v a = <|
   atomic   = a;
 |>
 
+
+val no_qualifiers: qualifiers
 let no_qualifiers = <|
   const    = false;
   restrict = false;
@@ -392,6 +359,7 @@ let no_qualifiers = <|
 
 
 
+(*
 let rec paramsEqual_aux ctypeEqual p1 p2 : bool =
   match (p1, p2) with
   | ([]           , []           ) -> true
@@ -402,9 +370,6 @@ let rec paramsEqual_aux ctypeEqual p1 p2 : bool =
 
 let paramsEqual = paramsEqual_aux ctypeEqual
 
-type typeCategory [name = "tc*"] = 
- | LValueType of qualifiers * ctype
- | RValueType of ctype
 
 let typeCategoryEqual tc1 tc2 : bool =
   match (tc1, tc2) with
@@ -412,24 +377,26 @@ let typeCategoryEqual tc1 tc2 : bool =
   | (RValueType    ty1, RValueType    ty2) -> ctypeEqual ty1 ty2
   | (_               , _               ) -> false
   end
-
-type storageDuration [name = "sd*"] =  (*r storage duration (\S6.2.4\#1) *)
- | Static
- | Thread
- | Automatic
- | Allocated
-
-instance (Eq storageDuration)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
+*)
 
 
-let storageDurationEqual sd1 sd2 : bool = 
-  match (sd1, sd2) with
-  | (Static   , Static   ) -> true
-  | (Thread   , Thread   ) -> true
-  | (Automatic, Automatic) -> true
-  | (Allocated, Allocated) -> true
-  | (_        , _        ) -> false
-  end
+
+
+
+
+
+
+
+
+
+
+
+val char16_t: ctype
+let char16_t =
+  (* STD §7.28#2 *)
+  Basic (Integer (Unsigned (IBBuiltin "int_least16_t")))
+
+val char32_t: ctype
+let char32_t =
+  (* STD §7.28#2 *)
+  Basic (Integer (Unsigned (IBBuiltin "int_least32_t")))

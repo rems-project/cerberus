@@ -1,8 +1,13 @@
 #ifndef	_STDLIB_H_
 #define	_STDLIB_H_
 
+#ifndef _STDIO_H_ // TODO: fix the f!cking parser
 typedef __cerbty_size_t size_t;
+#endif
+
+#ifndef _STDDEF_H_ // TODO: fix the f!cking parser
 typedef __cerbty_wchar_t wchar_t;
+#endif
 
 #define NULL __cerbvar_NULL
 

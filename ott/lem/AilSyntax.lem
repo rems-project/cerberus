@@ -110,6 +110,7 @@ type expression' 'A [name = "e*"] =
   | AilEconst of constant
   | AilEident of identifier
   | AilEsizeof of qualifiers * ctype
+  | AilEsizeof_expr of expression 'A
   | AilEalignof of qualifiers * ctype
   
   (* NOTE: type annotation on expression, used to remember the type of desugared
@@ -123,7 +124,8 @@ and generic_association 'A =
 and expression 'A [name = "e*"] =
   | AnnotatedExpression of 'A * expression' 'A
 
-type bindings (*[name="b*"]*) = list (identifier * (storageDuration * qualifiers * ctype))
+(* the storage duration must be Nothing iff the identifier is that of a function *)
+type bindings (*[name="b*"]*) = list (identifier * (maybe storageDuration * qualifiers * ctype))
 
 type statement' 'A [name="s*"] = 
   | AilSskip
@@ -178,7 +180,7 @@ type sigma 'A = <|
 |>
 
 
-type gamma = Context.context identifier (qualifiers * ctype)
+type gamma = Context.context identifier (maybe storageDuration * qualifiers * ctype)
 
 type program 'A = identifier * sigma 'A
 
@@ -434,6 +436,8 @@ let rec expressionEqual' eq_A e1 e2 =
         identifierEqual v1 v2
     | (AilEsizeof qs1 ty1, AilEsizeof qs2 ty2) ->
         qs1 = qs2 && ty1 = ty2
+    | (AilEsizeof_expr e1, AilEsizeof_expr e2) ->
+        expressionEqual eq_A e1 e2
     | (AilEalignof qs1 ty1, AilEalignof qs2 ty2) ->
         qs1 = qs2 && ty1 = ty2
     | (_, _) -> false
@@ -447,16 +451,16 @@ and expressionEqual eq_A e1 e2 =
 let argumentsEqual eq_A a1 a2 =
   argumentsEqual_aux eq_A expressionEqual a1 a2
 
-let bindingsEqual =
-  eq_list (eq_pair identifierEqual (eq_pair qualifiersEqual ctypeEqual))
+let bindingsEqual bs1 bs2 =
+  eq_list (eq_pair identifierEqual (eq_triple (=) qualifiersEqual ctypeEqual)) bs1 bs2
 
 let definitionEqual eq_A d1 d2 =
   eq_pair identifierEqual (expressionEqual eq_A) d1 d2
 
 let eq_declaration ds1 ds2 =
   match (ds1, ds2) with
-    | (Decl_object sd1 qs1 ty1, Decl_object sd2 qs2 ty2) ->
-        sd1 = sd2 && qs1 = qs2 && ty1 = ty2
+    | (Decl_object dur1 qs1 ty1, Decl_object dur2 qs2 ty2) ->
+        dur1 = dur2 && qs1 = qs2 && ty1 = ty2
     | (Decl_function ret_ty1 qs_tys1 is_variadic1 is_inline1 is_Noreturn1, Decl_function ret_ty2 qs_tys2 is_variadic2 is_inline2 is_Noreturn2) ->
         ret_ty1 = ret_ty2 &&
         qs_tys1 = qs_tys2 &&
@@ -890,7 +894,7 @@ let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
 let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
-val parameters_of_bindings: bindings -> list (qualifiers * ctype)
+val parameters_of_bindings: bindings -> list (maybe storageDuration * qualifiers * ctype)
 
 val type_from_sigma: forall 'A. (ctype * bindings * bool) * maybe (statement 'A) -> ctype
 
@@ -898,7 +902,7 @@ let parameters_of_bindings bs =
   List.map snd bs
 
 let type_from_sigma ((ty, bs, is_variadic), _) =
-  Function ty (List.map snd bs) is_variadic
+  Function ty (List.map (fun (_, (_, qs, ty)) -> (qs,ty)) bs) is_variadic
 
 
 
