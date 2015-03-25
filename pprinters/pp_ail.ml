@@ -202,14 +202,11 @@ let pp_integerType_raw = function
      !^ "Signed" ^^ P.brackets (pp_integerBaseType_raw ibty)
  | Unsigned ibty ->
      !^ "Unsigned" ^^ P.brackets (pp_integerBaseType_raw ibty)
-(*
- | Wchar_t ->
-     !^ "Wchar_t"
- | Char16_t ->
-     !^ "Char16_t"
- | Char32_t ->
-     !^ "Char32_t"
-*)
+ | IBuiltin str ->
+     !^ str
+ | Enum sym ->
+     !^ "enum" ^^^ pp_id sym
+
 
 let pp_basicType_raw = function
   | Integer ity ->
@@ -612,6 +609,8 @@ let rec pp_expression a_expr =
             (* TODO *)
             pp_keyword "sizeof" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
 (*            pp_keyword "sizeof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty)) *)
+        | AilEsizeof_expr e ->
+            pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
             (* TODO *)
             pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
@@ -691,7 +690,7 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
-            (fun (id, (qs, ty)) -> (* TODO: pp_qualifiers qs (pp_ctype ty) *) P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp_id_obj id)
+            (fun (id, (dur_opt, qs, ty)) -> (* TODO: pp_qualifiers qs (pp_ctype ty) *) P.parens (P.optional pp_storageDuration dur_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp_id_obj id)
             ids ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace

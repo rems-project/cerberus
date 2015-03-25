@@ -26,70 +26,42 @@ module Mem = Naive_memory
 
 
 let precedence = function
-  | Eop (OpExp, _, _) -> Some 1
+  | PEop (OpExp, _, _) -> Some 1
 
-  | Eop (OpMul, _, _)
-  | Eop (OpDiv, _, _)
-  | Eop (OpMod, _, _) -> Some 2
+  | PEop (OpMul, _, _)
+  | PEop (OpDiv, _, _)
+  | PEop (OpMod, _, _) -> Some 2
   
-  | Eop (OpAdd, _, _)
-  | Eop (OpSub, _, _) -> Some 3
+  | PEop (OpAdd, _, _)
+  | PEop (OpSub, _, _) -> Some 3
   
-  | Eop (OpLt,  _, _) -> Some 4
+  | PEop (OpLt,  _, _) -> Some 4
   
-  | Eop (OpEq,  _, _) -> Some 5
+  | PEop (OpEq,  _, _) -> Some 5
   
-  | Eop (OpAnd, _, _) -> Some 6
+  | PEop (OpAnd, _, _) -> Some 6
   
-  | Eop (OpOr,  _, _) -> Some 7
-
-  | Eunit
-  | Etrue
-  | Efalse
-  | Econst _
-  | Elist _
-  | Econs _
-  | Ectype _
-  | Esym _
-  | Eimpl _
-  | Earray _
-  | Etuple _
-  | Eundef _
-  | Eerror _
-  | Eraise _
-  | Eregister _
-(*
-  | Etry _
-*)
-  | Eskip
-  | Erun _
-  | Enot _
-  | Esave _
-  | Eret _
-  | Eindet _
-  | Eaction _
-  | Eproc _
-  | Ecall _
-  | Eshift _
-  | Ecase _
-  | Eoutput _
-  | Eif _
-  | Elet _
-  | Easeq _
-  | Ewseq _
-  | Esseq _
-  | Eunseq _
-  | Epar _
-  | Ewait _
-  | Etuple _
-  | Ebound _
-  | End _
-(* TODO: temporary *)
-  | Eis_scalar _
-  | Eis_integer _
-  | Eis_signed _
-  | Eis_unsigned _ -> None
-
+  | PEop (OpOr,  _, _) -> Some 7
+  
+  | PEundef _
+  | PEerror _
+  | PEval _
+  | PEsym _
+  | PEimpl _
+  | PEcons _
+  | PEcase_list _
+  | PEcase_ctype _
+  | PEshift _
+  | PEnot _
+  | PEtuple _
+  | PEarray _
+  | PEcall _
+  | PElet _
+  | PEif _
+  | PEis_scalar _
+  | PEis_integer _
+  | PEis_signed _
+  | PEis_unsigned _ -> None
 
 
 let lt_precedence p1 p2 =
@@ -137,6 +109,11 @@ let pp_binop = function
   | OpOr  -> !^ "\\/"
 
 
+let pp_ctype ty =
+  P.dquotes (Pp_core_ctype.pp_ctype ty)
+
+
+
 (* Qualification prefix for memory addresses *)
 let rec pp_prefix = function
   | []    -> P.empty
@@ -163,7 +140,7 @@ let rec pp_symbolic = function
   | Symbolic.SYMBconst n ->
       !^ (Big_int.string_of_big_int n)
   | Symbolic.SYMBctype ty ->
-      P.dquotes (Pp_core_ctype.pp_ctype ty)
+      pp_ctype ty
   | Symbolic.SYMBsym (_, sym) ->
       pp_symbol sym
   | Symbolic.SYMBop (op, symb1, symb2) ->
@@ -177,6 +154,7 @@ let rec pp_symbolic = function
         | Symbolic.Eq  -> "=="
         | Symbolic.Neq -> "/="
         | Symbolic.Lt  -> "<"
+        | Symbolic.Ge  -> ">="
         | Symbolic.And -> "and"
         | Symbolic.Or  -> "or" in
       P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
@@ -204,22 +182,6 @@ let pp_pointer_shift ptr_sh =
   P.brackets (aux ptr_sh)
 
 
-let rec pp_constant = function
-  | Mem.MVunspecified ty ->
-      !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-  | Mem.MVinteger (Symbolic.SYMBconst n) ->
-      !^ (Big_int.string_of_big_int n)
-  | Mem.MVinteger symb ->
-      !^ "SYMB" ^^ P.parens (pp_symbolic symb)
-  | Mem.MVpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
-      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
-  | Mem.MVpointer ptr_val ->
-      !^ "TODO(MVpointer)" 
-  | Mem.MVarray vs_opt ->
-      pp_const "array" ^^ P.parens (comma_list pp_constant vs_opt)
-  | Mem.MVstruct (tag, ident_vs) ->
-      P.parens (!^ "struct" ^^^ pp_symbol tag) ^^^ P.braces (comma_list (fun (ident, mem_val) -> P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp_constant mem_val) ident_vs)
-(*   | MVunion of Symbol.t * Symbol.t * mem_value *)
 
 
 
@@ -273,6 +235,7 @@ let pp_pattern _as =
     | _    -> P.parens (comma_list g _as)
 
 
+(*
 let pp_pointer_action = function
   | PtrEq ->
       pp_keyword "pointer_eq"
@@ -280,95 +243,166 @@ let pp_pointer_action = function
       pp_keyword "pointer_ne"
   | PtrShift ->
       pp_keyword "pointer_shift"
-
-let rec pp_expr e =
-  let rec pp p e =
-    let p'   = precedence e in
-    let pp z = P.group (pp p' z) in
-    
-(*
-    let rec pp_try_clauses = function
-      | [] ->
-          !^ "ERROR[empty try_clauses]"
-      | [(str, e)] ->
-          !^ "|" ^^^ !^ str ^^^ !^ "->" ^^^ pp e
-      | (str, e) :: str_es ->
-          !^ "|" ^^^ !^ str ^^^ !^ "->" ^^^ pp e ^^^ pp_try_clauses str_es in
 *)
-    
-    (if lt_precedence p' p then fun x -> x else P.parens)
-      (match e with
-        | Eunit ->
-            pp_const "unit"
-        | Etrue ->
-            pp_const "true"
-        | Efalse ->
-            pp_const "false"
-        | Econst c ->
-            pp_constant c
-        | Elist pes ->
-            P.brackets (comma_list pp pes)
-        | Econs (pe1, pe2) ->
-            pp_const "cons" ^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
-        | Ectype ty ->
-            P.dquotes (Pp_core_ctype.pp_ctype ty)
-        | Esym sym ->
-            pp_symbol sym
-        | Eimpl i ->
-            pp_impl i
-        | Earray xs ->
-            pp_const "array" ^^ P.parens (comma_list (function
-              | Left z -> pp_constant z
-              | Right sym -> pp_symbol sym
-            ) xs)
-        | Etuple pes ->
-            P.parens (comma_list pp pes)
-        | Enot e ->
-            pp_keyword "not" ^^^ P.parens (pp e)
-        | Eop (op, e1, e2) ->
-            pp e1 ^^^ pp_binop op ^^^ pp e2
-        | Ecall (fname, es) ->
-            pp_name fname ^^ P.parens (comma_list pp es)
-        | Eshift (pe, path) ->
-            pp_keyword "shift" ^^ P.parens (pp pe ^^ P.comma ^^^ pp_shift_path path)
-        | Ecase (pe, nm_void, nm_basic, nm_array, nm_fun, nm_ptr, nm_atomic, nm_struct, nm_union, nm_builtin) ->
-            pp_keyword "case_ty" ^^ P.parens (comma_list pp_name [nm_void; nm_basic; nm_array; nm_fun; nm_ptr; nm_atomic; nm_struct; nm_union; nm_builtin])
-        | Eoutput str ->
-            (* TODO: the string should be quoted and escaped *)
-            pp_keyword "output" ^^ P.parens (!^ str)
-        | Eundef u ->
+
+let rec pp_mem_value = function
+  | Mem.MVunspecified ty ->
+      !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+  | Mem.MVinteger (Mem.IVinteger n) ->
+      !^ (Big_int.string_of_big_int n)
+  | Mem.MVinteger _ ->
+      !^ "TODO(MVinteger SYMB_integer_value)"
+  | Mem.MVfloating str ->
+      !^ ("TODO(MVfloation " ^ str ^ ")")
+  | Mem.MVpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
+      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
+  | Mem.MVpointer ptr_val ->
+      !^ "TODO(MVpointer)" 
+  | Mem.MVarray vs_opt ->
+      pp_const "array" ^^ P.parens (comma_list pp_mem_value vs_opt)
+  | Mem.MVstruct (tag, ident_vs) ->
+      P.parens (!^ "struct" ^^^ pp_symbol tag) ^^^ P.braces (comma_list (fun (ident, mem_val) -> P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp_mem_value mem_val) ident_vs)
+   | Mem.MVunion (sym_tag, sym_member, mem_val) ->
+       !^ "TODO(MVunion)"
+
+
+let rec pp_value = function
+  | Vunit ->
+      pp_const "unit"
+  | Vtrue ->
+      pp_const "true"
+  | Vfalse ->
+      pp_const "false"
+  | Vlist cvals ->
+      P.brackets (comma_list pp_value cvals)
+  | Vtuple cvals ->
+      P.parens (comma_list pp_value cvals)
+  | Vctype ty ->
+      P.dquotes (Pp_core_ctype.pp_ctype ty)
+  | Vunspecified ty ->
+      pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+  | Vinteger (Mem.IVinteger n) ->
+      !^ (Big_int.string_of_big_int n)
+  | Vinteger ival ->
+      !^ "TODO(Vinteger SYMB_integer_value)"
+  | Vfloating str ->
+      !^ str
+(*
+  | Vsymbolic symb ->
+      !^ "SYMB" ^^ P.parens (pp_symbolic symb)
+*)
+  | Vpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
+      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
+  | Vpointer _ ->
+      !^ "TODO(MVpointer)" 
+  | Varray mem_vals ->
+      pp_const "array" ^^ P.parens (comma_list pp_mem_value mem_vals)
+
+
+let pp_pexpr pe =
+  let rec pp prec pe =
+    let prec' = precedence pe in
+    let pp z = P.group (pp prec' z) in
+    (if lt_precedence prec' prec then fun z -> z else P.parens)
+    begin
+      match pe with
+        | PEundef ub ->
             pp_keyword "undef" ^^ P.angles (P.angles (!^ (
-              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour u)
-                         else Undefined.string_of_undefined_behaviour u)))
-        | Eerror str ->
+              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour ub)
+                         else Undefined.string_of_undefined_behaviour ub)))
+        | PEerror str ->
             pp_keyword "error" ^^^ P.dquotes (!^ str)
-        | Eraise str ->
-            pp_keyword "raise" ^^ P.parens (!^ str)
-        | Eregister (str, nm) ->
-            pp_keyword "register" ^^ P.parens (!^ str ^^ P.comma ^^^ pp_name nm)
-        | Eskip ->
-            pp_keyword "skip"
-        | Elet (a, e1, e2) ->
-            pp_control "let" ^^^ pp_symbol a ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
-        | Eif (b, e1, e2) ->
-            pp_control "if" ^^^ pp b ^^^ pp_control "then" ^^
-            P.nest 2 (P.break 1 ^^ pp e1) ^^ P.break 1 ^^
-            pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^^ pp_control "end"
-        | Eproc (_, fname, es) ->
-            pp_name fname ^^ P.braces (comma_list pp es)
-        | Eaction (Paction (p, (Action (bs, a)))) ->
-          (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
-             P.rangle ^^ P.space) ^^ *)
-          pp_polarity p ^^ pp_action a
-        | Eunseq [] ->
-            !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
-        | Eunseq [e] ->
-            !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
-        | Eunseq es ->
-            P.brackets (P.separate_map (P.space ^^ (pp_control "||") ^^ P.space) pp es)
+        | PEval cval ->
+            pp_value cval
+        | PEsym sym ->
+            pp_symbol sym
+        | PEimpl iCst ->
+            pp_impl iCst
+        | PEcons (pe1, pe2) ->
+            pp_const "cons" ^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
+        | PEcase_list (pe1, pe2, nm) ->
+            pp_keyword "case_list" ^^ P.parens (
+              pp pe1 ^^ P.comma ^^^ pp pe2 ^^ P.comma ^^^ pp_name nm
+            )
+        | PEcase_ctype (pe1, pe2, nm1, nm2, nm3, nm4, nm5, nm6, nm7, nm8) ->
+            pp_keyword "case_ctype" ^^ P.parens (
+              pp pe1 ^^ P.comma ^^^ pp pe2 ^^ P.comma ^^^
+              pp_name nm1 ^^ P.comma ^^^ pp_name nm2 ^^ P.comma ^^^ pp_name nm3 ^^ P.comma ^^^
+              pp_name nm4 ^^ P.comma ^^^ pp_name nm5 ^^ P.comma ^^^ pp_name nm6 ^^ P.comma ^^^
+              pp_name nm7 ^^ P.comma ^^^ pp_name nm8 ^^ P.comma
+            )
+        | PEshift (pe, ty_pes) ->
+            pp_keyword "shift" ^^ P.parens (
+              pp pe ^^ P.comma ^^^
+              P.braces (comma_list (fun (ty, pe) -> P.parens (pp_ctype ty ^^ P.comma ^^^ pp pe)) ty_pes)
+            )
+        | PEnot pe ->
+            pp_keyword "not" ^^ P.parens (pp pe)
+        | PEop (bop, pe1, pe2) ->
+            pp pe1 ^^^ pp_binop bop ^^^ pp pe2
+        | PEtuple pes ->
+            P.parens (comma_list pp pes)
+        | PEarray xs -> (* of ( (Mem.mem_value, sym)Either.either) list *)
+            pp_keyword "array" ^^ P.parens (
+              comma_list (function
+                | Left mem_val ->
+                    pp_mem_value mem_val
+                | Right sym ->
+                    pp_symbol sym
+              ) xs
+            )
+        | PEcall (nm, pes) ->
+            pp_name nm ^^ P.parens (comma_list pp pes)
+        | PElet (sym, pe1, pe2) ->
+            pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
+            pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2 ^^^ pp_control "end"
+        | PEif (pe1, pe2, pe3) ->
+            pp_control "if" ^^^ pp pe1 ^^^ pp_control "then" ^^
+            P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
+            pp_control "else" ^^
+            P.nest 2 (P.break 1 ^^ pp pe3) ^^ P.break 1 ^^^
+            pp_control "end"
+        | PEis_scalar pe ->
+            pp_keyword "is_scalar" ^^^ P.parens (pp pe)
+        | PEis_integer pe ->
+            pp_keyword "is_integer" ^^^ P.parens (pp pe)
+        | PEis_signed pe ->
+            pp_keyword "is_signed" ^^^ P.parens (pp pe)
+        | PEis_unsigned pe ->
+            pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
+    end
+  in pp None pe
 
 
+
+let rec pp_expr = function
+  | Epure pe ->
+      pp_pexpr pe
+  | Eraise str ->
+      pp_keyword "raise" ^^ P.parens (!^ str)
+  | Eregister (str, nm) ->
+      pp_keyword "register" ^^ P.parens (!^ str ^^ P.comma ^^^ pp_name nm)
+  | Eskip ->
+      pp_keyword "skip"
+  | Elet (sym, pe1, e2) ->
+      pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
+      pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2 ^^^ pp_control "end"
+  | Eif (pe1, e2, e3) ->
+      pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
+      P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
+      pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3) ^^ P.break 1 ^^^ pp_control "end"
+  | Eproc (_, nm, es) ->
+      pp_name nm ^^ P.braces (comma_list pp_pexpr es)
+  | Eaction (Paction (p, (Action (bs, act)))) ->
+      (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
+         P.rangle ^^ P.space) ^^ *)
+      pp_polarity p ^^ pp_action act
+  | Eunseq [] ->
+      !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
+  | Eunseq [e] ->
+      !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp_expr e ^^ (pp_control "]-]-]")
+  | Eunseq es ->
+      pp_control "unseq" ^^ P.parens (comma_list pp_expr es)
 (*
 (*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
         | Ewseq ([], e1, e2) ->
@@ -393,83 +427,71 @@ let rec pp_expr e =
         | Ewseq ([], e1, e2) ->
             pp e1 ^^ P.semi ^^ P.break 1 ^^ pp e2
 *)
-
-        | Ewseq (_as, e1, e2) ->
-            pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
-        | Esseq (_as, e1, e2) ->
-            pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
-            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-            P.nest 2 (pp e2) ^^ P.break 1 ^^ pp_control "end"
-        | Easeq (None, act, y) ->
-            pp_control "let" ^^^ pp_control "atom" ^^^ P.lparen ^^ P.rparen ^^^ P.equals ^^^
-            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
-        | Easeq (Some a, act, y) ->
-            pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol a ^^^ P.equals ^^^
-            pp (Eaction (Paction (Pos, act))) ^^^ pp_control "in" ^^^ pp (Eaction y) ^^^ pp_control "end"
-        | Eindet e ->
-            pp_control "indet" ^^ P.parens (pp e)
-        | Esave (l, a_ty_s, e) ->
-            pp_keyword "save" ^^^ pp_symbol l ^^
-            P.parens (comma_list (fun (a,ty) -> pp_symbol a ^^ P.colon ^^^ Pp_core_ctype.pp_ctype ty) a_ty_s) ^^
-            P.dot ^^^ pp e ^^^ pp_control "end"
-        | Erun (_, l, es) ->
-            pp_keyword "run" ^^^ pp_symbol l ^^ P.parens (comma_list (fun (a, e) -> pp_symbol a ^^ P.colon ^^^ pp e) es)
-        | Eret e ->
-            pp_keyword "return" ^^^ P.parens (pp e)
-        | Epar es ->
-            pp_keyword "par" ^^ P.parens (comma_list pp es)
-        | Ewait tid ->
-            pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-        | End es ->
-            pp_keyword "nd" ^^ P.parens (comma_list pp es)
-        
-        (* TODO: temporary *)
-        | Eis_scalar e ->
-            pp_keyword "is_scalar" ^^^ P.parens (pp e)
-        | Eis_integer e ->
-            pp_keyword "is_integer" ^^^ P.parens (pp e)
-        | Eis_signed e ->
-            pp_keyword "is_signed" ^^^ P.parens (pp e)
-        | Eis_unsigned e ->
-            pp_keyword "is_unsigned" ^^^ P.parens (pp e)
-      )
-  in pp None e
+  | Ewseq (_as, e1, e2) ->
+      pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
+      pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
+      P.nest 2 (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+  | Esseq (_as, e1, e2) ->
+      pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
+      pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
+      P.nest 2 (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+  | Easeq (None, act1, pact2) ->
+      pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
+      pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
+  | Easeq (Some sym, act1, pact2) ->
+      pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol sym ^^^ P.equals ^^^
+      pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
+  | Eindet e ->
+      pp_control "indet" ^^ P.parens (pp_expr e)
+  | Esave (sym, sym_tys, e) ->
+      pp_keyword "save" ^^^ pp_symbol sym ^^
+      P.parens (comma_list (fun (sym,ty) -> pp_symbol sym ^^ P.colon ^^^ Pp_core_ctype.pp_ctype ty) sym_tys) ^^
+      P.dot ^^^ pp_expr e ^^^ pp_control "end"
+  | Erun (_, sym, sym_pes) ->
+      pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list (fun (sym, pe) -> pp_symbol sym ^^ P.colon ^^^ pp_pexpr pe) sym_pes)
+  | Eret pe ->
+      pp_keyword "return" ^^^ P.parens (pp_pexpr pe)
+  | Epar es ->
+      pp_keyword "par" ^^ P.parens (comma_list pp_expr es)
+  | Ewait tid ->
+      pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+  | End es ->
+      pp_keyword "nd" ^^ P.parens (comma_list pp_expr es)
 
 and pp_shift_path sh_path =
   P.braces (
-    comma_list (fun (ty, pe) -> P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty) ^^ P.comma ^^^ pp_expr pe)) sh_path
+    comma_list (fun (ty, pe) -> P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty) ^^ P.comma ^^^ pp_pexpr pe)) sh_path
   )
 
 
 and pp_action act =
   let pp_args args mo =
-    P.parens (comma_list pp_expr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
     | Create (al, ty, _) ->
-        pp_keyword "create" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr ty)
+        pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)
     | Alloc0 (al, n, _) ->
-        pp_keyword "alloc" ^^ P.parens (pp_expr al ^^ P.comma ^^^ pp_expr n)
+        pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill e ->
-        pp_keyword "kill" ^^ P.parens (pp_expr e)
+        pp_keyword "kill" ^^ P.parens (pp_pexpr e)
     | Store0 (ty, e1, e2, mo) ->
        pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_strong" ^^
-        P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
-                  pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
+        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
     | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_weak" ^^
-        P.parens (pp_expr ty ^^ P.comma ^^^ pp_expr e1 ^^ P.comma ^^^
-                  pp_expr e2 ^^ P.comma ^^^ pp_expr e3 ^^ P.comma ^^^
+        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+(*
     | Ptr (ptr_act, es) ->
-       pp_pointer_action ptr_act ^^ P.parens (comma_list pp_expr es)
-
+       pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)
+*)
 
 
 (* TODO: hackish (move to core.lem + some of these are implementation stuff ) *)
@@ -510,30 +532,38 @@ let pp_tagDefinitions tagDefs =
 
 
 
-
-let pp_argument (aname, atype) = pp_symbol aname ^^ P.colon ^^^ pp_core_base_type atype
+let pp_argument (sym, ty) =
+  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type ty
 
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
+let pp_fun_map funs =
+  Pmap.fold (fun sym decl acc ->
+    acc ^^
+    match decl with
+      | Fun  (bTy, params, pe) ->
+          pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          P.colon ^^ P.equals ^^
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+      | Proc (bTy, params, e) ->
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
+          P.colon ^^ P.equals ^^
+          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
+  ) funs P.empty
+
+
 let pp_file file =
-  isatty := Unix.isatty Unix.stdout;
-  let f acc (fname, (ftype, args, body)) =
+  let pp_glob acc (sym, coreTy, e) =
     acc ^^
-      pp_keyword "fun" ^^^ pp_symbol fname ^^^ P.parens (comma_list pp_argument args) ^^ P.colon ^^^ pp_core_type ftype ^^^
-      P.colon ^^ P.equals ^^
-      P.nest 2 (P.break 1 ^^ pp_expr body) ^^ P.break 1 ^^ P.break 1 in
-  let g acc (gsym, gTy, e) =
-    acc ^^
-    pp_keyword "glob" ^^^ pp_symbol gsym ^^ P.colon ^^^ pp_core_type gTy ^^^
+    pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_type coreTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
   
+  isatty := Unix.isatty Unix.stdout;
   !^ "{-" ^^ P.break 1 ^^
   pp_tagDefinitions file.tagDefinitions0 ^^ P.break 1 ^^
   !^ "-}" ^^ P.break 1 ^^
   
-  
-  List.fold_left g P.empty file.globs ^^
-  List.fold_left f P.empty (List.filter (function (Symbol.Symbol (_, Some f), _) -> not (List.mem f std) | _ -> true)
-    (Pset.elements (Pmap.bindings (pairCompare symbol_compare (fun _ _ -> 0)) file.funs))) ^^ P.break 1
+  List.fold_left pp_glob P.empty file.globs ^^
+  pp_fun_map file.funs

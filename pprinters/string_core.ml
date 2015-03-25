@@ -1,6 +1,8 @@
 open Core
 open Pp_core
 
+let string_of_pexpr pe =
+  Pp_utils.to_plain_string (pp_pexpr pe)
 let string_of_expr e =
   Pp_utils.to_plain_string (pp_expr e)
 let string_of_file f =

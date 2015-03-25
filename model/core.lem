@@ -108,11 +108,12 @@ end
 
 
 
-
+(*
 type pointer_action =
   | PtrEq
   | PtrNe
   | PtrShift
+*)
 
 
 (* TODO: think about that *)
@@ -131,7 +132,8 @@ type value =
   | Vtuple of list value
   | Vctype of ctype
 (*  | Vconst of Mem.mem_value *)
-  | Vinteger of Symbolic.symbolic
+  | Vunspecified of ctype
+  | Vinteger of Mem.integer_value
   | Vfloating of string
   | Vpointer of Mem.pointer_value
   | Varray of list Mem.mem_value
@@ -139,6 +141,10 @@ type value =
 
 (* pure Core expressions *)
 type pexpr =
+  (* undefined behaviour and late static error / failed assert *)
+  | PEundef of Undefined.undefined_behaviour
+  | PEerror of string
+
   (* values *)
   | PEval of value
   (* names *)
@@ -146,14 +152,19 @@ type pexpr =
   | PEimpl of Implementation_.implementation_constant
   (* list (de|con)structors *)
   | PEcons of pexpr * pexpr
-  | PEcase_list of pexpr * name * name
-  (* ctype destructor *)
-  | PEcase_ctype of pexpr * name * name * name * name * name * name * name * name * name
+  | PEcase_list of pexpr * pexpr * name
+  (* ctype destructor, the arguments are: ctype to destruct, constant
+       in void case, name of functions to call for the remaining cases:
+       basic, array, function, pointer, atomic, struct, union, builtin *)
+  | PEcase_ctype of pexpr * pexpr * name * name * name * name *
+                    name * name * name * name
   (* operators on pointer values *)
   | PEshift of pexpr * shift_path
   (* operators on integers *)
   | PEnot of pexpr
   | PEop of binop * pexpr * pexpr
+  (* operations provide by the memory layout model *)
+  | PEmemop of Mem.memop * list pexpr
   (* these two are annoying *)
   | PEtuple of list pexpr
   | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *)
@@ -177,10 +188,6 @@ and shift_path =
 type expr 'a =
   (* pure expression *)
   | Epure of pexpr
-  
-  (* undefined behaviour and late static error / failed assert *)
-  | Eundef of Undefined.undefined_behaviour
-  | Eerror of string
   
   (* these two are too deal with C signals *)
   | Eraise of handler_event
@@ -330,7 +337,7 @@ and action_ =
   | CompareExchangeWeak of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
   
   (* TODO: it annoying (maybe wrong) that these are actions *)
-  | Ptr of pointer_action * list pexpr
+(*  | Ptr of pointer_action * list pexpr *)
 
 and action 'a  = Action of 'a * action_
 and paction 'a = Paction of polarity * action 'a
@@ -390,19 +397,25 @@ end
 
 
 
+(* TODO: don't we need any impl proc? *)
+type impl_decl =
+  | Def  of core_base_type * pexpr
+  | IFun of core_base_type * list (sym * core_base_type) * pexpr
+type impl = map Implementation_.implementation_constant impl_decl
 
-type impl_decl 'a =
-  | Def  of core_base_type * expr 'a
-  | IFun of core_base_type * list (sym * core_base_type) * expr 'a
-type impl 'a = map Implementation_.implementation_constant (impl_decl 'a)
 
-type fun_map 'a = map sym (core_type * list (sym * core_base_type) * expr 'a)
+type fun_map_decl 'a =
+  | Fun  of core_base_type * list (sym * core_base_type) * pexpr
+  | Proc of core_base_type * list (sym * core_base_type) * expr 'a
+
+type fun_map 'a = map sym (fun_map_decl 'a)
+
 
 (* a Core file is just a set of named functions *)
 type file 'a = <|
   main   : sym;
   stdlib : fun_map 'a;
-  impl   : impl 'a;
+  impl   : impl;
   globs  : list (sym * core_type * expr 'a);
   funs   : fun_map 'a;
   

@@ -391,25 +391,30 @@ let rec hack expr =
   match expr with
     | Core.Epure _ ->
         expr
+    | Core.Eraise _ ->
+        expr
+    | Core.Eregister _ _ ->
+        expr
+    | Core.Eskip ->
+        expr
     | Core.Elet sym pe1 e2 ->
         Core.Elet sym pe1 (hack e2)
-    | Core.Eproc _ _ _ ->
-        expr
     | Core.Eif pe1 e2 e3 ->
         Core.Eif pe1 (hack e2) (hack e3)
+    | Core.Eproc _ _ _ ->
+        expr
+    | Core.Eaction _ ->
+        expr
     | Core.Eunseq es ->
         Core.Eunseq (map hack es)
     | Core.Ewseq as_opt e1 e2 ->
         Core.Ewseq as_opt (hack e1) (hack e2)
     | Core.Esseq as_opt e1 e2 ->
         Core.Esseq as_opt (hack e1) (hack e2)
-
 (* TODO: lem non termination bug *)
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
                             (Core.Ewseq [] (Core.Eaction pact) (Core.Epure (Core.PEsym match _a_opt with Just x -> x end)))
-
-
 (*
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
@@ -444,7 +449,12 @@ let order (f: Core.file unit) =
   
   
   
-  Exception.return [(1, <| f with Core.funs= Map.map (fun (ty, args, body) -> (ty, args, hack body)) f.Core.funs |>)]
+  Exception.return [(1, <| f with Core.funs= Map.map (function
+    | Core.Proc ty args e ->
+        Core.Proc ty args (hack e)
+    | z ->
+        z
+  end) f.Core.funs |>)]
 
 (*
 
@@ -459,4 +469,9 @@ let order (f: Core.file unit) =
 
 val hackish_order: Core.file unit -> Core.file unit
 let hackish_order file =
-  <| file with Core.funs= Map.map (fun (ty, args, body) -> (ty, args, hack body)) file.Core.funs |>
+  <| file with Core.funs= Map.map (function
+    | Core.Proc ty args e -> 
+        Core.Proc ty args (hack e)
+    | z ->
+        z
+  end) file.Core.funs |>

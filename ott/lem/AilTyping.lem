@@ -502,9 +502,9 @@ let typeable P (S : sigma 'B1 'B2) G (e : expression 'A) : bool =
 
 
 
-val well_formed_bindings: forall 'a. sigma 'a -> list (identifier * (qualifiers * ctype)) -> errorM unit
+val well_formed_bindings: forall 'a. sigma 'a -> bindings -> errorM unit
 let well_formed_bindings S bs =
-  mapM_ (comb (uncurry (wf_lvalue S)) snd) bs >>
+  mapM_ (comb (uncurry (wf_lvalue S)) (fun (_, (_, qs, ty)) -> (qs, ty))) bs >>
   guard (TError "found non disjoint bindings") (
     disjoint_bindings identifierEqual bs
   )

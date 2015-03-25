@@ -6,6 +6,11 @@ module Mem = Naive_memory
 
 module ATypes = AilTypes
 
+
+val pp_pexpr: pexpr -> string
+declare ocaml target_rep function pp_pexpr = `String_core.string_of_pexpr`
+
+
 (*
 type rewriter = <|
   unit_rwter:                                                      expr unit;
@@ -213,27 +218,28 @@ let rec remove_unseqs expr =
       Eif pe1 (remove_unseqs e2) (remove_unseqs e3)
 
   | Eunseq es ->
-      if List.all is_pure es then
-        Epure (PEtuple es)
-      else
-        Eunseq (List.map remove_unseqs es)
+      let pes_opt = List.foldr (fun e acc_opt ->
+        match (acc_opt, to_pure e) with
+          | (Just acc, Just pe) ->
+              Just (pe :: acc)
+          | _ ->
+              Nothing
+        end) (Just []) es in
+      maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (PEtuple pes)) pes_opt
   
   | Ewseq _as (Eunseq es) e2 ->
-      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (a_opt, e) ->
-        if is_pure e then
-          (acc1, (a_opt, e) :: acc2)
-        else
-          ((a_opt, remove_unseqs e) :: acc1, acc2)
-      ) ([], []) (List.zip _as es) in
+      (* ys is the assoc list of symbolic names, values that can be substituted away *)
+      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
+        match to_pure e with
+          | Just cval ->
+              (acc1, (sym_opt, cval) :: acc2)
+          | Nothing ->
+              ((sym_opt, remove_unseqs e) :: acc1, acc2)
+        end) ([], []) (List.zip _as es) in
       
       let e2' =
-        remove_unseqs $ List.foldl (fun acc (a_opt, e) ->
-          match a_opt with
-            | Just a ->
-                subst_sym a e acc
-            | Nothing ->
-                acc
-          end
+        remove_unseqs $ List.foldl (fun acc (sym_opt, cval) ->
+          maybe acc (fun sym -> subst_sym sym cval acc) sym_opt
         ) e2 rev_ys in
       
       match rev_xs with
@@ -250,28 +256,24 @@ let rec remove_unseqs expr =
       Ewseq _as (remove_unseqs e1) (remove_unseqs e2)
   
   | Esseq _as (Eunseq es) e2 ->
-      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (a_opt, e) ->
-        if is_pure e then
-          (acc1, (a_opt, e) :: acc2)
-        else
-          ((a_opt, remove_unseqs e) :: acc1, acc2)
-      ) ([], []) (List.zip _as es) in
+      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
+        match to_pure e with
+          | Just pe ->
+              (acc1, (sym_opt, pe) :: acc2)
+          | Nothing ->
+              ((sym_opt, remove_unseqs e) :: acc1, acc2)
+        end) ([], []) (List.zip _as es) in
       
       let e2' =
-        remove_unseqs $ List.foldl (fun acc (a_opt, e) ->
-          match a_opt with
-            | Just a ->
-                subst_sym a e acc
-            | Nothing ->
-                acc
-          end
+        remove_unseqs $ List.foldl (fun acc (sym_opt, pe) ->
+          maybe acc (fun sym -> subst_sym sym pe acc) sym_opt
         ) e2 rev_ys in
       
       match rev_xs with
         | [] ->
             e2'
-        | [(a_opt, e')] ->
-            Esseq [a_opt] e' e2'
+        | [(sym_opt, e')] ->
+            Esseq [sym_opt] e' e2'
         | _ ->
             let (_as', es') = List.unzip $ List.reverse rev_xs in
             Esseq _as' (Eunseq es') e2'
@@ -299,6 +301,7 @@ let rec remove_unseqs expr =
   end
 
 
+(*
 let rec remove_seqs expr =
   match expr with
   | Elet sym e1 e2 ->
@@ -359,6 +362,7 @@ let rec remove_seqs expr =
   | _ ->
       expr
   end
+*)
 
 (* returns a Right iff the expression always ends with a return() *)
 let rec remove_dead_aux expr =
@@ -526,34 +530,83 @@ let in_minimal_range ty n =
         false (* others are impl-def are should be given at conv_int as argument *)
   end
 
-let rec remove_conv_int expr =
-  match expr with
-    | Elist pes ->
-        Elist (List.map remove_conv_int pes)
-    | Etuple pes ->
-        Etuple (List.map remove_conv_int pes)
-    | Enot e ->
-        Enot (remove_conv_int e)
-    | Eop bop pe1 pe2 ->
-        Eop bop (remove_conv_int pe1) (remove_conv_int pe2)
-    | Ecall nm pes ->
-        let pes' = List.map remove_conv_int pes in
+
+let rec remove_conv_int_pexpr pexpr =
+  match pexpr with
+    | PEundef _ ->
+        pexpr
+    | PEerror _ ->
+        pexpr
+    | PEval _ ->
+        pexpr
+    | PEsym _ ->
+        pexpr
+    | PEimpl _ ->
+        pexpr
+    | PEcons pe1 pe2 ->
+        PEcons (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEcase_list pe nm1 nm2 ->
+        PEcase_list (remove_conv_int_pexpr pe) nm1 nm2
+    | PEcase_ctype pe nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9 ->
+        PEcase_ctype (remove_conv_int_pexpr pe) nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9
+    | PEshift pe sh ->
+        PEshift (remove_conv_int_pexpr pe) sh
+    | PEnot pe ->
+        PEnot (remove_conv_int_pexpr pe)
+    | PEop bop pe1 pe2 ->
+        PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEtuple pes ->
+        PEtuple (List.map remove_conv_int_pexpr pes)
+    | PEarray _ ->
+        pexpr
+    | PEcall nm pes ->
+        let pes' = List.map remove_conv_int_pexpr pes in
         match (nm, pes') with
           (* TODO: hack !!!!!!!!! *)
-          | (Sym (Symbol.Symbol _ (Just "conv_int")), [Ectype ty; (Econst (Mem.MVinteger (Symbolic.SYMBconst n)) as cst)]) ->
-              if in_minimal_range ty n then
-                cst
-              else
-                Ecall nm pes'
+          | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
+              match (to_value pe_ty, to_value pe_n) with
+                | (Just (Vctype ty), Just ((Vinteger (Mem.IVinteger n)) as cval)) ->
+                    if in_minimal_range ty n then
+                      PEval cval
+                    else
+                      PEcall nm pes'
+                | _ ->
+                    PEcall nm pes'
+(*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
+              end
           | _ ->
-              Ecall nm pes'
+              PEcall nm pes'
         end
-    | Elet a pe1 e2 ->
-        Elet a (remove_conv_int pe1) (remove_conv_int e2)
+    | PElet sym pe1 pe2 ->
+        PElet sym (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEif pe1 pe2 pe3 ->
+        PEif (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3)
+    | PEis_scalar pe ->
+        PEis_scalar (remove_conv_int_pexpr pe)
+    | PEis_integer pe ->
+        PEis_integer (remove_conv_int_pexpr pe)
+    | PEis_signed pe ->
+        PEis_signed (remove_conv_int_pexpr pe)
+    | PEis_unsigned pe ->
+        PEis_unsigned (remove_conv_int_pexpr pe)
+  end
+
+let rec remove_conv_int expr =
+  match expr with
+    | Epure pe ->
+        Epure (remove_conv_int_pexpr pe)
+    | Eraise _ ->
+        expr
+    | Eregister _ _ ->
+        expr
+    | Eskip ->
+        expr
+    | Elet sym pe1 e2 ->
+        Elet sym (remove_conv_int_pexpr pe1) (remove_conv_int e2)
     | Eif pe1 e2 e3 ->
-        Eif (remove_conv_int pe1) (remove_conv_int e2) (remove_conv_int e3)
+        Eif (remove_conv_int_pexpr pe1) (remove_conv_int e2) (remove_conv_int e3)
     | Eproc () nm pes ->
-        Eproc () nm (List.map remove_conv_int pes)
+        Eproc () nm (List.map remove_conv_int_pexpr pes)
     | Eaction pact ->
         Eaction (remove_conv_int_paction pact)
     | Eunseq es ->
@@ -568,46 +621,36 @@ let rec remove_conv_int expr =
         Eindet (remove_conv_int e)
     | Ebound i e ->
         Ebound i (remove_conv_int e)
-    | Esave k a_tys e ->
-        Esave k a_tys (remove_conv_int e)
-    | Erun () k a_es ->
-        Erun () k (List.map (fun (a, e) -> (a, remove_conv_int e)) a_es)
+    | Esave ksym sym_tys e ->
+        Esave ksym sym_tys (remove_conv_int e)
+    | Erun () ksym sym_pes ->
+        Erun () ksym (List.map (fun (sym, pe) -> (sym, remove_conv_int_pexpr pe)) sym_pes)
     | Eret pe ->
-        Eret (remove_conv_int pe)
+        Eret (remove_conv_int_pexpr pe)
     | End es ->
         End (List.map remove_conv_int es)
     | Epar es ->
         Epar (List.map remove_conv_int es)
-    | Eis_scalar pe ->
-        Eis_scalar (remove_conv_int pe)
-    | Eis_integer pe ->
-        Eis_integer (remove_conv_int pe)
-    | Eis_signed pe ->
-        Eis_signed (remove_conv_int pe)
-    | Eis_unsigned pe ->
-        Eis_unsigned (remove_conv_int pe)
-    | _ ->
+    | Ewait _ ->
         expr
   end
 
 and remove_conv_int_action_ act_ =
   match act_ with
     | Create pe1 pe2 pref ->
-        Create (remove_conv_int pe1) (remove_conv_int pe2) pref
+        Create (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
     | Alloc pe1 pe2 pref ->
-        Alloc (remove_conv_int pe1) (remove_conv_int pe2) pref
+        Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
     | Kill pe ->
-        Kill (remove_conv_int pe)
+        Kill (remove_conv_int_pexpr pe)
     | Store pe1 pe2 pe3 mo ->
-        Store (remove_conv_int pe1) (remove_conv_int pe2) (remove_conv_int pe3) mo
+        Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->
-        Load (remove_conv_int pe1) (remove_conv_int pe2) mo
+        Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeStrong (remove_conv_int pe1) (remove_conv_int pe2) (remove_conv_int pe3) (remove_conv_int pe4) mo1 mo2
+        CompareExchangeStrong (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
     | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeWeak (remove_conv_int pe1) (remove_conv_int pe2) (remove_conv_int pe3) (remove_conv_int pe4) mo1 mo2
-    | Ptr ptr_act pes ->
-        Ptr ptr_act (List.map remove_conv_int pes)
+        CompareExchangeWeak (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
   end
 
 and remove_conv_int_action (Action () act_) = Action () (remove_conv_int_action_ act_)
@@ -688,15 +731,21 @@ let rec sequentialise_creates_kills expr =
 
 (* ========================================================================== *)
 
+let rewrite_pexpr pexpr =
+  remove_conv_int_pexpr pexpr
+
 let rewrite_expr expr =
   (remove_conv_int -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
 
 let rewrite_fun_map fun_map =
-  Map.map (fun (ret_ty, params, expr) ->
-    (ret_ty, params, rewrite_expr expr)
-  ) fun_map
+  Map.map (function
+    | Fun ty params pe ->
+        Fun ty params (rewrite_pexpr pe)
+    | Proc ty params e ->
+        Proc ty params (rewrite_expr e)
+  end) fun_map
 
 
 

@@ -317,7 +317,7 @@ let is_complete S ty =
 end
 
 (* TODO *)
-val is_icomplete: forall 'a. sigma 'a -> ctype -> bool
+val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
 let is_incomplete S ty =
   not (is_complete S ty)
 
@@ -864,14 +864,12 @@ let rec ~{coq} compatible ty1 ty2 =
         compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
         compatible ty1 ty2 && qs1 = qs2
-    | (Struct _, _) ->
-        assert_false "WIP: compatible"
-    | (Union _, _) ->
-        assert_false "WIP: compatible"
-    | (_, Struct _) ->
-        assert_false "WIP: compatible"
-    | (_, Union _) ->
-        assert_false "WIP: compatible"
+    | (Struct tag1, Struct tag2) ->
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
+    | (Union tag1, Union tag2) ->
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
     | (Builtin str1, Builtin str2) ->
         str1 = str2
     | _ ->

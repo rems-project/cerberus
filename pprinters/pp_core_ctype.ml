@@ -17,11 +17,13 @@ let pp_symbol  a = !^ (Pp_symbol.to_string_pretty a)
 let pp_integer_base_ctype ibty =
   let open AilTypes in
   match ibty with
-    | Ichar    -> !^ "ichar"
-    | Short    -> !^ "short"
-    | Int_     -> !^ "int"
-    | Long     -> !^ "long"
-    | LongLong -> !^ "long_long"
+    | Ichar         -> !^ "ichar"
+    | Short         -> !^ "short"
+    | Int_          -> !^ "int"
+    | Long          -> !^ "long"
+    | LongLong      -> !^ "long_long"
+    | IBBuiltin str -> !^ str
+
 
 let pp_integer_ctype ity =
   let open AilTypes in

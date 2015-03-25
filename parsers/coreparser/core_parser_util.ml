@@ -1,11 +1,30 @@
 open Global
 
+type _sym =
+  string * (Lexing.position * Lexing.position)
+
+let _sym_compare (str1, _) (str2, _) =
+  compare str1 str2
+
+let pp_pos (_, (start_p, end_p)) =
+  let filename = Filename.basename start_p.Lexing.pos_fname in
+  let (l1, l2) = (start_p.Lexing.pos_lnum, end_p.Lexing.pos_lnum) in
+  
+  let c1 = start_p.Lexing.pos_cnum - start_p.Lexing.pos_bol in
+  let c2 = end_p.Lexing.pos_cnum - end_p.Lexing.pos_bol in
+  
+  if l1 = l2 then
+    Printf.sprintf "%s:%d:%d-%d" filename l1 c1 c2
+  else
+    Printf.sprintf "%s:%d:%d - %d:%d" filename l1 c1 l2 c2
+
 
 (* Type of Core parser outputs *)
 type result =
-  | Rfile of Core.sym * (unit Core.fun_map)
+    (* main symbol, globals, fun_map *)
+  | Rfile of Core.sym * (Core.sym * Core.core_type * unit Core.expr) list * unit Core.fun_map
   | Rstd  of unit Core.fun_map
-  | Rimpl of unit Core.impl * unit Core.fun_map
+  | Rimpl of Core.impl * unit Core.fun_map
 
 
 type token =
@@ -64,6 +83,7 @@ type token =
   | IF
   | THEN
   | ELSE
+  | UNSEQ
   | WEAK
   | STRONG
   | ATOM
@@ -89,8 +109,6 @@ type token =
   | FUN
   | PROC
   | END
-  | CASE
-  | OF
   | SEQ_CST
   | RELAXED
   | RELEASE
@@ -104,19 +122,15 @@ type token =
   
   | STRING of string
   
-  | SYM of string
+  | SYM of _sym
   | IMPL of Implementation_.implementation_constant
   | UB of Undefined.undefined_behaviour
   | INT_CONST of Big_int.big_int
   
   | DQUOTE
   
-  | CASE_TY
-  | SIGNED_PATTERN
-  | UNSIGNED_PATTERN
-  | ARRAY_PATTERN
-  | POINTER_PATTERN
-  | ATOMIC_PATTERN
+  | CASE_LIST
+  | CASE_CTYPE
   | EQ_GT
 
   | PLUS

@@ -84,6 +84,7 @@ let keywords =
 (*  | Eproc of set 'a * name * list (expr 'a) *)
 (*  | Eaction of paction 'a *)
 (*  | Eunseq of list (expr 'a) *)
+      ("unseq", T.UNSEQ);
       ("weak", T.WEAK);
       ("strong", T.STRONG);
       ("atom", T.ATOM);
@@ -123,8 +124,6 @@ let keywords =
       
       
       ("end",     T.END     );
-      ("case",    T.CASE    );
-      ("of",      T.OF      );
       ("seq_cst", T.SEQ_CST );
       ("relaxed", T.RELAXED );
       ("release", T.RELEASE );
@@ -132,12 +131,8 @@ let keywords =
       ("consume", T.CONSUME );
       ("acq_rel", T.ACQ_REL );
 
-      ("case_ty",   T.CASE_TY         );
-      ("Signed",    T.SIGNED_PATTERN  );
-      ("Unsigned",  T.UNSIGNED_PATTERN);
-      ("Array",     T.ARRAY_PATTERN   );
-      ("Pointer",   T.POINTER_PATTERN );
-      ("Atomic",    T.ATOMIC_PATTERN  );
+      ("case_list",   T.CASE_LIST);
+      ("case_ctype",   T.CASE_CTYPE);
 
 
 (* TODO: temporary *)
@@ -152,7 +147,7 @@ let scan_sym lexbuf =
   try
     Pmap.find id keywords
   with Not_found ->
-    T.SYM id
+    T.SYM (id, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf))
 
 let scan_impl lexbuf =
   let id = Lexing.lexeme lexbuf in

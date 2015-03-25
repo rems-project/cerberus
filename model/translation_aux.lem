@@ -17,10 +17,10 @@ let rec mk_stdcall_aux pred xs =
     | x::xs' -> if pred x then Just x else mk_stdcall_aux pred xs'
   end
 
-val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.expr 'a) -> Core.expr 'a)
+val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.pexpr) -> Core.pexpr)
 let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
-    | Just (f, _) -> Core.Ecall (Core.Sym f)
+    | Just (f, _) -> Core.PEcall (Core.Sym f)
     | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
 
@@ -32,7 +32,7 @@ let mk_stdcall stdlib fname =
 
 (* (integer) promotion for values. (cf. §6.3.1.1#2) *)
 (* this should be a function from pure Core expr to pure Core expr (I think ...) *)
-let promote_value (e: C.expr 'b ) : C.expr 'b = e (* TODO !!!! *)
+let promote_value (e: C.pexpr) : C.pexpr = e (* TODO !!!! *)
 
 
 

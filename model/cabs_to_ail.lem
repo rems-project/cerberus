@@ -249,8 +249,8 @@ let is_address_constant ((AnnotatedExpression () expr) as a_expr) =
        duration, or a pointer to a function designator; (...) *)
     | AilEunary Address (AnnotatedExpression () (AilEident sym)) ->
         (* (...) it shall be created explicitly using the unary & operator (...) *)
-        E.fetch_object_declaration sym >>= fun (sd, _, _) ->
-        match sd with
+        E.fetch_object_declaration sym >>= fun (dur, _, _) ->
+        match dur with
           | ATypes.Static ->
               E.return true
           | _ ->
@@ -1085,7 +1085,7 @@ _STD "§6.5.3.1#3" $
         desugar_expression e >>= fun d_e ->
         E.return $ AilEunary (translate_unary_operator uop) d_e
     | CabsEsizeof_expr e ->
-        Boot.assert_false "WIP 22"
+        AilEsizeof_expr <$> desugar_expression e
     | CabsEsizeof_type tyname ->
         (* TODO: STD check + annot *)
         desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1499,11 +1499,11 @@ and static_thread_implicit_initializer ty =
 
 
 (*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.t ? *)
-and wip_desugar_initializer_ sd current_ty = function
+and wip_desugar_initializer_ dur current_ty = function
   | Init_expr e ->
       (* we ignore the type here because the type checking will catch
          errors later *)
-      match sd with
+      match dur with
         | ATypes.Automatic ->
             desugar_expression e
         | ATypes.Allocated ->
@@ -1528,7 +1528,7 @@ and wip_desugar_initializer_ sd current_ty = function
       match current_ty with
         | ATypes.Array elem_ty (Just n) ->
             (* STD §6.7.9#10 *)
-            let implicit = AnnotatedExpression () $ AilEconst match sd with
+            let implicit = AnnotatedExpression () $ AilEconst match dur with
               | ATypes.Automatic ->
                   ConstantIndeterminate elem_ty
               | ATypes.Allocated ->
@@ -1545,7 +1545,7 @@ and wip_desugar_initializer_ sd current_ty = function
                     is_integer_constant_expression d_e >>= function
                       | true ->
                           evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IConstant j _ _) ->
-                          wip_desugar_initializer_ sd elem_ty init               >>= fun d_e                     ->
+                          wip_desugar_initializer_ dur elem_ty init              >>= fun d_e                     ->
                           
                           match compare j i with
                             | LT ->
@@ -1563,7 +1563,7 @@ and wip_desugar_initializer_ sd current_ty = function
                 | Just [Desig_member id] ->
 *)
                 | Nothing ->
-                    wip_desugar_initializer_ sd elem_ty init >>= fun cst ->
+                    wip_desugar_initializer_ dur elem_ty init >>= fun cst ->
                     E.return (i+1, Just cst :: acc)
                 | _ ->
                     (* Multi-array designator *)
@@ -1604,7 +1604,7 @@ and wip_desugar_initializer_ sd current_ty = function
             match desigs_opt_inits with
               (* this the "optionaly enclosed in braces" case from (§6.7.9#11, sentence 1) *)
               | [(Nothing, init)] ->
-                  wip_desugar_initializer_ sd current_ty init
+                  wip_desugar_initializer_ dur current_ty init
               | _ ->
                   Boot.assert_false "WIP: error message. is that event a possible case?"
             end
@@ -1683,8 +1683,8 @@ let desugar_declaration_base specifs idecltors =
         | _ ->
             E.register_identifier ident
               E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
-            let sd = determinate_storage_duration link specifs.storage_classes in
-            E.register_internal_object_declaration sym (sd, qs, ty) >>
+            let dur = determinate_storage_duration link specifs.storage_classes in
+            E.register_internal_object_declaration sym (dur, qs, ty) >>
             match d_e_opt with
               | Just d_e ->
                   E.return ((sym, d_e) :: acc)
@@ -1903,7 +1903,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           (* TODO: this is not really a block scope (...) *)
           E.with_scope E.Scope_block (
             desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), _ty) ->
-            E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs  ->
+            E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs ->
             
             (* for each [init_declarator] *)
             E.foldrM (fun (ident, qs, ty, d_e_opt) (acc1, acc2) ->
@@ -1921,10 +1921,11 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
                 | _ ->
                     E.register_identifier ident
-                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (_, sym) ->
+                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
                     match d_e_opt with
                       | Just d_e ->
-                          E.return ((sym, d_e) :: acc1, (sym, (qs, ty)) :: acc2)
+                          let dur = determinate_storage_duration link specifs.storage_classes in
+                          E.return ((sym, d_e) :: acc1, (sym, (Just dur, qs, ty)) :: acc2)
                       | Nothing ->
                           E.return (acc1, acc2)
                     end
@@ -2246,8 +2247,8 @@ let desugar_and_register_external_declaration edecl =
                 | _ ->
                     E.register_identifier ident
                       E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
-                    let sd = determinate_storage_duration link specifs.storage_classes in
-                    E.register_external_object_declaration sym (sd, AilTypesAux.combine_qualifiers qs qs', ty') >>
+                    let dur = determinate_storage_duration link specifs.storage_classes in
+                    E.register_external_object_declaration sym (dur, AilTypesAux.combine_qualifiers qs qs', ty') >>
                     match d_e_opt with
                       | Just d_e ->
                           E.register_external_object_definition sym d_e

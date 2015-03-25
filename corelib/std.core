@@ -1,3 +1,45 @@
+{-
+-- Ctype utilities
+-- these are hackish
+fun ctype_true(ty: ctype) : boolean :=
+  true
+fun ctype_false(ty: ctype) : boolean :=
+  false
+fun ctype_integer_false(ty: ctype, n: integer) : boolean :=
+  false
+
+
+ | Basic of AilTypes.basicType
+ | Array of ctype * maybe integer
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of AilTypes.qualifiers * ctype
+ | Atomic of ctype
+ | Struct of struct_tag
+ | Union  of union_tag
+ | Builtin of string
+
+
+fun is_pointer(ty) : boolean :=
+  case_ctype(false, ctype_false, ctype_integer_false, ctype_true, TODO_function, ctype_false
+
+fun is_integer(ty) : boolean :=
+  case_ctype(false, 
+
+fun is_arithmetic(ty) : boolean :=
+  -- TODO: is_floating
+  is_integer(ty)
+
+fun is_scalar (ty: ctype) : boolean :=
+  is_pointer(ty) /\ is_arithmetic(ty)
+
+fun is_signed (ty: ctype) : boolean :=
+  
+fun is_unsigned (ty: ctype) : boolean :=
+-}
+
+
+
+
 -- Math utilities
 
 {-
@@ -287,7 +329,7 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 
 
 
-fun listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
+proc listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   let strong c = load("char", shift(str, {("char", 0)})) in
   if c = 0 then
     return(acc)
@@ -297,6 +339,6 @@ fun listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   end
 
 -- TODO: this is the reverse
-fun listFromStr(str: pointer) : eff [integer] :=
-  listFromStr_aux{str, list()}
+proc listFromStr(str: pointer) : eff [integer] :=
+  listFromStr_aux{str, []}
 

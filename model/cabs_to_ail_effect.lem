@@ -257,12 +257,12 @@ let with_scope scope m =
       match kind with
         | Kind_object false ->
             match Map.lookup sym st.external_object_declarations with
-              | Just (_ (* storage duration *), qs, ty) ->
-                  (sym, (qs, ty)) :: acc
+              | Just (dur, qs, ty) ->
+                  (sym, (Just dur, qs, ty)) :: acc
               | Nothing ->
                   match Map.lookup sym st.internal_object_declarations with
-                    | Just (_ (* storage duration *), qs, ty) ->
-                        (sym, (qs, ty)) :: acc
+                    | Just (dur, qs, ty) ->
+                        (sym, (Just dur, qs, ty)) :: acc
                     | Nothing ->
                         (* TODO: check *)
                         acc
@@ -895,7 +895,7 @@ let extract_program startup_str =
           let decls = Map_extra.toList (
             map_union
               (Map.map (fun (ty, params, b1, b2, b3) -> A.Decl_function ty params b1 b2 b3) st.function_declarations)
-              (Map.map (fun (sd, qs, ty) -> A.Decl_object sd qs ty) st.external_object_declarations)
+              (Map.map (fun (dur, qs, ty) -> A.Decl_object dur qs ty) st.external_object_declarations)
           ) in
           
           (startup_sym, <|
