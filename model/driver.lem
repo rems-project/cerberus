@@ -871,7 +871,8 @@ declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
 
-val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> list string -> ND.t (* WIP *) unit
+val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> list string ->
+           ND.t (string * (bool * ExecutableOpsem.exeState * Core.pexpr) * (nat * nat))
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -881,8 +882,15 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   match Map.lookup dr_st.core_file.Core.main dr_st.core_file.Core.funs with
     | Nothing ->
         ND.kill (ND.Other "couldn't find the startup function")
-(*
-    | Just (_, params, expr) ->
+    
+    | Just decl ->
+        let (params, expr) = match decl with
+          | Core.Fun  _ params pe ->
+              (params, Core.Eret pe)
+          | Core.Proc _ params e ->
+              (params, e)
+        end in
+        
         match params with
           | [(argc_sym, _); (argv_sym, _)] ->
               (* memomy_values to be stored in memory objects pointed to by
@@ -964,7 +972,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
             match dr_st'.concurrency_state.stateIsDefined with
               | MinimalOpsem.Defined2 ->
                   let (str, (is_blocked, conc_st, cval), steps) = finalize dr_st' in
-                  ND.log ("Result: " ^ show cval ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >>
+(*                  ND.log ("Result: " ^ show (Core.Epure (Core.PEval cval)) ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >> *)
                   ND.return (str, (is_blocked, conc_st, Core.PEval cval), steps)
               | MinimalOpsem.DataRaces _ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
@@ -990,5 +998,4 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
         else
           ND.return $
             (fun (str, (is_blocked, conc_st, cval), steps) -> (str, (is_blocked, conc_st, Core.PEval cval), steps)) (finalize dr_st')
-*)
 end

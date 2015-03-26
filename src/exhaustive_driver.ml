@@ -84,7 +84,7 @@ let isActive = function
 
 
 
-type execution_result = (Core_run_aux.core_run_annotation Core.expr list, Errors.t9) Exception.t3
+type execution_result = (Core.pexpr list, Errors.t9) Exception.t3
 
 let drive sym_supply file args with_concurrency : execution_result =
   let main_body = 
@@ -115,8 +115,8 @@ let drive sym_supply file args with_concurrency : execution_result =
   
   List.iteri (fun n exec ->
     match exec with
-      | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, value), (dr_steps, coreRun_steps))) ->
-          let str_v = String_core.string_of_expr value in
+      | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
+          let str_v = String_core.string_of_pexpr pe in
           if not (List.mem str_v !ky) then (
             Debug.print_debug 2 (
               Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\n" n (pp_constraints constraints) ^
@@ -130,7 +130,7 @@ let drive sym_supply file args with_concurrency : execution_result =
             print_string stdout;
             
             ky := str_v :: !ky;
-            ret := value :: !ret;
+            ret := pe :: !ret;
         ) else
           Debug.print_debug 3 (
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^

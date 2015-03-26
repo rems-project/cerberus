@@ -729,13 +729,82 @@ let rec sequentialise_creates_kills expr =
 
 
 
+let rec pure_propagation expr =
+  match expr with
+    | Elet sym pe1 e2 ->
+        let e2' = pure_propagation e2 in
+        match to_pure e2' with
+          | Just pe2 ->
+              Epure (PElet sym pe1 pe2)
+          | Nothing ->
+              Elet sym pe1 e2'
+        end
+    | Eif pe1 e2 e3 ->
+        let e2' = pure_propagation e2 in
+        let e3' = pure_propagation e3 in
+        match (to_pure e2', to_pure e3') with
+          | (Just pe2, Just pe3) ->
+              Epure (PEif pe1 pe2 pe3)
+          | (Just pe2, Nothing) ->
+              Eif pe1 (Epure pe2) e3'
+          | (Nothing, Just pe3) ->
+              Eif pe1 e2' (Epure pe3)
+        end
+    | Eunseq es ->
+        (* TODO: do better *)
+        let es' = List.map pure_propagation es in
+        match to_pures es' with
+          | Just pes ->
+              Epure (PEtuple pes)
+          | Nothing ->
+              Eunseq es'
+        end
+    | Ewseq _as e1 e2 ->
+        let e1' = pure_propagation e1 in
+        match to_pure e1' with
+          | Just pe1 ->
+              pure_propagation (subst_syms _as pe1 e2)
+          | Nothing ->
+              Ewseq _as e1' (pure_propagation e2)
+       end
+    | Esseq _as e1 e2 ->
+        let e1' = pure_propagation e1 in
+        match to_pure e1' with
+          | Just pe1 ->
+              pure_propagation (subst_syms _as pe1 e2)
+          | Nothing ->
+              Esseq _as e1' (pure_propagation e2)
+       end
+    | Eindet e ->
+        Eindet (pure_propagation e)
+    | Ebound n e ->
+        Ebound n (pure_propagation e)
+    | Esave sym sym_tys e ->
+        Esave sym sym_tys (pure_propagation e)
+    | End es ->
+        End (List.map pure_propagation es)
+    | Epar es ->
+        Epar (List.map pure_propagation es)
+    | _ ->
+        expr
+  end
+
+
+
+
+
+
+
+
+
+
 (* ========================================================================== *)
 
 let rewrite_pexpr pexpr =
   remove_conv_int_pexpr pexpr
 
 let rewrite_expr expr =
-  (remove_conv_int -|
+  (pure_propagation -| remove_conv_int -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
 

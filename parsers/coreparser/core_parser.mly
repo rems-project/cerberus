@@ -1699,7 +1699,7 @@ ifun_declaration:
 | FUN fname= IMPL params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON bTy= core_base_type
   COLON_EQ fbody= expr
-    { IFun_decl (fname, (bTy, List.rev params, fbody)) }
+    { IFun_decl (fname, (bTy, params, fbody)) }
 ;
 
 glob_declaration:
@@ -1713,14 +1713,14 @@ fun_declaration:
 | FUN fname= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON bTy= core_base_type
   COLON_EQ fbody= expr
-    { Fun_decl (fname, (bTy, List.rev params, fbody)) }
+    { Fun_decl (fname, (bTy, params, fbody)) }
 ;
 
 proc_declaration:
 | PROC _sym= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON EFF bTy= core_base_type
   COLON_EQ fbody= expr
-    { Proc_decl (_sym, (bTy, List.rev params, fbody)) }
+    { Proc_decl (_sym, (bTy, params, fbody)) }
 ;
 
 
