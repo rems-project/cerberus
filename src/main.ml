@@ -157,11 +157,11 @@ let backend sym_supply core_file args =
     | Some (Exhaustive | Random | Interactive) ->
         (* TODO: temporary hack for the command name *)
         match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) (!!cerb_conf.concurrency) with
-          | Exception.Result (v::_ | [v]) ->
+          | Exception.Result (pe::_ | [pe]) ->
             begin
               (* TODO: yuck *)
               try
-                int_of_string (String_core.string_of_expr v)
+                int_of_string (String_core.string_of_pexpr pe)
               with | _ ->
                 0
             end

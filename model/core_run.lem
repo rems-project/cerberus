@@ -241,8 +241,10 @@ let rec core_eval file inside_if = function
         | (OpExp, Just (Vinteger n1), Just (Vinteger n2)) ->
             EU.return $ PEval (Vinteger (Mem.mk_integer_value (n1 ** natFromInteger n2)))
 *)
-        | (OpEq, Just (Vinteger n1), Just (Vinteger n2)) ->
+        | (OpEq, Just (Vinteger (Mem.IVinteger n1)), Just (Vinteger (Mem.IVinteger n2))) ->
             EU.return $ PEval (if n1 = n2 then Vtrue else Vfalse)
+        | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
+            Boot.assert_false "WIP equality between complex integer_value"
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
         

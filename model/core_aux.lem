@@ -324,6 +324,14 @@ let rec to_value pexpr =
         Just Vfalse
     | PEnot (PEval Vfalse) ->
         Just Vtrue
+    | PEnot _ ->
+        Nothing
+    | PEop _ _ _ ->
+        (* TODO: do better *)
+        Nothing
+    | PEmemop _ _ ->
+        (* TODO: do better *)
+        Nothing
     | PEtuple pes ->
         let cvals_opt = List.foldr (fun pe acc_opt ->
           match (acc_opt, to_value pe) with
@@ -359,6 +367,20 @@ let rec to_value pexpr =
         to_value pe2
     | PEif (PEval Vfalse) _ pe3 ->
         to_value pe3
+    | PEif _ _ _ ->
+        Nothing
+    | PEis_scalar pe ->
+        (* TODO: do better *)
+        Nothing
+    | PEis_integer pe ->
+        (* TODO: do better *)
+        Nothing
+    | PEis_signed pe ->
+        (* TODO: do better *)
+        Nothing
+    | PEis_unsigned pe ->
+        (* TODO: do better *)
+        Nothing
   end
 
 val     to_values: list pexpr -> maybe (list value)
