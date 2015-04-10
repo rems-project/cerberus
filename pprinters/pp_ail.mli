@@ -14,7 +14,7 @@ val pp_integerType: integerType -> PPrint.document
 
 val pp_basicType: basicType -> PPrint.document
 
-val pp_integer: Big_int.big_int -> PPrint.document
+val pp_integer: Nat_big_num.num -> PPrint.document
 
 
 (*

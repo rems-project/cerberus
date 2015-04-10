@@ -86,6 +86,7 @@ module Effect = struct
   val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
   let mapM_ f _as = sequence_ (List.map f _as)
   
+  (* NOTE: this is foldl *)
   val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
   let rec foldM f a = function
     | []    -> return a

@@ -130,7 +130,7 @@ Z3_LIB=/Library/lib
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=_ocaml_generated
-OCAMLBUILD=ocamlbuild -classic-display -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs pprint,cmdliner -libs nums,unix,str -cflags -bin-annot
+OCAMLBUILD=ocamlbuild -classic-display -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer" -tag annot -tag debug -use-ocamlfind -pkgs zarith,pprint,cmdliner -libs nums,unix,str -cflags -bin-annot
 # OCAMLBUILD=ocamlbuild -use-menhir -menhir "menhir --external-tokens Core_parser_util --strict --explain --infer --trace" -tag annot -tag debug -use-ocamlfind -pkgs pprint,z3 -libs nums,unix -cflags -bin-annot,-custom,-I,$(Z3_API_PATH) -lflags -cclib,-L$(Z3_LIB),-cclib,-lz3
 
 

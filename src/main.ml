@@ -293,7 +293,7 @@ let exec =
 
 let exec_mode =
   let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Exhaustive & info ["mode"] ~docv:"MODE" ~doc)
+  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Random & info ["mode"] ~docv:"MODE" ~doc)
 
 let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
@@ -408,7 +408,7 @@ let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 let catch_result m =
   match m with
   | Exception.Result [[(Undefined.Defined (Core.Econst (Cmm_aux.Cint n), _), _)]] ->
-      exit (Big_int.int_of_big_int n)
+      exit (Nat_big_num.to_int n)
   | Exception.Result _ ->
      debug_print "[Main.catch_result] returning a fake return code";
      exit 0

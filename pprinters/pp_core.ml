@@ -138,7 +138,7 @@ let rec pp_symbolic = function
   | Symbolic.SYMBfalse ->
       !^ "false"
   | Symbolic.SYMBconst n ->
-      !^ (Big_int.string_of_big_int n)
+      !^ (Nat_big_num.to_string n)
   | Symbolic.SYMBctype ty ->
       pp_ctype ty
   | Symbolic.SYMBsym (_, sym) ->
@@ -176,7 +176,7 @@ let pp_pointer_shift ptr_sh =
     | [] ->
         P.empty
     | (ty, n) :: ptr_sh' ->
-        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Big_int.string_of_big_int n) ^^ P.comma ^^^
+        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Nat_big_num.to_string n) ^^ P.comma ^^^
         aux ptr_sh'
   in
   P.brackets (aux ptr_sh)
@@ -249,7 +249,7 @@ let rec pp_mem_value = function
   | Mem.MVunspecified ty ->
       !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | Mem.MVinteger (Mem.IVinteger n) ->
-      !^ (Big_int.string_of_big_int n)
+      !^ (Nat_big_num.to_string n)
   | Mem.MVinteger _ ->
       !^ "TODO(MVinteger SYMB_integer_value)"
   | Mem.MVfloating str ->
@@ -282,7 +282,7 @@ let rec pp_value = function
   | Vunspecified ty ->
       pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
   | Vinteger (Mem.IVinteger n) ->
-      !^ (Big_int.string_of_big_int n)
+      !^ (Nat_big_num.to_string n)
   | Vinteger ival ->
       !^ "TODO(Vinteger SYMB_integer_value)"
   | Vfloating str ->
@@ -297,6 +297,12 @@ let rec pp_value = function
       !^ "TODO(MVpointer)" 
   | Varray mem_vals ->
       pp_const "array" ^^ P.parens (comma_list pp_mem_value mem_vals)
+  | Vstruct (sym, xs) ->
+      !^ "TODO(Vstruct)" 
+      (* pp_const "struct" ^^ P.parens *)
+  | Vunion (sym, ident, mem_val) ->
+      !^ "TODO(Vunion)" 
+      (* pp_const "struct" ^^ P.parens *)
 
 
 let pp_pexpr pe =
@@ -354,7 +360,7 @@ let pp_pexpr pe =
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (sym, pe1, pe2) ->
-            pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
+            (* DEBUG *) !^ "{-pe-}" ^^^ pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
             pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2 ^^^ pp_control "end"
         | PEif (pe1, pe2, pe3) ->
             pp_control "if" ^^^ pp pe1 ^^^ pp_control "then" ^^
@@ -385,7 +391,7 @@ let rec pp_expr = function
   | Eskip ->
       pp_keyword "skip"
   | Elet (sym, pe1, e2) ->
-      pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
+      (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
       pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2 ^^^ pp_control "end"
   | Eif (pe1, e2, e3) ->
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^

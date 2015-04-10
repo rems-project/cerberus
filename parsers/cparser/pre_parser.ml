@@ -7078,7 +7078,7 @@ and _menhir_goto_separated_nonempty_list_PIPES_compound_statement_ : _menhir_env
         let (_menhir_stack : ('freshtv2417 * _menhir_state * 'tv_compound_statement) * _menhir_state * 'tv_separated_nonempty_list_PIPES_compound_statement_) = Obj.magic _menhir_stack in
         ((let ((_menhir_stack, _menhir_s, x), _, xs) = _menhir_stack in
         let _v : 'tv_separated_nonempty_list_PIPES_compound_statement_ = 
-# 146 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 146 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( x :: xs )
 # 7084 "pre_parser.ml"
          in
@@ -7478,7 +7478,7 @@ and _menhir_goto_compound_statement : _menhir_env -> 'ttv_tail -> _menhir_state 
             let (_menhir_stack : 'freshtv2317 * _menhir_state * 'tv_compound_statement) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
             let _v : 'tv_separated_nonempty_list_PIPES_compound_statement_ = 
-# 144 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 144 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( [ x ] )
 # 7484 "pre_parser.ml"
              in

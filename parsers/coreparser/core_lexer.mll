@@ -28,6 +28,7 @@ let keywords =
       ("struct",      T.STRUCT);
       ("union",       T.UNION);
       ("enum",        T.ENUM);
+(*
       ("size_t",      T.SIZE_T);
       ("intptr_t",    T.INTPTR_T);
       ("ptrdiff_t",   T.PTRDIFF_T);
@@ -43,6 +44,7 @@ let keywords =
       ("uint16_t",  T.UINT16_T);
       ("uint32_t",  T.UINT32_T);
       ("uint64_t",  T.UINT64_T);
+*)
       
       
       
@@ -198,7 +200,7 @@ rule main = parse
   
   (* integer constants *)
   | ('-'?)['0'-'9']+ as integer
-      { T.INT_CONST (Big_int.big_int_of_string integer) }
+      { T.INT_CONST (Nat_big_num.of_string integer) }
   
   (* binary operators *)
   | '+'   { T.PLUS }

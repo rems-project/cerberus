@@ -342,3 +342,12 @@ proc listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
 proc listFromStr(str: pointer) : eff [integer] :=
   listFromStr_aux{str, []}
 
+
+
+
+{-
+proc printf(fmrt: pointer, args: [pointer]) : eff integer :=
+  let ret = <printf_internal>(fmrt, args) in
+    return(ret)
+  end
+-}

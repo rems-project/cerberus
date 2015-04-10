@@ -69,7 +69,6 @@ val translate:
 
 (* ========================================================================== *)
 
-(* TODO: crash on union members *)
 val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.t -> Cabs.cabs_identifier -> C.shift_path
 let shiftPathFromMember program tag ident =
   match List.lookup tag (snd program).A.tag_definitions with
@@ -78,7 +77,10 @@ let shiftPathFromMember program tag ident =
           match acc_ with
             | Left acc ->
                 if ident = ident' then
-                  Right acc
+                  if List.null acc then
+                    Right [(Caux.proj_ctype ty, Caux.zero)]
+                  else
+                    Right acc
                 else
                   Left ((Caux.proj_ctype ty, Caux.one) :: acc)
             | Right acc ->
@@ -86,6 +88,9 @@ let shiftPathFromMember program tag ident =
           end
         ) (Left []) ident_tys in
         sh
+    | Just (A.UnionDef ident_tys) ->
+        let Just ty = List.lookup ident ident_tys in
+        [(Caux.proj_ctype ty, Caux.zero)]
   end
 
 let rec translate_lvalue stdlib program a_expr =
@@ -1016,17 +1021,25 @@ Boot.assert_false "WIP:
 
 
 
+      | A.AilEconst cst ->
+          E.return match cst with
+            | A.ConstantIndeterminate ty ->
+                C.Epure (C.PEval (C.Vunspecified (Caux.proj_ctype ty)))
+(*
+          | A.ConstantNull ->
+*)
+            | A.ConstantInteger (A.IConstant n _ _) ->
+                (* TODO: check *)
+                C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value n)))
+            | A.ConstantCharacter (_, str) ->
+                (* TODO: prefix? *)
+                (* TODO: making an implementation fix here (ASCII) *)
+                C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value (Decode.decode_character_constant str))))
+(*
+            | A.ConstantArray csts ->
+*)
+          end
 
-      
-      | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
-          E.return $
-           C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value n)))
-
-      (* TODO *)
-      | A.AilEconst (A.ConstantCharacter (_, str)) ->
-          (* TODO: making an implementation fix here (ASCII) *)
-          E.return $
-            C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value (Decode.decode_character_constant str))))
       
       | A.AilEbuiltin str ->
           let mk_ctype_min ty = C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)] in
@@ -1559,7 +1572,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
                     C.TyEffect C.BTy_pointer,
                     C.Esseq [Just a_global] core_create
                       (* TODO: proper memory order *)
-                      (C.Esseq [] (Caux.pstore core_ty (C.PEsym a_global) Caux.zero Cmm.NA)
+                      (C.Esseq [] (Caux.pstore core_ty (C.PEsym a_global) (Caux.zeros sigm.A.tag_definitions (Caux.proj_ctype ty)) Cmm.NA)
                          (C.Eret $ C.PEsym a_global)
                       )
                     ) :: gacc, facc)

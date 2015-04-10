@@ -585,8 +585,8 @@ type_specifier:
 
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
-| ctor= struct_or_union id_opt= OTHER_NAME? LBRACE decls= struct_declaration_list RBRACE
-    {  ctor id_opt (Some (List.rev decls)) }
+| ctor= struct_or_union id_opt= OTHER_NAME? LBRACE rev_decls= struct_declaration_list RBRACE
+    {  ctor id_opt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union id= OTHER_NAME
     { ctor (Some id) None }
 
@@ -603,8 +603,8 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
     { sdecl::sdecls }
 
 struct_declaration:
-| tspecs_tquals= specifier_qualifier_list sdeclrs_opt= struct_declarator_list? SEMICOLON
-    { let (tspecs, tquals) = tspecs_tquals in Struct_declaration (tspecs, tquals, option [] id sdeclrs_opt) }
+| tspecs_tquals= specifier_qualifier_list rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
+    { let (tspecs, tquals) = tspecs_tquals in Struct_declaration (tspecs, tquals, option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
 

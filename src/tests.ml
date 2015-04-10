@@ -61,7 +61,7 @@ let get_test (file_name:string)
                      (fun x -> Econst
                                  (Naive_memory.MV_integer
                                    (Symbolic.SYMBconst 
-                                     (Big_int.big_int_of_int x)
+                                     (Nat_big_num.of_int x)
                                    )
                                  )
                      ) 

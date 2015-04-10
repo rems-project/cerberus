@@ -749,6 +749,8 @@ let rec pure_propagation expr =
               Eif pe1 (Epure pe2) e3'
           | (Nothing, Just pe3) ->
               Eif pe1 e2' (Epure pe3)
+          | (Nothing, Nothing) ->
+              Eif pe1 e2' e3'
         end
     | Eunseq es ->
         (* TODO: do better *)

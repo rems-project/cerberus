@@ -45,3 +45,13 @@ let sequence ms =
       ms' >>= fun xs ->
       return (x::xs)
     ) (return []) ms
+
+
+(* NOTE: this is foldl *)
+val     foldM: forall 'a 'b 'msg. ('a -> 'b -> t 'a 'msg) -> 'a -> list 'b -> t 'a 'msg (* GENERIC Monad *)
+let rec foldM f a = function                                                            (* GENERIC Monad *)
+  | [] ->                                                                               (* GENERIC Monad *)
+      return a                                                                          (* GENERIC Monad *)
+  | x::xs ->                                                                            (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                               (* GENERIC Monad *)
+end

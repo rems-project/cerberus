@@ -245,6 +245,7 @@ let sequence ms =                                   (* GENERIC Monad *)
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b) (* GENERIC Monad *)
 let mapM f xs =  sequence (List.map f xs)                      (* GENERIC Monad *)
 
+(* NOTE: this is foldl *)
 val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a (* GENERIC Monad *)
 let rec foldM f a = function                                             (* GENERIC Monad *)
   | [] ->                                                                (* GENERIC Monad *)

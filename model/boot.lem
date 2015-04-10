@@ -62,7 +62,7 @@ declare ocaml target_rep function pp_core_expr = `String_core.string_of_expr`
 let inline {coq} pp_core_expr x = let _ = x in ""
 
 val nat_of_string: string -> natural
-declare ocaml target_rep function nat_of_string = `Big_int.big_int_of_string`
+declare ocaml target_rep function nat_of_string = `Nat_big_int.of_string`
 
 
 

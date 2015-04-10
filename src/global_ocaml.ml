@@ -56,7 +56,7 @@ let cerb_conf =
 
 (* TODO: temporary, should use the field in cerb_conf *)
 let cerb_exec_mode_opt =
-  ref (Some Exhaustive)
+  ref (Some Random)
 
 let current_execution_mode () =
 (*  !!cerb_conf.exec_mode_opt *)

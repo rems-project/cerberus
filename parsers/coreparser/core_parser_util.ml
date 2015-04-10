@@ -125,7 +125,7 @@ type token =
   | SYM of _sym
   | IMPL of Implementation_.implementation_constant
   | UB of Undefined.undefined_behaviour
-  | INT_CONST of Big_int.big_int
+  | INT_CONST of Nat_big_num.num
   
   | DQUOTE
   

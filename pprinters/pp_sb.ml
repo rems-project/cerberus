@@ -45,7 +45,7 @@ let string_of_trace_action tact =
     | Core_run_effect.Tcreate (ty, o, tid) ->
         f o ^ " \\Leftarrow {\\color{red}\\mathbf{C}_\\text{" ^ pp_ctype ty ^ "}}"
     | Core_run_effect.Talloc (n, o, tid) ->
-        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Big_int.string_of_big_int n ^ "}}"
+        f o ^ " \\Leftarrow {\\color{red}\\mathbf{A}_\\text{" ^ Nat_big_num.to_string n ^ "}}"
     | Core_run_effect.Tkill (o, tid) ->
         "{\\color{red}\\mathbf{K}} " ^ f o
     | Core_run_effect.Tstore (ty, o, n, mo, tid) ->
@@ -76,7 +76,7 @@ let pp n g =
   
   let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
-      !^ (Big_int.string_of_big_int i) ^^^ !^ "->" ^^^ !^ (Big_int.string_of_big_int i') ^^^
+      !^ (Nat_big_num.to_string i) ^^^ !^ "->" ^^^ !^ (Nat_big_num.to_string i') ^^^
         P.brackets (!^ "color" ^^ P.equals ^^ P.dquotes !^ col)) rel ^^ if List.length rel > 0 then P.semi else P.empty in
   
   !^ ("digraph G" ^ string_of_int n) ^^ P.braces
@@ -85,7 +85,7 @@ let pp n g =
         (!^ "label" ^^ P.equals ^^ P.dquotes !^ ("\\mathbf{thread}_{" ^ (Pp_run.string_of_thread_id tid) ^ "}") ^^ P.semi ^^
         !^ "style=filled;color=lightgrey; node [shape=box,style=filled,color=white];" ^^
         P.separate_map P.semi (fun (aid, act) -> 
-          !^ (Big_int.string_of_big_int aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (Big_int.string_of_big_int aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
+          !^ (Nat_big_num.to_string aid) ^^ P.brackets (!^ "label=" ^^ (P.dquotes $ !^ (Nat_big_num.to_string aid) ^^ P.colon ^^^ !^ (string_of_trace_action act)))
         ) acts)
      ) (Pmap.bindings_list threads) ^^ P.semi ^^ P.break 1 ^^
      

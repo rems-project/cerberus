@@ -164,7 +164,7 @@ let pp_basicType = function
 
 
 
-let pp_integer i = P.string (Big_int.string_of_big_int i)
+let pp_integer i = P.string (Nat_big_num.to_string i)
 
 
 
@@ -441,7 +441,7 @@ let pp_integerSuffix =
 
 (*
 let rec string_of_octal_big_int n =
-  let (n', r) = Big_int.quomod_big_int n in
+  let (n', r) = Nat_big_int.quomod n in
   match r with
     | 
  *)
@@ -456,19 +456,19 @@ let string_of_big_int_with_basis n b =
       | 10 -> 'a'
       | r  -> char_of_int (r + 48) in
   let rec f n acc =
-    let (n', r) = Big_int.quomod_big_int n b in
-    let c = char_of_digit (Big_int.int_of_big_int r) in
-    if Big_int.eq_big_int n' Big_int.zero_big_int then
+    let (n', r) = Nat_big_num.quomod n b in
+    let c = char_of_digit (Nat_big_num.to_int r) in
+    if Nat_big_num.equal n' (Nat_big_num.of_int 0) then
       c :: acc
     else
       f n' (c :: acc) in
   f n []
 
 let string_of_octal_big_int n =
-  if Big_int.eq_big_int n Big_int.zero_big_int then
+  if Nat_big_num.equal n (Nat_big_num.of_int 0) then
     "0"
   else
-    let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 8) in
+    let l = string_of_big_int_with_basis n (Nat_big_num.of_int 8) in
     let ret = String.create (List.length l+1) in
     ret.[0] <- '0';
     List.iteri (fun i c ->
@@ -477,7 +477,7 @@ let string_of_octal_big_int n =
     ret
 
 let string_of_hexadecimal_big_int n =
-  let l = string_of_big_int_with_basis n (Big_int.big_int_of_int 16) in
+  let l = string_of_big_int_with_basis n (Nat_big_num.of_int 16) in
   let ret = String.create (List.length l + 2) in
   ret.[0] <- '0';
   ret.[1] <- 'x';
@@ -493,7 +493,7 @@ let pp_integerConstant = function
   | IConstant (n, basis, suff_opt) ->
       !^ (match basis with
             | Octal       -> string_of_octal_big_int n
-            | Decimal     -> Big_int.string_of_big_int n
+            | Decimal     -> Nat_big_num.to_string n
             | Hexadecimal -> string_of_hexadecimal_big_int n
          )  ^^ (P.optional pp_integerSuffix suff_opt)
   | IConstantMax ity ->
