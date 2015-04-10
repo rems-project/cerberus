@@ -28,7 +28,7 @@ type expr =
 (*  | Vtuple of list value *)
   | Vctype of Core_ctype.ctype0
   | Vunspecified of Core_ctype.ctype0
-  | Vinteger of Big_int.big_int
+  | Vinteger of Nat_big_num.num
   | Vfloating of string
 (* RUNTIME  | Vsymbolic of Symbolic.symbolic *)
 (* RUNTIME  | Vpointer of Mem.pointer_value *)
@@ -937,7 +937,7 @@ let subst name =
 
 %}
 
-%token <Big_int.big_int> INT_CONST
+%token <Nat_big_num.num> INT_CONST
 %token <Core_parser_util._sym> SYM
 %token <Implementation_.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
@@ -1256,6 +1256,13 @@ ctype:
     { Core_ctype.Pointer0 (AilTypes.no_qualifiers, ty) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
     { Core_ctype.Atomic0 ty }
+| (* TODO: check the lexing *) str= SYM
+    { match Builtins.translate_builtin_typenames ("__cerbty_" ^ fst str) with
+        | Some ty ->
+            Core_aux.proj_ctype ty
+        | None ->
+            $syntaxerror
+    }
 ;
 (* END Ail types *)
 

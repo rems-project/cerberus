@@ -1,4 +1,5 @@
 open import Pervasives Global Show Core
+import AilSyntax
 import Boot Product Symbolic Exception Naive_memory
 
 open import Thread Core_run_aux
@@ -22,12 +23,20 @@ let toMemValue cval =
         Nothing
     | Vctype _ ->
         Nothing
+    | Vunspecified ty ->
+        Just (Mem.mk_unspecified ty)
     | Vinteger ival ->
         Just (Mem.MVinteger ival)
     | Vfloating str ->
         Just (Mem.mk_floating str)
     | Vpointer ptr_val ->
         Just (Mem.mk_pointer ptr_val)
+    | Varray mem_vals ->
+        Just (Mem.mk_array mem_vals)
+    | Vstruct sym xs ->
+        Just (Mem.MVstruct sym xs)
+    | Vunion sym ident mem_val ->
+        Just (Mem.MVunion sym ident mem_val)
   end
 
 (* TODO: it is ugly to define this in the current module *)
@@ -44,10 +53,10 @@ let rec toCoreValue mem_val =
         Vpointer ptr_val
     | Mem.MVarray mem_vals ->
         Varray mem_vals
-(* TODO
-    | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
-    | MVunion of Symbol.t * Symbol.t * mem_value (* the symbols are respectively the tag and the member *)
-*)
+    | Mem.MVstruct sym xs ->
+        Vstruct sym xs
+    | Mem.MVunion sym ident mem_val ->
+        Vunion sym ident mem_val
   end
 
 
@@ -105,8 +114,6 @@ let cfunction_const fsym =
   PEval (Vpointer (Mem.function_pointer fsym))
 
 
-
-
 (* Project an AilTypes.ctype into a Core.ctype *)
 val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
 let rec proj_ctype ty =
@@ -139,6 +146,48 @@ let rec proj_ctype ty =
         Core_ctype.Builtin str
   end
 
+
+(* for a given Ctype returns the corresponding "zero" value *)
+(*val     zeros: AilSyntax.tag_definition -> Core_ctype.ctype -> pexpr *)
+(* see §6.7.9#10 *)
+let rec zeros_aux tagDefs ty =
+  match ty with
+    | Core_ctype.Basic _ ->
+        Mem.MVinteger (Mem.mk_integer_value 0)
+    | Core_ctype.Array elem_ty (Just n) ->
+        Mem.MVarray (List.replicate (natFromInteger n) (Mem.MVinteger (Mem.mk_integer_value 0)))
+    | Core_ctype.Pointer _ ty ->
+        Mem.MVpointer (Mem.null_pointer ty)
+    | Core_ctype.Atomic ty' ->
+        zeros_aux tagDefs ty'
+    | Core_ctype.Struct tag ->
+        let Just (AilSyntax.StructDef ident_tys) = List.lookup tag tagDefs in
+        Mem.MVstruct tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs (proj_ctype ty))) ident_tys)
+    | Core_ctype.Union tag ->
+        let Just (AilSyntax.UnionDef ((ident, ty')::_)) = List.lookup tag tagDefs in
+        Mem.MVunion tag ident (zeros_aux tagDefs (proj_ctype ty'))
+
+(*
+ | Builtin of string
+*)
+   | _ ->
+       Boot.assert_false "Core_aux.zeros should only be called on complete types"
+  end
+
+let zeros tagDefs ty =
+  (* TODO: yucky *)
+  PEval match zeros_aux tagDefs ty with
+    | Mem.MVinteger ival ->
+        Vinteger ival
+    | Mem.MVarray mem_vals ->
+        Varray mem_vals
+    | Mem.MVpointer ptr_val ->
+        Vpointer ptr_val
+    | Mem.MVstruct sym xs ->
+        Vstruct sym xs
+    | Mem.MVunion sym ident mem_val ->
+        Vunion sym ident mem_val
+  end
 
 
 
@@ -363,6 +412,9 @@ let rec to_value pexpr =
     | PEcall _ _ ->
          (* TODO: maybe do some eval? *)
         Nothing
+    | PElet sym pe1 pe2 ->
+        (* TODO: do the subst ? *)
+        Nothing
     | PEif (PEval Vtrue) pe2 _ ->
         to_value pe2
     | PEif (PEval Vfalse) _ pe3 ->
@@ -498,6 +550,8 @@ let rec subst_sym_pexpr sym pe' = function
       PEnot (subst_sym_pexpr sym pe' pe)
   | PEop bop pe1 pe2 ->
       PEop bop (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2)
+  | PEmemop memop pes ->
+      PEmemop memop (List.map (subst_sym_pexpr sym pe') pes)
   | PEtuple pes ->
       PEtuple (List.map (subst_sym_pexpr sym pe') pes)
   | PEarray xs ->
@@ -547,7 +601,7 @@ let rec subst_sym sym pe' = function
   | (Eskip as expr) ->
       expr
   | Elet sym' pe1 e2 ->
-      Elet sym (subst_sym_pexpr sym pe' pe1) (if sym = sym' then e2 else subst_sym sym pe' e2)
+      Elet sym' (subst_sym_pexpr sym pe' pe1) (if sym = sym' then e2 else subst_sym sym pe' e2)
   | Eif pe1 e2 e3 ->
       Eif (subst_sym_pexpr sym pe' pe1) (subst_sym sym pe' e2) (subst_sym sym pe' e3)
   | Eproc annot nm pes ->
@@ -985,25 +1039,27 @@ val symbolify: value -> Symbolic.symbolic
 let symbolify expr =
   match expr with
     | Vunit ->
-        Boot.assert_false "TODO: Core_aux.symbolify: Vunit"
-(*
-        Symbolic.SYMBunit
-*)
+        Boot.assert_false "TODO: Core_aux.symbolify, Vunit"
     | Vtrue ->
         Symbolic.SYMBtrue
     | Vfalse ->
         Symbolic.SYMBfalse
-(*
-TODO
-    | Econst mem_val ->
-       symbolify_mem_value mem_val
-*)
     | Vlist pes ->
-        Boot.assert_false "TODO: Core_aux.symbolify: Elist"
+        Boot.assert_false "TODO: Core_aux.symbolify, Vlist"
+    | Vtuple vs ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Vtuple"
     | Vctype ty ->
         Symbolic.SYMBctype ty
-    | Vtuple vs ->
-        Boot.assert_false "TODO: Core_aux.symbolify: Etuple"
+    | Vunspecified ty ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Vunspecified"
+    | Vinteger ival ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Vinteger"
+    | Vfloating str ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Vfloating"
+    | Vpointer ptr_val ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Vpointer"
+    | Varray mem_vals ->
+        Boot.assert_false "TODO: Core_aux.symbolify, Varray"
   end
 
 val     unsymbolify: Symbolic.symbolic -> pexpr

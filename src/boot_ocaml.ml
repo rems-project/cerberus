@@ -47,36 +47,36 @@ let output_string2 str =
 let fake_printf str args =
   match (str, args) with
   | ("\"%d\"", [Cmm_aux.Cint n]) ->
-      Big_int.string_of_big_int n
+      Nat_big_num.to_string n
 
   | ("\"checksum = %x\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "checksum = %x\n" (Big_int.int_of_big_int n)
+      Printf.sprintf "checksum = %x\n" (Nat_big_num.to_int n)
 
   | ("\"checksum = %X\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "checksum = %X\n" (Big_int.int_of_big_int n)
+      Printf.sprintf "checksum = %X\n" (Nat_big_num.to_int n)
 
   | ("\"...checksum after hashing %s : %X\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "...checksum after hashing %s : %X\n" (Xstring.implode str) (Big_int.int_of_big_int n)
+      Printf.sprintf "...checksum after hashing %s : %X\n" (Xstring.implode str) (Nat_big_num. n)
 
   | ("\"...checksum after hashing %s : %lX\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "...checksum after hashing %s : %LX\n" (Xstring.implode str) (Big_int.int64_of_big_int n)
+      Printf.sprintf "...checksum after hashing %s : %LX\n" (Xstring.implode str) (Nat_big_num.to_int64 n)
 
   | ("\"%s %d\\n\"", [Cmm_aux.Cstring str; Cmm_aux.Cint n]) ->
-      Printf.sprintf "%s %ld\n" (Xstring.implode str) (Big_int.int32_of_big_int n)
+      Printf.sprintf "%s %ld\n" (Xstring.implode str) (Nat_big_num.to_int32 n)
 
   (* --- *)
 
   | ("\"DEBUG> %ld\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %Ld\n" (Big_int.int64_of_big_int n)
+      Printf.sprintf "DEBUG> %Ld\n" (Nat_big_num.to_int64 n)
 
   | ("\"DEBUG> %d\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %ld\n" (Big_int.int32_of_big_int n)
+      Printf.sprintf "DEBUG> %ld\n" (Nat_big_num.to_int32 n)
 
   | ("\"DEBUG> %u\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %lu\n" (Big_int.int32_of_big_int n)
+      Printf.sprintf "DEBUG> %lu\n" (Nat_big_num.to_int32 n)
 
   | ("\"DEBUG> %lu\\n\"", [Cmm_aux.Cint n]) ->
-      Printf.sprintf "DEBUG> %Lu\n" (Big_int.int64_of_big_int n)
+      Printf.sprintf "DEBUG> %Lu\n" (Nat_big_num.to_int64 n)
 
   | (str, []) ->
       Scanf.unescaped (String.sub str 1 (String.length str - 2))
@@ -102,7 +102,7 @@ let random_select xs =
 open Str
 (* TODO: ridiculous hack *)
 (*
-let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)) : string =
+let pseudo_printf (frmt : string) (args : string list (* Nat_big_num.num list *)) : string =
   let rexp = regexp "%\(d\|llx\)" in
   let rec f str args acc =
     if String.length str = 0 then
@@ -120,7 +120,7 @@ let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)
               print_endline "PRINTF WITH NOT ENOUGH ARGUMENTS";
               List.rev (str :: acc)
           | arg :: args' ->
-              f str' args' ((* Big_int.string_of_big_int *) arg :: pre :: acc)
+              f str' args' ((* Nat_big_num.to_string *) arg :: pre :: acc)
       with
         Not_found ->
           if List.length args <> 0 then
@@ -139,7 +139,7 @@ let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)
 *)
 
 (* TODO: ridiculous hack (v2) *)
-let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)) : string =
+let pseudo_printf (frmt : string) (args : string list (* Nat_big_num.num list *)) : string =
   let rexp = regexp "%\(d\|llx\)" in
   let rec f str args acc =
     if String.length str = 0 then
@@ -163,7 +163,7 @@ let pseudo_printf (frmt : string) (args : string list (* Big_int.big_int list *)
                 | "%llx" ->
                     Printf.sprintf "%Lx" (Int64.of_string arg)
               in 
-              f str' args' ((* Big_int.string_of_big_int *) arg :: pre :: acc)
+              f str' args' ((* Nat_big_num.to_string *) arg :: pre :: acc)
       with
         Not_found ->
           if List.length args <> 0 then

@@ -36,9 +36,8 @@ let pp_integer_ctype ity =
         !^ ("u" ^ str)
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
+    | IBuiltin str     -> !^ str
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
-    | _ ->
-        !^ "pp_inter_ctype OTHER"
 
 let pp_basic_ctype bty =
   let open AilTypes in

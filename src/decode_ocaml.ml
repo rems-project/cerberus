@@ -20,9 +20,9 @@ let decode_integer_constant str =
     else
       (str, 10, AilSyntax.Decimal) in
   let l = String.length str in
-  let ret = ref (Big_int.big_int_of_int 0) in
+  let ret = ref (Nat_big_num.of_int 0) in
   String.iteri (fun i c ->
-    ret := Big_int.add_big_int (Big_int.mult_big_int (Big_int.big_int_of_int (read_digit c)) (Big_int.power_int_positive_int basisN ((l - i - 1)))) !ret) str;
+    ret := Nat_big_num.add (Nat_big_num.mul (Nat_big_num.of_int (read_digit c)) (Nat_big_num.pow_int_positive basisN ((l - i - 1)))) !ret) str;
   (basis, !ret)
 
 
@@ -31,114 +31,114 @@ let decode_integer_constant str =
 (* TODO: making the implementation choice of using ASCII for now *)
 let decode_character_constant = function
   (* uppercases letters *)
-  | "A" -> Big_int.big_int_of_int 65
-  | "B" -> Big_int.big_int_of_int 66
-  | "C" -> Big_int.big_int_of_int 67
-  | "D" -> Big_int.big_int_of_int 68
-  | "E" -> Big_int.big_int_of_int 69
-  | "F" -> Big_int.big_int_of_int 70
-  | "G" -> Big_int.big_int_of_int 71
-  | "H" -> Big_int.big_int_of_int 72
-  | "I" -> Big_int.big_int_of_int 73
-  | "J" -> Big_int.big_int_of_int 74
-  | "K" -> Big_int.big_int_of_int 75
-  | "L" -> Big_int.big_int_of_int 76
-  | "M" -> Big_int.big_int_of_int 77
-  | "N" -> Big_int.big_int_of_int 78
-  | "O" -> Big_int.big_int_of_int 79
-  | "P" -> Big_int.big_int_of_int 80
-  | "Q" -> Big_int.big_int_of_int 81
-  | "R" -> Big_int.big_int_of_int 82
-  | "S" -> Big_int.big_int_of_int 83
-  | "T" -> Big_int.big_int_of_int 84
-  | "U" -> Big_int.big_int_of_int 85
-  | "V" -> Big_int.big_int_of_int 86
-  | "W" -> Big_int.big_int_of_int 87
-  | "X" -> Big_int.big_int_of_int 88
-  | "Y" -> Big_int.big_int_of_int 89
-  | "Z" -> Big_int.big_int_of_int 90
+  | "A" -> Nat_big_num.of_int 65
+  | "B" -> Nat_big_num.of_int 66
+  | "C" -> Nat_big_num.of_int 67
+  | "D" -> Nat_big_num.of_int 68
+  | "E" -> Nat_big_num.of_int 69
+  | "F" -> Nat_big_num.of_int 70
+  | "G" -> Nat_big_num.of_int 71
+  | "H" -> Nat_big_num.of_int 72
+  | "I" -> Nat_big_num.of_int 73
+  | "J" -> Nat_big_num.of_int 74
+  | "K" -> Nat_big_num.of_int 75
+  | "L" -> Nat_big_num.of_int 76
+  | "M" -> Nat_big_num.of_int 77
+  | "N" -> Nat_big_num.of_int 78
+  | "O" -> Nat_big_num.of_int 79
+  | "P" -> Nat_big_num.of_int 80
+  | "Q" -> Nat_big_num.of_int 81
+  | "R" -> Nat_big_num.of_int 82
+  | "S" -> Nat_big_num.of_int 83
+  | "T" -> Nat_big_num.of_int 84
+  | "U" -> Nat_big_num.of_int 85
+  | "V" -> Nat_big_num.of_int 86
+  | "W" -> Nat_big_num.of_int 87
+  | "X" -> Nat_big_num.of_int 88
+  | "Y" -> Nat_big_num.of_int 89
+  | "Z" -> Nat_big_num.of_int 90
   
   (* lowercase letters *)
-  | "a" -> Big_int.big_int_of_int 97
-  | "b" -> Big_int.big_int_of_int 98
-  | "c" -> Big_int.big_int_of_int 99
-  | "d" -> Big_int.big_int_of_int 100
-  | "e" -> Big_int.big_int_of_int 101
-  | "f" -> Big_int.big_int_of_int 102
-  | "g" -> Big_int.big_int_of_int 103
-  | "h" -> Big_int.big_int_of_int 104
-  | "i" -> Big_int.big_int_of_int 105
-  | "j" -> Big_int.big_int_of_int 106
-  | "k" -> Big_int.big_int_of_int 107
-  | "l" -> Big_int.big_int_of_int 108
-  | "m" -> Big_int.big_int_of_int 109
-  | "n" -> Big_int.big_int_of_int 110
-  | "o" -> Big_int.big_int_of_int 111
-  | "p" -> Big_int.big_int_of_int 112
-  | "q" -> Big_int.big_int_of_int 113
-  | "r" -> Big_int.big_int_of_int 114
-  | "s" -> Big_int.big_int_of_int 115
-  | "t" -> Big_int.big_int_of_int 116
-  | "u" -> Big_int.big_int_of_int 117
-  | "v" -> Big_int.big_int_of_int 118
-  | "w" -> Big_int.big_int_of_int 119
-  | "x" -> Big_int.big_int_of_int 120
-  | "y" -> Big_int.big_int_of_int 121
-  | "z" -> Big_int.big_int_of_int 122
+  | "a" -> Nat_big_num.of_int 97
+  | "b" -> Nat_big_num.of_int 98
+  | "c" -> Nat_big_num.of_int 99
+  | "d" -> Nat_big_num.of_int 100
+  | "e" -> Nat_big_num.of_int 101
+  | "f" -> Nat_big_num.of_int 102
+  | "g" -> Nat_big_num.of_int 103
+  | "h" -> Nat_big_num.of_int 104
+  | "i" -> Nat_big_num.of_int 105
+  | "j" -> Nat_big_num.of_int 106
+  | "k" -> Nat_big_num.of_int 107
+  | "l" -> Nat_big_num.of_int 108
+  | "m" -> Nat_big_num.of_int 109
+  | "n" -> Nat_big_num.of_int 110
+  | "o" -> Nat_big_num.of_int 111
+  | "p" -> Nat_big_num.of_int 112
+  | "q" -> Nat_big_num.of_int 113
+  | "r" -> Nat_big_num.of_int 114
+  | "s" -> Nat_big_num.of_int 115
+  | "t" -> Nat_big_num.of_int 116
+  | "u" -> Nat_big_num.of_int 117
+  | "v" -> Nat_big_num.of_int 118
+  | "w" -> Nat_big_num.of_int 119
+  | "x" -> Nat_big_num.of_int 120
+  | "y" -> Nat_big_num.of_int 121
+  | "z" -> Nat_big_num.of_int 122
   
   (* digits *)
-  | "0" -> Big_int.big_int_of_int 48
-  | "1" -> Big_int.big_int_of_int 49
-  | "2" -> Big_int.big_int_of_int 50
-  | "3" -> Big_int.big_int_of_int 51
-  | "4" -> Big_int.big_int_of_int 52
-  | "5" -> Big_int.big_int_of_int 53
-  | "6" -> Big_int.big_int_of_int 54
-  | "7" -> Big_int.big_int_of_int 55
-  | "8" -> Big_int.big_int_of_int 56
-  | "9" -> Big_int.big_int_of_int 57
+  | "0" -> Nat_big_num.of_int 48
+  | "1" -> Nat_big_num.of_int 49
+  | "2" -> Nat_big_num.of_int 50
+  | "3" -> Nat_big_num.of_int 51
+  | "4" -> Nat_big_num.of_int 52
+  | "5" -> Nat_big_num.of_int 53
+  | "6" -> Nat_big_num.of_int 54
+  | "7" -> Nat_big_num.of_int 55
+  | "8" -> Nat_big_num.of_int 56
+  | "9" -> Nat_big_num.of_int 57
   
   (* graphic characters *)
-  | "!"    -> Big_int.big_int_of_int 33
-  | "\\\"" -> Big_int.big_int_of_int 34
-  | "#"    -> Big_int.big_int_of_int 35
-  | "%"    -> Big_int.big_int_of_int 37
-  | "&"    -> Big_int.big_int_of_int 38
-  | "'"    -> Big_int.big_int_of_int 39
-  | "("    -> Big_int.big_int_of_int 40
-  | ")"    -> Big_int.big_int_of_int 41
-  | "*"    -> Big_int.big_int_of_int 42
-  | "+"    -> Big_int.big_int_of_int 43
-  | ","    -> Big_int.big_int_of_int 44
-  | "-"    -> Big_int.big_int_of_int 45
-  | "."    -> Big_int.big_int_of_int 46
-  | "/"    -> Big_int.big_int_of_int 47
-  | ":"    -> Big_int.big_int_of_int 58
-  | ";"    -> Big_int.big_int_of_int 59
-  | "<"    -> Big_int.big_int_of_int 60
-  | "="    -> Big_int.big_int_of_int 61
-  | ">"    -> Big_int.big_int_of_int 62
-  | "?"    -> Big_int.big_int_of_int 63
-  | "["    -> Big_int.big_int_of_int 91
-  | "\\\\" -> Big_int.big_int_of_int 92
-  | "]"    -> Big_int.big_int_of_int 93
-  | "^"    -> Big_int.big_int_of_int 94
-  | "_"    -> Big_int.big_int_of_int 95
-  | "{"    -> Big_int.big_int_of_int 123
-  | "|"    -> Big_int.big_int_of_int 124
-  | "}"    -> Big_int.big_int_of_int 125
-  | "~"    -> Big_int.big_int_of_int 126
+  | "!"    -> Nat_big_num.of_int 33
+  | "\\\"" -> Nat_big_num.of_int 34
+  | "#"    -> Nat_big_num.of_int 35
+  | "%"    -> Nat_big_num.of_int 37
+  | "&"    -> Nat_big_num.of_int 38
+  | "'"    -> Nat_big_num.of_int 39
+  | "("    -> Nat_big_num.of_int 40
+  | ")"    -> Nat_big_num.of_int 41
+  | "*"    -> Nat_big_num.of_int 42
+  | "+"    -> Nat_big_num.of_int 43
+  | ","    -> Nat_big_num.of_int 44
+  | "-"    -> Nat_big_num.of_int 45
+  | "."    -> Nat_big_num.of_int 46
+  | "/"    -> Nat_big_num.of_int 47
+  | ":"    -> Nat_big_num.of_int 58
+  | ";"    -> Nat_big_num.of_int 59
+  | "<"    -> Nat_big_num.of_int 60
+  | "="    -> Nat_big_num.of_int 61
+  | ">"    -> Nat_big_num.of_int 62
+  | "?"    -> Nat_big_num.of_int 63
+  | "["    -> Nat_big_num.of_int 91
+  | "\\\\" -> Nat_big_num.of_int 92
+  | "]"    -> Nat_big_num.of_int 93
+  | "^"    -> Nat_big_num.of_int 94
+  | "_"    -> Nat_big_num.of_int 95
+  | "{"    -> Nat_big_num.of_int 123
+  | "|"    -> Nat_big_num.of_int 124
+  | "}"    -> Nat_big_num.of_int 125
+  | "~"    -> Nat_big_num.of_int 126
   
-  | " "    -> Big_int.big_int_of_int 32
+  | " "    -> Nat_big_num.of_int 32
   
   (* §5.2.2#2 *)
-  | "\\a"   -> Big_int.big_int_of_int 7
-  | "\\b"   -> Big_int.big_int_of_int 8
-  | "\\f"   -> Big_int.big_int_of_int 12
-  | "\\n"   -> Big_int.big_int_of_int 10
-  | "\\r"   -> Big_int.big_int_of_int 13
-  | "\\t"   -> Big_int.big_int_of_int 9
-  | "\\v"   -> Big_int.big_int_of_int 11
+  | "\\a"   -> Nat_big_num.of_int 7
+  | "\\b"   -> Nat_big_num.of_int 8
+  | "\\f"   -> Nat_big_num.of_int 12
+  | "\\n"   -> Nat_big_num.of_int 10
+  | "\\r"   -> Nat_big_num.of_int 13
+  | "\\t"   -> Nat_big_num.of_int 9
+  | "\\v"   -> Nat_big_num.of_int 11
   
   | str ->
       if String.length str = 0 then
@@ -181,5 +181,5 @@ let decode_character_constant = function
 
 let encode_character_constant n =
   (* TODO: fixing the encoding to ASCII for now *)
-(*  Printf.printf "ENCODING %s\n" (Big_int.string_of_big_int n); *)
-  Char.chr (Big_int.int_of_big_int n)
+(*  Printf.printf "ENCODING %s\n" (Nat_big_num.to_string n); *)
+  Char.chr (Nat_big_num.to_int n)

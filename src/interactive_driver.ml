@@ -43,7 +43,7 @@ let rec string_of_stack = function
 
 let print_core_state st =
   List.iter (fun (tid, (_, th_st)) ->
-    Printf.printf "Thread %s:\n" (Big_int.string_of_big_int tid);
+    Printf.printf "Thread %s:\n" (Nat_big_num.to_string tid);
     Printf.printf "  arena= %s\n" (Boot_pprint.pp_core_expr th_st.Core_run2.arena0);
     Printf.printf "  stack= %s\n" (string_of_stack th_st.Core_run2.stack0);
     print_newline ()
@@ -108,11 +108,11 @@ let rec loop file st run_st =
       print_endline (string_of_int i ^
         match step with
           | Core_run2.Step_action_request (str, tid, request) ->
-              "- action request (" ^ str ^ ") with thread " ^ Big_int.string_of_big_int tid
+              "- action request (" ^ str ^ ") with thread " ^ Nat_big_num.to_string tid
           | Core_run2.Step_tau (str, tid, _) ->
-              "- tau transition (" ^ str ^ ") with thread " ^ Big_int.string_of_big_int tid
+              "- tau transition (" ^ str ^ ") with thread " ^ Nat_big_num.to_string tid
           | Core_run2.Step_eval (str, tid, _) ->
-              "- eval transition (" ^ str ^ ") with thread " ^ Big_int.string_of_big_int tid
+              "- eval transition (" ^ str ^ ") with thread " ^ Nat_big_num.to_string tid
           | Core_run2.Step_done pe ->
               "- done: " ^ Boot_pprint.pp_core_expr pe
       )

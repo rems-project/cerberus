@@ -37,7 +37,7 @@ let rec string_of_dyn_rule = function
 let string_of_mem_value = function
   | Cmm_aux_old.Muninit     -> "uninit"
   | Cmm_aux_old.Mbase c     -> Boot_pprint.to_plain_string (Pp_core.pp_constant c)
-  | Cmm_aux_old.Mobj addr   -> Boot_pprint.to_plain_string (Pp_core.pp_mem_addr addr) (* (_, x) -> Big_int.string_of_big_int x *)
+  | Cmm_aux_old.Mobj addr   -> Boot_pprint.to_plain_string (Pp_core.pp_mem_addr addr) (* (_, x) -> Nat_big_num.to_string x *)
   | Cmm_aux_old.Mnull       -> "NULL"
 
 let string_of_sym = function
@@ -49,14 +49,14 @@ let string_of_trace_action tact =
     Boot_pprint.to_plain_string (Pp_core.pp_mem_addr o) in
 (*
     "[" ^ (Boot_pprint.to_plain_string (PPrint.separate_map PPrint.dot (fun x -> PPrint.string (string_of_sym x)) (fst o))) ^
-      ": @" ^ Big_int.string_of_big_int (snd o) ^ "]" in
+      ": @" ^ Nat_big_num.to_string (snd o) ^ "]" in
  *)
   match tact with
     | Core_run_effect.Tcreate (ty, o, tid) ->
         f o ^ " <= create {" ^ (Boot_pprint.to_plain_string (Pp_core.pp_ctype ty)) ^ "}" ^
         " thread: " ^ (string_of_thread_id tid)
     | Core_run_effect.Talloc (n, o, tid) ->
-        f o ^ " <= alloc " ^ Big_int.string_of_big_int n ^
+        f o ^ " <= alloc " ^ Nat_big_num.to_string n ^
         " thread: " ^ (string_of_thread_id tid)
     | Core_run_effect.Tkill (o, tid) ->
         "kill " ^ f o ^
@@ -95,7 +95,7 @@ let rec string_of_trace tact_map t =
            Colour.ansi_format [Colour.Blue] (string_of_dyn_rule r) ^ " ==> " ^
            (* Colour.ansi_format [Colour.Green] (f $ Pset.elements bs)  ^ *)
            Colour.ansi_format [Colour.Red]  
-           (Big_int.string_of_big_int a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
+           (Nat_big_num.to_string a) ^ ": " ^ string_of_trace_action (Pmap.find a tact_map) ^ "\n" ^ string_of_trace tact_map xs
 
 
 (*

@@ -188,15 +188,41 @@ let rec core_eval file inside_if = function
                   Boot.assert_false "WIP: Core_run.core_eval PEcase_ctype, Builtin"
             end
         | PEval _ ->
-            EU.fail $ Illformed_program "PEcase_ctype: fist operand should be a ctype"
+            EU.fail $ Illformed_program "PEcase_ctype: first operand should be a ctype"
         | pe' ->
             EU.return $ PEcase_ctype pe' pe_void nm_basic nm_array nm_fun nm_ptr nm_atom nm_struct nm_union nm_builtin
       end
-  | PEshift pe sh ->
-      Boot.assert_false "KKK"
+  | PEshift pe ty_pes ->
+      core_eval file inside_if pe >>= fun pe' ->
+      match to_value pe' with
+        | Just (Vpointer ptr_val as cval) ->
+            EU.foldM (fun _acc (ty, pe) ->
+              core_eval file inside_if pe >>= fun pe' ->
+              match (to_value pe', _acc) with
+                | (Just (Vinteger ival), Left acc) ->
+                    (* TODO: Vunspecified *)
+                    EU.return $ Left ((ty, ival) :: acc)
+                | (Just (Vinteger _ as cval), Right acc) ->
+                    EU.return $ Right ((ty, PEval cval) :: acc)
+                | (Just _, _) ->
+                    EU.fail $ Illformed_program "PEshift: the expression in the shift path should be integers"
+                | (Nothing, Left ivals) ->
+                    EU.return $ Right ((ty, pe') :: List.map (fun (ty, ival) -> (ty, PEval (Vinteger ival))) ivals)
+                | (Nothing, Right acc) ->
+                    EU.return $ Right ((ty, pe') :: acc)
+              end
+            ) (Left []) ty_pes >>= function
+              | Left rev_ty_ivals ->
+                  EU.return $ PEval (Vpointer (Mem.shift_pointer_value ptr_val (List.reverse rev_ty_ivals)))
+              | Right rev_ty_pes' ->
+                  EU.return $ PEshift (PEval cval) (List.reverse rev_ty_pes')
+            end
+        | Just _ ->
+            EU.fail $ Illformed_program ("PEshift: first operand should be a pointer")
+        | Nothing ->
+            EU.return $ PEshift pe' ty_pes
+      end
   
-
-
   | PEnot pe ->
       core_eval file inside_if pe >>= function
         | PEval Vtrue ->
@@ -758,7 +784,7 @@ let update_thread_state tid th_st st =
 
 val register_handler: core_state -> core_state
 let register_handler st =
-  Boot.assert_false "WIP"
+  Boot.assert_false "WIP: register_handler"
 
 val update_thread_state: thread_id -> thread_state -> core_state -> core_state
 let update_thread_state tid th_st st =
@@ -1071,7 +1097,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                       
 *)
                   
-                  | "printf_internal" ->
+                  | "printf" ->
                       (* TODO: hack, should use output.lem instead *)
                       let mk_string = function
                         | Mem.MVarray vs ->
@@ -1100,7 +1126,10 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                                 arena= Epure (PEval (Vinteger (Mem.mk_integer_value 0)))
                               |> st)
                             )
+(*
                         | Vpointer ptr1 :: args ->
+*)
+                        | [Vpointer ptr1; Vlist args] ->
                             ND.return $ Step_output (
                               runMem (Mem.load format_ty ptr1) >>= fun (Mem.MVpointer ptr_format) ->
                               (* TODO: this should be an array of the proper size of char !!! *)

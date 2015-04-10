@@ -1091,7 +1091,9 @@ _STD "§6.5.3.1#3" $
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return $ AilEsizeof qs ty
     | CabsEalignof tyname ->
-        Boot.assert_false "WIP 24"
+        (* TODO: STD check + annot *)
+        desugar_type_name tyname >>= fun (qs, ty) ->
+        E.return $ AilEalignof qs ty
     | CabsEcast tyname e ->
         (* TODO: check *)
         desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1545,7 +1547,7 @@ and wip_desugar_initializer_ dur current_ty = function
                     is_integer_constant_expression d_e >>= function
                       | true ->
                           evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IConstant j _ _) ->
-                          wip_desugar_initializer_ dur elem_ty init              >>= fun d_e                     ->
+                            wip_desugar_initializer_ dur elem_ty init              >>= fun d_e               ->
                           
                           match compare j i with
                             | LT ->

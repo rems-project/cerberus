@@ -69,7 +69,7 @@ let string_of_operator = function
 (* the list of string on the "left" are the declarations for symbols *)
 let rec string_of_symbolic = function
   | SYMBconst n ->
-      ([], Big_int.string_of_big_int n)
+      ([], Nat_big_num.to_string n)
   | SYMBsym (_, Symbol (x, _)) ->
       let str = "sym_" ^ string_of_int x in
       ([str], str)

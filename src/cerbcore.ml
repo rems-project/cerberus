@@ -54,7 +54,7 @@ let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 let catch_result m =
   match m with
   | Exception.Result [[(Undefined.Defined (Core.Econst (Mem.MV_integer (Symbolic.SYMBconst n)), _), _)]] ->
-      exit (Big_int.int_of_big_int n)
+      exit (Nat_big_num.to_int n)
   | Exception.Result _ ->
      Debug.print_debug 2 "[Main.catch_result] returning a fake return code";
      exit 0

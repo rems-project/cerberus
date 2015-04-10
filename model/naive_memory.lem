@@ -74,7 +74,7 @@ type mem_value =
   | MVpointer of pointer_value
   | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
   | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
-  | MVunion of Symbol.t * Symbol.t * mem_value (* the symbols are respectively the tag and the member *)
+  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
 
 
 type mem_write =
@@ -239,6 +239,8 @@ end
 
 let rec stringFromInteger_value ival =
   match ival with
+    | IVinteger n ->
+        "(IVinteger " ^ show n ^ ")"
     | IVsymbolic symb ->
         "(IVsymbolic " ^ show symb ^ ")"
     | IVptrdiff ptr_val1 ptr_val2 ->
@@ -364,6 +366,8 @@ module MaybeM = struct
           f z
     end
   
+  
+  (* NOTE: this is a foldl *)
   val     foldM: forall 'a 'b. ('a -> 'b -> maybe 'a) -> 'a -> list 'b -> maybe 'a
   let rec foldM f a = function
     | [] ->
@@ -700,6 +704,28 @@ let rec mkUnspec tagDefs ty =
   end
 
 
+(* TODO: for debug *)
+let rec stringFromMemValue mem_val =
+  match mem_val with
+    | MVunspecified ty ->
+        "(MVunspecified " ^ string_of_ctype ty ^ ")"
+    | MVinteger (IVinteger n) ->
+        "(MVinteger " ^ show n ^ ")"
+    | MVinteger _ ->
+        "(MVinteger TODO)"
+    | MVfloating str ->
+        "(MVfloating " ^ str ^ ")"
+    | MVpointer _ ->
+        "(MVpointer TODO)"
+    | MVarray mem_vals ->
+        "(MVarray " ^ stringFromList stringFromMemValue mem_vals ^ ")"
+    | MVstruct sym_tag ident_mem_vals ->
+        "(MVstruct " ^ show sym_tag ^ stringFromList (stringFromPair show stringFromMemValue) ident_mem_vals ^ ")"
+    | MVunion sym_tag sym_member mem_val ->
+        "(MVunion " ^ show sym_tag ^ " " ^ show sym_member ^ stringFromMemValue mem_val ^ ")"
+  end
+
+
 val combineWrites: mem_read -> list mem_write -> memM mem_value
 let combineWrites (MemRead (PVobject _ rSh) rTy as r) ws =
   catMaybes <$> SEU.mapM (getAffection r) ws >>= function
@@ -714,7 +740,9 @@ let combineWrites (MemRead (PVobject _ rSh) rTy as r) ws =
         SEU.foldM (fun acc (wOff, wFp, wVal) ->
           match getSubValue wVal wOff wFp with
             | Nothing ->
-                SEU.fail $ MerrOther ("myCombineWrites: some footprint was too big")
+                SEU.fail $ MerrOther ("myCombineWrites: some footprint was too big: " ^
+                                      stringFromMemValue wVal ^ ", " ^ stringFromList string_of_ctype wOff ^ ", " ^ stringFromList string_of_ctype wFp)
+
             | Just mval ->
                 SEU.return $ setValue tagDefs acc (List.deletes wOff rOff) mval
           end
@@ -765,7 +793,7 @@ val allocate_object:    Thread.thread_id  (* the allocating thread *)
 val load: Core_ctype.ctype -> pointer_value -> memM mem_value
 val store: Core_ctype.ctype -> pointer_value -> mem_value -> memM unit
 
-val shift_pointer_value: pointer_value -> list (Core_ctype.ctype * Symbolic.symbolic) -> pointer_value
+val shift_pointer_value: pointer_value -> list (Core_ctype.ctype * integer_value) -> pointer_value
 
 
 (* TODO: change the name *)
@@ -846,7 +874,7 @@ let store ty ptr_val mem_val =
 
 let shift_pointer_value ptr_val ptr_sh' =
   (* TODO: forcing concrete offsets for now *)
-  let ptr_sh' = map (fun (id, Symbolic.SYMBconst n) -> (id, n)) ptr_sh' in
+  let ptr_sh' = map (fun (id, IVinteger n) -> (id, n)) ptr_sh' in
   match ptr_val with
     | PVobject oid ptr_sh ->
         PVobject oid (ptr_sh ++ ptr_sh') (* (normaliseShift $ ptr_sh ++ ptr_sh') *)

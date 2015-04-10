@@ -351,8 +351,8 @@ let rec annotate_constant cst =
               else
                 E.fail Loc.unknown (TError "array constant elements don't all have the same type")
         end
-    | ConstantIndeterminate _ ->
-        assert_false "WIP typing: ConstantIndeterminate"
+    | ConstantIndeterminate ty ->
+        E.return (ConstantIndeterminate ty, GenRValueType (GenTypes.inject_type ty))
     | ConstantNull ->
         assert_false "WIP typing: ConstantNull"
   end

@@ -137,6 +137,8 @@ type value =
   | Vfloating of string
   | Vpointer of Mem.pointer_value
   | Varray of list Mem.mem_value
+  | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
+  | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
 
 
 (* pure Core expressions *)

@@ -55,7 +55,7 @@ let string_of_location (Mem.PVobject ((n, pref), ptr_sh)) =
 
 let string_of_cvalue = function
   | Mem.MVinteger (Mem.IVinteger n) ->
-      Big_int.string_of_big_int n
+      Nat_big_num.to_string n
   | Mem.MVinteger ival ->
       (* "SYMB(" ^ Pp_utils.to_plain_string (Pp_core.pp_symbolic symb) ^ ")" *)
       "SYMB(integer_value)"

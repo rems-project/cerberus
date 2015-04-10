@@ -1052,7 +1052,7 @@ and _menhir_goto_argument_expression_list : _menhir_env -> 'ttv_tail -> _menhir_
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_argument_expression_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 1058 "Parser.ml"
          in
@@ -1568,7 +1568,7 @@ and _menhir_goto_expression : _menhir_env -> 'ttv_tail -> _menhir_state -> (
             ((let (_menhir_stack, _menhir_s, x, _startpos_x_) = _menhir_stack in
             let _startpos = _startpos_x_ in
             let _v : 'tv_option_expression_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 1574 "Parser.ml"
              in
@@ -3405,7 +3405,7 @@ and _menhir_goto_assignment_expression : _menhir_env -> 'ttv_tail -> _menhir_sta
         ) * Lexing.position * Lexing.position) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x, _startpos_x_, _endpos_x_) = _menhir_stack in
         let _v : 'tv_option_assignment_expression_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 3411 "Parser.ml"
          in
@@ -7016,7 +7016,7 @@ and _menhir_goto_block_item_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_block_item_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 7022 "Parser.ml"
          in
@@ -7102,7 +7102,7 @@ and _menhir_goto_designator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 # 7103 "Parser.ml"
         )) = _v in
         ((let _v : 'tv_option_designation_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 7108 "Parser.ml"
          in
@@ -7170,7 +7170,7 @@ and _menhir_goto_separated_nonempty_list_PIPES_compound_statement_ : _menhir_env
         ) * Lexing.position) * _menhir_state * 'tv_separated_nonempty_list_PIPES_compound_statement_) = Obj.magic _menhir_stack in
         ((let ((_menhir_stack, _menhir_s, x, _endpos_x_), _, xs) = _menhir_stack in
         let _v : 'tv_separated_nonempty_list_PIPES_compound_statement_ = 
-# 146 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 146 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( x :: xs )
 # 7176 "Parser.ml"
          in
@@ -9256,7 +9256,7 @@ and _menhir_goto_compound_statement : _menhir_env -> 'ttv_tail -> _menhir_state 
             ) * Lexing.position) = Obj.magic _menhir_stack in
             ((let (_menhir_stack, _menhir_s, x, _endpos_x_) = _menhir_stack in
             let _v : 'tv_separated_nonempty_list_PIPES_compound_statement_ = 
-# 144 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 144 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( [ x ] )
 # 9262 "Parser.ml"
              in
@@ -10434,7 +10434,7 @@ and _menhir_goto_init_declarator_list : _menhir_env -> 'ttv_tail -> _menhir_stat
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_init_declarator_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 10440 "Parser.ml"
          in
@@ -10474,7 +10474,7 @@ and _menhir_goto_parameter_type_list : _menhir_env -> 'ttv_tail -> _menhir_state
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_parameter_type_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 10480 "Parser.ml"
          in
@@ -11078,7 +11078,7 @@ and _menhir_goto_declaration : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 and _menhir_reduce154 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_designation_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 11084 "Parser.ml"
      in
@@ -11218,7 +11218,7 @@ and _menhir_reduce156 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
   fun _menhir_env _menhir_stack _menhir_s ->
     let _startpos = _menhir_env._menhir_startp in
     let _v : 'tv_option_expression_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 11224 "Parser.ml"
      in
@@ -12183,7 +12183,7 @@ and _menhir_goto_struct_declarator_list : _menhir_env -> 'ttv_tail -> _menhir_st
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_struct_declarator_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 12189 "Parser.ml"
          in
@@ -12625,7 +12625,7 @@ and _menhir_goto_struct_declaration_list : _menhir_env -> 'ttv_tail -> _menhir_s
         )) = Obj.magic _menhir_stack in
         let (_ : _menhir_state) = _menhir_s in
         let (_endpos__5_ : Lexing.position) = _endpos in
-        ((let ((((_menhir_stack, _menhir_s, ctor, _startpos_ctor_), _, id_opt), _startpos__3_), _, decls) = _menhir_stack in
+        ((let ((((_menhir_stack, _menhir_s, ctor, _startpos_ctor_), _, id_opt), _startpos__3_), _, rev_decls) = _menhir_stack in
         let _startpos = _startpos_ctor_ in
         let _v : (
 # 109 "Parser.mly"
@@ -12633,7 +12633,7 @@ and _menhir_goto_struct_declaration_list : _menhir_env -> 'ttv_tail -> _menhir_s
 # 12634 "Parser.ml"
         ) = 
 # 589 "Parser.mly"
-    (  ctor id_opt (Some (List.rev decls)) )
+    (  ctor id_opt (Some (List.rev rev_decls)) )
 # 12638 "Parser.ml"
          in
         _menhir_goto_struct_or_union_specifier _menhir_env _menhir_stack _menhir_s _v _startpos) : 'freshtv1190)) : 'freshtv1192)
@@ -13192,7 +13192,7 @@ and _menhir_run372 : _menhir_env -> 'ttv_tail -> _menhir_state -> Lexing.positio
         let (_menhir_stack : 'freshtv1143) = Obj.magic _menhir_stack in
         let (_menhir_s : _menhir_state) = MenhirState372 in
         ((let _v : 'tv_option_block_item_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 13198 "Parser.ml"
          in
@@ -13427,7 +13427,7 @@ and _menhir_reduce163 : _menhir_env -> 'ttv_tail * _menhir_state * (
   fun _menhir_env _menhir_stack ->
     let (_menhir_stack, _menhir_s, x) = _menhir_stack in
     let _v : 'tv_option_pointer_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 13433 "Parser.ml"
      in
@@ -13807,7 +13807,7 @@ and _menhir_goto_struct_declaration : _menhir_env -> 'ttv_tail -> _menhir_state 
 and _menhir_reduce168 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_type_qualifier_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 13813 "Parser.ml"
      in
@@ -14184,7 +14184,7 @@ and _menhir_goto_enumerator_list : _menhir_env -> 'ttv_tail -> _menhir_state -> 
 and _menhir_reduce158 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_init_declarator_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 14190 "Parser.ml"
      in
@@ -15266,7 +15266,7 @@ and _menhir_goto_direct_declarator : _menhir_env -> 'ttv_tail -> (
                 )) = Obj.magic _menhir_stack in
                 ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
                 let _v : 'tv_option_declarator_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 15272 "Parser.ml"
                  in
@@ -15452,7 +15452,7 @@ and _menhir_goto_pointer : _menhir_env -> 'ttv_tail -> _menhir_state -> (
 and _menhir_reduce142 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_abstract_declarator_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 15458 "Parser.ml"
      in
@@ -15461,7 +15461,7 @@ and _menhir_reduce142 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
 and _menhir_reduce152 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_declarator_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 15467 "Parser.ml"
      in
@@ -15470,7 +15470,7 @@ and _menhir_reduce152 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return
 and _menhir_reduce162 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_pointer_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 15476 "Parser.ml"
      in
@@ -15511,14 +15511,14 @@ and _menhir_goto_option_struct_declarator_list_ : _menhir_env -> 'ttv_tail -> _m
 # 15512 "Parser.ml"
         )) * _menhir_state * 'tv_option_struct_declarator_list_) = Obj.magic _menhir_stack in
         let (_endpos__3_ : Lexing.position) = _endpos in
-        ((let ((_menhir_stack, _menhir_s, tspecs_tquals), _, sdeclrs_opt) = _menhir_stack in
+        ((let ((_menhir_stack, _menhir_s, tspecs_tquals), _, rev_sdeclrs_opt) = _menhir_stack in
         let _v : (
 # 118 "Parser.mly"
      (Cabs.struct_declaration)
 # 15519 "Parser.ml"
         ) = 
 # 607 "Parser.mly"
-    ( let (tspecs, tquals) = tspecs_tquals in Struct_declaration (tspecs, tquals, option [] id sdeclrs_opt) )
+    ( let (tspecs, tquals) = tspecs_tquals in Struct_declaration (tspecs, tquals, option [] List.rev rev_sdeclrs_opt) )
 # 15523 "Parser.ml"
          in
         _menhir_goto_struct_declaration _menhir_env _menhir_stack _menhir_s _v) : 'freshtv836)) : 'freshtv838)
@@ -15739,7 +15739,7 @@ and _menhir_goto_declaration_specifiers : _menhir_env -> 'ttv_tail -> _menhir_st
         ) * Lexing.position) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x, _startpos_x_) = _menhir_stack in
         let _v : 'tv_option_declaration_specifiers_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 15745 "Parser.ml"
          in
@@ -15906,7 +15906,7 @@ and _menhir_goto_abstract_declarator : _menhir_env -> 'ttv_tail -> _menhir_state
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_abstract_declarator_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 15912 "Parser.ml"
          in
@@ -15917,7 +15917,7 @@ and _menhir_goto_abstract_declarator : _menhir_env -> 'ttv_tail -> _menhir_state
 and _menhir_reduce160 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_parameter_type_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 15923 "Parser.ml"
      in
@@ -16117,7 +16117,7 @@ and _menhir_goto_option_type_qualifier_list_ : _menhir_env -> 'ttv_tail -> _menh
             let (_menhir_stack : 'freshtv785) = Obj.magic _menhir_stack in
             let (_menhir_s : _menhir_state) = MenhirState277 in
             ((let _v : 'tv_option_assignment_expression_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 16123 "Parser.ml"
              in
@@ -16161,7 +16161,7 @@ and _menhir_goto_specifier_qualifier_list : _menhir_env -> 'ttv_tail -> _menhir_
             let (_menhir_stack : 'freshtv751) = Obj.magic _menhir_stack in
             let (_menhir_s : _menhir_state) = MenhirState159 in
             ((let _v : 'tv_option_struct_declarator_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 16167 "Parser.ml"
              in
@@ -16216,7 +16216,7 @@ and _menhir_goto_specifier_qualifier_list : _menhir_env -> 'ttv_tail -> _menhir_
         )) = Obj.magic _menhir_stack in
         ((let (_menhir_stack, _menhir_s, x) = _menhir_stack in
         let _v : 'tv_option_specifier_qualifier_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 16222 "Parser.ml"
          in
@@ -17227,7 +17227,7 @@ and _menhir_reduce169 : _menhir_env -> 'ttv_tail * _menhir_state * (
   fun _menhir_env _menhir_stack ->
     let (_menhir_stack, _menhir_s, x) = _menhir_stack in
     let _v : 'tv_option_type_qualifier_list_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 17233 "Parser.ml"
      in
@@ -17495,7 +17495,7 @@ and _menhir_goto_postfix_expression : _menhir_env -> 'ttv_tail -> _menhir_state 
             let (_menhir_stack : 'freshtv567) = Obj.magic _menhir_stack in
             let (_menhir_s : _menhir_state) = MenhirState55 in
             ((let _v : 'tv_option_argument_expression_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 17501 "Parser.ml"
              in
@@ -17841,7 +17841,7 @@ and _menhir_fail : unit -> 'a =
 and _menhir_reduce150 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_declaration_specifiers_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 17847 "Parser.ml"
      in
@@ -18424,7 +18424,7 @@ and _menhir_goto_type_qualifier_list : _menhir_env -> 'ttv_tail -> _menhir_state
 and _menhir_reduce164 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_specifier_qualifier_list_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 18430 "Parser.ml"
      in
@@ -18815,7 +18815,7 @@ and _menhir_goto_function_specifier : _menhir_env -> 'ttv_tail -> _menhir_state 
 and _menhir_reduce140 : _menhir_env -> 'ttv_tail -> _menhir_state -> 'ttv_return =
   fun _menhir_env _menhir_stack _menhir_s ->
     let _v : 'tv_option_OTHER_NAME_ = 
-# 29 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 29 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( None )
 # 18821 "Parser.ml"
      in
@@ -18865,7 +18865,7 @@ and _menhir_reduce141 : _menhir_env -> 'ttv_tail * _menhir_state * (
   fun _menhir_env _menhir_stack ->
     let (_menhir_stack, _menhir_s, x, _startpos_x_, _endpos_x_) = _menhir_stack in
     let _v : 'tv_option_OTHER_NAME_ = 
-# 31 "/Users/catzilla/.opam/4.02.0/lib/menhir/standard.mly"
+# 31 "/Users/catzilla/.opam/system/lib/menhir/standard.mly"
     ( Some x )
 # 18871 "Parser.ml"
      in
