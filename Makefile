@@ -11,11 +11,13 @@ LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err
 
 
 # C11 related stuff
-CMM_MODEL_DIR=../cpp/axiomatic/ntc
+#CMM_MODEL_DIR=../cpp/axiomatic/ntc
+CMM_MODEL_DIR=../../rsem/cpp/axiomatic/ntc
 CMM_MODEL_LEM =\
   cmm_master.lem
 
-CMM_EXEC_DIR=../cpp/newmm_op
+#CMM_EXEC_DIR=../cpp/newmm_op
+CMM_EXEC_DIR=../../rsem/cpp/newmm_op
 CMM_EXEC_LEM =\
   executableOpsem.lem \
   minimalOpsem.lem \
@@ -202,6 +204,9 @@ coreparser:
 
 CMXS=\
   $(patsubst %.ml, %.cmx, $(shell ocamldep -sort $(patsubst %.cmx, %.ml, $(wildcard $(addsuffix /*.cmx, $(OCAML_DIRS))))))
+
+foo:
+	echo $(CMXS)
 
 ocaml_native: | depend dependencies
 # TODO: surely this is wrong ...

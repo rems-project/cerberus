@@ -9,7 +9,7 @@ ZARITH_PATH=$(shell basename $(ZARITH_SOURCE) .tgz)
 ifeq ($(shell uname -s),Darwin)
   CMD=curl -O
 else
-  CMD=wget
+  CMD=wget --no-check-certificate
 endif
 
 
@@ -25,7 +25,7 @@ downloads:
 cmdliner:
 	@if [ ! -d $(CMDLINER_PATH) ] ; then \
 	  echo DOWNLOADING $(CMDLINER_SOURCE) ; \
-	  $(CMD) $(CMDLINER_SOURCE) && tar -zxf $(shell basename $(CMDLINER_SOURCE)) && rm -f $(shell basename $(CMDLINER_SOURCE)) ; \
+	  $(CMD) $(CMDLINER_SOURCE) && tar -jxf $(shell basename $(CMDLINER_SOURCE)) && rm -f $(shell basename $(CMDLINER_SOURCE)) ; \
 	fi
 	cd $(CMDLINER_PATH); ocaml pkg/build.ml native=true native-dynlink=false
 
