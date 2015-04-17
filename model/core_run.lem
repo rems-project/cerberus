@@ -50,7 +50,7 @@ let call_function file f_nm arg_cvals =
           | Just (IFun bty params pe) ->
               Exception.return (Fun bty params pe)
           | _ ->
-              Exception.fail (Illformed_program "calling an unknown impl-function")
+              Exception.fail (Illformed_program ("calling an unknown impl-function: " ^ Implementation_.string_of_implementation_constant f))
         end
     end >>= fun (Fun _ params body_pe) ->
   if List.length params <> List.length arg_cvals then
@@ -64,14 +64,26 @@ let call_function file f_nm arg_cvals =
 val call_proc: Core.file core_run_annotation -> Core.sym -> list Core.value ->
                Exception.t (Core.expr core_run_annotation) core_run_error
 let call_proc file psym cvals =
-  match Map.lookup psym file.funs with
-    | Just (Proc _ params body) ->
+  let params_body_opt =
+    match Map.lookup psym file.stdlib with
+      | Just (Proc _ params body) ->
+          Just (params, body)
+      | _ ->
+          match Map.lookup psym file.funs with
+            | Just (Proc _ params body) ->
+                Just (params, body)
+            | _ ->
+                Nothing
+          end
+    end in
+  match params_body_opt with
+    | Just (params, body) ->
         if List.length params <> List.length cvals then
           Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
         else
           Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym sym (PEval cval) acc) body params cvals)
-    | _ ->
-        Exception.fail (Illformed_program "calling an unknown procedure")
+    | Nothing ->
+        Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
 
 
@@ -269,13 +281,19 @@ let rec core_eval file inside_if = function
 *)
         | (OpEq, Just (Vinteger (Mem.IVinteger n1)), Just (Vinteger (Mem.IVinteger n2))) ->
             EU.return $ PEval (if n1 = n2 then Vtrue else Vfalse)
+        | (OpEq, Just (Vinteger (Mem.IVsymbolic (Symbolic.SYMBconst n1))), Just (Vinteger (Mem.IVsymbolic (Symbolic.SYMBconst n2)))) ->
+            EU.return $ PEval (if n1 = n2 then Vtrue else Vfalse)
+(*
         | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             Boot.assert_false "WIP equality between complex integer_value"
+*)
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
         
         (* TODO: temporary hack *)
         | (OpLt, Just (Vinteger (Mem.IVinteger n1)), Just (Vinteger (Mem.IVinteger n2))) ->
+            EU.return $ PEval (if n1 < n2 then Vtrue else Vfalse)
+        | (OpLt, Just (Vinteger (Mem.IVsymbolic (Symbolic.SYMBconst n1))), Just (Vinteger (Mem.IVsymbolic (Symbolic.SYMBconst n2)))) ->
             EU.return $ PEval (if n1 < n2 then Vtrue else Vfalse)
         | (OpLt, Just (Vinteger n1), Just (Vinteger n2)) ->
             Boot.assert_false "WIP: EU.return $ PEval (if n1 < n2 then Vtrue else Vfalse)"
@@ -1098,6 +1116,47 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
 *)
                   
                   | "printf" ->
+                      match cvals with
+                        | [Vlist cs; Vlist args] ->
+                            let str =
+                              let _ = Boot.output_string ("KKK> " ^ show (List.length cs)) in (* DEBUG *)
+                              String.toString $ List.map (function
+                                | Vinteger (Mem.IVinteger n) ->
+                                    Decode.encode_character_constant n
+                                | z ->
+                                    Boot.assert_false "printf_hack: one of the element of the format array was invalid"
+                              end) (List.reverse cs) in
+                            
+                            ND.return $ Step_output (
+                              SEU.foldM (fun acc (Vpointer ptr) ->
+                                (* TODO: the ctype is obviously wrong here *)
+                                runMem (Mem.load signed_int ptr) >>= fun mem_val ->
+                                SEU.return (Mem.prettyStringFromMem_value mem_val :: acc)
+                              ) [] args >>= fun arg_strs_rev ->
+                              SEU.return (pseudo_printf str (List.reverse arg_strs_rev), update_thread_state current_tid <| th_st with
+                                arena= Epure (PEval (Vinteger (Mem.mk_integer_value 0)))
+                              |> st)
+                            )
+(*
+                            let str =
+                              let _ = Boot.output_string ("KKK> " ^ show (List.length cs)) in (* DEBUG *)
+                              String.toString $ List.map (function
+                                | Vinteger (Mem.IVinteger n) ->
+                                    Decode.encode_character_constant n
+                                | z ->
+                                    Boot.assert_false "printf_hack: one of the element of the format array was invalid"
+                              end) (List.reverse cs) in
+                            ND.return $ Step_output (
+                              SEU.return (str, update_thread_state current_tid <| th_st with
+                                arena= Epure (PEval (Vinteger (Mem.mk_integer_value 0))) (* TODO: return value is wrong *)
+                              |> st)
+                            )
+*)
+                      end
+
+
+(*
+                  | "printf_old" ->
                       (* TODO: hack, should use output.lem instead *)
                       let mk_string = function
                         | Mem.MVarray vs ->
@@ -1155,6 +1214,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                         | _ ->
                             Boot.assert_false "invalid arguments for printf"
                       end
+*)
                   
                   | _ ->
                       Boot.assert_false $ "WIP, this stdlib function is not yet implemented: " ^ str

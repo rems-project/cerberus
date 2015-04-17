@@ -292,21 +292,12 @@ end
 
 let rec prettyStringFromMem_value mem_val =
   match mem_val with
-    | MVunspecified ty ->
-        "UNSPEC"
+    | MVinteger (IVinteger n) ->
+        show n
     | MVinteger (IVsymbolic (Symbolic.SYMBconst n)) ->
         show n
-    | MVinteger ival ->
-        "(MVinteger " ^ show ival ^ ")"
-    | MVpointer ptr_val ->
-        "(MVpointer " ^ show ptr_val ^ ")"
-    | MVarray mem_vals ->
-        "(MVarray " ^ stringFromList stringFromMem_value mem_vals ^ ")"
-    | MVstruct sym sym_vs ->
-        "MVstruct (" ^ show sym ^ ", " ^
-        stringFromList (stringFromPair show stringFromMem_value) sym_vs ^ ")"
-    | MVunion tag sym mem_val ->
-        "MVunion (" ^ show tag ^ ", " ^ show sym ^ ", " ^ stringFromMem_value mem_val ^ ")"
+    | _ ->
+        "0" (* TODO: check (I think this function is only used for printf *)
   end
 
 
@@ -715,8 +706,8 @@ let rec stringFromMemValue mem_val =
         "(MVinteger TODO)"
     | MVfloating str ->
         "(MVfloating " ^ str ^ ")"
-    | MVpointer _ ->
-        "(MVpointer TODO)"
+    | MVpointer ptr_val ->
+        "(MVpointer " ^ show ptr_val ^ ")"
     | MVarray mem_vals ->
         "(MVarray " ^ stringFromList stringFromMemValue mem_vals ^ ")"
     | MVstruct sym_tag ident_mem_vals ->
@@ -916,7 +907,7 @@ let mk_unspecified ty =
 
 
 let mk_integer n =
-  MVinteger (IVsymbolic (Symbolic.SYMBconst n))
+  MVinteger (IVinteger n)
 
 let mk_floating str =
   MVfloating str

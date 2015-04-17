@@ -1,1 +1,1 @@
-include (Lexer_util.BASE with type token = Core_parser.token)
+include (Lexer_util.BASE with type token = Core_parser_util.token)
