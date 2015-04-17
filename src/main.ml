@@ -284,7 +284,7 @@ let impl =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/csmith-2.1.0/runtime")
+  Arg.(value & opt string ("gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let exec =

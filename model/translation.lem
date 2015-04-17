@@ -896,6 +896,15 @@ Boot.assert_false "WIP:
                   else match fid with
                     | Symbol.Symbol _ Nothing ->
                         Boot.assert_false "TODO: error"
+
+
+                    | Symbol.Symbol _ (Just "printf") ->
+                          (* TODO: temporary hack *)
+                        match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "printf_proxy" | _ -> false end) (Map_extra.toList stdlib) with
+                          | Just (f, _) -> Core.Sym f
+                        end
+
+
                     | Symbol.Symbol _ (Just str) ->
                         C.Impl (Implementation_.StdFunction str)
                   end in
@@ -965,7 +974,7 @@ Boot.assert_false "WIP:
                     C.Ewseq (List.map (fun z -> Just z) as_tmp) (Caux.mk_unseq core_creates)
                       (C.Ewseq [] (Caux.mk_unseq core_inits)
                         (C.Ewseq [Just a_call] (C.Eindet $ C.Eproc default fname
-                                                  (if List.null syms_reminder then syms1 else syms1 ++ [Caux.mk_cons syms_reminder]))
+                                                  (if is_variadic then syms1 ++ [Caux.mk_cons syms_reminder] else syms1))
                           (C.Ewseq [] (Caux.mk_unseq core_kills)
                             (C.Epure (C.PEsym a_call))
                           )
@@ -1097,8 +1106,8 @@ Boot.assert_false "WIP:
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
           let elems = List.map (fun c_str ->
             Mem.mk_integer (Decode.decode_character_constant c_str)
-          ) strs in
-          E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Varray (elems ++ [Mem.mk_integer 0]))) >>
+          ) strs ++ [Mem.mk_integer 0] in
+          E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Varray elems)) >>
           E.return (
             C.Epure (C.PEsym sym)
           )

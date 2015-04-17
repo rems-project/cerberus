@@ -329,25 +329,32 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 
 
 
-proc listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
+proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   let strong c = load("char", shift(str, {("char", 0)})) in
   if c = 0 then
     return(acc)
   else
-    listFromStr_aux(shift(str,{("char", 1)}), cons(c,acc))
+    let strong ret = rev_listFromStr_aux{shift(str,{("char", 1)}), cons(c,acc)} in
+      return(ret)
+    end
   end
   end
+
 
 -- TODO: this is the reverse
-proc listFromStr(str: pointer) : eff [integer] :=
-  listFromStr_aux{str, []}
-
-
-
-
-{-
-proc printf(fmrt: pointer, args: [pointer]) : eff integer :=
-  let ret = <printf_internal>(fmrt, args) in
-    return(ret)
+proc rev_listFromStr(str: pointer) : eff [integer] :=
+  let strong ret = rev_listFromStr_aux{str, []} in
+  return(ret)
   end
--}
+
+
+
+
+proc printf_proxy(tmp_ptr: pointer, args: [pointer]) : eff integer :=
+  let strong frmt_ptr = load("char*", tmp_ptr) in
+  let strong xs = rev_listFromStr{frmt_ptr} in
+  let strong ret = <std_function_printf>{xs, args} in
+  return (ret)
+  end
+  end
+  end
