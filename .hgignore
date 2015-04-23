@@ -13,6 +13,11 @@ parsers/coreparser/core_parser.mli
 parsers/coreparser/*.conflicts
 parsers/cparser/*.conflicts
 
+
+dependencies/**
+*.cmx
+*.cmi
+
 .DS_Store
 
 cerberus
