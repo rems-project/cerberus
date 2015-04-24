@@ -17,6 +17,7 @@ parsers/cparser/*.conflicts
 dependencies/**
 *.cmx
 *.cmi
+*.o
 
 .DS_Store
 
