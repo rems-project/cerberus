@@ -808,7 +808,7 @@ let rewrite_pexpr pexpr =
   remove_conv_int_pexpr pexpr
 
 let rewrite_expr expr =
-  (pure_propagation -| remove_conv_int -|
+  ((* pure_propagation -| *) remove_conv_int -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
 
