@@ -22,6 +22,7 @@ type basis =
 type integerConstant (*[name = "ic*"]*) =
   | IConstant of integer * basis * maybe integerSuffix
   | IConstantMax of integerType
+  | IConstantMin of integerType
 
 type characterPrefix =
   | Pref_L
@@ -99,6 +100,10 @@ type expression' 'A [name = "e*"] =
   (* TODO: these two don't exist in C (apart from in decl) *)
   | AilEarray of ctype * list (maybe (expression 'A))
   | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *)
+  
+  (* NOTE: the expression obviously need to match the type, and will typically be
+           a AilEarray or AilEstruct *)
+  | AilEcompound of ctype * expression 'A
   
   
   | AilEmemberof of expression 'A * Cabs.cabs_identifier

@@ -395,6 +395,21 @@ let rec to_value pexpr =
           | Nothing ->
               Nothing
         end
+    | PEarray pes ->
+        let mem_vals_opt = List.foldr (fun pe acc_opt ->
+          match (acc_opt, maybe Nothing toMemValue $ to_value pe) with
+            | (Just acc, Just mem_val) ->
+                Just (mem_val :: acc)
+            | _ ->
+                Nothing
+          end) (Just []) pes in
+        match mem_vals_opt with
+          | Just mem_vals ->
+              Just (Varray mem_vals)
+          | Nothing ->
+              Nothing
+        end
+(*
     | PEarray xs ->
         let cvals_opt = List.foldr (fun x acc_opt ->
           match (acc_opt, x) with
@@ -409,6 +424,7 @@ let rec to_value pexpr =
           | Nothing ->
               Nothing
         end
+*)
     | PEcall _ _ ->
          (* TODO: maybe do some eval? *)
         Nothing
@@ -554,6 +570,9 @@ let rec subst_sym_pexpr sym pe' = function
       PEmemop memop (List.map (subst_sym_pexpr sym pe') pes)
   | PEtuple pes ->
       PEtuple (List.map (subst_sym_pexpr sym pe') pes)
+  | PEarray pes ->
+      PEarray (List.map (subst_sym_pexpr sym pe') pes)
+(*
   | PEarray xs ->
       match to_value pe' with
         | Just cval ->
@@ -567,12 +586,15 @@ let rec subst_sym_pexpr sym pe' = function
                   end) xs
               | Nothing ->
                   (* TODO: this case is a Core type error *)
-                  Boot.assert_false "subst_sym_pexpr: the pure expression being substituted should be memory storable"
+                  Boot.assert_false ("subst_sym_pexpr: the pure expression being substituted should be memory storable> " ^
+                                    Boot.pp_core_expr (Epure pe' : expr unit))
             end
         | Nothing ->
             (* TODO: this case is a Core type error *)
-            Boot.assert_false "subst_sym_pexpr: the pure expression being substituted should be memory storable"
+            Boot.assert_false ("subst_sym_pexpr: the pure expression being substituted should be memory storable> " ^
+                               Boot.pp_core_expr (Epure pe' : expr unit))
       end
+*)
   | PEcall nm pes ->
       PEcall nm (List.map (subst_sym_pexpr sym pe') pes)
   | PElet sym' pe1 pe2 ->
@@ -592,6 +614,18 @@ end
 
 val     subst_sym: forall 'a. sym -> pexpr -> expr 'a -> expr 'a
 let rec subst_sym sym pe' = function
+(*
+  let () =
+    (* TODO: debug *)
+    match to_value pe' with
+      | Just _ ->
+          ()
+      | Nothing ->
+          Boot.assert_false ("DEBUG [Caux.subst_sym]: called on a non-value: " ^ Boot.pp_core_expr (Epure pe'))
+    end
+  in
+  match _pe with
+*)
   | Epure pe ->
       Epure (subst_sym_pexpr sym pe' pe)
   | (Eraise _ as expr) ->

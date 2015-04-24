@@ -725,16 +725,24 @@ and translate_expression stdlib program a_expr =
           E.fresh_symbol          >>= fun sym_e2  ->
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
-          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-            E.return $
-              C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                (C.Epure $ C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.one Caux.zero)
-          else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case>: TODO"
-          else if Aaux.is_null_pointer_constant e1 then
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
-          else
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+          E.return $
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+              
+              begin
+                C.Epure $
+                  if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
+                    C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.one Caux.zero
+                  
+                  else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
+                    (* TODO: experimenting *)
+                    C.PEmemop Mem.Ptreq [C.PEsym sym_e1; C.PEsym sym_e2]
+                  
+                  else if Aaux.is_null_pointer_constant e1 then
+                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
+                  
+                  else
+                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+                end
       
       | A.AilEbinary e1 A.Ne e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
@@ -783,6 +791,7 @@ Boot.assert_false "WIP:
           translate_expression $ A.AnnotatedExpression annot (A.AilEassign e1 (A.AnnotatedExpression annot2 (A.AilEbinary e1 (A.Arithmetic aop) e2)))
       
       (* TODO: conv_int on e2 and e2 !!!!!!! *)
+      
       | A.AilEcond e1 e2 e3 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
@@ -790,12 +799,16 @@ Boot.assert_false "WIP:
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e1 >>= fun core_e2 ->
           translate_expression e1 >>= fun core_e3 ->
-          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
+          (* STD (§6.5.15#4) *)
+(* TODO(check) the case splits only have to do why the Ail typing
+
+          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then *)
             E.return $
               C.Ewseq [Just sym_e1] core_e1
                 (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) Caux.zero)) core_e2 core_e3)
-          else
+(*          else
             Boot.assert_false "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
+*)
       
       | A.AilEcast _ ty e ->
           E.fresh_symbol         >>= fun sym_e  ->
@@ -990,13 +1003,13 @@ Boot.assert_false "WIP:
               | Just e ->
                   E.fresh_symbol         >>= fun a_e    ->
                   translate_expression e >>= fun core_e ->
-                  E.return (Right a_e :: acc, fun z -> C.Esseq [Just a_e] core_e (mk_core z))
+                  E.return (C.PEsym a_e :: acc, fun z -> C.Esseq [Just a_e] core_e (mk_core z))
               | Nothing ->
-                  E.return (Left (Mem.mk_unspecified $ Caux.proj_ctype ty) :: acc, mk_core)
+                  E.return (C.PEval (C.Vunspecified $ Caux.proj_ctype ty) :: acc, mk_core)
             end
-          ) ([], fun z -> z) (List.reverse e_opts) >>= fun (xs, mk_core) ->
+          ) ([], fun z -> z) (List.reverse e_opts) >>= fun (pes, mk_core) ->
           E.return $
-            mk_core (C.Epure (C.PEarray xs))
+            mk_core (C.Epure (C.PEarray pes))
       
       | A.AilEstruct tag ident_e_opts ->
           Boot.assert_false "WIP [Translation.translate_exp, A.AilEstruct]"
@@ -1031,22 +1044,45 @@ Boot.assert_false "WIP:
 
 
       | A.AilEconst cst ->
-          E.return match cst with
+          E.return $ C.Epure match cst with
             | A.ConstantIndeterminate ty ->
-                C.Epure (C.PEval (C.Vunspecified (Caux.proj_ctype ty)))
-(*
-          | A.ConstantNull ->
-*)
+                C.PEval (C.Vunspecified (Caux.proj_ctype ty))
+            | A.ConstantNull ->
+                (* TODO: should make the Ail ctor take a ctype? *)
+                C.PEval (C.Vpointer (Mem.null_pointer Cty.Void))
             | A.ConstantInteger (A.IConstant n _ _) ->
-                (* TODO: check *)
-                C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value n)))
+                (* TODO: suffix/basis? + check *)
+                C.PEval (C.Vinteger (Mem.mk_integer_value n))
+            | A.ConstantInteger (A.IConstantMax ity) ->
+                let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
+                C.PEcall (C.Impl Implementation_.Ctype_max) [C.PEval (C.Vctype ty)]
+            | A.ConstantInteger (A.IConstantMin ity) ->
+                let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
+                C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)]
             | A.ConstantCharacter (_, str) ->
                 (* TODO: prefix? *)
                 (* TODO: making an implementation fix here (ASCII) *)
-                C.Epure (C.PEval (C.Vinteger (Mem.mk_integer_value (Decode.decode_character_constant str))))
-(*
+                C.PEval (C.Vinteger (Mem.mk_integer_value (Decode.decode_character_constant str)))
             | A.ConstantArray csts ->
+                Boot.assert_false "WIP: Translation > AilEconst, ConstantArray"
+
+
+(*
+type integerConstant (*[name = "ic*"]*) =
+  | IConstant of integer * basis * maybe integerSuffix
+  | IConstantMax of integerType
+  | IConstantMin of integerType
+
+type characterPrefix =
+  | Pref_L
+  | Pref_u
+  | Pref_U
+
+type characterConstant =
+    maybe characterPrefix * string
 *)
+
+
           end
 
       

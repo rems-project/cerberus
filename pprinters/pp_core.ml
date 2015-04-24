@@ -43,6 +43,7 @@ let precedence = function
   
   | PEop (OpOr,  _, _) -> Some 7
   
+  | PEmemop _
   | PEundef _
   | PEerror _
   | PEval _
@@ -265,6 +266,13 @@ let rec pp_mem_value = function
    | Mem.MVunion (sym_tag, sym_member, mem_val) ->
        !^ "TODO(MVunion)"
 
+let pp_memop = function
+  | Mem.Ptreq ->
+      !^ "\"ptreq\""
+  | Mem.Ptrdiff ->
+      !^ "\"ptrdiff\""
+  | Mem.Intptr ->
+      !^ "\"intptr\""
 
 let rec pp_value = function
   | Vunit ->
@@ -346,8 +354,13 @@ let pp_pexpr pe =
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
+        | PEmemop (memop, pes) ->
+            pp_keyword "memop" ^^ P.parens (pp_memop memop ^^ P.comma ^^^ comma_list pp pes)
         | PEtuple pes ->
             P.parens (comma_list pp pes)
+        | PEarray pes ->
+            pp_keyword "array" ^^ P.parens (comma_list pp pes)
+(*
         | PEarray xs -> (* of ( (Mem.mem_value, sym)Either.either) list *)
             pp_keyword "array" ^^ P.parens (
               comma_list (function
@@ -357,6 +370,7 @@ let pp_pexpr pe =
                     pp_symbol sym
               ) xs
             )
+*)
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (sym, pe1, pe2) ->

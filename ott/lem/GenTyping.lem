@@ -86,6 +86,8 @@ let type_of_constant iCst =
         Concrete (Unsigned LongLong)
     | IConstantMax ity ->
         Concrete ity
+    | IConstantMin ity ->
+        Concrete ity
   end
 
 
