@@ -80,8 +80,8 @@ type mem_value =
 type mem_write =
   MemWrite of pointer_value * Core_ctype.ctype * mem_value
 
-type mem_read = 
-  MemRead of pointer_value * Core_ctype.ctype
+type mem_read_request = 
+  MemReadRequest of pointer_value * Core_ctype.ctype
 
 
 type tag_definitions =

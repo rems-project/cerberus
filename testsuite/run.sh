@@ -1,10 +1,10 @@
 #!/bin/bash
 
-file=smith*.c
+file=`cat ~/rsem/csem/notes/examples/cerberus_examples.dat`
 
 rm -f CERB_STATUS
 for i in $file; do
-  cerberus --progress $i &> /dev/null;
+  cerberus --progress ~/rsem/csem/notes/examples/$i &> /dev/null;
   case $? in
     10)
           echo "$i    PARS" >> CERB_STATUS
