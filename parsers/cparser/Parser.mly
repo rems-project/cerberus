@@ -57,6 +57,7 @@ let dummy_loc =
   COMMA (* TODO: HASH HASH_HASH *)
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
+  ASSERT
 (* NON-STD cppmem syntax *)
 (* LBRACES PIPES RBRACES *)
 
@@ -293,6 +294,9 @@ postfix_expression:
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list RBRACE
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA RBRACE
     { CabsExpression (($startpos, $endpos), CabsEcompound (ty, List.rev inits)) }
+(* TODO: non-std way of dealing with these *)
+| ASSERT LPAREN expr= assignment_expression RPAREN
+    { CabsExpression (($startpos, $endpos), CabsEassert expr) }
 
 argument_expression_list: (* NOTE: the list is in reverse *)
 | expr= assignment_expression

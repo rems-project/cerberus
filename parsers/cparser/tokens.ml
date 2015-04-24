@@ -105,6 +105,7 @@ type token =
   | PIPE_EQ
   | COMMA
   
+  | ASSERT
   | LBRACES
   | PIPES
   | RBRACES

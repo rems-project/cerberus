@@ -635,6 +635,17 @@ OLD(sigma_declaration)
           | _ ->
               E.fail Loc.unknown (TError_TODO 26)
         end
+
+    | AilEassert e ->
+        annotate_rvalue e >>= fun (e', gty) ->
+        if is_scalar gty then
+          E.return (AilEassert e', GenRValueType GenVoid)
+        else
+          E.fail Loc.unknown (TError "§7.2.1.1#1")
+
+
+
+
     | AilEgeneric (* e gas *) _ _ ->
         E.fail Loc.unknown (TError "WIP")
 (*
