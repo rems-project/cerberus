@@ -169,7 +169,8 @@ type pexpr =
   | PEmemop of Mem.memop * list pexpr
   (* these two are annoying *)
   | PEtuple of list pexpr
-  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *)
+(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
+  | PEarray of list pexpr
   (* call to a pure function *)
   | PEcall of name * list pexpr
   

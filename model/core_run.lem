@@ -398,6 +398,23 @@ let rec core_eval file inside_if = function
         | Nothing ->
             PEtuple pes'
       end
+  | PEarray pes ->
+      EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+      match to_values pes' with
+        | Just cvals ->
+            maybe (EU.fail $ Illformed_program ("PEarray: found a symbol during evaluation> " ^ Boot.pp_core_expr (Epure (PEarray pes') : expr unit)))
+              (fun mem_vals -> EU.return $ PEval (Varray mem_vals)) $
+            List.foldr (fun cval acc_opt ->
+              match (toMemValue cval, acc_opt) with
+                | (Just mem_val, Just acc) ->
+                    Just (mem_val :: acc)
+                | _ ->
+                    Nothing
+              end) (Just []) cvals
+        | Nothing ->
+            EU.return $ PEarray pes'
+      end
+(*
   | PEarray xs ->
       maybe (EU.fail $ Illformed_program "PEarray: found a symbol during evaluation")
             (fun vs -> EU.return $ PEval (Varray vs)) $
@@ -408,6 +425,7 @@ let rec core_eval file inside_if = function
             | _ ->
                 Nothing
           end) (Just []) xs
+*)
   | PEcall nm pes ->
       EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
       match to_values pes' with

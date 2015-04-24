@@ -100,6 +100,9 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         Core.PEop bop (fpe pe1) (fpe pe2)
     | Core.PEtuple pes ->
         Core.PEtuple (List.map fpe pes)
+    | Core.PEarray pes ->
+        Core.PEarray (List.map fpe pes)
+(*
     | Core.PEarray xs ->
         (* TODO: check is this is ever useful *)
         Core.PEarray (List.map (either function
@@ -108,6 +111,7 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
           | mem_val ->
               Left mem_val
         end (fun z -> Right z)) xs)
+*)
     | Core.PEcall nm pes ->
         Core.PEcall nm (List.map fpe pes)
     | Core.PElet sym pe1 pe2 ->

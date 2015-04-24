@@ -45,7 +45,7 @@ type expr =
   | PEnot of expr (* pexpr *)
   | PEop of Core.binop * expr (* pexpr *) * expr (* pexpr *)
   | PEtuple of expr list (* pexpr *)
-  | PEarray of ((Mem.mem_value, _sym) either) list
+  | PEarray of expr list (* ((Mem.mem_value, _sym) either) list *)
   | PEcall of name * expr list (* pexpr *)
 (*
   | PElet of sym * pexpr * pexpr
@@ -313,6 +313,14 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Pure (Core.PEtuple pes)
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEtuple")
+    | PEarray _es ->
+        (match to_pures (List.map (f st) _es) with
+          | Left pes ->
+              Pure (Core.PEarray pes)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEarray")
+
+(*
     | PEarray _xs ->
         let xs = List.map (function
           | Left mem_val ->
@@ -321,6 +329,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Right (lookup_symbol _sym st)
         ) _xs in
         Pure (Core.PEarray xs)
+*)
     | PEcall (_nm, _es) ->
         let nm = fnm _nm in
         (match to_pures (List.map (f st) _es) with
@@ -1346,22 +1355,8 @@ memory_order:
 
 
 
-mem_value:
-| n= INT_CONST
-    { Mem.mk_integer n }
-(*
-| ARRAY LPAREN mem_vals= separated_nonempty_list (COMMA, mem_value) RPAREN
-    { Mem.mk_array mem_vals }
-*)
-;
 
 
-array_elem:
-| mem_val= mem_value
-    { Left mem_val }
-| str= SYM
-    { Right str }
-;
 
 expr:
 | UNIT
@@ -1410,8 +1405,8 @@ expr:
     { PEop (bop, _e1, _e2) }
 | LPAREN _e= expr COMMA _es= separated_nonempty_list(COMMA, expr) RPAREN
     { PEtuple (_e::_es) }
-| ARRAY xs= delimited(LPAREN, separated_nonempty_list(COMMA, array_elem), RPAREN)
-    { PEarray xs }
+| ARRAY _es= delimited(LPAREN, separated_nonempty_list(COMMA, expr), RPAREN)
+    { PEarray _es }
 | nm= name _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { PEcall (nm, _es) }
 (* TODO: these are temporary *)
