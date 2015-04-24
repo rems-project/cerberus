@@ -43,7 +43,7 @@
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
 (* NON-STD cppmem syntax *)
-LBRACES PIPES RBRACES
+(* LBRACES PIPES RBRACES *)
 
 %token EOF
 
@@ -664,7 +664,9 @@ labeled_statement(last_statement):
 compound_statement:
 | LBRACE block_item_list? RBRACE
 (* NON-STD cppmem syntax *)
+(*
 | LBRACES separated_nonempty_list(PIPES, compound_statement) RBRACES
+*)
     {}
 
 block_item_list:
