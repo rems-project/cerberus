@@ -96,7 +96,7 @@ type mem_state = <|
 |>
 
 type mem_error =
-  | MerrUnitialised of mem_read
+  | MerrUnitialised of mem_read_request
   | MerrInternal of string
   | MerrOther of string
 
@@ -153,14 +153,14 @@ let rec mem_valueCompare mem_val1 mem_val2 =
     | (MVarray mem_vals1, MVarray mem_vals2) ->
         lexicographicCompareBy mem_valueCompare mem_vals1 mem_vals2
     | (MVstruct tag1 ident_vs1, MVstruct tag2 ident_vs2) ->
-        assert_false "WIP"
+        assert_false "WIP: mem_valueCompare, MVstruct"
 (*
         pairCompare setElemCompare
           (lexicographicCompare (pairCompare setElemCompare mem_valueCompare))
           (tag1, sym_vs1) (tag2, sym_vs2)
 *)
     | (MVunion tag1 sym1 mem_val1, MVunion tag2 sym2 mem_val2) ->
-        assert_false "WIP"
+        assert_false "WIP: mem_valueCompare, MVunion"
   end
 
 let mem_valueEquals mem_val1 mem_val2 =
@@ -283,9 +283,9 @@ instance (Show mem_write)
     "W " ^ show ptr_val ^ "(" ^ string_of_ctype ty ^ ") := " ^ show mval
 end
 
-instance (Show mem_read)
+instance (Show mem_read_request)
   let show r =
-    let MemRead ptr_val ty = r in
+    let MemReadRequest ptr_val ty = r in
     "R " ^ show ptr_val ^ "(" ^ string_of_ctype ty ^ ")"
 end
 
@@ -654,10 +654,10 @@ let decider (rOffset, rFootprint) (wOffset, wFootprint) wVal =
   end
 
 
-val getAffection: mem_read -> mem_write -> memM (maybe (offset * footprint * mem_value))
+val getAffection: mem_read_request -> mem_write -> memM (maybe (offset * footprint * mem_value))
 let getAffection r w =
   match (r, w) with
-    | (MemRead (PVobject rOid rSh) rTy, MemWrite (PVobject wOid wSh) wTy wVal) ->
+    | (MemReadRequest (PVobject rOid rSh) rTy, MemWrite (PVobject wOid wSh) wTy wVal) ->
         if rOid <> wOid then
           SEU.return Nothing
         else
@@ -717,8 +717,8 @@ let rec stringFromMemValue mem_val =
   end
 
 
-val combineWrites: mem_read -> list mem_write -> memM mem_value
-let combineWrites (MemRead (PVobject _ rSh) rTy as r) ws =
+val combineWrites: mem_read_request -> list mem_write -> memM mem_value
+let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
   catMaybes <$> SEU.mapM (getAffection r) ws >>= function
     | [] ->
         SEU.fail $ MerrOther ("myCombineWrites: uninit ==> " ^ show (r, ws))
@@ -765,6 +765,7 @@ let combineWrites (MemRead (PVobject _ rSh) rTy as r) ws =
 
 (* Memory layout model API ================================================== *)
 type memop =
+  | Ptreq
   | Ptrdiff (* (address, address) -> integer *)
   | Intptr  (* address -> integer *)
 
@@ -846,7 +847,7 @@ let allocate_object tid pref ty =
 
 let load ty ptr_val =
   SEU.read (fun st -> st.memWrites) >>=
-    combineWrites (MemRead ptr_val ty)
+    combineWrites (MemReadRequest ptr_val ty)
 
 
 let store ty ptr_val mem_val =
