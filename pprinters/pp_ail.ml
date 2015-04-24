@@ -593,6 +593,8 @@ let rec pp_expression a_expr =
 *)
         | AilEcall (e, es) ->
             pp e ^^ P.parens (comma_list pp es)
+        | AilEassert e ->
+            !^ "assert" ^^ P.parens (pp e)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list pp_generic_association gas)
         | AilEarray (ty, e_opts) ->

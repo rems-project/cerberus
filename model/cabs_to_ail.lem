@@ -1029,7 +1029,7 @@ _STD "§6.5.1#2" $
                 E.return (AilEident id)
           | Nothing ->
               match Builtins.translate_builtin_varnames ident with
-                | Just d_e ->
+                | Just (d_e, _) ->
                     E.return d_e
                 | Nothing ->
                     E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation ("§6.5.1#2, Nothing, Nothing: " ^ str)) (* TODO: check the quote *)
@@ -1055,6 +1055,8 @@ _STD "§6.5.2.1#2, sentence 2" $
     | CabsEcall e es ->
         (* TODO: STD check + annot *)
         AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es
+    | CabsEassert e ->
+        AilEassert <$> desugar_expression e
     | CabsEmemberof e ident ->
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
         AilEmemberof <$> desugar_expression e <*> (E.return ident)
@@ -1066,6 +1068,9 @@ _STD "§6.5.2.1#2, sentence 2" $
     | CabsEpostdecr e ->
         AilEunary PostfixDecr <$> desugar_expression e
     | CabsEcompound tyname inits ->
+        desugar_type_name tyname >>= fun (qs, ty) ->
+        (* TODO: qualifier? *)
+(*        KKK ZZZ  *)
         Boot.assert_false "WIP 18"
     | CabsEpreincr e ->
 _STD "§6.5.3.1#2, sentence 3" $
@@ -1547,7 +1552,7 @@ and wip_desugar_initializer_ dur current_ty = function
                     is_integer_constant_expression d_e >>= function
                       | true ->
                           evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IConstant j _ _) ->
-                            wip_desugar_initializer_ dur elem_ty init              >>= fun d_e               ->
+                           wip_desugar_initializer_ dur elem_ty init             >>= fun d_e               ->
                           
                           match compare j i with
                             | LT ->
@@ -1578,6 +1583,7 @@ and wip_desugar_initializer_ dur current_ty = function
                 (AilEarray elem_ty (List.reverse (Global.replicate_list (Just implicit) (natFromInteger n - List.length xs) ++ xs)))
             
         | ATypes.Struct tag ->
+            (* TODO: check the STD!!!!! *)
 (*
             E.resolve_tag_definition tag >>= function
               | E.Struct_definition ident_tys ->
@@ -1591,7 +1597,94 @@ and wip_desugar_initializer_ dur current_ty = function
                   Boot.assert_false "ERROR, todo msg"
             end >>
 *)
-            Boot.assert_false "WIP"
+            E.resolve_tag_definition tag >>= function
+              | E.Struct_definition ident_tys ->
+                  
+
+
+
+
+
+(*
+WIP
+
+
+                  E.foldlM (fun (desigs_opt, init) (i, acc) ->
+                    match desigs_opt with
+                      |
+                    end
+                  ) desigs_opt_inits (0, []) >>= fun _ ->
+
+
+
+
+
+
+
+
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  let xs = Boot.assert_false "WIP: Cabs_to_ail, Struct" in
+                  
+              
+
+(*
+desigs_opt_inits
+
+  | Init_list of list (maybe (list designator) * initializer_)
+
+and designator =
+  | Desig_array of cabs_expression
+  | Desig_member of cabs_identifier
+
+*)
+                  
+                  
+                  E.return $
+                    AnnotatedExpression () (AilEstruct tag xs)
+                  
+                  
+                  
+                  
+
+
+
+
+
+              | _ ->
+                  E.fail Loc.unknown (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
+            end
+
+
+(*
+  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *)
+*)
+
+
+            
 
 
 (*
@@ -1608,7 +1701,9 @@ and wip_desugar_initializer_ dur current_ty = function
               | [(Nothing, init)] ->
                   wip_desugar_initializer_ dur current_ty init
               | _ ->
-                  Boot.assert_false "WIP: error message. is that event a possible case?"
+                  (* TODO: this (at leat) possible with something like:
+                       int a = {1, 2}; *)
+                  Boot.assert_false "WIP: error message. is that even a possible case?"
             end
 (*
 (§6.7.9#11, sentence 1) The initializer for a scalar shall be a single expression, optionally enclosed in braces.
@@ -1794,7 +1889,7 @@ WIP KKK
 
 val do_while_hack: cabs_expression -> cabs_statement -> E.t cabs_statement
 let do_while_hack e (CabsStatement loc smt) =
-  Boot.assert_false "WIP"
+  Boot.assert_false "WIP, Cabs_to_ail.do_while_hack"
 (*
 WIP KKK
   (* TODO: it would be nice to only generate these names, if they are needed *)

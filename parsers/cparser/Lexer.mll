@@ -69,6 +69,8 @@ let keywords: (string * Tokens.token) list = [
     "_Noreturn"      , NORETURN;
     "_Static_assert" , STATIC_ASSERT;
     "_Thread_local"  , THREAD_LOCAL;
+    
+    "assert", ASSERT;
   ]
 
 

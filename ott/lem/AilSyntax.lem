@@ -94,6 +94,7 @@ type expression' 'A [name = "e*"] =
   | AilEcond of expression 'A * expression 'A * expression 'A
   | AilEcast of qualifiers * ctype * expression 'A
   | AilEcall of expression 'A * list (expression 'A)
+  | AilEassert of expression 'A
   | AilEgeneric of expression 'A * list (generic_association 'A)
   
   (* TODO: hackish? *)
@@ -433,6 +434,8 @@ let rec expressionEqual' eq_A e1 e2 =
     | (AilEcall e1 es1, AilEcall e2 es2) ->
         expressionEqual eq_A e1 e2 &&
         argumentsEqual es1 es2
+    | (AilEassert e1, AilEassert e2) ->
+        expressionEqual eq_A e1 e2
     | (AilEstr lit1, AilEstr lit2) ->
         stringLiteralEqual lit1 lit2
     | (AilEconst c1, AilEconst c2) ->
@@ -671,6 +674,8 @@ let rec equiv_expression' e1 e2 =
     | (AilEcall e1 es1, AilEcall e2 es2) ->
         equiv_expression e1 e2 &&
         equiv_arguments es1 es2
+    | (AilEassert e1, AilEassert e2) ->
+        equiv_expression e1 e2
     | (AilEconst c1, AilEconst c2) ->
         constantEqual c1 c2
     | (AilEident v1, AilEident v2) ->

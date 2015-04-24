@@ -996,6 +996,17 @@ Boot.assert_false "WIP:
             | _ -> Boot.assert_false "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
           end
       
+      | A.AilEassert e ->
+          E.fresh_symbol         >>= fun a_e      ->
+          translate_expression e >>= fun core_e   ->
+          E.return $
+            C.Esseq [Just a_e] core_e 
+              (C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym a_e) Caux.zero)
+                          (C.PEerror "assert() failure")
+                          (C.PEval C.Vunit)
+                       )
+              )
+      
       | A.AilEarray _ e_opts ->
           let (Aty.Array ty _) = result_ty in
           E.foldlM (fun (acc, mk_core) e_opt ->
