@@ -36,6 +36,7 @@ let precedence = function
   | CabsEpreincr _
   | CabsEpredecr _
   | CabsEassert _
+  | CabsEoffsetof _
   | CabsEcompound _ -> Some 1
   | CabsEunary _
   | CabsEsizeof_expr _
@@ -622,6 +623,8 @@ let rec pp_cabs_expression p (CabsExpression (_, expr)) =
           pp_ctor "CabsEcall" ^^ P.brackets (f e ^^ P.comma ^^^P.brackets (comma_list f es))
       | CabsEassert e ->
           pp_ctor "CabsEassert" ^^ P.brackets (f e)
+      | CabsEoffsetof (tyname, ident) ->
+          pp_ctor "CabsEoffsetof" ^^ P.brackets (pp_type_name tyname ^^ P.comma ^^^ pp_cabs_identifier ident)
       | CabsEmemberof (e, id) ->
           pp_ctor "CabsEmemberof" ^^ P.brackets (f e ^^ P.comma ^^^ pp_cabs_identifier id)
       | CabsEmemberofptr (e, id) ->

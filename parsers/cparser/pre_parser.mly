@@ -42,7 +42,7 @@
   COMMA (* TODO: HASH HASH_HASH *)
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
-  ASSERT
+  ASSERT OFFSETOF
 (* NON-STD cppmem syntax *)
 (* LBRACES PIPES RBRACES *)
 
@@ -157,8 +157,11 @@ postfix_expression:
 | postfix_expression MINUS_MINUS
 | LPAREN type_name RPAREN LBRACE initializer_list RBRACE
 | LPAREN type_name RPAREN LBRACE initializer_list COMMA RBRACE
+(* NOTE: the following are suppose to be part of the C library, but are "special" *)
 | ASSERT LPAREN assignment_expression RPAREN
-    {}
+    { }
+| OFFSETOF LPAREN type_name COMMA id= general_identifier RPAREN
+    { set_id_type id (OtherId "offsetof") }
 
 argument_expression_list:
 | assignment_expression
