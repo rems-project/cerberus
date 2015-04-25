@@ -117,8 +117,9 @@ type cabs_expression_ =
   | CabsEassign of cabs_assignment_operator * cabs_expression * cabs_expression
   (* §6.5.17 Comma operator, Syntax *)
   | CabsEcomma of cabs_expression * cabs_expression
-  (* NOTE: assert is suppose to be in the library, but has a non standard type *)
+  (* NOTE: the following are suppose to be in the library, but need special treatment *)
   | CabsEassert of cabs_expression
+  | CabsEoffsetof of type_name * cabs_identifier
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
 

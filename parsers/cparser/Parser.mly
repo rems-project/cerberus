@@ -57,7 +57,7 @@ let dummy_loc =
   COMMA (* TODO: HASH HASH_HASH *)
 (* TODO(in lexer?)  LT_COLON COLON_GT LT_PERCENT PERCENT_GT PERCENT_COLON PERCENT_COLON_PERCENT_COLON *)
 
-  ASSERT
+  ASSERT OFFSETOF
 (* NON-STD cppmem syntax *)
 (* LBRACES PIPES RBRACES *)
 
@@ -297,6 +297,9 @@ postfix_expression:
 (* TODO: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
     { CabsExpression (($startpos, $endpos), CabsEassert expr) }
+| OFFSETOF LPAREN ty= type_name COMMA id= OTHER_NAME RPAREN
+    { CabsExpression (($startpos, $endpos), CabsEoffsetof (ty, id)) }
+
 
 argument_expression_list: (* NOTE: the list is in reverse *)
 | expr= assignment_expression

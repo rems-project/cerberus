@@ -106,6 +106,7 @@ type token =
   | COMMA
   
   | ASSERT
+  | OFFSETOF
   | LBRACES
   | PIPES
   | RBRACES

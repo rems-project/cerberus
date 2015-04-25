@@ -71,6 +71,7 @@ let keywords: (string * Tokens.token) list = [
     "_Thread_local"  , THREAD_LOCAL;
     
     "assert", ASSERT;
+    "offsetof", OFFSETOF;
   ]
 
 
