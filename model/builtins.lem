@@ -708,7 +708,7 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_ATOMIC_LLONG_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_LLONG_LOCK_FREE", Nothing)
     | "__cerbvar_ATOMIC_POINTER_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_POINTER_LOCK_FREE", Nothing)
     | "__cerbvar_ATOMIC_FLAG_INIT" -> Just (A.AilEbuiltin "ATOMIC_FLAG_INIT", Nothing)
-    | "__cerbvar_NULL" -> Just (A.AilEbuiltin "NULL", Nothing)
+    | "__cerbvar_NULL" -> Just (A.AilEconst A.ConstantNull, Just (ATypes.Pointer ATypes.no_qualifiers ATypes.Void))
     | "__cerbvar_offsetof" -> Just (A.AilEbuiltin "offsetof", Nothing)
     | "__cerbvar_INT8_MIN" ->
         let ity = ATypes.Signed (ATypes.IBBuiltin "int8_t") in

@@ -323,6 +323,9 @@ let rec annotate_constant cst =
   match cst with
     | ConstantInteger ic ->
         E.return (ConstantInteger ic, GenRValueType (GenBasic (GenInteger (type_of_constant ic))))
+    | ConstantFloating fc ->
+        (* TODO: ignoring the prefix for now (assuming the absence thereof) *)
+        E.return (ConstantFloating fc, GenRValueType (GenBasic (GenRealFloating (Floating Double))))
     | ConstantCharacter cc ->
         (* TODO: §6.4.4.4#9 *)
         match fst cc with
@@ -356,7 +359,8 @@ let rec annotate_constant cst =
     | ConstantIndeterminate ty ->
         E.return (ConstantIndeterminate ty, GenRValueType (GenTypes.inject_type ty))
     | ConstantNull ->
-        assert_false "WIP typing: ConstantNull"
+        (* TODO: check *)
+        E.return (ConstantNull, GenRValueType (GenPointer no_qualifiers Void))
   end
 
 
@@ -643,7 +647,8 @@ OLD(sigma_declaration)
         else
           E.fail Loc.unknown (TError "§7.2.1.1#1")
 
-
+    | AilEoffsetof ty ident ->
+        E.return (AilEoffsetof ty ident, GenRValueType (GenBasic (GenInteger SizeT)))
 
 
     | AilEgeneric (* e gas *) _ _ ->
@@ -771,8 +776,37 @@ TODO
             end
       end
   
-  | AilEmemberofptr _ _ ->
-      E.fail Loc.unknown (TError "WIP: memberofptr")
+  | AilEmemberofptr e ident ->
+      (* TODO: check, factorize *)
+      (* TODO: missing on Atomic types *)
+      annotate_rvalue e >>= function
+        | (e', GenPointer _ (Struct tag_sym)) ->
+            match lookup_tag_definition sigm tag_sym with
+              | Just (StructDef ident_tys) ->
+                  match List.lookup ident ident_tys with
+                    | Just ty ->
+                        (* TODO: qualifiers *)
+                        E.return (AilEmemberof e' ident, GenLValueType AilTypes.no_qualifiers ty)
+                    | Nothing ->
+                        E.fail Loc.unknown (TError "TODO[msg] Struct memberofptr: invalid member")
+                  end
+              | _ ->
+                  E.fail Loc.unknown (TError "TODO: AilEmemberofptr Struct, failed to kind a valid tag definition")
+            end
+        | (e', GenPointer _ (Union tag_sym)) ->
+            match lookup_tag_definition sigm tag_sym with
+              | Just (UnionDef ident_tys) ->
+                  match List.lookup ident ident_tys with
+                    | Just ty ->
+                        (* TODO: qualifiers *)
+                        E.return (AilEmemberof e' ident, GenLValueType AilTypes.no_qualifiers ty)
+                    | Nothing ->
+                        E.fail Loc.unknown (TError "TODO[msg] Union memberofptr: invalid member")
+                  end
+              | _ ->
+                  E.fail Loc.unknown (TError "TODO: AilEmemberofptr Union, failed to kind a valid tag definition")
+            end
+      end
 
   | AilEassign e1 e2 ->
       annotate_expression e1 >>= fun e1' ->

@@ -12,6 +12,7 @@ type genIntegerType [name="git*"] =
 
 type genBasicType [name="gbt"] =
  | GenInteger of genIntegerType
+ | GenRealFloating of realFloatingType
 
 
 type genType (* [name="gt*"] *) =
