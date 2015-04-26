@@ -151,17 +151,24 @@ let pp_integerType = function
      pp_type_keyword "enum" ^^^ pp_id sym
 
 
-(*
-let pp_real_floating_type = function
-  | FLOAT       -> !^ "float"
-  | DOUBLE      -> !^ "double"
-  | LONG_DOUBLE -> !^ "long" ^^^ !^ "double"
-*)
+let pp_floatingType = function
+  | Float ->
+      pp_type_keyword "float"
+  | Double ->
+      pp_type_keyword "double"
+  | LongDouble ->
+      pp_type_keyword "long" ^^^ pp_type_keyword "double"
 
+
+let pp_realFloatingType = function
+  | Floating ft ->
+      pp_floatingType ft
 
 let pp_basicType = function
-  | Integer it -> pp_integerType it
-
+  | Integer it ->
+      pp_integerType it
+  | RealFloating rft ->
+      pp_realFloatingType rft
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
@@ -499,6 +506,8 @@ let pp_integerConstant = function
   | IConstantMax ity ->
       !^ "TODO[IConstantMax]"
 
+let pp_floatingConstant str =
+  !^ str
 
 let pp_characterPrefix pref =
   let to_string = function
@@ -532,6 +541,8 @@ let rec pp_constant = function
       pp_const "NULL"
   | ConstantInteger ic ->
       pp_integerConstant ic
+  | ConstantFloating fc ->
+      pp_floatingConstant fc
   | ConstantCharacter cc ->
       pp_characterConstant cc
  | ConstantArray csts ->
@@ -595,6 +606,8 @@ let rec pp_expression a_expr =
             pp e ^^ P.parens (comma_list pp es)
         | AilEassert e ->
             !^ "assert" ^^ P.parens (pp e)
+        | AilEoffsetof (ty, ident) ->
+            !^ "offsetof" ^^ P.parens (pp_ctype_raw ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list pp_generic_association gas)
         | AilEarray (ty, e_opts) ->

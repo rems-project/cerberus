@@ -590,7 +590,7 @@ let desugar_cabs_constant = function
   | CabsInteger_const iCst ->
       E.return (ConstantInteger (translate_integer_constant iCst))
   | CabsFloating_const str ->
-      E.fail Loc.unknown (Errors.Desugar_NeverSupported "floating constants")
+      E.return (ConstantFloating str)
   | CabsEnumeration_const ->
       E.fail Loc.unknown (Errors.Desugar_NotyetSupported "WIP: desugar_cabs_constant, CabsEnumeration_const")
   | CabsCharacter_const cCst ->
@@ -712,59 +712,82 @@ val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.t (A
 let desugar_basic_type_specifiers specs =
 _STD "§6.7.2#2, sentence 2 (non `void' case)" $
   if      specs = Multiset.from_list [BTSpec_char] then
+    (* STD §6.7.2#2, item 2 *)
     E.return $ ATypes.Integer ATypes.Char
   else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
+    (* STD §6.7.2#2, item 3 *)
     E.return $ ATypes.Integer (ATypes.Signed ATypes.Ichar)
   else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
+    (* STD §6.7.2#2, item 4 *)
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Ichar)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_short];
             Multiset.from_list [BTSpec_signed; BTSpec_short];
             Multiset.from_list [BTSpec_short; BTSpec_int];
             Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 5 *)
     E.return $ ATypes.Integer (ATypes.Signed ATypes.Short)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_unsigned; BTSpec_short];
             Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 6 *)
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Short)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_int];
             Multiset.from_list [BTSpec_signed];
             Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 7 *)
     E.return $ ATypes.Integer (ATypes.Signed ATypes.Int_)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_unsigned];
             Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 8 *)
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Int_)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_long];
             Multiset.from_list [BTSpec_signed; BTSpec_long];
             Multiset.from_list [BTSpec_long; BTSpec_int];
             Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
+    (* STD §6.7.2#2, item 9 *)
     E.return $ ATypes.Integer (ATypes.Signed ATypes.Long)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_unsigned; BTSpec_long];
             Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 10 *)
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Long)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_long; BTSpec_long];
             Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
             Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
             Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 11 *)
     E.return $ ATypes.Integer (ATypes.Signed ATypes.LongLong)
   else if List.any (fun z -> specs = z) [
             Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
             Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
+    (* STD §6.7.2#2, item 12 *)
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.LongLong)
-  else if specs = Multiset.from_list [BTSpec_Bool] then E.return $ ATypes.Integer (ATypes.Bool)
-  (* NOTE: real floating not supported *)
-  else if    specs = Multiset.from_list [BTSpec_float]
-          || specs = Multiset.from_list [BTSpec_double]
-          || specs = Multiset.from_list [BTSpec_long; BTSpec_double]
-          || specs = Multiset.from_list [BTSpec_float; BTSpec_Complex]
-          || specs = Multiset.from_list [BTSpec_double; BTSpec_Complex]
-          || specs = Multiset.from_list [BTSpec_long; BTSpec_double; BTSpec_Complex] then
-    E.fail Loc.unknown $ Errors.Desugar_NeverSupported "real floating types"
+  else if specs = Multiset.from_list [BTSpec_float] then
+    (* STD §6.7.2#2, item 13 *)
+    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.Float)
+  else if specs = Multiset.from_list [BTSpec_double] then
+    (* STD §6.7.2#2, item 14 *)
+    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.Double)
+  else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
+    (* STD §6.7.2#2, item 15 *)
+    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.LongDouble)
+  else if specs = Multiset.from_list [BTSpec_Bool] then
+    (* STD §6.7.2#2, item 16 *)
+    E.return $ ATypes.Integer (ATypes.Bool)
+  else if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
+    (* STD §6.7.2#2, item 17 *)
+    E.fail Loc.unknown $ Errors.Desugar_NeverSupported "_Complex types"
+  else if specs = Multiset.from_list [BTSpec_double; BTSpec_Complex] then
+    (* STD §6.7.2#2, item 18 *)
+    E.fail Loc.unknown $ Errors.Desugar_NeverSupported "_Complex types"
+  else if specs = Multiset.from_list [BTSpec_long; BTSpec_double; BTSpec_Complex] then
+    (* STD §6.7.2#2, item 19 *)
+    E.fail Loc.unknown $ Errors.Desugar_NeverSupported "_Complex types"
   else
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
 
@@ -1055,8 +1078,6 @@ _STD "§6.5.2.1#2, sentence 2" $
     | CabsEcall e es ->
         (* TODO: STD check + annot *)
         AilEcall <$> desugar_expression e <*> E.mapM desugar_expression es
-    | CabsEassert e ->
-        AilEassert <$> desugar_expression e
     | CabsEmemberof e ident ->
         (* NOTE: we don't desugar the field name here because we need to know the type of [e] ... *)
         AilEmemberof <$> desugar_expression e <*> (E.return ident)
@@ -1123,6 +1144,12 @@ _STD "§6.5.3.1#3" $
         AilEbinary <$> desugar_expression e1
                    <*> E.return Comma
                    <*> desugar_expression e2
+    | CabsEassert e ->
+        AilEassert <$> desugar_expression e
+    | CabsEoffsetof tyname ident ->
+        (* TODO: do something with the qualifiers? *)
+        desugar_type_name tyname >>= fun (qs, ty) ->
+        E.return (AilEoffsetof ty ident)
   end
 
 and desugar_generic_association gas =

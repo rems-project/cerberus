@@ -37,11 +37,21 @@ type integerType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] =
 *)
  (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
 
+(* STD §6.2.5#10, sentence 1 *)
+type floatingType =
+  | Float
+  | Double
+  | LongDouble
+
+(* STD §6.2.5#11, sentence 2 *)
+type realFloatingType =
+  | Floating of floatingType
+(*  | Complex of floatingType (* STD §6.2.5#11, sentence 1 *) *)
 
 (* STD §6.2.5#14, sentence 1 *)
 type basicType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)bty[0-9]*'?$"] =
  | Integer of integerType
-(* TODO: Floating *)
+ | RealFloating of realFloatingType
 
 
 type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|

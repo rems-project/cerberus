@@ -24,6 +24,9 @@ type integerConstant (*[name = "ic*"]*) =
   | IConstantMax of integerType
   | IConstantMin of integerType
 
+type floatingConstant =
+  string
+
 type characterPrefix =
   | Pref_L
   | Pref_u
@@ -57,6 +60,7 @@ type constant [name = "c*"] =
  | ConstantIndeterminate of ctype
  | ConstantNull (* TODO: maybe temporary *)
  | ConstantInteger       of integerConstant
+ | ConstantFloating      of floatingConstant
  | ConstantCharacter     of characterConstant
  | ConstantArray         of list constant
 
@@ -95,6 +99,7 @@ type expression' 'A [name = "e*"] =
   | AilEcast of qualifiers * ctype * expression 'A
   | AilEcall of expression 'A * list (expression 'A)
   | AilEassert of expression 'A
+  | AilEoffsetof of ctype * Cabs.cabs_identifier
   | AilEgeneric of expression 'A * list (generic_association 'A)
   
   (* TODO: hackish? *)
@@ -436,6 +441,8 @@ let rec expressionEqual' eq_A e1 e2 =
         argumentsEqual es1 es2
     | (AilEassert e1, AilEassert e2) ->
         expressionEqual eq_A e1 e2
+    | (AilEoffsetof ty1 ident1, AilEoffsetof ty2 ident2) ->
+        ty1 = ty1 && ident1 = ident2
     | (AilEstr lit1, AilEstr lit2) ->
         stringLiteralEqual lit1 lit2
     | (AilEconst c1, AilEconst c2) ->
@@ -448,7 +455,7 @@ let rec expressionEqual' eq_A e1 e2 =
         expressionEqual eq_A e1 e2
     | (AilEalignof qs1 ty1, AilEalignof qs2 ty2) ->
         qs1 = qs2 && ty1 = ty2
-    | (_, _) -> false
+    | (_, _) -> false (* TODO: this is wrong *)
   end
 and expressionEqual eq_A e1 e2 =
   match (e1, e2) with
