@@ -435,6 +435,30 @@ type fault_setgen =
     One of (string * (candidate_execution -> set (action)))
   | Two of (string * (candidate_execution -> set (action * action)))
 
+(* The above type (fault_setgen) is used for the
+   undefinedness-predicates, where the kind of undefinedness is
+   denoted by a string. To make it easier to work with, we provide
+   alternative definitions of the undefinedness-predicates, that
+   return a list of the following type. *)
+
+type undefinedness =
+  | DataRaces of set (action * action)
+  | UnsequencedRaces of set (action * action)
+  | IndeterminateReads of set action
+  | BadMutexes of set action
+  | NotInSublanguage    (* e.g. a fence in the lock-only model *)
+
+instance (Show undefinedness)
+  let show d = 
+    match d with
+    | DataRaces s          -> "DataRaces: " ^ show (aid_of_rel2 s)
+    | UnsequencedRaces s   -> "UnsequencedRaces: " ^ show (aid_of_rel2 s)
+    | IndeterminateReads s -> "IndeterminateReads: " ^ show (Set.map aid_of s)
+    | BadMutexes s         -> "BadMutexes: " ^ show (Set.map aid_of s)
+    | NotInSublanguage     -> "NotInSublanguage"
+    end
+end
+
 
 type opsem_t = program -> pre_execution -> bool
 
@@ -1331,6 +1355,32 @@ let locks_only_undefined_behaviour =
     Two ("data_races", data_races);
     One ("indeterminate_reads", indeterminate_reads);
     One ("locks_only_bad_mutexes", locks_only_bad_mutexes) ]
+
+val locks_only_undefined_behaviour_alt: candidate_execution -> list undefinedness
+let locks_only_undefined_behaviour_alt ex =
+  let unseq_races = unsequenced_races ex in
+  let data_races = data_races ex in
+  let indet_reads = indeterminate_reads ex in
+  let bad_mutexes = locks_only_bad_mutexes ex in
+    if not (Set.null unseq_races) then
+      [UnsequencedRaces unseq_races]
+    else
+      []
+  ++
+    if not (Set.null data_races) then
+      [DataRaces data_races]
+    else 
+      []
+  ++
+    if not (Set.null indet_reads) then
+      [IndeterminateReads indet_reads]
+    else
+      []
+  ++
+    if not (Set.null bad_mutexes) then
+      [BadMutexes bad_mutexes]
+    else
+      []
 
 
 (*********************************************** *)

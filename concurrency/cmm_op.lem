@@ -1,0 +1,89 @@
+(* --------------------------------------------------------------------- *)
+(* -- An operational semantics of C11 concurrency                        *)
+(* -- (c) Kyndylan Nienhuis, University of Cambridge                     *)
+(* --------------------------------------------------------------------- *)
+
+open import Pervasives Show Show_extra
+open import Cmm_aux Cmm_master
+
+
+
+(* The axiomatic model ------------------------------------------------- *)
+
+(* The following parameters denote which model and sublanguage we use
+   in the opserational semantics. If the model satisfies certain
+   properties (see the Isabelle proofs), the operational semantics
+   will be equivalent to the axiomatic model. These properties hold
+   for some models (probably rel-acq-rlx-sc, rel-acq-rlx-sc-fences,
+   with_consume and the standard model), but not all models. *)
+
+val sublanguage: condition_t
+let inline sublanguage = true_condition
+
+val memory_model: memory_model
+let inline memory_model = standard_memory_model
+
+val axBehaviour: opsem_t -> program -> program_behaviours
+let inline ~{ocaml} axBehaviour = standard_behaviour
+
+val axUndefined: list fault_setgen
+let inline axUndefined = locks_only_undefined_behaviour
+
+val getRelations: pre_execution -> execution_witness -> relation_list
+let inline getRelations = standard_relations
+
+val axConsistent: candidate_execution -> bool
+let inline axConsistent ex = 
+  apply_tree standard_consistent_execution ex
+
+
+
+(* The simplified axiomatic model -------------------------------------- *)
+
+(* We use the simplified version of det_read and consistent_atomic_rf. *)
+
+val axsimpConsistentExecution: named_predicate_tree
+let axsimpConsistentExecution =
+  Node [ 
+    ("assumptions",                     Leaf assumptions);
+    ("tot_empty",                       Leaf tot_empty);
+    ("well_formed_threads",             Leaf well_formed_threads);
+    ("well_formed_rf",                  Leaf well_formed_rf);
+    ("locks_only_consistent_locks",     Leaf locks_only_consistent_locks);
+    ("locks_only_consistent_lo",        Leaf locks_only_consistent_lo);
+    ("consistent_mo",                   Leaf consistent_mo);
+    ("sc_accesses_consistent_sc",       Leaf sc_accesses_consistent_sc);
+    ("sc_fenced_sc_fences_heeded",      Leaf sc_fenced_sc_fences_heeded);
+    ("consistent_hb",                   Leaf consistent_hb);
+    ("det_read_alt",                    Leaf det_read_alt);
+    ("consistent_non_atomic_rf",        Leaf consistent_non_atomic_rf);
+    ("consistent_atomic_rf",            Leaf consistent_atomic_rf);
+    ("coherent_memory_use",             Leaf coherent_memory_use);
+    ("rmw_atomicity",                   Leaf rmw_atomicity);
+    ("sc_accesses_sc_reads_restricted", Leaf sc_accesses_sc_reads_restricted)  
+  ]
+
+val axsimpConsistent: candidate_execution -> bool
+let inline axsimpConsistent ex =
+  apply_tree axsimpConsistentExecution ex
+
+val axsimpMemoryModel: memory_model
+let axsimpMemoryModel = 
+  <| consistent = axsimpConsistentExecution;
+     relation_calculation = getRelations;
+     undefined = axUndefined;
+     relation_flags =
+       <|  rf_flag  = true;
+           mo_flag  = true;
+           sc_flag  = true;
+           lo_flag  = true;
+           tot_flag = false |>
+  |>
+
+val axsimpBehaviour: opsem_t -> program -> program_behaviours
+let ~{ocaml} axsimpBehaviour opsem_t p =
+  behaviour axsimpMemoryModel sublanguage opsem_t p
+
+
+
+(* The incremental model ----------------------------------------------- *)
