@@ -1,0 +1,259 @@
+(* An operational semantics of concurrent C11, Kyndylan Nienhuis *)
+
+(* The goal of this semantics is to give as much insight as
+   possible. *)
+
+open import Pervasives
+open import Cmm_aux
+open import Cmm_master
+open import MinimalOpsem
+
+(* The stepwise consistency predicates ---------------------------------------------------------- *)
+
+val isInOpsemOrder_step: pre_execution -> state -> state -> action -> bool
+let isInOpsemOrder_step pre s1 s2 a =
+  forall (b IN pre.actions). 
+    (b IN s1.committed --> (a, b) NIN opsemOrder pre s2.exWitness) &&
+    ((b, a) IN opsemOrder pre s2.exWitness --> b IN s1.committed)
+
+val mo_step_atomic_write: pre_execution -> state -> state -> action -> bool
+let mo_step_atomic_write pre s1 s2 a =
+  let succ = {(a, b) | forall (b IN pre.actions)
+                     | b NIN s1.committed && b <> a && is_write b && loc_of b = loc_of a} in
+  s2.exWitness.mo = Set.(union) s1.exWitness.mo succ
+
+val rf_step_load: pre_execution -> state -> state -> action -> bool
+let rf_step_load pre s1 s2 r =
+  if (exists (w IN pre.actions). (w, r) IN getVse pre s2.exWitness) then
+    exists (w IN pre.actions). w IN s1.committed &&
+                               is_write w && 
+                               loc_of w = loc_of r && 
+                               value_written_by w = value_read_by r &&
+                               s2.exWitness.rf = Set.insert (w, r) s1.exWitness.rf
+  else
+    s2.exWitness.rf = s1.exWitness.rf
+
+val rf_step_rmw: pre_execution -> state -> state -> action -> bool
+let rf_step_rmw pre s1 s2 r =
+  let same_loc_writes = {w | forall (w IN s1.committed) | 
+                         w IN pre.actions && is_write w && loc_of w = loc_of r} in
+  if Set.null same_loc_writes then
+    s2.exWitness.rf = s1.exWitness.rf
+  else
+    exists (w IN same_loc_writes). (forall (w' IN same_loc_writes). (w, w') NIN s1.exWitness.mo) &&
+                                   s2.exWitness.rf = Set.insert (w, r) s1.exWitness.rf
+
+val expandsOrder: set action -> action -> set (action * action) -> set (action * action) -> bool
+let expandsOrder domain a r1 r2 =
+  (* The new action is inserted before all other actions in the domain *)
+  r2 = Set.(union) r1 {(a, b) | forall (b IN domain) | true} ||
+  (* There exists an action b in the domain, such that 'a' is inserted directly after it. *)
+  exists (b IN domain). 
+      let prev = {(c, a) | forall (c IN domain) | (c, b) IN r1} in
+      let succ = {(a, c) | forall (c IN domain) | (b, c) IN r1} in
+      r2 = Set.(union) r1 (Set.insert (b, a) (Set.(union) prev succ))
+
+val sc_step: pre_execution -> state -> state -> action -> bool
+let sc_step pre s1 s2 a =
+  let sc_set = {b | forall (b IN s1.committed) | is_seq_cst b && b IN pre.actions} in
+  expandsOrder sc_set a s1.exWitness.sc s2.exWitness.sc
+                               
+val lo_step_lock_unlock: pre_execution -> state -> state -> action -> bool
+let lo_step_lock_unlock pre s1 s2 a =
+  let same_loc_lo = {b | forall (b IN s1.committed) | 
+                     b IN pre.actions && (is_lock b || is_unlock b) && loc_of b = loc_of a} in
+  expandsOrder same_loc_lo a s1.exWitness.lo s2.exWitness.lo
+
+
+(* The operational semantics ------------------------------------------------------------------- *)
+
+val relPerformLoad: pre_execution -> state -> state -> action -> bool
+let relPerformLoad pre s1 s2 a = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  rf_step_load pre s1 s2 a &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  (if is_seq_cst a then
+    sc_step pre s1 s2 a
+  else
+    s2.exWitness.sc = s1.exWitness.sc) &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformStore: pre_execution -> state -> state -> action -> bool
+let relPerformStore pre s1 s2 a = 
+  (if is_at_atomic_location pre.lk a then
+    mo_step_atomic_write pre s1 s2 a
+  else
+    s2.exWitness.mo = s1.exWitness.mo) &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  (if is_seq_cst a then
+    sc_step pre s1 s2 a
+  else
+    s2.exWitness.sc = s1.exWitness.sc) &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformRmw: pre_execution -> state -> state -> action -> bool
+let relPerformRmw pre s1 s2 a = 
+  mo_step_atomic_write pre s1 s2 a &&
+  rf_step_rmw pre s1 s2 a &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  (if is_seq_cst a then
+    sc_step pre s1 s2 a
+  else
+    s2.exWitness.sc = s1.exWitness.sc) &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformBlocked_rmw: pre_execution -> state -> state -> action -> bool
+let relPerformBlocked_rmw pre s1 s2 _ = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  s2.exWitness.sc = s1.exWitness.sc &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformLock: pre_execution -> state -> state -> action -> bool
+let relPerformLock pre s1 s2 a = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  lo_step_lock_unlock pre s1 s2 a &&
+  s2.exWitness.sc = s1.exWitness.sc  &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformUnlock: pre_execution -> state -> state -> action -> bool
+let relPerformUnlock pre s1 s2 a = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  lo_step_lock_unlock pre s1 s2 a &&
+  s2.exWitness.sc = s1.exWitness.sc &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformFence: pre_execution -> state -> state -> action -> bool
+let relPerformFence pre s1 s2 a = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  (if is_seq_cst a then
+    sc_step pre s1 s2 a
+  else
+    s2.exWitness.sc = s1.exWitness.sc) &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformAlloc: pre_execution -> state -> state -> action -> bool
+let relPerformAlloc pre s1 s2 _ = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  s2.exWitness.sc = s1.exWitness.sc &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relPerformDealloc: pre_execution -> state -> state -> action -> bool
+let relPerformDealloc pre s1 s2 _ = 
+  s2.exWitness.mo = s1.exWitness.mo &&
+  s2.exWitness.rf = s1.exWitness.rf &&
+  s2.exWitness.lo = s1.exWitness.lo &&
+  s2.exWitness.sc = s1.exWitness.sc &&
+  s2.exWitness.tot = s1.exWitness.tot &&
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, getRelations pre s2.exWitness) &&
+  (* TODO: prove instead of assert that the following always holds *)
+  witnessRestrict s2.exWitness s1.committed = s1.exWitness
+
+val relOpsemStep: pre_execution -> state -> state -> action -> bool
+let relOpsemStep pre s1 s2 a =
+
+  (* A new action is committed in the step *)
+  a IN pre.actions &&
+  a NIN s1.committed &&
+  s2.committed = Set.insert a s1.committed && 
+  isInOpsemOrder_step pre s1 s2 a &&
+
+  (* We find a suitable witness *)
+  match a with 
+  | Load _ _ _ _ _    -> relPerformLoad pre s1 s2 a
+  | Store _ _ _ _ _   -> relPerformStore pre s1 s2 a
+  | RMW _ _ _ _ _ _   -> relPerformRmw pre s1 s2 a
+  | Blocked_rmw _ _ _ -> relPerformBlocked_rmw pre s1 s2 a
+  | Lock _ _ _ _      -> relPerformLock pre s1 s2 a
+  | Unlock _ _ _      -> relPerformUnlock pre s1 s2 a
+  | Fence _ _ _       -> relPerformFence pre s1 s2 a
+  | Alloc _ _ _       -> relPerformAlloc pre s1 s2 a
+  | Dealloc _ _ _     -> relPerformDealloc pre s1 s2 a
+  end &&
+
+  (* Definedness *)
+  s2.stateIsDefined = exIsDefined (pre, s2.exWitness, getRelations pre s2.exWitness)
+
+
+indreln
+[relOpsemTrace: pre_execution -> state -> state -> bool]
+
+relOpsemReflexive: forall pre s. 
+  (* We need this condition for the opsem to be sound *)
+  let rel = getRelations pre s.exWitness in
+  well_formed_threads (pre, s.exWitness, rel) &&
+  consistent_hb (pre, s.exWitness, rel)
+==>
+  relOpsemTrace pre s s
+
+and
+relOpsemStep: forall pre x y z a.
+  relOpsemTrace pre x y && 
+  relOpsemStep pre y z a
+==>
+  relOpsemTrace pre x z
+
+
+val relOpsemConsistent: opsem_t -> program -> observable_execution -> bool
+let ~{ocaml} relOpsemConsistent opsem_t p ex =
+  exists s. 
+  opsem_t p (fst ex) &&
+  relOpsemTrace (fst ex) (initialState (fst ex)) s &&
+  s.exWitness = snd ex &&
+  s.committed = (fst ex).actions
+
+val relOpsemUndefined: opsem_t -> program -> observable_execution -> bool
+let ~{ocaml} relOpsemUndefined opsem_t p ex =
+  exists s. 
+  opsem_t p (fst ex) &&
+  relOpsemTrace (fst ex) (initialState (fst ex)) s &&
+  s.exWitness = snd ex &&
+  s.committed = (fst ex).actions &&
+  not s.stateIsDefined
+
+val relOpsemBehaviour: opsem_t -> program -> Cmm_master.program_behaviours
+let ~{ocaml} relOpsemBehaviour opsem_t p = 
+  if (exists ex. relOpsemUndefined opsem_t p ex)
+  then Undefined
+  else Defined {ex | relOpsemConsistent opsem_t p ex}

@@ -1,14 +1,8 @@
 open import Pervasives
 import Language
 
-type program = Language.command
-type location = Language.variable
-type cvalue = int
-
-type id = 
-  | Concrete of nat
-  | Speculative of location * cvalue
-
-type aid = id
-
-type tid = id
+type program_impl = nat
+type location_impl = nat
+type cvalue_impl = int
+type aid_impl = nat
+type tid_impl = nat
