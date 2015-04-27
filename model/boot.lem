@@ -1,0 +1,79 @@
+open import Pervasives
+import Core
+
+(* Error messages for impossible situations *)
+val outOfHomeomorphism: forall 'a. string -> 'a
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
+declare coq   target_rep function assert_false = `DAEMON`
+
+
+(*
+val debug_level: nat
+declare ocaml target_rep function debug_level = `Boot_ocaml.debug_level`
+declare coq   target_rep function debug_level = `0`
+*)
+
+val debug: forall 'a. string -> 'a
+
+(*
+val print_debug: forall 'a. string -> 'a -> 'a
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+let inline {coq} print_debug x z = let _ = x in z (* I love lem so very much *)
+*)
+
+type char
+
+val is_digit: char -> bool
+
+val is_quote: char -> bool
+
+val span_string: (char -> bool) -> string -> string * string
+
+val unquote_string: string -> string
+
+val splitAt_string: nat -> string -> string * string
+
+val length_string: string -> nat
+
+(* HACK for testing *)
+val pickList: forall 'a. list 'a -> list 'a * 'a * list 'a
+declare ocaml target_rep function pickList = `Boot_ocaml.pickList`
+
+
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `Debug.output_string2`
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
+
+(* Pretty printing (HACK: mind your mind) *)
+val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
+declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype`
+
+val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
+declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
+
+val pp_core_expr: forall 'a. Core.expr 'a -> string
+declare ocaml target_rep function pp_core_expr = `String_core.string_of_expr`
+
+let inline {coq} pp_core_expr x = let _ = x in ""
+
+val nat_of_string: string -> natural
+declare ocaml target_rep function nat_of_string = `Nat_big_int.of_string`
+
+
+
+(*
+val pp_cabs0_definition: forall 'a. 'a -> string
+declare ocaml target_rep function pp_cabs0_definition = `String_cabs.string_of_cabs0_definition`
+*)
+
+val pp_core_file: forall 'a. Core.file 'a -> string
+declare ocaml target_rep function pp_core_file = `String_core.string_of_core_file`
+
+
+val pp_core_params: forall 'a. list (Core.sym * Core.core_base_type) -> string
+declare ocaml target_rep function pp_core_params = `String_core.string_of_core_params`

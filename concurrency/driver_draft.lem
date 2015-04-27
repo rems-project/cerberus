@@ -1,0 +1,112 @@
+open import Pervasives
+open import Cmm_aux
+open import Cmm_master
+open import MinimalOpsem
+open import RelationalOpsem
+open import ExecutableOpsem
+
+(* Constraint solver ------------------------------------------------------ *)
+
+type cvalue (* = Core.expr unit *)
+type symbol (* = Symbol.t *)
+type constraint = cvalue (* Should be a cvalue that evaluates to a boolean *)
+
+val isConcrete : cvalue -> bool
+(* Returns true if the symbolicValue doesn't contain symbols *)
+
+type valuation =
+  symbol -> cvalue
+
+type partialValuation = 
+  symbol -> maybe cvalue
+
+val extendValuation: valuation -> cvalue -> cvalue
+val extendPartialValuation: partialValuation -> cvalue -> cvalue
+
+val initialValuation : partialValuation
+
+type symbolicSolver =
+  <| refineValuation : constraint -> partialValuation -> partialValuation;
+  |>
+
+type threeStateBoolean = 
+  | tTrue
+  | tUnknown
+  | tFalse
+
+type symbolicEquality =
+  cvalue -> cvalue -> threeStateBoolean
+
+val getSymbolicEquality : partialValuation -> symbolicEquality
+let {} getSymbolicEquality e left right = 
+  let leftE = (extendPartialValuation e left) in
+  let rightE = (extendPartialValuation e right) in
+  if (leftE = rightE) then
+    tTrue
+  else if (isConcrete leftE) && (isConcrete rightE) then
+    tFalse
+  else 
+    tUnknown
+
+(* Threadwise semantics -------------------------------------------------- *)
+
+type threadwiseState
+
+type threadwiseStep =
+
+  (* RequestName  of sbBefore * ddBefore * aswBefore
+                     parameters of request *
+                     the new state or a callback *)
+
+  | LoadRequest   of set aid * set aid * set aid * 
+                     aid * tid * memory_order * location * location_kind *
+                     (cvalue -> threadwiseState)
+
+  | StoreRequest  of set aid * set aid * set aid *
+                     aid * tid * memory_order * location * location_kind * cvalue *
+                     threadwiseState
+
+  | LockRequest   of set aid * set aid * set aid *
+                     aid * tid * location * location_kind *
+                     (lock_outcome -> threadwiseState)
+
+  | UnlockRequest of set aid * set aid * set aid * 
+                     aid * tid * location * location_kind *
+                     threadwiseState
+
+  | RmwRequest    of set aid * set aid * set aid *
+                     aid * tid * memory_order * location * location_kind * cvalue *
+                     (cvalue -> threadwiseState)
+
+  | FenceRequest  of set aid * set aid * set aid *
+                     aid * tid * memory_order *
+                     threadwiseState
+
+  | ThreadwiseTau of threadwiseState
+
+
+type threadwiseSemantics =
+  <| tInitial : program -> threadwiseState;
+     tNext    : threadwiseState -> set threadwiseStep;
+  |>
+
+(* Concurrent semantics --------------------------------------------------- *)
+
+type concState
+
+type preExStep = 
+  <| action       : Cmm_master.action;
+     sbBefore     : set aid;
+     ddBefore     : set aid;
+     aswBefore    : set aid;
+     locationKind : maybe location_kind;
+  |>
+
+val updatePreEx: concState -> preExStep -> concState
+
+type concStep = 
+  | ConcurrencyTau of concState
+  | ReadsFrom      of constraint * concState
+
+val concurrentInitial: concStep
+val concurrentNext: symbolicEquality -> concState -> set concStep
