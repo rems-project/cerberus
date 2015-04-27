@@ -77,3 +77,10 @@ declare ocaml target_rep function pp_core_file = `String_core.string_of_core_fil
 
 val pp_core_params: forall 'a. list (Core.sym * Core.core_base_type) -> string
 declare ocaml target_rep function pp_core_params = `String_core.string_of_core_params`
+
+
+
+val begin_timing: string -> unit
+declare ocaml target_rep function begin_timing = `Debug.begin_timing`
+val end_timing: unit -> unit
+declare ocaml target_rep function end_timing = `Debug.end_timing`
