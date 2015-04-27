@@ -12,16 +12,17 @@ LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err
 
 # C11 related stuff
 #CMM_MODEL_DIR=../cpp/axiomatic/ntc
-CMM_MODEL_DIR=../../rsem/cpp/axiomatic/ntc
+CMM_MODEL_DIR=concurrency
 CMM_MODEL_LEM =\
   cmm_master.lem
 
 #CMM_EXEC_DIR=../cpp/newmm_op
-CMM_EXEC_DIR=../../rsem/cpp/newmm_op
+CMM_EXEC_DIR=concurrency
 CMM_EXEC_LEM =\
-  executableOpsem.lem \
-  minimalOpsem.lem \
-  relationalOpsem.lem
+  cmm_op.lem
+#  executableOpsem.lem \
+#  minimalOpsem.lem \
+#  relationalOpsem.lem
 
 
 # Ail syntax and type system
@@ -155,7 +156,7 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
-	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/executableOpsem.ml
+#	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/executableOpsem.ml
 	rm -f $(BUILD_DIR)/*.lem
 
 
