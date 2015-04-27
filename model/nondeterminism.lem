@@ -347,10 +347,10 @@ let is_active = function
       false
 end
 
-let kyndylan (ND xs) =
+let warns_if_no_active_ex (ND xs) =
   let _ =
     if not (List.any is_active xs) then
-      Boot.print_debug 4 "KYNDYLAN!"
+      Boot.print_debug 4 "There are no active executions"
     else
       () in
   ND xs
