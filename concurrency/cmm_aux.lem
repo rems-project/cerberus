@@ -11,6 +11,10 @@ type tid_impl = Tid_hol of nat
 type location_impl = Loc_hol of nat
 type cvalue_impl = Cvalue_hol of nat
 
+instance (SetType location_impl)
+  let setElemCompare = defaultCompare
+end
+
 instance (Show tid_impl)
   let show tid = 
     match tid with

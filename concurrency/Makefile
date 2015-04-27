@@ -1,8 +1,8 @@
 BUILD_DIR           = _bin
 CPP_BUILD_DIR       = _bin_cppmem
-OCAML_LIB_DIR       = ../../../bitbucket/lem/ocaml-lib
-CMM_MODEL_DIR       = ../axiomatic/ntc
-CPP_SRC_DIR         = ../src
+OCAML_LIB_DIR       = ../../lem/ocaml-lib
+CMM_MODEL_DIR       = ../../../rsem/cpp/axiomatic/ntc
+CPP_SRC_DIR         = ../../../rsem/cpp/src
 CPP_INTEGRATION_DIR = cppmem-integration
 
 CMM_MODEL_LEM_EXT = \
@@ -29,12 +29,16 @@ AXIOM_BEH_GEN = \
 
 OPSEM_LEM = \
   cmm_op.lem \
+  nondeterminism.lem \
 
 # Isa and ocaml variants of OPSEM_LEM
 OPSEM_GEN = \
   Cmm_op.thy \
   cmm_op.ml \
   Cmm_op-inc.tex \
+  Nondeterminism.thy \
+  nondeterminism.ml \
+  Nondeterminism-inc.tex \
 
 
 default: $(BUILD_DIR)/Cmm_op.thy \
