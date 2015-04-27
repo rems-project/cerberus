@@ -324,11 +324,20 @@ let monCheckConsistency ex =
 val monCheckWitRestrict: execution_witness -> set action -> execution_witness -> ND.t unit
 let monCheckWitRestrict new_wit committed old_wit =
   ND.guard (incWitRestrict new_wit committed = old_wit) 
-           (ND.Error "\"witnessRestrict new committed = old\" should hold by construction.") 
+           (ND.Error "\"witnessRestrict new committed = old\" should hold by construction.")
+
+val monCheckCommitmentOrder: candidate_execution -> set action -> action -> ND.t unit
+let monCheckCommitmentOrder (pre, wit, rel) committed a = 
+  let order = incCom (pre, wit, rel) in
+  ND.guard (forall (b IN pre.actions). 
+               ((b, a) IN order -->  b IN committed) &&
+               (b IN committed --> (a, b) NIN order))  
+           (ND.Other ("Committing action " ^ show (aid_of a) ^ 
+                      " does not respect the opsem order."))
 
 (* The semantics of performing an action *)
 
-val monPerformLoad: pre_execution -> incState -> action -> ND.t incState
+val monPerformLoad: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformLoad pre s a =
   (if is_seq_cst a then
      monAddToSc pre a s
@@ -336,19 +345,9 @@ let monPerformLoad pre s a =
      ND.return s.incWit.sc)    >>= fun new_sc ->
   monAddToRfLoad pre a s       >>= fun new_rf ->
   let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                           >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit  >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monPerformStore: pre_execution -> incState -> action -> ND.t incState
+val monPerformStore: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformStore pre s a =
   (if is_seq_cst a then
      monAddToSc pre a s
@@ -359,19 +358,9 @@ let monPerformStore pre s a =
    else
      ND.return s.incWit.mo)    >>= fun new_mo ->
   let new_wit = <| s.incWit with sc = new_sc; mo = new_mo; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val exePerformRmw: pre_execution -> incState -> action -> ND.t incState
+val monPerformRmw: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformRmw pre s a =
   (if is_seq_cst a then
      monAddToSc pre a s
@@ -380,85 +369,35 @@ let monPerformRmw pre s a =
   monAddToRfRmw pre a s        >>= fun new_rf ->
   monAddToMo pre a s           >>= fun new_mo ->
   let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; mo = new_mo; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monPerformBlocked_rmw: pre_execution -> incState -> action -> ND.t incState
+val monPerformBlocked_rmw: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformBlocked_rmw pre s a =
   let new_wit = s.incWit in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monPerformLock: pre_execution -> incState -> action -> ND.t incState
+val monPerformLock: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformLock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
   let new_wit = <| s.incWit with lo = new_lo; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monPerformUnlock: pre_execution -> incState -> action -> ND.t incState
+val monPerformUnlock: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformUnlock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
   let new_wit = <| s.incWit with lo = new_lo; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monPerformFence: pre_execution -> incState -> action -> ND.t incState
+val monPerformFence: pre_execution -> incState -> action -> ND.t execution_witness
 let monPerformFence pre s a =
   (if is_seq_cst a then
      monAddToSc pre a s
    else
      ND.return s.incWit.sc)    >>= fun new_sc ->
   let new_wit = <| s.incWit with sc = new_sc; |> in
-  let new_committed = Set.insert a s.incCommitted in
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  ND.return new_wit
 
-  (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
-  (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
-
-  let new_state = <| incWit       = new_wit; 
-                     incCommitted = new_committed; |> in
-  ND.return new_state
-
-val monStep: pre_execution -> incState -> ND.t incState
+val monStep: pre_execution -> incState -> ND.t (action * incState)
 let monStep pre s =
   let ex = (pre, s.incWit, getRelations pre s.incWit) in  
 
@@ -476,17 +415,21 @@ let monStep pre s =
   | Blocked_rmw _ _ _ -> monPerformBlocked_rmw pre s a
   | Alloc _ _ _       -> ND.kill (ND.Error "Allocs not supported")
   | Dealloc _ _ _     -> ND.kill (ND.Error "Deallocs not supported")
-  end                         >>= fun s2 ->
-  
-  let new_wit = s2.incWit in
-  let new_rel = getRelations pre new_wit in
-  let order = incCom (pre, new_wit, new_rel) in
-  ND.guard (forall (b IN pre.actions). 
-               ((b, a) IN order -->  b IN s.incCommitted) &&
-               (b IN s.incCommitted --> (a, b) NIN order))  
-           (ND.Other ("Committing action " ^ show (aid_of a) ^ 
-                      " does not respect the opsem order.")) >>
-  ND.return s2
+  end                         >>= fun new_wit ->
+
+  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  monCheckConsistency new_ex                          >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
+
+  monCheckCommitmentOrder new_ex s.incCommitted a     >>
+
+  let new_committed = Set.insert a s.incCommitted in
+  let new_state = <| incWit       = new_wit; 
+                     incCommitted = new_committed; |> in
+  ND.return (a, new_state)
 
 
 
@@ -533,14 +476,6 @@ instance (Show symState)
     ", committed: " ^ show (Set.map aid_of state.symCommitted) ^ 
     ", eq: " ^ "TODO" ^ ")"
 end
-
-(* TODO: define a custom equality *)
-(*
-instance (Eq symState)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-*)
 
 val defaultLk: location_kind
 let defaultLk = Non_Atomic
@@ -664,6 +599,11 @@ val symPerformUnlock: symState -> action -> equalityCvalue -> ND.t symStep
 val symPerformFence: symState -> action -> equalityCvalue -> ND.t symStep
 
 val symStep: symState -> equalityCvalue -> ND.t symStep
-let symStep s eq = 
-  ND.kill (ND.Other "Not implemented")
-
+let symStep s eq =
+  (* TODO: this is not correct! *)
+  let incState = <| incWit = s.symWit; 
+                    incCommitted = s.symCommitted; |> in
+  monStep s.symPre incState >>= fun (a, newIncState) ->
+  let newSymState = <| s with symWit = newIncState.incWit;
+                              symCommitted = newIncState.incCommitted; |> in
+  ND.return (ConcurrencyTau a newSymState)
