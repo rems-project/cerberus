@@ -1,0 +1,669 @@
+(* An operational semantics of concurrent C11, Kyndylan Nienhuis *)
+
+(* The goal of this semantics is to be integrable with both cppmem and
+   csem. The constraints are that the semantics is executable as
+   opposed to relational, that pre-executions can be built
+   incrementally and that cvalues are symbolic (hence they have a
+   custom equality). *)
+
+(* The function exeOpsemTrace explains how this semantics should be
+   used. *)
+
+open import Pervasives Show
+open import Cmm_master
+open import MinimalOpsem 
+open import RelationalOpsem
+open Set_extra
+
+import Nondeterminism
+module ND = Nondeterminism
+
+(* Debug *)
+
+val print: string -> unit
+(*
+declare ocaml target_rep function print = `print_string`
+let ~{ocaml} print _ = () *)
+let print _ = ()  
+
+(* The executable opsem uses a custom equality over cvalues *)
+
+type threeStateBoolean = 
+  | TTrue
+  | TUnknown
+  | TFalse
+
+instance (Eq threeStateBoolean)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+type equalityCvalue =
+  cvalue -> cvalue -> threeStateBoolean
+
+val initialEqualityCvalue: equalityCvalue
+let initialEqualityCvalue left right =
+  if left = right then TTrue else TUnknown
+
+val standardEqualityCvalue: equalityCvalue
+let standardEqualityCvalue left right =
+  if left = right then TTrue else TFalse
+
+(* The state of the executable opsem *)
+
+type exeState =
+<| preEx:          pre_execution; 
+   exWitness:      execution_witness;
+   committed:      set action;
+   stateIsDefined: definedness;
+   equalityCvalue: equalityCvalue;
+|>
+
+(* TODO: define a custom equality *)
+instance (Eq exeState)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show exeState)
+  let show state =
+    "(pre_ex: " ^ show (Set.map aid_of state.preEx.actions) ^  
+    ", wit: " ^ show state.exWitness ^
+    ", committed: " ^ show (Set.map aid_of state.committed) ^ 
+    ", isDefined: " ^ show state.stateIsDefined ^
+    ", eq: " ^ "TODO" ^ ")"
+end
+
+val numberOfUncommittedActions: exeState -> nat
+let numberOfUncommittedActions ex =
+  Set.size (Set.difference ex.preEx.actions ex.committed)
+
+val defaultLk: location_kind
+let defaultLk = Non_Atomic
+
+val emptyPreEx: pre_execution
+let emptyPreEx = 
+  <| actions = {}; 
+     threads = {};
+     lk = (fun _ -> defaultLk);
+     sb = {};
+     asw = {};
+     dd = {}; 
+  |>
+
+val initialExeState: pre_execution -> exeState
+let initialExeState pre = 
+  <| preEx = pre;
+     exWitness = initialWitness;
+     committed = {};
+     stateIsDefined = getDefinedness (pre, initialWitness, getRelations pre initialWitness);
+     equalityCvalue = initialEqualityCvalue;
+  |>
+
+(* Non-deterministic monad *)
+
+module S = struct
+
+  (* The first set denotes the non-deterministic results, the second
+     set contains the explanations why other results where not
+     possible. *) 
+  type t 'a = list 'a (* * set string *)
+
+  val pick: forall 'a. list 'a -> t 'a
+  let pick l = l
+
+  val return: forall 'a. SetType 'a => 'a -> t 'a
+  let return x = [x] (* ({x}, {}) *)
+
+  val block: forall 'a. SetType 'a => t 'a
+  let block = [] (* ({}, {}) *)
+
+  val filter: bool -> t unit
+  let filter b = if b then return () else block
+  
+  val bind: forall 'a 'b. SetType 'a, SetType 'b => t 'a -> ('a -> t 'b) -> t 'b
+  (* let bind m f = Set.bigunionMap f m *)
+  let bind m f = List.concat (List.map f m)
+
+  val bind2: forall 'a 'b. SetType 'a, SetType 'b => t 'a -> t 'b -> t 'b
+  (* let bind2 m1 m2 = if Set.null m1 then block else m2 *)
+  let bind2 m1 m2 = if List.null m1 then block else m2
+
+  let inline (>>=) = bind
+  let inline (>>)  = bind2
+end
+
+(* Note that until we have implemented back tracking, we need the
+   concurrency model to compute the set of next steps exhaustively
+   (regardless of the execution mode) to prevent getting stuck in
+   killed executions. *) 
+let inline (>>=) = ND.bindExhaustive 
+let inline (>>) m1 m2 = ND.bindExhaustive m1 (fun _ -> m2)
+
+(* The symbolic opsem allows the threadwise local semantics to build
+   the pre-execution step by step, as opposed to generate full
+   pre-executions. *)
+ 
+type preExStep = 
+  <| action       : action;
+     sbBefore     : set aid;
+     ddBefore     : set aid;
+     aswBefore    : set aid;
+     locationKind : maybe location_kind;
+  |>
+
+instance (Show preExStep)
+  let show step = 
+    "(Action: " ^ show step.action ^
+    ", sbBefore: " ^ show step.sbBefore ^
+    ", ddBefore: " ^ show step.ddBefore ^
+    ", aswBefore: " ^ show step.aswBefore ^
+    ", locKind: " ^ show step.locationKind ^ ")"
+end
+
+val updatePreEx: exeState -> preExStep -> exeState
+let updatePreEx s step = 
+  let pre = s.preEx in
+  let new_lk = match (step.locationKind, loc_of step.action) with
+               | (Just loc_kind, Just loc) -> (fun x -> if x = loc then loc_kind else pre.lk x)
+               | _                         -> pre.lk
+               end in
+  let extra_sb  = Set.cross {a | forall (a IN pre.actions) | aid_of a IN step.sbBefore}  {step.action} in
+  let extra_dd  = Set.cross {a | forall (a IN pre.actions) | aid_of a IN step.ddBefore}  {step.action} in
+  let extra_asw = Set.cross {a | forall (a IN pre.actions) | aid_of a IN step.aswBefore} {step.action} in
+  let new_pre = <| actions = Set.insert step.action pre.actions;
+                   threads = Set.insert (tid_of step.action) pre.threads;
+                   lk      = new_lk;
+                   sb      = pre.sb union extra_sb;
+                   dd      = pre.dd union extra_dd;
+                   asw     = pre.asw union extra_asw;
+                |> in
+  let extra_mo = if is_write step.action && is_at_atomic_location new_lk step.action then
+                    {(a, step.action) | forall (a IN s.preEx.actions)
+                     | a IN s.committed && a <> step.action && is_write a && loc_of a = loc_of step.action} 
+                 else {} in
+  let new_mo = Set.(union) s.exWitness.mo extra_mo in
+  let new_wit = <| s.exWitness with mo = new_mo |> in
+  let new_is_defined = getDefinedness (new_pre, new_wit, getRelations new_pre new_wit) in
+  <|s with preEx = new_pre; exWitness = new_wit; |>
+
+
+(* Methods for updating the execution witness *)
+
+val addToTransitiveOrder: set action -> action -> set (action * action) -> ND.t (set (action * action))
+let addToTransitiveOrder domain a r =
+  ND.msum  
+  [(* We insert the action before all other actions *)
+   ND.return (Set.(union) r {(a, b) | forall (b IN domain) | true})
+  ;
+   (* We choose an action, and insert 'a' directly after it *)
+   (ND.pick (Set_extra.toList domain) >>= fun b ->
+    let prev = {(c, a) | forall (c IN domain) | (c, b) IN r} in
+    let succ = {(a, c) | forall (c IN domain) | (b, c) IN r} in
+    ND.return (Set.(union) r (Set.insert (b, a) (Set.(union) prev succ)))
+   )
+  ]
+
+val addToMo: action -> exeState -> ND.t (set (action * action))
+let addToMo a s =
+  let succ = {(a, b) | forall (b IN s.preEx.actions)
+                     | b NIN s.committed && b <> a && is_write b && loc_of b = loc_of a} in
+  ND.return (Set.(union) s.exWitness.mo succ)
+
+(* NOTE: this function is only sound when the resulting execution is
+   checked for det_read. Because the resulting state is not visible at 
+   this point, we can't check that here. The top-level semantics is sound, 
+   because in all calling fuctions we do check det_read *) 
+(* The return type is the new rf-relation, and Nothing if no new edge
+   has been added, and otherwise Just a b with a b the values of the
+   read and write of the new rf-edge. *)
+val addToRf_load: action -> exeState -> equalityCvalue -> 
+                  ND.t (set (action * action) * maybe (cvalue * cvalue))
+let addToRf_load a s eq =
+  ND.msum
+  [(* We do not add an rf-edge. This should happen when there is no vse-edge in the resulting state. *)
+   ND.return (s.exWitness.rf, Nothing)
+  ;
+   (* We add an rf-edge. *)
+   (ND.pick (Set_extra.toList 
+      {b | forall (b IN s.committed) | 
+         b IN s.preEx.actions &&
+         is_write b && 
+         loc_of b = loc_of a}) >>= fun w ->
+    match (value_written_by w, value_read_by a) with
+    | (Just value_w, Just value_a) -> 
+        ND.guard (not (eq value_w value_a = TFalse)) 
+                 (ND.Other ("The value written (" ^ show value_w ^ 
+                            ") and the value read ( " ^ show value_a ^ 
+                            ") cannot be matched")) >> 
+        ND.return ((Set.insert (w, a) s.exWitness.rf), Just (value_w, value_a))
+    | _                            -> 
+        ND.kill (ND.Error "A write-read pair doesn't contain the values written and read")
+    end
+   )
+  ]
+   
+
+(* The return type is the new rf-relation, and Nothing if no new edge
+   has been added, and otherwise Just a b with a b the values of the
+   read and write of the new rf-edge. *)
+val addToRf_rmw: action -> exeState -> equalityCvalue ->
+                 ND.t (set (action * action) * maybe (cvalue * cvalue))
+let addToRf_rmw a s eq =
+  let mo_actions = {b | forall (b IN s.committed) | 
+                    b IN s.preEx.actions && is_write b && loc_of b = loc_of a} in
+  if mo_actions = {} then
+    ND.return (s.exWitness.rf, Nothing)
+  else
+    ND.pick (Set_extra.toList 
+      {w | forall (w IN mo_actions) | 
+         forall (c IN mo_actions). (w, c) NIN s.exWitness.mo}) >>= fun w ->
+   match (value_written_by w, value_read_by a) with
+   | (Just value_w, Just value_a) -> 
+       ND.guard (not (eq value_w value_a = TFalse))
+                (ND.Other ("The value written (" ^ show value_w ^ 
+                           ") and the value read ( " ^ show value_a ^ 
+                           ") cannot be matched")) >>
+       ND.return ((Set.insert (w, a) s.exWitness.rf), Just (value_w, value_a))
+   | _                            -> 
+       ND.kill (ND.Error "A write-read pair doesn't contain the values written and read")
+   end
+
+val addToLo: action -> exeState -> ND.t (set (action * action))
+let addToLo a s = 
+  let same_loc_lo = {b | forall (b IN s.committed) | 
+                     b IN s.preEx.actions && (is_lock b || is_unlock b) && loc_of b = loc_of a} in
+  addToTransitiveOrder same_loc_lo a s.exWitness.lo
+
+val addToSc: action -> exeState -> ND.t (set (action * action))
+let addToSc a s = 
+  let sc_set = {b | forall (b IN s.committed) | is_seq_cst b && b IN s.preEx.actions} in
+  addToTransitiveOrder sc_set a s.exWitness.sc
+
+(* The consistency predicates using the custom equality over cvalues -------------------------- *)
+
+val well_formed_rf_op_sym: equalityCvalue -> set action -> candidate_execution -> bool
+let well_formed_rf_op_sym eq committed (Xo,Xw,_) =
+    forall ((a,b) IN Xw.rf).
+      a IN Xo.actions && b IN Xo.actions &&
+      a IN committed && b IN committed &&
+      loc_of a = loc_of b &&
+      is_write a && is_read b &&
+      (match (value_read_by b, value_written_by a) with
+       | (Just value_b, Just value_a) -> not (eq value_b value_a = TFalse)
+       | _                            -> false
+       end) &&
+      forall (a' IN Xo.actions). (a',b) IN Xw.rf --> a = a'
+
+val checkConsistency_aux: string -> equalityCvalue -> set action -> candidate_execution -> ND.t unit
+let checkConsistency_aux prefix eq committed ex =
+  let (pre, wit, rel) = ex in
+  let postfix = " is violated in " ^ show (pre, wit) ^ ", committed: " ^ 
+                show (Set.map aid_of committed) in
+  ND.guard (assumptions ex) 
+    (ND.Other (prefix ^ "assumptions" ^ postfix)) >>
+  ND.guard (det_read_op committed ex) 
+    (ND.Other (prefix ^ "det_read_op" ^ postfix)) >>
+  ND.guard (coherent_memory_use ex) 
+    (ND.Other (prefix ^ "coherent_memory_use" ^ postfix)) >>
+  ND.guard (consistent_atomic_rf ex) 
+    (ND.Other (prefix ^ "consistent_atomic_rf" ^ postfix)) >>
+  ND.guard (consistent_hb ex) 
+    (ND.Other (prefix ^ "consistent_hb" ^ postfix)) >>
+  ND.guard (consistent_mo_op committed ex) 
+    (ND.Other (prefix ^ "consistent_mo_op" ^ postfix)) >>
+  ND.guard (consistent_non_atomic_rf ex) 
+    (ND.Other (prefix ^ "consistent_non_atomic_rf" ^ postfix)) >>
+  ND.guard (locks_only_consistent_lo_op committed ex) 
+    (ND.Other (prefix ^ "locks_only_consistent_lo_op" ^ postfix)) >>
+  ND.guard (locks_only_consistent_locks_op committed ex) 
+    (ND.Other (prefix ^ "locks_only_consistent_locks_op" ^ postfix)) >>
+  ND.guard (rmw_atomicity_op committed ex) 
+    (ND.Other (prefix ^ "rmw_atomicity_op" ^ postfix)) >>
+  ND.guard (sc_accesses_consistent_sc_op committed ex) 
+    (ND.Other (prefix ^ "sc_accesses_consistent_sc_op" ^ postfix)) >>
+  ND.guard (sc_accesses_sc_reads_restricted ex) 
+    (ND.Other (prefix ^ "sc_accesses_sc_reads_restricted" ^ postfix)) >>
+  ND.guard (sc_fenced_sc_fences_heeded ex) 
+    (ND.Other (prefix ^ "sc_fenced_sc_fences_heeded" ^ postfix)) >>
+  ND.guard (tot_empty ex) 
+    (ND.Other (prefix ^ "tot_empty" ^ postfix)) >>
+  ND.guard (well_formed_rf_op_sym eq committed ex) 
+    (ND.Other (prefix ^ "well_formed_rf_op_sym" ^ postfix)) >>
+  ND.guard (well_formed_threads ex) 
+    (ND.Other (prefix ^ "well_formed_threads" ^ postfix))
+
+val checkConsistency: equalityCvalue -> set action -> candidate_execution -> ND.t unit
+let checkConsistency =
+  checkConsistency_aux ""
+
+val checkConsistencyStartState: equalityCvalue -> set action -> candidate_execution -> ND.t unit
+let checkConsistencyStartState =
+  checkConsistency_aux "Start state: "
+
+val checkWitnessRestrict: execution_witness -> set action -> execution_witness -> ND.t unit
+let checkWitnessRestrict new_wit committed old_wit =
+  ND.guard (witnessRestrict new_wit committed = old_wit) 
+           (ND.Error "\"witnessRestrict new committed = old\" should hold by construction.") 
+
+
+(* The operational semantics ------------------------------------------------------------------ *)
+
+type exeStep = 
+  | ConcurrencyTau of action * exeState
+
+  (* The first cvalue is the value written, the second the value read. *)
+  | ReadsFrom      of cvalue * cvalue * action * exeState 
+
+instance (Show exeStep)
+  let show step = 
+    match step with
+    | ConcurrencyTau a state  -> 
+        "Tau (" ^ show (aid_of a) ^ ", " ^ show state ^ ")"
+    | ReadsFrom v1 v2 a state -> 
+        "ReadsFrom (" ^ show (aid_of a) ^ ", " ^ show v2 ^ " <- " ^ show v1 ^ ", " ^ show state ^ ")"
+    end
+end
+
+
+val stateOf: exeStep -> exeState
+let stateOf step = 
+  match step with
+  | ConcurrencyTau _ s -> s
+  | ReadsFrom _ _ _ s  -> s
+  end
+
+val actionOf: exeStep -> action
+let actionOf step = 
+  match step with
+  | ConcurrencyTau a _ -> a
+  | ReadsFrom _ _ a _  -> a
+  end
+
+
+instance (SetType exeStep)
+  let setElemCompare step1 step2 = setElemCompare (actionOf step1) (actionOf step2)
+end
+
+
+
+val exePerformLoad: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformLoad s a eq =
+  (if is_seq_cst a then
+     addToSc a s
+   else
+     ND.return s.exWitness.sc)    >>= fun new_sc ->
+  addToRf_load a s eq          >>= fun (new_rf, values) ->
+  let new_wit = <| s.exWitness with sc = new_sc; rf = new_rf; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>= fun _ ->
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>= fun _ ->
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+
+  match values with
+  | Just (v, w) -> ND.return (ReadsFrom v w a new_state)
+  | _           -> ND.return (ConcurrencyTau a new_state)
+  end
+
+val exePerformStore: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformStore s a eq =
+  (if is_seq_cst a then
+     addToSc a s
+   else
+     ND.return s.exWitness.sc)    >>= fun new_sc ->
+  (if is_at_atomic_location s.preEx.lk a then
+    addToMo a s
+   else
+     ND.return s.exWitness.mo)    >>= fun new_mo ->
+  let new_wit = <| s.exWitness with sc = new_sc; mo = new_mo; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex             >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformRmw: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformRmw s a eq =
+  (if is_seq_cst a then
+     addToSc a s
+   else
+     ND.return s.exWitness.sc)    >>= fun new_sc ->
+  addToRf_rmw a s eq           >>= fun (new_rf, values) ->
+  addToMo a s                  >>= fun new_mo ->
+  let new_wit = <| s.exWitness with sc = new_sc; rf = new_rf; mo = new_mo; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+
+  match values with
+  | Just (v, w) -> ND.return (ReadsFrom v w a new_state)
+  | _           -> ND.return (ConcurrencyTau a new_state)
+  end
+
+val exePerformBlocked_rmw: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformBlocked_rmw s a eq =
+
+  let new_wit = s.exWitness in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformLock: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformLock s a eq =
+  addToLo a s                  >>= fun new_lo ->
+  let new_wit = <| s.exWitness with lo = new_lo; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformUnlock: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformUnlock s a eq =
+  addToLo a s                  >>= fun new_lo ->
+  let new_wit = <| s.exWitness with lo = new_lo; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformFence: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformFence s a eq =
+  (if is_seq_cst a then
+     addToSc a s
+   else
+     ND.return s.exWitness.sc)    >>= fun new_sc ->
+  let new_wit = <| s.exWitness with sc = new_sc; |> in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformAlloc: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformAlloc s a eq =
+  let new_wit = s.exWitness in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exePerformDealloc: exeState -> action -> equalityCvalue -> ND.t exeStep
+let exePerformDealloc s a eq =
+  let new_wit = s.exWitness in
+
+  let new_committed = Set.insert a s.committed in
+  let new_ex = (s.preEx, new_wit, getRelations s.preEx new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  checkConsistency eq new_committed new_ex            >>
+  (* TODO: prove instead of assert that the following always holds *)  
+  checkWitnessRestrict new_wit s.committed s.exWitness >>
+
+  let new_is_defined = getDefinedness new_ex in
+  let new_state = <| preEx = s.preEx;
+                     exWitness = new_wit; 
+                     committed = new_committed;
+                     stateIsDefined = new_is_defined;
+                     equalityCvalue = eq; |> in
+  ND.return (ConcurrencyTau a new_state)
+
+val exeOpsemStep: exeState -> equalityCvalue -> ND.t exeStep
+let exeOpsemStep s eq =
+
+  let ex = (s.preEx, s.exWitness, getRelations s.preEx s.exWitness) in
+  checkConsistencyStartState eq s.committed ex >>
+  
+  let uncommitted_actions = 
+    Set_extra.toList (Set.difference s.preEx.actions s.committed) in
+
+  ND.pick uncommitted_actions >>= fun a ->
+
+  match a with
+  | Lock _ _ _ _      -> exePerformLock s a eq
+  | Unlock _ _ _      -> exePerformUnlock s a eq
+  | Load _ _ _ _ _    -> exePerformLoad s a eq
+  | Store _ _ _ _ _   -> exePerformStore s a eq
+  | RMW _ _ _ _ _ _   -> exePerformRmw s a eq
+  | Fence _ _ _       -> exePerformFence s a eq
+  | Blocked_rmw _ _ _ -> exePerformBlocked_rmw s a eq
+  | Alloc _ _ _       -> exePerformAlloc s a eq
+  | Dealloc _ _ _     -> exePerformDealloc s a eq
+  end                          >>= fun step ->
+  
+  let order = opsemOrder s.preEx (stateOf step).exWitness in
+  ND.guard (forall (b IN s.preEx.actions). 
+               ((b, a) IN order -->  b IN s.committed) &&
+               (b IN s.committed --> (a, b) NIN order))  
+           (ND.Other ("Committing action " ^ show (aid_of a) ^ 
+                      " does not respect the opsem order.")) >>
+  ND.return step
+
+
+(*
+indreln
+[exeOpsemTrace: exeState -> bool]
+
+exeInitialEmpty: forall.
+  true
+==>
+  exeOpsemTrace (initialExeState emptyPreEx)
+
+and
+exeInitialCustom: forall pre.
+  let ex = (pre, initialWitness, getRelations pre initialWitness) in
+  well_formed_threads ex &&
+  consistent_hb ex
+==>
+  exeOpsemTrace (initialExeState pre)
+
+and
+exePreExStep: forall preExStep x y.
+  exeOpsemTrace x &&
+  y = updatePreEx x preExStep
+  (* TODO: require that the preExStep preserves some consistency predicates *)
+==>
+  exeOpsemTrace y
+
+and
+exeConcurrencyOpsemStep: forall x eq a step.
+  exeOpsemTrace x &&
+  (* TODO: require that eq is more specific than current eq *)
+  List.elem step (exeOpsemStep x eq)
+==>
+  exeOpsemTrace (stateOf step)
+*)
+

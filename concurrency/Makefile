@@ -1,68 +1,124 @@
-BUILD_DIR     = _bin
-OCAML_LIB_DIR = ../../../../bitbucket/lem/ocaml-lib
+BUILD_DIR           = _bin
+CPP_BUILD_DIR       = _bin_cppmem
+OCAML_LIB_DIR       = ../../../bitbucket/lem/ocaml-lib
+CMM_MODEL_DIR       = ../axiomatic/ntc
+CPP_SRC_DIR         = ../src
+CPP_INTEGRATION_DIR = cppmem-integration
+
+CMM_MODEL_LEM_EXT = \
+  cmm_master.lem \
 
 CMM_MODEL_LEM = \
   cmm_master.lem \
   cmm_aux.lem \
+  language.lem \
+  examples.lem
 
-# Ocaml and isa variants of CMM_MODEL_LEM and cmm_aux
+# Ocaml and isa variants of CMM_MODEL_LEM
 CMM_MODEL_GEN = \
-  cmm_master.ml \
   Cmm_master.thy \
-  cmm_aux.ml \
   Cmm_aux.thy \
+  Language.thy \
+  Examples.thy \
+  cmm_master.ml \
+  cmm_aux.ml \
+  language.ml \
+  examples.ml \
 
 CMM_SRC_ML = \
   value.ml \
 
-OPSEM_LEM = \
-  language.lem \
-  examples.lem \
-  opsem_aux.lem \
-  opsem.lem \
-  twop.lem \
-#  opsem_exe.lem \
+MIN_OPSEM_LEM = \
+  minimalOpsem.lem \
 
-# Ocaml and isa variants of OPSEM_LEM
-OPSEM_GEN = \
-  language.ml \
-  Language.thy \
-  examples.ml \
-  Examples.thy \
-  opsem_aux.ml \
-  Opsem_aux.thy \
-  opsem.ml \
-  Opsem.thy \
-  twop.ml \
-  Twop.thy \
-#  opsem_exe.ml \
-#  Opsem_exe.thy
+# Isa and ocaml variants of MIN_OPSEM_LEM
+MIN_OPSEM_GEN = \
+  MinimalOpsem.thy \
+  minimalOpsem.ml \
+  MinimalOpsem-inc.tex \
+
+REL_OPSEM_LEM = \
+  relationalOpsem.lem \
+
+# Isa and ocaml variants of REL_OPSEM_LEM
+REL_OPSEM_GEN = \
+  RelationalOpsem.thy \
+  relationalOpsem.ml \
+  RelationalOpsem-inc.tex \
+
+EXE_OPSEM_LEM = \
+  executableOpsem.lem \
+
+# Isa and ocaml variants of EXE_OPSEM_LEM
+EXE_OPSEM_GEN = \
+  ExecutableOpsem.thy \
+  executableOpsem.ml \
+  ExecutableOpsem-inc.tex \
+
+TEST_LEM = \
+  test.lem
+
+TEST_GEN = \
+  test.ml
 
 OPSEM_ML = \
   pp.ml \
   main.ml \
 
-default: $(BUILD_DIR)/Twop.thy 
+default: $(BUILD_DIR)/ExecutableOpsem.thy $(BUILD_DIR)/main.byte
 
-# Doesn't build anything, but only typechecks the lem-files
-typecheck: $(addprefix $(BUILD_DIR)/, $(OPSEM_LEM)) \
-           $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_LEM)) 
-	cd $(BUILD_DIR); lem $(OPSEM_LEM) 
+# The model depends on some external files. Copies of those files are
+# included in the repository so we can choose when we want to merge
+# changes. The rule update_dependencies updates the copies with the
+# most up to date version.
+update_dependencies: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) \
+                     $(addprefix $(CPP_SRC_DIR)/, $(CMM_SRC_ML)) | \
+                     $(BUILD_DIR)
+        # Copy the cmm model files to the top level directory
+	@echo COPYING $(CMM_MODEL_LEM_EXT)
+	@cp $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) .
+        # Copy the cmm src files to the top level directory
+	@echo COPYING $(CMM_SRC_ML)
+	@cp $(addprefix $(CPP_SRC_DIR)/, $(CMM_SRC_ML)) .
 
 # Generate byte files from ml
 $(BUILD_DIR)/main.byte: $(addprefix $(BUILD_DIR)/, $(OPSEM_ML)) \
-                        $(addprefix $(BUILD_DIR)/, $(OPSEM_GEN)) \
-                        $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN)) \
                         $(addprefix $(BUILD_DIR)/, $(CMM_SRC_ML)) \
+                        $(addprefix $(BUILD_DIR)/, $(TEST_GEN)) \
+                        $(addprefix $(BUILD_DIR)/, $(EXE_OPSEM_GEN)) \
+                        $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)) \
+                        $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)) \
+                        $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN)) \
         # We copy the library files, because I can't get ocamlbuild to look into the lib directory
 	cp $(OCAML_LIB_DIR)/*.ml  $(BUILD_DIR)
 	cp $(OCAML_LIB_DIR)/*.mli $(BUILD_DIR)
 	cd $(BUILD_DIR); ocamlbuild -lib nums main.byte 
 
-# Build the lem source files to ocaml and isa
-$(addprefix $(BUILD_DIR)/, $(OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(OPSEM_LEM)) \
-                                          $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
-	cd $(BUILD_DIR); lem $(OPSEM_LEM) -isa -ocaml
+# Build the test files to ocaml
+$(addprefix $(BUILD_DIR)/, $(TEST_GEN)): $(addprefix $(BUILD_DIR)/, $(TEST_LEM)) \
+                                         $(addprefix $(BUILD_DIR)/, $(EXE_OPSEM_GEN)) \
+                                         $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)) \
+                                         $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)) \
+                                         $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(TEST_LEM) -ocaml
+
+# Build the executable opsem to ocaml and isa
+$(addprefix $(BUILD_DIR)/, $(EXE_OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(EXE_OPSEM_LEM)) \
+                                              $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)) \
+                                              $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)) \
+                                              $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(EXE_OPSEM_LEM) -isa -ocaml -tex
+
+# Build the relational opsem to ocaml and isa
+$(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_LEM)) \
+                                              $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)) \
+                                              $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(REL_OPSEM_LEM) -isa -ocaml -tex
+
+# Build the minimal opsem to ocaml and isa
+$(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_LEM)) \
+                                              $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(MIN_OPSEM_LEM) -isa -ocaml -tex
 
 # Build cmm (the axiomatic memory model) to ocaml and isa
 $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN)): $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_LEM))
@@ -92,6 +148,28 @@ $(BUILD_DIR)/%.ott: %.ott | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir $(BUILD_DIR)
 
-# Delete the build directory
+
+
+
+# Build integration with cppmem
+cppmem: $(CPP_BUILD_DIR)/main.ml $(CPP_BUILD_DIR)
+	cp -R $(CPP_INTEGRATION_DIR)/* $(CPP_BUILD_DIR)
+	make -C $(CPP_BUILD_DIR)
+
+# Copy the cppmem files to the build directory
+$(CPP_BUILD_DIR)/main.ml: $(CPP_SRC_DIR)/main.ml | $(CPP_BUILD_DIR)
+        # Actually this rule depends on all files in cppmem (not only main.ml)
+        # So changes in other cppmem-files are not detected if main.ml does not change
+	cp -R $(CPP_SRC_DIR)/* $(CPP_BUILD_DIR)
+
+# Create the cppmem-build directory
+$(CPP_BUILD_DIR):
+	mkdir $(CPP_BUILD_DIR)
+
+
+
+
+# Delete the build directories
 clean:
-	rm -rf $(BUILD_DIR) 
+	rm -rf $(BUILD_DIR)
+	rm -rf $(CPP_BUILD_DIR)

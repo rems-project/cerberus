@@ -114,8 +114,8 @@ consumes, relaxed or locks
 
 *)
 
-
-open import Pervasives Relation
+open import Show Show_extra (* CSEM *)
+open import Pervasives Relation Set
 
 (* for reference, this actually uses the following parts of Pervasives *)
 (*
@@ -134,7 +134,7 @@ open import List
 (*open import Sorting*)
 open import Relation
 *)
-import Cmm_aux
+open import Cmm_aux
 
 
 
@@ -184,17 +184,11 @@ declare hol target_rep function minimal_elements = `minimal_elements`
 
 (**** Cppmem base types ****)
 
-(*
-type aid = string
-type program = nat
-*)
-
-type aid = Cmm_aux.aid
-type program = Cmm_aux.program
-
-type tid = Cmm_aux.tid
-type location = Cmm_aux.location
-type cvalue = Cmm_aux.cvalue
+type aid = aid_impl
+type program = program_impl
+type tid = tid_impl
+type location = location_impl
+type cvalue = cvalue_impl
 
 
 type memory_order =
@@ -206,9 +200,48 @@ type memory_order =
   | Consume
   | Acq_rel
 
+instance (Eq memory_order)                (* CSEM *)
+  let (=)  = unsafe_structural_equality   (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end                                       (* CSEM *)
+
+instance (SetType memory_order)       (* CSEM *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end                                   (* CSEM *)
+
+instance (Show memory_order)
+  let show mo = 
+    match mo with
+    | NA      -> "NA"
+    | Seq_cst -> "Seq_cst"
+    | Relaxed -> "Relaxed"
+    | Release -> "Release"
+    | Acquire -> "Acquire"
+    | Consume -> "Consume"
+    | Acq_rel -> "Acq_rel"
+    end    
+end
+
 type lock_outcome =
     Locked
   | Blocked
+
+instance (Eq lock_outcome)                (* CSEM *)
+  let (=)  = unsafe_structural_equality   (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end                                       (* CSEM *)
+
+instance (SetType lock_outcome)       (* CSEM *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end                                   (* CSEM *)
+
+instance (Show lock_outcome)
+  let show lo = 
+    match lo with
+    | Locked  -> "Locked"
+    | Blocked -> "Blocked"
+    end    
+end
 
 type action =
   | Lock of aid * tid * location * lock_outcome
@@ -218,8 +251,66 @@ type action =
   | RMW of aid * tid * memory_order * location * cvalue * cvalue
   | Fence of aid * tid * memory_order
   | Blocked_rmw of aid * tid * location
-  | Create of aid * tid * location (* CSEM *)
-  | Kill of aid * tid * location (* CSEM *)
+  | Alloc of aid * tid * location (* CSEM *)
+  | Dealloc of aid * tid * location (* CSEM *)
+
+let aid_of a =
+    match a with
+    | Lock aid _ _ _            -> aid
+    | Unlock aid _ _            -> aid
+    | Load aid _ _ _ _          -> aid
+    | Store aid _ _ _ _         -> aid
+    | RMW aid _ _ _ _ _         -> aid
+    | Fence aid _ _             -> aid
+    | Blocked_rmw aid _ _       -> aid
+    | Alloc aid _ _            -> aid (* CSEM *)
+    | Dealloc aid _ _              -> aid (* CSEM *)
+    end
+
+val action_equality: action -> action -> bool
+let {ocaml} action_equality a1 a2 = 
+  aid_of a1 = aid_of a2
+let inline ~{ocaml} action_equality a1 a2 = 
+  unsafe_structural_equality a1 a2
+
+instance (Eq action)                              (* CSEM *)
+  let (=)  = action_equality                      (* CSEM *)
+  let (<>) = fun x y -> not (action_equality x y) (* CSEM *)
+end                                               (* CSEM *)
+
+instance (SetType action)                                        (* CSEM *)
+  let setElemCompare x y = setElemCompare (aid_of x) (aid_of y)  (* CSEM *)
+end                                                              (* CSEM *)
+
+instance (Show action)
+  let show a =
+    match a with
+    | Lock aid tid loc lock        ->
+      "Lock (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", loc: " ^ 
+      show loc ^ ", " ^ show lock ^ ")"
+    | Unlock aid tid loc           ->
+      "Unlock (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", loc: " ^ 
+      show loc ^ ")"
+    | Load aid tid mo loc val1     ->
+      "Load (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", mo: " ^ 
+      show mo ^ ", loc: " ^ show loc ^ ", val: " ^ show val1 ^ ")"
+    | Store aid tid mo loc val1    ->
+      "Store (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", mo: " ^ 
+      show mo ^ ", loc: " ^ show loc ^ ", val: " ^ show val1 ^ ")"
+    | RMW aid tid mo loc val1 val2 ->
+      "RMW (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", mo: " ^ 
+      show mo ^ ", loc: " ^ show loc ^ ", val1: " ^ show val1 ^ ", val2: " ^ show val2 ^ ")"
+    | Fence aid tid mo             ->
+      "Fence (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", mo: " ^ show mo ^ ")"
+    | Blocked_rmw aid tid loc      ->
+      "Blocked_rmw (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", loc: " ^ show loc ^ ")"
+    | Alloc aid tid loc            ->
+      "Alloc (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", loc: " ^ show loc ^ ")"
+    | Dealloc aid tid loc          ->
+      "Dealloc (aid: " ^ show aid ^ ", tid: " ^ show tid ^ ", loc: " ^ show loc ^ ")"
+    end
+end
+
 
 
 (*********************************************** *)
@@ -231,6 +322,24 @@ type location_kind =
   | Non_Atomic
   | Atomic
 
+instance (Eq location_kind) (* CSEM *)
+  let (=)  = unsafe_structural_equality (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end (* CSEM *)
+
+instance (SetType location_kind)      (* CSEM *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end                                   (* CSEM *)
+
+instance (Show location_kind)
+  let show loc = 
+    match loc with
+    | Mutex      -> "Mutex"
+    | Non_Atomic -> "Non_Atomic"
+    | Atomic     -> "Atomic"
+    end    
+end
+
 type pre_execution =
   <|  actions : set (action);
       threads : set (tid);
@@ -239,6 +348,21 @@ type pre_execution =
       asw     : set (action * action) ;
       dd      : set (action * action) ;
   |>
+
+(* The name aid_or_rel clashes with something in Isabelle *)
+val aid_of_rel2: set (action * action) -> set (aid * aid)
+let aid_of_rel2 s =
+  Set.map (fun (a, b) -> (aid_of a, aid_of b)) s
+
+instance (Show pre_execution)
+  let show pre =
+    "actions: " ^ show pre.actions ^ 
+    ", threads: " ^ show pre.threads ^
+    ", lk: " ^ "?" ^
+    ", sb: " ^ show (aid_of_rel2 pre.sb) ^
+    ", asw: " ^ show (aid_of_rel2 pre.asw) ^ 
+    ", dd: " ^ show (aid_of_rel2 pre.dd)
+end
 
 type order_kind =
      Global_order
@@ -249,7 +373,6 @@ type relation_usage_flags =
       mo_flag  : bool;
       sc_flag  : bool;
       lo_flag  : bool;
-      ao_flag  : bool;
       tot_flag : bool;  |>
 
 type execution_witness =
@@ -257,13 +380,21 @@ type execution_witness =
       mo      : set (action * action);
       sc      : set (action * action);
       lo      : set (action * action);
-      ao      : set (action * action);
       tot     : set (action * action);
  |>
 
+instance (Show execution_witness)
+  let show wit =
+    "rf: " ^ show (aid_of_rel2 wit.rf) ^ 
+    ", mo: " ^ show (aid_of_rel2 wit.mo)  ^ 
+    ", sc: " ^ show (aid_of_rel2 wit.sc) ^ 
+    ", lo: " ^ show (aid_of_rel2 wit.lo)^ 
+    ", tot: " ^ show (aid_of_rel2 wit.tot)
+end
+
 type relation_list = list (string * set (action * action))
 
-type complete_execution = (pre_execution * execution_witness * relation_list)
+type candidate_execution = (pre_execution * execution_witness * relation_list)
 
 type observable_execution = (pre_execution * execution_witness)
 
@@ -278,7 +409,7 @@ type rf_program_behaviours =
   | rf_Undefined
 
 type named_predicate_tree =
-    Leaf of (complete_execution -> bool)
+    Leaf of (candidate_execution -> bool)
   | Node of list (string * named_predicate_tree)
 
 
@@ -297,8 +428,49 @@ let rec apply_tree pred_tree X =
 
 
 type fault_setgen =
-    One of (string * (complete_execution -> set (action)))
-  | Two of (string * (complete_execution -> set (action * action)))
+    One of (string * (candidate_execution -> set (action)))
+  | Two of (string * (candidate_execution -> set (action * action)))
+
+
+type opsem_t = program -> pre_execution -> bool
+
+type condition_t = set candidate_execution -> bool
+
+let true_condition _ = true
+
+
+
+type memory_model =
+  <|  consistent : named_predicate_tree;
+      relation_calculation : pre_execution -> execution_witness ->
+  relation_list;
+      undefined : list (fault_setgen);
+      relation_flags : relation_usage_flags;
+  |>
+
+
+
+
+
+(*************************************************** *)
+(*   - 2.3 - Projection functions *)
+(*************************************************** *)
+
+(* The unpack functions are not used in the model itself, but are probably 
+   needed by every user of the model. *)
+
+let not_alloc_or_dealloc = function    (* CSEM *)
+  | Lock _ _ _ _            -> true  (* CSEM *)
+  | Unlock _ _ _            -> true  (* CSEM *)
+  | Load _ _ _ _ _          -> true  (* CSEM *)
+  | Store _ _ _ _ _         -> true  (* CSEM *)
+  | RMW _ _ _ _ _ _         -> true  (* CSEM *)
+  | Fence _ _ _             -> true  (* CSEM *)
+  | Blocked_rmw _ _ _       -> true  (* CSEM *)
+  | Alloc _ _ _            -> false (* CSEM *)
+  | Dealloc _ _ _              -> false (* CSEM *)
+ end                                 (* CSEM *)
+
 
 
 let is_fault faults_list (Xo,Xw,rl) a =
@@ -313,62 +485,101 @@ let is_fault faults_list (Xo,Xw,rl) a =
 let each_empty faults_list X =
     let faults_empty f =
       match f with
-        One (_name,setgen) -> Set.null (setgen X)
-      | Two (_name,setgen) -> Set.null (setgen X) end in
+        One (_name,setgen) -> null (setgen X)
+      | Two (_name,setgen) -> null (setgen X) end in
     List.all faults_empty faults_list
 
 
-type opsem_t = program -> pre_execution -> bool
+val pre_execution_equal: pre_execution -> pre_execution -> bool (* CSEM *)
+let {ocaml} pre_execution_equal pre1 pre2 = (* CSEM *)
+  Set.setEqual pre1.actions pre2.actions && (* CSEM *)
+  Set.setEqual pre1.threads pre2.threads && (* CSEM *)
+(*  Set.setEqual pre1.lk pre2.lk && (* CSEM *) *) (* TODO !!!!! *)
+  Set.setEqual pre1.sb pre2.sb && (* CSEM *)
+  Set.setEqual pre1.asw pre2.asw && (* CSEM *)
+  Set.setEqual pre1.dd pre2.dd (* CSEM *)
 
-type protocol_t = set complete_execution -> bool
+let inline ~{ocaml} pre_execution_equal pre1 pre2 = (* CSEM *)
+  unsafe_structural_equality pre1 pre2 (* CSEM *)
 
-let true_protocol _ = true
+instance (Eq pre_execution)                                       (* CSEM *)
+  let (=)  = pre_execution_equal                                  (* CSEM *)
+  let (<>) = fun pre1 pre2 -> not (pre_execution_equal pre1 pre2) (* CSEM *)
+ end                                                              (* CSEM *)
+
+val execution_witness_equal: execution_witness -> execution_witness -> bool (* CSEM *)
+let {ocaml} execution_witness_equal wit1 wit2 =                             (* CSEM *)
+  Set.setEqual wit1.rf wit2.rf &&                                           (* CSEM *)
+  Set.setEqual wit1.mo wit2.mo &&                                           (* CSEM *)
+  Set.setEqual wit1.sc wit2.sc &&                                           (* CSEM *)
+  Set.setEqual wit1.lo wit2.lo &&                                           (* CSEM *)
+  Set.setEqual wit1.tot wit2.tot                                            (* CSEM *)
+
+let inline ~{ocaml} execution_witness_equal wit1 wit2 = (* CSEM *)
+  unsafe_structural_equality wit1 wit2                  (* CSEM *)
+
+instance (Eq execution_witness) (* CSEM *)
+  let (=) = execution_witness_equal (* CSEM *)
+  let (<>) w1 w2 = not (execution_witness_equal w1 w2) (* CSEM *)
+ end (* CSEM *)
+
+instance (Eq program_behaviours) (* CSEM *) (* WIP *)
+  let (=)  = unsafe_structural_equality (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end (* CSEM *)
+
+instance (Eq rf_program_behaviours) (* CSEM *) (* WIP *)
+  let (=)  = unsafe_structural_equality (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end (* CSEM *)
 
 
-val statically_satisfied : forall. protocol_t -> opsem_t -> program -> bool
-let {hol; isabelle; tex} statically_satisfied protocol opsem (p : program) =
+instance (SetType execution_witness) (* CSEM *) (* WIP *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end (* CSEM *)
+
+instance (SetType pre_execution) (* CSEM *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end (* CSEM *)
+
+
+
+val statically_satisfied : forall. condition_t -> opsem_t -> program -> bool
+let {hol; isabelle; tex} statically_satisfied condition opsem (p : program) =
   let Xs = {(Xo,Xw,rl) | opsem p Xo} in
-  protocol Xs
+  condition Xs
 
 
 
-type memory_model =
-  <|  consistent : named_predicate_tree;
-      relation_calculation : pre_execution -> execution_witness ->
-  relation_list;
-      undefined : list (fault_setgen);
-      relation_flags : relation_usage_flags;
-  |>
-
-val observable_filter : forall. set (complete_execution) -> set (observable_execution)
+val observable_filter : forall. set (candidate_execution) -> set (observable_execution)
 let {hol; isabelle; tex} observable_filter X = {(Xo,Xw) | exists rl. (Xo,Xw,rl) IN X}
 
-val behaviour : forall. memory_model -> protocol_t -> opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} behaviour M protocol opsem (p : program) =
+val behaviour : forall. memory_model -> condition_t -> opsem_t -> program -> program_behaviours
+let {hol; isabelle; tex} behaviour M condition opsem (p : program) =
   let consistent_executions =
     { (Xo,Xw,rl) |
         opsem p Xo &&
         apply_tree M.consistent (Xo,Xw,rl) &&
         rl = M.relation_calculation Xo Xw } in
-  if protocol consistent_executions &&
+  if condition consistent_executions &&
      forall (X IN consistent_executions).
         each_empty M.undefined X
   then Defined (observable_filter consistent_executions)
   else Undefined
 
 
-val rf_observable_filter : forall. set (complete_execution) -> set (rf_observable_execution)
+val rf_observable_filter : forall. set (candidate_execution) -> set (rf_observable_execution)
 let {hol; isabelle; tex} rf_observable_filter X = {(Xo,Xw.rf) | exists rl. (Xo,Xw,rl) IN X}
 
 
-val rf_behaviour : forall. memory_model -> protocol_t -> opsem_t -> program -> rf_program_behaviours
-let {hol; isabelle; tex} rf_behaviour M protocol opsem (p : program) =
+val rf_behaviour : forall. memory_model -> condition_t -> opsem_t -> program -> rf_program_behaviours
+let {hol; isabelle; tex} rf_behaviour M condition opsem (p : program) =
   let consistent_executions =
     { (Xo,Xw,rl) |
         opsem p Xo &&
         apply_tree M.consistent (Xo,Xw,rl) &&
         rl = M.relation_calculation Xo Xw } in
-  if protocol consistent_executions &&
+  if condition consistent_executions &&
      forall (X IN consistent_executions).
         each_empty M.undefined X
   then rf_Defined (rf_observable_filter consistent_executions)
@@ -376,39 +587,6 @@ let {hol; isabelle; tex} rf_behaviour M protocol opsem (p : program) =
 
 
 
-
-
-(*************************************************** *)
-(*   - 2.3 - Projection functions *)
-(*************************************************** *)
-
-(* The unpack functions are not used in the model itself, but are probably 
-   needed by every user of the model. *)
-
-let not_create_or_kill = function    (* CSEM *)
-  | Lock _ _ _ _            -> true  (* CSEM *)
-  | Unlock _ _ _            -> true  (* CSEM *)
-  | Load _ _ _ _ _          -> true  (* CSEM *)
-  | Store _ _ _ _ _         -> true  (* CSEM *)
-  | RMW _ _ _ _ _ _         -> true  (* CSEM *)
-  | Fence _ _ _             -> true  (* CSEM *)
-  | Blocked_rmw _ _ _       -> true  (* CSEM *)
-  | Create _ _ _            -> false (* CSEM *)
-  | Kill _ _ _              -> false (* CSEM *)
- end                                 (* CSEM *)
-
-let aid_of a =
-    match a with
-    | Lock aid _ _ _            -> aid
-    | Unlock aid _ _            -> aid
-    | Load aid _ _ _ _          -> aid
-    | Store aid _ _ _ _         -> aid
-    | RMW aid _ _ _ _ _         -> aid
-    | Fence aid _ _             -> aid
-    | Blocked_rmw aid _ _       -> aid
-    | Create aid _ _            -> aid (* CSEM *)
-    | Kill aid _ _              -> aid (* CSEM *)
-    end
 
 let tid_of a =
     match a with
@@ -419,8 +597,8 @@ let tid_of a =
     | RMW _ tid _ _ _ _        -> tid
     | Fence _ tid _            -> tid
     | Blocked_rmw _ tid _      -> tid
-    | Create _ tid _           -> tid (* CSEM *)
-    | Kill _ tid _             -> tid (* CSEM *)
+    | Alloc _ tid _           -> tid (* CSEM *)
+    | Dealloc _ tid _             -> tid (* CSEM *)
     end
 
 let loc_of a =
@@ -432,8 +610,8 @@ let loc_of a =
     | RMW _ _ _ l _ _        -> Just l
     | Fence _ _ _            -> Nothing
     | Blocked_rmw _ _ l      -> Just l
-    | Create _ _ l           -> Just l (* CSEM *)
-    | Kill _ _ l             -> Just l (* CSEM *)
+    | Alloc _ _ l           -> Just l (* CSEM *)
+    | Dealloc _ _ l             -> Just l (* CSEM *)
     end
 
 let value_read_by a =
@@ -528,13 +706,13 @@ let is_fence a =
     | _           -> false
     end
 
-let is_create = function  (* CSEM *)
-  | Create _ _ _ -> true  (* CSEM *)
+let is_alloc = function  (* CSEM *)
+  | Alloc _ _ _ -> true  (* CSEM *)
   | _            -> false (* CSEM *)
 end                       (* CSEM *)
 
-let is_kill = function  (* CSEM *)
-  | Kill _ _ _ -> true  (* CSEM *)
+let is_dealloc = function  (* CSEM *)
+  | Dealloc _ _ _ -> true  (* CSEM *)
   | _          -> false (* CSEM *)
  end                    (* CSEM *)
 
@@ -609,6 +787,12 @@ let per_location_total s rel =
     forall (a IN s) (b IN s). loc_of a = loc_of b -->
       (a,b) IN rel || (b,a) IN rel || (a = b)
 
+val action_equal: action -> action -> bool (* CSEM *)
+let inline {ocaml} action_equal a1 a2 =    (* CSEM *)
+  aid_of a1 = aid_of a2 (* CSEM *)
+
+let inline ~{ocaml} action_equal a1 a2 =   (* CSEM *)
+  (a1 = a2) (* CSEM *)
 
 (**************************************** *)
 (*   - 2.4 - Location kinds *)
@@ -626,8 +810,8 @@ let actions_respect_location_kinds actions lk =
     | RMW _ _ _ l _ _         -> lk l = Atomic
     | Fence _ _ _             -> true
     | Blocked_rmw _ _ l       -> lk l = Atomic
-    | Create _ _ _            -> true (* CSEM *)
-    | Kill _ _ _              -> true (* CSEM *)
+    | Alloc _ _ _            -> true (* CSEM *)
+    | Dealloc _ _ _              -> true (* CSEM *)
     end
 
 
@@ -676,6 +860,7 @@ let well_formed_action a =
 
 
 
+val assumptions: (pre_execution * execution_witness * relation_list) -> bool
 let assumptions (Xo,Xw,_) =
   finite_prefixes Xw.rf  Xo.actions &&
   finite_prefixes Xw.mo  Xo.actions &&
@@ -700,16 +885,17 @@ let indeterminate_sequencing Xo =
       (a,b) IN Xo.sb || (b,a) IN Xo.sb
 
 
-let sbasw Xo = Relation.transitiveClosure (Xo.sb union Xo.asw)
+let sbasw Xo = transitiveClosure (Xo.sb union Xo.asw)
 
 (* 7.22.3 p1 "Each such allocation shall yield a pointer to an object disjoint from any other object."  (* CSEM *)
    When we are going to make a distinction between regions and objects we have to revise this           (* CSEM *)
    (7.22.3 p1 says that the objects do not overlap, so only unused parts of                             (* CSEM *)
    the malloced regions overlap and that might be not-racy. *)                                          (* CSEM *)
-let disjoint_creates actions =                                                                          (* CSEM *)
-  (forall (a IN actions) (b IN actions). is_create a && is_create b && (loc_of a = loc_of b) --> a = b) (* CSEM *)
+let disjoint_allocs actions =                                                                          (* CSEM *)
+  (forall (a IN actions) (b IN actions). is_alloc a && is_alloc b && (loc_of a = loc_of b) --> a = b) (* CSEM *)
 
-let well_formed_threads ((Xo,_,_): pre_execution * execution_witness * relation_list) =
+val well_formed_threads: (pre_execution * execution_witness * relation_list) -> bool
+let well_formed_threads ((Xo,_,_):(pre_execution * execution_witness * relation_list)) =
     (forall (a IN Xo.actions). well_formed_action a) &&
     actions_respect_location_kinds Xo.actions Xo.lk &&
     blocking_observed Xo.actions Xo.sb &&
@@ -722,11 +908,15 @@ let well_formed_threads ((Xo,_,_): pre_execution * execution_witness * relation_
     isStrictPartialOrder Xo.dd &&
     Xo.dd subset Xo.sb &&
     indeterminate_sequencing Xo &&
-    Relation.isIrreflexive (sbasw Xo) &&
-    finite_prefixes (sbasw Xo) Xo.actions &&
-    (forall ((a,b) IN Xo.asw). tid_of a <> tid_of b)
-    && disjoint_creates Xo.actions (* CSEM *)
+    isIrreflexive (sbasw Xo) &&
+    finite_prefixes (sbasw Xo) Xo.actions
+    && disjoint_allocs Xo.actions (* CSEM *)
 
+(*
+Conjuncts removed from above:
+
+
+*)
 
 
 let pre_execution_mask Xo A =
@@ -846,11 +1036,11 @@ let {hol; isabelle; tex}
 The above requires the fringe_set to be finite for tot_consistency and for inducting over the fringe. That is something I should make assumptions to satisfy (I will need to justify them). I would be requiring the number of sb unordered actions and the number of thread spawns between actions to be finite.
 *)
 
-val produce_well_formed_threads : forall. (program -> pre_execution -> bool) -> bool
+val produce_well_formed_threads : forall. opsem_t -> bool
 let {ocaml}
     produce_well_formed_threads opsem = true
 let {hol; isabelle; tex}
-    produce_well_formed_threads opsem =
+    produce_well_formed_threads (opsem:opsem_t) =
     forall Xo p. exists Xw rl. opsem p Xo --> well_formed_threads (Xo,Xw,rl)
 
 
@@ -873,16 +1063,19 @@ let visible_side_effect_set actions hb =
           is_write c && (loc_of c = loc_of b) &&
           (a,c) IN hb && (c,b) IN hb) }
 
+val det_read: pre_execution * execution_witness * relation_list -> bool
 let det_read (Xo,Xw,_::("vse",vse)::_) =
     forall (r IN Xo.actions).
       is_load r -->
       (exists (w IN Xo.actions).  (w,r)  IN vse) =
       (exists (w' IN Xo.actions). (w',r) IN Xw.rf)
 
+val consistent_non_atomic_rf: pre_execution * execution_witness * relation_list -> bool
 let consistent_non_atomic_rf (Xo,Xw,_::("vse",vse)::_) =
     forall ((w,r) IN Xw.rf). is_at_non_atomic_location Xo.lk r -->
       (w,r) IN vse
 
+val well_formed_rf: pre_execution * execution_witness * relation_list -> bool
 let well_formed_rf (Xo,Xw,_) =
     forall ((a,b) IN Xw.rf).
       a IN Xo.actions && b IN Xo.actions &&
@@ -891,8 +1084,19 @@ let well_formed_rf (Xo,Xw,_) =
       value_read_by b = value_written_by a &&
       forall (a' IN Xo.actions). (a',b) IN Xw.rf --> a = a'
 
+val sc_mo_lo_empty: pre_execution * execution_witness * relation_list -> bool
+let sc_mo_lo_empty (_,Xw,_) = null Xw.sc && null Xw.mo && null Xw.lo
 
-let sc_mo_lo_empty (_,Xw,_) = Set.null Xw.sc && Set.null Xw.mo && Set.null Xw.lo
+val sc_mo_empty: pre_execution * execution_witness * relation_list -> bool
+let sc_mo_empty (_,Xw,_) = null Xw.sc && null Xw.mo
+
+val sc_empty: pre_execution * execution_witness * relation_list -> bool
+let sc_empty (_,Xw,_) = (null Xw.sc)
+
+
+val tot_empty: pre_execution * execution_witness * relation_list -> bool
+let tot_empty (_,Xw,_) = (null Xw.tot)
+
 
 let single_thread_relations Xo Xw =
     let hb    = Xo.sb in
@@ -903,6 +1107,7 @@ let single_thread_relations Xo Xw =
 let single_thread_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
          ("sc_mo_lo_empty", Leaf sc_mo_lo_empty);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("consistent_rf",
@@ -912,9 +1117,11 @@ let single_thread_consistent_execution =
 
 (*********************************************** *)
 
+val indeterminate_reads: candidate_execution -> set action
 let indeterminate_reads (Xo,Xw,_) =
     {b | forall (b IN Xo.actions) | is_read b && not (exists (a IN Xo.actions). (a,b) IN Xw.rf)}
 
+val unsequenced_races: candidate_execution -> set (action * action)
 let unsequenced_races (Xo,_,_) =
     { (a,b) | forall (a IN Xo.actions) (b IN Xo.actions) |
         is_at_non_atomic_location Xo.lk a &&
@@ -928,11 +1135,11 @@ let single_thread_undefined_behaviour =
     One ("indeterminate_reads", indeterminate_reads) ]
 
 let no_CK Xo =                                   (* CSEM *)
-  forall (a IN Xo.actions). not_create_or_kill a (* CSEM *)
+  forall (a IN Xo.actions). not_alloc_or_dealloc a (* CSEM *)
 
 
-val single_thread_protocol : forall. protocol_t
-let single_thread_protocol (Xs:set complete_execution) =
+val single_thread_condition : forall. condition_t
+let single_thread_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
   exists (b IN Xo.actions). forall (a IN Xo.actions).
     (tid_of a = tid_of b) &&
@@ -950,7 +1157,6 @@ let single_thread_memory_model =
            mo_flag  = false;
            sc_flag  = false;
            lo_flag  = false;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
@@ -958,7 +1164,7 @@ let single_thread_memory_model =
 
 val single_thread_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} single_thread_behaviour opsem (p : program) =
-  behaviour single_thread_memory_model single_thread_protocol opsem p
+  behaviour single_thread_memory_model single_thread_condition opsem p
 
 
 
@@ -980,7 +1186,7 @@ let locks_only_sw_set actions asw lo =
        locks_only_sw actions asw lo a b }
 
 let no_consume_hb sb sw =
-    Relation.transitiveClosure (sb union sw)
+    transitiveClosure (sb union sw)
 
 let locks_only_relations Xo Xw =
     let sw    = locks_only_sw_set Xo.actions Xo.asw Xw.lo in
@@ -991,13 +1197,10 @@ let locks_only_relations Xo Xw =
       ("sw", sw) ]
 
 
-let sc_mo_empty (_,Xw,_) = Set.null Xw.sc && Set.null Xw.mo
-    
-
 let locks_only_consistent_lo (Xo,Xw,("hb",hb)::_) =
     relation_over Xo.actions Xw.lo &&
-    Relation.isTransitive Xw.lo &&
-    Relation.isIrreflexive Xw.lo &&
+    isTransitive Xw.lo &&
+    isIrreflexive Xw.lo &&
     forall (a IN Xo.actions) (b IN Xo.actions).
       ((a,b) IN Xw.lo --> not ((b,a) IN hb)) &&
       ( ((a,b) IN Xw.lo || (b,a) IN Xw.lo)
@@ -1011,7 +1214,7 @@ let locks_only_consistent_lo (Xo,Xw,("hb",hb)::_) =
       )
 
 
-
+val locks_only_consistent_locks: pre_execution * execution_witness * relation_list -> bool
 let locks_only_consistent_locks (Xo,Xw,_) =
     (forall ((a,c) IN Xw.lo). 
       is_successful_lock a && is_successful_lock c
@@ -1019,13 +1222,15 @@ let locks_only_consistent_locks (Xo,Xw,_) =
       (exists (b IN Xo.actions). is_unlock b && (a,b) IN Xw.lo && (b,c) IN Xw.lo))
 
 
+val consistent_hb: pre_execution * execution_witness * relation_list -> bool
 let consistent_hb (Xo,_,("hb",hb)::_) =
-    Relation.isIrreflexive (Relation.transitiveClosure hb)
+    isIrreflexive (transitiveClosure hb)
 
 
 let locks_only_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
          ("sc_mo_empty", Leaf sc_mo_empty);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1058,12 +1263,13 @@ let locks_only_good_mutex_use actions lk sb lo a =
           is_unlock au && (al,au) IN lo && (au,a) IN lo
     )
 
-
+val locks_only_bad_mutexes: candidate_execution -> set action
 let locks_only_bad_mutexes (Xo,Xw,_) =
   { a | forall (a IN Xo.actions) |
     not (locks_only_good_mutex_use Xo.actions Xo.lk Xo.sb Xw.lo a)}
 
 
+val data_races: candidate_execution -> set (action * action)
 let data_races (Xo,Xw,("hb",hb)::_) =
     { (a,b) | forall (a IN Xo.actions) (b IN Xo.actions) |
         not (a = b) && (loc_of a = loc_of b) && (is_write a || is_write b) &&
@@ -1082,8 +1288,8 @@ let locks_only_undefined_behaviour =
 (*********************************************** *)
 
 
-val locks_only_protocol : forall. protocol_t
-let locks_only_protocol (Xs:set complete_execution) =
+val locks_only_condition : forall. condition_t
+let locks_only_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match (loc_of a) with
@@ -1100,13 +1306,12 @@ let locks_only_memory_model =
            mo_flag  = false;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 val locks_only_behaviour : forall . opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} locks_only_behaviour opsem (p : program) =
-  behaviour locks_only_memory_model locks_only_protocol opsem p
+  behaviour locks_only_memory_model locks_only_condition opsem p
 
 
 (*********************************************** *)
@@ -1115,17 +1320,18 @@ consumes, release or acquire *)
 (*********************************************** *)
 
 
-let sc_empty (_,Xw,_) = (Set.null Xw.sc)
-
+val consistent_atomic_rf: pre_execution * execution_witness * relation_list -> bool
 let consistent_atomic_rf (Xo,Xw,("hb",hb)::_) =
     forall ((w,r) IN Xw.rf). is_at_atomic_location Xo.lk r && is_load r -->
         not ((r,w) IN hb)
 
+val rmw_atomicity: pre_execution * execution_witness * relation_list -> bool
 let rmw_atomicity (Xo,Xw,_) =
     forall (b IN Xo.actions) (a IN Xo.actions).
       is_RMW b --> (adjacent_less_than Xw.mo Xo.actions a b = ((a,b) IN Xw.rf))
 
 
+val coherent_memory_use: pre_execution * execution_witness * relation_list -> bool
 let coherent_memory_use (Xo,Xw,("hb",hb)::_) =
     (* CoRR *)
     ( not ( exists ((a,b) IN Xw.rf) ((c,d) IN Xw.rf).
@@ -1140,10 +1346,11 @@ let coherent_memory_use (Xo,Xw,("hb",hb)::_) =
     ( not (exists ((a,b) IN hb). (b,a) IN Xw.mo) )
 
 
+val consistent_mo: pre_execution * execution_witness * relation_list -> bool
 let consistent_mo (Xo,Xw,_) =
     relation_over Xo.actions Xw.mo &&
-    Relation.isTransitive Xw.mo &&
-    Relation.isIrreflexive Xw.mo &&
+    isTransitive Xw.mo &&
+    isIrreflexive Xw.mo &&
     forall (a IN Xo.actions) (b IN Xo.actions).
       ((a,b) IN Xw.mo || (b,a) IN Xw.mo)
       = ( (not (a = b)) &&
@@ -1155,6 +1362,7 @@ let consistent_mo (Xo,Xw,_) =
 let relaxed_only_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
          ("sc_empty", Leaf sc_empty);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1169,8 +1377,8 @@ let relaxed_only_consistent_execution =
                   ("rmw_atomicity", Leaf rmw_atomicity) ]) ]
 
 
-val relaxed_only_protocol : forall. protocol_t
-let relaxed_only_protocol (Xs:set complete_execution) =
+val relaxed_only_condition : forall. condition_t
+let relaxed_only_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -1181,8 +1389,8 @@ let relaxed_only_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> mo IN {Relaxed}
       | Fence _ _ _             -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -1198,14 +1406,13 @@ let relaxed_only_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val relaxed_only_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} relaxed_only_behaviour opsem (p : program) =
-  behaviour relaxed_only_memory_model relaxed_only_protocol opsem p
+  behaviour relaxed_only_memory_model relaxed_only_condition opsem p
 
 
 
@@ -1215,6 +1422,7 @@ consumes or relaxed *)
 (*********************************************** *)
 
 (* Unused in this model currently, causes me to encounter the non-atomic LB writes problem, which can be solved for the simpler model. *)
+val release_acquire_coherent_memory_use: pre_execution * execution_witness * relation_list -> bool
 let release_acquire_coherent_memory_use (Xo,Xw,("hb",hb)::_) =
     (* CoWR *)
     ( not ( exists ((a,b) IN Xw.rf) (c IN Xo.actions).
@@ -1223,15 +1431,16 @@ let release_acquire_coherent_memory_use (Xo,Xw,("hb",hb)::_) =
     ( not (exists ((a,b) IN hb). (b,a) IN Xw.mo) )
 
 
+val atomic_initialisation_first: pre_execution * execution_witness * relation_list -> bool
 let atomic_initialisation_first (Xo,_,_) =
   forall (a IN Xo.actions) (b IN Xo.actions).
     is_at_atomic_location Xo.lk a && is_NA_store a &&
     is_write b && (loc_of a = loc_of b) && (a <> b) -->
-    ((a,b) IN Relation.transitiveClosure (Xo.sb union Xo.asw)) && not (is_NA_store b)
+    ((a,b) IN transitiveClosure (Xo.sb union Xo.asw)) && not (is_NA_store b)
 
 
-val release_acquire_protocol : forall. protocol_t
-let release_acquire_protocol (Xs:set complete_execution) =
+val release_acquire_condition : forall. condition_t
+let release_acquire_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     atomic_initialisation_first (Xo,Xw,rl) &&
     forall (a IN Xo.actions).
@@ -1243,8 +1452,8 @@ let release_acquire_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> mo = Acq_rel
       | Fence _ _ _             -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -1279,6 +1488,7 @@ let release_acquire_relations Xo Xw =
 let release_acquire_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
          ("sc_empty", Leaf sc_empty);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1302,14 +1512,13 @@ let release_acquire_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val release_acquire_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} release_acquire_behaviour opsem (p : program) =
-  behaviour release_acquire_memory_model release_acquire_protocol opsem p
+  behaviour release_acquire_memory_model release_acquire_condition opsem p
 
 
 
@@ -1319,8 +1528,8 @@ consumes *)
 (*********************************************** *)
 
 
-val release_acquire_relaxed_protocol : forall. protocol_t
-let release_acquire_relaxed_protocol (Xs:set complete_execution) =
+val release_acquire_relaxed_condition : forall. condition_t
+let release_acquire_relaxed_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -1331,8 +1540,8 @@ let release_acquire_relaxed_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Acq_rel;Acquire;Release;Relaxed})
       | Fence _ _ _             -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -1389,14 +1598,13 @@ let release_acquire_relaxed_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val release_acquire_relaxed_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} release_acquire_relaxed_behaviour opsem (p : program) =
-  behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_protocol opsem p
+  behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p
 
 
 
@@ -1406,8 +1614,8 @@ let {hol; isabelle; tex} release_acquire_relaxed_behaviour opsem (p : program) =
 (*********************************************** *)
 
 
-val release_acquire_fenced_protocol : forall. protocol_t
-let release_acquire_fenced_protocol (Xs:set complete_execution) =
+val release_acquire_fenced_condition : forall. condition_t
+let release_acquire_fenced_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -1418,8 +1626,8 @@ let release_acquire_fenced_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Acq_rel;Acquire;Release;Relaxed})
       | Fence _ _ mo            -> (mo IN {Release;Acquire;Relaxed})
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -1486,14 +1694,13 @@ let release_acquire_fenced_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val release_acquire_fenced_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} release_acquire_fenced_behaviour opsem (p : program) =
-  behaviour release_acquire_fenced_memory_model release_acquire_fenced_protocol opsem p
+  behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p
 
 
 
@@ -1502,8 +1709,8 @@ let {hol; isabelle; tex} release_acquire_fenced_behaviour opsem (p : program) =
 (*********************************************** *)
 
 
-val sc_accesses_protocol : forall. protocol_t
-let sc_accesses_protocol (Xs:set complete_execution) =
+val sc_accesses_condition : forall. condition_t
+let sc_accesses_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -1514,16 +1721,16 @@ let sc_accesses_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Acq_rel;Acquire;Release;Relaxed;Seq_cst})
       | Fence _ _ mo            -> (mo IN {Release;Acquire;Relaxed})
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
-
+val sc_accesses_consistent_sc: pre_execution * execution_witness * relation_list -> bool
 let sc_accesses_consistent_sc (Xo,Xw,("hb",hb)::_) =
     relation_over Xo.actions Xw.sc &&
-    Relation.isTransitive Xw.sc &&
-    Relation.isIrreflexive Xw.sc &&
+    isTransitive Xw.sc &&
+    isIrreflexive Xw.sc &&
     forall (a IN Xo.actions) (b IN Xo.actions).
       ((a,b) IN Xw.sc --> not ((b,a) IN hb union Xw.mo)) &&
       ( ((a,b) IN Xw.sc || (b,a) IN Xw.sc) =
@@ -1531,6 +1738,7 @@ let sc_accesses_consistent_sc (Xo,Xw,("hb",hb)::_) =
       )
 
 
+val sc_accesses_sc_reads_restricted: pre_execution * execution_witness * relation_list -> bool
 let sc_accesses_sc_reads_restricted (Xo,Xw,("hb",hb)::_) =
     forall ((w,r) IN Xw.rf). is_seq_cst r -->
       ( is_seq_cst w && (w,r) IN Xw.sc &&
@@ -1545,6 +1753,7 @@ let sc_accesses_sc_reads_restricted (Xo,Xw,("hb",hb)::_) =
 
 let sc_accesses_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1573,14 +1782,13 @@ let sc_accesses_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val sc_accesses_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} sc_accesses_behaviour opsem (p : program) =
-  behaviour sc_accesses_memory_model sc_accesses_protocol opsem p
+  behaviour sc_accesses_memory_model sc_accesses_condition opsem p
 
 
 
@@ -1589,8 +1797,8 @@ let {hol; isabelle; tex} sc_accesses_behaviour opsem (p : program) =
 (*********************************************** *)
 
 
-val sc_fenced_protocol : forall. protocol_t
-let sc_fenced_protocol (Xs:set complete_execution) =
+val sc_fenced_condition : forall. condition_t
+let sc_fenced_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -1601,11 +1809,12 @@ let sc_fenced_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Acq_rel;Acquire;Release;Relaxed;Seq_cst})
       | Fence _ _ mo            -> (mo IN {Release;Acquire;Relaxed;Seq_cst})
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
+val sc_fenced_sc_fences_heeded: pre_execution * execution_witness * relation_list -> bool
 let sc_fenced_sc_fences_heeded (Xo,Xw,_) =
     forall (f IN Xo.actions) (f' IN Xo.actions) 
            (r IN Xo.actions)
@@ -1643,6 +1852,7 @@ let sc_fenced_sc_fences_heeded (Xo,Xw,_) =
 
 let sc_fenced_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1671,14 +1881,13 @@ let sc_fenced_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val sc_fenced_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} sc_fenced_behaviour opsem (p : program) =
-  behaviour sc_fenced_memory_model sc_fenced_protocol opsem p
+  behaviour sc_fenced_memory_model sc_fenced_condition opsem p
 
 
 
@@ -1687,7 +1896,7 @@ let {hol; isabelle; tex} sc_fenced_behaviour opsem (p : program) =
 (* 11 - with consume *)
 (*********************************************** *)
 
-let with_consume_cad_set actions sb dd rf = Relation.transitiveClosure ( (rf inter sb) union dd )
+let with_consume_cad_set actions sb dd rf = transitiveClosure ( (rf inter sb) union dd )
 
 let with_consume_dob actions rf rs cad w a =
     tid_of w <> tid_of a &&
@@ -1715,7 +1924,7 @@ let compose R1 R2 =
 
 let inter_thread_happens_before actions sb sw dob =
     let r = sw union dob union (compose sw sb) in
-      Relation.transitiveClosure (r union (compose sb r))
+      transitiveClosure (r union (compose sb r))
 
 
 let happens_before actions sb ithb =
@@ -1744,6 +1953,7 @@ let with_consume_relations Xo Xw =
 
 let with_consume_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1773,14 +1983,13 @@ let with_consume_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val with_consume_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} with_consume_behaviour opsem (p : program) =
-  behaviour with_consume_memory_model true_protocol opsem p
+  behaviour with_consume_memory_model true_condition opsem p
 
 
 
@@ -1828,6 +2037,7 @@ let standard_relations Xo Xw =
       ("cad", cad) ]
 
 
+val standard_consistent_atomic_rf: pre_execution * execution_witness * relation_list -> bool
 let standard_consistent_atomic_rf (Xo,Xw,_::_::_::("vsses",vsses)::_) =
     forall ((w,r) IN Xw.rf). is_at_atomic_location Xo.lk r && is_load r-->
         (w,r) IN vsses
@@ -1835,6 +2045,7 @@ let standard_consistent_atomic_rf (Xo,Xw,_::_::_::("vsses",vsses)::_) =
 
 let standard_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("locks_only_consistent_locks", Leaf locks_only_consistent_locks);
@@ -1866,13 +2077,12 @@ let standard_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 val standard_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} standard_behaviour opsem (p : program) =
-  behaviour standard_memory_model true_protocol opsem p
+  behaviour standard_memory_model true_condition opsem p
 
 
 
@@ -1885,8 +2095,8 @@ consumes or relaxed *)
 
 (* Hypothetical Fortran model note (No longer applicable): If Nick was going to use this model, I would want to strengthen SC fences, and think some more about the SC fence absorbsion mismatch. I would also need to cut down hb to the SC portion that Nick discussed. *)
 
-val release_acquire_SC_protocol : forall. protocol_t
-let release_acquire_SC_protocol (Xs:set complete_execution) =
+val release_acquire_SC_condition : forall. condition_t
+let release_acquire_SC_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     atomic_initialisation_first (Xo,Xw,rl) &&
     forall (a IN Xo.actions).
@@ -1898,8 +2108,8 @@ let release_acquire_SC_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Acq_rel;Seq_cst})
       | Fence _ _ mo            -> (mo IN {Seq_cst})
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 (*********************************************** *)
@@ -1915,19 +2125,18 @@ let release_acquire_SC_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val release_acquire_SC_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} release_acquire_SC_behaviour opsem (p : program) =
-  behaviour release_acquire_SC_memory_model release_acquire_SC_protocol opsem p
+  behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p
 
 
 val release_acquire_SC_rf_behaviour : forall. opsem_t -> program -> rf_program_behaviours
 let {hol; isabelle; tex} release_acquire_SC_rf_behaviour opsem (p : program) =
-  rf_behaviour release_acquire_SC_memory_model release_acquire_SC_protocol opsem p
+  rf_behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p
 
 
 (*********************************************** *)
@@ -1936,8 +2145,8 @@ consumes or relaxed *)
 (*********************************************** *)
 
 
-val SC_protocol : forall. protocol_t
-let SC_protocol (Xs:set complete_execution) =
+val SC_condition : forall. condition_t
+let SC_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     atomic_initialisation_first (Xo,Xw,rl) &&
     forall (a IN Xo.actions).
@@ -1949,8 +2158,8 @@ let SC_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Seq_cst})
       | Fence _ _ mo            -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 (*********************************************** *)
@@ -1966,38 +2175,38 @@ let SC_memory_model =
            mo_flag  = true;
            sc_flag  = true;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val SC_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} SC_behaviour opsem (p : program) =
-  behaviour SC_memory_model SC_protocol opsem p
+  behaviour SC_memory_model SC_condition opsem p
 
 
 (*********************************************** *)
 (* 15 - tot - sequential consistency *)
 (*********************************************** *)
 
+val atomic_initialisation_before_all: pre_execution * execution_witness * relation_list -> bool
 let atomic_initialisation_before_all (Xo,_,_) =
   forall (a IN Xo.actions) (b IN Xo.actions).
     is_at_atomic_location Xo.lk a && is_NA_store a &&
     (loc_of a = loc_of b) && (a <> b) -->
-    ((a,b) IN Relation.transitiveClosure (Xo.sb union Xo.asw)) && not (is_NA_store b)
+    ((a,b) IN transitiveClosure (Xo.sb union Xo.asw)) && not (is_NA_store b)
 
 
-val bounded_executions : forall. set complete_execution -> bool
+val bounded_executions : forall. set candidate_execution -> bool
 let {ocaml}
     bounded_executions Xs = true
-let {hol; isabelle; tex} bounded_executions (Xs:set complete_execution) =
+let {hol; isabelle; tex} bounded_executions (Xs:set candidate_execution) =
   exists N. forall ((Xo,Xw,rl) IN Xs).
     finite Xo.actions &&
     size Xo.actions < N
 
 
-val tot_protocol : forall. protocol_t
-let tot_protocol (Xs:set complete_execution) =
+val tot_condition : forall. condition_t
+let tot_condition (Xs:set candidate_execution) =
   bounded_executions Xs &&
   forall ((Xo,Xw,rl) IN Xs).
     atomic_initialisation_before_all (Xo,Xw,rl) &&
@@ -2010,8 +2219,8 @@ let tot_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> (mo IN {Seq_cst})
       | Fence _ _ mo            -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -2022,14 +2231,17 @@ let tot_relations Xo Xw =
       ("vse", vse);
     ]
 
+val tot_det_read: pre_execution * execution_witness * relation_list -> bool
 let tot_det_read (Xo,Xw,_::("vse",vse)::_) =
     forall (r IN Xo.actions).
       (exists (w IN Xo.actions).  (w,r)  IN vse) =
       (exists (w' IN Xo.actions). (w',r) IN Xw.rf)
 
+val tot_consistent_rf: pre_execution * execution_witness * relation_list -> bool
 let tot_consistent_rf (Xo,Xw,_::("vse",vse)::_) =
     forall ((w,r) IN Xw.rf). (w,r) IN vse
 
+val tot_consistent_locks: pre_execution * execution_witness * relation_list -> bool
 let tot_consistent_locks (Xo,Xw,_) =
     (forall ((a,c) IN Xw.tot). 
       is_successful_lock a && is_successful_lock c && (loc_of a = loc_of c)
@@ -2037,17 +2249,18 @@ let tot_consistent_locks (Xo,Xw,_) =
       (exists (b IN Xo.actions). (loc_of a = loc_of b) && is_unlock b && (a,b) IN Xw.tot && (b,c) IN Xw.tot))
 
 
+val tot_consistent_tot: pre_execution * execution_witness * relation_list -> bool
 let tot_consistent_tot (Xo,Xw,_) =
     relation_over Xo.actions Xw.tot &&
-    Relation.isTransitive Xw.tot &&
-    Relation.isIrreflexive Xw.tot &&
+    isTransitive Xw.tot &&
+    isIrreflexive Xw.tot &&
     isTrichotomousOn  Xw.tot  Xo.actions &&
     Xo.sb subset Xw.tot &&
     Xo.asw subset Xw.tot &&
     finite_prefixes Xw.tot Xo.actions
 
 
-
+val tot_assumptions: pre_execution * execution_witness * relation_list -> bool
 let tot_assumptions (Xo,Xw,_) =
   finite_prefixes Xw.rf Xo.actions
 
@@ -2110,18 +2323,17 @@ let tot_memory_model =
            mo_flag  = false;
            sc_flag  = false;
            lo_flag  = false;
-           ao_flag  = false;
            tot_flag = true; |>
   |>
 
 
 val tot_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} tot_behaviour opsem (p : program) =
-  behaviour tot_memory_model tot_protocol opsem p
+  behaviour tot_memory_model tot_condition opsem p
 
 val tot_rf_behaviour : forall. opsem_t -> program -> rf_program_behaviours
 let {hol; isabelle; tex} tot_rf_behaviour opsem (p : program) =
-  rf_behaviour tot_memory_model tot_protocol opsem p
+  rf_behaviour tot_memory_model tot_condition opsem p
 
 
 (***********************)
@@ -2130,12 +2342,12 @@ let {hol; isabelle; tex} tot_rf_behaviour opsem (p : program) =
 
 val cond : forall. (program -> pre_execution -> bool) -> program -> bool
 let {hol; isabelle; tex} 
-cond opsem p = statically_satisfied sc_fenced_protocol opsem p
+cond opsem p = statically_satisfied sc_fenced_condition opsem p
 
 let M1 = tot_memory_model
 let M2 = tot_memory_model
-let P1 = tot_protocol
-let P2 = tot_protocol
+let P1 = tot_condition
+let P2 = tot_condition
 
 
 
@@ -2146,88 +2358,88 @@ theorem {hol; isabelle; tex} genthm:
 
 theorem {hol; isabelle; tex} thm0:
 (forall opsem p.
-  (behaviour with_consume_memory_model true_protocol opsem p =
-   behaviour standard_memory_model true_protocol opsem p))
+  (behaviour with_consume_memory_model true_condition opsem p =
+   behaviour standard_memory_model true_condition opsem p))
 
 
 theorem {hol; isabelle; tex} thm1:
 (forall opsem p.
-  statically_satisfied sc_fenced_protocol opsem p -->
-  (behaviour sc_fenced_memory_model sc_fenced_protocol opsem p =
-   behaviour with_consume_memory_model true_protocol opsem p))
+  statically_satisfied sc_fenced_condition opsem p -->
+  (behaviour sc_fenced_memory_model sc_fenced_condition opsem p =
+   behaviour with_consume_memory_model true_condition opsem p))
 
 theorem {hol; isabelle; tex} thm2:
 (forall opsem p.
-  statically_satisfied sc_accesses_protocol opsem p -->
-  (behaviour sc_accesses_memory_model sc_accesses_protocol opsem p =
-   behaviour sc_fenced_memory_model sc_fenced_protocol opsem p))
+  statically_satisfied sc_accesses_condition opsem p -->
+  (behaviour sc_accesses_memory_model sc_accesses_condition opsem p =
+   behaviour sc_fenced_memory_model sc_fenced_condition opsem p))
 
 theorem {hol; isabelle; tex} thm3:
 (forall opsem p.
-  statically_satisfied release_acquire_fenced_protocol opsem p -->
-  (behaviour release_acquire_fenced_memory_model release_acquire_fenced_protocol opsem p =
-   behaviour sc_accesses_memory_model sc_accesses_protocol opsem p))
+  statically_satisfied release_acquire_fenced_condition opsem p -->
+  (behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p =
+   behaviour sc_accesses_memory_model sc_accesses_condition opsem p))
 
 theorem {hol; isabelle; tex} thm4:
 (forall opsem p.
-  statically_satisfied release_acquire_relaxed_protocol opsem p -->
-  (behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_protocol opsem p =
-   behaviour release_acquire_fenced_memory_model release_acquire_fenced_protocol opsem p))
+  statically_satisfied release_acquire_relaxed_condition opsem p -->
+  (behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p =
+   behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p))
 
 theorem {hol; isabelle; tex} thm6:
 (forall opsem p.
-  statically_satisfied relaxed_only_protocol opsem p -->
-  (behaviour relaxed_only_memory_model relaxed_only_protocol opsem p =
-   behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_protocol opsem p))
+  statically_satisfied relaxed_only_condition opsem p -->
+  (behaviour relaxed_only_memory_model relaxed_only_condition opsem p =
+   behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p))
 
 theorem {hol; isabelle; tex} thm7:
 (forall opsem p.
-  statically_satisfied locks_only_protocol opsem p -->
-  (behaviour locks_only_memory_model locks_only_protocol opsem p =
-   behaviour release_acquire_memory_model release_acquire_protocol opsem p))
+  statically_satisfied locks_only_condition opsem p -->
+  (behaviour locks_only_memory_model locks_only_condition opsem p =
+   behaviour release_acquire_memory_model release_acquire_condition opsem p))
 
 theorem {hol; isabelle; tex} thm8:
 (forall opsem p.
-  statically_satisfied locks_only_protocol opsem p -->
-  (behaviour locks_only_memory_model locks_only_protocol opsem p =
-   behaviour relaxed_only_memory_model relaxed_only_protocol opsem p))
+  statically_satisfied locks_only_condition opsem p -->
+  (behaviour locks_only_memory_model locks_only_condition opsem p =
+   behaviour relaxed_only_memory_model relaxed_only_condition opsem p))
 
 theorem {hol; isabelle; tex} thm9:
 (forall opsem p.
-  statically_satisfied single_thread_protocol opsem p -->
-  (behaviour single_thread_memory_model single_thread_protocol opsem p = 
-   behaviour locks_only_memory_model locks_only_protocol opsem p))
+  statically_satisfied single_thread_condition opsem p -->
+  (behaviour single_thread_memory_model single_thread_condition opsem p = 
+   behaviour locks_only_memory_model locks_only_condition opsem p))
 
 theorem {hol; isabelle; tex} thm10:
 (forall opsem p.
-  statically_satisfied release_acquire_SC_protocol opsem p -->
-  (behaviour sc_fenced_memory_model sc_fenced_protocol opsem p =
-   behaviour release_acquire_SC_memory_model release_acquire_SC_protocol opsem p))
+  statically_satisfied release_acquire_SC_condition opsem p -->
+  (behaviour sc_fenced_memory_model sc_fenced_condition opsem p =
+   behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
 theorem {hol; isabelle; tex} thm5:
 (forall opsem p.
-  statically_satisfied release_acquire_protocol opsem p -->
-  (behaviour release_acquire_memory_model release_acquire_protocol opsem p =
-   behaviour release_acquire_SC_memory_model release_acquire_SC_protocol opsem p))
+  statically_satisfied release_acquire_condition opsem p -->
+  (behaviour release_acquire_memory_model release_acquire_condition opsem p =
+   behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
 theorem {hol; isabelle; tex} thm11:
 (forall opsem p.
-  statically_satisfied SC_protocol opsem p -->
-  (behaviour SC_memory_model SC_protocol opsem p =
-   behaviour release_acquire_SC_memory_model release_acquire_SC_protocol opsem p))
+  statically_satisfied SC_condition opsem p -->
+  (behaviour SC_memory_model SC_condition opsem p =
+   behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
 theorem {hol; isabelle; tex} thm12:
 (forall opsem p.
-  statically_satisfied locks_only_protocol opsem p -->
-  (behaviour SC_memory_model SC_protocol opsem p = 
-   behaviour locks_only_memory_model locks_only_protocol opsem p))
+  statically_satisfied locks_only_condition opsem p -->
+  (behaviour SC_memory_model SC_condition opsem p = 
+   behaviour locks_only_memory_model locks_only_condition opsem p))
 
 theorem {hol; isabelle; tex} bigthm:
 (forall opsem p.
   opsem_assumptions opsem &&
-  statically_satisfied tot_protocol opsem p -->
-  (rf_behaviour SC_memory_model SC_protocol opsem p =
-   rf_behaviour tot_memory_model tot_protocol opsem p))
+  statically_satisfied tot_condition opsem p -->
+  (rf_behaviour SC_memory_model SC_condition opsem p =
+   rf_behaviour tot_memory_model tot_condition opsem p))
 
 
 (* val genthm : bool *)
@@ -2249,68 +2461,68 @@ theorem {hol; isabelle; tex} bigthm:
 
 (* val thm1 : bool *)
 (* let {hol; isabelle; tex} thm1 = forall opsem p. *)
-(*   statically_satisfied sc_fenced_protocol opsem p --> *)
+(*   statically_satisfied sc_fenced_condition opsem p --> *)
 (*   (sc_fenced_behaviour opsem p = with_consume_behaviour opsem p) *)
 
 (* val thm2 : bool *)
 (* let {hol; isabelle; tex} thm2 = forall opsem p. *)
-(*   statically_satisfied sc_accesses_protocol opsem p --> *)
+(*   statically_satisfied sc_accesses_condition opsem p --> *)
 (*   (sc_accesses_behaviour opsem p = sc_fenced_behaviour opsem p) *)
 
 (* val thm3 : bool *)
 (* let {hol; isabelle; tex} thm3 = forall opsem p. *)
-(*   statically_satisfied release_acquire_fenced_protocol opsem p --> *)
+(*   statically_satisfied release_acquire_fenced_condition opsem p --> *)
 (*   (release_acquire_fenced_behaviour opsem p = sc_accesses_behaviour opsem p) *)
 
 (* val thm4 : bool *)
 (* let {hol; isabelle; tex} thm4 = forall opsem p. *)
-(*   statically_satisfied release_acquire_relaxed_protocol opsem p --> *)
+(*   statically_satisfied release_acquire_relaxed_condition opsem p --> *)
 (*   (release_acquire_relaxed_behaviour opsem p = release_acquire_fenced_behaviour opsem p) *)
 
 (* val thm6 : bool *)
 (* let {hol; isabelle; tex} thm6 = forall opsem p. *)
-(*   statically_satisfied relaxed_only_protocol opsem p --> *)
+(*   statically_satisfied relaxed_only_condition opsem p --> *)
 (*   (relaxed_only_behaviour opsem p = release_acquire_relaxed_behaviour opsem p) *)
 
 (* val thm7 : bool *)
 (* let {hol; isabelle; tex} thm7 = forall opsem p. *)
-(*   statically_satisfied locks_only_protocol opsem p --> *)
+(*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (locks_only_behaviour opsem p = release_acquire_behaviour opsem p) *)
 
 (* val thm8 : bool *)
 (* let {hol; isabelle; tex} thm8 = forall opsem p. *)
-(*   statically_satisfied locks_only_protocol opsem p --> *)
+(*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (locks_only_behaviour opsem p = relaxed_only_behaviour opsem p) *)
 
 (* val thm9 : bool *)
 (* let {hol; isabelle; tex} thm9 = forall opsem p. *)
-(*   statically_satisfied single_thread_protocol opsem p --> *)
+(*   statically_satisfied single_thread_condition opsem p --> *)
 (*   (single_thread_behaviour opsem p = locks_only_behaviour opsem p) *)
 
 (* val thm10 : bool *)
 (* let {hol; isabelle; tex} thm10 = forall opsem p. *)
-(*   statically_satisfied release_acquire_SC_protocol opsem p --> *)
+(*   statically_satisfied release_acquire_SC_condition opsem p --> *)
 (*   (sc_fenced_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm5 : bool *)
 (* let {hol; isabelle; tex} thm5 = forall opsem p. *)
-(*   statically_satisfied release_acquire_protocol opsem p --> *)
+(*   statically_satisfied release_acquire_condition opsem p --> *)
 (*   (release_acquire_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm11 : bool *)
 (* let {hol; isabelle; tex} thm11 = forall opsem p. *)
-(*   statically_satisfied SC_protocol opsem p --> *)
+(*   statically_satisfied SC_condition opsem p --> *)
 (*   (SC_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm12 : bool *)
 (* let {hol; isabelle; tex} thm12 = forall opsem p. *)
-(*   statically_satisfied locks_only_protocol opsem p --> *)
+(*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (SC_behaviour opsem p = locks_only_behaviour opsem p) *)
 
 (* val bigthm : bool *)
 (* let {hol; isabelle; tex} bigthm = forall opsem p. *)
 (*   opsem_assumptions opsem && *)
-(*   statically_satisfied tot_protocol opsem p --> *)
+(*   statically_satisfied tot_condition opsem p --> *)
 (*   (release_acquire_SC_rf_behaviour opsem p = tot_rf_behaviour opsem p) *)
 
 
@@ -2322,8 +2534,8 @@ consumes, relaxed or locks *)
 
 
 
-val release_acquire_no_locks_protocol : forall. protocol_t
-let release_acquire_no_locks_protocol (Xs:set complete_execution) =
+val release_acquire_no_locks_condition : forall. condition_t
+let release_acquire_no_locks_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -2334,8 +2546,8 @@ let release_acquire_no_locks_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> mo = Acq_rel
       | Fence _ _ _             -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 
@@ -2361,12 +2573,13 @@ let release_acquire_no_locks_relations Xo Xw =
       ("sw", sw) ]
 
 
-let sc_lo_empty (_,Xw,_) = Set.null Xw.sc && Set.null Xw.lo
+let sc_lo_empty (_,Xw,_) = null Xw.sc && null Xw.lo
 
 
 let release_acquire_no_locks_consistent_execution =
   Node [ ("assumptions", Leaf assumptions);
          ("sc_lo_empty", Leaf sc_empty);
+         ("tot_empty", Leaf tot_empty);
          ("well_formed_threads", Leaf well_formed_threads);
          ("well_formed_rf", Leaf well_formed_rf);
          ("consistent_mo", Leaf consistent_mo);
@@ -2397,14 +2610,13 @@ let release_acquire_no_locks_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 
 val release_acquire_no_locks_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} release_acquire_no_locks_behaviour opsem (p : program) =
-  behaviour release_acquire_no_locks_memory_model release_acquire_no_locks_protocol opsem p
+  behaviour release_acquire_no_locks_memory_model release_acquire_no_locks_condition opsem p
 
 
 
@@ -2413,8 +2625,8 @@ let {hol; isabelle; tex} release_acquire_no_locks_behaviour opsem (p : program) 
 but without sc, consumes, relaxed or locks *)
 (*********************************************** *)
 
-val release_acquire_lifetime_no_locks_protocol : forall. protocol_t
-let release_acquire_lifetime_no_locks_protocol (Xs:set complete_execution) =
+val release_acquire_lifetime_no_locks_condition : forall. condition_t
+let release_acquire_lifetime_no_locks_condition (Xs:set candidate_execution) =
   forall ((Xo,Xw,rl) IN Xs).
     forall (a IN Xo.actions).
       match a with
@@ -2425,8 +2637,8 @@ let release_acquire_lifetime_no_locks_protocol (Xs:set complete_execution) =
       | RMW _ _ mo _ _ _        -> mo = Acq_rel
       | Fence _ _ _             -> false
       | Blocked_rmw _ _ _       -> true
-      | Create _ _ _            -> false (* CSEM *)
-      | Kill _ _ _              -> false (* CSEM *)
+      | Alloc _ _ _            -> false (* CSEM *)
+      | Dealloc _ _ _              -> false (* CSEM *)
       end
 
 (*********************************************** *)     
@@ -2436,24 +2648,24 @@ let release_acquire_lifetime_no_locks_protocol (Xs:set complete_execution) =
    together with 7.22.3 p1 "The lifetime of an allocated object extends from the allocation until the deallocation." *)
 let reads_outside_lifetime (Xo,Xw,("hb",hb)::_) =
     { a | forall (a IN Xo.actions) |
-     not (exists (b IN Xo.actions). is_create b && (loc_of a = loc_of b) && (b, a) IN hb) ||
-     (exists (b IN Xo.actions). is_kill b && (loc_of a = loc_of b) && not ((a, b) IN hb))}
+     not (exists (b IN Xo.actions). is_alloc b && (loc_of a = loc_of b) && (b, a) IN hb) ||
+     (exists (b IN Xo.actions). is_dealloc b && (loc_of a = loc_of b) && not ((a, b) IN hb))}
 
-(* 7.22.3.3 p2 (similar to C++ 18.6.1.3) says that Kills without a 
-  happens before Create are undefined and that a Kill that happens after 
-  another Kill is undefined. The standard does not say anything about Kills that 
+(* 7.22.3.3 p2 (similar to C++ 18.6.1.3) says that Deallocs without a 
+  happens before Alloc are undefined and that a Dealloc that happens after 
+  another Dealloc is undefined. The standard does not say anything about Deallocs that 
   are hb-unrelated. We have decided to treat that as undefined behaviour. *)
-let bad_kills (Xo,Xw,("hb",hb)::_) =
+let bad_deallocs (Xo,Xw,("hb",hb)::_) =
     { a | forall (a IN Xo.actions) |
-      is_kill a && ((not (exists (b IN Xo.actions). is_create b && (b, a) IN hb)) || 
-                    (exists (c IN Xo.actions). is_kill c && a <> c))}
+      is_dealloc a && ((not (exists (b IN Xo.actions). is_alloc b && (b, a) IN hb)) || 
+                    (exists (c IN Xo.actions). is_dealloc c && a <> c))}
       
 let release_acquire_lifetime_no_locks_undefined_behaviour =
   [ Two ("unsequenced_races", unsequenced_races);
     Two ("data_races", data_races);
     One ("indeterminate_reads", indeterminate_reads);
     One ("reads_outside_lifetime", reads_outside_lifetime);
-    One ("bad_kills", bad_kills); ]
+    One ("bad_deallocs", bad_deallocs); ]
 
 let release_acquire_lifetime_no_locks_memory_model =
   <| consistent = release_acquire_no_locks_consistent_execution;
@@ -2464,12 +2676,11 @@ let release_acquire_lifetime_no_locks_memory_model =
            mo_flag  = true;
            sc_flag  = false;
            lo_flag  = true;
-           ao_flag  = false;
            tot_flag = false |>
   |>
 
 val release_acquire_lifetime_no_locks_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex}release_acquire_lifetime_no_locks_behaviour  opsem (p : program) =
-  behaviour release_acquire_lifetime_no_locks_memory_model release_acquire_lifetime_no_locks_protocol opsem p
+  behaviour release_acquire_lifetime_no_locks_memory_model release_acquire_lifetime_no_locks_condition opsem p
 
 *)
