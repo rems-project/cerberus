@@ -27,6 +27,21 @@ declare ocaml target_rep function string_of_ctype = `String_core_ctype.string_of
 
 
 
+val begin_timing_: string -> unit
+declare ocaml target_rep function begin_timing_ = `Debug.begin_timing`
+val end_timing_: unit -> unit
+declare ocaml target_rep function end_timing_ = `Debug.end_timing`
+
+let begin_timing str =
+  let () = begin_timing_ str in
+  SEU.return ()
+
+let end_timing () =
+  let () = end_timing_ () in
+  SEU.return ()
+
+
+
 type object_id = nat * list Symbol.t (* symbols originating from C, for debugging purpose *)
 
 
@@ -846,8 +861,11 @@ let allocate_object tid pref ty =
 
 
 let load ty ptr_val =
+  begin_timing "Mem.load" >>
   SEU.read (fun st -> st.memWrites) >>=
-    combineWrites (MemReadRequest ptr_val ty)
+    combineWrites (MemReadRequest ptr_val ty) >>= fun ret ->
+  end_timing () >>
+  SEU.return ret
 
 
 let store ty ptr_val mem_val =
