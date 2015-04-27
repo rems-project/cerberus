@@ -386,6 +386,44 @@ qed
 
 termination apply_tree by lexicographic_order
 
+(* Behaviour *)
+
+lemma behaviour_memory_model_eq [case_names Consistency Undef Sublanguage]:
+  fixes m1 m2 opsem_t p cons1 rel1 cons2 rel2
+  defines "cons1 \<equiv> apply_tree (consistent m1)"
+      and "cons2 \<equiv> apply_tree (consistent m2)"
+      and "undef1 \<equiv> each_empty (undefined0 m1)"
+      and "undef2 \<equiv> each_empty (undefined0 m2)"
+      and "rel1 \<equiv> relation_calculation m1"
+      and "rel2 \<equiv> relation_calculation m2"
+      and "consEx1 \<equiv> {(Xo, Xw, rl). opsem_t p Xo \<and> cons1 (Xo, Xw, rl) \<and> rl = rel1 Xo Xw}"
+      and "consEx2 \<equiv> {(Xo, Xw, rl). opsem_t p Xo \<and> cons2 (Xo, Xw, rl) \<and> rl = rel2 Xo Xw}"
+  assumes cons:  "\<And>pre wit. cons1 (pre, wit, rel1 pre wit) = cons2 (pre, wit, rel2 pre wit)"
+      and undef: "\<And>pre wit. undef1 (pre, wit, rel1 pre wit) = undef2 (pre, wit, rel2 pre wit)"
+      and sublang: "c1 consEx1 = c2 consEx2"
+  shows          "behaviour m1 c1 opsem_t p = behaviour m2 c2 opsem_t p"
+proof -
+  have consEx: "observable_filter consEx1 = observable_filter consEx2"
+    using cons
+    unfolding observable_filter_def
+              consEx1_def consEx2_def
+    by auto
+  have undefEq: "  Ball consEx1 (each_empty (undefined0 m1))
+                 = Ball consEx2 (each_empty (undefined0 m2))"
+    using undef cons
+    unfolding undef1_def undef2_def rel1_def rel2_def
+              consEx1_def consEx2_def
+    by auto
+  thus ?thesis
+    using consEx sublang
+    unfolding behaviour_def Let_def
+              cons1_def cons2_def 
+              undef1_def undef2_def
+              rel1_def rel2_def
+              consEx1_def consEx2_def
+    by simp
+qed
+
 (* Simplifications for projection functions *)
 
 declare aid_of.simps [simp]
@@ -833,6 +871,17 @@ lemma rel_list_consistent_hb [simp]:
   shows    "consistent_hb (pre, wit, (''hb'', hb)#rel) = 
              consistent_hb (pre, wit, [(''hb'', hb)])"      
 unfolding consistent_hb.simps ..
+
+(* locks_only_undefined_behaviour *)
+
+lemma locks_only_undefined_behaviour_simp:
+  shows "  (locks_only_undefined_behaviour_alt ex = []) 
+         = (each_empty locks_only_undefined_behaviour ex)"
+unfolding locks_only_undefined_behaviour_alt_def
+          locks_only_undefined_behaviour_def
+          each_empty_def
+          Let_def
+by simp
 
 (* Cmm: 4 - relaxed - no sc, consumes, release or acquire ------------------------------------- *)
 
@@ -1528,6 +1577,13 @@ next
         qed      
     qed
 qed
+
+lemma standard_memory_model_simps [simp]:
+  shows "consistent standard_memory_model = standard_consistent_execution"
+        "relation_calculation standard_memory_model = standard_relations"
+        "undefined0 standard_memory_model = locks_only_undefined_behaviour"
+unfolding standard_memory_model_def
+by simp_all
 
 (* Extra lemmas for with_consume -------------------------------------------------------------- *)
 
