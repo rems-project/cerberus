@@ -523,6 +523,7 @@ type symState =
    symWit:            execution_witness;
    symCommitted:      set action;
    symEqualityCvalue: equalityCvalue;
+   symUndefinedness:  list undefinedness;
 |>
 
 instance (Show symState)
@@ -534,10 +535,12 @@ instance (Show symState)
 end
 
 (* TODO: define a custom equality *)
+(*
 instance (Eq symState)
   let (=)  = unsafe_structural_equality
   let (<>) = unsafe_structural_inequality
 end
+*)
 
 val defaultLk: location_kind
 let defaultLk = Non_Atomic
@@ -558,6 +561,8 @@ let symInitialState pre =
      symWit = initialWitness;
      symCommitted = {};
      symEqualityCvalue = initialEqualityCvalue;
+     (* TODO: not true! *)
+     symUndefinedness = [];
   |>
 
 (* The symbolic model allows the threadwise local semantics to build
@@ -614,13 +619,13 @@ let symUpdatePreEx s step =
    know which values are being considered equal when a new rf-edge is
    formed. *)
 
-type symStepType = 
+type symStep = 
   | ConcurrencyTau of action * symState
 
   (* The first cvalue is the value written, the second the value read. *)
   | ReadsFrom      of cvalue * cvalue * action * symState 
 
-instance (Show symStepType)
+instance (Show symStep)
   let show step = 
     match step with
     | ConcurrencyTau a state  -> 
@@ -630,35 +635,35 @@ instance (Show symStepType)
     end
 end
 
-val stateOf: symStepType -> symState
+val stateOf: symStep -> symState
 let stateOf step = 
   match step with
   | ConcurrencyTau _ s -> s
   | ReadsFrom _ _ _ s  -> s
   end
 
-val actionOf: symStepType -> action
+val actionOf: symStep -> action
 let actionOf step = 
   match step with
   | ConcurrencyTau a _ -> a
   | ReadsFrom _ _ a _  -> a
   end
 
-val symPerformLoad: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformLoad: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformStore: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformStore: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformRmw: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformRmw: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformBlocked_rmw: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformBlocked_rmw: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformLock: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformLock: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformUnlock: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformUnlock: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symPerformFence: symState -> action -> equalityCvalue -> ND.t symStepType
+val symPerformFence: symState -> action -> equalityCvalue -> ND.t symStep
 
-val symStep: symState -> equalityCvalue -> ND.t symStepType
+val symStep: symState -> equalityCvalue -> ND.t symStep
 let symStep s eq = 
   ND.kill (ND.Other "Not implemented")
 

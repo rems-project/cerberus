@@ -1,15 +1,13 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode
-open import Show Core_run Core_run_aux ExecutableOpsem Cmm_master
+open import Show Core_run Core_run_aux Cmm_op Cmm_master
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 import Map_extra (* DEBUG *)
 
 import Naive_memory
-
-import MinimalOpsem
 
 module Mem = Naive_memory
 
@@ -32,7 +30,7 @@ type driver_state = <|
   core_file:         Core.file core_run_annotation;
   core_state:        core_state;       (* state of the core program *)
   core_run_state:    core_run_state;   (* state of the core evaluator *)
-  concurrency_state: exeState; (* state of the concurrency memory model *)
+  concurrency_state: symState; (* state of the concurrency memory model *)
   
 (* sequential_state: sequential_state; *)
   
@@ -306,7 +304,7 @@ let rec stepConcurrency n dr_st =
         | _ ->
             ND.pick concur_steps
       end >>= *)
-    (exeOpsemStep dr_st.concurrency_state initialEqualityCvalue >>= 
+    (symStep dr_st.concurrency_state initialEqualityCvalue >>= 
      function
         | ConcurrencyTau performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)
@@ -386,9 +384,9 @@ let runCore m dr_st =
 
 
 (* Returns the number of uncommitted action in the concurency memory model state *)
-val number_of_uncommitted: exeState -> nat
+val number_of_uncommitted: symState -> nat
 let number_of_uncommitted concur_st =
-  Set.size concur_st.preEx.actions - Set.size concur_st.committed
+  Set.size concur_st.symPre.actions - Set.size concur_st.symCommitted
 
 
 (* TODO: debug *)
@@ -473,7 +471,7 @@ let repair_pre_execution dr_st =
 |>
   in
   <| dr_st with concurrency_state=
-    <| dr_st.concurrency_state with preEx= repair dr_st.concurrency_state.preEx |>
+    <| dr_st.concurrency_state with symPre= repair dr_st.concurrency_state.symPre |>
   |>
 
 
@@ -498,7 +496,7 @@ let action_request_concurrency dr_st request =
     match request with
       | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
           let _ = Boot.print_debug 9 ("StoreRequest on: " ^ show ptr_val ^ " := " ^ show mem_val) in
-          (<| action=       Store aid tid mo ptr_val mem_val;
+          (<| newAction=       Store aid tid mo ptr_val mem_val;
               sbBefore=     sb_edges;
               ddBefore=     dd_edges;
               aswBefore=    asw_edges;
@@ -508,7 +506,7 @@ let action_request_concurrency dr_st request =
 (*          let (sym, dr_st) = fresh_symbol dr_st in *)
           let _ = Boot.print_debug 9 ("LoadRequest on: " ^ show ptr_val) in
           (* ND.log "LOAD\n" >> *)
-          (<| action=       Load aid tid mo ptr_val mem_val;
+          (<| newAction=    Load aid tid mo ptr_val mem_val;
               sbBefore=     sb_edges;
               ddBefore=     dd_edges;
               aswBefore=    asw_edges;
@@ -527,7 +525,7 @@ let action_request_concurrency dr_st request =
   end in
   
   <| dr_st' with
-    concurrency_state= updatePreEx dr_st.concurrency_state preEx_step;
+    concurrency_state= symUpdatePreEx dr_st.concurrency_state preEx_step;
     trace= act :: dr_st.trace
   |>
 
@@ -544,15 +542,15 @@ let action_request_sequential dr_st request =
     | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
         (* HACK: just using the concurrency to detect unsequenced races *)
         let preEx_step = <|
-          action=       Store aid tid mo ptr_val mem_val;
+          newAction=       Store aid tid mo ptr_val mem_val;
           sbBefore=     sb_edges;
           ddBefore=     dd_edges;
           aswBefore=    asw_edges;
           locationKind= Just (if Core_ctype.is_atomic ty then Atomic else Non_Atomic);
         |> in
         
-        let concurrency_state' = updatePreEx dr_st.concurrency_state preEx_step in
-        let preEx = concurrency_state'.preEx in
+        let concurrency_state' = symUpdatePreEx dr_st.concurrency_state preEx_step in
+        let preEx = concurrency_state'.symPre in
         
         let has_unseq_race =
           not $ Set.null { (a,b) | forall (a IN preEx.Cmm.actions) (b IN preEx.Cmm.actions) |
@@ -589,7 +587,7 @@ let action_request_sequential dr_st request =
                 mem_val
           end in
         let preEx_step = <|
-          action=       Store aid tid mo ptr_val mem_val;
+          newAction=    Store aid tid mo ptr_val mem_val;
           sbBefore=     sb_edges;
           ddBefore=     dd_edges;
           aswBefore=    asw_edges;
@@ -597,7 +595,7 @@ let action_request_sequential dr_st request =
         |> in
 
         <| dr_st with
-          concurrency_state= updatePreEx dr_st.concurrency_state preEx_step;
+          concurrency_state= symUpdatePreEx dr_st.concurrency_state preEx_step;
           core_state= mk_core_st' mem_val;
         |>
   end
@@ -650,7 +648,7 @@ let rec driver with_concurrency _dr_st =
           end in
 
         (if with_concurrency && execution_mode_is_random then
-           let total = numberOfUncommittedActions dr_st''.concurrency_state in
+           let total = number_of_uncommitted dr_st''.concurrency_state in
            let choices = Enum.enumFromTo 0 total in
            
            (* DEBUG *)
@@ -735,7 +733,7 @@ let finalize_constraints core_file (Constraints.Constraints symbs) =
 
 
 
-val finalize: driver_state -> (string * (bool * exeState * Core.value) * (nat * nat))
+val finalize: driver_state -> (string * (bool * symState * Core.value) * (nat * nat))
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
@@ -791,7 +789,7 @@ let initial_driver_state sym_supply file =
     core_file=         file;
     core_state=        initial_core_state;
     core_run_state=    initial_core_run_state file.Core.tagDefinitions;
-    concurrency_state= initialExeState emptyPreEx;
+    concurrency_state= symInitialState symInitialPre;
     
     (* TODO: uber hack *)
 (*    sequential_state= Map.empty; *)
@@ -870,13 +868,13 @@ let driver_globals with_concurrency sym_supply file =
 
 
 
-val pp_exeState: exeState -> string
+val pp_exeState: symState -> string
 declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
 
 val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> list string ->
-           ND.t (string * (bool * ExecutableOpsem.exeState * Core.pexpr) * (nat * nat))
+           ND.t (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -962,10 +960,10 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
         if with_concurrency then
           let dr_st' = repair_pre_execution dr_st' in
           let n     = (number_of_uncommitted dr_st'.concurrency_state) in
-          ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.preEx ^ "\n") >>
+          ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.symPre ^ "\n") >>
           ND.log ("Calling concurrency " ^ show n ^ " times\n") >>
           ND.apply_to_constraints (finalize_constraints dr_st'.core_file) (stepConcurrency n dr_st') >>= fun dr_st' ->
-          ND.log ("with: " ^ show dr_st'.concurrency_state.exWitness ^ "\n") >>
+          ND.log ("with: " ^ show dr_st'.concurrency_state.symWit ^ "\n") >>
           
 
           (* TODO: tmp *)
@@ -973,28 +971,28 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
           
             (* TODO: the current function should return a Core.value inside an
                undef/error monad. Not a Core.pexpr like we currently do *)
-            match dr_st'.concurrency_state.stateIsDefined with
-              | MinimalOpsem.Defined2 ->
+            match dr_st'.concurrency_state.symUndefinedness with
+              | [] ->
                   let (str, (is_blocked, conc_st, cval), steps) = finalize dr_st' in
 (*                  ND.log ("Result: " ^ show (Core.Epure (Core.PEval cval)) ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >> *)
                   ND.return (str, (is_blocked, conc_st, Core.PEval cval), steps)
-              | MinimalOpsem.DataRaces _ ->
+              | (DataRaces _)::_ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Data_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
-              | MinimalOpsem.UnsequencedRaces _ ->
+              | (UnsequencedRaces _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Unsequenced_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
-              | MinimalOpsem.IndeterminateReads _ ->
+              | (IndeterminateReads _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
-              | MinimalOpsem.BadMutexes _ ->
+              | (BadMutexes _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
-              | MinimalOpsem.NotInSublanguage ->
+              | NotInSublanguage::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))

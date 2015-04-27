@@ -119,7 +119,7 @@ let dot_of_pre_execution preEx value_str eqs_str =
   "}}"
 
 
-open ExecutableOpsem
+open Cmm_op
 
 let dot_of_exeState st value_str eqs_str =
   "digraph G {" ^
@@ -127,14 +127,14 @@ let dot_of_exeState st value_str eqs_str =
   "eqs [shape=box, label= \"" ^ eqs_str ^ "\"];" ^
   "subgraph cluster1 {" ^
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
-                                      string_of_action act2 ^ "\";" ^ acc) st.preEx.sb "") ^
+                                      string_of_action act2 ^ "\";" ^ acc) st.symPre.sb "") ^
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
-                                      string_of_action act2 ^ "\" [color=\"deeppink4\"];" ^ acc) st.preEx.asw "") ^
+                                      string_of_action act2 ^ "\" [color=\"deeppink4\"];" ^ acc) st.symPre.asw "") ^
 
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
-                                      string_of_action act2 ^ "\" [color=\"red\"];" ^ acc) st.exWitness0.rf "") ^
+                                      string_of_action act2 ^ "\" [color=\"red\"];" ^ acc) st.symWit.rf "") ^
   (Pset.fold (fun (act1, act2) acc -> "\"" ^ string_of_action act1 ^ "\" -> \"" ^
-                                      string_of_action act2 ^ "\" [color=\"blue\"];" ^ acc) st.exWitness0.mo "") ^
+                                      string_of_action act2 ^ "\" [color=\"blue\"];" ^ acc) st.symWit.mo "") ^
 
   "}}"
 
