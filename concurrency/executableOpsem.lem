@@ -624,7 +624,9 @@ let exeOpsemStep s eq =
   | Dealloc _ _ _     -> exePerformDealloc s a eq
   end                          >>= fun step ->
   
-  let order = opsemOrder s.preEx (stateOf step).exWitness in
+  let new_wit = (stateOf step).exWitness in
+  let new_rel = getRelations s.preEx new_wit in
+  let order = opsemOrder (s.preEx, new_wit, new_rel) in
   ND.guard (forall (b IN s.preEx.actions). 
                ((b, a) IN order -->  b IN s.committed) &&
                (b IN s.committed --> (a, b) NIN order))  

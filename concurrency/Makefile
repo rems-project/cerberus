@@ -7,6 +7,7 @@ CPP_INTEGRATION_DIR = cppmem-integration
 
 CMM_MODEL_LEM_EXT = \
   cmm_master.lem \
+  cmm_aux.lem \
 
 CMM_MODEL_LEM = \
   cmm_master.lem \
@@ -25,8 +26,12 @@ CMM_MODEL_GEN = \
   language.ml \
   examples.ml \
 
-CMM_SRC_ML = \
-  value.ml \
+AXIOM_BEH_LEM = \
+  axiomaticBehaviour.lem \
+
+AXIOM_BEH_GEN = \
+  AxiomaticBehaviour.thy \
+  axiomaticBehaviour.ml \
 
 MIN_OPSEM_LEM = \
   minimalOpsem.lem \
@@ -65,25 +70,22 @@ OPSEM_ML = \
   pp.ml \
   main.ml \
 
-default: $(BUILD_DIR)/ExecutableOpsem.thy $(BUILD_DIR)/main.byte
+default: $(BUILD_DIR)/AxiomaticBehaviour.thy \
+         $(BUILD_DIR)/axiomaticBehaviourAuxiliary.byte \
+         $(BUILD_DIR)/RelationalOpsem.thy \
 
 # The model depends on some external files. Copies of those files are
 # included in the repository so we can choose when we want to merge
 # changes. The rule update_dependencies updates the copies with the
 # most up to date version.
 update_dependencies: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) \
-                     $(addprefix $(CPP_SRC_DIR)/, $(CMM_SRC_ML)) | \
                      $(BUILD_DIR)
         # Copy the cmm model files to the top level directory
 	@echo COPYING $(CMM_MODEL_LEM_EXT)
 	@cp $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) .
-        # Copy the cmm src files to the top level directory
-	@echo COPYING $(CMM_SRC_ML)
-	@cp $(addprefix $(CPP_SRC_DIR)/, $(CMM_SRC_ML)) .
 
 # Generate byte files from ml
 $(BUILD_DIR)/main.byte: $(addprefix $(BUILD_DIR)/, $(OPSEM_ML)) \
-                        $(addprefix $(BUILD_DIR)/, $(CMM_SRC_ML)) \
                         $(addprefix $(BUILD_DIR)/, $(TEST_GEN)) \
                         $(addprefix $(BUILD_DIR)/, $(EXE_OPSEM_GEN)) \
                         $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)) \
@@ -92,7 +94,16 @@ $(BUILD_DIR)/main.byte: $(addprefix $(BUILD_DIR)/, $(OPSEM_ML)) \
         # We copy the library files, because I can't get ocamlbuild to look into the lib directory
 	cp $(OCAML_LIB_DIR)/*.ml  $(BUILD_DIR)
 	cp $(OCAML_LIB_DIR)/*.mli $(BUILD_DIR)
-	cd $(BUILD_DIR); ocamlbuild -lib nums main.byte 
+	cd $(BUILD_DIR); ocamlbuild -lib nums main.byte
+
+# Generate byte files from generated tests
+$(BUILD_DIR)/axiomaticBehaviourAuxiliary.byte: $(addprefix $(BUILD_DIR)/, $(AXIOM_BEH_GEN)) \
+                                               $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN)) \
+        # We copy the library files, because I can't get ocamlbuild to look into the lib directory
+	cp $(OCAML_LIB_DIR)/*.ml  $(BUILD_DIR)
+	cp $(OCAML_LIB_DIR)/*.mli $(BUILD_DIR)
+	cd $(BUILD_DIR); ocamlbuild -lib nums axiomaticBehaviourAuxiliary.byte
+
 
 # Build the test files to ocaml
 $(addprefix $(BUILD_DIR)/, $(TEST_GEN)): $(addprefix $(BUILD_DIR)/, $(TEST_LEM)) \
@@ -119,6 +130,11 @@ $(addprefix $(BUILD_DIR)/, $(REL_OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(REL_O
 $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(MIN_OPSEM_LEM)) \
                                               $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
 	cd $(BUILD_DIR); lem $(MIN_OPSEM_LEM) -isa -ocaml -tex
+
+# Build the AxiomaticBehaviour to ocaml and isa
+$(addprefix $(BUILD_DIR)/, $(AXIOM_BEH_GEN)): $(addprefix $(BUILD_DIR)/, $(AXIOM_BEH_LEM)) \
+                                              $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(AXIOM_BEH_LEM) -isa -ocaml -tex
 
 # Build cmm (the axiomatic memory model) to ocaml and isa
 $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN)): $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_LEM))

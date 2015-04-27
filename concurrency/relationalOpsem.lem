@@ -8,13 +8,24 @@ open import Cmm_aux
 open import Cmm_master
 open import MinimalOpsem
 
+(* TODO: need better solution for getHb. *)
+
+val getHb: pre_execution -> execution_witness -> set (action * action)
+let getHb pre wit = 
+  match getRelations pre wit with
+  | ("hb",hb)::_ -> hb
+  | _            -> {}
+  end
+
 (* The stepwise consistency predicates ---------------------------------------------------------- *)
 
 val isInOpsemOrder_step: pre_execution -> state -> state -> action -> bool
 let isInOpsemOrder_step pre s1 s2 a =
+  (* TODO: Get the relations as a parameter, instead of computing it here. *)
+  let s2_ex = (pre, s2.exWitness, getRelations pre s2.exWitness) in
   forall (b IN pre.actions). 
-    (b IN s1.committed --> (a, b) NIN opsemOrder pre s2.exWitness) &&
-    ((b, a) IN opsemOrder pre s2.exWitness --> b IN s1.committed)
+    (b IN s1.committed --> (a, b) NIN opsemOrder s2_ex) &&
+    ((b, a) IN opsemOrder s2_ex --> b IN s1.committed)
 
 val mo_step_atomic_write: pre_execution -> state -> state -> action -> bool
 let mo_step_atomic_write pre s1 s2 a =
@@ -24,7 +35,9 @@ let mo_step_atomic_write pre s1 s2 a =
 
 val rf_step_load: pre_execution -> state -> state -> action -> bool
 let rf_step_load pre s1 s2 r =
-  if (exists (w IN pre.actions). (w, r) IN getVse pre s2.exWitness) then
+  if (exists (w IN pre.actions). (w, r) IN getHb pre s2.exWitness &&
+                                 is_write w && 
+                                 loc_of w = loc_of r) then
     exists (w IN pre.actions). w IN s1.committed &&
                                is_write w && 
                                loc_of w = loc_of r && 
