@@ -36,7 +36,7 @@ let begin_timing str =
   let () = begin_timing_ str in
   SEU.return ()
 
-let end_timing =
+let end_timing () =
   let () = end_timing_ () in
   SEU.return ()
 
