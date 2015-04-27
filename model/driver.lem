@@ -658,7 +658,7 @@ let rec driver with_concurrency _dr_st =
              () in
            
            ND.pick choices >>= fun n ->
-           ND.kyndylan (stepConcurrency n dr_st'' )
+           ND.warns_if_no_active_ex (stepConcurrency n dr_st'' )
          else
            ND.return dr_st'') >>= fun dr_st''' ->
         
