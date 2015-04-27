@@ -294,7 +294,7 @@ unfolding assumptions.simps
 by simp
 
 lemma det_read_op_initialWitness [simp]:
-  shows "det_read_op {} (pre, initialWitness, [(''hb'', getHb pre initialWitness), (''vse'', getVse pre initialWitness)])"
+  shows "det_read_op {} (pre, initialWitness, [(''hb'', getHb pre initialWitness)])"
 unfolding det_read_op.simps
 by simp
 
@@ -320,7 +320,7 @@ by simp
 
 lemma isInOpsemOrder_initialWitness [simp]:
   shows "isInOpsemOrder {} (pre, initialWitness, [])"
-unfolding isInOpsemOrder.simps
+unfolding isInOpsemOrder_def
 by simp
 
 lemma locks_only_consistent_lo_op_initialWitness [simp]:
@@ -374,9 +374,11 @@ proof induct
   case (relOpsemReflexive pre s)
   hence "well_formed_threads (pre, initialWitness, [])"
   and   "consistent_hb (pre, initialWitness, getRelations pre initialWitness)"
-    unfolding Let_def getRelations_def by auto
+    unfolding Let_def release_acquire_fenced_relations_simp release_acquire_fenced_relations_alt_def
+    by auto
   hence "exIsConsistent_op {} (pre, initialWitness, getRelations pre initialWitness)"
-    unfolding exIsConsistent_op_def getRelations_def by auto
+    unfolding exIsConsistent_op_def release_acquire_fenced_relations_simp release_acquire_fenced_relations_alt_def
+    by auto
   thus "minOpsemTrace pre s s"
     using minOpsemReflexive relOpsemReflexive by auto
 next
@@ -435,14 +437,14 @@ lemma consistent_mo_aux2:
 proof -
   have cons_mo: "consistent_mo_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
-  have "isIrreflexive (mo wit)" "isTransitive (mo wit)"
+  have "irrefl (mo wit)" "trans (mo wit)"
     using cons_mo unfolding consistent_mo_op.simps by simp_all
   hence "(b, a) \<notin> mo wit" 
-    using in_mo unfolding isIrreflexive_def isTransitive_def relApply_def by auto blast
+    using in_mo unfolding irrefl_def trans_def by auto 
   have "relOver (mo wit) (actions0 pre)" 
     using cons_mo unfolding consistent_mo_op.simps relation_over_def by simp
   hence abInPreActions: "a \<in> actions0 pre" "b \<in> actions0 pre" 
-    using in_mo relOver_simp by fast+
+    using in_mo relOver_simp by auto
   hence "loc_of a = loc_of b \<and> is_at_atomic_location (lk pre) a"
     using cons_mo in_mo unfolding consistent_mo_op.simps relation_over_def by auto
   hence "is_at_atomic_location (lk pre) b"
@@ -576,7 +578,7 @@ proof -
       hence "adjacent_less_than (mo wit) (actions0 pre) a a" 
         using cons_rmw ab `a = b` in_rf unfolding rmw_atomicity_op.simps by auto
       hence "(a, a) \<in> mo wit" unfolding adjacent_less_than_def by simp
-      thus False using cons_mo unfolding consistent_mo_op.simps isIrreflexive_def by auto
+      thus False using cons_mo unfolding consistent_mo_op.simps irrefl_def by auto
     qed
   thus ?thesis
     using in_rf cons_rf unfolding well_formed_rf_op.simps by auto
@@ -601,41 +603,25 @@ qed
 lemma det_read_aux:
   assumes cons: "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and b:    "is_load b \<and> b \<in> actions"
-    shows       "(\<exists>a. (a, b) \<in> getVse pre wit) = (\<exists>a'. (a', b) \<in> rf wit)"
+    shows       "(\<exists>a.   (a, b) \<in> getHb pre wit \<and> is_write a \<and> loc_of a = loc_of b) 
+                      = (\<exists>a'. (a', b) \<in> rf wit)"
 proof (intro iffI, auto)
   fix a
-  assume a: "(a, b) \<in> getVse pre wit"
+  assume a: "(a, b) \<in> getHb pre wit" "is_write a" "loc_of a = loc_of b"
   have "well_formed_threads (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
   hence relOver_sb: "relOver (sb pre) (actions0 pre)"
     unfolding well_formed_threads.simps by simp
   have det_read: "det_read_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
-  (* We can relaxed the requirement that (a, b) \<in> getVse to getHb, but then we have to prove
-     finite_fixes getHb, which is in a way trivial, but still a lot of work. *)
-  (*
-  let ?S = "{c. (c, b) \<in> getHb pre wit \<and> is_write c \<and> c \<in> actions0 pre \<and> loc_of c = loc_of b}"
-  have "a \<in> actions0 pre" "b \<in> actions0 pre"
-    using a hbRelOver (* Use well_formed_threads and hbRelOver *)
-  hence "a \<in> ?S" using a by simp
-  hence "?S \<noteq> {}" by auto
-  moreover have "finite ?S" (* Use finite_prefixes (getHb pre wit) (actions0 pre) *)
-  moreover have "isStrictPartialOrder (getHb pre wit)" (* This will NOT work in consume fragment *)
-  ultimately obtain x where x: "x \<in> ?S \<and> (\<forall>y. y \<in> ?S \<longrightarrow> (x, y) \<notin> getHb pre wit)"
-    using supremum[where A="?S" and R="getHb pre wit"] by auto
-  hence "x \<in> actions0 pre" by auto
-  hence "(x, b) \<in> getVse pre wit"
-    using x b unfolding getVse_def visible_side_effect_set_def by (cases b) auto
-  *)
-  have "(a, b) \<in> getHb pre wit"
-    using a unfolding getVse_def visible_side_effect_set_def by simp
-  hence "a \<in> actions0 pre" "b \<in> actions0 pre" 
-    using hbRelOver relOver_simp relOver_sb by fast+
-  hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> getVse pre wit"
+  have "a \<in> actions0 pre" "b \<in> actions0 pre" 
+    using a hbRelOver relOver_simp relOver_sb by fast+
+  hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> getHb pre wit \<and> is_write a' \<and> loc_of a' = loc_of b"
     using a by auto
   hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> rf wit" 
     using det_read b `b \<in> actions0 pre`
-    unfolding det_read_op.simps getRelations_def by auto
+    unfolding det_read_op.simps getRelations_def
+    by auto
   thus "\<exists>a'. (a', b) \<in> rf wit" by auto
 next
   fix a 
@@ -644,9 +630,11 @@ next
   assume in_rf: "(a, b) \<in> rf wit"
   hence "a \<in> actions0 pre"  "b \<in> actions0 pre" using cons well_formed_rf_aux by auto
   hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> rf wit" using in_rf by auto
-  hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> getVse pre wit"
-    using det_read b `b \<in> actions0 pre` unfolding det_read_op.simps getRelations_def by auto
-  thus "\<exists>a. (a, b) \<in> getVse pre wit" by auto
+  hence "\<exists>a'\<in>actions0 pre. (a', b) \<in> getHb pre wit \<and> is_write a' \<and> loc_of a' = loc_of b"
+    using det_read b `b \<in> actions0 pre` 
+    unfolding det_read_op.simps getRelations_def
+    by auto
+  thus "\<exists>a. (a, b) \<in> getHb pre wit \<and> is_write a \<and> loc_of a = loc_of b" by auto
 qed
 
 lemma rmw_atomicity_aux:
@@ -660,7 +648,7 @@ proof
   have rmw_at: "rmw_atomicity_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
   thus "adjacent_less_than (mo wit) (actions0 pre) a b"
-    unfolding getRelations_def rmw_atomicity_op.simps
+    unfolding rmw_atomicity_op.simps
     using in_pre_actions b in_rf
     by auto
 next
@@ -671,7 +659,7 @@ next
   have rmw_at: "rmw_atomicity_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
   thus "(a, b) \<in> rf wit"
-    unfolding getRelations_def rmw_atomicity_op.simps
+    unfolding rmw_atomicity_op.simps
     using in_pre_actions b in_mo
     by auto
 qed
@@ -690,10 +678,10 @@ proof (intro disjCI)
     using in_rf well_formed_rf_aux[OF cons2] committed by auto
   have "c \<in> actions0 pre" 
     using well_formed_rf_aux[OF cons2 in_rf] by simp
-  hence "(a, c) \<notin> opsemOrder pre (exWitness s')"
+  hence "(a, c) \<notin> opsemOrder (pre, (exWitness s'), getRelations pre (exWitness s'))"
     using order `c \<in> committed s` unfolding isInOpsemOrder_step_def by auto
   hence "(a, c) \<notin> rf (exWitness s')"
-    unfolding opsemOrder_def by auto
+    unfolding opsemOrder.simps by auto
   hence "a \<noteq> b" using in_rf by auto
   hence "b \<in> committed s" using b by simp
   hence "(b, c) \<in> rf (witnessRestrict (exWitness s') (committed s))" using in_rf c by simp
@@ -752,6 +740,14 @@ next
   thus "(b, c) \<in> rf (exWitness s)" using `a \<noteq> c` by simp
 qed
 
+(* TODO: refactor *)
+lemma vse_simp [simp]:
+  shows "RelationalOpsem.getHb = getHb"
+apply (intro ext)
+unfolding RelationalOpsem.getHb_def 
+          getRelations_def
+by auto
+
 lemma step_rf_load:
   assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
       and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
@@ -768,11 +764,17 @@ proof auto
 next
   fix b c
   assume in_rf:  "(b, c) \<in> rf (exWitness s')"
-     and no_vse: "\<forall>w\<in>actions0 pre. (w, a) \<notin> getVse pre (exWitness s')"
+     and no_vse: "     \<forall>w\<in>actions0 pre. is_write w
+                   \<longrightarrow> (w, a) \<in> EquivalenceMinimalOpsem.getHb pre (exWitness s')
+                   \<longrightarrow> loc_of w \<noteq> loc_of a"
   have "det_read_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
     using cons2 unfolding exIsConsistent_op_def by simp
-  hence "(\<exists>w\<in>actions0 pre. (w, a) \<in> getVse pre (exWitness s')) = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf (exWitness s'))"
-    using a committed unfolding det_read_op.simps getRelations_def by auto
+  hence "  (\<exists>w\<in>actions0 pre. (w, a) \<in> getHb pre (exWitness s') \<and> is_write w \<and> loc_of w = loc_of a) 
+         = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf (exWitness s'))"
+    using a committed 
+    apply simp
+    unfolding det_read_op.simps 
+    by auto
   hence no_rf: "\<forall>w\<in>actions0 pre. (w, a) \<notin> rf (exWitness s')"
     using no_vse by auto    
   have "b \<in> actions0 pre" using well_formed_rf_aux[OF cons2 in_rf] by simp
@@ -784,7 +786,8 @@ next
 next
   fix w'
   assume "w' \<in> actions0 pre" 
-         "(w', a) \<in> getVse pre (exWitness s')"
+         "(w', a) \<in> getHb pre (exWitness s')"
+         "is_write w'" "loc_of w' = loc_of a"
   hence "\<exists>w. (w, a) \<in> rf (exWitness s')" using det_read_aux[OF cons2] a committed by auto
   then obtain w where w_in_rf: "(w, a) \<in> rf (exWitness s')" by fast
   have w: "w \<in> actions0 pre \<and> w \<in> committed s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
@@ -873,16 +876,16 @@ proof -
         qed
       hence non_empty: "?S \<noteq> {}" using not_empty by simp
       have "assumptions (pre, exWitness s' , [])" 
-        using cons2 unfolding exIsConsistent_op_def getRelations_def by simp
+        using cons2 unfolding exIsConsistent_op_def by simp
       hence "finite_prefixes (mo (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?S"
         unfolding finite_prefixes_def using a by fast
-      hence "isIrreflexive (mo (exWitness s')) \<and> isTransitive (mo (exWitness s'))"
+      hence "irrefl (mo (exWitness s')) \<and> trans (mo (exWitness s'))"
         using cons2 unfolding exIsConsistent_op_def consistent_mo_op.simps by auto
       hence isOrder: "isStrictPartialOrder (mo (exWitness s'))" unfolding isStrictPartialOrder_def .
       obtain w where "w \<in> ?S \<and> (\<forall>y. y \<in> ?S \<longrightarrow> (w, y) \<notin> mo (exWitness s'))"
-        using supremum[OF finite non_empty isOrder] by auto
+        using supremum_partial_order[OF finite non_empty isOrder] by auto
       hence w:    "w \<in> actions0 pre \<and> (w, a) \<in> mo (exWitness s')"
       and   w2:   "w \<in> ?same_loc_writes"
       and   max:  "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> mo (exWitness s') \<longrightarrow> (w, y) \<notin> mo (exWitness s')"
@@ -915,12 +918,13 @@ proof -
   have cons_sc: "sc_accesses_consistent_sc_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
   hence "relOver (sc wit) (actions0 pre)"
-    unfolding sc_accesses_consistent_sc_op.simps getRelations_def by simp
+    apply simp unfolding sc_accesses_consistent_sc_op.simps by simp
   hence "b \<in> actions0 pre" "c \<in> actions0 pre"
     using relOver_simp in_sc by auto
   thus ?thesis
     using cons_sc in_sc
-    unfolding sc_accesses_consistent_sc_op.simps getRelations_def
+    apply simp
+    unfolding sc_accesses_consistent_sc_op.simps 
     by auto
 qed
 
@@ -939,7 +943,8 @@ proof -
     using cons unfolding exIsConsistent_op_def by simp
   thus ?thesis
     using cons_sc ab_def
-    unfolding sc_accesses_consistent_sc_op.simps getRelations_def
+    apply simp
+    unfolding sc_accesses_consistent_sc_op.simps 
     by auto
 qed
 
@@ -1030,20 +1035,20 @@ proof auto
       hence "b' \<in> ?sc_set2" using b' by simp
       hence non_empty: "?sc_set2 \<noteq> {}" by fast
       have "assumptions (pre, exWitness s' , [])" 
-        using cons2 unfolding exIsConsistent_op_def getRelations_def by simp
+        using cons2 unfolding exIsConsistent_op_def by simp
       hence "finite_prefixes (sc (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?sc_set2"
         unfolding finite_prefixes_def using a by fast
-      hence irreflexive: "isIrreflexive (sc (exWitness s'))"
-      and   transitive:  "isTransitive (sc (exWitness s'))"
+      hence irreflexive: "irrefl (sc (exWitness s'))"
+      and   transitive:  "trans (sc (exWitness s'))"
         using cons2 
-        unfolding exIsConsistent_op_def sc_accesses_consistent_sc_op.simps getRelations_def 
-        by auto
+        unfolding exIsConsistent_op_def 
+        by (auto simp add: sc_accesses_consistent_sc_op.simps)
       hence isOrder: "isStrictPartialOrder (sc (exWitness s'))" 
         unfolding isStrictPartialOrder_def by simp
       obtain b where "b \<in> ?sc_set2 \<and> (\<forall>y. y \<in> ?sc_set2 \<longrightarrow> (b, y) \<notin> sc (exWitness s'))"
-        using supremum[OF finite non_empty isOrder] by auto
+        using supremum_partial_order[OF finite non_empty isOrder] by auto
       hence b:   "b \<in> actions0 pre \<and> (b, a) \<in> sc (exWitness s')"
       and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> sc (exWitness s') \<longrightarrow> (b, y) \<notin> sc (exWitness s')"
         by auto
@@ -1150,12 +1155,13 @@ proof -
   have cons_lo: "locks_only_consistent_lo_op actions (pre, wit, getRelations pre wit)"
     using cons unfolding exIsConsistent_op_def by simp
   hence "relOver (lo wit) (actions0 pre)"
-    unfolding locks_only_consistent_lo_op.simps getRelations_def by simp
+    apply simp unfolding locks_only_consistent_lo_op.simps by simp
   hence "b \<in> actions0 pre" "c \<in> actions0 pre"
     using relOver_simp in_lo by auto
   thus ?thesis
     using cons_lo in_lo
-    unfolding locks_only_consistent_lo_op.simps getRelations_def
+    apply simp
+    unfolding locks_only_consistent_lo_op.simps 
     by auto
 qed
 
@@ -1176,7 +1182,8 @@ proof -
     using cons unfolding exIsConsistent_op_def by simp
   thus ?thesis
     using cons_lo ab_def
-    unfolding locks_only_consistent_lo_op.simps getRelations_def
+    apply simp
+    unfolding locks_only_consistent_lo_op.simps 
     by auto
 qed
 
@@ -1279,20 +1286,20 @@ proof auto
       hence "b' \<in> ?lo_set2" using b' by simp
       hence non_empty: "?lo_set2 \<noteq> {}" by fast
       have "assumptions (pre, exWitness s' , [])" 
-        using cons2 unfolding exIsConsistent_op_def getRelations_def by simp
+        using cons2 unfolding exIsConsistent_op_def by simp
       hence "finite_prefixes (lo (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?lo_set2"
         unfolding finite_prefixes_def using a by fast
-      hence irreflexive: "isIrreflexive (lo (exWitness s'))"
-      and   transitive:  "isTransitive (lo (exWitness s'))"
+      hence irreflexive: "irrefl (lo (exWitness s'))"
+      and   transitive:  "trans (lo (exWitness s'))"
         using cons2 
-        unfolding exIsConsistent_op_def locks_only_consistent_lo_op.simps getRelations_def 
-        by auto
+        unfolding exIsConsistent_op_def   
+        by (auto simp add: locks_only_consistent_lo_op.simps)
       hence isOrder: "isStrictPartialOrder (lo (exWitness s'))" 
         unfolding isStrictPartialOrder_def by simp
       obtain b where "b \<in> ?lo_set2 \<and> (\<forall>y. y \<in> ?lo_set2 \<longrightarrow> (b, y) \<notin> lo (exWitness s'))"
-        using supremum[OF finite non_empty isOrder] by auto
+        using supremum_partial_order[OF finite non_empty isOrder] by auto
       hence b:   "b \<in> actions0 pre" and b_in_lo: "(b, a) \<in> lo (exWitness s')"
       and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> lo (exWitness s') \<longrightarrow> (b, y) \<notin> lo (exWitness s')"
         by auto
@@ -1385,7 +1392,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformLoad_def
@@ -1429,7 +1436,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformStore_def 
@@ -1462,7 +1469,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformRmw_def
@@ -1491,7 +1498,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformBlocked_rmw_def
@@ -1519,7 +1526,7 @@ proof -
   hence lo: "lo_step_lock_unlock pre s1 s2 a" 
     using step_lo_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformLock_def
@@ -1547,7 +1554,7 @@ proof -
   hence lo: "lo_step_lock_unlock pre s1 s2 a" 
     using step_lo_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformUnlock_def
@@ -1575,7 +1582,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformFence_def
@@ -1604,7 +1611,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformAlloc_def
@@ -1633,7 +1640,7 @@ proof -
   hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
     using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
   have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
-    using cons1 cons2 unfolding exIsConsistent_op_def getRelations_def by simp_all
+    using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
   hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformDealloc_def
@@ -1647,14 +1654,14 @@ lemma completeness_step:
 proof -
   have a: "a \<in> actions0 pre \<and> a \<notin> committed s1 \<and> committed s2 = insert a (committed s1)"
     using step unfolding minOpsemStep_def Let_def by simp
-  have order: "\<forall>b\<in>actions0 pre. (b, a) \<in> opsemOrder pre (exWitness s2) \<longrightarrow> b \<in> (committed s1)"
+  have order: "\<forall>b\<in>actions0 pre. (b, a) \<in> opsemOrderAlt pre (exWitness s2) \<longrightarrow> b \<in> (committed s1)"
     using step unfolding minOpsemStep_def Let_def by simp
   have order2: "isInOpsemOrder_step pre s1 s2 a"
     using step unfolding minOpsemStep_def isInOpsemOrder_step_def Let_def by simp
   have definedness: "stateIsDefined s2 = exIsDefined (pre, exWitness s2, getRelations pre (exWitness s2))"
     using step unfolding minOpsemStep_def Let_def by simp
   have cons2: "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
-    using step unfolding minOpsemStep_def Let_def by auto
+    using step unfolding minOpsemStep_def Let_def by blast (* TODO: why does auto loop? *)
   have wit: "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
     using step unfolding minOpsemStep_def Let_def by auto
   show ?thesis
@@ -1706,11 +1713,6 @@ proof -
     qed
 qed
 
-lemma foo:
-  assumes "minOpsemTrace pre r s"
-  shows   "\<And>a b. b \<in> committed s \<and> (a, b) \<in> opsemOrder pre (exWitness s) \<longrightarrow> a \<notin> committed s"
-oops
-
 lemma completenessRelTrace_aux:
   assumes "minOpsemTrace pre r s"
           "r = initialState pre"
@@ -1719,10 +1721,10 @@ using assms
 proof induct
   case (minOpsemReflexive pre s)
   hence "exIsConsistent_op {} (pre, initialWitness, getRelations pre initialWitness)"
-    unfolding exIsConsistent_op_def getRelations_def by auto
+    unfolding exIsConsistent_op_def by auto
   hence "well_formed_threads (pre, initialWitness, getRelations pre initialWitness)"
   and   "consistent_hb (pre, initialWitness, getRelations pre initialWitness)"
-    unfolding exIsConsistent_op_def getRelations_def by auto
+    unfolding exIsConsistent_op_def by auto
   thus "relOpsemTrace pre s s"
     using relOpsemReflexive minOpsemReflexive by auto
 next

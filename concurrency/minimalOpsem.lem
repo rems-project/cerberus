@@ -21,10 +21,13 @@ open import Cmm_master
    locks, non-atomics and atomics, except for consumes. *)
 
 val sublanguage: condition_t
-let sublanguage = sc_fenced_condition
+let inline sublanguage = true_condition
 
 val memory_model: memory_model
-let memory_model = sc_fenced_memory_model
+let inline memory_model = with_consume_memory_model
+
+val getRelations: pre_execution -> execution_witness -> relation_list
+let inline getRelations = with_consume_relations
 
 (* We give structure to the types of undefinedness *)
 
@@ -54,55 +57,25 @@ let getDefinedness ex =
   if not (Set.null data_races) then
     DataRaces data_races
   else 
-    let unseq_races = unsequenced_races ex in
-    if not (Set.null unseq_races) then
+  let unseq_races = unsequenced_races ex in
+  if not (Set.null unseq_races) then
     UnsequencedRaces unseq_races
   else
-    let indet_reads = indeterminate_reads ex in
-    if not (Set.null indet_reads) then
+  let indet_reads = indeterminate_reads ex in
+  if not (Set.null indet_reads) then
     IndeterminateReads indet_reads
   else
-    let bad_mutexes = locks_only_bad_mutexes ex in
-    if not (Set.null bad_mutexes) then
+  let bad_mutexes = locks_only_bad_mutexes ex in
+  if not (Set.null bad_mutexes) then
     BadMutexes bad_mutexes
   else
-    let in_sublanguage = sublanguage {ex} in
-    if not in_sublanguage then
+  let in_sublanguage = sublanguage {ex} in
+  if not in_sublanguage then
     NotInSublanguage
   else
     Defined2
 
 (* Abbreviations that use the the memory_model *)
-
-type hbCalculation = pre_execution -> execution_witness -> set (action * action)
-
-val getHb: hbCalculation
-let getHb pre wit =  
-  match memory_model.relation_calculation pre wit with
-  | ("hb", hb)::_ -> hb
-  | _             -> {}
-  end
-
-val getVse: pre_execution -> execution_witness -> set (action * action)
-let getVse pre wit =
-  visible_side_effect_set pre.actions (getHb pre wit)
-
-val getOtherRel: pre_execution -> execution_witness -> relation_list
-let getOtherRel pre wit =
-  match memory_model.relation_calculation pre wit with
-  | ("hb", _)::("vse", _)::t -> t
-  | _                        -> []
-  end
-
-(* getRelations is equivalent to memory_model.relation_calculation,
-   but it makes it possible to use the hb-relation, without expanding
-   the definition of hb. This is useful in the Isabelle proofs. *)
-
-val getRelations: pre_execution -> execution_witness -> relation_list
-let getRelations pre wit =
-  ("hb",  getHb pre wit)::
-  ("vse", getVse pre wit)::
-  getOtherRel pre wit
 
 val exIsConsistent: candidate_execution -> bool
 let exIsConsistent ex = apply_tree memory_model.consistent ex
@@ -179,19 +152,19 @@ val is_na_or_non_write: pre_execution -> action -> bool
 let is_na_or_non_write pre a = not (is_write a) || is_at_non_atomic_location pre.lk a
 
 (* TODO: find a better name *)
-val hbMinus: pre_execution -> execution_witness -> set (action * action)
-let hbMinus pre wit = 
-  {(a, b) | forall ((a, b) IN (getHb pre wit)) | is_na_or_non_write pre b} 
+val hbMinus: candidate_execution -> set (action * action)
+let hbMinus (pre,wit,("hb",hb)::_) = 
+  {(a, b) | forall ((a, b) IN hb) | is_na_or_non_write pre b} 
 
-val opsemOrder: pre_execution -> execution_witness -> set (action * action)
-let opsemOrder pre wit =
-  Relation.transitiveClosure (Set.(union) (hbMinus pre wit) (Set.(union) wit.rf wit.mo))
+val opsemOrder: candidate_execution -> set (action * action)
+let opsemOrder (pre, wit, rel) =
+  Relation.transitiveClosure (Set.(union) (hbMinus (pre, wit, rel)) (Set.(union) wit.rf wit.mo))
 
 (* The consistency predicates of the operational semantics -------------------------------------- *)
 
 (* For certain consistency predicates of the axiomatic model, we
    define an operational variant that takes into account which actions
-   have been committed. They can be recognized by the prefix _op. *)
+   have been committed. They can be recognized by the postfix _op. *)
 
 val consistent_mo_op: set action -> candidate_execution -> bool
 let consistent_mo_op committed (Xo,Xw,_) =
@@ -208,15 +181,15 @@ let consistent_mo_op committed (Xo,Xw,_) =
           (a IN committed || b IN committed))
 
 val det_read_op: set action -> candidate_execution -> bool
-let det_read_op committed (Xo,Xw,_::("vse",vse)::_) =
+let det_read_op committed (Xo,Xw,("hb",hb)::_) =
     forall (r IN Xo.actions).
       is_load r && r IN committed -->
-      (exists (w IN Xo.actions).  (w,r)  IN vse) =
+      (exists (w IN Xo.actions).  (w,r)  IN hb && is_write w && (loc_of w = loc_of r)) =
       (exists (w' IN Xo.actions). (w',r) IN Xw.rf)
 
 val isInOpsemOrder: set action -> candidate_execution -> bool
-let isInOpsemOrder committed (Xo,Xw,_) =
-  downclosed committed (opsemOrder Xo Xw)
+let isInOpsemOrder committed ex =
+  downclosed committed (opsemOrder ex)
 
 val locks_only_consistent_lo_op: set action -> candidate_execution -> bool
 let locks_only_consistent_lo_op committed (Xo,Xw,("hb",hb)::_) =
@@ -319,8 +292,8 @@ let minOpsemStep pre s1 s2 a =
 
   (* Actions are committed in opsemOrder. *)
   (forall (b IN pre.actions).
-    (b IN s1.committed --> (a, b) NIN opsemOrder pre s2.exWitness) &&
-    ((b, a) IN opsemOrder pre s2.exWitness --> b IN s1.committed)) &&
+    (b IN s1.committed --> (a, b) NIN opsemOrder (pre, s2.exWitness, rel)) &&
+    ((b, a) IN opsemOrder (pre, s2.exWitness, rel) --> b IN s1.committed)) &&
 
   (* The new execution_witness extends the previous (only new
   relations are added, and new relations are from or to the committed
@@ -398,6 +371,8 @@ let selective_downclosed f s r = forall ((a, b) IN r). b IN s && f b --> a IN s
    hbCalculation, so we can prove the conditions for multiple
    models. *)
 
+type hbCalculation = pre_execution -> execution_witness -> set (action * action)
+
 val extractHb: (pre_execution -> execution_witness -> relation_list) -> hbCalculation
 let extractHb relCalc pre wit =
   match relCalc pre wit with
@@ -412,12 +387,12 @@ let ~{ocaml} hbCalcIsMonotonic hbCalc =
 
 val prefixes_are_final: set action -> set (action * action) -> set (action * action) -> bool
 let prefixes_are_final s r r' =
-  forall (c IN s). forall ((a, b) IN r). (b = c || (b, c) IN r) --> (a, b) IN r'
+  forall ((a, b) IN r). b IN s --> (a, b) IN r'
 
 val selective_prefixes_are_final: (action -> bool) -> set action -> set (action * action) -> 
                                   set (action * action) -> bool
 let selective_prefixes_are_final f s r r' =
-  forall (c IN s). f c --> (forall ((a, b) IN r). (b = c || (b, c) IN r) --> (a, b) IN r')
+  forall ((a, b) IN r). b IN s && f b --> (a, b) IN r'
 
 (* TODO: find a better name *)
 val sbMinus: pre_execution -> set (action * action) -> set (action * action)
@@ -429,6 +404,8 @@ let ~{ocaml} hbCalcIsFinalForPrefixes hbCalc =
   forall pre wit actions. downclosed actions wit.rf && 
                           downclosed actions wit.mo && 
                           downclosed actions (sbMinus pre pre.sb) &&
+                          Relation.isTransitive pre.sb &&
+                          pre.dd subset pre.sb &&
                           selective_downclosed (is_na_or_non_write pre) actions (hbCalc pre wit) -->
      selective_prefixes_are_final (is_na_or_non_write pre)
                                   actions
