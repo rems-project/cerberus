@@ -1,17 +1,14 @@
 open Global_ocaml
 
 (* == Environment variables ===================================================================== *)
-let corelib_path =
-    try
-      Sys.getenv "CORELIB_PATH"
-    with Not_found ->
-      error "expecting the environment variable CORELIB_PATH set to point to the location of std.core."
-
 let cerb_path =
     try
       Sys.getenv "CERB_PATH"
     with Not_found ->
       error "expecting the environment variable CERB_PATH set to point to the location cerberus."
+
+let corelib_path =
+  Filename.concat cerb_path "corelib"
 
 
 (* == Symbol counter for the Core parser ======================================================== *)
@@ -213,7 +210,7 @@ let pipeline filename args =
   Exception.return0 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress no_rewrite concurrency args =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress no_rewrite concurrency preEx args =
   Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -241,7 +238,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx;
   
 (*
   if !!cerb_conf.concurrency_tests then
@@ -316,6 +313,10 @@ let concurrency =
   let doc = "Activate the C11 concurrency" in
   Arg.(value & flag & info["concurrency"] ~doc)
 
+let preEx =
+  let doc = "only generate and output the concurrency pre-execution (activates the C11 concurrency)" in
+  Arg.(value & flag & info["preEx"] ~doc)
+
 (*
 let concurrency_tests =
   let doc = "Runs the concurrency regression tests" in
@@ -328,7 +329,8 @@ let args =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $ concurrency $ args) in
+  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $
+                         concurrency $ preEx $ args) in
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
