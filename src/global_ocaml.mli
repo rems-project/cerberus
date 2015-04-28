@@ -36,6 +36,7 @@ type cerberus_conf = {
   progress:      bool;
   no_rewrite:    bool;
   concurrency:   bool;
+  preEx:         bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -56,6 +57,7 @@ val set_cerb_conf:
     bool ->
     execution_mode ->
     (Input.t -> (Core_parser_util.result, Errors.t9) Exception.t3) ->
+    bool ->
     bool ->
     bool ->
     bool ->

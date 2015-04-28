@@ -46,6 +46,7 @@ type cerberus_conf = {
   progress:          bool;
   no_rewrite:        bool;
   concurrency:       bool;
+  preEx:             bool;
 }
 
 let (!!) z = !z()
@@ -63,7 +64,7 @@ let current_execution_mode () =
   !cerb_exec_mode_opt
 
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress no_rewrite concurrency =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress no_rewrite concurrency preEx =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -73,8 +74,9 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser p
     core_parser=   core_parser;
     exec_mode_opt= if exec then Some exec_mode else None;
     progress=      progress;
-    concurrency=   concurrency;
-    no_rewrite=    no_rewrite
+    no_rewrite=    no_rewrite;
+    concurrency=   concurrency || preEx;
+    preEx=         preEx;
   }
 
 
