@@ -17,7 +17,7 @@ type mode =
 
 
 
-type provenance_id
+type provenance_id = allocation_id
 
 type provenance =
   | Prov_wildcard
@@ -25,14 +25,30 @@ type provenance =
   | Prov_some of set provenance_id (* INVARIANT: non empty set *)
 
 
-type address
+type address = Symbolic.symbolic (* a normal symbolic expression that will resolve to a number, maybe with disjointness and adjacency constraints (kept elsewhere) *)
+
+(* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_member with the struct/union type. *)
+type shift_path_element = 
+  | SPE_member of ctype * integer (*TODO: bring back symbolic *)
+  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+
+type shift_path = list shift_path_element
 
 
 type pointer_value_aux =
-  | PVnull of ctype
-  | PVbase of allocation_id
+  | PVnull of ctype  
+     (* the lvalue type of the pointer object we stored a NULL to *) 
+     (*always with Prov_none *)
+  | PVbase of allocation_id  
+     (* the result of a dynamic or automatic/static/thread-local allocation *)
+     (* generated (and perhaps always?) with Prov_some with the singleton set of its allocation_id  *)
   | PVshift of pointer_value_aux * shift_path
+     (* shift_path used to be a list of (ctype,int) pairs.  
+        now the int should be the naive_memory.lem integer_value 
+*)
   | PVfromint of integer_value (* never a null pointer *)
+
+(* in memory-value, kayvan wants byte-n-of-memory-value too *)
 
 type pointer_value =
   provenance * pointer_value_aux
