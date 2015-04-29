@@ -1,3 +1,4 @@
+
 #ifndef	_STRING_H_
 #define	_STRING_H_
 
@@ -43,6 +44,25 @@ errno_t strerror_s(char *s, rsize_t maxsize, errno_t errnum);
 size_t strerrorlen_s(errno_t errnum);
 size_t strnlen_s(const char *s, size_t maxsize);
 */
+
+
+
+
+int memcmp(const void *s1, const void *s2, size_t n)
+{
+  unsigned char c1, c2;
+  for (int i=0; i < n; i++) {
+    c1 = *(unsigned char*)s1;
+    c2 = *(unsigned char*)s2;
+    if ( c1 != c2 )
+      return c1 - c2;
+  }
+  return 0;
+}
+
+
+
+
 
 #else
 #endif

@@ -64,7 +64,7 @@ let signed_type = function
   | Unsigned _ ->
       false
   | IBuiltin _ ->
-      false
+      false (* TODO: builtins here are of impl-def signess*)
   | Enum _ ->
       (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
       true
@@ -80,10 +80,8 @@ let unsigned_type = function
       false
   | Unsigned _ ->
       true
-  | IBuiltin "size_t" ->
-      true
   | IBuiltin _ ->
-      false
+      false (* TODO: builtins here are of impl-def signess*)
   | Enum _ ->
       (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
       false
@@ -491,7 +489,9 @@ let le_integer_range impl ity1 ity2 =
   | (Unsigned Int8_t  , Signed Int64_t   ) -> false
 *)
 
-  | _ -> assert_false "WIP"
+  | (IBuiltin str, _) -> assert_false ("WIP le_integer_range (left): " ^ str)
+  | (_, IBuiltin str) -> assert_false ("WIP le_integer_range (right): " ^ str)
+  | _ -> assert_false "WIP: le_integer_range"
 
 
 (*
@@ -570,7 +570,7 @@ let lt_integer_rank_congruence impl ity1 ity2 =
     | (ity1, Unsigned ibty2) ->
         lt_integer_rank_base impl ity1 (Signed ibty2)
     | _ ->
-        assert_false "WIP"
+        assert_false "WIP lt_integer_rank_congruence"
   end
 
 val lt_integer_rank: integerType -> integerType -> bool

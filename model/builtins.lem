@@ -453,6 +453,8 @@ let translate_builtin_typenames = function
       Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intmax_t"))))
   | "__cerbty_intptr_t" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intptr_t"))))
+  | "__cerbty_ptrdiff_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "ptrdiff_t"))))
   | "__cerbty_jmp_buf" ->
       Just (ATypes.Builtin "jmp_buf")
   | "__cerbty_mtx_t" ->
@@ -462,7 +464,7 @@ let translate_builtin_typenames = function
   | "__cerbty_sig_atomic_t" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "sig_atomic_t")))
   | "__cerbty_size_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "size_t")))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "size_t"))))
   | "__cerbty_thrd_t" ->
       Just (ATypes.Builtin "thrd_t")
   | "__cerbty_tss_t" ->

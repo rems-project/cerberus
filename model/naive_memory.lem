@@ -311,8 +311,10 @@ let rec prettyStringFromMem_value mem_val =
         show n
     | MVinteger (IVsymbolic (Symbolic.SYMBconst n)) ->
         show n
+    | MVpointer ptr_val ->
+        "PTR(" ^ show ptr_val ^ ")"
     | _ ->
-        "0" (* TODO: check (I think this function is only used for printf *)
+        "[TODO]" (* TODO: check (I think this function is only used for printf *)
   end
 
 
