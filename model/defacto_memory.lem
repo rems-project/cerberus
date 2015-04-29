@@ -1,0 +1,111 @@
+(* De-facto C11 memory model *)
+open import Core_ctype
+
+
+(* Semantic switches *)
+type mode =
+  | Mode_ISO
+    (* the bools are: "-no-strict-aliasing", multiple-provenance,
+       pointer-lifetime-zap *)
+  | Mode_Defacto of bool * bool * bool
+
+
+(* Basic representation: 
+   
+     assuming 8-bit bytes and two's complement arithmetic.
+ *)
+
+
+
+type provenance_id
+
+type provenance =
+  | Prov_wildcard
+  | Prov_none
+  | Prov_some of set provenance_id (* INVARIANT: non empty set *)
+
+
+type address
+
+
+type pointer_value_aux =
+  | PVnull of ctype
+  | PVbase of allocation_id
+  | PVshift of pointer_value_aux * shift_path
+  | PVfromint of integer_value (* never a null pointer *)
+
+type pointer_value =
+  provenance * pointer_value_aux
+
+
+type integer_value_aux =
+  | IVconcrete of Symbolic.symbolic
+  | IVfromptr of pointer_value_aux
+  | IVop of ivop * list integer_value_aux
+
+type integer_value =
+  provenance * integer_value_aux
+
+
+
+(* TODO: split it *)
+type allocation = <|
+  is_dynamic: bool;
+  allocated_type: maybe ctype; (* only for static *)
+  address: address_id;
+|>
+
+
+type memory_state = <|
+  allocations: map allocation_id allocation;
+  allocation_constaints: something; (* might need to be in driver_state *)
+  
+|>
+
+
+(* API *)
+val ptr_eq: pointer_value -> pointer_value -> memM bool
+val ptr_add: pointer_value -> integer_value -> memM pointer_value
+val ptr_diff: pointer_value -> pointer_value -> memM integer_value
+val ptr_fromint: integer_value -> memM pointer_value (* cast from scalar to pointer value *)
+
+
+(* TODO: is it unclear how to decide if ptr_diff in intra or inter object *)
+
+
+
+
+
+
+(*
+
+int *p, *q;
+
+*(unsigned char* )&q = *((unsigned char* )&p);
+(unsigned char* )q[1] = (unsigned char* )p[1];
+(unsigned char* )q[2] = (unsigned char* )p[2];
+(unsigned char* )q[3] = (unsigned char* )p[3];
+
+
+
+
+
+
+
+*)
+
+
+(*
+
+STATIC_ALLOCATION:
+
+  * gen a provenance_id
+  * return the singleton of provenance_id
+  
+ 
+
+
+
+
+
+*)
