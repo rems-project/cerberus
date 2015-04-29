@@ -652,7 +652,7 @@ OLD(sigma_declaration)
 
 
     | AilEgeneric (* e gas *) _ _ ->
-        E.fail Loc.unknown (TError "WIP")
+        E.fail Loc.unknown (TError "WIP: GenTyping AilEgeneric")
 (*
         annotate_expression e                     >>= fun e'   ->
         E.mapM (annotate_generic_association A S G) gas >>= fun gas' ->

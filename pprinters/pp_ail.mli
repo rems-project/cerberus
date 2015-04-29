@@ -10,6 +10,7 @@ val pp_qualifiers: qualifiers -> PPrint.document -> PPrint.document
 val pp_integerBaseType: integerBaseType -> PPrint.document
 
 
+val pp_integerType_raw: integerType -> PPrint.document
 val pp_integerType: integerType -> PPrint.document
 
 val pp_basicType: basicType -> PPrint.document

@@ -8,87 +8,23 @@ fun ctype_min_void () : integer :=
   error <<<ctype_min>>> -- TODO
 
 fun ctype_min_basic (ty: ctype) : integer :=
-  if ty = "char" then
+  if ty = "char" \/ ty = "signed ichar" \/ ty = "int8_t" then
     -128
+  else if    ty = "_Bool" \/ ty = "unsigned ichar" \/ ty = "unsigned short" \/ ty = "unsigned int"
+          \/ ty = "unsigned long" \/ ty = "unsigned long_long" \/ ty = "uint8_t" \/ ty = "uint16_t"
+          \/ ty = "uint32_t" \/ ty = "uint64_t"
+          \/ ty = "uintptr_t" \/ ty = "size_t" then
+    0
+  else if ty = "signed short" \/ ty = "int16_t" then
+    -32768
+  else if ty = "signed int" \/ ty = "int32_t" then
+    -2147483648
+  else if    ty = "signed long" \/ ty = "signed long_long" \/ ty = "int64_t"
+          \/ ty = "intptr_t" \/ ty = "ptrdiff_t" then
+    -9223372036854775808
   else
-    if ty = "_Bool" then
-      0 -- TODO: check
-    else
-      if ty = "signed ichar" then
-        -128
-      else
-        if ty = "unsigned ichar" then
-          0
-        else
-          if ty = "signed short" then
-            -32768
-          else
-            if ty = "unsigned short" then
-              0
-            else
-              if ty = "signed int" then
-                -2147483648
-              else
-                if ty = "unsigned int" then
-                  0
-                else
-                  if ty = "signed long" then
-                    -9223372036854775808
-                  else
-                    if ty = "unsigned long" then
-                      0
-                    else
-                      if ty = "signed long_long" then
-                        -9223372036854775808
-                      else
-                        if ty = "unsigned long_long" then
-                          0
-                        else
-                          if ty = "int8_t" then
-                            -128
-                          else
-                            if ty = "int16_t" then
-                              -32768
-                            else
-                              if ty = "int32_t" then
-                                -2147483648
-                              else
-                                if ty = "int64_t" then
-                                  -9223372036854775808
-                                else
-                                  if ty = "uint8_t" then
-                                    0
-                                  else
-                                    if ty = "uint16_t" then
-                                      0
-                                    else
-                                      if ty = "uint32_t" then
-                                        0
-                                      else
-                                        if ty = "uint64_t" then
-                                          0
-                                        else
-                                          error <<<ctype_min>>> -- TODO
-                                        end
-                                      end
-                                    end
-                                  end
-                                end
-                              end
-                            end
-                          end
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
-    end
-  end
+    error <<<ctype_min>>> -- TODO
+  end end end end end
 
 fun ctype_min_array (ty: ctype, n: integer) : integer :=
   <ctype_min>(ty)
@@ -369,7 +305,8 @@ fun sizeof_basic (ty: ctype) : integer :=
   else if ty = "signed int" \/ ty = "unsigned int" \/ ty = "int32_t" \/ ty = "uint32_t" then
     4
   else if    ty = "signed long" \/ ty = "unsigned long" \/ ty = "signed long_long" \/  ty = "unsigned long_long"
-          \/ ty = "int64_t" \/ ty = "uint64_t" \/ ty = "size_t" then
+          \/ ty = "int64_t" \/ ty = "uint64_t"
+          \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
     8
   else
     error <<<sizeof_basic>>> -- TODO
@@ -407,7 +344,8 @@ fun alignof_basic (ty: ctype) : integer :=
   else if ty = "signed int" \/ ty = "unsigned int" \/ ty = "int32_t" \/ ty = "uint32_t" then
     4
   else if    ty = "signed long" \/ ty = "unsigned long" \/ ty = "signed long_long" \/  ty = "unsigned long_long"
-          \/ ty = "int64_t" \/ ty = "uint64_t" \/ ty = "size_t" then
+          \/ ty = "int64_t" \/ ty = "uint64_t"
+          \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
     8
   else
     error <<<alignof_basic>>> -- TODO

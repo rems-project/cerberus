@@ -139,6 +139,7 @@ let pseudo_printf (frmt : string) (args : string list (* Nat_big_num.num list *)
 *)
 
 (* TODO: ridiculous hack (v2) *)
+(*
 let pseudo_printf (frmt : string) (args : string list (* Nat_big_num.num list *)) : string =
   let rexp = regexp "%\(d\|llx\)" in
   let rec f str args acc =
@@ -179,3 +180,104 @@ let pseudo_printf (frmt : string) (args : string list (* Nat_big_num.num list *)
         frmt (* TODO: technically that should be invalid *)
   in
   String.concat "" (f frmt' args [])
+*)
+
+
+
+
+open Core_ctype
+open AilTypes
+
+
+let ctype_of_specifier = function
+  | "%d"
+  | "%i" -> Basic0 (Integer (Signed AilTypes.Int_))
+  | "%o"
+  | "%u"
+  | "%x"
+  | "%X" -> Basic0 (Integer (Unsigned Int_))
+  | "%f"
+  | "%F"
+  | "%e"
+  | "%E"
+  | "%g"
+  | "%G"
+  | "%a"
+  | "%A" -> Basic0 (RealFloating (Floating Double))
+(*  | "c" -> *)
+(*  | "s" -> *)
+  | "%p" -> Pointer0 (AilTypes.no_qualifiers, Void0)
+(*  | "n" -> *)
+  | "%llx" -> Basic0 (Integer (Unsigned LongLong))
+  | str ->
+    failwith ("BOOM: " ^ str)
+
+
+
+let recombiner (xs: string list ) : string list -> string =
+  let n = List.length xs in
+  let rec aux z n = function
+    | []  ->
+        ""
+    | [x] ->
+        x
+    | (x::xs) ->
+        x ^ List.nth z n ^ aux z (n+1) xs in
+  fun z -> aux z 0 xs
+  
+
+let pseudo_printf (frmt : string) : Core_ctype.ctype0 list * (string list -> string) =
+  let rexp = regexp ("%\\(" ^ String.concat "\\|"
+    ["d"; "i"; "o"; "u"; "x"; "X"; "f"; "F"; "e"; "E";
+     "g"; "G"; "a"; "A"; "c"; "s"; "p"; "n"; "%"; "llx"] ^ "\\)") in
+  let rec f str (tys_acc, str_acc) =
+    if String.length str = 0 then
+      (* we've reach the end of the format string *)
+      (List.rev tys_acc, List.rev str_acc)
+    else
+      try
+        let spec_pos    = search_forward rexp str 0 in
+        let frmt_prefix = String.sub str 0 spec_pos in
+        let str' =
+          let offset = match_end () in
+          String.sub str offset (String.length str - offset) in
+        
+        let spec = matched_group 0 str in
+        
+        f str' (ctype_of_specifier spec :: tys_acc, frmt_prefix :: str_acc)
+
+
+(*
+          | "%d" ->
+              (Core_ctype.(Basic0 (AilTypes.Integer (AilTypes.Signed AilTypes.Int_))) :: tys_acc,
+               fun str ->
+                 Printf.sprintf "%Ld" (Int64.of_string str) ^
+
+ (* Printf.sprintf "%Ld" (Int64.of_string arg) *)
+(*
+                | "%llx" ->
+                    "long" (* Printf.sprintf "%Lx" (Int64.of_string arg) *)
+*)
+                | "%p" ->
+                    Core_ctype.(Pointer0 (AilTypes.no_qualifiers, Void0))
+              in 
+              f str' (* args' *) ((* Nat_big_num.to_string *) arg :: (* pre :: *) acc)
+*)
+      with
+        Not_found ->
+          (* there are no more conversion specifiers in the remainder of the format string *)
+          (List.rev tys_acc, List.rev (str :: str_acc))
+  in
+  let frmt' =
+    try
+      let n = search_forward (regexp "\000") frmt 0 in
+      String.sub frmt 0 n
+    with
+      Not_found ->
+        frmt (* TODO: technically that should be invalid *)
+  in
+  let (tys, strs) = f frmt' ([], []) in
+  (tys, recombiner strs)
+
+
+
