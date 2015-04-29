@@ -135,6 +135,10 @@ let rec translate_lvalue stdlib program a_expr =
           E.return (a, Me.null)
         end
 *)
+      | A.AilEcast _ _ e ->
+          (* TODO: check, maybe to something with the type ? *)
+          translate_lvalue stdlib program e
+
 
       | A.AilEmemberof e ident ->
           let (Aty.Struct tag_sym) = ctype_of e in
