@@ -39,7 +39,7 @@ let call_function file f_nm arg_cvals =
           | Nothing ->
               match Map.lookup f_a file.funs with
                 | Just z ->
-                    (* callign a user function *)
+                    (* calling a user function *)
                     Exception.return z
                 | Nothing ->
                     Exception.fail (Illformed_program "calling an unknown function")

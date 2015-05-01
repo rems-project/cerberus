@@ -769,13 +769,13 @@ _STD "§6.7.2#2, sentence 2 (non `void' case)" $
     E.return $ ATypes.Integer (ATypes.Unsigned ATypes.LongLong)
   else if specs = Multiset.from_list [BTSpec_float] then
     (* STD §6.7.2#2, item 13 *)
-    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.Float)
+    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.Float)
   else if specs = Multiset.from_list [BTSpec_double] then
     (* STD §6.7.2#2, item 14 *)
-    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.Double)
+    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.Double)
   else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
     (* STD §6.7.2#2, item 15 *)
-    E.return $ ATypes.RealFloating (ATypes.Floating ATypes.LongDouble)
+    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.LongDouble)
   else if specs = Multiset.from_list [BTSpec_Bool] then
     (* STD §6.7.2#2, item 16 *)
     E.return $ ATypes.Integer (ATypes.Bool)
@@ -815,7 +815,7 @@ _STD "§6.7.2#2, sentence 2 (`void' case)"
       Boot.assert_false "WIP: TSpec_struct Nothing, Nothing"
   
   | [TSpec_struct tag_ident_opt sdecls_opt] ->
-      (* §6.7.3.2#7 *)
+      (* §6.7.2.3#7 *)
       E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
       
       match sdecls_opt with
@@ -841,6 +841,23 @@ _STD "§6.7.2#2, sentence 2 (`void' case)"
       end
   
   
+  | [TSpec_union tag_ident_opt sdecls_opt] ->
+      (* §6.7.2.3#7 *)
+      E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
+      
+      match sdecls_opt with
+        | Just sdecls ->
+            E.mapM desugar_struct_declaration sdecls >>= fun xs ->
+            (* TODO: hum, a bit silly here *)
+            (* TODO: not silly ==> catch redefinitions *)
+            E.register_tag_definition Loc.unknown tag_sym (E.Union_definition $ List.concat xs) >>
+            E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+        | Nothing ->
+            (* TODO: bogus? *)
+            E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+      end
+
+
   
 (*
       (* NOTE: in this case the struct type has already been declared *)
@@ -1626,8 +1643,61 @@ and wip_desugar_initializer_ dur current_ty = function
 *)
             E.resolve_tag_definition tag >>= function
               | E.Struct_definition ident_tys ->
+                  (* TODO: (for now) only allowing explicit and complete initializer *)
+                  if List.all (function
+                       | (Just [Desig_member _], Init_expr _) -> true
+                       | _                                    -> false
+                     end) desigs_opt_inits then
+                    E.foldlM (fun (Just [Desig_member ident], Init_expr e) acc ->
+                      desugar_expression e >>= fun d_e ->
+                      E.return $ (ident, d_e) :: acc
+                    ) desigs_opt_inits [] >>= fun xs ->
+                    
+                    E.return $
+                      AnnotatedExpression () (
+                        AilEstruct tag (List.map (fun (ident, _) -> (ident, List.lookup ident xs)) ident_tys)
+                      )
+                  
+                  (* TODO: OR a flat implicit initializer *)
+                  else if List.all (function
+                            | (Nothing, Init_expr _) -> true
+                            | _                      -> false
+                          end) desigs_opt_inits then
+                    E.foldlM (fun ((ident, _), (Nothing, Init_expr e)) acc ->
+                      desugar_expression e >>= fun d_e ->
+                      E.return $ (ident, Just d_e) :: acc
+                    ) (List.zip ident_tys desigs_opt_inits) [] >>= fun xs_rev ->
+                    
+                    E.return $
+                      AnnotatedExpression () (
+                        AilEstruct tag (List.reverse xs_rev)
+                      )
+                  
+                  else
+                    (* TODO: crazy stuff we don't deal with yet *)
+                    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "crazy struct initializers")
                   
 
+
+
+(*
+val foldl : forall 'a 'b. ('a -> 'b -> 'a) -> 'a -> list 'b -> 'a (* originally foldl *)
+*)
+                  
+
+(*
+                    | Init_list desigs_opt_inits ->
+
+
+  | Init_list of list (maybe (list designator) * initializer_)
+
+
+and designator =
+  | Desig_array of cabs_expression
+  | Desig_member of cabs_identifier
+
+
+*)
 
 
 
@@ -1673,9 +1743,6 @@ WIP
 
 
 
-
-                  let xs = Boot.assert_false "WIP: Cabs_to_ail, Struct" in
-                  
               
 
 (*
@@ -1689,9 +1756,6 @@ and designator =
 
 *)
                   
-                  
-                  E.return $
-                    AnnotatedExpression () (AilEstruct tag xs)
                   
                   
                   

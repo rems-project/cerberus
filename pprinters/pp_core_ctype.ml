@@ -39,10 +39,22 @@ let pp_integer_ctype ity =
     | IBuiltin str     -> !^ str
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
 
+let pp_floating_ctype fty =
+  let open AilTypes in
+  match fty with
+    | RealFloating Float ->
+        !^ "float"
+    | RealFloating Double ->
+        !^ "double"
+    | RealFloating LongDouble ->
+        !^ "long_double"
+
+
 let pp_basic_ctype bty =
   let open AilTypes in
   match bty with
     | Integer ity -> pp_integer_ctype ity
+    | Floating fty -> pp_floating_ctype fty
 
 let rec pp_ctype = function
 (*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)

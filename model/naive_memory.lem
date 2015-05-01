@@ -785,6 +785,7 @@ type memop =
   | Ptreq
   | Ptrdiff (* (address, address) -> integer *)
   | Intptr  (* address -> integer *)
+  | PtrLt
 
 
 val runMem: forall 'a. memM 'a -> mem_state -> either mem_error ('a * mem_state)

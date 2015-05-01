@@ -3,7 +3,9 @@
 
 #include <stdarg.h>
 
+#ifndef _STDLIB_H_ || _STRING_H_ // TODO: fix the f!cking parser
 typedef __cerbty_size_t size_t;
+#endif
 typedef __cerbty_FILE   FILE;
 typedef __cerbty_fpos_t fpos_t;
 

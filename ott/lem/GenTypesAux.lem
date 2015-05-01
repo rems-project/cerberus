@@ -34,7 +34,15 @@ let is_integer = function
       true
   | _ ->
       false
-  end
+end
+
+val is_floating: genType -> bool
+let is_floating = function
+  | GenBasic (GenFloating _) ->
+      true
+  | _ ->
+      false
+end
 
 val is_pointer: genType -> bool
 let is_pointer = function
@@ -67,7 +75,7 @@ end
 (* STD §6.2.5#18, sentence 1 *)
 val is_arithmetic: genType -> bool
 let is_arithmetic gty =
-  is_integer gty
+  is_integer gty || is_floating gty
 
 (* STD §6.2.5#21, sentence 1 *)
 val is_scalar: genType -> bool
@@ -243,6 +251,8 @@ let interpret_genBasicType impl = function
   | GenInteger gity ->
       interpret_genIntegerType impl gity >>= fun ity ->
       return (Integer ity)
+  | GenFloating fty ->
+      return (Floating fty)
 end
 
 val interpret_genType: implementation -> genType -> errorM ctype

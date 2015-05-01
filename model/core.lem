@@ -171,6 +171,7 @@ type pexpr =
   | PEtuple of list pexpr
 (*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
   | PEarray of list pexpr
+  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
   (* call to a pure function *)
   | PEcall of name * list pexpr
   
