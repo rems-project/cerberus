@@ -56,6 +56,7 @@ let precedence = function
   | PEnot _
   | PEtuple _
   | PEarray _
+  | PEstruct _
   | PEcall _
   | PElet _
   | PEif _
@@ -360,6 +361,12 @@ let pp_pexpr pe =
             P.parens (comma_list pp pes)
         | PEarray pes ->
             pp_keyword "array" ^^ P.parens (comma_list pp pes)
+        | PEstruct (tag_sym, xs) ->
+            pp_keyword "struct" ^^ P.parens (
+              pp_symbol tag_sym ^^ P.comma ^^^ comma_list (
+                (fun (ident, pe) -> Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe)
+              ) xs
+            )
 (*
         | PEarray xs -> (* of ( (Mem.mem_value, sym)Either.either) list *)
             pp_keyword "array" ^^ P.parens (

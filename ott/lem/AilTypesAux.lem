@@ -100,6 +100,16 @@ let is_integer ty =
       false
 end
 
+
+val is_floating: ctype -> bool
+let is_floating ty =
+  match unatomic ty with
+    | Basic (Floating _) ->
+        true
+    | _ ->
+        false
+  end
+
 val is_void: ctype -> bool
 let is_void ty =
   (* TODO: check atomic *)
@@ -256,7 +266,7 @@ end
 (* STD §6.2.5#18, sentence 1 *)
 val is_arithmetic: ctype -> bool
 let is_arithmetic ty =
-  is_integer ty (* TODO: || is_floating ty *)
+  is_integer ty || is_floating ty
 
 (* STD §6.2.5#21, sentence 1 *)
 val is_scalar: ctype -> bool

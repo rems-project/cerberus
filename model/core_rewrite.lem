@@ -560,6 +560,10 @@ let rec remove_conv_int_pexpr pexpr =
     | PEtuple pes ->
         PEtuple (List.map remove_conv_int_pexpr pes)
     | PEarray _ ->
+        (* TODO *)
+        pexpr
+    | PEstruct _ _ ->
+        (* TODO *)
         pexpr
     | PEcall nm pes ->
         let pes' = List.map remove_conv_int_pexpr pes in

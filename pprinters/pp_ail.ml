@@ -151,7 +151,7 @@ let pp_integerType = function
      pp_type_keyword "enum" ^^^ pp_id sym
 
 
-let pp_floatingType = function
+let pp_realFloatingType = function
   | Float ->
       pp_type_keyword "float"
   | Double ->
@@ -160,15 +160,15 @@ let pp_floatingType = function
       pp_type_keyword "long" ^^^ pp_type_keyword "double"
 
 
-let pp_realFloatingType = function
-  | Floating ft ->
-      pp_floatingType ft
+let pp_floatingType = function
+  | RealFloating ft ->
+      pp_realFloatingType ft
 
 let pp_basicType = function
   | Integer it ->
       pp_integerType it
-  | RealFloating rft ->
-      pp_realFloatingType rft
+  | Floating rft ->
+      pp_floatingType rft
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
@@ -215,9 +215,24 @@ let pp_integerType_raw = function
      !^ "enum" ^^^ pp_id sym
 
 
+
+let pp_realFloatingType_raw = function
+  | Float ->
+      !^ "Float"
+  | Double ->
+      !^ "Double"
+  | LongDouble ->
+      !^ "LongDouble"
+
+let pp_floatingType_raw = function
+  | RealFloating rfty ->
+      !^ "RealFloating" ^^ P.brackets(pp_realFloatingType_raw rfty)
+
 let pp_basicType_raw = function
   | Integer ity ->
       !^ "Integer" ^^ P.brackets (pp_integerType_raw ity)
+  | Floating fty ->
+      !^ "Floating" ^^ P.brackets (pp_floatingType_raw fty)
 
 let pp_qualifiers_raw qs =
   let f (str, b) =
@@ -612,6 +627,8 @@ let rec pp_expression a_expr =
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list pp_generic_association gas)
         | AilEarray (ty, e_opts) ->
             P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
+        | AilEstruct (tag_sym, xs) ->
+            P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
         | AilEbuiltin str ->
             !^ str
         | AilEstr lit ->

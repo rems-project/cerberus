@@ -203,7 +203,7 @@ let ctype_of_specifier = function
   | "%g"
   | "%G"
   | "%a"
-  | "%A" -> Basic0 (RealFloating (Floating Double))
+  | "%A" -> Basic0 (Floating (RealFloating Double))
 (*  | "c" -> *)
 (*  | "s" -> *)
   | "%p" -> Pointer0 (AilTypes.no_qualifiers, Void0)

@@ -122,7 +122,7 @@ let well_typed_assignment S ty1 gty2 null2 =
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
           if AilTypesAux.compatible ref_ty1 ref_ty2 && AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = output_string "[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
+            let _ = output_string "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
@@ -245,7 +245,7 @@ let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
 
 val annotate_assignee_aux: forall 's 'A1 'A2. sigma 's -> (expression 'A1 -> E.t (expression 'A2 * genType)) -> ctype -> expression 'A1 -> E.t (expression 'A2)
 let annotate_assignee_aux S annotate_rvalue ty1 e2 =
-  annotate_rvalue e2                                           >>= fun (e2, gty2) ->
+  annotate_rvalue e2                                             >>= fun (e2, gty2) ->
   well_typed_assignment S ty1 gty2 (is_null_pointer_constant e2) >>= function
     | true ->
         E.return e2
@@ -325,7 +325,7 @@ let rec annotate_constant cst =
         E.return (ConstantInteger ic, GenRValueType (GenBasic (GenInteger (type_of_constant ic))))
     | ConstantFloating fc ->
         (* TODO: ignoring the prefix for now (assuming the absence thereof) *)
-        E.return (ConstantFloating fc, GenRValueType (GenBasic (GenRealFloating (Floating Double))))
+        E.return (ConstantFloating fc, GenRValueType (GenBasic (GenFloating (RealFloating Double))))
     | ConstantCharacter cc ->
         (* TODO: §6.4.4.4#9 *)
         match fst cc with
@@ -408,6 +408,19 @@ let rec annotate_expression' annot sigm (gamm: gamma) expr =
           E.fail Loc.unknown (TError "TODO[msg]: failed to type an array constant")
 *)
     
+    | AilEstruct tag_sym xs ->
+        E.mapM (fun (ident, e_opt) ->
+          maybe (E.return Nothing) (fun e -> Just <$> annotate_rvalue e) e_opt >>= fun a_e_opt ->
+          E.return (ident, Maybe.map fst a_e_opt)
+        ) xs >>= fun xs' ->
+        (* TODO: the actual type checking of the members ... *)
+        E.return (AilEstruct tag_sym xs', GenRValueType (GenStruct tag_sym))
+
+
+
+(* of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *) *)
+
+
     | AilEbuiltin str ->
         match Builtins.ctype_of_builtin_varname str with
           | Just ty ->
@@ -786,7 +799,7 @@ TODO
                   match List.lookup ident ident_tys with
                     | Just ty ->
                         (* TODO: qualifiers *)
-                        E.return (AilEmemberof e' ident, GenLValueType AilTypes.no_qualifiers ty)
+                        E.return (AilEmemberofptr e' ident, GenLValueType AilTypes.no_qualifiers ty)
                     | Nothing ->
                         E.fail Loc.unknown (TError "TODO[msg] Struct memberofptr: invalid member")
                   end
@@ -799,7 +812,7 @@ TODO
                   match List.lookup ident ident_tys with
                     | Just ty ->
                         (* TODO: qualifiers *)
-                        E.return (AilEmemberof e' ident, GenLValueType AilTypes.no_qualifiers ty)
+                        E.return (AilEmemberofptr e' ident, GenLValueType AilTypes.no_qualifiers ty)
                     | Nothing ->
                         E.fail Loc.unknown (TError "TODO[msg] Union memberofptr: invalid member")
                   end
@@ -1154,7 +1167,10 @@ let annotate_definition_aux A S G (ty, e) =
       (* TODO: "(...) that has automatic storage duration" *)
       (* STD §6.7.9#13 *)
       else if AilTypesAux.is_struct_or_union ty then
-        assert_false "WIP: annotate_definition_aux, is_struct_or_union ty"
+        (* TODO: check *)
+        annotate_rvalue A S G e >>= fun (a_e, gty) ->
+        (* TODO: need to make sure that gty is compatible with ty *)
+        E.return a_e
       
       (* STD §6.7.9#14 *)
       else if AilTypesAux.is_array_of_character ty then
