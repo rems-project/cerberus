@@ -308,7 +308,7 @@ let rec core_eval file inside_if = function
               | (Vfalse, Vfalse) ->
                   EU.return $ PEval Vfalse
               | _ ->
-                  EU.fail $ Illformed_program "PEop OpAnd: the two operands should booleans"
+                  EU.fail $ Illformed_program ("PEop OpAnd: the two operands should be booleans ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         | (OpOr, Just v1, Just v2) ->
             match (v1, v2) with
@@ -321,7 +321,7 @@ let rec core_eval file inside_if = function
               | (Vfalse, Vfalse) ->
                   EU.return $ PEval Vfalse
               | _ ->
-                  EU.fail $ Illformed_program "PEop OpAnd: the two operands should booleans"
+                  EU.fail $ Illformed_program ("PEop OpOr: the two operands should be booleans ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
 
 (* TODO: symbolics *)

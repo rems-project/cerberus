@@ -202,7 +202,7 @@ fun ctype_max_basic (ty: ctype) : integer :=
                                       if ty = "uint32_t" then
                                         4294967295
                                       else
-                                        if ty = "uint64_t" \/ "size_t" then
+                                        if ty = "uint64_t" \/ ty = "size_t" then
                                           18446744073709551615
                                         else
 if ty = "_Atomic(signed int)" then
