@@ -257,6 +257,14 @@ using assms
 unfolding relOver_def
 by auto
 
+lemma relOver_subset:
+  assumes "relOver r s"
+      and "r' \<subseteq> r"
+  shows   "relOver r' s"
+using assms
+unfolding relOver_def
+by auto
+
 (* relRestrict *)
 
 lemmas relRestrictI [intro?] = relToIntro[OF relRestrict_def]
@@ -300,6 +308,13 @@ by auto
 lemma relRestrict_relRestrict [simp]:
   shows "relRestrict (relRestrict r s) s' = relRestrict r (s \<inter> s')"
 unfolding relRestrict_def
+by auto
+
+lemma relRestrict_id:
+  assumes "relOver r a"
+  shows   "relRestrict r a = r"
+using assms
+unfolding relOver_def relRestrict_def
 by auto
 
 lemma relRestrict_isTransitive [elim]:
@@ -422,6 +437,13 @@ qed
 
 declare relation_over_def [simp]
 thm relation_over_def
+
+(* inj_on *)
+
+lemma inj_on_empty [simp]:
+  shows "inj_on f {}"
+unfolding inj_on_def
+by simp
 
 (* adjacent_less_than *)
 
@@ -604,6 +626,11 @@ using assms
 unfolding threadwise_def
 by auto
 
+lemma threadwise_empty [simp]:
+  shows "threadwise s {}"
+unfolding threadwise_def
+by simp
+
 lemmas interthreadI [intro?] = defToIntro[OF interthread_def]
 
 lemma interthreadE [elim?]:
@@ -613,6 +640,11 @@ lemma interthreadE [elim?]:
 using assms
 unfolding interthread_def
 by auto
+
+lemma interthread_empty [simp]:
+  shows "interthread s {}"
+unfolding interthread_def
+by simp
 
 lemmas locationwiseI [intro?] = defToIntro[OF locationwise_def]
 
@@ -624,10 +656,20 @@ using assms
 unfolding locationwise_def
 by auto
 
+lemma locationwise_empty [simp]:
+  shows "locationwise s {}"
+unfolding locationwise_def
+by simp
+
 declare action_respects_location_kinds.simps [simp]
 
 lemmas actions_respect_location_kindsI [intro?] = defToIntro[OF actions_respect_location_kinds_def]
 lemmas actions_respect_location_kindsE [elim?] = defToElim[OF actions_respect_location_kinds_def]
+
+lemma actions_respect_location_kinds_empty [simp]:
+  shows "actions_respect_location_kinds {} p_lk"
+unfolding actions_respect_location_kinds_def
+by simp
 
 (* The standard intro and elim are less powerfull than the following ones. *)
 
@@ -701,6 +743,38 @@ lemma rel_list_assumptions [simp]:
   assumes "rel \<noteq> []"
   shows   "assumptions (pre, wit, rel) = assumptions (pre, wit,[])"
 unfolding assumptions.simps ..
+
+(* Blocking observed *)
+
+lemma blocking_observed_empty [simp]:
+  shows "blocking_observed {} r"
+        "blocking_observed s {}"
+unfolding blocking_observed_def
+by simp_all
+
+(* Indeterminate sequencing *)
+
+lemmas indeterminate_sequencingI [intro?] = defToIntro[OF indeterminate_sequencing_def]
+
+lemma indeterminate_sequencingE [elim?]:
+  assumes "indeterminate_sequencing pre"
+      and "a \<in> actions0 pre"
+      and "b \<in> actions0 pre"
+      and "tid_of a = tid_of b"
+      and "a \<noteq> b"
+      and " \<not>(is_at_non_atomic_location (lk pre) a \<and> is_at_non_atomic_location (lk pre) b)"
+  obtains "(a, b) \<in> sb pre"
+        | "(b, a) \<in> sb pre"
+using assms
+unfolding indeterminate_sequencing_def
+by auto
+
+(* Disjoint allocs *)
+
+lemma disjoint_allocs_empty [simp]:
+  shows "disjoint_allocs {}"
+unfolding disjoint_allocs_def
+by simp
 
 (* well_formed_threads *)
 
@@ -782,6 +856,12 @@ proof auto
     qed
 qed
 
+lemma downclosed_relOver:
+  assumes "relOver r a"
+  shows   "downclosed a r"
+using assms
+unfolding relOver_def downclosed_def by auto
+
 lemma downclosed_subset:
   assumes "r \<subseteq> r'"
           "downclosed a r'"
@@ -819,6 +899,11 @@ lemma visible_side_effect_setE2 [elim?]:
 using assms
 unfolding visible_side_effect_set_def
 by auto
+
+lemma visible_side_effect_set_empty [simp]:
+  shows "visible_side_effect_set s {} = {}"
+unfolding visible_side_effect_set_def
+by simp
 
 lemma exists_vse_hb:
   assumes cons:  "consistent_hb (pre, wit, (''hb'', hb)#rel)"

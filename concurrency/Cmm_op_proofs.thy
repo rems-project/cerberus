@@ -131,6 +131,31 @@ lemma incPreRestrict_simps [simp]:
 unfolding preRestrict_def
 by simp_all
 
+lemma preRestrict_id:
+  assumes "well_formed_threads (pre, initialWitness, [])"
+  shows   "preRestrict pre (actions0 pre) = pre"
+proof -
+  have sb: "relOver (sb pre) (actions0 pre)"
+    using assms by auto
+  have asw: "relOver (asw pre) (actions0 pre)"
+    using assms by auto
+  have "dd pre \<subseteq> sb pre"
+    using assms by auto
+  hence dd: "relOver (dd pre) (actions0 pre)"
+    using sb relOver_subset by metis
+  show ?thesis
+    using relRestrict_id[OF sb] 
+          relRestrict_id[OF dd] 
+          relRestrict_id[OF asw]
+    unfolding preRestrict_def
+    by simp
+qed
+
+lemma incPreRestrict_sbasw_empty [simp]:
+  shows "sbasw (preRestrict pre {}) = {}"
+unfolding sbasw_def
+by simp
+
 lemma incPreRestrict_sbasw_subset:
   shows "sbasw (preRestrict pre actions) \<subseteq> relRestrict (sbasw pre) actions"
 proof -
@@ -481,6 +506,78 @@ lemma relOver_with_consume_hb:
   shows   "relOver (with_consume_hb pre wit) (actions0 pre)"
 unfolding with_consume_hb_def happens_before_def
 using assms relOver_ithb
+by simp
+
+(* Empty hb in the with_consume fragment *)
+
+lemma sw_asw_empty [simp]:
+  shows "sw_asw (preRestrict pre {}) initialWitness = {}"
+unfolding sw_asw_def
+by simp
+
+lemma sw_lock_empty [simp]:
+  shows "sw_lock (preRestrict pre {}) initialWitness = {}"
+unfolding sw_lock_def
+by simp
+
+lemma sw_rel_acq_rs_empty [simp]:
+  shows "sw_rel_acq_rs (preRestrict pre {}) initialWitness = {}"
+unfolding sw_rel_acq_rs_def
+by simp
+
+lemma sw_fence_sb_hrs_rf_sb_empty [simp]:
+  shows "sw_fence_sb_hrs_rf_sb (preRestrict pre {}) initialWitness = {}"
+unfolding sw_fence_sb_hrs_rf_sb_def
+by simp
+
+lemma sw_fence_sb_hrs_rf_empty [simp]:
+  shows "sw_fence_sb_hrs_rf (preRestrict pre {}) initialWitness = {}"
+unfolding sw_fence_sb_hrs_rf_def
+by simp
+
+lemma sw_fence_rs_rf_sb_empty [simp]:
+  shows "sw_fence_rs_rf_sb (preRestrict pre {}) initialWitness = {}"
+unfolding sw_fence_rs_rf_sb_def
+by simp
+
+lemma release_acquire_fenced_synchronizes_with_set_empty [simp]:
+  shows "release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre {}) initialWitness = {}"
+unfolding release_acquire_fenced_synchronizes_with_set_alt_def
+by simp
+
+lemma with_consume_dob_set_empty [simp]:
+  shows "with_consume_dob_set_alt (preRestrict pre {}) initialWitness = {}"
+unfolding with_consume_dob_set_alt_def with_consume_dob_set_def
+by simp
+
+lemma ithb_r_empty [simp]:
+  shows "inter_thread_happens_before_r (preRestrict pre {}) initialWitness = {}"
+unfolding inter_thread_happens_before_r_def
+by simp
+
+lemma ithb_step_empty [simp]:
+  shows "inter_thread_happens_before_step (preRestrict pre {}) initialWitness = {}"
+unfolding inter_thread_happens_before_step_def
+by simp
+
+lemma ithb_empty [simp]:
+  shows "inter_thread_happens_before_alt (preRestrict pre {}) initialWitness = {}"
+unfolding inter_thread_happens_before_alt_def
+by simp
+
+lemma happens_before_empty [simp]:
+  shows "happens_before s {} {} = {}"
+unfolding happens_before_def
+by simp
+
+lemma getHb_empty [simp]:
+  shows "getHb (preRestrict pre {}) initialWitness = {}"
+unfolding getHb_def
+by simp
+
+lemma getVse_empty [simp]:
+  shows "getVse (preRestrict pre {}) initialWitness = {}"
+unfolding getVse_def
 by simp
 
 (* Sb in hb in the rel-acq-rlx fragment *)
@@ -1654,32 +1751,6 @@ proof (intro allI impI)
     by metis
 qed
 
-(* Soundness ---------------------------------------------------------------------------------- *)
-
-lemma incTraceConsistency: 
-  assumes "incTrace pre r s"
-          "r = incInitialState pre"
-  shows   "axsimpConsistentAlt pre (incWit s)"
-using assms 
-proof induct
-  case incStep
-  thus ?case unfolding incStep_def Let_def by auto
-qed simp
-
-lemma incConsistentSoundness:
-  assumes "incConsistent (pre, wit, getRelations pre wit)"
-  shows   "axsimpConsistent (pre, wit, getRelations pre wit)"
-using assms
-proof -
-  assume "incConsistent (pre, wit, getRelations pre wit)"
-  from this obtain s where trace: "incTrace pre (incInitialState pre) s"
-                     and   wit:   "incWit s = wit"
-                     and   com:   "incCommitted s = actions0 pre"
-    unfolding incConsistent.simps by auto
-  thus "axsimpConsistent (pre, wit, getRelations pre wit)" 
-    by (metis trace wit incTraceConsistency)
-qed
-
 (* Invariance of consistency predicates under prefixes ---------------------------------------- *)
 
 lemma final_vse:
@@ -2081,6 +2152,261 @@ proof -
     qed
 qed
 
+(* Soundness ---------------------------------------------------------------------------------- *)
+
+(* Consistency of initialWitness *)
+
+lemma assumptions_initialWitness [simp]:
+  shows "assumptions ((preRestrict pre {}), initialWitness, [])"
+unfolding assumptions.simps
+by simp
+
+lemma well_formed_threads_initialWitness [simp]:
+  shows "well_formed_threads ((preRestrict pre {}), initialWitness, [])"
+unfolding well_formed_threads.simps indeterminate_sequencing_def
+by simp
+
+lemma det_read_op_initialWitness [simp]:
+  shows "det_read_alt ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding det_read_alt.simps
+by simp
+
+lemma coherent_memory_use_initialWitness [simp]:
+  shows "coherent_memory_use ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding coherent_memory_use.simps
+by simp
+
+lemma consistent_atomic_rf_initialWitness [simp]:
+  shows "consistent_atomic_rf ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding consistent_atomic_rf.simps
+by simp
+
+lemma consistent_mo_op_initialWitness [simp]:
+  shows "consistent_mo ((preRestrict pre {}), initialWitness, [])"
+unfolding consistent_mo.simps
+by simp
+
+lemma consistent_hb_initialWitness [simp]:
+  shows "consistent_hb ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding consistent_hb.simps 
+by simp
+
+lemma consistent_non_atomic_rf_initialWitness [simp]:
+  shows "consistent_non_atomic_rf ((preRestrict pre {}), initialWitness, [(''hb'', {}), (''vse'', {})])"
+unfolding consistent_non_atomic_rf.simps
+by simp
+
+lemma locks_only_consistent_lo_op_initialWitness [simp]:
+  shows "locks_only_consistent_lo ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding locks_only_consistent_lo.simps 
+by simp
+
+lemma locks_only_consistent_locks_op_initialWitness [simp]:
+  shows "locks_only_consistent_locks ((preRestrict pre {}), initialWitness, [])"
+unfolding locks_only_consistent_locks.simps
+by simp
+
+lemma rmw_atomicity_op_initialWitness [simp]:
+  shows "rmw_atomicity ((preRestrict pre {}), initialWitness, [])"
+unfolding rmw_atomicity.simps
+by simp
+
+lemma sc_accesses_consistent_sc_op_initialWitness [simp]:
+  shows "sc_accesses_consistent_sc ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding sc_accesses_consistent_sc.simps 
+by simp
+
+lemma sc_accesses_sc_reads_restricted_initialWitness [simp]:
+  shows "sc_accesses_sc_reads_restricted ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+unfolding sc_accesses_sc_reads_restricted.simps
+by simp
+
+lemma sc_fenced_sc_fences_heeded_initialWitness [simp]:
+  shows "sc_fenced_sc_fences_heeded ((preRestrict pre {}), initialWitness, [])"
+unfolding sc_fenced_sc_fences_heeded.simps
+by simp
+
+lemma tot_empty_initialWitness [simp]:
+  shows "tot_empty ((preRestrict pre {}), initialWitness, [])"
+unfolding tot_empty.simps
+by simp
+
+lemma well_formed_rf_op_initialWitness [simp]:
+  shows "well_formed_rf ((preRestrict pre {}), initialWitness, [])"
+unfolding well_formed_rf.simps
+by simp
+
+lemma consistencyEmptyExecution [simp]:
+  shows "axsimpConsistentAlt (preRestrict pre {}) initialWitness"
+unfolding axsimpConsistentAlt_def
+by simp
+
+lemma incTraceConsistency: 
+  assumes "incTrace pre r s"
+          "r = incInitialState pre"
+  shows   "  axsimpConsistentAlt (preRestrict pre (incCommitted s)) (incWit s)
+           \<and> well_formed_threads (pre, initialWitness, [])"
+using assms 
+proof induct
+  case incStep
+  thus ?case unfolding incStep_def Let_def by auto
+qed simp
+
+lemma incConsistentSoundness:
+  assumes "incConsistent (pre, wit, getRelations pre wit)"
+  shows   "axsimpConsistent (pre, wit, getRelations pre wit)"
+using assms
+proof -
+  assume "incConsistent (pre, wit, getRelations pre wit)"
+  from this obtain s where trace: "incTrace pre (incInitialState pre) s"
+                     and   wit:   "incWit s = wit"
+                     and   com:   "incCommitted s = actions0 pre"
+    unfolding incConsistent.simps by auto
+  thus "axsimpConsistent (pre, wit, getRelations pre wit)" 
+    using incTraceConsistency[OF trace] preRestrict_id wit
+    by metis
+qed
+
+(* Completeness ------------------------------------------------------------------------------- *)
+
+lemma existenceIncTrace:
+  assumes cons:       "axsimpConsistentAlt pre wit"
+      and finite:     "finite actions"
+      and universe:   "actions \<subseteq> actions0 pre"
+      and downclosed: "downclosed actions (incComAlt pre wit)"
+  shows   "\<exists> s. incTrace pre (incInitialState pre) s \<and> 
+                incWit s = incWitRestrict wit actions \<and> 
+                incCommitted s = actions"
+proof (rule finite_downclosedsubset_induct[where R="(incComAlt pre wit)" and B="actions0 pre"])
+  show "finite actions" using finite .
+next
+  show "actions \<subseteq> actions0 pre" using universe .
+next
+  show "downclosed actions (incComAlt pre wit)" using downclosed .
+next
+  show "acyclic (incComAlt pre wit)"
+    using opsemOrder_isStrictPartialOrder[OF cons]
+    unfolding isStrictPartialOrder_def acyclic_def irrefl_def
+    by auto
+next
+  have "well_formed_threads (pre, wit, [])"
+    using cons by auto
+  hence "well_formed_threads (pre, initialWitness, [])"
+    unfolding well_formed_threads.simps by simp
+  thus "\<exists>s.   incTrace pre (incInitialState pre) s 
+            \<and> incWit s = incWitRestrict wit {} 
+            \<and> incCommitted s = {}"
+    using incReflexive by (intro exI[where x="incInitialState pre"]) simp
+next
+  fix a :: action
+  fix actions :: "action set"
+  assume finite':     "finite actions"
+     and              "a \<notin> actions"
+     and              "a \<in> actions0 pre"
+     and downclosed': "downclosed (insert a actions) (incComAlt pre wit)"
+     and max:         "\<forall>b\<in>actions. (a, b) \<notin> incComAlt pre wit"
+     and IH:          "\<exists>s. incTrace pre (incInitialState pre) s \<and> 
+                           incWit s = incWitRestrict wit actions \<and> 
+                           incCommitted s = actions"
+  obtain s where trace:     "incTrace pre (incInitialState pre) s" 
+             and witness:   "incWit s = incWitRestrict wit actions"
+             and committed: "incCommitted s = actions" using IH by blast
+
+  let ?actions' = "insert a actions"
+  let ?pre'     = "preRestrict pre ?actions'"
+  let ?wit'     = "incWitRestrict wit ?actions'"
+  let ?s' = "\<lparr> incWit=?wit', 
+               incCommitted=?actions'\<rparr>"
+  have downclosed_mo: "downclosed ?actions' (mo wit)"
+    using downclosed' unfolding incComAlt_def by auto
+  have inOpsemOrder: "\<forall>b\<in>actions0 pre. ((b, a) \<in> incComAlt ?pre' (incWit ?s') \<longrightarrow> b \<in> actions) \<and>
+                                       (b \<in> actions \<longrightarrow> (a, b) \<notin> incComAlt ?pre' (incWit ?s'))"
+    proof auto
+      fix b
+      (* TODO: fix opsemOrder *)
+      assume "b \<in> actions0 pre"
+             "(b, a) \<in> incComAlt ?pre' ?wit'"
+      hence ba_in_rel: "(b, a) \<in> incComAlt pre wit"
+        using opsemOrderIsMonotonic downclosed_mo
+        unfolding hbCalcIsMonotonic_def
+        by auto
+      hence "b \<noteq> a"
+        using opsemOrder_isStrictPartialOrder[OF cons]
+        unfolding isStrictPartialOrder_def irrefl_def
+        by auto
+      thus "b \<in> actions"
+        using downclosed' ba_in_rel unfolding downclosed_def by auto
+    next
+      fix b
+      (* TODO: fix opsemOrder *)
+      assume "b \<in> actions0 pre"
+             "b \<in> actions"
+             "(a, b) \<in> incComAlt ?pre' ?wit'"
+      hence ba_in_rel: "(a, b) \<in> incComAlt pre wit"
+        using opsemOrderIsMonotonic downclosed_mo
+        unfolding hbCalcIsMonotonic_def
+        by auto
+      thus False using max `b \<in> actions` by metis 
+    qed
+  have "axsimpConsistentAlt ?pre' ?wit'"
+    using cons downclosed' axsimpConsistent_restriction by metis
+  hence "incStep pre s ?s' a"
+    unfolding incStep_def Let_def 
+    using committed `a \<notin> actions` `a \<in> actions0 pre` witness inOpsemOrder
+    by auto
+  hence "incTrace pre (incInitialState pre) ?s'" using incStep trace by smt
+  thus "\<exists>s'. incTrace pre (incInitialState pre) s' \<and> 
+             incWit s' = incWitRestrict wit ?actions' \<and> 
+             incCommitted s' = ?actions'"
+    by (intro exI[where x="?s'"]) simp
+qed
+
+lemma incConsistentCompleteness:
+  assumes consistent: "axsimpConsistent (pre, wit, getRelations pre wit)"
+      and finite:     "finite (actions0 pre)"
+  shows               "incConsistent (pre, wit, getRelations pre wit)"
+proof -
+  have relOverSb: "relOver (sb pre) (actions0 pre)"
+    using consistent
+    by (auto 4 3)
+  have "well_formed_rf (pre, wit, [])" 
+    using consistent by auto
+  hence relOverRf: "relOver (rf wit) (actions0 pre)"
+    unfolding well_formed_rf.simps relOver_def 
+    by auto
+  have relOverMo: "relOver (mo wit) (actions0 pre)"
+    using consistent by auto
+  have relOverSc: "relOver (sc wit) (actions0 pre)"
+    using consistent by auto
+  have relOverLo: "relOver (lo wit) (actions0 pre)"
+    using consistent by auto
+  have "tot_empty (pre, wit, [])"
+    using consistent by auto
+  hence relOverTot: "relOver (tot wit) (actions0 pre)"
+    unfolding tot_empty.simps by simp
+  have wit_restrict: "incWitRestrict wit (actions0 pre) = wit" 
+    using relOverRf relOverMo relOverSc relOverLo relOverTot
+    unfolding incWitRestrict_def 
+    by (simp add: relRestrict_id)
+  have "relOver (getHb pre wit) (actions0 pre)" 
+    using relOverSb hbRelOver by auto
+  hence relOverHbMinus: "relOver (hbMinusAlt pre wit) (actions0 pre)"
+    unfolding hbMinus.simps 
+              relOver_def 
+              getRelations_simp
+    by auto
+  have downclosed: "downclosed (actions0 pre) (incComAlt pre wit)" 
+    unfolding incComAlt_def
+    using relOverRf relOverMo relOverHbMinus
+    by (simp add: downclosed_relOver)
+  obtain s where "incTrace pre (incInitialState pre) s"
+                           "incWit s = incWitRestrict wit (actions0 pre)"
+                           "incCommitted s = (actions0 pre)"
+    using existenceIncTrace[OF consistent finite _ downclosed]
+    by auto
+  thus ?thesis
+    unfolding incConsistent.simps using wit_restrict by auto
+qed
 
 
 end
