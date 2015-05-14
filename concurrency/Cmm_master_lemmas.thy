@@ -287,6 +287,11 @@ lemma relRestrict_empty_relation [simp]:
 unfolding relRestrict_def
 by simp
 
+lemma relRestrict_subset [simp]:
+  shows "relRestrict r s \<subseteq> r"
+unfolding relRestrict_def
+by auto
+
 lemma relRestrict_union [simp]:
   shows "relRestrict (r \<union> r') s = (relRestrict r s \<union> relRestrict r' s)"
 unfolding relRestrict_def
