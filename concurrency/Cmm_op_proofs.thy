@@ -421,10 +421,6 @@ lemma relOver_release_acquire_relaxed_sw:
 unfolding release_acquire_relaxed_synchronizes_with_set_alt_def
           release_acquire_relaxed_synchronizes_with_set_def 
 unfolding relOver_def 
-(* TODO define relOver elim for all the relations *)
-unfolding sw_asw_def
-          sw_lock_def
-          sw_rel_acq_rs_def
 by auto
  
 lemma relOver_release_acquire_relaxed_hb:
@@ -542,11 +538,10 @@ lemma loInHb_aux:
   shows                             "(a, b) \<in> hbCalc pre wit"
 proof -
 
-  have "relOver (lo wit) (actions0 pre)" using locks_only_consistent_lo
-    unfolding locks_only_consistent_lo.simps by simp
+  have "relOver (lo wit) (actions0 pre)"
+    using locks_only_consistent_lo by auto
   hence in_actions: "a \<in> actions0 pre" "b \<in> actions0 pre" 
-    using is_lo
-    unfolding relOver_def by force+
+    using is_lo unfolding relOver_def by auto
 
   show "(a, b) \<in> hbCalc pre wit" 
     proof (cases "tid_of a = tid_of b")
@@ -558,23 +553,18 @@ proof -
     next
       assume tid_eq: "tid_of a = tid_of b"
 
-      have "(b, a) \<notin> hbCalc pre wit" using locks_only_consistent_lo is_lo in_actions
-        unfolding locks_only_consistent_lo.simps by simp
+      have "(b, a) \<notin> hbCalc pre wit" 
+        using locks_only_consistent_lo is_lo by auto
       hence "(b, a) \<notin> sb pre" 
-        using sbInHb
-        by auto
+        using sbInHb by auto
 
-      have "a \<noteq> b" using locks_only_consistent_lo is_lo in_actions
-        unfolding locks_only_consistent_lo.simps 
-                  irrefl_def
-        by auto
+      have "a \<noteq> b" 
+        using locks_only_consistent_lo is_lo by auto
 
-      have "is_at_mutex_location (lk pre) a" using assms is_lo in_actions
-        unfolding locks_only_consistent_lo.simps 
-        by force
+      have "is_at_mutex_location (lk pre) a" 
+        using assms is_lo in_actions by auto
       hence not_na_loc: "\<not> is_at_non_atomic_location (lk pre) a"
-        unfolding is_at_mutex_location_def is_at_non_atomic_location_def
-        by (cases "loc_of a") auto
+        by auto
 
       have "(a, b) \<in> sb pre"
         using well_formed_threads
@@ -584,8 +574,7 @@ proof -
         by auto
 
       thus "(a, b) \<in> hbCalc pre wit"
-        using sbInHb
-        by auto
+        using sbInHb by auto
 
     qed
 qed
@@ -991,9 +980,8 @@ lemma final_release_acquire_relaxed_sw:
 using sw1
 apply (cases rule: release_acquire_relaxed_swIE)
 using final_sw_asw
-      final_sw_lock
-      final_sw_rel_acq_rs
-      assms
+      final_sw_lock[OF _ `a \<in> actions` `b \<in> actions`]
+      final_sw_rel_acq_rs[OF _ downclosed_rf downclosed_mo `b \<in> actions`]
 by metis+
 
 lemma final_no_consume_hb_aux:
@@ -1282,37 +1270,38 @@ lemma final_dob:
       and dob_set:       "(a, d) \<in> with_consume_dob_set_alt pre wit"
   shows   "(a, d) \<in> with_consume_dob_set_alt pre (incWitRestrict wit actions)"
 proof -
-  obtain b e where a:  "a \<in> actions0 pre" "is_release a"
-               and b:  "b \<in> actions0 pre" "is_consume b"
+  obtain c b where a:  "a \<in> actions0 pre" "is_release a"
+               and rs: "(a, b) \<in> release_sequence_set_alt pre wit"
+               and b:  "b \<in> actions0 pre"
+               and rf: "(b, c) \<in> rf wit"
+               and c:  "c \<in> actions0 pre" "is_consume c"
+               and cad_or_eq: "(c, d) \<in> with_consume_cad_set_alt pre wit \<or> c = d"
                and d2: "d \<in> actions0 pre"
-               and e:  "e \<in> actions0 pre"
-               and rs: "(a, e) \<in> release_sequence_set_alt pre wit"
-               and rf: "(e, b) \<in> rf wit"
-               and cad_or_eq: "(b, d) \<in> with_consume_cad_set_alt pre wit \<or> b = d"
     using dob_set
     unfolding with_consume_dob_set_alt_def 
               with_consume_dob_set_def
     by (auto simp add: dependency_ordered_before_def)
-  have cad2: "((b, d) \<in> with_consume_cad_set_alt pre (incWitRestrict wit actions) \<or> (b = d)) \<and> b \<in> actions"
+  have cad2: "  ((c, d) \<in> with_consume_cad_set_alt pre (incWitRestrict wit actions) \<or> (c = d))
+              \<and> c \<in> actions"
     using cad_or_eq
     proof
-      assume "b = d"
+      assume "c = d"
       thus ?thesis using `d \<in> actions` by simp
     next
-      assume "(b, d) \<in> with_consume_cad_set_alt pre wit"
+      assume "(c, d) \<in> with_consume_cad_set_alt pre wit"
       thus ?thesis
         using final_cad[OF downclosed_sb trans_sb dd_in_sb d]
         by fast
     qed
-  hence "e \<in> actions"
+  hence "b \<in> actions"
     using rf downclosed_rf unfolding downclosed_def by fast
-  hence rf2: "(e, b) \<in> relRestrict (rf wit) actions" 
+  hence rf2: "(b, c) \<in> relRestrict (rf wit) actions" 
     using cad2 rf by auto
-  have rs2: "(a, e) \<in> release_sequence_set_alt pre (incWitRestrict wit actions)" 
-    using rs final_release_sequence[OF downclosed_mo `e \<in> actions`]
+  have rs2: "(a, b) \<in> release_sequence_set_alt pre (incWitRestrict wit actions)" 
+    using rs final_release_sequence[OF downclosed_mo `b \<in> actions`]
     by fast
   thus ?thesis
-    using a b d d2 e rs2 rf2 cad2
+    using a c d d2 b rs2 rf2 cad2
     unfolding with_consume_dob_set_alt_def with_consume_dob_set_def
     by (auto simp add: dependency_ordered_before_def)
 qed
