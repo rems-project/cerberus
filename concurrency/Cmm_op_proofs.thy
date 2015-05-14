@@ -928,7 +928,7 @@ definition hbCalcIsFinalForPrefixes  :: "(pre_execution \<Rightarrow> execution_
      \<longrightarrow>  selective_prefixes_are_final (is_na_or_non_write pre0)
                                    actions1
                                    (hbCalc pre0 wit) 
-                                   (hbCalc pre0 (incWitRestrict wit actions1)))"
+                                   (hbCalc (preRestrict pre0 actions1) (incWitRestrict wit actions1)))"
 
 definition hbCalcIsMonotonic  :: "(pre_execution \<Rightarrow> execution_witness \<Rightarrow>(action*action)set)\<Rightarrow> bool "  where 
   "hbCalcIsMonotonic hbCalc = (\<forall> pre0. \<forall> wit. \<forall> actions1.
@@ -939,7 +939,8 @@ lemma final_release_sequence:
   assumes  "downclosed actions (mo wit)"
       and  "b \<in> actions"
       and  "(a, b) \<in> release_sequence_set_alt pre wit"
-  shows   "(a, b) \<in> release_sequence_set_alt pre (incWitRestrict wit actions)"
+  shows    "  a \<in> actions
+            \<and> (a, b) \<in> release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms
 unfolding release_sequence_set_alt_def 
           release_sequence_set_def 
@@ -948,7 +949,9 @@ by auto
 
 lemma final_sw_asw:
   assumes "(a, b) \<in> sw_asw pre wit"
-  shows   "(a, b) \<in> sw_asw pre (incWitRestrict wit actions)"
+      and "a \<in> actions" 
+      and "b \<in> actions"
+  shows   "(a, b) \<in> sw_asw (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms
 unfolding sw_asw_def
 by auto
@@ -957,7 +960,7 @@ lemma final_sw_lock:
   assumes "(a, b) \<in> sw_lock pre wit"
       and "a \<in> actions" 
       and "b \<in> actions"
-  shows   "(a, b) \<in> sw_lock pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> sw_lock (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms
 unfolding sw_lock_def
 by auto
@@ -967,19 +970,20 @@ lemma final_sw_rel_acq_rs:
       and downclosed_rf: "downclosed actions (rf wit)"
       and downclosed_mo: "downclosed actions (mo wit)"
       and "b \<in> actions"
-  shows   "(a, b) \<in> sw_rel_acq_rs pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> sw_rel_acq_rs (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms(1)
 proof (cases rule: sw_rel_acq_rsIE, simp)
   case (rel_acq_rs c)
   hence "c \<in> actions" 
     using downclosed_rf `b \<in> actions` by (auto elim: downclosedE)
   let ?rs   = "release_sequence_set_alt pre wit"
-  let ?rs2  = "release_sequence_set_alt pre (incWitRestrict wit actions)"
-  have "(a, c) \<in> ?rs2"
+  let ?rs2  = "release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
+  have "a \<in> actions \<and> (a, c) \<in> ?rs2"
     using final_release_sequence[OF downclosed_mo `c \<in> actions`]
     using rel_acq_rs
     by auto
-  thus "(a, c) \<in> ?rs2 \<and> c \<in> actions \<and> b \<in> actions"
+  (* TODO: I have no idea why the simplifier did not get rid of the double occurrences. *)
+  thus "a \<in> actions \<and> b \<in> actions \<and> c \<in> actions \<and> (a, c) \<in> ?rs2 \<and> c \<in> actions \<and> b \<in> actions"
     using rel_acq_rs `b \<in> actions` `c \<in> actions` by auto
 qed
 
@@ -989,10 +993,10 @@ lemma final_release_acquire_relaxed_sw:
       and "a \<in> actions" 
       and "b \<in> actions"
       and sw1: "(a, b) \<in> release_acquire_relaxed_synchronizes_with_set_alt pre wit"
-  shows   "(a, b) \<in> release_acquire_relaxed_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> release_acquire_relaxed_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 using sw1
 apply (cases rule: release_acquire_relaxed_swIE)
-using final_sw_asw
+using final_sw_asw[OF _ `a \<in> actions` `b \<in> actions`]
       final_sw_lock[OF _ `a \<in> actions` `b \<in> actions`]
       final_sw_rel_acq_rs[OF _ downclosed_rf downclosed_mo `b \<in> actions`]
 by metis+
@@ -1004,25 +1008,26 @@ lemma final_no_consume_hb_aux:
       and downclosed_hb: "\<And>c. (c, b) \<in> (no_consume_hb p_sb sw) \<Longrightarrow> c \<in> actions"
       and in_hb:         "(a, b) \<in> no_consume_hb p_sb sw"
       and final_sw:      "\<And>x y. \<lbrakk>x \<in> actions; y \<in> actions; (x, y) \<in> sw\<rbrakk> \<Longrightarrow> (x, y) \<in> sw'"
-  shows   "(a, b) \<in> no_consume_hb p_sb sw'"
+  shows   "(a, b) \<in> no_consume_hb (relRestrict p_sb actions) sw'"
 proof -
   let ?hb = "no_consume_hb p_sb sw"
+  let ?p_sb' = "relRestrict p_sb actions"
   have "(a, b) \<in> (p_sb \<union> sw)\<^sup>+" using in_hb unfolding no_consume_hb_def .
-  hence "(a, b) \<in> (p_sb \<union> sw')\<^sup>+"    
+  hence "(a, b) \<in> (?p_sb' \<union> sw')\<^sup>+"    
     proof (rule converse_trancl_induct)
       fix y
       assume inSbSw: "(y, b) \<in> p_sb \<union> sw"
       hence "(y, b) \<in> ?hb" unfolding no_consume_hb_def by auto
       hence "y \<in> actions" using downclosed_hb by simp
-      hence "(y, b) \<in> p_sb \<union> sw'"
-        using final_sw `b \<in> actions` inSbSw
+      hence "(y, b) \<in> ?p_sb' \<union> sw'"
+        using final_sw `b \<in> actions` inSbSw 
         by auto
-      thus "(y, b) \<in> (p_sb \<union> sw')\<^sup>+" by auto
+      thus "(y, b) \<in> (?p_sb' \<union> sw')\<^sup>+" by auto
     next
       fix y z
       assume inSbSw:        "(y, z) \<in> p_sb \<union> sw"
          and inSbSwTrancl:  "(z, b) \<in> (p_sb \<union> sw)\<^sup>+"
-         and inSbSw2Trancl: "(z, b) \<in> (p_sb \<union> sw')\<^sup>+"
+         and inSbSw2Trancl: "(z, b) \<in> (?p_sb' \<union> sw')\<^sup>+"
       hence "(z, b) \<in> ?hb" unfolding no_consume_hb_def by auto
       hence "z \<in> actions" using downclosed_hb by simp
       have "(y, b) \<in> ?hb"
@@ -1030,22 +1035,22 @@ proof -
         using inSbSw inSbSwTrancl
         by (rule trancl_into_trancl2)
       hence "y \<in> actions" using downclosed_hb by simp
-      hence "(y, z) \<in> p_sb \<union> sw'"
+      hence "(y, z) \<in> ?p_sb' \<union> sw'"
         using final_sw inSbSw `z \<in> actions`
         by auto     
-      thus "(y, b) \<in> (p_sb \<union> sw')\<^sup>+" 
+      thus "(y, b) \<in> (?p_sb' \<union> sw')\<^sup>+" 
         using inSbSw2Trancl
         by (rule trancl_into_trancl2)
     qed
-  thus "(a, b) \<in> no_consume_hb p_sb sw'" 
+  thus "(a, b) \<in> no_consume_hb ?p_sb' sw'" 
     unfolding no_consume_hb_def
     by simp
 qed
 
 lemma final_no_consume_hb:
-  fixes pre wit sw sw'
+  fixes pre wit sw sw' actions
   defines "hb  \<equiv> no_consume_hb (sb pre) sw"
-      and "hb' \<equiv> no_consume_hb (sb pre) sw'"
+      and "hb' \<equiv> no_consume_hb (relRestrict (sb pre) actions) sw'"
   assumes downclosed_rf: "downclosed actions (rf wit)"
       and downclosed_mo: "downclosed actions (mo wit)"
       and downclosed_hb:  "selective_downclosed f actions hb"
@@ -1072,22 +1077,22 @@ proof auto
   fix wit :: execution_witness
   fix actions
   let ?sw  = "release_acquire_relaxed_synchronizes_with_set_alt pre wit"
-  let ?sw2 = "release_acquire_relaxed_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  let ?sw2 = "release_acquire_relaxed_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   let ?f   = "is_na_or_non_write pre"
-  assume downclosed: "downclosed actions (rf wit)" 
-                     "downclosed actions (mo wit)"
-                     "downclosed actions (sbMinus pre (sb pre))"
-                     "selective_downclosed ?f actions (release_acquire_relaxed_hb pre wit)"
-  have "\<And>x y. \<lbrakk>x \<in> actions; y \<in> actions; (x, y) \<in> ?sw\<rbrakk> \<Longrightarrow> (x, y) \<in> ?sw2"
-    using final_release_acquire_relaxed_sw downclosed
+  assume downclosed_rf: "downclosed actions (rf wit)" 
+     and downclosed_mo: "downclosed actions (mo wit)"
+     and downclosed_sb: "downclosed actions (sbMinus pre (sb pre))"
+     and downclosed_hb: "selective_downclosed ?f actions (release_acquire_relaxed_hb pre wit)"
+  have final_sw: "\<And>x y. \<lbrakk>x \<in> actions; y \<in> actions; (x, y) \<in> ?sw\<rbrakk> \<Longrightarrow> (x, y) \<in> ?sw2"
+    using final_release_acquire_relaxed_sw[OF downclosed_rf downclosed_mo]
     by metis 
-  thus "selective_prefixes_are_final (is_na_or_non_write pre) 
+  show "selective_prefixes_are_final (is_na_or_non_write pre) 
                                      actions
                                      (release_acquire_relaxed_hb pre wit) 
-                                     (release_acquire_relaxed_hb pre (incWitRestrict wit actions))"
-    using final_no_consume_hb downclosed 
+                                     (release_acquire_relaxed_hb (preRestrict pre actions) (incWitRestrict wit actions))"
+    using final_no_consume_hb[OF downclosed_rf downclosed_mo _ final_sw] downclosed_hb
     unfolding release_acquire_relaxed_hb_def
-    by metis   
+    by auto
 qed
 
 (* Prefixes are final in the rel-acq-rlx-fence fragment *)
@@ -1096,7 +1101,8 @@ lemma final_hypothetical_release_sequence:
   assumes  "downclosed actions (mo wit)"
       and  "b \<in> actions"
       and  "(a, b) \<in> hypothetical_release_sequence_set_alt pre wit"
-  shows   "(a, b) \<in> hypothetical_release_sequence_set_alt pre (incWitRestrict wit actions)"
+  shows   "  a \<in> actions 
+           \<and> (a, b) \<in> hypothetical_release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms
 unfolding hypothetical_release_sequence_set_alt_def 
           hypothetical_release_sequence_set_def 
@@ -1108,12 +1114,13 @@ lemma final_sw_fence_sb_hrs_rf_sb:
       and downclosed_rf: "downclosed actions (rf wit)"
       and downclosed_mo: "downclosed actions (mo wit)"
       and downclosed_sb: "downclosed actions (sbMinus pre (sb pre))"
+      and "a \<in> actions"
       and "b \<in> actions"
-  shows   "(a, b) \<in> sw_fence_sb_hrs_rf_sb pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> sw_fence_sb_hrs_rf_sb (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms(1)
 proof (cases rule: sw_fence_sb_hrs_rf_sbIE, simp)
   let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
-  let ?hrs2  = "hypothetical_release_sequence_set_alt pre (incWitRestrict wit actions)"
+  let ?hrs2  = "hypothetical_release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   case (fence x y z)
   have "is_na_or_non_write pre b" 
     using `is_fence b` unfolding is_na_or_non_write_def by (cases b) auto
@@ -1123,32 +1130,36 @@ proof (cases rule: sw_fence_sb_hrs_rf_sbIE, simp)
     using downclosed_sb `b \<in> actions` unfolding downclosed_def by metis  
   hence "y \<in> actions"
     using downclosed_rf `(y, z) \<in> rf wit` unfolding downclosed_def by metis  
-  hence "(x, y) \<in> ?hrs2"
+  hence "x \<in> actions \<and> (x, y) \<in> ?hrs2"
     using final_hypothetical_release_sequence `(x, y) \<in> ?hrs` downclosed_mo
     by metis
-  thus "(x, y) \<in> ?hrs2 \<and> y \<in> actions \<and> z \<in> actions"
-    using fence `z \<in> actions` `y \<in> actions` by auto
+  (* TODO: No idea why the simplifier left the double conjuncts. *)
+  thus "  a \<in> actions \<and> b \<in> actions \<and> x \<in> actions \<and> y \<in> actions \<and> z \<in> actions \<and> a \<in> actions
+        \<and> x \<in> actions \<and> (x, y) \<in> ?hrs2 \<and> y \<in> actions \<and> z \<in> actions \<and> b \<in> actions"
+    using fence `z \<in> actions` `y \<in> actions` `a \<in> actions` `b \<in> actions` by auto
 qed
 
 lemma final_sw_fence_sb_hrs_rf:
   assumes "(a, b) \<in> sw_fence_sb_hrs_rf pre wit"
       and downclosed_rf: "downclosed actions (rf wit)"
       and downclosed_mo: "downclosed actions (mo wit)"
+      and "a \<in> actions"
       and "b \<in> actions"
-  shows   "(a, b) \<in> sw_fence_sb_hrs_rf pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> sw_fence_sb_hrs_rf (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms(1)
 proof (cases rule: sw_fence_sb_hrs_rfIE, simp)
   let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
-  let ?hrs2  = "hypothetical_release_sequence_set_alt pre (incWitRestrict wit actions)"
+  let ?hrs2  = "hypothetical_release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   case (fence x y)
   have "y \<in> actions" 
     using downclosed_rf `b \<in> actions` `(y, b) \<in> rf wit` 
     unfolding downclosed_def by metis
-  hence "(x, y) \<in> ?hrs2" 
+  hence "x \<in> actions \<and> (x, y) \<in> ?hrs2" 
     using final_hypothetical_release_sequence `(x, y) \<in> ?hrs` downclosed_mo
     by metis
-  thus "(x, y) \<in> ?hrs2 \<and> y \<in> actions \<and> b \<in> actions"
-    using fence `y \<in> actions` `b \<in> actions` by auto
+  thus "  a \<in> actions \<and> b \<in> actions \<and> x \<in> actions \<and> y \<in> actions \<and> a \<in> actions \<and> x \<in> actions 
+        \<and> (x, y) \<in> ?hrs2 \<and> y \<in> actions \<and> b \<in> actions"
+    using fence `y \<in> actions` `a \<in> actions` `b \<in> actions` by auto
 qed
 
 lemma final_sw_fence_rs_rf_sb:
@@ -1157,11 +1168,11 @@ lemma final_sw_fence_rs_rf_sb:
       and downclosed_mo: "downclosed actions (mo wit)"
       and downclosed_sb: "downclosed actions (sbMinus pre (sb pre))"
       and b: "b \<in> actions"
-  shows   "(a, b) \<in> sw_fence_rs_rf_sb pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> sw_fence_rs_rf_sb (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms(1)
 proof (cases rule: sw_fence_rs_rf_sbIE, simp)
   let ?rs  = "release_sequence_set_alt pre wit"
-  let ?rs2  = "release_sequence_set_alt pre (incWitRestrict wit actions)"
+  let ?rs2  = "release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   case (fence x y)
   have "is_na_or_non_write pre b" 
     using `is_fence b` unfolding is_na_or_non_write_def by (cases b) auto
@@ -1171,11 +1182,12 @@ proof (cases rule: sw_fence_rs_rf_sbIE, simp)
     using downclosed_sb b unfolding downclosed_def by metis
   hence "x \<in> actions"
     using downclosed_rf `(x, y) \<in> rf wit` unfolding downclosed_def by metis
-  hence "(a, x) \<in> ?rs2" 
+  hence "a \<in> actions \<and> (a, x) \<in> ?rs2" 
     using final_release_sequence `(a, x) \<in> ?rs` downclosed_mo
     by metis
-  thus "(a, x) \<in> ?rs2 \<and> x \<in> actions \<and> y \<in> actions"
-    using fence `x \<in> actions` `y \<in> actions` by auto
+  thus "  a \<in> actions \<and> b \<in> actions \<and> x \<in> actions \<and> y \<in> actions
+        \<and> (a, x) \<in> ?rs2 \<and> x \<in> actions \<and> y \<in> actions \<and> b \<in> actions"
+    using fence `x \<in> actions` `y \<in> actions` `b \<in> actions` by auto
 qed
 
 lemma final_release_acquire_fenced_sw:
@@ -1185,7 +1197,7 @@ lemma final_release_acquire_fenced_sw:
       and "a \<in> actions"
       and "b \<in> actions"
       and sw1: "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt pre wit"
-  shows   "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 using sw1
 apply (cases rule: release_acquire_fenced_swIE)
 using final_sw_asw
@@ -1205,7 +1217,7 @@ proof auto
   fix wit :: execution_witness
   fix actions
   let ?sw   = "release_acquire_fenced_synchronizes_with_set_alt pre wit"
-  let ?sw2  = "release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  let ?sw2  = "release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   let ?f    = "is_na_or_non_write pre"
   assume downclosed_rf: "downclosed actions (rf wit)" 
      and downclosed_mo: "downclosed actions (mo wit)"
@@ -1217,10 +1229,10 @@ proof auto
   show "selective_prefixes_are_final (is_na_or_non_write pre) 
                                      actions 
                                      (release_acquire_fenced_hb pre wit) 
-                                     (release_acquire_fenced_hb pre (incWitRestrict wit actions))"
+                                     (release_acquire_fenced_hb (preRestrict pre actions) (incWitRestrict wit actions))"
     using final_no_consume_hb[OF downclosed_rf downclosed_mo] downclosed_hb final_sw
     unfolding release_acquire_fenced_hb_def
-    by metis
+    by auto
 qed
 
 (* Prefixes are final in the with-consume fragment *)
@@ -1231,7 +1243,7 @@ lemma final_cad:
       and dd_in_sb:      "dd pre \<subseteq> sb pre"
       and b:             "b \<in> actions" 
       and cad:           "(a, b) \<in> with_consume_cad_set_alt pre wit"
-  shows   "a \<in> actions \<and> (a, b) \<in> with_consume_cad_set_alt pre (incWitRestrict wit actions)"
+  shows   "a \<in> actions \<and> (a, b) \<in> with_consume_cad_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 proof -
   have downclosed_cad: "\<And>c. (c, b) \<in> (rf wit \<inter> sb pre \<union> dd pre)\<^sup>+ \<Longrightarrow> c \<in> actions"
     proof -
@@ -1247,27 +1259,29 @@ proof -
     qed
   hence "a \<in> actions" 
     using cad unfolding with_consume_cad_set_alt_def with_consume_cad_set_def by auto
-  have "(a, b) \<in> with_consume_cad_set_alt pre (incWitRestrict wit actions)"
+  have "(a, b) \<in> with_consume_cad_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
     using cad unfolding with_consume_cad_set_alt_def with_consume_cad_set_def
     proof (rule converse_trancl_induct)
       fix y
       assume y: "(y, b) \<in> rf wit \<inter> sb pre \<union> dd pre"
       hence "(y, b) \<in> (rf wit \<inter> sb pre \<union> dd pre)\<^sup>+" by fast
       hence "y \<in> actions" using downclosed_cad by fast
-      hence "(y, b) \<in> relRestrict (rf wit) actions \<inter> sb pre \<union> dd pre"
+      hence "(y, b) \<in> relRestrict (rf wit) actions \<inter> relRestrict (sb pre) actions \<union> relRestrict (dd pre) actions"
         using y b by auto
-      thus "(y, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb pre \<union> dd pre)\<^sup>+" by auto
+      thus "(y, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb (preRestrict pre actions) \<union> dd (preRestrict pre actions))\<^sup>+" 
+        by auto
     next
       fix y z
       assume y:  "(y, z) \<in> rf wit \<inter> sb pre \<union> dd pre"
          and z:  "(z, b) \<in> (rf wit \<inter> sb pre \<union> dd pre)\<^sup>+"
-         and ih: "(z, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb pre \<union> dd pre)\<^sup>+"
+         and ih: "(z, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb (preRestrict pre actions) \<union> dd (preRestrict pre actions))\<^sup>+"
       have "z \<in> actions" using downclosed_cad[OF z] .
-      have "(y, b) \<in> (rf wit \<inter> sb pre \<union> dd pre)\<^sup>+" using y z by (rule trancl_into_trancl2)
+      have "(y, b) \<in> (rf wit \<inter> sb pre \<union> dd pre)\<^sup>+" 
+        using y z by (rule trancl_into_trancl2)
       hence "y \<in> actions" using downclosed_cad by fast
-      have "(y, z) \<in> relRestrict (rf wit) actions \<inter> sb pre \<union> dd pre"
+      have "(y, z) \<in> relRestrict (rf wit) actions \<inter> relRestrict (sb pre) actions \<union> relRestrict (dd pre) actions"
         using y `y \<in> actions` `z \<in> actions` by auto
-      thus "(y, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb pre \<union> dd pre)\<^sup>+"
+      thus "(y, b) \<in> (rf (incWitRestrict wit actions) \<inter> sb (preRestrict pre actions) \<union> dd (preRestrict pre actions))\<^sup>+"
         using ih by (auto simp add: trancl_into_trancl2)
     qed
   thus ?thesis using `a \<in> actions` by simp
@@ -1281,7 +1295,7 @@ lemma final_dob:
       and dd_in_sb:      "dd pre \<subseteq> sb pre"
       and d:             "d \<in> actions" 
       and dob_set:       "(a, d) \<in> with_consume_dob_set_alt pre wit"
-  shows   "(a, d) \<in> with_consume_dob_set_alt pre (incWitRestrict wit actions)"
+  shows   "(a, d) \<in> with_consume_dob_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 proof -
   obtain c b where a:  "a \<in> actions0 pre" "is_release a"
                and rs: "(a, b) \<in> release_sequence_set_alt pre wit"
@@ -1294,7 +1308,8 @@ proof -
     unfolding with_consume_dob_set_alt_def 
               with_consume_dob_set_def
     by (auto simp add: dependency_ordered_before_def)
-  have cad2: "  ((c, d) \<in> with_consume_cad_set_alt pre (incWitRestrict wit actions) \<or> (c = d))
+  have cad2: "  (    (c, d) \<in> with_consume_cad_set_alt (preRestrict pre actions) (incWitRestrict wit actions) 
+                  \<or> (c = d))
               \<and> c \<in> actions"
     using cad_or_eq
     proof
@@ -1310,7 +1325,8 @@ proof -
     using rf downclosed_rf unfolding downclosed_def by fast
   hence rf2: "(b, c) \<in> relRestrict (rf wit) actions" 
     using cad2 rf by auto
-  have rs2: "(a, b) \<in> release_sequence_set_alt pre (incWitRestrict wit actions)" 
+  have rs2: "  a \<in> actions 
+             \<and> (a, b) \<in> release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)" 
     using rs final_release_sequence[OF downclosed_mo `b \<in> actions`]
     by fast
   thus ?thesis
@@ -1344,7 +1360,7 @@ lemma final_ithb_r:
       and a:              "a \<in> actions" 
       and b:              "b \<in> actions" 
       and ithb:           "(a, b) \<in> inter_thread_happens_before_r pre wit"
-  shows   "(a, b) \<in> inter_thread_happens_before_r pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> inter_thread_happens_before_r (preRestrict pre actions) (incWitRestrict wit actions)"
 using ithb
 unfolding inter_thread_happens_before_r_def
 apply (elim UnMember_mono)
@@ -1352,12 +1368,12 @@ defer defer
 apply (simp, elim composeMember_mono)
 proof simp
   assume "(a, b) \<in> with_consume_dob_set_alt pre wit"
-  thus "(a, b) \<in> with_consume_dob_set_alt pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> with_consume_dob_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
     using final_dob[OF downclosed_sb downclosed_rf downclosed_mo trans_sb dd_in_sb b]
     by auto
 next
   assume "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt pre wit"
-  thus "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
     using final_release_acquire_fenced_sw[OF downclosed_rf downclosed_mo downclosed_sb2 a b]
     by metis
 next
@@ -1366,8 +1382,9 @@ next
      and sb: "(y, b) \<in> sb pre"
   have "y \<in> actions"
     using sb downclosed_sb by auto
-  thus "(a, y) \<in> release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
-    using sw sb
+  thus "(a, y) \<in> release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)
+         \<and> y \<in> actions \<and> b \<in> actions"
+    using sw sb `b \<in> actions`
     using final_release_acquire_fenced_sw[OF downclosed_rf downclosed_mo downclosed_sb2 a]
     by metis
 qed
@@ -1384,7 +1401,7 @@ lemma final_ithb_step:
       and a:              "a \<in> actions" 
       and b:              "b \<in> actions" 
       and ithb:           "(a, b) \<in> inter_thread_happens_before_step pre wit"
-  shows   "(a, b) \<in> inter_thread_happens_before_step pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> inter_thread_happens_before_step (preRestrict pre actions) (incWitRestrict wit actions)"
 using ithb
 unfolding inter_thread_happens_before_step_def
 apply (elim UnMember_mono)
@@ -1392,7 +1409,7 @@ defer
 apply (simp, elim composeMember_mono)
 proof simp
   assume "(a, b) \<in> inter_thread_happens_before_r pre wit"
-  thus "(a, b) \<in> inter_thread_happens_before_r pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> inter_thread_happens_before_r (preRestrict pre actions) (incWitRestrict wit actions)"
     using final_ithb_r[OF downclosed_sb downclosed_sb2 downclosed_rf downclosed_mo
                           trans_sb dd_in_sb a b]
     by metis
@@ -1406,7 +1423,8 @@ next
     by auto
   hence "y \<in> actions"
     using downclosed_ithb by auto
-  thus "(y, b) \<in> inter_thread_happens_before_r pre (incWitRestrict wit actions)"
+  thus "  a \<in> actions \<and> y \<in> actions
+        \<and> (y, b) \<in> inter_thread_happens_before_r (preRestrict pre actions) (incWitRestrict wit actions)"
     using final_ithb_r[OF downclosed_sb downclosed_sb2 downclosed_rf downclosed_mo
                           trans_sb dd_in_sb]
     using r a b sb
@@ -1424,7 +1442,7 @@ lemma final_ithb:
       and dd_in_sb:       "dd pre \<subseteq> sb pre"
       and b:              "b \<in> actions" 
       and ithb:           "(a, b) \<in> inter_thread_happens_before_alt pre wit"
-  shows   "(a, b) \<in> inter_thread_happens_before_alt pre (incWitRestrict wit actions)"
+  shows   "(a, b) \<in> inter_thread_happens_before_alt (preRestrict pre actions) (incWitRestrict wit actions)"
 using ithb
 unfolding inter_thread_happens_before_alt_def
 proof (induct rule: converse_trancl_induct)
@@ -1434,7 +1452,7 @@ proof (induct rule: converse_trancl_induct)
     using downclosed_ithb
     unfolding inter_thread_happens_before_alt_def
     by auto
-  thus "(y, b) \<in> (inter_thread_happens_before_step pre (incWitRestrict wit actions))\<^sup>+"
+  thus "(y, b) \<in> (inter_thread_happens_before_step (preRestrict pre actions) (incWitRestrict wit actions))\<^sup>+"
     using final_ithb_step[OF downclosed_sb downclosed_sb2 downclosed_rf 
                              downclosed_mo downclosed_ithb trans_sb dd_in_sb _ b step]
     by auto
@@ -1442,7 +1460,7 @@ next
   fix y z
   assume yz: "(y, z) \<in> inter_thread_happens_before_step pre wit"
      and zb: "(z, b) \<in> (inter_thread_happens_before_step pre wit)\<^sup>+"
-     and ih: "(z, b) \<in> (inter_thread_happens_before_step pre (incWitRestrict wit actions))\<^sup>+"
+     and ih: "(z, b) \<in> (inter_thread_happens_before_step (preRestrict pre actions) (incWitRestrict wit actions))\<^sup>+"
   have z: "z \<in> actions"
     using zb downclosed_ithb
     unfolding inter_thread_happens_before_alt_def
@@ -1493,11 +1511,11 @@ next
         using zb unfolding inter_thread_happens_before_alt_def by auto
       thus "x \<in> actions" using downclosed_ithb by auto
     qed
-  hence "(y, z) \<in> (inter_thread_happens_before_step pre (incWitRestrict wit actions))\<^sup>+"
+  hence "(y, z) \<in> (inter_thread_happens_before_step (preRestrict pre actions) (incWitRestrict wit actions))\<^sup>+"
     using final_ithb_step[OF downclosed_sb1b downclosed_sb2 downclosed_rf 
                              downclosed_mo downclosed_ithb2 trans_sb dd_in_sb y z yz]
     by auto
-  thus "(y, b) \<in> (inter_thread_happens_before_step pre (incWitRestrict wit actions))\<^sup>+"
+  thus "(y, b) \<in> (inter_thread_happens_before_step (preRestrict pre actions) (incWitRestrict wit actions))\<^sup>+"
     using ih by auto
 qed
 
@@ -1511,16 +1529,21 @@ lemma final_with_consume_hb_aux:
       and trans_sb:      "trans (sb pre)"
       and dd_in_sb:      "dd pre \<subseteq> sb pre"
       and b:             "b \<in> actions" 
-      and ithb:          "(a, b) \<in> with_consume_hb pre wit"
-  shows   "(a, b) \<in> with_consume_hb pre (incWitRestrict wit actions)"
-proof -
-  show ?thesis
-    using ithb
+      and hb:            "(a, b) \<in> with_consume_hb pre wit"
+  shows   "(a, b) \<in> with_consume_hb (preRestrict pre actions) (incWitRestrict wit actions)"
+using hb
+unfolding with_consume_hb_def happens_before_def
+proof (rule UnMember_mono)
+  assume "(a, b) \<in> sb pre"
+  hence "a \<in> actions" using downclosed_sb by auto
+  thus "(a, b) \<in> sb (preRestrict pre actions)"
+    using `(a, b) \<in> sb pre` b by auto
+next
+  assume ithb: "(a, b) \<in> inter_thread_happens_before_alt pre wit"
+  show "(a, b) \<in> inter_thread_happens_before_alt (preRestrict pre actions) (incWitRestrict wit actions)"
     using final_ithb[OF downclosed_sb downclosed_sb2 downclosed_rf downclosed_mo
-                        downclosed_ithb trans_sb dd_in_sb b(1)]
-    unfolding with_consume_hb_def 
-              happens_before_def
-    by auto
+                        downclosed_ithb trans_sb dd_in_sb b(1) ithb]
+    by simp
 qed
 
 lemma final_with_consume_hb:
@@ -1531,7 +1554,7 @@ proof auto
   fix wit :: execution_witness
   fix actions
   let ?sw   = "release_acquire_fenced_synchronizes_with_set_alt pre wit"
-  let ?sw2  = "release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)"
+  let ?sw2  = "release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
   let ?f    = "is_na_or_non_write pre"
   assume downclosed_rf: "downclosed actions (rf wit)" 
      and downclosed_mo: "downclosed actions (mo wit)"
@@ -1542,7 +1565,7 @@ proof auto
   show "selective_prefixes_are_final (is_na_or_non_write pre) 
                                      actions 
                                      (with_consume_hb pre wit) 
-                                     (with_consume_hb pre (incWitRestrict wit actions))"
+                                     (with_consume_hb (preRestrict pre actions) (incWitRestrict wit actions))"
     unfolding selective_prefixes_are_final_def
     (* TODO: remove redundancies *)
     proof auto
@@ -1561,7 +1584,7 @@ proof auto
                   with_consume_hb_def 
                   happens_before_def
         by auto
-      show "(a, b) \<in> with_consume_hb pre (incWitRestrict wit actions)"
+      show "(a, b) \<in> with_consume_hb (preRestrict pre actions) (incWitRestrict wit actions)"
         using final_with_consume_hb_aux[OF downclosed_sb2 downclosed_sb downclosed_rf
                                            downclosed_mo downclosed_ithb trans_sb
                                            dd_in_sb b(1) ab]
