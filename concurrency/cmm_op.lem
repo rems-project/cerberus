@@ -155,8 +155,9 @@ let incInitialState _ =
 val incStep: pre_execution -> incState -> incState -> action -> bool
 let incStep pre s1 s2 a =
 
-  let rel   = getRelations pre s2.incWit in
-  let s2_ex = (pre, s2.incWit, rel) in
+  let s2_pre = preRestrict pre s2.incCommitted in
+  let rel   = getRelations s2_pre s2.incWit in
+  let s2_ex = (s2_pre, s2.incWit, rel) in
   let com   = incCom s2_ex in
 
   (* The action that is committed in this step hasn't already been committed *)
@@ -178,7 +179,7 @@ let incStep pre s1 s2 a =
   axsimpConsistent s2_ex
 
 
-(* incTrace is the transitive closure of incSte[, except that in the
+(* incTrace is the transitive closure of incStep, except that in the
    reflexive case we require that the consistency predicate hold. This
    is needed for soundness. *)
 
@@ -186,7 +187,7 @@ indreln
 [incTrace: pre_execution -> incState -> incState -> bool]
 
 incReflexive: forall pre s. 
-  axsimpConsistent (pre, s.incWit, getRelations pre s.incWit)
+  well_formed_threads (pre, initialWitness, [])
 ==>
   incTrace pre s s
 
