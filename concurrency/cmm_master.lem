@@ -396,6 +396,15 @@ instance (Show execution_witness)
     ", tot: " ^ show (aid_of_rel2 wit.tot)
 end
 
+val empty_witness: execution_witness
+let empty_witness = 
+  <| rf = {};
+     mo = {};
+     sc = {};
+     lo = {};
+     tot = {};
+  |>
+
 type relation_list = list (string * set (action * action))
 
 type candidate_execution = (pre_execution * execution_witness * relation_list)
