@@ -40,14 +40,20 @@ let inline axConsistent ex =
 
 (* The simplified axiomatic model -------------------------------------- *)
 
-(* We use the simplified version of det_read and consistent_atomic_rf. *)
+(* We use the simplified version of det_read and consistent_atomic_rf,
+and we add some requirements on pre-executions. *)
+
+val well_formed_threads_opsem: candidate_execution -> bool
+let well_formed_threads_opsem (pre, wit, rel) =
+  well_formed_threads (pre, wit, rel) &&
+  finite (pre.actions)
 
 val axsimpConsistentExecution: named_predicate_tree
 let axsimpConsistentExecution =
   Node [ 
     ("assumptions",                     Leaf assumptions);
     ("tot_empty",                       Leaf tot_empty);
-    ("well_formed_threads",             Leaf well_formed_threads);
+    ("well_formed_threads_opsem",       Leaf well_formed_threads_opsem);
     ("well_formed_rf",                  Leaf well_formed_rf);
     ("locks_only_consistent_locks",     Leaf locks_only_consistent_locks);
     ("locks_only_consistent_lo",        Leaf locks_only_consistent_lo);
@@ -98,15 +104,6 @@ let preRestrict pre actions =
    dd = Relation.relRestrict pre.dd actions;
 |>
 
-val initialWitness: execution_witness
-let initialWitness = 
-<| rf = {};
-   mo = {};
-   sc = {};
-   lo = {};
-   tot = {};
-|>
-
 (* incWitRestrict restricts the witness to the set of committed
    actions. *)
 val incWitRestrict: execution_witness -> set action -> execution_witness
@@ -137,6 +134,13 @@ let incCom (pre, wit, rel) =
     (Set.(union) (hbMinus (pre, wit, rel)) 
                  (Set.(union) wit.rf wit.mo))
 
+val respectsCom: set action -> set action -> set (action * action) -> action -> bool
+let respectsCom actions committed comOrder a = 
+  (forall (b IN actions).
+    (b IN committed --> (a, b) NIN comOrder) &&
+    ((b, a) IN comOrder --> b IN committed))
+  
+
 (* The state of the incremental model *)
 
 type incState = 
@@ -146,7 +150,7 @@ type incState =
 
 val incInitialState: pre_execution -> incState
 let incInitialState _ = 
-<| incWit       = initialWitness;
+<| incWit       = empty_witness;
    incCommitted = {};
 |>
 
@@ -166,9 +170,7 @@ let incStep pre s1 s2 a =
   s2.incCommitted = Set.insert a s1.incCommitted &&  
 
   (* Actions are committed in the right order. *)
-  (forall (b IN pre.actions).
-    (b IN s1.incCommitted --> (a, b) NIN com) &&
-    ((b, a) IN com --> b IN s1.incCommitted)) &&
+  respectsCom pre.actions s1.incCommitted com a &&
 
   (* The new execution_witness extends the previous (only new
   relations are added, and new relations are from or to the committed
@@ -187,7 +189,7 @@ indreln
 [incTrace: pre_execution -> incState -> incState -> bool]
 
 incReflexive: forall pre s. 
-  well_formed_threads (pre, initialWitness, [])
+  well_formed_threads_opsem (pre, empty_witness, [])
 ==>
   incTrace pre s s
 
@@ -338,14 +340,14 @@ let monCheckWitRestrict new_wit committed old_wit =
   Nondeterminism.guard (incWitRestrict new_wit committed = old_wit) 
            (Nondeterminism.Error "\"witnessRestrict new committed = old\" should hold by construction.")
 
-val monCheckCommitmentOrder: candidate_execution -> set action -> action -> Nondeterminism.t unit
-let monCheckCommitmentOrder (pre, wit, rel) committed a = 
+val monCheckCommitmentOrder: set action -> candidate_execution -> set action
+                             -> action -> Nondeterminism.t unit
+let monCheckCommitmentOrder actions (pre, wit, rel) committed a = 
   let order = incCom (pre, wit, rel) in
-  Nondeterminism.guard (forall (b IN pre.actions). 
-               ((b, a) IN order -->  b IN committed) &&
-               (b IN committed --> (a, b) NIN order))  
-           (Nondeterminism.Other ("Committing action " ^ show (aid_of a) ^ 
-                      " does not respect the commitment order."))
+  Nondeterminism.guard 
+    (respectsCom actions committed order a)
+    (Nondeterminism.Other ("Committing action " ^ show (aid_of a) ^ 
+                           " does not respect the commitment order."))
 
 (* The semantics of performing an action *)
 
@@ -411,7 +413,6 @@ let monPerformFence pre s a =
 
 val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
 let monStep pre s =
-  let ex = (pre, s.incWit, getRelations pre s.incWit) in  
 
   let uncommitted_actions = 
     Set_extra.toList (Set.difference pre.actions s.incCommitted) in
@@ -429,16 +430,17 @@ let monStep pre s =
   | Dealloc _ _ _     -> Nondeterminism.kill (Nondeterminism.Error "Deallocs not supported")
   end                         >>= fun new_wit ->
 
-  let new_ex = (pre, new_wit, getRelations pre new_wit) in
+  let new_committed = Set.insert a s.incCommitted in
+  let new_pre = preRestrict pre new_committed in
+  let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
 
   (* TODO: break down the consistency predicates in stepwise predicates *)
   monCheckConsistency new_ex                          >>
   (* TODO: prove instead of assert that the following always holds *)  
   monCheckWitRestrict new_wit s.incCommitted s.incWit >>
 
-  monCheckCommitmentOrder new_ex s.incCommitted a     >>
+  monCheckCommitmentOrder pre.actions new_ex s.incCommitted a     >>
 
-  let new_committed = Set.insert a s.incCommitted in
   let new_state = <| incWit       = new_wit; 
                      incCommitted = new_committed; |> in
   Nondeterminism.return (a, new_state)
@@ -505,7 +507,7 @@ let symInitialPre =
 val symInitialState: pre_execution -> symState
 let symInitialState pre = 
   <| symPre = pre;
-     symWit = initialWitness;
+     symWit = empty_witness;
      symCommitted = {};
      symEqualityCvalue = initialEqualityCvalue;
      (* TODO: not true! *)

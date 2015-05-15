@@ -1,9 +1,10 @@
 theory Cmm_op_proofs
 
 imports
-  Main
-  "_bin/Cmm_op"
-  Cmm_master_lemmas
+Main
+"_bin/Cmm_op"
+Cmm_master_lemmas
+Nondeterminism_lemmas  
 begin
 
 (* The axiomatic model ------------------------------------------------- *)
@@ -41,11 +42,52 @@ abbreviation "axsimpConsistentAlt pre wit \<equiv> axsimpConsistent (pre, wit, g
 lemmas axsimpConsistent_def = axsimpConsistentExecution_def
 lemmas axsimpConsistentAlt_def = axsimpConsistent_def
 
+lemma rel_list_well_formed_threads_opsem [simp]:
+  assumes "rel \<noteq> []"
+  shows   "well_formed_threads_opsem (pre, wit, rel) = well_formed_threads_opsem (pre, wit, [])"
+using assms
+unfolding well_formed_threads_opsem.simps
+by simp
+
+lemma witness_well_formed_threads_opsem [simp]:
+  assumes "wit \<noteq> empty_witness"
+  shows   "well_formed_threads_opsem (pre, wit, []) = well_formed_threads_opsem (pre, empty_witness, [])"
+using assms
+unfolding well_formed_threads_opsem.simps
+by simp
+
+lemma well_formed_threads_opsem_eq:
+  shows "  well_formed_threads_opsem (pre, wit, rel)
+         = (well_formed_threads (pre, wit, rel) \<and> finite (actions0 pre))"
+unfolding well_formed_threads_opsem.simps
+..
+
+lemma  well_formed_threads_opsemE [elim]:
+  assumes "well_formed_threads_opsem (pre, wit, rel)"
+  obtains "finite (actions0 pre)"
+      and "actions_respect_location_kinds (actions0 pre) (lk pre)"  
+      and "blocking_observed (actions0 pre) (sb pre)"  
+      and "inj_on aid_of (actions0 pre)"  
+      and "relation_over (actions0 pre) (sb pre)"  
+      and "relation_over (actions0 pre) (asw pre) "  
+      and "threadwise (actions0 pre) (sb pre)"  
+      and "interthread (actions0 pre) (asw pre)"  
+      and "isStrictPartialOrder (sb pre)"  
+      and "isStrictPartialOrder (dd pre)"  
+      and "(dd pre) \<subseteq> (sb pre)"  
+      and "indeterminate_sequencing pre"  
+      and "irrefl (sbasw pre)"  
+      and "finite_prefixes (sbasw pre) (actions0 pre)"  
+      and "disjoint_allocs (actions0 pre)"
+using assms
+unfolding well_formed_threads_opsem_eq
+by auto
+
 lemma axsimpConsistentE [elim]: 
   assumes "axsimpConsistentAlt pre wit"
   obtains "assumptions (pre, wit, [])"
       and "tot_empty (pre, wit, [])"
-      and "well_formed_threads (pre, wit, [])"
+      and "well_formed_threads_opsem (pre, wit, [])"
       and "well_formed_rf (pre, wit, [])"
       and "locks_only_consistent_locks (pre, wit, [])"
       and "locks_only_consistent_lo (pre, wit, [(''hb'', getHb pre wit)])"
@@ -68,15 +110,16 @@ by simp_all
 lemma axsimpConsistentEq:
   fixes pre wit
   defines "ex \<equiv> (pre, wit, getRelations pre wit)"
-  shows   "axsimpConsistent ex = axConsistent ex"
-using assms
-      det_read_simp 
+  shows   "axsimpConsistent ex = (axConsistent ex \<and> finite (actions0 pre))"
+using det_read_simp 
       standard_consistent_atomic_rf_simp
-unfolding axsimpConsistent_def
+      well_formed_threads_opsem_eq
+unfolding axsimpConsistent_def 
           axConsistent_def
           getRelations_simp 
           with_consume_vse_def
-by auto
+          ex_def 
+by simp metis
 
 lemma axsimpMemoryModel_simps [simp]:
   shows "consistent axsimpMemoryModel = axsimpConsistentExecution"
@@ -85,6 +128,8 @@ lemma axsimpMemoryModel_simps [simp]:
 unfolding axsimpMemoryModel_def
 by simp_all
 
+(* Not true anymore. *)
+(*
 lemma axsimpBehaviourEq:
   shows "axsimpBehaviour = axBehaviour"
 proof (intro ext)
@@ -98,9 +143,7 @@ proof (intro ext)
     unfolding axsimpBehaviour_def axBehaviour_def
               behaviour_def Let_def
     by simp
-qed
-
-
+qed *)
 
 (* The incremental model ----------------------------------------------- *)
 
@@ -111,15 +154,6 @@ lemmas hbMinusAlt_def = hbMinus.simps
 lemmas incComAlt_def = incCom.simps
 
 (* Simplifications *)
-
-lemma initialWitness_simps [simp]:
-  shows "rf initialWitness = {}"
-        "mo initialWitness = {}"
-        "sc initialWitness = {}"
-        "lo initialWitness = {}"
-        "tot initialWitness = {}"
-unfolding initialWitness_def
-by simp_all
 
 lemma incPreRestrict_simps [simp]:
   shows "actions0 (preRestrict pre actions) = actions0 pre \<inter> actions "
@@ -132,7 +166,7 @@ unfolding preRestrict_def
 by simp_all
 
 lemma preRestrict_id:
-  assumes "well_formed_threads (pre, initialWitness, [])"
+  assumes "well_formed_threads_opsem (pre, empty_witness, [])"
   shows   "preRestrict pre (actions0 pre) = pre"
 proof -
   have sb: "relOver (sb pre) (actions0 pre)"
@@ -184,13 +218,13 @@ unfolding incWitRestrict_def
 by simp_all
 
 lemma incWitRestrict_empty1 [simp]:
-  shows "incWitRestrict wit {} = initialWitness"
-unfolding incWitRestrict_def initialWitness_def 
+  shows "incWitRestrict wit {} = empty_witness"
+unfolding incWitRestrict_def empty_witness_def 
 by simp
 
 lemma incWitRestrict_empty2 [simp]:
-  shows "incWitRestrict initialWitness x = initialWitness"
-unfolding incWitRestrict_def initialWitness_def 
+  shows "incWitRestrict empty_witness x = empty_witness"
+unfolding incWitRestrict_def empty_witness_def 
 by simp
 
 lemma incWitRestrict_multiple [simp]:
@@ -199,7 +233,7 @@ unfolding incWitRestrict_def
 by auto
 
 lemma initialState_simps [simp]:
-  shows "incWit (incInitialState pre) = initialWitness"
+  shows "incWit (incInitialState pre) = empty_witness"
         "incCommitted (incInitialState pre) = {}"
 unfolding incInitialState_def
 by simp_all
@@ -511,57 +545,57 @@ by simp
 (* Empty hb in the with_consume fragment *)
 
 lemma sw_asw_empty [simp]:
-  shows "sw_asw (preRestrict pre {}) initialWitness = {}"
+  shows "sw_asw (preRestrict pre {}) empty_witness = {}"
 unfolding sw_asw_def
 by simp
 
 lemma sw_lock_empty [simp]:
-  shows "sw_lock (preRestrict pre {}) initialWitness = {}"
+  shows "sw_lock (preRestrict pre {}) empty_witness = {}"
 unfolding sw_lock_def
 by simp
 
 lemma sw_rel_acq_rs_empty [simp]:
-  shows "sw_rel_acq_rs (preRestrict pre {}) initialWitness = {}"
+  shows "sw_rel_acq_rs (preRestrict pre {}) empty_witness = {}"
 unfolding sw_rel_acq_rs_def
 by simp
 
 lemma sw_fence_sb_hrs_rf_sb_empty [simp]:
-  shows "sw_fence_sb_hrs_rf_sb (preRestrict pre {}) initialWitness = {}"
+  shows "sw_fence_sb_hrs_rf_sb (preRestrict pre {}) empty_witness = {}"
 unfolding sw_fence_sb_hrs_rf_sb_def
 by simp
 
 lemma sw_fence_sb_hrs_rf_empty [simp]:
-  shows "sw_fence_sb_hrs_rf (preRestrict pre {}) initialWitness = {}"
+  shows "sw_fence_sb_hrs_rf (preRestrict pre {}) empty_witness = {}"
 unfolding sw_fence_sb_hrs_rf_def
 by simp
 
 lemma sw_fence_rs_rf_sb_empty [simp]:
-  shows "sw_fence_rs_rf_sb (preRestrict pre {}) initialWitness = {}"
+  shows "sw_fence_rs_rf_sb (preRestrict pre {}) empty_witness = {}"
 unfolding sw_fence_rs_rf_sb_def
 by simp
 
 lemma release_acquire_fenced_synchronizes_with_set_empty [simp]:
-  shows "release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre {}) initialWitness = {}"
+  shows "release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre {}) empty_witness = {}"
 unfolding release_acquire_fenced_synchronizes_with_set_alt_def
 by simp
 
 lemma with_consume_dob_set_empty [simp]:
-  shows "with_consume_dob_set_alt (preRestrict pre {}) initialWitness = {}"
+  shows "with_consume_dob_set_alt (preRestrict pre {}) empty_witness = {}"
 unfolding with_consume_dob_set_alt_def with_consume_dob_set_def
 by simp
 
 lemma ithb_r_empty [simp]:
-  shows "inter_thread_happens_before_r (preRestrict pre {}) initialWitness = {}"
+  shows "inter_thread_happens_before_r (preRestrict pre {}) empty_witness = {}"
 unfolding inter_thread_happens_before_r_def
 by simp
 
 lemma ithb_step_empty [simp]:
-  shows "inter_thread_happens_before_step (preRestrict pre {}) initialWitness = {}"
+  shows "inter_thread_happens_before_step (preRestrict pre {}) empty_witness = {}"
 unfolding inter_thread_happens_before_step_def
 by simp
 
 lemma ithb_empty [simp]:
-  shows "inter_thread_happens_before_alt (preRestrict pre {}) initialWitness = {}"
+  shows "inter_thread_happens_before_alt (preRestrict pre {}) empty_witness = {}"
 unfolding inter_thread_happens_before_alt_def
 by simp
 
@@ -571,12 +605,12 @@ unfolding happens_before_def
 by simp
 
 lemma getHb_empty [simp]:
-  shows "getHb (preRestrict pre {}) initialWitness = {}"
+  shows "getHb (preRestrict pre {}) empty_witness = {}"
 unfolding getHb_def
 by simp
 
 lemma getVse_empty [simp]:
-  shows "getVse (preRestrict pre {}) initialWitness = {}"
+  shows "getVse (preRestrict pre {}) empty_witness = {}"
 unfolding getVse_def
 by simp
 
@@ -618,7 +652,7 @@ definition otherThreadLoInHb :: "hbCalculation \<Rightarrow> bool" where
 
 definition hbCalcRespectsSyncingLocks  :: "hbCalculation \<Rightarrow> bool" where 
    "hbCalcRespectsSyncingLocks hbCalc = (\<forall> pre0. \<forall> wit. 
-          well_formed_threads (pre0, wit, [])
+          well_formed_threads_opsem (pre0, wit, [])
       \<longrightarrow> locks_only_consistent_lo (pre0, wit, [((''hb''), hbCalc pre0 wit)])
       \<longrightarrow> (\<forall> a. \<forall> b.     (is_unlock a \<and> is_lock b \<and> (a, b) \<in> lo wit)
                      \<longrightarrow> (a, b) \<in> hbCalc pre0 wit))"
@@ -633,7 +667,7 @@ unfolding otherThreadLoInHb_def
 by auto
 
 lemma loInHb_aux:
-  assumes well_formed_threads:      "well_formed_threads (pre, wit, [])"
+  assumes well_formed_threads:      "well_formed_threads_opsem (pre, wit, [])"
       and locks_only_consistent_lo: "locks_only_consistent_lo (pre, wit, [(''hb'', hbCalc pre wit)])"
       and otherThreadLoInHb:        "otherThreadLoInHb hbCalc"
       and sbInHb:                   "sb pre \<subseteq> hbCalc pre wit"
@@ -669,10 +703,10 @@ proof -
       hence not_na_loc: "\<not> is_at_non_atomic_location (lk pre) a"
         by auto
 
-      have "(a, b) \<in> sb pre"
-        using well_formed_threads
-        unfolding well_formed_threads.simps 
-                  indeterminate_sequencing_def
+      have "indeterminate_sequencing pre" 
+        using well_formed_threads by auto
+      hence "(a, b) \<in> sb pre"
+        unfolding indeterminate_sequencing_def
         using in_actions tid_eq `a \<noteq> b` not_na_loc `(b, a) \<notin> sb pre`
         by auto
 
@@ -1585,8 +1619,8 @@ next
             using sb by auto
         next
           assume "(z, w) \<in> compose0 (sb pre) (inter_thread_happens_before_r pre wit)"
-          from this obtain v where zv: "(z, v) \<in> sb pre"
-                               and vw: "(v, w) \<in> inter_thread_happens_before_r pre wit"
+          then obtain v where zv: "(z, v) \<in> sb pre"
+                          and vw: "(v, w) \<in> inter_thread_happens_before_r pre wit"
             by auto
           have "(x, v) \<in> sb pre"
             using sb zv trans_sb by (auto elim: transE)
@@ -1877,7 +1911,7 @@ proof (clarsimp)
                 "is_write w"
                 "loc_of w = loc_of r"
       hence "(w, r) \<in> hb" using hb_eq by auto
-      from this obtain w' where w': "w'\<in>actions0 pre" "(w', r) \<in> rf wit"
+      then obtain w' where w': "w'\<in>actions0 pre" "(w', r) \<in> rf wit"
         using w det_read `is_load r` `r \<in> actions0 pre`
         unfolding det_read_alt.simps 
         by auto
@@ -1890,10 +1924,10 @@ proof (clarsimp)
       assume w': "(w', r) \<in> rf wit"
                  "w' \<in> actions0 pre"
                  "w' \<in> actions"
-      from this obtain w where w: "w \<in> actions0 pre"
-                                  "(w, r) \<in> hb"
-                                  "is_write w"
-                                  "loc_of w = loc_of r"
+      then obtain w where w: "w \<in> actions0 pre"
+                              "(w, r) \<in> hb"
+                              "is_write w"
+                              "loc_of w = loc_of r"
         using w' det_read `is_load r` `r \<in> actions0 pre`
         unfolding det_read_alt.simps 
         by auto
@@ -2045,6 +2079,14 @@ proof -
     by auto
 qed
 
+lemma well_formed_threads_opsem_restriction:
+  assumes "well_formed_threads_opsem (pre, wit, [])"
+  shows   "well_formed_threads_opsem (preRestrict pre actions, incWitRestrict wit actions, [])"
+using assms
+unfolding well_formed_threads_opsem_eq
+using well_formed_threads_restriction
+by simp
+
 lemma axsimpConsistent_restriction:
   assumes cons:       "axsimpConsistentAlt pre wit"
       and downclosed: "downclosed actions (incComAlt pre wit)"
@@ -2147,97 +2189,102 @@ proof -
       show "well_formed_rf (?pre', ?wit', [])"
         using cons well_formed_rf_restriction by auto
     next
-      show "well_formed_threads (?pre', ?wit', [])"
-        using cons well_formed_threads_restriction by auto
+      show "well_formed_threads_opsem (?pre', ?wit', [])"
+        using cons well_formed_threads_opsem_restriction by auto
     qed
 qed
 
 (* Soundness ---------------------------------------------------------------------------------- *)
 
-(* Consistency of initialWitness *)
+(* Consistency of empty_witness *)
 
-lemma assumptions_initialWitness [simp]:
-  shows "assumptions ((preRestrict pre {}), initialWitness, [])"
+lemma assumptions_empty_witness [simp]:
+  shows "assumptions ((preRestrict pre {}), empty_witness, [])"
 unfolding assumptions.simps
 by simp
 
-lemma well_formed_threads_initialWitness [simp]:
-  shows "well_formed_threads ((preRestrict pre {}), initialWitness, [])"
+lemma well_formed_threads_empty_witness [simp]:
+  shows "well_formed_threads ((preRestrict pre {}), empty_witness, [])"
 unfolding well_formed_threads.simps indeterminate_sequencing_def
 by simp
 
-lemma det_read_op_initialWitness [simp]:
-  shows "det_read_alt ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma well_formed_threads_opsem_empty_witness [simp]:
+  shows "well_formed_threads_opsem ((preRestrict pre {}), empty_witness, [])"
+unfolding well_formed_threads_opsem_eq
+by simp
+
+lemma det_read_op_empty_witness [simp]:
+  shows "det_read_alt ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding det_read_alt.simps
 by simp
 
-lemma coherent_memory_use_initialWitness [simp]:
-  shows "coherent_memory_use ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma coherent_memory_use_empty_witness [simp]:
+  shows "coherent_memory_use ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding coherent_memory_use.simps
 by simp
 
-lemma consistent_atomic_rf_initialWitness [simp]:
-  shows "consistent_atomic_rf ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma consistent_atomic_rf_empty_witness [simp]:
+  shows "consistent_atomic_rf ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding consistent_atomic_rf.simps
 by simp
 
-lemma consistent_mo_op_initialWitness [simp]:
-  shows "consistent_mo ((preRestrict pre {}), initialWitness, [])"
+lemma consistent_mo_op_empty_witness [simp]:
+  shows "consistent_mo ((preRestrict pre {}), empty_witness, [])"
 unfolding consistent_mo.simps
 by simp
 
-lemma consistent_hb_initialWitness [simp]:
-  shows "consistent_hb ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma consistent_hb_empty_witness [simp]:
+  shows "consistent_hb ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding consistent_hb.simps 
 by simp
 
-lemma consistent_non_atomic_rf_initialWitness [simp]:
-  shows "consistent_non_atomic_rf ((preRestrict pre {}), initialWitness, [(''hb'', {}), (''vse'', {})])"
+lemma consistent_non_atomic_rf_empty_witness [simp]:
+  shows "consistent_non_atomic_rf ((preRestrict pre {}), empty_witness, [(''hb'', {}), (''vse'', {})])"
 unfolding consistent_non_atomic_rf.simps
 by simp
 
-lemma locks_only_consistent_lo_op_initialWitness [simp]:
-  shows "locks_only_consistent_lo ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma locks_only_consistent_lo_op_empty_witness [simp]:
+  shows "locks_only_consistent_lo ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding locks_only_consistent_lo.simps 
 by simp
 
-lemma locks_only_consistent_locks_op_initialWitness [simp]:
-  shows "locks_only_consistent_locks ((preRestrict pre {}), initialWitness, [])"
+lemma locks_only_consistent_locks_op_empty_witness [simp]:
+  shows "locks_only_consistent_locks ((preRestrict pre {}), empty_witness, [])"
 unfolding locks_only_consistent_locks.simps
 by simp
 
-lemma rmw_atomicity_op_initialWitness [simp]:
-  shows "rmw_atomicity ((preRestrict pre {}), initialWitness, [])"
+lemma rmw_atomicity_op_empty_witness [simp]:
+  shows "rmw_atomicity ((preRestrict pre {}), empty_witness, [])"
 unfolding rmw_atomicity.simps
 by simp
 
-lemma sc_accesses_consistent_sc_op_initialWitness [simp]:
-  shows "sc_accesses_consistent_sc ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma sc_accesses_consistent_sc_op_empty_witness [simp]:
+  shows "sc_accesses_consistent_sc ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding sc_accesses_consistent_sc.simps 
 by simp
 
-lemma sc_accesses_sc_reads_restricted_initialWitness [simp]:
-  shows "sc_accesses_sc_reads_restricted ((preRestrict pre {}), initialWitness, [(''hb'', {})])"
+lemma sc_accesses_sc_reads_restricted_empty_witness [simp]:
+  shows "sc_accesses_sc_reads_restricted ((preRestrict pre {}), empty_witness, [(''hb'', {})])"
 unfolding sc_accesses_sc_reads_restricted.simps
 by simp
 
-lemma sc_fenced_sc_fences_heeded_initialWitness [simp]:
-  shows "sc_fenced_sc_fences_heeded ((preRestrict pre {}), initialWitness, [])"
+lemma sc_fenced_sc_fences_heeded_empty_witness [simp]:
+  shows "sc_fenced_sc_fences_heeded ((preRestrict pre {}), empty_witness, [])"
 unfolding sc_fenced_sc_fences_heeded.simps
 by simp
 
-lemma tot_empty_initialWitness [simp]:
-  shows "tot_empty ((preRestrict pre {}), initialWitness, [])"
+lemma tot_empty_empty_witness [simp]:
+  shows "tot_empty ((preRestrict pre {}), empty_witness, [])"
 unfolding tot_empty.simps
 by simp
 
-lemma well_formed_rf_op_initialWitness [simp]:
-  shows "well_formed_rf ((preRestrict pre {}), initialWitness, [])"
+lemma well_formed_rf_op_empty_witness [simp]:
+  shows "well_formed_rf ((preRestrict pre {}), empty_witness, [])"
 unfolding well_formed_rf.simps
 by simp
 
 lemma consistencyEmptyExecution [simp]:
-  shows "axsimpConsistentAlt (preRestrict pre {}) initialWitness"
+  shows "axsimpConsistentAlt (preRestrict pre {}) empty_witness"
 unfolding axsimpConsistentAlt_def
 by simp
 
@@ -2245,7 +2292,7 @@ lemma incTraceConsistency:
   assumes "incTrace pre r s"
           "r = incInitialState pre"
   shows   "  axsimpConsistentAlt (preRestrict pre (incCommitted s)) (incWit s)
-           \<and> well_formed_threads (pre, initialWitness, [])"
+           \<and> well_formed_threads_opsem (pre, empty_witness, [])"
 using assms 
 proof induct
   case incStep
@@ -2258,9 +2305,9 @@ lemma incConsistentSoundness:
 using assms
 proof -
   assume "incConsistent (pre, wit, getRelations pre wit)"
-  from this obtain s where trace: "incTrace pre (incInitialState pre) s"
-                     and   wit:   "incWit s = wit"
-                     and   com:   "incCommitted s = actions0 pre"
+  then obtain s where trace: "incTrace pre (incInitialState pre) s"
+                  and   wit: "incWit s = wit"
+                  and   com: "incCommitted s = actions0 pre"
     unfolding incConsistent.simps by auto
   thus "axsimpConsistent (pre, wit, getRelations pre wit)" 
     using incTraceConsistency[OF trace] preRestrict_id wit
@@ -2289,10 +2336,10 @@ next
     unfolding isStrictPartialOrder_def acyclic_def irrefl_def
     by auto
 next
-  have "well_formed_threads (pre, wit, [])"
+  have "well_formed_threads_opsem (pre, wit, [])"
     using cons by auto
-  hence "well_formed_threads (pre, initialWitness, [])"
-    unfolding well_formed_threads.simps by simp
+  hence "well_formed_threads_opsem (pre, empty_witness, [])"
+    by (cases "wit = empty_witness") simp_all
   thus "\<exists>s.   incTrace pre (incInitialState pre) s 
             \<and> incWit s = incWitRestrict wit {} 
             \<and> incCommitted s = {}"
@@ -2319,8 +2366,8 @@ next
                incCommitted=?actions'\<rparr>"
   have downclosed_mo: "downclosed ?actions' (mo wit)"
     using downclosed' unfolding incComAlt_def by auto
-  have inOpsemOrder: "\<forall>b\<in>actions0 pre. ((b, a) \<in> incComAlt ?pre' (incWit ?s') \<longrightarrow> b \<in> actions) \<and>
-                                       (b \<in> actions \<longrightarrow> (a, b) \<notin> incComAlt ?pre' (incWit ?s'))"
+  have inOpsemOrder: "respectsCom (actions0 pre) actions (incComAlt ?pre' (incWit ?s')) a"
+    unfolding respectsCom_def
     proof auto
       fix b
       (* TODO: fix opsemOrder *)
@@ -2407,6 +2454,60 @@ proof -
   thus ?thesis
     unfolding incConsistent.simps using wit_restrict by auto
 qed
+
+
+
+(* The monadic model ----------------------------------------------- *)
+
+lemma monCheckConsistency_simp [simp]:
+  shows "  x [\<in>] monCheckConsistency (pre, wit, getRelations pre wit)
+         = axsimpConsistentAlt pre wit"
+unfolding monCheckConsistency_def
+by simp
+
+lemma monCheckWitRestrict_simp [simp]:
+  shows "  x [\<in>] monCheckWitRestrict wit1 committed wit2
+         = (incWitRestrict wit1 committed = wit2)"
+unfolding monCheckWitRestrict_def
+by simp
+
+lemma monCheckCommitmentOrder_simp [simp]:
+  shows "  x [\<in>] monCheckCommitmentOrder actions (pre, wit, getRelations pre wit) committed a
+         = (respectsCom actions committed (incComAlt pre wit) a)"
+unfolding monCheckCommitmentOrder.simps Let_def
+by simp
+
+(* Soundness *)
+
+lemma monStepSoundness:
+  assumes "(a, s2) [\<in>] monStep pre s1"
+      and "well_formed_threads_opsem (pre, empty_witness, [])"
+  shows   "incStep pre s1 s2 a"
+using assms
+unfolding monStep_def Let_def incStep_def
+by auto
+
+(* Completeness --------------------------------------------- *)
+
+(* modification order *)
+
+lemma step_mo_not_atomic_write:
+  assumes cons:      "axsimpConsistentAlt pre' wit'"
+      and committed: "actions0 pre' = insert a committed"
+      and a:         "is_at_non_atomic_location (lk pre') a \<or> \<not> is_write a"
+  shows              "mo wit' = mo (incWitRestrict wit' committed)"
+proof auto
+  fix b c
+  assume in_mo: "(b, c) \<in> mo wit'"
+  hence b: "b \<in> actions0 pre' \<and> is_at_atomic_location (lk pre') b \<and> is_write b" 
+    and c: "c \<in> actions0 pre' \<and> is_at_atomic_location (lk pre') c \<and> is_write c"
+    using cons by auto
+  hence "a \<noteq> b" "a \<noteq> c" using a by auto
+  thus "b \<in> committed" "c \<in> committed" 
+    using b c committed by auto
+qed
+
+
 
 
 end

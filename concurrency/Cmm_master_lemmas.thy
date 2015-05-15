@@ -425,7 +425,7 @@ proof -
     using acyclic
     unfolding acyclic_def isStrictPartialOrder_def irrefl_def
     by auto
-  from this obtain x where x: "x \<in> A" "\<forall>y. y \<in> A \<longrightarrow> (x, y) \<notin> R\<^sup>+"
+  then obtain x where x: "x \<in> A" "\<forall>y. y \<in> A \<longrightarrow> (x, y) \<notin> R\<^sup>+"
     using supremum_partial_order[OF finite non_empty] by auto
   thus ?thesis
     using x that by auto
@@ -529,6 +529,17 @@ qed
 (* Cmm: 2 - Type definitions and projections---------------------------------------------------- *)
 
 termination apply_tree by lexicographic_order
+
+(* empty_witness *)
+
+lemma empty_witness_simps [simp]:
+  shows "rf empty_witness = {}"
+        "mo empty_witness = {}"
+        "sc empty_witness = {}"
+        "lo empty_witness = {}"
+        "tot empty_witness = {}"
+unfolding empty_witness_def
+by simp_all
 
 (* Behaviour *)
 
@@ -811,6 +822,11 @@ by simp
 lemma rel_list_well_formed_threads [simp]:
   assumes "rel \<noteq> []"
   shows   "well_formed_threads (pre, wit, rel) = well_formed_threads (pre, wit, [])"
+unfolding well_formed_threads.simps ..
+
+lemma witness_well_formed_threads [simp]:
+  assumes "wit \<noteq> empty_witness"
+  shows   "well_formed_threads (pre, wit, []) = well_formed_threads (pre, empty_witness, [])"
 unfolding well_formed_threads.simps ..
 
 (* downclosed *)
