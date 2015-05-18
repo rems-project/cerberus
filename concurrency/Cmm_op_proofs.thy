@@ -2052,7 +2052,7 @@ by clarsimp auto
 
 lemma well_formed_threads_restriction:
   assumes "well_formed_threads (pre, wit, [])"
-  shows   "well_formed_threads (preRestrict pre actions, incWitRestrict wit actions, [])"
+  shows   "well_formed_threads (preRestrict pre actions, wit2, [])"
 proof -
   have "actions_respect_location_kinds (actions0 pre \<inter> actions) (lk pre)"
     using assms
@@ -2081,11 +2081,11 @@ qed
 
 lemma well_formed_threads_opsem_restriction:
   assumes "well_formed_threads_opsem (pre, wit, [])"
-  shows   "well_formed_threads_opsem (preRestrict pre actions, incWitRestrict wit actions, [])"
+  shows   "well_formed_threads_opsem (preRestrict pre actions, wit2, [])"
 using assms
 unfolding well_formed_threads_opsem_eq
 using well_formed_threads_restriction
-by simp
+by auto
 
 lemma axsimpConsistent_restriction:
   assumes cons:       "axsimpConsistentAlt pre wit"
@@ -2409,26 +2409,24 @@ next
 qed
 
 lemma incConsistentCompleteness:
-  assumes consistent: "axsimpConsistent (pre, wit, getRelations pre wit)"
-      and finite:     "finite (actions0 pre)"
-  shows               "incConsistent (pre, wit, getRelations pre wit)"
+  assumes cons: "axsimpConsistent (pre, wit, getRelations pre wit)"
+  shows         "incConsistent (pre, wit, getRelations pre wit)"
 proof -
   have relOverSb: "relOver (sb pre) (actions0 pre)"
-    using consistent
-    by (auto 4 3)
+    using cons by (auto 4 3)
   have "well_formed_rf (pre, wit, [])" 
-    using consistent by auto
+    using cons by auto
   hence relOverRf: "relOver (rf wit) (actions0 pre)"
     unfolding well_formed_rf.simps relOver_def 
     by auto
   have relOverMo: "relOver (mo wit) (actions0 pre)"
-    using consistent by auto
+    using cons by auto
   have relOverSc: "relOver (sc wit) (actions0 pre)"
-    using consistent by auto
+    using cons by auto
   have relOverLo: "relOver (lo wit) (actions0 pre)"
-    using consistent by auto
+    using cons by auto
   have "tot_empty (pre, wit, [])"
-    using consistent by auto
+    using cons by auto
   hence relOverTot: "relOver (tot wit) (actions0 pre)"
     unfolding tot_empty.simps by simp
   have wit_restrict: "incWitRestrict wit (actions0 pre) = wit" 
@@ -2446,10 +2444,12 @@ proof -
     unfolding incComAlt_def
     using relOverRf relOverMo relOverHbMinus
     by (simp add: downclosed_relOver)
+  have finite: "finite (actions0 pre)"
+    using cons by auto
   obtain s where "incTrace pre (incInitialState pre) s"
                            "incWit s = incWitRestrict wit (actions0 pre)"
                            "incCommitted s = (actions0 pre)"
-    using existenceIncTrace[OF consistent finite _ downclosed]
+    using existenceIncTrace[OF cons finite _ downclosed]
     by auto
   thus ?thesis
     unfolding incConsistent.simps using wit_restrict by auto
@@ -2458,6 +2458,246 @@ qed
 
 
 (* The monadic model ----------------------------------------------- *)
+
+definition monInvariant :: "pre_execution \<Rightarrow> incState \<Rightarrow> bool" where
+  "monInvariant pre s \<equiv> 
+        axsimpConsistentAlt (preRestrict pre (incCommitted s)) (incWit s)
+      \<and> well_formed_threads_opsem (pre, empty_witness, [])
+      \<and> incCommitted s \<subseteq> actions0 pre"
+
+lemma monInvariantE [elim]:
+  assumes "monInvariant pre s"
+  obtains "axsimpConsistentAlt (preRestrict pre (incCommitted s)) (incWit s)"
+      and "well_formed_threads_opsem (pre, empty_witness, [])"
+      and "incCommitted s \<subseteq> actions0 pre"
+using assms
+unfolding monInvariant_def
+by simp
+
+lemma monInvariantE_incCommittedFinite [elim]:
+  assumes "monInvariant pre s"
+  obtains "finite (incCommitted s)"
+proof -
+  have "incCommitted s \<subseteq> actions0 pre" "finite (actions0 pre)"
+    using assms by auto
+  thus ?thesis using that finite_subset by auto
+qed
+
+(* Elims of auxiliaries *)
+
+lemma sameLocWritesE [elim]:
+  assumes "x \<in> sameLocWrites actions a"
+  obtains "x \<in> actions" "is_write x" "loc_of x = loc_of a"
+using assms
+unfolding sameLocWrites_def
+by auto
+
+lemma sameLocWrites_finite:
+  assumes "finite actions"
+  obtains "finite (sameLocWrites actions a)"
+using assms
+unfolding sameLocWrites_def
+by auto
+
+lemma sameLocLocksUnlocksE [elim]:
+  assumes "x \<in> sameLocLocksUnlocks actions a"
+  obtains "x \<in> actions" "is_lock x \<or> is_unlock x" "loc_of x = loc_of a"
+using assms
+unfolding sameLocLocksUnlocks_def
+by auto
+
+lemma scActionsE [elim]:
+  assumes "x \<in> scActions actions"
+  obtains "x \<in> actions" "is_seq_cst x"
+using assms
+unfolding scActions_def
+by auto
+
+(* Elims of relation constructions *)
+
+lemma monAddToMoE [elim?]:
+  assumes step: "rel [\<in>] monAddToMo pre a s"
+      and inv:  "monInvariant pre s"
+  obtains "rel = mo (incWit s) \<union> (\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s) a"
+using assms
+unfolding monAddToMo_def Let_def
+by auto
+
+lemma auxAddPairToRfE [elim?]: 
+  assumes step: "(rel', v) [\<in>] auxAddPairToRf rel w r eq"
+  obtains v_w v_r where "rel' = insert (w, r) rel"
+                        "v = Some (v_w, v_r)"
+                        "value_written_by w = Some v_w"
+                        "value_read_by r = Some v_r"
+                        "eq v_w v_r"
+using assms
+unfolding auxAddPairToRf_def
+apply (cases "value_written_by w", auto)
+by (cases "value_read_by r", auto)
+
+lemma auxAddToRfLoadE [elim?]:
+  assumes step: "(rel, v) [\<in>] auxAddToRfLoad pre a s eq"
+      and inv:  "monInvariant pre s"
+  obtains w v_w v_r where "rel = insert (w, a) (rf (incWit s))"
+                          "is_write w" 
+                          "w \<in> incCommitted s" 
+                          "loc_of w = loc_of a"
+                          "v = Some (v_w, v_r)"
+                          "value_written_by w = Some v_w"
+                          "value_read_by a = Some v_r"
+                          "eq v_w v_r"
+        | "rel = rf (incWit s)"
+proof (cases "rel = rf (incWit s)")
+  case True
+  thus ?thesis using that by metis
+next
+  case False
+  have "finite (sameLocWrites (incCommitted s) a)"
+    using inv sameLocWrites_finite by auto
+  then obtain w where w: "w \<in> sameLocWrites (incCommitted s) a"
+                         "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
+    using step False
+    unfolding auxAddToRfLoad_def
+    by auto
+  hence w2: "is_write w" "w \<in> incCommitted s" "loc_of w = loc_of a"
+    by auto
+  obtain v_w v_a where "rel = insert (w, a) (rf (incWit s))"
+                       "v = Some (v_w, v_a)"
+                       "value_written_by w = Some v_w"
+                       "value_read_by a = Some v_a"
+                       "eq v_w v_a"
+    using w by (auto elim: auxAddPairToRfE)
+  thus ?thesis using w2 that by auto
+qed
+
+lemma monAddToRfLoadE [elim?]:
+  assumes step: "rel [\<in>] monAddToRfLoad pre a s"
+      and inv:  "monInvariant pre s"
+  obtains w where "rel = insert (w, a) (rf (incWit s))"
+                  "value_written_by w = value_read_by a"
+                  "is_write w" 
+                  "w \<in> incCommitted s" 
+                  "loc_of w = loc_of a"
+        | "rel = rf (incWit s)"
+proof -
+  obtain v where v: "(rel, v) [\<in>] auxAddToRfLoad pre a s op ="
+    using step
+    unfolding monAddToRfLoad_def
+    by auto
+  thus ?thesis
+    using that auxAddToRfLoadE[OF v inv]
+    by (cases "rel = rf (incWit s)") metis+
+qed
+
+(* Elims of monStep *)
+
+lemma monStepE_action [elim]:
+  assumes monStep:  "(a, s2) [\<in>] monStep pre s1"
+      and cons_pre: "well_formed_threads_opsem (pre, empty_witness, [])" 
+  obtains "a \<in> actions0 pre" "a \<notin> incCommitted s1"
+proof -
+  have "finite (actions0 pre)"
+    using cons_pre by auto
+  hence "a \<in> actions0 pre" "a \<notin> incCommitted s1"
+    using monStep
+    unfolding monStep_def Let_def
+    by auto
+  thus ?thesis using that by simp
+qed
+
+lemma monStepE_committed [elim]:
+  assumes monStep:  "(a, s2) [\<in>] monStep pre s1"
+  obtains "incCommitted s2 = insert a (incCommitted s1)"
+using monStep
+unfolding monStep_def Let_def
+by auto
+
+lemmas monPerformActions_def = 
+  monPerformLock_def
+  monPerformUnlock_def
+  monPerformLoad_def
+  monPerformStore_def
+  monPerformRmw_def
+  monPerformFence_def
+  monPerformBlocked_rmw_def
+
+lemma monStepE_rf [elim?, consumes 1]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+  obtains (load)  "is_load a" "rf (incWit s2) [\<in>] monAddToRfLoad pre a s1"
+        | (rmw)   "is_RMW a" "rf (incWit s2) [\<in>] monAddToRfRmw pre a s1"
+        | (other) "\<not>is_load a" "\<not>is_RMW a" "rf (incWit s2) = rf (incWit s1)"
+using assms
+unfolding monStep_def monPerformActions_def Let_def
+by (cases a) auto
+
+lemma monStepE_mo [elim?]:
+  assumes monStep:  "(a, s2) [\<in>] monStep pre s1"
+      and cons_pre: "well_formed_threads_opsem (pre, empty_witness, [])" 
+  obtains (store) "is_write a" 
+                  "is_at_atomic_location (lk pre) a"
+                  "mo (incWit s2) [\<in>] monAddToMo pre a s1"
+        | (other) "\<not>is_RMW a"
+                  "\<not>(is_store a \<and> is_at_atomic_location (lk pre) a)" 
+                  "mo (incWit s2) = mo (incWit s1)"
+proof (cases "is_write a \<and> is_at_atomic_location (lk pre) a")
+  assume a: "is_write a \<and> is_at_atomic_location (lk pre) a"
+  hence "mo (incWit s2) [\<in>] monAddToMo pre a s1"
+    using monStep
+    unfolding monStep_def monPerformActions_def Let_def
+    by (cases a) auto
+  thus ?thesis using a store by auto
+next
+  assume a: "\<not>(is_write a \<and> is_at_atomic_location (lk pre) a)"
+  hence a2: "\<not>(is_store a \<and> is_at_atomic_location (lk pre) a)" 
+    by (cases a) auto
+  have "a \<in> actions0 pre"
+    using monStep cons_pre by auto
+  have "actions_respect_location_kinds (actions0 pre) (lk pre)"
+    using cons_pre by auto
+  hence "is_RMW a \<Longrightarrow> is_at_atomic_location (lk pre) a"
+    unfolding actions_respect_location_kinds_def
+              is_at_atomic_location_def
+    using `a \<in> actions0 pre` 
+    by (cases a) auto
+  hence a3: "\<not>is_RMW a" using a by auto
+  hence "mo (incWit s2) = mo (incWit s1)"
+    using a monStep
+    unfolding monStep_def monPerformActions_def Let_def
+    by (cases a) auto
+  thus ?thesis using a2 a3 other by auto
+qed
+
+lemma monStepE_lo [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+  obtains (lock)  "is_lock a \<or> is_unlock a" 
+                  "lo (incWit s2) [\<in>] monAddToLo pre a s1"
+        | (other) "\<not>is_lock a" 
+                  "\<not>is_unlock a" 
+                  "lo (incWit s2) = lo (incWit s1)"
+using assms
+unfolding monStep_def monPerformActions_def Let_def
+by (cases a) auto
+
+lemma monStepE_sc [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+  obtains (sc)    "is_seq_cst a" 
+                  "sc (incWit s2) [\<in>] monAddToSc pre a s1"
+        | (other) "\<not>is_seq_cst a" 
+                  "sc (incWit s2) = sc (incWit s1)"
+using assms
+unfolding monStep_def monPerformActions_def Let_def 
+apply (cases a, auto)
+by (cases "is_seq_cst a", auto)+
+
+lemma monStepE_tot [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+  obtains "tot (incWit s2) = tot (incWit s1)"
+unfolding incToEx_def Let_def tot_empty.simps
+using monStep
+unfolding monStep_def monPerformActions_def Let_def
+by (cases a) auto
+
+(* Simps of checkXxx predicates*)
 
 lemma monCheckConsistency_simp [simp]:
   shows "  x [\<in>] monCheckConsistency (pre, wit, getRelations pre wit)
@@ -2479,12 +2719,217 @@ by simp
 
 (* Soundness *)
 
+(* assumptions *)
+
+lemma monStep_assumptions:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "assumptions (incToEx pre s2)" 
+unfolding incToEx_def Let_def assumptions.simps
+oops
+
+(* tot_empty *)
+
+lemma monStep_tot_empty:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "tot_empty (incToEx pre s2)"
+proof -
+  have "tot (incWit s1) = {}"
+    using inv by auto
+  thus ?thesis
+    using monStepE_tot[OF monStep]
+    unfolding tot_empty.simps Let_def incToEx_def
+    by auto
+qed
+
+(* well_formed_threads_opsem *)
+
+lemma monStep_well_formed_threads_opsem:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "well_formed_threads_opsem (incToEx pre s2)"
+proof -
+  have "well_formed_threads_opsem (pre, empty_witness, [])"
+    using inv by auto
+  hence "well_formed_threads_opsem (preRestrict pre (incCommitted s2), empty_witness, [])"
+    using well_formed_threads_opsem_restriction by auto
+  thus ?thesis
+    unfolding incToEx_def Let_def
+    by (cases "incWit s2 = empty_witness") auto
+qed
+
+(* well_formed_rf *)
+
+lemma monStep_well_formed_rf_aux:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+      and rf:      "rf (incWit s2) = rf (incWit s1)"
+  shows   "well_formed_rf (incToEx pre s2)"
+proof -
+  have cons_rf: "well_formed_rf (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv unfolding incToEx_def Let_def by auto
+  have com: "incCommitted s2 = insert a (incCommitted s1)"
+    using monStep by auto
+  show ?thesis
+    unfolding incToEx_def Let_def well_formed_rf.simps 
+    unfolding com rf
+    using cons_rf
+    by auto
+qed
+
+lemma well_formed_rfIE:
+  assumes cons_rf:  "well_formed_rf (pre, wit, rel)"
+      and rf:       "rf wit' = insert (w, r) (rf wit)"
+      and actions:  "actions0 pre' \<supseteq> actions0 pre"
+      and r_and_w:  "w \<in> actions0 pre'"
+                    "r \<in> actions0 pre'"
+                    "loc_of w = loc_of r"
+                    "is_write w"
+                    "is_read r"
+                    "value_read_by r = value_written_by w"
+      and r_is_new: "r \<notin> actions0 pre"
+  shows   "well_formed_rf (pre', wit', rel')"
+unfolding well_formed_rf.simps 
+proof auto
+  fix a b
+  assume in_rf: "(a, b) \<in> rf wit'"
+  thus "a \<in> actions0 pre'"
+       "b \<in> actions0 pre'"
+       "loc_of a = loc_of b"
+       "is_write a"
+       "is_read b"
+       "value_read_by b = value_written_by a"
+    unfolding rf using cons_rf r_and_w actions by auto
+  fix a'
+  assume in_rf': "(a', b) \<in> rf wit'"
+  thus "a = a'"
+    proof (cases "b = r")
+      case True
+      have "(a, r) \<notin> rf wit" "(a', r) \<notin> rf wit"
+        using cons_rf r_is_new by auto
+      hence "a = w" "a' = w"
+        using in_rf in_rf' True unfolding rf by auto
+      thus ?thesis by auto
+    next
+      case False
+      hence "(a, b) \<in> rf wit" "(a', b) \<in> rf wit"
+        using in_rf in_rf' unfolding rf by auto
+      thus "a = a'"
+        using cons_rf by auto
+    qed
+qed
+
+lemma monStep_well_formed_rf:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "well_formed_rf (incToEx pre s2)"
+proof -
+  have cons_rf: "well_formed_rf (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv unfolding incToEx_def Let_def by auto
+  have com: "incCommitted s2 = insert a (incCommitted s1)"
+    using monStep by auto
+  have a: "a \<in> incCommitted s2" "a \<in> actions0 pre" "a \<notin> incCommitted s1"
+    using monStep inv by auto
+  show ?thesis
+    proof (cases rule: monStepE_rf[OF monStep])
+      case 1 (* load *)
+      hence "is_read a" by (intro is_readI) auto
+      show ?thesis
+        proof (cases rule: monAddToRfLoadE[OF 1(2) inv])
+          case (1 w) (*  rf (incWit s2) = insert (w, a) (rf (incWit s1)) *)
+          show ?thesis
+            using cons_rf
+            unfolding incToEx_def Let_def 
+            apply (elim well_formed_rfIE[OF _ 1(1)])
+            using 1 com inv a `is_read a`
+            by auto            
+        next
+          case 2 (* rf (incWit s2) = rf (incWit s1) *)
+          thus ?thesis
+            using monStep_well_formed_rf_aux monStep inv
+            by metis
+        qed
+    next
+      case 2 (* rmw *)
+      show ?thesis
+        proof (cases "sameLocWrites (incCommitted s1) a = {}")
+          case True
+          hence "rf (incWit s2) = rf (incWit s1)"
+            using 2 
+            unfolding monAddToRfRmw_def auxAddToRfRmw_def Let_def
+            by auto 
+          thus ?thesis
+            using monStep_well_formed_rf_aux monStep inv
+            by metis
+        next
+          case False
+          have "xxx"
+            using 2 
+            unfolding monAddToRfRmw_def auxAddToRfRmw_def Let_def sorry
+          show ?thesis sorry
+        qed
+(*
+      show ?thesis
+        unfolding incToEx_def Let_def well_formed_rf.simps 
+        unfolding com 
+        using cons_rf 2
+        unfolding monAddToRfRmw_def auxAddToRfRmw_def Let_def
+        apply auto sorry 
+*)
+    next
+      case 3 (* other *)
+      thus ?thesis
+        using monStep_well_formed_rf_aux monStep inv
+        by metis
+    qed
+qed
+
+(*
+proof auto
+  fix b c
+  assume in_rf: "(b, c) \<in> rf (incWit s1)"
+  thus "b \<in> actions0 pre"
+       "c \<in> actions0 pre"
+       "loc_of b = loc_of c"
+       "is_write b"
+       "is_read c"
+       "value_read_by c = value_written_by b"
+    using cons_rf by auto
+  have "b \<in> incCommitted s1"
+       "c \<in> incCommitted s1"
+    using in_rf cons_rf by auto
+  thus "b \<in> incCommitted s2"
+       "c \<in> incCommitted s2"
+    using monStep by auto
+  fix b'
+  assume in_rf': "(b', c) \<in> rf (incWit s1)"
+  thus "b = b'" using in_rf cons_rf by auto
+qed
+*)
+
+lemma monStepInvariant:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "monInvariant pre s2"
+proof -
+  have "finite (actions0 pre)"
+    using inv by auto
+  thus ?thesis
+    using monStep inv
+    unfolding monInvariant_def
+    unfolding monStep_def Let_def
+    by auto
+qed
+
 lemma monStepSoundness:
-  assumes "(a, s2) [\<in>] monStep pre s1"
-      and "well_formed_threads_opsem (pre, empty_witness, [])"
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
   shows   "incStep pre s1 s2 a"
-using assms
-unfolding monStep_def Let_def incStep_def
+using monStep inv
+using monStepInvariant[OF monStep inv]
+unfolding monInvariant_def
+          monStep_def Let_def incStep_def
 by auto
 
 (* Completeness --------------------------------------------- *)
@@ -2505,6 +2950,76 @@ proof auto
   hence "a \<noteq> b" "a \<noteq> c" using a by auto
   thus "b \<in> committed" "c \<in> committed" 
     using b c committed by auto
+qed
+
+lemma step_mo_atomic_write:
+  assumes cons1:     "axsimpConsistentAlt pre  wit"
+      and cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "wit = incWitRestrict wit' (actions0 pre)"
+      and committed: "actions0 pre' = insert a (actions0 pre)"
+      and a:         "  is_at_atomic_location (lk pre') a \<and> is_write a 
+                      \<and> a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+  shows   "mo wit' [\<in>] monAddToMo pre a s"
+unfolding monAddToMo_def Let_def
+proof simp
+  let ?succ     = "(\<lambda>b. (b, a)) ` {x \<in> actions0 pre. x \<in> incCommitted s \<and> x \<noteq> a \<and> is_write x \<and> loc_of x = loc_of a}"
+  let ?new_mo   = "mo (incWit s) \<union> ?succ"
+  show "mo (incWit s')  = ?new_mo"
+    proof (intro equalityI subsetI)
+      fix x
+      assume "x \<in> mo (incWit s')"
+      then obtain b c where "(b, c) = x" "(b, c) \<in> mo (incWit s')" by (cases x) fast
+      have "(b, c) \<in> ?new_mo"
+        proof (cases "b = a")
+        next
+          assume "b = a"
+          have not_in_mo_bc: "(b, c) \<notin> mo (incWit s)" using a wit `b = a` by auto
+          have "(c, b) \<notin> mo (incWit s')" 
+            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by simp
+          hence not_in_mo_cb: "(c, b) \<notin> mo (incWit s)" using wit by auto 
+          have "c \<notin> incCommitted s"
+            proof
+              assume "c \<in> incCommitted s"
+              have "b \<in> actions0 pre \<and> c \<in> actions0 pre \<and> b \<noteq> c \<and> 
+                    is_write b \<and> is_write c \<and> loc_of b = loc_of c \<and> 
+                    is_at_atomic_location (lk pre) b"
+                using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted
+                by auto
+              hence "(b, c) \<in> mo (incWit s) \<or> (c, b) \<in> mo (incWit s)"
+                using `c \<in> incCommitted s` consistent_mo_aux1[OF cons1] by auto
+              thus False using not_in_mo_bc not_in_mo_cb by simp
+              qed
+          hence "(b, c) \<in> ?succ"
+            using `b = a` consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by auto
+          thus "(b, c) \<in> ?new_mo" by simp
+        next
+          assume "b \<noteq> a"
+          hence "b \<in> incCommitted s" 
+            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted by auto  
+          hence "(b, c) \<in> mo (incWit s)"
+            using wit `(b, c) \<in> mo (incWit s')` by auto
+          thus "(b, c) \<in> ?new_mo" by simp
+        qed
+      thus "x \<in> ?new_mo" using `(b, c) = x` by simp
+    next
+      fix x
+      assume "x \<in> ?new_mo"
+      show "x \<in> mo (incWit s')"
+        using `x \<in> ?new_mo`
+        proof (elim UnE)
+          assume "x \<in> mo (incWit s)" 
+          thus "x \<in> mo (incWit s')" using wit by auto
+        next
+          assume "x \<in> ?succ"
+          then obtain b c where "(b, c) = x" "(b, c) \<in> ?succ" by (cases x) fast
+          hence "(c, b) \<notin> mo (incWit s')" using consistent_mo_aux2[OF cons2] incCommitted by fast
+          hence "(b, c) \<in> mo (incWit s')"
+            using `(b, c) \<in> ?succ` a cons2 incCommitted 
+            using consistent_mo_aux1[where a=a and b=c and wit="incWit s'"] 
+            by auto
+          thus "x \<in> mo (incWit s')" using `(b, c) = x` by simp
+        qed
+    qed
 qed
 
 
