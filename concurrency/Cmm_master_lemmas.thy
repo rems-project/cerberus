@@ -609,6 +609,20 @@ declare is_release.simps [simp]
 declare is_consume.simps [simp]
 declare is_seq_cst.simps [simp]
 
+lemma value_read_byE [elim]:
+  assumes "x = value_read_by a"
+      and "is_read a"
+  obtains v where "x = Some v"
+using assms
+by (cases a) auto
+
+lemma value_written_byE [elim]:
+  assumes "x = value_written_by a"
+      and "is_write a"
+  obtains v where "x = Some v"
+using assms
+by (cases a) auto
+
 lemma is_RMWI [intro?]:
   assumes "is_read a"
           "is_write a"
@@ -1084,6 +1098,21 @@ lemma well_formed_rfE [elim]:
 using assms
 unfolding well_formed_rf.simps 
 by auto
+
+lemma well_formed_rfE2 [elim]:
+  assumes "well_formed_rf (pre, wit, rel)"
+      and "(a, c) \<in> rf wit"
+      and "(b, c) \<in> rf wit"
+  obtains "a = b"
+proof -
+  have "a \<in> actions0 pre" "b \<in> actions0 pre"
+    using assms by auto
+  hence "a = b"
+    using assms
+    unfolding well_formed_rf.simps 
+    by auto
+  thus ?thesis using that by simp
+qed
 
 lemma rel_list_well_formed_rf [simp]:
   assumes "rel \<noteq> []"

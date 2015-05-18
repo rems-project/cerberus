@@ -109,4 +109,10 @@ lemma member_bindExhaustive [simp]:
 unfolding mem_def 
 by (auto simp add: forget_bindExhaustive set_foldr_append)
 
+(* The following simps are not determined by the monad itself, but useful in proofs. *)
+
+lemma member_if [simp]:
+  shows "x [\<in>] (if b then m1 else m2) = (if b then x [\<in>] m1 else x [\<in>] m2)"
+by auto
+
 end

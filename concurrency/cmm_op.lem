@@ -154,6 +154,13 @@ let incInitialState _ =
    incCommitted = {};
 |>
 
+val incToEx: pre_execution -> incState -> candidate_execution
+let incToEx pre s = 
+  let pre_res = preRestrict pre s.incCommitted in
+  let wit     = s.incWit in
+  let rel     = getRelations pre_res wit in
+  (pre_res, wit, rel)
+
 (* The semantics of the incremental model *)
 
 val incStep: pre_execution -> incState -> incState -> action -> bool
@@ -224,6 +231,20 @@ import Nondeterminism
 let inline (>>=) = Nondeterminism.bindExhaustive 
 let inline (>>) m1 m2 = Nondeterminism.bindExhaustive m1 (fun _ -> m2)
 
+(* Auxiliaries *)
+
+val sameLocWrites: set action -> action -> set action
+let sameLocWrites actions a =
+  {b | forall (b IN actions) | is_write b && loc_of b = loc_of a}
+
+val sameLocLocksUnlocks: set action -> action -> set action
+let sameLocLocksUnlocks actions a =
+  {b | forall (b IN actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a}
+
+val scActions: set action -> set action
+let scActions actions =
+  {b | forall (b IN actions) | is_seq_cst b}
+
 (* Methods for updating the execution witness *)
 
 val addToTransitiveOrder: set action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
@@ -239,9 +260,23 @@ let addToTransitiveOrder domain a r =
 
 val monAddToMo: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
 let monAddToMo pre a s =
-  let prev = {(b, a) | forall (b IN pre.actions)
-                     | b IN s.incCommitted && b <> a && is_write b && loc_of b = loc_of a} in
+  let prev = {(b, a) | forall (b IN sameLocWrites s.incCommitted a) | true} in
   Nondeterminism.return (Set.(union) s.incWit.mo prev)
+
+val auxAddPairToRf: set (action * action) -> action -> action -> 
+                    (cvalue -> cvalue -> bool) ->
+                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
+let auxAddPairToRf old_rf w r eq =
+  match (value_written_by w, value_read_by r) with
+  | (Just value_w, Just value_r) -> 
+      Nondeterminism.guard (eq value_w value_r) 
+               (Nondeterminism.Other ("The value written (" ^ show value_w ^ 
+                          ") and the value read ( " ^ show value_r ^ 
+                          ") cannot be matched")) >> 
+      Nondeterminism.return ((Set.insert (w, r) old_rf), Just (value_w, value_r))
+  | _ -> 
+      Nondeterminism.kill (Nondeterminism.Error "A write-read pair doesn't contain the values written and read")
+  end  
 
 (* NOTE: this function is only sound when the resulting execution is
    checked for det_read. Because the resulting state is not visible at 
@@ -260,22 +295,9 @@ let auxAddToRfLoad pre a s eq =
   (Nondeterminism.return (s.incWit.rf, Nothing))
   (* We add an rf-edge. *)
   (Nondeterminism.pick 
-    (Set_extra.toList 
-      {b | forall (b IN s.incCommitted) 
-         | b IN pre.actions &&
-           is_write b && 
-           loc_of b = loc_of a}) 
+    (Set_extra.toList (sameLocWrites s.incCommitted a)) 
     >>= fun w ->
-    match (value_written_by w, value_read_by a) with
-    | (Just value_w, Just value_a) -> 
-        Nondeterminism.guard (eq value_w value_a) 
-                 (Nondeterminism.Other ("The value written (" ^ show value_w ^ 
-                            ") and the value read ( " ^ show value_a ^ 
-                            ") cannot be matched")) >> 
-        Nondeterminism.return ((Set.insert (w, a) s.incWit.rf), Just (value_w, value_a))
-    | _ -> 
-        Nondeterminism.kill (Nondeterminism.Error "A write-read pair doesn't contain the values written and read")
-    end)
+    auxAddPairToRf s.incWit.rf w a eq)
 
 val monAddToRfLoad: pre_execution -> action -> incState -> 
                     Nondeterminism.t (set (action * action))
@@ -291,8 +313,7 @@ val auxAddToRfRmw: pre_execution -> action -> incState ->
                    (cvalue -> cvalue -> bool) ->
                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
 let auxAddToRfRmw pre a s eq =
-  let mo_actions = {b | forall (b IN s.incCommitted)
-                      | b IN pre.actions && is_write b && loc_of b = loc_of a} in
+  let mo_actions = sameLocWrites s.incCommitted a in
   if mo_actions = {} then
     Nondeterminism.return (s.incWit.rf, Nothing)
   else
@@ -301,16 +322,7 @@ let auxAddToRfRmw pre a s eq =
         {w | forall (w IN mo_actions) 
            | forall (c IN mo_actions). (w, c) NIN s.incWit.mo})
     >>= fun w ->
-    match (value_written_by w, value_read_by a) with
-    | (Just value_w, Just value_a) -> 
-        Nondeterminism.guard (eq value_w value_a)
-                 (Nondeterminism.Other ("The value written (" ^ show value_w ^ 
-                            ") and the value read ( " ^ show value_a ^ 
-                            ") cannot be matched")) >>
-        Nondeterminism.return ((Set.insert (w, a) s.incWit.rf), Just (value_w, value_a))
-    | _ -> 
-        Nondeterminism.kill (Nondeterminism.Error "A write-read pair doesn't contain the values written and read")
-    end
+    auxAddPairToRf s.incWit.rf w a eq    
 
 val monAddToRfRmw: pre_execution -> action -> incState -> 
                    Nondeterminism.t (set (action * action))
@@ -320,14 +332,11 @@ let monAddToRfRmw pre a s =
 
 val monAddToLo: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
 let monAddToLo pre a s = 
-  let same_loc_lo = {b | forall (b IN s.incCommitted) 
-                       | b IN pre.actions && (is_lock b || is_unlock b) && loc_of b = loc_of a} in
-  addToTransitiveOrder same_loc_lo a s.incWit.lo
+  addToTransitiveOrder (sameLocLocksUnlocks s.incCommitted a) a s.incWit.lo
 
 val monAddToSc: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
 let monAddToSc pre a s = 
-  let sc_set = {b | forall (b IN s.incCommitted) | is_seq_cst b && b IN pre.actions} in
-  addToTransitiveOrder sc_set a s.incWit.sc
+  addToTransitiveOrder (scActions s.incCommitted) a s.incWit.sc
 
 (* Checking consistency in monadic style *)
 
@@ -435,7 +444,7 @@ let monStep pre s =
   let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
 
   (* TODO: break down the consistency predicates in stepwise predicates *)
-  monCheckConsistency new_ex                          >>
+  (* monCheckConsistency new_ex                          >> *)
   (* TODO: prove instead of assert that the following always holds *)  
   monCheckWitRestrict new_wit s.incCommitted s.incWit >>
 
@@ -549,8 +558,8 @@ let symUpdatePreEx s step =
                    threads = Set.insert (tid_of step.newAction) pre.threads;
                    lk      = new_lk;
                    sb      = pre.sb union extra_sb;
-                   dd      = pre.dd union extra_dd;
                    asw     = pre.asw union extra_asw;
+                   dd      = pre.dd union extra_dd;
                 |> in
   (*
   let extra_mo = if is_write step.newAction && is_at_atomic_location new_lk step.newAction then
