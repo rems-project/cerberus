@@ -641,6 +641,15 @@ lemma is_readI [intro?]:
   shows   "is_read a"
 using assms by (cases a) auto
 
+lemma is_RMWE_location_kind [elim?]:
+  assumes "is_RMW a" "a \<in> actions0 pre"
+      and "actions_respect_location_kinds (actions0 pre) (lk pre)"
+  obtains "is_at_atomic_location (lk pre) a"
+using assms
+unfolding actions_respect_location_kinds_def
+          is_at_atomic_location_def
+by (cases a) auto
+
 lemmas threadwiseI [intro?] = defToIntro[OF threadwise_def]
 
 lemma threadwiseE [elim?]:
