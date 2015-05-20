@@ -27,19 +27,22 @@ AXIOM_BEH_GEN = \
   AxiomaticBehaviour.thy \
   axiomaticBehaviour.ml \
 
+ND_LEM = \
+  nondeterminism.lem \
+
+ND_GEN = \
+  Nondeterminism.thy \
+  nondeterminism.ml \
+  Nondeterminism-inc.tex \
+
 OPSEM_LEM = \
   cmm_op.lem \
-  nondeterminism.lem \
 
 # Isa and ocaml variants of OPSEM_LEM
 OPSEM_GEN = \
   Cmm_op.thy \
   cmm_op.ml \
   Cmm_op-inc.tex \
-  Nondeterminism.thy \
-  nondeterminism.ml \
-  Nondeterminism-inc.tex \
-
 
 default: $(BUILD_DIR)/Cmm_op.thy \
 
@@ -71,8 +74,14 @@ $(BUILD_DIR)/axiomaticBehaviourAuxiliary.byte: $(addprefix $(BUILD_DIR)/, $(AXIO
 
 # Build the opsem to ocaml and isa
 $(addprefix $(BUILD_DIR)/, $(OPSEM_GEN)): $(addprefix $(BUILD_DIR)/, $(OPSEM_LEM)) \
+                                          $(addprefix $(BUILD_DIR)/, $(ND_GEN)) \
                                           $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
 	cd $(BUILD_DIR); lem $(OPSEM_LEM) -isa -ocaml -tex
+
+# Build the nd-monad to ocaml and isa
+$(addprefix $(BUILD_DIR)/, $(ND_GEN)): $(addprefix $(BUILD_DIR)/, $(ND_LEM)) \
+                                       $(addprefix $(BUILD_DIR)/, $(CMM_MODEL_GEN))
+	cd $(BUILD_DIR); lem $(ND_LEM) -isa -ocaml -tex
 
 # Build the AxiomaticBehaviour to ocaml and isa
 $(addprefix $(BUILD_DIR)/, $(AXIOM_BEH_GEN)): $(addprefix $(BUILD_DIR)/, $(AXIOM_BEH_LEM)) \
